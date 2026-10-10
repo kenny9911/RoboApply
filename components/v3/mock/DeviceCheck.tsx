@@ -18,8 +18,9 @@
 //
 // WP-63a: with `networkProbe` the check also rates the connection
 // (NetworkPrecheck) and, on a weak one, offers the written practice. With
-// `cameraLocalOnly` (GoApply) it says the camera is shown to the candidate
-// alone — it is never sent or recorded.
+// `cameraLocalOnly` (the server's media policy says the camera is not
+// published) it says the camera is shown to the candidate alone — it is never
+// sent or recorded.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
@@ -57,7 +58,7 @@ interface Props {
   onSwitchToText?: () => void;
   switchingToText?: boolean;
   onNetworkResult?: (result: NetworkAssessment) => void;
-  /** The camera stays a local preview (GoApply): say so under the preview. */
+  /** The camera stays a local preview (the server's media policy): say so under the preview. */
   cameraLocalOnly?: boolean;
 }
 

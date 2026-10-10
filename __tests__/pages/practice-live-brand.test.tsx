@@ -1,12 +1,15 @@
 // __tests__/pages/practice-live-brand.test.tsx
 //
-// /practice/[id] per brand (WP-63a), with LiveKit mocked out:
-//   - GoApply: the camera is a LOCAL preview only — no video track is ever
-//     published, not even when the camera failed the device check and is
-//     started later; the device check and the self-view say "only you can
-//     see it" (practice.live.cam.*), and no key path is ever shown
-//   - a connection the server marks `cameraPublish: false` is honoured on
-//     RoboApply too; RoboApply video otherwise publishes as in Wave 0
+// /practice/[id] on both brands (WP-63a; D5 parity), with LiveKit mocked out:
+//   - a video practice publishes the camera on GoApply exactly as on
+//     RoboApply (G8, G104): the page has no brand term for it
+//   - where the server's media policy keeps the camera local
+//     (`cameraPublish: false`: GoApply's operator opt-out
+//     CN_INTERVIEW_CAMERA_PUBLISH=false) the camera is a LOCAL preview only on
+//     either brand — no video track is ever published, not even when the
+//     camera failed the device check and is started later; the device check
+//     and the self-view say "only you can see it" (practice.live.cam.*), and
+//     no key path is ever shown
 //   - the device check's connection row reads "Connection: Good / Fair /
 //     Weak" (practice.live.network.*); a weak network explains itself and
 //     offers the written practice, which ends the unstarted live session and
@@ -169,9 +172,54 @@ beforeEach(() => {
   Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
 });
 
-describe('GoApply: the camera is a local preview only', () => {
-  it('never publishes a video track, shows the camera to the candidate alone, says so', async () => {
+describe('GoApply: a video practice publishes the camera, like RoboApply (D5)', () => {
+  it('publishes the camera track, with no local-only note', async () => {
+    api.get.mockResolvedValue({ session: makeSession({ cameraPublish: true }) });
+    api.connection.mockResolvedValue({ connection: connection({ cameraPublish: true }) });
+    await renderLive('goapply');
+    await screen.findByRole('button', { name: 'Join the interview' });
+    expect(screen.queryByText(/Only you can see your camera/)).toBeNull();
+    noKeyPaths();
+    await join();
+    await waitFor(() => expect(lk.room!.localParticipant.setCameraEnabled).toHaveBeenCalledWith(true));
+    expect(localSelfView()).toBeNull();
+    expect(screen.queryByText('Only you see this')).toBeNull();
+    // GoApply's addition stays: the interviewer is labelled as an AI voice in the room.
+    expect(document.querySelector('[data-ai-label="audio"]')).not.toBeNull();
+    noKeyPaths();
+  });
+
+  it('the brand alone decides nothing: an older API that sends no policy publishes on GoApply too', async () => {
+    api.connection.mockResolvedValue({ connection: connection() });
+    await renderLive('goapply');
+    await screen.findByRole('button', { name: 'Join the interview' });
+    expect(screen.queryByText(/Only you can see your camera/)).toBeNull();
+    await join();
+    await waitFor(() => expect(lk.room!.localParticipant.setCameraEnabled).toHaveBeenCalledWith(true));
+    expect(localSelfView()).toBeNull();
+  });
+
+  it('a voice practice uses no camera at all', async () => {
+    api.get.mockResolvedValue({ session: makeSession({ mode: 'voice', cameraPublish: false }) });
+    api.connection.mockResolvedValue({ connection: connection({ mode: 'voice', cameraPublish: false }) });
+    await renderLive('goapply');
+    await screen.findByRole('button', { name: 'Join the interview' });
+    expect(screen.queryByText(/Only you can see your camera/)).toBeNull();
+    await join();
+    await waitFor(() => expect(lk.room!.localParticipant.setMicrophoneEnabled).toHaveBeenCalledWith(true));
+    expect(lk.room!.localParticipant.setCameraEnabled).not.toHaveBeenCalled();
+    expect(localSelfView()).toBeNull();
+  });
+});
+
+describe('GoApply with the operator opt-out (the server says the camera stays local)', () => {
+  beforeEach(() => {
+    // The session carries the policy before the room is joined; the connection repeats it.
+    api.get.mockResolvedValue({ session: makeSession({ cameraPublish: false }) });
     api.connection.mockResolvedValue({ connection: connection({ cameraPublish: false }) });
+  });
+
+  it('never publishes a video track, shows the camera to the candidate alone, says so', async () => {
     await renderLive('goapply');
     await screen.findByRole('button', { name: 'Join the interview' });
     noKeyPaths();
@@ -185,7 +233,6 @@ describe('GoApply: the camera is a local preview only', () => {
     expect(getUserMedia).toHaveBeenLastCalledWith(expect.objectContaining({ audio: false, video: expect.anything() }));
     expect(screen.queryByTestId('video-track')).toBeNull();
     expect(screen.getByText('Only you see this')).toBeInTheDocument();
-    // GoApply: the interviewer is labelled as an AI voice in the room.
     expect(document.querySelector('[data-ai-label="audio"]')).not.toBeNull();
     noKeyPaths();
 
@@ -203,7 +250,6 @@ describe('GoApply: the camera is a local preview only', () => {
       if (constraints?.video && cameraBlocked) throw Object.assign(new Error('blocked'), { name: 'NotAllowedError' });
       return { getTracks: () => [{ stop: vi.fn() }] } as unknown as MediaStream;
     }) as never);
-    api.connection.mockResolvedValue({ connection: connection({ cameraPublish: false }) });
     await renderLive('goapply');
     await join('Join with voice only');
     await waitFor(() => expect(lk.room!.localParticipant.setMicrophoneEnabled).toHaveBeenCalledWith(true));
@@ -215,7 +261,7 @@ describe('GoApply: the camera is a local preview only', () => {
     expect(lk.room!.localParticipant.setCameraEnabled).not.toHaveBeenCalled();
   });
 
-  it('holds even against an older API that sends no cameraPublish', async () => {
+  it('the session’s policy holds when the connection (an older API) does not repeat it', async () => {
     api.connection.mockResolvedValue({ connection: connection() });
     await renderLive('goapply');
     await join();

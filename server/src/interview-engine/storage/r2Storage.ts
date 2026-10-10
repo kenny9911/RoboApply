@@ -25,7 +25,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { getR2Creds, INTERVIEW_R2_PREFIX, type R2Creds } from '../config.js';
+import { getEarlierR2Creds, getR2Creds, getR2WriteCreds, INTERVIEW_R2_PREFIX, type R2Creds } from '../config.js';
 import { logger } from '../../services/LoggerService.js';
 
 const DEFAULT_PRESIGN_TTL_SEC = 3600; // 1h — playback links for the report page
@@ -37,10 +37,11 @@ function clampTtl(seconds: number): number {
 /**
  * Cache key of an S3 client: endpoint + bucket + access key id (+ region and
  * path style, which also change the client). The bucket name alone is not
- * enough: two brands may each own a bucket of the same name on different
- * stores (R2 for RoboApply, a mainland store for GoApply), and reusing the
- * first brand's client would send the second brand's objects to the wrong
- * store with the wrong credentials. The secret is never part of the key; a
+ * enough: GoApply may own a bucket of the same name as the shared one on a
+ * different store (R2 for the shared stack, a mainland store for GoApply), and
+ * reusing the first client would send the other store's objects to the wrong
+ * place with the wrong credentials. Two brands on the shared bucket resolve
+ * to the same key and share one client. The secret is never part of the key; a
  * rotated secret under the same access key id rebuilds the client (compared
  * separately).
  */
@@ -48,14 +49,25 @@ export function r2ClientCacheKey(creds: R2Creds): string {
   return [creds.endpoint ?? '', creds.bucket, creds.accessKeyId, creds.region, creds.forcePathStyle ? 'path' : 'vhost'].join('\u0000');
 }
 
-/** One client per store; the two brands at most, plus a rotation or two. */
+/** One client per store: the shared one and GoApply's own at most, plus a rotation or two. */
 const MAX_CACHED_CLIENTS = 8;
 
 export class InterviewR2Storage {
   private readonly clients = new Map<string, { client: S3Client; secret: string }>();
 
+  /** The brand's store can be read and deleted from. */
   isConfigured(): boolean {
     return getR2Creds() !== null;
+  }
+
+  /**
+   * NEW artifacts of the current brand may be written. The same as
+   * `isConfigured`, except for GoApply under CN_RESIDENCY_STRICT without a
+   * bucket of its own (config.ts `getR2WriteCreds`): nothing new goes to the
+   * shared bucket, while earlier objects there stay readable and deletable.
+   */
+  canStore(): boolean {
+    return getR2WriteCreds() !== null;
   }
 
   // ── Key builders ──
@@ -73,7 +85,9 @@ export class InterviewR2Storage {
   }
 
   async putObject(params: { key: string; body: Buffer | string; contentType: string }): Promise<void> {
-    const { client, bucket } = this.resolve();
+    const creds = getR2WriteCreds();
+    if (!creds) throw new Error('Interview Engine R2 storage is not available for new objects (not configured, or CN_RESIDENCY_STRICT without CN_S3_BUCKET)');
+    const { client, bucket } = this.resolve(creds);
     await client.send(
       new PutObjectCommand({
         Bucket: bucket,
@@ -89,20 +103,34 @@ export class InterviewR2Storage {
    * error (S3 delete is idempotent). Returns false — never throws — when the
    * delete could not be confirmed (unconfigured storage or a request error),
    * so sweeps can hold DB rows that still point at live objects.
+   *
+   * The object is deleted from the brand's store and from any store its
+   * earlier sessions wrote to (GoApply after it got a bucket of its own:
+   * `getEarlierR2Creds`), so a session created on the shared bucket is still
+   * cleaned up once CN_S3_BUCKET is set.
    */
   async deleteObject(key: string): Promise<boolean> {
-    if (!this.isConfigured()) return false;
-    try {
-      const { client, bucket } = this.resolve();
-      await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
-      return true;
-    } catch (err) {
-      logger.warn('INTERVIEW_ENGINE_R2', 'deleteObject failed', {
-        key,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      return false;
+    const current = getR2Creds();
+    if (!current) return false;
+    const seen = new Set<string>();
+    let ok = true;
+    for (const creds of [current, ...getEarlierR2Creds()]) {
+      const id = r2ClientCacheKey(creds);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      try {
+        const { client, bucket } = this.resolve(creds);
+        await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+      } catch (err) {
+        ok = false;
+        logger.warn('INTERVIEW_ENGINE_R2', 'deleteObject failed', {
+          key,
+          earlierStore: creds === current ? undefined : true,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
+    return ok;
   }
 
   /**
@@ -196,8 +224,8 @@ export class InterviewR2Storage {
     return this.resolve().client;
   }
 
-  private resolve(): { client: S3Client; bucket: string } {
-    const creds = getR2Creds();
+  private resolve(given?: R2Creds): { client: S3Client; bucket: string } {
+    const creds = given ?? getR2Creds();
     if (!creds) throw new Error('Interview Engine R2 storage is not configured (S3_BUCKET / S3 credentials missing)');
     const key = r2ClientCacheKey(creds);
     let entry = this.clients.get(key);

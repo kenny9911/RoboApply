@@ -20,10 +20,11 @@
 //   - GoApply without voice offers the written practice with a one-line reason.
 //     It runs through the first-party practice routes: the server checks the
 //     GoApply gate, loads the job, meters credits and ticks the checklist.
-//   - The market-requirements preview (web search + LLM) is a RoboApply
-//     panel. The server refuses it without the AI gate and never searches the
-//     web for GoApply (no domestic search provider), so a GoApply preview
-//     would only restate the role: it is not offered there.
+//   - The market-requirements preview (web search + LLM) is offered on both
+//     brands (D5). The server refuses it without the AI gate, and its search
+//     query never carries personal information.
+//   - Voice is offered wherever the server says it is available
+//     (`setup.voice`, the `ai.interviewVoice` capability): no brand term here.
 //   - GoApply (WP-66): the catalog lists the AI-interview practice format
 //     first, under its own name (practiceCn.format.*); it runs 20–30 minutes,
 //     so only those lengths are offered and priced. Start asks WeChat once for
@@ -48,7 +49,6 @@ import { useLocale, useTranslations } from 'next-intl';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { RoboApiError } from '../../../lib/api/client';
 import { accountKeys, useCredits } from '../../../hooks/useAccount';
-import { useBrand } from '../../../lib/brand';
 import { useCredits as useCreditSummary } from '../../../hooks/shared/useCredits';
 import { reportCreditsExhausted } from '../../../hooks/shared/useCreditGate';
 import { useFlag } from '../../../lib/flags';
@@ -136,7 +136,6 @@ export default function MockSetupPage() {
   const localizeType = useLocalizeType();
   const router = useRouter();
   const { user } = useAuth();
-  const brand = useBrand();
   const queryClient = useQueryClient();
 
   const catalogQuery = useMockCatalog();
@@ -405,11 +404,9 @@ export default function MockSetupPage() {
   const aiBlocked = setup ? !setup.ai.allowed : false;
   const textMode = !!setup && setup.ai.allowed && !setup.voice.available && setup.voice.reason === 'voice_unavailable';
   const canLaunch = !!(interviewer && type && hasRoleSource) && !aiBlocked;
-  // The preview runs a web search and an LLM on the post: only where AI is
-  // allowed, and not on GoApply (the search provider is international) until
-  // WP-63a gives it a domestic path. It never gates launch.
-  const showPreview = brand.market !== 'cn';
-  const canPreview = showPreview && !!(interviewer && type && hasRoleSource) && !aiBlocked;
+  // The preview runs a web search and an LLM on the post, on both brands: only
+  // where AI is allowed (GoApply's consent gate). It never gates launch.
+  const canPreview = !!(interviewer && type && hasRoleSource) && !aiBlocked;
   const targetKey = hasRoleSource
     ? jobActive
       ? `job:${job!.id}`
@@ -625,8 +622,8 @@ export default function MockSetupPage() {
     creditBalance !== undefined && longestAffordableMinutes(durationOptions, creditBalance, creditMinutes) === null;
 
   // Is there anything to buy? A plan that raises the allowance (the server
-  // says so), or a practice pack on sale right now (GoApply sells none before
-  // payments open). The plans are only read when a shortfall is on screen and
+  // says so), or a practice pack on sale right now (the plans API says what is
+  // sellable on this brand). The plans are only read when a shortfall is on screen and
   // the summary has not already answered.
   const plansQ = usePlans({ enabled: (!canAfford || insufficientCredits !== null) && !upgradable });
   const canGetCredits =
@@ -755,7 +752,6 @@ export default function MockSetupPage() {
       webSources={previewMut.data?.webSources ?? []}
       sampleQuestions={previewMut.data?.sampleQuestions ?? []}
       groundedOn={previewMut.data?.groundedOn}
-      showPreview={showPreview}
       canPreview={canPreview}
       onPreview={runPreview}
       onRetryPreview={runPreview}
@@ -776,6 +772,7 @@ export default function MockSetupPage() {
         open={recordingSheetOpen}
         onClose={() => setRecordingSheetOpen(false)}
         mode={format}
+        videoAllowed={setup.media?.recordVideo !== false}
         initial={recordingChoice}
         onConfirm={(choice) => {
           setRecording(choice);

@@ -33,7 +33,7 @@ import {
 } from '../sessions/InterviewSessionService.js';
 import { toSessionSummary, toSessionDetail } from './serialize.js';
 import { handleEngineError } from './errors.js';
-import { isRecordingEnabled, resolveSessionCallbackBaseUrl } from '../config.js';
+import { getInterviewMediaPolicy, isRecordingEnabled, resolveSessionCallbackBaseUrl } from '../config.js';
 import { shouldUseParley } from '../parley/parleyConfig.js';
 import type { InterviewSource } from '../types.js';
 import { aiGateOpen, currentBrand, gateBody, gateStatus, loadConsent, marketOf, practiceGate } from './practiceGate.js';
@@ -159,8 +159,8 @@ router.get('/sessions/:id/report', requireAuth, requireApiKey, async (req: Reque
 //   GET  /practice/sessions/:id        — report extras: the job it was for,
 //                                        whether recording was consented
 //   GET  /practice/jobs?ids=a,b        — the job checklist's "Practiced" step
-//   POST /practice/text/start          — written practice (GoApply without
-//                                        voice): `jobId` loaded server-side
+//   POST /practice/text/start          — written practice (where voice is
+//                                        not available): `jobId` loaded server-side
 //                                        (404 job_not_found), metered like a
 //                                        live practice (402 + bucket)
 //   POST /practice/text/next-turn      — one answer → the interviewer's reply
@@ -172,11 +172,15 @@ router.get('/sessions/:id/report', requireAuth, requireApiKey, async (req: Reque
 // GoApply user without a bound phone or the AI consent never gets an LLM call
 // (aiAllowed, TASK_PLAN §2.2), whichever client calls it.
 //
-// GoApply (market cn): AI routes need a bound phone (403
-// phone_binding_required) and a live `ai_resume_parsing` consent (aiAllowed →
-// 503 ai_unavailable/ai_consent_required); without the voice capability
-// (`ai.interviewVoice`) a session answers 503 ai_unavailable/voice_unavailable
-// and the setup offers text practice instead.
+// GoApply (market cn): AI routes need a bound phone where one can be bound
+// (403 phone_binding_required) and a live `ai_resume_parsing` consent
+// (aiAllowed → 503 ai_unavailable/ai_consent_required). Voice is on by default
+// and runs on the shared media plane when GoApply has none of its own (D5);
+// without the voice capability (`ai.interviewVoice`: no LiveKit at all, or the
+// product switch off), or with a configuration no voice session can start on
+// (practiceGate: no interview model the plane's worker can run, the
+// domestic-only wall without a plane of its own), a session answers 503
+// ai_unavailable/voice_unavailable and the setup offers text practice instead.
 
 /** Admins are exempt from practice credits, on the roboapply source (mirrors internalRoutes). */
 function isAdmin(user: { role?: string | null; roles?: string[] | null } | undefined): boolean {
@@ -199,7 +203,7 @@ async function recordingAvailable(): Promise<boolean> {
   if (!isRecordingEnabled()) return false;
   try {
     const { interviewR2Storage } = await import('../storage/r2Storage.js');
-    return interviewR2Storage.isConfigured();
+    return interviewR2Storage.canStore();
   } catch {
     return false;
   }
@@ -269,6 +273,9 @@ router.get('/practice/setup', requireAuth, requireFirstParty, async (req: Reques
       voice: gate.voice,
       ai: gate.ai,
       recording: { available, consent },
+      // One policy on both brands (config.ts getInterviewMediaPolicy); the
+      // client reads it instead of the brand.
+      media: getInterviewMediaPolicy(brand),
     });
   } catch (err) {
     return handleEngineError(res, 'practice_setup', err, { userId });
@@ -383,6 +390,8 @@ router.post('/practice/text/start', requireAuth, requireFirstParty, async (req: 
       job,
       creditExempt: admin,
       locale: await requestLocale(req),
+      // The account name never goes to the web-search vendor (as in the live practice).
+      knownValues: [req.user!.name ?? ''],
     });
     return res.json(started);
   } catch (err) {

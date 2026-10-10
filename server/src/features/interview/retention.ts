@@ -2,14 +2,15 @@
 //
 // Both privacy notices publish one rule (PRODUCT F-TRUST-06, CN_TW L-11,
 // compliance/retention.ts row `interview_recordings`): practice recordings and
-// transcripts are kept for INTERVIEW_RETENTION_DAYS (CN_ on GoApply; default
-// and maximum 90 days), then deleted — on BOTH brands.
+// transcripts are kept for INTERVIEW_RETENTION_DAYS (GoApply reads its CN_
+// override first, else the shared value; default and maximum 90 days), then
+// deleted — on BOTH brands.
 //
 // What is deleted, for sessions created before the window:
 //   live practice (InterviewSession) — the recording object, the transcript
 //     objects (transcript.json / transcript.txt) and the report sidecar
-//     (report.json, which repeats the report's quotes) in the brand's own
-//     bucket; the transcript rows (`transcript`, `transcriptText`) plus every
+//     (report.json, which repeats the report's quotes) in the bucket the
+//     brand uses; the transcript rows (`transcript`, `transcriptText`) plus every
 //     column that points at a deleted object (recording*, transcriptKey,
 //     egressId);
 //   written practice (RAMockSession) — the transcript (`transcript`).
@@ -33,7 +34,11 @@
 //
 // The task runs once per brand (compliance-daily, inside runWithBrand), scoped
 // to that brand's users (`User.brand`), so each brand's objects are deleted
-// from its own bucket (S3_* / CN_S3_*). It pages by id and stops on the budget;
+// from the bucket that brand uses: the shared one (S3_*) for both by default,
+// CN_S3_* when GoApply has its own (D5; GOAPPLY_PARITY_PLAN §3.5). Keys carry
+// the session id, so a shared bucket never mixes the two. When GoApply has
+// its own bucket, the storage layer also clears the shared one for its
+// earlier sessions. It pages by id and stops on the budget;
 // written practice (DB-only) is purged before live sessions (objects).
 
 import prisma from '../../lib/prisma.js';

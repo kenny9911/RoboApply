@@ -20,10 +20,15 @@
 // AI-interview format of features/cn/interview: the fixed 20–30 minute script
 // and the zh question sets, with one role question written for the job when
 // the model is available. Every other GoApply practice runs the pipeline
-// above WITHOUT Step 0: no GoApply practice sends the role to the
-// international web-search service (the saved job post is the only evidence).
-// RoboApply practices run the pipeline above unchanged.
+// above, web research included, exactly as a RoboApply practice does (D5;
+// GOAPPLY_PARITY_PLAN §3.5): the search query is a role text with no personal
+// information on either brand, and a refused or failed search only means no
+// web evidence. The account name is one of the values the query is checked
+// against: the caller passes it as `knownValues`, or runs the start inside
+// `withSearchKnownValues` when the call goes through a service that does not
+// forward it.
 
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { logger } from '../../../services/LoggerService.js';
 import { llmService } from '../../../services/llm/LLMService.js';
 import { raSearchWeb, formatWebEvidence } from '../lib/raWebSearch.js';
@@ -56,6 +61,23 @@ import {
 
 /** Where raSearchWeb sends its query (roboapply/v2/lib/raWebSearch.ts). */
 const WEB_SEARCH_URL = 'https://api.tavily.com/search';
+
+type KnownValues = ReadonlyArray<string | null | undefined>;
+
+const searchKnownValues = new AsyncLocalStorage<KnownValues>();
+
+/**
+ * Run `fn` with values that must never reach the web-search vendor (the
+ * account name, as the live practice passes the candidate name). Every
+ * `generate` inside it checks its research query against them, in addition to
+ * its own `knownValues`. For a caller that starts the practice through a
+ * service which does not forward the values (RAMockService.start).
+ */
+export function withSearchKnownValues<T>(values: KnownValues | undefined, fn: () => T): T {
+  const own = (values ?? []).filter((v): v is string => typeof v === 'string' && v.trim().length > 0);
+  if (own.length === 0) return fn();
+  return searchKnownValues.run([...(searchKnownValues.getStore() ?? []), ...own], fn);
+}
 
 function resolvedInterviewModelLabel(): string {
   const taskModel = interviewGenModel();
@@ -98,6 +120,11 @@ export interface RAInterviewPromptInput {
   market?: 'intl' | 'cn';
   /** Question-selection seed for the cn format (defaults to the request id). */
   seed?: string;
+  /**
+   * Values the research query must not contain (the account name). A query
+   * that carries one is not sent; the practice is planned without web evidence.
+   */
+  knownValues?: KnownValues;
 }
 
 /** The cn format's plan, saved in the blueprint (timing per question). */
@@ -377,24 +404,28 @@ export class RAInterviewPromptService {
     const opts = { requestId, locale: language, signal };
     const startedAt = Date.now();
 
-    // ── Step 0: Tavily research (best-effort; intl only) ──
-    // GoApply (market `cn`) never sends the role to the international search
-    // service: the job post the candidate saved is the only evidence.
+    // ── Step 0: Tavily research (best-effort; both brands, D5) ──
+    // The search service takes job and role queries only, never personal
+    // information: a role text that carries an email, a phone number or an id
+    // number is not sent, neither is one that carries the account name (the
+    // known values), and neither is any query the residency policy refuses
+    // for the brand (a mainland deployment does not use this vendor). The
+    // practice is then planned without web evidence, never failed.
     let webEvidence = '';
     let webSources: Array<{ title: string; url: string }> = [];
-    if (market !== 'cn') {
-      try {
-        const query = `${role || type.label} role requirements, key skills, and interview focus`;
-        // The search service takes job and role queries only, never personal
-        // information: a role text that carries an email, a phone number or an
-        // id number is not sent (the practice is then planned without web evidence).
-        assertNoPiInPayload({ brand: getCurrentBrandId() ?? 'roboapply', target: WEB_SEARCH_URL, payload: query.slice(0, 400) });
-        const resp = await raSearchWeb(query, { maxResults: 5, requestId, signal });
-        webEvidence = formatWebEvidence(resp);
-        webSources = (resp?.results ?? []).slice(0, 5).map((r) => ({ title: r.title, url: r.url }));
-      } catch {
-        /* a refused query (personal information) or a failed search: no web evidence */
-      }
+    try {
+      const query = `${role || type.label} role requirements, key skills, and interview focus`;
+      assertNoPiInPayload({
+        brand: getCurrentBrandId() ?? (market === 'cn' ? 'goapply' : 'roboapply'),
+        target: WEB_SEARCH_URL,
+        payload: query.slice(0, 400),
+        knownValues: [...(input.knownValues ?? []), ...(searchKnownValues.getStore() ?? [])],
+      });
+      const resp = await raSearchWeb(query, { maxResults: 5, requestId, signal });
+      webEvidence = formatWebEvidence(resp);
+      webSources = (resp?.results ?? []).slice(0, 5).map((r) => ({ title: r.title, url: r.url }));
+    } catch {
+      /* a refused query (personal information, residency) or a failed search: no web evidence */
     }
 
     // ── Step 1: requirements ──

@@ -100,6 +100,7 @@ vi.mock('../livekit/egress.js', () => ({ startRoomRecording: h.startRecording, s
 vi.mock('../storage/r2Storage.js', () => ({
   interviewR2Storage: {
     isConfigured: () => h.r2Configured.value,
+    canStore: () => h.r2Configured.value,
     recordingKey: (id: string) => `rec/${id}.mp4`,
     transcriptKey: (id: string) => `tr/${id}.json`,
     reportKey: (id: string) => `rp/${id}.json`,
@@ -129,6 +130,17 @@ const ENV: Record<string, string | undefined> = {
   LIVEKIT_API_SECRET: 'test-secret-test-secret-test-secret',
   LIVEKIT_AGENT_CALLBACK_SECRET: 'cb-secret',
   INTERVIEW_ENGINE_RECORDING_ENABLED: 'true',
+  // Only the shared credentials: no GoApply override of any kind (D5 default).
+  CN_LIVEKIT_URL: undefined, CN_LIVEKIT_API_KEY: undefined, CN_LIVEKIT_API_SECRET: undefined,
+  CN_LIVEKIT_AGENT_CALLBACK_SECRET: undefined, CN_VOICE_PROVIDER: undefined, VOICE_PROVIDER: undefined,
+  CN_INTERVIEW_ENGINE_AGENT_NAME: undefined, INTERVIEW_ENGINE_AGENT_NAME: undefined,
+  CN_INTERVIEW_ENGINE_STT_MODEL: undefined, CN_INTERVIEW_ENGINE_TTS_MODEL: undefined,
+  INTERVIEW_ENGINE_STT_MODEL: undefined, INTERVIEW_ENGINE_TTS_MODEL: undefined, INTERVIEW_ENGINE_TTS_PROVIDER: undefined,
+  CN_LLM_INTERVIEW_MODEL: undefined, CN_LLM_INTERVIEW_LIVE_MODEL: undefined, LLM_INTERVIEW_LIVE_MODEL: undefined,
+  LLM_INTERVIEW_LIVE_REASONING_EFFORT: undefined, CN_LLM_INTERVIEW_LIVE_REASONING_EFFORT: undefined,
+  CN_INTERVIEW_ENGINE_RECORDING_ENABLED: undefined, CN_INTERVIEW_CAMERA_PUBLISH: undefined,
+  CN_LLM_DOMESTIC_ONLY: undefined, CN_RESIDENCY_STRICT: undefined,
+  INTERVIEW_ENGINE_CALLBACK_BASE_URL: undefined, BACKEND_PUBLIC_URL: undefined, PUBLIC_BACKEND_URL: undefined,
 };
 const saved: Record<string, string | undefined> = {};
 
@@ -144,6 +156,8 @@ const {
   PracticeJobNotFoundError,
 } = mod;
 const { handleEngineError } = await import('../routes/errors.js');
+const { runWithBrand } = await import('../../lib/requestContext.js');
+const liveKit = vi.mocked(await import('../livekit/liveKitClient.js'));
 
 const JOBS: Record<string, any> = {
   j_intl: {
@@ -222,6 +236,9 @@ const deps = {
   hasConsent: vi.fn(async (_u: string, type: string) => deps.consents.has(type)),
   markChecklistStep: vi.fn(async () => ({})),
   grantPracticeCredit: vi.fn(async () => ({ status: 'granted' as const })),
+  /** Reason keys that already hold a first-practice grant, per user. */
+  granted: new Set<string>(),
+  hasPracticeGrant: vi.fn(async (userId: string, reason: string) => deps.granted.has(`${userId}:${reason}`)),
   findUser: vi.fn(async () => null as any),
   findResume: vi.fn(async () => null as any),
 };
@@ -269,6 +286,7 @@ beforeEach(() => {
   deps.gatePractice.mockResolvedValue({ ok: true, balance: 3, required: 1, tier: 'free' });
   h.r2Configured.value = true;
   deps.consents = new Set();
+  deps.granted = new Set();
   deps.market = 'intl';
   h.gate.mockResolvedValue({ ok: true, balance: 3, required: 1, tier: 'free' });
   h.generate.mockResolvedValue(genResult());
@@ -282,6 +300,7 @@ beforeEach(() => {
     hasConsent: deps.hasConsent,
     markChecklistStep: deps.markChecklistStep,
     grantPracticeCredit: deps.grantPracticeCredit,
+    hasPracticeGrant: deps.hasPracticeGrant,
     findUser: deps.findUser,
     findResume: deps.findResume,
     currentMarket: () => deps.market,
@@ -535,12 +554,20 @@ describe('written practice (GoApply without voice)', () => {
       'u1',
       expect.objectContaining({ role: '后端工程师 (某公司)', interviewerId: 'maya', typeId: 'behavioral', durationMinutes: 15 }),
       undefined,
+      undefined,
     );
     // WP-66: the posting, the market and the job id reach the text interview.
     expect(deps.textStart.mock.calls[0]?.[1]).toMatchObject({ jdText: '负责后端', market: 'intl', jobId: 'j_cn' });
     expect(textRows.get('t1')!.jobId).toBe('j_cn');
     expect(readTextPracticeMeta(textRows.get('t1')!.blueprint)).toMatchObject({ kind: 'text', jobId: 'j_cn', creditExempt: false });
     expect(textRows.get('t1')!.blueprint.interviewerBrief).toBe('b'); // the generator's brief is kept
+  });
+
+  it('hands the account name to the start, so a role text that carries it never reaches the web-search vendor', async () => {
+    await svc.startTextPractice({
+      userId: 'u1', role: '张伟的产品经理面试', interviewerId: 'maya', typeId: 'case', job: null, locale: 'zh', knownValues: ['张伟'],
+    });
+    expect(deps.textStart).toHaveBeenCalledWith('u1', expect.objectContaining({ role: '张伟的产品经理面试' }), 'zh', ['张伟']);
   });
 
   it('out of credits: no text interview starts', async () => {
@@ -631,7 +658,23 @@ describe('first free practice (C42)', () => {
     expect(deps.grantPracticeCredit).not.toHaveBeenCalled();
   });
 
-  it('GoApply: grants after phone verification', async () => {
+  it('RoboApply: a verified phone alone earns nothing (email is its verification), and no second key is ever checked', async () => {
+    deps.findUser.mockResolvedValueOnce({
+      brand: 'roboapply', name: 'A', emailVerified: false, emailVerifiedAt: null, emailIsPlaceholder: false,
+      phoneE164: '+14155550100', phoneVerifiedAt: new Date(),
+    });
+    expect(await ensureFirstPracticeGrant('u1')).toEqual({ method: 'email', verified: false, grant: null });
+    deps.findUser.mockResolvedValueOnce({
+      brand: 'roboapply', name: 'A', emailVerified: true, emailVerifiedAt: new Date(), emailIsPlaceholder: false,
+      phoneE164: '+14155550100', phoneVerifiedAt: new Date(),
+    });
+    expect(await ensureFirstPracticeGrant('u1')).toEqual({ method: 'email', verified: true, grant: 'granted' });
+    expect(deps.grantPracticeCredit).toHaveBeenCalledTimes(1);
+    expect(deps.grantPracticeCredit).toHaveBeenCalledWith('u1', 'email_verified', 'email_verified');
+    expect(deps.hasPracticeGrant).not.toHaveBeenCalled();
+  });
+
+  it('GoApply: grants after phone verification, with the phone key', async () => {
     deps.findUser.mockResolvedValueOnce({
       brand: 'goapply', name: null, emailVerified: true, emailVerifiedAt: null, emailIsPlaceholder: true,
       phoneE164: '+8613800000000', phoneVerifiedAt: new Date(),
@@ -641,12 +684,76 @@ describe('first free practice (C42)', () => {
     expect(deps.grantPracticeCredit).toHaveBeenCalledWith('u1', 'phone_verified', 'phone_verified');
   });
 
-  it('GoApply without a phone, or an unknown user, gets nothing; a failing grant reports failed', async () => {
+  it('GoApply: an email-verified user with no phone gets the first free practice, with the email key (G69)', async () => {
     deps.findUser.mockResolvedValueOnce({
-      brand: 'goapply', name: null, emailVerified: true, emailVerifiedAt: new Date(), emailIsPlaceholder: false,
+      brand: 'goapply', name: '张伟', emailVerified: true, emailVerifiedAt: new Date(), emailIsPlaceholder: false,
       phoneE164: null, phoneVerifiedAt: null,
     });
+    expect(await ensureFirstPracticeGrant('u1')).toEqual({ method: 'email', verified: true, grant: 'granted' });
+    expect(deps.grantPracticeCredit).toHaveBeenCalledTimes(1);
+    expect(deps.grantPracticeCredit).toHaveBeenCalledWith('u1', 'email_verified', 'email_verified');
+  });
+
+  it('GoApply: a later phone verification does not grant a second one (and neither does the reverse order)', async () => {
+    const emailOnly = {
+      brand: 'goapply', name: '张伟', emailVerified: true, emailVerifiedAt: new Date(), emailIsPlaceholder: false,
+      phoneE164: null, phoneVerifiedAt: null,
+    };
+    // 1. Email verified, no phone: granted once under the email key.
+    deps.findUser.mockResolvedValueOnce(emailOnly);
+    expect((await ensureFirstPracticeGrant('u1')).grant).toBe('granted');
+    deps.granted.add('u1:email_verified');
+    // 2. The phone is verified later: the entitlement is already used.
+    deps.findUser.mockResolvedValueOnce({ ...emailOnly, phoneE164: '+8613800000000', phoneVerifiedAt: new Date() });
+    expect(await ensureFirstPracticeGrant('u1')).toEqual({ method: 'phone', verified: true, grant: 'already_granted' });
+    expect(deps.hasPracticeGrant).toHaveBeenLastCalledWith('u1', 'email_verified');
+    expect(deps.grantPracticeCredit).toHaveBeenCalledTimes(1);
+
+    // The reverse: phone first (granted under the phone key), the phone later removed, email verified.
+    deps.granted = new Set(['u2:phone_verified']);
+    deps.findUser.mockResolvedValueOnce(emailOnly);
+    expect(await ensureFirstPracticeGrant('u2')).toEqual({ method: 'email', verified: true, grant: 'already_granted' });
+    expect(deps.hasPracticeGrant).toHaveBeenLastCalledWith('u2', 'phone_verified');
+    expect(deps.grantPracticeCredit).toHaveBeenCalledTimes(1);
+  });
+
+  it('GoApply: the same verification never grants twice either (the key family is unchanged)', async () => {
+    const both = {
+      brand: 'goapply', name: '张伟', emailVerified: true, emailVerifiedAt: new Date(), emailIsPlaceholder: false,
+      phoneE164: '+8613800000000', phoneVerifiedAt: new Date(),
+    };
+    deps.findUser.mockResolvedValue(both);
+    deps.grantPracticeCredit.mockResolvedValueOnce({ status: 'granted' } as any).mockResolvedValue({ status: 'already_granted' } as any);
+    // Phone first: the key the phone grant has always used.
+    expect(await ensureFirstPracticeGrant('u1')).toEqual({ method: 'phone', verified: true, grant: 'granted' });
+    expect(await ensureFirstPracticeGrant('u1')).toEqual({ method: 'phone', verified: true, grant: 'already_granted' });
+    expect(deps.grantPracticeCredit.mock.calls.every((c) => c[1] === 'phone_verified' && c[2] === 'phone_verified')).toBe(true);
+    deps.findUser.mockResolvedValue(null as any);
+  });
+
+  it('GoApply, nothing verified: says which verification is still open, and grants nothing', async () => {
+    // An email + password account: the open step is its email.
+    deps.findUser.mockResolvedValueOnce({
+      brand: 'goapply', name: null, emailVerified: false, emailVerifiedAt: null, emailIsPlaceholder: false,
+      phoneE164: null, phoneVerifiedAt: null,
+    });
+    expect(await ensureFirstPracticeGrant('u1')).toEqual({ method: 'email', verified: false, grant: null });
+    // A grandfathered flag without a verification date is not a verification.
+    deps.findUser.mockResolvedValueOnce({
+      brand: 'goapply', name: null, emailVerified: true, emailVerifiedAt: null, emailIsPlaceholder: false,
+      phoneE164: null, phoneVerifiedAt: null,
+    });
+    expect(await ensureFirstPracticeGrant('u1')).toEqual({ method: 'email', verified: false, grant: null });
+    // A WeChat or phone account has no real address: the open step is the phone.
+    deps.findUser.mockResolvedValueOnce({
+      brand: 'goapply', name: null, emailVerified: true, emailVerifiedAt: new Date(), emailIsPlaceholder: true,
+      phoneE164: '+8613800000000', phoneVerifiedAt: null,
+    });
     expect(await ensureFirstPracticeGrant('u1')).toEqual({ method: 'phone', verified: false, grant: null });
+    expect(deps.grantPracticeCredit).not.toHaveBeenCalled();
+  });
+
+  it('an unknown user gets nothing; a failing grant or a failing ledger read reports failed', async () => {
     expect(await ensureFirstPracticeGrant('u1')).toEqual({ method: 'email', verified: false, grant: null });
     deps.findUser.mockResolvedValueOnce({
       brand: 'roboapply', name: 'A', emailVerified: true, emailVerifiedAt: new Date(), emailIsPlaceholder: false,
@@ -654,6 +761,15 @@ describe('first free practice (C42)', () => {
     });
     deps.grantPracticeCredit.mockRejectedValueOnce(new Error('ledger down'));
     expect((await ensureFirstPracticeGrant('u1')).grant).toBe('failed');
+    // GoApply: when the other key cannot be read, nothing is granted (never a possible second grant).
+    deps.findUser.mockResolvedValueOnce({
+      brand: 'goapply', name: null, emailVerified: true, emailVerifiedAt: new Date(), emailIsPlaceholder: false,
+      phoneE164: null, phoneVerifiedAt: null,
+    });
+    deps.hasPracticeGrant.mockRejectedValueOnce(new Error('ledger down'));
+    deps.grantPracticeCredit.mockClear();
+    expect(await ensureFirstPracticeGrant('u1')).toEqual({ method: 'email', verified: true, grant: 'failed' });
+    expect(deps.grantPracticeCredit).not.toHaveBeenCalled();
   });
 });
 
@@ -878,32 +994,36 @@ describe('GoApply: "your practice report is ready" in WeChat (once per report)',
     const { id } = await liveSession({ role: '后端工程师' });
     // The session belongs to GoApply (its brand column decides, not the host the callback arrives on).
     Object.assign(h.rows.get(id)!, { brand: 'goapply', voiceProvider: 'livekit_cloud' });
+    h.rows.get(id)!.transcript = [
+      { role: 'interviewer', text: '请做一个自我介绍。', ts: 1000 },
+      { role: 'candidate', text: '我负责支付接口，延迟降低了四成。', ts: 9000 },
+    ];
+    // It runs on the shared plane (no CN_LIVEKIT_URL), so its callbacks carry the
+    // shared worker's secret; a stray CN secret without a plane is not accepted.
     const cnSecret = process.env.CN_LIVEKIT_AGENT_CALLBACK_SECRET;
     process.env.CN_LIVEKIT_AGENT_CALLBACK_SECRET = 'cn-cb-secret';
     try {
-      h.rows.get(id)!.transcript = [
-        { role: 'interviewer', text: '请做一个自我介绍。', ts: 1000 },
-        { role: 'candidate', text: '我负责支付接口，延迟降低了四成。', ts: 9000 },
-      ];
-      await svc.workerLifecycle({ sessionId: id, secret: 'cn-cb-secret', event: 'ended' });
-      expect(h.rows.get(id)!.status).toBe('completed');
-      await vi.waitFor(() => expect(deps.sendReportNotice).toHaveBeenCalledTimes(1));
-      expect(deps.sendReportNotice).toHaveBeenCalledWith({
-        userId: 'u1',
-        template: 'report_ready',
-        params: { title: '后端工程师', completedAt: expect.any(String) },
-        eventId: id,
-        href: `/practice/${id}/report`,
-      });
-      // Late triggers never announce it again.
-      await svc.workerLifecycle({ sessionId: id, secret: 'cn-cb-secret', event: 'ended' });
-      await svc.finalize(id);
-      await new Promise((r) => setTimeout(r, 10));
-      expect(deps.sendReportNotice).toHaveBeenCalledTimes(1);
+      await expect(svc.workerLifecycle({ sessionId: id, secret: 'cn-cb-secret', event: 'ended' })).rejects.toMatchObject({ name: 'InterviewAuthError' });
+      expect(h.rows.get(id)!.status).toBe('live');
     } finally {
       if (cnSecret === undefined) delete process.env.CN_LIVEKIT_AGENT_CALLBACK_SECRET;
       else process.env.CN_LIVEKIT_AGENT_CALLBACK_SECRET = cnSecret;
     }
+    await svc.workerLifecycle({ sessionId: id, secret: 'cb-secret', event: 'ended' });
+    expect(h.rows.get(id)!.status).toBe('completed');
+    await vi.waitFor(() => expect(deps.sendReportNotice).toHaveBeenCalledTimes(1));
+    expect(deps.sendReportNotice).toHaveBeenCalledWith({
+      userId: 'u1',
+      template: 'report_ready',
+      params: { title: '后端工程师', completedAt: expect.any(String) },
+      eventId: id,
+      href: `/practice/${id}/report`,
+    });
+    // Late triggers never announce it again.
+    await svc.workerLifecycle({ sessionId: id, secret: 'cb-secret', event: 'ended' });
+    await svc.finalize(id);
+    await new Promise((r) => setTimeout(r, 10));
+    expect(deps.sendReportNotice).toHaveBeenCalledTimes(1);
   });
 
   it('a failed send never breaks scoring, and is not retried', async () => {
@@ -927,5 +1047,125 @@ describe('GoApply: "your practice report is ready" in WeChat (once per report)',
     await svc.scoreTextPractice({ userId: 'u1', sessionId });
     await vi.waitFor(() => expect(deps.sendReportNotice).toHaveBeenCalledTimes(1));
     expect([...deps.sendReportNotice.mock.calls[0]![0].params.title].length).toBeLessThanOrEqual(20);
+  });
+});
+
+// ─── D5 parity: GoApply voice and video practice on the shared media plane ──
+
+describe('GoApply voice and video practice with only the shared credentials (D5)', () => {
+  const asGoApply = <T>(fn: () => Promise<T>) => runWithBrand('goapply', fn);
+  async function cnLive(extra: Record<string, unknown> = {}) {
+    const s = await asGoApply(() => svc.createSession({ userId: 'u1', role: '后端工程师', market: 'cn', language: 'zh', ...extra }));
+    await asGoApply(() => svc.prepareSession({ sessionId: s.id, userId: 'u1' }));
+    const conn = await asGoApply(() => svc.getConnection({ sessionId: s.id, userId: 'u1' }));
+    return { id: s.id, conn, created: s };
+  }
+  const roomMetadata = () => JSON.parse((liveKit.createInterviewRoom.mock.calls.at(-1)![0] as { metadata: string }).metadata);
+
+  it('a voice session is created (not a 503 config error) with a zh voice and the shared STT (G53, G54)', async () => {
+    const { created } = await cnLive({ mode: 'voice' });
+    expect(created).toMatchObject({ brand: 'goapply', voiceProvider: 'livekit_cloud', status: 'preparing', language: 'zh' });
+    expect((created.liveMetrics as Row).voiceSeam).toEqual({ v: 1, brand: 'goapply', provider: 'livekit_cloud', stack: 'shared' });
+    const voice = created.voice as Row;
+    expect(voice.model).not.toMatch(/^dashscope\//);
+    expect(String(voice.languageCode)).toMatch(/^(zh|cmn)/);
+    const meta = roomMetadata();
+    // The same interview routing as RoboApply: the shared model through LiveKit Inference.
+    expect(meta.llm.model).toBe('openai/gpt-5.4');
+    expect(meta.stt).toMatchObject({ provider: 'deepgram', model: 'deepgram/nova-3', language: 'zh' });
+    expect(meta.voice).toEqual(voice);
+  });
+
+  it('dispatch: a GoApply room on the shared project dispatches the worker registered there, never GoApply-Interview (G51)', async () => {
+    await cnLive({ mode: 'voice' });
+    expect(liveKit.dispatchAgent).toHaveBeenCalledTimes(1);
+    expect(liveKit.dispatchAgent.mock.calls[0]![0]).toMatchObject({ agentName: 'RoboApply-Interview' });
+    // The clone dev stack registers another name on the shared project.
+    process.env.INTERVIEW_ENGINE_AGENT_NAME = 'RoboApply-Interview-Clone';
+    try {
+      liveKit.dispatchAgent.mockClear();
+      await cnLive({ mode: 'voice' });
+      expect(liveKit.dispatchAgent.mock.calls[0]![0]).toMatchObject({ agentName: 'RoboApply-Interview-Clone' });
+      // A RoboApply session dispatches the same worker.
+      liveKit.dispatchAgent.mockClear();
+      await liveSession();
+      expect(liveKit.dispatchAgent.mock.calls[0]![0]).toMatchObject({ agentName: 'RoboApply-Interview-Clone' });
+    } finally {
+      delete process.env.INTERVIEW_ENGINE_AGENT_NAME;
+    }
+  });
+
+  it('a video practice publishes the camera; with both consents the recording has video (G8)', async () => {
+    deps.consents = new Set(['interview_recording', 'interview_video']);
+    const { id, conn } = await cnLive({ mode: 'video', recording: { audio: true, video: true } });
+    expect(conn.cameraPublish).toBe(true);
+    expect(liveKit.mintJoinToken.mock.calls.at(-1)![0]).toMatchObject({ allowVideo: true });
+    expect(h.rows.get(id)!.recordingConsent).toEqual({ audio: true, video: true });
+    await vi.waitFor(() => expect(h.startRecording).toHaveBeenCalledWith(expect.objectContaining({ audioOnly: false })));
+    await vi.waitFor(() => expect(h.rows.get(id)!.recordingMimeType).toBe('video/mp4'));
+    await svc.handleEgressEnded({ egressId: 'EG_1', sizeBytes: 2048, durationSec: 60, signer: { apiKey: 'test-key', brands: ['roboapply', 'goapply'] } });
+    expect(h.rows.get(id)).toMatchObject({ recordingBytes: 2048, recordingMimeType: 'video/mp4' });
+  });
+
+  it('without the video consent (not offered or not given) the camera is still published and the recording is audio only', async () => {
+    deps.consents = new Set(['interview_recording']);
+    const { id, conn } = await cnLive({ mode: 'video', recording: { audio: true, video: true } });
+    expect(conn.cameraPublish).toBe(true);
+    expect(h.rows.get(id)!.recordingConsent).toEqual({ audio: true, video: false });
+    await vi.waitFor(() => expect(h.startRecording).toHaveBeenCalledWith(expect.objectContaining({ audioOnly: true })));
+    await vi.waitFor(() => expect(h.rows.get(id)!.recordingMimeType).toBe('audio/mp4'));
+    // No recording consent at all: nothing is recorded, the camera is still live.
+    deps.consents = new Set();
+    h.startRecording.mockClear();
+    const none = await cnLive({ mode: 'video', recording: { audio: true, video: true } });
+    expect(none.conn.cameraPublish).toBe(true);
+    expect(none.conn.recording).toBe(false);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(h.startRecording).not.toHaveBeenCalled();
+  });
+
+  it('CN_INTERVIEW_CAMERA_PUBLISH=false restores local preview only and audio-only recording, on GoApply alone', async () => {
+    deps.consents = new Set(['interview_recording', 'interview_video']);
+    process.env.CN_INTERVIEW_CAMERA_PUBLISH = 'false';
+    try {
+      const { id, conn } = await cnLive({ mode: 'video', recording: { audio: true, video: true } });
+      expect(conn.cameraPublish).toBe(false);
+      expect(liveKit.mintJoinToken.mock.calls.at(-1)![0]).toMatchObject({ allowVideo: false });
+      expect(h.rows.get(id)!.recordingConsent).toEqual({ audio: true, video: false });
+      await vi.waitFor(() => expect(h.startRecording).toHaveBeenCalledWith(expect.objectContaining({ audioOnly: true })));
+      h.startRecording.mockClear();
+      const intl = await liveSession({ mode: 'video', recording: { audio: true, video: true } });
+      expect(intl.conn.cameraPublish).toBe(true);
+      await vi.waitFor(() => expect(h.startRecording).toHaveBeenCalledWith(expect.objectContaining({ audioOnly: false })));
+    } finally {
+      delete process.env.CN_INTERVIEW_CAMERA_PUBLISH;
+    }
+  });
+
+  it('the Parley transport is honoured for GoApply as for RoboApply (G57)', async () => {
+    const cn = await asGoApply(() => svc.createSession({ userId: 'u1', role: '后端工程师', market: 'cn', transport: 'parley' }));
+    expect((cn.liveMetrics as Row).control).toMatchObject({ transport: 'parley' });
+    const intl = await svc.createSession({ userId: 'u1', role: 'Engineer', market: 'intl', transport: 'parley' });
+    expect((intl.liveMetrics as Row).control).toMatchObject({ transport: 'parley' });
+  });
+
+  it('the opt-in domestic-only wall refuses the shared (LiveKit Inference) worker for GoApply, with nothing persisted', async () => {
+    process.env.CN_LLM_DOMESTIC_ONLY = 'true';
+    try {
+      await expect(asGoApply(() => svc.createSession({ userId: 'u1', role: '后端工程师', market: 'cn' })))
+        .rejects.toMatchObject({ code: 'interview_engine_not_configured' });
+      // Parley runs its own models: under the wall a GoApply session does not take it either.
+      await expect(asGoApply(() => svc.createSession({ userId: 'u1', role: '后端工程师', market: 'cn', transport: 'parley' })))
+        .rejects.toMatchObject({ code: 'interview_engine_not_configured' });
+      expect(h.rows.size).toBe(0);
+      // RoboApply keeps Parley under GoApply's wall.
+      const intl = await svc.createSession({ userId: 'u1', role: 'Engineer', market: 'intl', transport: 'parley' });
+      expect((intl.liveMetrics as Row).control).toMatchObject({ transport: 'parley' });
+      h.reset();
+      // RoboApply is untouched by GoApply's wall.
+      await expect(svc.createSession({ userId: 'u1', role: 'Engineer', market: 'intl' })).resolves.toMatchObject({ status: 'preparing' });
+    } finally {
+      delete process.env.CN_LLM_DOMESTIC_ONLY;
+    }
   });
 });

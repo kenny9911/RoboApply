@@ -4,10 +4,11 @@
 // AI gate, and the web search behind the no-personal-information check.
 //   - GoApply, AI consent off (or no bound phone): the refusal, ZERO
 //     LLMService calls and ZERO Tavily requests;
-//   - GoApply, consent on: the preview is written by the model from the role
-//     and the job post alone — the offshore search is never called;
-//   - RoboApply: unchanged, and the search query never carries the user's
-//     name, an email or a phone number.
+//   - GoApply, consent on: the same preview as RoboApply (D5; G9, G105):
+//     grounded on the job post, else on a web search of the role, and a
+//     failed search degrades to a role-based preview, never an error;
+//   - both brands: the search query never carries the user's name, an email
+//     or a phone number.
 // The real prompt service and web search run; the model (blueprint agent +
 // LLMService) and `fetch` are spies. No network.
 // Run: npx vitest run server/src/interview-engine/routes/previewRoutes.test.ts
@@ -86,6 +87,7 @@ const saved = { key: process.env.TAVILY_API_KEY, region: process.env.DEPLOY_REGI
 
 beforeAll(async () => {
   process.env.TAVILY_API_KEY = 'tvly-test';
+  delete process.env.DEPLOY_REGION;
   const express = (await import('express')).default;
   const preview = (await import('./previewRoutes.js')).default;
   const app = express();
@@ -104,6 +106,7 @@ afterAll(async () => {
   globalThis.fetch = realFetch;
   if (saved.key === undefined) delete process.env.TAVILY_API_KEY;
   else process.env.TAVILY_API_KEY = saved.key;
+  if (saved.region !== undefined) process.env.DEPLOY_REGION = saved.region;
   await new Promise<void>((r) => server.close(() => r()));
 });
 
@@ -162,25 +165,50 @@ describe('GoApply: the AI gate comes first', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('consent on → the model writes the preview from the role and post; the offshore search is never called', async () => {
+  it('consent on → the blueprint is built with web evidence, as on RoboApply (G9)', async () => {
     const res = await preview({ role: '后端工程师', interviewType: 'behavioral', personaId: 'maya', language: 'zh' });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.requirements.roleSummary).toBe('Builds APIs');
     expect(body.sampleQuestions).toEqual(['Tell me about a hard bug.', 'How do you test?']);
-    // No web evidence: grounded on the role alone, with no sources to show.
-    expect(body.webSources).toEqual([]);
-    expect(body.groundedOn).toBe('role');
+    expect(body.groundedOn).toBe('market');
+    expect(body.webSources).toEqual([{ title: 'Backend Engineer at Acme', url: 'https://boards.example/1' }]);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe('https://api.tavily.com/search');
+    // The query is the role text only.
+    expect(tavilyBodies()[0]?.query).toBe('后端工程师 job description requirements responsibilities qualifications');
     expect(m.agentRun).toHaveBeenCalledTimes(1);
-    expect(m.agentRun.mock.calls[0]?.[0]).toMatchObject({ webEvidence: '' });
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(String(m.agentRun.mock.calls[0]?.[0]?.webEvidence)).toContain('A summary');
   });
 
-  it('consent on, a short job post (which would trigger a search on RoboApply) still never searches', async () => {
+  it('consent on, a short job post: the search runs and the preview stays grounded on the post', async () => {
     const res = await preview({ jdText: '负责后端服务开发，熟悉 Go 或 Java。', language: 'zh' });
     expect(res.status).toBe(200);
     expect((await res.json()).groundedOn).toBe('jd');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['the user’s own name', '张伟 后端工程师', { name: '张伟' }],
+    ['an email address', '后端工程师 zhangwei@example.com', {}],
+    ['a mainland phone number', '后端工程师 13800138000', {}],
+  ])('a role carrying %s is never sent to the search; the preview still works', async (_what, role, user) => {
+    m.user = { ...m.user, ...user };
+    const res = await preview({ role, language: 'zh' });
+    expect(res.status).toBe(200);
+    expect((await res.json()).groundedOn).toBe('role');
     expect(fetchSpy).not.toHaveBeenCalled();
+    expect(m.agentRun).toHaveBeenCalledTimes(1);
+  });
+
+  it('a search failure degrades to no evidence, never an error', async () => {
+    fetchSpy.mockRejectedValue(new Error('search down'));
+    const res = await preview({ role: '后端工程师', language: 'zh' });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.groundedOn).toBe('role');
+    expect(body.webSources).toEqual([]);
+    expect(m.agentRun.mock.calls[0]?.[0]).toMatchObject({ webEvidence: '' });
   });
 
   it('a general type whose length fits 20–30 minutes previews in the AI-interview practice format the session will run', async () => {

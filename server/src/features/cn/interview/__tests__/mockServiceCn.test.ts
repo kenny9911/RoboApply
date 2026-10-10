@@ -85,7 +85,7 @@ import {
   typeLabelFor,
   typesForMarket,
 } from '../../../../roboapply/v2/lib/raMockCatalog.js';
-import { raInterviewPromptService } from '../../../../roboapply/v2/services/RAInterviewPromptService.js';
+import { raInterviewPromptService, withSearchKnownValues } from '../../../../roboapply/v2/services/RAInterviewPromptService.js';
 import { MockValidationError, raMockService } from '../../../../roboapply/v2/services/RAMockService.js';
 import { CN_AI_INTERVIEW_FORMAT_ID, CN_SCRIPT_SECTIONS, storyQuestionCount } from '../index.js';
 
@@ -164,7 +164,7 @@ describe('start on GoApply', () => {
     expect(m.prisma.rAMockSession.create.mock.calls[0]![0].data).toMatchObject({ id: out.sessionId, userId: 'u1', jobId: 'job_cn_1', typeId: 'behavioral', plannedDurationMinutes: 25 });
     expect(row.blueprint.cnFormat).toMatchObject({ formatId: CN_AI_INTERVIEW_FORMAT_ID, minutes: 25, language: 'zh' });
 
-    // The job post reached the requirements agent as evidence; no web search on GoApply.
+    // The job post reached the requirements agent as evidence; the fixed format script researches nothing.
     expect(m.requirements.mock.calls[0]![0].webEvidence).toBe('Job post (saved by the candidate):\n负责用户增长与数据分析。');
     expect(m.search).not.toHaveBeenCalled();
 
@@ -204,8 +204,22 @@ describe('start on GoApply', () => {
     expect(m.rows.get(long.sessionId)!.blueprint).not.toHaveProperty('cnFormat');
     const coding = await raMockService.start('u1', { ...START, typeId: 'technical', durationMinutes: 25, market: 'cn' });
     expect(coding.cnFormat).toBeUndefined();
-    // Still no offshore search for any GoApply practice.
+    // Outside the fixed format these run the general pipeline, web research included (D5).
+    expect(m.search).toHaveBeenCalledTimes(2);
+  });
+
+  it('the account name set around the start reaches the plan: a role that carries it is not searched, and the practice still starts', async () => {
+    // What the practice route does (InterviewSessionService.startTextPractice): RAMockService.start
+    // does not forward known values, so they are set for everything it runs.
+    const start = (role: string) =>
+      runWithBrand('goapply', () =>
+        withSearchKnownValues(['张伟'], () => raMockService.start('u1', { ...START, role, typeId: 'technical', durationMinutes: 25 })),
+      );
+    const named = await start('张伟的后端工程师面试');
     expect(m.search).not.toHaveBeenCalled();
+    expect(named.questions.length).toBeGreaterThan(0);
+    await start('后端工程师');
+    expect(m.search).toHaveBeenCalledOnce();
   });
 
   it('the market defaults to the request’s brand', async () => {

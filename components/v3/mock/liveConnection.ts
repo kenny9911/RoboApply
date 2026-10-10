@@ -65,14 +65,13 @@ export function qualityLevel(quality: ConnectionQuality): QualityLevel | null {
   }
 }
 
-// ─── Camera plan per brand (WP-63a, CN L-11) ──────────────────────────────
+// ─── Camera plan (the server's media policy; no brand term) ────────────────
 
 export interface CameraPlanInput {
   mode: 'voice' | 'video';
-  /** From the connection: false = the brand keeps the camera local (absent on older APIs). */
+  /** From the server (the connection, else the session): false = the camera
+   *  stays local. Absent on older APIs: read as allowed. */
   cameraPublish?: boolean;
-  /** The brand's market; GoApply ('cn') never publishes a camera. */
-  market: 'intl' | 'cn';
   /** The camera worked in the device check (or there was no check: a rejoin). */
   deviceOk: boolean;
 }
@@ -81,19 +80,20 @@ export interface CameraPlan {
   /** Publish a camera track to the room (the interviewer side can receive it). */
   publish: boolean;
   /** The camera, if shown at all, is a local self-view from a stream that is
-   *  never sent. Decided by the brand alone, so a later "Start camera" can
-   *  never fall through to publishing. */
+   *  never sent. Decided by the server's policy alone, so a later "Start
+   *  camera" can never fall through to publishing. */
   localPreview: boolean;
   /** The local preview starts on when the room opens (it worked in the check). */
   previewStartsOn: boolean;
 }
 
-/** Where the candidate's camera goes. On GoApply — or whenever the server
- *  says so — it is a local self-view only: no video track is ever published,
- *  even when the camera failed the device check and is turned on later. */
-export function cameraPlan({ mode, cameraPublish, market, deviceOk }: CameraPlanInput): CameraPlan {
+/** Where the candidate's camera goes: published on both brands, unless the
+ *  server says it stays local (`cameraPublish: false`, an operator opt-out).
+ *  Then it is a local self-view only: no video track is ever published, even
+ *  when the camera failed the device check and is turned on later. */
+export function cameraPlan({ mode, cameraPublish, deviceOk }: CameraPlanInput): CameraPlan {
   if (mode !== 'video') return { publish: false, localPreview: false, previewStartsOn: false };
-  const localOnly = cameraPublish === false || market === 'cn';
+  const localOnly = cameraPublish === false;
   if (localOnly) return { publish: false, localPreview: true, previewStartsOn: deviceOk };
   return { publish: deviceOk, localPreview: false, previewStartsOn: false };
 }

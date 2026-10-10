@@ -200,6 +200,10 @@ export interface IESessionDetail extends IESessionSummary {
   reportPending?: boolean;
   recordingAvailable: boolean;
   transcriptAvailable: boolean;
+  /** The server's media policy for this session, known before the room is
+   *  joined: false = a video practice keeps the camera as a local preview
+   *  (nothing is published). Absent on an older API: read as allowed. */
+  cameraPublish?: boolean;
 }
 
 export type IECoachMode = 'hint' | 'nudge';
@@ -225,8 +229,8 @@ export interface IEConnection {
    *  page joins Parley with `parley` instead of a LiveKit room. */
   transport?: 'parley';
   parley?: IEParleyJoin;
-  /** False when the server's join token cannot publish a camera (GoApply: local
-   *  preview only; WP-63a). Absent = legacy server, treat as allowed. */
+  /** False when the server's join token cannot publish a camera (the media
+   *  policy keeps it a local preview). Absent = legacy server, treat as allowed. */
   cameraPublish?: boolean;
 }
 
@@ -328,6 +332,9 @@ export interface PracticeSetup {
   ai: { allowed: boolean; reason: PracticeGateReason | null };
   /** `available` = recording can happen at all here; `consent` = the user's standing grants. */
   recording: { available: boolean; consent: PracticeRecordingRequest };
+  /** The server's media policy (the same on both brands unless an operator
+   *  turned camera publishing off). Absent on an older API: read as allowed. */
+  media?: { cameraPublish: boolean; recordVideo: boolean };
 }
 
 export interface PracticeSessionInfo {

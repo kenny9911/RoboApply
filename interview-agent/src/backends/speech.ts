@@ -69,7 +69,7 @@ function pinned<T extends string>(env: Env, name: string, allowed: readonly T[])
   throw new WorkerConfigError(`${name}="${raw}" is not supported. Use ${allowed.join(' or ')}.`);
 }
 
-/** A GoApply worker never resolves a speech backend to the gateway (R-13). */
+/** The GoApply (mainland) worker never resolves a speech backend to the gateway. */
 function refuseGatewayOnGoApply(kind: 'STT' | 'TTS', model: string | undefined, env: Env): void {
   if (!isGoApplyWorker(env)) return;
   throw new WorkerConfigError(

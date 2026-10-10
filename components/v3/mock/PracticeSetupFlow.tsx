@@ -67,6 +67,10 @@ import {
 import { MarketRequirementsPanel, type PreviewState } from './MarketRequirementsPanel';
 import styles from './PracticeSetupFlow.module.css';
 
+/** Where practice packs and plans are sold: the plan picker, like the report's
+ *  "get more" link (features/practice/PracticeReportEnd PRACTICE_PLANS_HREF). */
+const PRACTICE_PLANS_HREF = '/settings/billing#plans';
+
 /** Browse the catalog, or paste the job post itself. */
 export type RoleSourceMode = 'role' | 'jd';
 
@@ -142,7 +146,7 @@ interface Props {
   webSources: Array<{ title: string; url: string }>;
   sampleQuestions: string[];
   groundedOn?: 'jd' | 'market' | 'role';
-  /** False hides the market-requirements preview entirely (GoApply, WP-43). Default true. */
+  /** False hides the market-requirements preview entirely. Default true: it is shown on both brands. */
   showPreview?: boolean;
   canPreview: boolean;
   onPreview: () => void;
@@ -874,7 +878,7 @@ export function PracticeSetupFlow({
                   </button>
                 ) : null}
                 {canGetCredits ? (
-                  <Link className={styles.laneGhost} href="/settings#billing">{t('setup.getCredits')}</Link>
+                  <Link className={styles.laneGhost} href={PRACTICE_PLANS_HREF}>{t('setup.getCredits')}</Link>
                 ) : null}
               </span>
             ) : null}

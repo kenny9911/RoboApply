@@ -1,13 +1,16 @@
 // Shared helpers for the worker's model backends (WP-63b, CN-E-06).
 //
-// The worker serves one brand per deployment: the RoboApply worker
-// (`RoboApply-Interview`) runs every model through the LiveKit Inference
-// gateway, exactly as before; the GoApply worker (`GoApply-Interview`) runs a
-// domestic OpenAI-compatible LLM and DashScope speech, and must never reach an
+// A worker serves one LiveKit plane. The shared worker (`RoboApply-Interview`)
+// runs every model through the LiveKit Inference gateway, exactly as before,
+// for BOTH brands: a GoApply session with no plane of its own is dispatched to
+// it with the shared models (owner ruling D5, GOAPPLY_PARITY_PLAN §3.5). The
+// GoApply worker (`GoApply-Interview`) is the optional mainland deployment on
+// GoApply's own plane (CN_LIVEKIT_* on the control plane): it runs a domestic
+// OpenAI-compatible LLM and DashScope speech, and by design never reaches an
 // international endpoint with a candidate's words. The rules here mirror the
-// control plane's GoApply policy (server/src/platform/llm/brandPolicy.ts,
-// TASK_PLAN R-13): only mainland endpoints, matched by host, plus an explicit
-// allowlist for a self-hosted mainland gateway.
+// control plane's mainland host list (server/src/platform/llm/brandPolicy.ts):
+// only mainland endpoints, matched by host, plus an explicit allowlist for a
+// self-hosted mainland gateway.
 //
 // Pure module (no I/O); unit-tested.
 
@@ -94,7 +97,9 @@ export const GOAPPLY_AGENT_NAME = 'GoApply-Interview';
  * True when this process serves GoApply: it registers as `GoApply-Interview`
  * (INTERVIEW_ENGINE_AGENT_NAME) or sets WORKER_BRAND=goapply. A GoApply worker
  * may never use a gateway backend, whatever LLM_BACKEND / STT_BACKEND /
- * TTS_BACKEND say or leave unset (R-13): the brand, not only the deploy
+ * TTS_BACKEND say or leave unset (the mainland deployment's own rule; a GoApply
+ * session on the shared plane is served by the shared worker instead): the
+ * worker's identity, not only the deploy
  * image's env pins, decides.
  */
 export function isGoApplyWorker(env: Env): boolean {

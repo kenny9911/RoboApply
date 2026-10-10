@@ -1,8 +1,10 @@
 // @vitest-environment node
 //
 // WP-63a acceptance: the retention purge deletes recordings and transcripts
-// (objects and rows) older than the window, on both brands, each from its own
-// bucket — and leaves newer sessions, the scores and the other brand alone.
+// (objects and rows) older than the window, on both brands, each from the
+// bucket the brand uses (D5: the shared bucket for GoApply unless CN_S3_BUCKET
+// gives it its own) — and leaves newer sessions, the scores and the other
+// brand alone.
 // Run: npx vitest run server/src/features/interview/retention.test.ts
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -189,12 +191,32 @@ describe('purgeInterviewArtifacts', () => {
     expect(h.sessions.get('a_old')!.recordingKey).toBeNull();
   });
 
-  it('without the brand’s bucket, never claims objects are gone', async () => {
+  it('GoApply with no bucket of its own purges from the shared bucket, by session id (G55)', async () => {
     delete process.env.CN_S3_BUCKET;
+    session('c_old', 'uG', 100);
+    session('a_old', 'uR', 100);
+    const r = await purgeInterviewArtifacts({ brand: 'goapply', now: NOW });
+    expect(r).toMatchObject({ sessions: 1, objectsPending: 0 });
+    expect(h.sessions.get('c_old')).toMatchObject({ transcriptText: null, recordingKey: null, transcriptKey: null });
+    // Only its own session's keys, in the shared bucket; RoboApply's session is untouched.
+    expect(h.deleted.length).toBeGreaterThan(0);
+    expect(h.deleted.every((d) => d.bucket === 'intl-bucket' && d.key.startsWith('interviews/c_old/'))).toBe(true);
+    expect(h.sessions.get('a_old')!.recordingKey).toBe('interviews/a_old/recording.mp4');
+  });
+
+  it('without any usable bucket, never claims objects are gone', async () => {
+    // A bucket of its own with a missing key is not configured (never the shared keys).
+    delete process.env.CN_S3_SECRET_ACCESS_KEY;
     session('c_old', 'uG', 100);
     const r = await purgeInterviewArtifacts({ brand: 'goapply', now: NOW });
     expect(r).toMatchObject({ sessions: 1, objectsDeleted: 0, objectsPending: 1 });
     expect(h.sessions.get('c_old')).toMatchObject({ transcriptText: null, recordingKey: 'interviews/c_old/recording.mp4' });
+    expect(h.deleted).toEqual([]);
+    // The same for a deployment with no storage at all, on either brand.
+    for (const k of Object.keys(ENV)) delete process.env[k];
+    session('a_old', 'uR', 100);
+    expect(await purgeInterviewArtifacts({ brand: 'roboapply', now: NOW })).toMatchObject({ objectsDeleted: 0, objectsPending: 1 });
+    expect(h.sessions.get('a_old')!.recordingKey).toBe('interviews/a_old/recording.mp4');
   });
 
   it('uses a shorter per-brand window when configured', async () => {

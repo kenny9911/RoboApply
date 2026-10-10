@@ -40,6 +40,7 @@ const m = vi.hoisted(() => {
     hasLiveConsent: vi.fn(),
     user: { id: 'u1', role: 'seeker', roles: ['seeker'], name: 'Jane Doe' } as Record<string, unknown>,
     apiKeyId: undefined as string | undefined,
+    canStore: true,
   };
 });
 
@@ -57,7 +58,7 @@ vi.mock('../../platform/brand/brandContext.js', () => ({ getCurrentBrandOrDefaul
 vi.mock('../../features/auth-cn/index.js', () => ({ phoneBindingRequired: m.phoneRequired }));
 vi.mock('../../platform/consent/index.js', () => ({ aiAllowed: m.aiAllowed, hasLiveConsent: m.hasLiveConsent }));
 vi.mock('../../platform/flags.js', () => ({ isEnabledForBrand: m.voiceOn }));
-vi.mock('../storage/r2Storage.js', () => ({ interviewR2Storage: { isConfigured: () => true } }));
+vi.mock('../storage/r2Storage.js', () => ({ interviewR2Storage: { isConfigured: () => true, canStore: () => m.canStore } }));
 vi.mock('../sessions/InterviewSessionService.js', () => ({
   interviewSessionService: {
     createSession: m.create,
@@ -89,6 +90,14 @@ function row(extra: Record<string, unknown> = {}) {
 let server: Server;
 let base: string;
 const savedRec = process.env.INTERVIEW_ENGINE_RECORDING_ENABLED;
+// The gate reads the real interview configuration (config.ts voiceRoutingProblem):
+// every test starts from one shared interview model and no GoApply override.
+const ROUTING_ENV = [
+  'LLM_INTERVIEW_MODEL', 'LLM_INTERVIEW_LIVE_MODEL', 'CN_LLM_INTERVIEW_MODEL', 'CN_LLM_INTERVIEW_LIVE_MODEL',
+  'CN_LLM_DOMESTIC_ONLY', 'CN_RESIDENCY_STRICT', 'CN_LIVEKIT_URL', 'CN_LIVEKIT_API_KEY', 'CN_LIVEKIT_API_SECRET',
+  'CN_INTERVIEW_ENGINE_STT_MODEL', 'CN_INTERVIEW_ENGINE_TTS_MODEL', 'LLM_SETTINGS_DB_DISABLED',
+] as const;
+const savedRouting: Record<string, string | undefined> = Object.fromEntries(ROUTING_ENV.map((k) => [k, process.env[k]]));
 
 beforeAll(async () => {
   process.env.INTERVIEW_ENGINE_RECORDING_ENABLED = 'true';
@@ -103,11 +112,19 @@ beforeAll(async () => {
 afterAll(async () => {
   if (savedRec === undefined) delete process.env.INTERVIEW_ENGINE_RECORDING_ENABLED;
   else process.env.INTERVIEW_ENGINE_RECORDING_ENABLED = savedRec;
+  for (const k of ROUTING_ENV) {
+    if (savedRouting[k] === undefined) delete process.env[k];
+    else process.env[k] = savedRouting[k];
+  }
   await new Promise<void>((r) => server.close(() => r()));
 });
 
 beforeEach(() => {
   vi.clearAllMocks();
+  for (const k of ROUTING_ENV) delete process.env[k];
+  process.env.LLM_SETTINGS_DB_DISABLED = 'true';
+  process.env.LLM_INTERVIEW_MODEL = 'openai/gpt-5.4';
+  m.canStore = true;
   m.user = { id: 'u1', role: 'seeker', roles: ['seeker'], name: 'Jane Doe' };
   m.apiKeyId = undefined;
   m.brand = { id: 'roboapply', market: 'intl', name: 'RoboApply' };
@@ -223,6 +240,34 @@ describe('GoApply gates', () => {
     expect(m.voiceOn).toHaveBeenCalledWith('ai.interviewVoice', m.brand, process.env);
   });
 
+  it.each(['CN_LLM_DOMESTIC_ONLY', 'CN_RESIDENCY_STRICT'])(
+    '%s without a plane of its own: no voice session can start, so 503 voice_unavailable (never a session that fails at create)',
+    async (wall) => {
+      process.env[wall] = 'true';
+      const res = await post('/ie/v1/practice/sessions', { role: '工程师' });
+      expect(res.status).toBe(503);
+      expect(await res.json()).toEqual({ error: 'ai_unavailable', reason: 'voice_unavailable' });
+      expect(m.create).not.toHaveBeenCalled();
+      // The written practice is not behind the voice gate.
+      expect((await post('/ie/v1/practice/text/start', { role: '工程师', interviewerId: 'priya', typeId: 'behavioral' })).status).toBe(200);
+    },
+  );
+
+  it('no interview model the shared worker can run: 503 voice_unavailable', async () => {
+    delete process.env.LLM_INTERVIEW_MODEL;
+    const res = await post('/ie/v1/practice/sessions', { role: '工程师' });
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: 'ai_unavailable', reason: 'voice_unavailable' });
+    expect(m.create).not.toHaveBeenCalled();
+  });
+
+  it('a domestic interview model of its own does not turn voice off on the shared plane (D5)', async () => {
+    process.env.CN_LLM_INTERVIEW_MODEL = 'qwen/qwen-max';
+    const res = await post('/ie/v1/practice/sessions', { role: '工程师' });
+    expect(res.status).toBe(200);
+    expect(m.create).toHaveBeenCalledTimes(1);
+  });
+
   it('with everything in place it creates on the cn market', async () => {
     const res = await post('/ie/v1/practice/sessions', { role: '工程师', jobId: 'j_cn' });
     expect(res.status).toBe(200);
@@ -232,6 +277,8 @@ describe('GoApply gates', () => {
   it('RoboApply never runs the GoApply checks', async () => {
     m.brand = { id: 'roboapply', market: 'intl', name: 'RoboApply' };
     m.voiceOn.mockReturnValue(false);
+    process.env.CN_LLM_DOMESTIC_ONLY = 'true';
+    delete process.env.LLM_INTERVIEW_MODEL;
     const res = await post('/ie/v1/practice/sessions', { role: 'Engineer' });
     expect(res.status).toBe(200);
     expect(m.phoneRequired).not.toHaveBeenCalled();
@@ -252,8 +299,61 @@ describe('GET /practice/setup', () => {
       voice: { available: true, reason: null },
       ai: { allowed: true, reason: null },
       recording: { available: true, consent: { audio: true, video: false } },
+      media: { cameraPublish: true, recordVideo: true },
     });
     expect(m.loadJob).toHaveBeenCalledWith('u1', 'j1', 'intl');
+  });
+
+  it('GoApply by default: voice is offered and the media policy is the same as RoboApply’s (G7, G8)', async () => {
+    m.brand = { id: 'goapply', market: 'cn', name: 'GoApply' };
+    m.hasLiveConsent.mockResolvedValue(true);
+    const body = await (await get('/ie/v1/practice/setup')).json();
+    expect(body).toMatchObject({
+      market: 'cn',
+      voice: { available: true, reason: null },
+      ai: { allowed: true, reason: null },
+      recording: { available: true, consent: { audio: true, video: true } },
+      media: { cameraPublish: true, recordVideo: true },
+    });
+    // The capability, not the brand, decides: it was asked for GoApply.
+    expect(m.voiceOn).toHaveBeenCalledWith('ai.interviewVoice', m.brand, process.env);
+  });
+
+  it('GoApply with CN_INTERVIEW_CAMERA_PUBLISH=false: the setup says the camera stays local and video is not recorded', async () => {
+    m.brand = { id: 'goapply', market: 'cn', name: 'GoApply' };
+    const saved = process.env.CN_INTERVIEW_CAMERA_PUBLISH;
+    process.env.CN_INTERVIEW_CAMERA_PUBLISH = 'false';
+    try {
+      expect((await (await get('/ie/v1/practice/setup')).json()).media).toEqual({ cameraPublish: false, recordVideo: false });
+      m.brand = { id: 'roboapply', market: 'intl', name: 'RoboApply' };
+      expect((await (await get('/ie/v1/practice/setup')).json()).media).toEqual({ cameraPublish: true, recordVideo: true });
+    } finally {
+      if (saved === undefined) delete process.env.CN_INTERVIEW_CAMERA_PUBLISH;
+      else process.env.CN_INTERVIEW_CAMERA_PUBLISH = saved;
+    }
+  });
+
+  it.each(['CN_LLM_DOMESTIC_ONLY', 'CN_RESIDENCY_STRICT'])(
+    'GoApply under %s without a plane of its own: the setup reports voice unavailable, so the written practice is offered',
+    async (wall) => {
+      m.brand = { id: 'goapply', market: 'cn', name: 'GoApply' };
+      process.env[wall] = 'true';
+      expect(await (await get('/ie/v1/practice/setup')).json()).toMatchObject({
+        market: 'cn',
+        voice: { available: false, reason: 'voice_unavailable' },
+        ai: { allowed: true, reason: null },
+      });
+      // RoboApply is not touched by GoApply's wall.
+      m.brand = { id: 'roboapply', market: 'intl', name: 'RoboApply' };
+      expect((await (await get('/ie/v1/practice/setup')).json()).voice).toEqual({ available: true, reason: null });
+    },
+  );
+
+  it('recording is offered only where a new recording can be stored (CN_RESIDENCY_STRICT without a bucket of its own: not offered)', async () => {
+    m.brand = { id: 'goapply', market: 'cn', name: 'GoApply' };
+    m.hasLiveConsent.mockResolvedValue(true);
+    m.canStore = false;
+    expect((await (await get('/ie/v1/practice/setup')).json()).recording).toEqual({ available: false, consent: { audio: true, video: true } });
   });
 
   it('a job that is not there (or in the other market) is 404', async () => {
@@ -263,7 +363,7 @@ describe('GET /practice/setup', () => {
     expect(await res.json()).toEqual({ error: 'job_not_found' });
   });
 
-  it('works without a job (no resume either) and reports GoApply voice off', async () => {
+  it('works without a job (no resume either) and reports GoApply voice off when the capability is off (no LiveKit, or FLAG_GOAPPLY_INTERVIEW_VOICE=false)', async () => {
     m.brand = { id: 'goapply', market: 'cn', name: 'GoApply' };
     m.voiceOn.mockReturnValue(false);
     m.loadResume.mockResolvedValue(null);
@@ -318,6 +418,8 @@ describe('written practice (/practice/text/*)', () => {
     expect(m.textStart).toHaveBeenCalledWith(expect.objectContaining({
       userId: 'u1', interviewerId: 'maya', typeId: 'behavioral', language: 'zh', durationMinutes: 15,
       job: expect.objectContaining({ id: 'j_cn' }), creditExempt: false,
+      // The account name: a role text that carries it is never sent to the web-search vendor.
+      knownValues: ['Jane Doe'],
     }));
     expect(m.ensureGrant.mock.invocationCallOrder[0]).toBeLessThan(m.textStart.mock.invocationCallOrder[0]);
   });
