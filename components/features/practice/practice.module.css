@@ -223,6 +223,7 @@
 
 .card {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-3);
   border: 1px solid var(--rule);
   border-radius: var(--r-md);
@@ -246,8 +247,15 @@
   line-height: var(--lh-subtitle);
 }
 
+/* The question is set in 600; the primitive pins bold to 600 inline, so bold
+ * inside a question needs its own step up to stay visible. */
+.question :global(strong) {
+  font-weight: 700 !important;
+}
+
 .turns {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-2);
   margin: 0;
   padding: 0;
@@ -255,6 +263,7 @@
 }
 
 .turn {
+  min-width: 0;
   border-radius: var(--r-sm);
   background: var(--surface-2);
   padding: var(--sp-2) var(--sp-3);
@@ -267,10 +276,87 @@
   background: var(--action-subtle);
 }
 
-.turn strong {
+/* The speaker label. Not `.turn strong`: an interviewer line is markdown and
+ * may carry its own bold text, which must stay inline body text. */
+.turnWho {
   display: block;
   color: var(--text-muted);
   font-size: var(--fs-label);
+  font-weight: 600;
+}
+
+.turnText {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* What the user typed: keep their line breaks (typed code, a list). */
+.turnTyped {
+  white-space: pre-wrap;
+}
+
+/* AI-written markdown (interviewer lines, questions, hints), rendered by the
+ * Markdown primitive in block mode. The primitive sets its paragraph and list
+ * spacing inline, hence the one `!important` (same as the report page). */
+.aiText {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.aiText :global(.v3-md-block) {
+  display: block;
+}
+
+.aiText :global(.v3-md-block) > :last-child {
+  margin-bottom: 0 !important;
+}
+
+.aiText :global(:is(h1, h2, h3, h4, h5, h6)) {
+  margin: 0 0 var(--sp-2);
+  font-size: inherit;
+  font-weight: 600;
+  line-height: inherit;
+}
+
+/* A code block wraps instead of widening the bubble past a 375px screen. */
+.aiText :global(pre) {
+  max-width: 100%;
+  margin: 0 0 var(--sp-3);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-weight: 400;
+  white-space: pre-wrap;
+}
+
+.aiText :global(pre) > :global(code) {
+  display: block;
+  white-space: inherit;
+}
+
+.aiText :global(table) {
+  display: block;
+  max-width: 100%;
+  margin: 0 0 var(--sp-3);
+  overflow-x: auto;
+}
+
+.aiText :global(blockquote) {
+  margin: 0 0 var(--sp-3);
+  border-left: 2px solid var(--rule-strong);
+  padding-left: var(--sp-3);
+}
+
+/* "Hint: …" reads as one line when the hint is one paragraph. */
+.hint > .aiText {
+  display: inline;
+}
+
+.hint > .aiText :global(.v3-md-block) {
+  display: inline;
+}
+
+.hint > .aiText :global(.v3-md-block) > :global(p:first-child) {
+  display: inline;
 }
 
 .textarea {

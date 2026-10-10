@@ -20,6 +20,12 @@
 //   • Past sessions sit at the top as a lane, not behind a header dropdown:
 //     repeating a practice is the single highest-intent action a returning
 //     candidate takes, and it prefills the whole brief in one click.
+//
+// Two things the screen only offers when they exist:
+//   • the Format chip (video or voice) — `formatChoice` is false where the
+//     practice runs in writing, so no video or voice option is shown there;
+//   • the "Get credits" link — `canGetCredits` is false where nothing is on
+//     sale, so a credit shortfall never points at a page that sells nothing.
 
 import Link from 'next/link';
 import {
@@ -35,7 +41,7 @@ import {
 import { useTranslations } from 'next-intl';
 
 import { INTERVIEW_LOCALES } from '../../../lib/localeConfig';
-import { mockCreditsForMinutes } from '../../../lib/mockInterviewCredits';
+import { canAffordMinutes, longestAffordableMinutes, mockCreditsForMinutes } from '../../../lib/mockInterviewCredits';
 import { useMockRoleLabels } from '../../../lib/mockRoleLabels';
 import { CN_FORMAT_DURATIONS, isCnFormatType, useLocalizeType } from '../../features/practice-cn';
 import type { IERequirements } from '../../../lib/api/interviewEngine';
@@ -73,6 +79,16 @@ const SEARCH_CAP = 12;
 /** Lengths always offered, plus whatever the chosen focus recommends. */
 const BASE_DURATIONS = [15, 30, 45, 60];
 
+/**
+ * The lengths offered for an interview type, shortest first. GoApply's
+ * AI-interview practice runs 20–30 minutes, so only those lengths are offered
+ * for it; every other type gets the base lengths plus its own.
+ */
+export function practiceDurationOptions(type: Pick<RAMockType, 'id' | 'minutes'> | null | undefined): number[] {
+  if (isCnFormatType(type?.id)) return [...CN_FORMAT_DURATIONS];
+  return Array.from(new Set([...BASE_DURATIONS, ...(type ? [type.minutes] : [])])).sort((a, b) => a - b);
+}
+
 /** Recent sessions shown in the lane before "show all". */
 const RECENT_LANE_LIMIT = 3;
 
@@ -106,6 +122,11 @@ interface Props {
 
   format: RAMockFormat;
   onFormatChange: (value: RAMockFormat) => void;
+  /**
+   * False hides the Format chip and its tray: there is no video or voice to
+   * choose where the practice runs in writing. Default true.
+   */
+  formatChoice?: boolean;
   language: string;
   onLanguageChange: (value: string) => void;
   durationMinutes: number;
@@ -135,6 +156,12 @@ interface Props {
    *  interview service, or anything else. */
   startError: 'network' | 'busy' | 'generic' | null;
   insufficientCredits: { balance: number; required: number } | null;
+  /**
+   * False when there is nothing to buy here (no practice pack on sale, no plan
+   * that raises the allowance): the shortfall notice then states the numbers
+   * without a "Get credits" link. Default true.
+   */
+  canGetCredits?: boolean;
   canLaunch: boolean;
   starting: boolean;
   onStart: () => void;
@@ -264,6 +291,7 @@ export function PracticeSetupFlow({
   recommendedTypeIds,
   format,
   onFormatChange,
+  formatChoice = true,
   language,
   onLanguageChange,
   durationMinutes,
@@ -287,6 +315,7 @@ export function PracticeSetupFlow({
   canAfford,
   startError,
   insufficientCredits,
+  canGetCredits = true,
   canLaunch,
   starting,
   onStart,
@@ -334,22 +363,14 @@ export function PracticeSetupFlow({
     );
   }, [types, recommendedTypeIds]);
 
-  const durationOptions = useMemo(
-    () =>
-      // GoApply's AI-interview practice runs 20–30 minutes: only those lengths are offered for it.
-      isCnFormatType(selectedType?.id)
-        ? [...CN_FORMAT_DURATIONS]
-        : Array.from(new Set([...BASE_DURATIONS, ...(selectedType ? [selectedType.minutes] : [])])).sort((a, b) => a - b),
-    [selectedType],
-  );
+  const durationOptions = useMemo(() => practiceDurationOptions(selectedType), [selectedType]);
 
   // The longest interview the current balance actually covers — offered as the
   // one-click repair inside the shortfall notice.
   const affordableDuration = creditsRemaining === undefined
     ? null
-    : [...durationOptions]
-        .reverse()
-        .find((minutes) => creditsRemaining + 1e-9 >= mockCreditsForMinutes(minutes, creditMinutes)) ?? null;
+    : longestAffordableMinutes(durationOptions, creditsRemaining, creditMinutes);
+  const shorterDuration = affordableDuration !== null && affordableDuration !== durationMinutes ? affordableDuration : null;
 
   const creditShortage = insufficientCredits ?? (
     !canAfford && creditsRemaining !== undefined
@@ -409,10 +430,15 @@ export function PracticeSetupFlow({
   }, [tray]);
 
   // Losing the role source collapses the plan; an open tray would be pointing
-  // at controls that are no longer on screen.
+  // at controls that are no longer on screen. The same goes for the Format
+  // tray once there is no format to choose.
   useEffect(() => {
     if (!hasRoleSource) setTray(null);
   }, [hasRoleSource]);
+
+  useEffect(() => {
+    if (!formatChoice) setTray((current) => (current === 'mode' ? null : current));
+  }, [formatChoice]);
 
   function toggleTray(key: TrayKey) {
     setTray((current) => (current === key ? null : key));
@@ -425,7 +451,7 @@ export function PracticeSetupFlow({
 
   const languageLabel = INTERVIEW_LOCALES.find((locale) => locale.code === language)?.label ?? language;
 
-  const chips: Array<{
+  const allChips: Array<{
     key: TrayKey;
     icon: ReactNode;
     label: string;
@@ -468,6 +494,8 @@ export function PracticeSetupFlow({
       suggested: false,
     },
   ];
+  // No Format chip where there is no video or voice to choose (the written practice).
+  const chips = formatChoice ? allChips : allChips.filter((chip) => chip.key !== 'mode');
 
   const trayTitle: Record<TrayKey, string> = {
     interviewer: t('setup.interviewer.title'),
@@ -768,7 +796,7 @@ export function PracticeSetupFlow({
                   />
                 ) : null}
 
-                {tray === 'mode' ? (
+                {tray === 'mode' && formatChoice ? (
                   <OptionGrid
                     label={trayTitle.mode}
                     value={format}
@@ -794,7 +822,7 @@ export function PracticeSetupFlow({
                     onCommit={() => closeTray(true)}
                     options={durationOptions.map((minutes) => {
                       const cost = mockCreditsForMinutes(minutes, creditMinutes);
-                      const unaffordable = creditsRemaining !== undefined && creditsRemaining + 1e-9 < cost;
+                      const unaffordable = creditsRemaining !== undefined && !canAffordMinutes(minutes, creditsRemaining, creditMinutes);
                       return {
                         id: minutes,
                         title: t('setup.type.minutes', { minutes }),
@@ -836,15 +864,20 @@ export function PracticeSetupFlow({
 
         {creditShortage ? (
           <div role="alert" className={styles.alert}>
-            <span>{t('setup.insufficientCredits', creditShortage)}</span>
-            <span className={styles.alertActions}>
-              {affordableDuration !== null && affordableDuration !== durationMinutes ? (
-                <button type="button" className={styles.laneGhost} onClick={() => onDurationChange(affordableDuration)}>
-                  {t('setup.flow.useShorter', { minutes: affordableDuration })}
-                </button>
-              ) : null}
-              <Link className={styles.laneGhost} href="/settings#billing">{t('setup.getCredits')}</Link>
-            </span>
+            {/* "Add credits" is only said, and only linked, where credits can be had. */}
+            <span>{t(canGetCredits ? 'setup.insufficientCredits' : 'setup.insufficientCreditsNoPurchase', creditShortage)}</span>
+            {shorterDuration !== null || canGetCredits ? (
+              <span className={styles.alertActions}>
+                {shorterDuration !== null ? (
+                  <button type="button" className={styles.laneGhost} onClick={() => onDurationChange(shorterDuration)}>
+                    {t('setup.flow.useShorter', { minutes: shorterDuration })}
+                  </button>
+                ) : null}
+                {canGetCredits ? (
+                  <Link className={styles.laneGhost} href="/settings#billing">{t('setup.getCredits')}</Link>
+                ) : null}
+              </span>
+            ) : null}
           </div>
         ) : null}
 

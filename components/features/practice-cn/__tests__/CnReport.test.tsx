@@ -204,6 +204,16 @@ describe('CnReportView', () => {
     expect(second.getByText('Result: found')).toBeInTheDocument();
   });
 
+  // FIX-6: a typed session never mentions a transcript or speech-to-text.
+  it('says where the filler counts come from: the transcript for a voice session, the typed answers for a written one', () => {
+    const { unmount } = render(wrap(<CnReportView report={report} />));
+    expect(screen.getByTestId('cn-fillers-note').textContent).toBe('Counted from the transcript. Speech-to-text can miss or add words.');
+    unmount();
+    render(wrap(<CnReportView report={report} typed />));
+    expect(screen.getByTestId('cn-fillers-note').textContent).toBe('Counted from the answers you typed.');
+    expect(screen.getByTestId('cn-report').textContent).not.toMatch(/speech-to-text/i);
+  });
+
   it('renders in Chinese with the zh bundle', () => {
     const messages = { practiceCn: zhBundle.practiceCn, legal: { aiBadge: { text: 'AI 辅助生成', title: 'AI', document: 'd', audio: 'a' } } };
     render(wrap(<CnReportView report={report} />, 'goapply', messages));

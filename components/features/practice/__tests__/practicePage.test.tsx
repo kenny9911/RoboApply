@@ -7,10 +7,16 @@
 // free first practice, GoApply's written practice when voice is unavailable
 // (job forwarded, metered, 402 back to the setup), and no market-requirements
 // preview where AI is blocked or on GoApply.
+//
+// FIX-6 — what the first plan on screen promises: a length the balance covers
+// ("1 credit left", Start on), no "verify to get your first practice free"
+// notice while the balance covers a practice, no "Get credits" link where
+// nothing is on sale, and no video or voice format where the practice runs in
+// writing.
 
 import type { ReactNode } from 'react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 
 import PracticePage from '../../../../app/(auth)/practice/page';
 import { RoboApiError } from '../../../../lib/api/client';
@@ -33,6 +39,9 @@ const m = vi.hoisted(() => ({
   credits: vi.fn(),
   getConsents: vi.fn(),
   recordConsent: vi.fn(),
+  upgradable: true,
+  plans: undefined as unknown,
+  plansEnabled: [] as boolean[],
 }));
 
 const CREDITS = { balance: 5, periodAllotment: 1, tier: 'free', creditMinutes: 20 };
@@ -61,7 +70,14 @@ vi.mock('../../../../hooks/useAccount', async () => {
 });
 vi.mock('../../../../lib/api/compliance', () => ({ getConsents: m.getConsents, recordConsent: m.recordConsent }));
 vi.mock('../../../../hooks/shared/useCredits', () => ({
-  useCredits: () => ({ data: { summary: { upgradable: true } } }),
+  useCredits: () => ({ data: { summary: { upgradable: m.upgradable } } }),
+}));
+vi.mock('../../../../hooks/credits/usePlans', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../../hooks/credits/usePlans')>()),
+  usePlans: (options: { enabled?: boolean } = {}) => {
+    m.plansEnabled.push(options.enabled !== false);
+    return { data: options.enabled === false ? undefined : m.plans };
+  },
 }));
 vi.mock('../../../../hooks/shared/useCreditGate', () => ({ reportCreditsExhausted: m.report }));
 vi.mock('../../../../lib/flags', () => ({ useFlag: (key: string) => m.flags[key] === true }));
@@ -108,6 +124,9 @@ function apiError(status: number, payload: Record<string, unknown>) {
 beforeEach(() => {
   vi.clearAllMocks();
   m.flags = { interviewBank: true };
+  m.upgradable = true;
+  m.plans = undefined;
+  m.plansEnabled.length = 0;
   m.credits.mockResolvedValue(CREDITS);
   m.getConsents.mockResolvedValue({
     items: [
@@ -248,6 +267,11 @@ describe('GoApply without voice', () => {
     fireEvent.click(await screen.findByRole('radio', { name: 'Frontend Engineer' }));
     const start = await screen.findByRole('button', { name: 'Start the written practice' });
     await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
+    // FIX-6: the practice is written, so no video or voice format is offered.
+    expect(screen.getByRole('button', { name: /^Length/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Format/ })).toBeNull();
+    expect(screen.queryByText('Video call')).toBeNull();
+    expect(screen.queryByText('Voice only')).toBeNull();
     fireEvent.click(start);
     expect(await screen.findByRole('heading', { name: 'Written practice' })).toBeTruthy();
     expect(await screen.findByText('Tell me about yourself.')).toBeTruthy();
@@ -312,5 +336,110 @@ describe('GoApply without voice', () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(start.disabled).toBe(true);
     expect(screen.getAllByRole('link', { name: 'Add phone number' })).toHaveLength(1);
+  });
+});
+
+// ─── FIX-6: the first plan on screen is one the user can start ────────────
+
+/** A balance of one credit (20 minutes), as a new account has. */
+const ONE_CREDIT = { ...CREDITS, balance: 1 };
+const UNVERIFIED = { firstPractice: { method: 'email', verified: false, grant: null } };
+const PACK = { key: 'practice_pack', kind: 'pack', amountMinor: 900, unsellableReason: null, requiresFlag: null, phase: 'mvp', sellable: true };
+
+describe('a new user with one credit', () => {
+  it('starts on a length the balance covers: "1 credit left", Start on, no shortfall and no verify notice', async () => {
+    m.credits.mockResolvedValue(ONE_CREDIT);
+    m.setup.mockResolvedValue(setupPayload(UNVERIFIED));
+    renderWithProviders(<PracticePage />);
+    await screen.findByTestId('practice-job-banner');
+    // The job practice would default to a 40-minute interview (2 credits); the balance covers 15.
+    expect(await screen.findByRole('button', { name: /^Length\s*15 min/ })).toBeTruthy();
+    expect(await screen.findByText('Costs 0.75 credits · 1 credit left')).toBeTruthy();
+    expect(screen.queryByText(/1 credits/)).toBeNull();
+    await startButton();
+    expect(screen.queryByRole('alert')).toBeNull();
+    // The balance covers a practice, so nothing asks to verify for a free one.
+    expect(screen.queryByText('Verify your email to get your first practice interview free.')).toBeNull();
+    expect(m.plansEnabled.every((enabled) => !enabled)).toBe(true);
+  });
+
+  it('a longer length picked by hand says what is missing and offers the shorter one, still without the verify notice', async () => {
+    m.credits.mockResolvedValue(ONE_CREDIT);
+    m.setup.mockResolvedValue(setupPayload(UNVERIFIED));
+    renderWithProviders(<PracticePage />);
+    fireEvent.click(await screen.findByRole('button', { name: /^Length\s*15 min/ }));
+    const tray = await screen.findByRole('group', { name: 'How long should it run?' });
+    expect(within(tray).getByRole('radio', { name: /^45 min/ })).toHaveTextContent('2.25 credits — more than you have');
+    expect(within(tray).getByRole('radio', { name: /^15 min/ })).toHaveTextContent('Costs 0.75 credits');
+    fireEvent.click(within(tray).getByRole('radio', { name: /^45 min/ }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('This interview needs 2.25 credits and you have 1. Add credits to continue.');
+    expect(within(alert).getByRole('link', { name: 'Get credits' })).toHaveAttribute('href', '/settings#billing');
+    expect((screen.getByRole('button', { name: 'Start the interview' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByText('Verify your email to get your first practice interview free.')).toBeNull();
+
+    fireEvent.click(within(alert).getByRole('button', { name: 'Use 15 min instead' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    await startButton();
+  });
+
+  it('with no credit for any length, the unverified user is told how to get the free first practice', async () => {
+    m.credits.mockResolvedValue({ ...CREDITS, balance: 0 });
+    m.setup.mockResolvedValue(setupPayload(UNVERIFIED));
+    renderWithProviders(<PracticePage />);
+    expect(await screen.findByText('Verify your email to get your first practice interview free.')).toBeTruthy();
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('This interview needs 2 credits and you have 0.');
+    expect(within(alert).queryByRole('button', { name: /min instead/ })).toBeNull();
+  });
+});
+
+describe('a credit shortfall where nothing is on sale', () => {
+  beforeEach(() => {
+    m.upgradable = false;
+    m.credits.mockResolvedValue({ ...CREDITS, balance: 0 });
+    m.setup.mockResolvedValue(setupPayload({ market: 'cn', voice: { available: false, reason: 'voice_unavailable' } }));
+  });
+
+  it('states the numbers with no "Get credits" link and no "add credits" instruction', async () => {
+    m.plans = { plans: [] };
+    renderWithProviders(goApply(<PracticePage />));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('This interview needs 2 credits and you have 0.');
+    expect(alert.textContent).not.toMatch(/Add credits/);
+    expect(within(alert).queryByRole('link')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Get credits' })).toBeNull();
+    // The plans were read to find out (only once a shortfall was on screen).
+    expect(m.plansEnabled.at(-1)).toBe(true);
+  });
+
+  it('shows the link again once a practice pack is on sale', async () => {
+    m.plans = { plans: [PACK] };
+    renderWithProviders(goApply(<PracticePage />));
+    const alert = await screen.findByRole('alert');
+    expect(within(alert).getByRole('link', { name: 'Get credits' })).toBeTruthy();
+    expect(alert).toHaveTextContent('Add credits to continue.');
+  });
+});
+
+describe('the Format chip', () => {
+  it('RoboApply with voice: video and voice are offered', async () => {
+    renderWithProviders(<PracticePage />);
+    fireEvent.click(await screen.findByRole('button', { name: /^Format\s*Video/ }));
+    expect(await screen.findByRole('radio', { name: /Voice only/ })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: /Video call/ })).toBeTruthy();
+  });
+
+  it('GoApply while AI practice is gated (no voice either way): no video or voice is offered', async () => {
+    m.setup.mockResolvedValue(setupPayload({
+      market: 'cn',
+      ai: { allowed: false, reason: 'phone_binding_required' },
+      voice: { available: false, reason: 'phone_binding_required' },
+    }));
+    renderWithProviders(goApply(<PracticePage />));
+    await screen.findByTestId('practice-job-banner');
+    expect(await screen.findByRole('button', { name: /^Length/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Format/ })).toBeNull();
   });
 });
