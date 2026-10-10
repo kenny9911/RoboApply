@@ -1,4 +1,5 @@
-// components/features/resume — resume check UI (WP-22) and the keyword check.
+// components/features/resume — resume check UI (WP-22), the keyword check,
+// hub/layout (WP-36b) and the builder, editor tools and tour (WP-65).
 // Cross-area imports go through this file (TASK_PLAN.md §2.1 rule 4).
 
 export { ResumeCheckReport, Comparison, editorHrefFor, type ResumeCheckReportProps } from './ResumeCheckReport';
@@ -39,3 +40,17 @@ export {
   type ResolvedLayout,
   type SpacingPreset,
 } from './layout';
+// WP-65: editor tools, the check tour, the guided builder.
+export {
+  AskAssistantButton,
+  FitToPageControl,
+  ResumeDetailsPanel,
+  SectionOrderPanel,
+  docLanguageOf,
+  personalLineFor,
+  type ResumeAssistantRequest,
+} from './EditorTools';
+// Sign-out / session-expired cleanup of the builder's unsent draft and draft photo.
+export { clearResumeBuilderDeviceData } from '../../../hooks/resume/useResumePhoto';
+export { ResumeTour, ResumeTourCard, RESUME_TOUR_STEPS, type ResumeTourProps } from './ResumeTour';
+export { ResumeBuilder, ResumeBuilderView } from './builder/ResumeBuilder';

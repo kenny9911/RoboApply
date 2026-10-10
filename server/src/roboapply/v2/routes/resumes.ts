@@ -15,6 +15,12 @@
 //   PATCH  /:id/layout      — template, page size, spacing, accent, date format (WP-36b)
 //   GET    /:id/export      — PDF/DOCX; 409 unverified_claims; records the file
 //                             on an application with ?trackerEntryId= (WP-36b)
+//   POST   /:id/export      — the same, with an optional photo from the user's
+//                             device (JSON `{ format, nameStyle?, trackerEntryId?,
+//                             photo? }`; data: URL, JPEG/PNG ≤ 512 KB). The photo
+//                             is placed by the renderer and never stored; a
+//                             file recorded on an application (stored) is made
+//                             without it on every brand (X-Photo-Omitted: 1). WP-65.
 //
 // Hub rules (WP-36b): up to 5 base resumes (409 resume_limit_reached);
 // tailored versions do not count. Uploads check the brand's file storage
@@ -30,7 +36,7 @@ import multer from 'multer';
 import { requireAuth } from '../lib/raAuth.js';
 import { legacyAiGates } from '../lib/legacyAiGates.js';
 import { getRequestLocale } from '../lib/raLocale.js';
-import { FILE_NAME_STYLE_KEYS, defaultPageFor, type FileNameStyleKey } from '../lib/resumeExport.js';
+import { FILE_NAME_STYLE_KEYS, defaultPageFor, photoTypeOf, withExportPhoto, type FileNameStyleKey } from '../lib/resumeExport.js';
 import { logger } from '../../../services/LoggerService.js';
 import {
   isAcceptedResumeUpload,
@@ -38,7 +44,8 @@ import {
 } from '../../../lib/candidateResumeIngest.js';
 import { resumeOriginalFileStorageService } from '../../../services/ResumeOriginalFileStorageService.js';
 import { getCurrentBrandOrDefault } from '../../../platform/brand/brandContext.js';
-import { PatchLayoutBodySchema } from '../../../features/resume/index.js';
+import { PatchLayoutBodySchema, getLayoutService } from '../../../features/resume/index.js';
+import { HttpError } from '../../../platform/http.js';
 import {
   BASE_RESUME_LIMIT,
   raResumeService,
@@ -421,10 +428,13 @@ router.patch('/:id/layout', requireAuth, async (req: Request<{ id: string }>, re
     });
   }
   try {
-    const resume = await raResumeService.patchLayout(req.user!.id, req.params.id, parsed.data.layout as Record<string, unknown>);
+    // WP-65: the RES layout service merges the WP-36b keys plus `personal`,
+    // `photo` and `headingLanguage` (RAResumeService.patchLayout drops them).
+    await getLayoutService().patch(req.user!.id, req.params.id, parsed.data.layout as Record<string, unknown>);
+    const resume = await raResumeService.getById(req.user!.id, req.params.id);
     return res.json({ resume: { ...resume, defaultPage: requestDefaultPage(req) } });
   } catch (err) {
-    if (err instanceof ResumeNotFoundError) {
+    if (err instanceof ResumeNotFoundError || (err instanceof HttpError && err.code === 'not_found')) {
       return res.status(404).json({ error: 'not_found' });
     }
     logger.error('RA_V2_RESUMES', 'layout failed', {
@@ -454,32 +464,66 @@ function requestDefaultPage(req: Request): 'letter' | 'a4' {
 // unverified_claims while any inserted claim is unverified (ruling C12). With
 // trackerEntryId the exact bytes are kept and an RAApplicationArtifact row
 // records sha256 + storage key; its id comes back in X-Artifact-Id.
-router.get('/:id/export', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
+/** Largest photo a download may carry (decoded bytes). */
+export const MAX_EXPORT_PHOTO_BYTES = 512 * 1024;
+
+/** A `data:image/jpeg|png;base64,…` URL → bytes, or null when absent; throws 'invalid_photo'. */
+export function decodeExportPhoto(raw: unknown): Buffer | null {
+  if (raw === undefined || raw === null || raw === '') return null;
+  if (typeof raw !== 'string') throw new Error('invalid_photo');
+  const m = /^data:image\/(?:jpeg|jpg|png);base64,([A-Za-z0-9+/=\s]+)$/.exec(raw.trim());
+  if (!m) throw new Error('invalid_photo');
+  const bytes = Buffer.from(m[1]!.replace(/\s+/g, ''), 'base64');
+  if (bytes.length === 0 || bytes.length > MAX_EXPORT_PHOTO_BYTES || !photoTypeOf(bytes)) throw new Error('invalid_photo');
+  return bytes;
+}
+
+interface ExportParams {
+  format: unknown;
+  nameStyle: unknown;
+  trackerEntryId: unknown;
+  photo?: unknown;
+}
+
+async function sendExport(req: Request<{ id: string }>, res: Response, input: ExportParams): Promise<Response> {
   try {
     const userId = req.user!.id;
-    const format = String(req.query.format ?? 'pdf').toLowerCase();
+    const format = String(input.format ?? 'pdf').toLowerCase();
     if (format !== 'pdf' && format !== 'docx') {
       return res.status(422).json({ error: 'unsupported_format', code: 'unsupported_format', supported: ['pdf', 'docx'] });
     }
-    const nameStyleRaw = typeof req.query.nameStyle === 'string' ? req.query.nameStyle : '';
+    const nameStyleRaw = typeof input.nameStyle === 'string' ? input.nameStyle : '';
     if (nameStyleRaw && !(FILE_NAME_STYLE_KEYS as readonly string[]).includes(nameStyleRaw)) {
       return res.status(422).json({ error: 'invalid_name_style', code: 'validation_failed', details: { allowed: FILE_NAME_STYLE_KEYS } });
     }
-    const trackerRaw = typeof req.query.trackerEntryId === 'string' ? req.query.trackerEntryId.trim() : '';
+    const trackerRaw = typeof input.trackerEntryId === 'string' ? input.trackerEntryId.trim() : '';
     if (trackerRaw.length > 64) {
       return res.status(422).json({ error: 'invalid_tracker_entry', code: 'validation_failed' });
     }
+    let photo: Buffer | null;
+    try {
+      photo = decodeExportPhoto(input.photo);
+    } catch {
+      return res.status(422).json({ error: 'invalid_photo', code: 'validation_failed', details: { reason: 'invalid_photo', maxBytes: MAX_EXPORT_PHOTO_BYTES } });
+    }
     const brand = getCurrentBrandOrDefault();
-    const result = await raResumeService.exportVariant(userId, req.params.id, {
-      format: format as ExportFormat,
-      nameStyle: (nameStyleRaw || null) as FileNameStyleKey | null,
-      trackerEntryId: trackerRaw || null,
-      channel: 'download',
-      locale: getRequestLocale(req),
-      brand: brand.id,
-      market: brand.market,
-      country: requestCountry(req),
-    });
+    // The photo is never stored on our servers (every brand; GoApply CN-0
+    // minimization and the "stays in this browser" promise). A file recorded on
+    // an application is stored as an artifact, so it is made without the photo.
+    const photoOmitted = Boolean(photo && trackerRaw);
+    if (photoOmitted) photo = null;
+    const result = await withExportPhoto(photo, () =>
+      raResumeService.exportVariant(userId, req.params.id, {
+        format: format as ExportFormat,
+        nameStyle: (nameStyleRaw || null) as FileNameStyleKey | null,
+        trackerEntryId: trackerRaw || null,
+        channel: 'download',
+        locale: getRequestLocale(req),
+        brand: brand.id,
+        market: brand.market,
+        country: requestCountry(req),
+      }),
+    );
 
     // ASCII filename for legacy clients + RFC 5987 filename* for CJK names.
     const asciiName =
@@ -491,7 +535,8 @@ router.get('/:id/export', requireAuth, async (req: Request<{ id: string }>, res:
     );
     res.setHeader('X-Content-Sha256', result.sha256);
     if (result.artifactId) res.setHeader('X-Artifact-Id', result.artifactId);
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Artifact-Id, X-Content-Sha256');
+    if (photoOmitted) res.setHeader('X-Photo-Omitted', '1');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Artifact-Id, X-Content-Sha256, X-Photo-Omitted');
     return res.send(result.buffer);
   } catch (err) {
     if (err instanceof ResumeNotFoundError) {
@@ -506,11 +551,20 @@ router.get('/:id/export', requireAuth, async (req: Request<{ id: string }>, res:
     logger.error('RA_V2_RESUMES', 'export failed', {
       userId: req.user?.id,
       resumeId: req.params.id,
-      format: req.query.format,
+      format: input.format,
       error: err instanceof Error ? err.message : String(err),
     });
     return res.status(500).json({ error: 'internal_error' });
   }
+}
+
+router.get('/:id/export', requireAuth, (req: Request<{ id: string }>, res: Response) =>
+  sendExport(req, res, { format: req.query.format, nameStyle: req.query.nameStyle, trackerEntryId: req.query.trackerEntryId }),
+);
+
+router.post('/:id/export', requireAuth, (req: Request<{ id: string }>, res: Response) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  return sendExport(req, res, { format: body.format, nameStyle: body.nameStyle, trackerEntryId: body.trackerEntryId, photo: body.photo });
 });
 
 // ── V3 inline AI ──────────────────────────────────────────────────────────

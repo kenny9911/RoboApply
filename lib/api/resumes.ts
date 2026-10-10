@@ -33,6 +33,11 @@
 //   POST   /api/v1/roboapply/v2/resumes/:id/issues/:issueId/apply
 //   POST   /api/v1/roboapply/v2/resumes/:id/keyword-report
 //   PATCH  /api/v1/roboapply/v2/resumes/:id/layout
+//   POST   /api/v1/roboapply/v2/resumes/:id/export             (binary; with a device photo, WP-65)
+//   POST   /api/v1/roboapply/v2/resumes/:id/fit-to-page        (WP-65)
+//   GET    /api/v1/roboapply/v2/resumes/builder/config         (WP-65)
+//   POST   /api/v1/roboapply/v2/resumes/builder/suggest        (WP-65)
+//   POST   /api/v1/roboapply/v2/resumes/builder                (WP-65)
 
 import { apiUrl, call, type CallOptions, type In, type Out, seg, withQuery } from './contracts/wire';
 import type * as R from './contracts/resume';
@@ -106,12 +111,19 @@ export interface ResumeExportOptions {
   nameStyle?: FileNameStyle | null;
   /** Record the exact file on this application. */
   trackerEntryId?: string | null;
+  /**
+   * A photo kept on this device (JPEG/PNG data URL). Sent with the request
+   * (POST), placed by the renderer, never stored on the server (WP-65).
+   */
+  photo?: string | null;
 }
 
 export interface ResumeExportResult {
   fileName: string;
   /** The RAApplicationArtifact id when the file was recorded on an application. */
   artifactId: string | null;
+  /** A file recorded on an application (stored) is made without the photo, on every brand. */
+  photoOmitted?: boolean;
 }
 
 // ── CRUD ───────────────────────────────────────────────────────────────────
@@ -265,7 +277,24 @@ export async function downloadResumeExport(id: string, options: ResumeExportOpti
 
   let res: Response;
   try {
-    res = await fetch(resumeExportUrl(id, options), { method: 'GET', credentials: 'include', headers, cache: 'no-store' });
+    if (options.photo) {
+      // WP-65: the photo travels in the body, never in a URL.
+      headers['Content-Type'] = 'application/json';
+      res = await fetch(apiUrl(`${BASE}/${seg(id)}/export`), {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+        cache: 'no-store',
+        body: JSON.stringify({
+          format: options.format,
+          nameStyle: options.nameStyle ?? undefined,
+          trackerEntryId: options.trackerEntryId ?? undefined,
+          photo: options.photo,
+        }),
+      });
+    } else {
+      res = await fetch(resumeExportUrl(id, options), { method: 'GET', credentials: 'include', headers, cache: 'no-store' });
+    }
   } catch (err) {
     throw new RoboApiError(err instanceof Error ? err.message : 'Network error', { code: 'network_error' });
   }
@@ -290,7 +319,9 @@ export async function downloadResumeExport(id: string, options: ResumeExportOpti
     a.remove();
     URL.revokeObjectURL(objectUrl);
   }
-  return { fileName, artifactId: res.headers.get('X-Artifact-Id') };
+  const result: ResumeExportResult = { fileName, artifactId: res.headers.get('X-Artifact-Id') };
+  if (res.headers.get('X-Photo-Omitted') === '1') result.photoOmitted = true;
+  return result;
 }
 
 /** `resume.createTailorSession` — POST /api/v1/roboapply/v2/resumes/tailor-sessions */
@@ -354,6 +385,38 @@ export function patchResumeLayout(id: string, body: In<typeof R.PatchLayoutBodyS
   return call<{ resume: ResumeVariant }>('PATCH', `/api/v1/roboapply/v2/resumes/${seg(id)}/layout`, { ...opts, body }).then((r) => r?.resume);
 }
 
+// ── WP-65: fit to page, guided builder ─────────────────────────────────────
+
+export type FitToPageResponse = R.FitToPageResponse;
+export type BuilderConfig = R.BuilderConfigView;
+export type BuilderDraft = In<typeof R.BuilderDraftSchema>;
+export type BuilderSuggestBody = In<typeof R.BuilderSuggestBodySchema>;
+export type BuilderSuggestResponse = R.BuilderSuggestResponse;
+export type BuilderCreateResponse = R.BuilderCreateResponse;
+export type BuilderSection = R.BuilderSection;
+export type BuilderDocLanguage = R.BuilderDocLanguage;
+export type BuilderVariant = R.BuilderVariant;
+
+/** `resume.fitToPage` — POST /api/v1/roboapply/v2/resumes/:id/fit-to-page */
+export function fitResumeToPage(id: string, body: In<typeof R.FitToPageBodySchema>, opts?: CallOptions): Promise<R.FitToPageResponse> {
+  return call<R.FitToPageResponse>('POST', `/api/v1/roboapply/v2/resumes/${seg(id)}/fit-to-page`, { ...opts, body });
+}
+
+/** `resume.builderConfig` — GET /api/v1/roboapply/v2/resumes/builder/config */
+export function getBuilderConfig(opts?: CallOptions): Promise<R.BuilderConfigView> {
+  return call<R.BuilderConfigView>('GET', `/api/v1/roboapply/v2/resumes/builder/config`, opts);
+}
+
+/** `resume.builderSuggest` — POST /api/v1/roboapply/v2/resumes/builder/suggest */
+export function suggestBuilderText(body: In<typeof R.BuilderSuggestBodySchema>, opts?: CallOptions): Promise<R.BuilderSuggestResponse> {
+  return call<R.BuilderSuggestResponse>('POST', `/api/v1/roboapply/v2/resumes/builder/suggest`, { ...opts, body });
+}
+
+/** `resume.builderCreate` — POST /api/v1/roboapply/v2/resumes/builder */
+export function createResumeFromBuilder(body: In<typeof R.BuilderDraftSchema>, opts?: CallOptions): Promise<R.BuilderCreateResponse> {
+  return call<R.BuilderCreateResponse>('POST', `/api/v1/roboapply/v2/resumes/builder`, { ...opts, body });
+}
+
 /** Every wrapper of this area, for callers that prefer one import. */
 export const resumesApi = {
   listResumes,
@@ -380,4 +443,8 @@ export const resumesApi = {
   applyIssueFix,
   getKeywordReport,
   patchResumeLayout,
+  fitResumeToPage,
+  getBuilderConfig,
+  suggestBuilderText,
+  createResumeFromBuilder,
 };

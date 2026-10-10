@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   registerCompliance: vi.fn(),
   setPurge: vi.fn(),
   putObjects: 0,
+  putBodies: [] as Buffer[],
 }));
 
 // ── tiny in-memory Prisma ─────────────────────────────────────────────────
@@ -107,7 +108,18 @@ vi.mock('../../../../server/src/features/resume/index.js', async () => {
     ...contract,
     unverifiedClaimsCount: (id: string) => (mocks.unverified ? mocks.unverified(id) : Promise.reject(new NotImplementedError('resume.unverifiedClaimsCount'))),
     resumeAiAvailable: async () => false,
+    // WP-65: the legacy PATCH /:id/layout saves through the RES layout service (real, over the fake Prisma).
+    getLayoutService: () => layoutService,
   };
+});
+let layoutService: unknown;
+beforeAll(async () => {
+  // Loaded by path (like the router) so the web type-check does not pull server modules in.
+  const LAYOUT_SERVICE = '../../../../server/src/features/resume/layout/LayoutService.js';
+  const LAYOUT_STORE = '../../../../server/src/features/resume/layout/store.js';
+  const { LayoutService } = (await import(/* @vite-ignore */ LAYOUT_SERVICE)) as { LayoutService: new (deps: unknown) => unknown };
+  const { createPrismaLayoutStore } = (await import(/* @vite-ignore */ LAYOUT_STORE)) as { createPrismaLayoutStore: () => unknown };
+  layoutService = new LayoutService({ store: createPrismaLayoutStore(), countPages: async () => 1, market: () => 'intl' });
 });
 vi.mock('../../../../server/src/features/compliance/index.js', async () => {
   const a = await import('../../../../server/src/features/compliance/aiLabel.js');
@@ -143,7 +155,11 @@ function realStorage(env: Record<string, string | undefined>) {
     env,
     createS3Client: () => ({
       send: (async (command: { constructor: { name: string } }) => {
-        if (command.constructor.name === 'PutObjectCommand') mocks.putObjects += 1;
+        if (command.constructor.name === 'PutObjectCommand') {
+          mocks.putObjects += 1;
+          const body = (command as unknown as { input?: { Body?: unknown } }).input?.Body;
+          if (Buffer.isBuffer(body) || body instanceof Uint8Array) mocks.putBodies.push(Buffer.from(body));
+        }
         return {};
       }) as any,
     }),
@@ -205,6 +221,7 @@ describe('resume hub routes (WP-36b)', () => {
     mocks.brand = 'roboapply';
     mocks.unverified = null;
     mocks.putObjects = 0;
+    mocks.putBodies = [];
     mocks.storage = realStorage({ ...INTL_S3, ALLOWED_BRANDS: 'roboapply,goapply' });
     mocks.ingest.mockReset();
     delete process.env.CN_AI_EXPORT_EXPLICIT_LABEL;
@@ -522,6 +539,64 @@ describe('resume hub routes (WP-36b)', () => {
       expect(res.headers.get('content-type')).not.toBe('application/pdf');
       expect(mocks.db.artifacts).toHaveLength(0);
       expect(mocks.putObjects).toBe(0);
+    });
+  });
+
+  describe('POST /:id/export (WP-65: a photo from the device, placed by the renderer, never stored)', () => {
+    const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const post = (id: string, body: Row, headers: Record<string, string> = {}) =>
+      fetch(`${base}/${id}/export`, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
+
+    it('places the photo in the PDF and keeps the GoApply AI marks', async () => {
+      mocks.brand = 'goapply';
+      const v = variant({ kind: 'tailored_for_jd', sourceKind: 'tailored', resumeMarkdown: '# 王小明\n\n## 实习经历\n\n- 负责导出\n', layout: { template: 'campus', photo: true, personal: { nativePlace: '浙江' } } });
+      const res = await post(v.id, { format: 'pdf', photo: `data:image/png;base64,${PNG}` }, { 'x-test-locale': 'zh' });
+      expect(res.status).toBe(200);
+      const pdf = Buffer.from(await res.arrayBuffer()).toString('latin1');
+      expect(pdf).toMatch(/\/Subtype \/Image/);
+      expect(pdf).toContain('/AIContentID');
+      expect(res.headers.get('x-photo-omitted')).toBeNull();
+      expect(mocks.db.artifacts).toHaveLength(0);
+      expect(mocks.putObjects).toBe(0);
+    });
+
+    it.each(['roboapply', 'goapply'] as const)('%s: a file recorded on an application is made and stored without the photo', async (brand) => {
+      mocks.brand = brand;
+      mocks.db.trackers.push({ id: 'trp', userId: 'user1', jobId: null, deletedAt: null });
+      const v = variant({ layout: { photo: true } });
+      const res = await post(v.id, { format: 'pdf', trackerEntryId: 'trp', photo: `data:image/png;base64,${PNG}` });
+      expect(res.status).toBe(200);
+      expect(res.headers.get('x-photo-omitted')).toBe('1');
+      expect(Buffer.from(await res.arrayBuffer()).toString('latin1')).not.toMatch(/\/Subtype \/Image/);
+      expect(mocks.db.artifacts).toHaveLength(1);
+      // RoboApply stores the recorded file in object storage here; whatever is stored has no image.
+      if (brand === 'roboapply') expect(mocks.putBodies).toHaveLength(1);
+      for (const body of mocks.putBodies) {
+        expect(body.toString('latin1')).toContain('%PDF');
+        expect(body.toString('latin1')).not.toMatch(/\/Subtype \/Image/);
+      }
+    });
+
+    it('RoboApply DOCX recorded on an application carries no image either', async () => {
+      mocks.db.trackers.push({ id: 'trd', userId: 'user1', jobId: null, deletedAt: null });
+      const v = variant({ layout: { photo: true } });
+      const res = await post(v.id, { format: 'docx', trackerEntryId: 'trd', photo: `data:image/png;base64,${PNG}` });
+      expect(res.status).toBe(200);
+      expect(res.headers.get('x-photo-omitted')).toBe('1');
+      expect(mocks.putBodies).toHaveLength(1);
+      // Zip entry names are stored uncompressed: an embedded image would list word/media/….
+      const stored = mocks.putBodies[0]!.toString('latin1');
+      expect(stored).toContain('word/document.xml');
+      expect(stored).not.toContain('word/media/');
+    });
+
+    it('422 on a photo that is not a JPEG/PNG data URL; the same guards as GET', async () => {
+      const v = variant();
+      const bad = await post(v.id, { format: 'pdf', photo: 'data:image/gif;base64,R0lGODlh' });
+      expect(bad.status).toBe(422);
+      expect((await bad.json()).details).toMatchObject({ reason: 'invalid_photo' });
+      expect((await post(v.id, { format: 'rtf' })).status).toBe(422);
+      expect((await post('nope', { format: 'pdf' })).status).toBe(404);
     });
   });
 

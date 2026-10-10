@@ -124,11 +124,12 @@ describe('tailored versions per job', () => {
 });
 
 describe('LayoutPanel', () => {
-  it('offers five templates, Standard recommended, and warns on Two-column', () => {
+  it('offers six templates (Campus since WP-65), Standard recommended, and warns on Two-column', () => {
     const onChange = vi.fn();
     const { rerender } = renderWithProviders(<LayoutPanel value={resolveLayout(null, 'a4')} defaultPage="a4" onChange={onChange} />);
     const group = screen.getByRole('group', { name: 'Template' });
-    expect(within(group).getAllByRole('radio')).toHaveLength(5);
+    expect(within(group).getAllByRole('radio')).toHaveLength(6);
+    expect(within(group).getByRole('radio', { name: /Campus/ })).toBeInTheDocument();
     expect(within(group).getByRole('radio', { name: /Standard/ })).toBeChecked();
     expect(within(group).getByText('Recommended')).toBeInTheDocument();
     expect(screen.queryByRole('note')).toBeNull();
@@ -189,6 +190,15 @@ describe('DownloadModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /^PDF/ }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(api.downloadResumeExport).toHaveBeenCalledWith('r1', { format: 'pdf', nameStyle: 'company_role_name', trackerEntryId: 'tr1' }, 'Main');
+  });
+
+  it('WP-65: sends the device photo with the download when one is placed', async () => {
+    api.downloadResumeExport.mockResolvedValue({ fileName: 'x.pdf', artifactId: null });
+    const onClose = vi.fn();
+    renderWithProviders(<DownloadModal resumeId="r1" resumeName="Main" resumeMarkdown="# A" photo="data:image/jpeg;base64,AAAA" onClose={onClose} />);
+    fireEvent.click(screen.getByRole('button', { name: /^PDF/ }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(api.downloadResumeExport).toHaveBeenCalledWith('r1', expect.objectContaining({ format: 'pdf', photo: 'data:image/jpeg;base64,AAAA' }), 'Main');
   });
 
   it('shows the C12 message when the server refuses with unverified_claims', async () => {

@@ -6,14 +6,22 @@
 // accent, header alignment and date format. Controlled: the editor saves each
 // change through PATCH /:id/layout (usePatchResumeLayoutMutation) and the
 // preview follows the cache. Native radio groups and a select; 44 px targets.
+//
+// WP-65: the Campus template (A4 new-grad layout), justify, bullet mark,
+// education order, skills layout, and the section-title language of the
+// downloaded file (zh/en bilingual export — the user's text stays as written).
 
 import { useId } from 'react';
 import { useTranslations } from 'next-intl';
 
 import {
   ACCENTS,
+  BULLETS,
   DATE_FORMATS,
+  EDU_ORDERS,
   FONTS,
+  HEADING_LANGUAGES,
+  SKILLS_LAYOUTS,
   RECOMMENDED_TEMPLATE,
   SPACING_KEYS,
   TEMPLATES,
@@ -65,6 +73,7 @@ function Choice<T extends string>({
 
 export function LayoutPanel({ value, defaultPage, onChange, saving, error }: LayoutPanelProps) {
   const t = useTranslations('resume.layout');
+  const tb = useTranslations('resumeBuilder.layout');
   const base = useId();
   const warn = WARN_TEMPLATES.includes(value.template);
 
@@ -83,8 +92,8 @@ export function LayoutPanel({ value, defaultPage, onChange, saving, error }: Lay
                 onChange={() => onChange({ template: tpl })}
                 className={styles.choiceInput}
               />
-              <span className={styles.templateName}>{t(`template.${tpl}.name`)}</span>
-              <span className={styles.templateDesc}>{t(`template.${tpl}.desc`)}</span>
+              <span className={styles.templateName}>{tpl === 'campus' ? tb('campus.name') : t(`template.${tpl}.name`)}</span>
+              <span className={styles.templateDesc}>{tpl === 'campus' ? tb('campus.desc') : t(`template.${tpl}.desc`)}</span>
               {tpl === RECOMMENDED_TEMPLATE ? <span className={styles.recommended}>{t('template.recommended')}</span> : null}
             </label>
           ))}
@@ -166,6 +175,62 @@ export function LayoutPanel({ value, defaultPage, onChange, saving, error }: Lay
             </option>
           ))}
         </select>
+      </div>
+
+      <fieldset className={styles.fieldset}>
+        <legend className={styles.legend}>{tb('bullet.label')}</legend>
+        <div className={styles.choiceRow}>
+          {BULLETS.map((b) => (
+            <Choice key={b} name={`${base}-bullet`} value={b} current={value.bullet} label={tb(`bullet.${b}`)} onPick={(bullet) => onChange({ bullet })} />
+          ))}
+        </div>
+      </fieldset>
+
+      <div className={styles.fieldset}>
+        <label className={styles.choice} data-checked={value.justify || undefined}>
+          <input type="checkbox" checked={value.justify} onChange={(e) => onChange({ justify: e.target.checked })} className={styles.choiceInput} />
+          <span>{tb('justify')}</span>
+        </label>
+      </div>
+
+      <div className={styles.fieldset}>
+        <label className={styles.legend} htmlFor={`${base}-edu`}>
+          {tb('eduOrder.label')}
+        </label>
+        <select id={`${base}-edu`} className={styles.select} value={value.eduOrder} onChange={(e) => onChange({ eduOrder: e.target.value as ResolvedLayout['eduOrder'] })}>
+          {EDU_ORDERS.map((o) => (
+            <option key={o} value={o}>
+              {tb(`eduOrder.${o}`)}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className={styles.fieldset}>
+        <label className={styles.legend} htmlFor={`${base}-skills`}>
+          {tb('skillsLayout.label')}
+        </label>
+        <select id={`${base}-skills`} className={styles.select} value={value.skillsLayout} onChange={(e) => onChange({ skillsLayout: e.target.value as ResolvedLayout['skillsLayout'] })}>
+          {SKILLS_LAYOUTS.map((o) => (
+            <option key={o} value={o}>
+              {tb(`skillsLayout.${o}`)}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className={styles.fieldset}>
+        <label className={styles.legend} htmlFor={`${base}-headings`}>
+          {tb('headingLanguage.label')}
+        </label>
+        <select id={`${base}-headings`} className={styles.select} value={value.headingLanguage} onChange={(e) => onChange({ headingLanguage: e.target.value as ResolvedLayout['headingLanguage'] })}>
+          {HEADING_LANGUAGES.map((o) => (
+            <option key={o} value={o}>
+              {tb(`headingLanguage.${o === 'zh-TW' ? 'zhTW' : o}`)}
+            </option>
+          ))}
+        </select>
+        <p className={styles.hint}>{tb('headingLanguage.hint')}</p>
       </div>
 
       <p className={styles.status} role="status" aria-live="polite">

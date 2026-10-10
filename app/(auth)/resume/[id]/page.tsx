@@ -35,6 +35,12 @@
 // change) — an autosave echo never clobbers in-flight keystrokes or remounts
 // rows.
 //
+// WP-65 (preview pane): fit to one page (GoApply: 1–2 pages) with undo, the
+// section order, the GoApply personal details (籍贯 / 政治面貌) and the device
+// photo — placed by the export renderer only, never in the resume text — and
+// "Ask the Assistant about this resume". The brand's details / photo / page
+// rules come from GET /builder/config.
+//
 // Layout: the (auth) layout wraps children in `.main-inner` (padded, max-width
 // 1180). The editor is a full-bleed split, so we break out of that padding with
 // a negative-margin wrapper that spans the viewport width of the main column.
@@ -59,7 +65,19 @@ import {
   useDeleteResumeMutation,
   usePatchResumeLayoutMutation,
 } from '../../../../hooks/useResumes';
-import { LayoutPanel, layoutPatch, resolveLayout } from '../../../../components/features/resume';
+import {
+  AskAssistantButton,
+  FitToPageControl,
+  LayoutPanel,
+  ResumeDetailsPanel,
+  SectionOrderPanel,
+  docLanguageOf,
+  layoutPatch,
+  personalLineFor,
+  resolveLayout,
+} from '../../../../components/features/resume';
+import { useBuilderConfig } from '../../../../hooks/resume/useResumeBuilder';
+import { useResumePhoto } from '../../../../hooks/resume/useResumePhoto';
 import { TailorLaunchHost } from '../../../../components/features/tailor';
 import { DeleteResumeConfirm } from '../../../../components/resumes/DeleteResumeConfirm';
 import layoutStyles from '../../../../components/features/resume/ResumeHub.module.css';
@@ -112,6 +130,14 @@ export default function ResumeEditorPage({
   // WP-36b: template / page / spacing / accent / date format, saved per resume.
   const defaultPage = resume?.defaultPage ?? 'letter';
   const layout = useMemo(() => resolveLayout(resume?.layout ?? null, defaultPage), [resume?.layout, defaultPage]);
+  const tb = useTranslations('resumeBuilder.editor');
+  // WP-65: per-brand details, photo and page count (GoApply: 籍贯 / 政治面貌, photo, up to 2 pages).
+  const builderConfig = useBuilderConfig();
+  const personalFields = builderConfig.data?.personalFields ?? [];
+  const photoOffered = builderConfig.data?.photo.offered ?? false;
+  const maxPages = builderConfig.data?.maxPages ?? 1;
+  const photo = useResumePhoto(id);
+  const placedPhoto = photoOffered && layout.photo ? photo.photo : null;
 
   const [structured, setStructured] = useState<StructuredResume | null>(null);
   const [resumeName, setResumeName] = useState('');
@@ -911,6 +937,27 @@ export default function ResumeEditorPage({
                 <span>{t('preview.page')}</span>
               </div>
             </div>
+            <FitToPageControl resumeId={id} maxPages={maxPages} photo={Boolean(placedPhoto)} />
+            <div className="rb-preview-bar">
+              <AskAssistantButton resumeId={id} enabled={aiEnabled} />
+            </div>
+            <details className={layoutStyles.layoutDetails}>
+              <summary className={layoutStyles.layoutSummary}>{tb('order')}</summary>
+              <SectionOrderPanel resume={structured} onChange={updateStructured} />
+            </details>
+            {personalFields.length > 0 || photoOffered ? (
+              <details className={layoutStyles.layoutDetails}>
+                <summary className={layoutStyles.layoutSummary}>{tb('details')}</summary>
+                <ResumeDetailsPanel
+                  layout={resume.layout}
+                  personalFields={personalFields}
+                  photoOffered={photoOffered}
+                  photo={photo}
+                  saving={layoutMut.isPending}
+                  onPatch={(change) => layoutMut.mutate(change)}
+                />
+              </details>
+            ) : null}
             <details className={layoutStyles.layoutDetails}>
               <summary className={layoutStyles.layoutSummary}>{t('layout.title')}</summary>
               <LayoutPanel
@@ -922,7 +969,13 @@ export default function ResumeEditorPage({
               />
             </details>
             <div className="rb-paper-wrap">
-              <ResumePaper resume={structured} layout={layout} />
+              <ResumePaper
+                resume={structured}
+                layout={layout}
+                personalLine={personalFields.length ? personalLineFor(resume.layout?.personal, docLanguageOf(layout.headingLanguage, resume.resumeMarkdown)) : null}
+                photo={placedPhoto}
+                photoAlt={tb('photoAlt')}
+              />
             </div>
           </div>
         </div>
@@ -957,6 +1010,7 @@ export default function ResumeEditorPage({
           resumeMarkdown={serializeResumeMarkdown(structured)}
           unverifiedClaims={resume.unverifiedClaims ?? 0}
           aiAssisted={resume.aiAssisted ?? false}
+          photo={placedPhoto}
           onClose={() => setDownloadOpen(false)}
         />
       ) : null}

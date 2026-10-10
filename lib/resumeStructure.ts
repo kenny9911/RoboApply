@@ -15,6 +15,15 @@
 // serialize. Experience/education location lines (`*City, ST*` under the
 // entry head) parse back into `location` — symmetric with the serializer.
 //
+// WP-65: Chinese section titles (教育背景, 实习经历, 自我评价, 專長…) are read as
+// the known blocks, and both the original titles and the original section
+// order are kept (`headings`, `order`), so a Chinese resume from the guided
+// builder opens structured and saves back unchanged. Only the FIRST section of
+// each kind is structured; a second one (实习经历 after 工作经历) stays an extra
+// section verbatim, so nothing is ever merged away. A contact line that starts
+// with the email or phone has no target title: what is left is the location.
+// `sectionSequence` / `applySectionSequence` reorder sections (F-RES-12).
+//
 // All pure. No React, no I/O. Test from vitest.
 
 // ─────────────────────────────────────────────────────────────────────
@@ -75,7 +84,20 @@ export interface StructuredResume {
   education: StructuredEducation[];
   skills: string[];
   extraSections: StructuredExtraSection[];
+  /** Original titles of the known blocks (e.g. 实习经历); default English titles otherwise. */
+  headings?: Partial<Record<KnownSectionKind, string>>;
+  /** Order of the known blocks as written; missing kinds follow in the default order. */
+  order?: KnownSectionKind[];
 }
+
+/** Default order and titles of the known blocks. */
+export const KNOWN_SECTION_ORDER: readonly KnownSectionKind[] = ['summary', 'experiences', 'education', 'skills'];
+export const DEFAULT_SECTION_HEADINGS: Record<KnownSectionKind, string> = {
+  summary: 'Summary',
+  experiences: 'Experience',
+  education: 'Education',
+  skills: 'Skills',
+};
 
 // ─────────────────────────────────────────────────────────────────────
 // Helpers
@@ -219,6 +241,19 @@ function parseContactFromPreamble(preamble: string[]): {
   // — what remains is the candidate's target/current title.
   const taglineLine =
     rest.split('\n').find((l) => l.trim().length > 0) ?? '';
+  // WP-65: the serializer writes the title first. When the line starts with
+  // the email or phone there is no title, and the leftover part is the
+  // location (a CJK city such as 上海 has no "City, ST" shape).
+  const parts = stripWrappers(taglineLine)
+    .split(/\s+[·|｜]\s+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const isContactBit = (p: string) =>
+    EMAIL_RE.test(p) ||
+    (PHONE_RE.test(p) && p.replace(/\D/g, '').length >= 7 && p.replace(PHONE_RE, '').trim().length === 0) ||
+    links.some((l) => p.includes(l));
+  const noTitle = parts.length > 1 && isContactBit(parts[0]);
+  const leftover = noTitle ? parts.filter((p) => !isContactBit(p)) : [];
   let tagline = stripWrappers(taglineLine);
   if (emailMatch) tagline = tagline.replace(emailMatch[0], '');
   if (phoneMatch) tagline = tagline.replace(phoneMatch[0], '');
@@ -237,6 +272,10 @@ function parseContactFromPreamble(preamble: string[]): {
   if (locMatch && !links.some((l) => l.includes(locMatch[1]))) {
     location = locMatch[1].trim();
     tagline = tagline.split(location).join(' ');
+  }
+  if (noTitle) {
+    if (!location && leftover.length) location = leftover.join(', ');
+    tagline = '';
   }
 
   tagline = tagline
@@ -258,7 +297,7 @@ function parseContactFromPreamble(preamble: string[]): {
   };
 }
 
-function classifySection(heading: string): KnownSectionKind | null {
+export function classifySection(heading: string): KnownSectionKind | null {
   const h = heading.trim().toLowerCase();
   if (/^summary|^professional summary|^profile|^about/.test(h)) return 'summary';
   if (
@@ -269,6 +308,12 @@ function classifySection(heading: string): KnownSectionKind | null {
     return 'experiences';
   if (/^education|^academic/.test(h)) return 'education';
   if (/^skills|^technical skills|^expertise|^stack/.test(h)) return 'skills';
+  // Chinese titles (WP-65). 技能证书 / 證照 hold certificate lines and stay
+  // verbatim; only a plain skills title is read as the skills line.
+  if (/^(个人总结|個人總結|个人简介|個人簡介|個人摘要|自我评价|自我評價|自我介绍|自我介紹)$/.test(h)) return 'summary';
+  if (/^(工作经历|工作經歷|工作经验|工作經驗|实习经历|實習經歷|实习经验|實習經驗)$/.test(h)) return 'experiences';
+  if (/^(教育背景|教育经历|教育經歷|学历|學歷)$/.test(h)) return 'education';
+  if (/^(专业技能|專業技能|技能|专长|專長)$/.test(h)) return 'skills';
   return null;
 }
 
@@ -481,9 +526,18 @@ export function parseResumeMarkdown(md: string): StructuredResume {
   // back at (approximately) the same spot in the document.
   let lastKnown: KnownSectionKind | null = null;
   let extraIdx = 0;
+  const headings: Partial<Record<KnownSectionKind, string>> = {};
+  const order: KnownSectionKind[] = [];
 
   for (const sec of sections) {
-    const kind = classifySection(sec.heading);
+    const classified = classifySection(sec.heading);
+    // Only the first section of a kind is structured; a repeat stays verbatim.
+    const kind = classified && !order.includes(classified) ? classified : null;
+    if (kind) {
+      order.push(kind);
+      const heading = sec.heading.trim();
+      if (heading && heading !== DEFAULT_SECTION_HEADINGS[kind]) headings[kind] = heading;
+    }
     if (kind === 'summary') {
       summary = sec.body
         .map((l) => l.trim())
@@ -510,7 +564,7 @@ export function parseResumeMarkdown(md: string): StructuredResume {
     lastKnown = kind;
   }
 
-  return {
+  const out: StructuredResume = {
     contact,
     targetTitle: targetTitleHint,
     summary,
@@ -519,6 +573,9 @@ export function parseResumeMarkdown(md: string): StructuredResume {
     skills,
     extraSections,
   };
+  if (Object.keys(headings).length) out.headings = headings;
+  if (order.length && order.some((k, i) => k !== KNOWN_SECTION_ORDER.filter((x) => order.includes(x))[i])) out.order = order;
+  return out;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -563,57 +620,137 @@ export function serializeResumeMarkdown(s: StructuredResume): string {
 
   emitExtras(null);
 
-  if (s.summary.trim()) {
-    lines.push('## Summary');
-    lines.push('');
-    lines.push(s.summary.trim());
-    lines.push('');
-  }
-  emitExtras('summary');
-
-  if (s.experiences.length) {
-    lines.push('## Experience');
-    lines.push('');
-    for (const e of s.experiences) {
-      const head = [e.company, e.title, joinDateRange(e.startDate, e.endDate)]
-        .filter(Boolean)
-        .join(' · ');
-      lines.push(`### ${head}`);
-      if (e.location.trim()) lines.push(`*${e.location.trim()}*`);
-      for (const b of e.bullets) {
-        if (b.trim()) lines.push(`- ${b.trim()}`);
-      }
+  const title = (kind: KnownSectionKind) => s.headings?.[kind]?.trim() || DEFAULT_SECTION_HEADINGS[kind];
+  const emitKnown = (kind: KnownSectionKind) => {
+    if (kind === 'summary' && s.summary.trim()) {
+      lines.push(`## ${title('summary')}`);
+      lines.push('');
+      lines.push(s.summary.trim());
       lines.push('');
     }
-  }
-  emitExtras('experiences');
-
-  if (s.education.length) {
-    lines.push('## Education');
-    lines.push('');
-    for (const ed of s.education) {
-      const head = [ed.degree, ed.school, joinDateRange(ed.startDate, ed.endDate)]
-        .filter(Boolean)
-        .join(' · ');
-      lines.push(`### ${head}`);
-      if (ed.location.trim()) lines.push(`*${ed.location.trim()}*`);
-      for (const b of ed.bullets) {
-        if (b.trim()) lines.push(`- ${b.trim()}`);
+    if (kind === 'experiences' && s.experiences.length) {
+      lines.push(`## ${title('experiences')}`);
+      lines.push('');
+      for (const e of s.experiences) {
+        const head = [e.company, e.title, joinDateRange(e.startDate, e.endDate)]
+          .filter(Boolean)
+          .join(' · ');
+        lines.push(`### ${head}`);
+        if (e.location.trim()) lines.push(`*${e.location.trim()}*`);
+        for (const b of e.bullets) {
+          if (b.trim()) lines.push(`- ${b.trim()}`);
+        }
+        lines.push('');
       }
+    }
+    if (kind === 'education' && s.education.length) {
+      lines.push(`## ${title('education')}`);
+      lines.push('');
+      for (const ed of s.education) {
+        const head = [ed.degree, ed.school, joinDateRange(ed.startDate, ed.endDate)]
+          .filter(Boolean)
+          .join(' · ');
+        lines.push(`### ${head}`);
+        if (ed.location.trim()) lines.push(`*${ed.location.trim()}*`);
+        for (const b of ed.bullets) {
+          if (b.trim()) lines.push(`- ${b.trim()}`);
+        }
+        lines.push('');
+      }
+    }
+    if (kind === 'skills' && s.skills.length) {
+      lines.push(`## ${title('skills')}`);
+      lines.push('');
+      lines.push(s.skills.filter((sk) => sk.trim()).join(' · '));
       lines.push('');
     }
-  }
-  emitExtras('education');
-
-  if (s.skills.length) {
-    lines.push('## Skills');
-    lines.push('');
-    lines.push(s.skills.filter((sk) => sk.trim()).join(' · '));
-    lines.push('');
-  }
-  emitExtras('skills');
+    emitExtras(kind);
+  };
+  for (const kind of knownOrder(s)) emitKnown(kind);
 
   return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
+}
+
+/** The known blocks in emission order: `order` first, then the rest by default. */
+export function knownOrder(s: Pick<StructuredResume, 'order'>): KnownSectionKind[] {
+  const seen = new Set<KnownSectionKind>();
+  const out: KnownSectionKind[] = [];
+  for (const k of [...(s.order ?? []), ...KNOWN_SECTION_ORDER]) {
+    if (!KNOWN_SECTION_ORDER.includes(k) || seen.has(k)) continue;
+    seen.add(k);
+    out.push(k);
+  }
+  return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Section order (F-RES-12 reorder; WP-65)
+// ─────────────────────────────────────────────────────────────────────
+
+export type SectionRef =
+  | { kind: 'known'; key: KnownSectionKind }
+  | { kind: 'extra'; id: string };
+
+/** True when the known block has content (and so appears in the document). */
+function hasKnownContent(s: StructuredResume, k: KnownSectionKind): boolean {
+  if (k === 'summary') return s.summary.trim().length > 0;
+  if (k === 'experiences') return s.experiences.length > 0;
+  if (k === 'education') return s.education.length > 0;
+  return s.skills.length > 0;
+}
+
+/** The sections in document order, as the serializer will write them. */
+export function sectionSequence(s: StructuredResume): SectionRef[] {
+  const out: SectionRef[] = [];
+  const extras = s.extraSections ?? [];
+  const pushExtras = (anchor: KnownSectionKind | null) => {
+    for (const x of extras) if (x.anchor === anchor) out.push({ kind: 'extra', id: x.id });
+  };
+  pushExtras(null);
+  for (const k of knownOrder(s)) {
+    if (hasKnownContent(s, k)) out.push({ kind: 'known', key: k });
+    pushExtras(k);
+  }
+  return out;
+}
+
+/**
+ * Put the sections in `seq` order: known blocks get that order, and each extra
+ * section is anchored to the known block before it. Content never changes.
+ */
+export function applySectionSequence(s: StructuredResume, seq: SectionRef[]): StructuredResume {
+  const order: KnownSectionKind[] = [];
+  const anchors = new Map<string, KnownSectionKind | null>();
+  const extraOrder: string[] = [];
+  let last: KnownSectionKind | null = null;
+  for (const ref of seq) {
+    if (ref.kind === 'known') {
+      order.push(ref.key);
+      last = ref.key;
+    } else {
+      anchors.set(ref.id, last);
+      extraOrder.push(ref.id);
+    }
+  }
+  // Known blocks with no content keep their place after the listed ones.
+  for (const k of knownOrder(s)) if (!order.includes(k)) order.push(k);
+  const byId = new Map(s.extraSections.map((x) => [x.id, x]));
+  const extras = [
+    ...extraOrder.map((id) => byId.get(id)).filter((x): x is StructuredExtraSection => Boolean(x)),
+    ...s.extraSections.filter((x) => !extraOrder.includes(x.id)),
+  ].map((x) => (anchors.has(x.id) ? { ...x, anchor: anchors.get(x.id) ?? null } : x));
+  return { ...s, order, extraSections: extras };
+}
+
+/** Move one section up (-1) or down (+1) in the document. */
+export function moveSection(s: StructuredResume, ref: SectionRef, dir: -1 | 1): StructuredResume {
+  const seq = sectionSequence(s);
+  const idx = seq.findIndex((r) => (r.kind === 'known' && ref.kind === 'known' ? r.key === ref.key : r.kind === 'extra' && ref.kind === 'extra' && r.id === ref.id));
+  const to = idx + dir;
+  if (idx < 0 || to < 0 || to >= seq.length) return s;
+  const next = [...seq];
+  [next[idx], next[to]] = [next[to]!, next[idx]!];
+  return applySectionSequence(s, next);
 }
 
 // ─────────────────────────────────────────────────────────────────────

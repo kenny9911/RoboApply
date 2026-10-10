@@ -371,28 +371,298 @@ export const UpdateClaimBodySchema = z
   .strict()
   .refine((v) => v.status !== 'edited' || Boolean(v.text), { message: 'An edited claim needs text.' });
 
-// ── Layout (WP-36b) ──────────────────────────────────────────────────────
+// ── Layout (WP-36b; WP-65 additions) ─────────────────────────────────────
+//
+// WP-65 adds the `campus` template (A4 应届 / new-grad layout), the
+// personal-details placement for GoApply (籍贯 / 政治面貌, entered by the user
+// and placed by the export renderer only — never in the resume text, so never
+// in any prompt or score), `photo` (place the photo kept on the user's device
+// when downloading; the server never stores it), and `headingLanguage` (the
+// zh/en bilingual export switches the section titles; the user's text stays as
+// written).
 
-export const RESUME_TEMPLATES = ['standard', 'compact', 'centered', 'structured', 'two_column'] as const;
+export const RESUME_TEMPLATES = ['standard', 'compact', 'centered', 'structured', 'two_column', 'campus'] as const;
+export const HEADING_LANGUAGES = ['as_written', 'en', 'zh', 'zh-TW'] as const;
+export type HeadingLanguage = (typeof HEADING_LANGUAGES)[number];
+/** Bullet marks: a named style or one literal character. */
+export const BULLET_STYLES = ['solid', 'hollow', 'dash'] as const;
+/** Optional personal details placed by the renderer (GoApply 籍贯 / 政治面貌). */
+export const ResumePersonalSchema = z
+  .object({
+    nativePlace: z.string().trim().max(40).optional(),
+    politicalStatus: z.string().trim().max(20).optional(),
+  })
+  .strict();
+export type ResumePersonal = z.infer<typeof ResumePersonalSchema>;
+// A null field removes that stored value (the template default applies again);
+// fit-to-page's Undo uses this to put the stored layout back exactly.
+const pt = z.number().nullable();
+const SizesSchema = z.object({ name: pt, section: pt, sub: pt, body: pt }).partial().strict();
+const SpacingSchema = z.object({ section: pt, entry: pt, line: pt, marginY: pt, marginX: pt }).partial().strict();
 /** `RAResumeVariant.layout` (documented JSON column). */
 export const ResumeLayoutSchema = z
   .object({
     template: z.enum(RESUME_TEMPLATES).optional(),
     font: z.string().max(60).optional(),
-    sizes: z.object({ name: z.number(), section: z.number(), sub: z.number(), body: z.number() }).partial().strict().optional(),
+    /** null clears all stored sizes (template defaults). */
+    sizes: SizesSchema.nullable().optional(),
     page: z.enum(['letter', 'a4']).optional(),
-    spacing: z.object({ section: z.number(), entry: z.number(), line: z.number(), marginY: z.number(), marginX: z.number() }).partial().strict().optional(),
+    /** null clears all stored spacing (template defaults). */
+    spacing: SpacingSchema.nullable().optional(),
     justify: z.boolean().optional(),
     headerAlign: z.enum(['left', 'center']).optional(),
     accent: z.string().max(20).optional(),
     bullet: z.string().max(4).optional(),
     skillsLayout: z.enum(['inline', 'grouped', 'columns']).optional(),
-    eduOrder: z.enum(['before_experience', 'after_experience']).optional(),
+    // null clears the saved order (as written).
+    eduOrder: z.enum(['before_experience', 'after_experience']).nullable().optional(),
     dateFormat: z.string().max(20).optional(),
     hideDivider: z.boolean().optional(),
+    // ── WP-65 ──
+    /** null clears the stored details. */
+    personal: ResumePersonalSchema.nullable().optional(),
+    photo: z.boolean().optional(),
+    headingLanguage: z.enum(HEADING_LANGUAGES).optional(),
   })
   .strict();
 export const PatchLayoutBodySchema = z.object({ layout: ResumeLayoutSchema }).strict();
+
+// ── Fit to one page (WP-65; PRODUCT_PLAN.md F-RES-14) ────────────────────
+//
+// Adjusts spacing, then margins, then type sizes — never the text. The
+// result is saved as explicit `sizes` / `spacing`; `previous` holds the values
+// that were in effect before (for display) and `restore` the stored values
+// (null = none stored), so Undo is PATCH /:id/layout `{ layout: restore }` and
+// puts the stored layout back exactly — template defaults are never pinned.
+// GoApply resumes may target 2 pages (A4, 1–2 pages). `photo: true` says a
+// device photo is placed on download, so the search reserves its box.
+
+export const FitToPageBodySchema = z
+  .object({
+    pages: z.union([z.literal(1), z.literal(2)]).default(1),
+    photo: z.boolean().optional(),
+  })
+  .strict();
+export type FitStatus = 'fitted' | 'already_fits' | 'too_long';
+export interface FitSpacing {
+  section: number;
+  entry: number;
+  line: number;
+  marginX: number;
+  marginY: number;
+}
+export interface FitSizes {
+  name: number;
+  section: number;
+  sub: number;
+  body: number;
+}
+export interface FitToPageResponse {
+  status: FitStatus;
+  /** Pages the PDF has before and after (after = before when nothing changed). */
+  pages: { before: number; after: number; target: number };
+  /** The values now saved (null when nothing changed). */
+  applied: { sizes: FitSizes; spacing: FitSpacing } | null;
+  /** The values in effect before (template defaults filled in). */
+  previous: { sizes: FitSizes; spacing: FitSpacing };
+  /** The stored values before (null = not stored); PATCH `{ layout: restore }` to undo. */
+  restore: { sizes: FitRestore<FitSizes>; spacing: FitRestore<FitSpacing> };
+}
+export type FitRestore<T> = { [K in keyof T]: number | null };
+
+// ── Guided builder (WP-65; PRODUCT_PLAN.md F-RES-17, F-RES-12 cn, TW-04) ─
+//
+//   GET  /builder/config     → BuilderConfigView (sections for this brand and locale)
+//   POST /builder/suggest    BuilderSuggestBody → BuilderSuggestResponse (credit rewrite;
+//                            503 ai_unavailable when AI is off; never sent personal details)
+//   POST /builder            BuilderDraft → BuilderCreateResponse (a new base resume; 409
+//                            reason resume_limit_reached when every slot is taken)
+//
+// Variants: `intl` (RoboApply), `tw` (RoboApply in Traditional Chinese: 自傳,
+// optional photo, 期望待遇 "依公司規定 / 面議"), `cn` (GoApply 应届: 基本信息,
+// 求职意向, 教育, 实习, 项目 (STAR), 校园经历, 技能证书 (CET-4/6), 获奖, 自我评价,
+// optional photo / 籍贯 / 政治面貌). Photo, 籍贯 and 政治面貌 never enter the
+// resume text or any prompt: the export renderer places them.
+
+export const BUILDER_VARIANTS = ['intl', 'tw', 'cn'] as const;
+export type BuilderVariant = (typeof BUILDER_VARIANTS)[number];
+export const BUILDER_DOC_LANGUAGES = ['en', 'zh', 'zh-TW'] as const;
+export type BuilderDocLanguage = (typeof BUILDER_DOC_LANGUAGES)[number];
+/** Builder steps / document sections. */
+export const BUILDER_SECTIONS = [
+  'basics',
+  'intent',
+  'summary',
+  'education',
+  'experience',
+  'internship',
+  'projects',
+  'campus',
+  'skills',
+  'certificates',
+  'awards',
+  'selfEvaluation',
+  'autobiography',
+  'personal',
+] as const;
+export type BuilderSection = (typeof BUILDER_SECTIONS)[number];
+export const SALARY_KINDS = ['none', 'company_policy', 'negotiable', 'amount'] as const;
+export type SalaryKind = (typeof SALARY_KINDS)[number];
+
+const Short = z.string().trim().max(120);
+const DateText = z.string().trim().max(30);
+const Line = z.string().trim().max(400);
+const Long = z.string().trim().max(1500);
+
+export const BuilderEntrySchema = z
+  .object({
+    title: Short.default(''),
+    organization: Short.default(''),
+    location: Short.default(''),
+    start: DateText.default(''),
+    end: DateText.default(''),
+    bullets: z.array(Line).max(12).default([]),
+  })
+  .strict();
+export type BuilderEntry = z.infer<typeof BuilderEntrySchema>;
+
+export const BuilderEducationSchema = z
+  .object({
+    school: Short.default(''),
+    degree: Short.default(''),
+    major: Short.default(''),
+    start: DateText.default(''),
+    end: DateText.default(''),
+    /** GPA / ranking as the user writes it. */
+    gpa: z.string().trim().max(30).default(''),
+    details: z.array(Line).max(8).default([]),
+  })
+  .strict();
+export type BuilderEducation = z.infer<typeof BuilderEducationSchema>;
+
+export const BuilderStarSchema = z
+  .object({ situation: Line.default(''), task: Line.default(''), action: Line.default(''), result: Line.default('') })
+  .strict();
+export const BuilderProjectSchema = z
+  .object({
+    name: Short.default(''),
+    role: Short.default(''),
+    start: DateText.default(''),
+    end: DateText.default(''),
+    link: z.string().trim().max(200).default(''),
+    /** STAR prompts (cn); written as bullets in that order. */
+    star: BuilderStarSchema.default({ situation: '', task: '', action: '', result: '' }),
+    bullets: z.array(Line).max(12).default([]),
+  })
+  .strict();
+export type BuilderProject = z.infer<typeof BuilderProjectSchema>;
+
+export const BuilderDraftSchema = z
+  .object({
+    docLanguage: z.enum(BUILDER_DOC_LANGUAGES),
+    /** The resume's name in the hub (defaults to the target title). */
+    name: z.string().trim().max(80).optional(),
+    basics: z
+      .object({
+        fullName: z.string().trim().min(1).max(80),
+        email: z.string().trim().max(120).default(''),
+        phone: z.string().trim().max(40).default(''),
+        city: Short.default(''),
+        links: z.array(z.string().trim().max(200)).max(4).default([]),
+      })
+      .strict(),
+    intent: z
+      .object({
+        targetTitle: Short.default(''),
+        cities: Short.default(''),
+        salary: z.object({ kind: z.enum(SALARY_KINDS).default('none'), amount: z.string().trim().max(60).default('') }).strict().default({ kind: 'none', amount: '' }),
+        availableFrom: z.string().trim().max(60).default(''),
+      })
+      .strict()
+      .default({ targetTitle: '', cities: '', salary: { kind: 'none', amount: '' }, availableFrom: '' }),
+    summary: Long.default(''),
+    education: z.array(BuilderEducationSchema).max(6).default([]),
+    experience: z.array(BuilderEntrySchema).max(10).default([]),
+    internship: z.array(BuilderEntrySchema).max(10).default([]),
+    projects: z.array(BuilderProjectSchema).max(8).default([]),
+    campus: z.array(BuilderEntrySchema).max(8).default([]),
+    skills: z.array(z.string().trim().max(60)).max(40).default([]),
+    certificates: z.array(z.string().trim().max(80)).max(20).default([]),
+    awards: z.array(Line).max(20).default([]),
+    selfEvaluation: Long.default(''),
+    autobiography: z.string().trim().max(4000).default(''),
+    /** Optional details the renderer places (never in the text). */
+    personal: ResumePersonalSchema.optional(),
+    /** Place the photo kept on this device when downloading. */
+    photo: z.boolean().default(false),
+    /** An AI suggestion the user accepted is in this draft (exports then carry the AI marks). */
+    aiAssisted: z.boolean().default(false),
+  })
+  .strict();
+export type BuilderDraft = z.infer<typeof BuilderDraftSchema>;
+export type BuilderDraftInput = z.input<typeof BuilderDraftSchema>;
+
+/** What an AI suggestion writes. */
+export const BUILDER_SUGGEST_KINDS = ['bullets', 'summary', 'self_evaluation'] as const;
+export type BuilderSuggestKind = (typeof BUILDER_SUGGEST_KINDS)[number];
+/**
+ * The only fields a builder prompt may carry. There is no personal-details
+ * field: photo, 籍贯, 政治面貌, gender, birth date and family members cannot
+ * be sent (and lines that mention them are dropped from the notes).
+ */
+export const BuilderSuggestBodySchema = z
+  .object({
+    kind: z.enum(BUILDER_SUGGEST_KINDS),
+    docLanguage: z.enum(BUILDER_DOC_LANGUAGES),
+    targetTitle: Short.default(''),
+    /** The entry the bullets are for (bullets only). */
+    entry: z.object({ title: Short.default(''), organization: Short.default(''), section: z.enum(['experience', 'internship', 'projects', 'campus']) }).strict().optional(),
+    /** The user's own notes: what they did, how, what came of it. */
+    notes: z.string().trim().max(2000).default(''),
+    /** For a summary / self-evaluation: short lines from the draft (titles, bullets, skills). */
+    context: z.array(z.string().trim().max(400)).max(40).default([]),
+  })
+  .strict()
+  .refine((v) => v.notes.length > 0 || v.context.length > 0, { message: 'Write a few notes first.' });
+export type BuilderSuggestBody = z.infer<typeof BuilderSuggestBodySchema>;
+
+export interface BuilderSuggestResponse {
+  suggestions: Array<{ text: string; aiWritten: true }>;
+  /** Suggestions dropped because they added numbers that are not in your notes. */
+  blocked: number;
+}
+
+export interface BuilderStepView {
+  key: BuilderSection;
+  /** The step can be skipped (it then adds nothing to the resume). */
+  optional: boolean;
+  /** The step has an AI action (hidden when AI is unavailable). */
+  ai: BuilderSuggestKind | null;
+}
+
+export interface BuilderConfigView {
+  variant: BuilderVariant;
+  docLanguages: BuilderDocLanguage[];
+  defaultDocLanguage: BuilderDocLanguage;
+  steps: BuilderStepView[];
+  /** Document section titles per language (what the resume will say). */
+  headings: Record<BuilderDocLanguage, Partial<Record<BuilderSection, string>>>;
+  /** AI may run for this user on this brand (consent + model). */
+  aiAvailable: boolean;
+  page: 'letter' | 'a4';
+  /** Pages a resume should fit in (GoApply: 2). */
+  maxPages: 1 | 2;
+  template: (typeof RESUME_TEMPLATES)[number];
+  photo: { offered: boolean; defaultOn: Record<BuilderDocLanguage, boolean> };
+  personalFields: Array<keyof ResumePersonal>;
+  salaryKinds: SalaryKind[];
+  /** Certificate names offered as one-tap adds (the user adds scores). */
+  certificateSuggestions: string[];
+}
+
+export interface BuilderCreateResponse {
+  resumeId: string;
+}
 
 export const RESUME_ERROR_CODES = {
   /** Finalize/export refused while any claim is pending (409). */

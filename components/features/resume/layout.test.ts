@@ -37,6 +37,12 @@ describe('layout model', () => {
       headerAlign: 'left',
       dateFormat: 'as_written',
       spacing: 'normal',
+      justify: false,
+      bullet: 'solid',
+      eduOrder: 'as_written',
+      skillsLayout: 'grouped',
+      headingLanguage: 'as_written',
+      photo: true,
     });
     expect(resolveLayout({ template: 'centered', page: 'letter', spacing: { ...SPACING_PRESETS.tight } }, 'a4')).toMatchObject({
       template: 'centered',
