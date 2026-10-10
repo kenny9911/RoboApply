@@ -5,7 +5,7 @@
 // each one carries its official URL, source and last verification date, and
 // shows "待核实" 14 days after it (needsReverify). Seeker: deadline reminders
 // (kind 'event') and follow-a-company (kind 'company', per 届别).
-// Admin curation: paste an official URL → single-page fetch → CN LLM proposes
+// Admin curation: paste an official URL → single-page fetch → the model proposes
 // → a person checks and saves a draft → verifies → publishes. There is no
 // path that publishes without `verifiedAt` + `verifiedBy`, and editing a
 // verified entry's facts clears its verification (a published entry goes
@@ -350,7 +350,7 @@ export async function adminExtract(deps: CampusServiceDeps, officialUrl: string,
   assertSourceUrl(officialUrl, deps.env, 'officialUrl');
   const route = deps.resolveModel(deps.env);
   if (!route.available || !route.model) {
-    throw new HttpError('ai_unavailable', 'No domestic model is configured for reading pages; fill the form by hand.', { reason: 'no_model' });
+    throw new HttpError('ai_unavailable', 'No model is configured for reading pages; fill the form by hand.', { reason: 'no_model' });
   }
   let page: FetchedPage;
   try {

@@ -1,30 +1,43 @@
 // server/src/platform/llm/brandPolicy.ts
 //
-// Pure LLM routing policy per brand (TASK_PLAN.md R-13, CN_TW_LAUNCH_PLAN.md
-// L-3). No I/O. WP-14 wires it into LLMService (primary and every fallback)
-// through egressPolicy.ts, which supplies the endpoint the client really calls.
+// Pure LLM routing policy per brand (owner ruling D5; GOAPPLY_PARITY_PLAN.md
+// §3.3; it supersedes TASK_PLAN R-13). No I/O. LLMService applies it to the
+// primary route and to every fallback hop through egressPolicy.ts, which
+// supplies the endpoint the client really calls.
 //
-// GoApply (`llmProfile: 'domestic_cn'`):
-//   - may call only the domestic vendors deepseek, qwen/DashScope, kimi
-//     (Moonshot), glm (Zhipu), doubao (Volcano Ark) and minimax (China);
+// GoApply, by default: every route RoboApply may use (OpenRouter, OpenAI,
+// Anthropic, Google, …) plus its domestic vendors, as primary and as a
+// fallback hop. A call with no provider at all is refused (`missing_route`).
+//
+// GoApply behind the domestic-only wall (`CN_LLM_DOMESTIC_ONLY=true`, or
+// `CN_RESIDENCY_STRICT=true`, which implies it; an operator opt-in, never
+// implied by a missing value):
+//   - only the domestic vendors deepseek, qwen/DashScope, kimi (Moonshot),
+//     glm (Zhipu), doubao (Volcano Ark) and minimax (China);
 //   - `newapi` (an OpenAI-compatible gateway) only when its base host is on
 //     the domestic allowlist (the vendor hosts above plus
 //     `CN_LLM_DOMESTIC_HOSTS`, for a self-hosted mainland gateway);
 //   - an explicit base URL must itself be domestic (e.g. MiniMax's
 //     international host `api.minimax.io` is refused);
 //   - no fallback to international models, no BYOK.
+// The settings resolver (lib/llm/llmModels.ts) applies the same wall one step
+// earlier: a shared selector or provider mode that names no mainland vendor
+// is not inherited at all, so a GoApply task falls back to GoApply's own
+// default model instead of resolving to a route this file would refuse.
 //
-// RoboApply (`llmProfile: 'global'`), the reverse rule: a prompt that carries
-// user data never resolves to a mainland-China endpoint, as primary or as a
+// RoboApply (`llmProfile: 'global'`), unchanged: a prompt that carries user
+// data never resolves to a mainland-China endpoint, as primary or as a
 // fallback. Matching is by endpoint host, not provider name, so OpenRouter
 // serving a DeepSeek model (host openrouter.ai) is allowed while the direct
 // DeepSeek API (api.deepseek.com) is not.
 
+import { cnLlmDomesticOnly } from '../brand/brandEnv.js';
+import { BRANDS } from '../brand/registry.js';
 import type { ProductBrand } from '../brand/registry.js';
 
 export type EnvLike = Record<string, string | undefined>;
 
-/** Provider ids GoApply may name directly (aliases map to the same vendor). */
+/** The domestic vendors: the only providers GoApply may name behind the wall (aliases map to the same vendor). */
 export const GOAPPLY_DIRECT_PROVIDERS = [
   'deepseek',
   'qwen',
@@ -59,7 +72,8 @@ export const PROVIDER_DEFAULT_HOSTS: Record<string, string> = {
 
 /**
  * Mainland-China model endpoints (exact host or any subdomain). Used both as
- * GoApply's domestic allowlist and as RoboApply's egress denylist.
+ * GoApply's allowlist behind the domestic-only wall and as RoboApply's egress
+ * denylist.
  */
 export const MAINLAND_LLM_HOST_SUFFIXES = [
   'api.deepseek.com',
@@ -104,7 +118,8 @@ export interface LlmPolicyInput extends LlmRoute {
   brand: Pick<ProductBrand, 'id' | 'llmProfile'>;
   /**
    * Whether the prompt carries user data (default true). RoboApply's egress
-   * rule applies only to prompts with user data; GoApply's rule always applies.
+   * rule applies only to prompts with user data; GoApply's wall, when it is
+   * on, applies to every prompt.
    */
   carriesUserData?: boolean;
   env?: EnvLike;
@@ -176,14 +191,37 @@ export function isGoApplyDirectProvider(provider: string): boolean {
   return (GOAPPLY_DIRECT_PROVIDERS as readonly string[]).includes(provider.trim().toLowerCase());
 }
 
+/**
+ * A brand whose own stack is the domestic one (GoApply). The caller may pass
+ * the registry entry or LLMService's view of it, whose `llmProfile` is the
+ * effective profile (`global` while the brand runs on the shared stack), so
+ * the registry is asked too.
+ */
+function isDomesticBrand(brand: LlmPolicyInput['brand']): boolean {
+  return brand.llmProfile === 'domestic_cn' || BRANDS[brand.id]?.llmProfile === 'domestic_cn';
+}
+
+/**
+ * The domestic-only wall holds for this brand: it is the brand the wall is
+ * about (GoApply) AND the operator switched it on (`CN_LLM_DOMESTIC_ONLY`, or
+ * the strict residency switch). The one predicate the route check, BYOK and
+ * the task-model prefix checks share.
+ */
+export function llmDomesticOnlyApplies(brand: LlmPolicyInput['brand'], env: EnvLike = process.env): boolean {
+  return isDomesticBrand(brand) && cnLlmDomesticOnly(env);
+}
+
 /** Decide whether one route (primary or fallback) is allowed for the brand. */
 export function checkLlmRoute(input: LlmPolicyInput): LlmPolicyDecision {
   const env = input.env ?? process.env;
   const provider = (input.provider || '').trim().toLowerCase();
   const host = provider ? routeHost({ ...input, provider }) : hostOf(input.baseUrl ?? null);
 
-  if (input.brand.llmProfile === 'domestic_cn') {
+  if (isDomesticBrand(input.brand)) {
     if (!provider) return deny('missing_route', 'No provider configured for this brand.', host);
+    // D5 default: GoApply may use every route RoboApply may use, and its
+    // domestic vendors. The mainland-only rule below is the operator's wall.
+    if (!cnLlmDomesticOnly(env)) return { allowed: true, host };
     if (input.byok) return deny('byok_not_allowed', 'Personal API keys are not used on this brand.', host);
     if (provider === 'newapi') {
       if (!host || !isMainlandLlmHost(host, env)) {
@@ -200,7 +238,7 @@ export function checkLlmRoute(input: LlmPolicyInput): LlmPolicyDecision {
     return { allowed: true, host };
   }
 
-  // Global profile (RoboApply).
+  // RoboApply.
   if (input.carriesUserData === false) return { allowed: true, host };
   if (host && isMainlandLlmHost(host, env)) {
     return deny('mainland_endpoint_for_intl', `Endpoint ${host} is in mainland China; user data may not go there.`, host);
@@ -221,8 +259,8 @@ export function assertLlmRoute(input: LlmPolicyInput): void {
 /**
  * Filter a fallback chain to the routes the brand may use, keeping order.
  * Wave 0's chain can include `deepseek-v4-flash`; for RoboApply prompts with
- * user data a direct DeepSeek route is dropped, for GoApply every
- * international route is dropped.
+ * user data a direct DeepSeek route is dropped. GoApply keeps the whole chain
+ * by default and only its domestic routes behind the domestic-only wall.
  */
 export function filterLlmChain<R extends LlmRoute>(
   brand: LlmPolicyInput['brand'],

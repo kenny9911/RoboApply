@@ -408,10 +408,18 @@ describe('CompetitivenessService', () => {
 // ── Carry-over (Wave 2 → WP-77): GoApply bare scorer model ids ─────────────
 
 describe('defaultProviderFor', () => {
-  it('GoApply reads only CN_LLM_PROVIDER (no fallback to the global provider)', async () => {
+  it('both brands read the provider mode from the same resolver: GoApply its own CN_LLM_PROVIDER, else the shared one', async () => {
     const goapply = getBrand('goapply');
+    const roboapply = getBrand('roboapply');
     expect(await defaultProviderFor(goapply, { CN_LLM_PROVIDER: ' DeepSeek ', LLM_PROVIDER: 'openrouter' })).toBe('deepseek');
-    expect(await defaultProviderFor(goapply, { LLM_PROVIDER: 'openrouter' })).toBeNull();
+    // No CN provider: the shared provider mode, exactly what RoboApply gets.
+    expect(await defaultProviderFor(goapply, { LLM_PROVIDER: 'openai' })).toBe('openai');
+    expect(await defaultProviderFor(goapply, { LLM_PROVIDER: 'openai' })).toBe(await defaultProviderFor(roboapply, { LLM_PROVIDER: 'openai' }));
+    expect(await defaultProviderFor(goapply, {})).toBe('openrouter');
+    expect(await defaultProviderFor(roboapply, {})).toBe('openrouter');
+    // RoboApply never reads the CN_ value.
+    expect(await defaultProviderFor(roboapply, { CN_LLM_PROVIDER: 'deepseek', LLM_PROVIDER: 'openai' })).toBe('openai');
+    // GoApply on its own stack with no provider of its own: none (a bare model id then has no route).
+    expect(await defaultProviderFor(goapply, { CN_LLM_MODEL: 'deepseek-chat', LLM_PROVIDER: 'openrouter' })).toBeNull();
   });
 });
-

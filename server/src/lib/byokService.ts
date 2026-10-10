@@ -15,6 +15,9 @@ import { prisma } from './prisma.js';
 import { encryptField, decryptField } from './crypto.js';
 import { logger } from '../services/LoggerService.js';
 import { getCurrentBrandId } from './requestContext.js';
+import type { EnvSource } from '../platform/brand/brandEnv.js';
+import { getBrand, isBrandId } from '../platform/brand/registry.js';
+import { llmDomesticOnlyApplies } from '../platform/llm/brandPolicy.js';
 
 // ---------------------------------------------------------------------------
 // Provider catalog
@@ -35,15 +38,17 @@ export const BYOK_PROVIDERS = [
 export type ByokProvider = (typeof BYOK_PROVIDERS)[number];
 
 /**
- * Whether personal API keys are used on a brand. GoApply: never (TASK_PLAN
- * R-13 — its AI stays on the domestic model and a user key could point
- * anywhere). RoboApply: yes.
+ * Whether personal API keys are used on a brand. Both brands: yes (D5:
+ * GoApply follows RoboApply). GoApply: no only behind the domestic-only wall
+ * (`CN_LLM_DOMESTIC_ONLY=true`, or `CN_RESIDENCY_STRICT=true`), where its AI
+ * must stay on mainland endpoints and a user key could point anywhere.
  */
-export function isByokAllowedForBrand(brandId: string | undefined | null): boolean {
-  return brandId !== 'goapply';
+export function isByokAllowedForBrand(brandId: string | undefined | null, env: EnvSource = process.env): boolean {
+  if (!brandId || !isBrandId(brandId)) return true;
+  return !llmDomesticOnlyApplies(getBrand(brandId), env);
 }
 
-/** Thrown when a GoApply unit of work tries to store a personal key. */
+/** Thrown when a GoApply unit of work tries to store a personal key behind the domestic-only wall. */
 export class ByokNotAllowedError extends Error {
   readonly code = 'feature_disabled' as const;
   constructor() {
@@ -205,9 +210,10 @@ export interface ResolvedByok {
  * active, with the API key decrypted in-memory. Returns null when no
  * row matches — callers should fall back to platform credentials.
  *
- * - GoApply never uses BYOK (R-13: its AI stays on the domestic model; a
- *   user key would route a GoApply user's data to an offshore provider), so
- *   a GoApply unit of work always gets null.
+ * - Behind the domestic-only wall (CN_LLM_DOMESTIC_ONLY) GoApply does not
+ *   use BYOK: a user key could route a GoApply user's data to an offshore
+ *   provider, so a GoApply unit of work gets null there. Otherwise both
+ *   brands resolve a personal key the same way.
  * - A failed LOOKUP (DB error, pool timeout) is logged and returns null: the
  *   platform route serves the call, as it did before every request carried a
  *   user context. Only a row that exists but cannot be DECRYPTED throws —

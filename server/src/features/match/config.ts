@@ -6,7 +6,9 @@
 //
 //   MATCH_WEIGHTS                  JSON {title_level, skills, industry, logistics, career_path} (35/30/15/10/10)
 //   MATCH_TIERS                    JSON {great, good, possible} (80/65/45; great > good > possible)
-//   SCORE_DAILY_BUDGET / CN_…      AI scores per brand per day, platform-paid (20,000; brandEnv, no fallback)
+//   SCORE_DAILY_BUDGET / CN_…      AI scores per brand per day, platform-paid (20,000). Read per key through
+//                                  brandEnv (D5): GoApply uses CN_SCORE_DAILY_BUDGET when set, else the shared
+//                                  SCORE_DAILY_BUDGET; each brand still has its own counter.
 //   SCORE_PRECOMPUTE_PER_USER_DAY  AI scores the precompute cron may queue per user per day (25)
 
 import { brandEnv, type EnvSource } from '../../platform/brand/brandEnv.js';

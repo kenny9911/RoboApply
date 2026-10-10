@@ -111,18 +111,42 @@ describe('offersAiAvailable (consent AND the ai.text capability)', () => {
     expect(await offersAiAvailable(RA_USER)).toBe(false);
   });
 
-  it('GoApply with consent but no CN text model configured (real ai.text check): false', async () => {
+  it('GoApply with consent and NO CN text model (real ai.text check): true; AI runs on the shared stack', async () => {
     consent = true;
     const real = await vi.importActual<typeof import('../../platform/flags.js')>('../../platform/flags.js');
     setFlagOverrideLoader(async () => []);
-    flags.isEnabled.mockImplementation((key: Parameters<typeof real.isEnabled>[0], opts: Parameters<typeof real.isEnabled>[1]) =>
-      real.isEnabled(key, { ...opts, brand: BRANDS.goapply, env: { NODE_ENV: 'test' } }),
-    );
+    const withEnv = (env: Record<string, string>) =>
+      flags.isEnabled.mockImplementation((key: Parameters<typeof real.isEnabled>[0], opts: Parameters<typeof real.isEnabled>[1]) =>
+        real.isEnabled(key, { ...opts, brand: BRANDS.goapply, env: { NODE_ENV: 'test', ...env } }),
+      );
+    // No CN_ value at all: on (D5).
+    withEnv({});
+    expect(await offersAiAvailable(GA_USER)).toBe(true);
+    // A CN text model of its own changes nothing about the gate.
+    withEnv({ CN_LLM_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'k', CN_LLM_MODEL: 'deepseek-chat' });
+    expect(await offersAiAvailable(GA_USER)).toBe(true);
+    // A typo in the content-safety setting no longer turns GoApply AI off: the filter runs on the keyword list.
+    withEnv({ CN_CONTENT_SAFETY_PROVIDER: 'nonsense' });
+    expect(await offersAiAvailable(GA_USER)).toBe(true);
+    setFlagOverrideLoader(null);
+  });
+
+  it('GoApply with consent: false only through an explicit off switch or an unusable filter under CN_RESIDENCY_STRICT', async () => {
+    consent = true;
+    const real = await vi.importActual<typeof import('../../platform/flags.js')>('../../platform/flags.js');
+    setFlagOverrideLoader(async () => []);
+    const withEnv = (env: Record<string, string>) =>
+      flags.isEnabled.mockImplementation((key: Parameters<typeof real.isEnabled>[0], opts: Parameters<typeof real.isEnabled>[1]) =>
+        real.isEnabled(key, { ...opts, brand: BRANDS.goapply, env: { NODE_ENV: 'test', ...env } }),
+      );
+    // The operator's off switch for the capability.
+    withEnv({ FLAG_GOAPPLY_AI_TEXT: 'false' });
     expect(await offersAiAvailable(GA_USER)).toBe(false);
-    // Control: the same check is true once a CN text model is configured.
-    flags.isEnabled.mockImplementation((key: Parameters<typeof real.isEnabled>[0], opts: Parameters<typeof real.isEnabled>[1]) =>
-      real.isEnabled(key, { ...opts, brand: BRANDS.goapply, env: { NODE_ENV: 'test', CN_LLM_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'k', CN_LLM_MODEL: 'deepseek-chat' } }),
-    );
+    // The strict residency posture: a content-safety filter that cannot run as configured fails closed.
+    withEnv({ CN_RESIDENCY_STRICT: 'true', CN_CONTENT_SAFETY_PROVIDER: 'nonsense' });
+    expect(await offersAiAvailable(GA_USER)).toBe(false);
+    // Control: the strict posture with a clean filter configuration is on.
+    withEnv({ CN_RESIDENCY_STRICT: 'true' });
     expect(await offersAiAvailable(GA_USER)).toBe(true);
     setFlagOverrideLoader(null);
   });

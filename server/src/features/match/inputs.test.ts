@@ -275,11 +275,16 @@ describe('config', () => {
     expect(tierFor(81, { great: 85, good: 70, possible: 50 })).toBe('good');
   });
 
-  it('budgets: brandEnv without fallback, defaults, invalid ignored', () => {
+  it('budgets: read per key (GoApply: CN_ value, else the shared one), defaults, invalid ignored', () => {
     expect(scoreDailyBudget('roboapply', {})).toBe(20_000);
+    expect(scoreDailyBudget('goapply', {})).toBe(20_000);
     expect(scoreDailyBudget('roboapply', { SCORE_DAILY_BUDGET: '500' })).toBe(500);
-    expect(scoreDailyBudget('goapply', { SCORE_DAILY_BUDGET: '500' })).toBe(20_000);
+    // GoApply with only SCORE_DAILY_BUDGET gets it; CN_SCORE_DAILY_BUDGET still wins; RoboApply never reads it.
+    expect(scoreDailyBudget('goapply', { SCORE_DAILY_BUDGET: '500' })).toBe(500);
     expect(scoreDailyBudget('goapply', { CN_SCORE_DAILY_BUDGET: '300' })).toBe(300);
+    expect(scoreDailyBudget('goapply', { SCORE_DAILY_BUDGET: '500', CN_SCORE_DAILY_BUDGET: '300' })).toBe(300);
+    expect(scoreDailyBudget('roboapply', { SCORE_DAILY_BUDGET: '500', CN_SCORE_DAILY_BUDGET: '300' })).toBe(500);
+    expect(scoreDailyBudget('roboapply', { CN_SCORE_DAILY_BUDGET: '300' })).toBe(20_000);
     expect(scoreDailyBudget('roboapply', { SCORE_DAILY_BUDGET: 'lots' })).toBe(20_000);
     expect(precomputePerUserDay({})).toBe(25);
     expect(precomputePerUserDay({ SCORE_PRECOMPUTE_PER_USER_DAY: '3' })).toBe(3);

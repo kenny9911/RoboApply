@@ -92,11 +92,19 @@ describe('rolling summary', () => {
 });
 
 describe('daily budget', () => {
-  it('per brand, no fallback between brands', () => {
+  it('per key: GoApply uses CN_COPILOT_DAILY_BUDGET_USD when set, else the shared budget; RoboApply never reads the CN_ value', () => {
     expect(copilotDailyBudgetUsd('roboapply', { COPILOT_DAILY_BUDGET_USD: '12.5' })).toBe(12.5);
-    expect(copilotDailyBudgetUsd('goapply', { COPILOT_DAILY_BUDGET_USD: '12.5' })).toBe(DEFAULT_COPILOT_DAILY_BUDGET_USD);
+    // GoApply with only the shared budget gets it.
+    expect(copilotDailyBudgetUsd('goapply', { COPILOT_DAILY_BUDGET_USD: '12.5' })).toBe(12.5);
+    // Its own value still wins.
     expect(copilotDailyBudgetUsd('goapply', { CN_COPILOT_DAILY_BUDGET_USD: '3' })).toBe(3);
+    expect(copilotDailyBudgetUsd('goapply', { COPILOT_DAILY_BUDGET_USD: '12.5', CN_COPILOT_DAILY_BUDGET_USD: '3' })).toBe(3);
+    expect(copilotDailyBudgetUsd('roboapply', { COPILOT_DAILY_BUDGET_USD: '12.5', CN_COPILOT_DAILY_BUDGET_USD: '3' })).toBe(12.5);
+    expect(copilotDailyBudgetUsd('roboapply', { CN_COPILOT_DAILY_BUDGET_USD: '3' })).toBe(DEFAULT_COPILOT_DAILY_BUDGET_USD);
+    // Neither set, or an invalid value: the default.
+    expect(copilotDailyBudgetUsd('goapply', {})).toBe(DEFAULT_COPILOT_DAILY_BUDGET_USD);
     expect(copilotDailyBudgetUsd('roboapply', { COPILOT_DAILY_BUDGET_USD: 'abc' })).toBe(DEFAULT_COPILOT_DAILY_BUDGET_USD);
+    expect(copilotDailyBudgetUsd('goapply', { CN_COPILOT_DAILY_BUDGET_USD: 'abc', COPILOT_DAILY_BUDGET_USD: '12.5' })).toBe(DEFAULT_COPILOT_DAILY_BUDGET_USD);
   });
 
   it('counts micro-dollars in RARateCounter and reports exhaustion at the cap', async () => {

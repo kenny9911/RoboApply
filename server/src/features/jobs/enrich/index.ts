@@ -38,7 +38,7 @@ export { buildKeywords, MAX_KEYWORDS } from './keywords.js';
 export type { JobKeyword, KeywordImportance } from './keywords.js';
 export { selectTaxonomyCandidates } from './candidates.js';
 export { REQUIREMENT_TAGS, needsLlm, postingTextOf } from './reconcile.js';
-export { brandForMarket, resolveEnrichModel } from './agent.js';
+export { brandForMarket, resolveEnrichModel, taskModelRoute, type EnrichModelRoute } from './agent.js';
 export { DEFAULT_ENRICH_DAILY_JOBS, enrichDailyLimit } from './budget.js';
 export { enrichDedupeKey, enrichJob, systemUserIdFor } from './service.js';
 export type { EnrichOutcome } from './service.js';

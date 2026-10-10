@@ -42,7 +42,8 @@ let fromEnv: Installed | null = null;
 /**
  * Install a provider (tests, tooling). Pass null to go back to the provider
  * the environment configures (CN_CONTENT_SAFETY_PROVIDER; keyword_only by
- * default). `timeoutMs` defaults to the configured timeout.
+ * default and for a configuration that cannot run as written). `timeoutMs`
+ * defaults to the configured timeout.
  */
 export function setContentSafetyProvider(next: ContentSafetyProvider | null, opts: { timeoutMs?: number } = {}): void {
   installed = next ? { provider: next, timeoutMs: opts.timeoutMs ?? envInstalled().timeoutMs } : null;
@@ -51,9 +52,13 @@ export function setContentSafetyProvider(next: ContentSafetyProvider | null, opt
 function envInstalled(): Installed {
   if (!fromEnv) {
     const config = resolveContentSafetyConfig(process.env);
-    if (config.problems.length) {
+    // Once per process (the result is cached): a bad setting is never silent.
+    if (config.degraded) {
       // eslint-disable-next-line no-console
-      console.error('[contentSafety] misconfigured; GoApply AI will answer ai_unavailable:', config.problems.join('; '));
+      console.warn(`[contentSafety] configuration problems; the filter runs as ${config.provider} on its safe defaults:`, config.problems.join('; '));
+    } else if (config.problems.length) {
+      // eslint-disable-next-line no-console
+      console.error('[contentSafety] misconfigured under CN_RESIDENCY_STRICT; GoApply AI will answer ai_unavailable:', config.problems.join('; '));
     }
     fromEnv = { provider: createContentSafetyProvider(config), timeoutMs: config.timeoutMs };
   }
@@ -73,7 +78,11 @@ function activeTimeoutMs(): number {
   return (installed ?? envInstalled()).timeoutMs;
 }
 
-/** Brands whose LLM calls are checked (R-13: GoApply only). */
+/**
+ * Brands whose LLM calls are checked: GoApply only, on EVERY route it takes
+ * (its own domestic provider or the shared international one). The check
+ * follows the brand of the call, never the provider or the LLM profile.
+ */
 export function contentSafetyApplies(brand: BrandId): boolean {
   return brand === 'goapply';
 }

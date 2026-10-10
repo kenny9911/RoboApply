@@ -1,7 +1,8 @@
 // @vitest-environment node
 //
-// Tests for server/src/platform/llm/egressPolicy.ts (WP-14; kept in an owned
+// Tests for server/src/platform/llm/egressPolicy.ts (kept in an owned
 // directory). The decision is made on the host the client will really call.
+// GoApply's mainland-only rule is the operator's opt-in (CN_LLM_DOMESTIC_ONLY).
 import { describe, expect, it } from 'vitest';
 import {
   OPENROUTER_MAINLAND_UPSTREAMS,
@@ -34,18 +35,40 @@ describe('checkLlmEgress', () => {
     expect(checkLlmEgress({ brand: 'roboapply', provider: 'deepseek', carriesUserData: false, env: {} }).allowed).toBe(true);
   });
 
-  it('GoApply: refuses DeepSeek behind an international proxy and any BYOK', () => {
-    expect(checkLlmEgress({ brand: 'goapply', provider: 'deepseek', credentialBaseUrl: 'https://llm-proxy.example.com', env: {} })).toMatchObject({
+  it('GoApply by default: OpenRouter, OpenAI, Anthropic and Google are allowed, as are a proxy and a personal key', () => {
+    for (const provider of ['openrouter', 'openai', 'anthropic', 'google']) {
+      expect(checkLlmEgress({ brand: 'goapply', provider, env: {} }), provider).toMatchObject({ allowed: true });
+    }
+    expect(checkLlmEgress({ brand: 'goapply', provider: 'openrouter', env: {} })).toMatchObject({ host: 'openrouter.ai', baseUrl: 'https://openrouter.ai/api/v1' });
+    expect(checkLlmEgress({ brand: 'goapply', provider: 'deepseek', credentialBaseUrl: 'https://llm-proxy.example.com', env: {} }).allowed).toBe(true);
+    expect(checkLlmEgress({ brand: 'goapply', provider: 'deepseek', byok: true, env: {} }).allowed).toBe(true);
+    expect(checkLlmEgress({ brand: 'goapply', provider: 'glm', env: {} })).toMatchObject({ allowed: true, host: 'open.bigmodel.cn' });
+    // A gateway with no base URL anywhere still has an endpoint to check against: none.
+    expect(checkLlmEgress({ brand: 'goapply', provider: '', env: {} })).toMatchObject({ allowed: false, code: 'missing_route' });
+  });
+
+  it('GoApply behind the wall (CN_LLM_DOMESTIC_ONLY=true): refuses DeepSeek behind an international proxy, any international provider and any BYOK', () => {
+    const env = { CN_LLM_DOMESTIC_ONLY: 'true' };
+    expect(checkLlmEgress({ brand: 'goapply', provider: 'deepseek', credentialBaseUrl: 'https://llm-proxy.example.com', env })).toMatchObject({
       allowed: false,
       code: 'host_not_domestic',
     });
-    expect(checkLlmEgress({ brand: 'goapply', provider: 'deepseek', byok: true, env: {} })).toMatchObject({ allowed: false, code: 'byok_not_allowed' });
-    expect(checkLlmEgress({ brand: 'goapply', provider: 'glm', env: {} })).toMatchObject({ allowed: true, host: 'open.bigmodel.cn' });
+    expect(checkLlmEgress({ brand: 'goapply', provider: 'openrouter', env })).toMatchObject({ allowed: false, code: 'provider_not_domestic', host: 'openrouter.ai' });
+    expect(checkLlmEgress({ brand: 'goapply', provider: 'newapi', env: { ...env, NEWAPI_BASE_URL: 'https://gw.example.com/v1' } })).toMatchObject({
+      allowed: false,
+      code: 'newapi_host_not_allowlisted',
+    });
+    expect(checkLlmEgress({ brand: 'goapply', provider: 'deepseek', byok: true, env })).toMatchObject({ allowed: false, code: 'byok_not_allowed' });
+    expect(checkLlmEgress({ brand: 'goapply', provider: 'glm', env })).toMatchObject({ allowed: true, host: 'open.bigmodel.cn' });
+    // RoboApply's decisions do not move with GoApply's wall.
+    expect(checkLlmEgress({ brand: 'roboapply', provider: 'openrouter', env }).allowed).toBe(true);
+    expect(checkLlmEgress({ brand: 'roboapply', provider: 'deepseek', env })).toMatchObject({ allowed: false, code: 'mainland_endpoint_for_intl' });
   });
 
   it('assertLlmEgress throws a client-safe LlmBrandPolicyError', () => {
+    expect(() => assertLlmEgress({ brand: 'goapply', provider: 'anthropic', env: {} })).not.toThrow();
     try {
-      assertLlmEgress({ brand: 'goapply', provider: 'anthropic', env: {} });
+      assertLlmEgress({ brand: 'goapply', provider: 'anthropic', env: { CN_LLM_DOMESTIC_ONLY: 'true' } });
       expect.unreachable();
     } catch (err) {
       expect(err).toBeInstanceOf(LlmBrandPolicyError);

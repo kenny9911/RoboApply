@@ -1,14 +1,18 @@
 // @vitest-environment node
 // WP-18 — scorer v3 (RAJobMatchScorerV3Agent): prompt, input and parsing.
 // Lives in the MATCH area (the agent's own colocated test file belongs to FND).
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { runWithBrand } from '../../lib/requestContext.js';
+import { getBrand } from '../../platform/brand/registry.js';
 import {
   RAJobMatchScorerV3Agent,
   SCORER_V3_PARSE_EVIDENCE_CAP,
+  resolvedJobMatchScorerModel,
   type RAJobMatchScorerV3Input,
 } from '../../roboapply/v2/agents/RAJobMatchScorerAgent.js';
 import { guardEvidence, MAX_EVIDENCE_PER_DIMENSION } from './evidence.js';
+import { defaultScorerRouteAllowed } from './scorerRoute.js';
 
 class V3Probe extends RAJobMatchScorerV3Agent {
   prompt() {
@@ -104,5 +108,67 @@ describe('evidence caps', () => {
     const resume = 'quote number 1. quote number 3. quote number 4. quote number 5.';
     const kept = guardEvidence(parsed.dimensions.skills.evidence, { resume, posting: '' });
     expect(kept.map((e) => e.text)).toEqual(['quote number 1', 'quote number 3', 'quote number 4']);
+  });
+});
+
+// ── D5: the scorer model on GoApply (GOAPPLY_PARITY_PLAN.md §3.3) ────────────
+
+describe('scorer model per brand (D5)', () => {
+  const NAMES = ['LLM_PROVIDER', 'LLM_MODEL', 'LLM_MATCHING_MODEL', 'CN_LLM_PROVIDER', 'CN_LLM_MODEL', 'CN_LLM_MATCHING_MODEL', 'CN_LLM_DOMESTIC_ONLY', 'CN_RESIDENCY_STRICT'];
+  beforeEach(() => {
+    for (const name of NAMES) vi.stubEnv(name, '');
+    vi.stubEnv('LLM_SETTINGS_DB_DISABLED', 'true');
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('GoApply with only LLM_MODEL set gets an AI score: the same scorer model as RoboApply, on an allowed route', async () => {
+    vi.stubEnv('LLM_MODEL', 'openrouter/openai/gpt-6-luna');
+    const goModel = runWithBrand('goapply', () => resolvedJobMatchScorerModel());
+    const roboModel = runWithBrand('roboapply', () => resolvedJobMatchScorerModel());
+    expect(goModel).toBe('openrouter/openai/gpt-6-luna');
+    expect(goModel).toBe(roboModel);
+    // MatchService asks this before every scorer call; false would mean the deterministic quick estimate only.
+    expect(await defaultScorerRouteAllowed(getBrand('goapply'), goModel)).toBe(true);
+    expect(await defaultScorerRouteAllowed(getBrand('roboapply'), roboModel)).toBe(true);
+
+    // The matching task model is shared per key too.
+    vi.stubEnv('LLM_MATCHING_MODEL', 'google/gemini-3.8-flash');
+    expect(runWithBrand('goapply', () => resolvedJobMatchScorerModel())).toBe('google/gemini-3.8-flash');
+    expect(await defaultScorerRouteAllowed(getBrand('goapply'), 'google/gemini-3.8-flash')).toBe(true);
+  });
+
+  it('GoApply\'s own matching model wins; behind the wall an international scorer model means the quick estimate', async () => {
+    vi.stubEnv('LLM_MODEL', 'openrouter/openai/gpt-6-luna');
+    vi.stubEnv('CN_LLM_PROVIDER', 'deepseek');
+    vi.stubEnv('CN_LLM_MATCHING_MODEL', 'deepseek/deepseek-v4-flash');
+    expect(runWithBrand('goapply', () => resolvedJobMatchScorerModel())).toBe('deepseek/deepseek-v4-flash');
+    expect(runWithBrand('roboapply', () => resolvedJobMatchScorerModel())).toBe('openrouter/openai/gpt-6-luna');
+    expect(await defaultScorerRouteAllowed(getBrand('goapply'), 'deepseek/deepseek-v4-flash')).toBe(true);
+
+    vi.stubEnv('CN_LLM_DOMESTIC_ONLY', 'true');
+    expect(await defaultScorerRouteAllowed(getBrand('goapply'), 'deepseek/deepseek-v4-flash')).toBe(true);
+    expect(await defaultScorerRouteAllowed(getBrand('goapply'), 'openrouter/openai/gpt-6-luna')).toBe(false);
+    expect(await defaultScorerRouteAllowed(getBrand('roboapply'), 'openrouter/openai/gpt-6-luna')).toBe(true);
+  });
+
+  it('behind the wall a shared matching model does not shadow GoApply\'s own mainland default: the AI score stays on', async () => {
+    vi.stubEnv('LLM_MODEL', 'openrouter/openai/gpt-6-luna');
+    vi.stubEnv('LLM_MATCHING_MODEL', 'google/gemini-3.8-flash'); // RoboApply's, set for the whole deployment
+    vi.stubEnv('CN_LLM_PROVIDER', 'deepseek');
+    vi.stubEnv('CN_LLM_MODEL', 'deepseek-v4-flash');
+    vi.stubEnv('CN_LLM_DOMESTIC_ONLY', 'true');
+    const goModel = runWithBrand('goapply', () => resolvedJobMatchScorerModel());
+    expect(goModel).toBe('deepseek-v4-flash');
+    expect(await defaultScorerRouteAllowed(getBrand('goapply'), goModel)).toBe(true);
+    expect(runWithBrand('roboapply', () => resolvedJobMatchScorerModel())).toBe('google/gemini-3.8-flash');
+    // With no mainland model of its own GoApply has no scorer model (the quick estimate), never the shared one.
+    vi.stubEnv('CN_LLM_PROVIDER', '');
+    vi.stubEnv('CN_LLM_MODEL', '');
+    expect(() => runWithBrand('goapply', () => resolvedJobMatchScorerModel())).toThrow(/not configured/);
+  });
+
+  it('with no model at all the scorer has none on either brand', () => {
+    expect(() => runWithBrand('goapply', () => resolvedJobMatchScorerModel())).toThrow(/not configured/);
+    expect(() => runWithBrand('roboapply', () => resolvedJobMatchScorerModel())).toThrow(/not configured/);
   });
 });

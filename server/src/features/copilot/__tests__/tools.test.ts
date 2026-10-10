@@ -537,7 +537,10 @@ describe('cross-area seams (joins J1, J2, J3)', () => {
 
   it('exports the daily budget reader for admin limits (J3)', () => {
     expect(copilotIndex.copilotDailyBudgetUsd('roboapply', { COPILOT_DAILY_BUDGET_USD: '12.5' })).toBe(12.5);
-    expect(copilotIndex.copilotDailyBudgetUsd('goapply', { COPILOT_DAILY_BUDGET_USD: '12.5' })).toBe(copilotIndex.DEFAULT_COPILOT_DAILY_BUDGET_USD);
+    // Read per key: GoApply with only the shared budget gets it; its own CN_ value still wins.
+    expect(copilotIndex.copilotDailyBudgetUsd('goapply', { COPILOT_DAILY_BUDGET_USD: '12.5' })).toBe(12.5);
+    expect(copilotIndex.copilotDailyBudgetUsd('goapply', { COPILOT_DAILY_BUDGET_USD: '12.5', CN_COPILOT_DAILY_BUDGET_USD: '3' })).toBe(3);
     expect(copilotIndex.copilotDailyBudgetUsd('goapply', { CN_COPILOT_DAILY_BUDGET_USD: '3' })).toBe(3);
+    expect(copilotIndex.copilotDailyBudgetUsd('goapply', {})).toBe(copilotIndex.DEFAULT_COPILOT_DAILY_BUDGET_USD);
   });
 });

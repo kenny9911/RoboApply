@@ -29,9 +29,10 @@
 
 // The prefix table lives in services/llm/providerPrefixes.ts (one copy, so a
 // provider added there is understood here too). `qwen/` pins DashScope only on
-// the domestic profile (GoApply); on RoboApply it stays an OpenRouter slug.
-import { getBrand } from '../../platform/brand/registry.js';
-import { contextlessLlmBrand } from './llmBrand.js';
+// the domestic profile (GoApply with a provider of its own); on the global
+// profile (RoboApply, and GoApply on the shared stack) it stays an OpenRouter
+// slug.
+import { contextlessLlmBrand, effectiveLlmProfile } from './llmBrand.js';
 import { resolveProviderPrefix } from '../../services/llm/providerPrefixes.js';
 
 export interface LlmSelector {
@@ -68,7 +69,7 @@ export function parseLlmSelector(llm?: string | null): LlmSelector | null {
   const rest = raw.substring(slashIdx + 1);
   if (rest.length === 0) return { model: raw };
 
-  const provider = resolveProviderPrefix(head, getBrand(contextlessLlmBrand().brandId).llmProfile);
+  const provider = resolveProviderPrefix(head, effectiveLlmProfile(contextlessLlmBrand().brandId));
   if (!provider) {
     // Unrecognized prefix (e.g. a bare "vendor/model" OpenRouter slug) — keep
     // the whole string as the model and let default routing handle it.

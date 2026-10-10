@@ -1,9 +1,11 @@
 // @vitest-environment node
 //
-// WP-14 acceptance: streamChatWithTools against a fake OpenAI-compatible
-// server on 127.0.0.1 (no external network): text deltas, a tool-call round,
-// abort on signal, retry only before the first delta, the GoApply
-// content-safety gate on streamed output, and the copilot startup check.
+// streamChatWithTools against a fake OpenAI-compatible server on 127.0.0.1 (no
+// external network): text deltas, a tool-call round, abort on signal, retry
+// only before the first delta, GoApply on the shared stack (same provider and
+// model as RoboApply) and on its own, the domestic-only wall as an opt-in, the
+// GoApply content-safety gate on streamed output on every route, and the
+// copilot startup check for both brands.
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -19,7 +21,12 @@ vi.mock('../LoggerService.js', () => ({
   generateRequestId: () => 'req_stream',
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), logLLMCall: vi.fn() },
 }));
-vi.mock('../../lib/byokService.js', () => ({ resolveByok: vi.fn(async () => null), touchByok: vi.fn() }));
+// The real brand predicate (isByokAllowedForBrand); only the key lookup is faked.
+vi.mock('../../lib/byokService.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/byokService.js')>()),
+  resolveByok: vi.fn(async () => null),
+  touchByok: vi.fn(),
+}));
 vi.mock('../../lib/llm/systemCredentials.js', () => ({
   resolveProviderCredential: (provider: string) => {
     const p = provider.toLowerCase();
@@ -91,6 +98,11 @@ const ENV_NAMES = [
   'CN_LLM_MODEL',
   'CN_LLM_COPILOT_MODEL',
   'CN_LLM_DOMESTIC_HOSTS',
+  'CN_LLM_DOMESTIC_ONLY',
+  'CN_RESIDENCY_STRICT',
+  'NODE_ENV',
+  'ALLOWED_BRANDS',
+  'BRAND_LOCK',
   'LLM_SETTINGS_DB_DISABLED',
   'LLM_RETRY_BASE_MS',
   'LLM_RETRY_MAX_MS',
@@ -100,9 +112,13 @@ const ENV_NAMES = [
 ];
 let savedEnv: Record<string, string | undefined> = {};
 
+/** Every model/provider variable of either brand that is set right now (a local .env may carry some). */
+const llmEnvNames = () => Object.keys(process.env).filter((n) => /^(CN_)?LLM_/.test(n));
+
 beforeEach(() => {
-  savedEnv = Object.fromEntries(ENV_NAMES.map((n) => [n, process.env[n]]));
-  for (const n of ENV_NAMES) delete process.env[n];
+  const names = [...new Set([...ENV_NAMES, ...llmEnvNames()])];
+  savedEnv = Object.fromEntries(names.map((n) => [n, process.env[n]]));
+  for (const n of names) delete process.env[n];
   process.env.LLM_SETTINGS_DB_DISABLED = 'true';
   process.env.LLM_RETRY_BASE_MS = '1';
   process.env.LLM_RETRY_MAX_MS = '2';
@@ -119,7 +135,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  for (const n of ENV_NAMES) {
+  for (const n of new Set([...Object.keys(savedEnv), ...llmEnvNames()])) {
     if (savedEnv[n] === undefined) delete process.env[n];
     else process.env[n] = savedEnv[n];
   }
@@ -358,7 +374,90 @@ describe('streamChatWithTools (OpenAI-compatible)', () => {
   });
 });
 
-describe('streamChatWithTools on GoApply', () => {
+describe('streamChatWithTools on GoApply with only the shared env (D5)', () => {
+  const passAll = () =>
+    safety.setContentSafetyProvider({
+      id: 'spy',
+      checkInput: vi.fn(async () => ({ verdict: 'pass' as const, labels: [], provider: 'spy' })),
+      checkOutput: vi.fn(async () => ({ verdict: 'pass' as const, labels: [], provider: 'spy' })),
+    });
+
+  it('streams from the same provider and model as RoboApply (the shared copilot model)', async () => {
+    passAll();
+    safety.setContentSafetyEventWriter(async () => {});
+    const stream = (res: ServerResponse) => sse(res, [textChunk('Hello'), textChunk(' there.'), finishChunk('stop'), usageChunk]);
+    handlers.push((_req, res) => stream(res), (_req, res) => stream(res));
+
+    const goResult = await go(() => new LLMService().streamChatWithTools([{ role: 'user', content: 'hi' }], { task: 'copilot', tools, maxTokens: 900 }));
+    const roboResult = await robo(() => new LLMService().streamChatWithTools([{ role: 'user', content: 'hi' }], { task: 'copilot', tools, maxTokens: 900 }));
+
+    expect(goResult).toMatchObject({ content: 'Hello there.', model: 'fake-model', provider: 'newapi', finishReason: 'stop' });
+    expect({ ...goResult }).toEqual({ ...roboResult });
+    expect(requests).toHaveLength(2);
+    expect(requests[0].path).toBe(requests[1].path);
+    expect(requests[0].auth).toBe(requests[1].auth);
+    expect(requests[0].body).toEqual(requests[1].body);
+  });
+
+  it('tool streaming works on the shared model too: the tool call reaches onToolCall after the content-safety check', async () => {
+    passAll();
+    safety.setContentSafetyEventWriter(async () => {});
+    handlers.push((_req, res) =>
+      sse(res, [
+        { id: 'c1', object: 'chat.completion.chunk', model: 'fake-model', choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'search_jobs', arguments: '{"q":"' } }] } }] },
+        { id: 'c1', object: 'chat.completion.chunk', model: 'fake-model', choices: [{ index: 0, delta: { tool_calls: [{ index: 0, function: { arguments: 'designer"}' } }] } }] },
+        finishChunk('tool_calls'),
+      ]),
+    );
+    const calls: string[] = [];
+    const result = await go(() =>
+      new LLMService().streamChatWithTools([{ role: 'user', content: '找设计师的工作' }], { task: 'copilot', tools, onToolCall: (c) => calls.push(`${c.name} ${c.arguments}`) }),
+    );
+    expect(result.finishReason).toBe('tool_calls');
+    expect(calls).toEqual(['search_jobs {"q":"designer"}']);
+    expect(requests[0].body.model).toBe('fake-model');
+  });
+
+  it('a missing copilot and default model is a configuration error, as on RoboApply (never ai_unavailable)', async () => {
+    delete process.env.LLM_COPILOT_MODEL;
+    const stream = () => new LLMService().streamChatWithTools([{ role: 'user', content: 'hi' }], { task: 'copilot', tools });
+    const goErr = await go(stream).catch((e: unknown) => e);
+    const roboErr = await robo(stream).catch((e: unknown) => e);
+    expect((goErr as Error).message).toMatch(/No LLM model is configured for task "copilot"/);
+    expect((goErr as Error).message).toBe((roboErr as Error).message);
+    expect(goErr).not.toMatchObject({ code: 'ai_unavailable' });
+    expect(requests).toHaveLength(0);
+  });
+
+  it('behind the wall (CN_LLM_DOMESTIC_ONLY=true) the shared model is no fallback: ai_unavailable, nothing is sent', async () => {
+    process.env.CN_LLM_DOMESTIC_ONLY = 'true';
+    const caught = await go(() => new LLMService().streamChatWithTools([{ role: 'user', content: 'hi' }], { task: 'copilot', tools })).catch((e: unknown) => e);
+    expect(caught).toMatchObject({ code: 'ai_unavailable', status: 503, reason: 'no_model' });
+    expect((caught as { detail?: string }).detail).toMatch(/CN_LLM_DOMESTIC_ONLY/);
+    expect(requests).toHaveLength(0);
+    // A gateway is not a mainland vendor by its name: the shared one is not borrowed even when its host is allowlisted...
+    process.env.CN_LLM_DOMESTIC_HOSTS = '127.0.0.1';
+    await expect(go(() => new LLMService().streamChatWithTools([{ role: 'user', content: 'hi' }], { task: 'copilot', tools }))).rejects.toMatchObject({
+      code: 'ai_unavailable',
+      reason: 'no_model',
+    });
+    expect(requests).toHaveLength(0);
+    // ...GoApply names it in its own settings, and then it streams.
+    process.env.CN_LLM_PROVIDER = 'newapi';
+    process.env.CN_LLM_MODEL = 'fake-model';
+    handlers.push((_req, res) => sse(res, [textChunk('ok'), finishChunk('stop')]));
+    await go(() => new LLMService().streamChatWithTools([{ role: 'user', content: 'hi' }], { task: 'copilot', tools }));
+    expect(requests).toHaveLength(1);
+    requests.length = 0;
+    for (const n of ['CN_LLM_PROVIDER', 'CN_LLM_MODEL', 'CN_LLM_DOMESTIC_HOSTS']) delete process.env[n];
+    // RoboApply is not behind GoApply's wall.
+    handlers.push((_req, res) => sse(res, [textChunk('ok'), finishChunk('stop')]));
+    await robo(() => new LLMService().streamChatWithTools([{ role: 'user', content: 'hi' }], { task: 'copilot', tools }));
+    expect(requests).toHaveLength(1);
+  });
+});
+
+describe('streamChatWithTools on GoApply with a provider of its own', () => {
   beforeEach(() => {
     // A domestic new-api gateway (the fake server, allowlisted by host).
     process.env.CN_LLM_DOMESTIC_HOSTS = '127.0.0.1';
@@ -366,12 +465,31 @@ describe('streamChatWithTools on GoApply', () => {
     process.env.CN_LLM_MODEL = 'fake-model';
   });
 
-  it('answers ai_unavailable without a CN model, never using the RoboApply copilot model', async () => {
+  it('answers ai_unavailable when its own stack has no model or no route, and sends nothing', async () => {
+    const stream = () => new LLMService().streamChatWithTools([{ role: 'user', content: 'hi' }], { task: 'copilot', tools });
+    // A provider of its own and no model anywhere (neither its own nor the shared one).
     delete process.env.CN_LLM_MODEL;
-    await expect(go(() => new LLMService().streamChatWithTools([{ role: 'user', content: 'hi' }], { task: 'copilot', tools }))).rejects.toMatchObject({
-      code: 'ai_unavailable',
-    });
+    delete process.env.LLM_COPILOT_MODEL;
+    await expect(go(stream)).rejects.toMatchObject({ code: 'ai_unavailable', reason: 'no_model' });
+    // Its own default model as a bare id, and no provider of its own.
+    process.env.CN_LLM_MODEL = 'fake-model';
+    delete process.env.CN_LLM_PROVIDER;
+    await expect(go(stream)).rejects.toMatchObject({ code: 'ai_unavailable', reason: 'no_model' });
     expect(requests).toHaveLength(0);
+  });
+
+  it('a task model it has not overridden is the shared copilot model, on the route it has for RoboApply', async () => {
+    // CN default model set, CN copilot model unset: the shared LLM_COPILOT_MODEL (newapi/fake-model) is used.
+    process.env.CN_LLM_MODEL = 'own-default-model';
+    safety.setContentSafetyEventWriter(async () => {});
+    handlers.push((_req, res) => sse(res, [textChunk('ok'), finishChunk('stop')]));
+    await go(() => new LLMService().streamChatWithTools([{ role: 'user', content: 'hi' }], { task: 'copilot', tools }));
+    expect(requests[0].body.model).toBe('fake-model');
+    // Its own copilot model wins when set.
+    process.env.CN_LLM_COPILOT_MODEL = 'own-copilot-model';
+    handlers.push((_req, res) => sse(res, [textChunk('ok'), finishChunk('stop')]));
+    await go(() => new LLMService().streamChatWithTools([{ role: 'user', content: 'hi' }], { task: 'copilot', tools }));
+    expect(requests[1].body.model).toBe('own-copilot-model');
   });
 
   it('releases streamed text only after the content-safety check passed it', async () => {
@@ -657,26 +775,101 @@ describe('buildStreamParams (vendor quirks)', () => {
 });
 
 describe('assertCopilotModelSupportsTools (startup check per brand)', () => {
-  it('passes a tool-capable copilot model and skips GoApply without a domestic model', () => {
+  it('passes a shared tool-capable copilot model for both brands: GoApply is checked like RoboApply, not skipped', () => {
     process.env.LLM_COPILOT_MODEL = 'openrouter/openai/gpt-6-luna';
     const results = assertCopilotModelSupportsTools({ brands: ['roboapply', 'goapply'] });
-    expect(results.map((r) => [r.brand, r.ok, r.skipped ?? null])).toEqual([
-      ['roboapply', true, null],
-      ['goapply', true, 'no domestic model configured (AI hidden)'],
+    expect(results.map((r) => [r.brand, r.ok, r.skipped ?? null, r.route.selector, r.route.providerType])).toEqual([
+      ['roboapply', true, null, 'openrouter/openai/gpt-6-luna', 'openrouter'],
+      ['goapply', true, null, 'openrouter/openai/gpt-6-luna', 'openrouter'],
     ]);
   });
 
-  it('fails loudly when the copilot model is Google or Anthropic', () => {
-    process.env.LLM_COPILOT_MODEL = 'google/gemini-3.8-flash';
-    expect(() => assertCopilotModelSupportsTools({ brands: ['roboapply'] })).toThrow(ToolsUnsupportedError);
+  it('a production boot with no deployment scope checks both brands and passes on the shared copilot model', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.LLM_COPILOT_MODEL = 'openrouter/openai/gpt-6-luna';
+    const results = assertCopilotModelSupportsTools();
+    expect(results.map((r) => [r.brand, r.ok])).toEqual([
+      ['roboapply', true],
+      ['goapply', true],
+    ]);
+    // Only the default model set: the copilot task inherits it on both brands.
+    delete process.env.LLM_COPILOT_MODEL;
+    process.env.LLM_MODEL = 'openrouter/openai/gpt-6-luna';
+    expect(assertCopilotModelSupportsTools().every((r) => r.ok && r.route.inheritsDefault)).toBe(true);
   });
 
-  it('fails loudly when the GoApply copilot model breaks the brand policy', () => {
+  it('fails loudly when the copilot model is Google or Anthropic, for GoApply too', () => {
+    process.env.LLM_COPILOT_MODEL = 'google/gemini-3.8-flash';
+    expect(() => assertCopilotModelSupportsTools({ brands: ['roboapply'] })).toThrow(ToolsUnsupportedError);
+    expect(() => assertCopilotModelSupportsTools({ brands: ['goapply'] })).toThrow(ToolsUnsupportedError);
+    const report = assertCopilotModelSupportsTools({ brands: ['roboapply', 'goapply'], throwOnError: false });
+    expect(report.map((r) => [r.brand, r.ok])).toEqual([
+      ['roboapply', false],
+      ['goapply', false],
+    ]);
+  });
+
+  it('fails loudly when no copilot or default model is configured: GoApply is no longer skipped', () => {
+    delete process.env.LLM_COPILOT_MODEL;
+    const report = assertCopilotModelSupportsTools({ brands: ['roboapply', 'goapply'], throwOnError: false });
+    expect(report.map((r) => [r.brand, r.ok, r.problem])).toEqual([
+      ['roboapply', false, 'no copilot or default model configured'],
+      ['goapply', false, 'no copilot or default model configured'],
+    ]);
+  });
+
+  it('an international GoApply copilot model is fine by default and breaks the brand policy only behind the wall', () => {
     process.env.CN_LLM_PROVIDER = 'deepseek';
     process.env.CN_LLM_MODEL = 'deepseek-v4-flash';
     process.env.CN_LLM_COPILOT_MODEL = 'openrouter/openai/gpt-6-luna';
+    expect(assertCopilotModelSupportsTools({ brands: ['goapply'] })[0]).toMatchObject({ ok: true, brand: 'goapply' });
+
+    process.env.CN_LLM_DOMESTIC_ONLY = 'true';
     const report = assertCopilotModelSupportsTools({ brands: ['goapply'], throwOnError: false });
     expect(report[0]).toMatchObject({ ok: false, brand: 'goapply' });
     expect(() => assertCopilotModelSupportsTools({ brands: ['goapply'] })).toThrow(/goapply/);
+    // Its own domestic copilot model passes behind the wall.
+    process.env.CN_LLM_COPILOT_MODEL = 'deepseek/deepseek-v4-flash';
+    expect(assertCopilotModelSupportsTools({ brands: ['goapply'] })[0]).toMatchObject({ ok: true });
+  });
+
+  it('behind the wall a shared copilot model does not shadow GoApply\'s own mainland default: both brands pass the boot check', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.CN_LLM_DOMESTIC_ONLY = 'true';
+    process.env.CN_LLM_PROVIDER = 'deepseek';
+    process.env.CN_LLM_MODEL = 'deepseek-v4-flash';
+    process.env.LLM_COPILOT_MODEL = 'openrouter/openai/gpt-6-luna'; // RoboApply's, set for the whole deployment
+    const results = assertCopilotModelSupportsTools(); // throws on any failure
+    expect(results.map((r) => [r.brand, r.ok, r.skipped ?? null, r.route.selector, r.route.providerType, r.route.allowed])).toEqual([
+      ['roboapply', true, null, 'openrouter/openai/gpt-6-luna', 'openrouter', true],
+      ['goapply', true, null, 'deepseek-v4-flash', 'deepseek', true],
+    ]);
+    expect(results[1].route).toMatchObject({ inheritsDefault: true, source: 'env', sharedWalledOff: 'openrouter/openai/gpt-6-luna' });
+    // The strict residency switch implies the wall.
+    delete process.env.CN_LLM_DOMESTIC_ONLY;
+    process.env.CN_RESIDENCY_STRICT = 'true';
+    expect(assertCopilotModelSupportsTools().map((r) => [r.brand, r.ok, r.route.providerType])).toEqual([
+      ['roboapply', true, 'openrouter'],
+      ['goapply', true, 'deepseek'],
+    ]);
+  });
+
+  it('behind the wall with no mainland model GoApply is skipped (its AI answers 503); RoboApply still boots', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.CN_LLM_DOMESTIC_ONLY = 'true';
+    process.env.LLM_COPILOT_MODEL = 'openrouter/openai/gpt-6-luna';
+    const results = assertCopilotModelSupportsTools(); // no throw
+    expect(results.map((r) => [r.brand, r.ok, r.skipped ?? null])).toEqual([
+      ['roboapply', true, null],
+      ['goapply', true, 'no mainland model behind the domestic-only wall (AI unavailable)'],
+    ]);
+    expect(results[1].route).toMatchObject({ selector: null, sharedWalledOff: 'openrouter/openai/gpt-6-luna' });
+    // Without the wall a brand with no model at all is still a failure, never a skip.
+    delete process.env.CN_LLM_DOMESTIC_ONLY;
+    for (const n of ['LLM_COPILOT_MODEL', 'LLM_MODEL']) delete process.env[n];
+    expect(assertCopilotModelSupportsTools({ throwOnError: false }).map((r) => [r.brand, r.ok, r.skipped ?? null])).toEqual([
+      ['roboapply', false, null],
+      ['goapply', false, null],
+    ]);
   });
 });

@@ -9,6 +9,7 @@ import { OpenAICompatibleProvider } from './OpenAICompatibleProvider.js';
 import { generateRequestId, logger } from '../LoggerService.js';
 import { getCurrentUserId, getCurrentRequestId, setByokInRequest } from '../../lib/requestContext.js';
 import {
+  isByokAllowedForBrand,
   resolveByok,
   touchByok,
   type ByokProvider,
@@ -16,20 +17,21 @@ import {
 } from '../../lib/byokService.js';
 import { resolveProviderCredential, type ProviderTuning } from '../../lib/llm/systemCredentials.js';
 import {
-  getProviderSetting,
-  getDefaultModel,
   getFallbackModelSetting,
+  getLlmRoutingDefaults,
   getRetryAttempts,
   getRetryBaseMs,
   getRetryMaxMs,
+  resolveModelKey,
+  type LlmSettingSource,
 } from '../../lib/llm/llmModels.js';
-import { contextlessLlmBrand, requireLlmCallBrand } from '../../lib/llm/llmBrand.js';
+import { contextlessLlmBrand, llmCallBrand, requireLlmCallBrand } from '../../lib/llm/llmBrand.js';
 import { getTaskModel, getTaskModelOrDefault, type LlmTask } from '../../lib/llm/llmTaskSettings.js';
 import { isTransientLLMError } from './withRetry.js';
-import { normalizeProviderType, resolveProviderPrefix } from './providerPrefixes.js';
+import { normalizeProviderType, resolveSelectorRoute, splitSelectorPrefix, stripProviderPrefix } from './providerPrefixes.js';
 import { getBrand, type BrandId, type ProductBrand } from '../../platform/brand/registry.js';
 import { allowedBrands } from '../../platform/brand/runtime.js';
-import { LlmBrandPolicyError } from '../../platform/llm/brandPolicy.js';
+import { LlmBrandPolicyError, llmDomesticOnlyApplies } from '../../platform/llm/brandPolicy.js';
 import { checkLlmEgress, type LlmEgressDecision } from '../../platform/llm/egressPolicy.js';
 import {
   ContentBlockedError,
@@ -91,8 +93,9 @@ export interface LLMServiceOptions extends LLMOptions {
   task?: LlmTask | string;
   /**
    * Whether the prompt carries user data (default true). Only a RoboApply
-   * prompt with NO user data may reach a mainland-China endpoint; GoApply's
-   * domestic-only rule applies regardless.
+   * prompt with NO user data may reach a mainland-China endpoint. GoApply may
+   * use mainland endpoints for any prompt, and only those when the
+   * domestic-only wall is on (CN_LLM_DOMESTIC_ONLY).
    */
   carriesUserData?: boolean;
 }
@@ -143,7 +146,20 @@ export interface StreamChatWithToolsResult {
 export interface LlmRouteExplanation {
   brand: BrandId;
   task: LlmTask | 'default' | 'fallback';
+  /** The profile the brand runs on (`effectiveLlmProfile`): GoApply is `global` on the shared stack. */
+  profile?: 'global' | 'domestic_cn';
   selector: string | null;
+  /**
+   * Where the selector comes from: the brand's own admin override or variable
+   * (`override`, `env`), or the shared stack GoApply falls back to (`shared`).
+   */
+  source?: LlmSettingSource;
+  /**
+   * The shared selector of this task that the domestic-only wall set aside
+   * for the brand (it names no mainland vendor). It is not used: the task
+   * runs on the brand's own default model, or has none.
+   */
+  sharedWalledOff?: string;
   /** True when the task has no model of its own and uses the brand default. */
   inheritsDefault: boolean;
   providerType: string | null;
@@ -216,43 +232,73 @@ export class LLMService {
   // resolveDefaults() — NOT cached on the instance — so an admin changing the
   // DB-backed default takes effect within ~1s without a redeploy. See
   // docs/llm-settings-db/.
-  private static readonly DEFAULT_PROVIDER = 'openrouter';
-
   /**
-   * Resolve default routing for a brand: DB override ?? env. Model selection
-   * never lives in code. RoboApply falls back to the historical OpenRouter
-   * mode; GoApply has NO default provider (R-13): with CN_LLM_PROVIDER unset,
-   * a bare model id cannot be routed and the call answers ai_unavailable.
+   * Resolve default routing for a brand (lib/llm/llmModels.ts
+   * getLlmRoutingDefaults: DB override ?? env, per key, GoApply falling back
+   * to the shared stack). Model selection never lives in code. On the global
+   * profile (RoboApply, and GoApply with no provider of its own) the provider
+   * mode falls back to the historical OpenRouter mode. On the domestic profile
+   * there is no default provider: a bare model id with no provider of
+   * GoApply's own cannot be routed and the call answers ai_unavailable.
+   * Behind the domestic-only wall the shared stack is a fallback only for
+   * values that name a mainland vendor, on either profile.
    */
   private resolveDefaults(brand: ProductBrand = this.callBrand()): { providerMode: string; model?: string } {
-    const configured = normalizeProviderType(getProviderSetting(brand.id) || '');
-    const providerMode = configured || (brand.llmProfile === 'domestic_cn' ? '' : LLMService.DEFAULT_PROVIDER);
-    return { providerMode, model: getDefaultModel(brand.id) };
+    const defaults = getLlmRoutingDefaults(brand.id);
+    return { providerMode: defaults.providerMode, model: defaults.model };
+  }
+
+  /**
+   * A call with no model or no route is "AI unavailable" (503), not an
+   * internal error, when that is the state an operator chose: GoApply runs on
+   * a provider of its own (the domestic profile), or the domestic-only wall
+   * holds and GoApply has no mainland model for the call (the shared model is
+   * not a fallback behind the wall).
+   */
+  private missingModelIsUnavailable(brand: ProductBrand): boolean {
+    return brand.llmProfile === 'domestic_cn' || llmDomesticOnlyApplies(brand);
+  }
+
+  /** Operator-facing detail for a missing model or route (logs only). */
+  private missingModelDetail(brand: ProductBrand, what: string): string {
+    return llmDomesticOnlyApplies(brand)
+      ? `${brand.name}: ${what}. The domestic-only wall is on (CN_LLM_DOMESTIC_ONLY), so the shared model is not used; set CN_LLM_MODEL (and CN_LLM_PROVIDER) or the task's CN_LLM_<TASK>_MODEL to a mainland model.`
+      : `${brand.name}: ${what}.`;
   }
 
   /**
    * The brand of a call: the explicit option, else the current unit of work,
    * else this deployment's single brand (BRAND_LOCK / ALLOWED_BRANDS), else
    * the default (RoboApply; legacy crons and scripts). The default is logged
-   * once, because a GoApply user's prompt must never take that path — such
-   * callers pass `brand` or use runWithBrand. With `sending` (a prompt is
-   * about to leave), a production deployment that also serves GoApply refuses
-   * the default outright (BrandContextMissingError).
+   * once: a call made for a GoApply user must run in that user's brand (pass
+   * `brand` or use runWithBrand), or its prompt skips the content-safety
+   * filter. With `sending` (a prompt is about to leave), production refuses
+   * the default (BrandContextMissingError) only when a wrong guess could cross
+   * a wall an operator chose: GoApply has an LLM stack of its own, or
+   * CN_LLM_DOMESTIC_ONLY is on (lib/llm/llmBrand.ts requireLlmCallBrand).
+   *
+   * The entry returned is the LLM layer's view of the brand (llmCallBrand):
+   * `llmProfile` is the EFFECTIVE profile, so GoApply with no domestic
+   * provider is `global` and every profile check below treats it as RoboApply
+   * is treated (same default provider, selector dialect and fallback chain),
+   * and `llmEnvPrefix` is '' then. The id stays the brand's own, so the route
+   * policy, content safety and logs still see GoApply.
    */
   private callBrand(explicit?: BrandId, sending = false): ProductBrand {
-    if (explicit) return getBrand(explicit);
+    if (explicit) return llmCallBrand(explicit);
     const resolved = sending ? requireLlmCallBrand() : contextlessLlmBrand();
     if (resolved.source === 'default' && !warnedMissingBrand) {
       warnedMissingBrand = true;
       logger.warn('LLM_POLICY', 'LLM call without a brand context; routing as the default brand. Pass `brand` or wrap the work in runWithBrand().');
     }
-    return getBrand(resolved.brandId);
+    return llmCallBrand(resolved.brandId);
   }
 
   private getConfiguredFallbackModel(primaryModel: string, brand: ProductBrand): string | null {
-    // DB override (admin) wins, then env LLM_FALLBACK_MODEL (CN_LLM_FALLBACK_MODEL
-    // on GoApply). There is no source-level model substitution: operators own
-    // both model choices.
+    // DB override (admin) wins, then env LLM_FALLBACK_MODEL. GoApply reads its
+    // own override (CN_LLM_FALLBACK_MODEL) first and otherwise the shared one.
+    // There is no source-level model substitution: operators own both model
+    // choices.
     const configured = (getFallbackModelSetting(brand.id) || '').trim();
     if (configured && configured !== primaryModel) {
       return configured;
@@ -302,24 +348,23 @@ export class LLMService {
    * slash is the model id the upstream provider actually expects.
    */
   private normalizeModel(model: string, provider: string): string {
-    if (!model.includes('/')) return model;
-    const slashIdx = model.indexOf('/');
-    const modelProvider = model.substring(0, slashIdx);
-    const modelName = model.substring(slashIdx + 1);
-    if (modelProvider.toLowerCase() === provider.toLowerCase()) {
-      // Expected + benign: the model id carries an explicit `<provider>/…`
-      // routing hint that matches the provider we're already calling, so we
-      // strip the redundant prefix to the id the upstream API expects. Not an
-      // error and not a retry — log once per unique (model → provider) to keep
-      // it out of the per-call/per-retry stream.
-      const key = `${model}=>${provider.toLowerCase()}`;
-      if (!loggedPrefixStrips.has(key)) {
-        loggedPrefixStrips.add(key);
-        logger.debug('LLM_SERVICE', `Stripped redundant "${modelProvider}/" routing prefix: "${model}" → "${modelName}" (provider already "${provider}")`);
-      }
-      return modelName;
-    }
-    return model;
+    const modelName = stripProviderPrefix(model, provider);
+    if (modelName !== model) this.noteStrippedPrefix(model, modelName, provider);
+    return modelName;
+  }
+
+  /**
+   * Expected + benign: the model id carries an explicit `<provider>/…` routing
+   * hint that matches the provider we're already calling, so the redundant
+   * prefix is stripped to the id the upstream API expects. Not an error and
+   * not a retry — logged once per unique (model → provider) to keep it out of
+   * the per-call/per-retry stream.
+   */
+  private noteStrippedPrefix(model: string, modelName: string, provider: string): void {
+    const key = `${model}=>${provider.toLowerCase()}`;
+    if (loggedPrefixStrips.has(key)) return;
+    loggedPrefixStrips.add(key);
+    logger.debug('LLM_SERVICE', `Stripped redundant "${model.substring(0, model.indexOf('/'))}/" routing prefix: "${model}" → "${modelName}" (provider already "${provider}")`);
   }
 
   /**
@@ -330,16 +375,13 @@ export class LLMService {
     rawModel: string,
     brand: ProductBrand = this.callBrand(),
   ): { providerType: string; model: string } | null {
-    if (!rawModel.includes('/')) return null;
-    const slashIdx = rawModel.indexOf('/');
-    const providerType = resolveProviderPrefix(rawModel.substring(0, slashIdx), brand.llmProfile);
-    if (!providerType) return null;
-    return { providerType, model: rawModel.substring(slashIdx + 1) };
+    return splitSelectorPrefix(rawModel, brand.llmProfile);
   }
 
   /** Resolve a configured selector with the same rules for primary and fallback
-   * calls. Recognized provider prefixes always pin the native provider; an
-   * explicit openrouter/ prefix keeps the vendor slug behind OpenRouter. */
+   * calls (providerPrefixes.ts resolveSelectorRoute, the one copy of the rule).
+   * Recognized provider prefixes always pin the native provider; an explicit
+   * openrouter/ prefix keeps the vendor slug behind OpenRouter. */
   private resolvePlatformRoute(
     rawModel: string,
     providerMode: string,
@@ -355,33 +397,19 @@ export class LLMService {
       };
     }
 
-    const direct = this.resolveDirectModel(rawModel, brand);
-    // Every recognized outer prefix is an explicit route, including
-    // openrouter/...; it must win even when legacy LLM_PROVIDER names a
-    // different single provider.
-    if (direct) return direct;
-
-    if (providerMode === 'direct') {
-      if (rawModel.includes('/')) {
-        return { providerType: 'openrouter', model: rawModel };
-      }
-      return {
-        providerType: this.resolveDirectModel(defaultModel || '', brand)?.providerType ?? 'openrouter',
-        model: rawModel,
-      };
+    // A recognized outer prefix is an explicit route, including openrouter/...;
+    // it wins even when LLM_PROVIDER names a different single provider. With no
+    // provider mode at all (the domestic profile without a provider of its
+    // own) a bare model id has no route: the empty provider type is refused as
+    // missing_route.
+    const route = resolveSelectorRoute(rawModel, providerMode, defaultModel, brand.llmProfile);
+    if (route.providerType && route.providerType === providerMode && route.model !== rawModel && !this.resolveDirectModel(rawModel, brand)) {
+      this.noteStrippedPrefix(rawModel, route.model, providerMode);
     }
-
-    // GoApply with no CN_LLM_PROVIDER: a bare model id has no route. The
-    // empty provider type is refused by the brand policy as missing_route.
-    if (!providerMode) return { providerType: '', model: rawModel };
-
-    return {
-      providerType: providerMode,
-      model: this.normalizeModel(rawModel, providerMode),
-    };
+    return route;
   }
 
-  /* ── Per-brand policy (WP-14, TASK_PLAN R-13) ──────────────────────────── */
+  /* ── Per-brand policy (D5; platform/llm/brandPolicy.ts) ────────────────── */
 
   /** Credential base URL of a provider (system DB / env), without throwing. */
   private credentialBaseUrl(providerType: string): string | null {
@@ -410,11 +438,11 @@ export class LLMService {
   }
 
   /**
-   * Refuse the primary route when the brand may not use it. A GoApply call
-   * with no route at all is "AI unavailable" (503: the feature is hidden
-   * until a domestic model is configured); any other refusal is a
-   * configuration error (LlmBrandPolicyError, 500) that is logged and NEVER
-   * re-routed to another provider.
+   * Refuse the primary route when the brand may not use it. On the domestic
+   * profile (GoApply with a stack of its own), and behind the domestic-only
+   * wall, a call with no route at all is "AI unavailable" (503); any other
+   * refusal is a configuration error (LlmBrandPolicyError, 500) that is logged
+   * and NEVER re-routed to another provider.
    */
   private assertPrimaryRoute(
     brand: ProductBrand,
@@ -422,8 +450,11 @@ export class LLMService {
     carriesUserData: boolean | undefined,
     requestId: string,
   ): void {
-    if (!route.providerType && brand.llmProfile === 'domestic_cn') {
-      throw new AiUnavailableError('no_model', `${brand.name}: CN_LLM_PROVIDER is not set and "${route.model}" has no provider prefix.`);
+    if (!route.providerType && this.missingModelIsUnavailable(brand)) {
+      throw new AiUnavailableError(
+        'no_model',
+        this.missingModelDetail(brand, `no provider of its own is set (CN_LLM_PROVIDER) and "${route.model}" has no provider prefix`),
+      );
     }
     const decision = this.routeDecision(brand, route.providerType, { carriesUserData, model: route.model });
     if (decision.allowed) return;
@@ -547,9 +578,10 @@ export class LLMService {
       const lower = providerType.toLowerCase();
       if (input.credentialFailure && lower === primaryType) return false;
       if (input.requireTools && !supportsToolStreaming(lower)) return false;
-      // The brand policy filters the chain (R-13): GoApply keeps only domestic
-      // routes; a RoboApply prompt with user data drops mainland endpoints
-      // (Wave 0's auto list includes deepseek-v4-flash).
+      // The brand policy filters the chain: a RoboApply prompt with user data
+      // drops mainland endpoints (Wave 0's auto list includes
+      // deepseek-v4-flash); GoApply keeps every hop, and only the domestic ones
+      // behind the domestic-only wall.
       if (!this.routeDecision(input.brand, lower, { carriesUserData: input.carriesUserData }).allowed) return false;
       const cred = this.platformCredential(lower);
       if (!cred.hasKey) return false;
@@ -1024,13 +1056,14 @@ export class LLMService {
     // is the last-resort fallback for genuinely context-less callers.
     const requestId = options?.requestId || getCurrentRequestId() || generateRequestId();
 
-    // Per-brand routing (WP-14). GoApply calls pass the content-safety check
-    // on the way in and on the way out (WP-24 provider; fail closed).
+    // Per-brand routing. GoApply calls pass the content-safety check on the
+    // way in and on the way out, on whichever route they take: its own
+    // domestic provider or the shared one (WP-24 provider; fail closed).
     const brand = this.callBrand(options?.brand, true);
     const callId = `${requestId}:${Math.random().toString(36).slice(2, 10)}`;
     const safetyCtx = { brand, task: options?.task, requestId, callId };
-    // The input check runs once the route is known to be allowed (so a
-    // GoApply deployment without a model never pays for a check).
+    // The input check runs once the route is known to be allowed (so a call
+    // that cannot be routed never pays for a check).
     const result = await this.routeAndCall(messages, options, brand, requestId, startTime, () =>
       this.contentSafety('input', this.safetyInputText(messages), safetyCtx),
     );
@@ -1062,9 +1095,11 @@ export class LLMService {
     // would be shipped to the provider as a model id.
     const explicitModel = options?.visionModel || options?.model;
     const rawModel = (explicitModel && explicitModel !== 'default' ? explicitModel : undefined) || defaults.model;
-    if (!rawModel && brand.llmProfile === 'domestic_cn') {
-      // GoApply never borrows RoboApply's model (R-13): no CN model, no AI.
-      throw new AiUnavailableError('no_model', `${brand.name}: no CN_LLM_MODEL (or task model) is configured.`);
+    if (!rawModel && this.missingModelIsUnavailable(brand)) {
+      // GoApply with a provider of its own and no model anywhere (neither its
+      // own nor the shared one), or behind the wall with no mainland model:
+      // AI is unavailable, not an internal error.
+      throw new AiUnavailableError('no_model', this.missingModelDetail(brand, 'no CN_LLM_MODEL, LLM_MODEL or task model is configured'));
     }
     if (!rawModel) {
       throw new Error(
@@ -1081,7 +1116,7 @@ export class LLMService {
       options?.provider,
       brand,
     );
-    // Brand policy on the endpoint host (R-13): refused → logged, thrown, never re-routed.
+    // Brand policy on the endpoint host: refused → logged, thrown, never re-routed.
     this.assertPrimaryRoute(brand, primaryRoute, carriesUserData, requestId);
     await beforeProviderCall();
     const model = primaryRoute.model;
@@ -1105,8 +1140,9 @@ export class LLMService {
     // out to eliminate. See docs/prd-byok.md.
     const userId = getCurrentUserId();
     const providerNamePreByok = activeProvider?.getProviderName() ?? primaryRoute.providerType.toLowerCase();
-    // BYOK is off for GoApply (R-13: a user key could point anywhere).
-    const byokProviderKey = brand.llmProfile === 'domestic_cn' ? null : llmProviderToByokProvider(providerNamePreByok);
+    // BYOK follows RoboApply on both brands; it is off for GoApply only behind
+    // the domestic-only wall (a user key could point anywhere).
+    const byokProviderKey = isByokAllowedForBrand(brand.id) ? llmProviderToByokProvider(providerNamePreByok) : null;
     let byokRow: ResolvedByok | null = null;
     let byokActive = false;
     if (userId && byokProviderKey) {
@@ -1119,7 +1155,8 @@ export class LLMService {
       }
       // A user key whose own base URL is a refused endpoint (e.g. a RoboApply
       // user's gateway on a mainland host) is not used; the already-checked
-      // platform route serves the call instead.
+      // platform route serves the call instead. The re-check runs for both
+      // brands.
       if (byokRow && !this.routeDecision(brand, providerNamePreByok, { carriesUserData, byok: true, baseUrl: byokRow.baseUrl }).allowed) {
         logger.warn('LLM_POLICY', `Skipping a personal ${providerNamePreByok} key: its endpoint is not allowed for ${brand.id}`, {
           brand: brand.id,
@@ -1368,8 +1405,8 @@ export class LLMService {
    * SYSTEM/env credentials (the platform path). Deliberately bypasses the user
    * BYOK swap in chat() — the admin is testing the system config, not their own
    * key. Never throws; returns a structured result for the UI. The probe
-   * carries no user data, but the brand policy still applies (GoApply only
-   * ever reaches domestic endpoints).
+   * carries no user data, but the brand policy still applies (behind the
+   * domestic-only wall GoApply only ever reaches domestic endpoints).
    */
   async probeModel(
     modelId: string,
@@ -1439,10 +1476,16 @@ export class LLMService {
           : getTaskModel(task, brand.id);
     const inheritsDefault = !own && task !== 'default' && task !== 'fallback' && !!defaults.model;
     const selector = own ?? (inheritsDefault ? defaults.model ?? null : null);
+    const key = inheritsDefault || task === 'default' ? 'defaultModel' : task === 'fallback' ? 'fallbackModel' : task;
+    const taskKey = task === 'default' ? 'defaultModel' : task === 'fallback' ? 'fallbackModel' : task;
+    const walledOff = resolveModelKey(taskKey, brand.id).sharedWalledOff;
     const base: LlmRouteExplanation = {
       brand: brand.id,
       task,
+      profile: brand.llmProfile,
       selector,
+      source: resolveModelKey(key, brand.id).source,
+      ...(walledOff ? { sharedWalledOff: walledOff } : {}),
       inheritsDefault,
       providerType: null,
       model: null,
@@ -1453,7 +1496,10 @@ export class LLMService {
       toolsSupported: false,
     };
     if (!selector) {
-      return { ...base, policyCode: 'missing_route', reason: `No model configured (${brand.llmEnvPrefix}LLM_MODEL).` };
+      const reason = llmDomesticOnlyApplies(brand)
+        ? 'No mainland model configured behind the domestic-only wall (set CN_LLM_MODEL or the task\'s CN_LLM_<TASK>_MODEL; the shared model is not used).'
+        : `No model configured (${brand.llmEnvPrefix}LLM_MODEL).`;
+      return { ...base, policyCode: 'missing_route', reason };
     }
     const route = this.resolvePlatformRoute(selector, defaults.providerMode, defaults.model, undefined, brand);
     const decision = this.routeDecision(brand, route.providerType, { model: route.model });
@@ -1482,8 +1528,9 @@ export class LLMService {
    *
    * - Only OpenAI-compatible providers stream tools; Google and Anthropic
    *   throw ToolsUnsupportedError.
-   * - Brand policy as in chat(): GoApply domestic only (no BYOK), RoboApply
-   *   never reaches a mainland endpoint with user data.
+   * - Brand policy as in chat(): RoboApply never reaches a mainland endpoint
+   *   with user data; GoApply may use every route, and only domestic ones
+   *   (no BYOK) behind the domestic-only wall.
    * - Retries (transient errors) and credential fallbacks happen ONLY before
    *   the first delta or tool call is emitted; afterwards a failure throws
    *   LlmStreamInterruptedError so the caller ends the turn with an error
@@ -1519,8 +1566,11 @@ export class LLMService {
     const defaults = this.resolveDefaults(brand);
     const rawModel = (opts.model && opts.model !== 'default' ? opts.model : undefined) ?? getTaskModelOrDefault(opts.task, brand.id);
     if (!rawModel) {
-      if (brand.llmProfile === 'domestic_cn') {
-        throw new AiUnavailableError('no_model', `${brand.name}: no CN_LLM_${opts.task.toUpperCase()}_MODEL or CN_LLM_MODEL is configured.`);
+      if (this.missingModelIsUnavailable(brand)) {
+        throw new AiUnavailableError(
+          'no_model',
+          this.missingModelDetail(brand, `no CN_LLM_${opts.task.toUpperCase()}_MODEL, CN_LLM_MODEL or shared model is configured`),
+        );
       }
       throw new Error(`No LLM model is configured for task "${opts.task}". Set LLM_${opts.task.toUpperCase()}_MODEL or LLM_MODEL.`);
     }
@@ -1534,7 +1584,7 @@ export class LLMService {
     const safetyCtx = { brand, task: opts.task, requestId, callId };
     await this.contentSafety('input', this.safetyInputText(messages), safetyCtx);
 
-    // Credentials: BYOK (RoboApply only, endpoint re-checked) → system/env.
+    // Credentials: BYOK (both brands unless GoApply's wall is on; endpoint re-checked) → system/env.
     type Hop = { providerType: string; model: string; apiKey: string; baseUrl: string | null; byok: boolean; rowId?: string; source: 'primary' | 'configured' | 'auto' };
     const hops: Hop[] = [];
     const platformHop = (providerType: string, model: string, source: Hop['source']): Hop | null => {
@@ -1547,7 +1597,7 @@ export class LLMService {
       }
     };
     const userId = getCurrentUserId();
-    const byokKey = brand.llmProfile === 'domestic_cn' ? null : llmProviderToByokProvider(primary.providerType);
+    const byokKey = isByokAllowedForBrand(brand.id) ? llmProviderToByokProvider(primary.providerType) : null;
     if (userId && byokKey) {
       const row = await resolveByok(userId, byokKey);
       if (row && this.routeDecision(brand, primary.providerType, { carriesUserData: opts.carriesUserData, byok: true, baseUrl: row.baseUrl }).allowed) {
@@ -1796,10 +1846,17 @@ export const llmService = new LLMService();
 
 /* ── Startup check (ARCHITECTURE.md §5.1) ─────────────────────────────────── */
 
+/** Brands already told (once per process) that the wall leaves them without a model. */
+const warnedWalledNoModel = new Set<BrandId>();
+
 export interface CopilotToolsCheck {
   brand: BrandId;
   ok: boolean;
-  /** Why the brand is skipped (GoApply with no domestic model: its AI is hidden). */
+  /**
+   * Set (with `ok: true`) only for GoApply behind the domestic-only wall with
+   * no mainland model: its Assistant answers 503 ai_unavailable, which is the
+   * state the operator chose, not a broken model. No other case is skipped.
+   */
   skipped?: string;
   route: LlmRouteExplanation;
   problem?: string;
@@ -1807,10 +1864,14 @@ export interface CopilotToolsCheck {
 
 /**
  * Fail loudly when the copilot task resolves to a model that cannot stream
- * tool calls (Google, Anthropic) or that the brand policy refuses, for every
- * brand this deployment serves. GoApply without a configured domestic model
- * is skipped (its AI is hidden, `ai.text=false`). Call at boot; pass
- * `{ throwOnError: false }` to get the report only.
+ * tool calls (Google, Anthropic), that the brand policy refuses, or to no
+ * model at all, for every brand this deployment serves. GoApply is checked
+ * like RoboApply: with no domestic model of its own it resolves to the shared
+ * copilot model and passes when that model is tool-capable. Behind the
+ * domestic-only wall a shared copilot model that is not a mainland one is set
+ * aside and GoApply's own default model is checked; with no mainland model at
+ * all GoApply is skipped (its AI answers 503) and the other brands still
+ * boot. Call at boot; pass `{ throwOnError: false }` to get the report only.
  */
 export function assertCopilotModelSupportsTools(
   options: { brands?: BrandId[]; throwOnError?: boolean; service?: LLMService } = {},
@@ -1819,9 +1880,15 @@ export function assertCopilotModelSupportsTools(
   const brands = options.brands ?? allowedBrands();
   const results: CopilotToolsCheck[] = brands.map((brandId) => {
     const route = service.explainRoute('copilot', brandId);
-    const brand = getBrand(brandId);
-    if (!route.selector && brand.llmProfile === 'domestic_cn') {
-      return { brand: brandId, ok: true, skipped: 'no domestic model configured (AI hidden)', route };
+    if (!route.selector && llmDomesticOnlyApplies(getBrand(brandId))) {
+      if (!warnedWalledNoModel.has(brandId)) {
+        warnedWalledNoModel.add(brandId);
+        logger.warn('LLM_POLICY', `${brandId}: no mainland model behind the domestic-only wall; its AI features answer 503 ai_unavailable until CN_LLM_MODEL or CN_LLM_COPILOT_MODEL names one.`, {
+          brand: brandId,
+          ...(route.sharedWalledOff ? { sharedModelNotUsed: route.sharedWalledOff } : {}),
+        });
+      }
+      return { brand: brandId, ok: true, skipped: 'no mainland model behind the domestic-only wall (AI unavailable)', route };
     }
     if (!route.selector) return { brand: brandId, ok: false, route, problem: 'no copilot or default model configured' };
     if (!route.allowed) return { brand: brandId, ok: false, route, problem: route.reason ?? 'route refused by the brand policy' };
@@ -1837,7 +1904,7 @@ export function assertCopilotModelSupportsTools(
       failures[0].route.providerType ?? '(none)',
       failures[0].route.model ?? '(none)',
       `The Assistant (copilot) model cannot be used: ${lines.join('; ')}. ` +
-        'Set LLM_COPILOT_MODEL / CN_LLM_COPILOT_MODEL to a tool-capable, allowed model.',
+        'Set LLM_COPILOT_MODEL (or the GoApply override CN_LLM_COPILOT_MODEL) to a tool-capable, allowed model.',
     );
   }
   return results;

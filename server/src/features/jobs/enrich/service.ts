@@ -83,7 +83,11 @@ export type EnrichOutcome =
   | { status: 'rules_only'; reason: 'covered' | 'no_model' | 'no_ai_consent' | 'budget_disabled' | 'llm_failed' }
   | { status: 'deferred'; retryAfterMs: number };
 
-/** The user id cost rows go under: the brand's system user, else the shared-cost sentinel. */
+/**
+ * The user id cost rows go under: the brand's system user (GoApply:
+ * CN_RA_SYSTEM_USER_ID when set, else the shared RA_SYSTEM_USER_ID, per key),
+ * else the shared-cost sentinel when neither is set.
+ */
 export function systemUserIdFor(market: string, env: Record<string, string | undefined> = process.env): string {
   return brandEnv(getBrand(brandForMarket(market)), 'RA_SYSTEM_USER_ID', env) ?? SHARED_COST_USER_ID;
 }
@@ -186,7 +190,7 @@ export async function enrichJob(payload: EnrichPayload, attempt: EnrichAttempt, 
   const route = resolveEnrichModel(getBrand(brandId), deps.env);
   if (!route.available) {
     if (route.refused) {
-      logger.warn('JOB_ENRICH', 'GoApply enrich model is not on a domestic provider; finishing rules only', { jobId: job.id, reason: route.refused });
+      logger.warn('JOB_ENRICH', 'GoApply enrich model is not on a domestic provider (CN_LLM_DOMESTIC_ONLY is on); finishing rules only', { jobId: job.id, reason: route.refused });
     }
     return finishRulesOnly(deps, job, text, signals, 'no_model');
   }

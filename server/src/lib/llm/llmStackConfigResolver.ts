@@ -36,8 +36,9 @@ interface CachedSnapshot {
   source: 'db' | 'empty';
 }
 
-// One snapshot per brand (WP-14): GoApply's overrides live under their own
-// AppConfig key and are never read for RoboApply, nor the other way round.
+// One snapshot per brand: GoApply's overrides live under their own AppConfig
+// key and are never read for RoboApply. GoApply reads its own snapshot first
+// and RoboApply's for a setting it has not overridden (llmModels.ts).
 const activeCaches = new Map<LlmStackBrand, CachedSnapshot>();
 
 /* ── Read API ─────────────────────────────────────────────────────────────── */
@@ -64,8 +65,10 @@ export async function getLlmStack(brandId: LlmStackBrand = 'roboapply'): Promise
 
 /**
  * Synchronous accessor for the hot path (provider/model resolution). Returns
- * the cached overrides blob of one brand; on cold cache returns an all-null
- * blob (⇒ env fallback in the accessor) and warms in the background.
+ * the cached overrides blob of ONE brand, with no cross-brand fallback here:
+ * the per-key order (GoApply blob, CN_ env, RoboApply blob, shared env) is the
+ * accessor's (llmModels.ts). On cold cache returns an all-null blob (⇒ env
+ * fallback in the accessor) and warms in the background.
  */
 export function getLlmStackSync(brandId: LlmStackBrand = 'roboapply'): LlmStackConfigBlob {
   if (isDbConfigDisabled()) return emptyLlmStackBlob();

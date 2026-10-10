@@ -103,10 +103,19 @@ describe('resolveByok', () => {
     await expect(resolveByok('u1', 'openai')).rejects.toThrow(/could not be decrypted/);
   });
 
-  it('never applies on GoApply (R-13), even when the user has a key', async () => {
+  it('applies on GoApply as on RoboApply by default (D5), and never behind the domestic-only wall', async () => {
     db.findUnique.mockResolvedValue({ id: 'k1', encryptedKey: 'enc:sk-user', baseUrl: null, isActive: true });
-    await expect(runWithBrand('goapply', () => resolveByok('u1', 'openai'))).resolves.toBeNull();
-    expect(db.findUnique).not.toHaveBeenCalled();
+    await expect(runWithBrand('goapply', () => resolveByok('u1', 'openai'))).resolves.toMatchObject({ apiKey: 'sk-user' });
     await expect(runWithBrand('roboapply', () => resolveByok('u1', 'openai'))).resolves.toMatchObject({ apiKey: 'sk-user' });
+
+    for (const name of ['CN_LLM_DOMESTIC_ONLY', 'CN_RESIDENCY_STRICT']) {
+      db.findUnique.mockClear();
+      vi.stubEnv(name, 'true');
+      await expect(runWithBrand('goapply', () => resolveByok('u1', 'openai'))).resolves.toBeNull();
+      expect(db.findUnique).not.toHaveBeenCalled();
+      // The wall is GoApply's: RoboApply keeps its keys.
+      await expect(runWithBrand('roboapply', () => resolveByok('u1', 'openai'))).resolves.toMatchObject({ apiKey: 'sk-user' });
+      vi.unstubAllEnvs();
+    }
   });
 });

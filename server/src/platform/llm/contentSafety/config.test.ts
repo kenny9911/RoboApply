@@ -1,7 +1,9 @@
 // @vitest-environment node
 //
 // WP-24: environment → provider, readiness for the CN-1 assertion, and the
-// provider chain used in aliyun_green mode.
+// provider chain used in aliyun_green mode. D5: a setting that cannot run as
+// written degrades to the keyword list (GoApply AI stays on); it fails closed
+// only under CN_RESIDENCY_STRICT.
 
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -13,6 +15,7 @@ import {
   resolveContentSafetyConfig,
 } from './config.js';
 import { ContentSafetyProviderError, type ContentSafetyProvider, type ContentSafetyResult } from './types.js';
+import { BUILTIN_KEYWORD_LIST } from './builtinKeywords.js';
 import { PRIVATE_LIST, goapplyCtx } from './__tests__/fixtures.js';
 
 const aliyunEnv = {
@@ -20,15 +23,24 @@ const aliyunEnv = {
   ALIYUN_GREEN_ACCESS_KEY_ID: 'ak',
   ALIYUN_GREEN_ACCESS_KEY_SECRET: 'sk',
 };
+const STRICT = { CN_RESIDENCY_STRICT: 'true' };
+/** Every way the three GoApply settings and Aliyun Green can be wrong at once. */
+const everythingWrong = {
+  CN_CONTENT_SAFETY_PROVIDER: 'aliyun_green',
+  ALIYUN_GREEN_REGION: 'ap-southeast-1',
+  ALIYUN_GREEN_ENDPOINT: 'https://green-cip.ap-southeast-1.aliyuncs.com',
+  CN_CONTENT_SAFETY_TIMEOUT_MS: '5',
+  CN_SAFETY_KEYWORDS_URL: 'http://plain.example/list',
+};
 
 describe('resolveContentSafetyConfig', () => {
   it('defaults to keyword_only with the default timeout', () => {
-    expect(resolveContentSafetyConfig({})).toEqual({ provider: 'keyword_only', timeoutMs: DEFAULT_CONTENT_SAFETY_TIMEOUT_MS, problems: [] });
+    expect(resolveContentSafetyConfig({})).toEqual({ provider: 'keyword_only', timeoutMs: DEFAULT_CONTENT_SAFETY_TIMEOUT_MS, problems: [], degraded: false });
   });
 
-  it('reads only the CN_-prefixed names (no fallback to unprefixed env, R-03)', () => {
+  it('reads only the CN_-prefixed names: the three settings are GoApply\'s own and never come from an unprefixed variable', () => {
     const cfg = resolveContentSafetyConfig({ CONTENT_SAFETY_PROVIDER: 'nonsense', SAFETY_KEYWORDS_URL: 'http://x', CONTENT_SAFETY_TIMEOUT_MS: '1' });
-    expect(cfg).toEqual({ provider: 'keyword_only', timeoutMs: DEFAULT_CONTENT_SAFETY_TIMEOUT_MS, problems: [] });
+    expect(cfg).toEqual({ provider: 'keyword_only', timeoutMs: DEFAULT_CONTENT_SAFETY_TIMEOUT_MS, problems: [], degraded: false });
   });
 
   it('aliyun_green with keys resolves the mainland endpoint and LLM services', () => {
@@ -53,20 +65,52 @@ describe('resolveContentSafetyConfig', () => {
     expect(custom.timeoutMs).toBe(2500);
   });
 
-  it('collects every problem', () => {
-    const cfg = resolveContentSafetyConfig({
-      CN_CONTENT_SAFETY_PROVIDER: 'aliyun_green',
-      ALIYUN_GREEN_REGION: 'ap-southeast-1',
-      ALIYUN_GREEN_ENDPOINT: 'https://green-cip.ap-southeast-1.aliyuncs.com',
-      CN_CONTENT_SAFETY_TIMEOUT_MS: '5',
-      CN_SAFETY_KEYWORDS_URL: 'http://plain.example/list',
-    });
+  it('collects every problem, and by default runs on the safe defaults instead of failing (degraded)', () => {
+    const cfg = resolveContentSafetyConfig(everythingWrong);
     expect(cfg.problems).toHaveLength(5);
     expect(cfg.problems.join(' | ')).toMatch(/TIMEOUT.*https.*ACCESS_KEY.*outside mainland.*outside mainland/);
-    expect(resolveContentSafetyConfig({ CN_CONTENT_SAFETY_PROVIDER: 'openai_moderation' })).toMatchObject({
+    // Each bad value fell back to its default: keyword list, built-in only, default timeout, no Aliyun call.
+    expect(cfg).toMatchObject({ provider: 'keyword_only', timeoutMs: DEFAULT_CONTENT_SAFETY_TIMEOUT_MS, degraded: true });
+    expect(cfg.keywordsUrl).toBeUndefined();
+    expect(cfg.aliyun).toBeUndefined();
+
+    expect(resolveContentSafetyConfig({ CN_CONTENT_SAFETY_PROVIDER: 'openai_moderation' })).toEqual({
+      provider: 'keyword_only',
+      timeoutMs: DEFAULT_CONTENT_SAFETY_TIMEOUT_MS,
+      problems: [expect.stringMatching(/keyword_only or aliyun_green/)],
+      degraded: true,
+    });
+  });
+
+  it('each bad value degrades on its own: the rest of the configuration is kept', () => {
+    // A bad timeout does not cost a working Aliyun Green its place.
+    expect(resolveContentSafetyConfig({ ...aliyunEnv, CN_CONTENT_SAFETY_TIMEOUT_MS: 'soon' })).toMatchObject({
+      provider: 'aliyun_green',
+      timeoutMs: DEFAULT_CONTENT_SAFETY_TIMEOUT_MS,
+      degraded: true,
+      aliyun: { accessKeyId: 'ak' },
+    });
+    // A bad keyword URL: the built-in list alone, Aliyun Green still on.
+    const badUrl = resolveContentSafetyConfig({ ...aliyunEnv, CN_SAFETY_KEYWORDS_URL: 'http://plain.example/list' });
+    expect(badUrl).toMatchObject({ provider: 'aliyun_green', degraded: true });
+    expect(badUrl.keywordsUrl).toBeUndefined();
+    // Aliyun Green without keys: the keyword list, and the private list stays.
+    const noKeys = resolveContentSafetyConfig({ CN_CONTENT_SAFETY_PROVIDER: 'aliyun_green', CN_SAFETY_KEYWORDS_URL: 'https://l.cn/k.json', CN_CONTENT_SAFETY_TIMEOUT_MS: '2500' });
+    expect(noKeys).toMatchObject({ provider: 'keyword_only', keywordsUrl: 'https://l.cn/k.json', timeoutMs: 2500, degraded: true });
+    expect(noKeys.aliyun).toBeUndefined();
+  });
+
+  it('under CN_RESIDENCY_STRICT a problem is not set aside: the configuration is kept as written and is not degraded', () => {
+    const cfg = resolveContentSafetyConfig({ ...everythingWrong, ...STRICT });
+    expect(cfg.problems).toHaveLength(5);
+    expect(cfg).toMatchObject({ provider: 'aliyun_green', degraded: false, keywordsUrl: 'http://plain.example/list' });
+    expect(resolveContentSafetyConfig({ CN_CONTENT_SAFETY_PROVIDER: 'openai_moderation', ...STRICT })).toMatchObject({
       provider: 'invalid',
+      degraded: false,
       problems: [expect.stringMatching(/keyword_only or aliyun_green/)],
     });
+    // A clean configuration is the same with or without the switch.
+    expect(resolveContentSafetyConfig({ ...aliyunEnv, ...STRICT })).toEqual(resolveContentSafetyConfig(aliyunEnv));
   });
 });
 
@@ -75,6 +119,7 @@ describe('contentSafetyReadiness', () => {
     expect(contentSafetyReadiness({})).toEqual({
       provider: 'keyword_only',
       usable: true,
+      degraded: false,
       cn1Ready: false,
       keywordList: 'builtin',
       timeoutMs: DEFAULT_CONTENT_SAFETY_TIMEOUT_MS,
@@ -82,13 +127,53 @@ describe('contentSafetyReadiness', () => {
     });
   });
 
-  it('aliyun_green with keys is CN-1 ready; without keys it is unusable', () => {
+  it('aliyun_green with keys is CN-1 ready; without keys it runs as the keyword list (usable, never CN-1 ready)', () => {
     expect(contentSafetyReadiness({ ...aliyunEnv, CN_SAFETY_KEYWORDS_URL: 'https://l.cn/k.json' })).toMatchObject({
       usable: true,
+      degraded: false,
       cn1Ready: true,
       keywordList: 'builtin+private',
     });
-    expect(contentSafetyReadiness({ CN_CONTENT_SAFETY_PROVIDER: 'aliyun_green' })).toMatchObject({ usable: false, cn1Ready: false });
+    expect(contentSafetyReadiness({ CN_CONTENT_SAFETY_PROVIDER: 'aliyun_green' })).toMatchObject({
+      provider: 'keyword_only',
+      usable: true,
+      degraded: true,
+      cn1Ready: false,
+      problems: [expect.stringMatching(/ACCESS_KEY/)],
+    });
+    // A working Aliyun Green with one bad side setting is not CN-1 ready either: the operator has something to fix.
+    expect(contentSafetyReadiness({ ...aliyunEnv, CN_CONTENT_SAFETY_TIMEOUT_MS: '5' })).toMatchObject({ provider: 'aliyun_green', usable: true, degraded: true, cn1Ready: false });
+  });
+
+  it('a typo in a CN_CONTENT_SAFETY_* value never turns GoApply AI off: usable stays true and the problem is reported', () => {
+    for (const env of [
+      { CN_CONTENT_SAFETY_PROVIDER: 'nonsense' },
+      { CN_CONTENT_SAFETY_TIMEOUT_MS: '5' },
+      { CN_SAFETY_KEYWORDS_URL: 'http://plain.example/list' },
+      everythingWrong,
+    ]) {
+      const r = contentSafetyReadiness(env);
+      expect(r, JSON.stringify(env)).toMatchObject({ usable: true, degraded: true, keywordList: 'builtin', timeoutMs: DEFAULT_CONTENT_SAFETY_TIMEOUT_MS });
+      expect(r.problems.length).toBeGreaterThan(0);
+    }
+    expect(contentSafetyReadiness({ CN_CONTENT_SAFETY_PROVIDER: 'nonsense' }).provider).toBe('keyword_only');
+  });
+
+  it('fails closed only under CN_RESIDENCY_STRICT', () => {
+    for (const env of [
+      { CN_CONTENT_SAFETY_PROVIDER: 'nonsense' },
+      { CN_CONTENT_SAFETY_PROVIDER: 'aliyun_green' },
+      { CN_CONTENT_SAFETY_TIMEOUT_MS: '5' },
+      { CN_SAFETY_KEYWORDS_URL: 'http://plain.example/list' },
+    ]) {
+      expect(contentSafetyReadiness({ ...env, ...STRICT }), JSON.stringify(env)).toMatchObject({ usable: false, degraded: false, cn1Ready: false });
+    }
+    expect(contentSafetyReadiness({ CN_CONTENT_SAFETY_PROVIDER: 'nonsense', ...STRICT }).provider).toBe('invalid');
+    // The LLM wall alone is not the residency switch: content safety still degrades.
+    expect(contentSafetyReadiness({ CN_CONTENT_SAFETY_PROVIDER: 'nonsense', CN_LLM_DOMESTIC_ONLY: 'true' })).toMatchObject({ usable: true, degraded: true });
+    // A clean configuration is usable under the switch.
+    expect(contentSafetyReadiness(STRICT)).toMatchObject({ usable: true, degraded: false });
+    expect(contentSafetyReadiness({ ...aliyunEnv, ...STRICT })).toMatchObject({ usable: true, cn1Ready: true });
   });
 
   it('never returns secrets', () => {
@@ -104,11 +189,26 @@ describe('createContentSafetyProvider', () => {
     const kw = createContentSafetyProvider(resolveContentSafetyConfig({}));
     expect(kw.keywordProvider).toBe(kw);
     expect(createContentSafetyProvider(resolveContentSafetyConfig(aliyunEnv)).keywordProvider?.id).toBe('keyword_only');
-    const broken = createContentSafetyProvider(resolveContentSafetyConfig({ CN_CONTENT_SAFETY_PROVIDER: 'bogus' }));
-    expect(broken.id).toBe('misconfigured');
-    const err = await broken.checkOutput('x', goapplyCtx()).catch((e) => e);
-    expect(err).toBeInstanceOf(ContentSafetyProviderError);
-    expect(err.cause_).toBe('misconfigured');
+    // Under CN_RESIDENCY_STRICT a bad configuration is a provider that refuses every check.
+    for (const env of [{ CN_CONTENT_SAFETY_PROVIDER: 'bogus' }, { CN_CONTENT_SAFETY_PROVIDER: 'aliyun_green' }, { CN_CONTENT_SAFETY_TIMEOUT_MS: '5' }]) {
+      const broken = createContentSafetyProvider(resolveContentSafetyConfig({ ...env, ...STRICT }));
+      expect(broken.id).toBe('misconfigured');
+      const err = await broken.checkOutput('x', goapplyCtx()).catch((e) => e);
+      expect(err).toBeInstanceOf(ContentSafetyProviderError);
+      expect(err.cause_).toBe('misconfigured');
+    }
+  });
+
+  it('a degraded configuration still filters: the built-in keyword list runs, it is never "no filter"', async () => {
+    for (const env of [{ CN_CONTENT_SAFETY_PROVIDER: 'bogus' }, { CN_CONTENT_SAFETY_PROVIDER: 'aliyun_green' }, everythingWrong]) {
+      const p = createContentSafetyProvider(resolveContentSafetyConfig(env));
+      expect(p.id, JSON.stringify(env)).toBe('keyword_only');
+      const blocked = BUILTIN_KEYWORD_LIST.entries.find((e) => e.action === 'block')!;
+      await expect(p.checkInput(`please: ${blocked.term}`, goapplyCtx())).resolves.toMatchObject({ verdict: 'block' });
+      await expect(p.checkOutput('An ordinary answer about a resume.', goapplyCtx())).resolves.toMatchObject({ verdict: 'pass' });
+    }
+    // One bad side setting keeps the stronger filter.
+    expect(createContentSafetyProvider(resolveContentSafetyConfig({ ...aliyunEnv, CN_CONTENT_SAFETY_TIMEOUT_MS: '5' })).id).toBe('keyword_only+aliyun_green');
   });
 
   it('wires the private list URL into the keyword provider', async () => {

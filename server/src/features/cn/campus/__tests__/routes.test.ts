@@ -1,6 +1,7 @@
 // @vitest-environment node
 // WP-58 routes (route harness, injected auth and in-memory service; no DB,
-// no network): capability off ⇒ 404 feature_disabled; public reads are
+// no network): capability off ⇒ 404 feature_disabled (GoApply: on by default,
+// off only with CN_CAMPUS_CALENDAR_ENABLED=false); public reads are
 // CDN-cacheable and carry the source; admin only for curation; nothing is
 // published without verification.
 
@@ -60,11 +61,28 @@ describe('capability', () => {
     }
   });
 
-  it('GoApply with the mode off and no counsel switch: 404 too', async () => {
-    const off = await startRouteHarness({ env: {}, mounts: [['/api/v1/public/campus', createCampusPublicRouter({ env: {}, service })]] });
-    const res = await off.request<{ code: string }>('GET', '/api/v1/public/campus', { host: GA });
-    expect(res.status).toBe(404);
-    await off.close();
+  it('GoApply with no CN_ value at all: the calendar is on (200); RoboApply stays off', async () => {
+    const plain = await startRouteHarness({ env: {}, mounts: [['/api/v1/public/campus', createCampusPublicRouter({ env: {}, service })]] });
+    const res = await plain.request<{ data: CampusEventList }>('GET', '/api/v1/public/campus', { host: GA });
+    expect(res.status).toBe(200);
+    expect(res.body.data.items.map((i) => i.id)).toEqual(['ev_a']);
+    expect((await plain.request('GET', '/api/v1/public/campus', { host: RA })).status).toBe(404);
+    await plain.close();
+  });
+
+  it('GoApply: 404 feature_disabled only with CN_CAMPUS_CALENDAR_ENABLED=false (the off switch), whatever the job-feed mode is', async () => {
+    for (const env of [{ CN_CAMPUS_CALENDAR_ENABLED: 'false' }, { CN_CAMPUS_CALENDAR_ENABLED: 'false', CN_RECRUITMENT_INFO_MODE: 'licensed' }] as Array<Record<string, string>>) {
+      const off = await startRouteHarness({ env, mounts: [['/api/v1/public/campus', createCampusPublicRouter({ env, service })]] });
+      const res = await off.request<{ code: string }>('GET', '/api/v1/public/campus', { host: GA });
+      expect(res.status, JSON.stringify(env)).toBe(404);
+      expect(res.body.code).toBe('feature_disabled');
+      await off.close();
+    }
+    // The job-feed mode being off does not hide the calendar.
+    const feedOff = { CN_RECRUITMENT_INFO_MODE: 'off' };
+    const on = await startRouteHarness({ env: feedOff, mounts: [['/api/v1/public/campus', createCampusPublicRouter({ env: feedOff, service })]] });
+    expect((await on.request('GET', '/api/v1/public/campus', { host: GA })).status).toBe(200);
+    await on.close();
   });
 });
 

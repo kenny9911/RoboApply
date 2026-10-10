@@ -82,11 +82,14 @@ function harness(
     afterEnrich: async (j, ctx) => {
       h.hooks.push({ job: j, ctx: ctx as unknown as Record<string, unknown> });
     },
-    env: options.env ?? { RA_SYSTEM_USER_ID: 'sys_roboapply' },
+    env: options.env ?? DEFAULT_ENV,
     now: () => NOW,
   };
   return h;
 }
+
+/** The shared stack: a system user for cost rows and a default model (the enrich task inherits it). */
+const DEFAULT_ENV = { RA_SYSTEM_USER_ID: 'sys_roboapply', LLM_MODEL: 'stack-default-model' };
 
 const cnJob = () =>
   makeJob({ id: 'job_cn', market: 'cn', title: '数据分析师', companyName: '某某能源集团', description: CN_POSTING, descriptionPlain: CN_POSTING, sourceBoard: 'bank_gohire' });
@@ -133,7 +136,7 @@ describe('enrichJob', () => {
     expect(h.hooks[0]!.job).toMatchObject({ id: 'job_1', market: 'intl', provider: 'activejobs', sponsorship: 'not_offered' });
   });
 
-  it('runs a GoApply job on the CN model profile under runWithBrand(goapply), whatever the ambient brand', async () => {
+  it('runs a GoApply job on its own CN model under runWithBrand(goapply), whatever the ambient brand', async () => {
     const h = harness(cnJob(), {
       env: { CN_LLM_ENRICH_MODEL: 'deepseek/deepseek-chat', LLM_ENRICH_MODEL: 'openai/gpt-cheap', CN_RA_SYSTEM_USER_ID: 'sys_goapply' },
       reply: { taxonomyId: 'data_analyst', sponsorship: { status: 'not_stated', quote: null }, employerTags: [{ tag: 'soe', quote: '某某能源集团是一家中央企业' }] },
@@ -145,29 +148,66 @@ describe('enrichJob', () => {
     expect(h.calls[0]!.brand).toBe('goapply');
     expect(h.calls[0]!.options.task).toBe('enrich');
     expect(h.calls[0]!.options.model).toBe('deepseek/deepseek-chat');
-    expect(h.calls[0]!.options.provider).toBe('deepseek');
+    // No pin by default: the model id's own prefix routes it.
+    expect(h.calls[0]!.options.provider).toBeUndefined();
     expect(h.calls[0]!.user).toContain('MARKET: mainland China');
     expect(h.job.employerTags).toEqual(['soe']);
     expect(h.costs[0]).toMatchObject({ userId: 'sys_goapply', brand: 'goapply', market: 'cn' });
     expect(h.hooks[0]!.ctx).toMatchObject({ brand: 'goapply', market: 'cn' });
   });
 
-  it('GoApply never falls back to an unprefixed model: no CN model → rules only, zero LLM calls', async () => {
-    const h = harness(cnJob(), { env: { LLM_ENRICH_MODEL: 'openai/gpt-cheap', LLM_MODEL: 'openai/gpt-default' } });
-    expect(await enrichJob({ jobId: 'job_cn' }, FIRST, h.deps)).toEqual({ status: 'rules_only', reason: 'no_model' });
-    expect(h.calls).toHaveLength(0);
-    expect(h.job).toMatchObject({ enrichModel: RULES_ONLY_MODEL, enrichVersion: ENRICH_VERSION, enrichedAt: NOW });
-    expect(h.keywords[0]!.modelUsed).toBe(RULES_ONLY_MODEL);
-    expect(h.costs).toHaveLength(0);
-    expect(h.hooks).toHaveLength(1);
+  it('GoApply with only the shared stack enriches with RoboApply\'s model, under runWithBrand(goapply), cost under the shared system user', async () => {
+    const env = { LLM_ENRICH_MODEL: 'openai/gpt-cheap', LLM_MODEL: 'openai/gpt-default', RA_SYSTEM_USER_ID: 'sys_shared' };
+    const h = harness(cnJob(), { env, reply: { taxonomyId: 'data_analyst', sponsorship: { status: 'not_stated', quote: null } } });
+    expect(await enrichJob({ jobId: 'job_cn' }, FIRST, h.deps)).toMatchObject({ status: 'enriched', model: 'openai/gpt-cheap' });
+    expect(h.calls).toHaveLength(1);
+    // Routed and filtered as GoApply (content safety follows the brand), on the same selector RoboApply uses.
+    expect(h.calls[0]!.brand).toBe('goapply');
+    expect(h.calls[0]!.options).toMatchObject({ task: 'enrich', model: 'openai/gpt-cheap' });
+    expect(h.calls[0]!.options.provider).toBeUndefined();
+    expect(h.job).toMatchObject({ enrichModel: 'openai/gpt-cheap', enrichVersion: ENRICH_VERSION, enrichedAt: NOW });
+    // CN_RA_SYSTEM_USER_ID is unset: the shared id, read per key.
+    expect(h.costs).toEqual([expect.objectContaining({ userId: 'sys_shared', brand: 'goapply', market: 'cn', model: 'openai/gpt-cheap' })]);
+
+    // The same env enriches a RoboApply job with the same model.
+    const intl = harness(makeJob(), { env });
+    expect(await enrichJob({ jobId: 'job_1' }, FIRST, intl.deps)).toMatchObject({ status: 'enriched', model: 'openai/gpt-cheap' });
+    expect(intl.calls[0]!.brand).toBe('roboapply');
+    expect(intl.calls[0]!.options.model).toBe(h.calls[0]!.options.model);
   });
 
-  it('GoApply refuses a model id that is not pinned to a domestic provider: rules only, zero LLM calls', async () => {
-    for (const model of ['deepseek-chat', 'openrouter/deepseek/deepseek-chat', 'openai/gpt-cheap']) {
-      const h = harness(cnJob(), { env: { CN_LLM_ENRICH_MODEL: model } });
+  it('no model anywhere → rules only, zero LLM calls (both brands)', async () => {
+    for (const [job, id] of [[cnJob(), 'job_cn'], [makeJob(), 'job_1']] as const) {
+      const h = harness(job, { env: { RA_SYSTEM_USER_ID: 'sys' } });
+      expect(await enrichJob({ jobId: id }, FIRST, h.deps)).toEqual({ status: 'rules_only', reason: 'no_model' });
+      expect(h.calls).toHaveLength(0);
+      expect(h.job).toMatchObject({ enrichModel: RULES_ONLY_MODEL, enrichVersion: ENRICH_VERSION, enrichedAt: NOW });
+      expect(h.keywords[0]!.modelUsed).toBe(RULES_ONLY_MODEL);
+      expect(h.costs).toHaveLength(0);
+      expect(h.hooks).toHaveLength(1);
+    }
+  });
+
+  it('behind the wall (CN_LLM_DOMESTIC_ONLY) GoApply refuses a model id that is not pinned to a domestic provider: rules only, zero LLM calls', async () => {
+    const wall = { CN_LLM_DOMESTIC_ONLY: 'true' };
+    for (const env of [
+      { CN_LLM_ENRICH_MODEL: 'deepseek-chat' },
+      { CN_LLM_ENRICH_MODEL: 'openrouter/deepseek/deepseek-chat' },
+      { CN_LLM_ENRICH_MODEL: 'openai/gpt-cheap' },
+      // The shared model it would otherwise use is not a mainland route either.
+      { LLM_ENRICH_MODEL: 'openai/gpt-cheap', LLM_MODEL: 'openai/gpt-default' },
+    ]) {
+      const h = harness(cnJob(), { env: { ...wall, ...env } });
       expect(await enrichJob({ jobId: 'job_cn' }, FIRST, h.deps)).toEqual({ status: 'rules_only', reason: 'no_model' });
       expect(h.calls).toHaveLength(0);
     }
+    // A domestic model is pinned to its provider, as before.
+    const h = harness(cnJob(), { env: { ...wall, CN_LLM_ENRICH_MODEL: 'deepseek/deepseek-chat' }, reply: { taxonomyId: 'data_analyst', sponsorship: { status: 'not_stated', quote: null } } });
+    expect(await enrichJob({ jobId: 'job_cn' }, FIRST, h.deps)).toMatchObject({ status: 'enriched', model: 'deepseek/deepseek-chat' });
+    expect(h.calls[0]!.options).toMatchObject({ model: 'deepseek/deepseek-chat', provider: 'deepseek' });
+    // Without the wall the same ids are simply used.
+    const open = harness(cnJob(), { env: { CN_LLM_ENRICH_MODEL: 'openai/gpt-cheap' }, reply: { taxonomyId: 'data_analyst', sponsorship: { status: 'not_stated', quote: null } } });
+    expect(await enrichJob({ jobId: 'job_cn' }, FIRST, open.deps)).toMatchObject({ status: 'enriched', model: 'openai/gpt-cheap' });
   });
 
   it("makes zero LLM calls for a GoApply user's import without AI consent", async () => {
@@ -377,11 +417,17 @@ describe('enrichJob', () => {
 });
 
 describe('helpers', () => {
-  it('logs cost under the brand system user, else the shared-cost sentinel', () => {
+  it('logs cost under the brand system user (GoApply: its own id, else the shared one), else the shared-cost sentinel', () => {
     expect(systemUserIdFor('intl', { RA_SYSTEM_USER_ID: 'sys_r' })).toBe('sys_r');
     expect(systemUserIdFor('cn', { RA_SYSTEM_USER_ID: 'sys_r', CN_RA_SYSTEM_USER_ID: 'sys_g' })).toBe('sys_g');
-    expect(systemUserIdFor('cn', { RA_SYSTEM_USER_ID: 'sys_r' })).toBe(SHARED_COST_USER_ID);
+    // RA_SYSTEM_USER_ID is read per key: GoApply uses the shared id when CN_RA_SYSTEM_USER_ID is unset.
+    expect(systemUserIdFor('cn', { RA_SYSTEM_USER_ID: 'sys_r' })).toBe('sys_r');
+    expect(systemUserIdFor('cn', { CN_RA_SYSTEM_USER_ID: 'sys_g' })).toBe('sys_g');
+    // RoboApply never reads the CN_ id.
+    expect(systemUserIdFor('intl', { CN_RA_SYSTEM_USER_ID: 'sys_g' })).toBe(SHARED_COST_USER_ID);
+    // The sentinel only when neither is set.
     expect(systemUserIdFor('intl', {})).toBe(SHARED_COST_USER_ID);
+    expect(systemUserIdFor('cn', {})).toBe(SHARED_COST_USER_ID);
   });
 
   it('builds the dedupe key from the job id and version', () => {
