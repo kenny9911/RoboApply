@@ -3,4 +3,9 @@
 
 export * from './contract.js';
 export { createCareerSourcesAdminRouter } from './routes.js';
-export { atsPublicHooks } from './hooks.js';
+export { atsPublicHooks, isTaiwanJob, twCardMeta } from './hooks.js';
+export { atsPublicAdapter, ensureAtsPublicAdapter } from './register.js';
+export { atsPublicEnabled, createAtsPublicAdapter, ATS_PUBLIC_KILL_SWITCH } from './adapter.js';
+export { CONNECTORS, connectorFor } from './connectors.js';
+export { extractPermitTags } from './permitTags.js';
+export { careerSourcesService } from './service.js';

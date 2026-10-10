@@ -14,6 +14,8 @@
 import { call, type CallOptions, type In, type Items, seg, withQuery } from './contracts/wire';
 import type * as CS from './contracts/jobs/sources/atsPublic';
 
+export type { CareerSourceRunResult, CareerSourceView, PublicAts, TwCardMeta, TwPermitTag, TwPermitTagView } from './contracts/jobs/sources/atsPublic';
+
 /** `careerSources.list` — GET /api/v1/roboapply/admin/career-sources */
 export function adminListCareerSources(query?: In<typeof CS.ListCareerSourcesQuerySchema>, opts?: CallOptions): Promise<Items<CS.CareerSourceView>> {
   return call<Items<CS.CareerSourceView>>('GET', withQuery(`/api/v1/roboapply/admin/career-sources`, query), opts);
@@ -29,14 +31,14 @@ export function adminUpdateCareerSource(id: string, body: In<typeof CS.PatchCare
   return call<CS.CareerSourceView>('PATCH', `/api/v1/roboapply/admin/career-sources/${seg(id)}`, { ...opts, body });
 }
 
-/** `careerSources.delete` — DELETE /api/v1/roboapply/admin/career-sources/:id */
-export function adminDeleteCareerSource(id: string, opts?: CallOptions): Promise<void> {
-  return call<void>('DELETE', `/api/v1/roboapply/admin/career-sources/${seg(id)}`, opts);
+/** `careerSources.delete` — DELETE /api/v1/roboapply/admin/career-sources/:id (its open jobs are archived). */
+export function adminDeleteCareerSource(id: string, opts?: CallOptions): Promise<{ archivedJobs: number }> {
+  return call<{ archivedJobs: number }>('DELETE', `/api/v1/roboapply/admin/career-sources/${seg(id)}`, opts);
 }
 
 /** `careerSources.runNow` — POST /api/v1/roboapply/admin/career-sources/:id/run */
-export function adminRunCareerSource(id: string, opts?: CallOptions): Promise<void> {
-  return call<void>('POST', `/api/v1/roboapply/admin/career-sources/${seg(id)}/run`, opts);
+export function adminRunCareerSource(id: string, opts?: CallOptions): Promise<CS.CareerSourceRunResult> {
+  return call<CS.CareerSourceRunResult>('POST', `/api/v1/roboapply/admin/career-sources/${seg(id)}/run`, opts);
 }
 
 /** Every wrapper of this area, for callers that prefer one import. */

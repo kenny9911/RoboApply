@@ -1,0 +1,36 @@
+{
+  "jobs": [
+    {
+      "absolute_url": "https://boards.greenhouse.io/formosarobotics/jobs/4012345",
+      "data_compliance": [{ "type": "gdpr", "requires_consent": false, "retention_period": null }],
+      "internal_job_id": 3011111,
+      "location": { "name": "Taipei, Taiwan" },
+      "metadata": null,
+      "id": 4012345,
+      "updated_at": "2026-10-01T09:12:00-04:00",
+      "requisition_id": "ENG-101",
+      "title": "Backend Engineer",
+      "company_name": "Formosa Robotics",
+      "first_published": "2026-09-20T02:00:00-04:00",
+      "language": "zh-TW",
+      "content": "&lt;p&gt;我們正在尋找後端工程師。&lt;/p&gt;&lt;p&gt;待遇面議（經常性薪資達4萬元或以上）。&lt;/p&gt;&lt;p&gt;本公司可協助申請工作許可。&lt;/p&gt;&lt;p&gt;Experience with Go and PostgreSQL &amp;amp; Kubernetes.&lt;/p&gt;",
+      "departments": [{ "id": 11, "name": "Engineering", "child_ids": [], "parent_id": null }],
+      "offices": [{ "id": 21, "name": "Taipei", "location": "Taipei, Taiwan", "child_ids": [], "parent_id": null }]
+    },
+    {
+      "absolute_url": "https://boards.greenhouse.io/formosarobotics/jobs/4012399",
+      "internal_job_id": 3011112,
+      "location": { "name": "Hsinchu" },
+      "metadata": null,
+      "id": 4012399,
+      "updated_at": "2026-10-02T10:00:00-04:00",
+      "requisition_id": "HW-7",
+      "title": "Firmware Engineer",
+      "content": "&lt;p&gt;Firmware role. Monthly salary NT$55,000 - NT$75,000.&lt;/p&gt;&lt;p&gt;Employment Gold Card holders are welcome to apply.&lt;/p&gt;",
+      "departments": [],
+      "offices": []
+    },
+    { "id": null, "title": "Broken row without an id" }
+  ],
+  "meta": { "total": 3 }
+}

@@ -46,3 +46,71 @@ export interface CareerSourceView {
   lastJobCount: number | null;
   lastError: string | null;
 }
+
+/** Display names of the public job-board systems (data, never bundle copy). */
+export const PUBLIC_ATS_NAMES: Readonly<Record<PublicAts, string>> = {
+  greenhouse: 'Greenhouse',
+  lever: 'Lever',
+  ashby: 'Ashby',
+  smartrecruiters: 'SmartRecruiters',
+};
+
+/**
+ * `POST /:id/run` ("Check now"): the board is read once to report what it
+ * lists (or why it cannot be read); when it can, the source is marked due and
+ * ingest's standing `ats_public` query is queued to run now, so the postings
+ * go through the same normalize → save path as the scheduled run.
+ */
+export interface CareerSourceRunResult {
+  sourceId: string;
+  /** 'scheduled': the board was read and the import is queued or waits for the next run; 'error': it could not be read. */
+  status: 'scheduled' | 'error';
+  /** Postings the board lists right now. */
+  listed: number;
+  /** True when the import was queued to run now; false = it runs at the next scheduled ingest. */
+  queued: boolean;
+  error: string | null;
+}
+
+// ── Taiwan card meta (marketHooks.cardMeta → `meta.ats_public`) ──────────
+
+/** Work-authorization tags for Taiwan, each shown only with a quote from the posting (TW-09). */
+export const TW_PERMIT_TAGS = ['tw_work_permit_support', 'tw_gold_card'] as const;
+export type TwPermitTag = (typeof TW_PERMIT_TAGS)[number];
+
+export interface TwPermitTagView {
+  tag: TwPermitTag;
+  /** Verbatim sentence from the posting (≤ 240 characters). */
+  quote: string;
+}
+
+/**
+ * `cardMeta(job).ats_public` for jobs in Taiwan (JobMetaTw). Pay is only ever
+ * the posting's own text: `negotiable` means the posting says 面議 / 依公司規定
+ * and gives no figure; nothing here estimates or implies an amount (TW-03).
+ */
+export interface TwCardMeta {
+  country: 'TW';
+  pay: {
+    /**
+     * The pay text for cards: as posted, except that for a 面議 posting the
+     * Employment Services Act Art. 5 floor clause ("經常性薪資達4萬元或以上")
+     * is removed, because it is the legal rule, not this job's pay. Null when
+     * the posting gives no pay text.
+     */
+    text: string | null;
+    /** The pay text exactly as posted (shown on the job page as the posting's own words), or null. */
+    posted: string | null;
+    /** The posting states an amount or range. */
+    disclosed: boolean;
+    /** The posting says pay is negotiable / per company rules, with no figure. */
+    negotiable: boolean;
+  };
+  permitTags: TwPermitTagView[];
+  source: {
+    /** e.g. "Appier · Greenhouse" (company + job board). */
+    name: string | null;
+    url: string | null;
+    board: PublicAts | null;
+  };
+}
