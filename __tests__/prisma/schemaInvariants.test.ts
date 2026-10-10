@@ -54,6 +54,13 @@ const PLACEMENT: Record<string, string> = {
   RAProviderUsage: 'ra-jobs.prisma',
   RAH1bEmployerStat: 'ra-jobs.prisma',
   RACareerSiteSource: 'ra-jobs.prisma',
+  RASponsorRegisterEntry: 'ra-jobs.prisma', // SCHEMA-7 (MKT-0)
+  // ra-retrieval, ra-skills, billing records (SCHEMA-7, MKT-0)
+  RAJobEmbedding: 'ra-retrieval.prisma',
+  RAUserEmbedding: 'ra-retrieval.prisma',
+  RASkill: 'ra-skills.prisma',
+  RABillingRefund: 'ra-credits.prisma',
+  RABillingConsentArchive: 'ra-credits.prisma',
   // ra-match
   RAJobMatchScore: 'ra-match.prisma',
   RAKeywordExtraction: 'ra-match.prisma',
@@ -176,6 +183,14 @@ const NO_CASCADE: Record<string, { behaviour: 'no_fk' | 'SetNull'; reason: strin
     behaviour: 'SetNull',
     reason: 'proof that an access/delete request was handled must outlive the account',
   },
+  RABillingConsentArchive: {
+    behaviour: 'no_fk',
+    reason: 'proof of a checkout acknowledgement that must outlive the account (AB 2863); compliance-daily deletes it at retainUntil',
+  },
+  RABillingRefund: {
+    behaviour: 'no_fk',
+    reason: 'refund record with no FK so User and AlipayOrder gain no back-relation; the account purge deletes it by userId',
+  },
 };
 
 type Scope = 'brand' | 'user' | 'global';
@@ -202,6 +217,12 @@ const SCOPE: Record<string, Scope> = {
   RAProviderUsage: 'global', // provider quota is per API key, not per brand
   RAH1bEmployerStat: 'global', // US DOL public data
   RACareerSiteSource: 'brand',
+  RASponsorRegisterEntry: 'global', // SCHEMA-7: public register data
+  RASkill: 'global', // SCHEMA-7: one skill vocabulary for both brands
+  RAJobEmbedding: 'brand', // SCHEMA-7: carries market; vectors never cross markets
+  RAUserEmbedding: 'brand', // SCHEMA-7: carries market
+  RABillingRefund: 'brand', // SCHEMA-7
+  RABillingConsentArchive: 'brand', // SCHEMA-7
   RAJobMatchScore: 'user',
   RAKeywordExtraction: 'global', // derived from one RAJob, which carries market
   RAFitReport: 'user',
