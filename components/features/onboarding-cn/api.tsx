@@ -14,6 +14,8 @@
 //   open-jobs panel     getCnMarketSnapshot         (lib/api/onboardingCn: every chosen role and city
 //                                                     in one count, with the median, through `cnSnapshotView`)
 //   campus programmes   listCampusEvents / subscribeCampus (lib/api/campus, WP-58)
+//   manual profile      getProfile / patchProfile / addEducation / addExperience / putSkills
+//                                                    (lib/api/profile, WP-19; the manual form of G6 — no parse, no AI)
 // The campus count in the panel is the programme list's own (so it is absent
 // when the campus calendar is off, R-14) and is dated with the list's `asOf`.
 
@@ -22,12 +24,14 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { getOnboardingState, putOnboardingStep } from '../../../lib/api/onboarding';
 import { cnSnapshotQuery, getCnMarketSnapshot } from '../../../lib/api/onboardingCn';
 import { getConsents, getSignupConsents, recordConsent } from '../../../lib/api/compliance';
+import { addEducation, addExperience, getProfile, patchProfile, putSkills } from '../../../lib/api/profile';
 import { getTaxonomy } from '../../../lib/api/search';
 import { listCampusEvents, subscribeCampus } from '../../../lib/api/campus';
 import type { MarketSnapshotResponse, OnboardingStateResponse, StepResponse } from '../../../lib/api/contracts/onboarding';
 import type { CnMarketSnapshotResponse } from '../../../lib/api/contracts/onboarding-cn';
 import type { ConsentCatalogItem, RecordConsentResponse } from '../../../lib/api/contracts/compliance';
 import type { CampusEventView } from '../../../lib/api/contracts/cn/campus';
+import type { ProfileView } from '../../../lib/api/contracts/profile';
 import { CN_ANY_CITY } from './logic';
 
 /**
@@ -87,6 +91,21 @@ export interface CnOnboardingApi {
   /** Every chosen city (不限 or none = all cities). */
   campusPrograms(q: { classYear?: number | null; cities?: readonly string[] }): Promise<CnProgramList | null>;
   subscribeProgram(eventId: string): Promise<void>;
+  /** The user's profile (manual mode: is there an education row already? which skills?). */
+  getProfile(): Promise<ProfileView>;
+  /** Manual mode: the fields the user typed. No file, no parse, no AI. */
+  patchProfile(body: { firstName?: string; lastName?: string }): Promise<unknown>;
+  addEducation(body: { school: string; degree?: string; major?: string }): Promise<unknown>;
+  addExperience(body: {
+    company: string;
+    title: string;
+    kind: 'work' | 'internship';
+    startDate?: string;
+    endDate?: string;
+    current?: boolean;
+    description?: string;
+  }): Promise<unknown>;
+  putSkills(body: { skills: Array<{ name: string; group?: string; level?: 'beginner' | 'intermediate' | 'advanced' | 'expert'; confirmed: boolean }> }): Promise<unknown>;
 }
 
 /** The role and city WP-30's single-role snapshot is asked for, and whether that is the whole search. */
@@ -179,6 +198,11 @@ export const defaultCnOnboardingApi: CnOnboardingApi = {
   async subscribeProgram(eventId) {
     await subscribeCampus({ kind: 'event', eventId, channel: 'in_app' });
   },
+  getProfile: () => getProfile(),
+  patchProfile: (body) => patchProfile(body),
+  addEducation: (body) => addEducation(body),
+  addExperience: (body) => addExperience(body),
+  putSkills: (body) => putSkills(body),
 };
 
 const Ctx = createContext<CnOnboardingApi>(defaultCnOnboardingApi);

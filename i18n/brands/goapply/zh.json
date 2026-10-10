@@ -1,0 +1,105 @@
+{
+  "auth": {
+    "brand": {
+      "feature_interview": "模拟企业 AI 面试形式的练习"
+    }
+  },
+  "authCn": {
+    "change": {
+      "noOtherWay": "无法使用当前手机号时，需要用这个账号的其他登录方式验证。如果没有，请到“帮助”页面联系客服。"
+    }
+  },
+  "credits": {
+    "planSheet": {
+      "sub": "Pro 会提高你的每日次数上限。会员卡只付一次，到期后不会自动续费。"
+    },
+    "cancel": {
+      "help": "会员卡只付一次，不会自动续费，无需取消。Pro 可以用到 {date}。",
+      "helpNoDate": "会员卡只付一次，不会自动续费，无需取消。到期前你仍可使用 Pro。"
+    },
+    "cancelPage": {
+      "footerLink": "续费与取消说明"
+    }
+  },
+  "extensionWeb": {
+    "page": {
+      "facts": "薪资、工作年限、学历这类问题，只用你保存过的回答来填。AI 从不撰写这些回答。"
+    }
+  },
+  "fit": {
+    "compared": {
+      "keys": {
+        "logistics": "地点和薪资"
+      }
+    }
+  },
+  "inbox": {
+    "settings": {
+      "sub": "消息中心会保留每一条职位提醒、提醒事项和通知。"
+    }
+  },
+  "invite": {
+    "how": {
+      "step2": "好友通过链接注册新的 %BRAND% 账号，完成账号验证，并完成设置。",
+      "step3": "你们各获得 {credits, plural, other {# 个练习面试额度}}。"
+    }
+  },
+  "jobs": {
+    "score": {
+      "rubric": {
+        "location_pay_visa": "地点和薪资 —— 10"
+      }
+    },
+    "workspace": {
+      "intro": "打开一个职位，看看哪些吻合、还缺什么。开启个性化推荐后，职位按与你资料的吻合程度排序；未开启时按发布时间排序。"
+    }
+  },
+  "landing": {
+    "help": {
+      "cancelLink": "续费与取消说明"
+    },
+    "home": {
+      "faq": {
+        "q3": {
+          "a": "它表示你的简历和职位描述的吻合程度：职位名称与级别、技能、行业、地点与薪资，以及你的职业发展路径。它不是你被录用的概率。"
+        }
+      }
+    },
+    "pricingPage": {
+      "sub": "所有价格和次数上限都在这个页面上。",
+      "instantAlerts": "即时职位提醒",
+      "cancelLink": "续费与取消说明"
+    },
+    "ranking": {
+      "fitParts": {
+        "logistics": "地点与薪资"
+      }
+    }
+  },
+  "onboarding": {
+    "matching": {
+      "phases": {
+        "reading": "读取你的资料",
+        "comparing": "把职位和你的资料比对"
+      }
+    },
+    "resume": {
+      "linkedin": {
+        "title": "导入已有的简历",
+        "body": "如果你在其他招聘平台或文档里有一份简历，把它导出成 PDF，再上传到这里。",
+        "choose": "上传简历 PDF"
+      }
+    }
+  },
+  "resume": {
+    "subtitle": "从空白开始写，或上传你现有的那份。然后为每一个想要的职位定制一份专用的。",
+    "empty": {
+      "sub": "先建一份 —— 从空白开始，或上传已有的简历 —— 每一行都会被检查。"
+    },
+    "analyzer": {
+      "issue": {
+        "contact_links": "加一个作品集或个人主页链接，让招聘方有地方深入了解你。"
+      }
+    }
+  }
+}

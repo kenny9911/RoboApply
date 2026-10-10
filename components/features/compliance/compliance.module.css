@@ -135,6 +135,57 @@
   margin: 0;
 }
 
+/* A five-column table cannot fit a phone. Below 640px each row is a labelled
+   list (the column name comes from the cell's data-label), so nothing runs
+   past the screen edge and nothing needs sideways scrolling. */
+@media (max-width: 640px) {
+  .tableWrapStack {
+    overflow-x: visible;
+  }
+
+  .tableStack,
+  .tableStack tbody,
+  .tableStack tr,
+  .tableStack td {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .tableStack thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .tableStack tr {
+    padding: var(--sp-2) 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .tableStack tr:last-child {
+    border-bottom: 0;
+  }
+
+  .tableStack td {
+    display: grid;
+    grid-template-columns: minmax(72px, 32%) minmax(0, 1fr);
+    gap: var(--sp-3);
+    padding: var(--sp-1) var(--sp-3);
+    border-bottom: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .tableStack td::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+}
+
 .muted {
   color: var(--text-muted);
   font-size: var(--fs-meta);

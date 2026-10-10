@@ -164,29 +164,42 @@ export function LlmEndpoints({ data }: { data?: DisclosuresResponse }) {
   );
 }
 
-/** Datasets whose licence requires attribution ({{data_attributions}}). */
+/**
+ * Datasets whose licence requires attribution ({{data_attributions}}).
+ *
+ * Five columns do not fit a phone (at 375px the table ran 54px past the
+ * screen edge), so below 640px each row is laid out as a labelled list
+ * (`tableStack`): every cell carries its column name in `data-label`.
+ */
 export function DataAttributions({ data }: { data?: DisclosuresResponse }) {
   const t = useTranslations('legal');
   const q = useDisclosures(data);
   const d = data ?? q.data;
   if (!d) return <p className={styles.muted}>{q.isError ? t('disclosures.error') : t('disclosures.loading')}</p>;
   if (d.dataAttributions.length === 0) return <p className={styles.muted}>{t('attributions.none')}</p>;
+  const cols = {
+    dataset: t('attributions.colDataset'),
+    publisher: t('attributions.colPublisher'),
+    usedFor: t('attributions.colUsedFor'),
+    licence: t('attributions.colLicence'),
+    asOf: t('attributions.colAsOf'),
+  };
   return (
-    <div className={styles.tableWrap} data-testid="data-attributions">
-      <table className={styles.table}>
+    <div className={`${styles.tableWrap} ${styles.tableWrapStack}`} data-testid="data-attributions">
+      <table className={`${styles.table} ${styles.tableStack}`}>
         <thead>
           <tr>
-            <th scope="col">{t('attributions.colDataset')}</th>
-            <th scope="col">{t('attributions.colPublisher')}</th>
-            <th scope="col">{t('attributions.colUsedFor')}</th>
-            <th scope="col">{t('attributions.colLicence')}</th>
-            <th scope="col">{t('attributions.colAsOf')}</th>
+            <th scope="col">{cols.dataset}</th>
+            <th scope="col">{cols.publisher}</th>
+            <th scope="col">{cols.usedFor}</th>
+            <th scope="col">{cols.licence}</th>
+            <th scope="col">{cols.asOf}</th>
           </tr>
         </thead>
         <tbody>
           {d.dataAttributions.map((a) => (
             <tr key={a.id} data-source={a.id}>
-              <td>
+              <td data-label={cols.dataset}>
                 {a.url ? (
                   <a href={a.url} target="_blank" rel="noopener noreferrer">
                     {a.name}
@@ -195,10 +208,10 @@ export function DataAttributions({ data }: { data?: DisclosuresResponse }) {
                   a.name
                 )}
               </td>
-              <td>{a.publisher}</td>
-              <td>{t(`attributions.purpose.${a.purpose}`)}</td>
-              <td>{a.license}</td>
-              <td>{a.asOf}</td>
+              <td data-label={cols.publisher}>{a.publisher}</td>
+              <td data-label={cols.usedFor}>{t(`attributions.purpose.${a.purpose}`)}</td>
+              <td data-label={cols.licence}>{a.license}</td>
+              <td data-label={cols.asOf}>{a.asOf}</td>
             </tr>
           ))}
         </tbody>

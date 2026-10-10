@@ -62,6 +62,7 @@ export function IdentityStep({ onDone, onBack }: CnOnboardingStepProps) {
 
   return (
     <StepFrame
+      step="identity"
       title={t('identity.title')}
       onBack={onBack}
       nextDisabled={!valid}

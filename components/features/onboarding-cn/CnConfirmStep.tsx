@@ -2,6 +2,10 @@
 
 // G7 确认 (/onboarding/confirm on GoApply) — PRODUCT_PLAN.md §4.5 G7.
 //
+// The settings the user chose are listed first (`ConfirmSummary`: every row
+// from the stored answers, the consent rows from the ledger), each with a
+// link back to its screen. Then the counts.
+//
 // Real counts only: the matching stage's count when the page passes it,
 // otherwise the open jobs in our index for the search (labelled as such); the
 // campus programmes taking applications now for the user's 届别, each with a
@@ -16,6 +20,7 @@ import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import type { CampusEventView } from '../../../lib/api/contracts/cn/campus';
 import { useFlag } from '../../../lib/flags';
 import { useCnOnboardingApi, type CnProgramList, type CnSnapshotView } from './api';
+import { ConfirmSummary, type ConfirmConsents } from './ConfirmSummary';
 import { jobsLine as indexJobsLine } from './OpportunityPanel';
 import { proseLocale } from './ConsentStep';
 import type { CnOnboardingStepProps } from './types';
@@ -32,7 +37,7 @@ export function classOfProgram(p: Pick<CampusEventView, 'graduationClass'>): num
   return m ? Number(m[1]) : null;
 }
 
-export function CnConfirmStep({ onDone, onBack, matchSummary }: CnOnboardingStepProps) {
+export function CnConfirmStep({ step, onDone, onBack, matchSummary }: CnOnboardingStepProps) {
   const t = useTranslations('onboardingCn');
   const locale = useLocale();
   const format = useFormatter();
@@ -43,6 +48,8 @@ export function CnConfirmStep({ onDone, onBack, matchSummary }: CnOnboardingStep
   const [programs, setPrograms] = useState<CnProgramList | null | 'loading'>('loading');
   // The ledger's 个性化推荐 answer (Settings may have changed it since G1); null = never answered.
   const [ledgerPersonalized, setLedgerPersonalized] = useState<boolean | null | 'unknown'>('unknown');
+  // The ledger's AI-processing and 个性化推荐 answers for the summary; null until the ledger is read.
+  const [ledgerConsents, setLedgerConsents] = useState<ConfirmConsents | null>(null);
   const [related, setRelated] = useState<Role[]>([]);
   const [extra, setExtra] = useState<Role[]>([]);
   const [heardFrom, setHeardFrom] = useState<HeardFrom | null>(null);
@@ -74,7 +81,9 @@ export function CnConfirmStep({ onDone, onBack, matchSummary }: CnOnboardingStep
       .getMyConsents(proseLocale(locale))
       .then((list) => {
         const item = list.find((i) => i.type === 'personalized_recommendation');
-        if (live && item) setLedgerPersonalized(item.granted);
+        if (!live) return;
+        if (item) setLedgerPersonalized(item.granted);
+        setLedgerConsents({ aiProcessing: list.find((i) => i.type === 'ai_resume_parsing')?.granted ?? null, personalized: item?.granted ?? null });
       })
       .catch(() => undefined);
     if (roles[0]) {
@@ -110,6 +119,7 @@ export function CnConfirmStep({ onDone, onBack, matchSummary }: CnOnboardingStep
 
   return (
     <StepFrame
+      step={step}
       title={t('confirm.title')}
       onBack={onBack}
       nextLabel={t('confirm.cta')}
@@ -123,6 +133,8 @@ export function CnConfirmStep({ onDone, onBack, matchSummary }: CnOnboardingStep
         })
       }
     >
+      {loaded ? <ConfirmSummary answers={answers} consents={ledgerConsents} /> : null}
+
       <section className={styles.panel} aria-live="polite">
         {jobsLine ? <p className={styles.stat}>{jobsLine}</p> : null}
         {jobsLine && !matchSummary && snapshot && snapshot !== 'loading' && !snapshot.jobs.scope.complete ? <p className={styles.note}>{t('intent.panel.partial')}</p> : null}

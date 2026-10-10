@@ -420,6 +420,11 @@ describe('facts rendered from the server response (no hard-coded vendor list)', 
       if (a.source.url) expect(within(row as HTMLElement).getByRole('link', { name: a.source.name })).toHaveAttribute('href', a.source.url);
     }
     expect(rows[0]).toHaveTextContent('Job role categories');
+    // Phone layout (/legal at 375px ran past the screen edge): the five-column table stacks, so every cell names its column.
+    const table = screen.getByTestId('data-attributions').querySelector('table')!;
+    expect(table.className).toMatch(/tableStack/);
+    expect(screen.getByTestId('data-attributions').className).toMatch(/tableWrapStack/);
+    expect([...rows[0]!.querySelectorAll('td')].map((td) => td.getAttribute('data-label'))).toEqual(['Dataset', 'Publisher', 'Used for', 'Licence', 'Copy dated']);
     view.unmount();
     renderWithBrand(<DataAttributions data={{ ...data, dataAttributions: [] }} />);
     expect(screen.getByText('No dataset that requires attribution is in use.')).toBeInTheDocument();
@@ -664,6 +669,29 @@ describe('ConsentsPanel (#consents, GoApply)', () => {
     fireEvent.click(screen.getByTestId('consents-close-confirm'));
     await waitFor(() => expect(api.recordConsent).toHaveBeenCalledWith(expect.objectContaining({ type: 'pipl_cross_border', granted: false })));
     expect(await screen.findByTestId('consents-closing')).toHaveTextContent('Your account is closed');
+  });
+
+  // Review finding: a consent given under the old text was shown as agreed next to the new text.
+  it('a consent given to an earlier text says so and can be agreed to again; the rest are unchanged', async () => {
+    api.getConsents.mockResolvedValue({
+      items: [
+        consent({ type: 'pipl_cross_border', required: true, granted: true, answeredAt: '2026-10-10T00:00:00.000Z', answeredProseVersion: 'v0', answeredTextCurrent: false, proseVersion: 'v1', prose: '境外处理方：数据库 Neon。' }),
+        consent({ type: 'pipl_basic_processing', required: true, withdrawable: false, granted: true, answeredAt: '2026-10-10T00:00:00.000Z', answeredProseVersion: 'v0', answeredTextCurrent: true, prose: '我已阅读并同意。' }),
+        consent({ type: 'marketing_email', granted: true, answeredAt: '2026-10-10T00:00:00.000Z', prose: '营销消息。' }),
+      ],
+    });
+    api.recordConsent.mockResolvedValue({ type: 'pipl_cross_border', granted: true, proseVersion: 'v1', proseHash: 'h', at: 'x', accountClosing: false });
+    renderWithBrand(<ConsentsPanel />, { brand: 'goapply' });
+    const cross = (await screen.findByText('境外处理方：数据库 Neon。')).closest('li') as HTMLElement;
+    expect(cross).toHaveTextContent('This text has changed since you answered. Your answer was given to the earlier version.');
+    // Same words (version bump only), or a catalog that does not say: no note, no extra button.
+    for (const type of ['pipl_basic_processing', 'marketing_email']) {
+      const row = document.querySelector(`[data-consent="${type}"]`) as HTMLElement;
+      expect(row).not.toHaveTextContent('This text has changed');
+      expect(within(row).queryByRole('button', { name: 'Agree to this text' })).toBeNull();
+    }
+    fireEvent.click(within(cross).getByRole('button', { name: 'Agree to this text' }));
+    await waitFor(() => expect(api.recordConsent).toHaveBeenCalledWith(expect.objectContaining({ type: 'pipl_cross_border', granted: true, proseVersion: 'v1' })));
   });
 });
 

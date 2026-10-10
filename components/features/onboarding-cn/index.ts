@@ -12,7 +12,8 @@
 // with the server's response; the page navigates to `nextRoute`.
 //
 // Also exported for the shared stages and the first-value screen:
-//   CnResumeGate      — wraps the resume screen on GoApply (AI consent → upload; else 手动填写)
+//   CnResumeGate      — wraps the resume screen on GoApply (AI consent → upload; else 手动填写,
+//                       which opens `ManualProfileForm`: the profile typed by hand, no parse, no AI)
 //   CnFirstValueTour  — "开启网申截止提醒" + the tour (stage `tour`); pass `campusCalendar`
 //                       and `aiAllowed` so features that are off are not advertised
 //   CnFirstValueScreen — the same tour with its props read for the signed-in user
@@ -29,15 +30,27 @@ import { IntentStep } from './IntentStep';
 import { TagsStep } from './TagsStep';
 import type { CnOnboardingStep, CnOnboardingStepProps } from './types';
 
-export { CN_ONBOARDING_STEPS, isCnOnboardingStep } from './types';
+export { CN_ONBOARDING_SCREENS, CN_ONBOARDING_STEPS, cnStepPosition, isCnOnboardingStep } from './types';
 export type { CnMatchSummary, CnOnboardingStep, CnOnboardingStepProps } from './types';
-export { ConsentStep, INITIAL_CONSENT_STATE, type ConsentFormState } from './ConsentStep';
+export { ConsentStep, INITIAL_CONSENT_STATE, REQUIRED_CONSENTS, consentFormFromLedger, consentsAlreadyGiven, consentsGivenToEarlierText, type ConsentFormState } from './ConsentStep';
 export { IdentityStep } from './IdentityStep';
 export { EducationStep, SchoolTags } from './EducationStep';
 export { IntentStep, intentBody, intentProblems, type IntentForm } from './IntentStep';
 export { TagsStep } from './TagsStep';
 export { CnConfirmStep, classOfProgram } from './CnConfirmStep';
 export { CnResumeGate, type CnResumeGateProps } from './CnResumeGate';
+export {
+  EMPTY_MANUAL_PROFILE,
+  ManualProfileForm,
+  manualProfileParts,
+  manualProfileProblems,
+  normalizeMonth,
+  type ManualProfileProblem,
+  parseSkills,
+  type ManualProfileFormProps,
+  type ManualProfileFormState,
+} from './ManualProfileForm';
+export { ConfirmSummary, confirmSummaryRows, type ConfirmConsents, type ConfirmSummaryRow } from './ConfirmSummary';
 export { CnFirstValueTour, tourCards, type CnFirstValueTourProps, type CnTourCard } from './CnFirstValueTour';
 export { CnFirstValueScreen, useCnAiAllowed, type CnFirstValueScreenProps } from './CnFirstValueScreen';
 export { OpportunityPanel } from './OpportunityPanel';

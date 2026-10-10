@@ -1,3 +1,77 @@
 {
-  "onboardingCn": {}
+  "onboardingCn": {
+    "common": {
+      "optional": "选填"
+    },
+    "consent": {
+      "given": "你在注册时已同意。",
+      "givenOn": "你已于 {date} 同意。",
+      "requiredGiven": "这些内容你在注册时已经同意，这里不再重复询问。",
+      "changedSinceOn": "你在 {date} 同意的是这段文字的旧版本。文字已有改动，请阅读后重新勾选。",
+      "changedSince": "你之前同意的是这段文字的旧版本。文字已有改动，请阅读后重新勾选。"
+    },
+    "education": {
+      "fullTimeYes": "是",
+      "fullTimeNo": "否"
+    },
+    "confirm": {
+      "summaryTitle": "你的选择",
+      "edit": "修改",
+      "editRow": "修改{row}",
+      "notSet": "未填写",
+      "skipped": "已跳过",
+      "notChosen": "未选择",
+      "fullTime": "{answer, select, yes {统招：是} other {统招：否}}",
+      "resumeAdded": "已添加",
+      "resumeNone": "未添加。可以在“我的资料”里手动填写。",
+      "rows": {
+        "identity": "身份",
+        "education": "教育背景",
+        "roles": "期望职位",
+        "cities": "期望城市",
+        "workType": "工作性质",
+        "pay": "期望薪资",
+        "employer": "更看重什么",
+        "resume": "简历",
+        "ai": "AI 处理",
+        "ranking": "个性化推荐"
+      }
+    },
+    "manual": {
+      "title": "手动填写资料",
+      "subtitle": "不读取文件，也不使用 AI。以下内容都可以不填，之后可以在“我的资料”里继续补充。",
+      "nameGroup": "姓名",
+      "lastName": "姓",
+      "firstName": "名",
+      "educationGroup": "教育经历",
+      "educationNote": "来自你前面填写的内容，可以修改。",
+      "experienceGroup": "一段经历（选填）",
+      "experienceHint": "一段实习或工作经历，之后还能继续添加。",
+      "kindLabel": "类型",
+      "kind": {
+        "internship": "实习",
+        "work": "工作"
+      },
+      "company": "公司",
+      "jobTitle": "职位",
+      "start": "开始时间",
+      "end": "结束时间",
+      "current": "目前仍在这里",
+      "description": "工作内容",
+      "descriptionPlaceholder": "用几句话写写你做了什么、有什么结果",
+      "skillsLabel": "技能",
+      "skillsHint": "用逗号或顿号分隔",
+      "skillsPlaceholder": "例如：Python、SQL、Excel",
+      "save": "保存并继续",
+      "later": "稍后填写",
+      "saveError": "有些内容没有保存成功，请重试。已保存的内容不会重复添加。",
+      "problem": {
+        "empty": "请至少填写一项，或选择“稍后填写”。",
+        "experience": "请填写这段经历的公司、职位和类型。",
+        "dateFormat": "请按“年-月”填写时间，例如 2024-03。",
+        "dates": "结束时间不能早于开始时间。"
+      },
+      "monthPlaceholder": "年-月，如 2024-03"
+    }
+  }
 }

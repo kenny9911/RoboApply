@@ -30,6 +30,7 @@ export { explainMatch, EXPLAIN_KEYS } from './explainMatch.js';
 export type { ExplainDimension, ExplainMatchInput } from './explainMatch.js';
 export {
   CONSENT_CATALOG,
+  CONSENT_PROSE_LOCALES,
   CONSENT_PROSE_VERSION,
   consentDefinitionsFor,
   consentProseHash,
@@ -43,7 +44,8 @@ export {
   resolveConsentProse,
   validateSignupConsents,
 } from './consents.js';
-export type { ConsentContext, ConsentDefinition, RecordConsentInput, SignupConsentCheck, SubmittedConsent } from './consents.js';
+export type { ConsentContext, ConsentDefinition, ConsentProseLocale, RecordConsentInput, ResolvedProse, SignupConsentCheck, SubmittedConsent } from './consents.js';
+export { aiPlaceSentence, describeProcessor, offshoreProcessors, offshoreProcessorsSentence, unplacedProcessors } from './processingStatement.js';
 export { addWorkingDays, piRequestDueAt } from './piRequests.js';
 export { RETENTION_RULES, registerArtifactStorageDeleter, retentionCutoff, retentionSchedule } from './retention.js';
 export { buildDisclosures, buildLegalFooter, dataAttributions, llmEndpointFacts, processingFacts } from './disclosures.js';

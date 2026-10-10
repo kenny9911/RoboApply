@@ -11,6 +11,8 @@ import { brandEnv, type EnvSource } from '../../platform/brand/brandEnv.js';
 import { GOAPPLY_DIRECT_PROVIDERS, MAINLAND_LLM_HOST_SUFFIXES, extraDomesticHosts, hostOf, isMainlandLlmHost } from '../../platform/llm/brandPolicy.js';
 import { contentSafetyReadiness } from '../../platform/llm/contentSafety/config.js';
 import { PROVIDER_DEFAULT_BASE_URLS, openRouterIgnoredUpstreams } from '../../platform/llm/egressPolicy.js';
+import { isCnMainland } from '../../platform/residency/deployRegion.js';
+import { isMainlandStorageHost, isPrivateHost } from '../../platform/residency/egressPolicy.js';
 import { residencySummary } from '../../platform/residency/summary.js';
 import { STAFFING_AGENCY_SOURCE, jobDataAttributions } from '../jobs/data/index.js';
 import { CITY_TABLE_SOURCE } from '../jobs/geo/index.js';
@@ -27,7 +29,7 @@ import {
   type ProcessingFacts,
   type ProcessorPurpose,
 } from './contract.js';
-import { isOffshore } from './consents.js';
+import { isOffshore } from './deployment.js';
 
 function val(env: EnvSource, name: string): string | null {
   const v = env[name];
@@ -173,6 +175,25 @@ export function awsRegionCountry(region: string | null): string | null {
   return region ? (AWS_REGION_COUNTRY[region] ?? null) : null;
 }
 
+/**
+ * Country of the brand's bucket, when its endpoint establishes it. GoApply
+ * only, and only 'CN': the endpoint is one the storage egress rule accepts as
+ * mainland (`isMainlandStorageHost`: a named mainland region of Aliyun OSS,
+ * Tencent COS or Huawei OBS, or an operator-listed mainland host). Two cases
+ * stay "Not listed" although that rule lets them through: an in-cluster
+ * address unless the deployment itself is the mainland stack, and Aliyun's
+ * Hong Kong region (`oss-cn-hongkong`), which is not mainland China.
+ * RoboApply's bucket has no country we can read from configuration.
+ */
+export function storageCountry(brand: ProductBrand, env: EnvSource = process.env): string | null {
+  if (brand.market !== 'cn') return null;
+  const host = hostOf(brandEnv(brand, 'S3_ENDPOINT', env) ?? null);
+  if (!host || !isMainlandStorageHost(host, env)) return null;
+  if (/(?:^|\.)oss-cn-hongkong(?:-internal)?\./.test(host)) return null;
+  if (isPrivateHost(host)) return isCnMainland(env) ? 'CN' : null;
+  return 'CN';
+}
+
 /** Processors derived from what this deployment is configured to use. */
 export function configuredProcessors(brand: ProductBrand, env: EnvSource = process.env): DisclosuresResponse['processors'] {
   const out: DisclosuresResponse['processors'] = [];
@@ -193,7 +214,7 @@ export function configuredProcessors(brand: ProductBrand, env: EnvSource = proce
   if (val(env, 'DEEPGRAM_API_KEY')) add('Deepgram', 'speech', 'US');
   if (val(env, 'CARTESIA_API_KEY')) add('Cartesia', 'speech', 'US');
   if (!cn && val(env, 'STRIPE_SECRET_KEY')) add('Stripe', 'payments', 'US');
-  if (brandEnv(brand, 'S3_BUCKET', env)) add(cn ? 'Object storage (CN)' : 'Object storage', 'storage', null);
+  if (brandEnv(brand, 'S3_BUCKET', env)) add(cn ? 'Object storage (CN)' : 'Object storage', 'storage', storageCountry(brand, env));
   // GoApply: generative-AI input and output are checked by Aliyun Content
   // Moderation (mainland) — listed only when that provider is really the one
   // configured and usable (WP-24); the built-in keyword filter sends nothing out.

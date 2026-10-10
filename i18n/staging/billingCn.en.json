@@ -1,3 +1,11 @@
 {
-  "billingCn": {}
+  "billingCn": {
+    "noRenewal": {
+      "title": "Nothing to cancel",
+      "body": "Memberships here are passes you pay for once. They never renew and nothing is charged again, so there is no subscription to cancel.",
+      "ends": "A pass ends by itself on its last day. To keep going after that, you buy a new one.",
+      "pricingLink": "See prices",
+      "settingsLink": "Open plan and billing settings"
+    }
+  }
 }

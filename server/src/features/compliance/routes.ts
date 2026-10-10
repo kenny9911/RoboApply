@@ -194,7 +194,7 @@ export function createLegalPublicRouter(deps: FeatureRouterDeps = {}): Router {
       const items = consentDefinitionsFor(brand.id)
         .filter((d) => d.stage === 'signup' && isConsentApplicable(d, ctx))
         .map((d) => {
-          const prose = resolveConsentProse(d, brand, locale);
+          const prose = resolveConsentProse(d, brand, locale, env);
           return {
             type: d.type,
             required: isConsentRequired(d, ctx),
@@ -206,7 +206,7 @@ export function createLegalPublicRouter(deps: FeatureRouterDeps = {}): Router {
             prose: prose.text,
             proseVersion: prose.version,
             proseHash: prose.hash,
-            proseLocale: prose.locale,
+            proseLocale: prose.proseLocale,
             granted: null,
             answeredAt: null,
           };

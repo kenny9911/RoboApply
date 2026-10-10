@@ -2,7 +2,9 @@
 
 // G3 教育背景 (/onboarding/education) — PRODUCT_PLAN.md §4.5 G3.
 //
-// 学历 and the school are required for 应届/在校; 社招 may skip. The school
+// 学历 and the school are required for 应届/在校; 社招 may skip. 统招 is an
+// optional yes / no question with no preselection: an unanswered question is
+// saved as no answer, never as "yes". The school
 // typeahead runs over data/schools.json (the 985 / 211 / 双一流 lists; its
 // source line says when it has not been checked against the official files);
 // free text is always allowed. 下一步 waits until the stored answers load, so
@@ -15,7 +17,7 @@ import { useTranslations } from 'next-intl';
 
 import type { CnSchool } from '../../../lib/api/contracts/onboarding-cn';
 import type { CnOnboardingStepProps } from './types';
-import { ChoiceChips, StepFrame, SwitchRow, useSaveStep, useStoredAnswers } from './parts';
+import { ChoiceChips, StepFrame, SwitchRow, YesNoChips, useSaveStep, useStoredAnswers } from './parts';
 import { CN_DEGREE_OPTIONS, identityOf, isStudent, stepAnswers } from './logic';
 import { exactSchool, filterSchools, loadCnPlaceData, type CnPlaceData } from './places';
 import styles from './OnboardingCn.module.css';
@@ -36,13 +38,13 @@ export function SchoolTags({ tags }: { tags: readonly string[] }) {
   );
 }
 
-export function EducationStep({ onDone, onBack }: CnOnboardingStepProps) {
+export function EducationStep({ step, onDone, onBack }: CnOnboardingStepProps) {
   const t = useTranslations('onboardingCn');
   const ids = useId();
   const { answers, loaded } = useStoredAnswers();
   const [data, setData] = useState<CnPlaceData | null>(null);
   const [degree, setDegree] = useState<Degree | null>(null);
-  const [fullTime, setFullTime] = useState(true);
+  const [fullTime, setFullTime] = useState<boolean | null>(null);
   const [overseas, setOverseas] = useState(false);
   const [school, setSchool] = useState('');
   const [picked, setPicked] = useState<CnSchool | null>(null);
@@ -85,7 +87,7 @@ export function EducationStep({ onDone, onBack }: CnOnboardingStepProps) {
   function body() {
     return {
       ...(degree ? { degree } : {}),
-      fullTime,
+      ...(fullTime !== null ? { fullTime } : {}),
       overseas,
       ...(school.trim() ? { school: school.trim() } : {}),
       ...(picked ? { schoolId: picked.id } : {}),
@@ -95,6 +97,7 @@ export function EducationStep({ onDone, onBack }: CnOnboardingStepProps) {
 
   return (
     <StepFrame
+      step={step}
       title={t('education.title')}
       subtitle={student ? undefined : t('education.subtitleOptional')}
       onBack={onBack}
@@ -106,7 +109,7 @@ export function EducationStep({ onDone, onBack }: CnOnboardingStepProps) {
       onSubmit={() => void save(body())}
     >
       <ChoiceChips label={t('education.degreeLabel')} options={CN_DEGREE_OPTIONS} value={degree} onChange={setDegree} render={(v) => t(`education.degree.${v}`)} required={student} />
-      <SwitchRow label={t('education.fullTime')} checked={fullTime} onChange={setFullTime} hint={t('education.fullTimeHint')} />
+      <YesNoChips label={t('education.fullTime')} value={fullTime} onChange={setFullTime} yes={t('education.fullTimeYes')} no={t('education.fullTimeNo')} hint={t('education.fullTimeHint')} />
 
       <div className={styles.field}>
         <label htmlFor={`${ids}-school`} className={styles.fieldLabel}>

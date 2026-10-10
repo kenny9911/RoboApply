@@ -5,6 +5,9 @@
 // role and city in one count) and dates the campus count with the programme
 // list's own as-of time; `CnFirstValueScreen` reads the tour's props for the
 // signed-in user.
+// FIX-8: consents given at sign-up are shown as given on G1 (not asked twice);
+// 手动填写资料 opens a real form; 统招 has no preselection; every screen
+// carries "Step N of 8"; the confirm screen lists the user's choices.
 
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -25,6 +28,7 @@ import {
   CnFirstValueTour,
   CnOnboardingApiProvider,
   CnResumeGate,
+  CN_ONBOARDING_SCREENS,
   ConsentStep,
   EducationStep,
   IdentityStep,
@@ -32,8 +36,17 @@ import {
   IntentStep,
   TagsStep,
   classOfProgram,
+  cnStepPosition,
+  confirmSummaryRows,
+  consentsAlreadyGiven,
+  consentsGivenToEarlierText,
   intentBody,
   intentProblems,
+  manualProfileParts,
+  manualProfileProblems,
+  normalizeMonth,
+  parseSkills,
+  EMPTY_MANUAL_PROFILE,
   type CnOnboardingApi,
   type IntentForm,
 } from '..';
@@ -43,8 +56,9 @@ import { cnSnapshotQuery } from '../../../../lib/api/onboardingCn';
 import { tourCards } from '../CnFirstValueTour';
 import { consentFormFromLedger } from '../ConsentStep';
 import { filterSchools, loadCnPlaceData } from '../places';
+import { ONBOARDING_SCREEN_STAGES } from '../../onboarding/flow';
 
-const PROSE_VERSION = '2026-10-10.wp13.v1';
+const PROSE_VERSION = '2026-10-11.fix8.v2';
 const consentItem = (type: string, over: Record<string, unknown> = {}) => ({
   type,
   required: ['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border'].includes(type),
@@ -63,6 +77,12 @@ const consentItem = (type: string, over: Record<string, unknown> = {}) => ({
 });
 const CN0_CONSENTS = ['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border', 'ai_resume_parsing', 'personalized_recommendation', 'marketing_email'].map((t) => consentItem(t));
 
+/** A new account's profile: nothing filled in. */
+const EMPTY_PROFILE = { firstName: null, lastName: null, education: [], experience: [], skills: [] } as never;
+/** The ledger right after the GoApply sign-up form: the three required consents granted, nothing else answered. */
+const SIGNED_UP_AT = '2026-10-11T02:00:00.000Z';
+const AFTER_SIGNUP = CN0_CONSENTS.map((c) => (c.required ? { ...c, granted: true, answeredAt: SIGNED_UP_AT } : c));
+
 function makeApi(over: Partial<CnOnboardingApi> = {}) {
   const api = {
     getState: vi.fn(async () => ({ stage: 'consent', nextRoute: '/onboarding/consent', branch: null, answers: {}, entry: null })),
@@ -78,6 +98,11 @@ function makeApi(over: Partial<CnOnboardingApi> = {}) {
     })),
     campusPrograms: vi.fn(async () => ({ items: [] as never[], more: false })),
     subscribeProgram: vi.fn(async () => undefined),
+    getProfile: vi.fn(async () => EMPTY_PROFILE),
+    patchProfile: vi.fn(async () => ({})),
+    addEducation: vi.fn(async () => ({})),
+    addExperience: vi.fn(async () => ({})),
+    putSkills: vi.fn(async () => ({})),
     ...over,
   };
   return api as typeof api & CnOnboardingApi;
@@ -152,6 +177,21 @@ describe('client mirrors of the server rules', () => {
     expect(data.provinces.some((p) => /一线/.test(JSON.stringify(p)))).toBe(false);
   });
 
+  it('the province picker has all 34 provincial-level divisions: 台湾 as well as 香港 and 澳门', async () => {
+    const { provinces } = await loadCnPlaceData();
+    expect(provinces).toHaveLength(34);
+    expect(provinces.map((p) => p.name)).toEqual(expect.arrayContaining(['台湾', '香港', '澳门']));
+    expect(provinces.find((p) => p.name === '台湾')).toMatchObject({ code: '71', cities: ['台湾'] });
+  });
+
+  it('the progress line counts over the same eight screens as the shared onboarding flow', () => {
+    expect([...CN_ONBOARDING_SCREENS]).toEqual([...ONBOARDING_SCREEN_STAGES.goapply]);
+    expect(cnStepPosition('consent')).toEqual({ current: 1, total: 8 });
+    expect(cnStepPosition('resume')).toEqual({ current: 6, total: 8 });
+    expect(cnStepPosition('confirm')).toEqual({ current: 8, total: 8 });
+    expect(cnStepPosition('tour')).toBeNull();
+  });
+
   it('maps every GoApply screen to a real component', () => {
     for (const C of Object.values(CN_ONBOARDING_STEP_COMPONENTS)) expect((C as { name?: string }).name).not.toBe('stubStep');
   });
@@ -196,6 +236,105 @@ describe('G1 ConsentStep', () => {
       marketing: false,
       proseVersion: PROSE_VERSION,
     });
+  });
+
+  it('consents given on the sign-up form are shown as given, not asked a second time; G1 asks only for the optional choices', async () => {
+    // Repro: tick the three boxes on /signup, verify the code, land on /onboarding/consent.
+    const api = makeApi({ getMyConsents: vi.fn(async () => AFTER_SIGNUP) as never });
+    const onDone = vi.fn();
+    render(<ConsentStep step="consent" onDone={onDone} />, api);
+    await screen.findByText('prose:pipl_cross_border');
+    // No required box is left to tick, and nothing blocks 下一步 but the 开启/关闭 choice.
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+    for (const type of ['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border']) {
+      const row = document.querySelector(`[data-consent="${type}"]`)!;
+      expect(row).toHaveAttribute('data-state', 'given');
+      expect(within(row as HTMLElement).getByText(`prose:${type}`)).toBeInTheDocument();
+      expect(within(row as HTMLElement).getByText(/^You agreed to this on .*2026/)).toBeInTheDocument();
+    }
+    expect(screen.getByText("You agreed to these when you signed up, so we don't ask again.")).toBeInTheDocument();
+    expect(screen.queryByText('Tick the required boxes to continue.')).toBeNull();
+    expect(screen.getByText('Choose On or Off for ranking to continue.')).toBeInTheDocument();
+    // The optional choices are still unanswered: nothing is switched on for the user.
+    for (const sw of screen.getAllByRole('switch')) expect(sw).not.toBeChecked();
+    fireEvent.click(screen.getByRole('radio', { name: 'Off' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    expect(api.saveStep).toHaveBeenCalledWith('consent', {
+      agreement: true,
+      crossBorder: true,
+      aiProcessing: false,
+      personalizedRecommendation: false,
+      marketing: false,
+      proseVersion: PROSE_VERSION,
+    });
+  });
+
+  it('a required consent the ledger does not hold is still a box to tick (only that one)', async () => {
+    const api = makeApi({ getMyConsents: vi.fn(async () => AFTER_SIGNUP.map((c) => (c.type === 'pipl_cross_border' ? { ...c, granted: null, answeredAt: null } : c))) as never });
+    render(<ConsentStep step="consent" onDone={vi.fn()} />, api);
+    const box = await screen.findByRole('checkbox', { name: 'prose:pipl_cross_border' });
+    expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('radio', { name: 'On' }));
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+    fireEvent.click(box);
+    expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
+    expect(consentsAlreadyGiven(AFTER_SIGNUP)).toEqual(new Map([['pipl_basic_processing', SIGNED_UP_AT], ['age_16_plus', SIGNED_UP_AT], ['pipl_cross_border', SIGNED_UP_AT]]));
+    expect(consentsAlreadyGiven(CN0_CONSENTS).size).toBe(0);
+  });
+
+  // Review finding: every existing account agreed to the OLD cross-border text; G1 printed the new
+  // text with "You agreed to this on {date}" — words the user never saw, shown as words they agreed to.
+  it('a consent given under an earlier text is not shown as agreed to the new one: it is asked again, with when the earlier version was agreed', async () => {
+    const ledger = AFTER_SIGNUP.map((c) =>
+      c.type === 'pipl_cross_border' ? { ...c, answeredProseVersion: '2026-10-10.wp13.v1', answeredTextCurrent: false } : c.required ? { ...c, answeredProseVersion: '2026-10-10.wp13.v1', answeredTextCurrent: true } : c,
+    );
+    const api = makeApi({ getMyConsents: vi.fn(async () => ledger) as never });
+    const onDone = vi.fn();
+    render(<ConsentStep step="consent" onDone={onDone} />, api);
+    // The two whose words are unchanged stay "given"; the cross-border text is a box again, unticked.
+    const box = await screen.findByRole('checkbox', { name: 'prose:pipl_cross_border' });
+    expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+    expect(box).not.toBeChecked();
+    for (const type of ['pipl_basic_processing', 'age_16_plus']) expect(document.querySelector(`[data-consent="${type}"]`)).toHaveAttribute('data-state', 'given');
+    const row = document.querySelector('[data-consent="pipl_cross_border"]')!;
+    expect(row).toHaveAttribute('data-state', 'changed');
+    expect(within(row as HTMLElement).queryByText(/^You agreed to this/)).toBeNull();
+    const note = document.querySelector('[data-consent-note="pipl_cross_border"]')!;
+    expect(note.textContent).toMatch(/^You agreed to an earlier version of this text on .*2026\. The text has changed, so please read it and tick the box again\.$/);
+    expect(box).toHaveAccessibleDescription(note.textContent!);
+    expect(screen.queryByText("You agreed to these when you signed up, so we don't ask again.")).toBeNull();
+    // Nothing goes on until it is ticked again.
+    fireEvent.click(screen.getByRole('radio', { name: 'Off' }));
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+    expect(screen.getByText('Tick the required boxes to continue.')).toBeInTheDocument();
+    fireEvent.click(box);
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await waitFor(() => expect(onDone).toHaveBeenCalled());
+    expect(api.saveStep).toHaveBeenCalledWith('consent', expect.objectContaining({ crossBorder: true, proseVersion: PROSE_VERSION }));
+
+    expect(consentsAlreadyGiven(ledger)).toEqual(new Map([['pipl_basic_processing', SIGNED_UP_AT], ['age_16_plus', SIGNED_UP_AT]]));
+    expect(consentsGivenToEarlierText(ledger)).toEqual(new Map([['pipl_cross_border', SIGNED_UP_AT]]));
+    expect(consentFormFromLedger(ledger)).toMatchObject({ agreement: true, age: true, crossBorder: false });
+    // A ledger that does not say which text was answered is read as before.
+    expect(consentsGivenToEarlierText(AFTER_SIGNUP).size).toBe(0);
+  });
+
+  it('says nothing of its own about where AI runs or who processes data: that is in the server prose (one statement, shared with /legal)', async () => {
+    const aiProse = '使用 AI 读取我的简历并准备求职材料。AI 请求只发送到中国大陆境内的 AI 服务。';
+    const crossProse = '在当前内测阶段，你的个人信息在中国大陆境外处理和存储。境外处理方：数据库 Neon（美国，us-west-2）。';
+    const list = CN0_CONSENTS.map((c) => (c.type === 'ai_resume_parsing' ? { ...c, prose: aiProse } : c.type === 'pipl_cross_border' ? { ...c, prose: crossProse } : c));
+    render(<ConsentStep step="consent" onDone={vi.fn()} />, makeApi({ getConsents: vi.fn(async () => list) as never }));
+    expect(await screen.findByText(aiProse)).toBeInTheDocument();
+    expect(screen.getByText(crossProse)).toBeInTheDocument();
+    // The old note contradicted the legal page ("AI processing also happens outside mainland China, with the providers listed above").
+    expect(screen.queryByText(/AI processing also happens outside mainland China/)).toBeNull();
+    expect(document.body.textContent).not.toMatch(/providers listed above|处理方见上方列表/);
+  });
+
+  it('shows its place in the eight screens', async () => {
+    render(<ConsentStep step="consent" onDone={vi.fn()} />, makeApi());
+    expect(await screen.findByText('Step 1 of 8')).toBeInTheDocument();
   });
 
   it('on a mainland deployment there is no cross-border box', async () => {
@@ -244,8 +383,9 @@ describe('G1 ConsentStep', () => {
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
   });
 
-  it('consentFormFromLedger: never answered stays unset', () => {
-    expect(consentFormFromLedger(CN0_CONSENTS, { crossBorder: true })).toEqual({ agreement: true, age: true, crossBorder: true, aiProcessing: false, personalizedRecommendation: null, marketing: false });
+  it('consentFormFromLedger: nothing is assumed — never answered stays unticked and unset', () => {
+    expect(consentFormFromLedger(CN0_CONSENTS)).toEqual({ ...INITIAL_CONSENT_STATE });
+    expect(consentFormFromLedger(AFTER_SIGNUP)).toEqual({ agreement: true, age: true, crossBorder: true, aiProcessing: false, personalizedRecommendation: null, marketing: false });
   });
 });
 
@@ -310,8 +450,40 @@ describe('G3 EducationStep', () => {
     expect(screen.queryByText(/as of/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     await waitFor(() =>
-      expect(api.saveStep).toHaveBeenCalledWith('education', { degree: 'bachelor', fullTime: true, overseas: false, school: '复旦大学', schoolId: '复旦大学' }),
+      // 统招 was not answered, so no answer is sent (it used to be sent as `true` without the user saying so).
+      expect(api.saveStep).toHaveBeenCalledWith('education', { degree: 'bachelor', overseas: false, school: '复旦大学', schoolId: '复旦大学' }),
     );
+  });
+
+  it('统招 starts unanswered; yes or no is sent only when chosen, and a second press clears it', async () => {
+    const api = asStudent();
+    render(<EducationStep step="education" onDone={vi.fn()} />, api);
+    await waitFor(() => expect(api.getState).toHaveBeenCalled());
+    expect(screen.getByText('Step 3 of 8')).toBeInTheDocument();
+    const group = screen.getByRole('group', { name: /Full-time program/ });
+    const yes = within(group).getByRole('button', { name: 'Yes' });
+    const no = within(group).getByRole('button', { name: 'No' });
+    expect(yes).toHaveAttribute('aria-pressed', 'false');
+    expect(no).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('switch', { name: /Full-time program/ })).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: "Bachelor's" }));
+    fireEvent.change(screen.getByRole('combobox', { name: /School/ }), { target: { value: '某某学院' } });
+    fireEvent.click(no);
+    expect(no).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await waitFor(() => expect(api.saveStep).toHaveBeenLastCalledWith('education', { degree: 'bachelor', fullTime: false, overseas: false, school: '某某学院' }));
+    fireEvent.click(no);
+    expect(no).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await waitFor(() => expect(api.saveStep).toHaveBeenLastCalledWith('education', { degree: 'bachelor', overseas: false, school: '某某学院' }));
+  });
+
+  it('a stored 统招 answer comes back as chosen', async () => {
+    const api = makeApi({
+      getState: vi.fn(async () => ({ stage: 'education', nextRoute: null, branch: null, entry: null, answers: { identity: { cnIdentity: 'yingjie' }, education: { degree: 'master', fullTime: true, school: '复旦大学', overseas: false } } })) as never,
+    });
+    render(<EducationStep step="education" onDone={vi.fn()} />, api);
+    await waitFor(() => expect(within(screen.getByRole('group', { name: /Full-time program/ })).getByRole('button', { name: 'Yes' })).toHaveAttribute('aria-pressed', 'true'));
   });
 
   it('下一步 waits for the stored answers (the 应届/在校 rule is not known before)', async () => {
@@ -521,6 +693,59 @@ describe('G7 CnConfirmStep', () => {
     expect(screen.queryByText(/We found/)).toBeNull();
   });
 
+  it('"Check your setup" lists the settings the user chose, each with a way back to its screen', async () => {
+    const answers = {
+      consent: { personalizedRecommendation: false },
+      identity: { cnIdentity: 'yingjie', graduationClass: 2027, graduationMonth: 6 },
+      education: { degree: 'bachelor', school: '复旦大学', major: '统计学', fullTime: false, overseas: false },
+      intent: { targetRoles: [{ label: '产品经理', taxonomyId: 'product_manager' }, { label: '数据分析' }], cities: ['上海', '杭州'], workType: 'full_time', salaryMonthlyK: { min: 15, max: 25 }, salaryMonths: 13, startDate: 'anytime' },
+      tags: { employerTypes: ['soe', 'foreign'], wantsHukou: true },
+      resume: { skip: true },
+    };
+    const api = makeApi({
+      getState: vi.fn(async () => ({ stage: 'confirm', nextRoute: null, branch: null, entry: null, answers })) as never,
+      getMyConsents: vi.fn(async () => CN0_CONSENTS.map((c) => (c.type === 'personalized_recommendation' || c.type === 'ai_resume_parsing' ? { ...c, granted: false } : c))) as never,
+    });
+    render(<CnConfirmStep step="confirm" onDone={vi.fn()} matchSummary={{ jobCount: 3 }} />, api, { 'jobs.feed': true });
+    const summary = await screen.findByTestId('cn-confirm-summary');
+    expect(within(summary).getByRole('heading', { name: 'Your choices' })).toBeInTheDocument();
+    const row = (id: string) => (summary.querySelector(`[data-row="${id}"]`) as HTMLElement).textContent;
+    expect(row('identity')).toContain('Graduating soon · Class of 2027');
+    expect(row('education')).toContain("Bachelor's · 复旦大学 · 统计学 · Full-time program: no");
+    expect(row('roles')).toContain('产品经理 · 数据分析');
+    expect(row('cities')).toContain('上海 · 杭州');
+    expect(row('workType')).toContain('Full-time');
+    expect(row('pay')).toContain('15-25K·13薪');
+    expect(row('employer')).toContain('State-owned · Foreign company');
+    expect(row('resume')).toContain('Not added. You can fill in your profile by hand.');
+    // The consent rows come from the ledger once it is read.
+    await waitFor(() => expect(row('ai')).toContain('Off'));
+    expect(row('ranking')).toContain('Off');
+    expect(within(summary).getByRole('link', { name: 'Change Roles' })).toHaveAttribute('href', '/onboarding/intent');
+    expect(within(summary).getByRole('link', { name: 'Change Education' })).toHaveAttribute('href', '/onboarding/education');
+    expect(within(summary).getByRole('link', { name: 'Change AI processing' })).toHaveAttribute('href', '/onboarding/consent');
+    expect(screen.getByText('Step 8 of 8')).toBeInTheDocument();
+  });
+
+  it('the summary fills in nothing for the user: a skipped step says so, an unanswered question says "Not filled in"', () => {
+    const t = ((key: string, values?: Record<string, unknown>) => (values ? `${key}:${JSON.stringify(values)}` : key)) as never;
+    const rows = confirmSummaryRows({ identity: { cnIdentity: 'shezhao', yearsExperience: '3-5', jobSearchStatus: 'employed_open' }, education: { skip: true }, intent: { targetRoles: [{ label: '会计' }], cities: ['any'], workType: 'full_time' }, tags: { skip: true } }, null, t);
+    const value = (id: string) => rows.find((r) => r.id === id)?.value;
+    expect(value('identity')).toBe('identity.option.shezhao.title · identity.years.y3to5 · identity.status.employed_open');
+    expect(value('education')).toBe('confirm.skipped');
+    expect(value('cities')).toBe('intent.anyCity');
+    expect(value('pay')).toBe('confirm.notSet');
+    expect(value('employer')).toBe('confirm.skipped');
+    expect(value('resume')).toBe('confirm.resumeNone');
+    // 统招 is not mentioned when it was not answered; the consent rows wait for the ledger.
+    expect(confirmSummaryRows({ education: { degree: 'bachelor', school: 'X' } }, null, t).find((r) => r.id === 'education')!.value).toBe('education.degree.bachelor · X');
+    expect(rows.some((r) => r.id === 'ai' || r.id === 'ranking')).toBe(false);
+    const withLedger = confirmSummaryRows({}, { aiProcessing: null, personalized: true }, t);
+    expect(withLedger.find((r) => r.id === 'ai')!.value).toBe('confirm.notChosen');
+    expect(withLedger.find((r) => r.id === 'ranking')!.value).toBe('consent.rankOn');
+    expect(withLedger.find((r) => r.id === 'identity')!.value).toBe('confirm.notSet');
+  });
+
   it('saves the optional source and extra roles', async () => {
     const api = makeApi({
       getState: vi.fn(async () => state(true)) as never,
@@ -630,10 +855,12 @@ describe('defaultCnOnboardingApi snapshot', () => {
 // ── Resume gate (manual mode) and first value ─────────────────────────────
 
 describe('CnResumeGate', () => {
-  it('with AI consent off: no upload screen, 手动填写 offered, no parse or AI call', async () => {
+  it('with AI consent off: no upload screen; 手动填写资料 opens the manual form (it does not skip ahead)', async () => {
     const upload = vi.fn();
     const onManual = vi.fn();
-    const api = makeApi();
+    const api = makeApi({
+      getState: vi.fn(async () => ({ stage: 'resume', nextRoute: null, branch: null, entry: null, answers: { identity: { cnIdentity: 'yingjie' }, education: { degree: 'bachelor', school: '南京大学', major: '统计学' } } })) as never,
+    });
     render(
       <CnResumeGate onManual={onManual}>
         <button type="button" onClick={upload}>
@@ -642,12 +869,185 @@ describe('CnResumeGate', () => {
       </CnResumeGate>,
       api,
     );
+    expect(await screen.findByText('Step 6 of 8')).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: 'Fill in my profile by hand' }));
-    expect(onManual).toHaveBeenCalled();
+    // Repro of the bug: this used to call onManual at once, so the user went to "Finding jobs" with no form.
+    expect(onManual).not.toHaveBeenCalled();
+    const form = await screen.findByTestId('cn-manual-profile');
+    expect(within(form).getByRole('heading', { name: 'Fill in your profile by hand' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Upload resume' })).toBeNull();
     expect(screen.getByText(/never use them to recommend jobs/)).toBeInTheDocument();
+    // The G3 answers are offered as an education row (the profile has none yet); nothing else is prefilled.
+    await waitFor(() => expect(screen.getByLabelText('School')).toHaveValue('南京大学'));
+    expect(screen.getByLabelText('Highest degree')).toHaveValue("Bachelor's");
+    expect(screen.getByLabelText('Company')).toHaveValue('');
+    for (const k of ['Internship', 'Job']) expect(screen.getByRole('button', { name: k })).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.change(screen.getByLabelText('Family name'), { target: { value: '林' } });
+    fireEvent.change(screen.getByLabelText('Given name'), { target: { value: '知远' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Internship' }));
+    fireEvent.change(screen.getByLabelText('Company'), { target: { value: '某科技公司' } });
+    fireEvent.change(screen.getByLabelText('Job title'), { target: { value: '数据分析实习生' } });
+    fireEvent.change(screen.getByLabelText('Start month'), { target: { value: '2026-06' } });
+    fireEvent.change(screen.getByLabelText('End month'), { target: { value: '2026-09' } });
+    fireEvent.change(screen.getByLabelText('Separate skills with commas'), { target: { value: 'Python、SQL, python' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }));
+    await waitFor(() => expect(onManual).toHaveBeenCalledTimes(1));
+    expect(api.patchProfile).toHaveBeenCalledWith({ lastName: '林', firstName: '知远' });
+    expect(api.addEducation).toHaveBeenCalledWith({ school: '南京大学', degree: "Bachelor's", major: '统计学' });
+    expect(api.addExperience).toHaveBeenCalledWith({ company: '某科技公司', title: '数据分析实习生', kind: 'internship', startDate: '2026-06', endDate: '2026-09' });
+    expect(api.putSkills).toHaveBeenCalledWith({ skills: [{ name: 'Python', confirmed: true }, { name: 'SQL', confirmed: true }] });
+    // Manual mode: no consent is recorded and nothing is uploaded or parsed.
     expect(api.recordConsent).not.toHaveBeenCalled();
     expect(upload).not.toHaveBeenCalled();
+  });
+
+  it('manual form: nothing typed cannot be saved; 稍后填写 continues without saving; Back returns to the notice', async () => {
+    const onManual = vi.fn();
+    const api = makeApi();
+    render(
+      <CnResumeGate onManual={onManual}>
+        <span>Upload resume</span>
+      </CnResumeGate>,
+      api,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Fill in my profile by hand' }));
+    const save = await screen.findByRole('button', { name: 'Save and continue' });
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
+    expect(await screen.findByText('Fill in at least one item, or choose Fill in later.')).toBeInTheDocument();
+    expect(onManual).not.toHaveBeenCalled();
+    // An experience that was started needs its company, title and type.
+    fireEvent.change(screen.getByLabelText('Company'), { target: { value: '某公司' } });
+    fireEvent.click(save);
+    expect(await screen.findByText('Add the company, the job title and the type for this experience.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(await screen.findByRole('button', { name: 'Fill in my profile by hand' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Fill in my profile by hand' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Fill in later' }));
+    expect(onManual).toHaveBeenCalledTimes(1);
+    expect(api.patchProfile).not.toHaveBeenCalled();
+    expect(api.addExperience).not.toHaveBeenCalled();
+  });
+
+  it('manual form: a retry after a failed save does not add a saved row a second time', async () => {
+    const onManual = vi.fn();
+    const api = makeApi({ putSkills: vi.fn().mockRejectedValueOnce(new Error('down')).mockResolvedValue({}) as never });
+    render(
+      <CnResumeGate onManual={onManual}>
+        <span>Upload resume</span>
+      </CnResumeGate>,
+      api,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Fill in my profile by hand' }));
+    await screen.findByTestId('cn-manual-profile');
+    fireEvent.click(screen.getByRole('button', { name: 'Job' }));
+    fireEvent.change(screen.getByLabelText('Company'), { target: { value: '某公司' } });
+    fireEvent.change(screen.getByLabelText('Job title'), { target: { value: '会计' } });
+    fireEvent.click(screen.getByRole('switch', { name: 'I still work here' }));
+    fireEvent.change(screen.getByLabelText('Separate skills with commas'), { target: { value: 'Excel' } });
+    const save = screen.getByRole('button', { name: 'Save and continue' });
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
+    expect(await screen.findByText(/Some of this wasn't saved/)).toBeInTheDocument();
+    expect(onManual).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }));
+    await waitFor(() => expect(onManual).toHaveBeenCalledTimes(1));
+    expect(api.addExperience).toHaveBeenCalledTimes(1);
+    expect(api.addExperience).toHaveBeenCalledWith({ company: '某公司', title: '会计', kind: 'work', current: true });
+    expect(api.putSkills).toHaveBeenCalledTimes(2);
+  });
+
+  it('manual form: a profile that already has an education row and skills keeps them (no second school, skills merged)', async () => {
+    const onManual = vi.fn();
+    const profile = { firstName: '知远', lastName: '林', education: [{ id: 'e1', school: '南京大学' }], experience: [], skills: [{ name: 'Excel', confirmed: true }] };
+    const api = makeApi({
+      getProfile: vi.fn(async () => profile) as never,
+      getState: vi.fn(async () => ({ stage: 'resume', nextRoute: null, branch: null, entry: null, answers: { education: { degree: 'bachelor', school: '南京大学' } } })) as never,
+    });
+    render(
+      <CnResumeGate onManual={onManual}>
+        <span>Upload resume</span>
+      </CnResumeGate>,
+      api,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Fill in my profile by hand' }));
+    await waitFor(() => expect(screen.getByLabelText('Family name')).toHaveValue('林'));
+    // The education group is not offered again.
+    expect(screen.queryByLabelText('School')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Separate skills with commas'), { target: { value: 'excel, SQL' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }));
+    await waitFor(() => expect(onManual).toHaveBeenCalledTimes(1));
+    expect(api.addEducation).not.toHaveBeenCalled();
+    expect(api.putSkills).toHaveBeenCalledWith({ skills: [{ name: 'Excel', confirmed: true }, { name: 'SQL', confirmed: true }] });
+  });
+
+  it('manual form rules: skills are split and de-duplicated; no education row when the profile has one; dates in order', () => {
+    expect(parseSkills('Python、SQL, python；Excel\n ')).toEqual(['Python', 'SQL', 'Excel']);
+    const f = { ...EMPTY_MANUAL_PROFILE, school: '南京大学', degree: '本科' };
+    expect(manualProfileParts(f, true).education).toEqual({ school: '南京大学', degree: '本科' });
+    expect(manualProfileParts(f, false).education).toBeNull();
+    expect(manualProfileProblems({ ...EMPTY_MANUAL_PROFILE }, true)).toEqual(['empty']);
+    expect(manualProfileProblems({ ...EMPTY_MANUAL_PROFILE, lastName: '林' }, true)).toEqual([]);
+    expect(manualProfileProblems({ ...EMPTY_MANUAL_PROFILE, kind: 'work', company: 'A', title: 'B', start: '2026-05', end: '2026-01' }, true)).toEqual(['dates']);
+    expect(manualProfileProblems({ ...EMPTY_MANUAL_PROFILE, title: 'B' }, true)).toEqual(['experience']);
+  });
+
+  // Review finding: Firefox and Safari on desktop show <input type="month"> as a plain text box. A month
+  // typed as "2024/03" or "2024年3月" was dropped without a word and the experience saved with no dates.
+  it('a month typed by hand is understood in the usual spellings, and one that is not is refused — never dropped silently', () => {
+    for (const typed of ['2024-03', '2024-3', '2024/03', '2024/3', '2024.03', '2024年3月', '2024年03月', ' 2024 年 3 月 ', '202403']) expect(normalizeMonth(typed), typed).toBe('2024-03');
+    for (const typed of ['', '  ', '2024', '03/2024', '2024-13', '2024-00', '24-03', 'March 2024', '2024-03-15', '20243']) expect(normalizeMonth(typed), typed).toBeNull();
+    const exp = { ...EMPTY_MANUAL_PROFILE, kind: 'work' as const, company: 'A', title: 'B' };
+    // Typed by hand: saved as the month it means.
+    expect(manualProfileParts({ ...exp, start: '2024/03', end: '2025年1月' }, true).experience).toMatchObject({ startDate: '2024-03', endDate: '2025-01' });
+    expect(manualProfileProblems({ ...exp, start: '2024/03', end: '2025年1月' }, true)).toEqual([]);
+    // Not a month: a problem, for either field.
+    expect(manualProfileProblems({ ...exp, start: 'March 2024' }, true)).toEqual(['dateFormat']);
+    expect(manualProfileProblems({ ...exp, start: '2024-03', end: 'now' }, true)).toEqual(['dateFormat']);
+    // "I work here now" clears and disables the end month, so it is not checked.
+    expect(manualProfileProblems({ ...exp, start: '2024-03', end: 'now', current: true }, true)).toEqual([]);
+    // The order check reads the typed spellings too.
+    expect(manualProfileProblems({ ...exp, start: '2026/5', end: '2026年1月' }, true)).toEqual(['dates']);
+  });
+
+  it('where the browser has no month picker, a month it cannot read stops the save and says how to write it', async () => {
+    const api = makeApi();
+    const onManual = vi.fn();
+    render(
+      <CnResumeGate onManual={onManual}>
+        <span>Upload resume</span>
+      </CnResumeGate>,
+      api,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Fill in my profile by hand' }));
+    await screen.findByTestId('cn-manual-profile');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save and continue' })).toBeEnabled());
+    const start = screen.getByLabelText('Start month') as HTMLInputElement;
+    const end = screen.getByLabelText('End month') as HTMLInputElement;
+    // The text-box fallback shows how to write a month.
+    expect(start).toHaveAttribute('placeholder', 'YYYY-MM');
+    expect(end).toHaveAttribute('placeholder', 'YYYY-MM');
+    // What Firefox and Safari on desktop do with type="month": a plain text box that takes any text
+    // (jsdom, like Chromium, empties a month input that is given anything but YYYY-MM).
+    const typeInto = (input: HTMLInputElement, value: string) => {
+      input.setAttribute('type', 'text');
+      fireEvent.change(input, { target: { value } });
+    };
+    fireEvent.change(screen.getByLabelText('Company'), { target: { value: '某公司' } });
+    fireEvent.change(screen.getByLabelText('Job title'), { target: { value: '产品实习生' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Internship' }));
+    typeInto(start, 'March 2024');
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Write each month as year and month, like 2024-03.');
+    expect(api.addExperience).not.toHaveBeenCalled();
+    expect(onManual).not.toHaveBeenCalled();
+    // Written the way people write it: saved as that month.
+    typeInto(start, '2024/03');
+    typeInto(end, '2024年9月');
+    fireEvent.click(screen.getByRole('button', { name: 'Save and continue' }));
+    await waitFor(() => expect(onManual).toHaveBeenCalledTimes(1));
+    expect(api.addExperience).toHaveBeenCalledWith(expect.objectContaining({ startDate: '2024-03', endDate: '2024-09' }));
   });
 
   it('turning AI processing on records the consent with the prose shown, then shows the upload', async () => {

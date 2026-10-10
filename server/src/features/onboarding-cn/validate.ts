@@ -16,6 +16,8 @@
 //   G3  应届/在校 need 学历 and a school; only 社招 may skip. A school picked
 //       from (or typed exactly as) the MOE list carries its official marks;
 //       overseas or unlisted schools carry none. Marks never reach ranking.
+//       统招 is stored only when the user answered it: no answer is recorded
+//       as neither yes nor no (nothing is assumed about the user).
 //   G4  1–3 roles, 1–5 cities (不限 alone), ≤3 industries; pay only on the
 //       option grid (K/月 1–30, 35–100; ·N薪 12–20; 实习 100–1000 元/天 step 50);
 //       实习 has days/week (default 4) and months (default 3个月); 指定日期
@@ -178,7 +180,8 @@ function validateEducation(body: unknown, ctx: CnStepContext): CnStepValidation 
   const listed = overseas ? null : (b.schoolId ? findSchool(b.schoolId) : null) ?? findSchool(b.school ?? null);
   const schoolName = listed?.name ?? b.school ?? undefined;
   const tags = listed ? schoolTagsFor(listed.id) : [];
-  const fullTime = b.fullTime ?? true;
+  // 统招: the user's own answer, or none. Never defaulted to "yes" (an unanswered question is not a fact about the user).
+  const fullTime = typeof b.fullTime === 'boolean' ? b.fullTime : undefined;
   const answers = {
     degree: b.degree,
     fullTime,
@@ -191,7 +194,8 @@ function validateEducation(body: unknown, ctx: CnStepContext): CnStepValidation 
     consents: [],
     cnFields: {
       degree: b.degree ?? null,
-      isFullTimeProgram: fullTime,
+      // null removes the key (profile `cnFields` PATCH), so an earlier answer the user cleared does not linger.
+      isFullTimeProgram: fullTime ?? null,
       schoolName: schoolName ?? null,
       schoolId: listed?.id ?? null,
       schoolTags: tags,

@@ -10,6 +10,16 @@
 // the browser JS bundle. This module additionally owns `loadMessages`, the
 // only piece that imports the (heavy) JSON — it is consumed server-side from
 // app/layout.tsx.
+//
+// Brand copy overrides (ARCHITECTURE.md §1.7; TASK_PLAN.md R-22): a brand may
+// carry `i18n/brands/<brand>/<locale>.json`, deep-merged AFTER the locale
+// bundle and before the `%BRAND%` tokens are replaced. GoApply uses it for
+// wording that never applies on the mainland brand — "import from LinkedIn"
+// becomes resume import, "cancel a subscription" becomes one-time passes,
+// visa and work-permit wording is dropped. RoboApply has no override bundle,
+// so its messages are exactly the locale bundles. An override changes the
+// WORDS of an existing key only: it adds no key and hides nothing (a section
+// that must disappear is gated by its capability in the component).
 
 export {
   LOCALES,
@@ -45,6 +55,9 @@ import deMessages from '../i18n/messages/de.json';
 // Staged English from the feature waves (ARCHITECTURE.md §10.1.2). Generated
 // by scripts/i18n-merge-staging.mjs; empty namespaces until a WP writes keys.
 import { STAGING_EN } from '../i18n/staging/index';
+// Brand copy overrides (GoApply serves zh and en only).
+import goapplyZhOverrides from '../i18n/brands/goapply/zh.json';
+import goapplyEnOverrides from '../i18n/brands/goapply/en.json';
 
 type Messages = Record<string, unknown>;
 
@@ -102,14 +115,28 @@ const MESSAGES: Record<RoboLocale, Messages> = {
   de: mergeOverEn(EN, clone(deMessages)),
 };
 
+/**
+ * Copy overrides per brand × locale, merged over the locale bundle
+ * (`mergeOverEn`: the override wins key by key, everything else is untouched).
+ * A brand or locale without an entry gets the locale bundle as it is.
+ */
+const BRAND_OVERRIDES: Partial<Record<BrandId, Partial<Record<RoboLocale, Messages>>>> = {
+  goapply: { zh: clone(goapplyZhOverrides), en: clone(goapplyEnOverrides) },
+};
+
+/** The override bundle of a brand × locale, still carrying `%BRAND%` tokens; null when there is none. */
+export function brandOverrides(brandId: BrandId, locale: RoboLocale): Record<string, unknown> | null {
+  return BRAND_OVERRIDES[brandId]?.[locale] ?? null;
+}
+
 /** Substituted bundles, memoized per brand × locale (at most 18 entries). */
 const BRANDED = new Map<string, Messages>();
 
 /**
- * The message bundle for a locale with the brand tokens replaced
- * (ARCHITECTURE.md §1.7): `%BRAND%` → the brand's product name,
- * `%OTHER_BRAND%` → the other brand's. Bundles never carry a literal brand
- * name. `brandId` defaults to RoboApply for callers that predate brands
+ * The message bundle for a locale with the brand's copy overrides merged in
+ * and the brand tokens replaced (ARCHITECTURE.md §1.7): `%BRAND%` → the
+ * brand's product name, `%OTHER_BRAND%` → the other brand's. Bundles never
+ * carry a literal brand name. `brandId` defaults to RoboApply for callers that predate brands
  * (lib/seo.ts, metadata helpers); pages get the request's brand from
  * app/layout.tsx.
  */
@@ -117,10 +144,12 @@ export function loadMessages(
   locale: RoboLocale,
   brandId: BrandId = DEFAULT_BRAND,
 ): Record<string, unknown> {
-  const key = `${brandId}:${MESSAGES[locale] ? locale : 'en'}`;
+  const lang: RoboLocale = MESSAGES[locale] ? locale : 'en';
+  const key = `${brandId}:${lang}`;
   let out = BRANDED.get(key);
   if (!out) {
-    out = substituteBrandTokens(MESSAGES[locale] ?? MESSAGES.en, brandId);
+    const overrides = brandOverrides(brandId, lang);
+    out = substituteBrandTokens(overrides ? mergeOverEn(MESSAGES[lang], overrides) : MESSAGES[lang], brandId);
     BRANDED.set(key, out);
   }
   return out;

@@ -1,3 +1,8 @@
 {
-  "legal": {}
+  "legal": {
+    "consents": {
+      "textChanged": "这段文字在你作答后有改动。你当时的选择针对的是旧版本。",
+      "agreeCurrent": "同意当前文字"
+    }
+  }
 }
