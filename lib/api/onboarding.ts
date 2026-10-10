@@ -1,6 +1,7 @@
 // lib/api/onboarding.ts — Onboarding stage machine (RoboApply O1–O8; GoApply steps via the same /steps route, WP-31).
 //
-// Thin typed wrappers over the area contract (FND-7). Owner: WP-30.
+// Thin typed wrappers over the area contract (FND-7). Owner: WP-30 (filled:
+// `getOnboardingState` and `suggestTitles` return WP-30's extended views).
 // Request types are the contract's zod input types; response types are the
 // contract's views. Change a signature here only together with its contract.
 //
@@ -19,8 +20,8 @@ import { call, type CallOptions, type In, type Items, postStream, seg, type Stre
 import type * as O from './contracts/onboarding';
 
 /** `onboarding.state` — GET /api/v1/roboapply/onboarding/state */
-export function getOnboardingState(opts?: CallOptions): Promise<O.OnboardingStateResponse> {
-  return call<O.OnboardingStateResponse>('GET', `/api/v1/roboapply/onboarding/state`, opts);
+export function getOnboardingState(opts?: CallOptions): Promise<O.OnboardingStateView> {
+  return call<O.OnboardingStateView>('GET', `/api/v1/roboapply/onboarding/state`, opts);
 }
 
 /** `onboarding.step` — PUT /api/v1/roboapply/onboarding/steps/:step */
@@ -29,8 +30,8 @@ export function putOnboardingStep(step: string, body: In<typeof O.StepBodySchema
 }
 
 /** `onboarding.titleSuggest` — GET /api/v1/roboapply/onboarding/title-suggest */
-export function suggestTitles(query: In<typeof O.TitleSuggestQuerySchema>, opts?: CallOptions): Promise<Items<O.TitleSuggestion>> {
-  return call<Items<O.TitleSuggestion>>('GET', withQuery(`/api/v1/roboapply/onboarding/title-suggest`, query), opts);
+export function suggestTitles(query: In<typeof O.TitleSuggestQuerySchema>, opts?: CallOptions): Promise<Items<O.TitleSuggestionView>> {
+  return call<Items<O.TitleSuggestionView>>('GET', withQuery(`/api/v1/roboapply/onboarding/title-suggest`, query), opts);
 }
 
 /** `onboarding.marketSnapshot` — GET /api/v1/roboapply/onboarding/market-snapshot */

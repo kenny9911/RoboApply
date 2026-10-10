@@ -1,3 +1,8 @@
+// @deprecated (WP-30) — the two-step setup service behind the legacy
+// /v2/onboarding/* routes. Replaced by server/src/features/onboarding/
+// (service.ts, stage machine). Kept only for the deprecated router; WP-75
+// deletes it with that router.
+//
 // backend/src/roboapply/v2/services/RAOnboardingService.ts
 //
 // First-run setup. TWO steps: add a resume, then confirm what we read from it.
@@ -834,6 +839,7 @@ export class RAOnboardingService {
   }
 }
 
+/** @deprecated WP-30: use `onboardingService` from server/src/features/onboarding. */
 export const raOnboardingService = new RAOnboardingService();
 export default raOnboardingService;
 
