@@ -27,7 +27,8 @@ import { createCreditTestKit } from '../../platform/credits/testkit.js';
 import type { RateLimitResult } from '../../platform/ratelimit/index.js';
 import { RAJobMatchScorerV3Agent, type RAJobMatchScorerV3Output } from '../../roboapply/v2/agents/RAJobMatchScorerAgent.js';
 import { SCORER_PROMPT_VERSION } from './contract.js';
-import { createMatchService, type MatchServiceDeps, type ScorerLike } from './MatchService.js';
+import { cnPostingVisible } from '../cn/jobs/index.js';
+import { createMatchService, visibleTo, type MatchServiceDeps, type ScorerLike } from './MatchService.js';
 import { createMemoryRepo, jobRecord, resumeRecord } from './testkit.js';
 
 const MODEL = 'test/model-a';
@@ -70,7 +71,8 @@ function setup(over: Partial<MatchServiceDeps> & { repo?: ReturnType<typeof crea
     costLog,
     profileSnapshot: async () => null,
     brand: () => getBrand('roboapply'),
-    env: {},
+    // GoApply cases here score public postings, which needs the recruitment-info mode to allow them (R-14).
+    env: { CN_RECRUITMENT_INFO_MODE: 'partner_deeplink' },
     now: () => new Date('2026-10-10T08:00:00Z'),
     ...over,
   });
@@ -292,6 +294,51 @@ describe('scoreJob — scorer v3', () => {
     await expect(service.scoreJob('u1', 'nope')).rejects.toMatchObject({ code: 'not_found' });
     await expect(service.scoreJob('u1', 'mine', { resumeVariantId: 'not-mine' })).rejects.toMatchObject({ code: 'not_found', details: { reason: 'resume_variant_not_found' } });
     expect((await service.scoreJob('u1', 'mine')).kind).toBe('ai');
+  });
+
+  it('GoApply, recruitment-info mode off: a third-party posting is a 404 on every reader; the user’s own import still works [R41-1b]', async () => {
+    const jobs = [
+      jobRecord({ id: 'gohire', market: 'cn' }),
+      jobRecord({ id: 'mine', market: 'cn', visibility: 'private', ownerUserId: 'u1' }),
+    ];
+    const off = setup({ repo: createMemoryRepo({ jobs }), brand: () => getBrand('goapply'), env: {} });
+    for (const call of [
+      () => off.service.scoreJob('u1', 'gohire'),
+      () => off.service.fitAnalysis('u1', 'gohire', 'idem-key-0001'),
+      () => off.service.keywordCheck('u1', 'gohire'),
+    ]) {
+      await expect(call()).rejects.toMatchObject({ code: 'not_found' });
+    }
+    expect(off.scorer.run).not.toHaveBeenCalled();
+    expect(await off.service.preScoreMany('u1', ['gohire', 'mine'])).toMatchObject([{ jobId: 'mine' }]);
+    expect((await off.service.keywordCheck('u1', 'mine')).jobId).toBe('mine');
+    expect((await off.service.scoreJob('u1', 'mine')).jobId).toBe('mine');
+
+    // Control: once the mode allows postings the same posting is readable.
+    const on = setup({ repo: createMemoryRepo({ jobs }), brand: () => getBrand('goapply'), env: { CN_RECRUITMENT_INFO_MODE: 'licensed' } });
+    expect((await on.service.keywordCheck('u1', 'gohire')).jobId).toBe('gohire');
+    expect((await on.service.preScoreMany('u1', ['gohire', 'mine'])).map((p) => p.jobId)).toEqual(['gohire', 'mine']);
+  });
+
+  it('visibleTo gives the same answer as cn/jobs cnPostingVisible in every mode (one rule, two readers)', () => {
+    const jobs = [
+      { market: 'cn', visibility: 'public', ownerUserId: null },
+      { market: 'cn', visibility: 'private', ownerUserId: 'u1' },
+      { market: 'cn', visibility: 'private', ownerUserId: 'u2' },
+      { market: 'cn', visibility: 'public', ownerUserId: 'u1' },
+      { market: 'intl', visibility: 'public', ownerUserId: null },
+      { market: 'intl', visibility: 'private', ownerUserId: 'u1' },
+      { market: 'intl', visibility: 'private', ownerUserId: 'u2' },
+    ];
+    for (const mode of [undefined, 'off', 'partner_deeplink', 'licensed']) {
+      const env = mode ? { CN_RECRUITMENT_INFO_MODE: mode } : {};
+      for (const job of jobs) {
+        const basic = job.visibility === 'public' || job.ownerUserId === 'u1';
+        expect(visibleTo(job, 'u1', job.market, env), `${mode} ${JSON.stringify(job)}`).toBe(basic && cnPostingVisible(job, 'u1', env));
+      }
+    }
+    // Another brand's market is never visible, whatever the mode.
+    expect(visibleTo(jobs[0]!, 'u1', 'intl', { CN_RECRUITMENT_INFO_MODE: 'licensed' })).toBe(false);
   });
 
   it('updates the variant’s cached score when it was tailored for this job', async () => {

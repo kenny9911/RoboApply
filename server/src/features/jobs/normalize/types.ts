@@ -221,12 +221,23 @@ export type NormalizedJob = {
   originalSourceName: string | null;
   /**
    * Host of the original posting (never linkedin.com); prefers the employer /
-   * ATS host over a job board's. No RAJob column yet: Schema request SCHEMA-2
-   * `RAJob.originalHost String?`. Until it lands, readers derive the host from
-   * sourceUrl (then applyUrl) with `hostOf`, skipping job-board hosts
-   * (`isJobBoardHost`).
+   * ATS host over a job board's. Stored in `RAJob.originalHost` (SCHEMA-2) by
+   * the ingest upsert and the import writer.
    */
   originalHost: string | null;
+  /**
+   * `[{ rule, evidence, at, method? }]` a market hook raised at normalize time
+   * (`marketHooks.afterNormalize`: GoApply keyword and blacklist fraud rules).
+   * The normalizer itself never sets it. The ingest upsert stores it, keeping
+   * other modules' flags on the row (R41-2).
+   */
+  fraudFlags?: unknown;
+  /**
+   * `[{ tag, evidenceQuote, evidenceUrl }]` a market hook read from the posting
+   * at normalize time (GoApply 届别 / 校招 / 网申截止 tags). Stored by the
+   * ingest upsert next to the tags enrichment writes (R41-2).
+   */
+  marketTags?: unknown;
   atsType: AtsType | null;
   /** true when a provider or our agency list says so; null = not known (never false by guess). */
   isAgency: boolean | null;

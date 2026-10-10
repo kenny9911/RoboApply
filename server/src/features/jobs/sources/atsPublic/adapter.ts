@@ -7,7 +7,8 @@
 // SYNC_INTERVAL_MS ago) and answers `exhausted: false` while more are due, so
 // the same tick keeps going. Postings go through ingest's normalize → hooks →
 // upsert → dedupe → enrich; postings a board stopped listing come back as
-// `closedExternalIds` and ingest archives them.
+// `closedExternalIds` and ingest archives them as 'source_removed' (a board
+// is not a recruiter bank). Board postings never expire by date.
 //
 // RoboApply only (`markets: ['intl']`): GoApply's sources are the GoHire bank,
 // user imports and the campus calendar (CN plan L-5). Unmetered (public APIs);
@@ -70,7 +71,7 @@ export function createAtsPublicAdapter(deps: AtsPublicAdapterDeps = {}): JobSour
           if (result.read) jobs.push(...result.read.inputs);
           closed.push(...result.closedExternalIds);
         }
-        return { jobs, calls, closedExternalIds: closed, exhausted: due.length <= BOARDS_PER_FETCH, cursor: null };
+        return { jobs, calls, closedExternalIds: closed, closeReason: 'source_removed', exhausted: due.length <= BOARDS_PER_FETCH, cursor: null };
       } catch (err) {
         return { jobs: [], calls: 0, error: err instanceof Error ? `career_sources:${err.message.slice(0, 160)}` : 'career_sources_failed' };
       }

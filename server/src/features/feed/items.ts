@@ -13,6 +13,7 @@
 //   - no applicant count, no "new" / "closing soon" urgency badges;
 //   - "Last checked {date}" comes from lastSeenAt.
 
+import type { MatchExplanation } from '../compliance/contract.js';
 import type { MatchUser } from '../match/index.js';
 import type { FeedBadge, FeedItem, FitBadge, PublicFeedItem } from './contract.js';
 import type { FeedJobRow } from './types.js';
@@ -115,6 +116,10 @@ export interface ItemContext {
   position: number | null;
   /** Today's date for the stated 网申 close (defaults to the clock). */
   now?: Date;
+  /** `marketHooks.cardMeta` output for this job (CN / TW card lines); left off the item when empty. */
+  cardMeta?: Record<string, Record<string, unknown>> | null;
+  /** `explainMatch` lines ("Why this job"); left off the item when absent. */
+  explanation?: MatchExplanation | null;
 }
 
 /** The public part of a card (no fit, no tracker) — also the visitor list item. */
@@ -148,5 +153,8 @@ export function publicItem(row: FeedJobRow, user: ItemContext['user'] = null, no
 }
 
 export function toFeedItem(row: FeedJobRow, ctx: ItemContext): FeedItem {
-  return { ...publicItem(row, ctx.user, ctx.now), fit: ctx.fit, tracker: ctx.tracker, position: ctx.position };
+  const item: FeedItem = { ...publicItem(row, ctx.user, ctx.now), fit: ctx.fit, tracker: ctx.tracker, position: ctx.position };
+  if (ctx.cardMeta && Object.keys(ctx.cardMeta).length) item.cardMeta = ctx.cardMeta;
+  if (ctx.explanation) item.explanation = ctx.explanation;
+  return item;
 }

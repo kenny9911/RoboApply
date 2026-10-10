@@ -12,6 +12,8 @@ import type { RequestHandler } from 'express';
 vi.mock('../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
 
 import { flagEnvName, setFlagOverrideLoader } from '../../platform/flags.js';
+import { explainMatch } from '../compliance/explainMatch.js';
+import { cardMeta } from '../jobs/marketHooks.js';
 import { fakeAuth, startRouteHarness, type RouteHarness } from '../../test/routeHarness.js';
 import { DEFAULT_MATCH_TIERS, DEFAULT_MATCH_WEIGHTS, buildMatchUser } from '../match/index.js';
 import type { SearchProfileWire } from '../search/index.js';
@@ -27,6 +29,8 @@ const repo = new FakeFeedRepo();
 let refreshAllowed = true;
 let currentUser: { id: string } | null = { id: 'u1' };
 const limiterCalls: string[] = [];
+let profileReads = 0;
+let profileFilters: SearchProfileWire['filters'] = {};
 const phoneGateCalls: string[] = [];
 
 const profile = (): SearchProfileWire => ({
@@ -36,7 +40,7 @@ const profile = (): SearchProfileWire => ({
   isActive: true,
   version: 1,
   schemaVersion: 1,
-  filters: {},
+  filters: profileFilters,
   alertInstantMax: 1,
   alertDigest: null,
   createdAt: NOW.toISOString(),
@@ -52,8 +56,19 @@ const service = createFeedQueryService({
     },
     config: () => ({ weights: { ...DEFAULT_MATCH_WEIGHTS }, tiers: { ...DEFAULT_MATCH_TIERS } }),
   },
-  search: { getActive: async () => profile(), get: async () => profile() } as never,
+  search: {
+    getActive: async () => {
+      profileReads += 1;
+      return profile();
+    },
+    get: async () => {
+      profileReads += 1;
+      return profile();
+    },
+  } as never,
   personalized: async () => true,
+  cardMeta,
+  explain: explainMatch,
   consumeRefresh: async () => ({ allowed: refreshAllowed, retryAfterSec: refreshAllowed ? 0 : 90 }),
   aiAllowed: async () => true,
   planner: async () => ({ queries: ['Data Analyst'], unverifiedPreferences: [] }),
@@ -97,6 +112,8 @@ beforeEach(() => {
   currentUser = { id: 'u1' };
   limiterCalls.length = 0;
   phoneGateCalls.length = 0;
+  profileReads = 0;
+  profileFilters = {};
   service.clearExploreCache();
 });
 
@@ -157,6 +174,62 @@ describe('POST /query', () => {
     expect(res.status).toBe(429);
     expect(res.headers.get('retry-after')).toBe('90');
     expect(res.body.details).toMatchObject({ reason: 'feed_refresh_limited', retryAfterSec: 90 });
+  });
+});
+
+describe('POST /query: cardMeta, explanation and the browse case (WP-33 ← WP-32)', () => {
+  type Item = { jobId: string; fit: { tier: string; kind: string } | null; cardMeta?: Record<string, Record<string, unknown>>; explanation?: { mode: string; headline: { key: string; params?: Record<string, unknown> }; notices: Array<{ key: string }> } };
+
+  it('each scored card carries `explanation`; a Taiwan posting carries `cardMeta`; others carry no cardMeta', async () => {
+    repo.rows.push(
+      feedRow({ id: 'tw1', postedAt: new Date(NOW.getTime() - 60_000), locationCountry: 'TW', location: 'Taipei, Taiwan', salaryDisclosed: false, salaryText: '待遇面議', sourceBoard: 'greenhouse', sourceName: 'Appier · Greenhouse' }),
+    );
+    const res = await h.request<Env<{ items: Item[] }>>('POST', `${P}/query`, { body: { sort: 'newest' } });
+    expect(res.status).toBe(200);
+    const tw = res.body.data.items.find((i) => i.jobId === 'tw1')!;
+    expect(tw.cardMeta).toMatchObject({ ats_public: { country: 'TW', pay: { posted: '待遇面議', disclosed: false, negotiable: true }, source: { name: 'Appier · Greenhouse', board: 'greenhouse' } } });
+    const other = res.body.data.items.find((i) => i.jobId === 'j00')!;
+    expect(other).not.toHaveProperty('cardMeta');
+    for (const item of res.body.data.items) {
+      expect(item.fit, item.jobId).not.toBeNull();
+      expect(item.explanation, item.jobId).toMatchObject({ mode: 'personalized', headline: { key: 'legal.explain.headline.personalized', params: { tier: item.fit!.tier } } });
+      expect(item.explanation!.notices.map((n) => n.key)).toContain('legal.explain.notice.notHiringChance');
+    }
+  });
+
+  it('browse: overrides.taxonomyIds with no searchProfileId lists the category by market and visibility rules only', async () => {
+    // The saved search would hide every seeded job (it asks for sales roles, onsite).
+    profileFilters = { taxonomyIds: ['sales'], workModels: ['onsite'] };
+    repo.rows.push(feedRow({ id: 'da1', taxonomyIds: ['data_analytics', 'data_analyst'], primaryTaxonomyId: 'data_analyst', postedAt: new Date(NOW.getTime() - 60_000) }));
+    repo.rows.push(feedRow({ id: 'mine', taxonomyIds: ['software_engineering'], visibility: 'private', ownerUserId: 'u1', sourceBoard: 'user_import', postedAt: new Date(NOW.getTime() - 30_000) }));
+    const res = await h.request<Env<{ items: Item[]; cursor: string | null; sessionId: string }>>('POST', `${P}/query`, {
+      body: { sort: 'newest', overrides: { taxonomyIds: ['software_engineering'] } },
+    });
+    expect(res.status).toBe(200);
+    expect(profileReads).toBe(0);
+    // 25 public backend jobs under the category: the first page of 20; never the analytics job or the user's own import.
+    expect(res.body.data.items).toHaveLength(20);
+    expect(res.body.data.items.map((i) => i.jobId)).not.toContain('da1');
+    expect(res.body.data.items.map((i) => i.jobId)).not.toContain('mine');
+    const page2 = await h.request<Env<{ items: Item[]; endOfFeed: boolean }>>('POST', `${P}/query`, {
+      body: { sort: 'newest', overrides: { taxonomyIds: ['software_engineering'] }, cursor: res.body.data.cursor },
+    });
+    expect(page2.body.data.items).toHaveLength(5);
+    expect(page2.body.data.endOfFeed).toBe(true);
+    // The tile count for the same category comes from the same rows (public, live, same age floor).
+    repo.categoryCounts = [{ taxonomyId: 'software_engineering', count: 25 }];
+    const ex = await h.request<Env<{ categories: Array<{ taxonomyId: string; count: number }> }>>('GET', `${P}/explore`);
+    expect(ex.body.data.categories.find((c) => c.taxonomyId === 'software_engineering')!.count).toBe(res.body.data.items.length + page2.body.data.items.length);
+  });
+
+  it('the same overrides with a searchProfileId narrow that search (not a browse); an unknown override is still 422', async () => {
+    profileFilters = { workModels: ['remote'] };
+    const res = await h.request<Env<{ items: Item[] }>>('POST', `${P}/query`, { body: { sort: 'newest', searchProfileId: 'sp1', overrides: { taxonomyIds: ['software_engineering'] } } });
+    expect(res.status).toBe(200);
+    expect(profileReads).toBe(1);
+    const bad = await h.request<Env<unknown>>('POST', `${P}/query`, { body: { overrides: { taxonomyIds: ['software_engineering'], seniority: ['wizard'] } } });
+    expect(bad.status).toBe(422);
+    expect(bad.body.details).toMatchObject({ reason: 'invalid_filters' });
   });
 });
 

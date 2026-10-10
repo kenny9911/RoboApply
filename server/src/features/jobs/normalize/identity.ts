@@ -6,8 +6,9 @@
 //                place = the city (table id when known, else the posting's
 //                city words), else the remote scope, else the country.
 //   searchText = titleNormalized + companyNameNormalized + top skills.
-//   expiresAt  = the provider's expiry; else postedAt + 45 days; bank jobs:
-//                none (the bank sync closes them).
+//   expiresAt  = the provider's expiry; else postedAt + 45 days; bank jobs
+//                and public ATS boards: none (their sync closes them when
+//                the bank or the board stops listing the posting).
 
 import { createHash } from 'node:crypto';
 import type { NormalizeProvider } from './types.js';
@@ -77,9 +78,17 @@ export function resolvePostedAt(
   return { postedAt: d, estimated: opts.estimated === true };
 }
 
-/** Provider expiry, else postedAt + 45 days; bank jobs and private imports never expire by date. */
+/** Providers whose postings never expire by date: their own sync (or the owner) closes them. */
+export const NO_DATE_EXPIRY_PROVIDERS: readonly NormalizeProvider[] = ['bank_robohire', 'bank_gohire', 'user_import', 'ats_public'];
+
+/**
+ * Provider expiry, else postedAt + 45 days. Bank jobs, private imports and
+ * public ATS boards (`ats_public`) never expire by date: an employer's board
+ * lists a role for as long as it is open, often for months, and the board
+ * sync archives the posting when the board stops listing it.
+ */
 export function resolveExpiresAt(provider: NormalizeProvider, providerExpiry: string | Date | null | undefined, postedAt: Date | null): Date | null {
-  if (provider === 'bank_robohire' || provider === 'bank_gohire' || provider === 'user_import') return null;
+  if (NO_DATE_EXPIRY_PROVIDERS.includes(provider)) return null;
   const explicit = toDate(providerExpiry ?? null);
   if (explicit && explicit.getUTCFullYear() >= 2000) return explicit;
   return postedAt ? new Date(postedAt.getTime() + DEFAULT_EXPIRY_DAYS * DAY_MS) : null;

@@ -13,6 +13,8 @@ import { newId } from './db.js';
 import {
   UPSERT_COLUMNS,
   applyDedupe,
+  fraudFlagsJson,
+  marketTagsJson,
   buildDedupeSql,
   buildJobUpsertSql,
   compareForCanonical,
@@ -72,6 +74,31 @@ describe('batch upsert SQL (snapshot)', () => {
     expect(insertCols.slice(UPSERT_COLUMNS.length)).toEqual(['firstSeenAt', 'lastSeenAt', 'updatedAt']);
   });
 
+  it('SCHEMA-2: originalHost is written on insert and refreshed on update', () => {
+    expect(row.originalHost).toBe('boards.greenhouse.io');
+    expect(UPSERT_COLUMNS).toContain('originalHost');
+    expect(recorded.text).toMatch(/INSERT INTO "RAJob" \([^)]*"originalSourceName", "originalHost", "atsType"/);
+    expect(recorded.text).toContain('"originalHost" = EXCLUDED."originalHost"');
+    expect(recorded.values[UPSERT_COLUMNS.indexOf('originalHost')]).toBe('boards.greenhouse.io');
+  });
+
+  it('R41-2: fraudFlags and marketTags are inserted, and on a re-ingest merged into what other modules stored', () => {
+    const updateSet = recorded.text.split('DO UPDATE SET')[1]!;
+    // Nothing incoming → the stored value is kept (never blanked by a re-ingest).
+    expect(updateSet).toContain(`"fraudFlags" = CASE WHEN EXCLUDED."fraudFlags" IS NULL OR jsonb_typeof(EXCLUDED."fraudFlags") <> 'array' OR jsonb_array_length(EXCLUDED."fraudFlags") = 0 THEN "RAJob"."fraudFlags"`);
+    // Nothing stored → the incoming list.
+    expect(updateSet).toContain(`WHEN "RAJob"."fraudFlags" IS NULL OR jsonb_typeof("RAJob"."fraudFlags") <> 'array' THEN EXCLUDED."fraudFlags"`);
+    // Both → the stored list plus the incoming entries it does not hold yet (same rule and evidence / same tag).
+    expect(updateSet).toContain(`ELSE "RAJob"."fraudFlags" || COALESCE((`);
+    expect(updateSet).toContain(`WHERE o.e->>'rule' = n.e->>'rule' AND o.e->>'evidence' = n.e->>'evidence'`);
+    expect(updateSet).toContain(`"marketTags" = CASE WHEN EXCLUDED."marketTags" IS NULL`);
+    expect(updateSet).toContain(`WHERE o.e->>'tag' = n.e->>'tag'`);
+    // Never a plain overwrite of either column.
+    expect(updateSet).not.toContain('"fraudFlags" = EXCLUDED."fraudFlags"');
+    expect(updateSet).not.toContain('"marketTags" = EXCLUDED."marketTags"');
+    expect(recorded.text).toMatch(/"publicDisplay", "fraudFlags", "marketTags", "firstSeenAt"/);
+  });
+
   it('writes in batches of 100', async () => {
     const db = createFakePrisma({ sql: { respond: () => [] } });
     const rows = Array.from({ length: 230 }, (_, i) => ({ ...row, id: `c${i}`, externalId: `x${i}` }));
@@ -102,6 +129,32 @@ describe('row mapping honesty', () => {
     expect(r.salaryMin).toBeNull();
     expect(r.salaryCurrency).toBeNull();
     expect(r.publicDisplay).toBe(false);
+  });
+
+  it('R41-2: flags and tags a market hook raised at normalize time are written with the row; the normalizer alone writes none', () => {
+    const plain = normalizeProviderJob(input(), 'activejobs', { now: NOW });
+    expect(toUpsertRow(plain, null)).toMatchObject({ fraudFlags: null, marketTags: null });
+
+    // What cnAfterNormalize adds to a GoApply posting (hooked jobs keep the NormalizedJob shape).
+    const flag = { rule: 'cn_training_loan', evidence: '入职需办理培训贷', at: NOW.toISOString(), method: 'keywords' };
+    const tag = { tag: 'class_year:2027', evidenceQuote: '面向2027届毕业生', evidenceUrl: null };
+    const hooked = { ...plain, market: 'cn' as const, fraudFlags: [flag], marketTags: [tag] };
+    const r = toUpsertRow(hooked, null);
+    expect(JSON.parse(r.fraudFlags!)).toEqual([flag]);
+    expect(JSON.parse(r.marketTags!)).toEqual([tag]);
+    const rec = toRecordedSql('$queryRaw', buildJobUpsertSql([r]), []);
+    expect(rec.values[UPSERT_COLUMNS.indexOf('fraudFlags')]).toBe(r.fraudFlags);
+    expect(rec.values[UPSERT_COLUMNS.indexOf('marketTags')]).toBe(r.marketTags);
+  });
+
+  it('only well-formed entries are written: a flag needs a rule and evidence, a tag needs its quote', () => {
+    expect(fraudFlagsJson([{ rule: 'r', evidence: 'e', at: 'x' }, { rule: 'no_evidence' }, null, 'text', { rule: '', evidence: 'e' }])).toBe(JSON.stringify([{ rule: 'r', evidence: 'e', at: 'x' }]));
+    expect(fraudFlagsJson([])).toBeNull();
+    expect(fraudFlagsJson(null)).toBeNull();
+    expect(fraudFlagsJson({ rule: 'r', evidence: 'e' })).toBeNull();
+    // A market tag never renders without its quote, so one without a quote is not stored.
+    expect(marketTagsJson([{ tag: 'hukou', evidenceQuote: '可落户' }, { tag: 'soe', evidenceQuote: '  ' }, { tag: 'foreign' }, { evidenceQuote: 'q' }])).toBe(JSON.stringify([{ tag: 'hukou', evidenceQuote: '可落户' }]));
+    expect(marketTagsJson(undefined)).toBeNull();
   });
 
   it('ids are cuid-shaped with no hyphen (public URLs are <id>-<slug>)', () => {

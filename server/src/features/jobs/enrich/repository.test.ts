@@ -92,6 +92,37 @@ describe('prisma enrich repository', () => {
     });
   });
 
+  it('loadJob also selects the place and link columns the market hooks read (no second read of the row)', async () => {
+    const { db, calls } = fakeDb();
+    await createPrismaEnrichRepository(db).loadJob('j1');
+    expect((calls.findUnique![0] as { select: Record<string, boolean> }).select).toMatchObject({ locationCountry: true, locations: true, sourceUrl: true, applyUrl: true, fraudFlags: true, marketTags: true });
+  });
+
+  it('clearedScamRules reads the rules of the job’s LATEST restore decision (RAJobReview); none → nothing cleared', async () => {
+    const reviews = [
+      { jobId: 'j1', decision: 'restore', at: new Date('2026-10-01T00:00:00Z'), clearedRules: ['intl_fee_required', 'intl_pay_to_apply'] },
+      { jobId: 'j1', decision: 'close', at: new Date('2026-10-05T00:00:00Z'), clearedRules: [] },
+      { jobId: 'j1', decision: 'restore', at: new Date('2026-10-08T00:00:00Z'), clearedRules: ['intl_fee_required'] },
+      { jobId: 'other', decision: 'restore', at: new Date('2026-10-09T00:00:00Z'), clearedRules: ['intl_messaging_app_only'] },
+    ];
+    const seen: unknown[] = [];
+    const db = {
+      ...fakeDb().db,
+      rAJobReview: {
+        findFirst: async (args: { where: { jobId: string; decision: string }; orderBy: { at: 'desc' }; select: unknown }) => {
+          seen.push(args);
+          const rows = reviews.filter((r) => r.jobId === args.where.jobId && r.decision === args.where.decision).sort((a, b) => b.at.getTime() - a.at.getTime());
+          return rows[0] ? { clearedRules: rows[0].clearedRules } : null;
+        },
+      },
+    };
+    const repo = createPrismaEnrichRepository(db as never);
+    expect(await repo.clearedScamRules!('j1')).toEqual(['intl_fee_required']);
+    expect(await repo.clearedScamRules!('other')).toEqual(['intl_messaging_app_only']);
+    expect(await repo.clearedScamRules!('never_reviewed')).toEqual([]);
+    expect(seen[0]).toEqual({ where: { jobId: 'j1', decision: 'restore' }, orderBy: { at: 'desc' }, select: { clearedRules: true } });
+  });
+
   it('writes one ra_job_enrich cost row', async () => {
     const { db, calls } = fakeDb();
     await createPrismaEnrichRepository(db).logCost({

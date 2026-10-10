@@ -78,6 +78,44 @@ describe('FeedItem', () => {
   });
 });
 
+describe('cardMeta and explanation (WP-33 ← WP-32)', () => {
+  const explanation = {
+    mode: 'personalized' as const,
+    headline: { key: 'legal.explain.headline.personalized', params: { tier: 'good' } },
+    reasons: [{ key: 'legal.explain.reason.skills' }],
+    gaps: [],
+    notices: [{ key: 'legal.explain.notice.notHiringChance' }],
+  };
+
+  it('carries the market card meta as the hooks return it, keyed by hook set', () => {
+    const cardMeta = { cn: { sourceLine: { kind: 'source', sourceName: 'GoHire' }, salary: { text: '15-25K·13薪', disclosed: true } } };
+    const item = toFeedItem(feedRow({ id: 'c1', market: 'cn' }), { user: null, fit: null, tracker: null, position: 0, cardMeta });
+    expect(item.cardMeta).toEqual(cardMeta);
+  });
+
+  it('carries the "Why this job" explanation next to the fit', () => {
+    const fit = { tier: 'good' as const, score: 72, kind: 'pre' as const, topGap: null, topOverlap: 'Python' };
+    const item = toFeedItem(feedRow({ id: 'e1' }), { user: null, fit, tracker: null, position: 0, explanation });
+    expect(item.explanation).toEqual(explanation);
+    expect(item.fit).toEqual(fit);
+  });
+
+  it('both are left off the wire when there is nothing to say (never an empty object or null)', () => {
+    const bare = toFeedItem(feedRow({ id: 'b1' }), { user: null, fit: null, tracker: null, position: 0 });
+    expect('cardMeta' in bare).toBe(false);
+    expect('explanation' in bare).toBe(false);
+    const empty = toFeedItem(feedRow({ id: 'b2' }), { user: null, fit: null, tracker: null, position: 0, cardMeta: {}, explanation: null });
+    expect('cardMeta' in empty).toBe(false);
+    expect('explanation' in empty).toBe(false);
+  });
+
+  it('the visitor item never carries either', () => {
+    const item = publicItem(feedRow({ id: 'p1', market: 'cn' }));
+    expect(item).not.toHaveProperty('cardMeta');
+    expect(item).not.toHaveProperty('explanation');
+  });
+});
+
 describe('badges', () => {
   it('"Direct from employer" only when fromRecruiterBank && employerVerified && !isAgency', () => {
     const kinds = (o: object) => badgesFor(feedRow({ id: 'x', workModel: 'onsite', ...o }), null).map((b) => b.kind);

@@ -15,6 +15,6 @@
 export * from './contract.js';
 export { createJobImportRouter } from './routes.js';
 export type { JobImportRouterDeps } from './routes.js';
-export { createJobImportService, defaultJobImportDeps, importExternalId, jobImportService, warningsFrom, IMPORT_ENRICH_TIMEOUT_MS } from './service.js';
+export { createJobImportService, defaultJobImportDeps, importExternalId, jobImportService, storedWarnings, warningsFrom, IMPORT_ENRICH_TIMEOUT_MS } from './service.js';
 export type { JobImportDeps, JobImportService, SaveJobOptions, SaveSource } from './service.js';
 export { checkImportUrl, hostMatchesPattern, importDenylist, isDeniedHost } from './urlPolicy.js';

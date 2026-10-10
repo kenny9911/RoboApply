@@ -98,9 +98,10 @@ export function createCompetitivenessService(deps: CompetitivenessServiceDeps): 
   }
 
   /**
-   * The search's newest PUBLIC posts on this brand, in the feed's order. The
-   * preview seam also returns the user's own imported (private) jobs; they are
-   * dropped here so no aggregate ever counts them (TASK_PLAN §2.2).
+   * The search's newest PUBLIC posts on this brand, newest first. The sample
+   * seam returns public rows only (reportInventory); the checks below are a
+   * second guard so no aggregate can ever count a private, archived or
+   * other-market row (TASK_PLAN §2.2).
    */
   async function samplePosts(userId: string, profile: Parameters<ReportInventory['sampleJobIds']>[1]): Promise<ReportPost[]> {
     const ids = await inventory.sampleJobIds(userId, profile, COMPETITIVENESS_LIMITS.sampleMax);

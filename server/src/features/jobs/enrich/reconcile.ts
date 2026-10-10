@@ -79,6 +79,11 @@ export interface EnrichJobRecord {
   enrichVersion: number | null;
   enrichModel: string | null;
   archivedAt: Date | null;
+  /** Place and links, passed through to the market hooks (not read by reconcile). */
+  locationCountry?: string | null;
+  locations?: unknown;
+  sourceUrl?: string | null;
+  applyUrl?: string | null;
 }
 
 export interface SkillDetail {

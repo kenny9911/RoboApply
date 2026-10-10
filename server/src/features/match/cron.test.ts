@@ -27,7 +27,22 @@ function counters(limits: Record<string, number> = {}) {
   return { consume, counts };
 }
 
-function setup(opts: { jobs?: number; perUser?: string; budget?: string; aiAllowed?: boolean; users?: number; brand?: 'roboapply' | 'goapply'; model?: string; realPolicy?: boolean } = {}) {
+function setup(
+  opts: {
+    jobs?: number;
+    perUser?: string;
+    budget?: string;
+    aiAllowed?: boolean;
+    users?: number;
+    brand?: 'roboapply' | 'goapply';
+    model?: string;
+    realPolicy?: boolean;
+    /** The ids the feed preview lists for a user (default: every seeded job, in order). */
+    preview?: (userId: string) => string[];
+    /** GoApply recruitment-info mode (default: postings allowed, so a GoApply run has candidates). */
+    cnMode?: 'off' | 'partner_deeplink' | 'licensed';
+  } = {},
+) {
   const brandId = opts.brand ?? 'roboapply';
   const model = opts.model ?? MODEL;
   const routeAllowed = opts.realPolicy ? undefined : () => true;
@@ -37,7 +52,8 @@ function setup(opts: { jobs?: number; perUser?: string; budget?: string; aiAllow
     active: Array.from({ length: opts.users ?? 1 }, (_, i) => ({ id: i === 0 ? 'u1' : `u${i + 1}`, brand: brandId, lastActiveAt: new Date(NOW.getTime() - 3600_000 * (i + 1)) })),
   });
   const { consume, counts } = counters();
-  const env = { SCORE_PRECOMPUTE_PER_USER_DAY: opts.perUser, SCORE_DAILY_BUDGET: opts.budget };
+  const env = { SCORE_PRECOMPUTE_PER_USER_DAY: opts.perUser, SCORE_DAILY_BUDGET: opts.budget, CN_RECRUITMENT_INFO_MODE: opts.cnMode ?? 'partner_deeplink' };
+  const candidateIds = vi.fn(async (userId: string, limit: number) => (opts.preview ? opts.preview(userId) : jobs.map((j) => j.id)).slice(0, limit));
   const service = createMatchService({ repo, resolveModel: () => model, routeAllowed, aiAllowed: async () => true, consume, brand: () => getBrand(brandId), env, now: () => NOW });
   const enqueued: Array<{ kind: string; payload: unknown; options: Record<string, unknown> }> = [];
   const enqueue = vi.fn(async (kind: string, payload: unknown, options: Record<string, unknown>): Promise<EnqueuedItem> => {
@@ -46,10 +62,10 @@ function setup(opts: { jobs?: number; perUser?: string; budget?: string; aiAllow
     return { id: String(enqueued.length), kind, status: 'queued', dedupeKey: String(options.dedupeKey), created: !dup };
   });
   const aiAllowed = vi.fn(async () => opts.aiAllowed ?? true);
-  const deps: PrecomputeDeps = { service, repo, aiAllowed, resolveModel: async () => model, routeAllowed, consume, enqueue: enqueue as never, env };
+  const deps: PrecomputeDeps = { service, repo, aiAllowed, resolveModel: async () => model, routeAllowed, consume, enqueue: enqueue as never, candidateIds, env };
   const task = createScorePrecompute(async () => deps);
   const ctx = { name: 'score-precompute', brand: getBrand(brandId), budget: createBudget(240_000), now: NOW };
-  return { task, ctx, repo, enqueued, counts, aiAllowed, consume };
+  return { task, ctx, repo, enqueued, counts, aiAllowed, consume, candidateIds };
 }
 
 describe('score-precompute', () => {
@@ -94,6 +110,60 @@ describe('score-precompute', () => {
     });
     await s.task(s.ctx);
     expect(s.enqueued.map((e) => (e.payload as { jobId: string }).jobId).sort()).toEqual(['job1', 'job2']);
+  });
+
+  it('candidates are exactly the ids the feed preview lists for the user (WP-93 #25): nothing outside it is queued', async () => {
+    // 30 jobs exist; the feed lists only these four for u1 (their search, order and visibility rules).
+    const s = setup({ preview: () => ['job7', 'job3', 'job20', 'job11'] });
+    expect(await s.task(s.ctx)).toMatchObject({ processed: 1, enqueued: 4 });
+    expect(s.candidateIds).toHaveBeenCalledTimes(1);
+    expect(s.candidateIds).toHaveBeenCalledWith('u1', 50, expect.objectContaining({ id: 'roboapply' }));
+    expect(s.enqueued.map((e) => (e.payload as { jobId: string }).jobId).sort()).toEqual(['job11', 'job20', 'job3', 'job7']);
+  });
+
+  it('an id the feed lists but the job table no longer has is skipped; an empty preview queues nothing', async () => {
+    const gone = setup({ preview: () => ['job1', 'deleted_job', 'job2'] });
+    await gone.task(gone.ctx);
+    expect(gone.enqueued.map((e) => (e.payload as { jobId: string }).jobId).sort()).toEqual(['job1', 'job2']);
+
+    // A GoApply user without 个性化推荐 (or a brand that may not show postings) has an empty preview.
+    const none = setup({ preview: () => [] });
+    expect(await none.task(none.ctx)).toMatchObject({ processed: 1, enqueued: 0 });
+    expect(none.enqueued).toHaveLength(0);
+  });
+
+  it('one user whose feed preview throws does not end the run: the next user is still queued, and the failure is counted', async () => {
+    const s = setup({
+      users: 3,
+      perUser: '2',
+      preview: (userId) => {
+        // u1 is read first every run (most recently active).
+        if (userId === 'u1') throw new Error('preview failed: profile load');
+        return ['job1', 'job2', 'job3'];
+      },
+    });
+    // u2 and u3 have a resume and a profile like u1.
+    for (const id of ['u2', 'u3']) {
+      s.repo.state.resumes.push({ ...s.repo.state.resumes[0]!, userId: id });
+      s.repo.state.users[id] = s.repo.state.users.u1!;
+    }
+    const r = await s.task(s.ctx);
+    expect(r).toMatchObject({ processed: 3, enqueued: 4, failed: 1 });
+    expect(s.candidateIds).toHaveBeenCalledTimes(3);
+    const byUser = s.enqueued.map((e) => (e.payload as { userId: string }).userId);
+    expect(byUser.filter((u) => u === 'u1')).toHaveLength(0);
+    expect(byUser.filter((u) => u === 'u2')).toHaveLength(2);
+    expect(byUser.filter((u) => u === 'u3')).toHaveLength(2);
+    // The failing user was charged nothing; a clean run reports no failures.
+    expect([...s.counts.entries()].filter(([k]) => k.includes('u1')).every(([, n]) => n === 0)).toBe(true);
+    const clean = setup();
+    expect(await clean.task(clean.ctx)).toMatchObject({ failed: 0 });
+  });
+
+  it('GoApply with recruitment-info mode off: a third-party posting is never queued for scoring (R-14)', async () => {
+    const s = setup({ brand: 'goapply', model: 'deepseek/deepseek-chat', realPolicy: true, cnMode: 'off' });
+    expect(await s.task(s.ctx)).toMatchObject({ enqueued: 0 });
+    expect(s.enqueued).toHaveLength(0);
   });
 
   it('GoApply users without AI consent are skipped (zero model work queued)', async () => {

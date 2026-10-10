@@ -37,6 +37,26 @@ describe('resolveEnrichModel (R-03 / R-13)', () => {
     expect(domesticProviderOf('kimi/kimi-k2')).toBe('kimi');
   });
 
+  it('GoApply: Qwen, GLM and Doubao route by vendor or platform prefix (WP-14 adapters); the prefix is the pinned provider', () => {
+    for (const [model, provider] of [
+      ['qwen/qwen-plus', 'qwen'],
+      ['dashscope/qwen-plus', 'dashscope'],
+      ['glm/glm-4-flash', 'glm'],
+      ['zhipu/glm-4-flash', 'zhipu'],
+      ['doubao/doubao-pro-32k', 'doubao'],
+      ['Ark/doubao-pro-32k', 'ark'],
+    ] as const) {
+      // LLMService maps a platform prefix to its provider and strips that same prefix from the id
+      // (normalizeProviderType + normalizeModel), so the id is passed through unchanged here.
+      expect(resolveEnrichModel('goapply', { CN_LLM_ENRICH_MODEL: model })).toEqual({ model, provider, available: true });
+    }
+    // Still refused: a bare id, a foreign gateway, a self-hosted gateway.
+    for (const model of ['qwen-plus', 'openrouter/qwen/qwen-plus', 'newapi/qwen-plus']) {
+      expect(resolveEnrichModel('goapply', { CN_LLM_ENRICH_MODEL: model }).available).toBe(false);
+    }
+    expect(domesticProviderOf('dashscope/qwen-plus')).toBe('dashscope');
+  });
+
   it('maps markets to brands', () => {
     expect(brandForMarket('cn')).toBe('goapply');
     expect(brandForMarket('intl')).toBe('roboapply');

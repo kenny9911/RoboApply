@@ -36,6 +36,25 @@ async function detailFlag(key: DetailFlag, userId: string): Promise<boolean> {
   return isEnabled(key as FlagKey, { userId });
 }
 
+/** The practice seam the "Practiced" step reads: job id → when the user last completed a practice for it. */
+export type PracticedJobsSeam = (userId: string, jobIds: string[]) => Promise<Record<string, string>>;
+
+/**
+ * The job page's "Practiced" step (SR-34-1): true once the user completed a
+ * practice for this job — a live (voice / video) session or a written
+ * practice (GoApply without voice; `RAMockSession.jobId`). Both come from the
+ * interview area's one seam, so the page and the practice history agree.
+ */
+export function practicedForJobFrom(practicedJobs: PracticedJobsSeam): (userId: string, jobId: string) => Promise<boolean> {
+  return async (userId, jobId) => Boolean((await practicedJobs(userId, [jobId]))[jobId]);
+}
+
+/** Production seam: `interviewSessionService.practicedJobs` (loaded on first use; the interview engine is heavy). */
+export const defaultPracticedJobs: PracticedJobsSeam = async (userId, jobIds) => {
+  const { interviewSessionService } = await import('../../../interview-engine/sessions/InterviewSessionService.js');
+  return interviewSessionService.practicedJobs(userId, jobIds);
+};
+
 async function personalized(userId: string, brand: ProductBrand): Promise<boolean> {
   if (brand.market !== 'cn') return true;
   const latest = await prisma.seekerConsentRecord.findFirst({
@@ -60,7 +79,7 @@ function createDefault(): JobDetailServiceImpl {
       const p = await profileService.get(userId);
       return { pastCompanies: p.experience.map((e) => e.company), schools: p.education.map((e) => e.school) };
     },
-    practicedForJob: async () => null,
+    practicedForJob: practicedForJobFrom(defaultPracticedJobs),
     markChecklistStep: async (userId, step) => (await import('../../growth/index.js')).markChecklistStep(userId, step),
     recordInteraction: async (userId, jobId, kind) => (await import('../../feed/index.js')).feedService.recordInteraction(userId, jobId, kind),
     isEnabled: detailFlag,

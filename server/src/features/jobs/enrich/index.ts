@@ -23,6 +23,7 @@ export {
   EnrichOutputError,
   EnrichPayloadSchema,
   MAX_QUOTE_CHARS,
+  RULES_CHECKED_MODEL,
   RULES_ONLY_MODEL,
   SENIORITY_LEVELS,
   SPONSORSHIP_STATUSES,

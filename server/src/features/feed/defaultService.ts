@@ -5,6 +5,8 @@
 
 import type { Market } from '../../platform/brand/registry.js';
 import { logger } from '../../services/LoggerService.js';
+import { explainMatch } from '../compliance/index.js';
+import type { MarketHookContext, MarketHookJob } from '../jobs/marketHooks.js';
 import { matchService } from '../match/index.js';
 import { searchProfileService } from '../search/index.js';
 import { createFeedQueryService, type FeedServiceDeps } from './FeedQueryService.js';
@@ -50,6 +52,16 @@ async function defaultPlanner(text: string, ctx: { userId: string; locale: strin
   return parseAgentPlan(raw) as PlannerPlan;
 }
 
+/**
+ * `marketHooks.cardMeta`, loaded on the first card: the hook modules bring
+ * the GoApply fraud classifier and the ATS source adapters with them, which
+ * importing the feed does not need.
+ */
+async function defaultCardMeta(job: MarketHookJob, ctx: MarketHookContext): Promise<Record<string, Record<string, unknown>>> {
+  const { cardMeta } = await import('../jobs/marketHooks.js');
+  return cardMeta(job, ctx);
+}
+
 export function defaultFeedDeps(): FeedServiceDeps {
   return {
     repo: createPrismaFeedRepo(),
@@ -59,6 +71,8 @@ export function defaultFeedDeps(): FeedServiceDeps {
     consumeRefresh: defaultConsumeRefresh,
     aiAllowed: defaultAiAllowed,
     planner: defaultPlanner,
+    cardMeta: defaultCardMeta,
+    explain: (input) => explainMatch(input),
   };
 }
 

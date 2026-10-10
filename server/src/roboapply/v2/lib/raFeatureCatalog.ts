@@ -52,6 +52,8 @@ export const FEATURE_BY_SKU: Record<string, FeatureDef> = {
   // add each one to the DeductionSku union in lib/matchBilling.ts when they
   // first log it. `PLATFORM_SKUS` below marks the shared (non-user) costs.
   ra_job_enrich: { key: 'job_enrich', label: 'Job Enrichment', modality: 'llm' },
+  // GoApply anti-fraud check on a gray-zone posting (WP-41; one cheap domestic-model call).
+  ra_cn_fraud_check: { key: 'job_fraud_check', label: 'Job Fraud Check', modality: 'llm' },
   ra_match_score_v3: { key: 'match_score', label: 'Job-Match Scoring', modality: 'llm' },
   ra_fit_analysis: { key: 'fit_analysis', label: 'Fit Analysis', modality: 'llm' },
   ra_competitiveness: { key: 'competitiveness', label: 'Competitiveness Report', modality: 'llm' },
@@ -70,6 +72,7 @@ export const FEATURE_BY_SKU: Record<string, FeatureDef> = {
 /** The SKUs ARCHITECTURE.md §7.5 adds for the jobright clone (all mapped above). */
 export const CLONE_SKUS = [
   'ra_job_enrich',
+  'ra_cn_fraud_check',
   'ra_match_score_v3',
   'ra_fit_analysis',
   'ra_competitiveness',
@@ -89,7 +92,7 @@ export const CLONE_SKUS = [
 ] as const;
 
 /** SKUs whose cost belongs to the platform, not to one user (logged under SHARED_COST_USER_ID). */
-export const PLATFORM_SKUS: ReadonlySet<string> = new Set(['ra_job_enrich', 'ra_seo_intro']);
+export const PLATFORM_SKUS: ReadonlySet<string> = new Set(['ra_job_enrich', 'ra_cn_fraud_check', 'ra_seo_intro']);
 
 export const FEATURE_OTHER: FeatureDef = { key: 'other', label: 'Other', modality: 'llm' };
 

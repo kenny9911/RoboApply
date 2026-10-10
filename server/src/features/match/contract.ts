@@ -356,7 +356,7 @@ export interface CompetitivenessReport extends CompetitivenessReportBody {
 
 /** Limits: sample size, and how many skills / options each plan shows. */
 export const COMPETITIVENESS_LIMITS = {
-  /** Newest posts of the search the report reads (the feed preview seam's ceiling). */
+  /** Newest posts of the search the report reads (the feed sample seam allows up to 400). */
   sampleMax: 50,
   /** A skill must be asked for in at least this many posts to be listed. */
   skillMinPosts: 2,

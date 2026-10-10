@@ -22,12 +22,13 @@ export { createMatchRouter, createScoreJobHandler } from './routes.js';
 export { MATCH_WORK_KINDS } from './workers.js';
 export { createMatchService, visibleTo, ScorerFailedError } from './MatchService.js';
 export type { MatchService, MatchServiceDeps, ScoreMode, ScoreOptions } from './MatchService.js';
-export { preScore, preScoreDimensions, combineDimensions, logisticsChecks, skillKey } from './preScore.js';
+export { preScore, preScoreDimensions, combineDimensions, logisticsChecks, skillKey, splitSkills } from './preScore.js';
 export type { MatchJob, MatchUser, PreScoreConfig, DegreeLevel } from './preScore.js';
 export { buildMatchUser, toMatchJob } from './context.js';
 export type { MatchJobRecord, UserMatchInputs } from './context.js';
 export { buildKeywordRows } from './keywordRows.js';
-export { getMatchTiers, getMatchWeights, ON_DEMAND_SCORE_CAP_PER_DAY } from './config.js';
+// Limits other areas display (admin "Limits" page) come from here, never from a copy.
+export { getMatchTiers, getMatchWeights, ON_DEMAND_SCORE_CAP_PER_DAY, scoreCounterKeys, scoreDailyBudget } from './config.js';
 export { createCompetitivenessService } from './CompetitivenessService.js';
 export type { CompetitivenessService, CompetitivenessServiceDeps } from './CompetitivenessService.js';
 export { BROADEN_EXCLUDED_FIELDS, askedSkills, buildReportBody, evaluatePost } from './competitiveness.js';

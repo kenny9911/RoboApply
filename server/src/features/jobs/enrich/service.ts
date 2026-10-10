@@ -3,7 +3,9 @@
 // Enrich one job (ARCHITECTURE.md §4.5). Steps:
 //   1. load; skip archived rows and rows already enriched at ENRICH_VERSION
 //      (idempotent: the same work item delivered twice does nothing);
-//   2. rule-based scam signals (intl) — always, no model;
+//   2. rule-based scam signals (intl) — always, no model; a rule an admin
+//      cleared when restoring the job (RAJobReview.clearedRules of its latest
+//      'restore') is never raised again, however often the job is re-enriched;
 //   3. skip the model when ingest already covered taxonomy, seniority and ≥5
 //      skills and the posting has nothing only the model can cite;
 //      also skip it when the brand has no model (GoApply without CN config)
@@ -11,6 +13,10 @@
 //   4. otherwise spend one unit of the market's daily budget; over budget →
 //      write the rule-based parts now and defer the item to the next window
 //      (a budget of 0 means "LLM enrichment off": finish rules only);
+//      a rules-only row records on itself whether a model pass is still owed
+//      (`enrichModel` RULES_ONLY_MODEL: no model / enrichment off) or would
+//      change nothing (RULES_CHECKED_MODEL: covered, no AI consent, the call
+//      failed on its last attempt) — jobs-maintain retries only the former;
 //   5. one structured call under the job's brand (`task: 'enrich'`);
 //   6. reconcile (quote guard, negation rule, candidate-only taxonomy), write
 //      the row, the RAKeywordExtraction row (top 30) and the cost row;
@@ -38,7 +44,7 @@ import {
 import { createPrismaEnrichRepository, type EnrichRepository } from './repository.js';
 import { fraudFlagUpdate, needsLlm, postingTextOf, reconcile, type EnrichJobRecord, type EnrichUpdate } from './reconcile.js';
 import { detectScamSignals } from './scamSignals.js';
-import { ENRICH_VERSION, RULES_ONLY_MODEL, type EnrichPayload } from './schema.js';
+import { ENRICH_VERSION, RULES_CHECKED_MODEL, RULES_ONLY_MODEL, type EnrichPayload } from './schema.js';
 
 export interface EnrichDeps {
   repo: EnrichRepository;
@@ -87,6 +93,19 @@ export function enrichDedupeKey(jobId: string, version: number = ENRICH_VERSION)
   return `job.enrich:${jobId}:v${version}`;
 }
 
+type RulesOnlyReason = Extract<EnrichOutcome, { status: 'rules_only' }>['reason'];
+
+/**
+ * What a rules-only row stores in `enrichModel`. Only a row that never had
+ * the chance of a model pass (no model for the brand, enrichment switched
+ * off) stays RULES_ONLY_MODEL, the value jobs-maintain retries. The rest are
+ * settled for this version: the work queue forgets a finished item after a
+ * week, so the row itself has to say that the pass was made.
+ */
+export function rulesOnlyMarker(reason: RulesOnlyReason): string {
+  return reason === 'no_model' || reason === 'budget_disabled' ? RULES_ONLY_MODEL : RULES_CHECKED_MODEL;
+}
+
 function hookJob(job: EnrichJobRecord, update: EnrichUpdate): MarketHookJob {
   return { ...job, ...update, id: job.id, market: job.market === 'cn' ? 'cn' : 'intl', provider: job.sourceBoard };
 }
@@ -115,14 +134,32 @@ async function finishRulesOnly(
   job: EnrichJobRecord,
   text: string,
   signals: ReturnType<typeof detectScamSignals>,
-  reason: Extract<EnrichOutcome, { status: 'rules_only' }>['reason'],
+  reason: RulesOnlyReason,
 ): Promise<EnrichOutcome> {
   const { update, report } = reconcile({ job, postingText: text, output: null, candidates: [], scamSignals: signals, model: null, now: deps.now() });
+  update.enrichModel = rulesOnlyMarker(reason);
   if (report.staleEvidence.length) logger.info('JOB_ENRICH', 'removed evidence the posting no longer contains', { jobId: job.id, stale: report.staleEvidence });
   await deps.repo.saveJob(job.id, update);
   await writeKeywords(deps, job, text, update, RULES_ONLY_MODEL, null);
   await runHooks(deps, job, update);
   return { status: 'rules_only', reason };
+}
+
+/**
+ * Drop the scam rules an admin cleared for this job ("Keep" on the reports
+ * page): a decision holds across re-enrichment. When the decision log cannot
+ * be read the rules are kept (a posting stays flagged rather than unflagged by
+ * an outage); the next enrichment reads the log again.
+ */
+async function withoutClearedRules<T extends { rule: string }>(deps: EnrichDeps, jobId: string, signals: T[]): Promise<T[]> {
+  if (!signals.length || !deps.repo.clearedScamRules) return signals;
+  try {
+    const cleared = new Set(await deps.repo.clearedScamRules(jobId));
+    return cleared.size ? signals.filter((s) => !cleared.has(s.rule)) : signals;
+  } catch (err) {
+    logger.warn('JOB_ENRICH', 'admin decisions unavailable; scam rules raised as detected', { jobId, error: err instanceof Error ? err.message : String(err) });
+    return signals;
+  }
 }
 
 /** Enrich one job. Throws only for errors the queue should retry. */
@@ -140,7 +177,7 @@ export async function enrichJob(payload: EnrichPayload, attempt: EnrichAttempt, 
 
   const now = deps.now();
   const text = postingTextOf(job);
-  const signals = detectScamSignals(`${job.title}\n${text}`, job.market);
+  const signals = await withoutClearedRules(deps, job.id, detectScamSignals(`${job.title}\n${text}`, job.market));
 
   const need = needsLlm(job, text);
   if (!need.needed) return finishRulesOnly(deps, job, text, signals, 'covered');

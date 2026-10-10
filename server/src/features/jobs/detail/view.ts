@@ -78,6 +78,13 @@ export const JOB_ROW_SELECT = {
   publicDisplay: true,
   slug: true,
   primaryTaxonomyId: true,
+  // Read by the market card hooks only (marketHooks.cardMeta → JobMetaCn / JobMetaTw):
+  // every location of the posting, the plain posting text a quoted tag is re-checked
+  // against, the stated N薪 and the source's own expiry date.
+  locations: true,
+  descriptionPlain: true,
+  salaryMonths: true,
+  expiresAt: true,
 } as const;
 
 export interface JobRow {
@@ -129,6 +136,11 @@ export interface JobRow {
   publicDisplay: boolean;
   slug: string | null;
   primaryTaxonomyId: string | null;
+  /** `[{ city, region, country, lat, lng }]` (market card hooks). */
+  locations?: unknown;
+  descriptionPlain?: string | null;
+  salaryMonths?: number | null;
+  expiresAt?: Date | null;
 }
 
 /** Same market as the brand; a private (imported) job only for its owner. */

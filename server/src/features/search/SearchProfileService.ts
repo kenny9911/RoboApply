@@ -343,6 +343,17 @@ export function createSearchProfileService(deps: SearchProfileServiceDeps = {}) 
     return toWire(await getRow(userId, id), market);
   }
 
+  /**
+   * A profile by id alone, for background readers that hold no session (the
+   * feed's alert-candidate seam): the owner, the version and the stored
+   * filters as written (the caller coerces them for its market). Null when
+   * the profile is gone. Never used to answer a request for another user.
+   */
+  async function findById(id: string): Promise<{ id: string; userId: string; version: number; filters: unknown } | null> {
+    const row = await (await getDb()).rASearchProfile.findFirst({ where: { id }, select: { id: true, userId: true, version: true, filters: true } });
+    return row ? { id: row.id, userId: row.userId, version: row.version, filters: row.filters } : null;
+  }
+
   /** The profile the feed uses now (active, else default). Migrates on first use. */
   async function getActive(userId: string): Promise<SearchProfileWire> {
     const { market, currency } = await context(userId);
@@ -480,7 +491,7 @@ export function createSearchProfileService(deps: SearchProfileServiceDeps = {}) 
     });
   }
 
-  return { list, get, getActive, create, update, patchFilters, setDefault, activate, remove };
+  return { list, get, getActive, findById, create, update, patchFilters, setDefault, activate, remove };
 }
 
 export type SearchProfileService = ReturnType<typeof createSearchProfileService>;

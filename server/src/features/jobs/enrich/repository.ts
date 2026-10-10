@@ -2,7 +2,10 @@
 //
 // The database side of enrichment, behind a narrow interface so the service
 // is tested without a database. Typed Prisma only (TASK_PLAN.md §2.1 rule 5).
-//   loadJob      — the RAJob columns enrichment reads;
+//   loadJob      — the RAJob columns enrichment reads (and the place and link
+//                  columns the market hooks need, so they do not re-read the row);
+//   clearedScamRules — the scam rules an admin cleared when restoring the job
+//                  (RAJobReview, the latest 'restore'): never raised again;
 //   saveJob      — one RAJob update with the reconciled columns;
 //   saveKeywords — upsert the job's RAKeywordExtraction row (top 30);
 //   logCost      — one UsageDeductionLog row, SKU `ra_job_enrich`, under the
@@ -39,12 +42,19 @@ export interface EnrichCostEntry {
 
 export interface EnrichRepository {
   loadJob(jobId: string): Promise<EnrichJobRecord | null>;
+  /**
+   * International scam rule ids an admin cleared on the job's latest
+   * 'restore' decision (admin "Keep", RAJobReview.clearedRules). Re-enrichment
+   * must not bring them back. Optional so a caller's own repository double
+   * need not model it (absent = nothing cleared).
+   */
+  clearedScamRules?(jobId: string): Promise<string[]>;
   saveJob(jobId: string, update: EnrichUpdate): Promise<void>;
   saveKeywords(jobId: string, row: KeywordRow): Promise<void>;
   logCost(entry: EnrichCostEntry): Promise<void>;
 }
 
-export type EnrichDb = Pick<typeof prisma, 'rAJob' | 'rAKeywordExtraction' | 'usageDeductionLog'>;
+export type EnrichDb = Pick<typeof prisma, 'rAJob' | 'rAKeywordExtraction' | 'usageDeductionLog' | 'rAJobReview'>;
 
 const JOB_SELECT = {
   id: true,
@@ -79,6 +89,11 @@ const JOB_SELECT = {
   enrichVersion: true,
   enrichModel: true,
   archivedAt: true,
+  // For marketHooks.afterEnrich (WP-42: is the job in Taiwan, and which link backs a quoted tag).
+  locationCountry: true,
+  locations: true,
+  sourceUrl: true,
+  applyUrl: true,
 } as const satisfies Prisma.RAJobSelect;
 
 function json(value: unknown[] | null | undefined): Prisma.InputJsonValue | typeof Prisma.DbNull | undefined {
@@ -115,6 +130,14 @@ export function createPrismaEnrichRepository(db: EnrichDb = prisma): EnrichRepos
   return {
     async loadJob(jobId) {
       return db.rAJob.findUnique({ where: { id: jobId }, select: JOB_SELECT });
+    },
+    async clearedScamRules(jobId) {
+      const row = await db.rAJobReview.findFirst({
+        where: { jobId, decision: 'restore' },
+        orderBy: { at: 'desc' },
+        select: { clearedRules: true },
+      });
+      return row?.clearedRules ?? [];
     },
     async saveJob(jobId, update) {
       const data = toJobUpdateData(update);

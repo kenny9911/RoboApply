@@ -8,6 +8,7 @@
 
 import type { Prisma } from '../../generated/prisma/client.js';
 import type prismaClient from '../../lib/prisma.js';
+import type { Market } from '../../platform/brand/registry.js';
 import type { AffinityState } from './affinity.js';
 import { readWeights } from './affinity.js';
 import type { FeedJobRow } from './types.js';
@@ -19,6 +20,7 @@ type Db = Pick<
   | 'rAJob'
   | 'rAJobUserState'
   | 'rAJobInteraction'
+  | 'rAJobReview'
   | 'rAFeedSession'
   | 'rAFeedRating'
   | 'rAUserAffinity'
@@ -80,24 +82,52 @@ export interface InteractionWrite {
   position?: number | null;
 }
 
+/** `cardExtrasSql` row: the fields the market card hooks read beyond the list columns. */
+export interface CardExtrasRow extends Record<string, unknown> {
+  id: string;
+  sourceUrl: string | null;
+  applyUrl: string | null;
+  locations: unknown;
+  fraudFlags: unknown;
+  descriptionPlain: string | null;
+}
+
 export interface FeedRepo {
   /** Run a retrieval statement from sql.ts. */
   queryRows(sql: Prisma.Sql): Promise<FeedJobRow[]>;
+  /** Run an id-only statement (`jobIdsSql`): ids in the statement's order. */
+  queryIds(sql: Prisma.Sql): Promise<string[]>;
+  /** Run `cardExtrasSql`. */
+  queryCardExtras(sql: Prisma.Sql): Promise<CardExtrasRow[]>;
+  /** Of `ids`, the jobs a public page may show now (the SEO pages' predicate, seo `basePublicWhere`). */
+  publicPageIds(ids: string[], market: Market, now: Date): Promise<Set<string>>;
+  /** The boards whose rows may be redisplayed publicly right now (seo `allowedPublicBoards`). */
+  publicBoards(): Promise<string[]>;
   /** Run a count statement from sql.ts (`SELECT count(*)::int AS "count"`). */
   queryCount(sql: Prisma.Sql): Promise<number>;
   /** Run the Explore count statement. */
   queryCategoryCounts(sql: Prisma.Sql): Promise<Array<{ taxonomyId: string; count: number }>>;
   /** Cached v3 AI scores for this user's current resume (content hash + prompt version must match). */
-  aiScores(userId: string, jobIds: string[], resume: { id: string; resumeContentHash: string } | null, promptVersion: string): Promise<Map<string, { score: number; tier: string | null }>>;
+  aiScores(
+    userId: string,
+    jobIds: string[],
+    resume: { id: string; resumeContentHash: string } | null,
+    promptVersion: string,
+  ): Promise<Map<string, { score: number; tier: string | null; dimensions?: unknown }>>;
   trackerStates(userId: string, jobIds: string[]): Promise<Map<string, string>>;
   createSession(data: FeedSessionWrite): Promise<FeedSessionRecord>;
   getSession(id: string, userId: string): Promise<FeedSessionRecord | null>;
-  /** `ranks` and `windowEndsId` are written together (they share one JSON column until SR-32-4). */
+  /** `windowEndsId` is its own column (SR-32-4); a session written before the column keeps its id in `ranks`. */
   updateSession(id: string, data: Partial<Pick<FeedSessionRecord, 'jobIds' | 'ranks' | 'totalEstimate' | 'windowEndsAt' | 'windowEndsId'>>): Promise<void>;
   actionJob(jobId: string): Promise<ActionJob | null>;
   setHidden(userId: string, jobId: string, hidden: { at: Date; reason: string } | null): Promise<void>;
   logInteractions(rows: InteractionWrite[]): Promise<void>;
-  /** Distinct users who reported the job with one of `reasons`. */
+  /**
+   * Distinct users who reported the job with one of `reasons` since its
+   * latest admin decision (RAJobReview; before that table, the newest
+   * `admin_review` interaction). Reports an admin already decided on do not
+   * count again, so a job an admin kept does not close on its next report.
+   */
   distinctReporters(jobId: string, reasons: readonly string[]): Promise<number>;
   /** Close a public job as reported (no-op when already closed). True when this call closed it. */
   closeAsReported(jobId: string, at: Date): Promise<boolean>;
@@ -111,21 +141,18 @@ export interface FeedRepo {
   /** RAProfile.skills names (`[{ name, confirmed }]`). */
   profileSkills(userId: string): Promise<string[]>;
   trackerCounts(userId: string): Promise<{ saved: number; applied: number }>;
-  /** The user's own imported jobs ("Added by you"), live only. */
+  /** The user's own imported jobs ("Added by you"): `sourceBoard = 'user_import'`, theirs, not archived. */
   importedCount(userId: string, market: string): Promise<number>;
   /** `SeekerProfile.onboardingAnswers.goal.goal`, else `RAProfile.careerGoal`. */
   careerGoal(userId: string): Promise<string | null>;
 }
 
 /**
- * `RAFeedSession.ranks` holds `{ entries, windowEndsId }` until schema request
- * SR-32-4 adds a `windowEndsId` column (contract FeedSessionRanksSchema).
- * A bare array (older sessions) reads as entries with no boundary id.
+ * `RAFeedSession.windowEndsId` is its own column (SCHEMA-3, SR-32-4) and
+ * `ranks` is the bare entries array. Sessions written before the column
+ * stored the envelope `{ entries, windowEndsId }` in `ranks` (30-minute TTL):
+ * `unpackRanks` still reads it, and `sessionFromRow` prefers the column.
  */
-export function packRanks(ranks: unknown, windowEndsId: string | null): { entries: unknown[]; windowEndsId: string | null } {
-  return { entries: Array.isArray(ranks) ? ranks : [], windowEndsId };
-}
-
 export function unpackRanks(json: unknown): { ranks: unknown[]; windowEndsId: string | null } {
   if (Array.isArray(json)) return { ranks: json, windowEndsId: null };
   if (json && typeof json === 'object') {
@@ -135,9 +162,10 @@ export function unpackRanks(json: unknown): { ranks: unknown[]; windowEndsId: st
   return { ranks: [], windowEndsId: null };
 }
 
-function sessionFromRow<T extends { ranks: unknown }>(row: T): Omit<T, 'ranks'> & { ranks: unknown[]; windowEndsId: string | null } {
-  const { ranks, windowEndsId } = unpackRanks(row.ranks);
-  return { ...row, ranks, windowEndsId };
+/** A stored session row → record: the column's boundary id, else the legacy envelope's. */
+export function sessionFromRow<T extends { ranks: unknown; windowEndsId?: string | null }>(row: T): Omit<T, 'ranks' | 'windowEndsId'> & { ranks: unknown[]; windowEndsId: string | null } {
+  const legacy = unpackRanks(row.ranks);
+  return { ...row, ranks: legacy.ranks, windowEndsId: row.windowEndsId ?? legacy.windowEndsId };
 }
 
 async function db(): Promise<Db> {
@@ -145,6 +173,12 @@ async function db(): Promise<Db> {
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+
+/** The newer of the review-table decision and the legacy `admin_review` interaction (null when neither exists). */
+export function latestDecisionAt(reviewAt: Date | null, legacyAt: Date | null): Date | null {
+  if (reviewAt && legacyAt) return reviewAt.getTime() >= legacyAt.getTime() ? reviewAt : legacyAt;
+  return reviewAt ?? legacyAt;
+}
 
 function isUniqueViolation(err: unknown): boolean {
   return (err as { code?: string } | null)?.code === 'P2002';
@@ -155,6 +189,32 @@ export function createPrismaFeedRepo(getDb: () => Promise<Db> = db): FeedRepo {
     async queryRows(sql) {
       const p = await getDb();
       return p.$queryRaw<FeedJobRow[]>(sql);
+    },
+
+    async queryIds(sql) {
+      const p = await getDb();
+      const rows = await p.$queryRaw<Array<{ id: string }>>(sql);
+      return rows.map((r) => r.id);
+    },
+
+    async queryCardExtras(sql) {
+      const p = await getDb();
+      return p.$queryRaw<CardExtrasRow[]>(sql);
+    },
+
+    async publicPageIds(ids, market, now) {
+      if (!ids.length) return new Set();
+      const p = await getDb();
+      // Lazy: the seo area imports nothing from the feed, but its module graph is not needed to rank a list.
+      const { allowedPublicBoards, basePublicWhere } = await import('../seo/index.js');
+      const base = basePublicWhere({ market, now, publicBoards: allowedPublicBoards() });
+      const rows = await p.rAJob.findMany({ where: { ...base, id: { in: ids } }, select: { id: true } });
+      return new Set(rows.map((r) => r.id));
+    },
+
+    async publicBoards() {
+      const { allowedPublicBoards } = await import('../seo/index.js');
+      return allowedPublicBoards();
     },
 
     async queryCount(sql) {
@@ -170,7 +230,7 @@ export function createPrismaFeedRepo(getDb: () => Promise<Db> = db): FeedRepo {
     },
 
     async aiScores(userId, jobIds, resume, promptVersion) {
-      const out = new Map<string, { score: number; tier: string | null }>();
+      const out = new Map<string, { score: number; tier: string | null; dimensions?: unknown }>();
       if (!resume || !jobIds.length) return out;
       const p = await getDb();
       const rows = await p.rAJobMatchScore.findMany({
@@ -182,9 +242,9 @@ export function createPrismaFeedRepo(getDb: () => Promise<Db> = db): FeedRepo {
           promptVersion,
           resumeContentHashAtScore: resume.resumeContentHash,
         },
-        select: { jobId: true, score: true, tier: true },
+        select: { jobId: true, score: true, tier: true, dimensions: true },
       });
-      for (const r of rows) out.set(r.jobId, { score: r.score, tier: r.tier });
+      for (const r of rows) out.set(r.jobId, { score: r.score, tier: r.tier, dimensions: r.dimensions });
       return out;
     },
 
@@ -203,8 +263,8 @@ export function createPrismaFeedRepo(getDb: () => Promise<Db> = db): FeedRepo {
 
     async createSession(data) {
       const p = await getDb();
-      const { windowEndsId, ranks, ...rest } = data;
-      const row = await p.rAFeedSession.create({ data: { ...rest, ranks: packRanks(ranks, windowEndsId) as unknown as Prisma.InputJsonValue } });
+      const { ranks, ...rest } = data;
+      const row = await p.rAFeedSession.create({ data: { ...rest, ranks: (Array.isArray(ranks) ? ranks : []) as Prisma.InputJsonValue } });
       return sessionFromRow(row);
     },
 
@@ -216,11 +276,10 @@ export function createPrismaFeedRepo(getDb: () => Promise<Db> = db): FeedRepo {
 
     async updateSession(id, data) {
       const p = await getDb();
-      const { ranks, windowEndsId, ...rest } = data;
-      const packed = ranks !== undefined || windowEndsId !== undefined ? packRanks(ranks, windowEndsId ?? null) : undefined;
+      const { ranks, ...rest } = data;
       await p.rAFeedSession.update({
         where: { id },
-        data: { ...rest, ...(packed ? { ranks: packed as unknown as Prisma.InputJsonValue } : {}) },
+        data: { ...rest, ...(ranks !== undefined ? { ranks: (Array.isArray(ranks) ? ranks : []) as Prisma.InputJsonValue } : {}) },
       });
     },
 
@@ -279,8 +338,14 @@ export function createPrismaFeedRepo(getDb: () => Promise<Db> = db): FeedRepo {
 
     async distinctReporters(jobId, reasons) {
       const p = await getDb();
+      const [review, legacy] = await Promise.all([
+        p.rAJobReview.findFirst({ where: { jobId }, orderBy: { at: 'desc' }, select: { at: true } }),
+        // Decisions made before RAJobReview existed (admin console, Wave 5).
+        p.rAJobInteraction.findFirst({ where: { jobId, kind: 'admin_review' }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
+      ]);
+      const decidedAt = latestDecisionAt(review?.at ?? null, legacy?.createdAt ?? null);
       const rows = await p.rAJobInteraction.findMany({
-        where: { jobId, kind: 'report', reasonCode: { in: [...reasons] } },
+        where: { jobId, kind: 'report', reasonCode: { in: [...reasons] }, ...(decidedAt ? { createdAt: { gt: decidedAt } } : {}) },
         select: { userId: true },
         distinct: ['userId'],
       });
@@ -368,7 +433,7 @@ export function createPrismaFeedRepo(getDb: () => Promise<Db> = db): FeedRepo {
 
     async importedCount(userId, market) {
       const p = await getDb();
-      return p.rAJob.count({ where: { ownerUserId: userId, visibility: 'private', market, archivedAt: null } });
+      return p.rAJob.count({ where: { ownerUserId: userId, sourceBoard: 'user_import', market, archivedAt: null } });
     },
 
     async careerGoal(userId) {

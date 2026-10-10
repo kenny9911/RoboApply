@@ -12,6 +12,7 @@
 // archivedAt IS NULL AND market = brand.market`.
 
 import { z } from 'zod';
+import type { MatchExplanation } from '../compliance/contract.js';
 import type { FilterSet, FilterSetPatch } from '../search/contract.js';
 
 const Id = z.string().min(1).max(64);
@@ -102,7 +103,30 @@ export interface FeedItem {
   campus?: { applyClosesAt: string | null; applyClosesQuote?: string | null; classYears: number[] } | null;
   /** 0-based position in the feed session (impressions beacon); null outside a session. */
   position?: number | null;
+  /**
+   * Market card lines from `marketHooks.cardMeta()`, keyed by hook set
+   * (`cn` → JobMetaCn, `ats_public` → JobMetaTw). Left off when no market
+   * hook has anything to add (most RoboApply cards).
+   */
+  cardMeta?: MarketCardMeta;
+  /**
+   * "Why this job" lines (PIPL Art. 24, `explainMatch`): present wherever a
+   * fit is shown, and on GoApply lists ordered by date (which say so).
+   */
+  explanation?: FeedExplanation;
 }
+
+/**
+ * The compliance area's `MatchExplanation` as a card carries it. The server
+ * always sends `mode` 'personalized' or 'non_personalized'; it is typed as a
+ * string here so a card object built from parsed JSON (where a literal has
+ * widened to string) still is a FeedItem. Readers narrow it (the web adapter
+ * `itemExtras` returns a `MatchExplanation`).
+ */
+export type FeedExplanation = Omit<MatchExplanation, 'mode'> & { mode: MatchExplanation['mode'] | (string & {}) };
+
+/** `marketHooks.cardMeta()` output: one record per applicable hook set. */
+export type MarketCardMeta = Record<string, Record<string, unknown>>;
 
 export const FEED_BADGE_KINDS = [
   'direct_from_employer',
@@ -261,7 +285,7 @@ export const PublicFeedQuerySchema = z.object({
   country: z.string().regex(/^[A-Z]{2}$/).optional(),
 });
 /** No fit, `publicDisplay` jobs only, 20 items. */
-export type PublicFeedItem = Omit<FeedItem, 'fit' | 'tracker'>;
+export type PublicFeedItem = Omit<FeedItem, 'fit' | 'tracker' | 'cardMeta' | 'explanation'>;
 export interface PublicFeedResponse {
   items: PublicFeedItem[];
 }
@@ -270,12 +294,10 @@ export interface PublicFeedResponse {
 
 const FeedSessionRankEntrySchema = z.object({ jobId: z.string(), fit: z.number().nullable(), kind: z.enum(['pre', 'ai']), rank: z.number() }).strict();
 /**
- * `RAFeedSession.ranks`: `{ entries: [{ jobId, fit, kind: 'pre'|'ai', rank }], windowEndsId }`.
- * `windowEndsId` is the id of the last row of a full retrieval window, paired
- * with `windowEndsAt` as the keyset of the next older refill; it rides here
- * until schema request SR-32-4 adds `RAFeedSession.windowEndsId`. The bare
- * entries array (sessions written before the envelope; 30-minute TTL) is
- * still read.
+ * `RAFeedSession.ranks`: `[{ jobId, fit, kind: 'pre'|'ai', rank }]`. The
+ * refill keyset id lives in its own column, `RAFeedSession.windowEndsId`
+ * (SCHEMA-3, SR-32-4). Sessions written before that column stored the
+ * envelope `{ entries, windowEndsId }` here (30-minute TTL); it is still read.
  */
 export const FeedSessionRanksSchema = z.union([
   z.array(FeedSessionRankEntrySchema),

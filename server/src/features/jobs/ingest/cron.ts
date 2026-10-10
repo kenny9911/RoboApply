@@ -13,7 +13,7 @@ import prisma from '../../../lib/prisma.js';
 import { logger } from '../../../services/LoggerService.js';
 import type { EnvSource, ProductBrand } from '../../../platform/brand/index.js';
 import { isEnabledForBrand } from '../../../platform/flags.js';
-import { kickDrain, type CronResult, type CronTask } from '../../../platform/queue/index.js';
+import { enqueueMany as platformEnqueueMany, kickDrain, type CronResult, type CronTask } from '../../../platform/queue/index.js';
 import type { IngestDb } from './db.js';
 import { runMaintenance } from './maintain.js';
 import { ENRICH_KIND, type EnqueueManyFn } from './pipeline.js';
@@ -73,14 +73,18 @@ export const runJobsIngest: CronTask = async (ctx): Promise<CronResult> => {
 };
 
 /**
- * jobs-maintain (03:30 UTC daily): expire/archive and dedupe repair (ARCH §4.6).
- * The missed-refresh archive runs only once Schema request SR-16b-1 is in place
- * (`missedRule: false` in the result until then).
+ * jobs-maintain (03:30 UTC daily): expire/archive, dedupe repair and the
+ * enrichment catch-up (ARCH §4.6; maintain.ts). The missed-refresh archive
+ * runs only once Schema request SR-16b-1 is in place (`missedRule: false` in
+ * the result until then). Runs inside `runWithBrand(ctx.brand)`; the items it
+ * queues carry that brand.
  */
 export const runJobsMaintain: CronTask = async (ctx): Promise<CronResult> => {
   const adapters = adaptersForBrand(ctx.brand, env());
   const perQueryTracking = deps.perQueryTracking ?? (await perQueryTrackingAvailable(db()));
-  const result = await runMaintenance(db(), ctx.brand.market, adapters, { perQueryTracking });
+  const enqueueMany: EnqueueManyFn = deps.enqueueMany ?? ((items) => platformEnqueueMany(items));
+  const result = await runMaintenance(db(), ctx.brand.market, adapters, { perQueryTracking, enrich: { brand: ctx.brand, enqueueMany, env: env() } });
+  if (result.enrichQueued > 0) (deps.kick ?? kickDrain)([ENRICH_KIND]);
   logger.info(TAG, 'jobs-maintain', { brand: ctx.brand.id, ...result });
-  return { processed: result.expired + result.missed + result.dedupeRepaired, ...result };
+  return { processed: result.expired + result.missed + result.dedupeRepaired + result.enrichQueued, ...result };
 };

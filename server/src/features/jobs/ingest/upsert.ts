@@ -13,6 +13,16 @@
 //     nothing, never blanked;
 //   - `applicantCount` is never written for 'linkedin' / 'jsearch' rows (the
 //     normalizer drops it and `toUpsertRow` forces null again);
+//   - `fraudFlags` and `marketTags` a market hook raised at normalize time
+//     (GoApply keyword / blacklist fraud rules, 届别 and 校招 tags) are stored
+//     with the row, so a flagged posting is out of the lists from its first
+//     ingest and the GoApply filters work before enrichment runs. On a
+//     re-ingest they are MERGED into what the row holds: every flag or tag
+//     another module wrote (enrichment's scam rules and requirement tags, the
+//     CN classifier, Taiwan work-permit tags) stays, an entry already there
+//     keeps its original record, and only new entries are added. Entries the
+//     posting no longer supports are removed by enrichment's own reconcile
+//     (a changed posting is re-enriched), never blanked here;
 //   - `visibility` and `firstSeenAt` never change; a private row (a user's own
 //     import) is never touched (`WHERE "RAJob"."visibility" = 'public'`);
 //   - a row archived because its source dropped it ('source_removed') or the
@@ -27,6 +37,7 @@ import { createHash } from 'node:crypto';
 import { Prisma } from '../../../generated/prisma/client.js';
 import type { Market } from '../../../platform/brand/index.js';
 import { NO_APPLICANT_COUNT_PROVIDERS, type NormalizedJob, type NormalizeProvider } from '../normalize/index.js';
+import type { SourceCloseReason } from '../sources/index.js';
 import { UPSERT_BATCH } from './config.js';
 import { newId, type IngestDb } from './db.js';
 
@@ -111,6 +122,8 @@ export interface JobUpsertRow {
   sourceUrl: string | null;
   sourceName: string | null;
   originalSourceName: string | null;
+  /** Host of the original posting (SCHEMA-2). */
+  originalHost: string | null;
   atsType: string | null;
   isAgency: boolean | null;
   fromRecruiterBank: boolean;
@@ -124,6 +137,10 @@ export interface JobUpsertRow {
   sourcePriority: number;
   searchText: string;
   publicDisplay: boolean;
+  /** JSON text of `[{ rule, evidence, at, method? }]` from the normalize-stage hooks, or null. */
+  fraudFlags: string | null;
+  /** JSON text of `[{ tag, evidenceQuote, evidenceUrl }]` from the normalize-stage hooks, or null. */
+  marketTags: string | null;
 }
 
 /** Column order of every VALUES tuple (= JobUpsertRow key order); the last three columns are now(). */
@@ -135,11 +152,27 @@ export const UPSERT_COLUMNS = [
   'seniority', 'roleType', 'minYears', 'maxYears', 'skills', 'workModel',
   'remoteScope', 'locationRegion', 'locations', 'geoLat', 'geoLng',
   'salarySource', 'salaryAnnualMin', 'salaryAnnualMax', 'salaryMonths', 'salaryDisclosed',
-  'salaryText', 'sourceUrl', 'sourceName', 'originalSourceName', 'atsType', 'isAgency',
+  'salaryText', 'sourceUrl', 'sourceName', 'originalSourceName', 'originalHost', 'atsType', 'isAgency',
   'fromRecruiterBank', 'employerVerified', 'applicantCount', 'applicantCountSource',
   'applicantCountAt', 'postedAtEstimated', 'expiresAt', 'dedupeKey', 'sourcePriority',
-  'searchText', 'publicDisplay',
+  'searchText', 'publicDisplay', 'fraudFlags', 'marketTags',
 ] as const satisfies readonly (keyof JobUpsertRow)[];
+
+const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+
+/** Valid fraud flags (`rule` + `evidence` strings) as JSON text; null when there are none. */
+export function fraudFlagsJson(value: unknown): string | null {
+  if (!Array.isArray(value)) return null;
+  const flags = value.filter((f) => isRecord(f) && typeof f.rule === 'string' && !!f.rule && typeof f.evidence === 'string');
+  return flags.length ? JSON.stringify(flags) : null;
+}
+
+/** Valid market tags (`tag` + a non-empty `evidenceQuote`: a tag never renders without its quote) as JSON text; null when none. */
+export function marketTagsJson(value: unknown): string | null {
+  if (!Array.isArray(value)) return null;
+  const tags = value.filter((t) => isRecord(t) && typeof t.tag === 'string' && !!t.tag && typeof t.evidenceQuote === 'string' && !!t.evidenceQuote.trim());
+  return tags.length ? JSON.stringify(tags) : null;
+}
 
 const int = (v: number | null): number | null => (v == null || !Number.isFinite(v) ? null : Math.round(v));
 
@@ -196,6 +229,7 @@ export function toUpsertRow(job: NormalizedJob, companyId: string | null, id: st
     sourceUrl: job.sourceUrl,
     sourceName: job.sourceName,
     originalSourceName: job.originalSourceName,
+    originalHost: job.originalHost,
     atsType: job.atsType,
     isAgency: job.isAgency,
     fromRecruiterBank: job.fromRecruiterBank,
@@ -209,6 +243,8 @@ export function toUpsertRow(job: NormalizedJob, companyId: string | null, id: st
     sourcePriority: job.sourcePriority,
     searchText: job.searchText,
     publicDisplay: job.publicDisplay,
+    fraudFlags: fraudFlagsJson(job.fraudFlags),
+    marketTags: marketTagsJson(job.marketTags),
   };
 }
 
@@ -221,10 +257,29 @@ function valuesTuple(r: JobUpsertRow): Prisma.Sql {
     ${r.seniority}::text, ${r.roleType}::text, ${r.minYears}::int, ${r.maxYears}::int, ${r.skills}::text[], ${r.workModel}::text,
     ${r.remoteScope}::text, ${r.locationRegion}::text, ${r.locations}::jsonb, ${r.geoLat}::double precision, ${r.geoLng}::double precision,
     ${r.salarySource}::text, ${r.salaryAnnualMin}::int, ${r.salaryAnnualMax}::int, ${r.salaryMonths}::int, ${r.salaryDisclosed}::boolean,
-    ${r.salaryText}::text, ${r.sourceUrl}::text, ${r.sourceName}::text, ${r.originalSourceName}::text, ${r.atsType}::text, ${r.isAgency}::boolean,
+    ${r.salaryText}::text, ${r.sourceUrl}::text, ${r.sourceName}::text, ${r.originalSourceName}::text, ${r.originalHost}::text, ${r.atsType}::text, ${r.isAgency}::boolean,
     ${r.fromRecruiterBank}::boolean, ${r.employerVerified}::boolean, ${r.applicantCount}::int, ${r.applicantCountSource}::text,
     ${r.applicantCountAt}::timestamp(3), ${r.postedAtEstimated}::boolean, ${r.expiresAt}::timestamp(3), ${r.dedupeKey}, ${r.sourcePriority}::int,
-    ${r.searchText}, ${r.publicDisplay}::boolean, now(), now(), now())`;
+    ${r.searchText}, ${r.publicDisplay}::boolean, ${r.fraudFlags}::jsonb, ${r.marketTags}::jsonb, now(), now(), now())`;
+}
+
+/**
+ * ON CONFLICT value of a JSON-list column the row shares with other writers:
+ * the stored list plus the incoming entries it does not hold yet (same
+ * `keys`). Nothing incoming → the stored value is kept untouched; nothing
+ * stored → the incoming list. An entry already stored keeps its own record
+ * (its original `at`, or the quote another module verified).
+ */
+function mergeJsonListSql(column: 'fraudFlags' | 'marketTags', keys: readonly string[]): Prisma.Sql {
+  const col = Prisma.raw(`"${column}"`);
+  const same = Prisma.raw(keys.map((k) => `o.e->>'${k}' = n.e->>'${k}'`).join(' AND '));
+  return Prisma.sql`CASE
+        WHEN EXCLUDED.${col} IS NULL OR jsonb_typeof(EXCLUDED.${col}) <> 'array' OR jsonb_array_length(EXCLUDED.${col}) = 0 THEN "RAJob".${col}
+        WHEN "RAJob".${col} IS NULL OR jsonb_typeof("RAJob".${col}) <> 'array' THEN EXCLUDED.${col}
+        ELSE "RAJob".${col} || COALESCE((
+          SELECT jsonb_agg(n.e) FROM jsonb_array_elements(EXCLUDED.${col}) AS n(e)
+          WHERE NOT EXISTS (SELECT 1 FROM jsonb_array_elements("RAJob".${col}) AS o(e) WHERE ${same})), '[]'::jsonb)
+      END`;
 }
 
 /** The batch statement (exported for the SQL snapshot test). */
@@ -237,10 +292,10 @@ export function buildJobUpsertSql(rows: JobUpsertRow[]): Prisma.Sql {
       "seniority", "roleType", "minYears", "maxYears", "skills", "workModel",
       "remoteScope", "locationRegion", "locations", "geoLat", "geoLng",
       "salarySource", "salaryAnnualMin", "salaryAnnualMax", "salaryMonths", "salaryDisclosed",
-      "salaryText", "sourceUrl", "sourceName", "originalSourceName", "atsType", "isAgency",
+      "salaryText", "sourceUrl", "sourceName", "originalSourceName", "originalHost", "atsType", "isAgency",
       "fromRecruiterBank", "employerVerified", "applicantCount", "applicantCountSource",
       "applicantCountAt", "postedAtEstimated", "expiresAt", "dedupeKey", "sourcePriority",
-      "searchText", "publicDisplay", "firstSeenAt", "lastSeenAt", "updatedAt")
+      "searchText", "publicDisplay", "fraudFlags", "marketTags", "firstSeenAt", "lastSeenAt", "updatedAt")
     VALUES ${Prisma.join(rows.map(valuesTuple))}
     ON CONFLICT ("externalId", "sourceBoard") DO UPDATE SET
       "lastSeenAt" = now(),
@@ -289,6 +344,7 @@ export function buildJobUpsertSql(rows: JobUpsertRow[]): Prisma.Sql {
       "sourceUrl" = EXCLUDED."sourceUrl",
       "sourceName" = EXCLUDED."sourceName",
       "originalSourceName" = EXCLUDED."originalSourceName",
+      "originalHost" = EXCLUDED."originalHost",
       "atsType" = EXCLUDED."atsType",
       "isAgency" = COALESCE(EXCLUDED."isAgency", "RAJob"."isAgency"),
       "fromRecruiterBank" = EXCLUDED."fromRecruiterBank",
@@ -300,6 +356,8 @@ export function buildJobUpsertSql(rows: JobUpsertRow[]): Prisma.Sql {
       "sourcePriority" = EXCLUDED."sourcePriority",
       "searchText" = EXCLUDED."searchText",
       "publicDisplay" = EXCLUDED."publicDisplay",
+      "fraudFlags" = ${mergeJsonListSql('fraudFlags', ['rule', 'evidence'])},
+      "marketTags" = ${mergeJsonListSql('marketTags', ['tag'])},
       "archivedAt" = CASE WHEN "RAJob"."closeReason" IN ('source_removed', 'bank_closed') THEN NULL ELSE "RAJob"."archivedAt" END,
       "closedAt" = CASE WHEN "RAJob"."closeReason" IN ('source_removed', 'bank_closed') THEN NULL ELSE "RAJob"."closedAt" END,
       "closeReason" = CASE WHEN "RAJob"."closeReason" IN ('source_removed', 'bank_closed') THEN NULL ELSE "RAJob"."closeReason" END
@@ -388,12 +446,23 @@ export async function applyDedupe(db: IngestDb, market: Market, keys: string[] |
   return db.$executeRaw(buildDedupeSql(market, keys === null ? null : [...new Set(keys)]));
 }
 
-/** Archives a bank's jobs the bank closed, unpublished or turned back into drafts. */
-export async function archiveClosedBankJobs(db: IngestDb, sourceBoard: string, externalIds: string[], now: Date): Promise<number> {
+/**
+ * Archives the postings a source closed itself: a recruiter bank that closed,
+ * unpublished or re-drafted a job ('bank_closed', the default), or a public
+ * job board that stopped listing one ('source_removed'). Both reasons are
+ * revived by the upsert if the source lists the posting again.
+ */
+export async function archiveClosedBankJobs(
+  db: IngestDb,
+  sourceBoard: string,
+  externalIds: string[],
+  now: Date,
+  closeReason: SourceCloseReason = 'bank_closed',
+): Promise<number> {
   if (externalIds.length === 0) return 0;
   const { count } = await db.rAJob.updateMany({
     where: { sourceBoard, externalId: { in: externalIds }, archivedAt: null, visibility: 'public' },
-    data: { archivedAt: now, closedAt: now, closeReason: 'bank_closed' },
+    data: { archivedAt: now, closedAt: now, closeReason },
   });
   return count;
 }

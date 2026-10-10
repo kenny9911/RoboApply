@@ -212,9 +212,6 @@ export function createMemoryRepo(seed: Partial<MemoryRepoState> = {}): MatchRepo
         .slice(0, limit)
         .map((u) => u.id);
     },
-    async candidateJobs({ market, limit }) {
-      return state.jobs.filter((j) => j.market === market && j.visibility === 'public').slice(0, limit);
-    },
     async freshAiScoredJobIds({ userId, jobIds, resumeVariantId, resumeContentHash, modelUsed, promptVersion }) {
       return new Set(
         state.scores

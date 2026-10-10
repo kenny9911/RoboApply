@@ -37,7 +37,7 @@ import type {
   FraudQueueStatus,
   ResolveFraudResponse,
 } from './contract.js';
-import { GOHIRE_SOURCE_NAME, extractClassYearTags, mergeClassYearTags, readMarketTags } from './card.js';
+import { GOHIRE_SOURCE_NAME, extractPostingTags, mergePostingTags, readMarketTags } from './card.js';
 import { cnFlagsOf, flagKey, mergeCnFraudFlags, sameFlags, signalsToFlags, withoutCnFlags, type StoredFraudFlag } from './fraud/flags.js';
 import { detectCnFraudSignals, hasGrayCues } from './fraud/keywords.js';
 import { defaultFraudLlm, resolveFraudModel, runFraudCall, type FraudLlm } from './fraud/llm.js';
@@ -134,24 +134,43 @@ async function clearedKeysFor(deps: CnJobsDeps, ref: { id?: unknown; sourceBoard
 
 /**
  * afterNormalize for mainland jobs (ingest and import): GoHire source name,
- * rule flags, 届别 tags. A blacklist read failure does not drop the job (the
- * afterEnrich pass retries with the queue).
+ * rule flags, posting-stated tags. A read failure never drops the job:
+ *   - blacklist unreadable → keyword flags only (afterEnrich adds the
+ *     blacklist flag; it propagates the error and the queue retries);
+ *   - review log unreadable at ingest → no new flag is written at all. Which
+ *     flags an admin cleared is unknown, and ingest stores flags add-only
+ *     (jobs/ingest/upsert), so a cleared flag written here would take an
+ *     unchanged posting off the lists until its next enrichment. The flags
+ *     the job arrived with pass through; afterEnrich decides with the log.
+ *     An import still shows its warnings: the user reads them before saving,
+ *     and an imported job is always enriched next.
  */
 export async function cnAfterNormalize(job: MarketHookJob, ctx: MarketHookContext, deps: CnJobsDeps): Promise<MarketHookJob> {
   if (job.market !== 'cn') return job;
   const out: MarketHookJob = { ...job };
   if (job.provider === 'bank_gohire' && !str(job.sourceName).trim()) out.sourceName = GOHIRE_SOURCE_NAME;
   let blacklist: BlacklistEntry[] = [];
-  let cleared = new Set<string>();
   try {
     blacklist = await deps.store.blacklistCached();
+  } catch (err) {
+    logger.warn('CN_JOBS', 'blacklist unavailable at normalize; checked again after enrichment', { error: err instanceof Error ? err.message : String(err) });
+  }
+  let cleared: Set<string> | null = null;
+  try {
     // An admin "clear" holds on re-ingest too: matched by row id, or by sourceBoard:externalId.
     cleared = clearedKeysIn(await deps.store.reviewsCached(), job);
   } catch (err) {
-    logger.warn('CN_JOBS', 'blacklist or review log unavailable at normalize; checked again after enrichment', { error: err instanceof Error ? err.message : String(err) });
+    logger.warn('CN_JOBS', 'review log unavailable at normalize; flags are decided after enrichment', { error: err instanceof Error ? err.message : String(err) });
   }
-  out.fraudFlags = mergeCnFraudFlags(job.fraudFlags, ruleFlags(job, blacklist, deps.now()), ['keywords', 'blacklist'], cleared);
-  out.marketTags = mergeClassYearTags(job.marketTags, extractClassYearTags(postingText(job)));
+  if (cleared) {
+    out.fraudFlags = mergeCnFraudFlags(job.fraudFlags, ruleFlags(job, blacklist, deps.now()), ['keywords', 'blacklist'], cleared);
+  } else if (ctx.stage === 'import') {
+    out.fraudFlags = mergeCnFraudFlags(job.fraudFlags, ruleFlags(job, blacklist, deps.now()), ['keywords', 'blacklist']);
+  } else {
+    // Nothing replaced, nothing added: the incoming flags, or null.
+    out.fraudFlags = mergeCnFraudFlags(job.fraudFlags, [], []);
+  }
+  out.marketTags = mergePostingTags(job.marketTags, extractPostingTags(postingText(job), job));
   if (ctx.stage === 'import') out.cnFraudWarnings = cnImportWarnings(out);
   return out;
 }
@@ -169,7 +188,7 @@ export async function cnAfterEnrich(job: MarketHookJob, _ctx: MarketHookContext,
   const blacklist = await deps.store.blacklistCached();
   const fraudFlags = mergeCnFraudFlags(job.fraudFlags, ruleFlags(job, blacklist, deps.now()), ['keywords', 'blacklist'], cleared);
   const text = postingText(job);
-  const marketTags = mergeClassYearTags(job.marketTags, extractClassYearTags(text));
+  const marketTags = mergePostingTags(job.marketTags, extractPostingTags(text, job));
   const update: { fraudFlags?: unknown; marketTags?: unknown } = {};
   if (!sameFlags(fraudFlags, job.fraudFlags)) update.fraudFlags = fraudFlags;
   if (JSON.stringify(marketTags ?? null) !== JSON.stringify(readMarketTags(job.marketTags).length ? readMarketTags(job.marketTags) : null)) update.marketTags = marketTags;

@@ -340,7 +340,9 @@ export async function runIngestQuery(ctx: PipelineContext, adapter: JobSourceAda
   const processed = await processJobs(ctx, adapter, fetched.jobs, { countryHint: query.params.country });
   let closed = 0;
   if (fetched.closedExternalIds?.length) {
-    for (const board of adapter.sourceBoards) closed += await archiveClosedBankJobs(ctx.db, board, fetched.closedExternalIds, ctx.now);
+    // The source says why (a bank closed the job / a public board stopped listing it); default: a bank.
+    const reason = fetched.closeReason ?? 'bank_closed';
+    for (const board of adapter.sourceBoards) closed += await archiveClosedBankJobs(ctx.db, board, fetched.closedExternalIds, ctx.now, reason);
   }
   await recordProviderUsage(ctx.db, adapter.provider, day, { calls: extraCalls, returned: fetched.jobs.length, inserted: processed.inserted });
   // SR-16b-1: only a search run that returned postings counts (an empty page is inconclusive).

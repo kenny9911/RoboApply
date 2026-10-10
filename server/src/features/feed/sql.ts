@@ -14,7 +14,9 @@
 //
 // Predicates follow FILTER_SET specs in search/filterSet.ts (ruling C15).
 // Conventions this file relies on (handoff requests to the writers):
-//   - marketTags `{ tag: 'class_year:<yyyy>' }` 届别 (WP-41, already asked by WP-18)
+//   The GoApply tags below are written by cn/jobs/card.ts (`extractPostingTags`),
+//   each only when the posting states it, with its quote:
+//   - marketTags `{ tag: 'class_year:<yyyy>' }` 届别
 //   - marketTags `{ tag: 'school_tier:985' | 'school_tier:211' | 'school_tier:double_first_class' }`
 //   - marketTags `{ tag: 'intern_days:<n>' }` days a week an internship asks for
 //   - marketTags `{ tag: 'cn_hire:campus' | 'cn_hire:social' }` 校招 / 社招
@@ -35,8 +37,17 @@ export interface SqlScope {
   now: Date;
   /** Counts and the visitor list: public rows only (never a user's private import). */
   publicOnly?: boolean;
-  /** Visitor list: the provider licence allows public redisplay. */
+  /**
+   * Visitor list: the provider licence allows public redisplay, and the
+   * posting is not past its expiry (the SEO pages' rule, seo `basePublicWhere`).
+   */
   publicDisplayOnly?: boolean;
+  /**
+   * With `publicDisplayOnly`: the boards still allowed to be redisplayed
+   * (seo `allowedPublicBoards`). Only recruiter-bank rows and rows of these
+   * boards are read, so the statement's LIMIT counts listable rows only.
+   */
+  publicBoards?: readonly string[];
   /** Skip the per-user hidden-state check (visitor list). */
   ignoreHidden?: boolean;
 }
@@ -266,9 +277,10 @@ export function predicateFor(field: FilterField, filters: FilterSet, scope: Pick
       const parts: Prisma.Sql[] = [];
       if (f.employmentType.includes('internship')) parts.push(Prisma.sql`j."employmentType" = 'internship'`);
       if (f.employmentType.includes('campus')) {
-        // 校招: stated as such, or (until a producer writes `cn_hire:` tags) a non-internship
-        // posting with no 校招/社招 statement that names a 届别 — a stated class year is
-        // evidence of a campus posting (same leniency as classYear above).
+        // 校招: stated as such (`cn_hire:campus`, written by cn/jobs/card.ts), or — only for a
+        // row that carries no `cn_hire:` tag at all — a non-internship posting that names a
+        // 届别: a stated class year is evidence of a campus posting (same leniency as
+        // classYear above).
         parts.push(
           Prisma.sql`(${hasTagIn(['cn_hire:campus'])} OR (j."employmentType" IS DISTINCT FROM 'internship' AND NOT ${hasTagPrefix('cn_hire:')} AND ${hasTagPrefix('class_year:')}))`,
         );
@@ -332,7 +344,11 @@ export function scopePredicates(scope: SqlScope): Prisma.Sql[] {
   ];
   if (scope.publicOnly || !scope.userId) out.push(Prisma.sql`j."visibility" = 'public'`);
   else out.push(Prisma.sql`(j."visibility" = 'public' OR j."ownerUserId" = ${scope.userId})`);
-  if (scope.publicDisplayOnly) out.push(Prisma.sql`j."publicDisplay" = true`);
+  if (scope.publicDisplayOnly) {
+    out.push(Prisma.sql`j."publicDisplay" = true`);
+    out.push(Prisma.sql`(j."expiresAt" IS NULL OR j."expiresAt" > ${scope.now}::timestamp(3))`);
+    if (scope.publicBoards) out.push(Prisma.sql`(j."fromRecruiterBank" = true OR j."sourceBoard" = ANY(${[...scope.publicBoards]}::text[]))`);
+  }
   if (scope.userId && !scope.ignoreHidden) {
     out.push(
       Prisma.sql`NOT EXISTS (SELECT 1 FROM "RAJobUserState" s WHERE s."userId" = ${scope.userId} AND s."jobId" = j."id" AND s."hiddenAt" IS NOT NULL)`,
@@ -376,6 +392,8 @@ export interface RetrievalSqlInput {
   toId?: string | null;
   /** firstSeenAt > since (new-count). */
   firstSeenAfter?: Date | null;
+  /** Extra predicates ANDed in (the browse category predicate). */
+  extra?: Prisma.Sql[];
   /**
    * GoApply `deadline`: jobs with a stated close date (soonest first), then
    * every job without one, newest first (they are listed, not dropped).
@@ -386,7 +404,7 @@ export interface RetrievalSqlInput {
 
 /** One window of candidates: newest first (or stated deadline first), LIMIT `limit`. */
 export function retrievalSql(input: RetrievalSqlInput): Prisma.Sql {
-  const parts = [...scopePredicates(input.scope), ...filterPredicates(input.filters, input.scope, input.fields)];
+  const parts = [...scopePredicates(input.scope), ...filterPredicates(input.filters, input.scope, input.fields), ...(input.extra ?? [])];
   if (input.from) parts.push(Prisma.sql`j."postedAt" >= ${input.from}::timestamp(3)`);
   if (input.to && input.toId) parts.push(Prisma.sql`(j."postedAt", j."id") < (${input.to}::timestamp(3), ${input.toId})`);
   else if (input.to) parts.push(Prisma.sql`j."postedAt" < ${input.to}::timestamp(3)`);
@@ -400,6 +418,61 @@ ${FROM}
 ${where(parts)}
 ${order}
 LIMIT ${input.limit}`;
+}
+
+/**
+ * The category predicate of a browse (Explore → a category's list): a job
+ * belongs to a category when its `taxonomyIds` carry the category id itself
+ * or any role under it — the rows the Explore tile counts (`exploreCountsSql`
+ * counts by the ids on the row), so the list and the tile agree.
+ */
+export function browseTaxonomySql(ids: readonly string[]): Prisma.Sql {
+  const all = [...new Set([...ids, ...expandTaxonomyIds(ids)])];
+  return Prisma.sql`j."taxonomyIds" && ${all}::text[]`;
+}
+
+export interface JobIdsSqlInput {
+  scope: SqlScope;
+  filters: FilterSet;
+  fields: readonly FilterField[];
+  /** postedAt ≥ from. */
+  from: Date | null;
+  /** With `from`: a posting with no date also passes (alerts for jobs we only just found). */
+  allowUndated?: boolean;
+  firstSeenAfter?: Date | null;
+  /** `posted`: newest posting first. `first_seen`: newest in our index first (alerts). */
+  orderBy: 'posted' | 'first_seen';
+  limit: number;
+}
+
+/** Job ids only, for the unranked seams (report sample, alert candidates): same scope and filter predicates as the list. */
+export function jobIdsSql(input: JobIdsSqlInput): Prisma.Sql {
+  const parts = [...scopePredicates(input.scope), ...filterPredicates(input.filters, input.scope, input.fields)];
+  if (input.from && input.allowUndated) parts.push(Prisma.sql`(j."postedAt" IS NULL OR j."postedAt" >= ${input.from}::timestamp(3))`);
+  else if (input.from) parts.push(Prisma.sql`j."postedAt" >= ${input.from}::timestamp(3)`);
+  if (input.firstSeenAfter) parts.push(Prisma.sql`j."firstSeenAt" > ${input.firstSeenAfter}::timestamp(3)`);
+  const order =
+    input.orderBy === 'first_seen'
+      ? Prisma.sql`ORDER BY j."firstSeenAt" DESC, j."id" DESC`
+      : Prisma.sql`ORDER BY j."postedAt" DESC NULLS LAST, j."id" DESC`;
+  return Prisma.sql`SELECT j."id"
+${FROM}
+${where(parts)}
+${order}
+LIMIT ${input.limit}`;
+}
+
+/**
+ * The fields `marketHooks.cardMeta` reads that the list does not select, for
+ * the cards of one page. The posting text is only read to re-check a quoted
+ * market tag (Taiwan work-permit tags), so it is returned only for rows that
+ * carry market tags.
+ */
+export function cardExtrasSql(ids: string[]): Prisma.Sql {
+  return Prisma.sql`SELECT j."id", j."sourceUrl", j."applyUrl", j."locations", j."fraudFlags",
+  CASE WHEN jsonb_typeof(j."marketTags") = 'array' AND jsonb_array_length(j."marketTags") > 0 THEN j."descriptionPlain" END AS "descriptionPlain"
+FROM "RAJob" j
+WHERE j."id" = ANY(${ids}::text[])`;
 }
 
 /** Rows by id (later pages of a session), still in scope and not hidden since. */
@@ -420,9 +493,13 @@ ${where(parts)}
 LIMIT ${input.cap + 1}) AS capped`;
 }
 
-/** Live public counts per L1 category (Explore). */
-export function exploreCountsSql(market: Market, categoryIds: string[]): Prisma.Sql {
+/**
+ * Live public counts per L1 category (Explore). `since` is the lists' age
+ * floor (postedAt ≥ since), so a tile counts what its browse list can reach.
+ */
+export function exploreCountsSql(market: Market, categoryIds: string[], since: Date | null = null): Prisma.Sql {
   const parts = [...scopePredicates({ market, userId: null, now: new Date(0), publicOnly: true }), Prisma.sql`j."taxonomyIds" && ${categoryIds}::text[]`];
+  if (since) parts.push(Prisma.sql`j."postedAt" >= ${since}::timestamp(3)`);
   return Prisma.sql`SELECT t.id AS "taxonomyId", count(*)::int AS "count"
 FROM "RAJob" j CROSS JOIN LATERAL unnest(j."taxonomyIds") AS t(id)
 ${where(parts)} AND t.id = ANY(${categoryIds}::text[])

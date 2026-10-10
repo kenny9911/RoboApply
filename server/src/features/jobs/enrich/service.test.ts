@@ -9,11 +9,11 @@ vi.mock('../../../lib/modelPricing.js', () => ({ calculateModelCost: vi.fn(() =>
 
 import { getCurrentBrandId, runWithBrand } from '../../../lib/requestContext.js';
 import { SHARED_COST_USER_ID } from '../../../roboapply/v2/lib/raFeatureCatalog.js';
-import { enrichDedupeKey, enrichJob, systemUserIdFor, type EnrichDeps } from './service.js';
+import { enrichDedupeKey, enrichJob, rulesOnlyMarker, systemUserIdFor, type EnrichDeps } from './service.js';
 import type { EnrichLlmOptions } from './agent.js';
 import type { EnrichJobRecord, EnrichUpdate } from './reconcile.js';
 import type { EnrichCostEntry, KeywordRow } from './repository.js';
-import { ENRICH_VERSION, RULES_ONLY_MODEL } from './schema.js';
+import { ENRICH_VERSION, RULES_CHECKED_MODEL, RULES_ONLY_MODEL } from './schema.js';
 import { CN_POSTING, INTL_POSTING, intlModelReply, makeJob } from './__tests__/fixtures.js';
 
 const NOW = new Date('2026-10-10T12:00:00.000Z');
@@ -176,6 +176,8 @@ describe('enrichJob', () => {
     expect(await enrichJob({ jobId: 'job_cn' }, FIRST, h.deps)).toEqual({ status: 'rules_only', reason: 'no_ai_consent' });
     expect(h.aiAllowed).toHaveBeenCalledWith('user_cn');
     expect(h.calls).toHaveLength(0);
+    // Settled for this version: jobs-maintain does not force it again night after night.
+    expect(h.job.enrichModel).toBe(RULES_CHECKED_MODEL);
     expect(h.hooks[0]!.ctx).toMatchObject({ userId: 'user_cn' });
   });
 
@@ -199,7 +201,9 @@ describe('enrichJob', () => {
     );
     expect(await enrichJob({ jobId: 'job_1' }, FIRST, h.deps)).toEqual({ status: 'rules_only', reason: 'covered' });
     expect(h.calls).toHaveLength(0);
-    expect(h.job.enrichModel).toBe(RULES_ONLY_MODEL);
+    // Nothing a model could add: the row says so itself (never queued for a model pass).
+    expect(h.job.enrichModel).toBe(RULES_CHECKED_MODEL);
+    expect(h.keywords[0]!.modelUsed).toBe(RULES_ONLY_MODEL);
     expect(h.keywords[0]!.keywords.slice(0, 5).map((k) => k.keyword)).toEqual(['python', 'go', 'sql', 'kafka', 'terraform']);
   });
 
@@ -224,6 +228,58 @@ describe('enrichJob', () => {
     expect(h.job).toMatchObject({ enrichModel: RULES_ONLY_MODEL, enrichVersion: ENRICH_VERSION, enrichedAt: NOW });
     expect(h.job.fraudFlags).toEqual([{ rule: 'intl_fee_required', evidence: 'A one-time training fee of $85 is due before your first shift.', at: NOW.toISOString() }]);
     expect(h.hooks).toHaveLength(1);
+  });
+
+  // ── WP-74 "Keep": re-enrichment never brings back a scam rule an admin cleared ──
+
+  const FEE_LINE = 'A one-time training fee of $85 is due before your first shift.';
+  const CHAT_LINE = 'To apply, message our recruiter on Telegram only.';
+  const scamJob = () => {
+    const text = `${makeJob().descriptionPlain}\n${FEE_LINE}\n${CHAT_LINE}`;
+    return makeJob({ descriptionPlain: text, description: text });
+  };
+
+  it('a cleared rule is not re-added on re-enrichment; a rule that was not cleared is', async () => {
+    const h = harness(scamJob(), { budgetLimit: 0 });
+    // Control: with no admin decision both rules are raised.
+    await enrichJob({ jobId: 'job_1' }, FIRST, h.deps);
+    const raised = (h.job.fraudFlags as Array<{ rule: string }>).map((f) => f.rule).sort();
+    expect(raised).toContain('intl_fee_required');
+    expect(raised.length).toBeGreaterThanOrEqual(2);
+    const other = raised.find((r) => r !== 'intl_fee_required')!;
+
+    // The admin restored the job and cleared the fee rule (the admin write also drops the stored flags).
+    h.job.fraudFlags = null;
+    const clearedScamRules = vi.fn(async () => ['intl_fee_required']);
+    h.deps.repo.clearedScamRules = clearedScamRules;
+    expect(await enrichJob({ jobId: 'job_1', force: true }, FIRST, h.deps)).toEqual({ status: 'rules_only', reason: 'budget_disabled' });
+    expect(clearedScamRules).toHaveBeenCalledWith('job_1');
+    const after = (h.job.fraudFlags as Array<{ rule: string }>).map((f) => f.rule);
+    expect(after).not.toContain('intl_fee_required');
+    expect(after).toContain(other);
+  });
+
+  it('clearing every raised rule leaves the job unflagged after re-enrichment (it stays in the lists)', async () => {
+    const fee = `${makeJob().descriptionPlain}\n${FEE_LINE}`;
+    const h = harness(makeJob({ descriptionPlain: fee, description: fee }), { budgetLimit: 0 });
+    h.deps.repo.clearedScamRules = async () => ['intl_fee_required'];
+    await enrichJob({ jobId: 'job_1' }, FIRST, h.deps);
+    expect(h.job.fraudFlags).toBeNull();
+    // The deferred path (budget spent) honours the decision too: nothing partial is written back.
+    const deferred = harness(makeJob({ descriptionPlain: fee, description: fee }), { budgetAllowed: false });
+    deferred.deps.repo.clearedScamRules = async () => ['intl_fee_required'];
+    expect((await enrichJob({ jobId: 'job_1' }, FIRST, deferred.deps)).status).toBe('deferred');
+    expect(deferred.job.fraudFlags ?? null).toBeNull();
+  });
+
+  it('a decision log outage keeps the rules as detected (a posting is never unflagged by an outage)', async () => {
+    const fee = `${makeJob().descriptionPlain}\n${FEE_LINE}`;
+    const h = harness(makeJob({ descriptionPlain: fee, description: fee }), { budgetLimit: 0 });
+    h.deps.repo.clearedScamRules = async () => {
+      throw new Error('db down');
+    };
+    await enrichJob({ jobId: 'job_1' }, FIRST, h.deps);
+    expect((h.job.fraudFlags as Array<{ rule: string }>).map((f) => f.rule)).toEqual(['intl_fee_required']);
   });
 
   it('is idempotent: a second delivery of the same item does nothing; a retry re-runs hooks only', async () => {
@@ -265,6 +321,25 @@ describe('enrichJob', () => {
     expect(h.job.citizenshipRequired).not.toBe(true);
   });
 
+  it('a rules-only row records whether a model pass is still owed: only "no model" and "enrichment off" stay retryable', () => {
+    expect(rulesOnlyMarker('no_model')).toBe(RULES_ONLY_MODEL);
+    expect(rulesOnlyMarker('budget_disabled')).toBe(RULES_ONLY_MODEL);
+    expect(rulesOnlyMarker('covered')).toBe(RULES_CHECKED_MODEL);
+    expect(rulesOnlyMarker('no_ai_consent')).toBe(RULES_CHECKED_MODEL);
+    expect(rulesOnlyMarker('llm_failed')).toBe(RULES_CHECKED_MODEL);
+    expect(RULES_CHECKED_MODEL).not.toBe(RULES_ONLY_MODEL);
+  });
+
+  it('a forced model pass on a rules-only row that the model has nothing to add to settles it (no second forced pass)', async () => {
+    const plain = 'Build APIs in Python and Go. Benefits include dental.';
+    const covered = { descriptionPlain: plain, description: plain, primaryTaxonomyId: 'backend_engineer', taxonomyIds: ['software_engineering', 'swe_backend', 'backend_engineer'], seniority: 'mid', skills: ['python', 'go', 'sql', 'kafka', 'terraform'] };
+    // As stored before this marker existed: rules-only at the current version.
+    const h = harness(makeJob({ ...covered, enrichedAt: new Date('2026-10-01'), enrichVersion: ENRICH_VERSION, enrichModel: RULES_ONLY_MODEL }));
+    expect(await enrichJob({ jobId: 'job_1', force: true }, FIRST, h.deps)).toEqual({ status: 'rules_only', reason: 'covered' });
+    expect(h.job.enrichModel).toBe(RULES_CHECKED_MODEL);
+    expect(h.calls).toHaveLength(0);
+  });
+
   it('re-enriches a row stamped with an older version', async () => {
     const h = harness(makeJob({ enrichedAt: new Date('2026-01-01'), enrichVersion: ENRICH_VERSION - 1 }));
     expect((await enrichJob({ jobId: 'job_1' }, FIRST, h.deps)).status).toBe('enriched');
@@ -277,7 +352,8 @@ describe('enrichJob', () => {
     expect(h.keywords).toHaveLength(1);
 
     expect(await enrichJob({ jobId: 'job_1' }, { attempt: 5, maxAttempts: 5 }, h.deps)).toEqual({ status: 'rules_only', reason: 'llm_failed' });
-    expect(h.job).toMatchObject({ enrichModel: RULES_ONLY_MODEL, enrichVersion: ENRICH_VERSION });
+    // The model had its attempts: not queued for another call until the posting or ENRICH_VERSION changes.
+    expect(h.job).toMatchObject({ enrichModel: RULES_CHECKED_MODEL, enrichVersion: ENRICH_VERSION });
     expect(h.costs).toHaveLength(0);
   });
 

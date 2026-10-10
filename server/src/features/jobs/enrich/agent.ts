@@ -7,8 +7,8 @@
 // Routing: the call carries `task: 'enrich'` (WP-14 resolves the per-brand
 // task model, brand policy and egress rules from it) and runs inside
 // `runWithBrand(<the job's brand>)`, so a GoApply job always resolves to the
-// CN model profile and passes WP-24's content-safety filter. Until WP-14
-// lands, this module also names the model itself from the brand's env:
+// CN model profile and passes WP-24's content-safety filter. This module
+// also names the model itself from the brand's env:
 //   RoboApply: LLM_ENRICH_MODEL, else the stack default (LLM_MODEL);
 //   GoApply:   CN_LLM_ENRICH_MODEL, else CN_LLM_MODEL — never an unprefixed
 //              key (R-03/R-13) — and only when the id names a domestic
@@ -58,14 +58,20 @@ export interface EnrichModelRoute {
 /**
  * Mainland providers LLMService can call directly (R-13: GoApply text stays
  * in-region). The id must carry one of these prefixes, e.g.
- * "deepseek/deepseek-chat". A bare id ("deepseek-chat") would fall through to
- * the global LLM_PROVIDER mode, and "openrouter/…" is a foreign gateway, so
- * both are refused. Qwen (DashScope), GLM (Zhipu) and Doubao (Ark) are not
- * LLMService providers yet; `newapi/` joins once WP-14's host allowlist
- * exists. The endpoint host behind each provider's credential is WP-14's
- * guard, not this module's.
+ * "deepseek/deepseek-chat" or "dashscope/qwen-plus". A bare id
+ * ("deepseek-chat") would fall through to the global LLM_PROVIDER mode, and
+ * "openrouter/…" is a foreign gateway, so both are refused.
+ *
+ * Qwen, GLM and Doubao answer to their vendor name and their platform name
+ * (WP-14: `qwen` / `dashscope`, `glm` / `zhipu`, `doubao` / `ark`). The
+ * prefix is passed as `options.provider`; LLMService maps a platform name to
+ * its provider (`normalizeProviderType`) and strips that same prefix from the
+ * model id, so "dashscope/qwen-plus" calls the Qwen provider with model
+ * "qwen-plus". `newapi/` (a self-hosted gateway) stays out: its host is not
+ * known to be in-region from the id alone. The endpoint host behind each
+ * provider's credential is WP-14's guard, not this module's.
  */
-export const CN_DOMESTIC_PROVIDERS = ['deepseek', 'kimi', 'moonshot', 'minimax'] as const;
+export const CN_DOMESTIC_PROVIDERS = ['deepseek', 'kimi', 'moonshot', 'minimax', 'qwen', 'dashscope', 'glm', 'zhipu', 'doubao', 'ark'] as const;
 
 /** The domestic provider named by a model id's prefix, or null. */
 export function domesticProviderOf(model: string): string | null {

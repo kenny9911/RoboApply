@@ -27,6 +27,7 @@
 import { getCurrentBrandOrDefault } from '../../platform/brand/brandContext.js';
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { ProductBrand } from '../../platform/brand/registry.js';
+import { cnRecruitmentInfoMode } from '../../platform/flags.js';
 import { HttpError } from '../../platform/http.js';
 import type { RateLimitResult, RateWindow } from '../../platform/ratelimit/index.js';
 import type { ReserveOptions } from '../../platform/credits/index.js';
@@ -219,10 +220,25 @@ async function defaultCostLog(input: CostLogInput): Promise<void> {
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-/** A job the user may see on this brand: same market; public or their own import. */
-export function visibleTo(job: Pick<MatchJobRecord, 'market' | 'visibility' | 'ownerUserId'>, userId: string, market: string): boolean {
+/**
+ * A job the user may see on this brand: same market; public or their own
+ * import. On GoApply a third-party posting also needs the recruitment-info
+ * mode to allow postings (R-14): with CN_RECRUITMENT_INFO_MODE=off only the
+ * user's own imports can be scored, analysed or keyword-checked. The same
+ * answer as cn/jobs `cnPostingVisible` (a test keeps the two equal), read from
+ * the platform's mode resolver so MATCH does not load the GoApply jobs area.
+ */
+export function visibleTo(
+  job: Pick<MatchJobRecord, 'market' | 'visibility' | 'ownerUserId'>,
+  userId: string,
+  market: string,
+  env: EnvSource = process.env,
+): boolean {
   if (job.market !== market) return false;
-  return job.visibility === 'public' || job.ownerUserId === userId;
+  if (!(job.visibility === 'public' || job.ownerUserId === userId)) return false;
+  // A posting that is not the user's own import is a third-party posting.
+  if (job.market === 'cn' && job.visibility !== 'private' && cnRecruitmentInfoMode(env) === 'off') return false;
+  return job.visibility !== 'private' || job.ownerUserId === userId;
 }
 
 interface StoredExplanation {
@@ -325,7 +341,7 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
 
   async function loadVisibleJob(userId: string, jobId: string): Promise<MatchJobRecord> {
     const job = await repo.getJob(jobId);
-    if (!job || !visibleTo(job, userId, brandOf().market)) {
+    if (!job || !visibleTo(job, userId, brandOf().market, deps.env)) {
       throw new HttpError('not_found', 'Job not found.', { reason: MATCH_ERROR_CODES.jobNotFound });
     }
     return job;
@@ -562,7 +578,7 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
 
   async function preScoreJobs(userId: string, jobs: MatchJobRecord[]): Promise<PreScoreResult[]> {
     const market = brandOf().market;
-    const visible = jobs.filter((j) => visibleTo(j, userId, market));
+    const visible = jobs.filter((j) => visibleTo(j, userId, market, deps.env));
     if (!visible.length) return [];
     const { user } = await userContext(userId);
     const cfg = config();
