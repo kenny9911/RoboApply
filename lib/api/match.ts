@@ -1,8 +1,9 @@
 // lib/api/match.ts — Fit analysis and the competitiveness report.
 //
 // Thin typed wrappers over the area contract (FND-7). Owner: WP-18 (report: WP-77).
-// The fit-analysis call needs `opts.idempotencyKey` (hooks/match/useFitAnalysis
-// passes the credit gate's key), so a retry never spends a second credit.
+// The fit-analysis and competitiveness calls need `opts.idempotencyKey`
+// (hooks/match passes the credit gate's key), so a retry never spends a
+// second credit.
 // Request types are the contract's zod input types; response types are the
 // contract's views. Change a signature here only together with its contract.
 //
@@ -33,9 +34,12 @@ export function createCompetitivenessReport(body: In<typeof M.CompetitivenessBod
   return call<M.CompetitivenessReport>('POST', `/api/v1/roboapply/match/competitiveness`, { ...opts, body });
 }
 
-/** `match.competitivenessLatest` — GET /api/v1/roboapply/match/competitiveness/latest */
-export function getLatestCompetitivenessReport(opts?: CallOptions): Promise<M.CompetitivenessReport | null> {
-  return call<M.CompetitivenessReport | null>('GET', `/api/v1/roboapply/match/competitiveness/latest`, opts);
+/** `match.competitivenessLatest` — GET /api/v1/roboapply/match/competitiveness/latest (the newest report, or null) */
+export function getLatestCompetitivenessReport(
+  query: In<typeof M.CompetitivenessLatestQuerySchema> = {},
+  opts?: CallOptions,
+): Promise<M.CompetitivenessReport | null> {
+  return call<M.CompetitivenessReport | null>('GET', withQuery(`/api/v1/roboapply/match/competitiveness/latest`, query), opts);
 }
 
 /** Every wrapper of this area, for callers that prefer one import. */

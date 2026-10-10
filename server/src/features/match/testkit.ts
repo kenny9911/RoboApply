@@ -2,6 +2,10 @@
 // MATCH tests (no vitest imports: the file compiles with the server).
 
 import type { Market } from '../../platform/brand/registry.js';
+import { HttpError } from '../../platform/http.js';
+import type { FeedCountResult, LimitingFilter } from '../feed/index.js';
+import type { SearchProfileWire } from '../search/index.js';
+import type { ReportInventory } from './reportInventory.js';
 import type { MatchJobRecord, UserMatchInputs } from './context.js';
 import type { KeywordInput } from './keywordRows.js';
 import type { MatchJob, MatchUser } from './preScore.js';
@@ -225,6 +229,77 @@ export function createMemoryRepo(seed: Partial<MemoryRepoState> = {}): MatchRepo
           )
           .map((s) => s.jobId),
       );
+    },
+  };
+}
+
+// ── Competitiveness report (WP-77) ────────────────────────────────────────
+
+/** A saved search as the search seam answers it. */
+export function searchProfileWire(overrides: Partial<SearchProfileWire> = {}): SearchProfileWire {
+  return {
+    id: 'sp1',
+    name: 'Backend in Berlin',
+    isDefault: true,
+    isActive: true,
+    version: 3,
+    schemaVersion: 1,
+    filters: { taxonomyIds: ['backend_engineer'], workModels: ['onsite'], postedWithinDays: 7 },
+    alertInstantMax: 0,
+    alertDigest: null,
+    createdAt: '2026-10-01T00:00:00.000Z',
+    updatedAt: '2026-10-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+/** `n` posts for one search: ids `p00`…, each stating what `make(i)` returns. */
+export function reportJobs(n: number, make: (i: number) => Partial<MatchJobRecord> = () => ({})): MatchJobRecord[] {
+  return Array.from({ length: n }, (_, i) => jobRecord({ id: `p${String(i).padStart(2, '0')}`, ...make(i) }));
+}
+
+export interface MemoryInventoryState {
+  profiles: SearchProfileWire[];
+  /** Job ids the feed preview lists for each profile id, newest first. */
+  samples: Record<string, string[]>;
+  count: FeedCountResult;
+  limiting: LimitingFilter[];
+  calls: { sample: number; count: number; limiting: number };
+  fail?: { count?: boolean; limiting?: boolean };
+}
+
+export function createMemoryReportInventory(seed: Partial<MemoryInventoryState> = {}): ReportInventory & { state: MemoryInventoryState } {
+  const state: MemoryInventoryState = {
+    profiles: seed.profiles ?? [searchProfileWire()],
+    samples: seed.samples ?? {},
+    count: seed.count ?? { count: 240, capped: false },
+    limiting: seed.limiting ?? [],
+    calls: { sample: 0, count: 0, limiting: 0 },
+    fail: seed.fail,
+  };
+  const find = (id: string) => {
+    const p = state.profiles.find((x) => x.id === id);
+    if (!p) throw new HttpError('not_found', 'Saved search not found.', { reason: 'search_profile_not_found' });
+    return p;
+  };
+  return {
+    state,
+    async getProfile(_userId, id) {
+      return find(id);
+    },
+    async sampleJobIds(_userId, profile, limit) {
+      state.calls.sample += 1;
+      return (state.samples[profile.id] ?? []).slice(0, limit);
+    },
+    async count() {
+      state.calls.count += 1;
+      if (state.fail?.count) throw new Error('count down');
+      return state.count;
+    },
+    async limiting() {
+      state.calls.limiting += 1;
+      if (state.fail?.limiting) throw new Error('limiting down');
+      return state.limiting;
     },
   };
 }

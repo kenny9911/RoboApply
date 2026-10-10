@@ -90,11 +90,22 @@ export async function configuredDefaultProvider(): Promise<string | null> {
   }
 }
 
-/** The production check: reads the default provider only when the model id names none. Fails closed. */
-export async function defaultScorerRouteAllowed(brand: Pick<ProductBrand, 'id' | 'llmProfile'>, model: string): Promise<boolean> {
+/**
+ * The default provider for an unprefixed model id on this brand. RoboApply:
+ * the configured `LLM_PROVIDER` (DB override first). GoApply: its own
+ * `CN_LLM_PROVIDER` only (R-03 brandEnv, no fallback to the global setting);
+ * unset → null, which resolves to OpenRouter and is refused (fails closed).
+ */
+export async function defaultProviderFor(brand: Pick<ProductBrand, 'id' | 'llmProfile'>, env: EnvLike = process.env): Promise<string | null> {
+  if (brand.llmProfile === 'domestic_cn') return env.CN_LLM_PROVIDER?.trim().toLowerCase() || null;
+  return configuredDefaultProvider();
+}
+
+/** The production check: reads the brand's default provider only when the model id names none. Fails closed. */
+export async function defaultScorerRouteAllowed(brand: Pick<ProductBrand, 'id' | 'llmProfile'>, model: string, env: EnvLike = process.env): Promise<boolean> {
   try {
-    const fallback = prefixedProvider(model, brand.llmProfile) ? null : await configuredDefaultProvider();
-    return scorerRouteAllowed(brand, model, fallback);
+    const fallback = prefixedProvider(model, brand.llmProfile) ? null : await defaultProviderFor(brand, env);
+    return scorerRouteAllowed(brand, model, fallback, env);
   } catch {
     return false;
   }

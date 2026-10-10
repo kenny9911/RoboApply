@@ -5,11 +5,15 @@
 // email, phone and address removed"; TASK_PLAN.md §2.2: no photo, 籍贯,
 // 政治面貌, gender, birth date or family members in any prompt).
 //
-// WP-15 owns the shared redactor (`server/src/platform/pii/redact.ts`), built
-// in the same wave. Until it merges this module is the scorer's own,
-// deliberately conservative stripper; INT switches `stripResumeForScoring`
-// to call `redact()` and keeps these tests as the scorer's contract (handoff
-// request to WP-15/INT).
+// The shared redactor (`platform/pii`, WP-15) runs first with
+// `LLM_PII_KINDS` (contact details, addresses, government IDs, health, the
+// person's name as a known value). The passes below stay on top of it as the
+// scorer's own, deliberately conservative contract (inputs.test.ts): images,
+// sensitive-field lines (性别, 籍贯, 政治面貌, birth date…), a leading
+// `# Name` heading, URLs, and CJK names written without a space in either
+// order.
+
+import { LLM_PII_KINDS, redactPii } from '../../platform/pii/index.js';
 
 const REMOVED = '[removed]';
 
@@ -50,6 +54,7 @@ function escapeRegExp(s: string): string {
 export function stripResumeForScoring(markdown: string, options: { names?: Array<string | null | undefined> } = {}): string {
   let text = markdown.replace(/\r\n?/g, '\n');
   text = text.replace(IMAGE, '');
+  text = redactPii(text, { kinds: LLM_PII_KINDS, marker: () => REMOVED, knownValues: options.names ?? [] }).text;
   const lines = text.split('\n').filter((line) => !SENSITIVE_LINE.test(line));
   // A leading `# Name` heading (the resume's first heading, short, no digits) is the name.
   const first = lines.findIndex((l) => l.trim().length > 0);
