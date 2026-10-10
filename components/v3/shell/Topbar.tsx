@@ -9,10 +9,10 @@
 // the bottom bar and here; an unmatched path renders NO crumb rather than a
 // wrong one.
 //
-// Ask renders only when the `copilot` capability is on AND the Assistant has
-// shipped (`SURFACES_READY.assistant`, flipped by INT; the dev override
-// NEXT_PUBLIC_SHOW_ALL_NAV shows it early). It opens the rail through
-// useOpenAssistant() — an explicit click, never a route change.
+// Ask renders only when the `copilot` capability is on (and
+// `SURFACES_READY.assistant`, true since INT-12; set it to false to take the
+// button out). It opens the rail through useOpenAssistant() — an explicit
+// click, never a route change.
 //
 // The Inbox bell is the MessageCenterButton slot (WP-39b). It renders nothing
 // until a real feed exists: a bell that cannot do anything is a claim.
@@ -28,7 +28,7 @@ import { useBrandId } from '../../../lib/brand/BrandProvider';
 import { useFlag } from '../../../lib/flags';
 import { useOpenAssistant } from '../../../hooks/shared/useOpenAssistant';
 import { MessageCenterButton } from '../../features/notifications/MessageCenterButton';
-import { useCommandPalette } from './CommandPalette';
+import { useCommandPalette, usePaletteJobSearch } from './CommandPalette';
 import { AvatarMenu } from './AvatarMenu';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { ThemeToggle } from './ThemeToggle';
@@ -49,6 +49,10 @@ export function Topbar() {
   const brandId = useBrandId();
   const openAssistant = useOpenAssistant();
   const askVisible = useAskVisible();
+  // Where there is no job feed (GoApply while its feed is off) ⌘K only jumps
+  // between pages, and the button says that rather than "Search jobs".
+  const jobSearch = usePaletteJobSearch();
+  const searchAria = jobSearch ? t('search_aria') : t('jump_aria');
 
   const crumbKey = crumbKeyFor(pathname, brandId);
   const isAdmin = crumbKey === 'admin';
@@ -64,10 +68,10 @@ export function Topbar() {
               type="button"
               className="search max-[760px]:hidden"
               onClick={palette.open}
-              aria-label={t('search_aria')}
+              aria-label={searchAria}
             >
               <IconSearch size={13} />
-              <span className="grow">{t('search_placeholder')}</span>
+              <span className="grow">{jobSearch ? t('search_placeholder') : t('jump_placeholder')}</span>
               <kbd>⌘K</kbd>
             </button>
 
@@ -78,7 +82,7 @@ export function Topbar() {
               type="button"
               className="icon-btn hidden max-[760px]:grid"
               onClick={palette.open}
-              aria-label={t('search_aria')}
+              aria-label={searchAria}
             >
               <IconSearch size={15} />
             </button>

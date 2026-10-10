@@ -1,0 +1,10 @@
+{
+  "nav": {
+    "jump_aria": "跳转到某个页面",
+    "jump_placeholder": "跳转到某个页面…",
+    "palette": {
+      "placeholder_pages": "跳转到某个页面…",
+      "empty_pages": "没有这个名称的页面。"
+    }
+  }
+}

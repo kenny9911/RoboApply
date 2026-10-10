@@ -1,9 +1,17 @@
 'use client';
 
 // Settings § Account — profile, contact, links.
-// name/email come from the auth profile (read-only display + editable name);
-// the rest live on the preferences blob. The default-résumé picker that used to
-// close this section now has its own settings section (ResumeSection).
+// Name and email come from the sign-in account and are shown read-only here
+// (the email is changed through its verification flow, the name on the
+// profile); the rest live on the preferences blob. The default-résumé picker
+// that used to close this section sits under "Your search" (ResumeSection).
+//
+// INT-12 removed two dead controls: the "Upload a photo" button (no handler,
+// and the account has no photo) and the name / email inputs that accepted
+// typing and threw it away. It also hides the Email row (and its confirmation
+// line) for an account that has no email: a GoApply phone or WeChat sign-up
+// stores a generated `…@users.goapply.invalid` address, which is not the
+// user's and is never shown (components/v3/account/format.ts).
 
 import { useTranslations } from 'next-intl';
 import {
@@ -14,10 +22,10 @@ import {
   Select,
   Slider,
 } from '../controls';
-import { Btn } from '../../primitives';
 import { LanguageSwitcher } from '../../shell/LanguageSwitcher';
 import type { RAPreferences } from '../../../../lib/api/v2';
 import { EmailVerificationLine } from '../../../features/auth/SecuritySettings';
+import { isPlaceholderEmail } from '../../account/format';
 
 export function IdentitySection({
   p,
@@ -32,6 +40,7 @@ export function IdentitySection({
 }) {
   const t = useTranslations('settings');
   const tc = useTranslations('common');
+  const hasEmail = !isPlaceholderEmail(email);
   const initials =
     name
       .split(/\s+/)
@@ -50,18 +59,12 @@ export function IdentitySection({
 
       <PrefGroup label={t('identity.group_profile')}>
         <div className="pref-avatar-row">
-          <div className="pref-avatar">{initials}</div>
-          <div>
-            <Btn>{t('identity.upload_photo')}</Btn>
-            <div className="pref-row-sub" style={{ marginTop: 6 }}>
-              {t('identity.photo_hint')}
-            </div>
+          <div className="pref-avatar" aria-hidden="true">
+            {initials}
           </div>
         </div>
         <PrefRow label={t('identity.full_name')}>
-          {/* Name lives on the auth profile; editing it here is display-only in
-              the stub (profile update is out of scope for this lane). */}
-          <TextInput value={name} onChange={() => {}} ariaLabel={t('identity.full_name')} />
+          <TextInput value={name} readOnly ariaLabel={t('identity.full_name')} />
         </PrefRow>
         <PrefRow label={t('identity.pronouns')} sub={t('identity.pronouns_sub')}>
           <Select
@@ -94,11 +97,15 @@ export function IdentitySection({
       </PrefGroup>
 
       <PrefGroup label={t('identity.group_contact')}>
-        <PrefRow label={t('identity.email')}>
-          <TextInput value={email} onChange={() => {}} ariaLabel={t('identity.email')} />
-        </PrefRow>
-        {/* WP-10: confirmed or not, with a resend button (never blocking). */}
-        <EmailVerificationLine />
+        {hasEmail ? (
+          <>
+            <PrefRow label={t('identity.email')}>
+              <TextInput value={email} readOnly ariaLabel={t('identity.email')} />
+            </PrefRow>
+            {/* WP-10: confirmed or not, with a resend button (never blocking). */}
+            <EmailVerificationLine />
+          </>
+        ) : null}
         <PrefRow label={t('identity.phone')}>
           <TextInput
             value={p.phone ?? ''}

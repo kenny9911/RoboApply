@@ -10,6 +10,11 @@
 // `instant_alerts` entitlement ("As they arrive" on Pro; never "unlimited")
 // and a daily/weekly email summary. Every write is one PATCH with
 // `baseVersion`.
+//
+// Registered as the `search` section in components/features/settings/
+// sectionComponents.ts (INT-12). The settings route adds the section's H1
+// above it and the draft-backed notes, main resume and company blocklist
+// below (components/v3/preferences: SearchIntro, SearchNotes, …).
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
@@ -181,7 +186,7 @@ function ProfileCard({ profile, list, onEdit }: { profile: SearchProfile; list: 
   );
 }
 
-/** The saved-searches manager (also rendered by the legacy HuntSection until INT wires this section). */
+/** The saved-searches manager: the list, new search, and the filters drawer. */
 export function SavedSearchesManager() {
   const t = useTranslations('filters');
   const query = useSearchProfiles();

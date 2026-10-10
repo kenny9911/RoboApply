@@ -1,10 +1,11 @@
-// WP-20: Settings → Your search (saved searches, alerts) and the reworked HuntSection.
+// WP-20: Settings → Your search (saved searches, alerts), and the draft-backed notes the
+// settings route renders under it (INT-12: SearchIntro / SearchNotes replace HuntSection).
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 
 import { SettingsSection } from './SettingsSection';
-import { HuntSection } from '../../v3/preferences/sections/HuntSection';
+import { SearchIntro, SearchNotes } from '../../v3/preferences/sections/HuntSection';
 import { TAXONOMY_TREE, fail, installFetch, list, ok, profile, renderWith, type RecordedCall } from '../filters/filters.testkit';
 
 const P = '/api/v1/roboapply/search-profiles';
@@ -100,15 +101,33 @@ describe('SettingsSection (#search)', () => {
   });
 });
 
-describe('HuntSection (legacy #search renderer)', () => {
-  it('renders the saved searches and only the free-text notes; no salary slider, stage grid or US-only work-authorization select', async () => {
-    setup();
+describe('SearchIntro + SearchNotes (the settings route’s pieces around the saved searches)', () => {
+  it('the section = intro, saved searches, then only the free-text notes; no salary slider, stage grid or US-only work-authorization select', async () => {
+    installFetch({
+      [`GET ${P}`]: () => ok(list([main, other], { maxProfiles: 10, maxInstantAlerts: 1, upgradable: true, proMaxProfiles: null })),
+      'GET /api/v1/roboapply/taxonomy': () => ok(TAXONOMY_TREE),
+    });
     const set = vi.fn();
     const prefs = { intentMarkdown: 'Fintech please', mustHaves: ['Remote'], dealbreakers: [] } as never;
-    renderWith(<HuntSection p={prefs} set={set} />);
-    expect((await screen.findAllByRole('heading', { name: 'Analyst roles' })).length).toBeGreaterThan(0);
+    renderWith(
+      <>
+        <SearchIntro />
+        <SettingsSection section="search" />
+        <SearchNotes p={prefs} set={set} />
+      </>,
+    );
+    expect((await screen.findAllByRole('heading', { name: 'Analyst roles' })).length).toBe(1);
+    // One H1: the setup sentence. The saved searches carry the H2.
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole('heading', { level: 2, name: 'Saved searches' })).toBeInTheDocument();
+    expect(screen.getByText(/now live in your saved searches below/)).toBeInTheDocument();
     expect(screen.getByDisplayValue('Fintech please')).toBeInTheDocument();
     expect(screen.queryByRole('slider')).toBeNull();
     expect(screen.queryByText(/H1-B|Series A/)).toBeNull();
+    // The notes edit the preferences draft through `set`.
+    fireEvent.change(screen.getByLabelText('What you want next'), { target: { value: 'Climate' } });
+    expect(set).toHaveBeenCalledWith('intentMarkdown', 'Climate');
+    // They are notes; the copy does not say they hide jobs.
+    expect(document.body.textContent).not.toMatch(/are hidden|is hidden/);
   });
 });

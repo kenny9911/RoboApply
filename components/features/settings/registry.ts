@@ -14,17 +14,33 @@
 // the added sections sit before it rather than after a destructive section.
 //
 // Visibility uses the nav rule (components/v3/shell/destinations.ts): brand,
-// `ready` (false until INT flips it once the owner ships the section;
-// `NEXT_PUBLIC_SHOW_ALL_NAV=true` skips it), and the capability `requires`
-// (fails closed). Sections that render the existing /settings content are
-// ready today; the rest are filled by their owners through
-// `components/features/<area>/SettingsSection.tsx` (FND-6b creates the stubs;
-// the import lines are added in `sectionComponents.ts`).
+// `ready` (`NEXT_PUBLIC_SHOW_ALL_NAV=true` skips it), the capability
+// `requires` (fails closed) and, for one section, `available` (a per-brand
+// rule that is not a capability flag).
+//
+// READY FLIPS (INT-12 / WP-93, after the no-dead-ends audit in
+// __tests__/shell/noDeadEnds.test.tsx). To take ONE section back out, set its
+// `ready` to false here; nothing else changes:
+//   assistant    WP-51   shown with `copilot`
+//   devices      WP-55a  shown with `extension` once the brand's extension is
+//                        published (a store id is configured): before that
+//                        no browser can be connected, so there is no list
+//   connections  WP-54   shown whenever `hiringContacts` is not 'off', so
+//                        "Delete all imported connections" stays reachable
+//                        after the mode drops from 'on' (importing itself
+//                        still needs 'on'; the section says so)
+//   referrals    WP-60   shown with `invites` on a brand whose every sign-up
+//                        attaches the invite (INVITE_REWARD_BRANDS)
+//
+// Content: the area component in `sectionComponents.ts`, or the route's
+// renderer for account / security / danger.
 //
 // `labelKey` is a FULL message key: existing sections keep their translated
 // `settings.nav.*` labels; new ones are staged under `nav.settingsSections.*`.
 // `aliases` keep old deep links working (`#notif` → notifications).
 
+import { extensionIdFor } from '../../../hooks/extension/bridge';
+import { INVITE_REWARD_BRANDS } from '../../../hooks/growth/useInvites';
 import type { BrandId } from '../../../lib/brand/registry.generated';
 import type { ResolvedFlags } from '../../../lib/flags';
 
@@ -66,7 +82,9 @@ export interface SettingsSectionEntry {
   brands: readonly BrandId[];
   /** Capability check; absent = always. Fails closed while flags load. */
   requires?: (flags: Partial<ResolvedFlags>) => boolean;
-  /** False until the owner's section ships (INT flips it). */
+  /** A per-brand rule that is not a capability flag; absent = always. */
+  available?: (brandId: BrandId) => boolean;
+  /** False while the owner's section is not shipped (INT-12 flipped the last four; see the header). */
   ready: boolean;
   owner: SettingsOwnerArea;
   /** Owner WP, for the handoff trail. */
@@ -88,10 +106,10 @@ export const SETTINGS_REGISTRY: readonly SettingsSectionEntry[] = [
   { id: 'appearance', labelKey: 'settings.nav.appearance', brands: BOTH, ready: true, owner: 'brand', wp: 'WP-12' },
   { id: 'consents', labelKey: 'nav.settingsSections.consents', brands: ['goapply'], ready: true, owner: 'compliance', wp: 'WP-13' },
   { id: 'search', labelKey: 'settings.nav.search', brands: BOTH, ready: true, owner: 'search', wp: 'WP-20', aliases: ['resume'] },
-  { id: 'assistant', labelKey: 'nav.settingsSections.assistant', brands: BOTH, ready: false, owner: 'copilot', wp: 'WP-51', requires: (f) => f.copilot === true },
-  { id: 'devices', labelKey: 'nav.settingsSections.devices', brands: BOTH, ready: false, owner: 'extension', wp: 'WP-55a', requires: (f) => f.extension === true },
-  { id: 'connections', labelKey: 'nav.settingsSections.connections', brands: BOTH, ready: false, owner: 'network', wp: 'WP-54', requires: (f) => f.hiringContacts === 'on' },
-  { id: 'referrals', labelKey: 'nav.settingsSections.referrals', brands: BOTH, ready: false, owner: 'growth', wp: 'WP-60', requires: (f) => f.invites === true },
+  { id: 'assistant', labelKey: 'nav.settingsSections.assistant', brands: BOTH, ready: true, owner: 'copilot', wp: 'WP-51', requires: (f) => f.copilot === true },
+  { id: 'devices', labelKey: 'nav.settingsSections.devices', brands: BOTH, ready: true, owner: 'extension', wp: 'WP-55a', requires: (f) => f.extension === true, available: (b) => extensionIdFor(b) !== null },
+  { id: 'connections', labelKey: 'nav.settingsSections.connections', brands: BOTH, ready: true, owner: 'network', wp: 'WP-54', requires: (f) => f.hiringContacts === 'deeplinks_only' || f.hiringContacts === 'on' },
+  { id: 'referrals', labelKey: 'nav.settingsSections.referrals', brands: BOTH, ready: true, owner: 'growth', wp: 'WP-60', requires: (f) => f.invites === true, available: (b) => INVITE_REWARD_BRANDS.includes(b) },
   { id: 'sensitive', labelKey: 'nav.settingsSections.sensitive', brands: BOTH, ready: true, owner: 'profile', wp: 'WP-19' },
   { id: 'danger', labelKey: 'settings.nav.danger', brands: BOTH, ready: true, owner: 'auth', wp: 'WP-10', danger: true },
 ];
@@ -108,6 +126,7 @@ export function isSettingsSectionVisible(entry: SettingsSectionEntry, ctx: Setti
   if (!entry.brands.includes(ctx.brandId)) return false;
   if (!entry.ready && !ctx.showAll) return false;
   if (entry.requires && !(ctx.flags && entry.requires(ctx.flags))) return false;
+  if (entry.available && !entry.available(ctx.brandId)) return false;
   return true;
 }
 

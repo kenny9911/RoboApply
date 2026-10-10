@@ -10,14 +10,35 @@
 //
 // An entry renders only when ALL of these hold:
 //   1. the current brand is in `brands`;
-//   2. `ready` is true — false for every NEW destination until INT (WP-93)
-//      flips it once the owning WP has shipped the page; the dev override
-//      `NEXT_PUBLIC_SHOW_ALL_NAV=true` skips this check (only this one);
+//   2. `ready` is true (the dev override `NEXT_PUBLIC_SHOW_ALL_NAV=true` skips
+//      this check, and only this one);
 //   3. `flag` (if any) is on — read through useCapabilities(), which fails
 //      closed, so a flagged entry appears a moment late but never shows when
 //      off (R-04: a disabled feature has no UI entry);
-//   4. its `gate` (if any) passes: `admin` (role) or `coachRoster` (the brand's
-//      roster has ≥1 active coach).
+//   4. its `gate` (if any) passes: `admin` (role), `coachRoster` (the brand's
+//      roster has ≥1 active coach), `invitesLive` (the brand's every sign-up
+//      path attaches the invite, hooks/growth INVITE_REWARD_BRANDS) or
+//      `extensionPublished` (the brand's extension has a store id,
+//      NEXT_PUBLIC_EXT_ID / NEXT_PUBLIC_CN_EXT_ID — until then /extension can
+//      only say "not available", which is not a destination).
+//
+// READY FLIPS (INT-12 / WP-93). Every destination below has shipped and
+// passed the no-dead-ends audit (__tests__/shell/noDeadEnds.test.tsx), so
+// every `ready` is true. `ready` stays in the shape as the one-line revert:
+// set it to false on ONE entry and that entry leaves the rail, the bottom
+// bar, the More sheet and the palette, on both themes and every locale,
+// without touching its page. Flipped by INT-12:
+//   ready, cn.ready        /ready      WP-53   shown with `agent`
+//   cn.campus              /campus     WP-58   shown with `jobs.campusCalendar`
+//   cn.referrals           /referrals  WP-54   shown with `cn.referralCodes`
+//   extension              /extension  WP-55a  shown with `extension` + gate `extensionPublished`
+//   invite, cn.invite      /invite     WP-60   shown with `invites` + gate `invitesLive`
+//                                              (GoApply: only once its phone and
+//                                              WeChat sign-ups carry the invite)
+//   coaching               /coaching   WP-72   shown with `coaching` + gate `coachRoster`
+//   SURFACES_READY.assistant           WP-51   the Topbar's Ask button, with `copilot`
+// GoApply has no 求职辅导 entry: its `coaching` flag is off; add one (lower
+// group, gate `coachRoster`) only if GoApply ever turns coaching on.
 //
 // Existing destinations (Jobs, Applications, Resume, Interview prep, Settings,
 // Admin) carry no flag on RoboApply, so the rail never flickers for them.
@@ -32,6 +53,8 @@ import { useBrand } from '../../../lib/brand/BrandProvider';
 import type { BrandId } from '../../../lib/brand/registry.generated';
 import { useCapabilities, type FlagKey, type ResolvedFlags } from '../../../lib/flags';
 import { useAuth } from '../../../lib/auth/useAuth';
+import { extensionIdFor } from '../../../hooks/extension/bridge';
+import { INVITE_REWARD_BRANDS } from '../../../hooks/growth/useInvites';
 import { useCoachRosterAvailable, type NavBadgeId } from '../../../hooks/shared/navBadges';
 import {
   IconBolt,
@@ -52,7 +75,7 @@ import {
 
 export type NavGroup = 'top' | 'lower';
 export type NavMobileSlot = 1 | 2 | 3 | 4 | 'more' | null;
-export type NavGate = 'admin' | 'coachRoster';
+export type NavGate = 'admin' | 'coachRoster' | 'invitesLive' | 'extensionPublished';
 
 export interface NavEntry {
   /** Stable id (brand-specific entries are prefixed `cn.`). */
@@ -68,7 +91,7 @@ export interface NavEntry {
   flag: FlagKey | null;
   badge: NavBadgeId | null;
   mobile: NavMobileSlot;
-  /** False until the destination's page has shipped (INT flips it). */
+  /** The destination's page has shipped. All true since INT-12; set one to false to take that entry out. */
   ready: boolean;
   gate?: NavGate;
   /** Which pathnames light this entry. */
@@ -93,29 +116,29 @@ const matchJobs = (p: string) => under('/jobs')(p) || under('/job-search')(p);
 export const NAV_ENTRIES: readonly NavEntry[] = [
   // ── RoboApply · top ───────────────────────────────────────────────────
   { id: 'jobs', href: '/jobs', labelKey: 'jobs', icon: IconSearch, group: 'top', brands: RA, flag: null, badge: 'jobs', mobile: 1, ready: true, match: matchJobs },
-  { id: 'ready', href: '/ready', labelKey: 'ready', icon: IconCheck, group: 'top', brands: RA, flag: 'agent', badge: 'ready', mobile: 'more', ready: false, match: under('/ready') },
+  { id: 'ready', href: '/ready', labelKey: 'ready', icon: IconCheck, group: 'top', brands: RA, flag: 'agent', badge: 'ready', mobile: 'more', ready: true, match: under('/ready') },
   { id: 'applications', href: '/applications', labelKey: 'applications', icon: IconStack, group: 'top', brands: RA, flag: null, badge: 'applications', mobile: 2, ready: true, match: under('/applications') },
   { id: 'resume', href: '/resume', labelKey: 'resume', icon: IconFile, group: 'top', brands: RA, flag: null, badge: null, mobile: 3, ready: true, match: under('/resume') },
   { id: 'practice', href: '/practice', labelKey: 'practice', icon: IconSparkle, group: 'top', brands: RA, flag: null, badge: null, mobile: 4, ready: true, match: under('/practice') },
   { id: 'profile', href: '/profile', labelKey: 'profile', icon: IconPerson, group: 'top', brands: RA, flag: null, badge: 'profile', mobile: 'more', ready: true, match: under('/profile') },
   // ── RoboApply · lower ─────────────────────────────────────────────────
-  { id: 'coaching', href: '/coaching', labelKey: 'coaching', icon: IconTarget, group: 'lower', brands: RA, flag: 'coaching', badge: null, mobile: 'more', ready: false, gate: 'coachRoster', match: under('/coaching') },
-  { id: 'invite', href: '/invite', labelKey: 'invite', icon: IconGift, group: 'lower', brands: RA, flag: 'invites', badge: null, mobile: 'more', ready: false, match: under('/invite') },
-  { id: 'extension', href: '/extension', labelKey: 'extension', icon: IconPuzzle, group: 'lower', brands: RA, flag: 'extension', badge: null, mobile: null, ready: false, match: under('/extension') },
+  { id: 'coaching', href: '/coaching', labelKey: 'coaching', icon: IconTarget, group: 'lower', brands: RA, flag: 'coaching', badge: null, mobile: 'more', ready: true, gate: 'coachRoster', match: under('/coaching') },
+  { id: 'invite', href: '/invite', labelKey: 'invite', icon: IconGift, group: 'lower', brands: RA, flag: 'invites', badge: null, mobile: 'more', ready: true, gate: 'invitesLive', match: under('/invite') },
+  { id: 'extension', href: '/extension', labelKey: 'extension', icon: IconPuzzle, group: 'lower', brands: RA, flag: 'extension', badge: null, mobile: null, ready: true, gate: 'extensionPublished', match: under('/extension') },
   { id: 'settings', href: '/settings', labelKey: 'settings', icon: IconSettings, group: 'lower', brands: RA, flag: null, badge: null, mobile: 'more', ready: true, match: under('/settings') },
   { id: 'admin', href: '/admin', labelKey: 'admin', icon: IconBolt, group: 'lower', brands: RA, flag: null, badge: null, mobile: null, ready: true, gate: 'admin', match: under('/admin') },
 
   // ── GoApply · top (职位 · 校招日历 · 待投递 · 投递记录 · 简历 · 面试练习 · 我的资料) ──
   { id: 'cn.jobs', href: '/jobs', labelKey: 'jobs', icon: IconSearch, group: 'top', brands: GA, flag: 'jobs.feed', badge: 'jobs', mobile: 1, ready: true, match: matchJobs },
-  { id: 'cn.campus', href: '/campus', labelKey: 'campus', mobileLabelKey: 'campus_short', icon: IconCalendar, group: 'top', brands: GA, flag: 'jobs.campusCalendar', badge: null, mobile: 2, ready: false, match: under('/campus') },
-  { id: 'cn.ready', href: '/ready', labelKey: 'cn_ready', icon: IconCheck, group: 'top', brands: GA, flag: 'agent', badge: 'ready', mobile: 'more', ready: false, match: under('/ready') },
+  { id: 'cn.campus', href: '/campus', labelKey: 'campus', mobileLabelKey: 'campus_short', icon: IconCalendar, group: 'top', brands: GA, flag: 'jobs.campusCalendar', badge: null, mobile: 2, ready: true, match: under('/campus') },
+  { id: 'cn.ready', href: '/ready', labelKey: 'cn_ready', icon: IconCheck, group: 'top', brands: GA, flag: 'agent', badge: 'ready', mobile: 'more', ready: true, match: under('/ready') },
   { id: 'cn.applications', href: '/applications', labelKey: 'cn_applications', mobileLabelKey: 'cn_applications_short', icon: IconStack, group: 'top', brands: GA, flag: null, badge: 'applications', mobile: 3, ready: true, match: under('/applications') },
   { id: 'cn.resume', href: '/resume', labelKey: 'resume', icon: IconFile, group: 'top', brands: GA, flag: null, badge: null, mobile: 'more', ready: true, match: under('/resume') },
   { id: 'cn.practice', href: '/practice', labelKey: 'cn_practice', mobileLabelKey: 'cn_practice_short', icon: IconSparkle, group: 'top', brands: GA, flag: null, badge: null, mobile: 4, ready: true, match: under('/practice') },
   { id: 'cn.profile', href: '/profile', labelKey: 'cn_profile', icon: IconPerson, group: 'top', brands: GA, flag: null, badge: 'profile', mobile: 'more', ready: true, match: under('/profile') },
   // ── GoApply · lower (内推 · 邀请好友 · 设置 · 会员 badge) ─────────────────
-  { id: 'cn.referrals', href: '/referrals', labelKey: 'cn_referrals', icon: IconUsers, group: 'lower', brands: GA, flag: 'cn.referralCodes', badge: null, mobile: 'more', ready: false, match: under('/referrals') },
-  { id: 'cn.invite', href: '/invite', labelKey: 'invite', icon: IconGift, group: 'lower', brands: GA, flag: 'invites', badge: null, mobile: 'more', ready: false, match: under('/invite') },
+  { id: 'cn.referrals', href: '/referrals', labelKey: 'cn_referrals', icon: IconUsers, group: 'lower', brands: GA, flag: 'cn.referralCodes', badge: null, mobile: 'more', ready: true, match: under('/referrals') },
+  { id: 'cn.invite', href: '/invite', labelKey: 'invite', icon: IconGift, group: 'lower', brands: GA, flag: 'invites', badge: null, mobile: 'more', ready: true, gate: 'invitesLive', match: under('/invite') },
   { id: 'cn.settings', href: '/settings', labelKey: 'settings', icon: IconSettings, group: 'lower', brands: GA, flag: null, badge: null, mobile: 'more', ready: true, match: under('/settings') },
   { id: 'cn.admin', href: '/admin', labelKey: 'admin', icon: IconBolt, group: 'lower', brands: GA, flag: null, badge: null, mobile: null, ready: true, gate: 'admin', match: under('/admin') },
 ];
@@ -125,11 +148,11 @@ export const MORE_LABEL_KEY: Record<BrandId, string> = { roboapply: 'more', goap
 
 /**
  * Non-nav surfaces with the same readiness rule: the Topbar's Ask button
- * (the Assistant rail is WP-51) and the job-detail route the palette links to
- * (WP-34). INT flips them with the destinations.
+ * (the Assistant rail, WP-51) and the job-detail route the palette links to
+ * (WP-34). Both shipped; set one to false to take that surface out.
  */
 export const SURFACES_READY = {
-  assistant: false,
+  assistant: true, // WP-51 shipped the rail and /assistant; flipped by INT-12 (WP-93)
   jobDetail: true, // WP-34 shipped /jobs/[id]; flipped at the Wave 3 gate (WP-34 / WP-35 request)
 } as const;
 
@@ -157,10 +180,22 @@ export function passesStaticRules(entry: NavEntry, ctx: Pick<NavVisibilityContex
   return true;
 }
 
+/** The invite programme runs on this brand (every sign-up path attaches the invite). */
+export function invitesLiveFor(brandId: BrandId): boolean {
+  return INVITE_REWARD_BRANDS.includes(brandId);
+}
+
+/** The brand's browser extension is published (it has a store id), so there is something to get. */
+export function extensionPublishedFor(brandId: BrandId): boolean {
+  return extensionIdFor(brandId) !== null;
+}
+
 export function isNavEntryVisible(entry: NavEntry, ctx: NavVisibilityContext): boolean {
   if (!passesStaticRules(entry, ctx)) return false;
   if (entry.gate === 'admin' && !ctx.isAdmin) return false;
   if (entry.gate === 'coachRoster' && !ctx.coachRoster) return false;
+  if (entry.gate === 'invitesLive' && !invitesLiveFor(ctx.brandId)) return false;
+  if (entry.gate === 'extensionPublished' && !extensionPublishedFor(ctx.brandId)) return false;
   return true;
 }
 
@@ -217,8 +252,8 @@ export function crumbKeyFor(pathname: string, brandId: BrandId): string | null {
 }
 
 /**
- * Where a job hit in the palette goes: `/jobs/[id]` once the detail page has
- * shipped (WP-34), the feed until then (the route shell is a stub).
+ * Where a job hit in the palette goes: `/jobs/[id]` (WP-34), or the feed if
+ * `SURFACES_READY.jobDetail` is ever turned off.
  */
 export function jobHref(jobId: string, showAll: boolean = showAllNav()): string {
   return SURFACES_READY.jobDetail || showAll ? `/jobs/${encodeURIComponent(jobId)}` : '/jobs';

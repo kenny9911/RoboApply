@@ -1,28 +1,53 @@
 'use client';
 
-// CommandPalette — the ⌘K overlay. A real palette (not the prototype's static
-// span): job/company search via raV2Api.search.run + quick-nav to the four
+// CommandPalette — the ⌘K overlay. Job search through the feed
+// (`queryFeed({ q })`, lib/api/feed.ts) + quick-nav to the visible
 // destinations. Opens on ⌘K / Ctrl-K from anywhere, or via either Topbar
 // search button (both go through CommandPaletteProvider's `open()`).
 //
 // Behaviour:
-//   • Type → debounced search.run({ q, sortBy:'match_desc' }); results show
-//     under a "Jobs" group. With an empty query we show quick-nav only.
+//   • Typing filters the quick-nav list at once and sends NOTHING. With two or
+//     more characters a "Search jobs for “…”" row appears; Enter or a click
+//     on that row runs ONE `queryFeed({ q })` and the first PALETTE_JOB_LIMIT
+//     items show under a "Jobs" group.
+//   • Why not search as you type: a first-page feed query is a list refresh on
+//     the server. It scores a window, writes a feed session and counts against
+//     the user's refresh budget (20 per 10 minutes, shared with /jobs —
+//     FeedQueryService `consumeRefresh`). One request per keystroke pause
+//     would use that up in two or three searches and lock the job list itself
+//     with a 429. One request per search the user asked for does not, and the
+//     same search inside that window is answered from the cache.
+//   • It is the same query the job list runs, so the filters of the user's
+//     active saved search apply and a hit is always a job the list can show.
+//     The empty state says so, instead of "nothing found".
+//   • Job search exists only where the feed does (`jobs.feed`; off on GoApply
+//     until its recruitment-info mode allows a feed, R-14). Without it the
+//     palette is a page jumper and says so: no request, no search row, no
+//     "Jobs" group, and the placeholder does not promise a job search.
 //   • ↑/↓ move the highlight across the flat result list; Enter selects;
 //     Esc closes. Selecting a nav item routes to it. Selecting a job routes to
-//     `jobHref(id)` (destinations.ts): `/jobs/[id]` once the detail page has
-//     shipped (WP-34; INT flips `SURFACES_READY.jobDetail`), the feed before.
+//     `jobHref(id)` (destinations.ts): `/jobs/[id]`.
 //   • The nav targets are the visible nav entries for the brand and user
 //     (destinations.ts), so the palette never offers a page the rail hides.
+//   • A failed search says so; it is never shown as "nothing found". A search
+//     the server refused because the refresh budget is used up (429
+//     `feed_refresh_limited`) has its own message and no retry row.
 //   • The panel is --surface with a --rule border, so it flips with the theme
 //     instead of being a dark island in a light app; the backdrop stays a
 //     near-black scrim in both themes, which is what a scrim is for.
+//
+// History: this used to call the frozen V2 client (`raV2Api.search.run`,
+// /v2/search). INT-12 moved it to the feed wrapper so that route and its
+// index service can be deleted (TASK_PLAN.md WP-93; join J6). Still open with
+// the feed owner (INT-05): a lookup mode on feed.query that skips the refresh
+// budget, the feed session and the saved-search filters.
 
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -31,10 +56,33 @@ import {
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
-import { raV2Api } from '../../../lib/api/v2';
-import type { SearchRunResponse } from '../../../lib/api/v2';
+import { queryFeed } from '../../../lib/api/feed';
+import { apiErrorReason } from '../../../lib/api/contracts/wire';
+import type { FeedQueryResponse } from '../../../lib/api/contracts/feed';
+import { useFlag } from '../../../lib/flags';
 import { IconSearch, IconArrow } from '../primitives/Iconset';
 import { jobHref, useVisibleNav } from './destinations';
+
+/** How many job hits the palette lists (the feed page is longer; the rest is one click away on /jobs). */
+export const PALETTE_JOB_LIMIT = 6;
+
+/** The shortest text the palette offers to search jobs for. */
+export const PALETTE_MIN_QUERY = 2;
+
+/**
+ * How long a palette search is answered from the cache: the server's refresh
+ * window (server/src/platform/ratelimit/defaults.ts `feedRefresh`), so asking
+ * for the same thing again inside it never spends a second refresh.
+ */
+export const PALETTE_SEARCH_STALE_MS = 10 * 60 * 1000;
+
+/** React Query key of a palette search. */
+export const paletteSearchKey = (q: string) => ['shell', 'palette', 'feed', q] as const;
+
+/** True when the palette can search jobs here (the job feed exists for this brand and user). */
+export function usePaletteJobSearch(): boolean {
+  return useFlag('jobs.feed');
+}
 
 // ── context ──────────────────────────────────────────────────────────
 interface PaletteCtx {
@@ -85,10 +133,15 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
   const router = useRouter();
   const t = useTranslations('nav');
   const tp = useTranslations('nav');
+  const canSearchJobs = usePaletteJobSearch();
   const [q, setQ] = useState('');
-  const [debounced, setDebounced] = useState('');
+  // The text the user asked to search jobs for (Enter or a click on the
+  // search row). Null until then: typing alone never sends a request.
+  const [submitted, setSubmitted] = useState<string | null>(null);
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Set by a search; moves the highlight to the first hit when it arrives.
+  const [highlightHits, setHighlightHits] = useState(false);
   // Quick-nav targets: every visible nav entry (Settings included) — the
   // same registry the Sidebar and the bottom bar render.
   const nav = useVisibleNav();
@@ -98,84 +151,136 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
   useEffect(() => {
     if (isOpen) {
       setQ('');
-      setDebounced('');
+      setSubmitted(null);
       setActive(0);
+      setHighlightHits(false);
       const id = window.setTimeout(() => inputRef.current?.focus(), 30);
       return () => window.clearTimeout(id);
     }
     return undefined;
   }, [isOpen]);
 
-  // Debounce the query.
-  useEffect(() => {
-    const id = window.setTimeout(() => setDebounced(q.trim()), 180);
-    return () => window.clearTimeout(id);
-  }, [q]);
-
-  const { data, isFetching } = useQuery<SearchRunResponse>({
-    queryKey: ['v3', 'palette', 'search', debounced],
-    queryFn: () => raV2Api.search.run({ q: debounced, limit: 6, sortBy: 'match_desc' }),
-    enabled: isOpen && debounced.length >= 2,
-    staleTime: 30_000,
+  const term = q.trim();
+  const canOfferSearch = canSearchJobs && term.length >= PALETTE_MIN_QUERY;
+  // A search was asked for exactly this text. Editing the text ends it.
+  const searched = isOpen && canOfferSearch && submitted === term;
+  const { data, isFetching, isError, error, refetch } = useQuery<FeedQueryResponse>({
+    queryKey: paletteSearchKey(searched ? term : ''),
+    queryFn: ({ signal }) => queryFeed({ q: term }, { signal }),
+    enabled: searched,
+    staleTime: PALETTE_SEARCH_STALE_MS,
+    gcTime: PALETTE_SEARCH_STALE_MS,
+    // Each request is a list refresh on the server: never send one the user
+    // did not ask for.
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: false,
   });
+  const searching = searched && isFetching;
+  // A retry keeps the old error until it settles; while it runs only
+  // "Searching…" shows.
+  const errored = searched && isError && !isFetching;
+  const refreshLimited = errored && apiErrorReason(error) === 'feed_refresh_limited';
+  const failed = errored && !refreshLimited;
+  const answered = searched && !isFetching && !isError && data !== undefined;
 
-  const jobs = debounced.length >= 2 ? data?.jobs ?? [] : [];
+  const jobs = useMemo(
+    () =>
+      answered
+        ? (data?.items ?? []).slice(0, PALETTE_JOB_LIMIT).map((item) => ({ id: item.jobId, title: item.title, companyName: item.company.name }))
+        : [],
+    [answered, data],
+  );
 
-  // Filter quick-nav by query.
+  // Filter quick-nav by what is typed: local, so it follows every keystroke.
   const navMatches = useMemo(() => {
-    const ql = debounced.toLowerCase();
+    const ql = term.toLowerCase();
     return navTargets.filter((n) => !ql || t(n.labelKey).toLowerCase().includes(ql));
-  }, [debounced, t, navTargets]);
+  }, [term, t, navTargets]);
 
-  // Flat selectable list: nav items first, then jobs.
+  // The row that runs the search: offered until the search is asked for, and
+  // again after a failure the user can retry.
+  const showSearchRow = canOfferSearch && (!searched || failed);
+
+  // Flat selectable list: nav items, then the search row, then job hits.
   const flat = useMemo(
     () => [
       ...navMatches.map((n) => ({ type: 'nav' as const, href: n.href, label: t(n.labelKey) })),
+      ...(showSearchRow ? [{ type: 'search' as const, href: '', label: tp('palette.search_jobs', { query: term }) }] : []),
       ...jobs.map((j) => ({
         type: 'job' as const,
         href: jobHref(j.id),
         label: `${j.title} · ${j.companyName}`,
       })),
     ],
-    [navMatches, jobs, t],
+    [navMatches, showSearchRow, jobs, t, tp, term],
   );
+
+  // The highlight, kept inside the list as it grows and shrinks.
+  const activeIndex = Math.min(active, Math.max(0, flat.length - 1));
+
+  // When the hits of a search arrive, the highlight goes to the first one, so
+  // Enter, Enter opens the best hit. Done while rendering (not in an effect),
+  // so the row that looks highlighted is always the one Enter opens.
+  if (highlightHits && answered) {
+    setHighlightHits(false);
+    if (jobs.length > 0) setActive(navMatches.length);
+  }
+
+  const runSearch = useCallback(() => {
+    if (!canOfferSearch) return;
+    setHighlightHits(true);
+    // The same text again after a failure: the query is still mounted, so ask
+    // it again. Otherwise submitting enables the query for this text.
+    if (submitted === term) void refetch();
+    else setSubmitted(term);
+  }, [canOfferSearch, submitted, term, refetch]);
 
   const select = useCallback(
     (i: number) => {
       const item = flat[i];
       if (!item) return;
+      if (item.type === 'search') {
+        runSearch();
+        return;
+      }
       onClose();
       router.push(item.href);
     },
-    [flat, onClose, router],
+    [flat, onClose, router, runSearch],
   );
 
-  // Keyboard nav within the palette.
+  // Keyboard nav within the palette. The listener reads the current list
+  // through a ref that is updated with every commit, so a key pressed right
+  // after the list changed acts on what is on screen.
+  const keyState = useRef({ activeIndex, count: flat.length, select });
+  useLayoutEffect(() => {
+    keyState.current = { activeIndex, count: flat.length, select };
+  });
   useEffect(() => {
     if (!isOpen) return undefined;
     function onKey(e: KeyboardEvent) {
+      // An Enter that confirms an input-method candidate (Chinese, Japanese,
+      // Korean) is not a command: it must not run a search or leave the page.
+      if (e.isComposing || e.keyCode === 229) return;
+      const cur = keyState.current;
       if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setActive((a) => Math.min(a + 1, Math.max(0, flat.length - 1)));
+        setActive(Math.min(cur.activeIndex + 1, Math.max(0, cur.count - 1)));
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setActive((a) => Math.max(a - 1, 0));
+        setActive(Math.max(cur.activeIndex - 1, 0));
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        select(active);
+        cur.select(cur.activeIndex);
       }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isOpen, flat.length, active, select, onClose]);
-
-  // Clamp the highlight if the list shrinks.
-  useEffect(() => {
-    setActive((a) => Math.min(a, Math.max(0, flat.length - 1)));
-  }, [flat.length]);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -204,8 +309,17 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
           <input
             ref={inputRef}
             value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder={tp('palette.placeholder')}
+            onChange={(e) => {
+              setQ(e.target.value);
+              // Editing the text ends the search that was asked for; coming
+              // back to the same text needs Enter again (then it is answered
+              // from the cache).
+              setSubmitted(null);
+              setHighlightHits(false);
+              setActive(0);
+            }}
+            placeholder={canSearchJobs ? tp('palette.placeholder') : tp('palette.placeholder_pages')}
+            aria-label={canSearchJobs ? tp('palette.placeholder') : tp('palette.placeholder_pages')}
             className="flex-1 bg-transparent outline-hidden"
             style={{ color: 'var(--text)', fontFamily: 'var(--font-ui)', fontSize: 'var(--fs-body)' }}
           />
@@ -233,7 +347,7 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
                 return (
                   <Row
                     key={n.href}
-                    active={i === active}
+                    active={i === activeIndex}
                     onMouseEnter={() => setActive(i)}
                     onClick={() => select(i)}
                     icon={<IconArrow size={14} stroke="var(--text-muted)" />}
@@ -244,6 +358,23 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
             </Group>
           ) : null}
 
+          {showSearchRow
+            ? (() => {
+                runningIndex += 1;
+                const i = runningIndex;
+                return (
+                  <Row
+                    key="search"
+                    active={i === activeIndex}
+                    onMouseEnter={() => setActive(i)}
+                    onClick={() => select(i)}
+                    icon={<IconSearch size={14} stroke="var(--action)" />}
+                    label={tp('palette.search_jobs', { query: term })}
+                  />
+                );
+              })()
+            : null}
+
           {jobs.length > 0 ? (
             <Group label={tp('palette.group_jobs')}>
               {jobs.map((j) => {
@@ -252,7 +383,7 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
                 return (
                   <Row
                     key={j.id}
-                    active={i === active}
+                    active={i === activeIndex}
                     onMouseEnter={() => setActive(i)}
                     onClick={() => select(i)}
                     icon={<IconSearch size={14} stroke="var(--action)" />}
@@ -264,12 +395,33 @@ function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: () => v
             </Group>
           ) : null}
 
-          {flat.length === 0 ? (
+          {failed || refreshLimited ? (
+            <p role="alert" className="px-4 py-3" style={{ color: 'var(--danger)', fontSize: 'var(--fs-meta)' }}>
+              {refreshLimited ? tp('palette.refresh_limited') : tp('palette.error')}
+            </p>
+          ) : null}
+
+          {searching ? (
+            <p className="px-4 py-3" style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-meta)' }} role="status">
+              {tp('palette.searching')}
+            </p>
+          ) : null}
+
+          {/* A search that worked and found nothing: the saved-search filters
+              apply, and the message says so. */}
+          {answered && jobs.length === 0 ? (
+            <p className="px-4 py-3" style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-meta)' }} role="status">
+              {tp('palette.empty_jobs')}
+            </p>
+          ) : null}
+
+          {flat.length === 0 && !searched ? (
             <p
               className="px-4 py-8 text-center"
-              style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-meta)', fontStyle: 'italic' }}
+              style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-meta)' }}
+              role="status"
             >
-              {isFetching ? tp('palette.searching') : tp('palette.empty')}
+              {canSearchJobs ? tp('palette.empty') : tp('palette.empty_pages')}
             </p>
           ) : null}
         </div>

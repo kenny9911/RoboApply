@@ -4,107 +4,92 @@
 // Not a destination of its own: Settings sits in the nav's lower group.
 //
 // Which sections exist, in what order and per brand, is the registry in
-// components/features/settings/registry.ts (FND-6a; PRODUCT_PLAN.md §3.4):
+// components/features/settings/registry.ts (FND-6a; PRODUCT_PLAN.md §3.4).
+// What each section renders (INT-12 / WP-93 wiring):
 //
-//   Account        IdentitySection                       preferences (draft)
-//   Sign-in and security  SecurityCard                   account API
-//   Notifications  NotifSection                          preferences (draft)
-//   Plan and billing  credits SettingsSection (WP-21b)   sectionComponents.ts
-//   Credits        credits SettingsSection (WP-21b)      sectionComponents.ts
-//   Privacy and data  compliance PrivacyPanel (WP-13)    sectionComponents.ts
-//   Appearance     brand SettingsSection (WP-12)         sectionComponents.ts
-//   Your search    HuntSection + ResumeSection + BlocklistSection
-//   Danger zone    DangerSection                         destructive modals
-//   (+ consents, assistant, devices, connections, referrals, sensitive:
-//    rendered by their owning areas once ready)
+//   Account               this route: IdentitySection       preferences (draft)
+//                         + FinishSetupSettingsLine          frame (SECTION_EXTRAS)
+//   Sign-in and security  this route: SecurityCard           account API
+//                         + TwoFactorSettings                frame (SECTION_EXTRAS)
+//                         + ChangePhoneSection on GoApply    frame (SECTION_EXTRAS)
+//   Notifications         notifications SettingsSection      sectionComponents.ts
+//   Plan and billing      credits SettingsSection            sectionComponents.ts
+//   Credits               credits SettingsSection            sectionComponents.ts
+//   Privacy and data      compliance SettingsSection         sectionComponents.ts
+//   Appearance            brand SettingsSection              sectionComponents.ts
+//   Consents (GoApply)    compliance SettingsSection         sectionComponents.ts
+//   Your search           search SettingsSection (saved searches)
+//                         + this route, around it: SearchIntro above;
+//                           SearchNotes, ResumeSection, BlocklistSection
+//                           below                            preferences (draft)
+//   Assistant, Devices, Connections, Invite friends, Sensitive answers
+//                         their areas' SettingsSection       sectionComponents.ts
+//   Danger zone           this route: DangerSection          destructive modals
 //
-// This route renders the content that predates the clone; the frame
-// (<SettingsPage>) renders the section row and picks the open section. Old
-// deep links keep working: #notif → Notifications, #resume → Your search.
+// Old deep links keep working: #notif → Notifications, #resume → Your search.
 //
-// Two independent write models live side by side and that is deliberate:
+// THE DRAFT. The preference-backed pieces (Account, and the notes / main
+// resume / blocklist under Your search) share one draft + baseline + SaveBar.
+//   • `dirty` = the draft differs from the last server copy; Save clears it,
+//     Discard restores it.
+//   • Save sends ONLY the keys the user changed, never a search-backed key:
+//     job titles, places, pay and the company filters belong to the saved
+//     searches, which this page edits through their own API.
+//   • The blob is refetched while the page is open (saving a saved search
+//     invalidates it). A refetch never wipes unsaved edits, and a save that
+//     lands after a refetch does not mistake the server's newer values for
+//     edits: see `rebasePreferencesDraft` / `settlePreferencesSave` in
+//     hooks/usePreferences.ts.
+// This page no longer writes `goal`: level and pay are filters now, so there
+// is nothing here that could change it.
 //
-//   • The preference-backed sections share ONE draft + baseline + SaveBar.
-//     `dirty` is a structural compare of { draft, seniorityIndex } against the
-//     server baseline, so Save clears it and Discard restores it. On Save we
-//     fire preferences.update with the full draft and goal.upsert with the
-//     seniority + salary band.
-//     FIELD SPLIT NOTE (contract): `seniority` + the salary band live on
-//     `goal`. The band (salaryMinK/MaxK) is ALSO kept on the prefs draft for
-//     the UI and mirrored to goal on save (goal stores absolute dollars; prefs
-//     stores k).
-//   • Security writes immediately — a password change has nothing to Discard.
+// Sections that do not need the preferences never wait for them: the section
+// row always renders, and only the draft-backed pieces show a loading line or,
+// when the blob failed to load, what happened and a retry.
 //
-// Plan and billing / Credits (Wave 2 gate): rendered by WP-21b's credits
-// SettingsSection. Checkout there sends `planKey` (the legacy `{ tier }`
-// checkout this page used is refused by WP-21a with 409 plan_not_sellable)
-// and returns through /settings/billing/return (CheckoutReturn).
+// Security writes immediately — a password change has nothing to Discard.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 
-import { SettingsPage, type SettingsRenderers } from '../../../components/features/settings';
-import { usePreferences, useUpdatePreferences } from '../../../hooks/usePreferences';
-import { useGoal, useGoalMutation } from '../../../hooks/useGoal';
+import { SettingsPage, type SettingsRenderers, type SettingsRouteExtras } from '../../../components/features/settings';
+import {
+  changedPreferenceKeys,
+  rebasePreferencesDraft,
+  settlePreferencesSave,
+  usePreferences,
+  useUpdatePreferences,
+  type PreferencesDraftState,
+} from '../../../hooks/usePreferences';
 import { useResumeList } from '../../../hooks/useResumes';
 import { useAuth } from '../../../lib/auth/AuthProvider';
 import { RoboApiError } from '../../../lib/api/client';
 import {
   SaveBar,
-  PrefHeader,
   IdentitySection,
-  HuntSection,
+  SearchIntro,
+  SearchNotes,
   ResumeSection,
-  NotifSection,
   BlocklistSection,
   DangerSection,
 } from '../../../components/v3/preferences';
 import { Panel, SecurityCard } from '../../../components/v3/account';
+import { isPlaceholderEmail } from '../../../components/v3/account/format';
+import { clearDraftsOnSignOut, forgetPushOnSignOut, leaveSignedOut } from '../../../components/v3/shell/signOutCleanup';
 import { Btn } from '../../../components/v3/primitives/Btn';
+import { toast } from '../../../components/v3/primitives/Toast';
 import { useAccountProfile, useChangePassword, useSignOutAll } from '../../../hooks/useAccount';
-import type {
-  RAPreferences,
-  RAPreferenceOptions,
-  RASeniority,
-  PreferencesUpdateBody,
-} from '../../../lib/api/v2';
-
-// Map a numeric seniority index (Intern..Principal, 0..5) ↔ the RASeniority
-// enum used by `goal`. The two vocabularies don't line up 1:1 (RASeniority has
-// no "intern/junior/mid" and adds manager/director/vp/cxo) — this is a
-// best-effort bridge, unchanged from /preferences.
-const INDEX_TO_SENIORITY: RASeniority[] = [
-  'ic', // 0 Intern    → ic
-  'ic', // 1 Junior    → ic
-  'ic', // 2 Mid       → ic
-  'senior', // 3 Senior    → senior
-  'staff', // 4 Staff     → staff
-  'principal', // 5 Principal → principal
-];
-
-function seniorityToIndex(s: RASeniority | null): number {
-  if (!s) return 3; // default Senior
-  const i = INDEX_TO_SENIORITY.indexOf(s);
-  return i >= 0 ? i : 3;
-}
+import type { RAPreferences, PreferencesUpdateBody } from '../../../lib/api/v2';
 
 export default function SettingsRoute() {
-  // One namespace, one translator. This page used to hold three (`t`, `tp`,
-  // `ta`) because it was three routes — /preferences, /plans and /account —
-  // each with its own namespace. Wave 5 merged them into `settings`, so the
-  // aliases were three names for the same function.
   const t = useTranslations('settings');
-  const router = useRouter();
+  const tn = useTranslations('nav.settingsNotes');
   const auth = useAuth();
+  const { user, profile } = auth;
 
   const prefsQuery = usePreferences();
-  const goalQuery = useGoal();
   const resumesQuery = useResumeList();
-  const { user, profile } = useAuth();
-
   const updatePrefs = useUpdatePreferences();
-  const upsertGoal = useGoalMutation();
 
   // A section switch is a new screen: start it at the top rather than wherever
   // the previous section's scroll left off. Plain scrollTop writes, because
@@ -116,35 +101,24 @@ export default function SettingsRoute() {
   }, []);
 
   // ── Preference draft + its server baseline (dirty compare + discard) ──
-  const [draft, setDraft] = useState<RAPreferences | null>(null);
-  const [baseline, setBaseline] = useState<RAPreferences | null>(null);
-  const [seniorityIndex, setSeniorityIndex] = useState(3);
-  const [baselineSeniority, setBaselineSeniority] = useState(3);
-
+  const [prefs, setPrefs] = useState<PreferencesDraftState<RAPreferences> | null>(null);
   const serverPrefs = prefsQuery.data?.preferences ?? null;
-  const options: RAPreferenceOptions | null = prefsQuery.data?.options ?? null;
-  const goalSeniority = goalQuery.data?.goal?.seniority ?? null;
 
-  // Hydrate the draft once the server prefs arrive (and re-sync after a save,
-  // when serverPrefs.updatedAt changes).
+  // Every server copy (first load, a refetch, our own save landing in the
+  // cache) is folded into the draft; unsaved edits survive it.
   useEffect(() => {
     if (!serverPrefs) return;
-    setDraft(structuredClone(serverPrefs));
-    setBaseline(structuredClone(serverPrefs));
+    setPrefs((cur) => rebasePreferencesDraft(cur, serverPrefs));
   }, [serverPrefs]);
 
-  // Seniority comes from goal; seed it once goal resolves.
-  useEffect(() => {
-    const idx = seniorityToIndex(goalSeniority);
-    setSeniorityIndex(idx);
-    setBaselineSeniority(idx);
-  }, [goalSeniority]);
+  const draft = prefs?.draft ?? null;
+  const baseline = prefs?.baseline ?? null;
 
   // Deep path-set on the draft.
-  const set = (path: string, value: unknown) => {
-    setDraft((cur) => {
+  const set = useCallback((path: string, value: unknown) => {
+    setPrefs((cur) => {
       if (!cur) return cur;
-      const next = structuredClone(cur) as unknown as Record<string, unknown>;
+      const next = structuredClone(cur.draft) as unknown as Record<string, unknown>;
       const keys = path.split('.');
       let obj = next;
       for (let i = 0; i < keys.length - 1; i++) {
@@ -152,49 +126,33 @@ export default function SettingsRoute() {
         obj = obj[keys[i]] as Record<string, unknown>;
       }
       obj[keys[keys.length - 1]] = value;
-      return next as unknown as RAPreferences;
+      return { draft: next as unknown as RAPreferences, baseline: cur.baseline };
     });
-  };
+  }, []);
 
-  const dirty = useMemo(() => {
-    if (!draft || !baseline) return false;
-    return (
-      JSON.stringify(draft) !== JSON.stringify(baseline) ||
-      seniorityIndex !== baselineSeniority
-    );
-  }, [draft, baseline, seniorityIndex, baselineSeniority]);
+  const changed = useMemo(
+    () => (draft && baseline ? (changedPreferenceKeys(draft, baseline) as PreferencesUpdateBody) : {}),
+    [draft, baseline],
+  );
+  const dirty = Object.keys(changed).length > 0;
+  const saving = updatePrefs.isPending;
 
-  const saving = updatePrefs.isPending || upsertGoal.isPending;
-
-  const discard = () => {
-    if (baseline) setDraft(structuredClone(baseline));
-    setSeniorityIndex(baselineSeniority);
-  };
+  const discard = useCallback(() => {
+    setPrefs((cur) => (cur ? { draft: structuredClone(cur.baseline), baseline: cur.baseline } : cur));
+  }, []);
 
   const save = async () => {
-    if (!draft || !baseline) return;
-    // Send the whole draft (the API deep-merges; only changed fields matter).
-    await updatePrefs.mutateAsync(draft as unknown as PreferencesUpdateBody);
-
-    // Split write: seniority + salary band → goal. goal.upsert requires a
-    // targetTitle; reuse the existing goal's, falling back to the first role
-    // title so a first save doesn't throw.
-    const currentGoal = goalQuery.data?.goal ?? null;
-    const targetTitle =
-      currentGoal?.targetTitle || draft.roleTitles[0] || 'Untitled role';
+    if (!draft || !dirty) return;
+    const sent = changed;
     try {
-      await upsertGoal.mutateAsync({
-        targetTitle,
-        seniority: INDEX_TO_SENIORITY[seniorityIndex] ?? 'senior',
-        targetSalaryMin: draft.salaryMinK * 1000,
-        targetSalaryMax: draft.salaryMaxK * 1000,
-      });
+      const res = await updatePrefs.mutateAsync(sent);
+      // What we sent is saved; anything typed while the request was in flight
+      // stays unsaved.
+      setPrefs((cur) => settlePreferencesSave<RAPreferences>(cur, sent, res.preferences));
     } catch {
-      // Goal write is best-effort; prefs already persisted.
+      // Nothing was saved: the edits stay in the draft and the bar stays up.
+      toast({ message: tn('save_failed'), tone: 'danger' });
     }
-
-    setBaseline(structuredClone(draft));
-    setBaselineSeniority(seniorityIndex);
   };
 
   // ── Account security ─────────────────────────────────────────────────
@@ -231,75 +189,104 @@ export default function SettingsRoute() {
     );
   };
 
-  const onSignOutEverywhere = () => {
+  // True from the click until the request fails (on success the page leaves).
+  // It covers the push step, which runs before the mutation is pending, so the
+  // button is disabled and a second click cannot start a second sign-out.
+  const [signingOutEverywhere, setSigningOutEverywhere] = useState(false);
+  const signOutEverywhereInFlight = useRef(false);
+
+  const onSignOutEverywhere = async () => {
+    if (signOutEverywhereInFlight.current) return;
+    signOutEverywhereInFlight.current = true;
+    setSigningOutEverywhere(true);
+    // Forget this device's push subscription first, while the session can
+    // still authorise it. It never throws. If the sign-out then fails, this
+    // device's notifications stay off until the user turns them on again;
+    // nothing else is lost, because the drafts are cleared only on success.
+    await forgetPushOnSignOut();
     signOutAll.mutate(undefined, {
       onSuccess: () => {
+        clearDraftsOnSignOut();
         auth.clear();
-        router.replace('/login');
+        // A hard navigation: it drops the TanStack cache of this account.
+        leaveSignedOut();
+      },
+      onError: () => {
+        signOutEverywhereInFlight.current = false;
+        setSigningOutEverywhere(false);
+        toast({ message: tn('sign_out_failed'), tone: 'danger' });
       },
     });
   };
 
-  // ── Loading guard for the preference-backed sections ─────────────────
-  const loading = prefsQuery.isLoading || !draft || !options;
-
-  const name = (profile?.name as string) || user?.name || user?.email || '';
+  // `email` may be the generated address of an account without one (GoApply
+  // phone or WeChat sign-up). It still goes to the sections, which need it to
+  // tell (IdentitySection hides it, the delete modal sends it), but it never
+  // stands in for the name.
   const email = (profile?.email as string) || user?.email || '';
+  const name = (profile?.name as string) || user?.name || (isPlaceholderEmail(email) ? '' : email);
 
-  const renderers: SettingsRenderers =
-    loading || !draft || !options
-      ? {}
-      : {
-          account: () => <IdentitySection p={draft} set={set} name={name} email={email} />,
-          security: () =>
-            profileQ.data ? (
-              <SecurityCard
-                hasPassword={profileQ.data.hasPassword}
-                provider={profileQ.data.provider}
-                changing={changePassword.isPending}
-                signingOut={signOutAll.isPending}
-                passwordError={passwordError}
-                passwordSuccess={passwordSuccess}
-                onChangePassword={onChangePassword}
-                onSignOutEverywhere={onSignOutEverywhere}
-                resetKey={securityResetKey}
-              />
-            ) : profileQ.isError ? (
-              <BillingError onRetry={() => void profileQ.refetch()} />
-            ) : (
-              <p className="pref-sub">{t('loading')}</p>
-            ),
-          notifications: () => <NotifSection p={draft} set={set} />,
-          search: () => (
-            <>
-              <HuntSection
-                p={draft}
-                set={set}
-                options={options}
-                seniorityIndex={seniorityIndex}
-                setSeniorityIndex={setSeniorityIndex}
-              />
-              <ResumeSection p={draft} set={set} resumes={resumesQuery.data?.resumes ?? []} />
-              <BlocklistSection p={draft} set={set} />
-            </>
-          ),
-          danger: () => <DangerSection onReset={discard} accountEmail={email} />,
-        };
+  /**
+   * A draft-backed piece: its content once the preferences are here, a
+   * loading line while they load, and the failure with a retry when they did
+   * not load — never a blank panel.
+   */
+  const withDraft = (render: (p: RAPreferences) => ReactNode) => () => {
+    if (draft) return render(draft);
+    if (prefsQuery.isError) return <LoadError onRetry={() => void prefsQuery.refetch()} />;
+    return <p className="pref-sub">{t('loading')}</p>;
+  };
+
+  const renderers: SettingsRenderers = {
+    account: withDraft((p) => <IdentitySection p={p} set={set} name={name} email={email} />),
+    security: () =>
+      profileQ.data ? (
+        <SecurityCard
+          hasPassword={profileQ.data.hasPassword}
+          provider={profileQ.data.provider}
+          changing={changePassword.isPending}
+          signingOut={signingOutEverywhere || signOutAll.isPending}
+          passwordError={passwordError}
+          passwordSuccess={passwordSuccess}
+          onChangePassword={onChangePassword}
+          onSignOutEverywhere={() => void onSignOutEverywhere()}
+          resetKey={securityResetKey}
+        />
+      ) : profileQ.isError ? (
+        <LoadError onRetry={() => void profileQ.refetch()} />
+      ) : (
+        <p className="pref-sub">{t('loading')}</p>
+      ),
+    danger: () => <DangerSection accountEmail={email} />,
+  };
+
+  const extras: SettingsRouteExtras = {
+    search: {
+      before: () => <SearchIntro />,
+      after: withDraft((p) => (
+        <>
+          <SearchNotes p={p} set={set} />
+          <ResumeSection p={p} set={set} resumes={resumesQuery.data?.resumes ?? []} />
+          <BlocklistSection p={p} set={set} />
+        </>
+      )),
+    },
+  };
 
   return (
     <SettingsPage
-      loading={loading}
       renderers={renderers}
+      extras={extras}
       onSectionChange={onSectionChange}
       // Save bar — appears on dirty, clears on save/discard. Only the
-      // preference-backed sections can make it appear.
-      footer={dirty ? <SaveBar saving={saving} onDiscard={discard} onSave={save} /> : null}
+      // preference-backed pieces can make it appear.
+      footer={dirty ? <SaveBar saving={saving} onDiscard={discard} onSave={() => void save()} /> : null}
     />
   );
 }
 
-/** The account load failure: say what happened and what to do next. */
-function BillingError({ onRetry }: { onRetry: () => void }) {
+/** A load failure: say what happened and what to do next. */
+function LoadError({ onRetry }: { onRetry: () => void }) {
   const t = useTranslations('settings');
   return (
     <Panel>

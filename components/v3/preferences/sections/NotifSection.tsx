@@ -1,11 +1,13 @@
 'use client';
 
-// Settings § Notifications (WP-39b). The settings page still passes the
-// legacy preferences draft (`p`, `set`); this section no longer edits it.
-// Notification settings save on their own through the notifications API
-// (job alerts per saved search, channels, "Tips and reminders"), so they never
-// make the page's Save bar appear. The old email/push/SMS matrix and digest
-// control wrote preferences no sender read; they are gone.
+// Settings § Notifications — the pre-INT wrapper.
+//
+// @deprecated /settings#notifications renders `NotificationsSettingsSection`
+// (components/features/notifications), registered in
+// components/features/settings/sectionComponents.ts (INT-12). The settings
+// route no longer imports this file; it stays only because
+// components/features/notifications/notifications.test.tsx still renders it.
+// Delete it together with that test's import.
 
 import { NotificationsSettings } from '../../../features/notifications';
 import type { RAPreferences } from '../../../../lib/api/v2';

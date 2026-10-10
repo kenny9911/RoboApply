@@ -1,57 +1,56 @@
 'use client';
 
-// /settings#search — "Your search" (WP-20 rework).
+// /settings#search — the route's two pieces around the saved searches
+// (INT-12 / WP-93; WP-20 rework).
 //
-// Job targeting now lives in the saved searches (RASearchProfile, the one
-// preference store; ARCHITECTURE.md §2.8): titles, places, pay, company and
-// industry filters are edited with the same drawer the job list uses, so the
-// list, alerts and this page can never disagree. This section renders the
-// saved-searches manager (components/features/search) and keeps only the
-// free-text notes that are NOT filters and stay in the preferences blob: the
-// intent statement, must-haves and dealbreakers (never parsed into filters,
-// D3). The old seniority ladder, salary slider, company-stage grid (no funding
-// data) and the US-only work-authorization select are gone: level and pay are
-// filters, and work authorization is a per-country question on the profile
+// The section's content is `SearchSettingsSection` (components/features/search,
+// registered in components/features/settings/sectionComponents.ts): the saved
+// searches are the one preference store (RASearchProfile; ARCHITECTURE.md
+// §2.8), edited with the same drawer the job list uses, so the list, alerts
+// and this page can never disagree. Around it the settings route renders:
+//
+//   <SearchIntro />   above: the one setup sentence as the section's H1
+//                     (ruling C21) and where the filters went.
+//   <SearchNotes />   below: the free-text notes that are NOT filters and stay
+//                     in the preferences blob (the intent statement and two
+//                     lists). They are never parsed into filters (D3) and do
+//                     not hide or reorder jobs, and the copy says so.
+//
+// Gone since WP-20: the seniority ladder, salary slider, company-stage grid
+// (no funding data) and the US-only work-authorization select. Level and pay
+// are filters; work authorization is a per-country question on the profile
 // (WP-19, TW-09).
-//
-// The props are unchanged so app/(auth)/settings/page.tsx keeps compiling
-// until INT moves `#search` to SearchSettingsSection (TASK_PLAN §4.1.e).
 
 import { useTranslations } from 'next-intl';
 
 import { PrefHeader, PrefGroup, PrefRow, ChipInput } from '../controls';
-import { SavedSearchesManager } from '../../../features/search';
-import type { RAPreferences, RAPreferenceOptions } from '../../../../lib/api/v2';
+import type { RAPreferences } from '../../../../lib/api/v2';
 
-export function HuntSection({
-  p,
-  set,
-}: {
-  p: RAPreferences;
-  set: (path: string, value: unknown) => void;
-  /** Unused since WP-20 (kept for the settings page's call). */
-  options?: RAPreferenceOptions;
-  /** Unused since WP-20: level is a search filter. */
-  seniorityIndex?: number;
-  setSeniorityIndex?: (i: number) => void;
-}) {
+/** The section header: the one setup sentence (C21) and the pointer to the saved searches. */
+export function SearchIntro() {
   const t = useTranslations('settings');
   const tf = useTranslations('filters');
-
   return (
     <>
-      {/* Ruling C21: the one setup sentence stays this section's H1. */}
       <PrefHeader
         eyebrow={t('hunt.eyebrow')}
         title={`${t('hunt.title_before')} ${t('hunt.title_em')} ${t('hunt.title_after')}`}
         sub={t('hunt.sub')}
       />
       <p className="pref-sub">{tf('hunt.moved')}</p>
-      <h2 className="pref-sub">{tf('settings.title')}</h2>
-      <SavedSearchesManager />
+    </>
+  );
+}
 
+/** The draft-backed free-text notes (preferences blob). */
+export function SearchNotes({ p, set }: { p: RAPreferences; set: (path: string, value: unknown) => void }) {
+  const t = useTranslations('settings');
+  const tn = useTranslations('nav.settingsNotes');
+
+  return (
+    <>
       <PrefGroup label={t('hunt.group_intent')}>
-        <PrefRow label={t('hunt.intent_label')} sub={t('hunt.intent_sub')} align="top">
+        <PrefRow label={t('hunt.intent_label')} sub={tn('intent_sub')} align="top">
           <textarea
             className="pref-textarea"
             value={p.intentMarkdown}
@@ -62,8 +61,8 @@ export function HuntSection({
         </PrefRow>
       </PrefGroup>
 
-      <PrefGroup label={t('hunt.group_hard_rules')}>
-        <PrefRow label={t('hunt.musthaves_label')} sub={t('hunt.musthaves_sub')} align="top">
+      <PrefGroup label={tn('group_lists')}>
+        <PrefRow label={t('hunt.musthaves_label')} sub={tn('lists_sub')} align="top">
           <ChipInput
             values={p.mustHaves}
             onAdd={(v) => set('mustHaves', [...p.mustHaves, v])}
@@ -71,7 +70,7 @@ export function HuntSection({
             placeholder={t('hunt.musthaves_ph')}
           />
         </PrefRow>
-        <PrefRow label={t('hunt.dealbreakers_label')} sub={t('hunt.dealbreakers_sub')} align="top">
+        <PrefRow label={t('hunt.dealbreakers_label')} sub={tn('lists_sub')} align="top">
           <ChipInput
             values={p.dealbreakers}
             onAdd={(v) => set('dealbreakers', [...p.dealbreakers, v])}
