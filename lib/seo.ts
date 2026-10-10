@@ -2,7 +2,9 @@
 //
 // Marketing-site SEO/GEO helpers (WP-40 owns the landing metadata; WP-56
 // extends this file for the programmatic pages). Server-only (imports the
-// message bundles via lib/i18n).
+// message bundles via lib/i18n). WP-56 adds the builders at the end: browse
+// path classification, JobPosting / BreadcrumbList JSON-LD, host-aware
+// robots rules, sitemap XML and llms.txt.
 //
 // Two layers:
 //   - Brand-aware helpers used by every marketing page since WP-40:
@@ -11,27 +13,30 @@
 //     `faqPageNode(...)`, `messageAt(...)`. Canonical and hreflang follow the
 //     request's brand (ARCHITECTURE.md §1.6: RoboApply's cluster points zh-CN
 //     at GoApply; GoApply points en and zh-Hant at RoboApply).
-//   - The pre-brand landing helpers (`landingMetadata`, `landingJsonLd`,
-//     `languageAlternates`) kept for app/sitemap.ts and existing tests.
-//     @deprecated for new pages; WP-56 rewrites the sitemap, WP-75 deletes them.
+//   - The pre-brand `landingJsonLd` (+ `landingMetaStrings`, `SITE_URL`)
+//     kept for components/landing/LandingJsonLd.tsx and an existing test.
+//     @deprecated for new pages; WP-75 deletes them. (`languageAlternates`
+//     and `landingMetadata` were removed by WP-56 with app/sitemap.ts, their
+//     last importer.)
 //
 // URL scheme: `/` is the brand's default locale AND the x-default; every
 // other locale lives at `/{locale}` so crawlers get stable, indexable
 // localized documents. On RoboApply `/en` also renders English (so a link
 // can force it) but canonicalizes to `/` and is not part of the cluster.
 
-import type { Metadata } from 'next';
+import type { Metadata, MetadataRoute } from 'next';
 
 import { loadMessages } from './i18n';
 import {
   HREFLANG,
-  LOCALES,
   SEO_READY_LOCALES,
   localePath,
   type RoboLocale,
 } from './localeConfig';
 import { MARKET_CURRENCY, PLAN_PRICES_MINOR, type BillingMarket } from './pricing';
 import { getBrand, type BrandId, type ProductBrand } from './brand/registry.generated';
+import { PROTECTED_PREFIXES } from './proxyPaths';
+import type { PublicJobDetail } from './api/contracts/seo';
 
 export { localePath };
 
@@ -50,24 +55,6 @@ const OG_LOCALE: Record<RoboLocale, string> = {
   pt: 'pt_BR',
   de: 'de_DE',
 };
-
-/** hreflang → absolute URL map for the landing cluster (incl. x-default).
- *  Only SEO-ready (translated) locales participate; plus Bing-compat region
- *  aliases for Chinese (zh-CN / zh-HK don't parse script subtags). */
-export function languageAlternates(): Record<string, string> {
-  const langs: Record<string, string> = {};
-  for (const locale of SEO_READY_LOCALES) {
-    langs[HREFLANG[locale]] = `${SITE_URL}${localePath(locale)}`;
-  }
-  if (SEO_READY_LOCALES.includes('zh')) {
-    langs['zh-CN'] = `${SITE_URL}${localePath('zh')}`;
-  }
-  if (SEO_READY_LOCALES.includes('zh-TW')) {
-    langs['zh-HK'] = `${SITE_URL}${localePath('zh-TW')}`;
-  }
-  langs['x-default'] = `${SITE_URL}/`;
-  return langs;
-}
 
 interface LandingMetaStrings {
   title: string;
@@ -94,53 +81,6 @@ export function landingMetaStrings(locale: RoboLocale): LandingMetaStrings {
     ogTitle: meta.ogTitle ?? meta.title ?? `${SITE_NAME}: find out why you're not getting interviews`,
     ogDescription: meta.ogDescription ?? meta.description ?? `${SITE_NAME} shows the jobs that fit your resume and what each one is missing.`,
     keywords: meta.keywords,
-  };
-}
-
-/** Full Metadata object for a landing page (root or /{locale}). @deprecated use homeMetadata (brand-aware). */
-export function landingMetadata(locale: RoboLocale): Metadata {
-  const { title, description, ogTitle, ogDescription, keywords } =
-    landingMetaStrings(locale);
-  const canonical = `${SITE_URL}${localePath(locale)}`;
-  return {
-    title,
-    description,
-    ...(keywords ? { keywords } : {}),
-    alternates: {
-      canonical,
-      languages: languageAlternates(),
-    },
-    openGraph: {
-      type: 'website',
-      url: canonical,
-      siteName: SITE_NAME,
-      title: ogTitle,
-      description: ogDescription,
-      locale: OG_LOCALE[locale],
-      alternateLocale: LOCALES.filter((l) => l !== locale).map(
-        (l) => OG_LOCALE[l],
-      ),
-      // Text-free brand image so one asset serves all 9 locales.
-      images: [
-        {
-          url: `${SITE_URL}/og.png`,
-          width: 1200,
-          height: 630,
-          alt: SITE_NAME,
-        },
-      ],
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title: ogTitle,
-      description: ogDescription,
-      images: [`${SITE_URL}/og.png`],
-    },
-    robots: SEO_READY_LOCALES.includes(locale)
-      ? { index: true, follow: true, 'max-image-preview': 'large' }
-      : // Untranslated locale URLs stay reachable for humans (language menu)
-        // but out of the index until their landing bundle ships.
-        { index: false, follow: true },
   };
 }
 
@@ -379,4 +319,367 @@ export function faqFromMessages(locale: RoboLocale, brandId: BrandId, base: stri
   return keys
     .map((k) => ({ q: messageAt(locale, brandId, `${base}.${k}.q`), a: messageAt(locale, brandId, `${base}.${k}.a`) }))
     .filter((e) => e.q && e.a);
+}
+
+// ── Programmatic pages, job pages, crawl policy (WP-56) ──────────────────
+//
+// Pure builders for the routes WP-56 owns: app/browse/**, app/job/**,
+// app/robots.ts, app/sitemap.xml, app/sitemaps/[file], app/llms.txt. Data
+// comes from lib/server/publicApi.ts; nothing here fetches.
+
+
+/** Browse page types (twin of server/src/features/seo/contract.ts SEO_PAGE_TYPES). */
+export type BrowsePageType = 'role' | 'role_city' | 'remote_role' | 'sponsorship_role' | 'segment' | 'graduate_role';
+
+const BROWSE_SEGMENTS = new Set(['entry-level', 'internships']);
+const BROWSE_SEGMENT_RE = /^[\p{L}\p{N}-]{1,80}$/u;
+
+/**
+ * Page type + slug of a browse path WITHOUT resolving it (the server does
+ * that). Twin of the server's `classifyBrowsePath`; the slug equals the
+ * server's canonical slug for canonical paths, so cache tags line up with
+ * the ones `seo-rebuild` revalidates.
+ */
+export function classifyBrowseSegments(segments: readonly string[]): { type: BrowsePageType; slug: string } | null {
+  const parts = segments.map((s) => {
+    try {
+      return decodeURIComponent(s);
+    } catch {
+      return s;
+    }
+  });
+  if (parts.length === 0 || parts.length > 3 || !parts.every((p) => BROWSE_SEGMENT_RE.test(p))) return null;
+  const [a, b, c] = parts;
+  if (parts.length === 1 && BROWSE_SEGMENTS.has(a!)) return { type: 'segment', slug: a! };
+  if (a === 'remote') return parts.length === 2 ? { type: 'remote_role', slug: b! } : null;
+  if (a === 'graduate') return parts.length === 2 ? { type: 'graduate_role', slug: b! } : null;
+  if (a === 'visa-sponsorship') return parts.length === 3 ? { type: 'sponsorship_role', slug: `${b}/${c}` } : null;
+  if (parts.length === 1) return { type: 'role', slug: a! };
+  if (parts.length === 2) return { type: 'role_city', slug: `${a}/${b}` };
+  return null;
+}
+
+/** What a browse path that did not resolve asked for (`unknown_role` / `unknown_city` from the API). */
+export interface BrowseUnknownQuery {
+  kind: 'role' | 'city';
+  /** The role as typed (dashes → spaces). */
+  role: string;
+  /** The city as typed, for role × city paths. */
+  city: string | null;
+}
+
+/**
+ * Map an unresolved browse path to the role (and city) the visitor typed, so
+ * the page names the part we could not find: `/browse/backend-engineer/atlantis`
+ * with `unknown_city` is a city miss for "backend engineer", not a role named
+ * "atlantis". Null for any other reason or shape.
+ */
+export function browseUnknownQuery(segments: readonly string[], reason: string | null): BrowseUnknownQuery | null {
+  if (reason !== 'unknown_role' && reason !== 'unknown_city') return null;
+  const cls = classifyBrowseSegments(segments);
+  if (!cls || cls.type === 'segment') return null;
+  const text = (s: string | undefined) => (s ?? '').replace(/-/g, ' ').trim().slice(0, 80);
+  const parts = cls.slug.split('/');
+  if (cls.type === 'role_city') {
+    const role = text(parts[0]);
+    const city = text(parts[1]);
+    return reason === 'unknown_city' ? { kind: 'city', role, city } : { kind: 'role', role, city };
+  }
+  if (reason !== 'unknown_role') return null;
+  // sponsorship_role slugs are `<country>/<role>`; the rest are the role alone.
+  return { kind: 'role', role: text(parts[parts.length - 1]), city: null };
+}
+
+/** The id inside `/job/<id>-<slug>` (twin of the server's parseIdSlug). */
+export function parseJobIdSlug(idSlug: string): string | null {
+  let raw = idSlug;
+  try {
+    raw = decodeURIComponent(idSlug);
+  } catch {
+    /* keep raw */
+  }
+  const id = raw.split('-')[0] ?? '';
+  return /^[A-Za-z0-9_]{1,64}$/.test(id) ? id : null;
+}
+
+/** `seo:<brand>:<type>:<slug>` — unstable_cache tag (twin of the server's seoCacheTag). */
+export function seoCacheTag(brandId: BrandId, type: string, slug: string): string {
+  return `seo:${brandId}:${type}:${slug}`;
+}
+
+const SCHEMA_EMPLOYMENT: Record<string, string> = {
+  full_time: 'FULL_TIME',
+  part_time: 'PART_TIME',
+  contract: 'CONTRACTOR',
+  internship: 'INTERN',
+};
+
+const SCHEMA_PERIOD: Record<string, string> = { year: 'YEAR', month: 'MONTH', week: 'WEEK', day: 'DAY', hour: 'HOUR' };
+
+function escapeJson(graph: unknown): string {
+  return JSON.stringify(graph).replace(/</g, '\\u003c');
+}
+
+/**
+ * schema.org JobPosting for a public job page (ARCH §9.3):
+ *   datePosted only when the posted date was not estimated; validThrough only
+ *   from the posting's real end date; baseSalary only when the posting
+ *   disclosed pay; TELECOMMUTE only for remote jobs; directApply false (the
+ *   user applies on the employer's site).
+ */
+export function jobPostingNode(job: PublicJobDetail, brandId: BrandId): Record<string, unknown> {
+  const url = brandUrl(brandId, job.canonicalPath);
+  const description = [job.descriptionPlain, job.responsibilities, job.qualifications, job.benefits].filter(Boolean).join('\n\n');
+  const node: Record<string, unknown> = {
+    '@type': 'JobPosting',
+    '@id': `${url}#job`,
+    title: job.title,
+    description,
+    url,
+    directApply: false,
+    hiringOrganization: {
+      '@type': 'Organization',
+      name: job.company.name,
+      ...(job.company.website ? { sameAs: job.company.website } : {}),
+      ...(job.company.logoUrl ? { logo: job.company.logoUrl } : {}),
+    },
+  };
+  if (job.postedAt) node.datePosted = job.postedAt;
+  if (job.expiresAt) node.validThrough = job.expiresAt;
+  const employment = job.employmentType ? SCHEMA_EMPLOYMENT[job.employmentType] : undefined;
+  if (employment) node.employmentType = employment;
+  if (job.workModel === 'remote') {
+    node.jobLocationType = 'TELECOMMUTE';
+    if (job.remoteScope && job.remoteScope !== 'global') node.applicantLocationRequirements = { '@type': 'Country', name: job.remoteScope };
+  }
+  if (job.workModel !== 'remote' && (job.city || job.country)) {
+    node.jobLocation = {
+      '@type': 'Place',
+      address: {
+        '@type': 'PostalAddress',
+        ...(job.city ? { addressLocality: job.city } : {}),
+        ...(job.region ? { addressRegion: job.region } : {}),
+        ...(job.country ? { addressCountry: job.country } : {}),
+      },
+    };
+  }
+  if (job.pay && SCHEMA_PERIOD[job.pay.period]) {
+    node.baseSalary = {
+      '@type': 'MonetaryAmount',
+      currency: job.pay.currency,
+      value: {
+        '@type': 'QuantitativeValue',
+        unitText: SCHEMA_PERIOD[job.pay.period],
+        ...(job.pay.min != null ? { minValue: job.pay.min } : {}),
+        ...(job.pay.max != null ? { maxValue: job.pay.max } : {}),
+      },
+    };
+  }
+  return node;
+}
+
+/** schema.org BreadcrumbList for a trail of `{ name, path }`. */
+export function breadcrumbNode(brandId: BrandId, trail: ReadonlyArray<{ name: string; path: string }>): Record<string, unknown> {
+  return {
+    '@type': 'BreadcrumbList',
+    itemListElement: trail.map((t, i) => ({ '@type': 'ListItem', position: i + 1, name: t.name, item: brandUrl(brandId, t.path) })),
+  };
+}
+
+/** One JSON-LD document from graph nodes (escaped for a <script> tag). */
+export function jsonLdGraph(nodes: ReadonlyArray<Record<string, unknown>>): string {
+  return escapeJson({ '@context': 'https://schema.org', '@graph': nodes });
+}
+
+/** Metadata for a public page that is not a marketing page: canonical on the brand origin, indexable only when told. */
+export function publicPageMetadata(input: { brandId: BrandId; path: string; title: string; description: string; indexable: boolean }): Metadata {
+  const brand = getBrand(input.brandId);
+  const canonical = brandUrl(brand.id, input.path);
+  const image = brandUrl(brand.id, brand.assets.og);
+  return {
+    title: input.title,
+    description: input.description,
+    alternates: { canonical },
+    openGraph: { type: 'website', url: canonical, siteName: brand.name, title: input.title, description: input.description, images: [{ url: image, width: 1200, height: 630, alt: brand.name }] },
+    twitter: { card: 'summary_large_image', title: input.title, description: input.description, images: [image] },
+    robots: input.indexable ? { index: true, follow: true, 'max-image-preview': 'large' } : { index: false, follow: true },
+  };
+}
+
+// ── robots.txt ────────────────────────────────────────────────────────────
+
+/** AI crawlers: welcome on the marketing pages, kept off /job/* until bank syndication consent exists (OPS-A4). */
+export const AI_CRAWLERS: readonly string[] = [
+  'GPTBot',
+  'OAI-SearchBot',
+  'ChatGPT-User',
+  'ClaudeBot',
+  'Claude-User',
+  'Claude-SearchBot',
+  'anthropic-ai',
+  'PerplexityBot',
+  'Perplexity-User',
+  'Google-Extended',
+  'Applebot-Extended',
+  'CCBot',
+  'Bytespider',
+  'meta-externalagent',
+];
+
+/** Every authenticated route plus the API: "requires a session" and "not worth crawling" are the same set. */
+export function appDisallowPaths(): string[] {
+  return ['/api/', ...PROTECTED_PREFIXES];
+}
+
+/** Host-aware robots rules (ARCH §9.5). */
+export function robotsFor(brandId: BrandId): MetadataRoute.Robots {
+  const brand = getBrand(brandId);
+  const app = appDisallowPaths();
+  const rules: MetadataRoute.Robots['rules'] = [
+    { userAgent: '*', allow: '/', disallow: app },
+    { userAgent: [...AI_CRAWLERS], allow: '/', disallow: [...app, '/job/'] },
+  ];
+  if (brand.seo.searchEngines.includes('baidu')) rules.push({ userAgent: 'Baiduspider', allow: '/', disallow: app });
+  return { rules, sitemap: brandUrl(brand.id, '/sitemap.xml'), host: brand.canonicalOrigin };
+}
+
+// ── Sitemaps ──────────────────────────────────────────────────────────────
+
+export interface SitemapEntry {
+  loc: string;
+  lastmod?: string | null;
+  /** hreflang → absolute URL. */
+  alternates?: Record<string, string>;
+}
+
+function xmlEscape(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+export function urlsetXml(entries: readonly SitemapEntry[]): string {
+  const hasAlt = entries.some((e) => e.alternates && Object.keys(e.alternates).length);
+  const lines = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"${hasAlt ? ' xmlns:xhtml="http://www.w3.org/1999/xhtml"' : ''}>`,
+  ];
+  for (const e of entries) {
+    lines.push('  <url>');
+    lines.push(`    <loc>${xmlEscape(e.loc)}</loc>`);
+    if (e.lastmod) lines.push(`    <lastmod>${xmlEscape(e.lastmod)}</lastmod>`);
+    for (const [lang, href] of Object.entries(e.alternates ?? {})) {
+      lines.push(`    <xhtml:link rel="alternate" hreflang="${xmlEscape(lang)}" href="${xmlEscape(href)}"/>`);
+    }
+    lines.push('  </url>');
+  }
+  lines.push('</urlset>');
+  return `${lines.join('\n')}\n`;
+}
+
+export function sitemapIndexXml(sitemaps: ReadonlyArray<{ loc: string; lastmod?: string | null }>): string {
+  const lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'];
+  for (const s of sitemaps) {
+    lines.push('  <sitemap>');
+    lines.push(`    <loc>${xmlEscape(s.loc)}</loc>`);
+    if (s.lastmod) lines.push(`    <lastmod>${xmlEscape(s.lastmod)}</lastmod>`);
+    lines.push('  </sitemap>');
+  }
+  lines.push('</sitemapindex>');
+  return `${lines.join('\n')}\n`;
+}
+
+/**
+ * The static sitemap of a brand: the home cluster (each home URL with the
+ * brand's hreflang set — only `brand.seoLocales` plus the cross-domain
+ * alternates), the marketing subpages, indexable feature pages, signup, and
+ * the surfaces that are live (`/browse`, `/campus`).
+ */
+export function staticSitemapEntries(
+  brandId: BrandId,
+  opts: { featurePaths: readonly string[]; surfaces: { browse: boolean; campus: boolean } },
+): SitemapEntry[] {
+  const brand = getBrand(brandId);
+  const languages = brandLanguageAlternates(brand.id);
+  const homes = SEO_READY_LOCALES.filter((l) => brand.seoLocales.includes(l)).map((l) => homePath(brand, l));
+  const out: SitemapEntry[] = [...new Set(homes)].map((p) => ({ loc: brandUrl(brand.id, p), alternates: languages }));
+  const pages = ['/pricing', '/about', '/security', '/help', ...opts.featurePaths, '/signup'];
+  if (opts.surfaces.browse && brand.market !== 'cn') pages.push('/browse');
+  if (opts.surfaces.campus && brand.market === 'cn') pages.push('/campus');
+  for (const p of pages) out.push({ loc: brandUrl(brand.id, p) });
+  return out;
+}
+
+// ── llms.txt ──────────────────────────────────────────────────────────────
+
+const LOCALE_NAMES: Record<RoboLocale, string> = {
+  en: 'English',
+  zh: '简体中文',
+  'zh-TW': '繁體中文',
+  ja: '日本語',
+  ko: '한국어',
+  es: 'Español',
+  fr: 'Français',
+  pt: 'Português',
+  de: 'Deutsch',
+};
+
+/**
+ * llms.txt per brand (ARCH §9.5; replaces the stale public/llms.txt). States
+ * only what the product does today; never claims it applies for the user
+ * (D1) and quotes no prices (they live in config and change).
+ */
+export function llmsTxt(brandId: BrandId, opts: { campus?: boolean } = {}): string {
+  const brand = getBrand(brandId);
+  const url = (p: string) => brandUrl(brand.id, p);
+  const other = getBrand(brand.otherBrand);
+  const langs = brand.locales.map((l) => LOCALE_NAMES[l]).join(', ');
+  if (brand.market === 'cn') {
+    return [
+      `# ${brand.name}`,
+      '',
+      `> ${brand.name} (${url('/')}) is a job-search toolkit for students and job seekers in mainland China: resume writing and checks, a record of the applications you send${opts.campus ? ', interview practice, and a campus recruiting calendar built from official sources' : ' and interview practice'}. You submit every application yourself on the employer's site; ${brand.name} never applies for you.`,
+      '',
+      `${brand.name}（${url('/')}）是面向中国大陆学生和求职者的求职工具：简历撰写与检查、投递记录${opts.campus ? '、面试练习，以及根据官方来源整理的校招日历' : '和面试练习'}。所有申请都由你本人在招聘方网站提交，${brand.name} 不会代你投递。`,
+      '',
+      '## Facts',
+      `- Languages: ${langs}.`,
+      '- AI-written text is labelled as AI-generated.',
+      `- Prices: see ${url('/pricing')} (prices change; do not quote them from memory).`,
+      `- International users (including Taiwan) are served by ${other.name}: ${other.canonicalOrigin}/`,
+      '',
+      '## Pages',
+      `- [首页 Home](${url('/')})`,
+      `- [价格 Pricing](${url('/pricing')})`,
+      `- [关于 About](${url('/about')})`,
+      `- [安全 Security](${url('/security')})`,
+      `- [帮助 Help](${url('/help')})`,
+      ...(opts.campus ? [`- [校招日历 Campus calendar](${url('/campus')})`] : []),
+      '',
+    ].join('\n');
+  }
+  const homes = SEO_READY_LOCALES.filter((l) => brand.seoLocales.includes(l) && l !== brand.defaultLocale).map((l) => `${url(homePath(brand, l))} (${LOCALE_NAMES[l]})`);
+  return [
+    `# ${brand.name}`,
+    '',
+    `> ${brand.name} (${url('/')}) helps job seekers find openings that fit their resume, see what each posting asks for that the resume does not show yet, tailor the resume and write a cover letter from their own experience, practice the interview with an AI interviewer, and keep track of their applications. You apply on the employer's site yourself; ${brand.name} never submits an application for you.`,
+    '',
+    '## Facts',
+    '- The fit score shows how a resume lines up with a posting. It is not a chance of being hired.',
+    '- Resume edits and cover letters are suggestions the user reviews before using them; claims must come from the user\'s own experience.',
+    '- Numbers about jobs (pay, counts) come from the postings or our job index and are shown with their source; unknown values are shown as not listed.',
+    `- Languages: ${langs}.`,
+    `- Prices: see ${url('/pricing')} (prices change; do not quote them from memory).`,
+    `- Users in mainland China are served by ${other.name}: ${other.canonicalOrigin}/`,
+    '',
+    '## Pages',
+    `- [Home](${url('/')}): what the product does and how it works.`,
+    `- [Pricing](${url('/pricing')})`,
+    `- [About](${url('/about')})`,
+    `- [Security](${url('/security')}): how data is stored and which AI providers process it.`,
+    `- [Help](${url('/help')})`,
+    ...(homes.length ? [`- Home page in other languages: ${homes.join(', ')}.`] : []),
+    '',
+    '## Crawling',
+    '- Public job pages (/job/...) are not open to AI crawlers; see robots.txt.',
+    '',
+  ].join('\n');
 }
