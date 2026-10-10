@@ -1,8 +1,10 @@
-// /admin/questions — route shell (FND-6b). Admin: question-bank moderation.
-//
-// STUB. Owner: WP-59, who replaces this page. Renders inside the (auth) app shell.
-// Nothing links here until the owner ships and INT flips the entry.
+// /admin/questions — practice-question moderation (WP-59): questions users
+// shared (checked before they show), reported and hidden questions, and
+// staff-written general questions. Admin only; the console checks the role
+// and the API enforces it.
+
+import { AdminQuestionsConsole } from '../../../../components/features/prep';
 
 export default function AdminQuestionsPage() {
-  return <div hidden data-route-stub="/admin/questions" data-owner="WP-59" />;
+  return <AdminQuestionsConsole />;
 }
