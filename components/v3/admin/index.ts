@@ -38,8 +38,10 @@ export {
 export { ProfitabilitySummary, SetPlanModal, RateCardPanel } from './panels';
 export * from './format';
 // Admin console additions (WP-74).
-export { AdminNav, ADMIN_AREAS, adminAreasFor, type AdminArea } from './AdminNav';
+export { AdminNav, ADMIN_AREAS, adminAreasFor, currentAdminArea, type AdminArea } from './AdminNav';
 export { AdminGate } from './AdminGate';
-export { SystemConsole, SYSTEM_VIEWS, fmtUsd, type SystemView } from './SystemConsole';
+export { SystemConsole, SYSTEM_VIEWS, AUDIT_ACTIONS, fmtUsd, type SystemView } from './SystemConsole';
 export { ReportsConsole } from './ReportsConsole';
+// Held invite rewards (INT-08; WP-60's review routes).
+export { InviteRewardsConsole, HOLD_REASONS, reviewOutcome, type ReviewOutcome } from './InviteRewardsConsole';
 export { UserOverridesPanel, RefundQuotePanel, parseOverrideValue } from './UserAdminPanels';

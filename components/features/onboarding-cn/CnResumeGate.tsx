@@ -10,7 +10,16 @@
 // The optional-field reminder is always shown. Images are parsed by the
 // GoHire parse API only (server routing, WP-15); there is no local OCR.
 //
-//   <CnResumeGate onManual={() => router.push('/profile')}><ResumeDoors/></CnResumeGate>
+// The onboarding page wraps the shared resume screen in it (INT-08); 手动填写
+// there skips the resume step, so setup goes on and the profile is filled in
+// by hand afterwards:
+//
+//   <CnResumeGate onManual={() => save({}, { skip: true })} busy={busy} error={error}><ResumeStep …/></CnResumeGate>
+//
+// `busy` and `error` belong to the caller's save (手动填写 is the caller's
+// request): while it runs both buttons are off, and when it fails the message
+// shows here — the upload screen, which would otherwise show it, is not on the
+// page in manual mode.
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -26,9 +35,13 @@ export interface CnResumeGateProps {
   children: ReactNode;
   /** Manual mode: fill the profile by hand (and skip the upload). */
   onManual: () => void;
+  /** The caller is saving (手动填写 was pressed): both buttons are off. */
+  busy?: boolean;
+  /** The caller's save failed: a plain message, already in the user's language. */
+  error?: string | null;
 }
 
-export function CnResumeGate({ children, onManual }: CnResumeGateProps) {
+export function CnResumeGate({ children, onManual, busy: saving = false, error = null }: CnResumeGateProps) {
   const t = useTranslations('onboardingCn');
   const locale = useLocale();
   const api = useCnOnboardingApi();
@@ -83,11 +96,11 @@ export function CnResumeGate({ children, onManual }: CnResumeGateProps) {
           <li>{t('resume.unavailable.assistant')}</li>
         </ul>
         <div className={styles.chips}>
-          <Btn variant="primary" onClick={onManual}>
+          <Btn variant="primary" onClick={onManual} disabled={saving || busy}>
             {t('resume.manual')}
           </Btn>
           {item ? (
-            <Btn onClick={() => void enable()} disabled={busy}>
+            <Btn onClick={() => void enable()} disabled={saving || busy}>
               {t('resume.enable')}
             </Btn>
           ) : null}
@@ -96,6 +109,11 @@ export function CnResumeGate({ children, onManual }: CnResumeGateProps) {
         {failed ? (
           <p className={styles.error} role="alert">
             {t('errors.save')}
+          </p>
+        ) : null}
+        {error ? (
+          <p className={styles.error} role="alert">
+            {error}
           </p>
         ) : null}
       </div>

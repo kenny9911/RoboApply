@@ -4,8 +4,19 @@
 // pipeline depend on the `OnboardingRepo` interface, so tests run on an
 // in-memory fake (no network, no database).
 
-import type { Prisma } from '../../generated/prisma/client.js';
+import { Prisma } from '../../generated/prisma/client.js';
 import type { OnboardingAnswers, OnboardingEntry } from './contract.js';
+
+/**
+ * Not flagged as fraudulent (R-17): `RAJob.fraudFlags` is null or []. The same
+ * rule as the cn index count (`NOT_FRAUD_FLAGGED`, onboarding-cn/marketSnapshot.ts);
+ * repo.test.ts keeps the two equal. It is written out here instead of imported:
+ * this file is loaded by every importer of the stage machine, and the
+ * onboarding-cn index would bring that whole area (and compliance) with it.
+ */
+export const CANDIDATE_NOT_FRAUD_FLAGGED: Prisma.RAJobWhereInput = {
+  OR: [{ fraudFlags: { equals: Prisma.DbNull } }, { fraudFlags: { equals: Prisma.JsonNull } }, { fraudFlags: { equals: [] } }],
+};
 
 export interface OnboardingRecord {
   step: string | null;
@@ -38,6 +49,8 @@ export interface CandidateQuery {
   titles: string[];
   /** ISO countries; empty = anywhere. */
   countries: string[];
+  /** City names (GoApply 期望城市); empty or absent = every city. */
+  cities?: string[];
   /** Include remote jobs wherever they are. */
   includeRemote: boolean;
   limit: number;
@@ -53,7 +66,13 @@ export interface OnboardingRepo {
   /** RAProfile.seekerType / careerGoal (upsert; undefined leaves a field). */
   setProfileFields(userId: string, data: { seekerType?: string | null; careerGoal?: string | null }): Promise<void>;
   getResume(userId: string, variantId: string): Promise<ResumeVariantRow | null>;
-  /** Candidate job ids for O6: public, canonical, live rows of the market only. */
+  /**
+   * Candidate job ids for O6: public, canonical rows of the market that are
+   * still open (not archived, not closed — a job closed after reports keeps
+   * `archivedAt` null). On GoApply a fraud-flagged posting is left out too
+   * (R-17), the same rule as the cn index count, so the number the user is
+   * told never exceeds what the list can show.
+   */
   findCandidates(q: CandidateQuery): Promise<string[]>;
 }
 
@@ -156,13 +175,21 @@ export function createPrismaOnboardingRepo(getDb: () => Promise<Db> = async () =
         ...(q.countries.length ? [{ locationCountry: { in: q.countries } }] : []),
         ...(q.includeRemote ? [{ workModel: 'remote' }] : []),
       ];
+      const cities = (q.cities ?? []).filter(Boolean);
+      const cityOr: Prisma.RAJobWhereInput[] = cities.length ? [{ locationCity: { in: cities } }, ...cities.map((c) => ({ location: { contains: c } }))] : [];
       const rows = await db.rAJob.findMany({
         where: {
           market: q.market,
           visibility: 'public',
           isCanonical: true,
           archivedAt: null,
-          AND: [{ OR: titleOr }, ...(placeOr.length && q.countries.length ? [{ OR: placeOr }] : [])],
+          closedAt: null,
+          AND: [
+            { OR: titleOr },
+            ...(placeOr.length && q.countries.length ? [{ OR: placeOr }] : []),
+            ...(cityOr.length ? [{ OR: cityOr }] : []),
+            ...(q.market === 'cn' ? [CANDIDATE_NOT_FRAUD_FLAGGED] : []),
+          ],
         },
         select: { id: true },
         orderBy: { postedAt: 'desc' },

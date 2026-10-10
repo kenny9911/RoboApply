@@ -1,6 +1,5 @@
 // server/src/features/admin/moderation.ts — GoApply referral-code moderation
-// from the console, with an audit row (ARCHITECTURE.md §10.5: "overrides and
-// moderation write an audit SeekerActivityLog row").
+// from the console, with an audit row (ARCHITECTURE.md §10.5; RAAdminAuditLog).
 //
 // The rules and storage are WP-54's (cn/referrals `CnReferralService.moderate`:
 // approve/reject, reason codes, report-count reset). This module reads the

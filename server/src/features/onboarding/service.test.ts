@@ -4,6 +4,9 @@
 // (no network, no database). Covers idempotent re-submission, resumability
 // across devices, side effects, leaving early, GoApply dispatch, and the O5
 // resume seed (daily limit; zero LLM calls without AI consent).
+// INT-08: the GoApply seam (confirm through the cn validator, the cn market
+// snapshot, the first-value route from the stored identity, the manual resume
+// step) and the soft "setup reached done" hook the invite programme uses.
 
 import { describe, expect, it, vi } from 'vitest';
 
@@ -14,7 +17,7 @@ import { NotImplementedError } from '../../platform/http.js';
 import { createOnboardingService, defaultCountry, type OnboardingDeps } from './service.js';
 import { SAMPLE_BASICS, createMemoryRepo, createMemorySearchProfiles } from './testkit.js';
 import { CONSENT_PROSE_VERSION } from '../compliance/index.js';
-import { createOnboardingCnService } from '../onboarding-cn/index.js';
+import { cnFirstValueContext, createOnboardingCnService } from '../onboarding-cn/index.js';
 
 const RA = { brand: getBrand('roboapply') };
 const GO = { brand: getBrand('goapply') };
@@ -387,5 +390,208 @@ describe('market snapshot is scoped to the brand market', () => {
     const { svc, deps } = setup();
     await svc.marketSnapshot({ taxonomyId: 'backend_engineer', country: 'US' }, GO);
     expect(deps.snapshot).toHaveBeenCalledWith({ market: 'cn', taxonomyId: 'backend_engineer', country: 'US' });
+  });
+});
+
+// ── INT-08: the GoApply seam ──────────────────────────────────────────────
+
+describe('GoApply confirm, first value and market snapshot (INT-08)', () => {
+  const INTENT = { targetRoles: [{ taxonomyId: 'product_manager', label: '产品经理' }], cities: ['上海'], workType: 'full_time' };
+
+  function cnSetup(identity: 'yingjie' | 'zaixiao' | 'shezhao', over: Partial<OnboardingDeps> = {}, step = 'confirm') {
+    const cn = createOnboardingCnService({ recordConsent: vi.fn(async () => ({})), patchCnFields: vi.fn(async () => ({})), patchDefaultFilters: vi.fn(async () => ({})) });
+    return setup(
+      {
+        validateCnStep: (stepName, body, ctx) => cn.validateCnStep(stepName, body, ctx),
+        applyCnStep: (u, b, r, o) => cn.applyCnStep(u, b, r, o),
+        cnFirstValueContext: (answers, caps) => cnFirstValueContext(answers, caps),
+        ...over,
+      },
+      { u1: { step, answers: { identity: { cnIdentity: identity, graduationClass: 2027 }, intent: INTENT } } },
+    );
+  }
+  const caps = (campusCalendar: boolean, jobsFeed: boolean) => ({ ...GO, firstValue: { campusCalendar, jobsFeed } });
+
+  it('PUT /steps/confirm takes the cn body (no experienceLevels) and moves to the tour', async () => {
+    const { svc, mem } = cnSetup('yingjie');
+    const res = await svc.saveStep('u1', 'confirm', { heardFrom: 'friend', extraRoles: [{ label: '产品运营' }] }, caps(true, true));
+    expect(res).toEqual({ stage: 'tour', nextStage: 'tour', nextRoute: '/campus' });
+    expect(mem.rows.get('u1')!.answers.confirm).toEqual({ extraRoles: [{ label: '产品运营' }], heardFrom: 'friend' });
+    // The intl-only fields are not accepted on GoApply.
+    const again = cnSetup('yingjie');
+    await expect(again.svc.saveStep('u1', 'confirm', { experienceLevels: ['mid'] }, GO)).rejects.toMatchObject({ code: 'invalid_request' });
+  });
+
+  it('POST /confirm goes the same way on GoApply', async () => {
+    const { svc, mem } = cnSetup('zaixiao');
+    expect(await svc.confirm('u1', { heardFrom: 'school' }, caps(true, false))).toEqual({ stage: 'tour', nextRoute: '/campus' });
+    expect(mem.rows.get('u1')!.step).toBe('tour');
+  });
+
+  it('the first-value route follows R-14 with the stored identity: /campus → /jobs → /resume; 社招 → /jobs', async () => {
+    const route = async (identity: 'yingjie' | 'zaixiao' | 'shezhao', campus: boolean, feed: boolean) =>
+      (await cnSetup(identity).svc.saveStep('u1', 'confirm', {}, caps(campus, feed))).nextRoute;
+    expect(await route('yingjie', true, true)).toBe('/campus');
+    expect(await route('yingjie', false, true)).toBe('/jobs');
+    expect(await route('yingjie', false, false)).toBe('/resume');
+    expect(await route('shezhao', true, true)).toBe('/jobs');
+    expect(await route('shezhao', true, false)).toBe('/campus');
+    expect(await route('shezhao', false, false)).toBe('/resume');
+  });
+
+  it('state, complete and leaving early land on the same first-value route', async () => {
+    const { svc } = cnSetup('shezhao', {}, 'tour');
+    expect((await svc.getState('u1', caps(true, true))).nextRoute).toBe('/jobs');
+    expect(await svc.complete('u1', caps(true, true))).toEqual({ stage: 'done', nextRoute: '/jobs' });
+    const early = cnSetup('yingjie', {}, 'intent');
+    expect(await early.svc.skip('u1', caps(true, true))).toEqual({ stage: 'done', nextRoute: '/campus' });
+  });
+
+  it('without the cn context the request capabilities alone decide (RoboApply is always /jobs)', async () => {
+    const { svc } = setup({ cnFirstValueContext: vi.fn(() => ({ cnIdentity: 'shezhao' as const, jobsFeed: true })) }, { u1: { step: 'tour' } });
+    expect(await svc.complete('u1', RA)).toEqual({ stage: 'done', nextRoute: '/jobs' });
+  });
+
+  it('GoApply market snapshot reads the cn index; RoboApply keeps its own loader', async () => {
+    const cnSnapshot = vi.fn(async () => ({ jobCount: { value: 7, source: 'index' as const, asOf: '2026-10-10T00:00:00.000Z' }, windowDays: 30, pay: null, topSkills: [] }));
+    const { svc, deps } = setup({ cnSnapshot });
+    expect((await svc.marketSnapshot({ taxonomyId: 'product_manager', country: 'CN', city: '上海' }, GO)).jobCount.value).toBe(7);
+    expect(cnSnapshot).toHaveBeenCalledWith({ taxonomyId: 'product_manager', country: 'CN', city: '上海' });
+    expect(deps.snapshot).not.toHaveBeenCalled();
+    await svc.marketSnapshot({ taxonomyId: 'backend_engineer', country: 'US' }, RA);
+    expect(deps.snapshot).toHaveBeenCalledWith({ market: 'intl', taxonomyId: 'backend_engineer', country: 'US' });
+    expect(cnSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it('with AI consent off the resume step is manual: it is skipped, nothing is read and no model is called', async () => {
+    const aiAllowed = vi.fn(async () => false);
+    const { svc, mem, aiSeedRoles, deps } = cnSetup('yingjie', { aiAllowed }, 'resume');
+    const res = await svc.saveStep('u1', 'resume', { skip: true }, GO);
+    expect(res).toEqual({ stage: 'matching', nextStage: 'matching', nextRoute: '/onboarding/matching' });
+    expect(mem.rows.get('u1')!.answers.resume).toEqual({ skip: true });
+    expect(mem.rows.get('u1')!.answers.skipped).toContain('resume');
+    expect(aiSeedRoles).not.toHaveBeenCalled();
+    expect(deps.consumeResumeQuota).not.toHaveBeenCalled();
+    expect(deps.queueResumeCheck).not.toHaveBeenCalled();
+    // Even a resume already in the account is seeded without a model while consent is off.
+    mem.addResume('u1', { id: 'rv1', parsedData: {}, resumeMarkdown: 'text' });
+    mem.rows.get('u1')!.step = 'resume';
+    const seeded = await svc.resume('u1', 'rv1', GO);
+    expect(seeded.profileDraft).toMatchObject({ aiSuggested: false });
+    expect(aiSeedRoles).not.toHaveBeenCalled();
+  });
+});
+
+// ── INT-08: setup reached done → the invite check (soft) ───────────────────
+
+describe('when setup reaches done the invite programme is told, softly', () => {
+  it('finishing the tour calls it once with the user', async () => {
+    const onSetupDone = vi.fn(async () => 'rewarded');
+    const { svc } = setup({ onSetupDone }, { u1: { step: 'tour' } });
+    await svc.complete('u1', RA);
+    expect(onSetupDone).toHaveBeenCalledTimes(1);
+    expect(onSetupDone).toHaveBeenCalledWith('u1');
+  });
+
+  it('skipping from the tour and leaving early both count (the stored stage becomes done); a finished user does not', async () => {
+    const onSetupDone = vi.fn(async () => null);
+    const tour = setup({ onSetupDone }, { u1: { step: 'tour' } });
+    await tour.svc.skip('u1', RA);
+    expect(onSetupDone).toHaveBeenCalledTimes(1);
+    await tour.svc.skip('u1', RA); // already done: nothing to tell
+    expect(onSetupDone).toHaveBeenCalledTimes(1);
+    const early = setup({ onSetupDone }, { u1: { step: 'basics', path: 'urgent' } });
+    await early.svc.skip('u1', RA);
+    expect(onSetupDone).toHaveBeenCalledTimes(2);
+    expect(early.mem.rows.get('u1')!.step).toBe('done');
+  });
+
+  it('is not called before done: saving steps and a refused complete tell nobody', async () => {
+    const onSetupDone = vi.fn(async () => null);
+    const { svc } = setup({ onSetupDone });
+    await svc.saveStep('u1', 'situation', { timing: 'asap', seekerType: 'experienced' }, RA);
+    await expect(svc.complete('u1', RA)).rejects.toMatchObject({ code: 'conflict' });
+    expect(onSetupDone).not.toHaveBeenCalled();
+  });
+
+  it('a failure never blocks finishing onboarding', async () => {
+    const warn = vi.fn();
+    const onSetupDone = vi.fn(async () => {
+      throw new Error('growth is down');
+    });
+    const { svc, mem } = setup({ onSetupDone, warn }, { u1: { step: 'tour' } });
+    await expect(svc.complete('u1', RA)).resolves.toEqual({ stage: 'done', nextRoute: '/jobs' });
+    expect(mem.rows.get('u1')).toMatchObject({ step: 'done' });
+    expect(mem.rows.get('u1')!.completedAt).toBeInstanceOf(Date);
+    expect(warn).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ userId: 'u1', error: 'growth is down' }));
+    const early = setup({ onSetupDone }, { u1: { step: 'basics', path: 'urgent' } });
+    await expect(early.svc.skip('u1', RA)).resolves.toMatchObject({ stage: 'done' });
+  });
+
+  it('the production wiring calls growth.checkReferralFor', async () => {
+    const checkReferralFor = vi.fn(async () => null);
+    vi.doMock('../growth/index.js', () => ({ checkReferralFor }));
+    try {
+      const { createDefaultOnboardingDeps } = await import('./defaults.js');
+      const mem = createMemoryRepo({ u1: { step: 'tour' } });
+      const deps = createDefaultOnboardingDeps(mem.repo);
+      await createOnboardingService(deps).complete('u1', RA);
+      expect(checkReferralFor).toHaveBeenCalledTimes(1);
+      expect(checkReferralFor).toHaveBeenCalledWith('u1');
+    } finally {
+      vi.doUnmock('../growth/index.js');
+    }
+  });
+});
+
+// ── INT-08: zero model calls without the AI consent, through the real wiring ──
+
+describe('default wiring: the resume seed and the AI consent', () => {
+  async function wired(aiConsent: boolean) {
+    vi.resetModules();
+    const run = vi.fn(async () => ({ updates: { targetRoles: ['数据分析师'] } }));
+    vi.doMock('../../roboapply/v2/agents/RAOnboardingResumeSeedAgent.js', () => ({ raOnboardingResumeSeedAgent: { run } }));
+    vi.doMock('../../platform/consent/index.js', async (orig) => ({ ...(await orig<object>()), aiAllowed: vi.fn(async () => aiConsent) }));
+    const { createDefaultOnboardingDeps } = await import('./defaults.js');
+    const { createOnboardingService: create } = await import('./service.js');
+    const mem = createMemoryRepo({ u1: { step: 'resume', answers: { identity: { cnIdentity: 'yingjie', graduationClass: 2027 } } } });
+    // A resume with no readable title: the only case in which the seed would ask a model.
+    mem.addResume('u1', { id: 'rv1', parsedData: {}, resumeMarkdown: '# Sample Person\n\n## Experience\n\nBuilt reports and dashboards for three years.' });
+    const svc = create({
+      ...createDefaultOnboardingDeps(mem.repo),
+      seedResume: () => ({ roles: [], seniority: null, years: 3 }),
+      consumeResumeQuota: async () => ({ allowed: true, retryAfterSec: 0 }),
+      grantFreeResumeCheck: async () => 'already_granted' as const,
+      queueResumeCheck: async () => undefined,
+    });
+    return { svc, run, mem };
+  }
+  const cleanup = () => {
+    vi.doUnmock('../../roboapply/v2/agents/RAOnboardingResumeSeedAgent.js');
+    vi.doUnmock('../../platform/consent/index.js');
+    vi.resetModules();
+  };
+
+  it('GoApply without the AI consent: the model is never called, for the seed or for the skipped step', async () => {
+    try {
+      const { svc, run } = await wired(false);
+      const seeded = await svc.resume('u1', 'rv1', { brand: getBrand('goapply'), locale: 'zh' });
+      expect(seeded.profileDraft).toMatchObject({ targetRoles: [], aiSuggested: false });
+      await svc.saveStep('u1', 'resume', { skip: true }, { brand: getBrand('goapply') });
+      expect(run).not.toHaveBeenCalled();
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('with the consent the same resume gets one AI suggestion, labelled as AI (the control for the test above)', async () => {
+    try {
+      const { svc, run } = await wired(true);
+      const seeded = await svc.resume('u1', 'rv1', { brand: getBrand('goapply'), locale: 'zh' });
+      expect(run).toHaveBeenCalledTimes(1);
+      expect(seeded.profileDraft).toMatchObject({ targetRoles: ['数据分析师'], aiSuggested: true });
+    } finally {
+      cleanup();
+    }
   });
 });

@@ -545,6 +545,14 @@ export interface OnboardingMatchResult {
   /** True while the remaining work runs as an `onboarding.match` queue item. */
   continuedInBackground: boolean;
   finishedAt: string;
+  /**
+   * False when the jobs were not compared with the profile (GoApply with
+   * 个性化推荐 off or unanswered, PIPL Art. 24): `jobCount` is then the number
+   * of open jobs found for the search (at most the candidate cap), not a fit
+   * count, and no fit score was computed or queued. Absent on older results
+   * (read as true).
+   */
+  ranked?: boolean;
 }
 
 /** `onboardingAnswers.resumeSuggestions`: what POST /onboarding/resume suggested (O7 chips). */
@@ -579,6 +587,12 @@ export interface OnboardingStateView extends OnboardingStateResponse {
     /** From the visitor's country header or locale, when it is one of the MVP countries. */
     country: OnboardingCountry | null;
   };
+  /**
+   * The first-value screen for this user (`firstValueRoute`): `/jobs` on
+   * RoboApply; on GoApply `/campus` → `/jobs` → `/resume` by what is on
+   * (R-14), 社招 → `/jobs`. Where a finished user is sent from /onboarding.
+   */
+  firstValueRoute?: string;
 }
 
 /** GET /onboarding/title-suggest (extends FND's TitleSuggestion). */

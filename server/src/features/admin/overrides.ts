@@ -2,7 +2,7 @@
 // entitlements, beta flags) from the user page, with an audit row
 // (ARCHITECTURE.md §10.5). The rules and storage are the credits area's
 // (`creditsAreaService`, WP-21a: validation, entitlement cache invalidation);
-// this module adds the SeekerActivityLog audit row on every change.
+// this module adds the RAAdminAuditLog audit row on every change.
 
 import { writeAdminAudit, type AuditStore } from './audit.js';
 import { ADMIN_AUDIT_EVENTS, type AdminOverrideView, type AdminOverridesResponse } from './contract.js';

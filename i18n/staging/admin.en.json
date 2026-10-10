@@ -17,6 +17,10 @@
           "title": "Reports to review",
           "sub": "Jobs people reported, scam signals and personal-data requests."
         },
+        "inviteRewards": {
+          "title": "Held invite rewards",
+          "sub": "Invites whose rewards wait for a person to approve or reject."
+        },
         "credits": {
           "title": "Credits and plans",
           "sub": "Daily limits per plan, reference rates and refund rules."
@@ -53,12 +57,13 @@
       "system": {
         "eyebrow": "Admin",
         "title": "System",
-        "sub": "How the job sources, background work, emails and the Assistant are doing today. Every number is counted live from the database.",
+        "sub": "How the job sources, background work, emails and the Assistant are doing today, and what admins changed. Every number is counted live from the database.",
         "views": {
           "health": "Health",
           "costs": "Costs",
           "feedback": "Assistant feedback",
-          "safety": "Content safety"
+          "safety": "Content safety",
+          "audit": "Admin actions"
         },
         "loading": "Loading…",
         "refresh": "Refresh",
@@ -251,7 +256,8 @@
         "restore": "Keep this job",
         "decided": "Saved.",
         "decideFailed": "That didn't save. Try again.",
-        "decisionHelp": "Close takes the job out of every list. Keep reopens a job closed by reports and clears its scam signs. For now, one new report can close a kept job again; it then comes back to this list. Both are recorded with your name."
+        "decisionHelp": "Close takes the job out of every list. Keep reopens a job closed by reports and clears its scam signs. For now, one new report can close a kept job again; it then comes back to this list. Both are recorded with your name.",
+        "decisionHelpHolds": "Close takes the job out of every list. Keep reopens a job closed by reports and clears its scam signs; only reports made after your decision count toward closing it again, and it comes back to this list when one arrives. Both are recorded with your name."
       },
       "referrals": {
         "title": "Shared referral codes",
@@ -364,6 +370,71 @@
         "deadline": "Refund window ends {at}",
         "amount": "Refund amount: {amount}",
         "issueElsewhere": "Issue the refund in the payment provider, then note it on the person's record."
+      },
+      "audit": {
+        "title": "Admin actions",
+        "sub": "Changes admins made: per-person limits, decisions on reported jobs, referral-code checks and retried background work. Newest first. Each row is written when the action happens and is kept even if an account is deleted.",
+        "filter": "Show",
+        "all": "All actions",
+        "loading": "Loading…",
+        "empty": "No admin actions recorded yet.",
+        "when": "When",
+        "what": "Action",
+        "admin": "Admin",
+        "about": "About",
+        "details": "Details",
+        "adminPage": "Open the admin page of account {id}",
+        "aboutPage": "Open the admin page of account {id}",
+        "more": "Show more",
+        "first": "Back to the start",
+        "action": {
+          "admin_override_created": "Added a limit or feature for one person",
+          "admin_override_deleted": "Removed a limit or feature for one person",
+          "admin_report_resolved": "Decided on a reported job",
+          "admin_work_item_retried": "Retried background work",
+          "admin_referral_moderated": "Checked a shared referral code",
+          "admin_invite_reward_reviewed": "Approved or rejected a held invite reward"
+        }
+      },
+      "inviteRewards": {
+        "eyebrow": "Admin",
+        "title": "Held invite rewards",
+        "sub": "When someone signs up with a friend's invite link and the sign-up looks like the same person, or the check could not run, the practice credits wait here for a person to decide.",
+        "listTitle": "Waiting for a decision",
+        "listSub": "Oldest first. Only this site's invites are listed.",
+        "loading": "Loading…",
+        "empty": "No invite rewards are waiting.",
+        "cardTitle": "Friend signed up {date}",
+        "qualified": "Met the conditions for the reward on {date}",
+        "notQualified": "Has not met the conditions for the reward yet",
+        "riskPoints": "Risk points: {points}",
+        "reasonsTitle": "Why it was held",
+        "noReasons": "No reason was recorded for this hold.",
+        "reason": {
+          "same_device": "Same device as the inviter",
+          "same_ip": "Same network address as the inviter",
+          "same_browser": "Same browser as the inviter",
+          "disposable_email": "Throwaway email address",
+          "burst": "Many sign-ups from this invite link in a short time",
+          "signals_missing": "No device or network record for one of the two accounts",
+          "signals_unavailable": "The device and network check could not run",
+          "invitee_no_profile": "The friend's account has no profile"
+        },
+        "inviterPage": "Open the inviter's admin page",
+        "friendPage": "Open the friend's admin page",
+        "approve": "Approve",
+        "working": "Saving…",
+        "reject": "Reject",
+        "help": "Approve gives the practice credits that are due: one for the friend, and one for the inviter unless they have reached this year's limit for invite rewards. Reject means the invite does not count and no credits are given. Neither can be undone here. This page prints no names, emails or account ids; the two links open the accounts' admin pages.",
+        "outcome": {
+          "approved": "Approved. Both people got their practice credits.",
+          "approved_friend_only": "Approved. The friend got their practice credit. The inviter got none: they have reached this year's limit for invite rewards, or their account has no profile.",
+          "approved_pending": "Approved. The credits could not be added yet; they are retried automatically.",
+          "not_counted": "This invite does not count and no credits were given: the friend's account has no profile, or someone rejected the invite first.",
+          "rejected": "Rejected. This invite does not count.",
+          "already_reviewed": "Someone already reviewed this invite. Nothing changed.",
+          "failed": "That didn't save. Try again."
+        }
       }
     }
   }

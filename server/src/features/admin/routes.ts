@@ -9,8 +9,9 @@ import { requireAdmin } from '../../middleware/admin.js';
 import { allowedBrands, type BrandId } from '../../platform/brand/index.js';
 import { parseBody, parseParams, parseQuery, requireUserId, route } from '../../platform/http.js';
 import type { FeatureRouterDeps } from '../index.js';
-import { createPrismaAuditStore, type AuditStore } from './audit.js';
+import { createPrismaAuditStore, listAdminAudit, writeAdminAudit, type AuditStore } from './audit.js';
 import {
+  AdminAuditQuerySchema,
   AdminCreateOverrideBodySchema,
   AdminOverridesQuerySchema,
   CopilotFeedbackQuerySchema,
@@ -27,7 +28,6 @@ import {
   ADMIN_AUDIT_EVENTS,
 } from './contract.js';
 import { createAdminOverride, deleteAdminOverride, listAdminOverrides, type OverridesService } from './overrides.js';
-import { writeAdminAudit } from './audit.js';
 import type { CostStore } from './costs.js';
 import type { FeedbackStore } from './feedback.js';
 import { ModerateReferralCodeBodySchema, ReferralCodeParamsSchema } from '../cn/referrals/contract.js';
@@ -107,6 +107,13 @@ export function createAdminConsoleRouter(deps: AdminConsoleDeps = {}): Router {
       await writeAdminAudit(audit(), { adminId: adminId(req), eventType: ADMIN_AUDIT_EVENTS.workItemRetried, payload: { workItemId: id, kind: result.kind } });
       return { id: result.id, status: result.status };
     }),
+  );
+
+  // Admin actions, newest first (RAAdminAuditLog).
+  router.get(
+    '/system/audit',
+    ...admin,
+    route(async (req) => listAdminAudit(audit(), parseQuery(req, AdminAuditQuerySchema))),
   );
 
   // ── Costs (SKU × brand × day) ───────────────────────────────────────────

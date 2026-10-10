@@ -30,7 +30,8 @@ import {
   type QueueKindRow,
   type SystemStatusResponse,
 } from './contract.js';
-import { BUDGET_COUNTER_KEYS, copilotDailyBudgetUsd, enrichDailyLimit, providerDailyCallLimit, scoreDailyBudget } from './limits.js';
+import type { IngestProvider } from '../jobs/ingest/index.js';
+import { copilotDailyBudgetUsd, dailyCallLimit, enrichCounterKey, enrichDailyLimit, scoreCounterKeys, scoreDailyBudget } from './limits.js';
 
 const DAY_MS = DAY * 1000;
 const COPILOT_SKU = 'ra_copilot_turn';
@@ -112,8 +113,8 @@ export async function brandHealth(
     store.ingestCounts(market, now, overdueBefore),
     store.newJobsByDay(market, weekStart),
     store.openJobCounts(market),
-    store.rateCounter(BUDGET_COUNTER_KEYS.enrich(market), dayStart),
-    store.rateCounter(BUDGET_COUNTER_KEYS.score(brandId), dayStart),
+    store.rateCounter(enrichCounterKey(market), dayStart),
+    store.rateCounter(scoreCounterKeys.budget(brandId), dayStart),
     store.emailStatus(brandId, day, JOB_ALERT_TEMPLATES),
     store.emailStatus(brandId, emailRange),
     store.emailFailuresByTemplate(brandId, emailRange, 10),
@@ -206,7 +207,8 @@ export async function buildSystemStatus(
     store.providerUsage(dayKey),
   ]);
   const providers: ProviderUsageRow[] = usage
-    .map((u) => ({ ...u, limit: providerDailyCallLimit(u.provider, env) }))
+    // RAProviderUsage.provider is the ingest provider's name; an unknown one has no default and reads its env limit or null.
+    .map((u) => ({ ...u, limit: dailyCallLimit(u.provider as IngestProvider, env) }))
     .sort((a, b) => a.provider.localeCompare(b.provider));
   const queue = { kinds: [...kinds].sort((a, b) => b.dead - a.dead || b.queued - a.queued || a.kind.localeCompare(b.kind)), deadTotal: kinds.reduce((s, k) => s + k.dead, 0) };
   const partial = { brands, queue, providers, dayElapsedShare: window.elapsedShare };

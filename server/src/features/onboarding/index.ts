@@ -34,7 +34,7 @@ export interface OnboardingService {
   meFor(userId: string, brand: BrandId): Promise<OnboardingMe>;
   getState(userId: string): Promise<OnboardingStateResponse>;
   saveStep(userId: string, step: string, body: Record<string, unknown>): Promise<StepResponse>;
-  confirm(userId: string, body: z.infer<typeof OnboardingConfirmBodySchema>): Promise<OnboardingStageResponse>;
+  confirm(userId: string, body: z.infer<typeof OnboardingConfirmBodySchema> | Record<string, unknown>): Promise<OnboardingStageResponse>;
   complete(userId: string): Promise<OnboardingStageResponse>;
   skip(userId: string): Promise<OnboardingStageResponse>;
 }

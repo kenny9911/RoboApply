@@ -15,15 +15,30 @@
 //     "Finish setting up" banner.
 //   - GoApply screens (consent … tags, cn confirm) come from
 //     components/features/onboarding-cn (WP-31); resume and matching are
-//     shared.
+//     shared. On GoApply (INT-08):
+//       · a cn step saves through its own request, so the page reads the
+//         state again before it moves on (the next screen must not see the
+//         old stage and bounce back);
+//       · the resume screen sits inside `CnResumeGate`: without the AI
+//         processing consent there is no upload, and "fill in by hand" skips
+//         the step (the gate shows that save's busy state and its error);
+//       · the confirm screen gets the real count from "Finding jobs"
+//         (`matchSummary`) when the jobs were compared with the profile;
+//       · after confirm the first-value screen (`CnFirstValueScreen`: deadline
+//         reminders, then the tour) shows here; finishing it completes
+//         onboarding and goes to the first-value route.
+//   - A finished user goes to the server's `firstValueRoute` (RoboApply: /jobs).
 //   - First-party events: onboarding_step_viewed / _completed / _abandoned.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useQueryClient } from '@tanstack/react-query';
 
 import {
   onboardingErrorReason,
+  onboardingKeys,
+  useCompleteOnboarding,
   useConfirmOnboarding,
   useLeaveOnboarding,
   useOnboardingState,
@@ -34,7 +49,14 @@ import { useAuth } from '../../../lib/auth/useAuth';
 import { track } from '../../../lib/analytics';
 import { useBrandId } from '../../../lib/brand/BrandProvider';
 import { Btn } from '../../v3/primitives/Btn';
-import { CN_ONBOARDING_STEP_COMPONENTS, isCnOnboardingStep, type CnOnboardingStepProps } from '../onboarding-cn';
+import {
+  CN_ONBOARDING_STEP_COMPONENTS,
+  CnFirstValueScreen,
+  CnResumeGate,
+  isCnOnboardingStep,
+  type CnMatchSummary,
+  type CnOnboardingStepProps,
+} from '../onboarding-cn';
 import { screensFor, stageOrder } from './flow';
 import { BasicsStep } from './steps/BasicsStep';
 import { ConfirmStep } from './steps/ConfirmStep';
@@ -55,6 +77,18 @@ const ROBOAPPLY_SCREENS: Record<string, ComponentType<StepScreenProps>> = {
   confirm: ConfirmStep,
 };
 
+/**
+ * The count "Finding jobs" stored, for the GoApply confirm screen. Only a
+ * finished run that compared the jobs with the profile counts: a run still
+ * going in the background, or one that did not use the profile (个性化推荐
+ * off: `ranked: false`), leaves the screen on its own index counts.
+ */
+export function matchSummaryOf(state: Pick<OnboardingState, 'answers'>): CnMatchSummary | null {
+  const m = (state.answers as Record<string, unknown>).matching as { jobCount?: unknown; topJobIds?: unknown; continuedInBackground?: unknown; ranked?: unknown } | undefined;
+  if (!m || typeof m.jobCount !== 'number' || m.continuedInBackground === true || m.ranked === false) return null;
+  return { jobCount: m.jobCount, ...(Array.isArray(m.topJobIds) ? { topJobIds: m.topJobIds.filter((x): x is string => typeof x === 'string') } : {}) };
+}
+
 export function OnboardingStepPage({ step }: { step: string }) {
   const t = useTranslations('onboarding.frame');
   const router = useRouter();
@@ -64,7 +98,13 @@ export function OnboardingStepPage({ step }: { step: string }) {
   const saveStep = useSaveStep();
   const confirm = useConfirmOnboarding();
   const leave = useLeaveOnboarding();
+  const complete = useCompleteOnboarding();
+  const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  // GoApply: the first-value screen is open (the confirm step was just saved).
+  const [cnTour, setCnTour] = useState(false);
+  // Onboarding is finished: where to go (wins over every other redirect).
+  const [exitRoute, setExitRoute] = useState<string | null>(null);
   const mountedAt = useRef(Date.now());
   const viewed = useRef<string | null>(null);
 
@@ -75,12 +115,13 @@ export function OnboardingStepPage({ step }: { step: string }) {
 
   // Where the user may be: finished → landing; ahead of their stage → their stage.
   const redirect = useMemo(() => {
+    if (exitRoute) return exitRoute;
     if (!state) return null;
-    if (state.completed) return '/jobs';
+    if (state.completed) return state.firstValueRoute ?? '/jobs';
     if (state.stage !== 'done' && state.stage !== 'tour' && stageOrder(step) > stageOrder(state.stage) && state.nextRoute) return state.nextRoute;
     if (index < 0 && state.nextRoute) return state.nextRoute;
     return null;
-  }, [state, step, index]);
+  }, [state, step, index, exitRoute]);
 
   useEffect(() => {
     if (redirect) router.replace(redirect);
@@ -143,10 +184,48 @@ export function OnboardingStepPage({ step }: { step: string }) {
   }, [leave, state, step, go, t]);
 
   const onMatchingDone = useCallback(() => {
-    void stateQuery.refetch();
     track('onboarding_step_completed', { stage: 'matching', durationMs: Date.now() - mountedAt.current, skipped: false, branch: state?.branch ?? null });
-    router.push('/onboarding/confirm');
+    // Read the new stage (and the stored count) first: the confirm screen must not start from the old one and send the user back here.
+    void stateQuery.refetch().finally(() => router.push('/onboarding/confirm'));
   }, [router, state?.branch, stateQuery]);
+
+  // One object per state read (the confirm screen reloads its counts when this changes).
+  const cnMatchSummary = useMemo(() => (state ? matchSummaryOf(state) : null), [state]);
+
+  // GoApply steps save through their own request: read the state again, then move on.
+  const onCnSaved = useCallback(
+    (route: string | null, s: OnboardingState) => {
+      void qc
+        .invalidateQueries({ queryKey: onboardingKeys.state() })
+        .catch(() => undefined)
+        .then(() => onSaved(route, false, s));
+    },
+    [qc, onSaved],
+  );
+
+  // GoApply: the confirm step is saved; the first-value screen opens in place.
+  const onCnConfirmed = useCallback(
+    (s: OnboardingState) => {
+      track('onboarding_step_completed', { stage: 'confirm', durationMs: Date.now() - mountedAt.current, skipped: false, branch: s.branch });
+      setError(null);
+      setCnTour(true);
+      void qc.invalidateQueries({ queryKey: onboardingKeys.state() }).catch(() => undefined);
+    },
+    [qc],
+  );
+
+  // GoApply: the tour is finished or dismissed → stage done → the first-value route.
+  const onCnTourFinished = useCallback(() => {
+    if (complete.isPending) return;
+    setError(null);
+    complete.mutate(undefined, {
+      onSuccess: (r) => {
+        void refresh?.();
+        setExitRoute(r.nextRoute ?? state?.firstValueRoute ?? '/jobs');
+      },
+      onError: (err) => setError(t(`errors.${onboardingErrorReason(err)}`)),
+    });
+  }, [complete, refresh, state?.firstValueRoute, t]);
 
   if (stateQuery.isLoading) {
     return (
@@ -169,22 +248,37 @@ export function OnboardingStepPage({ step }: { step: string }) {
   }
   if (redirect) return null;
 
-  const busy = saveStep.isPending || confirm.isPending || leave.isPending;
+  const busy = saveStep.isPending || confirm.isPending || leave.isPending || complete.isPending;
 
   if (step === 'matching') {
     return <MatchingStep state={state} onDone={onMatchingDone} onLeave={onLeave} position={position} />;
   }
 
-  if (brandId === 'goapply' && isCnOnboardingStep(step)) {
-    const Cn: ComponentType<CnOnboardingStepProps> = CN_ONBOARDING_STEP_COMPONENTS[step];
-    return (
-      <Cn
-        step={step}
-        onDone={(r) => onSaved(r.nextRoute, false, state)}
-        onBack={onBack}
-        onSkip={step === 'tags' ? () => save({}, { skip: true }) : undefined}
-      />
-    );
+  if (brandId === 'goapply') {
+    // After G7: deadline reminders and the tour, here, then on to the first-value page.
+    if (step === 'confirm' && (cnTour || state.stage === 'tour')) {
+      return <CnFirstValueScreen onFinish={onCnTourFinished} error={error} />;
+    }
+    if (step === 'resume') {
+      // Reading a resume uses AI: without the consent there is no upload, only "fill in by hand" (the step is skipped).
+      return (
+        <CnResumeGate onManual={() => save({}, { skip: true })} busy={busy} error={error}>
+          <ResumeStep state={state} save={save} onBack={onBack} onLeave={onLeave} busy={busy} error={error} position={position} />
+        </CnResumeGate>
+      );
+    }
+    if (isCnOnboardingStep(step)) {
+      const Cn: ComponentType<CnOnboardingStepProps> = CN_ONBOARDING_STEP_COMPONENTS[step];
+      return (
+        <Cn
+          step={step}
+          onDone={(r) => (step === 'confirm' ? onCnConfirmed(state) : onCnSaved(r.nextRoute, state))}
+          onBack={onBack}
+          onSkip={step === 'tags' ? () => save({}, { skip: true }) : undefined}
+          matchSummary={step === 'confirm' ? cnMatchSummary : undefined}
+        />
+      );
+    }
   }
 
   const Screen = ROBOAPPLY_SCREENS[step] ?? (step === 'resume' ? ResumeStep : null);

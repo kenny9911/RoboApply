@@ -322,6 +322,12 @@ export interface CnProvincesResponse {
   source: CnDataSource;
 }
 
+/** GET /onboarding/cn/defaults: the 届别 the identity step preselects for today's date (China time), and the usual graduation month. */
+export interface CnOnboardingDefaultsResponse {
+  graduationClass: { yingjie: number; zaixiao: number };
+  graduationMonth: number;
+}
+
 /** GB/T 4754-2017 国民经济行业分类, sections A–T (期望行业 options). */
 export const CN_INDUSTRY_CODES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'] as const;
 export type CnIndustryCode = (typeof CN_INDUSTRY_CODES)[number];

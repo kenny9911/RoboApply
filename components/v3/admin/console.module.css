@@ -37,6 +37,7 @@
 .table td { padding: 10px 12px 10px 0; border-bottom: 1px solid var(--rule); vertical-align: top; color: var(--text); }
 .table td.num, .table th.num { text-align: right; }
 .table tr:last-child td { border-bottom: 0; }
+.table td.wrap { overflow-wrap: anywhere; min-width: 200px; color: var(--text-2); }
 .code { font-family: var(--font-ui); font-size: var(--fs-label); background: var(--surface-2); padding: 2px 6px; border-radius: 4px; overflow-wrap: anywhere; }
 
 /* Filters */
@@ -54,6 +55,7 @@
 .cardHead h3 { font-size: var(--fs-body); font-weight: 600; margin: 0; overflow-wrap: anywhere; }
 .cardHead p { margin: 2px 0 0; font-size: var(--fs-label); color: var(--text-muted); }
 .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tagList { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; padding: 0; list-style: none; }
 .quote { margin: 0; padding: 8px 12px; border-left: 3px solid var(--rule); background: var(--surface-2); border-radius: 0 6px 6px 0; font-size: var(--fs-label); color: var(--text-2); line-height: 1.6; overflow-wrap: anywhere; }
 .turn { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 8px; font-size: var(--fs-label); line-height: 1.6; }
 .turn b { color: var(--text-muted); font-weight: 600; }

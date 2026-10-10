@@ -12,5 +12,6 @@ export { ADMIN_HEALTH_TEMPLATE_KEY, createAdminHealthTask, parseAdminEmails, run
 export { buildSystemStatus, createPrismaSystemStore, evaluateAlerts, healthWindow } from './system.js';
 export type { HealthMode, HealthWindow, SystemStore } from './system.js';
 // For other areas' admin writes that need the same audit row (e.g. the credits area's override routes).
+// Rows go to RAAdminAuditLog (adminId, subjectUserId, eventType, payload); writeAdminAudit never throws.
 export { createPrismaAuditStore, writeAdminAudit } from './audit.js';
-export type { AuditInput, AuditStore } from './audit.js';
+export type { AdminAuditRow, AdminAuditStore, AuditInput, AuditStore } from './audit.js';

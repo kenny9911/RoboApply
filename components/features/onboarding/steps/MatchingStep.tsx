@@ -42,8 +42,11 @@ export function MatchingStep({ state, onDone, onLeave, position }: MatchingStepP
   }, [run.status, run.result, onDone]);
 
   const basics = answersOf<{ jobFunctions: Array<{ label: string }>; countries: string[] }>(state, 'basics');
-  const titles = (basics.jobFunctions ?? []).map((f) => f.label).join(', ');
-  const places = (basics.countries ?? []).map((c) => tc(c)).join(', ');
+  // GoApply searches the G4 roles and cities (city names are shown as the user chose them; 不限 = no place named).
+  const intent = answersOf<{ targetRoles: Array<{ label: string }>; cities: string[] }>(state, 'intent');
+  const cn = state.brand === 'goapply';
+  const titles = (cn ? (intent.targetRoles ?? []) : (basics.jobFunctions ?? [])).map((f) => f.label).join(', ');
+  const places = cn ? (intent.cities ?? []).filter((c) => c !== 'any').join(', ') : (basics.countries ?? []).map((c) => tc(c)).join(', ');
 
   const label = (phase: (typeof MATCH_PHASES)[number]) => {
     if (phase === 'reading' && run.phases.reading === 'skipped') return t('phases.readingSkipped');

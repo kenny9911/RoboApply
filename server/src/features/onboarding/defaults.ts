@@ -14,7 +14,7 @@ import { seedDraftFromParsedResume } from '../../roboapply/v2/lib/raResumeSeed.j
 import { searchTaxonomy, taxonomyChildren, taxonomyLabel } from '../jobs/taxonomy/index.js';
 import { searchProfileService } from '../search/index.js';
 import { createProfileService, type ProfileServiceImpl } from '../profile/index.js';
-import { onboardingCnService, validateCnStep } from '../onboarding-cn/index.js';
+import { cnFirstValueContext, onboardingCnService, validateCnStep } from '../onboarding-cn/index.js';
 import { ONBOARDING_RESUME_UPLOADS_PER_DAY, type TitleSuggestionView } from './contract.js';
 import { createPrismaOnboardingRepo, type OnboardingRepo, type ResumeVariantRow } from './repo.js';
 import { createSnapshotLoader, type SnapshotDb } from './snapshot.js';
@@ -104,6 +104,13 @@ export function createDefaultOnboardingDeps(repo: OnboardingRepo = createPrismaO
     validateCnStep,
     applyCnStep: (userId, brand, result, opts) => onboardingCnService.applyCnStep(userId, brand, result, opts),
     snapshot: createSnapshotLoader(async () => (await import('../../lib/prisma.js')).default as unknown as SnapshotDb),
+    cnSnapshot: (q) => onboardingCnService.marketSnapshotForOnboarding(q),
+    cnFirstValueContext: (answers, caps) => cnFirstValueContext(answers, caps),
+    async onSetupDone(userId) {
+      // Invite programme: grant what is due now instead of waiting for the worker's next poll (growth never throws here).
+      const { checkReferralFor } = await import('../growth/index.js');
+      await checkReferralFor(userId);
+    },
     titleSuggest: suggestTitles,
     seedResume,
     aiSeedRoles,
@@ -156,6 +163,16 @@ export function createDefaultMatchDeps(
       return matchService.preScoreMany(userId, jobIds);
     },
     aiAllowed: (userId) => aiAllowed(userId),
+    // GoApply with the job feed off (R-14) searches nothing and counts nothing.
+    async searchAllowed() {
+      const { ingestAllowed } = await import('../jobs/ingest/index.js');
+      return ingestAllowed(brand);
+    },
+    async personalized(userId) {
+      // The feed's rule is the only one (PIPL Art. 24): RoboApply always; GoApply with the 个性化推荐 consent.
+      const { isFeedPersonalized } = await import('../feed/index.js');
+      return isFeedPersonalized(userId, brand.market);
+    },
     enqueue: (kind, payload, options) => enqueue(kind, payload, { ...options, brand: brand.id }),
     log: (msg, meta) => logger.info('ONBOARDING_MATCH', msg, meta),
   };

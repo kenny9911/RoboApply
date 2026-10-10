@@ -2,7 +2,12 @@
 
 import type { StepResponse } from '../../../lib/api/contracts/onboarding';
 
-/** GoApply stages whose screen lives in this area (stage code = route segment). */
+/**
+ * GoApply stages whose screen lives in this area (stage code = route segment).
+ * `resume` and `matching` are WP-30's shared screens and are not listed: the
+ * onboarding page renders the shared resume screen inside this area's
+ * `CnResumeGate` (AI consent → upload; otherwise fill in by hand).
+ */
 export const CN_ONBOARDING_STEPS = ['consent', 'identity', 'education', 'intent', 'tags', 'confirm'] as const;
 export type CnOnboardingStep = (typeof CN_ONBOARDING_STEPS)[number];
 

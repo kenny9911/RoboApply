@@ -33,7 +33,6 @@ import {
   cnMarketSnapshot,
   createOnboardingCnService,
   currentCampusClass,
-  feedRankingFor,
   feedSortFor,
   findSchool,
   NOT_FRAUD_FLAGGED,
@@ -472,20 +471,16 @@ describe('personalised recommendation seam', () => {
     expect(await svc.rankingMode('u1', 'goapply')).toBe('non_personalized');
   });
 
-  it('feed seam: a GoApply user with no 个性化推荐 record gets newest order and no fit scores', async () => {
-    const fake = createFakePrisma({ seed: { seekerProfile: [{ id: 'sp1', userId: 'u1' }] } });
-    const db = fake as never;
-    expect(await feedRankingFor('u1', 'goapply', 'recommended', db)).toEqual({ mode: 'non_personalized', sort: 'newest', showFitScores: false });
-    expect(await feedRankingFor('u1', 'goapply', 'highest_pay', db)).toEqual({ mode: 'non_personalized', sort: 'highest_pay', showFitScores: false });
-    fake.$rows('seekerConsentRecord').push({ seekerProfileId: 'sp1', consentType: 'personalized_recommendation', granted: true, createdAt: new Date('2026-10-09') });
-    expect(await feedRankingFor('u1', 'goapply', 'best_fit', db)).toEqual({ mode: 'personalized', sort: 'best_fit', showFitScores: true });
-    expect(await feedRankingFor('u2', 'roboapply', 'recommended', db)).toEqual({ mode: 'personalized', sort: 'recommended', showFitScores: true });
+  // Non-personalised order in the feed itself (GET /feed for a GoApply user
+  // with no personalized_recommendation record lists newest first with fit =
+  // null on every item) is the feed's rule, `isFeedPersonalized`, and is
+  // tested where it lives: server/src/features/feed/personalization.cn.test.ts.
+  // The duplicate `feedRankingFor` that used to sit here is gone.
+  it('this area no longer exports a second feed-ranking rule', async () => {
+    const surface = await import('./index.js');
+    expect(Object.keys(surface)).not.toContain('feedRankingFor');
+    expect(Object.keys(await import('./personalization.js')).sort()).toEqual(['feedSortFor', 'personalizedChoice', 'rankingModeFor', 'rankingModeForUser']);
   });
-
-  // REQ WP-31→WP-32 #1: the feed is a stub in this wave (feedService throws
-  // NotImplementedError). Once WP-32 resolves its sort through feedRankingFor,
-  // turn this into a feed-level test.
-  it.todo('feed (WP-32): GET /feed for a GoApply user with no personalized_recommendation record lists newest first with fit = null on every item [REQ WP-31→WP-32 #1]');
 });
 
 // ── applyCnStep (manual mode, zero LLM calls) ─────────────────────────────

@@ -1,12 +1,17 @@
 // WP-31 web: GoApply onboarding steps G1–G5, the cn confirm page, the resume
 // AI-consent gate and the first-value prompt. Requests are injected through
 // CnOnboardingApiProvider (no network). Rendered at 375px (the phone layout).
+// INT-08: the default open-jobs request goes to the cn snapshot route (every
+// role and city in one count) and dates the campus count with the programme
+// list's own as-of time; `CnFirstValueScreen` reads the tour's props for the
+// signed-in user.
 
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const wire = vi.hoisted(() => ({ getMarketSnapshot: vi.fn(), listCampusEvents: vi.fn() }));
+const wire = vi.hoisted(() => ({ getMarketSnapshot: vi.fn(), getCnMarketSnapshot: vi.fn(), listCampusEvents: vi.fn() }));
 vi.mock('../../../../lib/api/onboarding', async (orig) => ({ ...(await orig<object>()), getMarketSnapshot: wire.getMarketSnapshot }));
+vi.mock('../../../../lib/api/onboardingCn', async (orig) => ({ ...(await orig<object>()), getCnMarketSnapshot: wire.getCnMarketSnapshot }));
 vi.mock('../../../../lib/api/campus', async (orig) => ({ ...(await orig<object>()), listCampusEvents: wire.listCampusEvents }));
 
 import { renderWithBrand } from '../../../../__tests__/shell/helpers';
@@ -16,6 +21,7 @@ import * as serverSalary from '../../../../server/src/features/onboarding-cn/sal
 import {
   CN_ONBOARDING_STEP_COMPONENTS,
   CnConfirmStep,
+  CnFirstValueScreen,
   CnFirstValueTour,
   CnOnboardingApiProvider,
   CnResumeGate,
@@ -32,7 +38,8 @@ import {
   type IntentForm,
 } from '..';
 import * as logic from '../logic';
-import { defaultCnOnboardingApi, payFromOnboarding, snapshotScope } from '../api';
+import { campusOpenFrom, defaultCnOnboardingApi, payFromOnboarding, snapshotScope } from '../api';
+import { cnSnapshotQuery } from '../../../../lib/api/onboardingCn';
 import { tourCards } from '../CnFirstValueTour';
 import { consentFormFromLedger } from '../ConsentStep';
 import { filterSchools, loadCnPlaceData } from '../places';
@@ -468,7 +475,7 @@ describe('G7 CnConfirmStep', () => {
   it('real counts, 届别 eligibility, official links; sorted-by-date notice when personalisation is off', async () => {
     const api = makeApi({ getState: vi.fn(async () => state(false)) as never, campusPrograms: vi.fn(async () => ({ items: programs, more: false })) as never });
     render(<CnConfirmStep step="confirm" onDone={vi.fn()} matchSummary={{ jobCount: 42 }} />, api, { 'jobs.feed': true });
-    expect(await screen.findByText('We found 42 jobs for your search')).toBeInTheDocument();
+    expect(await screen.findByText('42 jobs at Good fit or better for your search')).toBeInTheDocument();
     expect(await screen.findByText('2 campus programs taking applications')).toBeInTheDocument();
     expect(screen.getByText('For the class of 2027, same as you')).toBeInTheDocument();
     expect(screen.getByText('For the class of 2028')).toBeInTheDocument();
@@ -533,29 +540,82 @@ describe('G7 CnConfirmStep', () => {
 // ── Snapshot honesty in the default requests (D3) ─────────────────────────
 
 describe('defaultCnOnboardingApi snapshot', () => {
-  const snap = (pay: unknown) => ({ jobCount: { value: 40, source: 'index', asOf: '2026-10-09T00:00:00Z' }, windowDays: 30, pay, topSkills: [] });
+  const cnSnap = (pay: unknown = null) => ({
+    jobCount: { value: 40, source: 'index', asOf: '2026-10-09T00:00:00Z' },
+    // The route also counts programmes; the panel shows the programme list's count instead (see below).
+    campusOpenCount: { value: 99, source: 'campus_calendar', asOf: '2026-10-09T00:00:00Z' },
+    pay,
+    windowDays: 30,
+  });
 
-  it('several roles and cities: the count is labelled for the one role and city it covers', async () => {
-    wire.getMarketSnapshot.mockResolvedValueOnce(snap(null));
-    wire.listCampusEvents.mockImplementation(async (q: { city?: string }) => ({ items: [{ id: q.city === '北京' ? 'b' : 'shared' }], cursor: q.city === '深圳' ? 'next' : null }));
+  beforeEach(() => {
+    wire.getCnMarketSnapshot.mockReset();
+    wire.getMarketSnapshot.mockReset();
+    wire.listCampusEvents.mockReset();
+  });
+
+  it('several roles and cities: one request for the whole search, and the count covers all of it', async () => {
+    wire.getCnMarketSnapshot.mockResolvedValueOnce(cnSnap());
+    wire.listCampusEvents.mockImplementation(async (q: { city?: string }) => ({
+      items: [{ id: q.city === '北京' ? 'b' : 'shared' }],
+      cursor: q.city === '深圳' ? 'next' : null,
+      asOf: q.city === '北京' ? '2026-10-10T08:00:00.000Z' : '2026-10-10T08:00:05.000Z',
+    }));
     const view = await defaultCnOnboardingApi.marketSnapshot({
       roles: [{ taxonomyId: 'product_manager', label: '产品经理' }, { taxonomyId: 'data_analyst', label: '数据分析' }, { label: '运营' }],
       cities: ['上海', '北京', '深圳'],
       classYear: 2027,
     });
-    expect(wire.getMarketSnapshot).toHaveBeenCalledWith({ taxonomyId: 'product_manager', country: 'CN', city: '上海' });
-    expect(view!.jobs.scope).toEqual({ complete: false, role: '产品经理', city: '上海' });
-    // Every chosen city is asked; duplicates merged; a further page means "at least"; no client-clock date.
+    expect(wire.getCnMarketSnapshot).toHaveBeenCalledTimes(1);
+    expect(wire.getCnMarketSnapshot).toHaveBeenCalledWith({ taxonomyIds: 'product_manager,data_analyst', roles: '运营', cities: '上海,北京,深圳', class: 2027 });
+    // WP-30's single-role route is no longer used for the panel.
+    expect(wire.getMarketSnapshot).not.toHaveBeenCalled();
+    expect(view!.jobs).toEqual({ value: 40, asOf: '2026-10-09T00:00:00Z', scope: { complete: true, role: '产品经理', city: null } });
+    // The campus count is the programme list's: every chosen city asked, duplicates merged, a further
+    // page means "at least", and it is dated with the list's own as-of (the oldest page), never the browser clock.
     expect(wire.listCampusEvents).toHaveBeenCalledTimes(3);
-    expect(view!.campusOpen).toEqual({ value: 2, more: true, asOf: null });
+    expect(view!.campusOpen).toEqual({ value: 2, more: true, asOf: '2026-10-10T08:00:00.000Z' });
   });
 
-  it('one role, one city: the count is the whole search', async () => {
-    wire.getMarketSnapshot.mockResolvedValueOnce(snap(null));
-    wire.listCampusEvents.mockResolvedValue({ items: [], cursor: null });
+  it('one role, 不限: no city is sent; the median and the middle half come from the cn route', async () => {
+    wire.getCnMarketSnapshot.mockResolvedValueOnce(cnSnap({ medianMonthly: 15000, p25Monthly: 12000, p75Monthly: 20000, listedCount: 25, sampleSize: 25, currency: 'CNY', period: 'month', source: 'index', asOf: '2026-10-09T00:00:00Z' }));
+    wire.listCampusEvents.mockResolvedValue({ items: [], cursor: null, asOf: '2026-10-10T08:00:00.000Z' });
     const view = await defaultCnOnboardingApi.marketSnapshot({ roles: [{ taxonomyId: 'product_manager', label: '产品经理' }], cities: ['any'] });
+    expect(wire.getCnMarketSnapshot).toHaveBeenCalledWith({ taxonomyIds: 'product_manager' });
     expect(view!.jobs.scope).toEqual({ complete: true, role: '产品经理', city: null });
+    expect(view!.pay).toEqual({ kind: 'iqr', median: 15000, low: 12000, high: 20000, listedCount: 25, sampleSize: 25, asOf: '2026-10-09T00:00:00Z' });
+    expect(view!.campusOpen).toEqual({ value: 0, more: false, asOf: '2026-10-10T08:00:00.000Z' });
     expect(snapshotScope({ roles: [{ label: '运营' }], cities: [] })).toBeNull();
+  });
+
+  it('with the campus calendar off (the list is refused) no campus count is shown, whatever the snapshot route counted', async () => {
+    wire.getCnMarketSnapshot.mockResolvedValueOnce(cnSnap());
+    wire.listCampusEvents.mockRejectedValue(new Error('feature_disabled'));
+    const view = await defaultCnOnboardingApi.marketSnapshot({ roles: [{ label: '运营' }], cities: [] });
+    expect(wire.getCnMarketSnapshot).toHaveBeenCalledWith({ roles: '运营' });
+    expect(view!.jobs.value).toBe(40);
+    expect(view!.campusOpen).toBeNull();
+    expect(campusOpenFrom(null)).toBeNull();
+    // A list that states no as-of time shows none.
+    expect(campusOpenFrom({ items: [], more: false })).toEqual({ value: 0, more: false, asOf: null });
+  });
+
+  it('shows no count rather than a partial one: no roles, a failed request, or a role the route cannot take', async () => {
+    wire.listCampusEvents.mockResolvedValue({ items: [], cursor: null, asOf: '2026-10-10T08:00:00.000Z' });
+    expect(await defaultCnOnboardingApi.marketSnapshot({ roles: [], cities: ['上海'] })).toBeNull();
+    expect(await defaultCnOnboardingApi.marketSnapshot({ roles: [{ label: 'Manager, Sales' }, { label: '运营' }], cities: [] })).toBeNull();
+    expect(wire.getCnMarketSnapshot).not.toHaveBeenCalled();
+    wire.getCnMarketSnapshot.mockRejectedValueOnce(new Error('down'));
+    expect(await defaultCnOnboardingApi.marketSnapshot({ roles: [{ label: '运营' }], cities: [] })).toBeNull();
+  });
+
+  it('cnSnapshotQuery: ids and labels apart, duplicates and 不限 dropped, commas make it inexact', () => {
+    expect(cnSnapshotQuery({ roles: [{ taxonomyId: 'a', label: 'A' }, { taxonomyId: 'a', label: 'A again' }, { label: ' 运营 ' }, { label: '运营' }], cities: ['any', '上海', '上海'], classYear: null })).toEqual({
+      query: { taxonomyIds: 'a', roles: '运营', cities: '上海' },
+      exact: true,
+    });
+    expect(cnSnapshotQuery({ roles: [{ label: '运营' }], cities: ['A,B'] }).exact).toBe(false);
+    expect(cnSnapshotQuery({ roles: [], cities: [] })).toEqual({ query: {}, exact: false });
   });
 
   it('pay only for monthly CNY, and never called "the middle half" from WP-30\'s figures', () => {
@@ -665,6 +725,44 @@ describe('CnFirstValueTour', () => {
 });
 
 // ── zh (GoApply's primary language) ───────────────────────────────────────
+
+describe('CnFirstValueScreen (the tour, wired for the signed-in user)', () => {
+  const stored = { identity: { cnIdentity: 'yingjie', graduationClass: 2027 }, intent: { cities: ['上海', '杭州'] } };
+  const granted = (v: boolean | null) => [consentItem('ai_resume_parsing', { granted: v })];
+
+  it('passes the stored 届别 and cities, the campus capability and the AI consent', async () => {
+    const api = makeApi({
+      getState: vi.fn(async () => ({ stage: 'tour', nextRoute: '/campus', branch: null, answers: stored, entry: null })) as never,
+      getMyConsents: vi.fn(async () => granted(true)) as never,
+    });
+    render(<CnFirstValueScreen onFinish={() => undefined} />, api, { 'jobs.campusCalendar': true, 'ai.text': true });
+    expect(await screen.findByRole('heading', { name: 'Get application deadline reminders' })).toBeInTheDocument();
+    expect(api.campusPrograms).toHaveBeenCalledWith({ classYear: 2027, cities: ['上海', '杭州'] });
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    for (const card of ['Campus calendar', 'Tailored resume', 'Interview practice']) expect(screen.getByRole('heading', { name: card })).toBeInTheDocument();
+  });
+
+  it('AI consent off, never answered, or unreadable: no AI feature is advertised', async () => {
+    const cases = [async () => granted(false), async () => granted(null), async () => Promise.reject(new Error('down'))];
+    for (const read of cases) {
+      const { unmount } = render(<CnFirstValueScreen onFinish={() => undefined} />, makeApi({ getMyConsents: vi.fn(read) as never }), { 'ai.text': true });
+      expect(await screen.findByRole('heading', { name: 'Fill in your profile' })).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Tailored resume' })).toBeNull();
+      expect(screen.queryByRole('heading', { name: 'Interview practice' })).toBeNull();
+      unmount();
+    }
+  });
+
+  it('finishing calls back once; a finish problem is shown under the tour', async () => {
+    const onFinish = vi.fn();
+    const first = render(<CnFirstValueScreen onFinish={onFinish} />, makeApi({ getMyConsents: vi.fn(async () => granted(true)) as never }), { 'ai.text': true });
+    fireEvent.click(await screen.findByRole('button', { name: 'Start' }));
+    expect(onFinish).toHaveBeenCalledTimes(1);
+    first.unmount();
+    render(<CnFirstValueScreen onFinish={onFinish} error="Something went wrong." />, makeApi(), {});
+    expect(await screen.findByRole('alert')).toHaveTextContent('Something went wrong.');
+  });
+});
 
 describe('zh bundle', () => {
   type Tree = { [k: string]: string | Tree };

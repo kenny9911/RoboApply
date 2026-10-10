@@ -1,14 +1,17 @@
-// server/src/features/onboarding-cn/personalization.ts — the 个性化推荐 seam for the feed (PIPL Art. 24).
+// server/src/features/onboarding-cn/personalization.ts — the 个性化推荐 answer (PIPL Art. 24).
 //
 // GoApply users choose 开启 or 关闭 on G1 (no default). Until they choose, or
-// when they choose 关闭, jobs are ranked by recency and filters only, with no
+// when they choose 关闭, jobs are ordered by recency and filters only, with no
 // fit scores. The choice is the latest `personalized_recommendation` consent
 // record (changeable any time in Settings → consents), so this reads the
 // ledger, not the onboarding answers. RoboApply always ranks with the profile.
 //
-// The feed (WP-32) calls `feedRankingFor(userId, brand, sort)` (or
-// `rankingModeForUser()` + `feedSortFor()`); the
-// non-personalised path never runs the scorer.
+// The feed does not call this module. Its own `isFeedPersonalized`
+// (features/feed/index.ts) is the single rule for non-personalised order:
+// it decides the order and nulls every fit, and onboarding's "Finding jobs"
+// step asks it too. The feed-level test is
+// server/src/features/feed/personalization.cn.test.ts. What stays here is the
+// pure mode logic and the ledger read behind `onboardingCnService.rankingMode`.
 
 import prisma from '../../lib/prisma.js';
 import type { BrandId } from '../../platform/brand/registry.js';
@@ -44,22 +47,4 @@ export async function personalizedChoice(userId: string, db: PersonalizationDb =
 export async function rankingModeForUser(userId: string, brand: BrandId, db: PersonalizationDb = prisma): Promise<CnRankingMode> {
   if (brand === 'roboapply') return 'personalized';
   return rankingModeFor(brand, await personalizedChoice(userId, db));
-}
-
-export interface FeedRanking<S extends string> {
-  mode: CnRankingMode;
-  /** The sort to run: a fit-based sort becomes `newest` when personalisation is off. */
-  sort: S | 'newest';
-  /** False in non-personalised mode: no fit score, tier or "why this job" ranking reasons are shown. */
-  showFitScores: boolean;
-}
-
-/**
- * The one call the feed (WP-32) makes per request: how this user's list may be
- * ranked. A GoApply user who chose 关闭, or never chose, gets recency + filters
- * only and no fit scores (PIPL Art. 24; H5).
- */
-export async function feedRankingFor<S extends string>(userId: string, brand: BrandId, requested: S, db: PersonalizationDb = prisma): Promise<FeedRanking<S>> {
-  const mode = await rankingModeForUser(userId, brand, db);
-  return { mode, sort: feedSortFor(requested, mode), showFitScores: mode === 'personalized' };
 }

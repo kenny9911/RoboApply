@@ -27,6 +27,8 @@
 //   - useReferralQueue / useModerateReferral   GoApply referral codes (WP-54)
 //   - usePiRequests / useUpdatePiRequest       personal-data requests (WP-13)
 //   - useRefundQuote(userId)          credits refund quote (WP-21a)
+//   - useAdminAudit(query)            GET /system/audit (admin actions)
+//   - useHeldReferrals / useReviewReferral     held invite rewards (WP-60 routes, lib/api/growth.ts)
 
 import {
   useMutation,
@@ -38,6 +40,7 @@ import {
 
 import { adminApi, adminConsoleApi } from '../lib/api/admin';
 import { adminListPiRequests, adminUpdatePiRequest } from '../lib/api/compliance';
+import { listHeldReferrals, reviewReferral } from '../lib/api/growth';
 import type {
   AdminOverviewResponse,
   AdminRange,
@@ -182,6 +185,11 @@ export function useRetryWorkItem() {
   });
 }
 
+/** Admin actions, newest first (GET /admin/system/audit). */
+export function useAdminAudit(query: ConsoleArg<typeof adminConsoleApi.listAdminAudit>, enabled = true) {
+  return useQuery({ queryKey: ['admin', 'console', 'audit', query ?? {}], queryFn: () => adminConsoleApi.listAdminAudit(query), enabled });
+}
+
 export function useAdminCosts(query: ConsoleArg<typeof adminConsoleApi.getCosts>, enabled = true) {
   return useQuery({ queryKey: ['admin', 'console', 'costs', query ?? {}], queryFn: () => adminConsoleApi.getCosts(query), enabled });
 }
@@ -261,5 +269,25 @@ export function useRefundQuote(userId: string | null, enabled = true) {
     queryFn: () => adminConsoleApi.getRefundQuote(userId!),
     enabled: enabled && !!userId,
     retry: false,
+  });
+}
+
+// ── Held invite rewards (WP-60's admin routes; INT-08 console) ───────────
+
+/** Invite rewards waiting for a person to review, oldest first (this brand). */
+export function useHeldReferrals(enabled = true) {
+  return useQuery({ queryKey: ['admin', 'console', 'heldReferrals'], queryFn: () => listHeldReferrals(), enabled });
+}
+
+/**
+ * Approve or reject one held invite. The list is read again after every
+ * answer, success or not: a 409 means the row changed (approved with the
+ * credits still being added, or reviewed by someone else).
+ */
+export function useReviewReferral() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; decision: 'approve' | 'reject' }) => reviewReferral(v.id, { decision: v.decision }),
+    onSettled: () => void qc.invalidateQueries({ queryKey: ['admin', 'console', 'heldReferrals'] }),
   });
 }
