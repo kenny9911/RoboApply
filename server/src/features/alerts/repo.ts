@@ -75,8 +75,6 @@ export interface AlertsRepo {
   jobCards(jobIds: readonly string[]): Promise<JobCardRow[]>;
   /** Applications in "applied" with no change for 10 days (real count). */
   noReplyCount(userId: string, now: Date): Promise<number>;
-  /** Exact count of jobs in the search first seen after `since` (re-engagement N). */
-  countMatchingJobs(input: { market: Market; filters: unknown; since: Date }): Promise<number>;
 }
 
 type AlertsDb = Pick<typeof prismaClient, 'rASearchProfile' | 'user' | 'rAJob' | 'rAJobUserState' | 'rATrackerEntry' | 'rAAlertDelivery'>;
@@ -311,17 +309,6 @@ export function createPrismaAlertsRepo(options: PrismaAlertsRepoOptions = {}): A
       return p.rATrackerEntry.count({
         where: { userId, deletedAt: null, status: 'applied', dateApplied: { lte: before }, updatedAt: { lte: before } },
       });
-    },
-
-    async countMatchingJobs({ market, filters, since }) {
-      const p = await db();
-      const fs = coerceFilterSet(filters, { market }).value;
-      const where = jobWhereForFilters(fs, market, await expandTaxonomy());
-      const { Prisma } = await import('../../generated/prisma/client.js');
-      // Flagged jobs never count (same rule as the candidate list).
-      const noFraud = { OR: [{ fraudFlags: { equals: Prisma.AnyNull } }, { fraudFlags: { equals: [] } }] };
-      // Mode off on GoApply: the count is 0, so no "N new jobs" message goes out either.
-      return p.rAJob.count({ where: { AND: [where, ...(await cnModeWhere(market, env)), noFraud, { firstSeenAt: { gt: since } }] } });
     },
   };
 }

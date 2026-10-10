@@ -154,8 +154,8 @@ describe('/push routes', () => {
 
   it('GoApply stays off in the push area itself, even with a FLAG override and CN_VAPID_* keys', async () => {
     const env = { ...VAPID, ...CN_VAPID, FLAG_GOAPPLY_WEB_PUSH: 'true' };
-    // The override really turns the flag on, so the 404 below comes from the service.
-    expect(isEnabledForBrand('webPush', getBrand('goapply'), env)).toBe(true);
+    // The flag itself is never on for a mainland brand (WP-93), and the service refuses as well.
+    expect(isEnabledForBrand('webPush', getBrand('goapply'), env)).toBe(false);
     expect(webPushServesBrand('goapply')).toBe(false);
     expect(webPushServesBrand('roboapply')).toBe(true);
     const cnDb = fakeDb();
@@ -205,13 +205,12 @@ describe('/push routes', () => {
     expect((await h.request('POST', L, { body: { endpoint: FCM(1) } })).status).toBe(401);
   });
 
-  it('answers 501 push_not_configured without VAPID keys, and the key when set', async () => {
-    const off = await hNoKeys.request<{ code: string; details: { reason: string } }>('GET', '/api/v1/roboapply/push/vapid-public-key', as('u1'));
-    expect(off.status).toBe(501);
-    expect(off.body.code).toBe('provider_not_configured');
-    expect(off.body.details.reason).toBe('push_not_configured');
+  it('is hidden (404 feature_disabled) without VAPID keys — the webPush flag needs them (WP-93) — and answers the key when set', async () => {
+    const off = await hNoKeys.request<{ code: string }>('GET', '/api/v1/roboapply/push/vapid-public-key', as('u1'));
+    expect(off.status).toBe(404);
+    expect(off.body.code).toBe('feature_disabled');
     const noSub = await hNoKeys.request('POST', '/api/v1/roboapply/push/subscriptions', { ...as('u1'), body: sub(1) });
-    expect(noSub.status).toBe(501);
+    expect(noSub.status).toBe(404);
 
     const on = await h.request<{ data: { publicKey: string } }>('GET', '/api/v1/roboapply/push/vapid-public-key', as('u1'));
     expect(on.status).toBe(200);
@@ -448,7 +447,7 @@ describe('push.send worker', () => {
     });
     const s = recordingSender();
     const service = makeService(db, s.sender);
-    expect(await handlePushSend(base, service, pushOn)).toEqual({ sent: 1, pruned: 0 });
+    expect(await handlePushSend(base, service, pushOn, VAPID)).toEqual({ sent: 1, pruned: 0 });
     expect(db.$rows('seekerNotification')[0]!.pushSentAt).toEqual(T0);
     await expect(handlePushSend({ ...base, brand: 'goapply' }, service, pushOn)).rejects.toMatchObject({ name: 'PermanentWorkError' });
     await expect(handlePushSend({ userId: 'u1' }, service, pushOn)).rejects.toMatchObject({ name: 'PermanentWorkError' });
@@ -464,10 +463,10 @@ describe('push.send worker', () => {
     const s = recordingSender();
     const service = makeService(db, s.sender);
     const off = vi.fn(async () => prefs({ alert: ['in_app', 'email'] }));
-    expect(await handlePushSend(base, service, off)).toEqual({ sent: 0, pruned: 0, skippedReason: 'preference_off' });
+    expect(await handlePushSend(base, service, off, VAPID)).toEqual({ sent: 0, pruned: 0, skippedReason: 'preference_off' });
     expect(off).toHaveBeenCalledWith('u1', expect.objectContaining({ id: 'roboapply' }));
-    expect(await handlePushSend({ ...base, category: 'mystery' }, service, pushOn)).toMatchObject({ sent: 0, skippedReason: 'preference_off' });
-    expect(await handlePushSend(base, service, async () => null)).toMatchObject({ sent: 0, skippedReason: 'preference_off' });
+    expect(await handlePushSend({ ...base, category: 'mystery' }, service, pushOn, VAPID)).toMatchObject({ sent: 0, skippedReason: 'preference_off' });
+    expect(await handlePushSend(base, service, async () => null, VAPID)).toMatchObject({ sent: 0, skippedReason: 'preference_off' });
     expect(s.calls).toHaveLength(0);
     expect(db.$rows('seekerNotification')[0]!.pushSentAt).toBeNull();
   });
@@ -493,7 +492,7 @@ describe('push.send worker', () => {
   it('completes without loading preferences when the person has no device', async () => {
     const s = recordingSender();
     const preferences = vi.fn(pushOn);
-    expect(await handlePushSend(base, makeService(fakeDb(), s.sender), preferences)).toEqual({ sent: 0, pruned: 0 });
+    expect(await handlePushSend(base, makeService(fakeDb(), s.sender), preferences, VAPID)).toEqual({ sent: 0, pruned: 0 });
     expect(preferences).not.toHaveBeenCalled();
   });
 
@@ -502,6 +501,6 @@ describe('push.send worker', () => {
       rAPushSubscription: [{ id: 's1', userId: 'u1', brand: 'roboapply', endpoint: FCM(1), p256dh: 'p', auth: 'a', userAgent: null, failedCount: 0, lastOkAt: null, createdAt: T0 }],
     });
     const s = recordingSender(() => ({ ok: false, statusCode: 503, gone: false, message: 'busy' }));
-    await expect(handlePushSend(base, makeService(db, s.sender), pushOn)).rejects.toThrow(/no device/);
+    await expect(handlePushSend(base, makeService(db, s.sender), pushOn, VAPID)).rejects.toThrow(/no device/);
   });
 });

@@ -9,7 +9,6 @@ const m = vi.hoisted(() => ({
   pruneRateCounters: vi.fn(async () => ({ deleted: 7 })),
   reconcile: vi.fn(async () => ({ finalized: 0, expired: 0 })),
   releaseStale: vi.fn(async () => 2),
-  fridayNudge: vi.fn(async () => ({})),
   coverLetterDelete: vi.fn(async (_args?: unknown) => ({ count: 4 })),
   accountPurge: vi.fn(async () => ({ scanned: 1, purged: 1 })),
   pruneReferralSignals: vi.fn(async () => ({ deleted: 5, nextAt: null })),
@@ -50,7 +49,6 @@ vi.mock('../services/LoggerService.js', () => ({
 vi.mock('../lib/prisma.js', () => ({ default: { roboApplyCoverLetterCache: { deleteMany: m.coverLetterDelete } } }));
 vi.mock('../roboapply/services/RoboApplyBillingReminderService.js', () => ({
   runRenewalReminderSweep: vi.fn(async () => ({})),
-  runFridayNudgeSweep: m.fridayNudge,
 }));
 vi.mock('../roboapply/services/SeekerAccountPurgeService.js', () => ({ runAccountPurgeSweep: m.accountPurge }));
 vi.mock('../interview-engine/sessions/InterviewSessionService.js', () => ({
@@ -198,7 +196,6 @@ describe('cron routes over HTTP', () => {
   it.each(REMOVED)('the removed V1 cron /%s is no longer served', async (name) => {
     const res = await h.request('GET', `/api/v1/cron/${name}`, auth);
     expect(res.status).toBe(404);
-    expect(m.fridayNudge).not.toHaveBeenCalled();
   });
 
   it('the existing crons are still served', async () => {

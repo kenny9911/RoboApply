@@ -396,12 +396,12 @@ describe('deploy-cn workflow', () => {
     const buildStage = /\nFROM \$\{NODE_IMAGE\} AS build\n([\s\S]*?)\nFROM /.exec(code(read(`${CN}/Dockerfile.web`)))?.[1] ?? '';
     const declared = new Set([...buildStage.matchAll(/^ARG ([A-Z][A-Z0-9_]*)\b/gm)].map((m) => m[1]!));
     /**
-     * Passed by the workflow, not yet declared by deploy/cn/Dockerfile.web.
-     * That file is outside INT-13's ownership (handoff request to the
-     * orchestrator): add `ARG <NAME>=` to its build stage, then delete the
-     * name here. Until then the value is inert on the mainland build.
+     * Names the workflow passes that deploy/cn/Dockerfile.web does not declare
+     * yet (such a value is inert on the mainland build). Empty since the INT
+     * gate declared NEXT_DEPLOYMENT_ID and CN_PUBLIC_ASSET_BASE_URL; a new
+     * build argument goes here only until the Dockerfile declares it.
      */
-    const PENDING_IN_DOCKERFILE_WEB = ['NEXT_DEPLOYMENT_ID', 'CN_PUBLIC_ASSET_BASE_URL'];
+    const PENDING_IN_DOCKERFILE_WEB: string[] = [];
 
     it('the workflow passes the five names the web build reads', () => {
       expect(passed).toEqual(['NPM_REGISTRY', 'NEXT_PUBLIC_CN_EXT_ID', 'NEXT_PUBLIC_CN_EXT_STORE_URL', 'NEXT_DEPLOYMENT_ID', 'CN_PUBLIC_ASSET_BASE_URL']);

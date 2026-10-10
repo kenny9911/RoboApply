@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { FEED_SORTS } from '../../feed/contract.js';
 import { parseFilterSetPatch, type FilterSet } from '../../search/index.js';
 import type { CardSource, CompetitivenessCardData } from '../contract.js';
-import type { SalaryStatsResult } from '../salaryStats.js';
+import type { SalaryStatsResult } from '../../feed/index.js';
 import type { CopilotTool, ToolContext, ToolOutput } from '../types.js';
 import { card, clip, indexCount, isNotFound, JobId, jobForModel, notAvailable, requireUser } from './util.js';
 

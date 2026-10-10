@@ -33,6 +33,11 @@ ARG NEXT_PUBLIC_EXT_ID=
 ARG NEXT_PUBLIC_EXT_STORE_URL=
 ARG NEXT_PUBLIC_CN_EXT_ID=
 ARG NEXT_PUBLIC_CN_EXT_STORE_URL=
+# Read by `next build` (next.config.mjs): the GoApply image origin allowed for
+# next/image, and the deployment id the skew protection compares (the CN
+# workflow passes the commit sha). Both empty = feature off.
+ARG CN_PUBLIC_ASSET_BASE_URL=
+ARG NEXT_DEPLOYMENT_ID=
 ENV NPM_CONFIG_REGISTRY=${NPM_REGISTRY} \
     PRISMA_ENGINES_MIRROR=${PRISMA_ENGINES_MIRROR} \
     NEXT_TELEMETRY_DISABLED=1 \
@@ -40,7 +45,9 @@ ENV NPM_CONFIG_REGISTRY=${NPM_REGISTRY} \
     NEXT_PUBLIC_EXT_ID=${NEXT_PUBLIC_EXT_ID} \
     NEXT_PUBLIC_EXT_STORE_URL=${NEXT_PUBLIC_EXT_STORE_URL} \
     NEXT_PUBLIC_CN_EXT_ID=${NEXT_PUBLIC_CN_EXT_ID} \
-    NEXT_PUBLIC_CN_EXT_STORE_URL=${NEXT_PUBLIC_CN_EXT_STORE_URL}
+    NEXT_PUBLIC_CN_EXT_STORE_URL=${NEXT_PUBLIC_CN_EXT_STORE_URL} \
+    CN_PUBLIC_ASSET_BASE_URL=${CN_PUBLIC_ASSET_BASE_URL} \
+    NEXT_DEPLOYMENT_ID=${NEXT_DEPLOYMENT_ID}
 
 # `postinstall` runs `prisma generate`, which needs the config and the schema.
 COPY package.json package-lock.json prisma.config.ts ./

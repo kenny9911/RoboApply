@@ -120,11 +120,6 @@ export interface CopilotStore {
   deleteMemory(userId: string, id: string, at: Date): Promise<boolean>;
   listFeedback(options: { cursor?: string; limit: number }): Promise<{ items: CopilotFeedbackRow[]; cursor: string | null }>;
   userName(userId: string): Promise<string | null>;
-  /**
-   * @deprecated Reads the resume area's `RAResumeVariant` directly. Replace
-   * with `resume.primaryVariantId(userId)` from `resume/index.ts` (REQ-50-03).
-   */
-  primaryResumeId(userId: string): Promise<string | null>;
   /** Cost row (units 0) under SKU `ra_copilot_turn`; the `assistant` credit commit writes the charged row. */
   logCost(input: { userId: string; costUsd: number; requestId: string | null; messageId: string; metadata: Record<string, unknown> }): Promise<void>;
 }
@@ -365,13 +360,6 @@ export function createPrismaCopilotStore(getDb: () => Promise<PrismaClientLike> 
       const p = await getDb();
       const row = await p.user.findUnique({ where: { id: userId }, select: { name: true } });
       return row?.name ?? null;
-    },
-    async primaryResumeId(userId) {
-      const p = await getDb();
-      const primary = await p.rAResumeVariant.findFirst({ where: { userId, deletedAt: null, isPrimary: true }, select: { id: true } });
-      if (primary) return primary.id;
-      const latest = await p.rAResumeVariant.findFirst({ where: { userId, deletedAt: null }, orderBy: { lastEditedAt: 'desc' }, select: { id: true } });
-      return latest?.id ?? null;
     },
     async logCost(input) {
       const p = await getDb();

@@ -353,7 +353,8 @@ describe('GET /jobs/:id (service)', () => {
     expect(await supported(intl, { atsType: 'greenhouse', applyUrl: 'https://boards.greenhouse.io/acme/jobs/1' })).toBe(true);
     expect(await supported(intl, { atsType: 'smartrecruiters', applyUrl: 'https://careers.smartrecruiters.com/Acme/1' })).toBe(false);
     expect(await supported(intl, { atsType: 'smartrecruiters', applyUrl: 'https://jobs.smartrecruiters.com/Acme/1' })).toBe(true);
-    expect(await supported(intl, { atsType: 'workday', applyUrl: 'https://acme.wd5.myworkdayjobs.com/External/job/1' })).toBe(false);
+    // INT gate (INT-03, R4): Workday is one run across its pages now, so it left the page-by-page list.
+    expect(await supported(intl, { atsType: 'workday', applyUrl: 'https://acme.wd5.myworkdayjobs.com/External/job/1' })).toBe(true);
     expect(await supported(intl, { atsType: 'successfactors', applyUrl: 'https://career5.sapsf.eu/career?company=acme' })).toBe(false);
     expect(await supported(cn, { atsType: 'feishu', applyUrl: 'https://jobs.bytedance.com/campus/position/1' })).toBe(false);
     expect(await supported(cn, { atsType: 'feishu', applyUrl: 'https://acme.jobs.feishu.cn/index/position/1' })).toBe(true);

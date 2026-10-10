@@ -32,7 +32,7 @@ export interface LifecycleRepo {
   /** Highest Great/Good fit open public job (not hidden) for the tailoring tip. */
   topFitJob(userId: string, market: Market): Promise<{ id: string; title: string; company: string } | null>;
   /** The active (else default) saved search. */
-  activeSearch(userId: string): Promise<{ name: string; filters: unknown } | null>;
+  activeSearch(userId: string): Promise<{ id: string; name: string; filters: unknown } | null>;
 }
 
 type LifecycleDb = Pick<
@@ -282,10 +282,10 @@ export function createPrismaLifecycleRepo(options: PrismaLifecycleRepoOptions = 
       const p = await db();
       const row = await p.rASearchProfile.findFirst({
         where: { userId },
-        select: { name: true, filters: true },
+        select: { id: true, name: true, filters: true },
         orderBy: [{ isActive: 'desc' }, { isDefault: 'desc' }, { updatedAt: 'desc' }],
       });
-      return row ? { name: row.name, filters: row.filters } : null;
+      return row ? { id: row.id, name: row.name, filters: row.filters } : null;
     },
   };
 }

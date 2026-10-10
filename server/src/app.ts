@@ -89,8 +89,11 @@ app.set('trust proxy', trustProxySetting());
 // Same-origin in production (the Next.js app and this API share each brand's
 // host via a Vercel rewrite), but we still allowlist every registry host of
 // the brands this deployment serves, NEXT_PUBLIC_ROBOAPPLY_URL, FRONTEND_URLS
-// and *.vercel.app previews. Dev allows localhost / goapply.localhost on the
-// dev ports. Built from the brand registry (platform/brand/runtime.ts).
+// and this deployment's own Vercel hosts. There is no built-in preview
+// pattern: other preview origins are allowed only through CORS_PREVIEW_HOSTS
+// (explicit opt-in; a bare `*.vercel.app` is refused). Dev allows localhost /
+// goapply.localhost on the dev ports. Built from the brand registry
+// (platform/brand/runtime.ts).
 app.use(
   cors({
     origin: corsOrigins(),
@@ -148,6 +151,8 @@ app.use('/api/v1/roboapply/billing', roboapplyBillingRouter);
 app.use('/api/v1/roboapply/account', roboapplyAccountRouter);
 app.use('/api/v1/roboapply/v2', roboapplyV2Router);
 
+// The job-search API is a RoboApply product: on a GoApply host both routers
+// answer 404 feature_disabled before any key or session lookup (routes.ts).
 const jobSearchRouters = createJobSearchRouters();
 app.use('/api/v1/job-search', jobSearchRouters.api);
 app.use('/api/v1/roboapply/v2/job-search', jobSearchRouters.website);

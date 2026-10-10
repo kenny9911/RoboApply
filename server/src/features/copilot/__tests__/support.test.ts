@@ -1,6 +1,8 @@
 // @vitest-environment node
-// WP-50 supporting modules: posted-pay aggregate (D3, n ≥ 20), nudges,
-// rolling summary, daily budget, the store's pagination, the worker.
+// WP-50 supporting modules: nudges, rolling summary, daily budget, the
+// store's pagination, the worker. The posted-pay aggregate (D3, n ≥ 20) is
+// feed's `marketStats` now and is tested in features/feed/marketStats.test.ts;
+// the primary-resume rule is tested in features/resume/primaryVariant.test.ts.
 
 import { describe, expect, it, vi } from 'vitest';
 
@@ -11,45 +13,9 @@ vi.mock('../../../services/LoggerService.js', () => ({
 import { getBrand } from '../../../platform/brand/registry.js';
 import { budgetKey, copilotDailyBudgetUsd, createCopilotBudget, DEFAULT_COPILOT_DAILY_BUDGET_USD } from '../budget.js';
 import { nextNudge, type NudgeSignals } from '../nudges.js';
-import { salaryStats, salaryWhere, summarizePay, type PayRow } from '../salaryStats.js';
 import { crossedSummaryMark, runThreadSummary } from '../summary.js';
 import { COPILOT_WORK_KINDS, workers } from '../workers.js';
-import { NOW, USER, fakeAreas, makeFake, makeService } from './testkit.js';
-import { createPrismaCopilotStore } from '../store.js';
-
-const row = (min: number | null, max: number | null, currency = 'USD', period = 'year'): PayRow => ({ salaryMin: min, salaryMax: max, salaryCurrency: currency, salaryPeriod: period });
-
-describe('salary aggregate', () => {
-  const meta = { totalCount: 100, asOf: NOW, scope: { taxonomyId: null, title: 'analyst', country: 'US', city: null } };
-
-  it('below 20 postings: no aggregate, counts only', () => {
-    const r = summarizePay(Array.from({ length: 19 }, (_, i) => row(80_000 + i * 1000, 100_000 + i * 1000)), meta);
-    expect(r).toMatchObject({ listedCount: 19, totalCount: 100, median: null, p25: null, p75: null, minSample: 20 });
-  });
-
-  it('20+ postings in one currency and period: quartiles with sampleSize and source', () => {
-    const rows = [...Array.from({ length: 21 }, (_, i) => row(90_000 + i * 2000, 110_000 + i * 2000)), row(50, 60, 'USD', 'hour'), row(null, null), row(5000, 8000, 'EUR', 'month')];
-    const r = summarizePay(rows, meta);
-    expect(r).toMatchObject({ currency: 'USD', period: 'year', listedCount: 21 });
-    expect(r.median).toEqual({ value: 120_000, source: 'index', sampleSize: 21, asOf: NOW.toISOString(), method: 'computed' });
-    expect(r.p25!.value).toBeLessThan(r.median!.value);
-    expect(r.p75!.value).toBeGreaterThan(r.median!.value);
-  });
-
-  it('only public, canonical, live rows of the brand market (imports never count)', () => {
-    const w = salaryWhere({ market: 'intl', taxonomyId: 'data.analyst', country: 'us', now: NOW }) as { AND: Array<Record<string, unknown>> };
-    expect(w.AND[0]).toEqual({ market: 'intl', visibility: 'public', isCanonical: true, archivedAt: null, closedAt: null });
-    expect(w.AND).toContainEqual({ taxonomyIds: { has: 'data.analyst' } });
-    expect(w.AND).toContainEqual({ locationCountry: 'US' });
-  });
-
-  it('queries rows and the total count with the same filter', async () => {
-    const db = { rAJob: { findMany: vi.fn(async () => Array.from({ length: 20 }, () => row(100_000, 120_000))), count: vi.fn(async () => 64) } };
-    const r = await salaryStats(db, { market: 'cn', title: '数据分析', now: NOW });
-    expect(db.rAJob.findMany.mock.calls[0]![0].where).toEqual(db.rAJob.count.mock.calls[0]![0].where);
-    expect(r).toMatchObject({ totalCount: 64, listedCount: 20, median: { value: 110_000, sampleSize: 20 } });
-  });
-});
+import { NOW, USER, fakeAreas, makeService } from './testkit.js';
 
 describe('nudges', () => {
   const signals = (over: Partial<NudgeSignals> = {}): NudgeSignals => ({ latestRating: async () => null, reportedSince: async () => false, ...over });
@@ -172,13 +138,6 @@ describe('store', () => {
     const f2 = await h.service.listFeedback({ limit: 2, cursor: f1.cursor! });
     expect(f2.items).toHaveLength(1);
     expect(f2.cursor).toBeNull();
-  });
-
-  it('primary resume, then the most recently edited', async () => {
-    const db = makeFake();
-    const store = createPrismaCopilotStore(async () => db as never);
-    expect(await store.primaryResumeId(USER)).toBe('res_1');
-    expect(await store.primaryResumeId('nobody')).toBeNull();
   });
 
   it('GoApply brand of a thread is enforced on list', async () => {

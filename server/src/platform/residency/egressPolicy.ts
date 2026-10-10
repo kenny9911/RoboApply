@@ -29,7 +29,9 @@
 //   - mainland-only service hosts (Aliyun, Tencent Cloud, WeChat).
 //
 // Both brands: Tavily, Firecrawl and RapidAPI receive NO PI — only company or
-// job queries. On the mainland stack GoApply does not call them at all.
+// job queries. On the mainland stack GoApply does not call them at all: the
+// job-search API that fans out to RapidAPI is closed for the cn market
+// (job-search/routes.ts `roboApplyOnly`).
 // `assertNoPiInPayload` is the runtime check callers of those vendors run on
 // the outgoing query.
 

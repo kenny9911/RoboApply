@@ -296,11 +296,12 @@ describe('notification settings', () => {
     );
 
     const go = await svc.getPreferences({ id: 'sp_go', userId: 'go', brand: GO, locale: 'zh' });
-    expect(go.tipsRemindersConsent.locale).toBe('en');
+    // WP-93: GoApply has its own catalog entry with zh prose.
+    expect(go.tipsRemindersConsent.locale).toBe('zh');
     expect(go.tipsRemindersConsent.text).not.toContain('%BRAND%');
     await svc.patchPreferences({ id: 'sp_go', userId: 'go', brand: GO, locale: 'zh' }, { tipsReminders: true });
     expect(db.$rows('seekerConsentRecord').at(-1)!.proseHash).toBe(
-      consentProseHash({ brand: 'goapply', type: 'tips_reminders', version: CONSENT_PROSE_VERSION, locale: 'en', text: go.tipsRemindersConsent.text }),
+      consentProseHash({ brand: 'goapply', type: 'tips_reminders', version: CONSENT_PROSE_VERSION, locale: 'zh', text: go.tipsRemindersConsent.text }),
     );
   });
 

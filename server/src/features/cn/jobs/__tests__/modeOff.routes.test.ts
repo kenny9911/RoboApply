@@ -20,10 +20,16 @@
 //     the Wave 3 gate applied Request R41-1 (the router ANDs cnPostingsWhere);
 //   - offers (WP-64): the benchmark's posted pay over a fake database holding
 //     MIN_SAMPLE public GoHire postings with pay (Wave 5 gate);
-//   - NOT_EXERCISED readers (tracker, seeker alerts) are covered by their
-//     own areas' mode-off tests (INT-04, INT-07); the rows here go when those
-//     land (join J8).
+//   - the tracker and the seeker alerts / inbox readers are covered by their
+//     own areas' mode-off tests (COVERED_ELSEWHERE; join J8, INT gate). This
+//     file only checks that those test files are still there;
+//   - the two legacy routers outside FEATURE_MOUNTS that return postings (INT
+//     gate): the job-search API (`/api/v1/job-search`, `/api/v1/roboapply/v2/
+//     job-search`) is closed on GoApply in every mode, checked here with the
+//     real brand middleware; `POST /v2/discover/run` is covered by
+//     roboapply/v2/routes/legacyAiGates.test.ts (COVERED_ELSEWHERE).
 
+import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { RequestHandler, Router } from 'express';
 
@@ -64,6 +70,7 @@ import { createSeoPublicRouter } from '../../../seo/routes.js';
 import { createSeoService } from '../../../seo/service.js';
 import { createMemorySeoRepo, seoJob } from '../../../seo/testkit.js';
 import { cnPostingVisible, cnPostingsWhere, filterCnPostings } from '../mode.js';
+import { createJobSearchRouters } from '../../../../job-search/routes.js';
 
 const GA = 'goapply.localhost:3621';
 /** Routers that only ever return third-party postings: gated as a whole. */
@@ -72,11 +79,14 @@ const POSTING_ONLY = ['feed', 'feed.public', 'visitor.alerts'];
 const SCANNED = ['jobs.detail', 'seo', 'cn.jobs', 'agent', 'extension', 'network', 'match', 'search.profiles'];
 /**
  * Job readers covered by their own areas' mode-off tests instead of this file
- * (join J8 removes each row once that test exists).
+ * (join J8: both tests landed with INT-04 and INT-07). Paths are relative to
+ * server/src/features.
  */
-const NOT_EXERCISED: Record<string, string> = {
-  tracker: 'INT-04 → server/src/features/tracker/modeOff.test.ts',
-  notifications: 'INT-07 → server/src/features/alerts/modeOff.test.ts',
+const COVERED_ELSEWHERE: Record<string, string> = {
+  tracker: 'tracker/modeOff.test.ts',
+  notifications: 'alerts/modeOff.test.ts',
+  // Legacy cross-bank search (not a feature mount): GoApply + mode off → 404 before any bank read or model call.
+  'v2.discover': '../roboapply/v2/routes/legacyAiGates.test.ts',
 };
 /**
  * GoApply AI-dependent routers (`agent`) answer 503 without a domestic model,
@@ -585,15 +595,89 @@ describe('GoApply, CN_RECRUITMENT_INFO_MODE=off', () => {
     });
   });
 
-  for (const [id, owner] of Object.entries(NOT_EXERCISED)) {
-    it.todo(`${id}: with mode off, no response carries a third-party posting (${owner}; join J8 removes this row)`);
-  }
+  it.each(Object.entries(COVERED_ELSEWHERE))('%s: its own mode-off test exists (%s)', (_id, file) => {
+    const source = readFileSync(new URL(`../../../${file}`, import.meta.url), 'utf8');
+    // The area's test must still exercise the mode switch, not just exist.
+    expect(source).toMatch(/CN_RECRUITMENT_INFO_MODE/);
+    expect(source).toMatch(/\bit(\.each)?\(/);
+  });
 
   it('the scanner recognises a posting and a feed card (guards the check against running vacuously)', () => {
     expect(thirdPartyPostings({ data: { items: [{ title: '产品经理', companyName: 'A', sourceName: 'GoHire' }] } })).toHaveLength(1);
     expect(thirdPartyPostings({ data: { items: [{ jobId: 'j', title: '产品经理', company: { name: 'A' }, source: { kind: 'bank' } }] } })).toHaveLength(1);
     expect(thirdPartyPostings({ data: { items: [{ title: '产品经理', companyName: 'A', visibility: 'private' }] } })).toEqual([]);
     expect(thirdPartyPostings({ data: { items: [{ jobId: 'j', title: '产品经理', company: { name: 'A' }, source: { kind: 'user_import' } }] } })).toEqual([]);
+  });
+});
+
+// ── The legacy job-search API (app.ts mounts; not in FEATURE_MOUNTS) ────────
+//
+// A RoboApply product that returns third-party postings from the RapidAPI
+// providers and the hiring index and runs a planner model. On GoApply both
+// routers are closed in EVERY mode (the recruitment-info mode does not open
+// them), before the key or session lookup. The fakes below would return a
+// posting, so "closed" is the gate's doing; RoboApply is the control.
+
+const JOB_SEARCH_MOUNTS = { api: '/api/v1/job-search', website: '/api/v1/roboapply/v2/job-search' } as const;
+
+function jobSearchHarness(env: Record<string, string>) {
+  const posting = { id: 'ext_1', title: '产品经理', companyName: '示例科技有限公司', applyUrl: 'https://jobs.example.com/1', provider: 'jsearch', sources: [] };
+  const meta = { totalReturned: 1, deduplicated: 0, partial: false, searchedAt: '2026-10-10T00:00:00Z', cache: 'miss', providers: [{ id: 'jsearch', name: 'JSearch', status: 'ok', resultCount: 1 }] };
+  const calls = { search: 0, agent: 0, keys: 0, auth: 0 };
+  const routers = createJobSearchRouters({
+    service: { providers: () => [{ id: 'jsearch', name: 'JSearch', enabled: true }], search: async () => (calls.search++, { jobs: [posting], meta }) } as never,
+    keys: {
+      authenticate: async () => (calls.auth++, { userId: 'u1', apiKeyId: 'k1' }),
+      list: async () => (calls.keys++, { keys: [] }),
+      create: async () => (calls.keys++, { key: { id: 'k2' }, token: 'fixture' }),
+      revoke: async () => void calls.keys++,
+    } as never,
+    quota: { reserve: async () => 'r1', finish: async () => undefined } as never,
+    agent: { search: async () => (calls.agent++, { jobs: [posting], meta, agent: { queries: ['产品经理'], mode: 'planned', criteria: { country: 'cn' }, unverifiedPreferences: [], linkedinOnly: false }, searches: [] }) } as never,
+    sessionAuth: (req, _res, next) => (calls.auth++, (req.user = { id: 'u1' } as never), next()),
+  });
+  const routes = { api: routesOf(routers.api), website: routesOf(routers.website) };
+  return startRouteHarness({ env, mounts: [[JOB_SEARCH_MOUNTS.api, routers.api], [JOB_SEARCH_MOUNTS.website, routers.website]] }).then((h) => ({ h, routes, calls }));
+}
+
+describe('legacy job-search API on GoApply', () => {
+  const BODY: Record<string, unknown> = { '/search': { query: '产品经理', country: 'cn' }, '/agent/search': { request: '找上海的产品经理职位' }, '/keys': { name: 'App' } };
+
+  it.each([['mode off', MODE_OFF], ['postings allowed', MODE_ON]])('%s: every route of both routers answers 404 feature_disabled; nothing is looked up, searched or planned', async (_name, env) => {
+    const { h, routes, calls } = await jobSearchHarness(env);
+    try {
+      let called = 0;
+      for (const side of ['api', 'website'] as const) {
+        expect(routes[side].length).toBeGreaterThan(0);
+        for (const r of routes[side]) {
+          const res = await h.request<{ code?: string }>(r.method, `${JOB_SEARCH_MOUNTS[side]}${fill(r.path)}`, { host: GA, body: r.method === 'GET' ? undefined : (BODY[r.path] ?? {}) });
+          expect(res.status, `${side} ${r.method} ${r.path}`).toBe(404);
+          expect(res.body?.code, `${side} ${r.method} ${r.path}`).toBe('feature_disabled');
+          expect(thirdPartyPostings(res.body)).toEqual([]);
+          called += 1;
+        }
+      }
+      expect(called).toBeGreaterThanOrEqual(8);
+      expect(calls).toEqual({ search: 0, agent: 0, keys: 0, auth: 0 });
+    } finally {
+      await h.close();
+    }
+  });
+
+  it('control: on RoboApply the same routers answer and return the posting (the check above is not vacuous)', async () => {
+    const { h, calls } = await jobSearchHarness(MODE_OFF);
+    try {
+      expect((await h.request('GET', `${JOB_SEARCH_MOUNTS.api}/openapi.json`)).status).toBe(200);
+      const search = await h.request<unknown>('POST', `${JOB_SEARCH_MOUNTS.website}/search`, { body: BODY['/search'] });
+      expect(search.status).toBe(200);
+      expect(thirdPartyPostings(search.body).length).toBeGreaterThan(0);
+      const planned = await h.request<unknown>('POST', `${JOB_SEARCH_MOUNTS.api}/agent/search`, { body: BODY['/agent/search'], headers: { authorization: 'Bearer fixture' } });
+      expect(planned.status).toBe(200);
+      expect(calls.search).toBe(1);
+      expect(calls.agent).toBe(1);
+    } finally {
+      await h.close();
+    }
   });
 });
 

@@ -193,11 +193,11 @@ describe('/practice/questions', () => {
     expect(row.querySelector('[data-source-note="suppressed"]')).toBeNull();
   });
 
-  it('a bundle without the label (before INT-12’s key lands) reads "another source", never a key path', async () => {
+  it('the count line names its source with the nav.source.label.user_reports label, never a key path', async () => {
     await renderIndex();
     const row = (await screen.findByText('Acme')).closest('a') as HTMLElement;
     const note = row.querySelector('[data-source-note="sourced"]') as HTMLElement;
-    expect(note.textContent).toMatch(/^Source: another source · as of /);
+    expect(note.textContent).toMatch(/^Source: users who shared questions · as of /);
     expect(document.body.textContent).not.toContain('label.user_reports');
   });
 

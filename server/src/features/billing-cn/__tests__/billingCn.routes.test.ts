@@ -235,6 +235,19 @@ describe('POST /billing-cn/wechatpay', () => {
     expect(await w.db.alipayOrder.findMany({})).toHaveLength(0);
   });
 
+  it('409 terms_outdated while the 用户协议 is still a draft, even with a version set (join J5: compliance decides what is published)', async () => {
+    await w.close();
+    // The repository's own content/legal/cn/user-agreement.md is `status: draft`.
+    const { LEGAL_CONTENT_DIR: _fixture, ...env } = GA_ENV;
+    w = await world({ env });
+    const res = await req(w, 'POST', ORDER_PATH, { body: buy() });
+    expect([res.status, res.body!.code]).toEqual([409, 'terms_outdated']);
+    expect(res.body!.details).toEqual({ currentVersion: null });
+    expect(w.calls).toHaveLength(0);
+    expect(await w.db.alipayOrder.findMany({})).toHaveLength(0);
+    expect(await w.db.seekerConsentRecord.findMany({})).toHaveLength(0);
+  });
+
   it('acknowledgeTerms (the gate the legacy /billing/checkout holds) uses the injected version resolver and the same limit and record', async () => {
     const db = seedDb();
     const limiter = memoryRateLimit(() => new Date('2026-10-10T08:00:00.000Z'));
@@ -279,8 +292,8 @@ describe('POST /billing-cn/wechatpay', () => {
     await w.close();
     w = await world({ env: { ...GA_ENV, WECHATPAY_MERCHANT_ENTITY: '别的公司' } });
     const mismatch = await req(w, 'POST', ORDER_PATH, { body: buy() });
-    expect([mismatch.status, mismatch.body!.code]).toEqual([503, 'rail_not_configured']);
-    expect(mismatch.body!.details).toMatchObject({ reason: 'entity_mismatch' });
+    // WP-93: the pay.wechatpay flag needs the entity match, so the route is hidden before the rail is asked.
+    expect([mismatch.status, mismatch.body!.code]).toEqual([404, 'feature_disabled']);
     expect(w.calls).toHaveLength(0);
   });
 
@@ -508,7 +521,8 @@ describe('POST /api/v1/webhooks/wechatpay (raw body, fixture vectors)', () => {
 
   it('answers 503 FAIL (WeChat retries) when verification is not configured, 404 on RoboApply', async () => {
     w = await world({ env: { ...GA_ENV_VECTOR, WECHATPAY_PUBLIC_KEY: '' }, now: at, seed: { alipayOrder: [order()] } });
-    expect((await notify()).status).toBe(503);
+    // WP-93: without the public key the pay.wechatpay flag is off; WeChat retries any non-2xx answer.
+    expect((await notify()).status).toBe(404);
     const ra = await notify(NOTIFY_BODY, { ...NOTIFY_VECTOR.headers }, ROBOAPPLY);
     expect([ra.status, ra.body!.code]).toEqual([404, 'feature_disabled']);
     await w.close();

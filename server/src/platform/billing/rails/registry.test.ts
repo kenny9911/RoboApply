@@ -18,9 +18,12 @@ const ENV = {
   CN_PAYMENT_COLLECTING_ENTITY: 'Example Collecting Co.',
   WECHATPAY_MCH_ID: 'm',
   WECHATPAY_APP_ID: 'a',
-  WECHATPAY_API_V3_KEY: 'k',
+  WECHATPAY_API_V3_KEY: '0123456789abcdef0123456789abcdef',
   WECHATPAY_MCH_CERT_SERIAL: 's',
   WECHATPAY_MCH_PRIVATE_KEY: 'p',
+  WECHATPAY_PUBLIC_KEY: 'pub',
+  WECHATPAY_PUBLIC_KEY_ID: 'PUB_KEY_ID_1',
+  WECHATPAY_MERCHANT_ENTITY: 'Example Collecting Co.',
 };
 
 function fakeWechat(configured = true): PaymentRailImpl {

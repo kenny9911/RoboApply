@@ -34,6 +34,7 @@ import { createAlipayWorkerRail, getRegisteredRail, registerRail, unregisterRail
 import { BillingCnService, cnPayTermsStatement } from '../../features/billing-cn/service.js';
 import { CN_PAY_TERMS_CONSENT_TYPE } from '../../features/billing-cn/contract.js';
 import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 const ENV_KEYS = {
   CN_PAYMENTS_ENABLED: 'true',
@@ -137,6 +138,9 @@ describe('GoApply WeChat Pay through the legacy /billing/checkout', () => {
     CN_PRICE_PRO_WEEK_PASS_FEN: '1200',
     // The published 用户协议 version (what GET /public/legal/terms answers on GoApply).
     CN_LEGAL_DOCS_VERSION: 'cn-terms-2026-10',
+    // Join J5: the gate asks compliance for the PUBLISHED version; the repository's own
+    // document is still a draft, so the tests read a published fixture.
+    LEGAL_CONTENT_DIR: fileURLToPath(new URL('../../features/billing-cn/__tests__/fixtures/legal', import.meta.url)),
   };
   const TERMS = 'cn-terms-2026-10';
   const orders: CheckoutOrder[] = [];

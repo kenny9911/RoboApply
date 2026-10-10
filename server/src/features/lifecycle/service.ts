@@ -10,7 +10,8 @@
 //     default: off for EEA/UK/CH/CA and GoApply);
 //   - send the first due row, in PRODUCT order, in-app first, then email and
 //     the registered channels. Rows that need a real number send only with it
-//     (re-engagement: N ≥ 3 new jobs, counted, never estimated).
+//     (re-engagement: N ≥ 3 new jobs, counted with the feed's own rules,
+//     never estimated; when the exact number is not known, nothing is sent).
 
 import type { BrandId, Market, ProductBrand } from '../../platform/brand/registry.js';
 import type { CronResult, CronTask } from '../../platform/queue/index.js';
@@ -18,6 +19,7 @@ import { logger } from '../../services/LoggerService.js';
 import {
   inQuietHours,
   tipsEnabled,
+  type AlertCandidateSource,
   type DeliverOutcome,
   type NotifyMessage,
   type PreferenceFacts,
@@ -47,8 +49,13 @@ export interface LifecycleDeps {
    * is the free one (free plan with its free allotment), or null when unknown.
    */
   practiceBalance(userId: string): Promise<{ credits: number; free: boolean } | null>;
-  /** Exact count of jobs in a saved search first seen after `since`. */
-  countNewJobs(input: { market: Market; filters: unknown; since: Date }): Promise<number>;
+  /**
+   * Exact count of jobs in a saved search first seen after `since`, as the job
+   * list (`/jobs`, where the message links) selects them, or null when the
+   * exact number is not known (more matched than were read). Never a floor or
+   * an estimate (D3): the message states the number.
+   */
+  countNewJobs(input: { searchProfileId: string; userId: string; market: Market; since: Date }): Promise<number | null>;
   /** First-value route for the welcome message (R-14 for GoApply). */
   firstRoute(brand: ProductBrand, cnIdentity: LifecyclePerson['cnIdentity']): string;
   /** Resume-onboarding route for "Finish setup". */
@@ -112,8 +119,9 @@ async function planStep(step: LifecycleStep, person: LifecyclePerson, brand: Pro
       const search = await deps.repo.activeSearch(person.userId);
       if (!search) return null;
       const since = inactiveSince(person);
-      const count = await deps.countNewJobs({ market: brand.market, filters: search.filters, since });
-      if (count < RE_ENGAGEMENT_MIN_JOBS) return null;
+      const count = await deps.countNewJobs({ searchProfileId: search.id, userId: person.userId, market: brand.market, since });
+      // null: more matched than were read, so no exact N exists; the message is not sent.
+      if (count === null || count < RE_ENGAGEMENT_MIN_JOBS) return null;
       return {
         step,
         category,
@@ -237,6 +245,28 @@ export async function canSendWith(userId: string, step: LifecycleStep, now: Date
   return true;
 }
 
+/**
+ * Most new jobs read for the re-engagement count (the feed's own id limit,
+ * FEED_LIMITS.retrievalLimit). More than this → the count is not exact and
+ * the message is not sent.
+ */
+export const RE_ENGAGEMENT_COUNT_LIMIT = 400;
+
+/**
+ * The re-engagement N over the alert candidate seam (join J4): the feed's own
+ * filter and scope rules for the saved search (radius, posted-within, GoApply
+ * fields, no seed rows, the posted-date floor, the person's hidden jobs), so
+ * the number in the message is what `/jobs` can show. `source` must already
+ * carry the recruitment-info gate (`modeGatedCandidates`). A truncated read
+ * answers null, never the floor.
+ */
+export function countNewJobsWith(source: AlertCandidateSource): LifecycleDeps['countNewJobs'] {
+  return async ({ searchProfileId, userId, market, since }) => {
+    const found = await source({ searchProfileId, userId, market, filters: null, since, postedSince: null, limit: RE_ENGAGEMENT_COUNT_LIMIT });
+    return found.truncated ? null : found.ids.length;
+  };
+}
+
 /** Production wiring (lazy). */
 export async function defaultLifecycleDeps(): Promise<LifecycleDeps> {
   const [
@@ -270,7 +300,13 @@ export async function defaultLifecycleDeps(): Promise<LifecycleDeps> {
         return null;
       }
     },
-    countNewJobs: (input) => alertsRepo.countMatchingJobs(input),
+    // The cron runs inside `runWithBrand`, which is where the feed reads the market from.
+    countNewJobs: countNewJobsWith(
+      alerts.modeGatedCandidates(async (q) => {
+        const { feedService } = await import('../feed/index.js');
+        return feedService.alertCandidates(q.searchProfileId, { since: q.since, limit: q.limit });
+      }),
+    ),
     firstRoute: (b, cnIdentity) =>
       firstValueRoute(b.id, {
         campusCalendar: isEnabledForBrand('jobs.campusCalendar', b),

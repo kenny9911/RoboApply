@@ -87,9 +87,10 @@ model RAAgentKitEvent {
   toState     String
   /// 'user' | 'system' | 'extension'
   actor       String
-  /// SCHEMA-4 (SR-52-3): 'transition' | 'decision' | 'notice'. Nullable with
-  /// no default: null = written before the writer sets it; readers then derive
-  /// it (decision and notice rows are the ones with `fromState = toState`).
+  /// SCHEMA-4 (SR-52-3): 'transition' | 'decision' | 'notice'. Written on every
+  /// new row since INT-03. Nullable with no default: null = written before the
+  /// writer set it (no backfill); readers then derive it (decision and notice
+  /// rows are the ones with `fromState = toState`).
   kind        String?
   /// e.g. `{ tailorSessionId?, coverLetterId?, artifactId?, fileName?, creditLedgerId? }`
   detail      Json?

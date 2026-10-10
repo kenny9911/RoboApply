@@ -18,7 +18,7 @@ One repository, one commit, two deployments. Vercel serves RoboApply (and the Go
 | Web | `goapply-web` (`deploy/cn/Dockerfile.web`, Next.js standalone) | Deployment `web` ×2, Service `web:3000` | Server-side SEO reads go to `http://api:4607` (runtime `NEXT_PUBLIC_API_URL`). |
 | API | `goapply-api` (`deploy/cn/Dockerfile.api`, `node server/dist/app.js`) | Deployment `api` ×2, Service `api:4607`, initContainer `preflight` | `ROBOAPPLY_CRON_DISABLED=true`: no node-cron; the CronJobs below run the sweeps. |
 | Crons | `goapply-api` (runs `deploy/cn/cron-call.mjs`) | 16 CronJobs `cron-*` (`deploy/cn/k8s/cronjobs.yaml`) | Generated from `vercel.json` by `scripts/gen-cn-cronjobs.mjs`; UTC schedules; `Authorization: Bearer $CRON_SECRET` to the API Service. |
-| Voice worker | `goapply-worker` (`interview-agent/Dockerfile`) | Deployment `worker`, **0 replicas** until voice is ready | Agent name `GoApply-Interview`. Needs the self-hosted CN LiveKit and WP-63b's domestic backend. Text practice needs no worker. |
+| Voice worker | `goapply-worker` (`interview-agent/deploy/cn/Dockerfile`) | Deployment `worker`, **0 replicas** until voice is ready | Agent name `GoApply-Interview`. Needs the self-hosted CN LiveKit and WP-63b's domestic backend. Text practice needs no worker. |
 | Database | Aliyun RDS PostgreSQL (cn-shanghai), same VPC | — | Reached over the VPC private address (passes the residency check without a suffix list). |
 | Object storage | Aliyun OSS (`CN_S3_*`) | — | No fallback to the international bucket. |
 
@@ -68,7 +68,7 @@ kubectl -n goapply create secret docker-registry acr-pull \
 - **`goapply-api-env`**: everything in `deploy/cn/cn.env.example` (names only; the repository-root `.env.example` has the full catalogue with comments). Generate **fresh** `JWT_SECRET`, `CRON_SECRET`, `INTERNAL_API_SECRET` for the mainland. `SENSITIVE_DATA_KEY`: see §8.6.
 - **`goapply-web-env`**: only what the web server reads, names in `deploy/cn/cn.web.env.example`:
   - `INTERNAL_API_SECRET` (same value as the API), `CN_CANONICAL_ORIGIN`, `BAIDU_SITE_VERIFICATION` (no `CN_` prefix), and `BRAND_HOST_MAP` if you serve extra hostnames;
-  - the values the legal pages (`/legal/[doc]`) fill in, same values as the API: `CN_LEGAL_ENTITY_NAME`, `CN_LEGAL_POSTAL_ADDRESS`, `CN_SUPPORT_EMAIL`, `CN_COMPLAINT_EMAIL`, `CN_COMPLAINT_PHONE`, `CN_LEGAL_DOCS_VERSION`. Without them the GoApply privacy policy and terms show 未披露 for the operator and complaint contacts and 草稿 for the version, which fails the C-5 disclosure.
+  - the values the legal pages (`/legal/[doc]`) fill in, same values as the API: `CN_LEGAL_ENTITY_NAME`, `CN_LEGAL_POSTAL_ADDRESS`, `CN_SUPPORT_EMAIL`, `CN_COMPLAINT_EMAIL`, `CN_COMPLAINT_PHONE`, `CN_LEGAL_DOCS_VERSION`, and optionally `CN_TAKEDOWN_CONTACT` (falls back to the support address). Without them the GoApply privacy policy and terms show 未披露 for the operator and complaint contacts and 草稿 for the version, which fails the C-5 disclosure.
 
   Do not give the web pods database or vendor credentials.
 - **`goapply-worker-env`**: the CN LiveKit (`LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`), `LIVEKIT_AGENT_CALLBACK_SECRET` (= the API's `CN_LIVEKIT_AGENT_CALLBACK_SECRET`) and WP-63b's backend variables (`LLM_BACKEND`, `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, `STT_BACKEND`, `TTS_BACKEND`, `DASHSCOPE_API_KEY`, …).
@@ -96,7 +96,7 @@ npx vitest run __tests__/deploy
 docker build -f deploy/cn/Dockerfile.api     -t goapply-api:local .
 docker build -f deploy/cn/Dockerfile.web     -t goapply-web:local .
 docker build -f deploy/cn/Dockerfile.gateway -t goapply-gateway:local .
-docker build -t goapply-worker:local interview-agent
+docker build -f interview-agent/deploy/cn/Dockerfile -t goapply-worker:local interview-agent
 
 # Building inside the mainland: npm mirror + base images from ACR
 docker build -f deploy/cn/Dockerfile.api \
@@ -207,11 +207,11 @@ COMMIT;                 -- only then; otherwise ROLLBACK;
 - **When vercel.json crons change** (a sweep is added, removed or rescheduled): run `node scripts/gen-cn-cronjobs.mjs`, commit the regenerated `deploy/cn/k8s/cronjobs.yaml`. The parity test (`__tests__/deploy/cronParity.test.ts`) and the workflow's `--check` fail until you do.
 - **Web caching:** each web replica keeps its own Next.js cache; `seo-rebuild` revalidates through the public origin, which reaches one replica. The others catch up within the page TTL (15 min). If that matters, run one web replica or add a shared cache handler.
 - **Scaling:** `api` and `web` are stateless; raise `replicas` in the manifest (an apply resets manual scaling). The worker drains for up to 90 minutes on rollout.
-- **Shutdown:** the API process has no SIGTERM handler; the `preStop` delay lets the Service drop the pod first, and in-flight requests get the 330 s grace period.
+- **Shutdown:** on SIGTERM the API stops its cron mirror, stops accepting connections, drains in-flight requests for up to 305 s (`SHUTDOWN_DRAIN_TIMEOUT_MS`), disconnects the database and exits. The `preStop` delay still lets the Service drop the pod first, inside the 330 s grace period.
 
 ## 10. Known limits of the kit
 
 - Annotation names for the Aliyun SLB (HTTPS listener, certificate, redirect, health check, IPv6) follow the ACK CCM documentation and were not exercised against a live cluster; verify them on the first deploy (`kubectl describe svc gateway`).
 - The self-hosted LiveKit for CN-1 voice (L-11, C-16) is not part of this kit; the worker stays at 0 replicas until it exists.
-- `next.config.mjs` still lists only the international image hosts; GoApply images served from `CN_PUBLIC_ASSET_BASE_URL` need a remote pattern there before `next/image` can load them. `deploymentId` is not set (version-skew protection across rolling deploys).
+- `next.config.mjs` adds one `next/image` remote pattern for `CN_PUBLIC_ASSET_BASE_URL` (a plain https origin, never a wildcard), and the deployment id for version-skew protection is the build argument `NEXT_DEPLOYMENT_ID` (the workflow passes the commit SHA). Both are build-time values of the web image (`deploy/cn/Dockerfile.web`); set the repository variable `CN_PUBLIC_ASSET_BASE_URL` before the first build.
 - No mainland CDN in front of static assets yet; the gateway serves them from the web pods.

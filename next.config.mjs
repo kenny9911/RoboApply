@@ -86,7 +86,10 @@ const nextConfig = {
   // (app/legal/legalSource.ts, WP-13); file tracing cannot see those reads,
   // so ship the folder with the /legal/[doc] route. The API function gets the
   // same folder through vercel.json includeFiles.
+  // Two keys on purpose: the route glob `/legal/*` does not match the index
+  // page `/legal` itself (app/legal/page.tsx reads the same folder).
   outputFileTracingIncludes: {
+    '/legal': ['./content/legal/**/*'],
     '/legal/*': ['./content/legal/**/*'],
   },
   images: {

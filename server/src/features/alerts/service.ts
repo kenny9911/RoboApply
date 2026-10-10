@@ -317,9 +317,14 @@ export async function defaultJobAlertsDeps(): Promise<JobAlertsDeps> {
   const repo = createPrismaAlertsRepo();
   return {
     repo,
-    // J4: replace the source with `(q) => feedService.alertCandidates(q.searchProfileId, { since: q.since, limit: q.limit })`
-    // (INT-05); keep the gate around it.
-    candidates: modeGatedCandidates((q) => repo.candidateJobIds(q)),
+    // Join J4 (INT gate): candidates come from the feed, so an alert selects with the feed's own
+    // filter rules (radius, posted-within, GoApply fields, visibility, fraud and mode rules).
+    // The cron runs inside `runWithBrand`, which is where the feed reads the market from; the
+    // recruitment-info gate stays around the source.
+    candidates: modeGatedCandidates(async (q) => {
+      const { feedService } = await import('../feed/index.js');
+      return feedService.alertCandidates(q.searchProfileId, { since: q.since, limit: q.limit, postedSince: q.postedSince });
+    }),
     prefs: createPrismaPreferencesRepo(),
     preScore: async (userId, jobIds) =>
       (await matchService.preScoreMany(userId, jobIds)).map((r) => ({ jobId: r.jobId, score: r.score, tier: r.tier, topGap: r.topGap })),

@@ -12,7 +12,8 @@ import type { PreferenceFacts } from '../alerts/preferences.js';
 import type { Recipient } from '../alerts/repo.js';
 import { createPrismaLifecycleRepo, resumeCheckViewSignalSince, type LifecyclePerson, type LifecycleRepo, type PrismaLifecycleRepoOptions } from './repo.js';
 import { LIFECYCLE_STEPS, TIPS_STEPS, dayBudgetUsed, eligibleSteps, stepForTemplate, type SentRecord } from './rules.js';
-import { CANDIDATE_PAGE, canSendWith, createLifecycleTask, runForPerson, type LifecycleDeps } from './service.js';
+import { FEED_LIMITS } from '../feed/contract.js';
+import { CANDIDATE_PAGE, RE_ENGAGEMENT_COUNT_LIMIT, canSendWith, countNewJobsWith, createLifecycleTask, runForPerson, type LifecycleDeps } from './service.js';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -140,7 +141,7 @@ const recipient = (brand: BrandId = 'roboapply'): Recipient => ({ userId: 'u1', 
 
 function makeDeps(
   p: LifecyclePerson,
-  opts: { prefs?: PreferenceFacts; count?: number; credits?: number | null; free?: boolean; claim?: boolean; topJob?: { id: string; title: string; company: string } | null } = {},
+  opts: { prefs?: PreferenceFacts; count?: number | null; credits?: number | null; free?: boolean; claim?: boolean; topJob?: { id: string; title: string; company: string } | null } = {},
 ) {
   const sentMsgs: NotifyMessage[] = [];
   const recorded: Array<{ userId: string; templateKey: string; at: Date }> = [];
@@ -151,7 +152,7 @@ function makeDeps(
       recorded.push({ userId, templateKey, at });
     },
     topFitJob: async () => (opts.topJob === undefined ? { id: 'j1', title: 'Data Analyst', company: 'Acme' } : opts.topJob),
-    activeSearch: async () => ({ name: 'Data jobs', filters: {} }),
+    activeSearch: async () => ({ id: 'sp1', name: 'Data jobs', filters: {} }),
   };
   const deps: LifecycleDeps = {
     repo,
@@ -162,7 +163,7 @@ function makeDeps(
       const credits = opts.credits === undefined ? 1 : opts.credits;
       return credits === null ? null : { credits, free: opts.free ?? true };
     },
-    countNewJobs: vi.fn(async () => opts.count ?? 12),
+    countNewJobs: vi.fn(async () => (opts.count === undefined ? 12 : opts.count)),
     firstRoute: (b) => (b.market === 'cn' ? '/campus' : '/jobs'),
     setupRoute: () => '/onboarding/basics',
     claimDay: vi.fn(async () => opts.claim ?? true),
@@ -283,7 +284,25 @@ describe('lifecycle service', () => {
     const many = makeDeps(p, { count: 7 });
     expect(await runForPerson(p, recipient(), prefs(), brand, many.deps, NOW)).toEqual({ sent: 'tips_re_engagement' });
     expect(many.sentMsgs[0]!.params).toMatchObject({ count: 7, search: 'Data jobs', since: p.lastActiveAt!.toISOString() });
-    expect(many.deps.countNewJobs).toHaveBeenCalledWith({ market: 'intl', filters: {}, since: p.lastActiveAt });
+    // Counted for the saved search itself, through the feed's alert seam (join J4).
+    expect(many.deps.countNewJobs).toHaveBeenCalledWith({ searchProfileId: 'sp1', userId: 'u1', market: 'intl', since: p.lastActiveAt });
+    // More matched than were read: there is no exact N, so nothing is sent (never a floor; D3).
+    const unknown = makeDeps(p, { count: null });
+    expect(await runForPerson(p, recipient(), prefs(), brand, unknown.deps, NOW)).toEqual({ skipped: 'nothing_due' });
+    expect(unknown.sentMsgs).toHaveLength(0);
+  });
+
+  it('the re-engagement count is the candidate seam’s ids for that search; a truncated read is not a number', async () => {
+    const since = new Date(NOW.getTime() - 15 * DAY);
+    const asked: unknown[] = [];
+    const source = (found: { ids: string[]; truncated: boolean }) => async (q: unknown) => (asked.push(q), found);
+    const input = { searchProfileId: 'sp1', userId: 'u1', market: 'intl' as const, since };
+    expect(await countNewJobsWith(source({ ids: ['a', 'b', 'c', 'd'], truncated: false }))(input)).toBe(4);
+    expect(asked[0]).toEqual({ searchProfileId: 'sp1', userId: 'u1', market: 'intl', filters: null, since, postedSince: null, limit: RE_ENGAGEMENT_COUNT_LIMIT });
+    expect(await countNewJobsWith(source({ ids: [], truncated: false }))(input)).toBe(0);
+    expect(await countNewJobsWith(source({ ids: Array.from({ length: RE_ENGAGEMENT_COUNT_LIMIT }, (_v, i) => `j${i}`), truncated: true }))(input)).toBeNull();
+    // The limit is the feed's own id limit: a larger ask would be clamped there and still report `truncated`.
+    expect(RE_ENGAGEMENT_COUNT_LIMIT).toBe(FEED_LIMITS.retrievalLimit);
   });
 
   it('the cron runs per brand and answers no_work fast', async () => {

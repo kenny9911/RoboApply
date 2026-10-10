@@ -12,6 +12,8 @@ import { NUDGE_KINDS } from '../../../../hooks/copilot/nudges';
 import { countsByLabel } from '../cards/ApplicationsCard';
 import { ALL_TRACKER_STATUSES } from '../../../../server/src/features/tracker/contract';
 import { CARD_TYPES, CREDIT_ACTIONS as SERVER_CREDIT_ACTIONS, NUDGE_KINDS as SERVER_NUDGE_KINDS } from '../../../../server/src/features/copilot/contract';
+import { tailorSessionHref } from '../../../../server/src/features/copilot/proposals';
+import { TAILOR_QUERY, TAILOR_SESSION_QUERY } from '../../tailor/TailorLaunchHost';
 import { __assistantChangeStore } from '../../../../hooks/feed/useCalibration';
 import { __outOfCreditsStore } from '../../../../hooks/shared/useCreditGate';
 import { CREDITS, MEMORY_CONSENT, PROFILE, PROFILES, card, fail, installFetch, ok, renderUi, type Route } from './testkit';
@@ -239,6 +241,19 @@ describe('card content', () => {
     installFetch(routes());
     const { container } = renderUi(<CopilotCardView card={card('tailor_ready', { href: 'javascript:alert(1)' })} />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('tailor_ready opens the session the Assistant created, not a new tailor run (a second credit)', () => {
+    installFetch(routes());
+    // The server's own href for an applied tailor proposal (proposals.ts).
+    const href = tailorSessionHref('res_1', 'job_1', 'ts_1');
+    renderUi(<CopilotCardView card={card('tailor_ready', { sessionId: 'ts_1', jobId: 'job_1', baseVariantId: 'res_1', href, aiWritten: true })} />);
+    const link = screen.getByRole('link', { name: 'Open the tailored resume' });
+    const url = new URL(link.getAttribute('href')!, 'https://app.test');
+    expect(url.pathname).toBe('/resume/res_1');
+    // The route contract of TailorLaunchHost: `tailorSession` re-opens; `tailor` alone starts a new flow.
+    expect(url.searchParams.get(TAILOR_SESSION_QUERY)).toBe('ts_1');
+    expect(url.searchParams.get(TAILOR_QUERY)).toBe('job_1');
   });
 
   it('interview_plan: source labels and Practice for this job', () => {

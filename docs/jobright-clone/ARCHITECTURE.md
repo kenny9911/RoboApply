@@ -1920,6 +1920,55 @@ As built (INT-13, from `server/src/features/agent/{routes,contract}.ts`): every 
 | extension device token | 600 requests/h |
 | events per anonId | 120/min |
 | any authenticated route | 600/min/user (global guard) |
+| resume upload per user (INT-10) | 10/day, shared with the LinkedIn PDF import (`RARateCounter` key `resumeUploadPerUser`; a code constant in `RAResumeService`, not yet in `RATE_LIMITS`) |
+| cancel survey per user (INT-02) | 5/h |
+
+### 3.11 Contract additions from the integration wave (INT gate, 2026-10-10)
+
+Recorded from the INT-01 … INT-13 handoffs; the tables above keep their original rows. Each line names the bundle that added it.
+
+**Credits and billing (INT-02)**
+- Entitlement summary: `cancelAtPeriodEnd: boolean` (true only for a live subscription set to end). The web reads it from the summary; it no longer falls back to `/billing/plan`.
+- `BucketSummary.proCap` / `proWindow`: present only where Pro allows more than the current cap (the "Pro: up to N" line on `/ready` reads it).
+- One `CheckoutResponse` type (`features/credits/contract.ts`) for the server and `lib/api/account.ts`.
+- `POST /billing/checkout` with rail `wechatpay` requires `termsVersion`: `409 terms_outdated` (`details.currentVersion`) when it is missing, stale, or no 用户协议 is published; `429 rate_limited` from the same per-user limit as `/billing-cn/wechatpay`. The current version is compliance's `publishedLegalDocVersion(brand, 'terms')` (join J5): a draft document means no version, so no order.
+- `student_verification_required` is `409` (was 403). The charged currency follows `x-vercel-ip-country` first (`buyerCountryFromRequest`); a TWD charge records the TWD acknowledgement.
+- `pay.wechatpay` (INT-11) also needs the WeChat Pay public key, its id, a 32-byte APIv3 key and the merchant-entity match; without them the order route and the notify webhook answer `404 feature_disabled`.
+
+**Ready to apply (INT-03)**
+- `GET /agent/queue`: `tab` / `cursor` / `limit` → `counts`, `weekKey`, `nextCursor`; rows carry `job.fit` (the deterministic estimate).
+- `GET` / `PUT /agent/settings`: `listFilters`, and `filterOverrides: null` clears the kept changes. Weekly lists read the kept filters.
+- `open` → `alreadyApplied`, `atsType`, `extensionSupported`, `item`. `GET /agent/queue/:id` carries `kit.revisionCost`.
+- Queue kind `agent.record-files` records the resume file on first open. `RAAgentKitEvent.kind` is written on every new row.
+
+**Extension (INT-03)**
+- `/ext/autofill-profile`: `flags.aiAnswers`, profile-view names, `answers[].source` (an `ai_confirmed` answer is filled by itself only on an exact question match).
+- Run reuse: one run per application within 2 h. The key is the job, else the page URL without its query; when the query names the job, `RAAutofillRun.pageUrl` ends in `#job=<hash>` (allowlisted parameter names only, no query value stored). A reused run that filled nothing holds a credit again, or answers `credits_exhausted`.
+- Protected question type `grades` (server and extension share one pattern). `workday` left the page-by-page list (`EXTENSION_PER_PAGE_ATS_TYPES`); iCIMS, Taleo and SuccessFactors stay on it.
+
+**Resume (INT-10)**
+- `GET /v2/resumes/:id/grade/latest?opened=1` stamps `RAResumeGrade.viewedAt` (first view of a finished check, report page only); a plain GET never stamps.
+- `POST /v2/resumes/upload`: `localParser=1` forces the local parser on RoboApply (ignored on GoApply); `429 rate_limited` with `details.reason = 'resume_upload_daily_limit'`; GoApply without the `ai_resume_parsing` consent → `503 ai_unavailable` (`ai_consent_required`); an unreadable GoApply image → `422 image_parse_unavailable`.
+- `POST /v2/resumes` with `kind=tailored_for_jd` runs a tailor session (one `tailor` credit; response adds `tailorSessionId`, `pendingClaims`). `/tailor-diff` and `/tailor-apply` answer `410 gone`.
+
+**Jobs, feed and alerts (INT-05, INT-07)**
+- `feedService`: `sampleForFilters`, `alertCandidates` (`{ ids, truncated }`), `marketStats.salary`, `feedSignals`. Job alerts take their candidates from `alertCandidates` (join J4); the Assistant reads `marketStats` and `feedSignals` (join J1) and resume's `primaryVariantId` (join J2).
+- `RAJob.enrichModel`: `'rules'` (retried by maintenance) and `'rules_checked'` (settled for this `ENRICH_VERSION`); both mean no model ran.
+- `FeedItem.cardMeta` / `explanation`; the precompute result has a `failed` count; `publicList` applies the public-page rules in its statement.
+- Lifecycle row 4 ("check ready and unopened") is sent only for checks completed on or after `RESUME_CHECK_VIEW_SIGNAL_SINCE`; unset means never.
+
+**Admin (INT-08)**
+- Admin actions are written to `RAAdminAuditLog`; job decisions (keep, close, restore) to `RAJobReview`. `GET /admin/reports` answers `keepHolds: true` now that the feed's reporter count and re-enrichment read `RAJobReview` (flag flipped at the gate).
+- Held invite rewards: `GET /admin/growth/referrals/held`, `POST /admin/growth/referrals/:id/review`.
+
+**Practice (INT-09)**
+- Browser `POST /interview-engine/sessions` is removed; `/v1/practice/sessions` is the one first-party create. `POST /requirements/preview`, `prepare` and `coach` pass the shared practice gate (GoApply with consent off: `503 ai_unavailable`, no model call, no web search).
+- GoApply catalog lists `cn_ai_interview` first; such a session is stored with `interviewType: 'cn_ai_interview'` (20–30 minutes).
+
+**Platform (INT-11, INT-13)**
+- CORS has no built-in preview pattern (`CORS_PREVIEW_HOSTS` is an explicit opt-in). `webPush` needs both VAPID keys and a `mailto:` / `https:` `VAPID_SUBJECT`, and is never on for GoApply.
+- `/public/legal/disclosures` and the `/legal` index page; `publishedLegalDocVersion(brand, doc, env)`.
+- The API drains on SIGTERM / SIGINT (`SHUTDOWN_DRAIN_TIMEOUT_MS`); `TRUST_PROXY` sets how many proxies are trusted.
 
 ---
 

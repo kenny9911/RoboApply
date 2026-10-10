@@ -248,8 +248,9 @@ describe('admin areas (AdminNav.tsx)', () => {
   });
 
   it('each brand’s admin sees only its own areas, and every admin page has an area (none is orphaned)', () => {
-    expect(adminAreasFor('roboapply').map((a) => a.id)).toEqual(['overview', 'system', 'reports', 'credits', 'announcements', 'questions', 'coaches', 'sources']);
-    expect(adminAreasFor('goapply').map((a) => a.id)).toEqual(['overview', 'system', 'reports', 'credits', 'announcements', 'questions', 'coaches', 'campus', 'fraud', 'invites']);
+    // `inviteRewards` (held invite rewards, /admin/reports/invites) joined on both brands at the INT gate (INT-08).
+    expect(adminAreasFor('roboapply').map((a) => a.id)).toEqual(['overview', 'system', 'reports', 'inviteRewards', 'credits', 'announcements', 'questions', 'coaches', 'sources']);
+    expect(adminAreasFor('goapply').map((a) => a.id)).toEqual(['overview', 'system', 'reports', 'inviteRewards', 'credits', 'announcements', 'questions', 'coaches', 'campus', 'fraud', 'invites']);
     const listed = new Set(ADMIN_AREAS.map((a) => a.href));
     const topLevelAdminPages = appRoutes()
       .filter((r) => r.segments[0] === 'admin' && r.segments.length <= 2 && !r.segments.some((s) => s.startsWith('[')))
@@ -263,7 +264,7 @@ describe('marketing nav and footer (SiteChrome.tsx, read-only)', () => {
 
   it('every literal link is a real, public page', () => {
     const hrefs = [...new Set([...source.matchAll(/href="(\/[^"]*)"/g)].map((m) => m[1]!))];
-    expect(hrefs.sort()).toEqual(['/#features', '/about', '/help', '/help/ranking', '/login', '/pricing', '/security']);
+    expect(hrefs.sort()).toEqual(['/#features', '/about', '/help', '/help/ranking', '/login', '/pricing', '/security', '/tools']);
     for (const href of hrefs) {
       expectLivePage(href, 'marketing chrome');
       expect(isProtectedPath(href.split('#')[0] || '/'), href).toBe(false);

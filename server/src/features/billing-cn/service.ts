@@ -13,7 +13,7 @@
 import { createHash } from 'node:crypto';
 import type { ExtendedPrismaClient } from '../../lib/prisma.js';
 import { logger } from '../../services/LoggerService.js';
-import { brandEnv, type EnvSource } from '../../platform/brand/brandEnv.js';
+import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { ProductBrand } from '../../platform/brand/registry.js';
 import {
   BillingError,
@@ -83,10 +83,11 @@ export interface BillingCnDeps {
   queryIntervalSec?: number;
   /**
    * The published GoApply 用户协议 version, or null when none is published
-   * (default: the brand's LEGAL_DOCS_VERSION, i.e. CN_LEGAL_DOCS_VERSION —
-   * the same value GET /public/legal/terms returns as `version`).
+   * (default, join J5: compliance's `publishedLegalDocVersion(brand, 'terms')`
+   * — the brand's LEGAL_DOCS_VERSION, i.e. CN_LEGAL_DOCS_VERSION, but only
+   * while the document is not `status: draft`).
    */
-  termsVersion?: (brand: ProductBrand, env: EnvSource) => string | null;
+  termsVersion?: (brand: ProductBrand, env: EnvSource) => string | null | Promise<string | null>;
   /** Fixed-window limiter (default: the platform's DB-backed consumeRateLimit). */
   consumeRateLimit?: (key: string, windows: readonly RateWindow[]) => Promise<{ allowed: boolean; retryAfterSec: number }>;
 }
@@ -134,11 +135,14 @@ function purposeFor(plan: Pick<CatalogPlan, 'kind'>): CnPurpose {
 }
 
 /**
- * Narrow adapter for the published 用户协议 version. Same rule as compliance's
- * legalDocsVersion() (not on its public surface yet; request to WP-13).
+ * The published 用户协议 version (join J5, INT gate): compliance decides. It is
+ * the brand's LEGAL_DOCS_VERSION only while the document is published; a
+ * draft, or no version, gives null, and then no acceptance is recorded and no
+ * order is taken. Loaded lazily, like every other cross-area call here.
  */
-function defaultTermsVersion(brand: ProductBrand, env: EnvSource): string | null {
-  return brandEnv(brand, 'LEGAL_DOCS_VERSION', env) ?? null;
+async function defaultTermsVersion(brand: ProductBrand, env: EnvSource): Promise<string | null> {
+  const { publishedLegalDocVersion } = await import('../compliance/index.js');
+  return publishedLegalDocVersion(brand, 'terms', env);
 }
 
 async function defaultConsumeRateLimit(key: string, windows: readonly RateWindow[]): Promise<{ allowed: boolean; retryAfterSec: number }> {
@@ -218,11 +222,12 @@ export class BillingCnService {
    * The buyer must have ticked the 用户协议 that is published now (it names
    * the collecting entity): a stale tab or a scripted client is refused.
    */
-  private assertCurrentTerms(brand: ProductBrand, termsVersion: string | null | undefined): asserts termsVersion is string {
-    const currentTerms = (this.deps.termsVersion ?? defaultTermsVersion)(brand, this.env());
+  private async requireCurrentTerms(brand: ProductBrand, termsVersion: string | null | undefined): Promise<string> {
+    const currentTerms = await (this.deps.termsVersion ?? defaultTermsVersion)(brand, this.env());
     if (!currentTerms || termsVersion !== currentTerms) {
       throw new BillingCnError('terms_outdated', 409, 'The agreement changed. Reload it and tick the box again.', { currentVersion: currentTerms });
     }
+    return currentTerms;
   }
 
   /**
@@ -272,8 +277,8 @@ export class BillingCnService {
     meta: RequestMeta = {},
   ): Promise<void> {
     await this.assertCreateRateLimit(userId, brand);
-    this.assertCurrentTerms(brand, input.termsVersion);
-    await this.recordTermsConsent(await this.db(), { seekerProfileId: input.seekerProfileId, brand, plan: input.plan, termsVersion: input.termsVersion }, meta);
+    const termsVersion = await this.requireCurrentTerms(brand, input.termsVersion);
+    await this.recordTermsConsent(await this.db(), { seekerProfileId: input.seekerProfileId, brand, plan: input.plan, termsVersion }, meta);
   }
 
   async createOrder(userId: string, brand: ProductBrand, input: CreateWechatOrderInput, meta: RequestMeta = {}): Promise<CreateWechatOrderResponse> {
@@ -290,14 +295,14 @@ export class BillingCnService {
     if (input.purpose && input.purpose !== purposeFor(plan)) {
       throw new BillingCnError('purpose_mismatch', 422, 'The purpose does not match the plan.');
     }
-    this.assertCurrentTerms(brand, input.termsVersion);
+    const termsVersion = await this.requireCurrentTerms(brand, input.termsVersion);
 
     const db = await this.db();
     const account = await loadBillingAccount(db, userId);
     if (!account) throw new HttpError('unauthorized');
     if (!account.seekerProfileId) throw new BillingError('no_profile', 'No seeker profile');
 
-    const context: WechatCheckoutContext = { tradeType: input.tradeType, termsVersion: input.termsVersion };
+    const context: WechatCheckoutContext = { tradeType: input.tradeType, termsVersion };
     // JSAPI: the rail pays with the openid WeChat sign-in recorded (never a
     // client-sent one); answer a clear 409 here when there is none.
     if (input.tradeType === 'jsapi' && !(await this.openIdFor(userId, brand))) {
@@ -305,7 +310,7 @@ export class BillingCnService {
     }
     if (input.tradeType === 'h5') context.payerClientIp = meta.ip ?? undefined;
 
-    await this.recordTermsConsent(db, { seekerProfileId: account.seekerProfileId, brand, plan, termsVersion: input.termsVersion }, meta);
+    await this.recordTermsConsent(db, { seekerProfileId: account.seekerProfileId, brand, plan, termsVersion }, meta);
 
     const result: WechatCheckoutResult = await this.rail().createCheckout({
       brand,
@@ -319,7 +324,7 @@ export class BillingCnService {
     logger.info('RA_BILLING', 'wechatpay checkout terms acknowledged', {
       userId,
       outTradeNo: result.orderId,
-      termsVersion: input.termsVersion,
+      termsVersion,
       userAgent: meta.userAgent ? meta.userAgent.slice(0, 200) : null,
     });
 

@@ -74,14 +74,6 @@ export function FitToPageControl({ resumeId, maxPages = 1, photo = false }: { re
 // ── Assistant entry ──────────────────────────────────────────────────────
 
 /**
- * The Assistant open request from the resume editor: the shared request plus
- * the resume it is about. The rail stores the whole request, so `resumeId`
- * reaches it today; the fields move into AssistantOpenRequest when WP-51 adds
- * the resume scope.
- */
-export type ResumeAssistantRequest = AssistantOpenRequest & { resumeId: string; scope: 'resume' };
-
-/**
  * Opens the Assistant from the editor with a prefilled request about this
  * resume (never sent until the user presses Send). Renders nothing when the
  * Assistant is off for this brand or AI is unavailable for this user.
@@ -97,11 +89,10 @@ export function AskAssistantButton({ resumeId, enabled = true }: { resumeId: str
       variant="ghost"
       data-resume-id={resumeId}
       onClick={() => {
-        // The request carries the resume id (ResumeAssistantRequest) so the
-        // rail can open the resume-scoped thread; until the rail and the
-        // copilot thread read `resumeId` (request to WP-51 / INT) the prompt
-        // still names the resume the user is looking at.
-        const request: ResumeAssistantRequest = { source: 'resume', resumeId, scope: 'resume', prompt: t('prompt') };
+        // `resumeId` and `scope` are part of the shared AssistantOpenRequest
+        // (join J7): the rail opens a chat scoped to this resume and every
+        // turn carries the id.
+        const request: AssistantOpenRequest = { source: 'resume', resumeId, scope: 'resume', prompt: t('prompt') };
         open(request);
       }}
     >

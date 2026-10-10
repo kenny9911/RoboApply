@@ -71,6 +71,16 @@ function messageIdOf(payload: unknown): string | null {
 const memoryFull = () =>
   new HttpError('conflict', `The Assistant keeps at most ${COPILOT_MEMORY_MAX} facts. Delete one in Settings first.`, { reason: COPILOT_ERROR_CODES.memoryFull, max: COPILOT_MEMORY_MAX });
 
+/**
+ * Where a `tailor_ready` card opens: the session the proposal just created and
+ * paid for (`tailorSession`), on its base resume. Without `tailorSession` the
+ * web route starts a NEW tailor run (components/features/tailor/TailorLaunchHost),
+ * which would reserve a second credit and skip this session's Verify-details step.
+ */
+export function tailorSessionHref(baseVariantId: string, jobId: string, sessionId: string): string {
+  return `/resume/${encodeURIComponent(baseVariantId)}?tailor=${encodeURIComponent(jobId)}&tailorSession=${encodeURIComponent(sessionId)}`;
+}
+
 const isVersionConflict = (err: unknown) => (err as { code?: unknown } | null)?.code === 'version_conflict';
 
 export function createProposalService(deps: ProposalServiceDeps): ProposalService {
@@ -185,7 +195,7 @@ export function createProposalService(deps: ProposalServiceDeps): ProposalServic
           card = {
             type: 'tailor_ready',
             id: deps.newCardId(),
-            data: { sessionId: session.id, sessionStatus: session.status, jobId, baseVariantId, resultVariantId: session.resultVariantId, href: `/resume/${encodeURIComponent(baseVariantId)}?tailor=${encodeURIComponent(jobId)}`, aiWritten: true },
+            data: { sessionId: session.id, sessionStatus: session.status, jobId, baseVariantId, resultVariantId: session.resultVariantId, href: tailorSessionHref(baseVariantId, jobId, session.id), aiWritten: true },
           };
           break;
         }

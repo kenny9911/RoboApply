@@ -163,22 +163,21 @@ describe('opening and closing', () => {
     expect(isRailShortcut({ key: 'j', metaKey: false, ctrlKey: true, altKey: true, shiftKey: false })).toBe(false);
   });
 
-  it('Cmd/Ctrl+J does nothing before the Assistant ships (no dev override)', async () => {
+  it('Cmd/Ctrl+J does nothing where the Assistant is off (copilot flag off)', async () => {
     installFetch(routes());
-    renderUi(<CopilotRail />);
+    renderUi(<CopilotRail />, { flags: { copilot: false } });
     fireEvent.keyDown(window, { key: 'j', ctrlKey: true });
     await new Promise((r) => setTimeout(r, 10));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('the floating button opens the rail; hidden once dismissed or before shipping', async () => {
+  it('the floating button opens the rail; hidden once dismissed or where the Assistant is off', async () => {
     installFetch(routes());
-    const a = renderUi(<CopilotRail />);
+    const a = renderUi(<CopilotRail />, { flags: { copilot: false } });
     await new Promise((r) => setTimeout(r, 10));
     expect(screen.queryByTestId('assistant-fab')).not.toBeInTheDocument();
     a.unmount();
 
-    vi.stubEnv('NEXT_PUBLIC_SHOW_ALL_NAV', 'true');
     const http = installFetch(routes());
     renderUi(<CopilotRail />);
     fireEvent.click(await screen.findByTestId('assistant-fab'));
@@ -620,9 +619,9 @@ describe('proactive nudge (F-ORION-08)', () => {
   });
 
   it('does not ask where no nudge could be shown: before Ask is offered, or on /assistant', async () => {
-    // Before the Assistant ships (no floating button): no call.
+    // Where the Assistant is off (copilot flag off, no floating button): no call.
     const hidden = installFetch(routes({ [`GET ${NUDGE}`]: () => nudge('pay_filter') }));
-    const a = renderUi(<CopilotRail />);
+    const a = renderUi(<CopilotRail />, { flags: { copilot: false } });
     await new Promise((r) => setTimeout(r, 20));
     expect(hidden.to('GET', NUDGE)).toHaveLength(0);
     a.unmount();

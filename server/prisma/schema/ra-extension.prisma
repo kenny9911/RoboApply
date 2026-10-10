@@ -35,7 +35,11 @@ model RAAutofillRun {
   host                String
   /// The page URL without its query string (SCHEMA-6, SR-INT-2). Used to reuse
   /// one run per application within ~2 hours when there is no jobId.
-  /// Null = not recorded.
+  /// When the query string names the job (an allowlist of parameter names such
+  /// as `gh_jid`, `jobId`, `career_job_req_id`), the value ends in
+  /// `#job=<hash>`: a hash of those parameters only, so two jobs on one path
+  /// are told apart. No query value is stored and tracking parameters are
+  /// ignored (INT-03). Null = not recorded (every row before the writer).
   pageUrl             String?
   atsType             String
   fieldsTotal         Int               @default(0)

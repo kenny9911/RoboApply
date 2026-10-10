@@ -2,19 +2,25 @@
 //
 // The ONE seam job alerts take their candidates from (`JobAlertsDeps.candidates`).
 //
-//   source        where the ids come from. Today: `AlertsRepo.candidateJobIds`
-//                 (FilterSet → RAJob `where`, jobFilters.ts). Join J4 switches
-//                 it to `feedService.alertCandidates(searchProfileId, { since,
-//                 limit })` (INT-05), which selects with the feed's own filter
-//                 semantics; the query below carries what either needs.
+//   source        where the ids come from. Production (join J4, INT gate):
+//                 `feedService.alertCandidates(searchProfileId, { since,
+//                 limit, postedSince })`, which selects with the feed's own
+//                 filter semantics. `AlertsRepo.candidateJobIds` (FilterSet →
+//                 RAJob `where`, jobFilters.ts) is the earlier Prisma source,
+//                 still used by tests; the query below carries what either needs.
 //   mode gate     `modeGatedCandidates(source)`: on GoApply with
 //                 CN_RECRUITMENT_INFO_MODE=off (R-14, R41-1b) the source is not
 //                 even asked and the answer is "no candidates", whatever the
 //                 source is. Alert candidates are public postings only (a
 //                 user's own import never alerts), so in mode off there is
-//                 nothing an alert may carry. The Prisma source applies
-//                 `cnPostingsWhere` in its own query as well (repo.ts), so the
-//                 rule holds at both layers.
+//                 nothing an alert may carry. The feed source checks the
+//                 mode itself as well (FeedQueryService `postingsAllowed`; the
+//                 Prisma source ANDs `cnPostingsWhere`), so the rule holds at
+//                 both layers.
+//
+// The lifecycle re-engagement count ("N new jobs fit your saved search") reads
+// the same gated feed source (`lifecycle/service.ts` `countNewJobsWith`), so
+// the number in that message follows the rules of the list it links to.
 //
 // No LLM, no ranking: ids newest first; the service scores and picks.
 

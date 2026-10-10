@@ -135,9 +135,12 @@ model RAResumeGrade {
   creditLedgerId String?
   createdAt      DateTime        @default(now())
   completedAt    DateTime?
-  /// First authenticated read of the completed check by its owner (stamped by
-  /// the resume-check GET). Null = not known to be viewed; the lifecycle
-  /// "check ready and unopened" message needs it (SCHEMA-3, SR-39a-1).
+  /// First time the owner had the finished report on screen. Stamped only by
+  /// the report page (`GET /v2/resumes/:id/grade/latest?opened=1`, INT-10);
+  /// other readers of the latest check never stamp. Null = not known to be
+  /// viewed. The lifecycle "check ready and unopened" message reads it, and
+  /// only for checks completed on or after `RESUME_CHECK_VIEW_SIGNAL_SINCE`
+  /// (SCHEMA-3, SR-39a-1; INT-07).
   viewedAt       DateTime?
 
   @@index([variantId, createdAt(sort: Desc)])

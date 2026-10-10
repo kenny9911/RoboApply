@@ -1,9 +1,12 @@
 // server/src/features/alerts/jobFilters.ts
 //
-// FilterSet v1 → RAJob `where` for alert candidates and the re-engagement
-// count. WP-32 owns feed retrieval and ranking; until it exposes a candidate
-// seam for alerts (see the WP-39a handoff), this narrow translation covers the
-// filters that decide whether a job belongs to a saved search. Where a value
+// FilterSet v1 → RAJob `where` for `AlertsRepo.candidateJobIds`, the earlier
+// Prisma candidate source. NOT used in production since the INT gate: job
+// alerts (join J4) and the re-engagement count (lifecycle `countNewJobsWith`)
+// both select through `feedService.alertCandidates`, with the feed's own
+// filter rules. It stays for the alert tests that still read
+// `candidateJobIds`; delete it with them (WP-97). This narrow translation
+// covers the filters that decide whether a job belongs to a saved search. Where a value
 // is unknown, include-filters drop the job (an alert may miss a job rather
 // than send one outside the search); exclusion filters keep "not stated".
 //

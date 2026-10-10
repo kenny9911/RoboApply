@@ -6,23 +6,23 @@
 // NotImplementedError; the tools turn that into "not available yet" for the
 // model.
 //
-// Three reads still go through copilot-local readers instead of the owning
-// area's seam. Each is ONE entry of `CROSS_AREA_DEFAULTS` below, so the
-// post-merge joins only swap that entry and delete the @deprecated reader:
-//   J1  salaryStats   → feed `marketStats.salary`        (then delete ./salaryStats.ts)
-//   J1  nudgeSignals  → feed `feedSignals`               (then delete createPrismaNudgeSignals)
-//   J2  primaryResumeId → resume `primaryVariantId`      (then delete store.primaryResumeId)
-// Nothing else in this area reads those tables.
+// Three reads that used to go through copilot-local readers now use the
+// owning area's seam (joins J1 and J2, applied at the INT gate). Each is ONE
+// entry of `CROSS_AREA_DEFAULTS` below:
+//   J1  salaryStats     → feed `marketStats.salary`
+//   J1  nudgeSignals    → feed `feedSignals`
+//   J2  primaryResumeId → resume `primaryVariantId`
+// This area reads no other area's table itself (guarded by tools.test.ts).
 
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { Market } from '../../platform/brand/registry.js';
 import { cnRecruitmentInfoMode } from '../../platform/flags.js';
 import type { CopilotAreas } from './types.js';
-import { createPrismaNudgeSignals, type NudgeSignals } from './nudges.js';
-import { salaryStats, type SalaryStatsInput, type SalaryStatsResult } from './salaryStats.js';
+import type { SalaryStatsInput, SalaryStatsResult } from '../feed/index.js';
+import type { NudgeSignals } from './nudges.js';
 import type { CopilotStore } from './store.js';
 
-/** The cross-area reads the joins J1/J2 replace (see the file header). */
+/** The cross-area reads the joins J1/J2 moved onto their owning areas (see the file header). */
 export interface CrossAreaReads {
   salaryStats(input: SalaryStatsInput): Promise<SalaryStatsResult>;
   nudgeSignals: NudgeSignals;
@@ -30,22 +30,22 @@ export interface CrossAreaReads {
 }
 
 /**
- * Today's readers. J1 and J2 change only this object:
- *   salaryStats:     async (input) => (await import('../feed/index.js')).marketStats.salary(input)
- *   nudgeSignals:    () => lazy feedSignals from '../feed/index.js'
- *   primaryResumeId: () => async (userId) => (await import('../resume/index.js')).primaryVariantId(userId)
+ * The readers, each through its owning area's index (loaded lazily, like
+ * every other call in this file). `marketStats.salary` applies the
+ * public-aggregate filter and, on GoApply, the fraud and recruitment-info
+ * rules, so the Assistant never repeats them.
  */
 export const CROSS_AREA_DEFAULTS: {
   salaryStats: () => CrossAreaReads['salaryStats'];
   nudgeSignals: () => NudgeSignals;
-  primaryResumeId: (store: Pick<CopilotStore, 'primaryResumeId'>) => CrossAreaReads['primaryResumeId'];
+  primaryResumeId: () => CrossAreaReads['primaryResumeId'];
 } = {
-  salaryStats: () => async (input) => {
-    const { default: prisma } = await import('../../lib/prisma.js');
-    return salaryStats(prisma, input);
-  },
-  nudgeSignals: () => createPrismaNudgeSignals(),
-  primaryResumeId: (store) => (userId) => store.primaryResumeId(userId),
+  salaryStats: () => async (input) => (await import('../feed/index.js')).marketStats.salary(input),
+  nudgeSignals: () => ({
+    latestRating: async (userId, since) => (await import('../feed/index.js')).feedSignals.latestRating(userId, since),
+    reportedSince: async (userId, since) => (await import('../feed/index.js')).feedSignals.reportedSince(userId, since),
+  }),
+  primaryResumeId: () => async (userId) => (await import('../resume/index.js')).primaryVariantId(userId),
 };
 
 /** The nudge signals the service uses by default (one place for J1). */
@@ -63,7 +63,7 @@ export interface DefaultAreasOptions {
 export function createDefaultAreas(options: DefaultAreasOptions): CopilotAreas {
   const env = (): EnvSource => options.env ?? process.env;
   const readSalaryStats = options.reads?.salaryStats ?? CROSS_AREA_DEFAULTS.salaryStats();
-  const readPrimaryResumeId = options.reads?.primaryResumeId ?? CROSS_AREA_DEFAULTS.primaryResumeId(options.store);
+  const readPrimaryResumeId = options.reads?.primaryResumeId ?? CROSS_AREA_DEFAULTS.primaryResumeId();
   return {
     async feedPreview(userId, input) {
       const { feedService } = await import('../feed/index.js');

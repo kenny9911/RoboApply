@@ -60,7 +60,7 @@ export const ADMIN_REVIEW_KIND = 'admin_review';
  * reads the decisions") compares this constant with the feed's source and
  * fails when they disagree, in either direction.
  */
-export const KEEP_DECISION_HOLDS = false;
+export const KEEP_DECISION_HOLDS = true;
 const NOTE_CHARS = 200;
 const MAX_NOTES = 3;
 

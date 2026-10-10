@@ -44,12 +44,14 @@ describe('scoped job-search API keys', () => {
     await expect(keys.authenticate(`Bearer ${created.token}`)).rejects.toMatchObject({ status: 401 });
     expect(await keys.list('owner')).toEqual({ keys: [] });
   });
-  it.each(['expired', 'disabled_user', 'wrong_scope'])('rejects %s keys', async (mode) => {
+  it.each(['expired', 'disabled_user', 'wrong_scope', 'goapply_owner'])('rejects %s keys', async (mode) => {
     const { keys, rows } = store();
     const created = await keys.create('owner', { name: 'App' });
     if (mode === 'expired') rows[0].expiresAt = new Date(0);
     if (mode === 'disabled_user') rows[0].user.isActive = false;
     if (mode === 'wrong_scope') rows[0].scopes = ['read', 'write'];
+    // A RoboApply product: a key owned by a GoApply account is not valid, whatever host it is sent to.
+    if (mode === 'goapply_owner') rows[0].user.brand = 'goapply';
     await expect(keys.authenticate(`Bearer ${created.token}`)).rejects.toMatchObject({ status: 401 });
   });
   it('rejects legacy keys and never queries storage with an invalid token', async () => {

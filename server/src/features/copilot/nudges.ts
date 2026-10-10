@@ -15,36 +15,16 @@ import type { NudgeView } from './contract.js';
 import type { CopilotAreas } from './types.js';
 import { indexCount } from './tools/util.js';
 
-type PrismaClientLike = typeof import('../../lib/prisma.js').default;
-
 export const LOW_RATING_BELOW = 6;
 export const RATING_LOOKBACK_DAYS = 7;
 export const REPORT_LOOKBACK_DAYS = 14;
 export const CAMPUS_DEADLINE_DAYS = 7;
 const DAY = 86_400_000;
 
+/** The user's own feed actions; the default is feed's `feedSignals` (areas.ts, join J1). */
 export interface NudgeSignals {
   latestRating(userId: string, since: Date): Promise<{ score: number; createdAt: Date } | null>;
   reportedSince(userId: string, since: Date): Promise<boolean>;
-}
-
-/**
- * @deprecated Reads the feed area's `RAFeedRating` and `RAJobInteraction`
- * tables directly. Replace with `feedSignals.latestRating()` /
- * `feedSignals.reportedSince()` from `feed/index.ts` (REQ-50-02).
- */
-export function createPrismaNudgeSignals(getDb: () => Promise<PrismaClientLike> = async () => (await import('../../lib/prisma.js')).default): NudgeSignals {
-  return {
-    async latestRating(userId, since) {
-      const p = await getDb();
-      return p.rAFeedRating.findFirst({ where: { userId, createdAt: { gte: since } }, orderBy: { createdAt: 'desc' }, select: { score: true, createdAt: true } });
-    },
-    async reportedSince(userId, since) {
-      const p = await getDb();
-      const row = await p.rAJobInteraction.findFirst({ where: { userId, kind: 'report', createdAt: { gte: since } }, select: { id: true } });
-      return Boolean(row);
-    },
-  };
 }
 
 export interface NudgeDeps {

@@ -114,9 +114,6 @@ function makeRepo(w: World): AlertsRepo {
     async noReplyCount() {
       return w.noReply;
     },
-    async countMatchingJobs() {
-      return 0;
-    },
   };
 }
 

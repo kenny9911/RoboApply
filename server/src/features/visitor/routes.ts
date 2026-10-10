@@ -88,11 +88,12 @@ type StillPublic = NonNullable<VisitorCopilotOptions['stillPublic']>;
 
 /**
  * A visitor sees only what a public job page may show. `search_jobs` (public)
- * reads `feedService.publicList`, which does not apply the whole public-page
- * predicate (expiry, current provider list), so every `job_list` card is
- * re-checked here, exactly like the visitor feed: items that fail are dropped,
- * and a card left empty is not sent. If the check itself fails, the card is
- * dropped (fail closed). Other cards pass unchanged.
+ * reads `feedService.publicList`, which applies the public-page predicate
+ * itself since INT-05 (expiry and the current provider list are part of its
+ * statement). Every `job_list` card is still re-checked here, exactly like the
+ * visitor feed, as a second guard: items that fail are dropped, and a card
+ * left empty is not sent. If the check itself fails, the card is dropped
+ * (fail closed). Other cards pass unchanged.
  */
 export async function publicCardOnly(card: unknown, brand: ProductBrand, now: Date, stillPublic: StillPublic): Promise<unknown | null> {
   const c = card as { type?: unknown; data?: unknown } | null;

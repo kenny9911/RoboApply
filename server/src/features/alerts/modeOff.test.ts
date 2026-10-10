@@ -6,7 +6,8 @@
 //   - the candidate selection seam (`modeGatedCandidates` over the Prisma
 //     source): off → nothing; partner_deeplink → listed;
 //   - the Prisma source by itself (the gate is a second layer, not the only one),
-//     the card reader behind digest rows and the "N new jobs" count;
+//     the card reader behind digest rows, and the re-engagement "N new jobs"
+//     count (lifecycle `countNewJobsWith` over the same gated seam);
 //   - the whole `job-alerts` task on GoApply, with the `jobs.alerts` flag forced
 //     ON so only the mode stands between the posting and an alert;
 //   - the inbox readers (list, unread count, mark read) over an alert row
@@ -31,6 +32,7 @@ import { deliverMessage, type DeliverDeps, type InAppRow } from './deliver.js';
 import type { PreferenceFacts } from './preferences.js';
 import { createPrismaAlertsRepo, type AlertProfileRow, type AlertsRepo, type PrismaAlertsRepoOptions, type Recipient } from './repo.js';
 import { createJobAlertsTask, type JobAlertsDeps } from './service.js';
+import { countNewJobsWith } from '../lifecycle/service.js';
 
 const NOW = new Date('2026-10-12T04:00:00Z'); // 12:00 in Shanghai
 const HOUR = 3_600_000;
@@ -136,21 +138,19 @@ describe('digest rows and the "N new jobs" count', () => {
     expect(Object.keys(cards[0]!)).not.toEqual(expect.arrayContaining(['market', 'visibility', 'ownerUserId', 'provider', 'sourceBoard']));
   });
 
-  it('mode off: the re-engagement count asks for no row (the fragment is in the query)', async () => {
-    const w = world();
-    const counted: Array<Record<string, unknown>> = [];
-    const original = w.db.rAJob.count.bind(w.db.rAJob);
-    w.db.rAJob.count = (async (args: { where?: Record<string, unknown> }) => {
-      counted.push(args.where ?? {});
-      return original(args);
-    }) as typeof w.db.rAJob.count;
-    expect(await w.repoFor(OFF).countMatchingJobs({ market: 'cn', filters: {}, since: new Date(NOW.getTime() - 24 * HOUR) })).toBe(0);
-    await w.repoFor(PARTNER).countMatchingJobs({ market: 'cn', filters: {}, since: new Date(NOW.getTime() - 24 * HOUR) });
-    await w.repoFor(OFF).countMatchingJobs({ market: 'intl', filters: {}, since: new Date(NOW.getTime() - 24 * HOUR) });
-    const fragments = counted.map((where) => (where.AND as Array<Record<string, unknown>>).filter((c) => Array.isArray(c.OR) && c.OR.some((o: Record<string, unknown>) => 'visibility' in o || 'id' in o)));
-    expect(fragments[0]).toEqual([{ OR: [{ id: { in: [] } }] }]); // off: nothing
-    expect(fragments[1]).toEqual([{ OR: [{ visibility: 'public' }] }]); // partner_deeplink: public postings
-    expect(fragments[2]).toEqual([]); // RoboApply: no GoApply fragment
+  it('mode off: the re-engagement count never asks its source and is 0, so no "N new jobs" message goes out', async () => {
+    // The lifecycle count reads the same gated candidate seam as the alerts (join J4).
+    const asked: AlertCandidateQuery[] = [];
+    const source = async (q: AlertCandidateQuery) => (asked.push(q), { ids: ['job_gh', 'job_2', 'job_3'], truncated: false });
+    const input = { searchProfileId: 'sp_cn', userId: 'u_cn', since: new Date(NOW.getTime() - 24 * HOUR) };
+    const off = countNewJobsWith(modeGatedCandidates(source, defaultPostingsAllowed(OFF)));
+    expect(await off({ ...input, market: 'cn' })).toBe(0);
+    expect(asked).toHaveLength(0);
+    const partner = countNewJobsWith(modeGatedCandidates(source, defaultPostingsAllowed(PARTNER)));
+    expect(await partner({ ...input, market: 'cn' })).toBe(3);
+    // RoboApply is not affected by the GoApply mode.
+    expect(await off({ ...input, market: 'intl' })).toBe(3);
+    expect(asked.map((q) => q.market)).toEqual(['cn', 'intl']);
   });
 });
 

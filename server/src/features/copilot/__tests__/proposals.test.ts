@@ -95,7 +95,7 @@ describe('credit actions: charged only on apply', () => {
     expect(h.areas.createTailorSession).not.toHaveBeenCalled();
     const res = await h.service.proposals.apply(USER, p.id, { locale: 'en' });
     expect(h.areas.createTailorSession).toHaveBeenCalledWith(USER, { baseVariantId: 'res_1', jobId: 'job_1', idempotencyKey: `copilot:${p.id}`, locale: 'en' });
-    expect(res.result).toMatchObject({ card: { type: 'tailor_ready', data: { sessionId: 'ts_1', href: '/resume/res_1?tailor=job_1' } } });
+    expect(res.result).toMatchObject({ card: { type: 'tailor_ready', data: { sessionId: 'ts_1', href: '/resume/res_1?tailor=job_1&tailorSession=ts_1' } } });
     expect(await storedCardStatus(h, p.messageId)).toEqual([
       ['credit_action', 'applied'],
       ['tailor_ready', undefined],

@@ -48,7 +48,6 @@ export {
   SectionOrderPanel,
   docLanguageOf,
   personalLineFor,
-  type ResumeAssistantRequest,
 } from './EditorTools';
 // Sign-out / session-expired cleanup of the builder's unsent draft and draft photo.
 export { clearResumeBuilderDeviceData } from '../../../hooks/resume/useResumePhoto';

@@ -29,7 +29,7 @@ import { createBudget } from '../../../platform/queue/index.js';
 // Parity: the originals the admin mirrors (tests are outside the boundary rule).
 import { DEFAULT_SCORE_DAILY_BUDGET, scoreDailyBudget, scoreCounterKeys } from '../../match/config.js';
 import { DEFAULT_COPILOT_DAILY_BUDGET_USD, copilotDailyBudgetUsd } from '../../copilot/budget.js';
-import { DEFAULT_DAILY_CALLS, dailyCallLimit } from '../../jobs/ingest/config.js';
+import { dailyCallLimit } from '../../jobs/ingest/config.js';
 import { enrichBudgetKey } from '../../jobs/enrich/budget.js';
 
 const NOW = new Date('2026-10-10T12:00:00Z');
@@ -760,37 +760,19 @@ describe('toSafetyView', () => {
   });
 });
 
-// ── Limits parity (the J3 copies in limits.ts) ────────────────────────────
+// ── Limits (join J3: re-exports of the owning areas, no copies) ───────────
 
-describe('limits mirror the owning areas (J3)', () => {
-  const envs = [{}, { SCORE_DAILY_BUDGET: '500', CN_SCORE_DAILY_BUDGET: '7', COPILOT_DAILY_BUDGET_USD: '12.5', CN_COPILOT_DAILY_BUDGET_USD: 'x', INGEST_JSEARCH_DAILY_CALLS: '42', INGEST_LINKEDIN_DAILY_CALLS: 'abc', INGEST_BANK_DAILY_CALLS: '9' }];
-  it.each(envs)('env %#', (env) => {
-    expect(limits.DEFAULT_SCORE_DAILY_BUDGET).toBe(DEFAULT_SCORE_DAILY_BUDGET);
-    expect(limits.DEFAULT_COPILOT_DAILY_BUDGET_USD).toBe(DEFAULT_COPILOT_DAILY_BUDGET_USD);
-    expect(limits.DEFAULT_DAILY_CALLS).toEqual(DEFAULT_DAILY_CALLS);
-    for (const brand of ['roboapply', 'goapply'] as const) {
-      expect(limits.scoreDailyBudget(brand, env)).toBe(scoreDailyBudget(brand, env));
-      expect(limits.copilotDailyBudgetUsd(brand, env)).toBe(copilotDailyBudgetUsd(brand, env));
-      expect(limits.scoreCounterKeys.budget(brand)).toBe(scoreCounterKeys.budget(brand));
-      expect(limits.scoreCounterKeys.onDemand(brand, 'u1')).toBe(scoreCounterKeys.onDemand(brand, 'u1'));
-      expect(limits.scoreCounterKeys.precompute(brand, 'u1')).toBe(scoreCounterKeys.precompute(brand, 'u1'));
-    }
-    for (const p of ['activejobs', 'linkedin', 'jsearch', 'bank', 'gohire'] as const) {
-      expect(limits.dailyCallLimit(p as never, env)).toBe(dailyCallLimit(p as never, env));
-    }
-  });
-
-  it('the J3 swap is three export lines: the copies carry the owners\' names', () => {
+describe('limits come from the owning areas (J3)', () => {
+  it('re-exports the owners\u2019 readers, so there is one definition per limit', () => {
+    expect(limits.scoreDailyBudget).toBe(scoreDailyBudget);
+    expect(limits.scoreCounterKeys).toBe(scoreCounterKeys);
+    expect(limits.copilotDailyBudgetUsd).toBe(copilotDailyBudgetUsd);
+    expect(limits.dailyCallLimit).toBe(dailyCallLimit);
     const src = readFileSync(new URL('../limits.ts', import.meta.url), 'utf8');
-    const block = src.slice(src.indexOf('// ── J3 COPIES — BEGIN'), src.indexOf('// ── J3 COPIES — END'));
-    for (const name of ['scoreDailyBudget', 'scoreCounterKeys', 'copilotDailyBudgetUsd', 'dailyCallLimit']) {
-      expect(block, name).toMatch(new RegExp(`export (function|const) ${name}\\b`));
-    }
-    // The three lines the join pastes are written out in the header.
-    expect(src).toContain("//        export { scoreDailyBudget, scoreCounterKeys } from '../match/index.js';");
-    expect(src).toContain("//        export { copilotDailyBudgetUsd } from '../copilot/index.js';");
-    expect(src).toContain("//        export { dailyCallLimit } from '../jobs/ingest/index.js';");
-    // system.ts uses only those names (plus the enrich readers, which are not copies).
+    expect(src).toContain("export { scoreDailyBudget, scoreCounterKeys } from '../match/index.js';");
+    expect(src).toContain("export { copilotDailyBudgetUsd } from '../copilot/index.js';");
+    expect(src).toContain("export { dailyCallLimit } from '../jobs/ingest/index.js';");
+    // system.ts uses only those names (plus the enrich readers).
     const system = readFileSync(new URL('../system.ts', import.meta.url), 'utf8');
     expect(system).toContain("import { copilotDailyBudgetUsd, dailyCallLimit, enrichCounterKey, enrichDailyLimit, scoreCounterKeys, scoreDailyBudget } from './limits.js';");
   });

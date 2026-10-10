@@ -22,7 +22,7 @@ import type { FixIssueResponse, LatestGradeResponse, TailorSessionView } from '.
 import type { CoverLetterView, LetterLength, LetterTone } from '../coverletter/index.js';
 import type { ImportJobResponse, ManualJob } from '../jobs/import/index.js';
 import type { CopilotCard, CopilotToolName, ProposalKind } from './contract.js';
-import type { SalaryStatsInput, SalaryStatsResult } from './salaryStats.js';
+import type { SalaryStatsInput, SalaryStatsResult } from '../feed/index.js';
 
 /** The other areas, as the Assistant uses them (all reads, except the proposal applies). */
 export interface CopilotAreas {

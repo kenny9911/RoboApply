@@ -7,6 +7,7 @@ import { JobSearchAccessError, jobSearchKeys } from './keys.js';
 import { SearchQuotaError, jobSearchQuota } from './quota.js';
 import { jobSearchOpenApi } from './openapi.js';
 import { createJobSearchAgent, type jobSearchAgent } from './agent.js';
+import { getCurrentBrandOrDefault, type ProductBrand } from '../platform/brand/index.js';
 
 type Dependencies = {
   service: typeof jobSearchService;
@@ -14,7 +15,34 @@ type Dependencies = {
   quota: typeof jobSearchQuota;
   sessionAuth: RequestHandler;
   agent: typeof jobSearchAgent;
+  /** The brand a request is for (default: the one the brand middleware resolved from the host). */
+  brand: (req: Request) => ProductBrand;
 };
+
+const requestBrand = (req: Request): ProductBrand => (req as Request & { brand?: ProductBrand }).brand ?? getCurrentBrandOrDefault();
+
+/**
+ * The job-search API (keyword search, the planner agent, integration keys and
+ * the OpenAPI document) is a RoboApply product. On GoApply every route of both
+ * routers answers 404 feature_disabled before any key or session lookup:
+ *   - R-14: it returns third-party postings from the RapidAPI providers and
+ *     the hiring index, whatever CN_RECRUITMENT_INFO_MODE says;
+ *   - TASK_PLAN §2.2 / H4: the planner sends the user's text to a model with
+ *     no `aiAllowed` check (RoboApply: always allowed; GoApply: consent);
+ *   - residency (platform/residency/egressPolicy.ts): GoApply does not call
+ *     the RapidAPI job sources.
+ * Opening it for GoApply later means the `jobs.feed` capability here and
+ * `aiAllowed(userId)` before `agent.search`, not removing this gate.
+ */
+function roboApplyOnly(brandOf: (req: Request) => ProductBrand): RequestHandler {
+  return (req, res, next) => {
+    if (brandOf(req).market === 'cn') {
+      res.status(404).json({ error: 'This feature is not available.', code: 'feature_disabled', requestId: req.requestId });
+      return;
+    }
+    next();
+  };
+}
 
 function requestId(req: Request, res: Response, next: NextFunction) {
   req.requestId ??= randomUUID();
@@ -38,12 +66,15 @@ function fail(err: unknown, req: Request, res: Response) {
 }
 
 export function createJobSearchRouters(overrides: Partial<Dependencies> = {}) {
-  const d = { service: jobSearchService, keys: jobSearchKeys, quota: jobSearchQuota, sessionAuth: requireAuth, ...overrides };
+  const d = { service: jobSearchService, keys: jobSearchKeys, quota: jobSearchQuota, sessionAuth: requireAuth, brand: requestBrand, ...overrides };
   const agent = overrides.agent ?? createJobSearchAgent({ service: d.service, quota: d.quota });
   const api = Router();
   const website = Router();
   api.use(requestId);
   website.use(requestId);
+  // Before the OpenAPI document, the key lookup and the session lookup.
+  api.use(roboApplyOnly(d.brand));
+  website.use(roboApplyOnly(d.brand));
 
   api.get('/openapi.json', (_req, res) => res.json(jobSearchOpenApi));
   api.use(async (req, res, next) => {

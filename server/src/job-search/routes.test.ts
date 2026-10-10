@@ -9,6 +9,7 @@ import { createJobSearchRouters } from './routes.js';
 import { JobSearchAccessError } from './keys.js';
 import { SearchQuotaError } from './quota.js';
 import { JobSearchValidationError } from './validation.js';
+import { getBrand } from '../platform/brand/registry.js';
 
 const emptyResult = {
   jobs: [], meta: { totalReturned: 0, deduplicated: 0, partial: false, searchedAt: '2026-09-12T00:00:00Z', cache: 'miss', providers: [{ id: 'jsearch', name: 'JSearch', status: 'empty', resultCount: 0 }] },
@@ -22,7 +23,7 @@ let base: string;
 
 beforeAll(async () => {
   const app = express(); app.use(express.json());
-  const routers = createJobSearchRouters({ service: service as never, keys: keys as never, quota: quota as never, agent, sessionAuth: (req, res, next) => {
+  const routers = createJobSearchRouters({ service: service as never, keys: keys as never, quota: quota as never, agent, brand: (req) => getBrand(req.get('x-test-brand') === 'goapply' ? 'goapply' : 'roboapply'), sessionAuth: (req, res, next) => {
     if (req.get('x-test-session') !== 'owner') return res.status(401).json({ code: 'AUTH_REQUIRED' });
     req.user = { id: 'owner' } as any;
     if (req.get('x-test-legacy')) req.apiKeyId = 'legacy';
@@ -176,5 +177,42 @@ describe('job-search HTTP API', () => {
     quota.reserve.mockRejectedValue(new Error('postgres://private-credential'));
     const res = await post('/api/search', { query: 'engineer' }, { Authorization: 'Bearer fixture-key' });
     expect(res.status).toBe(503); expect(await res.text()).not.toContain('private-credential'); expect(service.search).not.toHaveBeenCalled();
+  });
+});
+
+describe('job-search API on GoApply (a RoboApply product: R-14, H4)', () => {
+  const GO = { 'x-test-brand': 'goapply' };
+  const key = { Authorization: 'Bearer fixture-key' };
+  const session = { 'x-test-session': 'owner' };
+  const get = (path: string, headers: Record<string, string>) => fetch(`${base}${path}`, { headers });
+
+  it('every route of both routers answers 404 feature_disabled before any key, session, quota, source or planner call', async () => {
+    keys.list.mockResolvedValue({ keys: [] });
+    const calls: Array<[string, Promise<Response>]> = [
+      ['GET /api/openapi.json', get('/api/openapi.json', GO)],
+      ['GET /api/providers', get('/api/providers', { ...GO, ...key })],
+      ['POST /api/search', post('/api/search', { query: 'engineer', country: 'cn' }, { ...GO, ...key })],
+      ['POST /api/agent/search', post('/api/agent/search', { request: '找上海的产品经理职位' }, { ...GO, ...key })],
+      ['GET /website/providers', get('/website/providers', { ...GO, ...session })],
+      ['POST /website/search', post('/website/search', { query: 'engineer' }, { ...GO, ...session })],
+      ['POST /website/agent/search', post('/website/agent/search', { request: '找上海的产品经理职位' }, { ...GO, ...session })],
+      ['GET /website/keys', get('/website/keys', { ...GO, ...session })],
+      ['POST /website/keys', post('/website/keys', { name: 'App' }, { ...GO, ...session })],
+      ['DELETE /website/keys/k1', fetch(`${base}/website/keys/k1`, { method: 'DELETE', headers: { ...GO, ...session } })],
+      // No credentials at all: still 404, not 401 (the product is not there to sign in to).
+      ['POST /website/search (no session)', post('/website/search', { query: 'engineer' }, GO)],
+    ];
+    for (const [route, pending] of calls) {
+      const res = await pending;
+      expect(res.status, route).toBe(404);
+      expect(await res.json(), route).toMatchObject({ code: 'feature_disabled', requestId: res.headers.get('x-request-id') });
+    }
+    for (const fn of [keys.authenticate, keys.list, keys.create, keys.revoke, quota.reserve, service.providers, service.search, agent.search]) expect(fn).not.toHaveBeenCalled();
+  });
+
+  it('control: the same requests on RoboApply are served', async () => {
+    expect((await get('/api/openapi.json', {})).status).toBe(200);
+    expect((await post('/api/agent/search', { request: 'Find engineering jobs.' }, key)).status).toBe(200);
+    expect((await post('/website/search', { query: 'engineer' }, session)).status).toBe(200);
   });
 });

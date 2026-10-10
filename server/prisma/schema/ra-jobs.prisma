@@ -213,6 +213,12 @@ model RAJob {
   summary       String?   @db.Text
   enrichedAt    DateTime?
   enrichVersion Int?
+  /// What produced the enrichment at `enrichVersion`: a model id, or one of two
+  /// rules-only markers (no model ran, nothing here is AI output):
+  /// 'rules' = rules-only because no model was available or the budget was off
+  /// (maintenance retries these), 'rules_checked' = rules-only and settled for
+  /// this version (covered by rules, AI consent off, or the model call failed;
+  /// maintenance never selects it). Readers treat both markers alike (INT-05).
   enrichModel   String?
   /// Public job page slug (SEO).
   slug          String?

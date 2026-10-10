@@ -9,16 +9,30 @@
 //
 // The service never throws (worst case: zeroResults). A per-user daily cap +
 // rate limit bounds the ≤$0.35/run LLM cost.
+//
+// Gates, in order (INT gate; the route has no web caller and stays mounted
+// until the owner retires or keeps it, wave5 WP-93 #52):
+//   1. `requireAuth`;
+//   2. `RA_V2_DISCOVER_DISABLED=true` → 404 feature_disabled (this route only.
+//      `RA_CROSSBANK_DISABLED` is NOT that switch: it also turns the bank
+//      ingest adapters off, see raBankClients.isBankEnabled);
+//   3. GoApply with CN_RECRUITMENT_INFO_MODE=off → 404 feature_disabled: the
+//      run returns recruiter-bank postings and writes them to RAJob (R-14);
+//   4. `legacyAiGates()`: GoApply phone binding (403), then the user's AI
+//      consent and the brand's text model (503 ai_unavailable). The service
+//      sends the user's resume to the explorer, scorer and insight agents, so
+//      no model call happens before these pass (TASK_PLAN §2.2, H4).
 
-import { Router, type Request, type Response } from 'express';
+import { Router, type Request, type RequestHandler, type Response } from 'express';
+import type { EnvSource } from '../../../platform/brand/brandEnv.js';
+import { requireCnRecruitmentInfo } from '../../../features/cn/jobs/mode.js';
+import { legacyAiGates } from '../lib/legacyAiGates.js';
 import { requireAuth } from '../lib/raAuth.js';
 import { getRequestLocale } from '../lib/raLocale.js';
 import { getCurrentRequestId } from '../../../lib/requestContext.js';
 import { logger } from '../../../services/LoggerService.js';
 import { prisma } from '../../../lib/prisma.js';
 import { raCrossBankSearchService } from '../services/RACrossBankSearchService.js';
-
-const router = Router();
 
 // Durable per-user daily cap on this expensive endpoint. Backed by counting
 // today's cross-bank deduction rows (one insight + N score rows per run) rather
@@ -50,7 +64,21 @@ async function overDailyCap(userId: string): Promise<boolean> {
   }
 }
 
-router.post('/run', requireAuth, async (req: Request, res: Response) => {
+/** Env: `true` answers 404 on POST /v2/discover/run, whatever else is configured. */
+export const DISCOVER_DISABLED_ENV = 'RA_V2_DISCOVER_DISABLED';
+
+function requireDiscoverEnabled(env: EnvSource): RequestHandler {
+  return (_req, res, next) => {
+    const raw = env[DISCOVER_DISABLED_ENV];
+    if (typeof raw === 'string' && raw.trim().toLowerCase() === 'true') {
+      res.status(404).json({ success: false, code: 'feature_disabled', error: 'This feature is not available.' });
+      return;
+    }
+    next();
+  };
+}
+
+async function runDiscover(req: Request, res: Response) {
   try {
     const userId = req.user!.id;
     if (await overDailyCap(userId)) {
@@ -99,7 +127,15 @@ router.post('/run', requireAuth, async (req: Request, res: Response) => {
     });
     return res.status(500).json({ error: 'internal_error' });
   }
-});
+}
 
-export default router;
+/** `env` is where the kill switch and the GoApply recruitment-info mode are read from (tests pass a table). */
+export function createDiscoverRouter(options: { env?: EnvSource } = {}): Router {
+  const env = options.env ?? process.env;
+  const router = Router();
+  router.post('/run', requireAuth, requireDiscoverEnabled(env), requireCnRecruitmentInfo({ env }), ...legacyAiGates(), runDiscover);
+  return router;
+}
+
+export default createDiscoverRouter();
 export const __test = { overDailyCap, startOfUtcDay };

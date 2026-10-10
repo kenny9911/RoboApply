@@ -413,21 +413,24 @@ describe('draft_outreach (a credit proposal over NET networkService.createOutrea
 });
 
 describe('cross-area seams (joins J1, J2, J3)', () => {
-  it('salary stats and the primary resume are one injectable read each; no other area table is read here', async () => {
+  it('salary stats and the primary resume are one injectable read each; the defaults go through the owning areas', async () => {
     const salary = vi.fn(async () => ({ totalCount: 0 }) as never);
     const primary = vi.fn(async () => 'res_9');
-    const store = { primaryResumeId: vi.fn(async () => 'res_store') };
-    const areas = createDefaultAreas({ store: store as never, reads: { salaryStats: salary, primaryResumeId: primary } });
+    const areas = createDefaultAreas({ store: {} as never, reads: { salaryStats: salary, primaryResumeId: primary } });
     expect(await areas.primaryResumeId('u1')).toBe('res_9');
     await areas.salaryStats({ market: 'intl' } as never);
     expect(salary).toHaveBeenCalledWith({ market: 'intl' });
-    expect(store.primaryResumeId).not.toHaveBeenCalled();
-    // Without an override the default goes through the store's (deprecated) reader: the one line J2 swaps.
-    expect(await createDefaultAreas({ store: store as never }).primaryResumeId('u1')).toBe('res_store');
     expect(Object.keys(CROSS_AREA_DEFAULTS).sort()).toEqual(['nudgeSignals', 'primaryResumeId', 'salaryStats']);
+    // Joins J1 and J2: the defaults import feed and resume through their index, never a table.
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const source = fs.readFileSync(path.resolve(__dirname, '..', 'areas.ts'), 'utf8');
+    expect(source).toContain("(await import('../feed/index.js')).marketStats.salary(input)");
+    expect(source).toContain("(await import('../feed/index.js')).feedSignals.latestRating(userId, since)");
+    expect(source).toContain("(await import('../resume/index.js')).primaryVariantId(userId)");
   });
 
-  it('the only direct Prisma reads of other areas are the three @deprecated readers', async () => {
+  it('no other area\u2019s table is read directly in this area (J1 and J2 removed the three deprecated readers)', async () => {
     const fs = await import('node:fs');
     const path = await import('node:path');
     const dir = path.resolve(__dirname, '..');
@@ -441,8 +444,7 @@ describe('cross-area seams (joins J1, J2, J3)', () => {
         if (!OWN.test(m[1]!) && !SHARED.has(m[1]!)) found.add(`${path.basename(f)}:${m[1]}`);
       }
     }
-    // J1 deletes nudges.ts readers and salaryStats.ts; J2 deletes store.primaryResumeId.
-    expect([...found].sort()).toEqual(['nudges.ts:rAFeedRating', 'nudges.ts:rAJobInteraction', 'salaryStats.ts:rAJob', 'store.ts:rAResumeVariant']);
+    expect([...found].sort()).toEqual([]);
   });
 
   it('exports the daily budget reader for admin limits (J3)', () => {

@@ -29,6 +29,8 @@ model RAIntegration {
 /// JSON on the row (no separate turn table — a session's transcript is read/
 /// written whole). status: in_progress | complete.
 model RAMockSession {
+  /// Rows written since INT-09 carry a UUID generated before the insert (the
+  /// id doubles as the question-set seed); older rows keep the cuid default.
   id     String @id @default(cuid())
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)

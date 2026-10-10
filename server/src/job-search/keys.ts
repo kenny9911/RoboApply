@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import prisma from '../lib/prisma.js';
+import { getBrand, parseBrandId } from '../platform/brand/registry.js';
 
 export const JOB_SEARCH_SCOPE = 'jobs:search';
 const KEY_PATTERN = /^rajs_[a-f0-9]{64}$/;
@@ -86,12 +87,15 @@ export class JobSearchKeys {
       where: { key: hashSearchKey(token) },
       select: {
         id: true, userId: true, scopes: true, isActive: true, status: true,
-        expiresAt: true, user: { select: { isActive: true } },
+        expiresAt: true, user: { select: { isActive: true, brand: true } },
       },
     });
+    // The job-search API is a RoboApply product (routes.ts `roboApplyOnly`): a
+    // key owned by a GoApply account is not valid on any host.
+    const ownerBrand = record ? parseBrandId(record.user.brand) : null;
     if (!record || !record.isActive || record.status !== 'active' ||
         !record.user.isActive || (record.expiresAt && record.expiresAt <= new Date()) ||
-        !record.scopes.includes(JOB_SEARCH_SCOPE)) {
+        !record.scopes.includes(JOB_SEARCH_SCOPE) || (ownerBrand && getBrand(ownerBrand).market === 'cn')) {
       throw new JobSearchAccessError('invalid_api_key', 401, 'This API key is invalid, expired, or revoked.');
     }
     return { userId: record.userId, apiKeyId: record.id };

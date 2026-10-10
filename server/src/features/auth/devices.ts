@@ -5,7 +5,8 @@
 // numbers are ignored so a browser update does not look like a new device,
 // and no cookie or fingerprint is stored on the client. The mark is a
 // `RAAuthToken(kind 'known_device')` row whose hash binds user + device;
-// it expires 180 days after the last sign-in from that device.
+// it expires 90 days after the last sign-in from that device
+// (`TOKEN_TTL_MS.known_device`; the published retention row says the same).
 //
 // The first device an account ever signs in from (or the first one seen after
 // this shipped) is recorded silently: only a later, different device emails.

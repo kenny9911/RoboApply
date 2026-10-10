@@ -15,7 +15,10 @@
 // `index.unmounted.test.ts` keeps each of these paths answering 404.
 //
 // Still mounted on purpose: /discover (owner decision pending, wave5 WP-93
-// #52) and /mock (owner + Track A decision pending).
+// #52) and /mock (owner + Track A decision pending). Both pass
+// `legacyAiGates()` before any model call; /discover also closes on GoApply
+// while the recruitment-info mode is off and with RA_V2_DISCOVER_DISABLED=true
+// (INT gate; see discover.ts).
 //
 // All sub-routers apply `requireAuth` at the top of their handlers so the
 // gateway layer doesn't have to.

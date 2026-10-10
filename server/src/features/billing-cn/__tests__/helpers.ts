@@ -2,6 +2,7 @@
 // answers with responses signed by a throwaway "WeChat Pay" key.
 
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { createFakePrisma } from '../../../test/fakePrisma.js';
 import { NOTIFY_VECTOR } from './wechatpayVectors.js';
 
@@ -20,6 +21,13 @@ export const PLATFORM = pemPair();
 export const PLATFORM_KEY_ID = 'PUB_KEY_ID_TEST_PLATFORM_0001';
 
 export const ENTITY = '测试科技（上海）有限公司';
+
+/**
+ * A content root whose cn/user-agreement.md is `status: published` (join J5:
+ * the order gate asks compliance for the PUBLISHED 用户协议 version; the real
+ * document under content/legal is still a draft, which means "no version").
+ */
+export const PUBLISHED_LEGAL_DIR = fileURLToPath(new URL('./fixtures/legal', import.meta.url));
 
 /** GoApply with WeChat Pay fully configured (entity matches the merchant). */
 export const GA_ENV: Record<string, string> = {
@@ -42,6 +50,7 @@ export const GA_ENV: Record<string, string> = {
   CN_PRICE_PRACTICE_PACK_15_FEN: '7900',
   /** The published GoApply 用户协议 version (what GET /public/legal/terms returns). */
   CN_LEGAL_DOCS_VERSION: 'cn-terms-2026-10',
+  LEGAL_CONTENT_DIR: PUBLISHED_LEGAL_DIR,
 };
 
 /** The same, but verifying notifies with the fixture vector's public key. */

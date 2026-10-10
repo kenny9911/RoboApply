@@ -5247,7 +5247,7 @@ model InterviewSession {
 
   // ── Interview definition ──
   role                   String
-  interviewType          String  @default("behavioral") // behavioral|technical|system|case|culture|panel|screening|custom
+  interviewType          String  @default("behavioral") // behavioral|technical|system|case|culture|panel|screening|custom|cn_ai_interview (GoApply AI面试 format, INT-09)
   personaId              String? // interviewer persona id (from the catalog) or null for custom
   mode                   String  @default("voice") // voice | video
   /// BCP-47 interview language (en|zh|zh-TW|ja|es|fr|pt|de).
