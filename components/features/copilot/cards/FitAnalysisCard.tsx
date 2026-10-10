@@ -5,10 +5,17 @@
 // (MATCH's deterministic `skills.aligned` / `skills.missing`), the AI read's
 // strengths and gaps when there is one (AiGeneratedBadge on GoApply), and the
 // permanent line "This is not your chance of getting hired." (C5).
+//
+// The card stays in the chat as it was written. The fit itself moves with the
+// resume and the saved search, so the card says it is the fit at the time of
+// the answer and links to the job page, which always shows the current one
+// (both read the same stored score, MATCH `scoreJob`).
 
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
 import { FitTierLabel, HonestyLine } from '../../../v3/primitives';
+import { jobDetailHref } from '../../job';
 import { AiGeneratedBadge } from '../../market';
 import { CardFrame } from './CardFrame';
 import { parseFitAnalysis } from './model';
@@ -29,7 +36,7 @@ function Section({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-export function FitAnalysisCard({ card }: CardProps) {
+export function FitAnalysisCard({ card, ctx }: CardProps) {
   const t = useTranslations('assistant.cards.fit');
   const data = parseFitAnalysis(card.data);
   if (!data) return null;
@@ -43,6 +50,12 @@ export function FitAnalysisCard({ card }: CardProps) {
       <Section title={t('missing')} items={data.missing} />
       <Section title={t('highlights')} items={data.highlights} />
       <Section title={t('gaps')} items={data.gaps} />
+      <p className={styles.muted} data-testid="fit-snapshot">
+        {t('snapshot')}{' '}
+        <Link href={jobDetailHref(data.jobId)} className={styles.link} onClick={ctx.onNavigate}>
+          {t('openJob')}
+        </Link>
+      </p>
       <HonestyLine kind="fit" />
     </CardFrame>
   );

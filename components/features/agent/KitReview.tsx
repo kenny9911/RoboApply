@@ -3,8 +3,11 @@
 // KitReview — /ready/[jobId]: one job's application kit (PRODUCT F-AGENT-05,
 // 06, 10, 11).
 //
-//   header       job, company, fit, the kit's real state; "You submit each
-//                application yourself."
+//   header       job, company, today's fit (the job page's own), the kit's real
+//                state; "You submit each application yourself." The tailored
+//                resume shows a second fit, measured when it was tailored: it
+//                is labelled as that (KitResumePart), so the two never read as
+//                one number that disagrees with itself
 //   not ready    picked / failed → "Prepare kit" (cost first; a failed kit
 //                says why in plain words); preparing → updates by itself;
 //                expired → "No longer listed" + Remove; skipped → "You
@@ -23,7 +26,6 @@ import { useTranslations } from 'next-intl';
 
 import { Btn, EmptyState, FitTierLabel, HonestyLine, PageHeader, Pill, toast } from '../../v3/primitives';
 import { useJob, useAddToReady } from '../../../hooks/job';
-import { useProfile } from '../../../hooks/profile/useProfile';
 import {
   canPrepare,
   failedReasonOf,
@@ -98,7 +100,6 @@ function Kit({ item }: { item: ReadyQueueItem }) {
   const router = useRouter();
   const job = useJob(item.jobId);
   const settings = useAgentSettings();
-  const profile = useProfile();
   const actions = useKitActions(item.id);
   // Kit parts only for a kit that was prepared: never for a job still to
   // prepare, being prepared, no longer listed or skipped.
@@ -117,7 +118,6 @@ function Kit({ item }: { item: ReadyQueueItem }) {
   const company = job.data?.job.companyName ?? (summary?.companyName || null);
   const failedReason = item.state === 'failed' ? failedReasonOf(lastErrorOf(item)) : null;
   const fit = job.data?.fit ?? null;
-  const name = [profile.data?.firstName, profile.data?.lastName].filter(Boolean).join(' ') || null;
 
   const onPrepared = (r: PrepareRunResult) => {
     if (r.prepared.length > 0) toast({ message: t('prepare.started', { count: r.prepared.length }), tone: 'ok' });
@@ -207,8 +207,14 @@ function Kit({ item }: { item: ReadyQueueItem }) {
             <KitAnswersPart item={item} />
           </div>
           <aside className={styles.aside}>
-            <KitOpenPart item={item} jobApplyUrl={job.data?.job.applyUrl ?? null} jobLoading={job.isLoading} />
-            <KitFilesPart item={item} detail={detail} style={settings.data?.fileNameStyle ?? null} parts={{ name, company, role: job.data?.job.title ?? null }} />
+            <KitOpenPart
+              item={item}
+              jobApplyUrl={job.data?.job.applyUrl ?? null}
+              jobLoading={job.isLoading}
+              sourceKind={job.data?.job.source?.kind ?? null}
+              companyDomain={job.data?.company?.domain ?? null}
+            />
+            <KitFilesPart item={item} detail={detail} detailLoading={detailQ.isLoading} style={settings.data?.fileNameStyle ?? null} />
             <KitPracticePart item={item} />
             <KitHistoryPart item={item} detail={detail} />
           </aside>

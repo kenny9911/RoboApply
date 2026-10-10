@@ -296,6 +296,10 @@ export interface ApplyProposalResponse {
   applied: boolean;
   result: unknown;
 }
+/** POST /threads/:id/stop: whether a running reply was found and told to stop. */
+export interface StopTurnResponse {
+  stopped: boolean;
+}
 /**
  * `result` per kind:
  *   filter_change  { searchProfileId, version, countAfter: CountView | null }
@@ -408,6 +412,7 @@ export const COPILOT_ERROR_CODES = {
 export const COPILOT_TOOL_NAMES = [
   'search_jobs',
   'top_fit_jobs',
+  'added_jobs',
   'get_current_filters',
   'propose_filter_change',
   'set_sort',

@@ -6,6 +6,7 @@
 //   GET    /threads/:id/messages       ?before=&limit= → messages (with cards), chronological
 //   POST   /threads/:id/messages       { text, chip?, contextJobId?, resumeId? } → SSE
 //                                       (Idempotency-Key required; credit `assistant`)
+//   POST   /threads/:id/stop           stop the reply being written → { stopped }
 //   DELETE /threads/:id                archive → 204
 //   POST   /proposals/:id/apply        → { applied, result } (credit actions spend their own bucket here)
 //   POST   /proposals/:id/dismiss      → 204
@@ -17,7 +18,8 @@
 // feature_disabled / thread_not_found, 402 credits_exhausted, 403
 // phone_binding_required, 422, 503 ai_unavailable). After it opens,
 // problems arrive as an SSE `error` event. A client disconnect aborts the
-// model call.
+// model call; because a proxy in front may keep the upstream request open
+// after the browser left, the Stop button also calls POST /threads/:id/stop.
 
 import { Router, type Request, type RequestHandler, type Response } from 'express';
 import { seekerAuth } from '../../roboapply/engine/middleware/seekerAuth.js';
@@ -134,6 +136,16 @@ export function createCopilotRouter(deps: FeatureRouterDeps = {}, options: Copil
         sse.close();
       }
       return undefined;
+    }),
+  );
+
+  router.post(
+    '/threads/:id/stop',
+    ...auth,
+    on,
+    copilotRoute(async (req) => {
+      const { id } = parseParams(req, ThreadParamsSchema);
+      return (await service()).stopTurn(requireUserId(req), id);
     }),
   );
 

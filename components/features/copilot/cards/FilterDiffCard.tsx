@@ -27,6 +27,16 @@
 // tab) answers 409 `proposal_closed`. The card then says only that the
 // suggestion was already used or dismissed: it does not claim the search
 // changed, or that nothing was applied, because it may have been applied there.
+// When the server names what became of it (`status: 'applied'` — an earlier
+// click whose answer was lost on a slow connection) the card shows "Changes
+// applied": the change went through, so the buttons never stay. The server
+// says `applied` only once the change is made; while an earlier click is still
+// being worked on it says `applying`, and the card stays open with a line
+// saying so (nothing is called applied before it is).
+//
+// While the click is being answered the card says "Working on it…"; while the
+// answer the card belongs to is still being written (`ctx.turn === 'streaming'`)
+// Apply waits, so a change is only ever applied from an answer that is stored.
 //
 // The card only ever previews and applies against the saved search the
 // proposal names: if that search is not in the user's list (deleted, stale
@@ -42,7 +52,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 
 import { applyPatchPreview, clearAssistantFilterChange, noteAssistantFilterChange, opsToPatch } from '../../../../hooks/feed';
-import { isExpired, useProposal } from '../../../../hooks/copilot';
+import { PROPOSAL_APPLYING, isExpired, useProposal } from '../../../../hooks/copilot';
 import { searchKeys, useActiveSearchProfile, useApplyFilters, type FilterSet, type SearchProfile, type SearchProfileList } from '../../../../hooks/search';
 import { useBrand } from '../../../../lib/brand';
 import type { CopilotCard } from '../../../../lib/api/contracts/copilot';
@@ -93,6 +103,8 @@ function FilterDiffBody({ card, ctx, replaced = false, onReplace }: CardProps & 
   const { apply: applyFilters, isPending: reverting } = useApplyFilters();
   const proposal = useProposal(data?.proposalId ?? card.id, {
     initial: data ? initialProposalStatus(data.status, isExpired(data.expiresAt)) : 'pending',
+    // "Changes applied" claims only that the change was made, which is what the server confirms.
+    appliedWhenClosed: true,
   });
   const [before, setBefore] = useState<FilterSet | null>(null);
   const [after, setAfter] = useState<After | null>(null);
@@ -138,8 +150,12 @@ function FilterDiffBody({ card, ctx, replaced = false, onReplace }: CardProps & 
       const next = conflictCard(outcome.details);
       if (next) onReplace(next as CopilotCard);
     } else if (outcome.kind === 'closed') {
-      setClosedElsewhere(true);
-      // It may have been applied in another tab: show the search as it is now.
+      // An earlier click is still being worked on: the card stays open and says so.
+      if (outcome.status === PROPOSAL_APPLYING) return;
+      // Applied already (this card then shows "Changes applied"), or used / dismissed elsewhere.
+      if (outcome.status !== 'applied') setClosedElsewhere(true);
+      else void qc.invalidateQueries({ queryKey: ['feed'] });
+      // Either way show the search as it is now.
       void qc.invalidateQueries({ queryKey: searchKeys.profiles() });
     }
   };
@@ -170,6 +186,7 @@ function FilterDiffBody({ card, ctx, replaced = false, onReplace }: CardProps & 
 
   const { status } = proposal;
   const open = status === 'pending' || status === 'applying' || status === 'failed';
+  const waiting = ctx.turn === 'streaming';
   return (
     <CardFrame card={card} title={t('filterDiff.title')}>
       {status === 'expired' ? <p className={styles.cardText}>{t('proposalExpired')}</p> : null}
@@ -201,8 +218,21 @@ function FilterDiffBody({ card, ctx, replaced = false, onReplace }: CardProps & 
                 {t('failed')}
               </p>
             ) : null}
+            {status === 'applying' ? (
+              <p className={styles.cardText} role="status" data-testid="proposal-applying">
+                {t('applying')}
+              </p>
+            ) : waiting ? (
+              <p className={styles.cardText} data-testid="proposal-waiting">
+                {t('waitForAnswer')}
+              </p>
+            ) : proposal.inProgress ? (
+              <p className={styles.cardText} role="status" data-testid="proposal-in-progress">
+                {t('inProgress')}
+              </p>
+            ) : null}
             <div className={styles.cardActions}>
-              <Btn variant="primary" disabled={status === 'applying'} onClick={() => void apply()}>
+              <Btn variant="primary" disabled={status === 'applying' || waiting} aria-busy={status === 'applying' || undefined} onClick={() => void apply()}>
                 {t('filterDiff.apply')}
               </Btn>
               <Btn variant="ghost" disabled={status === 'applying'} onClick={() => void proposal.dismiss()}>

@@ -171,6 +171,125 @@ describe('handleTurn: one streamed turn', () => {
   });
 });
 
+describe('a turn on a busy database (verification finding: lost turn, hanging credit, appliable ghost proposal)', () => {
+  const FILTER_ROUNDS = [{ toolCalls: [{ name: 'propose_filter_change', args: { ops: [{ op: 'set', path: 'workModels', value: ['onsite'] }], reason: 'on-site' } }] }, { chunks: ['Review the card.'] }];
+
+  it('a failed credit release is tried again, not just logged', async () => {
+    const h = makeService({ rounds: [{ chunks: ['A full answer. '] }] });
+    const t = await newThread(h);
+    vi.spyOn(h.store, 'saveTurn').mockRejectedValueOnce(new Error('Transaction API error: Unable to start a transaction in the given time.'));
+    h.credits.release.mockRejectedValueOnce(new Error('Unable to start a transaction in the given time.'));
+    await runTurn(h, t, 'hi');
+    expect(h.credits.release).toHaveBeenCalledTimes(2);
+    expect(h.credits.state.reserved.get('res_1')!.status).toBe('released');
+  });
+
+  it('a failed credit commit is tried again', async () => {
+    const h = makeService({ rounds: [{ chunks: ['A full answer. '] }] });
+    const t = await newThread(h);
+    h.credits.commit.mockRejectedValueOnce(new Error('pool timeout'));
+    const events = await runTurn(h, t, 'hi');
+    expect(events.at(-1)!.event).toBe('done');
+    expect(h.credits.commit).toHaveBeenCalledTimes(2);
+    expect(h.credits.state.reserved.get('res_1')!.status).toBe('committed');
+  });
+
+  it('a proposal from a reply that could not be saved is closed and cannot be applied', async () => {
+    const h = makeService({ rounds: FILTER_ROUNDS });
+    const t = await newThread(h);
+    vi.spyOn(h.store, 'saveTurn').mockRejectedValueOnce(new Error('Unable to start a transaction in the given time.'));
+    const events = await runTurn(h, t, 'only on-site');
+    expect(events.at(-1)).toMatchObject({ event: 'error', data: { code: 'save_failed' } });
+    const proposalId = (events.find((e) => e.event === 'card')!.data as { data: { proposalId: string } }).data.proposalId;
+    expect((await h.store.getProposal(proposalId))!.status).toBe('expired');
+    await expect(h.service.proposals.apply(USER, proposalId)).rejects.toMatchObject({ code: 'conflict', details: { reason: 'proposal_expired' } });
+    expect(h.areas.patchFilters).not.toHaveBeenCalled();
+    expect(await h.db.rACopilotMessage.count({ where: { threadId: t } })).toBe(0);
+  });
+
+  it('still refused when closing the proposal in the database failed too', async () => {
+    const h = makeService({ rounds: FILTER_ROUNDS });
+    const t = await newThread(h);
+    vi.spyOn(h.store, 'saveTurn').mockRejectedValueOnce(new Error('Unable to start a transaction in the given time.'));
+    const transition = vi.spyOn(h.store, 'transitionProposal').mockRejectedValue(new Error('Unable to start a transaction in the given time.'));
+    const events = await runTurn(h, t, 'only on-site');
+    const proposalId = (events.find((e) => e.event === 'card')!.data as { data: { proposalId: string } }).data.proposalId;
+    expect((await h.store.getProposal(proposalId))!.status).toBe('pending');
+    transition.mockRestore();
+    await expect(h.service.proposals.apply(USER, proposalId)).rejects.toMatchObject({ code: 'conflict', details: { reason: 'proposal_expired', cause: 'turn_not_saved' } });
+    expect(h.areas.patchFilters).not.toHaveBeenCalled();
+    expect((await h.store.getProposal(proposalId))!.status).toBe('expired');
+  });
+});
+
+describe('Stop (verification finding: "Stopped." live, the full answer in the thread)', () => {
+  it('stopTurn aborts the running reply; what was written is stored with a "stopped" notice', async () => {
+    const h = makeService({ rounds: [{ chunks: ['Partial answer. '], hangUntilAbort: true }] });
+    const t = await newThread(h);
+    // No abort signal from the caller: a proxy kept the upstream request open.
+    const stream = await h.service.handleTurn(USER, t, { text: 'a long plan' }, { idempotencyKey: 'k' });
+    const reader = (async () => {
+      for await (const _ of stream) void _;
+    })();
+    await h.llm.hanging;
+    expect(await h.service.stopTurn(USER, t)).toEqual({ stopped: true });
+    await reader;
+    await stream.finished;
+    expect(h.llm.calls[0]!.opts.signal?.aborted).toBe(true);
+    expect(h.llm.streamChatWithTools).toHaveBeenCalledTimes(1);
+    const list = await h.service.listMessages(USER, t, {});
+    const reply = list.items.at(-1)!;
+    expect(reply.content).toBe('Partial answer.');
+    expect(reply.cards).toEqual([expect.objectContaining({ type: 'notice', data: { code: 'stopped' } })]);
+    // Nothing left to stop afterwards.
+    expect(await h.service.stopTurn(USER, t)).toEqual({ stopped: false });
+  });
+
+  it('a Stop pressed while the turn is still being checked stops it before the model is called (review: early Stop was lost)', async () => {
+    const h = makeService({ rounds: [{ chunks: ['A full answer. '] }] });
+    const t = await newThread(h);
+    let allow!: () => void;
+    h.aiAllowed.mockImplementationOnce(() => new Promise<boolean>((resolve) => (allow = () => resolve(true))));
+    const starting = h.service.handleTurn(USER, t, { text: 'a long plan' }, { idempotencyKey: 'k1' });
+    await vi.waitFor(() => expect(h.aiAllowed).toHaveBeenCalledTimes(1));
+    // No turn is running yet, but one is on its way: it is told to stop.
+    expect(await h.service.stopTurn(USER, t)).toEqual({ stopped: true });
+    allow();
+    const stream = await starting;
+    const events = await collect(stream);
+    await stream.finished;
+    expect(h.llm.streamChatWithTools).not.toHaveBeenCalled();
+    expect(events.some((e) => e.event === 'done' || e.event === 'error')).toBe(false);
+    expect(h.credits.release).toHaveBeenCalledWith('res_1', 'client_aborted');
+    expect(await h.db.rACopilotMessage.count({ where: { threadId: t } })).toBe(0);
+    // That Stop was for that turn only: the next message is answered in full.
+    const next = await runTurn(h, t, 'and now?', { key: 'k2' });
+    expect(next.at(-1)!.event).toBe('done');
+    expect(deltaText(next)).toContain('A full answer.');
+  });
+
+  it('a Stop with no turn on its way does not reach the next message', async () => {
+    const h = makeService({ rounds: [{ chunks: ['Hello. '] }] });
+    const t = await newThread(h);
+    expect(await h.service.stopTurn(USER, t)).toEqual({ stopped: false });
+    const events = await runTurn(h, t, 'hi');
+    expect(events.at(-1)!.event).toBe('done');
+  });
+
+  it('a turn refused by its checks leaves nothing behind for a later Stop', async () => {
+    const h = makeService({ rounds: [{ chunks: ['Hello. '] }], aiAllowed: false });
+    const t = await newThread(h);
+    await expect(h.service.handleTurn(USER, t, { text: 'hi' }, { idempotencyKey: 'k' })).rejects.toMatchObject({ code: 'ai_unavailable' });
+    expect(await h.service.stopTurn(USER, t)).toEqual({ stopped: false });
+  });
+
+  it('only the owner of the thread can stop it', async () => {
+    const h = makeService({ rounds: [{ chunks: ['Hello. '] }] });
+    const t = await newThread(h);
+    await expect(h.service.stopTurn('someone_else', t)).rejects.toMatchObject({ code: 'not_found' });
+  });
+});
+
 describe('guardrails inside a turn', () => {
   it('an invented "$145k median" is removed; the replacement line is streamed and stored', async () => {
     const h = makeService({ rounds: [{ chunks: ['Analyst pay varies. The median is ', '$145k for this role. ', 'Check the post.'] }] });

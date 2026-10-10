@@ -159,7 +159,13 @@ export interface AgentSetupResponse {
 }
 export const CalibrationBodySchema = CalibrationEntrySchema;
 
-/** POST /agent/setup/step — finish or skip one wizard step (only "Get the extension" can be skipped). */
+/**
+ * POST /agent/setup/step — finish or skip one wizard step. "Get the extension"
+ * can always be skipped. "Check your search" can be left for later (either
+ * action) only when there is nothing to rate: the jobs list is off for the
+ * account, or the search has no job left to rate; otherwise it needs
+ * CALIBRATION_REQUIRED ratings (409 `calibration_incomplete`).
+ */
 export const SetupStepBodySchema = z
   .object({ step: z.enum(['profile', 'calibrate', 'answers', 'weekly', 'extension']), action: z.enum(['complete', 'skip']).default('complete') })
   .strict();

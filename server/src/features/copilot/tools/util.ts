@@ -6,7 +6,7 @@ import type { FeedItem, PublicFeedItem } from '../../feed/index.js';
 import type { CardType, CopilotCard, CountView } from '../contract.js';
 import type { ToolContext, ToolOutput } from '../types.js';
 
-export const JobId = z.string().min(1).max(64).describe('A job id returned by a tool (search_jobs, top_fit_jobs) or the job in context.');
+export const JobId = z.string().min(1).max(64).describe('A job id returned by a tool (search_jobs, top_fit_jobs, added_jobs) or the job in context.');
 
 /** A seam that is still a stub, or a feature that is off, answers this (the model says it is not available). */
 export function notAvailable(reason: string, extra: Record<string, unknown> = {}): ToolOutput {

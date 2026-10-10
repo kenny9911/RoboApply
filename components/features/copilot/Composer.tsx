@@ -3,7 +3,8 @@
 // Composer — the question box: Enter sends, Shift+Enter is a new line, Stop
 // while an answer streams, voice input where the browser has it, and the
 // credit line ("Uses 1 of your N left today") so the cost is known before
-// sending (one `assistant` credit per message).
+// sending (one `assistant` credit per message). `compact` (the rail) uses the
+// short hint text: the long one does not fit the narrow box on one line.
 
 import { forwardRef, useId, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
@@ -21,9 +22,11 @@ export interface ComposerProps {
   onSend: () => void;
   onStop: () => void;
   streaming: boolean;
+  /** A narrow box (the rail): the short hint text. Default false. */
+  compact?: boolean;
 }
 
-export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function Composer({ value, onChange, onSend, onStop, streaming }, ref) {
+export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function Composer({ value, onChange, onSend, onStop, streaming, compact = false }, ref) {
   const t = useTranslations('assistant.composer');
   const credits = useCredits();
   const hintId = useId();
@@ -56,7 +59,7 @@ export const Composer = forwardRef<HTMLTextAreaElement, ComposerProps>(function 
           className={styles.input}
           rows={1}
           value={value}
-          placeholder={t('placeholder')}
+          placeholder={t(compact ? 'placeholderShort' : 'placeholder')}
           aria-describedby={hintId}
           aria-invalid={tooLong || undefined}
           onChange={(e) => onChange(e.target.value)}

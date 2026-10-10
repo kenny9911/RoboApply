@@ -20,7 +20,7 @@ import type { TrackerSummary } from '../tracker/index.js';
 import type { CampusEventView } from '../cn/campus/index.js';
 import type { FixIssueResponse, LatestGradeResponse, TailorSessionView } from '../resume/index.js';
 import type { CoverLetterView, LetterLength, LetterTone } from '../coverletter/index.js';
-import type { ImportJobResponse, ManualJob } from '../jobs/import/index.js';
+import type { AddedJobItem, ImportJobResponse, ManualJob } from '../jobs/import/index.js';
 import type { CopilotCard, CopilotToolName, ProposalKind } from './contract.js';
 import type { SalaryStatsInput, SalaryStatsResult } from '../feed/index.js';
 
@@ -37,6 +37,10 @@ export interface CopilotAreas {
   // jobs
   getJob(userId: string, jobId: string): Promise<JobDetailResponse>;
   scoreJob(userId: string, jobId: string, options: { resumeVariantId?: string | null; locale?: string }): Promise<MatchFitView>;
+  /** The stored fit for a job (the last AI read, else the quick estimate). Never a model call, never a credit. */
+  storedFit(userId: string, jobId: string, options: { resumeVariantId?: string | null; locale?: string }): Promise<MatchFitView>;
+  /** Jobs the user added themselves ("Added by you": private, owned by them), newest first. */
+  addedJobs(userId: string, options: { limit: number }): Promise<AddedJobItem[]>;
   companyProfile(idOrSlug: string): Promise<CompanyProfile>;
   connectionsForJob(userId: string, jobId: string): Promise<ConnectionsForJobResponse>;
   /**

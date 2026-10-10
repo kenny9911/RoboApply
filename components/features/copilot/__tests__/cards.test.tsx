@@ -5,9 +5,11 @@
 // consent before anything is saved.
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 
 import { ACTION_CARD_CAPS, CREDIT_ACTIONS, CopilotCardView, conflictCard, countText, parseCount, parseFilterDiff, sortHref } from '../cards';
+import { MessageList } from '../MessageList';
+import type { ChatMessage } from '../../../../hooks/copilot';
 import { NUDGE_KINDS } from '../../../../hooks/copilot/nudges';
 import { countsByLabel } from '../cards/ApplicationsCard';
 import { ALL_TRACKER_STATUSES } from '../../../../server/src/features/tracker/contract';
@@ -192,6 +194,32 @@ describe('card content', () => {
     expect(container.textContent).toContain('—');
     expect(container.textContent).not.toMatch(/\$\d/);
     expect(container.textContent).toContain('Not enough data yet');
+  });
+
+  it('job_list rows show what the list was made by: the work model, "Added by you", and no pay claim for a post that was not read (verification finding)', () => {
+    installFetch(routes());
+    const items = [
+      // A remote job whose post names a city: the card says Remote, so it does not read as on-site.
+      { jobId: 'job_r', title: 'Staff Engineer', company: { name: 'Mercury' }, location: 'San Francisco, California, United States', workModel: 'remote', pay: { min: 239000, max: 298800, currency: 'USD', period: 'year', text: null } },
+      { jobId: 'job_o', title: 'Designer', company: { name: 'Acme' }, location: 'New York', workModel: 'onsite', pay: null },
+      { jobId: 'job_m', title: 'Product Designer', company: { name: 'General Intuition' }, location: null, workModel: null, pay: null, payKnown: false, addedByUser: true },
+    ];
+    const { container } = renderUi(<CopilotCardView card={card('job_list', { items })} />);
+    const row = (id: string) => container.querySelector(`[data-job="${id}"]`)!;
+    expect(row('job_r').querySelector('[data-work-model="remote"]')).toHaveTextContent('Remote');
+    expect(row('job_o').querySelector('[data-work-model="onsite"]')).toHaveTextContent('On-site');
+    expect(row('job_o')).toHaveTextContent('Pay not listed');
+    expect(row('job_m')).toHaveTextContent('Added by you');
+    expect(row('job_m')).not.toHaveTextContent('Pay not listed');
+    expect(row('job_m').querySelector('[data-work-model]')).toBeNull();
+  });
+
+  it('fit_analysis says it is the fit at the time of the answer and links to the job page for the current one (verification finding)', () => {
+    installFetch(routes());
+    renderUi(<CopilotCardView card={card('fit_analysis', wire('fit_analysis'))} />);
+    const note = screen.getByTestId('fit-snapshot');
+    expect(note).toHaveTextContent('This is your fit when this answer was written. It changes when your resume or your search changes.');
+    expect(within(note).getByRole('link', { name: 'See your fit now' })).toHaveAttribute('href', expect.stringContaining('job_1'));
   });
 
   it('job_list shows the pay unit, and never invents one the post did not state', () => {
@@ -417,8 +445,8 @@ describe('filter_diff (F-ORION-04)', () => {
     expect(container.textContent).not.toContain('99');
   });
 
-  it('a suggestion already used or dismissed elsewhere (409 proposal_closed) does not claim the search changed or that nothing was applied', async () => {
-    const http = installFetch(routes({ 'POST /api/v1/roboapply/copilot/proposals/p_f/apply': () => fail(409, 'conflict', { reason: 'proposal_closed', status: 'applied' }) }));
+  it('a suggestion dismissed elsewhere (409 proposal_closed) does not claim the search changed or that nothing was applied', async () => {
+    const http = installFetch(routes({ 'POST /api/v1/roboapply/copilot/proposals/p_f/apply': () => fail(409, 'conflict', { reason: 'proposal_closed', status: 'dismissed' }) }));
     const { container } = renderUi(<CopilotCardView card={card('filter_diff', FIXTURES.filter_diff)} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Apply changes' }));
     const closed = await screen.findByTestId('filter-diff-closed');
@@ -427,6 +455,66 @@ describe('filter_diff (F-ORION-04)', () => {
     expect(container.textContent).not.toMatch(/Your search changed|was not applied/);
     expect(screen.queryByRole('button', { name: 'Apply changes' })).not.toBeInTheDocument();
     expect(http.to('POST', '/api/v1/roboapply/copilot/proposals/p_f/apply')).toHaveLength(1);
+  });
+
+  it('a suggestion that was already applied (the first click was answered too late) shows "Changes applied", never the buttons again', async () => {
+    // Verification finding: the filters were applied, the card kept "Apply changes / Not now".
+    installFetch(routes({ 'POST /api/v1/roboapply/copilot/proposals/p_f/apply': () => fail(409, 'conflict', { reason: 'proposal_closed', status: 'applied' }) }));
+    renderUi(<CopilotCardView card={card('filter_diff', FIXTURES.filter_diff)} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Apply changes' }));
+    expect(await screen.findByText('Changes applied.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Apply changes' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('filter-diff-closed')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Show jobs' })).toHaveAttribute('href', '/jobs');
+  });
+
+  it('an earlier click that is still being worked on (status applying): the card stays open and says so, nothing is called applied', async () => {
+    // Review: the proposal is claimed before the change is made, so "closed" alone does not mean it went through.
+    let n = 0;
+    const http = installFetch(
+      routes({
+        'POST /api/v1/roboapply/copilot/proposals/p_f/apply': () =>
+          (n += 1) === 1 ? fail(409, 'conflict', { reason: 'proposal_closed', status: 'applying' }) : ok({ applied: true, result: { searchProfileId: 'sp_1', version: 4, filters: {}, countAfter: null, before: {} } }),
+      }),
+    );
+    const { container } = renderUi(<CopilotCardView card={card('filter_diff', FIXTURES.filter_diff)} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Apply changes' }));
+    expect(await screen.findByTestId('proposal-in-progress')).toHaveTextContent('This is already being worked on. If nothing shows up in a minute, try again.');
+    expect(container.textContent).not.toMatch(/Changes applied|can no longer be used/);
+    // The earlier click failed and freed the suggestion: the button works again.
+    const again = screen.getByRole('button', { name: 'Apply changes' });
+    expect(again).toBeEnabled();
+    fireEvent.click(again);
+    expect(await screen.findByText('Changes applied.')).toBeInTheDocument();
+    expect(screen.queryByTestId('proposal-in-progress')).not.toBeInTheDocument();
+    expect(http.to('POST', '/api/v1/roboapply/copilot/proposals/p_f/apply')).toHaveLength(2);
+  });
+
+  it('says it is working while the click is answered, and waits for an answer that is still being written', async () => {
+    let release: (r: Response) => void = () => undefined;
+    installFetch(routes({ 'POST /api/v1/roboapply/copilot/proposals/p_f/apply': () => new Promise<Response>((resolve) => (release = resolve)) }));
+    const view = renderUi(<CopilotCardView card={card('filter_diff', FIXTURES.filter_diff)} ctx={{ turn: 'streaming' }} />);
+    const waitingBtn = await screen.findByRole('button', { name: 'Apply changes' });
+    expect(waitingBtn).toBeDisabled();
+    expect(screen.getByTestId('proposal-waiting')).toHaveTextContent('You can use this once the answer is finished.');
+    view.rerender(<CopilotCardView card={card('filter_diff', FIXTURES.filter_diff)} ctx={{}} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Apply changes' }));
+    expect(await screen.findByTestId('proposal-applying')).toHaveTextContent('Working on it…');
+    expect(screen.getByRole('button', { name: 'Apply changes' })).toBeDisabled();
+    release(ok({ applied: true, result: { searchProfileId: 'sp_1', version: 4, filters: {}, countAfter: null, before: {} } }));
+    expect(await screen.findByText('Changes applied.')).toBeInTheDocument();
+  });
+
+  it('a suggestion of an answer that could not be saved cannot be used', async () => {
+    const http = installFetch(routes({}));
+    renderUi(<CopilotCardView card={card('filter_diff', FIXTURES.filter_diff)} ctx={{ turn: 'unsaved' }} />);
+    expect(screen.getByTestId('proposal-not-saved')).toHaveTextContent('This suggestion was not saved with its answer, so it cannot be used. Ask again.');
+    expect(screen.queryByRole('button', { name: 'Apply changes' })).not.toBeInTheDocument();
+    expect(http.to('POST', '/api/v1/roboapply/copilot/proposals/p_f/apply')).toHaveLength(0);
+    // A card that offers nothing to apply is shown as it is.
+    cleanup();
+    renderUi(<CopilotCardView card={card('notice', { code: 'stopped' })} ctx={{ turn: 'unsaved' }} />);
+    expect(screen.getByText('Stopped.')).toBeInTheDocument();
   });
 
   it('a conflict with no fresh card (nothing left to change) closes the suggestion: no count, no Apply', async () => {
@@ -610,13 +698,40 @@ describe('credit_action', () => {
     }
   });
 
-  it('a proposal that was already used elsewhere (409 proposal_closed) closes the card instead of offering it again', async () => {
-    installFetch(routes({ 'POST /api/v1/roboapply/copilot/proposals/p_c/apply': () => fail(409, 'conflict', { reason: 'proposal_closed', status: 'applied' }) }));
+  it('a proposal dismissed elsewhere (409 proposal_closed) closes the card instead of offering it again', async () => {
+    installFetch(routes({ 'POST /api/v1/roboapply/copilot/proposals/p_c/apply': () => fail(409, 'conflict', { reason: 'proposal_closed', status: 'dismissed' }) }));
     renderUi(<CopilotCardView card={card('credit_action', FIXTURES.credit_action)} />);
     await screen.findByText('Uses 1 of your 2 left today');
     fireEvent.click(screen.getByRole('button', { name: 'Tailor my resume' }));
     await screen.findByText('This suggestion can no longer be used. Ask again for a fresh one.');
     expect(screen.queryByRole('button', { name: 'Tailor my resume' })).not.toBeInTheDocument();
+  });
+
+  it('a proposal an earlier click already applied: the closed line, never "Done." without a result, and the thread\'s cards are read again', async () => {
+    // Review: "Done." with no link was shown for work this card never saw finish.
+    installFetch(routes({ 'POST /api/v1/roboapply/copilot/proposals/p_c/apply': () => fail(409, 'conflict', { reason: 'proposal_closed', status: 'applied' }) }));
+    const refresh = vi.fn();
+    const { container } = renderUi(<CopilotCardView card={card('credit_action', FIXTURES.credit_action)} ctx={{ refresh }} />);
+    await screen.findByText('Uses 1 of your 2 left today');
+    fireEvent.click(screen.getByRole('button', { name: 'Tailor my resume' }));
+    await screen.findByText('This suggestion can no longer be used. Ask again for a fresh one.');
+    expect(container.textContent).not.toContain('Done.');
+    expect(screen.queryByRole('button', { name: 'Tailor my resume' })).not.toBeInTheDocument();
+    // What the earlier click made is in the thread: the stored cards are read again.
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+  });
+
+  it('a paid action that is still running from an earlier click (status applying): says so, keeps the button, never "Done." or "ask again"', async () => {
+    const refresh = vi.fn();
+    const http = installFetch(routes({ 'POST /api/v1/roboapply/copilot/proposals/p_c/apply': () => fail(409, 'conflict', { reason: 'proposal_closed', status: 'applying' }) }));
+    const { container } = renderUi(<CopilotCardView card={card('credit_action', FIXTURES.credit_action)} ctx={{ refresh }} />);
+    await screen.findByText('Uses 1 of your 2 left today');
+    fireEvent.click(screen.getByRole('button', { name: 'Tailor my resume' }));
+    expect(await screen.findByTestId('proposal-in-progress')).toHaveTextContent('This is already being worked on. If nothing shows up in a minute, try again.');
+    expect(container.textContent).not.toMatch(/Done\.|Ask again/);
+    expect(screen.getByRole('button', { name: 'Tailor my resume' })).toBeEnabled();
+    expect(refresh).not.toHaveBeenCalled();
+    expect(http.to('POST', '/api/v1/roboapply/copilot/proposals/p_c/apply')).toHaveLength(1);
   });
 });
 
@@ -894,5 +1009,50 @@ describe('WP-50 producers ↔ WP-51 cards (Wave 4 gate)', () => {
     expect(screen.getByText('About Acme')).toBeInTheDocument();
     expect(container.textContent).toContain('Software');
     expect(container.querySelectorAll('[data-source-note]').length).toBe(1);
+  });
+});
+
+describe('cards inside a conversation (the answer they belong to)', () => {
+  const message = (over: Partial<ChatMessage>): ChatMessage => ({
+    id: 'm1',
+    role: 'assistant',
+    content: 'Review the card.',
+    cards: [card('filter_diff', FIXTURES.filter_diff)],
+    createdAt: '2026-10-10T10:00:00.000Z',
+    feedback: null,
+    status: 'done',
+    tools: [],
+    error: null,
+    local: false,
+    ...over,
+  });
+  const list = (m: ChatMessage) => <MessageList messages={[m]} ctx={{}} onRetry={() => undefined} onFeedback={async () => true} />;
+
+  it('an answer that could not be saved: its suggestion cannot be applied', async () => {
+    installFetch(routes({}));
+    renderUi(list(message({ status: 'error', error: { code: 'save_failed', retryable: true } })));
+    expect(await screen.findByTestId('proposal-not-saved')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Apply changes' })).not.toBeInTheDocument();
+  });
+
+  it('a stored answer offers its suggestion; one still being written waits', async () => {
+    installFetch(routes({}));
+    const view = renderUi(list(message({ status: 'streaming' })));
+    expect(await screen.findByRole('button', { name: 'Apply changes' })).toBeDisabled();
+    view.rerender(list(message({ status: 'done' })));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Apply changes' })).toBeEnabled());
+  });
+
+  it('a stopped answer says "Stopped." once, live and after a reload', () => {
+    installFetch(routes({}));
+    const stoppedCard = card('notice', { code: 'stopped' });
+    const live = renderUi(list(message({ status: 'stopped', cards: [] })));
+    expect(screen.getAllByText('Stopped.')).toHaveLength(1);
+    live.unmount();
+    renderUi(list(message({ status: 'done', cards: [stoppedCard] })));
+    expect(screen.getAllByText('Stopped.')).toHaveLength(1);
+    cleanup();
+    renderUi(list(message({ status: 'stopped', cards: [stoppedCard] })));
+    expect(screen.getAllByText('Stopped.')).toHaveLength(1);
   });
 });

@@ -13,7 +13,7 @@ import { logger } from '../../../services/LoggerService.js';
 import type { CopilotTool, ToolContext, ToolOutput } from '../types.js';
 import { addExternalJob, draftOutreach, findConnections, interviewPrep, tailorResume, writeCoverLetter } from './actions.js';
 import { getCurrentFilters, proposeFilterChange, setSort } from './filters.js';
-import { analyzeFit, companyInsights, competitiveness, getJob, publicSearchJobs, salaryContext, searchJobs, topFitJobs } from './jobs.js';
+import { addedJobs, analyzeFit, companyInsights, competitiveness, getJob, publicSearchJobs, salaryContext, searchJobs, topFitJobs } from './jobs.js';
 import { isNotFound, isNotImplemented } from './util.js';
 import { applicationSummary, campusDeadlines, explainFeature, getProfileGaps, remember, resumeIssues, rewriteResumeSection } from './you.js';
 
@@ -23,6 +23,7 @@ type AnyTool = CopilotTool<any>;
 export const SEEKER_TOOLS: readonly AnyTool[] = [
   searchJobs,
   topFitJobs,
+  addedJobs,
   getCurrentFilters,
   proposeFilterChange,
   setSort,

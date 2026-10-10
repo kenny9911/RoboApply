@@ -5,14 +5,17 @@
 //   1 SetupProfileStep     Confirm profile: the fields application forms ask
 //                          for, with "Missing" flags and ProfileCompletionCard
 //   2 SetupCalibrateStep   Check your search: rate 3 picked jobs (with a reason
-//                          for "Not right"), "Show 3 more"; the search card
+//                          for "Not right"), "Show 3 more"; the search card.
+//                          With nothing to rate (no jobs for the search, or the
+//                          jobs list off for the account) it says so and the
+//                          wizard offers "Rate jobs later" instead of a dead end
 //   3 AnswersEditor        Application answers (the answer bank, F-AGENT-03)
 //   4 WeeklySettingsForm   Weekly settings (WeeklySettingsForm.tsx)
 //   5 SetupExtensionStep   Get the extension (flag `extension`; skippable)
 //
 // Every rating, answer and setting is the user's own; nothing is inferred.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
@@ -20,8 +23,10 @@ import { Btn, FitTierLabel, HonestyLine } from '../../v3/primitives';
 import { ProfileCompletionCard } from '../profile';
 import { InstallPrompt } from '../extension';
 import { useAgentSetup, useCalibrate, useSuggestions } from '../../../hooks/agent';
+import { useFlag } from '../../../lib/flags';
 import type { FeedItem } from '../../../lib/api/contracts/feed';
 import { cn } from '../../../lib/utils';
+import { MissingLabel } from './MissingLabel';
 import { ReadySearchCard } from './ReadySearchCard';
 import styles from './ready.module.css';
 
@@ -54,7 +59,7 @@ export function SetupProfileStep() {
             <ul className={styles.plainList}>
               {missing.map((m) => (
                 <li key={m.key} className={styles.spread}>
-                  <MissingLabel label={m.label} />
+                  <MissingLabel label={m.label} className={styles.body} />
                   <span className={styles.missingTag}>{t('setup.profile.missing')}</span>
                 </li>
               ))}
@@ -74,22 +79,30 @@ export function SetupProfileStep() {
   );
 }
 
-/** A missing field's label: an i18n key from the server when it is one, else its text. */
-function MissingLabel({ label }: { label: string }) {
-  const t = useTranslations();
-  const text = /^[\w-]+(\.[\w-]+)+$/.test(label) && t.has(label) ? t(label) : label;
-  return <span className={styles.body}>{text}</span>;
-}
-
 // ── 2. Check your search ────────────────────────────────────────────────────
 
-export function SetupCalibrateStep() {
+export interface SetupCalibrateStepProps {
+  /**
+   * How many of the listed jobs are still unrated: 0 means there is nothing
+   * (left) to rate, so the wizard may offer "Rate jobs later". Null while the
+   * list is loading or could not be read.
+   */
+  onRemaining?: (left: number | null) => void;
+}
+
+export function SetupCalibrateStep({ onRemaining }: SetupCalibrateStepProps = {}) {
   const t = useTranslations('ready');
   const setup = useAgentSetup();
+  const feedOn = useFlag('jobs.feed');
   const suggestions = useSuggestions({ limit: CALIBRATION_FETCH });
   const [offset, setOffset] = useState(0);
   const [rated, setRated] = useState<Record<string, 'up' | 'down'>>({});
   const all = suggestions.data?.items ?? [];
+  const left = suggestions.data ? all.filter((j) => !rated[j.jobId]).length : null;
+  useEffect(() => {
+    onRemaining?.(left);
+  }, [left, onRemaining]);
+  useEffect(() => () => onRemaining?.(null), [onRemaining]);
   const page = all.slice(offset, offset + CALIBRATION_PAGE);
   // The server's count (verdicts already saved, e.g. on an earlier visit)
   // wins; this visit's ratings cover the moment before it answers.
@@ -106,7 +119,17 @@ export function SetupCalibrateStep() {
       </p>
       {suggestions.isLoading ? <p className={styles.muted}>{t('loading')}</p> : null}
       {suggestions.isError ? <p className={styles.error}>{t('setup.calibrate.loadFailed')}</p> : null}
-      {suggestions.data && all.length === 0 ? <p className={styles.muted}>{t('setup.calibrate.none')}</p> : null}
+      {suggestions.data && all.length === 0 ? (
+        // Nothing to rate: say why, and that setup goes on (the wizard's button reads "Rate jobs later").
+        <p className={styles.muted} data-testid="calibrate-none">
+          {feedOn ? t('setup.calibrate.none') : t('setup.calibrate.noFeed')}
+        </p>
+      ) : null}
+      {!done && left === 0 ? (
+        <p className={styles.muted} data-testid="calibrate-later">
+          {t('setup.calibrate.laterNote')}
+        </p>
+      ) : null}
       {page.length > 0 ? (
         <ul className={styles.plainList}>
           {page.map((job) => (

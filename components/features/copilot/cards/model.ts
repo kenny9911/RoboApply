@@ -99,12 +99,21 @@ export function parseSources(v: unknown): SourcedWire[] {
 
 // ── job_list ─────────────────────────────────────────────────────────────
 
+export type WorkModelKey = 'remote' | 'hybrid' | 'onsite';
+const WORK_MODELS: readonly WorkModelKey[] = ['remote', 'hybrid', 'onsite'];
+
 export interface JobListRow {
   jobId: string;
   title: string;
   company: string | null;
   location: string | null;
+  /** How the post says the work is done; shown on the row so "remote" can be seen (a location alone reads as on-site). */
+  workModel: WorkModelKey | null;
   pay: FeedItem['pay'];
+  /** False for a job whose pay was not read (the user's own added jobs): no pay line, never "Pay not listed". */
+  payKnown: boolean;
+  /** One of the user's own added jobs. */
+  addedByUser: boolean;
   tier: FitTierKey | null;
   score: number | null;
 }
@@ -144,7 +153,19 @@ export function parseJobList(d: unknown): JobListData | null {
     if (!jobId || !title) continue;
     const company = isObj(r.company) ? str(r.company.name) : str(r.company);
     const fit = isObj(r.fit) ? r.fit : r;
-    items.push({ jobId, title, company, location: str(r.location), pay: payOf(r.pay), tier: tierOf(fit.tier), score: num(fit.score) });
+    const workModel = (WORK_MODELS as readonly string[]).includes(r.workModel as string) ? (r.workModel as WorkModelKey) : null;
+    items.push({
+      jobId,
+      title,
+      company,
+      location: str(r.location),
+      workModel,
+      pay: payOf(r.pay),
+      payKnown: r.payKnown !== false,
+      addedByUser: r.addedByUser === true,
+      tier: tierOf(fit.tier),
+      score: num(fit.score),
+    });
   }
   return { items };
 }
@@ -611,7 +632,8 @@ export function parseProfileGaps(d: unknown): ProfileGapsData | null {
 
 // ── notice ───────────────────────────────────────────────────────────────
 
-export const NOTICE_CODES = ['credits_exhausted', 'copilot_budget_exhausted', 'ai_unavailable', 'content_blocked', 'rate_limited', 'proposal_expired'] as const;
+/** `stopped`: the user pressed Stop; the server kept the answer as far as it got (CopilotService). */
+export const NOTICE_CODES = ['credits_exhausted', 'copilot_budget_exhausted', 'ai_unavailable', 'content_blocked', 'rate_limited', 'proposal_expired', 'stopped'] as const;
 export type NoticeCode = (typeof NOTICE_CODES)[number];
 export interface NoticeData {
   code: NoticeCode;

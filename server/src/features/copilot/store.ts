@@ -155,12 +155,69 @@ const MESSAGE_SELECT = {
 
 const json = (v: unknown): Prisma.InputJsonValue => v as Prisma.InputJsonValue;
 
+// ── Transactions that survive a busy database ─────────────────────────────
+//
+// Prisma's interactive transactions wait 2 s for a connection and run for 5 s
+// by default. On a busy pool that lost a whole Assistant turn ("Unable to
+// start a transaction in the given time") and left an applied proposal's card
+// unchanged. The Assistant's own writes are small and must not be dropped, so
+// they wait longer for a connection and are tried again when the transaction
+// never started or was rolled back by the database.
+
+/** Longer waits than Prisma's defaults (2 s / 5 s): a turn is worth waiting for. */
+export const COPILOT_TX_OPTIONS = { maxWait: 10_000, timeout: 20_000 } as const;
+/** Tries per write (the first one included). */
+export const COPILOT_TX_ATTEMPTS = 3;
+const TX_BACKOFF_MS = [250, 1_000] as const;
+
+/**
+ * Prisma codes for "the write did not happen, trying again is safe": the pool
+ * or the database could not be reached (P1001, P1002, P1008, P1017, P2024), or
+ * the transaction never started, expired or lost a write conflict and was
+ * rolled back (P2028, P2034).
+ */
+const TRANSIENT_DB_CODES: ReadonlySet<string> = new Set(['P1001', 'P1002', 'P1008', 'P1017', 'P2024', 'P2028', 'P2034']);
+const TRANSIENT_DB_MESSAGE = /unable to start a transaction|transaction already closed|timed out fetching a new connection|can't reach database server|connection (?:terminated|closed|reset)|ECONNRESET|ETIMEDOUT/i;
+
+/** True for a database error that left nothing written and may pass on a second try. Pure. */
+export function isTransientDbError(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code;
+  if (typeof code === 'string' && TRANSIENT_DB_CODES.has(code)) return true;
+  const message = err instanceof Error ? err.message : typeof err === 'string' ? err : '';
+  return TRANSIENT_DB_MESSAGE.test(message);
+}
+
+const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** Run `fn` again after a transient database error (at most `attempts` tries); any other error is thrown at once. */
+export async function retryTransient<T>(fn: (attempt: number) => Promise<T>, options: { attempts?: number; sleep?: (ms: number) => Promise<void> } = {}): Promise<T> {
+  const attempts = Math.max(1, options.attempts ?? COPILOT_TX_ATTEMPTS);
+  const sleep = options.sleep ?? defaultSleep;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await fn(attempt);
+    } catch (err) {
+      if (attempt >= attempts - 1 || !isTransientDbError(err)) throw err;
+      await sleep(TX_BACKOFF_MS[Math.min(attempt, TX_BACKOFF_MS.length - 1)]!);
+    }
+  }
+}
+
+export interface CopilotStoreOptions {
+  /** Wait between tries (tests pass a no-op). */
+  sleep?: (ms: number) => Promise<void>;
+}
+
 /** Newest-first keyset after a message (createdAt desc, id desc). */
 function beforeWhere(row: { createdAt: Date; id: string }): Prisma.RACopilotMessageWhereInput {
   return { OR: [{ createdAt: { lt: row.createdAt } }, { createdAt: row.createdAt, id: { lt: row.id } }] };
 }
 
-export function createPrismaCopilotStore(getDb: () => Promise<PrismaClientLike> = async () => (await import('../../lib/prisma.js')).default): CopilotStore {
+export function createPrismaCopilotStore(
+  getDb: () => Promise<PrismaClientLike> = async () => (await import('../../lib/prisma.js')).default,
+  options: CopilotStoreOptions = {},
+): CopilotStore {
+  const retry = <T>(fn: (attempt: number) => Promise<T>) => retryTransient(fn, { sleep: options.sleep });
   const store: CopilotStore = {
     async listThreads(userId, brand, limit) {
       const p = await getDb();
@@ -212,57 +269,71 @@ export function createPrismaCopilotStore(getDb: () => Promise<PrismaClientLike> 
     },
     async saveTurn(input) {
       const p = await getDb();
-      return p.$transaction(async (tx) => {
-        await tx.rACopilotMessage.create({
-          data: { threadId: input.threadId, role: 'user', content: input.user.content, cards: json([]), createdAt: input.user.createdAt },
-        });
-        await tx.rACopilotMessage.create({
-          data: {
-            id: input.assistant.id,
-            threadId: input.threadId,
-            role: 'assistant',
-            content: input.assistant.content,
-            cards: json(input.assistant.cards),
-            toolCalls: json(input.assistant.toolCalls),
-            model: input.assistant.model,
-            tokensIn: input.assistant.tokensIn,
-            tokensOut: input.assistant.tokensOut,
-            createdAt: input.assistant.createdAt,
-          },
-        });
-        const current = await tx.rACopilotThread.findUnique({ where: { id: input.threadId }, select: { title: true } });
-        const updated = await tx.rACopilotThread.update({
-          where: { id: input.threadId },
-          data: {
-            messageCount: { increment: 2 },
-            tokensIn: { increment: input.assistant.tokensIn },
-            tokensOut: { increment: input.assistant.tokensOut },
-            costUsd: { increment: input.costUsd },
-            lastMessageAt: input.assistant.createdAt,
-            ...(current && !current.title && input.title ? { title: input.title } : {}),
-            ...(input.contextJobId ? { contextJobId: input.contextJobId } : {}),
-          },
-          select: { messageCount: true },
-        });
-        return { messageCount: updated.messageCount };
-      });
+      return retry((attempt) =>
+        p.$transaction(async (tx) => {
+          if (attempt > 0) {
+            // A try whose answer was lost may still have been committed: the reply's id is fixed, so look before writing twice.
+            const already = await tx.rACopilotMessage.findUnique({ where: { id: input.assistant.id }, select: { id: true } });
+            if (already) {
+              const thread = await tx.rACopilotThread.findUnique({ where: { id: input.threadId }, select: { messageCount: true } });
+              return { messageCount: thread?.messageCount ?? 0 };
+            }
+          }
+          await tx.rACopilotMessage.create({
+            data: { threadId: input.threadId, role: 'user', content: input.user.content, cards: json([]), createdAt: input.user.createdAt },
+          });
+          await tx.rACopilotMessage.create({
+            data: {
+              id: input.assistant.id,
+              threadId: input.threadId,
+              role: 'assistant',
+              content: input.assistant.content,
+              cards: json(input.assistant.cards),
+              toolCalls: json(input.assistant.toolCalls),
+              model: input.assistant.model,
+              tokensIn: input.assistant.tokensIn,
+              tokensOut: input.assistant.tokensOut,
+              createdAt: input.assistant.createdAt,
+            },
+          });
+          const current = await tx.rACopilotThread.findUnique({ where: { id: input.threadId }, select: { title: true } });
+          const updated = await tx.rACopilotThread.update({
+            where: { id: input.threadId },
+            data: {
+              messageCount: { increment: 2 },
+              tokensIn: { increment: input.assistant.tokensIn },
+              tokensOut: { increment: input.assistant.tokensOut },
+              costUsd: { increment: input.costUsd },
+              lastMessageAt: input.assistant.createdAt,
+              ...(current && !current.title && input.title ? { title: input.title } : {}),
+              ...(input.contextJobId ? { contextJobId: input.contextJobId } : {}),
+            },
+            select: { messageCount: true },
+          });
+          return { messageCount: updated.messageCount };
+        }, COPILOT_TX_OPTIONS),
+      );
     },
     async setFeedback(messageId, value, note) {
       const p = await getDb();
       await p.rACopilotMessage.update({ where: { id: messageId }, data: { feedback: value, feedbackNote: note } });
     },
     async appendCard(messageId, card) {
-      await store.updateCards(messageId, (cards) => [...cards, card]);
+      // Appended once, by id: a try that was stored but whose answer was lost is tried again.
+      await store.updateCards(messageId, (cards) => (cards.some((c) => c && c.id === card.id) ? cards : [...cards, card]));
     },
     async updateCards(messageId, update) {
       const p = await getDb();
-      await p.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT id FROM "RACopilotMessage" WHERE id = ${messageId} FOR UPDATE`;
-        const row = await tx.rACopilotMessage.findUnique({ where: { id: messageId }, select: { cards: true } });
-        if (!row) return;
-        const cards = Array.isArray(row.cards) ? (row.cards as unknown as CopilotCard[]) : [];
-        await tx.rACopilotMessage.update({ where: { id: messageId }, data: { cards: json(update(cards)) } });
-      });
+      // Read-modify-write under the row lock, so a second try starts from the stored cards again.
+      await retry(() =>
+        p.$transaction(async (tx) => {
+          await tx.$queryRaw`SELECT id FROM "RACopilotMessage" WHERE id = ${messageId} FOR UPDATE`;
+          const row = await tx.rACopilotMessage.findUnique({ where: { id: messageId }, select: { cards: true } });
+          if (!row) return;
+          const cards = Array.isArray(row.cards) ? (row.cards as unknown as CopilotCard[]) : [];
+          await tx.rACopilotMessage.update({ where: { id: messageId }, data: { cards: json(update(cards)) } });
+        }, COPILOT_TX_OPTIONS),
+      );
     },
     async updateSummary(threadId, summary, throughId) {
       const p = await getDb();
@@ -310,12 +381,13 @@ export function createPrismaCopilotStore(getDb: () => Promise<PrismaClientLike> 
     },
     async createMemoryCapped(input, max) {
       const p = await getDb();
+      // Not tried again: a lost answer after a commit would store the fact twice (it has no fixed id).
       return p.$transaction(async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`ra_copilot_memory:${input.userId}`}))`;
         const live = await tx.rACopilotMemory.count({ where: { userId: input.userId, deletedAt: null } });
         if (live >= max) return null;
         return tx.rACopilotMemory.create({ data: { userId: input.userId, fact: input.fact, source: input.source } });
-      });
+      }, COPILOT_TX_OPTIONS);
     },
     async deleteMemory(userId, id, at) {
       const p = await getDb();

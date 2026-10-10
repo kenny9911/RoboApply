@@ -5,6 +5,10 @@
 //   - claims the proposal first (pending → applied, compare-and-set), so a
 //     double click runs it once; a failure puts it back to pending;
 //   - expires it after 24 h (409 conflict, reason proposal_expired);
+//   - refuses a suggestion whose reply was never stored (the turn's save
+//     failed): the service closes those when the save fails, this process
+//     remembers them (`turnUnsaved`), and a suggestion still pending after
+//     UNSAVED_TURN_GRACE_MS whose message does not exist is closed here;
 //   - filter_change: applies the patch at `baseVersion`; when the saved
 //     search changed meanwhile, marks it `conflict` and answers 409
 //     version_conflict with a fresh `filter_diff` card (a new proposal);
@@ -13,10 +17,20 @@
 //     cover_letter, job_import, rewrite, outreach) only now;
 //   - memory_add: GoApply needs a live `copilot_memory` consent (403), at
 //     most 50 facts (409 memory_full; counted and stored under one lock).
+// The reply to the click never waits long on the bookkeeping: the count shown
+// after a filter change and the update of the stored card are each given
+// COUNT_AFTER_WAIT_MS, then the click is answered and the card update finishes
+// on its own.
+// A proposal that is no longer pending answers 409 proposal_closed with what
+// became of it in `details.status`. `applied` is said only when the apply
+// FINISHED. A proposal is claimed (pending → applied) before its work runs, so
+// while that work is still running in this process a second click is told
+// `applying` instead: the work may still fail and put the proposal back.
 // The card in the stored message gets the new status, and a result card
 // (tailor_ready, cover_letter, job_imported, rewrite_ready; for an outreach
 // draft a link to the job's People tab, where the draft is kept) is appended,
-// both under a row lock on the message (store.updateCards).
+// both under a row lock on the message (store.updateCards). The update is
+// safe to run twice: a result card is appended once, by its id.
 
 import { HttpError } from '../../platform/http.js';
 import type { Market, ProductBrand } from '../../platform/brand/registry.js';
@@ -50,11 +64,29 @@ export interface ProposalServiceDeps {
   now: () => Date;
   hasConsent: (userId: string, type: 'copilot_memory') => Promise<boolean>;
   newCardId: () => string;
+  /** True when this process knows the reply `messageId` could not be stored (CopilotService). */
+  turnUnsaved?: (messageId: string) => boolean;
 }
+
+/**
+ * A turn is stored within minutes of its first card. A suggestion still
+ * pending after this long whose message is not in the thread came from a
+ * reply that was never stored.
+ */
+export const UNSAVED_TURN_GRACE_MS = 10 * 60_000;
+/**
+ * How long a click waits for bookkeeping before it is answered without it: the
+ * new job count after a filter change, and the update of the stored card.
+ */
+export const COUNT_AFTER_WAIT_MS = 4_000;
+/** `details.status` of a 409 proposal_closed while the claimed apply is still running (it may still fail). */
+export const PROPOSAL_APPLYING = 'applying';
 
 export interface ProposalService {
   apply(userId: string, proposalId: string, options?: { baseVersion?: number; locale?: string }): Promise<ApplyProposalResponse>;
   dismiss(userId: string, proposalId: string): Promise<void>;
+  /** True while a claimed apply of this proposal is still running in this process (its row already says `applied`). */
+  isApplying(proposalId: string): boolean;
 }
 
 /** Status as the user sees it (a pending proposal past its expiry is expired). */
@@ -83,8 +115,24 @@ export function tailorSessionHref(baseVariantId: string, jobId: string, sessionI
 
 const isVersionConflict = (err: unknown) => (err as { code?: unknown } | null)?.code === 'version_conflict';
 
+/** `work`, or null when it takes longer than `ms`. `work` keeps running; its failure is the caller's to handle. */
+function within<T>(work: Promise<T>, ms: number): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), ms);
+    (timer as { unref?: () => void }).unref?.();
+  });
+  return Promise.race([work, late]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 export function createProposalService(deps: ProposalServiceDeps): ProposalService {
   const { store, areas } = deps;
+  /** Proposals claimed here whose work has not finished (this process). */
+  const inFlight = new Set<string>();
+  /** What a closed proposal became, as a second click is told: never `applied` before the apply finished. */
+  const closedStatus = (id: string, status: string): string => (status === 'applied' && inFlight.has(id) ? PROPOSAL_APPLYING : status);
 
   async function load(userId: string, id: string): Promise<ProposalRow> {
     const row = await store.getProposal(id);
@@ -103,17 +151,35 @@ export function createProposalService(deps: ProposalServiceDeps): ProposalServic
         ...cards.map((c) =>
           c && typeof c.data === 'object' && c.data !== null && (c.data as { proposalId?: unknown }).proposalId === row.id ? { ...c, data: { ...(c.data as object), status } } : c,
         ),
-        ...extra,
+        // Appended once: a try that was stored but whose answer was lost is tried again (store.retryTransient).
+        ...extra.filter((e) => !cards.some((c) => c && c.id === e.id)),
       ]);
     } catch (err) {
       logger.warn('COPILOT', 'could not update the proposal card', { proposalId: row.id, error: err instanceof Error ? err.message : String(err) });
     }
   }
 
+  /** A pending suggestion whose reply is not in the thread (the turn's save failed) is closed, never applied. */
+  async function refuseUnsaved(row: ProposalRow): Promise<void> {
+    if (row.status !== 'pending') return;
+    const messageId = messageIdOf(row.payload);
+    if (!messageId) return;
+    let unsaved = deps.turnUnsaved?.(messageId) === true;
+    if (!unsaved && deps.now().getTime() - row.createdAt.getTime() > UNSAVED_TURN_GRACE_MS) {
+      unsaved = !(await store.getMessage(messageId));
+    }
+    if (!unsaved) return;
+    await store.transitionProposal(row.id, 'pending', 'expired', deps.now()).catch(() => false);
+    throw new HttpError('conflict', 'This suggestion was not saved. Ask again for a fresh one.', { reason: COPILOT_ERROR_CODES.proposalExpired, cause: 'turn_not_saved' });
+  }
+
   async function claim(row: ProposalRow): Promise<void> {
     const now = deps.now();
+    if (row.status === 'expired') {
+      throw new HttpError('conflict', 'This suggestion expired. Ask again for a fresh one.', { reason: COPILOT_ERROR_CODES.proposalExpired });
+    }
     if (row.status !== 'pending') {
-      throw new HttpError('conflict', 'This suggestion was already used or dismissed.', { reason: COPILOT_ERROR_CODES.proposalClosed, status: row.status });
+      throw new HttpError('conflict', 'This suggestion was already used or dismissed.', { reason: COPILOT_ERROR_CODES.proposalClosed, status: closedStatus(row.id, row.status) });
     }
     if (row.expiresAt.getTime() <= now.getTime()) {
       await store.transitionProposal(row.id, 'pending', 'expired', now);
@@ -121,12 +187,27 @@ export function createProposalService(deps: ProposalServiceDeps): ProposalServic
       throw new HttpError('conflict', 'This suggestion expired. Ask again for a fresh one.', { reason: COPILOT_ERROR_CODES.proposalExpired });
     }
     if (!(await store.transitionProposal(row.id, 'pending', 'applied', now))) {
-      throw new HttpError('conflict', 'This suggestion was already used or dismissed.', { reason: COPILOT_ERROR_CODES.proposalClosed });
+      // Lost the race to another click: say what became of it, so that card can show it.
+      const current = await store.getProposal(row.id).catch(() => null);
+      throw new HttpError('conflict', 'This suggestion was already used or dismissed.', { reason: COPILOT_ERROR_CODES.proposalClosed, ...(current ? { status: closedStatus(row.id, current.status) } : {}) });
     }
   }
 
+  /** The stored card's update, given COUNT_AFTER_WAIT_MS; after that it finishes on its own (syncCards logs its own failure). */
+  const syncCardsSoon = (row: ProposalRow, status: ProposalStatus, extra: CopilotCard[] = []): Promise<void | null> =>
+    within(syncCards(row, status, extra), COUNT_AFTER_WAIT_MS);
+
   async function unclaim(row: ProposalRow, to: ProposalStatus = 'pending'): Promise<void> {
     await store.transitionProposal(row.id, 'applied', to, deps.now());
+  }
+
+  /** The job count for the new filters, or null when it fails or takes longer than COUNT_AFTER_WAIT_MS. */
+  async function countWithin(userId: string, filters: Parameters<CopilotAreas['countForFilters']>[1]): Promise<CountView | null> {
+    try {
+      return await within(areas.countForFilters(userId, filters).then((res) => countView(res, deps.now())), COUNT_AFTER_WAIT_MS);
+    } catch {
+      return null;
+    }
   }
 
   async function applyFilter(userId: string, row: ProposalRow, market: Market): Promise<ApplyProposalResponse> {
@@ -169,13 +250,9 @@ export function createProposalService(deps: ProposalServiceDeps): ProposalServic
       await unclaim(row);
       throw err;
     }
-    await syncCards(row, 'applied');
-    let countAfter: CountView | null = null;
-    try {
-      countAfter = countView(await areas.countForFilters(userId, updated.filters), deps.now());
-    } catch {
-      countAfter = null;
-    }
+    // The change went through. The card update and the new count are bookkeeping:
+    // they run together and neither holds the answer back for long.
+    const [, countAfter] = await Promise.all([syncCardsSoon(row, 'applied'), countWithin(userId, updated.filters)]);
     return { applied: true, result: { searchProfileId: updated.id, version: updated.version, filters: updated.filters, countAfter, before: profile.filters } };
   }
 
@@ -278,7 +355,7 @@ export function createProposalService(deps: ProposalServiceDeps): ProposalServic
       await unclaim(row);
       throw err;
     }
-    await syncCards(row, 'applied', [card]);
+    await syncCardsSoon(row, 'applied', [card]);
     return { applied: true, result: { card, ...extra } };
   }
 
@@ -287,7 +364,7 @@ export function createProposalService(deps: ProposalServiceDeps): ProposalServic
     // Count and create are one locked step, so concurrent applies cannot pass the cap together.
     const memory = await store.createMemoryCapped({ userId, fact: payload.fact, source: 'user_confirmed' }, COPILOT_MEMORY_MAX);
     if (!memory) throw memoryFull();
-    await syncCards(row, 'applied');
+    await syncCardsSoon(row, 'applied');
     const view: MemoryFactView = { id: memory.id, fact: memory.fact, createdAt: memory.createdAt.toISOString() };
     return { applied: true, result: { memory: view } };
   }
@@ -310,24 +387,33 @@ export function createProposalService(deps: ProposalServiceDeps): ProposalServic
           throw new HttpError('invalid_request', 'baseVersion does not match this suggestion.', { reason: 'base_version_mismatch' });
         }
       }
+      await refuseUnsaved(row);
       await claim(row);
-      switch (row.kind) {
-        case 'filter_change':
-          return applyFilter(userId, row, market);
-        case 'credit_action':
-          return applyCreditAction(userId, row, options.locale);
-        case 'memory_add':
-          try {
-            return await applyMemory(userId, row);
-          } catch (err) {
+      // Claimed: until the work below ends (done, or failed and put back), a second click is told `applying`.
+      inFlight.add(row.id);
+      try {
+        switch (row.kind) {
+          case 'filter_change':
+            return await applyFilter(userId, row, market);
+          case 'credit_action':
+            return await applyCreditAction(userId, row, options.locale);
+          case 'memory_add':
+            try {
+              return await applyMemory(userId, row);
+            } catch (err) {
+              await unclaim(row);
+              throw err;
+            }
+          default:
             await unclaim(row);
-            throw err;
-          }
-        default:
-          await unclaim(row);
-          throw new HttpError('conflict', 'Unknown suggestion.', { reason: 'unknown_kind' });
+            throw new HttpError('conflict', 'Unknown suggestion.', { reason: 'unknown_kind' });
+        }
+      } finally {
+        inFlight.delete(row.id);
       }
     },
+
+    isApplying: (proposalId) => inFlight.has(proposalId),
 
     async dismiss(userId, proposalId) {
       const row = await load(userId, proposalId);

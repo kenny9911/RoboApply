@@ -27,7 +27,7 @@ export function SettingsSection(_props: SettingsSectionProps) {
   const memory = useMemory({ enabled });
   const del = useDeleteMemory();
   const consent = useMemoryConsent();
-  const fab = useRailMemory({ enabled, open: false, track: false });
+  const fab = useRailMemory({ enabled });
 
   if (!enabled) return null;
 

@@ -181,7 +181,7 @@ export function makeService(
   } = {},
 ): Harness {
   const db = options.db ?? makeFake();
-  const store = createPrismaCopilotStore(async () => db as never);
+  const store = createPrismaCopilotStore(async () => db as never, { sleep: async () => undefined });
   const areas = fakeAreas(options.areas);
   const llm = scriptedLlm(options.rounds ?? [{ chunks: ['Hello. '] }]);
   const credits = fakeCredits({ cap: options.creditsCap });
@@ -210,6 +210,7 @@ export function makeService(
     requestId: () => 'req_1',
     newMessageId: () => `msg_${++msg}`,
     newCardId: () => `card_${++cardN}`,
+    sleep: async () => undefined,
   };
   return { service: new CopilotService(deps), db, store, areas, llm, credits, budget, deps, consents, aiAllowed };
 }

@@ -8,6 +8,13 @@
 // the rail never loses the chat. Nothing is sent without the user pressing
 // Send: prompts from the cheatsheet, nudges or other pages only fill the box.
 //
+// The job on screen (`pageJobId`, the rail on `/jobs/<id>`): an empty chat is
+// already about it (CopilotRail). A conversation that is under way is never
+// replaced, so when it is about no job, or about another one, the thread
+// offers "New chat about this job" above the box and in the prompt list.
+// Without that, "Why do I fit this job?" typed on a job page was answered
+// "Which job do you mean?" and the message was spent.
+//
 // `canAsk` false (no AI consent, AI unavailable this session, or still
 // checking): the AI actions — composer, chips, prompt list — are not shown;
 // saved chats and the conversation so far stay readable.
@@ -41,9 +48,11 @@ export interface CopilotThreadProps {
   canAsk?: boolean;
   /** Still checking whether the user may ask: no notice yet. */
   checking?: boolean;
+  /** The job the page behind the rail is about (`/jobs/<id>`), or null. */
+  pageJobId?: string | null;
 }
 
-export function CopilotThread({ chat, variant, prefill, onNavigate, toolbarExtra, canAsk = true, checking = false }: CopilotThreadProps) {
+export function CopilotThread({ chat, variant, prefill, onNavigate, toolbarExtra, canAsk = true, checking = false, pageJobId = null }: CopilotThreadProps) {
   const t = useTranslations('assistant');
   const [draft, setDraft] = useState('');
   const [view, setView] = useState<ThreadView>('chat');
@@ -74,9 +83,20 @@ export function CopilotThread({ chat, variant, prefill, onNavigate, toolbarExtra
 
   const empty = chat.messages.length === 0 && !chat.loading;
   const inRail = variant === 'rail';
+  // The page is a job and this chat is not about it. (An empty chat takes the page's job by itself.)
+  const offerPageJob = canAsk && !!pageJobId && pageJobId !== chat.contextJobId;
+  const askAboutPageJob = () => {
+    if (!pageJobId || chat.streaming) return;
+    // The conversation so far stays in Chats; what was typed stays in the box.
+    chat.newChat({ jobId: pageJobId });
+    setView('chat');
+    focusInput();
+  };
+  const pageJobOffer = offerPageJob && !chat.streaming ? askAboutPageJob : undefined;
+  const composerShown = canAsk && view === 'chat';
 
   return (
-    <div className={cn(styles.thread, !inRail && styles.threadPage)} data-variant={variant}>
+    <div className={cn(styles.thread, !inRail && styles.threadPage)} data-variant={variant} data-composer={composerShown || undefined}>
       <div className={styles.toolbar} role="toolbar" aria-label={t('short')}>
         <button
           type="button"
@@ -119,7 +139,9 @@ export function CopilotThread({ chat, variant, prefill, onNavigate, toolbarExtra
         />
       ) : null}
 
-      {view === 'cheatsheet' && canAsk ? <Cheatsheet onPick={pick} wide={!inRail} /> : null}
+      {view === 'cheatsheet' && canAsk ? (
+        <Cheatsheet onPick={pick} wide={!inRail} hasJob={!!chat.contextJobId} onNavigate={onNavigate} onAskPageJob={pageJobOffer} />
+      ) : null}
 
       {view === 'chat' || (view === 'cheatsheet' && !canAsk) ? (
         <>
@@ -146,15 +168,24 @@ export function CopilotThread({ chat, variant, prefill, onNavigate, toolbarExtra
                     <h3 className={styles.emptyTitle}>{t('empty.title')}</h3>
                     <p className={styles.emptyBody}>{t('empty.body')}</p>
                   </div>
-                  <Cheatsheet onPick={pick} wide={!inRail} />
+                  {/* An empty chat takes the page's job by itself (CopilotRail), except one about a resume. */}
+                  <Cheatsheet onPick={pick} wide={!inRail} hasJob={!!chat.contextJobId} onNavigate={onNavigate} onAskPageJob={chat.contextResumeId ? pageJobOffer : undefined} />
                 </>
               ) : null}
             </>
           ) : (
-            <MessageList messages={chat.messages} ctx={{ prefill: pick, onNavigate }} onRetry={() => void chat.retry()} onFeedback={chat.feedback} />
+            <MessageList messages={chat.messages} ctx={{ prefill: pick, onNavigate, refresh: () => void chat.refreshCards() }} onRetry={() => void chat.retry()} onFeedback={chat.feedback} />
           )}
+          {offerPageJob && !empty ? (
+            <div className={styles.row} data-testid="assistant-page-job">
+              <p className={styles.muted}>{t(chat.contextJobId ? 'context.otherJob' : 'context.noJob')}</p>
+              <button type="button" className={styles.chip} disabled={chat.streaming} onClick={askAboutPageJob}>
+                {t('context.askPageJob')}
+              </button>
+            </div>
+          ) : null}
           {canAsk ? (
-            <Composer ref={inputRef} value={draft} onChange={setDraft} onSend={send} onStop={chat.stop} streaming={chat.streaming} />
+            <Composer ref={inputRef} value={draft} onChange={setDraft} onSend={send} onStop={chat.stop} streaming={chat.streaming} compact={inRail} />
           ) : checking ? null : (
             <p className={styles.muted} role="status" data-testid="assistant-cannot-ask">
               {t('cannotAsk')}

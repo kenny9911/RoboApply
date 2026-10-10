@@ -10,10 +10,10 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { CopilotRail, isRailShortcut } from '../CopilotRail';
+import { CopilotRail, isEditingField, isRailShortcut, jobIdOnPage } from '../CopilotRail';
 import { __assistantRailStore, openAssistantRail } from '../../../../hooks/shared/useOpenAssistant';
 import { __outOfCreditsStore } from '../../../../hooks/shared/useCreditGate';
-import { NUDGE_KINDS, RAIL_RESTORE_QUERY, __resetAssistantAvailability, __resetNudges, __resetRailRestore, offerAssistantNudge } from '../../../../hooks/copilot';
+import { NUDGE_KINDS, __resetAssistantAvailability, __resetNudges, offerAssistantNudge } from '../../../../hooks/copilot';
 import { NUDGE_KINDS as SERVER_NUDGE_KINDS } from '../../../../server/src/features/copilot/contract';
 import { CHEATSHEET_EXTRA, cheatsheetExtra } from '../Cheatsheet';
 import { CONSENTS, CREDITS, PROFILES, UI_STATE, fail, installFetch, installPopupGate, ok, renderUi, sse, streamResponse, type Route } from './testkit';
@@ -28,6 +28,9 @@ vi.mock('next/navigation', async (orig) => {
     useSearchParams: () => new URLSearchParams(),
   };
 });
+// Stop also names the thread to the server (hooks/copilot/stopTurn.ts; its own test covers the call).
+const stopSpy = vi.hoisted(() => ({ requestStopTurn: vi.fn(async (_threadId: string | null | undefined) => true) }));
+vi.mock('../../../../hooks/copilot/stopTurn', () => stopSpy);
 vi.mock('../../tailor', () => ({
   TailorButton: (p: { jobId: string; from?: string; className?: string }) => (
     <button type="button" className={p.className} data-testid="tailor-button" data-job={p.jobId} data-from={p.from}>
@@ -51,7 +54,7 @@ function setViewport(width: number) {
     configurable: true,
     writable: true,
     value: (query: string) => ({
-      matches: query === RAIL_RESTORE_QUERY ? wide : query === '(max-width: 760px)' ? !wide : false,
+      matches: query === '(min-width: 761px)' ? wide : query === '(max-width: 760px)' ? !wide : false,
       media: query,
       onchange: null,
       addListener: () => undefined,
@@ -86,7 +89,6 @@ async function ask(text: string) {
 beforeEach(() => {
   __assistantRailStore.reset();
   __outOfCreditsStore.reset();
-  __resetRailRestore();
   __resetNudges();
   __resetAssistantAvailability();
   nav.pathname = '/jobs';
@@ -121,35 +123,28 @@ describe('opening and closing', () => {
     expect(__assistantRailStore.get().open).toBe(false);
   });
 
-  it('restores an open rail once per load on a wide screen, and never on a phone', async () => {
-    installFetch(routes({ 'GET /api/v1/roboapply/ui-state': () => ok(UI_STATE({ 'assistant.rail': 'open' })) }));
-    const a = renderUi(<CopilotRail />);
-    await screen.findByRole('dialog');
-    a.unmount();
-    __assistantRailStore.reset();
-    // A second mount in the same load (e.g. a public page's shell) does not reopen.
-    renderUi(<CopilotRail />);
-    await new Promise((r) => setTimeout(r, 20));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
-
-  it('does not restore on a 375px phone', async () => {
-    setViewport(375);
+  it('a rail left open is not reopened by a page load: no dialog and no scrim the user did not ask for (verification finding)', async () => {
+    // What an older build stored when the rail was left open.
     const http = installFetch(routes({ 'GET /api/v1/roboapply/ui-state': () => ok(UI_STATE({ 'assistant.rail': 'open' })) }));
-    renderUi(<CopilotRail />);
+    const { container } = renderUi(<CopilotRail />);
     await waitFor(() => expect(http.to('GET', '/api/v1/roboapply/ui-state')).toHaveLength(1));
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(container.ownerDocument.querySelector('[aria-hidden="true"][class*="scrim"]')).toBeNull();
+    expect(__assistantRailStore.get().open).toBe(false);
+    // It still opens the moment the user asks.
+    openRail();
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });
 
-  it('writes the open/closed state back to ui-state when the user changes it', async () => {
+  it('opening and closing the rail writes nothing to ui-state (there is nothing to restore)', async () => {
     const http = installFetch(routes());
     renderUi(<CopilotRail />);
     openRail();
     await screen.findByRole('dialog');
-    await waitFor(() => expect(http.to('PATCH', '/api/v1/roboapply/ui-state').map((c) => c.body)).toContainEqual({ values: { 'assistant.rail': 'open' } }));
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
-    await waitFor(() => expect(http.to('PATCH', '/api/v1/roboapply/ui-state').map((c) => c.body)).toContainEqual({ values: { 'assistant.rail': 'closed' } }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(http.to('PATCH', '/api/v1/roboapply/ui-state')).toHaveLength(0);
   });
 
   it('Cmd/Ctrl+J toggles the rail where Ask is offered', async () => {
@@ -266,9 +261,13 @@ describe('conversation', () => {
     await screen.findByRole('dialog');
     await ask('Tell me more');
     await screen.findByText('Half an');
+    stopSpy.requestStopTurn.mockClear();
     fireEvent.click(screen.getByTestId('assistant-stop'));
     expect(await screen.findByText('Stopped.')).toBeInTheDocument();
     expect(screen.getByTestId('assistant-send')).toBeInTheDocument();
+    // Aborting the fetch may not reach the server through a proxy: the thread is named to it as well.
+    expect(stopSpy.requestStopTurn).toHaveBeenCalledTimes(1);
+    expect(stopSpy.requestStopTurn).toHaveBeenCalledWith('th_1');
   });
 
   it('an error event shows a plain message and Try again re-sends the question', async () => {
@@ -719,8 +718,219 @@ describe('AI availability (aiAllowed; TASK_PLAN §2.2)', () => {
   });
 });
 
+describe('the job on screen is the job in context (verification finding: top-bar Ask on a job page had no job)', () => {
+  it('Ask in the top bar on /jobs/<id> starts a chat about that job: chips show, the thread and the turn carry it', async () => {
+    nav.pathname = '/jobs/job_42';
+    const http = installFetch(routes());
+    renderUi(<CopilotRail />);
+    openRail({ source: 'topbar' });
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText('About this job')).toBeInTheDocument();
+    // "About a job" questions are offered: there is a job for them to be about.
+    expect(within(dialog).getByRole('button', { name: 'Why do I fit this job?' })).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Why I fit' }));
+    await waitFor(() => expect(http.to('POST', `${T}/th_1/messages`)).toHaveLength(1));
+    expect(http.to('POST', T)[0].body).toEqual({ contextJobId: 'job_42' });
+    expect(http.to('POST', `${T}/th_1/messages`)[0].body).toMatchObject({ chip: 'why_fit', contextJobId: 'job_42' });
+  });
+
+  it('on a page that is not a job, the "this job" questions are not offered (they would spend a message on "which job?")', async () => {
+    nav.pathname = '/jobs';
+    installFetch(routes());
+    renderUi(<CopilotRail />);
+    openRail({ source: 'topbar' });
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByText('About this job')).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Why do I fit this job?' })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Tailor my resume for this job.' })).not.toBeInTheDocument();
+    const hint = within(dialog).getByTestId('cheatsheet-needs-job-job');
+    expect(hint).toHaveTextContent('These questions are about one job. Open a job, then ask from there.');
+    expect(within(hint).getByRole('link', { name: 'Open your jobs' })).toHaveAttribute('href', '/jobs');
+    // Questions that need no job stay.
+    expect(within(dialog).getByRole('button', { name: 'Find jobs that list their pay.' })).toBeInTheDocument();
+  });
+
+  it('a conversation under way, then Ask on a job page: the thread offers a new chat about that job (review: the job was still missing)', async () => {
+    nav.pathname = '/jobs';
+    const http = installFetch(routes());
+    const view = renderUi(<CopilotRail />);
+    openRail({ source: 'topbar' });
+    let dialog = await screen.findByRole('dialog');
+    await within(dialog).findByTestId('assistant-input');
+    // No job page: nothing to offer.
+    await ask('Which jobs list their pay?');
+    await within(dialog).findByText('Your SQL work lines up with the post.');
+    expect(within(dialog).queryByTestId('assistant-page-job')).not.toBeInTheDocument();
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    // The same session, now on a job: Ask shows the conversation, and says it is not about this job.
+    nav.pathname = '/jobs/job_42';
+    view.rerender(<CopilotRail />);
+    openRail({ source: 'topbar' });
+    dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Your SQL work lines up with the post.')).toBeInTheDocument();
+    const offer = await within(dialog).findByTestId('assistant-page-job');
+    expect(offer).toHaveTextContent('This chat is not about the job on this page.');
+    // The prompt list does not send the user to open a job they are already on.
+    fireEvent.click(within(dialog).getByTestId('assistant-cheatsheet-toggle'));
+    const group = await within(dialog).findByTestId('cheatsheet-page-job-job');
+    expect(group).toHaveTextContent('These questions are about one job. This chat is not about the job on this page.');
+    expect(within(dialog).queryByTestId('cheatsheet-needs-job-job')).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('link', { name: 'Open your jobs' })).not.toBeInTheDocument();
+    fireEvent.click(within(group).getByRole('button', { name: 'New chat about this job' }));
+    // A new chat about the job on screen: its questions and chips are there, and the turn carries the job.
+    expect(await within(dialog).findByText('About this job')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Your SQL work lines up with the post.')).not.toBeInTheDocument();
+    expect(within(dialog).queryByTestId('assistant-page-job')).not.toBeInTheDocument();
+    await ask('Why do I fit this job?');
+    await waitFor(() => expect(http.to('POST', T)).toHaveLength(2));
+    expect(http.to('POST', T)[1].body).toEqual({ contextJobId: 'job_42' });
+    await waitFor(() => expect(http.to('POST', `${T}/th_1/messages`)).toHaveLength(2));
+    expect(http.to('POST', `${T}/th_1/messages`)[1].body).toMatchObject({ text: 'Why do I fit this job?', contextJobId: 'job_42' });
+  });
+
+  it('a chat about one job, opened on another job: the offer above the box says so and starts a chat about the job on screen', async () => {
+    nav.pathname = '/jobs/job_1';
+    const http = installFetch(routes());
+    const view = renderUi(<CopilotRail />);
+    openRail({ source: 'topbar' });
+    let dialog = await screen.findByRole('dialog');
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Why I fit' }));
+    await within(dialog).findByText('Your SQL work lines up with the post.');
+    // On its own job there is nothing to offer.
+    expect(within(dialog).queryByTestId('assistant-page-job')).not.toBeInTheDocument();
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    nav.pathname = '/jobs/job_2';
+    view.rerender(<CopilotRail />);
+    openRail({ source: 'topbar' });
+    dialog = await screen.findByRole('dialog');
+    const offer = await within(dialog).findByTestId('assistant-page-job');
+    expect(offer).toHaveTextContent('This chat is about another job.');
+    fireEvent.click(within(offer).getByRole('button', { name: 'New chat about this job' }));
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Why I fit' }));
+    await waitFor(() => expect(http.to('POST', T)).toHaveLength(2));
+    expect(http.to('POST', T)[1].body).toEqual({ contextJobId: 'job_2' });
+  });
+
+  it('the lists (/jobs/explore, /jobs/added, /jobs/report) are not a job', () => {
+    expect(jobIdOnPage('/jobs/job_42')).toBe('job_42');
+    expect(jobIdOnPage('/jobs/job_42/')).toBe('job_42');
+    for (const p of ['/jobs', '/jobs/explore', '/jobs/added', '/jobs/report', '/jobs/job_42/people', '/applications/job_42']) expect(jobIdOnPage(p), p).toBeNull();
+  });
+
+  it('a job left over from an earlier page is replaced by the page the user asks from; a conversation under way is not', async () => {
+    nav.pathname = '/jobs/job_1';
+    const http = installFetch(routes());
+    const view = renderUi(<CopilotRail />);
+    openRail({ source: 'topbar' });
+    let dialog = await screen.findByRole('dialog');
+    await within(dialog).findByText('About this job');
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    // Nothing was said: on the next job the chat is about that job.
+    nav.pathname = '/jobs/job_2';
+    view.rerender(<CopilotRail />);
+    openRail({ source: 'topbar' });
+    dialog = await screen.findByRole('dialog');
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Why I fit' }));
+    await waitFor(() => expect(http.to('POST', `${T}/th_1/messages`)).toHaveLength(1));
+    expect(http.to('POST', `${T}/th_1/messages`)[0].body).toMatchObject({ contextJobId: 'job_2' });
+    await within(dialog).findByText('Your SQL work lines up with the post.');
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    // A conversation exists now: Ask from another job shows it, unchanged.
+    nav.pathname = '/jobs/job_3';
+    view.rerender(<CopilotRail />);
+    openRail({ source: 'topbar' });
+    dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Your SQL work lines up with the post.')).toBeInTheDocument();
+    await ask('And the pay?');
+    await waitFor(() => expect(http.to('POST', `${T}/th_1/messages`)).toHaveLength(2));
+    expect(http.to('POST', `${T}/th_1/messages`)[1].body).toMatchObject({ contextJobId: 'job_2' });
+    // "New chat" there is about the job on screen.
+    fireEvent.click(within(dialog).getByTestId('assistant-new-chat'));
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Why I fit' }));
+    await waitFor(() => expect(http.to('POST', T)).toHaveLength(2));
+    expect(http.to('POST', T)[1].body).toEqual({ contextJobId: 'job_3' });
+  });
+});
+
+describe('the floating button steps aside while the user types (verification finding: it covered inputs)', () => {
+  it('is hidden while a field of the page has focus and back when it is left', async () => {
+    installFetch(routes());
+    renderUi(
+      <>
+        <input aria-label="Note" />
+        <button type="button">Next note</button>
+        <CopilotRail />
+      </>,
+    );
+    await screen.findByTestId('assistant-fab');
+    act(() => screen.getByLabelText('Note').focus());
+    await waitFor(() => expect(screen.queryByTestId('assistant-fab')).not.toBeInTheDocument());
+    act(() => screen.getByRole('button', { name: 'Next note' }).focus());
+    expect(await screen.findByTestId('assistant-fab')).toBeInTheDocument();
+  });
+
+  it('knows a typing field from a button or a checkbox', () => {
+    const el = (html: string) => {
+      const d = document.createElement('div');
+      d.innerHTML = html;
+      return d.firstElementChild;
+    };
+    expect(isEditingField(el('<input />'))).toBe(true);
+    expect(isEditingField(el('<input type="search" />'))).toBe(true);
+    expect(isEditingField(el('<textarea></textarea>'))).toBe(true);
+    expect(isEditingField(el('<select></select>'))).toBe(true);
+    expect(isEditingField(el('<div contenteditable="true"></div>'))).toBe(true);
+    expect(isEditingField(el('<input type="checkbox" />'))).toBe(false);
+    expect(isEditingField(el('<button></button>'))).toBe(false);
+    expect(isEditingField(null)).toBe(false);
+  });
+});
+
+describe('the composer in the rail (verification finding: scrolled questions showed under it, the hint was cut)', () => {
+  const css = readFileSync(join(process.cwd(), 'components/features/copilot/copilot.module.css'), 'utf8');
+
+  it('reaches down over the drawer body\'s bottom padding, so nothing scrolls into view below it', () => {
+    const body = /\.body\s*{[^}]*padding:\s*0 var\(--sp-5\) var\(--sp-5\)/.test(readFileSync(join(process.cwd(), 'components/v3/primitives/primitives.module.css'), 'utf8'));
+    expect(body, 'the drawer body still pads its bottom by --sp-5').toBe(true);
+    expect(css).toMatch(/\.thread\[data-variant='rail'\] \.composer\s*{\s*bottom: calc\(-1 \* var\(--sp-5\)\);\s*padding-bottom: var\(--sp-5\);/);
+  });
+
+  it('the thread reaches the scroller\'s edge while the composer is shown, so the space under it is the same at the end of the chat (review: a 20px jump)', async () => {
+    expect(css).toMatch(/\.thread\[data-variant='rail'\]\[data-composer\]\s*{\s*min-height: calc\(100% \+ var\(--sp-5\)\);\s*margin-bottom: calc\(-1 \* var\(--sp-5\)\);/);
+    installFetch(routes());
+    renderUi(<CopilotRail />);
+    openRail();
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByTestId('assistant-input');
+    const thread = dialog.querySelector('[data-variant="rail"]') as HTMLElement;
+    expect(thread).toHaveAttribute('data-composer');
+    // The other rail views have no composer and keep the drawer's own padding.
+    fireEvent.click(within(dialog).getByTestId('assistant-cheatsheet-toggle'));
+    await waitFor(() => expect(within(dialog).queryByTestId('assistant-input')).not.toBeInTheDocument());
+    expect(thread).not.toHaveAttribute('data-composer');
+  });
+
+  it('keeps the hint on one line (a short hint in the rail, so it is never cut) and lets the box grow with the text', async () => {
+    expect(css).toMatch(/\.input::placeholder\s*{[^}]*white-space: nowrap;/);
+    expect(css).toMatch(/\.input\s*{\s*field-sizing: content;/);
+    installFetch(routes());
+    renderUi(<CopilotRail />);
+    openRail();
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByTestId('assistant-input')).toHaveAttribute('placeholder', 'Ask a question');
+  });
+});
+
 describe('on /assistant (the full page is the Assistant)', () => {
-  it('does not restore the rail there, and leaving later does not open it', async () => {
+  it('does not open the rail there, and leaving later does not open it', async () => {
     nav.pathname = '/assistant';
     const http = installFetch(routes({ 'GET /api/v1/roboapply/ui-state': () => ok(UI_STATE({ 'assistant.rail': 'open' })) }));
     const view = renderUi(<CopilotRail />);
@@ -731,7 +941,6 @@ describe('on /assistant (the full page is the Assistant)', () => {
     view.rerender(<CopilotRail />);
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    // The stored preference is left as the user set it.
     expect(http.to('PATCH', '/api/v1/roboapply/ui-state')).toHaveLength(0);
   });
 

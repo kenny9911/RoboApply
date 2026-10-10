@@ -22,6 +22,21 @@
 // Events: meta → delta* / tool* / card* → (error) → done. A reply that could
 // not be saved ends with error `save_failed` and no done.
 //
+// When a write fails (a busy database): the store tries the turn's save again
+// (store.ts `retryTransient`); the credit release / commit is tried again
+// here; and when the save still fails, every proposal the turn created is
+// closed (`expired`), so a suggestion from a reply that is not in the thread
+// can never be applied (proposals.ts refuses it as well).
+//
+// Stop: the client's disconnect aborts the model call when it reaches this
+// process, but a proxy in between may keep the upstream request open, so
+// `stopTurn(userId, threadId)` (POST /threads/:id/stop) aborts the running
+// turn by name. A stopped reply is stored as far as it got, with a `notice`
+// card `stopped`, so the thread shows the same thing after a reload. A Stop
+// that arrives while the turn is still being checked (thread, consent, phone,
+// budget, credit) is remembered for that turn (`startingTurns`) and stops it
+// as soon as it starts, before the model is called.
+//
 // handleVisitorTurn: the same loop with the public tools only, no user, no
 // persistence, no credits (WP-78 rate-limits per IP); counts against the
 // brand budget.
@@ -115,7 +130,15 @@ export interface CopilotServiceDeps {
   requestId: () => string | null;
   newMessageId: () => string;
   newCardId?: () => string;
+  /** Wait between tries of a failed credit or proposal write (tests pass a no-op). */
+  sleep?: (ms: number) => Promise<void>;
 }
+
+/** Tries of a credit release / commit and of closing an unsaved turn's proposals. */
+export const SETTLE_ATTEMPTS = 3;
+const SETTLE_BACKOFF_MS = [300, 1_200] as const;
+/** Unsaved replies remembered by this process (proposals.ts refuses their suggestions). */
+const UNSAVED_TURNS_MAX = 500;
 
 const ASSISTANT_BUCKET = 'assistant' as const;
 const THREAD_LIST_LIMIT = 50;
@@ -176,6 +199,17 @@ interface TurnSpec {
 export class CopilotService {
   readonly proposals: ProposalService;
   private readonly newCardId: () => string;
+  /** Running turns by thread (this process), so Stop can abort one by name. */
+  private readonly activeTurns = new Map<string, Set<AbortController>>();
+  /**
+   * Turns still in their checks, by thread, and whether Stop was pressed for
+   * them meanwhile. Only a turn that was being checked when Stop arrived is
+   * stopped: the entry goes when its last turn has started or was refused, so
+   * a Stop never reaches a later message.
+   */
+  private readonly startingTurns = new Map<string, { count: number; stop: boolean }>();
+  /** Assistant message ids whose reply could not be stored (this process; oldest dropped first). */
+  private readonly unsavedTurns = new Set<string>();
 
   constructor(private readonly deps: CopilotServiceDeps) {
     this.newCardId = deps.newCardId ?? (() => `card_${crypto.randomUUID().slice(0, 12)}`);
@@ -186,7 +220,48 @@ export class CopilotService {
       now: deps.now,
       hasConsent: deps.hasConsent,
       newCardId: this.newCardId,
+      turnUnsaved: (messageId) => this.unsavedTurns.has(messageId),
     });
+  }
+
+  private rememberUnsaved(messageId: string): void {
+    if (this.unsavedTurns.size >= UNSAVED_TURNS_MAX) {
+      const oldest = this.unsavedTurns.values().next().value;
+      if (oldest !== undefined) this.unsavedTurns.delete(oldest);
+    }
+    this.unsavedTurns.add(messageId);
+  }
+
+  /** A write that must not be lost to one bad moment: tried again, whatever the error. */
+  private async settle<T>(what: string, fn: () => Promise<T>, context: Record<string, unknown> = {}): Promise<T | undefined> {
+    const sleep = this.deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+    for (let attempt = 0; attempt < SETTLE_ATTEMPTS; attempt += 1) {
+      try {
+        return await fn();
+      } catch (err) {
+        const last = attempt === SETTLE_ATTEMPTS - 1;
+        logger[last ? 'error' : 'warn']('COPILOT', `${what} failed${last ? '' : '; trying again'}`, { ...context, attempt: attempt + 1, error: errMessage(err) });
+        if (last) return undefined;
+        await sleep(SETTLE_BACKOFF_MS[Math.min(attempt, SETTLE_BACKOFF_MS.length - 1)]!);
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Stop the reply being written in this thread (the Stop button). True when a
+   * turn was found here and told to stop — one that is running, or one whose
+   * checks are still under way (it is stopped the moment it starts); false
+   * when there is none in this process (already finished, or served by another
+   * instance).
+   */
+  async stopTurn(userId: string, threadId: string): Promise<{ stopped: boolean }> {
+    await this.ownThread(userId, threadId);
+    const starting = this.startingTurns.get(threadId);
+    if (starting) starting.stop = true;
+    const running = this.activeTurns.get(threadId);
+    for (const c of running ?? []) c.abort();
+    return { stopped: !!starting || !!running?.size };
   }
 
   // ── Threads, messages ──────────────────────────────────────────────────
@@ -228,7 +303,13 @@ export class CopilotService {
       if (typeof pid === 'string') proposalIds.add(pid);
     }
     const now = this.deps.now();
-    const statuses = new Map((await this.deps.store.getProposals([...proposalIds])).map((p) => [p.id, effectiveStatus(p, now)]));
+    // A proposal whose apply is still running is not shown as applied yet: the work may still fail.
+    const statuses = new Map(
+      (await this.deps.store.getProposals([...proposalIds])).map((p) => {
+        const status = effectiveStatus(p, now);
+        return [p.id, status === 'applied' && this.proposals.isApplying(p.id) ? 'pending' : status] as const;
+      }),
+    );
     const items = chronological.map((m) => this.toMessageView(m, statuses));
     return { items, cursor };
   }
@@ -288,25 +369,46 @@ export class CopilotService {
   // ── Turns ──────────────────────────────────────────────────────────────
 
   async handleTurn(userId: string, threadId: string, input: TurnInput, options: TurnOptions = {}): Promise<CopilotEventStream> {
-    const thread = await this.ownThread(userId, threadId);
-    if (!(await this.deps.aiAllowed(userId))) {
-      throw new HttpError('ai_unavailable', 'The Assistant needs your consent to use AI. Turn it on in Settings.', { reason: COPILOT_ERROR_CODES.aiOff });
+    // The checks below take a moment (several reads and the credit hold). A Stop
+    // pressed meanwhile finds no running turn yet, so it is noted on this entry.
+    const starting = this.startingTurns.get(threadId) ?? { count: 0, stop: false };
+    starting.count += 1;
+    this.startingTurns.set(threadId, starting);
+    let thread: ThreadRow;
+    let brand: ProductBrand;
+    let reservation: Awaited<ReturnType<CopilotServiceDeps['credits']['reserve']>>;
+    try {
+      thread = await this.ownThread(userId, threadId);
+      if (!(await this.deps.aiAllowed(userId))) {
+        throw new HttpError('ai_unavailable', 'The Assistant needs your consent to use AI. Turn it on in Settings.', { reason: COPILOT_ERROR_CODES.aiOff });
+      }
+      await this.deps.assertPhoneBound(userId);
+      const key = options.idempotencyKey?.trim();
+      if (!key || key.length > 120) {
+        throw new HttpError('invalid_request', 'An Idempotency-Key header is required.', { reason: COPILOT_ERROR_CODES.idempotencyKeyRequired });
+      }
+      brand = this.deps.brand();
+      if (await this.deps.budget.exhausted(brand.id)) {
+        throw new HttpError('ai_unavailable', 'The Assistant is busy right now. Try again later; nothing was charged.', { reason: COPILOT_ERROR_CODES.dailyBudget });
+      }
+      reservation = await this.deps.credits.reserve({ userId, bucket: ASSISTANT_BUCKET, idempotencyKey: key, refType: 'ra_copilot_thread', refId: threadId, brand: brand.id });
+      if (reservation.replayed) {
+        const replay = new CreditReplayError(reservation.id, reservation.status === 'committed' ? 'committed' : 'reserved');
+        throw new HttpError('conflict', replay.message, { reason: replay.code });
+      }
+    } finally {
+      starting.count -= 1;
+      if (starting.count <= 0 && this.startingTurns.get(threadId) === starting) this.startingTurns.delete(threadId);
     }
-    await this.deps.assertPhoneBound(userId);
-    const key = options.idempotencyKey?.trim();
-    if (!key || key.length > 120) {
-      throw new HttpError('invalid_request', 'An Idempotency-Key header is required.', { reason: COPILOT_ERROR_CODES.idempotencyKeyRequired });
-    }
-    const brand = this.deps.brand();
-    if (await this.deps.budget.exhausted(brand.id)) {
-      throw new HttpError('ai_unavailable', 'The Assistant is busy right now. Try again later; nothing was charged.', { reason: COPILOT_ERROR_CODES.dailyBudget });
-    }
-    const reservation = await this.deps.credits.reserve({ userId, bucket: ASSISTANT_BUCKET, idempotencyKey: key, refType: 'ra_copilot_thread', refId: threadId, brand: brand.id });
-    if (reservation.replayed) {
-      const replay = new CreditReplayError(reservation.id, reservation.status === 'committed' ? 'committed' : 'reserved');
-      throw new HttpError('conflict', replay.message, { reason: replay.code });
-    }
-    return this.startTurn({
+    // The turn's own abort signal: the caller's (client gone) or Stop by name (`stopTurn`),
+    // including a Stop pressed during the checks above.
+    const controller = new AbortController();
+    if (options.signal?.aborted || starting.stop) controller.abort();
+    else options.signal?.addEventListener('abort', () => controller.abort(), { once: true });
+    const running = this.activeTurns.get(threadId) ?? new Set<AbortController>();
+    running.add(controller);
+    this.activeTurns.set(threadId, running);
+    const stream = this.startTurn({
       scope: 'seeker',
       userId,
       thread,
@@ -315,9 +417,14 @@ export class CopilotService {
       contextJobId: input.contextJobId ?? thread.contextJobId ?? null,
       resumeId: input.resumeId ?? null,
       locale: options.locale ?? (brand.market === 'cn' ? 'zh' : 'en'),
-      signal: options.signal,
+      signal: controller.signal,
       reservationId: reservation.id,
     });
+    void stream.finished.finally(() => {
+      running.delete(controller);
+      if (!running.size && this.activeTurns.get(threadId) === running) this.activeTurns.delete(threadId);
+    });
+    return stream;
   }
 
   async handleVisitorTurn(input: VisitorTurnInput, options: { tools: 'public'; signal?: AbortSignal; locale?: string }): Promise<CopilotEventStream> {
@@ -388,6 +495,8 @@ export class CopilotService {
     }
     if (spec.page) collectSourceNumbers(spec.page, allowedNumbers);
 
+    /** Proposals this turn created: closed again when the reply cannot be stored. */
+    const proposalIds: string[] = [];
     const toolCtx: ToolContext = {
       userId,
       brand,
@@ -406,6 +515,7 @@ export class CopilotService {
         if (spec.scope !== 'seeker' || !userId || !spec.thread) throw new Error('Proposals need a signed-in thread.');
         const expiresAt = new Date(deps.now().getTime() + PROPOSAL_TTL_MS);
         const row = await deps.store.createProposal({ threadId: spec.thread.id, userId, kind: draft.kind, payload: draft.payload, expiresAt });
+        proposalIds.push(row.id);
         return { id: row.id, expiresAt };
       },
       creditsLeft: async (bucket) => {
@@ -460,6 +570,8 @@ export class CopilotService {
 
     try {
       for (let round = 0; round < MAX_ROUNDS; round += 1) {
+        // Stopped before this round (also: before the first one): the model is not called.
+        if (spec.signal?.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
         const last = round === MAX_ROUNDS - 1;
         rounds += 1;
         const res = await deps.llm.streamChatWithTools(messages, {
@@ -536,6 +648,8 @@ export class CopilotService {
     let content = guard.text.trim();
     if (blockedTail) content = `${content}${content ? '\n\n' : ''}${guardLine('restBlocked', spec.locale)}`;
     const produced = content.length > 0 || cards.length > 0;
+    // A stopped reply is kept as far as it got, and says so wherever it is read again.
+    if (aborted && produced && spec.scope === 'seeker') cards.push({ type: 'notice', id: this.newCardId(), data: { code: 'stopped' } });
     const hits = guard.hits;
     if (hits.length) {
       for (const h of hits) logger.warn('COPILOT', 'copilot_guard_hit', { kind: h.kind, token: h.token, excerpt: h.excerpt, brand: brand.id, scope: spec.scope });
@@ -568,6 +682,15 @@ export class CopilotService {
         } catch (err) {
           logger.error('COPILOT', 'could not save the turn', { error: errMessage(err), threadId: spec.thread.id });
         }
+        if (!saved) {
+          // The reply is not in the thread, so nothing it suggested may be applied:
+          // remembered here at once (no database needed), and closed in the database.
+          this.rememberUnsaved(messageId);
+          const at = deps.now();
+          for (const id of proposalIds) {
+            await this.settle('closing a proposal of an unsaved turn', () => deps.store.transitionProposal(id, 'pending', 'expired', at), { proposalId: id });
+          }
+        }
       }
       // The `assistant` credit is charged only for a reply that is stored and
       // complete. A fault on our side (stream cut, internal error) or a failed
@@ -582,11 +705,10 @@ export class CopilotService {
             ? failure.code
             : null;
       if (spec.reservationId) {
-        if (releaseReason) {
-          await deps.credits.release(spec.reservationId, releaseReason).catch((e) => logger.warn('COPILOT', 'credit release failed', { error: errMessage(e) }));
-        } else {
-          await deps.credits.commit(spec.reservationId, { refId: messageId }).catch((e) => logger.warn('COPILOT', 'credit commit failed', { error: errMessage(e) }));
-        }
+        const reservationId = spec.reservationId;
+        // Tried again on failure: a reservation left hanging would hold one of the user's messages.
+        if (releaseReason) await this.settle('credit release', () => deps.credits.release(reservationId, releaseReason), { reservationId, reason: releaseReason });
+        else await this.settle('credit commit', () => deps.credits.commit(reservationId, { refId: messageId }), { reservationId });
       }
       if (produced && saved && brand.market === 'cn' && deps.logAiLabel) await deps.logAiLabel({ userId, contentId: `copilot_message:${messageId}` }).catch(() => undefined);
       if (costUsd > 0 || rounds > 0) {

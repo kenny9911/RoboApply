@@ -170,25 +170,42 @@ export function letterNeeded(mode: string, asks: boolean): boolean {
 }
 
 // ── File names (F-AGENT-03 "file naming") ────────────────────────────────
+//
+// The kit review shows the name the resume WILL download as. The file itself
+// is named by the resume export (roboapply/v2/lib/resumeExport.ts
+// `buildExportFileName`, called by RAResumeService.exportVariant), so these
+// rules are that function's rules, kept equal by a test: the same cleaning,
+// " - " between the parts, and the same fallback. A second naming scheme here
+// (underscores, the profile's name) showed a name no download ever had.
 
-function part(value: string | null | undefined): string {
+/** One part of a file name: no path or reserved characters, single spaces, at most 60 characters. */
+export function fileNamePart(value: string | null | undefined): string {
   return (value ?? '')
-    .normalize('NFKC')
-    .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ')
-    .replace(/[^\p{L}\p{N}]+/gu, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 40);
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 60);
 }
 
-/** Resume file name for a kit (no extension). Empty parts are left out; null when nothing is left. */
+/** The person's name as the resume itself gives it (its first heading), which is what the export uses. */
+export function resumeHeadingName(markdown: string | null | undefined): string | null {
+  const name = /^#\s+(.+)$/m.exec(markdown ?? '')?.[1]?.replace(/[*_`]/g, '').trim();
+  return name ? name : null;
+}
+
+/**
+ * Resume file name for a kit (no extension), following the chosen style.
+ * Parts that are not known are left out, never invented; with no part at all
+ * the name is `fallback` (the resume's own title), else "Resume".
+ */
 export function kitFileName(
   style: FileNameStyle | string,
-  input: { firstName?: string | null; lastName?: string | null; company?: string | null; role?: string | null; date?: Date },
-): string | null {
-  const name = [part(input.firstName), part(input.lastName)].filter(Boolean).join('_');
-  const company = part(input.company);
-  const role = part(input.role);
-  const date = input.date ? input.date.toISOString().slice(0, 10) : '';
+  input: { name?: string | null; company?: string | null; role?: string | null; date?: Date; fallback?: string | null },
+): string {
+  const name = fileNamePart(input.name);
+  const company = fileNamePart(input.company);
+  const role = fileNamePart(input.role);
+  const date = (input.date ?? new Date()).toISOString().slice(0, 10);
   let parts: string[];
   switch (style) {
     case 'name_role':
@@ -198,12 +215,13 @@ export function kitFileName(
       parts = [company, role, name];
       break;
     case 'name_date':
-      parts = [name, 'Resume', date];
+      parts = [name, date];
       break;
     case 'name_company_role':
-    default:
       parts = [name, company, role];
+      break;
+    default:
+      parts = [];
   }
-  const out = parts.filter(Boolean).join('_').slice(0, 120);
-  return out || null;
+  return parts.filter(Boolean).join(' - ') || fileNamePart(input.fallback) || 'Resume';
 }

@@ -98,6 +98,16 @@ export function createDefaultAreas(options: DefaultAreasOptions): CopilotAreas {
       // Free, platform-paid score (80/day/user, then the quick estimate); never a credit.
       return matchService.scoreJob(userId, jobId, { resumeVariantId: opts.resumeVariantId ?? undefined, locale: opts.locale, mode: 'on_demand' });
     },
+    async storedFit(userId, jobId, opts) {
+      const { matchService } = await import('../match/index.js');
+      // The same stored score the job page and the lists show; `cache_only` never calls a model.
+      return matchService.scoreJob(userId, jobId, { resumeVariantId: opts.resumeVariantId ?? undefined, locale: opts.locale, mode: 'cache_only' });
+    },
+    async addedJobs(userId, opts) {
+      const { jobImportService } = await import('../jobs/import/index.js');
+      // The user's own imports (visibility private, ownerUserId = user): never part of the public lists.
+      return (await jobImportService.listAdded(userId, { limit: Math.max(1, Math.min(50, opts.limit)) })).items;
+    },
     async companyProfile(idOrSlug) {
       const [{ companyService }, { getCurrentBrandOrDefault }] = await Promise.all([import('../jobs/companies/index.js'), import('../../platform/brand/index.js')]);
       // A signed-in viewer (WP-16b): not the anonymous count. GoApply mode `off` hides third-party postings from the count.

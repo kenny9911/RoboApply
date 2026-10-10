@@ -5,15 +5,29 @@
 // `#weekly`; the profile's "Application answers" links to `#answers`).
 //
 //   1 Confirm profile · 2 Check your search · 3 Application answers ·
-//   4 Weekly settings · 5 Get the extension (flag `extension`; skippable)
+//   4 Weekly settings · 5 Get the extension (skippable)
+//
+// "Get the extension" is a step only where the extension can be installed:
+// the `extension` capability AND a published extension for this brand
+// (`extensionIdFor`). Without one the step would offer nothing but Back and
+// Skip. The server may still count it as a step (it only knows the
+// capability); finishing the last step shown here then skips it there, so
+// setup is finished either way.
 //
 // The current step starts at the URL hash, else at the step the server says
-// is next (`GET /agent/setup`). A step is marked done only from the server's
-// checks (or, for answers, from the saved bank).
+// is next (`GET /agent/setup`) — read once the answer has ARRIVED: the query
+// is disabled until the capabilities are known, and a disabled query is "not
+// loading" with no data, which used to open step 1 on every return. A step is
+// marked done only from the server's checks (or, for answers, from the saved
+// bank).
 //
 // Continue reports the step to the server (POST /agent/setup/step); "Skip for
-// now" on "Get the extension" skips it. The last step finishes setup on the
-// server, which then makes the first weekly list; Finish goes to /ready.
+// now" on "Get the extension" skips it. "Check your search" needs 3 ratings,
+// except when there is nothing to rate (no jobs for the search, or the jobs
+// list is off for this account): then the button says "Rate jobs later" and
+// the step is left open instead of blocking the steps after it. The last step
+// finishes setup on the server, which then makes the first weekly list;
+// Finish goes to /ready.
 // Leaving the answers or weekly step with unsaved changes saves them first,
 // so no edit is dropped silently.
 //
@@ -24,12 +38,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 
 import { Btn, HonestyLine, PageHeader, toast } from '../../v3/primitives';
 import { useCapabilities, useFlag } from '../../../lib/flags';
+import { useBrandId } from '../../../lib/brand/BrandProvider';
+import { extensionIdFor } from '../../../hooks/extension';
 import { apiErrorDetails, apiErrorReason } from '../../../lib/api/contracts/wire';
-import { isUnavailable, useAgentSetup, useAnswerBank, useCompleteSetupStep } from '../../../hooks/agent';
+import { agentKeys, isUnavailable, useAgentSetup, useAnswerBank, useCompleteSetupStep } from '../../../hooks/agent';
 import type { AgentSetupResponse } from '../../../lib/api/contracts/agent';
 import { SETUP_STEPS } from './options';
 import { cn } from '../../../lib/utils';
@@ -50,9 +67,13 @@ type AgentSetupChecks = AgentSetupResponse['checks'] & {
 };
 const ALL_STEPS: readonly WizardStep[] = ['profile', 'calibrate', 'answers', 'weekly', 'extension'];
 
-/** The steps shown on this brand: "Get the extension" only with the `extension` flag. Pure. */
-export function wizardSteps(extensionOn: boolean): WizardStep[] {
-  return ALL_STEPS.filter((s) => s !== 'extension' || extensionOn);
+/**
+ * The steps shown here: "Get the extension" only when the extension can be
+ * installed (the `extension` capability and a published extension for the
+ * brand). Pure.
+ */
+export function wizardSteps(extensionInstallable: boolean): WizardStep[] {
+  return ALL_STEPS.filter((s) => s !== 'extension' || extensionInstallable);
 }
 
 /** Why Continue failed, in the words the wizard shows. Pure. */
@@ -68,11 +89,16 @@ export function stepFailureOf(err: unknown, steps: readonly WizardStep[]): StepF
   return { kind: 'generic' };
 }
 
-/** The step to open: a valid hash wins, else the server's next step (done → the first step). Pure. */
+/**
+ * The step to open: a valid hash wins, else the server's next step (done →
+ * the first step). The server's "Get the extension" where that step is not
+ * shown opens the last step: its Finish button closes setup. Pure.
+ */
 export function initialStep(hash: string, serverStep: string | undefined, steps: readonly WizardStep[]): WizardStep {
   const fromHash = hash.replace(/^#/, '');
   if ((steps as readonly string[]).includes(fromHash)) return fromHash as WizardStep;
   if (serverStep && (steps as readonly string[]).includes(serverStep)) return serverStep as WizardStep;
+  if (serverStep === 'extension') return steps[steps.length - 1]!;
   return steps[0]!;
 }
 
@@ -83,13 +109,19 @@ function readHash(): string {
 export function SetupWizard() {
   const t = useTranslations('ready');
   const router = useRouter();
+  const qc = useQueryClient();
   const { status } = useCapabilities();
   const on = useFlag('agent');
   const extensionOn = useFlag('extension');
+  const brand = useBrandId();
+  // The step exists only where there is something to install.
+  const extensionInstallable = extensionOn && !!extensionIdFor(brand);
   const setup = useAgentSetup({ enabled: on });
   const bank = useAnswerBank({ enabled: on });
   const complete = useCompleteSetupStep();
-  const steps = useMemo(() => wizardSteps(extensionOn), [extensionOn]);
+  const steps = useMemo(() => wizardSteps(extensionInstallable), [extensionInstallable]);
+  /** Jobs still to rate on "Check your search" (null until its list has loaded). */
+  const [ratingsLeft, setRatingsLeft] = useState<number | null>(null);
   const [step, setStepState] = useState<WizardStep | null>(null);
   const [stepError, setStepError] = useState<string | null>(null);
   /** The earlier step the server says is still open (Continue was out of order). */
@@ -97,11 +129,13 @@ export function SetupWizard() {
   const [leaving, setLeaving] = useState(false);
   const formRef = useRef<StepFormHandle | null>(null);
 
-  // Start once the server's step is known (or failed); follow later hash changes.
+  // Start once the server's step has arrived (or the read failed); follow later hash changes.
+  // `isPending` is true for a query that is still disabled, `isLoading` is not.
+  const setupSettled = setup.isSuccess || setup.isError;
   useEffect(() => {
-    if (step !== null || setup.isLoading) return;
+    if (step !== null || !on || !setupSettled) return;
     setStepState(initialStep(readHash(), setup.data?.step, steps));
-  }, [step, setup.isLoading, setup.data, steps]);
+  }, [step, on, setupSettled, setup.data, steps]);
   useEffect(() => {
     const onHash = () => {
       const h = readHash().replace(/^#/, '');
@@ -156,8 +190,9 @@ export function SetupWizard() {
 
   const index = steps.indexOf(step);
   const last = index === steps.length - 1;
-  // "Get the extension" is the only step that can be skipped.
+  // "Get the extension" can be skipped; "Check your search" can be left for later when there is nothing to rate.
   const skipping = step === 'extension' && !done.extension;
+  const rateLater = step === 'calibrate' && !done.calibrate && ratingsLeft === 0;
   const busy = leaving || complete.isPending;
 
   const next = async () => {
@@ -168,15 +203,22 @@ export function SetupWizard() {
       if (!(await saveCurrent())) return;
       let firstListAdded: number | null = null;
       try {
-        const r = await complete.mutateAsync({ step, action: skipping ? 'skip' : 'complete' });
+        let r = await complete.mutateAsync({ step, action: skipping || rateLater ? 'skip' : 'complete' });
+        // The server still counts "Get the extension", which is not offered here (nothing to install): skip it there.
+        if (last && r.step === 'extension' && !steps.includes('extension')) r = await complete.mutateAsync({ step: 'extension', action: 'skip' });
         firstListAdded = r.firstList ? r.firstList.added : null;
       } catch (err) {
         const failure = stepFailureOf(err, steps);
         if (failure.kind === 'out_of_order') {
           setOpenStep(failure.step);
           setStepError(failure.step ? t('setup.errors.outOfOrder', { step: t(`setup.steps.${failure.step}`) }) : t('setup.errors.outOfOrderUnknown'));
-        } else if (failure.kind === 'calibration') setStepError(t('setup.errors.calibration'));
-        else if (failure.kind === 'not_skippable') setStepError(t('setup.errors.notSkippable'));
+        } else if (failure.kind === 'calibration') {
+          // Finish found jobs to rate that were not there before: offer the way back to that step.
+          if (step !== 'calibrate') setOpenStep('calibrate');
+          // The server sees jobs to rate that this list does not show (yet): read the list again.
+          void qc.invalidateQueries({ queryKey: agentKeys.suggestions() });
+          setStepError(t('setup.errors.calibration'));
+        } else if (failure.kind === 'not_skippable') setStepError(t('setup.errors.notSkippable'));
         else setStepError(t('setup.errors.generic'));
         return;
       }
@@ -228,7 +270,7 @@ export function SetupWizard() {
             {t('setup.stepHeading', { n: index + 1, total: steps.length, name: t(`setup.steps.${step}`) })}
           </h2>
           {step === 'profile' ? <SetupProfileStep /> : null}
-          {step === 'calibrate' ? <SetupCalibrateStep /> : null}
+          {step === 'calibrate' ? <SetupCalibrateStep onRemaining={setRatingsLeft} /> : null}
           {step === 'answers' ? <AnswersEditor handleRef={formRef} /> : null}
           {step === 'weekly' ? <WeeklySettingsForm handleRef={formRef} /> : null}
           {step === 'extension' ? <SetupExtensionStep /> : null}
@@ -247,7 +289,7 @@ export function SetupWizard() {
               {index > 0 ? t('setup.back') : t('setup.backToReady')}
             </Btn>
             <Btn variant="primary" onClick={() => void next()} disabled={busy} aria-busy={busy}>
-              {skipping ? t('setup.skip') : last ? t('setup.finish') : t('setup.next')}
+              {skipping ? t('setup.skip') : rateLater ? t('setup.calibrate.later') : last ? t('setup.finish') : t('setup.next')}
             </Btn>
           </div>
         </section>

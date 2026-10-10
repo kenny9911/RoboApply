@@ -11,11 +11,13 @@ import {
   canTransition,
   effectiveSetupStep,
   inWeeklyWindow,
+  fileNamePart,
   kitFileName,
   letterNeeded,
   meetsMinTier,
   nextSetupStep,
   postAsksForCoverLetter,
+  resumeHeadingName,
   setupMove,
   tabOf,
   weekKeyFor,
@@ -171,14 +173,46 @@ describe('cover letter: only when the post asks for one', () => {
 });
 
 describe('kit file names', () => {
-  it('follows the chosen style and leaves out empty parts', () => {
-    const input = { firstName: 'Ana', lastName: 'Lima', company: 'Acme, Inc.', role: 'Data Analyst / BI', date: new Date('2026-10-12T00:00:00Z') };
-    expect(kitFileName('name_company_role', input)).toBe('Ana_Lima_Acme_Inc_Data_Analyst_BI');
-    expect(kitFileName('name_role', input)).toBe('Ana_Lima_Data_Analyst_BI');
-    expect(kitFileName('company_role_name', input)).toBe('Acme_Inc_Data_Analyst_BI_Ana_Lima');
-    expect(kitFileName('name_date', input)).toBe('Ana_Lima_Resume_2026-10-12');
-    expect(kitFileName('name_company_role', { company: '某公司', role: '产品经理' })).toBe('某公司_产品经理');
-    expect(kitFileName('name_role', {})).toBeNull();
+  const date = new Date('2026-10-12T00:00:00Z');
+
+  it('follows the chosen style and leaves out parts that are not known', () => {
+    const input = { name: 'Ana Lima', company: 'Acme, Inc.', role: 'Data Analyst / BI', date };
+    expect(kitFileName('name_company_role', input)).toBe('Ana Lima - Acme, Inc. - Data Analyst BI');
+    expect(kitFileName('name_role', input)).toBe('Ana Lima - Data Analyst BI');
+    expect(kitFileName('company_role_name', input)).toBe('Acme, Inc. - Data Analyst BI - Ana Lima');
+    expect(kitFileName('name_date', input)).toBe('Ana Lima - 2026-10-12');
+    expect(kitFileName('name_company_role', { company: '某公司', role: '产品经理' })).toBe('某公司 - 产品经理');
+  });
+
+  it('falls back to the resume title, then "Resume", when no part is known', () => {
+    expect(kitFileName('name_role', { fallback: 'Product resume' })).toBe('Product resume');
+    expect(kitFileName('name_role', {})).toBe('Resume');
+    expect(kitFileName('unknown_style', { name: 'Ana Lima', fallback: 'Product resume' })).toBe('Product resume');
+  });
+
+  it('reads the name from the resume\'s own heading', () => {
+    expect(resumeHeadingName('# **Ana Lima**\n\nProduct designer')).toBe('Ana Lima');
+    expect(resumeHeadingName('## Experience\n\nNo top heading')).toBeNull();
+    expect(resumeHeadingName(null)).toBeNull();
+  });
+
+  it('is the name the export gives the file (same rules as buildExportFileName)', async () => {
+    // Verification finding: the kit showed "General_Intuition_Medal_Product_Designer_…" for a
+    // file the export names with " - " between the parts.
+    const { buildExportFileName, cleanFilePart } = await import('../../roboapply/v2/lib/resumeExport.js');
+    const cases = [
+      { name: 'Ana Lima', company: 'General Intuition & Medal', role: 'Product Designer, Gaming Communities (In Office: New York)' },
+      { name: null, company: 'General Intuition & Medal', role: 'Product Designer' },
+      { name: 'Ana Lima', company: null, role: null },
+      { name: null, company: null, role: null },
+      { name: '  A/B  "C"  ', company: 'x'.repeat(80), role: 'Role\twith\ncontrol' },
+    ];
+    for (const style of ['name_company_role', 'name_role', 'company_role_name', 'name_date'] as const) {
+      for (const c of cases) {
+        expect(kitFileName(style, { ...c, date, fallback: 'My resume' }), `${style} ${JSON.stringify(c)}`).toBe(buildExportFileName(style, { ...c, date, fallback: 'My resume' }));
+      }
+    }
+    expect(fileNamePart('a/b:c  d')).toBe(cleanFilePart('a/b:c  d'));
   });
 });
 
