@@ -13,6 +13,13 @@
 //
 // F2-F5 (Home / Resumes / Tracker / Search / Insights / Jobs page engineers)
 // ONLY import from this file for V2 types.
+//
+// Frozen legacy client (TASK_PLAN §2.1 rule 9). WP-75 removed the dead slices
+// (queue, activity, integrations, onboarding, discover, jobs, insights, saved
+// searches) and their request/response shapes. The entity types the
+// `lib/fixtures/*` modules still type against (RAQueueItem, RAActivityDay,
+// RAAgentStats, RAIntegration, RASavedSearch, RACareerInsight, …) stay until
+// those fixtures go.
 
 // ─────────────────────────────────────────────────────────────────────
 // Enums
@@ -730,33 +737,6 @@ export interface TrackerBulkBody {
   };
 }
 
-export interface JobGetParams {
-  /** request a match score against this variant */
-  resumeVariantId?: string;
-  /** gated to Premium+; Free returns top-3 only */
-  includeKeywords?: boolean;
-}
-
-export interface JobApplyBody {
-  resumeVariantId?: string;
-  coverLetter?: string;
-  /** default 'manual' */
-  appliedVia?: 'manual' | 'extension';
-}
-
-export interface JobScoreBody {
-  resumeVariantId: string;
-  force?: boolean;
-  /**
-   * Opt in to re-generating the explanation prose when it was written in a
-   * different language than the caller is reading in. Costs one billed scorer
-   * call, so ONLY send it from a single-row, user-initiated gesture — never
-   * from the feed's bulk useQueries, which is what the server-side cache gate
-   * exists to protect.
-   */
-  regenerateExplanation?: boolean;
-}
-
 export type ResumeCreateBody =
   | { kind: 'base'; name: string; resumeMarkdown: string }
   | {
@@ -772,22 +752,7 @@ export interface ResumePatchBody {
   resumeMarkdown?: string;
 }
 
-export interface InsightsWeeklyParams {
-  /** ISO date — Sunday-anchored UTC; defaults to current week. */
-  weekStartUtc?: string;
-}
-
 // ── V3 request shapes ─────────────────────────────────────────────────
-
-export interface QueueUpdateCoverBody {
-  /** markdown; ≤ 6000 chars */
-  coverLetterMarkdown: string;
-}
-
-export interface ActivityFeedParams {
-  /** default 7 — how many days back */
-  days?: number;
-}
 
 /** Start a live mock-interview session. */
 export interface MockStartBody {
@@ -838,172 +803,6 @@ export interface ResumeTailorDiffBody {
 export type PreferencesUpdateBody = Partial<Omit<RAPreferences, 'updatedAt'>>;
 
 // ─────────────────────────────────────────────────────────────────────
-// First-run setup — /api/v1/roboapply/v2/onboarding/*
-// ─────────────────────────────────────────────────────────────────────
-//
-// MIRROR of `server/src/roboapply/v2/types/onboarding.ts` (mirrored, not
-// imported — workspace boundary). Drift between the two files is the bug;
-// `docs/roboapply/ONBOARDING_SPEC.md` §6 is the arbiter.
-//
-// TWO steps: add a resume, then confirm what we read from it. One step when a
-// resume already exists. There is no chat, no elicitation, and no job cards
-// inside the flow — /jobs renders those one second later.
-//
-// The chat contract that used to live here (`RAOnboardingStreamEvent`,
-// quick replies, transcripts, `aggressiveness`, `/complete`, `/pass`) is
-// deleted, not deprecated. Nothing raw-fetches an NDJSON stream any more.
-
-/** One "what your resume says" row, built deterministically server-side from
- *  the parsed resume variant. `label` arrives localized (server catalog);
- *  `value` is real extracted content — there is no fake-data state. */
-export interface IngestRow {
-  id: string;
-  kind:
-    | 'identity'
-    | 'experience'
-    | 'skills'
-    | 'education'
-    | 'links'
-    | 'summary'
-    | 'imported';
-  label: string;
-  value: string;
-}
-
-/** Salary slice of the draft. Never seeded, never inferred, never asked
- *  during setup — it reaches this shape only from Settings → Hunt. */
-export interface OnboardingDraftSalary {
-  min?: number;
-  max?: number;
-  /** ISO 4217. */
-  currency?: string;
-  period?: RASalaryPeriod;
-}
-
-/** Locations slice of the draft. */
-export interface OnboardingDraftLocations {
-  countries?: string[];
-  cities?: string[];
-  remoteOk?: boolean;
-}
-
-/**
- * The preference draft. Arrives SEEDED from the parsed resume; the confirm
- * submit sends back the COMPLETE post-edit state.
- *
- * `targetRoles` is the draft-side name for what the preferences blob calls
- * `roleTitles` — the field `preferencesToFilters()` turns into the feed's `q`.
- */
-export interface OnboardingDraftPreferences {
-  targetRoles?: string[];
-  seniority?: string;
-  workModes?: RAWorkType[];
-  salary?: OnboardingDraftSalary;
-  employmentTypes?: RAEmploymentType[];
-  industriesTarget?: string[];
-  industriesAvoid?: string[];
-  companyStages?: string[];
-  companySizes?: string[];
-  locations?: OnboardingDraftLocations;
-  /** Companies the user would like to work for. Boosts; never filters. */
-  targetCompanies?: string[];
-  mustHaves?: string[];
-  dealbreakers?: string[];
-}
-
-/**
- * Where a seeded value came from. RENDER THESE DIFFERENTLY: `resume` is "we
- * read this", `inferred` is "we guessed this" and needs its uncertainty
- * marker. An inferred value shown as a read value is exactly where "fast and
- * respectful" flips to "presumptuous" — and in the case of the city it is also
- * how a remote seeker ends up with an empty feed.
- */
-export type OnboardingSeedSource = 'resume' | 'inferred';
-
-export interface OnboardingSeedFieldMeta {
-  source: OnboardingSeedSource;
-  /** 0–1. Confirm writes every submitted field at 1.0 regardless. */
-  confidence: number;
-}
-
-/** Deterministic, token-free evidence for the lines beside the seeded chips
- *  ("3 roles · about 8 years"). Never LLM-derived. */
-export interface OnboardingSeedEvidence {
-  roles?: string[];
-  years?: number;
-  city?: string;
-  employers?: string[];
-}
-
-/** Which step the panel is showing, reported to `POST /onboarding/seen`. */
-export type OnboardingStep = 'resume' | 'confirm';
-
-/** Everything step 2 renders. `POST /bootstrap` and `GET /session` both
- *  return exactly this, so a mid-step reload has one code path. */
-export interface OnboardingSetupState {
-  sessionId: string;
-  /** The user has completed setup before (reopened from the filter bar). */
-  returning: boolean;
-  resumeVariant: { id: string; name: string };
-  ingestRows: IngestRow[];
-  draft: OnboardingDraftPreferences;
-  /** Per-field provenance, keyed by `OnboardingDraftPreferences` field name. */
-  fieldMeta: Record<string, OnboardingSeedFieldMeta>;
-  /** Seeded but NOT applied — render as an UNSELECTED suggestion chip.
-   *  `locations` lands here; roles never do. */
-  proposedFields: string[];
-  evidence: OnboardingSeedEvidence;
-  /** No roles could be derived — render the thin-resume variant. */
-  thin: boolean;
-  /** The parallel LLM seed had not landed yet. The screen is already correct;
-   *  re-fetch `GET /session` once only if `thin` is also true. */
-  enrichmentPending: boolean;
-}
-
-export interface OnboardingBootstrapBody {
-  resumeVariantId: string;
-}
-
-export type OnboardingBootstrapResponse = OnboardingSetupState;
-export type OnboardingSessionResponse = OnboardingSetupState;
-
-export interface OnboardingConfirmBody {
-  sessionId: string;
-  /** COMPLETE post-edit state. A present key REPLACES the seeded value —
-   *  including `[]`, which is how removing the last chip actually removes it.
-   *  An absent key is left untouched. */
-  draft: OnboardingDraftPreferences;
-  /** The one optional free-text line. Blank costs zero tokens. */
-  freeText?: string;
-}
-
-export interface OnboardingConfirmResponse {
-  goal: RACareerGoal;
-  preferences: RAPreferences;
-  /** Draft field names the free-text line contributed, so the UI can echo
-   *  what it understood. Empty when `freeText` was blank or the call failed. */
-  capturedFromNotes: string[];
-}
-
-export interface OnboardingSkipBody {
-  /** Optional — a skip with no session yet still stamps `skippedAt`. */
-  sessionId?: string;
-}
-
-export interface OnboardingSkipResponse {
-  skipped: boolean;
-}
-
-export interface OnboardingSeenBody {
-  step: OnboardingStep;
-}
-
-export interface OnboardingSeenResponse {
-  /** The stored count AFTER this open. Stop auto-opening at 2. */
-  autoOpens: number;
-}
-
-// ─────────────────────────────────────────────────────────────────────
 // Response shapes
 // ─────────────────────────────────────────────────────────────────────
 
@@ -1049,34 +848,6 @@ export interface SearchRunResponse {
   };
 }
 
-export interface SearchSaveQueryResponse {
-  savedSearch: RASavedSearch;
-}
-
-export interface SearchListSavedResponse {
-  savedSearches: RASavedSearch[];
-}
-
-export interface JobGetResponse {
-  job: RAJob;
-  trackerEntry: RATrackerEntryView | null;
-  matchScore: RAJobMatchScoreView | null;
-  keywords: RAKeyword[] | null;
-}
-
-export interface JobApplyResponse {
-  trackerEntry: RATrackerEntryView;
-}
-
-export interface JobSaveResponse {
-  trackerEntry: RATrackerEntryView;
-}
-
-export interface JobScoreResponse {
-  matchScore: RAJobMatchScoreView;
-  cached: boolean;
-}
-
 export interface ResumeListResponse {
   resumes: RAResumeVariantSummary[];
 }
@@ -1112,35 +883,7 @@ export interface LinkedInImportArgs {
   name?: string;
 }
 
-export interface InsightsWeeklyResponse {
-  insight: RACareerInsight | null;
-  week: { startUtc: string; endUtc: string };
-  nextGenerationAt: string | null;
-}
-
-export interface InsightsRefreshResponse {
-  insight: RACareerInsight;
-}
-
 // ── V3 response shapes ────────────────────────────────────────────────
-
-export interface QueueListResponse {
-  items: RAQueueItem[];
-  /** total pending — drives the "{n} pending review" eyebrow + nav badge */
-  pendingCount: number;
-}
-
-export interface QueueItemResponse {
-  item: RAQueueItem;
-}
-
-export interface ActivityFeedResponse {
-  days: RAActivityDay[];
-}
-
-export interface AgentStatsResponse {
-  stats: RAAgentStats;
-}
 
 export interface MockCatalogResponse {
   catalog: RAMockCatalog;
@@ -1177,14 +920,6 @@ export interface MockScoreResponse {
   strengths: string[];
   gaps: string[];
   durationMinutes: number;
-}
-
-export interface IntegrationsListResponse {
-  integrations: RAIntegration[];
-}
-
-export interface IntegrationResponse {
-  integration: RAIntegration;
 }
 
 export interface PreferencesGetResponse {
@@ -1247,78 +982,10 @@ export interface ResumeCoachTipsResponse {
 // Both `realApi` (Wave-4 fetch-backed) and `stubApi` (Wave-2 in-memory)
 // implement this. F2-F5 import via `lib/api/v2/index.ts` only.
 
-// ─── Cross-bank discovery (the search agent team) ────────────────────────
-export type BankId = 'robohire' | 'gohire';
-export type AcceptanceBand = 'strong' | 'on_the_bar' | 'reach' | 'bar_unset';
-export type MatchTier = 'recommended' | 'adjacent' | 'stretch';
-
-export interface DiscoverJobCard {
-  id: string;
-  title: string;
-  companyName: string;
-  companyLogoUrl: string | null;
-  location: string | null;
-  workType: string;
-  salaryMin: number | null;
-  salaryMax: number | null;
-  salaryCurrency: string | null;
-  salaryPeriod: 'month' | 'year' | 'week' | 'hour' | null;
-  postedAt: string | null;
-  isBookmarked: boolean;
-  matchScoreCached: number | null;
-  matchScore: number;
-  acceptanceOdds: number;
-  acceptanceBand: AcceptanceBand;
-  inviteBar: number;
-  barIsDefault: boolean;
-  aboveBar: boolean;
-  requiredCoverage: number;
-  matchTier: MatchTier;
-  whyMatched: string;
-  raiseOdds: string | null;
-  source: BankId;
-  sourcePublisher: string;
-  alsoOnBank: BankId | null;
-  applyUrl: string;
-  isExternal: true;
-}
-
-export interface CrossBankCoverageStats {
-  banksSwept: string[];
-  banksDegraded: string[];
-  totalRetrieved: number;
-  materialized: number;
-  recommendedCount: number;
-  exploreCount: number;
-  droppedTwins: number;
-  metSolidTarget: boolean;
-  perBank: Record<string, { retrieved: number; recommended: number }>;
-}
-
-export interface DiscoverRunBody {
-  resumeVariantId?: string | null;
-  aggressiveness?: 'balanced' | 'coverage' | 'precision';
-  limit?: number;
-}
-
-export interface CrossBankDiscoverResponse {
-  recommended: DiscoverJobCard[];
-  explore: DiscoverJobCard[];
-  coverage: CrossBankCoverageStats;
-  insight: { portfolioSummary: string } | null;
-  banksSwept: string[];
-  scorer: { callsUsed: number; cacheHits: number; budget: number };
-  zeroResults: boolean;
-}
-
 export interface RaV2Api {
   goal: {
     get(): Promise<GoalGetResponse>;
     upsert(patch: GoalUpsertBody): Promise<GoalUpsertResponse>;
-  };
-  /** Cross-bank job-search agent team — searches RoboHire + GoHire banks. */
-  discover: {
-    run(body?: DiscoverRunBody): Promise<CrossBankDiscoverResponse>;
   };
   tracker: {
     list(params?: TrackerListParams): Promise<TrackerListResponse>;
@@ -1329,22 +996,9 @@ export interface RaV2Api {
     bulk(body: TrackerBulkBody): Promise<TrackerBulkResponse>;
   };
   search: {
+    /** @deprecated Use `queryFeed({ q })` (lib/api/feed.ts). Kept for
+     *  CommandPalette and the /job-search page until INT moves them. */
     run(params?: SearchRunParams): Promise<SearchRunResponse>;
-    saveQuery(body: {
-      name: string;
-      query: SearchQuery;
-    }): Promise<SearchSaveQueryResponse>;
-    listSaved(): Promise<SearchListSavedResponse>;
-    deleteSaved(id: string): Promise<void>;
-  };
-  jobs: {
-    get(id: string, params?: JobGetParams): Promise<JobGetResponse>;
-    apply(id: string, body: JobApplyBody): Promise<JobApplyResponse>;
-    save(
-      id: string,
-      body?: { excitementStars?: number },
-    ): Promise<JobSaveResponse>;
-    score(id: string, body: JobScoreBody): Promise<JobScoreResponse>;
   };
   resumes: {
     list(params?: { kind?: RAResumeKind }): Promise<ResumeListResponse>;
@@ -1352,12 +1006,9 @@ export interface RaV2Api {
     /** Upload a résumé file (PDF / DOCX / TXT …). The backend extracts text,
      *  parses it, and creates a base variant; the first résumé becomes primary. */
     upload(file: File, opts?: { name?: string }): Promise<ResumeCreateResponse>;
-    /** Whether the optional LinkedIn URL-import path is enabled on this
-     *  deployment (PDF-export upload is always available). */
-    linkedinConfig(): Promise<LinkedInImportConfigResponse>;
-    /** Import a résumé from LinkedIn — a "Save to PDF" export (mode 'pdf') or a
-     *  public profile URL (mode 'url', only when linkedinConfig is enabled).
-     *  Creates a base variant tagged sourceKind 'linkedin'. */
+    /** Import a résumé from a LinkedIn "Save to PDF" export (mode 'pdf').
+     *  Creates a base variant tagged sourceKind 'linkedin'. (The URL import
+     *  was removed, ruling H9.) */
     importLinkedIn(args: LinkedInImportArgs): Promise<ResumeCreateResponse>;
     /** Mark a variant as the user's primary résumé (demotes any other). */
     setPrimary(id: string): Promise<ResumeCreateResponse>;
@@ -1379,33 +1030,6 @@ export interface RaV2Api {
     /** V3 — coach tips for the editor (cycling panel). */
     coachTips(id: string): Promise<ResumeCoachTipsResponse>;
   };
-  insights: {
-    weekly(params?: InsightsWeeklyParams): Promise<InsightsWeeklyResponse>;
-    refresh(): Promise<InsightsRefreshResponse>;
-  };
-
-  // ── V3 namespaces ──────────────────────────────────────────────────
-
-  /** Review queue — shaping layer over the V1 auto-apply engine (RoboRun). */
-  queue: {
-    list(): Promise<QueueListResponse>;
-    /** fire now; resolves with the item flipped to 'sent'. */
-    send(id: string): Promise<QueueItemResponse>;
-    /** skip; resolves with the item flipped to 'skipped'. */
-    skip(id: string): Promise<QueueItemResponse>;
-    /** edit the draft cover. */
-    updateCover(
-      id: string,
-      body: QueueUpdateCoverBody,
-    ): Promise<QueueItemResponse>;
-  };
-
-  /** Activity log + agent stats aggregate. */
-  activity: {
-    feed(params?: ActivityFeedParams): Promise<ActivityFeedResponse>;
-    /** the aggregate; cheap, cacheable, reused by Today + sidebar + Plan. */
-    orbStats(): Promise<AgentStatsResponse>;
-  };
 
   /** Mock interview — setup catalog + live turn loop + scored report. */
   mock: {
@@ -1416,34 +1040,10 @@ export interface RaV2Api {
     score(sessionId: string): Promise<MockScoreResponse>;
   };
 
-  /** Connected services. */
-  integrations: {
-    list(): Promise<IntegrationsListResponse>;
-    /** begin connect (stub flips connected=true immediately; real impl returns
-     *  an OAuth redirect URL — out of scope now). */
-    connect(provider: RAIntegrationProvider): Promise<IntegrationResponse>;
-    disconnect(provider: RAIntegrationProvider): Promise<IntegrationResponse>;
-  };
-
   /** Extended preferences (everything goal/settings/profile don't own). */
   preferences: {
     get(): Promise<PreferencesGetResponse>;
     /** partial; returns the merged result. */
     update(body: PreferencesUpdateBody): Promise<PreferencesUpdateResponse>;
-  };
-
-  /** First-run setup: step 1 (add a resume) → step 2 (confirm what we read).
-   *  Every call is plain JSON — there is no stream to raw-fetch any more. */
-  onboarding: {
-    /** Step 1 → step 2. Seeds the draft from the parsed resume variant. */
-    bootstrap(body: OnboardingBootstrapBody): Promise<OnboardingBootstrapResponse>;
-    /** Restores an in-progress setup (≤7 days old). 404 → start at step 1. */
-    getSession(): Promise<OnboardingSessionResponse>;
-    /** Step 2's submit. Persists preferences and ends setup. */
-    confirm(body: OnboardingConfirmBody): Promise<OnboardingConfirmResponse>;
-    /** Step 2 only. Stamps `skippedAt`; writes no preferences. */
-    skip(body?: OnboardingSkipBody): Promise<OnboardingSkipResponse>;
-    /** The panel auto-opened. Increments the cap counter (stop at 2). */
-    seen(body: OnboardingSeenBody): Promise<OnboardingSeenResponse>;
   };
 }

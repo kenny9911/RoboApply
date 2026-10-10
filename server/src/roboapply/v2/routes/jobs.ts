@@ -7,11 +7,14 @@
 //   POST /v2/jobs/:id/apply  → POST /jobs/:id/apply-click (tracker → applied with Undo)
 //                              or POST /jobs/:id/applied ("I applied")
 //   POST /v2/jobs/:id/score  → POST /jobs/:id/score (scorer v3, PII-stripped, 80/day cap)
-// Kept mounted (from the hot file v2/routes/index.ts) for the legacy V2 client
-// (`lib/api/v2`, `hooks/useJobDetail.ts`, `components/v3/today/*`) until
-// WP-75 unmounts and deletes it after a zero-importer grep.
+// UNMOUNTED by WP-75: v2/routes/index.ts no longer serves /v2/jobs and no
+// client calls it (`hooks/useJobDetail.ts`, `hooks/useTodayMatches.ts` and the
+// `raV2Api.jobs` slice are deleted). The file stays only because WP-77's
+// `server/src/features/match/legacyRoute.test.ts` still imports it; delete it
+// (with `jobs.score.test.ts` and the jobs half of `legacyJobScope.test.ts`)
+// once that test drops its legacy-route block.
 //
-// Mounted at /api/v1/roboapply/v2/jobs.
+// Was mounted at /api/v1/roboapply/v2/jobs.
 //
 //   GET  /:id            — job detail (with optional matchScore + keywords)
 //   POST /:id/apply      — idempotent: flips tracker entry to 'applied'

@@ -21,17 +21,7 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import prisma from '../lib/prisma.js';
 import { logger } from '../services/LoggerService.js';
-import { runDailyMatcherForAll } from '../roboapply/services/RoboApplyDailyMatcherService.js';
-import { authorAllQueuedRuns } from '../roboapply/services/RoboApplyAuthorService.js';
-import {
-  submitDueRunsAll,
-  catchupHardFailStaleRuns,
-} from '../roboapply/services/RoboApplySubmitterService.js';
-import { composeAndSendDigestsForLocalHour } from '../roboapply/services/RoboApplyDigestService.js';
-import {
-  runRenewalReminderSweep,
-  runFridayNudgeSweep,
-} from '../roboapply/services/RoboApplyBillingReminderService.js';
+import { runRenewalReminderSweep } from '../roboapply/services/RoboApplyBillingReminderService.js';
 import { interviewSessionService } from '../interview-engine/sessions/InterviewSessionService.js';
 import { runAccountPurgeSweep } from '../roboapply/services/SeekerAccountPurgeService.js';
 import crypto from 'node:crypto';
@@ -84,6 +74,30 @@ export async function reconcileInterviewSessions() {
   }
 }
 
+/**
+ * Retention for the retired V1 cover-letter cache (`RoboApplyCoverLetterCache`).
+ * WP-75 deleted its only writer and reader (RoboApplyAuthorService), so every
+ * row left is dead: a generated cover letter built from a user's resume, with
+ * no `User` relation, so neither the account-purge cascade nor the data wipe
+ * reaches it. The old weekly `/cache-cleanup` cron only removed expired rows;
+ * this sweep removes all of them and rides on the nightly account purge. The
+ * table itself stays in the schema (no DDL). Best-effort: never throws.
+ */
+export async function purgeLegacyCoverLetterCache(): Promise<{ deleted: number } | null> {
+  try {
+    const { count } = await prisma.roboApplyCoverLetterCache.deleteMany({});
+    if (count > 0) {
+      logger.info('ROBOAPPLY_CRON', 'legacy cover-letter cache purged', { deleted: count });
+    }
+    return { deleted: count };
+  } catch (err) {
+    logger.error('ROBOAPPLY_CRON', 'legacy cover-letter cache purge threw', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
 function safeEqual(a: string, b: string): boolean {
   const x = Buffer.from(a);
   const y = Buffer.from(b);
@@ -122,55 +136,30 @@ function job(name: string, fn: () => Promise<unknown>) {
   };
 }
 
-// 1. Daily matcher → chained author of everything it queued.
-router.get(
-  '/daily-matcher',
-  job('daily-matcher', async () => {
-    const matcher = await runDailyMatcherForAll({});
-    const author = await authorAllQueuedRuns({});
-    return { matcher, author };
-  }),
-);
+// The V1 auto-apply crons (daily-matcher, digest, submitter, catchup,
+// cache-cleanup) and the retired billing-friday-nudge were removed in WP-75
+// (ARCH §10.6 step 6; TASK_PLAN.md §4.1.d). Interview reconciliation already
+// runs on its own /interview-cleanup cron; the cover-letter cache retention
+// that /cache-cleanup did now runs inside /account-purge (see
+// purgeLegacyCoverLetterCache above).
 
-// 2. Digest fanout (service filters by user-local 07:00).
-router.get('/digest', job('digest', () => composeAndSendDigestsForLocalHour({})));
-
-// 3. Submitter (service filters by user-local 09:00).
-router.get('/submitter', job('submitter', () => submitDueRunsAll({})));
-
-// 4. Catchup sweep — submit due + hard-fail stale previewing runs.
-router.get(
-  '/catchup',
-  job('catchup', async () => {
-    const submit = await submitDueRunsAll({});
-    const hardFail = await catchupHardFailStaleRuns({});
-    return { submit, hardFail };
-  }),
-);
-
-// 5. Weekly cover-letter cache cleanup.
-router.get(
-  '/cache-cleanup',
-  job('cache-cleanup', async () => {
-    const { count } = await prisma.roboApplyCoverLetterCache.deleteMany({
-      where: { expiresAt: { lt: new Date() } },
-    });
-    return { deleted: count };
-  }),
-);
-
-// 6. Billing: renewal reminder (T-5d).
+// 1. Billing: renewal reminder (T-5d).
 router.get('/billing-renewal-reminder', job('billing-renewal-reminder', () => runRenewalReminderSweep({})));
 
-// 7. Billing: Friday "prep for next week" nudge.
-router.get('/billing-friday-nudge', job('billing-friday-nudge', () => runFridayNudgeSweep({})));
-
-// 8. Nightly GDPR account purge — R2 interview artifacts + resume originals
+// 2. Nightly GDPR account purge — R2 interview artifacts + resume originals
 //    first, then the User row (cascades), for accounts soft-deleted past the
-//    retention window. See SeekerAccountPurgeService.
-router.get('/account-purge', job('account-purge', () => runAccountPurgeSweep({})));
+//    retention window. See SeekerAccountPurgeService. Also clears the dead V1
+//    cover-letter cache first, so an account-purge throw cannot skip it.
+router.get(
+  '/account-purge',
+  job('account-purge', async () => {
+    const legacyCoverLetterCache = await purgeLegacyCoverLetterCache();
+    const purge = await runAccountPurgeSweep({});
+    return { ...purge, legacyCoverLetterCache };
+  }),
+);
 
-// 9. Interview-session cleanup (every 15 min): finalize/expire stranded
+// 3. Interview-session cleanup (every 15 min): finalize/expire stranded
 //    sessions past expiresAt + expire stale 'preparing' rows.
 router.get('/interview-cleanup', job('interview-cleanup', () => reconcileInterviewSessions()));
 

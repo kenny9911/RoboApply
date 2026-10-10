@@ -9,6 +9,9 @@ const m = vi.hoisted(() => ({
   pruneRateCounters: vi.fn(async () => ({ deleted: 7 })),
   reconcile: vi.fn(async () => ({ finalized: 0, expired: 0 })),
   releaseStale: vi.fn(async () => 2),
+  fridayNudge: vi.fn(async () => ({})),
+  coverLetterDelete: vi.fn(async (_args?: unknown) => ({ count: 4 })),
+  accountPurge: vi.fn(async () => ({ scanned: 1, purged: 1 })),
 }));
 
 // Area cron tasks are replaced by inert skips, so this file tests the cron
@@ -35,19 +38,12 @@ vi.mock('../platform/credits/index.js', async (importOriginal) => ({
 vi.mock('../services/LoggerService.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('../lib/prisma.js', () => ({ default: {} }));
-vi.mock('../roboapply/services/RoboApplyDailyMatcherService.js', () => ({ runDailyMatcherForAll: vi.fn(async () => ({})) }));
-vi.mock('../roboapply/services/RoboApplyAuthorService.js', () => ({ authorAllQueuedRuns: vi.fn(async () => ({})) }));
-vi.mock('../roboapply/services/RoboApplySubmitterService.js', () => ({
-  submitDueRunsAll: vi.fn(async () => ({})),
-  catchupHardFailStaleRuns: vi.fn(async () => ({})),
-}));
-vi.mock('../roboapply/services/RoboApplyDigestService.js', () => ({ composeAndSendDigestsForLocalHour: vi.fn(async () => ({})) }));
+vi.mock('../lib/prisma.js', () => ({ default: { roboApplyCoverLetterCache: { deleteMany: m.coverLetterDelete } } }));
 vi.mock('../roboapply/services/RoboApplyBillingReminderService.js', () => ({
   runRenewalReminderSweep: vi.fn(async () => ({})),
-  runFridayNudgeSweep: vi.fn(async () => ({})),
+  runFridayNudgeSweep: m.fridayNudge,
 }));
-vi.mock('../roboapply/services/SeekerAccountPurgeService.js', () => ({ runAccountPurgeSweep: vi.fn(async () => ({})) }));
+vi.mock('../roboapply/services/SeekerAccountPurgeService.js', () => ({ runAccountPurgeSweep: m.accountPurge }));
 vi.mock('../interview-engine/sessions/InterviewSessionService.js', () => ({
   interviewSessionService: { reconcileExpiredSessions: m.reconcile },
 }));
@@ -61,7 +57,7 @@ vi.mock('../platform/ratelimit/index.js', async (importOriginal) => ({
 }));
 
 import cron from 'node-cron';
-import router, { PLATFORM_CRON_JOBS, brandCronJob, runPlatformCron } from './handlers.js';
+import router, { PLATFORM_CRON_JOBS, brandCronJob, purgeLegacyCoverLetterCache, runPlatformCron } from './handlers.js';
 import { platformCronEnvName } from '../roboapply/schedulers/RoboApplyCronService.js';
 import { getCurrentBrandId } from '../lib/requestContext.js';
 import { startRouteHarness, type RouteHarness } from '../test/routeHarness.js';
@@ -71,17 +67,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.
 const vercel = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8')) as { crons: Array<{ path: string; schedule: string }> };
 
 const SECRET = 'cron-test-secret';
-const LEGACY = [
-  'daily-matcher',
-  'digest',
-  'submitter',
-  'catchup',
-  'cache-cleanup',
-  'billing-renewal-reminder',
-  'billing-friday-nudge',
-  'account-purge',
-  'interview-cleanup',
-];
+const LEGACY = ['billing-renewal-reminder', 'account-purge', 'interview-cleanup'];
+// The V1 auto-apply crons and the retired Friday nudge (WP-75, ARCH §10.6 step 6).
+const REMOVED = ['daily-matcher', 'digest', 'submitter', 'catchup', 'cache-cleanup', 'billing-friday-nudge'];
 const PLANNED = [
   ['jobs-plan', '0 2 * * *'],
   ['jobs-ingest', '*/10 * * * *'],
@@ -107,6 +95,11 @@ describe('cron set (TASK_PLAN.md §4.1.d)', () => {
     for (const job of PLATFORM_CRON_JOBS) expect(byPath.get(`/api/v1/cron/${job.name}`), job.name).toBe(job.schedule);
     for (const name of LEGACY) expect(byPath.has(`/api/v1/cron/${name}`), name).toBe(true);
     expect(vercel.crons).toHaveLength(LEGACY.length + PLANNED.length);
+  });
+
+  it('vercel.json no longer schedules the V1 auto-apply crons or the Friday nudge (WP-75)', () => {
+    const paths = new Set(vercel.crons.map((c) => c.path));
+    for (const name of REMOVED) expect(paths.has(`/api/v1/cron/${name}`), name).toBe(false);
   });
 
   it('every schedule is valid for node-cron, with a per-job env override name', () => {
@@ -190,11 +183,33 @@ describe('cron routes over HTTP', () => {
     });
   });
 
+  it.each(REMOVED)('the removed V1 cron /%s is no longer served', async (name) => {
+    const res = await h.request('GET', `/api/v1/cron/${name}`, auth);
+    expect(res.status).toBe(404);
+    expect(m.fridayNudge).not.toHaveBeenCalled();
+  });
+
   it('the existing crons are still served', async () => {
     const res = await h.request<{ ok: boolean; job: string }>('GET', '/api/v1/cron/interview-cleanup', auth);
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ ok: true, job: 'interview-cleanup' });
     expect(m.reconcile).toHaveBeenCalled();
+  });
+
+  it('account-purge also clears every row of the dead V1 cover-letter cache (WP-75 review)', async () => {
+    m.coverLetterDelete.mockClear();
+    const res = await h.request<{ ok: boolean; job: string; result: Record<string, unknown> }>('GET', '/api/v1/cron/account-purge', auth);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, job: 'account-purge', result: { purged: 1, legacyCoverLetterCache: { deleted: 4 } } });
+    expect(m.coverLetterDelete).toHaveBeenCalledWith({});
+    expect(m.accountPurge).toHaveBeenCalled();
+  });
+});
+
+describe('purgeLegacyCoverLetterCache', () => {
+  it('never throws: a database error is logged and reported as null', async () => {
+    m.coverLetterDelete.mockRejectedValueOnce(new Error('db down'));
+    await expect(purgeLegacyCoverLetterCache()).resolves.toBeNull();
   });
 });
 

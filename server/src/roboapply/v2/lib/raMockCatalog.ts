@@ -14,8 +14,8 @@
 //
 // This file lives under v2/lib/* (allowed by the V2 import boundary) and has
 // ZERO runtime imports. The wire types are mirrored locally (the same
-// convention every other v2 service follows — see RAQueueService /
-// RAIntegrationsService) rather than imported from the `roboapply/` Next.js
+// convention every other v2 service follows — see RATrackerService /
+// RAPreferencesService) rather than imported from the `roboapply/` Next.js
 // workspace, which would break the backend's `rootDir: ./src` constraint.
 
 // ─── Wire types (mirror roboapply/lib/api/v2/types.ts exactly) ────────────
