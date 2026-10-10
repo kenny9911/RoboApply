@@ -4,7 +4,10 @@ import {
   allowedBrands,
   brandLock,
   cookieDomainFor,
+  DEFAULT_CORS_PREVIEW_HOSTS,
   corsOrigins,
+  corsPreviewPatterns,
+  isCorsOriginAllowed,
   parseBrandHostMap,
   resolveBrandFromRequest,
   type BrandRequestLike,
@@ -164,7 +167,105 @@ describe('corsOrigins', () => {
         'https://x.example.com',
       ]),
     );
-    expect(origins.some((o) => o instanceof RegExp && o.test('https://roboapply-git-x.vercel.app'))).toBe(true);
+    // No preview pattern is built in: a `*.vercel.app` host is not this project's until the env says so.
+    expect(isCorsOriginAllowed('https://roboapply-git-x-kens-projects.vercel.app', { NODE_ENV: 'production' })).toBe(false);
+  });
+
+  describe('production preview origins (WP-93 CORS)', () => {
+    const PROD_BOTH = { NODE_ENV: 'production', ALLOWED_BRANDS: 'roboapply,goapply' };
+
+    const PREVIEWS = { ...PROD_BOTH, CORS_PREVIEW_HOSTS: 'roboapply-*-kens-projects-7efaf92b.vercel.app' };
+
+    it("allows this project's preview hosts (once CORS_PREVIEW_HOSTS names them) and both brand hosts", () => {
+      for (const origin of [
+        'https://roboapply-git-feat-x-kens-projects-7efaf92b.vercel.app',
+        'https://roboapply-9f3k2a1bc-kens-projects-7efaf92b.vercel.app',
+        'https://roboapply.io',
+        'https://www.roboapply.io',
+        'https://goapply.top',
+        'https://www.goapply.top',
+      ]) {
+        expect(isCorsOriginAllowed(origin, PREVIEWS), origin).toBe(true);
+      }
+      // The deployment's own preview host needs no pattern: Vercel names it.
+      const own = { ...PROD_BOTH, VERCEL_URL: 'roboapply-9f3k2a1bc-kens-projects-7efaf92b.vercel.app', VERCEL_BRANCH_URL: 'roboapply-git-feat-x-kens-projects-7efaf92b.vercel.app' };
+      expect(isCorsOriginAllowed('https://roboapply-9f3k2a1bc-kens-projects-7efaf92b.vercel.app', own)).toBe(true);
+      expect(isCorsOriginAllowed('https://roboapply-git-feat-x-kens-projects-7efaf92b.vercel.app', own)).toBe(true);
+    });
+
+    it('has no built-in preview pattern: a host anyone can register on Vercel is refused by default', () => {
+      expect(DEFAULT_CORS_PREVIEW_HOSTS).toBe('');
+      expect(corsPreviewPatterns(PROD_BOTH)).toEqual([]);
+      expect(corsOrigins(PROD_BOTH).every((o) => typeof o === 'string')).toBe(true);
+      for (const origin of [
+        'https://roboapply-x-kens-projects.vercel.app',
+        'https://roboapply-git-feat-x-kens-projects.vercel.app',
+        'https://roboapply-9f3k2a1bc-kens-projects-7efaf92b.vercel.app',
+      ]) {
+        expect(isCorsOriginAllowed(origin, PROD_BOTH), origin).toBe(false);
+        expect(isCorsOriginAllowed(origin, { ...PROD_BOTH, CORS_PREVIEW_HOSTS: '  ' }), origin).toBe(false);
+      }
+    });
+
+    it('refuses a foreign *.vercel.app origin and look-alikes', () => {
+      for (const origin of [
+        'https://evil.vercel.app',
+        'https://other-project-kens-projects.vercel.app',
+        'https://roboapply-git-x.vercel.app',
+        'https://roboapply-x-someone-else.vercel.app',
+        'https://roboapply-x-kens-projects.vercel.app.evil.com',
+        'https://evil.com/roboapply-x-kens-projects.vercel.app',
+        'https://x.roboapply-y-kens-projects.vercel.app',
+        'http://roboapply-x-kens-projects.vercel.app',
+        'https://roboapply--kens-projects.vercel.app.',
+        'https://notroboapply.io',
+      ]) {
+        expect(isCorsOriginAllowed(origin, PROD_BOTH), origin).toBe(false);
+        // Opting in to a pattern does not let its look-alikes through either.
+        expect(isCorsOriginAllowed(origin, { ...PROD_BOTH, CORS_PREVIEW_HOSTS: 'roboapply-*-kens-projects.vercel.app' }), origin).toBe(false);
+      }
+    });
+
+    it('CORS_PREVIEW_HOSTS is the only source of preview patterns; none/off drops them', () => {
+      const custom = { ...PROD_BOTH, CORS_PREVIEW_HOSTS: 'goapply-*-acme.vercel.app, roboapply-*-acme.vercel.app' };
+      expect(isCorsOriginAllowed('https://goapply-git-main-acme.vercel.app', custom)).toBe(true);
+      expect(isCorsOriginAllowed('https://roboapply-abc-acme.vercel.app', custom)).toBe(true);
+      expect(isCorsOriginAllowed('https://roboapply-abc-kens-projects.vercel.app', custom)).toBe(false);
+      for (const off of ['none', 'off', ' NONE ']) {
+        const env = { ...PROD_BOTH, CORS_PREVIEW_HOSTS: off };
+        expect(corsPreviewPatterns(env)).toEqual([]);
+        expect(isCorsOriginAllowed('https://roboapply-abc-kens-projects.vercel.app', env)).toBe(false);
+        expect(corsOrigins(env).every((o) => typeof o === 'string')).toBe(true);
+      }
+      // Unset or blank means no preview pattern.
+      expect(corsPreviewPatterns({ CORS_PREVIEW_HOSTS: '  ' })).toEqual([]);
+      expect(corsPreviewPatterns({})).toEqual([]);
+    });
+
+    it('an override can never re-open every Vercel deployment', () => {
+      for (const wide of ['*.vercel.app', '**.vercel.app', '*-*.vercel.app', 'a*.vercel.app', '*', 'https://*.vercel.app', '.*\\.vercel\\.app', '(.*).vercel.app']) {
+        const env = { ...PROD_BOTH, CORS_PREVIEW_HOSTS: wide };
+        expect(corsPreviewPatterns(env), wide).toEqual([]);
+        expect(isCorsOriginAllowed('https://evil.vercel.app', env), wide).toBe(false);
+      }
+      // A wildcard never crosses a dot.
+      const env = { ...PROD_BOTH, CORS_PREVIEW_HOSTS: 'roboapply-*.vercel.app' };
+      expect(isCorsOriginAllowed('https://roboapply-x.vercel.app', env)).toBe(true);
+      expect(isCorsOriginAllowed('https://roboapply-x.evil.vercel.app', env)).toBe(false);
+    });
+
+    it("allows the deployment's own Vercel hosts exactly", () => {
+      const env = { ...PROD_BOTH, CORS_PREVIEW_HOSTS: 'none', VERCEL_URL: 'roboapply-abc123.vercel.app', VERCEL_BRANCH_URL: 'roboapply-git-main.vercel.app' };
+      expect(isCorsOriginAllowed('https://roboapply-abc123.vercel.app', env)).toBe(true);
+      expect(isCorsOriginAllowed('https://roboapply-git-main.vercel.app', env)).toBe(true);
+      expect(isCorsOriginAllowed('https://roboapply-abc124.vercel.app', env)).toBe(false);
+      expect(corsOrigins({ ...env, VERCEL_URL: 'bad host/with path' })).not.toContain('https://bad host/with path');
+    });
+
+    it('development has no preview pattern at all', () => {
+      expect(corsOrigins({ NODE_ENV: 'development' }).every((o) => typeof o === 'string')).toBe(true);
+      expect(isCorsOriginAllowed('https://roboapply-x-kens-projects.vercel.app', { NODE_ENV: 'development' })).toBe(false);
+    });
   });
   it('omits brands this deployment does not serve', () => {
     expect(corsOrigins({ NODE_ENV: 'production' })).not.toContain('https://www.goapply.top');

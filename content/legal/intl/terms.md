@@ -32,6 +32,18 @@ No scraping, automated access, reselling, or using the service to mislead employ
 
 A fit score compares your resume with a posting. It is not your chance of getting hired. Job details come from the sources we name on each job and may change.
 
+Datasets we use under a licence that requires attribution:
+
+{{data_attributions}}
+
+## Interview questions people share
+
+People can share interview questions they were asked. Share only what you are free to share: nothing covered by a confidentiality agreement, and nothing copied from someone else's work.
+
+If you believe a shared question breaks a confidentiality agreement or your copyright, write to {{takedown_contact}} and tell us which question and why. We review each complaint and remove what should not be there.
+
+_[Counsel: takedown contact and procedure (notice contents, counter-notice, time limits).]_
+
 ## Paid plans
 
 See the subscription terms and the refund policy.

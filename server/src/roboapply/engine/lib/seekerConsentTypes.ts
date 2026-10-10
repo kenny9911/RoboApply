@@ -44,6 +44,12 @@ export const SEEKER_CONSENT_TYPES = [
   'analytics',
   /** GoApply: the 用户协议 version accepted before a WeChat Pay order (WP-62 billing-cn writes it; Wave 4 gate). */
   'cn_pay_terms_ack',
+  /**
+   * Share one coaching request (name, email, message) with the independent
+   * coach the user chose (PIPL Art. 23 separate consent; WP-72 → WP-93).
+   * Recorded through the compliance consent service with the prose hash.
+   */
+  'coaching_share_with_coach',
 ] as const;
 
 export type SeekerConsentType = (typeof SEEKER_CONSENT_TYPES)[number];

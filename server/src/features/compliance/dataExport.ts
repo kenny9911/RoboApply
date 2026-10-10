@@ -22,6 +22,7 @@ import { COMPLIANCE_ERROR_CODES, DATA_EXPORT_TTL_DAYS, type ExportRequestRespons
 import { DATA_EXPORT_READY_TEMPLATE } from './emails.js';
 import { COMPLIANCE_WORK_KINDS } from './kinds.js';
 import { createPiRequest, parseDetail } from './piRequests.js';
+import { JOB_INTERACTION_KINDS_KEPT } from './retention.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const ROW_CAP = 10_000;
@@ -62,6 +63,17 @@ registerExportSection('profile', (userId, db) => db.rAProfile.findUnique({ where
 registerExportSection('signInMethods', (userId, db) =>
   db.rAAuthIdentity.findMany({ where: { userId }, select: { provider: true, email: true, createdAt: true, lastUsedAt: true } }),
 );
+// Two-step sign-in: whether it is on and since when. The sealed secret, the
+// recovery-code hashes and the replay counter are credentials, never exported.
+registerExportSection('twoStepSignIn', async (userId, db) => {
+  const row = await db.rATwoFactor.findUnique({ where: { userId }, select: { enabledAt: true } });
+  return { enabled: Boolean(row?.enabledAt), enrolledAt: row?.enabledAt ?? null };
+});
+// Student price: the school domain and when it was verified. The address
+// itself is never stored (only its hash, which is not exported either).
+registerExportSection('studentVerification', (userId, db) =>
+  db.rAStudentVerification.findUnique({ where: { userId }, select: { schoolDomain: true, verifiedAt: true, expiresAt: true } }),
+);
 // Storage keys and upload idempotency tokens are internal; the content is exported.
 registerExportSection('resumes', (userId, db) =>
   db.rAResumeVariant.findMany({ where: { userId }, take: ROW_CAP, omit: { originalFileKey: true, originalFileProvider: true, uploadIdempotencyKey: true } }),
@@ -78,8 +90,10 @@ registerExportSection('applicationFiles', (userId, db) =>
     select: { kind: true, fileName: true, format: true, fileSha256: true, channel: true, createdAt: true },
   }),
 );
+// Admin review decisions (kind 'admin_review', WP-74) are an operator record
+// about a posting, not something this user did: they are left out.
 registerExportSection('jobInteractions', (userId, db) =>
-  db.rAJobInteraction.findMany({ where: { userId }, orderBy: { createdAt: 'asc' }, take: ROW_CAP }),
+  db.rAJobInteraction.findMany({ where: { userId, kind: { notIn: [...JOB_INTERACTION_KINDS_KEPT] } }, orderBy: { createdAt: 'asc' }, take: ROW_CAP }),
 );
 registerExportSection('assistant', (userId, db) =>
   db.rACopilotThread.findMany({
@@ -129,6 +143,33 @@ registerExportSection('contacts', (userId, db) =>
     select: { source: true, fullName: true, firstName: true, title: true, companyNameNormalized: true, linkedinUrl: true, connectedOn: true, createdAt: true },
   }),
 );
+// Messages the user drafted to people at a company (People, WP-54): the text
+// and what they did with it. The model name and internal ids stay out.
+registerExportSection('outreachDrafts', (userId, db) =>
+  db.rAOutreachDraft.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'asc' },
+    take: ROW_CAP,
+    select: { channel: true, subject: true, body: true, jobId: true, trackerEntryId: true, copiedAt: true, markedSentAt: true, createdAt: true },
+  }),
+);
+// 内推码 the user shared on GoApply (WP-54), with the review outcome they can
+// see. Who reviewed it and how often it was reported are not the user's data.
+registerExportSection('referralCodes', (userId, db) =>
+  db.rACnReferralCode.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'asc' },
+    take: ROW_CAP,
+    select: { company: true, code: true, programme: true, expiresAt: true, note: true, status: true, rejectReason: true, createdAt: true, updatedAt: true },
+  }),
+);
+// Invite a friend (WP-60): status and dates only. The other person's identity
+// is their data, and the risk signals are not exported.
+const REFERRAL_EXPORT_FIELDS = { status: true, createdAt: true, qualifiedAt: true, rewardedAt: true } as const;
+registerExportSection('referrals', async (userId, db) => ({
+  invited: await db.rAReferral.findMany({ where: { inviterUserId: userId }, orderBy: { createdAt: 'asc' }, take: ROW_CAP, select: REFERRAL_EXPORT_FIELDS }),
+  invitedBy: await db.rAReferral.findUnique({ where: { inviteeUserId: userId }, select: REFERRAL_EXPORT_FIELDS }),
+}));
 registerExportSection('contactImports', (userId, db) =>
   db.rAContactImport.findMany({ where: { userId }, take: ROW_CAP, select: { kind: true, fileName: true, rowCount: true, importedCount: true, createdAt: true } }),
 );

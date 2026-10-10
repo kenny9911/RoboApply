@@ -197,6 +197,81 @@
   box-shadow: var(--focus-ring);
 }
 
+/* ── Processing facts, AI endpoints, legal index ────────────────────── */
+
+.factList {
+  margin: 0 0 var(--sp-4);
+  padding-left: var(--sp-5);
+}
+
+.factList li {
+  margin: 0 0 var(--sp-1);
+}
+
+.hostList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-2);
+  list-style: none;
+  margin: 0 0 var(--sp-4);
+  padding: 0;
+}
+
+.hostList li {
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+
+.host {
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.indexList {
+  list-style: none;
+  margin: 0 0 var(--sp-5);
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.indexList li + li {
+  border-top: 1px solid var(--rule);
+}
+
+.indexList a {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-1) var(--sp-3);
+  min-height: var(--control-lg);
+  padding: var(--sp-2) var(--sp-4);
+  color: var(--text);
+  text-decoration: none;
+  border-radius: var(--r-sm);
+}
+
+.indexList a:hover {
+  background: var(--surface-2);
+}
+
+.indexList a:focus-visible,
+.footerButton:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.indexDocMeta {
+  color: var(--text-muted);
+  font-size: var(--fs-label);
+}
+
 /* ── Legal footer ───────────────────────────────────────────────────── */
 
 .footer {
@@ -240,9 +315,25 @@
   border-radius: var(--r-sm);
 }
 
-.footerLinks a:hover {
+.footerLinks a:hover,
+.footerButton:hover {
   color: var(--text);
   text-decoration: underline;
+}
+
+/* "Privacy choices": a button that looks like the links beside it. */
+.footerButton {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-lg);
+  padding: 0 var(--sp-2);
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  font-size: var(--fs-meta);
+  border-radius: var(--r-sm);
+  cursor: pointer;
 }
 
 .footerLines {

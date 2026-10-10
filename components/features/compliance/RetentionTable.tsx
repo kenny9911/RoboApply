@@ -4,6 +4,8 @@
 // compliance-daily cron runs (server/src/features/compliance/retention.ts).
 // Each row says how it is deleted, including rows that are not automated yet;
 // a period we do not set ourselves and ops has not configured shows "Not listed".
+// A `kept_minimum` row is not a deletion: its period is the least time the
+// record is kept, and the row says so.
 
 import { useQuery } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
@@ -14,9 +16,11 @@ import styles from './compliance.module.css';
 
 export const RETENTION_QUERY_KEY = ['compliance', 'retention'] as const;
 
-export function enforcementKey(rule: Pick<RetentionRuleView, 'enforcedBy'>): 'auto' | 'provider' | 'manual' {
+export function enforcementKey(rule: Pick<RetentionRuleView, 'enforcedBy'>): 'auto' | 'provider' | 'manual' | 'minimum' {
   if (rule.enforcedBy === 'provider') return 'provider';
   if (rule.enforcedBy === 'not_automated') return 'manual';
+  if (rule.enforcedBy === 'kept_minimum') return 'minimum';
+  // compliance-daily, account-purge, interview-retention, tools-purge, visitor-alerts: a scheduled job deletes it.
   return 'auto';
 }
 

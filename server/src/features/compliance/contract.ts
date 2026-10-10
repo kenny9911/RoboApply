@@ -14,7 +14,7 @@ import { z } from 'zod';
 // ── GET /compliance/disclosures (also public: /api/v1/public/legal/disclosures) ──
 
 /** What a processor does for us; the UI translates the code (legal.processors.<purpose>). */
-export const PROCESSOR_PURPOSES = ['database', 'hosting', 'email', 'voice', 'speech', 'payments', 'ai_models', 'storage'] as const;
+export const PROCESSOR_PURPOSES = ['database', 'hosting', 'email', 'voice', 'speech', 'payments', 'ai_models', 'storage', 'content_safety'] as const;
 export type ProcessorPurpose = (typeof PROCESSOR_PURPOSES)[number];
 
 export interface AiModelDisclosure {
@@ -39,6 +39,63 @@ export interface DisclosuresResponse {
   offshore: boolean;
   /** CN_GENAI_STATUS_NOTE verbatim, only when ops set it; never invented. */
   statusNote: string | null;
+  /** Where and how this deployment processes the brand's data (platform/residency `residencySummary`). */
+  processing: ProcessingFacts;
+  /** Which AI endpoints the brand's routing policy allows and refuses (platform/llm policy lists). */
+  llmEndpoints: LlmEndpointFacts;
+  /** Third-party datasets whose licence requires public attribution (features/jobs/data `jobDataAttributions`). */
+  dataAttributions: DataAttributionView[];
+}
+
+/** Processing facts derived from configuration only; the UI translates each code. */
+export interface ProcessingFacts {
+  /** Where this deployment runs. */
+  region: 'cn-mainland' | 'offshore';
+  /** intl = RoboApply; cn0 = GoApply processed offshore (closed beta); cn1 = GoApply on the mainland. */
+  stage: 'intl' | 'cn0' | 'cn1';
+  /** Uploaded resume files: kept in the brand's own bucket, read in memory only, or uploads refused. */
+  originalFiles: 'kept' | 'not_kept' | 'unavailable';
+  /**
+   * 'gohire_mainland' only when PDF uploads really go to the GoHire parser on a mainland server.
+   * 'local' means only that: no outside parsing service is called. It does not
+   * mean no third party reads the resume — AI model providers still may.
+   */
+  resumeParsing: 'gohire_mainland' | 'local';
+  /** Name of the outside parsing service when `resumeParsing` is not 'local' (the UI never hard-codes a vendor). */
+  resumeParser: string | null;
+  /** Kinds of identifiers removed from parsed text before it is stored (codes of platform/pii). */
+  redactedBeforeStorage: string[];
+  /** Photos and images are discarded instead of stored. */
+  imagesDiscarded: boolean;
+}
+
+export interface LlmEndpointFacts {
+  /**
+   * 'no_mainland'  — a prompt with user data never goes to a mainland-China model endpoint (RoboApply);
+   * 'mainland_only' — only domestic endpoints are used (GoApply).
+   */
+  rule: 'no_mainland' | 'mainland_only';
+  /** Provider ids the brand may call, each with the host its client uses unless ops configured another base URL. */
+  providers: Array<{ provider: string; host: string }>;
+  /** Mainland model hosts (exact or any subdomain): the allowlist for 'mainland_only', the refused list for 'no_mainland'. */
+  mainlandHosts: string[];
+  /** Upstream providers excluded on OpenRouter because they run in mainland China ('no_mainland' only). */
+  excludedUpstreams: string[];
+}
+
+export const DATA_ATTRIBUTION_PURPOSES = ['job_locations', 'role_categories', 'agency_marking'] as const;
+export type DataAttributionPurpose = (typeof DATA_ATTRIBUTION_PURPOSES)[number];
+
+export interface DataAttributionView {
+  id: string;
+  /** What the dataset is used for; the UI translates the code (legal.attributions.purpose.<code>). */
+  purpose: DataAttributionPurpose;
+  name: string;
+  publisher: string;
+  url: string | null;
+  license: string;
+  /** Date of the copy in use (YYYY-MM-DD). */
+  asOf: string;
 }
 
 // ── GET /api/v1/public/legal/footer ──────────────────────────────────────
@@ -210,9 +267,27 @@ export interface RetentionRuleView {
   id: string;
   /** Amount + unit; null when the period is set outside our code and not configured ("Not listed"). */
   keep: { amount: number; unit: 'hours' | 'days' | 'months' } | null;
-  /** Who runs the deletion: this cron, another named job, or the infrastructure provider. */
-  enforcedBy: 'compliance-daily' | 'account-purge' | 'interview-retention' | 'provider' | 'not_automated';
+  /**
+   * Who runs the deletion: this cron, another named job (`tools-purge` runs
+   * in jobs-maintain and hourly in reminders; `visitor-alerts` runs in
+   * job-alerts), or the infrastructure provider. `kept_minimum` rows are not
+   * deletions: the period is how long the record is kept at least (while the
+   * account exists); nothing deletes it earlier except deleting the account.
+   */
+  enforcedBy: RetentionEnforcer;
 }
+
+export const RETENTION_ENFORCERS = [
+  'compliance-daily',
+  'account-purge',
+  'interview-retention',
+  'tools-purge',
+  'visitor-alerts',
+  'provider',
+  'not_automated',
+  'kept_minimum',
+] as const;
+export type RetentionEnforcer = (typeof RETENTION_ENFORCERS)[number];
 
 // ── GET /api/v1/public/legal/:doc ────────────────────────────────────────
 

@@ -2,7 +2,10 @@
 //
 // Legal documents on disk, the export and purge workers, and compliance-daily.
 
-import { describe, expect, it, vi } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { getBrand } from '../../platform/brand/registry.js';
 import { createBudget, type CronContext } from '../../platform/queue/index.js';
 import { createFakePrisma } from '../../test/fakePrisma.js';
@@ -17,7 +20,8 @@ import {
   type ExportDb,
   type ExportStore,
 } from './dataExport.js';
-import { fillPlaceholders, loadLegalDoc, parseFrontMatter, readLegalSource } from './legalDocs.js';
+import { fillPlaceholders, loadLegalDoc, parseFrontMatter, publishedLegalDocVersion, readLegalSource } from './legalDocs.js';
+import * as complianceIndex from './index.js';
 import { createEmailTranslator, resetEmailI18nCache } from '../../platform/email/i18n.js';
 import { getEmailTemplate } from '../../platform/email/templates/registry.js';
 import { COMPLIANCE_EMAIL_KEYS, DATA_EXPORT_READY_TEMPLATE } from './emails.js';
@@ -91,6 +95,185 @@ describe('legal documents', () => {
     expect(parseFrontMatter('---\ntitle: "X"\nstatus: approved\n---\n# Body')).toEqual({ meta: { title: 'X', status: 'approved' }, body: '# Body' });
     expect(parseFrontMatter('# No meta')).toEqual({ meta: {}, body: '# No meta' });
     expect(fillPlaceholders('{{a}} {{ b }} {{c}}', { a: '1', b: '2' })).toBe('1 2 {{c}}');
+  });
+});
+
+describe('publishedLegalDocVersion (WP-93; billing-cn records it with cn_pay_terms_ack)', () => {
+  // A content directory with one published and one draft document per market.
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'legal-docs-'));
+  const write = (market: string, file: string, status: string | null) => {
+    mkdirSync(path.join(dir, market), { recursive: true });
+    const front = status === null ? '' : `---\ntitle: T\nstatus: ${status}\nupdated: 2026-11-01\n---\n`;
+    writeFileSync(path.join(dir, market, `${file}.md`), `${front}# T\n\nBody {{version}}\n`);
+  };
+  write('cn', 'user-agreement', 'published');
+  write('cn', 'privacy', 'draft');
+  write('cn', 'complaints', null); // no front matter = draft
+  write('intl', 'terms', 'published');
+  write('intl', 'privacy', 'draft');
+  write('intl', 'refunds', 'Draft');
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+  const env = (extra: Record<string, string> = {}) => ({ LEGAL_CONTENT_DIR: dir, ...extra });
+
+  it('is exported from the compliance index', () => {
+    expect(complianceIndex.publishedLegalDocVersion).toBe(publishedLegalDocVersion);
+  });
+
+  it('GoApply: a published 用户协议 answers its version; a draft answers null', () => {
+    const e = env({ CN_LEGAL_DOCS_VERSION: '2026-11.v1' });
+    expect(publishedLegalDocVersion(goapply, 'terms', e)).toBe('2026-11.v1');
+    expect(publishedLegalDocVersion(goapply, 'user-agreement', e)).toBe('2026-11.v1'); // alias of terms
+    expect(publishedLegalDocVersion(goapply, 'agreement', e)).toBe('2026-11.v1');
+    expect(publishedLegalDocVersion(goapply, 'privacy', e)).toBeNull();
+    expect(publishedLegalDocVersion(goapply, 'complaints', e)).toBeNull();
+  });
+
+  it('RoboApply: a published document answers its version; a draft answers null', () => {
+    const e = env({ LEGAL_DOCS_VERSION: 'v7' });
+    expect(publishedLegalDocVersion(roboapply, 'terms', e)).toBe('v7');
+    expect(publishedLegalDocVersion(roboapply, 'privacy', e)).toBeNull();
+    expect(publishedLegalDocVersion(roboapply, 'refunds', e)).toBeNull(); // "Draft" in any case
+  });
+
+  it('no version set, the other brand\'s version, an unknown or foreign document: null', () => {
+    expect(publishedLegalDocVersion(goapply, 'terms', env())).toBeNull();
+    expect(publishedLegalDocVersion(roboapply, 'terms', env())).toBeNull();
+    // R-03: no fallback from CN_X to X or back.
+    expect(publishedLegalDocVersion(goapply, 'terms', env({ LEGAL_DOCS_VERSION: 'v7' }))).toBeNull();
+    expect(publishedLegalDocVersion(roboapply, 'terms', env({ CN_LEGAL_DOCS_VERSION: 'v1' }))).toBeNull();
+    const both = env({ LEGAL_DOCS_VERSION: 'v7', CN_LEGAL_DOCS_VERSION: 'cn3' });
+    expect(publishedLegalDocVersion(goapply, 'terms', both)).toBe('cn3');
+    expect(publishedLegalDocVersion(roboapply, 'terms', both)).toBe('v7');
+    expect(publishedLegalDocVersion(goapply, 'cookies', both)).toBeNull(); // not a GoApply document
+    expect(publishedLegalDocVersion(roboapply, 'pi-collection-list', both)).toBeNull();
+    expect(publishedLegalDocVersion(goapply, 'no-such-doc', both)).toBeNull();
+    expect(publishedLegalDocVersion(goapply, '../../package', both)).toBeNull();
+  });
+
+  it('agrees with what loadLegalDoc serves', () => {
+    const e = env({ LEGAL_DOCS_VERSION: 'v7', CN_LEGAL_DOCS_VERSION: 'cn3' });
+    for (const [brand, docs] of [[goapply, ['terms', 'privacy', 'complaints']], [roboapply, ['terms', 'privacy', 'refunds']]] as const) {
+      for (const doc of docs) {
+        const served = loadLegalDoc(brand, doc, { env: e });
+        expect(publishedLegalDocVersion(brand, doc, e), `${brand.id}/${doc}`).toBe(served.draft ? null : served.version);
+      }
+    }
+  });
+
+  it('every document that ships today is still a draft, so nothing can be accepted yet', () => {
+    const e = { LEGAL_DOCS_VERSION: 'v1', CN_LEGAL_DOCS_VERSION: 'v1' };
+    for (const [brand, market] of [[roboapply, 'intl'], [goapply, 'cn']] as const) {
+      for (const doc of Object.keys(LEGAL_DOC_FILES[market])) {
+        expect(publishedLegalDocVersion(brand, doc, e), `${market}/${doc}`).toBeNull();
+      }
+    }
+  });
+});
+
+describe('legal drafts (WP-93 content; every changed document stays a draft)', () => {
+  const intl = (doc: string, env: Record<string, string> = {}) => loadLegalDoc(roboapply, doc, { env }).markdown;
+  const cn = (doc: string, env: Record<string, string> = {}) => loadLegalDoc(goapply, doc, { env }).markdown;
+
+  it('the privacy and cookie notices name the analytics cookies, the 13-month limit and the unlinked counts', () => {
+    for (const text of [intl('privacy'), intl('cookies')]) {
+      expect(text).toContain('`ra_anon`');
+      expect(text).toContain('`ra_analytics_consent`');
+      expect(text).toMatch(/13 months/);
+      expect(text).toMatch(/each visit stands alone/);
+      expect(text).toContain('`ra_tool_visitor`');
+      expect(text).toMatch(/24 hours/);
+      expect(text).toMatch(/strictly necessary|cannot be turned off/);
+      expect(text).toContain('Privacy choices');
+    }
+    const zh = cn('privacy');
+    for (const s of ['`ra_anon`', '13 个月', '`ra_tool_visitor`', '24 小时', '必要 Cookie']) expect(zh).toContain(s);
+  });
+
+  it('the GoApply notice describes no analytics choice: GoApply never asks, never sets that cookie, and always sets ra_anon', () => {
+    // lib/analytics isAnalyticsConsentRequired('cn', …) is false for every country
+    // (asserted next to the web components, compliance.test.tsx).
+    const zh = cn('privacy');
+    expect(zh).not.toContain('ra_analytics_consent');
+    expect(zh).not.toMatch(/不允许统计分析|是否允许统计分析|每次访问相互独立/);
+    expect(zh).toMatch(/`ra_anon`[^\n]*首次访问时设置/);
+    expect(zh).toMatch(/产品使用事件的收集已列入《个人信息收集清单》/);
+    // The list it points to carries the row, marked as required.
+    expect(cn('pi-collection-list')).toMatch(/\| 产品使用事件 \|[^\n]*`ra_anon`/);
+  });
+
+  it("GoApply's 个人信息收集清单 lists event collection", () => {
+    const list = cn('pi-collection-list');
+    expect(list).toMatch(/\| 产品使用事件 \|[^\n]*`ra_anon`[^\n]*13 个月/);
+    expect(list).toContain('`ra_tool_visitor`');
+    expect(list).toMatch(/\| 登录设备 \|[^\n]*90 天/);
+  });
+
+  it('the LinkedIn connections import is described as third-party data: what is kept and what is discarded', () => {
+    const text = intl('privacy');
+    expect(text).toMatch(/information about other people/);
+    expect(text).toMatch(/Kept, for each person: name, company, position and connected-on date/);
+    expect(text).toMatch(/Discarded when the file is read: the email address and profile link columns/);
+    expect(text).toMatch(/The file itself is not kept/);
+    expect(text).toMatch(/We never contact these people/);
+  });
+
+  it('the terms carry a takedown contact for shared questions (TAKEDOWN_CONTACT, else the support address)', () => {
+    expect(intl('terms')).toMatch(/breaks a confidentiality agreement or your copyright, write to support@roboapply\.io/);
+    expect(intl('terms', { TAKEDOWN_CONTACT: 'takedown@example.test' })).toContain('write to takedown@example.test');
+    expect(intl('terms', { SUPPORT_EMAIL: 'help@example.test' })).toContain('write to help@example.test');
+    expect(intl('terms')).toMatch(/Counsel: takedown contact and procedure/);
+    // GoApply reads its own variable (no fallback across brands).
+    expect(cn('terms', { TAKEDOWN_CONTACT: 'takedown@example.test' })).not.toContain('takedown@example.test');
+    expect(cn('terms', { CN_TAKEDOWN_CONTACT: 'jubao@example.cn' })).toContain('请发送邮件至 jubao@example.cn');
+  });
+
+  it('the GoApply 用户协议 names the collecting entity and says passes do not renew and there are no deposits', () => {
+    const named = cn('terms', { CN_PAYMENT_COLLECTING_ENTITY: '示例（上海）科技有限公司' });
+    expect(named).toContain('收款主体：示例（上海）科技有限公司');
+    expect(cn('terms')).toContain('收款主体：未披露'); // never invented
+    expect(cn('terms', { PAYMENT_COLLECTING_ENTITY: 'Intl Co' })).toContain('收款主体：未披露');
+    for (const s of ['一次性通行证', '不会自动续费', '不会自动扣款', '不收取押金', '预存款']) expect(named).toContain(s);
+  });
+
+  it('processing facts, AI endpoints and data sources are filled from the server, never typed into a file', () => {
+    for (const [market, files] of [['intl', ['privacy', 'terms']], ['cn', ['privacy', 'third-party-sharing', 'user-agreement']]] as const) {
+      for (const file of files) {
+        const raw = readLegalSource(market, file)!;
+        expect(raw, `${market}/${file}`).toMatch(/\{\{(processing_facts|llm_endpoints|data_attributions)\}\}/);
+        // No AI host or dataset is written in the source file itself.
+        for (const literal of ['api.openai.com', 'openrouter.ai', 'api.deepseek.com', 'dashscope.aliyuncs.com', 'O*NET']) expect(raw).not.toContain(literal);
+      }
+    }
+    const privacy = intl('privacy');
+    expect(privacy).toContain('never sent to a model service in mainland China');
+    expect(privacy).toContain('api.deepseek.com'); // the refused hosts, from the policy list
+    expect(privacy).toContain('openrouter (openrouter.ai)');
+    expect(privacy).toContain('Where this service runs: outside mainland China');
+    expect(intl('terms')).toMatch(/\| \[O\*NET-SOC 2019[^\n]*CC BY 4\.0/);
+    const zh = cn('privacy');
+    expect(zh).toContain('只使用中国大陆境内的模型服务');
+    expect(zh).toContain('deepseek (api.deepseek.com)');
+    expect(zh).not.toContain('openrouter');
+    expect(zh).toContain('本服务的运行地点：中国大陆境外');
+    expect(zh).toContain('只在内存中读取，不保存原文件');
+    expect(cn('privacy', { DEPLOY_REGION: 'cn-mainland' })).toContain('本服务的运行地点：中国大陆境内');
+  });
+
+  it('the GoApply processor list adds Aliyun Content Moderation (mainland) when it is configured', () => {
+    const env = { CN_CONTENT_SAFETY_PROVIDER: 'aliyun_green', ALIYUN_GREEN_ACCESS_KEY_ID: 'ak', ALIYUN_GREEN_ACCESS_KEY_SECRET: 'sk' };
+    expect(cn('third-party-sharing', env)).toMatch(/\| Aliyun Content Moderation \| content_safety \| CN \|/);
+    expect(cn('third-party-sharing')).not.toContain('Aliyun Content Moderation');
+    expect(cn('third-party-sharing')).toContain('内容安全审核');
+  });
+
+  it('no document names a brand in its source; all are still drafts', () => {
+    for (const market of ['intl', 'cn'] as const) {
+      for (const file of OWNED[market]) {
+        const raw = readLegalSource(market, file)!;
+        expect(raw, `${market}/${file}`).not.toMatch(/RoboApply|GoApply/);
+        expect(parseFrontMatter(raw).meta.status).toBe('draft');
+      }
+    }
   });
 });
 

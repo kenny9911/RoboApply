@@ -187,7 +187,63 @@ export function cookieDomainFor(
   return h === bare || h.endsWith(`.${bare}`) ? configured : undefined;
 }
 
-/** CORS allowlist from the registry (ARCH §1.6). */
+/**
+ * No preview pattern is built in. Any host under `vercel.app` whose shape is
+ * `<project>-<anything>-<team>.vercel.app` can be claimed by another Vercel
+ * account (a project name is free text), so a default glob would hand a
+ * credentialed CORS grant to a host this project does not control. The
+ * deployment's own hosts are allowed exactly through VERCEL_URL /
+ * VERCEL_BRANCH_URL, and a preview page calls its own `/api/*` same-origin.
+ */
+export const DEFAULT_CORS_PREVIEW_HOSTS = '';
+
+const PREVIEW_GLOB = /^[a-z0-9*-]+(\.[a-z0-9-]+)+$/;
+
+/**
+ * One origin pattern per host glob in `CORS_PREVIEW_HOSTS` (comma list). This
+ * is an explicit opt-in: unset, blank, `none` or `off` = no preview origins.
+ * `*` stands for one run of letters, digits and hyphens inside a label (never
+ * a dot). A glob is refused when its first label has no literal text left of
+ * the registrable suffix (`*.vercel.app`, `**.vercel.app`): that would re-open
+ * every Vercel customer's deployment as a credentialed origin. Whoever sets a
+ * pattern under a shared suffix accepts that another account can register a
+ * host that matches it.
+ */
+export function corsPreviewPatterns(env: EnvSource = process.env): RegExp[] {
+  const raw = env.CORS_PREVIEW_HOSTS === undefined || env.CORS_PREVIEW_HOSTS.trim() === '' ? DEFAULT_CORS_PREVIEW_HOSTS : env.CORS_PREVIEW_HOSTS;
+  const lowered = raw.trim().toLowerCase();
+  if (lowered === '' || lowered === 'none' || lowered === 'off') return [];
+  const patterns: RegExp[] = [];
+  for (const part of lowered.split(',')) {
+    const glob = part.trim();
+    if (!glob || !PREVIEW_GLOB.test(glob)) continue;
+    const firstLabel = glob.split('.')[0]!;
+    // At least 3 literal characters in the project label, so `*`, `a*` and `*-*` are refused.
+    if (firstLabel.replace(/[*-]/g, '').length < 3) continue;
+    const body = glob
+      .split('*')
+      .map((piece) => piece.replace(/[.]/g, '\\.'))
+      .join('[a-z0-9-]+');
+    patterns.push(new RegExp(`^https://${body}$`, 'i'));
+  }
+  return patterns;
+}
+
+/** `https://<host>` for a Vercel system variable that holds a bare host (VERCEL_URL …). */
+function vercelOrigin(value: string | undefined): string | null {
+  const host = normalizeHost(value);
+  return host && /^[a-z0-9.-]+$/.test(host) ? `https://${host}` : null;
+}
+
+/**
+ * CORS allowlist from the registry (ARCH §1.6). In production: the registry
+ * hosts of the brands this deployment serves, NEXT_PUBLIC_ROBOAPPLY_URL,
+ * FRONTEND_URLS, this deployment's own Vercel hosts (exact) and, only when
+ * CORS_PREVIEW_HOSTS is set, the preview patterns it names
+ * (`corsPreviewPatterns`). Any other `*.vercel.app` origin is refused, so a
+ * credentialed cross-origin POST (e.g. /auth/wechat/start) from a page anyone
+ * can deploy gets no CORS grant.
+ */
 export function corsOrigins(env: EnvSource = process.env): (string | RegExp)[] {
   const fromEnv = (env.FRONTEND_URLS || '')
     .split(',')
@@ -206,6 +262,16 @@ export function corsOrigins(env: EnvSource = process.env): (string | RegExp)[] {
     for (const host of getBrand(id).hosts) origins.push(`https://${host}`);
   }
   if (env.NEXT_PUBLIC_ROBOAPPLY_URL) origins.push(env.NEXT_PUBLIC_ROBOAPPLY_URL);
-  origins.push(...fromEnv, /^https:\/\/[a-z0-9-]+\.vercel\.app$/i);
-  return [...new Set(origins)];
+  origins.push(...fromEnv);
+  for (const own of [env.VERCEL_URL, env.VERCEL_BRANCH_URL, env.VERCEL_PROJECT_PRODUCTION_URL]) {
+    const origin = vercelOrigin(own);
+    if (origin) origins.push(origin);
+  }
+  const unique: (string | RegExp)[] = [...new Set(origins)];
+  return [...unique, ...corsPreviewPatterns(env)];
+}
+
+/** Whether an Origin header value gets a credentialed CORS grant (the same rule the `cors` middleware applies). */
+export function isCorsOriginAllowed(origin: string, env: EnvSource = process.env): boolean {
+  return corsOrigins(env).some((o) => (typeof o === 'string' ? o === origin : o.test(origin)));
 }

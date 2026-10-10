@@ -21,6 +21,12 @@
 //     request is opened and a `compliance.purge` work item is enqueued.
 //   - The agreement and the age confirmation cannot be withdrawn one by one;
 //     they end with the account (delete account in #danger).
+//   - Adding an entry never changes another entry's hash: the hash covers the
+//     entry's own brand, type, locale and text plus CONSENT_PROSE_VERSION, so
+//     new entries are added under the current version (consents.test.ts pins
+//     every earlier hash). Bump the version only when existing text changes.
+//   - `proseStatus: 'draft'` marks wording counsel has not approved yet. It is
+//     metadata for reviewers; the text shown and hashed is the `prose` itself.
 
 import crypto from 'node:crypto';
 import prisma from '../../lib/prisma.js';
@@ -41,7 +47,12 @@ import { COMPLIANCE_WORK_KINDS } from './kinds.js';
 export const CONSENT_PROSE_VERSION = '2026-10-10.wp13.v1';
 
 export type ConsentRequirement = 'always' | 'offshore' | 'tw' | 'never';
-export type ConsentApplicability = 'always' | 'offshore' | 'tw' | 'gohire_parse_intl';
+/**
+ * When the catalog offers a consent. `never` = defined so a record can be
+ * written and read (`recordConsent` does not look at applicability), but not
+ * offered: `listConsents` shows it only once the user has a record of it.
+ */
+export type ConsentApplicability = 'always' | 'offshore' | 'tw' | 'gohire_parse_intl' | 'never';
 
 export interface ConsentDefinition {
   type: SeekerConsentType;
@@ -56,6 +67,8 @@ export interface ConsentDefinition {
   defaultGranted: false;
   /** Prose per locale; `en` is required. `%BRAND%` is substituted per brand. */
   prose: { en: string; zh?: string };
+  /** 'draft' = counsel has not approved this wording yet (the final text becomes a new prose version). */
+  proseStatus?: 'draft';
 }
 
 const OFFSHORE_PROCESSORS_ZH =
@@ -221,6 +234,32 @@ export const CONSENT_CATALOG: readonly ConsentDefinition[] = [
     },
   },
   {
+    // Camera video of a practice interview is recorded only with this live
+    // grant, on top of `interview_recording` (InterviewSessionService
+    // practiceRecordingConsent, WP-43 → WP-93). Until it is granted the engine
+    // records audio only. `interview_recording` keeps its audio-and-transcript
+    // wording: video is this separate, later choice.
+    //
+    // NOT OFFERED on GoApply (`appliesWhen: 'never'`): GoApply records audio
+    // only, always (CN L-11, getInterviewMediaPolicy: cameraPublish and
+    // recordVideo are false), so asking for this consent would state processing
+    // that does not happen. The practice sheet keeps saying video is not
+    // offered. Change this to 'always' only together with CN L-11.
+    type: 'interview_video',
+    brand: 'goapply',
+    requiredWhen: 'never',
+    appliesWhen: 'never',
+    stage: 'in_context',
+    control: 'toggle',
+    withdrawable: true,
+    onWithdraw: 'none',
+    defaultGranted: false,
+    prose: {
+      zh: '在面试练习中录制我的摄像头画面，并与录音一起保存，供我回看。保存 90 天后自动删除。未开启时不会录制摄像头画面。',
+      en: 'Record video from my camera during practice interviews and keep it with the audio so I can review it. It is deleted automatically after 90 days. When this is off, my camera is never recorded.',
+    },
+  },
+  {
     type: 'copilot_memory',
     brand: 'goapply',
     requiredWhen: 'never',
@@ -233,6 +272,52 @@ export const CONSENT_CATALOG: readonly ConsentDefinition[] = [
     prose: {
       zh: '允许求职助手记住我说过的偏好，用于以后的对话。你可以随时查看和删除。',
       en: 'Let the Assistant remember preferences I tell it, for later conversations. You can review and delete them anytime.',
+    },
+  },
+  {
+    // Optional and off until the user turns it on (no regional default on
+    // GoApply). The English text is RoboApply's, so the record a GoApply user
+    // wrote before this entry existed hashes to the same value.
+    type: 'tips_reminders',
+    brand: 'goapply',
+    requiredWhen: 'never',
+    appliesWhen: 'always',
+    stage: 'in_context',
+    control: 'toggle',
+    withdrawable: true,
+    onWithdraw: 'none',
+    defaultGranted: false,
+    prose: {
+      zh: '向我发送与我收藏的职位和已开始的练习有关的提示和提醒。',
+      en: 'Send me tips and reminders about jobs I saved and practice I started.',
+    },
+  },
+  {
+    // PIPL Art. 23: a separate consent before personal information goes to
+    // another handler. Asked on the coaching request form, per request; the
+    // coach is named on that form. DRAFT wording — counsel writes the final text.
+    //
+    // `appliesWhen: 'never'`: the wording speaks of "this coaching request", so
+    // it is not a standalone switch on the consents panel. The coaching form
+    // records it (recordConsent); the panel lists it only after that, so the
+    // user can see and withdraw it.
+    type: 'coaching_share_with_coach',
+    brand: 'goapply',
+    requiredWhen: 'never',
+    appliesWhen: 'never',
+    stage: 'in_context',
+    control: 'checkbox',
+    withdrawable: true,
+    onWithdraw: 'none',
+    defaultGranted: false,
+    proseStatus: 'draft',
+    prose: {
+      zh:
+        '我同意 %BRAND% 把这份辅导申请中的姓名、邮箱和留言发送给我选择的独立教练，仅用于回复我的申请。' +
+        '教练不是 %BRAND% 的员工，会按照自己的规则处理这些信息。撤回后不再发送新的申请；已经发送的申请由教练处理。',
+      en:
+        'I agree that %BRAND% sends the name, email address and message in this coaching request to the independent coach I chose, only so they can reply to it. ' +
+        'The coach does not work for %BRAND% and handles this information under their own rules. Withdrawing stops new requests from being sent; requests already sent stay with the coach.',
     },
   },
   // ── RoboApply (PRODUCT §4.1; CN plan "intl signup") ──────────────────────
@@ -299,6 +384,21 @@ export const CONSENT_CATALOG: readonly ConsentDefinition[] = [
     onWithdraw: 'none',
     defaultGranted: false,
     prose: { en: 'Keep the audio and transcript of my practice interviews so I can review them. They are deleted automatically after 90 days.' },
+  },
+  {
+    // See the GoApply entry: without this live grant the camera is never recorded.
+    type: 'interview_video',
+    brand: 'roboapply',
+    requiredWhen: 'never',
+    appliesWhen: 'always',
+    stage: 'in_context',
+    control: 'toggle',
+    withdrawable: true,
+    onWithdraw: 'none',
+    defaultGranted: false,
+    prose: {
+      en: 'Record video from my camera during practice interviews and keep it with the audio so I can review it. It is deleted automatically after 90 days. When this is off, my camera is never recorded.',
+    },
   },
   {
     type: 'copilot_memory',

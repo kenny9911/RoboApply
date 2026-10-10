@@ -35,6 +35,7 @@ import { getCurrentBrandOrDefault } from './brand/brandContext.js';
 import { envSet, parseBoolEnv, brandEnv, type EnvSource } from './brand/brandEnv.js';
 import type { BrandFlags, BrandId, HiringContactsMode, ProductBrand } from './brand/registry.js';
 import { contentSafetyReadiness } from './llm/contentSafety/config.js';
+import { checkLlmEgress } from './llm/egressPolicy.js';
 
 /** Product flags held in the registry (booleans only; hiringContacts is a mode). */
 export type ProductFlagKey = Exclude<keyof BrandFlags, 'hiringContacts'>;
@@ -123,9 +124,8 @@ export function cnRecruitmentInfoMode(env: EnvSource = process.env): CnRecruitme
 
 /**
  * GoApply LLM providers allowed by R-13 together with the vendor key each
- * needs. `newapi` is absent on purpose: it is allowed only when its base host
- * is on the domestic allowlist, which WP-14 (`brandPolicy.ts`) checks; until
- * then a GoApply deployment must name a direct domestic vendor.
+ * needs. `newapi` (an OpenAI-compatible gateway) has no entry: it counts only
+ * when its base host passes the brand's egress policy (`cnLlmConfigured`).
  */
 const CN_LLM_PROVIDER_KEYS: Record<string, string> = {
   deepseek: 'DEEPSEEK_API_KEY',
@@ -139,8 +139,19 @@ const CN_LLM_PROVIDER_KEYS: Record<string, string> = {
   minimax: 'MINIMAX_API_KEY',
 };
 
-function cnLlmConfigured(env: EnvSource): boolean {
+/**
+ * A domestic text model is configured for the brand. `CN_LLM_PROVIDER=newapi`
+ * needs NEWAPI_API_KEY and NEWAPI_BASE_URL, and the gateway's host must be one
+ * `checkLlmEgress` allows for the brand (the mainland allowlist) — the same
+ * decision LLMService makes before it sends a prompt. The GoApply DB override
+ * is not read here (this errs on the side of hiding AI).
+ */
+function cnLlmConfigured(brand: ProductBrand, env: EnvSource): boolean {
   const provider = (env.CN_LLM_PROVIDER || '').trim().toLowerCase();
+  if (provider === 'newapi') {
+    if (!envSet(env, 'NEWAPI_API_KEY', 'NEWAPI_BASE_URL', 'CN_LLM_MODEL')) return false;
+    return checkLlmEgress({ brand, provider, model: env.CN_LLM_MODEL, env }).allowed;
+  }
   const keyName = CN_LLM_PROVIDER_KEYS[provider];
   return Boolean(keyName && envSet(env, keyName, 'CN_LLM_MODEL'));
 }
@@ -171,6 +182,20 @@ function emailConfigured(brand: ProductBrand, env: EnvSource): boolean {
   return false; // unset or 'none'
 }
 
+/**
+ * The VAPID key pair plus a contact subject the push services accept
+ * (`mailto:` or `https://`). The same rule as `vapidConfig` in
+ * features/push/config.ts, which the routes and the worker use: with the pair
+ * set and the subject missing they answer "not configured", so the flag must
+ * not offer push then.
+ */
+function vapidUsable(brand: ProductBrand, env: EnvSource): boolean {
+  const publicKey = brandEnv(brand, 'VAPID_PUBLIC_KEY', env)?.trim();
+  const privateKey = brandEnv(brand, 'VAPID_PRIVATE_KEY', env)?.trim();
+  const subject = brandEnv(brand, 'VAPID_SUBJECT', env)?.trim();
+  return Boolean(publicKey && privateKey && subject && /^(mailto:|https:\/\/)/i.test(subject));
+}
+
 function cnPaymentsEnabled(env: EnvSource): boolean {
   return parseBoolEnv(env.CN_PAYMENTS_ENABLED);
 }
@@ -181,7 +206,81 @@ function aiTextConfigured(brand: ProductBrand, env: EnvSource): boolean {
   // with no fallback to the international stack (R-13), and a usable
   // content-safety filter (WP-24): a misconfigured filter hides the AI
   // features instead of letting every call fail closed with 503.
-  return brand.llmProfile === 'domestic_cn' ? cnLlmConfigured(env) && contentSafetyReadiness(env).usable : true;
+  return brand.llmProfile === 'domestic_cn' ? cnLlmConfigured(brand, env) && contentSafetyReadiness(env).usable : true;
+}
+
+// ── Requirement probes ──────────────────────────────────────────────────────
+//
+// Two requirements are owned by another module:
+//   `ai.interviewVoice`  voiceAvailable(brand)      interview-engine/providers
+//   `pay.wechatpay`      wechatPayReadiness(brand)  platform/billing/rails/wechatpay
+// Importing either here would pull its module graph (the database pool and
+// the LiveKit SDK; the server logger and the billing rails) into this file,
+// which pure code and the web test helpers import. So `platform/startup.ts`
+// registers both at boot, and until then (unit tests, tools) the same rule is
+// evaluated here from the env table. flags.test.ts runs both against the
+// real functions over a matrix of configurations, so they cannot drift.
+
+/** `voiceAvailable` reads `process.env`, so it answers only calls made with it. */
+export type VoiceAvailabilityProbe = (brand: BrandId) => boolean;
+/** `wechatPayReadiness(brand, env).ready`. */
+export type WechatPayReadinessProbe = (brand: ProductBrand, env: EnvSource) => boolean;
+
+let voiceProbe: VoiceAvailabilityProbe | null = null;
+let wechatPayProbe: WechatPayReadinessProbe | null = null;
+
+/** Register `voiceAvailable` (pass null to restore the built-in rule). */
+export function setVoiceAvailabilityProbe(probe: VoiceAvailabilityProbe | null): void {
+  voiceProbe = probe;
+}
+
+/** Register `wechatPayReadiness` (pass null to restore the built-in rule). */
+export function setWechatPayReadinessProbe(probe: WechatPayReadinessProbe | null): void {
+  wechatPayProbe = probe;
+}
+
+/** VOICE_PROVIDER / CN_VOICE_PROVIDER ids (interview-engine/config.ts VOICE_PROVIDER_IDS). */
+const VOICE_PROVIDER_IDS = ['livekit_cloud', 'livekit_selfhosted', 'volcano', 'trtc'] as const;
+/** Ids with an implementation (interview-engine/providers IMPLEMENTED_VOICE_PROVIDERS). */
+const IMPLEMENTED_VOICE_PROVIDER_IDS: readonly string[] = ['livekit_cloud', 'livekit_selfhosted'];
+
+/** The brand's selected voice provider has an implementation and its credentials are set. */
+function voiceMediaAvailable(brand: ProductBrand, env: EnvSource): boolean {
+  if (voiceProbe && env === process.env) return voiceProbe(brand.id);
+  const raw = (brandEnv(brand, 'VOICE_PROVIDER', env) || '').toLowerCase();
+  const id = (VOICE_PROVIDER_IDS as readonly string[]).includes(raw) ? raw : 'livekit_cloud';
+  if (!IMPLEMENTED_VOICE_PROVIDER_IDS.includes(id)) return false;
+  return Boolean(brandEnv(brand, 'LIVEKIT_URL', env) && brandEnv(brand, 'LIVEKIT_API_KEY', env) && brandEnv(brand, 'LIVEKIT_API_SECRET', env));
+}
+
+/** A PEM from env with surrounding quotes and literal "\n" escapes resolved (as the rail reads it). */
+function pemSet(raw: string | undefined): boolean {
+  if (!raw) return false;
+  return raw.trim().replace(/^["']|["']$/g, '').replace(/\\n/g, '\n').trim().length > 0;
+}
+
+/** Legal names compare without case, bracket width or whitespace. */
+function entityKey(name: string | undefined): string {
+  return (name ?? '').normalize('NFKC').replace(/[（]/g, '(').replace(/[）]/g, ')').replace(/\s+/g, '').toLowerCase();
+}
+
+/**
+ * WeChat Pay may take money: merchant credentials, a 32-byte APIv3 key, the
+ * WeChat Pay public key + id that verify notifies, and the collecting entity
+ * (CN_PAYMENT_COLLECTING_ENTITY) equal to the merchant's registered legal
+ * name (WECHATPAY_MERCHANT_ENTITY) — collecting for another seller is 二清
+ * (OPS C-13).
+ */
+function wechatPayReady(brand: ProductBrand, env: EnvSource): boolean {
+  if (wechatPayProbe) return wechatPayProbe(brand, env);
+  if (brand.market !== 'cn' || !brand.paymentRails.includes('wechatpay')) return false;
+  if (!envSet(env, 'WECHATPAY_MCH_ID', 'WECHATPAY_APP_ID', 'WECHATPAY_MCH_CERT_SERIAL', 'WECHATPAY_PUBLIC_KEY_ID')) return false;
+  if (!pemSet(env.WECHATPAY_MCH_PRIVATE_KEY) || !pemSet(env.WECHATPAY_PUBLIC_KEY)) return false;
+  if (Buffer.byteLength((env.WECHATPAY_API_V3_KEY ?? '').trim(), 'utf8') !== 32) return false;
+  const entity = brandEnv(brand, 'PAYMENT_COLLECTING_ENTITY', env)?.trim();
+  const merchant = (env.WECHATPAY_MERCHANT_ENTITY ?? '').trim();
+  if (!entity || !merchant) return false;
+  return entityKey(merchant) === entityKey(entity);
 }
 
 /**
@@ -231,21 +330,35 @@ export function requirementsMet(key: FlagKey, brand: ProductBrand, env: EnvSourc
     case 'pay.alipay':
       return brand.paymentRails.includes('alipay') && cnPaymentsEnabled(env) && envSet(env, 'ALIPAY_API_URL', 'ALIPAY_CALLBACK_SECRET');
     case 'pay.wechatpay':
+      // Merchant credentials, the WeChat Pay public key + id that verify
+      // notifies, and the collecting entity matching the merchant's legal name
+      // (`wechatPayReadiness`, OPS C-13) — and nothing before CN_PAYMENTS_ENABLED.
       return (
         brand.paymentRails.includes('wechatpay') &&
         cnPaymentsEnabled(env) &&
-        envSet(env, 'WECHATPAY_MCH_ID', 'WECHATPAY_APP_ID', 'WECHATPAY_API_V3_KEY', 'WECHATPAY_MCH_CERT_SERIAL', 'WECHATPAY_MCH_PRIVATE_KEY')
+        envSet(
+          env,
+          'WECHATPAY_MCH_ID',
+          'WECHATPAY_APP_ID',
+          'WECHATPAY_API_V3_KEY',
+          'WECHATPAY_MCH_CERT_SERIAL',
+          'WECHATPAY_MCH_PRIVATE_KEY',
+          'WECHATPAY_PUBLIC_KEY',
+          'WECHATPAY_PUBLIC_KEY_ID',
+        ) &&
+        wechatPayReady(brand, env)
       );
     // ── AI ───────────────────────────────────────────────────────────────
     case 'ai.text':
       return aiTextConfigured(brand, env);
     case 'ai.vision':
-      return cn ? cnLlmConfigured(env) && envSet(env, 'CN_LLM_VISION_MODEL') : true;
+      return cn ? cnLlmConfigured(brand, env) && envSet(env, 'CN_LLM_VISION_MODEL') : true;
     case 'ai.interviewVoice':
-      return (
-        brand.flags.interviewVoice &&
-        Boolean(brandEnv(brand, 'LIVEKIT_URL', env) && brandEnv(brand, 'LIVEKIT_API_KEY', env) && brandEnv(brand, 'LIVEKIT_API_SECRET', env))
-      );
+      // The media plane only. Whether the product offers voice is the
+      // `interviewVoice` switch (registry default, FLAG_<BRAND>_INTERVIEW_VOICE,
+      // per-user override), applied in `isEnabledForBrand` — so GoApply voice
+      // can be turned on by config once its CN_LIVEKIT_* plane exists.
+      return voiceMediaAvailable(brand, env);
     // ── jobs (R-14) ──────────────────────────────────────────────────────
     case 'jobs.feed':
     case 'jobs.recommendations':
@@ -287,6 +400,11 @@ export function requirementsMet(key: FlagKey, brand: ProductBrand, env: EnvSourc
     // ── extension ────────────────────────────────────────────────────────
     case 'ext.autofill':
       return true; // gated by the `extension` product flag below
+    // ── web push (WP-61) ─────────────────────────────────────────────────
+    case 'webPush':
+      // Never on a mainland brand (no override can change that), and only
+      // with a usable VAPID config: without it nothing could be delivered.
+      return !cn && vapidUsable(brand, env);
     // ── AI-only product surfaces (R-13) ──────────────────────────────────
     case 'copilot':
     case 'agent':

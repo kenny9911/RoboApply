@@ -8,13 +8,23 @@
 
 import type { ProductBrand } from '../../platform/brand/registry.js';
 import { brandEnv, type EnvSource } from '../../platform/brand/brandEnv.js';
+import { GOAPPLY_DIRECT_PROVIDERS, MAINLAND_LLM_HOST_SUFFIXES, extraDomesticHosts, hostOf, isMainlandLlmHost } from '../../platform/llm/brandPolicy.js';
+import { contentSafetyReadiness } from '../../platform/llm/contentSafety/config.js';
+import { PROVIDER_DEFAULT_BASE_URLS, openRouterIgnoredUpstreams } from '../../platform/llm/egressPolicy.js';
+import { residencySummary } from '../../platform/residency/summary.js';
+import { STAFFING_AGENCY_SOURCE, jobDataAttributions } from '../jobs/data/index.js';
+import { CITY_TABLE_SOURCE } from '../jobs/geo/index.js';
 import {
   ICP_LOOKUP_URL,
   LEGAL_FOOTER_DOCS,
   PSB_LOOKUP_URL_PREFIX,
   type AiModelDisclosure,
+  type DataAttributionPurpose,
+  type DataAttributionView,
   type DisclosuresResponse,
   type LegalFooterModel,
+  type LlmEndpointFacts,
+  type ProcessingFacts,
   type ProcessorPurpose,
 } from './contract.js';
 import { isOffshore } from './consents.js';
@@ -184,6 +194,13 @@ export function configuredProcessors(brand: ProductBrand, env: EnvSource = proce
   if (val(env, 'CARTESIA_API_KEY')) add('Cartesia', 'speech', 'US');
   if (!cn && val(env, 'STRIPE_SECRET_KEY')) add('Stripe', 'payments', 'US');
   if (brandEnv(brand, 'S3_BUCKET', env)) add(cn ? 'Object storage (CN)' : 'Object storage', 'storage', null);
+  // GoApply: generative-AI input and output are checked by Aliyun Content
+  // Moderation (mainland) — listed only when that provider is really the one
+  // configured and usable (WP-24); the built-in keyword filter sends nothing out.
+  if (cn) {
+    const safety = contentSafetyReadiness(env);
+    if (safety.usable && safety.provider === 'aliyun_green') add('Aliyun Content Moderation', 'content_safety', 'CN', val(env, 'ALIYUN_GREEN_REGION'));
+  }
   for (const m of configuredModels(brand, env)) add(m.vendor, 'ai_models', m.region);
   return out;
 }
@@ -206,6 +223,83 @@ function filings(brand: ProductBrand, env: EnvSource): DisclosuresResponse['fili
   return out;
 }
 
+/** The outside resume parser, named once here for the notices (the bundles and components carry no vendor name). */
+export const MAINLAND_RESUME_PARSER_NAME = 'GoHire';
+
+/**
+ * Where and how the brand's data is processed on this deployment —
+ * `residencySummary(brand)`, nothing added. The bucket endpoint host is left
+ * out on purpose: this goes to an unauthenticated endpoint, and for some
+ * object stores the host carries the account id or names the bucket endpoint.
+ */
+export function processingFacts(brand: ProductBrand, env: EnvSource = process.env): ProcessingFacts {
+  const r = residencySummary(brand, env);
+  return {
+    region: r.region,
+    stage: r.stage,
+    originalFiles: r.originalFiles,
+    resumeParsing: r.resumeParsing,
+    resumeParser: r.resumeParsing === 'gohire_mainland' ? MAINLAND_RESUME_PARSER_NAME : null,
+    redactedBeforeStorage: [...r.redactedBeforeStorage],
+    imagesDiscarded: r.imagesDiscarded,
+  };
+}
+
+/**
+ * The AI endpoint lists of the routing policy, straight from its own tables
+ * (PROVIDER_DEFAULT_BASE_URLS, MAINLAND_LLM_HOST_SUFFIXES,
+ * OPENROUTER_MAINLAND_UPSTREAMS) so the notice and the enforcement can never
+ * name different hosts:
+ *   GoApply   providers = the domestic providers, each on its default host;
+ *             mainlandHosts = the allowlist (plus CN_LLM_DOMESTIC_HOSTS).
+ *   RoboApply providers = every provider whose default host is outside
+ *             mainland China (a local model server is not a processor);
+ *             mainlandHosts = the hosts user data is never sent to;
+ *             excludedUpstreams = the OpenRouter upstreams that are skipped.
+ */
+export function llmEndpointFacts(brand: ProductBrand, env: EnvSource = process.env): LlmEndpointFacts {
+  const domestic = brand.llmProfile === 'domestic_cn';
+  const mainlandHosts = [...new Set<string>([...MAINLAND_LLM_HOST_SUFFIXES, ...extraDomesticHosts(env)])];
+  const providers: LlmEndpointFacts['providers'] = [];
+  const seenHosts = new Set<string>();
+  for (const [provider, baseUrl] of Object.entries(PROVIDER_DEFAULT_BASE_URLS)) {
+    const host = hostOf(baseUrl);
+    if (!host || host === 'localhost' || seenHosts.has(host)) continue;
+    const mainland = isMainlandLlmHost(host, env);
+    const listed = domestic ? mainland && (GOAPPLY_DIRECT_PROVIDERS as readonly string[]).includes(provider) : !mainland;
+    if (!listed) continue;
+    seenHosts.add(host);
+    providers.push({ provider, host });
+  }
+  return {
+    rule: domestic ? 'mainland_only' : 'no_mainland',
+    providers,
+    mainlandHosts,
+    excludedUpstreams: domestic ? [] : openRouterIgnoredUpstreams(env),
+  };
+}
+
+function attributionPurpose(sourceId: string): DataAttributionPurpose {
+  if (sourceId === CITY_TABLE_SOURCE.id) return 'job_locations';
+  if (sourceId === STAFFING_AGENCY_SOURCE.id) return 'agency_marking';
+  return 'role_categories';
+}
+
+/** Datasets whose licence requires public attribution (e.g. CC BY); the team's own compilations are not listed. */
+export function dataAttributions(): DataAttributionView[] {
+  return jobDataAttributions()
+    .filter((a) => a.attributionRequired)
+    .map((a) => ({
+      id: a.source.id,
+      purpose: attributionPurpose(a.source.id),
+      name: a.source.name,
+      publisher: a.source.publisher,
+      url: a.source.url,
+      license: a.source.license,
+      asOf: a.asOf,
+    }));
+}
+
 export function buildDisclosures(brand: ProductBrand, env: EnvSource = process.env): DisclosuresResponse {
   return {
     brand: brand.id,
@@ -214,6 +308,9 @@ export function buildDisclosures(brand: ProductBrand, env: EnvSource = process.e
     processors: configuredProcessors(brand, env),
     offshore: brand.market === 'cn' && isOffshore(env),
     statusNote: brand.market === 'cn' ? val(env, 'CN_GENAI_STATUS_NOTE') : null,
+    processing: processingFacts(brand, env),
+    llmEndpoints: llmEndpointFacts(brand, env),
+    dataAttributions: dataAttributions(),
   };
 }
 

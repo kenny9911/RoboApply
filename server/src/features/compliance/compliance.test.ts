@@ -18,9 +18,24 @@ import {
   newAiContentId,
   type AiLabelDb,
 } from './aiLabel.js';
-import { ICP_LOOKUP_URL, LEGAL_FOOTER_DOCS, resolveLegalDocSlug } from './contract.js';
-import { buildDisclosures, buildLegalFooter, configuredModels, parseGenaiDisclosures, parseModelId } from './disclosures.js';
+import { ICP_LOOKUP_URL, LEGAL_FOOTER_DOCS, PROCESSOR_PURPOSES, resolveLegalDocSlug } from './contract.js';
+import { buildUserDataExport, exportSectionNames, type ExportDb } from './dataExport.js';
+import { GOAPPLY_DIRECT_PROVIDERS, MAINLAND_LLM_HOST_SUFFIXES, hostOf, isMainlandLlmHost } from '../../platform/llm/brandPolicy.js';
+import { OPENROUTER_MAINLAND_UPSTREAMS, PROVIDER_DEFAULT_BASE_URLS, checkLlmEgress } from '../../platform/llm/egressPolicy.js';
+import { residencySummary } from '../../platform/residency/summary.js';
+import { jobDataAttributions } from '../jobs/data/index.js';
+import {
+  buildDisclosures,
+  buildLegalFooter,
+  configuredModels,
+  dataAttributions,
+  llmEndpointFacts,
+  parseGenaiDisclosures,
+  parseModelId,
+  processingFacts,
+} from './disclosures.js';
 import { EXPLAIN_KEYS, explainMatch, type ExplainDimension } from './explainMatch.js';
+import { processingFactsMarkdown } from './legalDocs.js';
 import {
   addWorkingDays,
   adminListPiRequests,
@@ -240,6 +255,168 @@ describe('disclosures', () => {
   });
 });
 
+describe('disclosures rendered from the code that enforces them (WP-93)', () => {
+  const ALIYUN = { CN_CONTENT_SAFETY_PROVIDER: 'aliyun_green', ALIYUN_GREEN_ACCESS_KEY_ID: 'ak', ALIYUN_GREEN_ACCESS_KEY_SECRET: 'sk' };
+
+  it('GoApply lists Aliyun Content Moderation (mainland) only when it is the configured, usable filter', () => {
+    const listed = buildDisclosures(goapply, ALIYUN).processors.filter((p) => p.purpose === 'content_safety');
+    expect(listed).toEqual([{ name: 'Aliyun Content Moderation', purpose: 'content_safety', country: 'CN', region: null }]);
+    expect(buildDisclosures(goapply, { ...ALIYUN, ALIYUN_GREEN_REGION: 'cn-shanghai' }).processors.find((p) => p.purpose === 'content_safety')).toMatchObject({
+      country: 'CN',
+      region: 'cn-shanghai',
+    });
+    // The built-in keyword filter sends nothing out; a half-configured or offshore Aliyun filter is not claimed.
+    const none = (env: Record<string, string>) => buildDisclosures(goapply, env).processors.some((p) => p.purpose === 'content_safety');
+    expect(none({})).toBe(false);
+    expect(none({ CN_CONTENT_SAFETY_PROVIDER: 'keyword_only' })).toBe(false);
+    expect(none({ CN_CONTENT_SAFETY_PROVIDER: 'aliyun_green' })).toBe(false);
+    expect(none({ ...ALIYUN, ALIYUN_GREEN_REGION: 'ap-southeast-1' })).toBe(false);
+    // RoboApply has no such processor, whatever the CN variables say.
+    expect(buildDisclosures(roboapply, ALIYUN).processors.some((p) => p.purpose === 'content_safety')).toBe(false);
+    expect(serverPurposes()).toContain('content_safety');
+  });
+
+  it('processing facts are exactly residencySummary(brand)', () => {
+    const cases: Array<[typeof goapply, Record<string, string>]> = [
+      [roboapply, {}],
+      [roboapply, { S3_BUCKET: 'b', S3_ENDPOINT: 'https://r2.example.test', S3_ACCESS_KEY_ID: 'a', S3_SECRET_ACCESS_KEY: 's' }],
+      [goapply, {}],
+      [goapply, { DEPLOY_REGION: 'cn-mainland' }],
+      [goapply, { DEPLOY_REGION: 'cn-mainland', CN_S3_BUCKET: 'cn', CN_S3_ENDPOINT: 'https://oss-cn-shanghai.example.test', CN_S3_ACCESS_KEY_ID: 'a', CN_S3_SECRET_ACCESS_KEY: 's' }],
+    ];
+    for (const [brand, env] of cases) {
+      const r = residencySummary(brand, env);
+      expect(processingFacts(brand, env), `${brand.id} ${JSON.stringify(env)}`).toEqual({
+        region: r.region,
+        stage: r.stage,
+        originalFiles: r.originalFiles,
+        resumeParsing: r.resumeParsing,
+        resumeParser: r.resumeParsing === 'gohire_mainland' ? 'GoHire' : null,
+        redactedBeforeStorage: [...r.redactedBeforeStorage],
+        imagesDiscarded: r.imagesDiscarded,
+      });
+      expect(buildDisclosures(brand, env).processing).toEqual(processingFacts(brand, env));
+    }
+    // The outside parser is named by the server only when it is really in use.
+    expect(processingFacts(goapply, { GOHIRE_API_KEY: 'k' })).toMatchObject({ resumeParsing: 'gohire_mainland', resumeParser: 'GoHire' });
+    expect(processingFacts(roboapply, { GOHIRE_API_KEY: 'k' })).toMatchObject({ resumeParsing: 'local', resumeParser: null });
+    expect(processingFacts(roboapply, { GOHIRE_API_KEY: 'k', GOHIRE_PARSE_BRANDS: 'roboapply,goapply' })).toMatchObject({ resumeParsing: 'gohire_mainland', resumeParser: 'GoHire' });
+    // CN-0 (GoApply offshore): the notice cannot claim more than the deployment does.
+    expect(processingFacts(goapply, {})).toMatchObject({ region: 'offshore', stage: 'cn0', originalFiles: 'not_kept', imagesDiscarded: true });
+    expect(processingFacts(goapply, {}).redactedBeforeStorage.length).toBeGreaterThan(0);
+    expect(processingFacts(roboapply, {})).toMatchObject({ region: 'offshore', stage: 'intl', redactedBeforeStorage: [], imagesDiscarded: false });
+  });
+
+  it('the public response never carries the storage bucket endpoint (for some stores the host holds the account id)', () => {
+    const R2 = { S3_BUCKET: 'b', S3_ENDPOINT: 'https://0123456789abcdef.r2.cloudflarestorage.com', S3_ACCESS_KEY_ID: 'a', S3_SECRET_ACCESS_KEY: 's' };
+    const OSS = {
+      DEPLOY_REGION: 'cn-mainland',
+      CN_S3_BUCKET: 'cn',
+      CN_S3_ENDPOINT: 'https://oss-cn-shanghai.example.test',
+      CN_S3_ACCESS_KEY_ID: 'a',
+      CN_S3_SECRET_ACCESS_KEY: 's',
+    };
+    for (const [brand, env, host] of [
+      [roboapply, R2, '0123456789abcdef'],
+      [goapply, OSS, 'oss-cn-shanghai'],
+    ] as const) {
+      // The summary knows the host; the disclosure leaves it out.
+      expect(residencySummary(brand, env).storageHost).toContain(host);
+      const d = buildDisclosures(brand, env);
+      expect(d.processing.originalFiles).toBe('kept');
+      expect('storageHost' in d.processing).toBe(false);
+      expect(JSON.stringify(d)).not.toContain(host);
+      for (const zh of [true, false]) {
+        const md = processingFactsMarkdown(d.processing, zh);
+        expect(md).not.toContain(host);
+        expect(md).toContain(zh ? '保存在我们自己的文件存储中。' : 'kept in our own file storage.');
+      }
+    }
+  });
+
+  it("'local' parsing is stated as what it is: no outside parser — never \"read on our own servers\"", () => {
+    const local = processingFacts(roboapply, {});
+    expect(local.resumeParsing).toBe('local');
+    const en = processingFactsMarkdown(local, false);
+    const zh = processingFactsMarkdown(processingFacts(goapply, {}), true);
+    expect(en).toContain('not sent to a separate resume-parsing service');
+    expect(en).toContain('it goes to an AI model provider');
+    expect(zh).toContain('不会发送给单独的简历解析服务');
+    expect(zh).toContain('AI 模型服务方');
+    for (const md of [en, zh]) expect(md).not.toMatch(/own servers|自己的服务器/);
+    // With the outside parser in use, the line names it from the server value.
+    const viaParser = processingFacts(goapply, { GOHIRE_API_KEY: 'k' });
+    expect(processingFactsMarkdown(viaParser, false)).toContain('done by the GoHire parsing service on servers in mainland China');
+    expect(processingFactsMarkdown(viaParser, true)).toContain('由位于中国大陆服务器上的 GoHire 解析服务完成');
+    // A response without a parser name states only the no-outside-parser fact.
+    expect(processingFactsMarkdown({ ...viaParser, resumeParser: null }, false)).toContain('not sent to a separate resume-parsing service');
+  });
+
+  it('GoApply AI endpoints: only domestic providers on allowlisted hosts — every listed route passes the egress policy', () => {
+    const f = llmEndpointFacts(goapply, {});
+    expect(f.rule).toBe('mainland_only');
+    expect(f.excludedUpstreams).toEqual([]);
+    expect(f.mainlandHosts).toEqual([...MAINLAND_LLM_HOST_SUFFIXES]);
+    expect(f.providers.length).toBeGreaterThanOrEqual(5);
+    for (const p of f.providers) {
+      expect(GOAPPLY_DIRECT_PROVIDERS as readonly string[], p.provider).toContain(p.provider);
+      expect(p.host).toBe(hostOf(PROVIDER_DEFAULT_BASE_URLS[p.provider]));
+      expect(isMainlandLlmHost(p.host)).toBe(true);
+      expect(checkLlmEgress({ brand: goapply, provider: p.provider, env: {} }).allowed, p.provider).toBe(true);
+    }
+    // No offshore provider is ever offered to GoApply.
+    for (const offshore of ['openai', 'openrouter', 'anthropic', 'google']) expect(f.providers.map((p) => p.provider)).not.toContain(offshore);
+    // An ops-added domestic gateway host joins the allowlist.
+    expect(llmEndpointFacts(goapply, { CN_LLM_DOMESTIC_HOSTS: 'llm.internal.example.cn' }).mainlandHosts).toContain('llm.internal.example.cn');
+  });
+
+  it('RoboApply AI endpoints: no mainland host is listed as usable; the refused hosts and upstreams are the policy lists', () => {
+    const f = llmEndpointFacts(roboapply, {});
+    expect(f.rule).toBe('no_mainland');
+    expect(f.mainlandHosts).toEqual([...MAINLAND_LLM_HOST_SUFFIXES]);
+    expect(f.excludedUpstreams).toEqual([...OPENROUTER_MAINLAND_UPSTREAMS]);
+    expect(llmEndpointFacts(roboapply, { OPENROUTER_IGNORE_PROVIDERS: 'someone' }).excludedUpstreams).toEqual([...OPENROUTER_MAINLAND_UPSTREAMS, 'someone']);
+    expect(f.providers.length).toBeGreaterThanOrEqual(4);
+    for (const p of f.providers) {
+      expect(p.host).toBe(hostOf(PROVIDER_DEFAULT_BASE_URLS[p.provider]));
+      expect(isMainlandLlmHost(p.host), p.host).toBe(false);
+      expect(p.host).not.toBe('localhost');
+      expect(checkLlmEgress({ brand: roboapply, provider: p.provider, env: {} }).allowed, p.provider).toBe(true);
+    }
+    // Every mainland default host of the policy table is absent from the usable list and refused by the policy.
+    const usable = new Set(f.providers.map((p) => p.host));
+    for (const [provider, url] of Object.entries(PROVIDER_DEFAULT_BASE_URLS)) {
+      const host = hostOf(url);
+      if (!host || !isMainlandLlmHost(host)) continue;
+      expect(usable.has(host), host).toBe(false);
+      expect(checkLlmEgress({ brand: roboapply, provider, env: {} }).allowed, provider).toBe(false);
+    }
+    // One row per host (aliases such as google/gemini are not repeated).
+    expect(new Set(f.providers.map((p) => p.host)).size).toBe(f.providers.length);
+  });
+
+  it('data attributions: every dataset whose licence requires credit, and only those', () => {
+    const required = jobDataAttributions().filter((a) => a.attributionRequired);
+    const shown = dataAttributions();
+    expect(shown.map((a) => a.id)).toEqual(required.map((a) => a.source.id));
+    expect(shown.length).toBeGreaterThanOrEqual(1);
+    for (const a of shown) {
+      const src = required.find((r) => r.source.id === a.id)!;
+      expect(a).toMatchObject({ name: src.source.name, publisher: src.source.publisher, url: src.source.url, license: src.source.license, asOf: src.asOf });
+      expect(a.license).toMatch(/CC BY/);
+      expect(['job_locations', 'role_categories', 'agency_marking']).toContain(a.purpose);
+    }
+    expect(shown.find((a) => a.id === 'onet_soc_2019')).toMatchObject({ purpose: 'role_categories' });
+    // Lists the team compiled itself need no credit and are not presented as third-party data.
+    expect(shown.some((a) => /compiled by/i.test(a.name))).toBe(false);
+    expect(buildDisclosures(goapply, {}).dataAttributions).toEqual(shown);
+  });
+});
+
+function serverPurposes(): readonly string[] {
+  return PROCESSOR_PURPOSES;
+}
+
 describe('legal footer (snapshot with and without env)', () => {
   it('without env: only links, no numbers, nothing pending', () => {
     const f = buildLegalFooter(goapply, {});
@@ -337,5 +514,122 @@ describe('legal doc slugs', () => {
     expect(resolveLegalDocSlug('intl', 'pi-collection-list')).toBeNull();
     expect(resolveLegalDocSlug('cn', 'cookies')).toBeNull();
     expect(resolveLegalDocSlug('intl', '../etc/passwd')).toBeNull();
+  });
+});
+
+// ── Data export (WP-93: wave 4 #10; wave 5 #10, #37, #38) ───────────────────
+
+describe('data export: People, 内推码, referrals, two-step sign-in, student domain', () => {
+  const at = (d: string) => new Date(`${d}T08:00:00.000Z`);
+  const now = at('2026-10-10');
+
+  function seeded() {
+    return createFakePrisma({
+      seed: {
+        user: [{ id: 'u1', email: 'me@example.test', brand: 'goapply' }],
+        rAOutreachDraft: [
+          { id: 'od1', userId: 'u1', contactId: 'ct9', jobId: 'j1', trackerEntryId: 't1', channel: 'referral_ask', subject: 'Quick question', body: 'Hi Sam, could you refer me?', model: 'internal-model-x', copiedAt: at('2026-10-02'), markedSentAt: null, createdAt: at('2026-10-01') },
+          { id: 'od2', userId: 'someone-else', channel: 'email', body: 'not mine', createdAt: at('2026-10-01') },
+        ],
+        rACnReferralCode: [
+          { id: 'rc1', brand: 'goapply', userId: 'u1', company: '示例科技', companyNormalized: 'shili-keji', code: 'NTM2026', programme: '2027 校招', expiresAt: at('2026-12-31'), note: '研发岗', status: 'approved', rejectReason: null, reportCount: 3, hiddenAt: null, moderatedAt: at('2026-10-03'), moderatedById: 'admin-77', createdAt: at('2026-10-02'), updatedAt: at('2026-10-03') },
+          { id: 'rc2', brand: 'goapply', userId: 'someone-else', company: '别家', companyNormalized: 'biejia', code: 'OTHER', status: 'approved', createdAt: at('2026-10-02'), updatedAt: at('2026-10-02') },
+        ],
+        rAReferral: [
+          { id: 'rf1', brand: 'goapply', inviterUserId: 'u1', inviteeUserId: 'friend-1', status: 'rewarded', riskScore: 7, riskReasons: ['same_device'], qualifiedAt: at('2026-09-05'), rewardedAt: at('2026-09-06'), createdAt: at('2026-09-01') },
+          { id: 'rf2', brand: 'goapply', inviterUserId: 'u1', inviteeUserId: 'friend-2', status: 'pending', riskScore: 0, riskReasons: [], qualifiedAt: null, rewardedAt: null, createdAt: at('2026-09-20') },
+          { id: 'rf3', brand: 'goapply', inviterUserId: 'inviter-9', inviteeUserId: 'u1', status: 'qualified', riskScore: 1, riskReasons: [], qualifiedAt: at('2026-08-02'), rewardedAt: null, createdAt: at('2026-08-01') },
+          { id: 'rf4', brand: 'goapply', inviterUserId: 'inviter-9', inviteeUserId: 'friend-3', status: 'rewarded', createdAt: at('2026-08-01') },
+        ],
+        rATwoFactor: [
+          { userId: 'u1', brand: 'goapply', secretSealed: 'v1.sealed-totp-secret', enabledAt: at('2026-09-15'), lastUsedStep: 58812345, recoveryCodeHashes: ['recovery-hash-aaa', 'recovery-hash-bbb'], recoveryCodesGeneratedAt: at('2026-09-15'), createdAt: at('2026-09-15') },
+        ],
+        rAStudentVerification: [
+          { userId: 'u1', brand: 'goapply', schoolEmailHash: 'school-email-hash-zzz', schoolDomain: 'pku.edu.cn', pendingEmailHash: 'pending-hash-yyy', pendingDomain: 'tsinghua.edu.cn', codeHash: 'code-hash-xxx', codeAttempts: 2, verifiedAt: at('2026-09-10'), expiresAt: at('2027-09-10'), createdAt: at('2026-09-10') },
+        ],
+        rAJobInteraction: [
+          { id: 'ji1', userId: 'u1', jobId: 'j1', kind: 'view', createdAt: at('2026-10-01') },
+          { id: 'ji2', userId: 'u1', jobId: 'j2', kind: 'save', createdAt: at('2026-10-02') },
+          { id: 'ji3', userId: 'u1', jobId: 'j3', kind: 'admin_review', meta: { decision: 'removed', note: 'internal moderation note' }, createdAt: at('2026-10-03') },
+        ],
+      },
+    });
+  }
+
+  it('registers the sections', () => {
+    for (const name of ['outreachDrafts', 'referralCodes', 'referrals', 'twoStepSignIn', 'studentVerification', 'jobInteractions']) {
+      expect(exportSectionNames(), name).toContain(name);
+    }
+  });
+
+  it('outreachDrafts: the text and what the user did with it — only their own rows, no model or internal ids', async () => {
+    const out = await buildUserDataExport('u1', seeded() as unknown as ExportDb, now);
+    expect(out.outreachDrafts).toEqual([
+      { channel: 'referral_ask', subject: 'Quick question', body: 'Hi Sam, could you refer me?', jobId: 'j1', trackerEntryId: 't1', copiedAt: at('2026-10-02'), markedSentAt: null, createdAt: at('2026-10-01') },
+    ]);
+  });
+
+  it('referralCodes (内推码): the code and its review outcome, without the reviewer or the report count', async () => {
+    const out = await buildUserDataExport('u1', seeded() as unknown as ExportDb, now);
+    expect(out.referralCodes).toEqual([
+      { company: '示例科技', code: 'NTM2026', programme: '2027 校招', expiresAt: at('2026-12-31'), note: '研发岗', status: 'approved', rejectReason: null, createdAt: at('2026-10-02'), updatedAt: at('2026-10-03') },
+    ]);
+    const text = JSON.stringify(out.referralCodes);
+    expect(text).not.toContain('admin-77');
+    expect(text).not.toContain('reportCount');
+  });
+
+  it('referrals: status and dates only — no friend identity in either direction, no risk signals', async () => {
+    const out = await buildUserDataExport('u1', seeded() as unknown as ExportDb, now);
+    expect(out.referrals).toEqual({
+      invited: [
+        { status: 'rewarded', createdAt: at('2026-09-01'), qualifiedAt: at('2026-09-05'), rewardedAt: at('2026-09-06') },
+        { status: 'pending', createdAt: at('2026-09-20'), qualifiedAt: null, rewardedAt: null },
+      ],
+      invitedBy: { status: 'qualified', createdAt: at('2026-08-01'), qualifiedAt: at('2026-08-02'), rewardedAt: null },
+    });
+    const text = JSON.stringify(out);
+    for (const secret of ['friend-1', 'friend-2', 'friend-3', 'inviter-9', 'inviteeUserId', 'inviterUserId', 'riskScore', 'riskReasons', 'same_device']) {
+      expect(text, secret).not.toContain(secret);
+    }
+  });
+
+  it('twoStepSignIn: on/off and when — never the secret, the recovery codes or the replay counter', async () => {
+    const out = await buildUserDataExport('u1', seeded() as unknown as ExportDb, now);
+    expect(out.twoStepSignIn).toEqual({ enabled: true, enrolledAt: at('2026-09-15') });
+    const text = JSON.stringify(out);
+    for (const secret of ['sealed-totp-secret', 'secretSealed', 'recovery-hash-aaa', 'recovery-hash-bbb', 'recoveryCodeHashes', '58812345', 'lastUsedStep']) {
+      expect(text, secret).not.toContain(secret);
+    }
+    // Never enrolled, or enrolment started but not confirmed: off, no date.
+    const none = await buildUserDataExport('nobody', seeded() as unknown as ExportDb, now);
+    expect(none.twoStepSignIn).toEqual({ enabled: false, enrolledAt: null });
+    const pending = createFakePrisma({ seed: { rATwoFactor: [{ userId: 'u2', brand: 'roboapply', secretSealed: 'v1.pending-secret', enabledAt: null, recoveryCodeHashes: [] }] } });
+    const half = await buildUserDataExport('u2', pending as unknown as ExportDb, now);
+    expect(half.twoStepSignIn).toEqual({ enabled: false, enrolledAt: null });
+    expect(JSON.stringify(half)).not.toContain('pending-secret');
+  });
+
+  it('studentVerification: the school domain and its dates — no address hash, no pending address, no code', async () => {
+    const out = await buildUserDataExport('u1', seeded() as unknown as ExportDb, now);
+    expect(out.studentVerification).toEqual({ schoolDomain: 'pku.edu.cn', verifiedAt: at('2026-09-10'), expiresAt: at('2027-09-10') });
+    const text = JSON.stringify(out);
+    for (const secret of ['school-email-hash-zzz', 'pending-hash-yyy', 'tsinghua.edu.cn', 'code-hash-xxx', 'codeAttempts']) {
+      expect(text, secret).not.toContain(secret);
+    }
+    expect((await buildUserDataExport('nobody', seeded() as unknown as ExportDb, now)).studentVerification).toBeNull();
+  });
+
+  it("jobInteractions: the user's own activity; admin_review rows are left out", async () => {
+    const out = await buildUserDataExport('u1', seeded() as unknown as ExportDb, now);
+    expect((out.jobInteractions as Array<{ kind: string }>).map((r) => r.kind)).toEqual(['view', 'save']);
+    const text = JSON.stringify(out);
+    expect(text).not.toContain('admin_review');
+    expect(text).not.toContain('internal moderation note');
+  });
+
+  it('no section failed', async () => {
+    const out = await buildUserDataExport('u1', seeded() as unknown as ExportDb, now);
+    expect(out.sectionsUnavailable).toBeUndefined();
   });
 });

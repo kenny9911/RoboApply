@@ -2,16 +2,19 @@
 
 // LegalDocument — one legal document page body: title, DRAFT banner (until
 // counsel approves and ops sets the docs version), the markdown, the live
-// tables for {{retention_schedule}}, {{ai_models}} and {{processors}}, and the
-// list of the brand's other documents.
+// blocks ({{retention_schedule}}, {{ai_models}}, {{processors}},
+// {{processing_facts}}, {{llm_endpoints}}, {{data_attributions}}) and the list
+// of the brand's other documents.
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
 import { Markdown } from '../../v3/primitives/Markdown';
-import { ModelsTable, ProcessorsTable } from './DisclosureTables';
+import type { ReactNode } from 'react';
+
+import { DataAttributions, LlmEndpoints, ModelsTable, ProcessingFacts, ProcessorsTable } from './DisclosureTables';
 import { RetentionTable } from './RetentionTable';
-import { splitLegalBlocks, type LegalDocSlug, type LegalMarket } from './legalCatalog';
+import { splitLegalBlocks, type LegalBlock, type LegalDocSlug, type LegalMarket } from './legalCatalog';
 import styles from './compliance.module.css';
 
 export interface LegalDocumentProps {
@@ -27,6 +30,24 @@ export interface LegalDocumentProps {
   /** The UI locale, to say when the text is English-only. */
   uiLocale: string;
   otherDocs: LegalDocSlug[];
+}
+
+/** The live component of a block placeholder. */
+export function LegalBlockView({ block, market }: { block: LegalBlock; market: LegalMarket }): ReactNode {
+  switch (block) {
+    case 'retention_schedule':
+      return <RetentionTable />;
+    case 'ai_models':
+      return <ModelsTable market={market} />;
+    case 'processors':
+      return <ProcessorsTable />;
+    case 'processing_facts':
+      return <ProcessingFacts />;
+    case 'llm_endpoints':
+      return <LlmEndpoints />;
+    case 'data_attributions':
+      return <DataAttributions />;
+  }
 }
 
 export function LegalDocument(props: LegalDocumentProps) {
@@ -55,12 +76,8 @@ export function LegalDocument(props: LegalDocumentProps) {
               <Markdown key={i} block>
                 {s.text}
               </Markdown>
-            ) : s.block === 'retention_schedule' ? (
-              <RetentionTable key={i} />
-            ) : s.block === 'ai_models' ? (
-              <ModelsTable key={i} market={props.market} />
             ) : (
-              <ProcessorsTable key={i} />
+              <LegalBlockView key={i} block={s.block} market={props.market} />
             ),
           )}
         </div>

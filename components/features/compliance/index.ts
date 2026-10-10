@@ -4,13 +4,15 @@
 export { SettingsSection as ComplianceSettingsSection } from './SettingsSection';
 export { PrivacyPanel } from './PrivacyPanel';
 export { ConsentsPanel } from './ConsentsPanel';
-export { LegalDocument, type LegalDocumentProps } from './LegalDocument';
+export { LegalBlockView, LegalDocument, type LegalDocumentProps } from './LegalDocument';
+export { LegalIndex, type LegalIndexProps } from './LegalIndex';
 export { LegalFooterView, type LegalFooterViewProps } from './LegalFooterView';
 export { AiBadgeView, type AiBadgeKind } from './AiBadgeView';
 export { RetentionTable } from './RetentionTable';
-export { ModelsTable, ProcessorsTable } from './DisclosureTables';
+export { DataAttributions, LlmEndpoints, ModelsTable, ProcessingFacts, ProcessorsTable } from './DisclosureTables';
 export { WhyThisJob } from './WhyThisJob';
 export {
+  LEGAL_BLOCKS,
   LEGAL_DOCS,
   LEGAL_DOC_FILES,
   LEGAL_DOC_ALIASES,
@@ -19,6 +21,7 @@ export {
   legalDocsFor,
   resolveLegalDocSlug,
   splitLegalBlocks,
+  type LegalBlock,
   type LegalDocSlug,
   type LegalMarket,
 } from './legalCatalog';

@@ -17,7 +17,13 @@
 //   GoApply, where they are not served at all (404 legal_doc_not_published).
 //
 // Placeholders (`{{name}}`) are filled from configuration; an unset value
-// renders "Not listed" / "未披露" — never an invented fact.
+// renders "Not listed" / "未披露" — never an invented fact. The processing
+// facts, the AI endpoint lists and the data-source attributions are rendered
+// from the code that enforces them (disclosures.ts), never typed into a file.
+//
+// `publishedLegalDocVersion(brand, doc)` is what another area records when a
+// user accepts a document (billing-cn: the 用户协议 before a WeChat Pay order):
+// the version of a PUBLISHED document, null while it is a draft.
 
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -27,6 +33,7 @@ import { brandEnv, type EnvSource } from '../../platform/brand/brandEnv.js';
 import { HttpError } from '../../platform/http.js';
 import { COMPLIANCE_ERROR_CODES, resolveLegalDocSlug, type LegalDoc, type LegalDocResponse } from './contract.js';
 import { gohireParseForIntl, isOffshore } from './consents.js';
+import type { DisclosuresResponse } from './contract.js';
 import { buildDisclosures } from './disclosures.js';
 import { retentionScheduleMarkdown } from './retention.js';
 
@@ -85,6 +92,97 @@ function mdTable(header: [string, string, string], rows: string[][], empty: stri
   return [`| ${header.join(' | ')} |`, '| --- | --- | --- |', ...rows.map((r) => `| ${r.join(' | ')} |`)].join('\n');
 }
 
+const PII_KIND_LABELS: Record<string, { en: string; zh: string }> = {
+  email: { en: 'email addresses', zh: '邮箱地址' },
+  phone: { en: 'phone numbers', zh: '电话号码' },
+  address: { en: 'street addresses', zh: '详细地址' },
+  prc_id: { en: 'mainland China ID numbers', zh: '居民身份证号码' },
+  tw_id: { en: 'Taiwan ID numbers', zh: '台湾身份证号码' },
+  us_ssn: { en: 'US Social Security numbers', zh: '美国社会安全号码' },
+  gov_id: { en: 'other government ID numbers', zh: '其他证件号码' },
+  health: { en: 'health details', zh: '健康信息' },
+  known_value: { en: 'identifiers you entered in your profile', zh: '你在个人资料中填写的标识信息' },
+};
+
+/** {{processing_facts}}: one line per fact of `residencySummary(brand)`. */
+export function processingFactsMarkdown(f: DisclosuresResponse['processing'], zh: boolean): string {
+  const lines: string[] = [];
+  if (zh) {
+    lines.push(`- 本服务的运行地点：${f.region === 'cn-mainland' ? '中国大陆境内' : '中国大陆境外'}。`);
+    lines.push(
+      f.originalFiles === 'kept'
+        ? '- 你上传的简历文件：保存在我们自己的文件存储中。'
+        : f.originalFiles === 'not_kept'
+          ? '- 你上传的简历文件：只在内存中读取，不保存原文件。'
+          : '- 你上传的简历文件：当前部署未开放文件上传。',
+    );
+    lines.push(
+      f.resumeParsing === 'gohire_mainland' && f.resumeParser
+        ? `- 简历读取：由位于中国大陆服务器上的 ${f.resumeParser} 解析服务完成。`
+        : // 'local' says only that no outside parser is called; AI providers may still read the resume.
+          '- 简历读取：不会发送给单独的简历解析服务。由 AI 读取时（包括扫描页和图片），简历内容会发送给 AI 模型服务方。',
+    );
+    if (f.redactedBeforeStorage.length) lines.push(`- 保存前从简历文字中移除：${f.redactedBeforeStorage.map((k) => PII_KIND_LABELS[k]?.zh ?? k).join('、')}。`);
+    if (f.imagesDiscarded) lines.push('- 简历中的照片和图片：不保存。');
+  } else {
+    lines.push(`- Where this service runs: ${f.region === 'cn-mainland' ? 'in mainland China' : 'outside mainland China'}.`);
+    lines.push(
+      f.originalFiles === 'kept'
+        ? '- Resume files you upload: kept in our own file storage.'
+        : f.originalFiles === 'not_kept'
+          ? '- Resume files you upload: read in memory only; the original file is not kept.'
+          : '- Resume files you upload: file upload is off on this deployment.',
+    );
+    lines.push(
+      f.resumeParsing === 'gohire_mainland' && f.resumeParser
+        ? `- Reading your resume: done by the ${f.resumeParser} parsing service on servers in mainland China.`
+        : '- Reading your resume: it is not sent to a separate resume-parsing service. When AI reads it, including scanned pages and images, it goes to an AI model provider.',
+    );
+    if (f.redactedBeforeStorage.length) lines.push(`- Removed from the resume text before it is stored: ${f.redactedBeforeStorage.map((k) => PII_KIND_LABELS[k]?.en ?? k).join(', ')}.`);
+    if (f.imagesDiscarded) lines.push('- Photos and images in a resume: not stored.');
+  }
+  return lines.join('\n');
+}
+
+/** {{llm_endpoints}}: the routing policy's own provider and host lists. */
+export function llmEndpointsMarkdown(f: DisclosuresResponse['llmEndpoints'], zh: boolean): string {
+  const providers = f.providers.map((p) => `${p.provider} (${p.host})`).join(zh ? '、' : ', ');
+  const hosts = f.mainlandHosts.join(zh ? '、' : ', ');
+  if (zh) {
+    return f.rule === 'mainland_only'
+      ? [`- 只使用中国大陆境内的模型服务。可用的提供方及其默认地址：${providers || '未披露'}。`, `- 允许的模型服务地址（含其子域名）：${hosts}。`].join('\n')
+      : [
+          `- 带有用户数据的请求不会发送到中国大陆境内的模型服务。可用的提供方及其默认地址：${providers || '未披露'}。`,
+          `- 不会使用的地址（含其子域名）：${hosts}。`,
+          ...(f.excludedUpstreams.length ? [`- 通过 OpenRouter 调用时排除的上游：${f.excludedUpstreams.join('、')}。`] : []),
+        ].join('\n');
+  }
+  return f.rule === 'mainland_only'
+    ? [`- Only model services in mainland China are used. Providers and the address each uses by default: ${providers || 'Not listed'}.`, `- Allowed model addresses (and their subdomains): ${hosts}.`].join('\n')
+    : [
+        `- A request that carries your data is never sent to a model service in mainland China. Providers we can use and the address each uses by default: ${providers || 'Not listed'}.`,
+        `- Addresses that are never used (and their subdomains): ${hosts}.`,
+        ...(f.excludedUpstreams.length ? [`- Upstream providers excluded when a request goes through OpenRouter: ${f.excludedUpstreams.join(', ')}.`] : []),
+      ].join('\n');
+}
+
+const ATTRIBUTION_PURPOSE: Record<string, { en: string; zh: string }> = {
+  job_locations: { en: 'City names and map positions for job locations', zh: '职位地点的城市名称和位置' },
+  role_categories: { en: 'Job role categories', zh: '职位类别' },
+  agency_marking: { en: 'Marking posts from staffing and recruitment firms', zh: '标记人力资源和猎头公司发布的职位' },
+};
+
+/** {{data_attributions}}: datasets whose licence requires attribution. */
+export function dataAttributionsMarkdown(items: DisclosuresResponse['dataAttributions'], zh: boolean): string {
+  if (items.length === 0) return zh ? '目前没有需要署名的第三方数据集。' : 'No third-party dataset that requires attribution is in use.';
+  const head = zh ? '| 数据集 | 发布方 | 用途 | 许可 | 数据日期 |' : '| Dataset | Publisher | Used for | Licence | Copy dated |';
+  return [
+    head,
+    '| --- | --- | --- | --- | --- |',
+    ...items.map((a) => `| ${a.url ? `[${a.name}](${a.url})` : a.name} | ${a.publisher} | ${ATTRIBUTION_PURPOSE[a.purpose]?.[zh ? 'zh' : 'en'] ?? a.purpose} | ${a.license} | ${a.asOf} |`),
+  ].join('\n');
+}
+
 /** Values for every placeholder the skeletons use. */
 export function legalPlaceholderValues(brand: ProductBrand, env: EnvSource = process.env): Record<string, string> {
   const zh = brand.market === 'cn';
@@ -111,6 +209,14 @@ export function legalPlaceholderValues(brand: ProductBrand, env: EnvSource = pro
     retention_schedule: retentionScheduleMarkdown(zh ? 'zh' : 'en', env),
     ai_models: models,
     processors,
+    processing_facts: processingFactsMarkdown(d.processing, zh),
+    llm_endpoints: llmEndpointsMarkdown(d.llmEndpoints, zh),
+    data_attributions: dataAttributionsMarkdown(d.dataAttributions, zh),
+    // Who collects GoApply payments (CN_PAYMENT_COLLECTING_ENTITY); named in the 用户协议.
+    collecting_entity: brandEnv(brand, 'PAYMENT_COLLECTING_ENTITY', env) ?? missing,
+    // Where NDA / copyright complaints about shared interview questions go
+    // (TAKEDOWN_CONTACT / CN_TAKEDOWN_CONTACT); the support address until ops sets one.
+    takedown_contact: brandEnv(brand, 'TAKEDOWN_CONTACT', env) ?? brandEnv(brand, 'SUPPORT_EMAIL', env) ?? brand.email.replyTo,
     minimum_age: '16',
     offshore_notice: zh
       ? isOffshore(env)
@@ -122,6 +228,37 @@ export function legalPlaceholderValues(brand: ProductBrand, env: EnvSource = pro
         ? 'Only if you agree when you upload: your resume is read by the GoHire parsing service, which runs on servers in mainland China.'
         : '',
   };
+}
+
+/**
+ * The publication state of one document file for a brand — the single rule
+ * `loadLegalDoc` and `publishedLegalDocVersion` share (and app/legal/legalSource.ts
+ * mirrors for the page):
+ *   version   = the brand's LEGAL_DOCS_VERSION (GoApply: CN_LEGAL_DOCS_VERSION; R-03)
+ *   published = that version is set AND the file is not `status: draft`
+ */
+function publicationOf(brand: ProductBrand, meta: FrontMatter, env: EnvSource): { version: string | null; draft: boolean } {
+  const version = legalDocsVersion(brand, env);
+  const draft = !version || (meta.status ?? 'draft').trim().toLowerCase() === 'draft';
+  return { version, draft };
+}
+
+/**
+ * The version of a legal document a user can be asked to accept: its version
+ * when the document is published, `null` while it is a draft (front matter
+ * `status: draft`, or no version set), does not exist for the brand's market,
+ * or the slug is unknown. Aliases resolve as on /legal (`user-agreement` →
+ * the GoApply 用户协议). Callers must not record an acceptance, or take a
+ * payment that depends on one, when this returns null.
+ */
+export function publishedLegalDocVersion(brand: ProductBrand, doc: string, env: EnvSource = process.env): string | null {
+  let resolved = resolveLegalDocSlug(brand.market, doc);
+  if (resolved && 'redirect' in resolved) resolved = resolveLegalDocSlug(brand.market, resolved.redirect);
+  if (!resolved || 'redirect' in resolved) return null;
+  const source = readLegalSource(brand.market, resolved.file, env);
+  if (!source) return null;
+  const { version, draft } = publicationOf(brand, parseFrontMatter(source).meta, env);
+  return draft ? null : version;
 }
 
 export interface LoadLegalDocOptions {
@@ -138,8 +275,7 @@ export function loadLegalDoc(brand: ProductBrand, slug: string, opts: LoadLegalD
   const source = readLegalSource(brand.market, resolved.file, env);
   if (!source) throw new HttpError('not_found');
   const { meta, body } = parseFrontMatter(source);
-  const version = legalDocsVersion(brand, env);
-  const draft = !version || (meta.status ?? 'draft') === 'draft';
+  const { version, draft } = publicationOf(brand, meta, env);
   if (draft && brand.market === 'cn' && env.NODE_ENV === 'production') {
     throw new HttpError('not_found', 'This document is not published yet.', { reason: COMPLIANCE_ERROR_CODES.docNotPublished });
   }

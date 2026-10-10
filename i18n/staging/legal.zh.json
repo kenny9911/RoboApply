@@ -33,7 +33,8 @@
       "genaiRegistration": "生成式人工智能服务登记号：{number}",
       "algorithmFiling": "算法备案号：{number}",
       "complaintsEmail": "投诉举报邮箱：{email}",
-      "complaintsPhone": "投诉举报电话：{phone}"
+      "complaintsPhone": "投诉举报电话：{phone}",
+      "privacyChoices": "隐私选择"
     },
     "page": {
       "eyebrow": "法律信息",
@@ -68,7 +69,8 @@
       "speech": "语音识别与合成",
       "payments": "支付",
       "ai_models": "AI 模型",
-      "storage": "文件存储"
+      "storage": "文件存储",
+      "content_safety": "内容安全审核"
     },
     "retention": {
       "title": "数据保存期限",
@@ -79,7 +81,8 @@
       "enforced": {
         "auto": "到期自动删除",
         "provider": "由数据库服务商设置",
-        "manual": "尚未自动删除"
+        "manual": "尚未自动删除",
+        "minimum": "至少保存这么久；注销账户时一并删除"
       },
       "rows": {
         "assistant_messages": "求职助手对话",
@@ -91,9 +94,14 @@
         "application_artifacts": "投递所用文件的副本",
         "inactive_accounts": "长期未登录的账户（提前 30 天邮件通知）",
         "auth_tokens": "验证码和登录链接（过期后）",
+        "known_devices": "你登录过的设备（自该设备最后一次登录起）",
         "ai_label_logs": "AI 生成内容标识记录",
         "content_safety_events": "内容安全检查记录",
         "interview_recordings": "面试练习录音和文字记录",
+        "tool_results": "免费工具的结果（报告和从你的文件中读取的文字）",
+        "anon_alerts_unconfirmed": "未确认的职位提醒订阅（自最后一封确认邮件起）",
+        "anon_alerts_unsubscribed": "未登录时订阅、已退订的职位提醒（含邮箱地址）",
+        "billing_consent_records": "你同意自动续费或购买条款的记录",
         "data_exports": "你的数据导出文件",
         "backups": "数据库备份"
       }
@@ -208,6 +216,54 @@
         "turnOff": "如需不使用个人资料排序，请在设置中关闭“根据我的资料为职位排序”。",
         "turnOn": "如需按匹配度排序，请在设置中开启“根据我的资料为职位排序”。"
       }
+    },
+    "processing": {
+      "region": "{where, select, mainland {本服务在中国大陆境内运行。} other {本服务在中国大陆境外运行。}}",
+      "files": "{state, select, kept {你上传的简历文件保存在我们自己的文件存储中。} not_kept {你上传的简历文件只在内存中读取，不保存原文件。} other {当前部署未开放文件上传。}}",
+      "parsing": "{mode, select, outside_mainland {简历由位于中国大陆服务器上的 {service} 解析服务读取。} other {简历不会发送给单独的简历解析服务。由 AI 读取时（包括扫描页和图片），简历内容会发送给 AI 模型服务方。}}",
+      "redacted": "保存前从简历文字中移除：{kinds}。",
+      "images": "简历中的照片和图片不保存。",
+      "pii": {
+        "email": "邮箱地址",
+        "phone": "电话号码",
+        "address": "详细地址",
+        "prc_id": "居民身份证号码",
+        "tw_id": "台湾身份证号码",
+        "us_ssn": "美国社会安全号码",
+        "gov_id": "其他证件号码",
+        "health": "健康信息",
+        "known_value": "你在个人资料中填写的标识信息"
+      }
+    },
+    "llmEndpoints": {
+      "rule": "{rule, select, mainland_only {只使用中国大陆境内的 AI 服务。以下是可用的提供方，以及未另行配置时各自使用的地址：} other {带有你的数据的请求不会发送到中国大陆境内的 AI 服务。以下是可用的提供方，以及未另行配置时各自使用的地址：}}",
+      "hosts": "{rule, select, mainland_only {允许使用的 AI 服务地址（含其子域名）：} other {不会使用的 AI 服务地址（含其子域名）：}}",
+      "excluded": "通过网关调用时，会排除以下上游提供方：",
+      "colProvider": "提供方",
+      "colHost": "地址"
+    },
+    "attributions": {
+      "none": "目前没有需要署名的数据集。",
+      "colDataset": "数据集",
+      "colPublisher": "发布方",
+      "colUsedFor": "用途",
+      "colLicence": "许可",
+      "colAsOf": "数据日期",
+      "purpose": {
+        "job_locations": "职位地点的城市名称和位置",
+        "role_categories": "职位类别",
+        "agency_marking": "标记人力资源和猎头公司发布的职位"
+      }
+    },
+    "index": {
+      "title": "法律信息",
+      "sub": "我们的文件，以及本服务如何处理你的数据。下面的清单来自本服务当前的实际配置。",
+      "docsTitle": "文件",
+      "processingTitle": "你的数据在哪里处理",
+      "aiTitle": "AI",
+      "endpointsTitle": "AI 请求的去向",
+      "attributionsTitle": "数据来源署名",
+      "attributionsSub": "我们使用的、许可要求署名的数据集。"
     }
   }
 }
