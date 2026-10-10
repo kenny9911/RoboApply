@@ -19,6 +19,7 @@ import { DAY, rateLimit, type RateWindow } from '../../platform/ratelimit/index.
 import type { FeatureRouterDeps } from '../index.js';
 import { AddTrackerNoteBodySchema, TRACKER_EXPORT_DAILY_LIMIT, TrackerEntryParamsSchema, type FollowUpsResponse } from './contract.js';
 import { trackerCsv } from './csv.js';
+import { zonedDayKey } from './facts.js';
 import { trackerCore, TrackerDuplicateError, TrackerInvalidInputError, TrackerNotFoundError, type TrackerCore } from './service.js';
 
 export const TRACKER_EXPORT_LIMIT_NAME = 'trackerExportPerUser';
@@ -66,9 +67,12 @@ export function createTrackerRouter(deps: FeatureRouterDeps = {}, options: Track
     limiter(TRACKER_EXPORT_LIMIT_NAME, TRACKER_EXPORT_WINDOWS),
     route(async (req, res) => {
       const userId = requireUserId(req);
-      const entries = await core.exportEntries(userId);
-      const csv = trackerCsv(entries, getRequestLocale(req), getCurrentBrandOrDefault());
-      const stamp = new Date().toISOString().slice(0, 10);
+      // `?tz=<IANA name>`: the zone the page is showing dates in (the browser's). A missing or unknown name falls back to the stored zone.
+      const asked = typeof req.query.tz === 'string' ? req.query.tz : null;
+      const [entries, timeZone] = await Promise.all([core.exportEntries(userId), core.timeZone(userId, asked)]);
+      // Dates in the file, and the date in its name, are the user's own (not the UTC date).
+      const csv = trackerCsv(entries, getRequestLocale(req), getCurrentBrandOrDefault(), { timeZone });
+      const stamp = zonedDayKey(new Date(), timeZone);
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="applications-${stamp}.csv"`);
       res.setHeader('Cache-Control', 'no-store');

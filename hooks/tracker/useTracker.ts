@@ -142,10 +142,22 @@ export function useWeeklyInsight(weekStartUtc?: string) {
   });
 }
 
-export function useRefreshWeeklyInsight() {
+/**
+ * Write the week's AI summary. `shownWeek` is the week the card shows (the
+ * reader's own week start): the answer replaces it only when it is about that
+ * same week; otherwise the card is simply read again.
+ */
+export function useRefreshWeeklyInsight(shownWeek?: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => refreshWeeklyInsight(),
-    onSuccess: (data) => qc.setQueryData(trackerKeys.weekly(), data),
+    onSuccess: (data) => {
+      if (!shownWeek) {
+        qc.setQueryData(trackerKeys.weekly(), data);
+        return;
+      }
+      if (data.week.startUtc === shownWeek) qc.setQueryData(trackerKeys.weekly(shownWeek), data);
+      else void qc.invalidateQueries({ queryKey: ['tracker', 'weekly'] });
+    },
   });
 }

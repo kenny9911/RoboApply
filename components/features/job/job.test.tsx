@@ -372,6 +372,32 @@ describe('a job the user added', () => {
     expect(screen.getByTestId('job-header')).not.toHaveTextContent('choose “I applied”');
   });
 
+  it('FIX-3: after "Undo · I didn\'t apply" the header stops saying "In your applications" and takes the server\'s answer', async () => {
+    const d = imported();
+    const saved = { ...d, tracker: { id: 't1', status: 'bookmarked', dateApplied: null }, checklist: { ...d.checklist, saved: true, applied: false } };
+    const applied = { ...d, tracker: { id: 't1', status: 'applied', dateApplied: NOW }, checklist: { ...d.checklist, saved: true, applied: true } };
+    api.getJob.mockResolvedValueOnce(saved);
+    api.markApplied.mockResolvedValue({ tracker: { id: 't1', status: 'applied', dateApplied: NOW } });
+    render();
+    await screen.findByTestId('job-detail');
+    // "I applied": the page data now says applied.
+    api.getJob.mockResolvedValue(applied);
+    fireEvent.click(screen.getByTestId('i-applied-button'));
+    expect(await screen.findByRole('button', { name: 'In your applications' })).toBeDisabled();
+    // Undo: the server puts it back to Saved; the page data read after the undo is slow.
+    let release!: (v: unknown) => void;
+    api.undoApplied.mockResolvedValue({ tracker: { id: 't1', status: 'bookmarked', dateApplied: null } });
+    api.getJob.mockReturnValue(new Promise((r) => (release = r)));
+    fireEvent.click(within(await screen.findByTestId('undo-bar')).getByRole('button', { name: "Undo · I didn't apply" }));
+    await waitFor(() => expect(api.undoApplied).toHaveBeenCalledWith('j1'));
+    // Even before the fresh data arrives the stale "In your applications" is gone.
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'In your applications' })).toBeNull());
+    expect(screen.getByRole('button', { name: 'Saved' })).toBeInTheDocument();
+    release(saved);
+    await waitFor(() => expect(screen.getByTestId('i-applied-button')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'In your applications' })).toBeNull();
+  });
+
   it('already applied when the page opens: no "I applied" button and no line pointing at it', async () => {
     const d = imported();
     api.getJob.mockResolvedValue({ ...d, checklist: { ...d.checklist, applied: true } });

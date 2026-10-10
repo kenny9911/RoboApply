@@ -46,8 +46,8 @@ export function WhyYouFit({ strengths, aligned, listed }: WhyYouFitProps) {
         <>
           <p className={styles.intro}>{t('haveSkills')}</p>
           <ul className={styles.chips}>
-            {aligned.map((s) => (
-              <li key={s} className={`${styles.chip} ${styles.chipHave}`}>
+            {aligned.map((s, i) => (
+              <li key={`${i}:${s}`} className={`${styles.chip} ${styles.chipHave}`}>
                 <span className={styles.chipMark} aria-hidden="true">
                   ✓
                 </span>
@@ -86,8 +86,8 @@ export function WhatYoureMissing({ gaps, missing, listed }: WhatYoureMissingProp
         <>
           <p className={styles.intro}>{t('skillsHeading')}</p>
           <ul className={styles.chips}>
-            {missing.map((s) => (
-              <li key={s} className={`${styles.chip} ${styles.chipMissing}`}>
+            {missing.map((s, i) => (
+              <li key={`${i}:${s}`} className={`${styles.chip} ${styles.chipMissing}`}>
                 {s}
               </li>
             ))}

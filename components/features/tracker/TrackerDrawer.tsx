@@ -35,6 +35,7 @@ import { OfferSection } from '../offers';
 import { TailorButton } from '../tailor';
 import { useAiConsent } from '../../../hooks/copilot';
 import { useLaunchPractice } from '../../../hooks/shared/useLaunchPractice';
+import { useBrand } from '../../../lib/brand';
 import { useFlag, useHiringContactsMode } from '../../../lib/flags';
 import {
   useAddTrackerNote,
@@ -126,7 +127,12 @@ interface FormState {
   notesMarkdown: string;
 }
 
-function formFrom(e: TR.TrackerEntryView): FormState {
+/**
+ * The form for an entry. A salary with no amount has no currency of its own,
+ * so the currency box starts from the brand's (CNY on GoApply, USD on
+ * RoboApply) instead of a database default.
+ */
+export function formFrom(e: TR.TrackerEntryView, defaultCurrency = ''): FormState {
   return {
     status: e.status,
     outcome: e.outcome ?? '',
@@ -136,14 +142,14 @@ function formFrom(e: TR.TrackerEntryView): FormState {
     followUpAt: toDateInput(e.followUpAt),
     deadline: e.deadline ?? '',
     maxSalary: e.maxSalary === null ? '' : String(e.maxSalary),
-    maxSalaryCurrency: e.maxSalaryCurrency ?? '',
+    maxSalaryCurrency: (e.maxSalary !== null ? e.maxSalaryCurrency : null) ?? defaultCurrency,
     notesMarkdown: e.notesMarkdown ?? '',
   };
 }
 
 /** Only the fields that changed (the server records each one). */
-export function buildPatch(entry: TR.TrackerEntryView, f: FormState): In<typeof TR.TrackerPatchBodySchema> {
-  const before = formFrom(entry);
+export function buildPatch(entry: TR.TrackerEntryView, f: FormState, defaultCurrency = ''): In<typeof TR.TrackerPatchBodySchema> {
+  const before = formFrom(entry, defaultCurrency);
   const body: In<typeof TR.TrackerPatchBodySchema> = {};
   if (f.outcome !== before.outcome) {
     if (f.outcome) body.outcome = f.outcome as TR.TrackerOutcome;
@@ -164,9 +170,12 @@ export function buildPatch(entry: TR.TrackerEntryView, f: FormState): In<typeof 
     const n = Number(f.maxSalary);
     body.maxSalary = f.maxSalary.trim() === '' || !Number.isFinite(n) ? null : Math.max(0, Math.round(n));
   }
+  const currency = f.maxSalaryCurrency.trim().toUpperCase();
   if (f.maxSalaryCurrency !== before.maxSalaryCurrency) {
-    const c = f.maxSalaryCurrency.trim().toUpperCase();
-    body.maxSalaryCurrency = /^[A-Z]{3}$/.test(c) ? c : null;
+    body.maxSalaryCurrency = /^[A-Z]{3}$/.test(currency) ? currency : null;
+  } else if (typeof body.maxSalary === 'number' && entry.maxSalaryCurrency !== currency && /^[A-Z]{3}$/.test(currency)) {
+    // A first amount saved with the currency the box showed (the brand's), not whatever the row held.
+    body.maxSalaryCurrency = currency;
   }
   if (f.notesMarkdown !== before.notesMarkdown) body.notesMarkdown = f.notesMarkdown || null;
   return body;
@@ -180,14 +189,15 @@ function DrawerBody({ entry }: { entry: TR.TrackerEntryView }) {
   const refreshEntry = useRefreshTrackerEntry(entry.id);
   const refreshFiles = useRefreshTrackerArtifacts(entry.id);
   const launchPractice = useLaunchPractice();
-  const [form, setForm] = useState<FormState>(() => formFrom(entry));
+  const defaultCurrency = useBrand().currency;
+  const [form, setForm] = useState<FormState>(() => formFrom(entry, defaultCurrency));
   const [notice, setNotice] = useState<'saved' | 'error' | null>(null);
   const link = entryLink(entry);
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setNotice(null);
     setForm((f) => ({ ...f, [key]: value }));
   };
-  const body = buildPatch(entry, form);
+  const body = buildPatch(entry, form, defaultCurrency);
   const dirty = Object.keys(body).length > 0;
   const ended = Boolean(form.outcome);
 
@@ -198,7 +208,7 @@ function DrawerBody({ entry }: { entry: TR.TrackerEntryView }) {
       { id: entry.id, body },
       {
         onSuccess: ({ entry: next }) => {
-          setForm(formFrom(next));
+          setForm(formFrom(next, defaultCurrency));
           setNotice('saved');
         },
         onError: () => setNotice('error'),
@@ -416,6 +426,13 @@ function FilesSent({ entry }: { entry: TR.TrackerEntryView }) {
   );
 }
 
+/** A stage "move" from a stage to the same stage changed nothing and is not history. */
+export function isRealChange(ev: Pick<TR.TrackerEventView, 'kind' | 'fromValue' | 'toValue' | 'payload'>): boolean {
+  if (ev.kind !== 'status') return true;
+  const p = ev.payload ?? {};
+  return Boolean(p.removed || p.undo) || !ev.fromValue || ev.fromValue !== ev.toValue;
+}
+
 function History({ entryId }: { entryId: string }) {
   const t = useTranslations('applications');
   const stageLabel = useStageLabel();
@@ -432,7 +449,9 @@ function History({ entryId }: { entryId: string }) {
       case 'status':
         if (p.removed) return t('events.removed');
         if (p.undo) return t('events.undo', { to: stageLabel(ev.toValue ?? 'bookmarked') });
-        return t('events.status', { from: stageLabel(ev.fromValue ?? 'bookmarked'), to: stageLabel(ev.toValue ?? 'bookmarked') });
+        // The first stage of an application has nothing it moved from ("Moved from Saved to Saved").
+        if (!ev.fromValue) return t('events.created', { stage: stageLabel(ev.toValue ?? 'bookmarked') });
+        return t('events.status', { from: stageLabel(ev.fromValue), to: stageLabel(ev.toValue ?? 'bookmarked') });
       case 'stage':
         return t('events.stage');
       case 'note':
@@ -483,7 +502,7 @@ function History({ entryId }: { entryId: string }) {
       {data && data.length === 0 ? <p className={styles.muted}>{t('drawer.timeline_empty')}</p> : null}
       {data && data.length > 0 ? (
         <ol className={styles.timeline}>
-          {data.map((ev) => (
+          {data.filter(isRealChange).map((ev) => (
             <li key={ev.id} className={styles.timelineItem}>
               <span className={ev.kind === 'note' ? styles.noteText : undefined}>{describe(ev)}</span>
               <time className={styles.muted} dateTime={ev.at}>

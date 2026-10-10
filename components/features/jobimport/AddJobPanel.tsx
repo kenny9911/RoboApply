@@ -18,12 +18,13 @@
 
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { Btn, Tabs, tabPanelProps } from '../../v3/primitives';
 import { jobHref } from '../../v3/shell/destinations';
 import { tailorHref } from '../../../hooks/shared/useLaunchTailor';
 import { practiceHref } from '../../../hooks/shared/useLaunchPractice';
-import { useJobImport, type ImportErrorView } from '../../../hooks/jobimport/useJobImport';
+import { jobImportKeys, useJobImport, type ImportErrorView } from '../../../hooks/jobimport/useJobImport';
 import type { ImportJobResponse, ManualJob } from '../../../lib/api/contracts/jobs/import';
 import { ImportFieldsForm } from './ImportFieldsForm';
 import { ImportWarnings } from './ImportWarnings';
@@ -101,6 +102,9 @@ export interface AddJobPanelProps {
   resumeImportId?: string | null;
 }
 
+/** After a save that failed, the list is read once more this long after (the server may still be finishing). */
+export const REREAD_AFTER_FAILED_SAVE_MS = 8_000;
+
 export function AddJobPanel({ initialMode = 'link', resumeImportId = null }: AddJobPanelProps) {
   const t = useTranslations('jobImport');
   const id = useId();
@@ -112,6 +116,14 @@ export function AddJobPanel({ initialMode = 'link', resumeImportId = null }: Add
   const [formKey, setFormKey] = useState(0);
 
   const result = flow.result;
+  const queryClient = useQueryClient();
+  const rereadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (rereadTimer.current) clearTimeout(rereadTimer.current);
+    },
+    [],
+  );
 
   // Reopen the unfinished add the link names, once per id.
   const resumedId = useRef<string | null>(null);
@@ -136,7 +148,13 @@ export function AddJobPanel({ initialMode = 'link', resumeImportId = null }: Add
 
   async function save(job: ManualJob) {
     const importId = result && result.status !== 'done' ? result.importId : null;
-    await flow.save(job, importId);
+    const saved = await flow.save(job, importId);
+    if (saved) return;
+    // A save that ended in an error may still have gone through (the connection dropped after the job was
+    // stored). Read the list again, now and once more shortly after, so a job that exists is shown.
+    const reread = () => void queryClient.invalidateQueries({ queryKey: jobImportKeys.all });
+    reread();
+    rereadTimer.current = setTimeout(reread, REREAD_AFTER_FAILED_SAVE_MS);
   }
 
   function startOver() {

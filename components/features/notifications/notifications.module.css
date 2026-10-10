@@ -138,6 +138,35 @@
   gap: 8px;
   padding: 0 16px 12px 40px;
 }
+/* The jobs a job alert is about, under its row (aligned with the row's text). */
+.jobs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 16px 12px 40px;
+  min-width: 0;
+}
+.jobList {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.jobLink {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta);
+  color: var(--action);
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+.jobLink:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
 .status {
   margin: 0;
   font-size: var(--fs-meta);

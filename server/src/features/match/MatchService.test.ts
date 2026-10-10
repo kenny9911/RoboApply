@@ -28,7 +28,7 @@ import type { RateLimitResult } from '../../platform/ratelimit/index.js';
 import { RAJobMatchScorerV3Agent, type RAJobMatchScorerV3Output } from '../../roboapply/v2/agents/RAJobMatchScorerAgent.js';
 import { SCORER_PROMPT_VERSION } from './contract.js';
 import { cnPostingVisible } from '../cn/jobs/index.js';
-import { createMatchService, visibleTo, type MatchServiceDeps, type ScorerLike } from './MatchService.js';
+import { createMatchService, shownKeywords, visibleTo, type MatchServiceDeps, type ScorerLike } from './MatchService.js';
 import { createMemoryRepo, jobRecord, resumeRecord } from './testkit.js';
 
 const MODEL = 'test/model-a';
@@ -109,12 +109,22 @@ describe('scoreJob — scorer v3', () => {
     const { service, repo } = setup({ scorer });
     const fit = await service.scoreJob('u1', 'job1');
     // Rust/Haskell are not in the post (dropped); Go is in the post and the resume (moved to matched).
-    expect(fit.keywordsMatched).toEqual(['TypeScript', 'Go']);
-    expect(fit.keywordsMissing).toEqual(['Kubernetes']);
     expect(repo.state.scores[0]!.explanation).toMatchObject({ keywordsMatched: ['TypeScript', 'Go'], keywordsMissing: ['Kubernetes'] });
+    // FIX-3: the view does not repeat a term the skill chips already list (they are the same three things).
+    expect(fit.keywordsMatched).toEqual([]);
+    expect(fit.keywordsMissing).toEqual([]);
     expect(fit.skills).toEqual({ aligned: ['TypeScript', 'Go'], missing: ['Kubernetes'], listed: 3 });
     const pre = await setup({ aiAllowed: async () => false }).service.scoreJob('u1', 'job1');
     expect(pre).toMatchObject({ kind: 'pre', keywordsMatched: [], keywordsMissing: [], skills: { aligned: ['TypeScript', 'Go'], missing: ['Kubernetes'], listed: 3 } });
+  });
+
+  it('FIX-3: stored model terms are shown by the current rule: no repeats, usual spelling, and a broader term a listed technology shows is not "missing"', async () => {
+    const stored = { keywordsMatched: ['typescript/node.js', 'TypeScript', 'payments'], keywordsMissing: ['cloud infrastructure', 'relational databases', 'grpc', 'GRPC', 'kubernetes'] };
+    const user = { skills: ['TypeScript', 'Node.js', 'AWS'], resumeTextNorm: 'built payments apis on aws with postgresql', recentTitle: 'Software Engineer' };
+    expect(shownKeywords(stored, user, { aligned: ['TypeScript'], missing: ['Kubernetes'] })).toEqual({
+      keywordsMatched: ['TypeScript/Node.js', 'Payments', 'Cloud infrastructure', 'Relational databases'],
+      keywordsMissing: ['gRPC'],
+    });
   });
 
   it('a skill only in the resume body counts as shown in the fit view', async () => {
@@ -183,6 +193,74 @@ describe('scoreJob — scorer v3', () => {
     const regen = await service.scoreJob('u1', 'job1', { locale: 'zh', regenerateExplanation: true });
     expect(regen).toMatchObject({ cached: false, summaryLocaleStale: false });
     expect(scorer.run).toHaveBeenCalledTimes(2);
+  });
+
+  it('rewriting the text in another language keeps the score, its components and the scored date', async () => {
+    const run = vi
+      .fn<ScorerLike['run']>()
+      .mockResolvedValueOnce(scorerOutput())
+      // The second call would score differently: none of its numbers may be used.
+      .mockResolvedValueOnce(
+        scorerOutput({
+          dimensions: {
+            title_level: { score: 20, evidence: [] },
+            skills: { score: 10, evidence: [] },
+            industry: { score: 30, evidence: [] },
+            career_path: { score: 40, evidence: [] },
+          },
+          strengths: ['你在 Go 里做过支付接口'],
+          gaps: ['没有体现 Kubernetes 经验'],
+          summary: '你的支付经验很对口，但这个职位以 Kubernetes 为主。',
+          keywordsMatched: [],
+          keywordsMissing: [],
+        }),
+      );
+    const { service, repo, costLog } = setup({ scorer: { run } });
+    const first = await service.scoreJob('u1', 'job1', { locale: 'en' });
+    const scoredAt = repo.state.scores[0]!.generatedAt;
+    const regen = await service.scoreJob('u1', 'job1', { locale: 'zh', regenerateExplanation: true });
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(regen).toMatchObject({
+      kind: 'ai',
+      score: first.score,
+      tier: first.tier,
+      dimensions: first.dimensions,
+      keywordsMatched: first.keywordsMatched,
+      keywordsMissing: first.keywordsMissing,
+      scoredAt: first.scoredAt,
+      summary: '你的支付经验很对口，但这个职位以 Kubernetes 为主。',
+      strengths: ['你在 Go 里做过支付接口'],
+      gaps: ['没有体现 Kubernetes 经验'],
+      summaryLocaleStale: false,
+      cached: false,
+    });
+    expect(repo.state.scores).toHaveLength(1);
+    expect(repo.state.scores[0]).toMatchObject({ score: first.score, locale: 'zh', generatedAt: scoredAt });
+    expect(costLog).toHaveBeenLastCalledWith(expect.objectContaining({ reason: 'locale_regen' }));
+    // The next read in that language is the cache, not flagged.
+    expect(await service.scoreJob('u1', 'job1', { locale: 'zh' })).toMatchObject({ cached: true, summaryLocaleStale: false, score: first.score });
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it('a rewrite that may not run, or fails, leaves the stored AI fit in place: never a quick estimate', async () => {
+    // Over the daily cap.
+    let capped = false;
+    const consume = vi.fn(async ({ key }: { key: string }) => (capped && key.includes(':score:user:') ? { ...allow(0), allowed: false } : allow()));
+    const a = setup({ consume });
+    const first = await a.service.scoreJob('u1', 'job1', { locale: 'en' });
+    capped = true;
+    const overCap = await a.service.scoreJob('u1', 'job1', { locale: 'zh', regenerateExplanation: true });
+    expect(overCap).toMatchObject({ kind: 'ai', score: first.score, summary: first.summary, summaryLocaleStale: true, estimateReason: null });
+    expect(a.scorer.run).toHaveBeenCalledTimes(1);
+    expect(a.repo.state.scores[0]).toMatchObject({ locale: 'en', score: first.score });
+
+    // The model call fails.
+    const run = vi.fn<ScorerLike['run']>().mockResolvedValueOnce(scorerOutput()).mockRejectedValueOnce(new Error('upstream 502'));
+    const b = setup({ scorer: { run } });
+    const stored = await b.service.scoreJob('u1', 'job1', { locale: 'en' });
+    const failed = await b.service.scoreJob('u1', 'job1', { locale: 'zh', regenerateExplanation: true });
+    expect(failed).toMatchObject({ kind: 'ai', score: stored.score, summary: stored.summary, summaryLocaleStale: true });
+    expect(b.repo.state.scores[0]).toMatchObject({ locale: 'en' });
   });
 
   it('beyond 80 a day (or the brand budget) answers the Quick estimate', async () => {
@@ -359,6 +437,44 @@ describe('preScoreMany', () => {
     expect(scorer.run).not.toHaveBeenCalled();
     expect(consume).not.toHaveBeenCalled();
     expect(await service.preScoreMany('u1', [])).toEqual([]);
+  });
+
+  it('FIX-3: a job the user has an AI score for carries THAT score in every list (Similar jobs and alerts used to show the quick estimate)', async () => {
+    const repo = createMemoryRepo({ jobs: [jobRecord(), jobRecord({ id: 'job2' })] });
+    const { service, scorer } = setup({ repo });
+    // The job page scored job1 with the model; job2 has no AI score.
+    const detail = await service.scoreJob('u1', 'job1', { locale: 'en' });
+    expect(detail.kind).toBe('ai');
+    scorer.run.mockClear();
+
+    const list = await service.preScoreMany('u1', ['job1', 'job2']);
+    const estimate = (await service.preScoreJobs('u1', [jobRecord()]))[0]!;
+    expect(estimate.kind).toBe('pre');
+    expect(estimate.score).not.toBe(detail.score); // the two numbers differ: showing both is the bug
+    expect(list[0]).toMatchObject({ jobId: 'job1', kind: 'ai', score: detail.score, tier: detail.tier });
+    expect(list[0]!.dimensions.find((d) => d.key === 'skills')!.score).toBe(60); // the AI components, not the estimate's
+    expect(list[1]).toMatchObject({ jobId: 'job2', kind: 'pre', score: estimate.score });
+    expect(scorer.run).not.toHaveBeenCalled(); // never a model call for a list
+  });
+
+  it('FIX-3: an AI score for an older resume or prompt is not shown (the same rule as the feed card)', async () => {
+    const repo = createMemoryRepo({ jobs: [jobRecord()] });
+    const { service } = setup({ repo });
+    await service.scoreJob('u1', 'job1');
+    repo.state.resumes[0]!.resumeContentHash = 'hash-2'; // the resume changed
+    expect((await service.preScoreMany('u1', ['job1']))[0]!.kind).toBe('pre');
+    repo.state.resumes[0]!.resumeContentHash = 'hash-1';
+    repo.state.scores[0]!.promptVersion = 'old-prompt';
+    expect((await service.preScoreMany('u1', ['job1']))[0]!.kind).toBe('pre');
+  });
+
+  it('FIX-3: the list still answers the quick estimate when the stored scores cannot be read', async () => {
+    const repo = createMemoryRepo({ jobs: [jobRecord()] });
+    repo.listAiScores = async () => {
+      throw new Error('db down');
+    };
+    const { service } = setup({ repo });
+    expect((await service.preScoreMany('u1', ['job1']))[0]).toMatchObject({ jobId: 'job1', kind: 'pre' });
   });
 });
 

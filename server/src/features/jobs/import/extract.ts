@@ -8,7 +8,12 @@
 //      description, location → source `job_data`.
 //   2. Otherwise the page title (`page_title`), the site name
 //      (`page_site_name`) and the page's main text (`page_text`) — values the
-//      form asks the user to check.
+//      form asks the user to check. A page title that names both ("Job
+//      Application for Staff Engineer at Acme", the title Greenhouse boards
+//      use) gives the title and the company. The page text is the posting
+//      only: the site's navigation above the job's own heading and the
+//      application form below it ("Apply for this job", "First Name *", …)
+//      are left out.
 // The link the user gave is the apply link (`link`).
 
 import { htmlToPlain } from '../normalize/index.js';
@@ -100,8 +105,34 @@ function postingLocation(posting: Json): string | null {
 
 const clip = (s: string | null, max: number): string | null => (s ? (s.length <= max ? s : s.slice(0, max).trimEnd()) : null);
 
-/** Page text, minus markdown images and link targets, kept to the description cap. */
-export function cleanPageText(markdown: string): string | null {
+/** A line that starts the page's application form or its footer: nothing after it is the posting. */
+const FORM_START_RE =
+  /^(?:apply (?:for|to) this (?:job|position|role)|apply now|submit (?:your )?application|application form|first name\s*\*?|legal first name\s*\*?|resume\/cv\s*\*?|attach resume|autofill with [a-z ]+|create a job alert|share this job|similar jobs|powered by \w+|立即申请|申请该职位|投递简历)\s*:?$/i;
+/** How far down the page the job's own heading is looked for. */
+const TITLE_SEARCH_LINES = 40;
+
+const lineKey = (s: string) => s.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
+/**
+ * The posting's part of a page's text: from the job's own heading (when the
+ * title is known and appears near the top) to the application form or footer.
+ * Only whole chrome blocks are removed; when neither marker is found the text
+ * is returned as it is.
+ */
+export function withoutPageChrome(plain: string, title: string | null): string {
+  let lines = plain.split('\n');
+  const want = title ? lineKey(title) : '';
+  if (want) {
+    const at = lines.slice(0, TITLE_SEARCH_LINES).findIndex((l) => lineKey(l) === want);
+    if (at > 0) lines = lines.slice(at);
+  }
+  const end = lines.findIndex((l, i) => i > 0 && FORM_START_RE.test(l.trim()));
+  if (end > 0) lines = lines.slice(0, end);
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/** Page text, minus markdown images and link targets (and, with a title, the page chrome around the posting), kept to the description cap. */
+export function cleanPageText(markdown: string, title: string | null = null): string | null {
   const plain = markdown
     .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
@@ -109,7 +140,23 @@ export function cleanPageText(markdown: string): string | null {
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  return clip(plain || null, MAX_DESCRIPTION_CHARS);
+  const posting = withoutPageChrome(plain, title);
+  // Never trade a usable text for a fragment: the trimmed text is used only when it is still a description.
+  const body = posting.length >= MIN_DESCRIPTION_CHARS ? posting : plain;
+  return clip(body || null, MAX_DESCRIPTION_CHARS);
+}
+
+/**
+ * "Job Application for Staff Engineer at Acme" (the page title of Greenhouse
+ * boards) → the title and the company it names. Null for any other shape: a
+ * title is not split on a guess.
+ */
+export function titleAndCompanyFromPage(title: string | null): { title: string; company: string } | null {
+  if (!title) return null;
+  const m = /^\s*job application for\s+(.+?)\s+at\s+(.+?)\s*$/i.exec(title.replace(/\s+/g, ' '));
+  if (!m) return null;
+  const [, role, company] = m as unknown as [string, string, string];
+  return role.trim() && company.trim() ? { title: role.trim(), company: company.trim() } : null;
 }
 
 /** Title from the page `<title>` / og:title, without a trailing " | Site" / " - Careers" part. */
@@ -171,19 +218,25 @@ export function extractDraft(page: ScrapedPage, link: string): ExtractResult {
   }
 
   const site = page.metadata.ogSiteName;
+  // A page title that names the role and the employer ("Job Application for X at Y").
+  const named = titleAndCompanyFromPage(page.metadata.title) ?? titleAndCompanyFromPage(page.metadata.ogTitle);
   if (!draft.title) {
-    const t = titleFromPage(page.metadata.ogTitle ?? page.metadata.title, site);
+    const t = named ? clip(named.title, 200) : titleFromPage(page.metadata.ogTitle ?? page.metadata.title, site);
     if (t) {
       draft.title = t;
       sources.title = 'page_title';
     }
+  }
+  if (!draft.company && named) {
+    draft.company = clip(named.company, 200);
+    sources.company = 'page_title';
   }
   if (!draft.company && site) {
     draft.company = clip(site, 200);
     sources.company = 'page_site_name';
   }
   if (!draft.description) {
-    const body = cleanPageText(page.markdown);
+    const body = cleanPageText(page.markdown, draft.title);
     if (body) {
       draft.description = body;
       sources.description = 'page_text';

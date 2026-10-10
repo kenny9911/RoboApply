@@ -15,7 +15,7 @@
 // factor is listed on /help/ranking (contract RANKING_FACTORS).
 
 import type { FitTierKey, MatchTiers, PreScoreResult } from '../match/index.js';
-import { normalizeSkills } from '../jobs/normalize/index.js';
+import { normalizeSkills, payPlausible } from '../jobs/normalize/index.js';
 import { SENIORITY_LEVELS, type FilterSet } from '../search/index.js';
 import { affinityKeys, affinityScore, type AffinityState } from './affinity.js';
 import { FEED_LIMITS, GOAL_ADJUSTMENTS, ORDERING_RULES, RANKING_FACTORS, type FeedSort, type FitBadge } from './contract.js';
@@ -165,8 +165,10 @@ export function sponsorshipFirst<T extends { row: Pick<FeedJobRow, 'sponsorship'
 const time = (d: Date | null) => (d ? d.getTime() : -Infinity);
 
 /** Annual listed pay for "Highest pay" (pay-listed jobs first; the user's currency first). */
-function annualPay(row: FeedJobRow): number | null {
+export function annualPay(row: Pick<FeedJobRow, 'salaryDisclosed' | 'salaryAnnualMax' | 'salaryAnnualMin' | 'salaryMax' | 'salaryMin' | 'salaryPeriod' | 'salaryCurrency' | 'salaryMonths'>): number | null {
   if (!row.salaryDisclosed) return null;
+  // A figure that cannot be pay (a posting typo) is not "the highest pay": it sorts with jobs that list none.
+  if (!payPlausible({ min: row.salaryMin, max: row.salaryMax, currency: row.salaryCurrency, period: row.salaryPeriod, months: row.salaryMonths })) return null;
   const a = row.salaryAnnualMax ?? row.salaryAnnualMin;
   if (a !== null) return a;
   const v = row.salaryMax ?? row.salaryMin;

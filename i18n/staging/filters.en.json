@@ -1,3 +1,10 @@
 {
-  "filters": {}
+  "filters": {
+    "chips": {
+      "anywhereIn": "Anywhere in {country}",
+      "sponsorshipNotNeeded": "No sponsorship needed",
+      "cleared": "Filters cleared.",
+      "undo": "Undo"
+    }
+  }
 }

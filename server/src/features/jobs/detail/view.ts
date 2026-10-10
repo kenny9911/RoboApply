@@ -13,6 +13,8 @@
 import type { ProductBrand } from '../../../platform/brand/registry.js';
 import type { FeedItem, FitBadge } from '../../feed/contract.js';
 import type { PreScoreResult } from '../../match/contract.js';
+import { payPlausible, statesAmount } from '../normalize/index.js';
+import { bestTaxonomyMatch, taxonomyLabel } from '../taxonomy/index.js';
 import {
   JOB_REQUIREMENT_TAGS,
   PRE_APPLY_STATUSES,
@@ -162,7 +164,20 @@ export function toPay(row: Pick<JobRow, 'salaryMin' | 'salaryMax' | 'salaryCurre
   const min = positive(row.salaryMin);
   const max = positive(row.salaryMax);
   if (!row.salaryDisclosed || (min == null && max == null) || !row.salaryCurrency || !PAY_PERIODS.has(row.salaryPeriod ?? '')) return null;
+  // A stored figure that cannot be pay for its period ("$60,000,000 an hour") is never shown as a number.
+  if (!payPlausible({ min, max, currency: row.salaryCurrency, period: row.salaryPeriod, months: (row as { salaryMonths?: number | null }).salaryMonths ?? null })) return null;
   return { min, max, currency: row.salaryCurrency, period: row.salaryPeriod as JobPay['period'], text: clean(row.salaryText) };
+}
+
+/**
+ * "Pay as stated": the post's own pay words, only when there is no numeric pay
+ * to show and the words carry an amount. "Competitive pay and benefits" and
+ * 面議 are not pay a reader can use, so they render "Pay not listed".
+ */
+export function toPayText(row: Pick<JobRow, 'salaryText'>, pay: JobPay | null): string | null {
+  if (pay) return null;
+  const text = clean(row.salaryText);
+  return text && statesAmount(text) ? text : null;
 }
 
 function clean(s: string | null | undefined): string | null {
@@ -264,7 +279,7 @@ export function toJobDetail(row: JobRow, now: Date, campus: JobCampusInfo | null
     employmentType: row.employmentType,
     seniority: row.seniority,
     pay,
-    payText: pay ? null : clean(row.salaryText),
+    payText: toPayText(row, pay),
     summary: summary ? { text: summary, aiWritten: true } : null,
     sections: toSections(row),
     skills: toSkills(row.skillsDetail),
@@ -301,10 +316,14 @@ export function toCompanySummary(row: Pick<JobRow, 'companyId' | 'companyName' |
   };
 }
 
-/** Feed fit badge from a pre-score (null score → no badge, never 0). */
+/**
+ * Feed fit badge from a list score (null score → no badge, never 0). The kind
+ * is kept: a stored AI score is the same number the feed card shows and is
+ * not labelled "Quick estimate".
+ */
 export function toFitBadge(pre: PreScoreResult | undefined): FitBadge | null {
   if (!pre || pre.score == null || !pre.tier) return null;
-  return { tier: pre.tier, score: pre.score, kind: 'pre', topGap: pre.topGap, topOverlap: pre.topOverlap };
+  return { tier: pre.tier, score: pre.score, kind: pre.kind, topGap: pre.topGap, topOverlap: pre.topOverlap };
 }
 
 /** A similar job as a feed card; pay keeps the posting's own period (weekly too) and its words-only text. */
@@ -319,7 +338,7 @@ export function toSimilarItem(row: JobRow, now: Date, fit: FitBadge | null, trac
     employmentType: row.employmentType,
     seniority: row.seniority,
     pay,
-    payText: pay ? null : clean(row.salaryText),
+    payText: toPayText(row, pay),
     postedAt: row.postedAt ? row.postedAt.toISOString() : null,
     lastSeenAt: row.lastSeenAt ? row.lastSeenAt.toISOString() : null,
     source: { name: sourceOf(row).name, kind: sourceOf(row).kind },
@@ -389,9 +408,49 @@ function distinct(values: string[], exclude: string, max: number): string[] {
   return out;
 }
 
+/** "Senior", "Sr.", "II", "Lead" …: who holds the role, not the role (people at any level do the job). */
+const LEVEL_WORDS = /\b(?:senior|sr|junior|jr|staff|principal|lead|intern|internship|entry[- ]level|mid[- ]level|associate|i{1,3}|iv|v)\b\.?/gi;
+
+/**
+ * A taxonomy name that names one role ("Product designer"). Some names group
+ * several ("Server, barista or bartender", "Finance manager / controller",
+ * "NLP and LLM engineer"): searched as keywords every word must match, so they
+ * find fewer people than the posting's own title would, and they read wrongly
+ * ("People working as Server, barista or bartender").
+ */
+function namesOneRole(label: string): boolean {
+  return !/[\/,(&]|\s(?:or|and)\s/i.test(label);
+}
+
+/**
+ * The role to search people by: the posting title is often a headline
+ * ("Product Designer - Gaming Communities (In-Office NYC)"), and searching it
+ * word for word finds nobody. The role our taxonomy placed the job in is used
+ * when its name is one role ("Product designer"); for a grouped name, or a job
+ * we could not place, the title's first part without notes in brackets and
+ * level words ("Barista").
+ */
+export function searchRole(job: { title: string; primaryTaxonomyId?: string | null }): string {
+  const placed = job.primaryTaxonomyId ? taxonomyLabel(job.primaryTaxonomyId, 'en') : null;
+  if (placed && namesOneRole(placed)) return placed;
+  if (!placed) {
+    const matched = bestTaxonomyMatch(job.title);
+    const label = matched ? taxonomyLabel(matched.id, 'en') : null;
+    if (label && namesOneRole(label)) return label;
+  }
+  const head = job.title
+    .normalize('NFKC')
+    .replace(/[(（[【][^)）\]】]*[)）\]】]/g, ' ')
+    .split(/\s+[-–—|:]\s+|[,;|@]|\s+(?:at|for|in)\s+(?=[A-Z])/)[0]!
+    .replace(LEVEL_WORDS, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return head || job.title.replace(/\s+/g, ' ').trim();
+}
+
 /** Three people searches at the company; nothing is fetched by us. Empty for markets without LinkedIn search. */
 export function peopleSearchLinks(
-  job: { title: string; companyName: string },
+  job: { title: string; companyName: string; primaryTaxonomyId?: string | null },
   profile: { pastCompanies: string[]; schools: string[] },
   market: string,
 ): PeopleSearchLink[] {
@@ -400,8 +459,9 @@ export function peopleSearchLinks(
   if (!company) return [];
   const companies = distinct(profile.pastCompanies, company, MAX_PAST_COMPANIES);
   const schools = distinct(profile.schools, '', MAX_SCHOOLS);
+  const role = searchRole(job);
   return [
-    { kind: 'role', url: linkedinSearch(`${quoted(company)} ${job.title}`.trim()), params: { company, title: job.title } },
+    { kind: 'role', url: linkedinSearch(`${quoted(company)} ${role}`.trim()), params: { company, title: role } },
     {
       kind: 'past_companies',
       url: companies.length ? linkedinSearch(`${quoted(company)} (${companies.map(quoted).join(' OR ')})`) : null,

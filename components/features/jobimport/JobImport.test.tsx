@@ -373,6 +373,23 @@ describe('AddJobPanel — typed in', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save job' }));
   }
 
+  it('FIX-3: a save that ends in an error still re-reads the list (the job may have been stored before the connection dropped)', async () => {
+    // The first list read is empty; the server stored the job although the save call answered 500.
+    api.listAddedJobs.mockResolvedValueOnce(list([])).mockResolvedValue(list([item({ jobId: 'j9', title: 'Analyst', companyName: 'Initech' })]));
+    api.importJob.mockRejectedValueOnce(new RoboApiError('x', { status: 500, payload: { code: 'internal_error' } }));
+    renderWithBrand(
+      <>
+        <AddJobPanel initialMode="manual" />
+        <AddedJobsList />
+      </>,
+    );
+    await waitFor(() => expect(api.listAddedJobs).toHaveBeenCalledTimes(1));
+    fillManual();
+    // The job shows in "Your added jobs" without a page reload.
+    expect(await screen.findByRole('heading', { name: 'Analyst' }, { timeout: 3000 })).toBeInTheDocument();
+    expect(api.listAddedJobs.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
   it('out of credits (402 from the server): the sheet takes over with the server details', async () => {
     api.importJob.mockRejectedValueOnce(
       new RoboApiError('x', { status: 402, payload: { code: 'credits_exhausted', details: { bucket: 'job_import', resetsAt: '2026-10-11T00:00:00.000Z', upgradable: true } } }),

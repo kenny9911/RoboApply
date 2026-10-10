@@ -9,6 +9,9 @@ import type { ReactElement, ReactNode } from 'react';
 import { render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { vi } from 'vitest';
+import type { AbstractIntlMessages } from 'next-intl';
+
+import enMessages from '../../../i18n/messages/en.json';
 
 import { BrandProvider, clientBrandFor, type BrandId } from '../../../lib/brand';
 import { IntlWrapper } from '../../../__tests__/utils/mockTranslations';
@@ -88,12 +91,27 @@ export const TAXONOMY_TREE = {
   sources: [],
 };
 
-export function renderWith(ui: ReactElement, opts: { brand?: BrandId; client?: QueryClient; locale?: string } = {}) {
+/** English messages with a few keys replaced (a locale's translated names), for tests of translated labels. */
+function messagesWith(over: Record<string, unknown> | undefined): AbstractIntlMessages | undefined {
+  if (!over) return undefined;
+  const merge = (base: Record<string, unknown>, src: Record<string, unknown>): Record<string, unknown> => {
+    const out: Record<string, unknown> = { ...base };
+    for (const [k, v] of Object.entries(src)) {
+      const prev = out[k];
+      out[k] = v && typeof v === 'object' && prev && typeof prev === 'object' ? merge(prev as Record<string, unknown>, v as Record<string, unknown>) : v;
+    }
+    return out;
+  };
+  return merge(JSON.parse(JSON.stringify(enMessages)), over) as AbstractIntlMessages;
+}
+
+export function renderWith(ui: ReactElement, opts: { brand?: BrandId; client?: QueryClient; locale?: string; messages?: Record<string, unknown> } = {}) {
+  const messages = messagesWith(opts.messages);
   const client = opts.client ?? new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } });
   function Wrapper({ children }: { children: ReactNode }) {
     return (
       <QueryClientProvider client={client}>
-        <IntlWrapper locale={opts.locale}>
+        <IntlWrapper locale={opts.locale} {...(messages ? { messages } : {})}>
           <BrandProvider brand={clientBrandFor(opts.brand ?? 'roboapply')}>{children}</BrandProvider>
         </IntlWrapper>
       </QueryClientProvider>

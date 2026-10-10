@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_MATCH_TIERS, DEFAULT_MATCH_WEIGHTS } from './contract.js';
 import { getMatchTiers, getMatchWeights, precomputePerUserDay, scoreDailyBudget, tierFor } from './config.js';
 import { buildMatchUser, classYearsFromTags, degreeFromText, parseMonth, postingText, toMatchJob, userNames, yearsFromRanges } from './context.js';
-import { guardEvidence, normalizeForGuard } from './evidence.js';
+import { guardEvidence, normalizeForGuard, plainQuote } from './evidence.js';
 import { buildKeywordRows, mentions, normalizeText } from './keywordRows.js';
 import { stripResumeForScoring } from './pii.js';
 import { RESUME_MD, defaultUserInputs, jobRecord, matchJob, matchUser } from './testkit.js';
@@ -117,6 +117,27 @@ describe('CitationGuard', () => {
       { text: '5+ years of backend experience', source: 'posting' },
     ]);
     expect(guardEvidence('nope', sources)).toEqual([]);
+  });
+
+  it('FIX-3: a quote is shown without the resume\'s markdown markup, and is still checked against what the resume says', () => {
+    const md = { resume: '## Skills\n**Technical:** TypeScript, Go, PostgreSQL\n\n## Experience\n- Led the rewrite of the ingestion service, handling 40 million events a day.\n- Wrote the `billing` module with [Stripe](https://stripe.com).', posting: '' };
+    const kept = guardEvidence(
+      [
+        { text: '**Technical:** TypeScript, Go, PostgreSQL', source: 'resume' }, // copied with its markup
+        { text: '- Led the rewrite of the ingestion service, handling 40 million events a day.', source: 'resume' },
+        { text: 'Wrote the billing module with Stripe', source: 'resume' }, // copied without it
+        { text: '**Technical:** Rust', source: 'resume' }, // invented, markup or not
+      ],
+      md,
+    );
+    expect(kept.map((e) => e.text)).toEqual([
+      'Technical: TypeScript, Go, PostgreSQL',
+      'Led the rewrite of the ingestion service, handling 40 million events a day.',
+      'Wrote the billing module with Stripe',
+    ]);
+    for (const e of kept) expect(e.text).not.toMatch(/\*\*|^[-*] |`|\]\(/);
+    expect(plainQuote('1. *Owned* the __launch__ of snake_case_names and 2 * 3')).toBe('Owned the launch of snake_case_names and 2 * 3');
+    expect(plainQuote('> ### Summary')).toBe('Summary');
   });
 
   it('keeps at most 3', () => {

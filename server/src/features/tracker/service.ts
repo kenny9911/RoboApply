@@ -127,6 +127,12 @@ export interface TrackerCoreDeps {
    * `feedService.recordInteraction`).
    */
   recordInteraction?: ((userId: string, jobId: string, kind: TrackerAffinityKind) => Promise<unknown>) | null;
+  /**
+   * The user's own time zone (IANA), for "this week" and the CSV. Default:
+   * `SeekerProfile.timezone` captured at signup, else the brand's fallback
+   * (features/alerts `resolveTimeZone`: Asia/Shanghai on GoApply, UTC otherwise).
+   */
+  timeZone?: (userId: string) => Promise<string>;
   /** How long a write waits for the feed signal before answering (default `FEED_SIGNAL_TIMEOUT_MS`). */
   feedSignalTimeoutMs?: number;
   /**
@@ -348,8 +354,29 @@ export const feedRecordInteraction = async (userId: string, jobId: string, kind:
   await feedService.recordInteraction(userId, jobId, kind);
 };
 
+/**
+ * A user's time zone from the tracker's own database handle; never throws
+ * (the brand's fallback, else UTC, when it cannot be read).
+ */
+async function readTimeZone(getDb: () => Promise<TrackerDb>, userId: string): Promise<string> {
+  let stored: string | null = null;
+  try {
+    const db = (await getDb()) as unknown as { seekerProfile?: { findUnique(args: { where: { userId: string }; select: { timezone: true } }): Promise<{ timezone: string | null } | null> } };
+    stored = (await db.seekerProfile?.findUnique({ where: { userId }, select: { timezone: true } }))?.timezone ?? null;
+  } catch (err) {
+    logger.warn('TRACKER', 'time zone not read; using the fallback', { userId, error: err instanceof Error ? err.message : String(err) });
+  }
+  try {
+    const { resolveTimeZone } = await import('../alerts/index.js');
+    return resolveTimeZone(stored, getCurrentBrandOrDefault().id);
+  } catch {
+    return 'UTC';
+  }
+}
+
 export function createTrackerCore(deps: TrackerCoreDeps = {}) {
   const getDb = deps.getDb ?? defaultGetDb;
+  const timeZoneOf = deps.timeZone ?? ((userId: string) => readTimeZone(getDb, userId));
   const clock = deps.now ?? (() => new Date());
   const marketOf = deps.market ?? (() => getCurrentBrandOrDefault().market as TrackerMarket);
   const lockKeyOf = deps.lockKey ?? defaultLockKey;
@@ -1043,9 +1070,35 @@ export function createTrackerCore(deps: TrackerCoreDeps = {}) {
       return computeFollowUps(await core.factEntries(userId), clock(), marketOf());
     },
 
-    async weeklyFacts(userId: string, weekStart: string): Promise<WeeklyFacts> {
+    /**
+     * The user's time zone. `preferred` is the zone the reader's browser
+     * reports for this request: the page shows and groups dates in that zone,
+     * so when it is a valid IANA name it wins. The stored zone is written once,
+     * at signup, and is missing on older accounts; it (see
+     * `TrackerCoreDeps.timeZone`) is the fallback.
+     */
+    async timeZone(userId: string, preferred?: string | null): Promise<string> {
+      // A name longer than any IANA zone is not looked up.
+      if (typeof preferred === 'string' && preferred.trim() && preferred.length <= 64) {
+        try {
+          // The same check alerts use (loaded on demand, like the stored-zone fallback above).
+          const { isValidTimeZone } = await import('../alerts/index.js');
+          if (isValidTimeZone(preferred)) return preferred.trim();
+        } catch {
+          // fall through to the stored zone
+        }
+      }
+      return timeZoneOf(userId);
+    },
+
+    /**
+     * The week's counts. `weekStart` is a Sunday (YYYY-MM-DD); its seven days
+     * are the user's days, in their time zone (`preferredTimeZone` as in `timeZone`).
+     */
+    async weeklyFacts(userId: string, weekStart: string, preferredTimeZone?: string | null): Promise<WeeklyFacts> {
       const db = await getDb();
-      const { start, end } = weekRange(weekStart);
+      const timeZone = await core.timeZone(userId, preferredTimeZone);
+      const { start, end } = weekRange(weekStart, timeZone);
       const [entries, events] = await Promise.all([
         core.factEntries(userId),
         db.rATrackerEvent.findMany({
@@ -1054,7 +1107,7 @@ export function createTrackerCore(deps: TrackerCoreDeps = {}) {
           take: SCAN_CAP,
         }),
       ]);
-      return computeWeeklyFacts(entries, events, weekStart, clock(), marketOf());
+      return computeWeeklyFacts(entries, events, weekStart, clock(), marketOf(), timeZone);
     },
 
     async summary(userId: string): Promise<{ byStatus: Record<string, number>; followUps: FollowUpView[] }> {

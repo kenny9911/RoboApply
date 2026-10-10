@@ -212,6 +212,15 @@ export function createMemoryRepo(seed: Partial<MemoryRepoState> = {}): MatchRepo
         .slice(0, limit)
         .map((u) => u.id);
     },
+    async listAiScores({ userId, jobIds, resumeVariantId, resumeContentHash, promptVersion }) {
+      const out = new Map<string, Pick<ScoreRecord, 'score' | 'tier' | 'dimensions'>>();
+      for (const s of state.scores) {
+        if (s.userId !== userId || !jobIds.includes(s.jobId) || s.resumeVariantId !== resumeVariantId) continue;
+        if (s.scoreKind !== 'ai' || s.promptVersion !== promptVersion || s.resumeContentHashAtScore !== resumeContentHash) continue;
+        out.set(s.jobId, { score: s.score, tier: s.tier, dimensions: s.dimensions });
+      }
+      return out;
+    },
     async freshAiScoredJobIds({ userId, jobIds, resumeVariantId, resumeContentHash, modelUsed, promptVersion }) {
       return new Set(
         state.scores

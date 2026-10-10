@@ -17,6 +17,7 @@ import { Markdown } from '../../v3/primitives';
 import { JobFit, JobKeywordCheck } from '../match';
 import { WhyThisJob } from '../compliance';
 import { AiGeneratedBadge, MarketJobMeta, withOwnImport } from '../market';
+import { useBrand } from '../../../lib/brand';
 import type { JobDetailResponse, JobCampusInfo } from '../../../lib/api/contracts/jobs/detail';
 import { validDate } from './format';
 import styles from './job.module.css';
@@ -63,8 +64,10 @@ export function JobOverview({ detail, marketMeta = true }: JobOverviewProps) {
   const t = useTranslations('jobDetail.overview');
   const tq = useTranslations('jobDetail.header');
   const { job } = detail;
+  // Visa sponsorship is a RoboApply question; GoApply (mainland) shows no visa or work-permit wording.
+  const intl = useBrand().market !== 'cn';
   const workAuth = [
-    ...(job.sponsorship.status !== 'not_stated' && job.sponsorship.quote
+    ...(intl && job.sponsorship.status !== 'not_stated' && job.sponsorship.quote
       ? [{ key: 'sponsorship', label: t(`sponsorship.${job.sponsorship.status}`), quote: job.sponsorship.quote }]
       : []),
     ...job.requirements.map((r) => ({ key: r.tag, label: t(`requirement.${r.tag}`), quote: r.quote })),
@@ -136,7 +139,8 @@ export function JobOverview({ detail, marketMeta = true }: JobOverviewProps) {
 
       <section className={styles.section} aria-label={t('keywordTitle')}>
         <h3 className={styles.sectionTitle}>{t('keywordTitle')}</h3>
-        <JobKeywordCheck jobId={job.id} />
+        {/* This section already carries the title: the check does not print "Keyword check" a second time. */}
+        <JobKeywordCheck jobId={job.id} withHeading={false} />
       </section>
     </div>
   );

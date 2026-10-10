@@ -9,9 +9,10 @@
 // sensitive answers, EEO, photo, 籍贯, 政治面貌, gender, birth date, family.
 // School tier is a user-side filter on postings, never a ranking input.
 
+import { statesAmount, withoutPayLabel } from '../jobs/normalize/index.js';
 import { coerceFilterSet } from '../search/index.js';
 import type { Market } from '../../platform/brand/registry.js';
-import { isDegreeLevel, type DegreeLevel, type MatchJob, type MatchUser } from './preScore.js';
+import { isDegreeLevel, resumeSeniority, type DegreeLevel, type MatchJob, type MatchUser } from './preScore.js';
 
 // ── User side ─────────────────────────────────────────────────────────────
 
@@ -184,6 +185,7 @@ export function buildMatchUser(inputs: UserMatchInputs, now: Date = new Date()):
     classYear: inputs.market === 'cn' ? classYearOf(inputs.profile?.cnFields) : null,
     recentTitle: recentTitle ?? null,
     yearsExperience: years,
+    resumeSeniority: resumeSeniority(recentTitle, years),
     searchProfileVersion: inputs.searchProfile?.version ?? null,
   };
 }
@@ -235,6 +237,8 @@ export interface MatchJobRecord {
   salaryAnnualMin: number | null;
   salaryAnnualMax: number | null;
   salaryCurrency: string | null;
+  /** The posting's own pay words ("18-28K·15薪"), when it has them. */
+  salaryText?: string | null;
   sponsorship: string | null;
   sponsorshipEvidence: string | null;
   marketTags: unknown;
@@ -268,6 +272,12 @@ function skillsDetailOf(v: unknown): MatchJob['skillsDetail'] {
     .map((s) => ({ skill: s.skill as string, kind: typeof s.kind === 'string' ? s.kind : undefined, required: s.required === true }));
 }
 
+/** The posting's pay words when they state an amount, without a label of their own; null otherwise. */
+export function payAsPosted(salaryText: string | null | undefined): string | null {
+  const text = typeof salaryText === 'string' ? withoutPayLabel(salaryText.trim()) : '';
+  return text && statesAmount(text) ? text.slice(0, 80) : null;
+}
+
 export function toMatchJob(row: MatchJobRecord): MatchJob {
   const cy = classYearsFromTags(row.marketTags);
   return {
@@ -290,6 +300,7 @@ export function toMatchJob(row: MatchJobRecord): MatchJob {
     salaryAnnualMin: row.salaryAnnualMin,
     salaryAnnualMax: row.salaryAnnualMax,
     salaryCurrency: row.salaryCurrency,
+    payAsPosted: payAsPosted(row.salaryText),
     sponsorship: row.sponsorship,
     sponsorshipEvidence: row.sponsorshipEvidence,
     companyIndustries: row.companyIndustries ?? [],

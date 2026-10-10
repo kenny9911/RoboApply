@@ -16,6 +16,7 @@ import {
   countSql,
   exploreCountsSql,
   filterPredicates,
+  isCountryWideLocation,
   jobIdsSql,
   predicateFor,
   retrievalSql,
@@ -105,6 +106,26 @@ describe('predicates (one snapshot per FilterSet field)', () => {
 
   it('a city with no coordinates and radius 0 matches the city in every script, remote passes', () => {
     expect(show(predicateFor('locations', { locations: [{ label: '上海', city: '上海', radiusKm: 0 }] }, cn))).toMatchSnapshot();
+  });
+
+  it('a country with no city is the whole country, whatever its radius (FIX-3: onboarding "Anywhere in United States")', () => {
+    // What onboarding stored: the country code as the label, radius 0. It used to compare locationCity to "us".
+    const us = { label: 'US', country: 'US', radiusKm: 0 as const };
+    const sql = show(predicateFor('locations', { locations: [us] }, intl));
+    expect(sql?.text).toBe(`(j."workModel" = 'remote' OR (j."locationCountry" = $1))`);
+    expect(sql?.values).toEqual(['US']);
+    expect(sql?.text).not.toContain('locationCity');
+    for (const loc of [us, { ...us, radiusKm: 40 as const }, { ...us, label: 'United States' }, { ...us, label: 'Anywhere in United States' }]) {
+      expect(isCountryWideLocation(loc), JSON.stringify(loc)).toBe(true);
+    }
+    // A city is still a city: named in `city`, by coordinates, or by a label our city table knows.
+    expect(isCountryWideLocation({ label: 'Austin, TX', city: 'Austin', country: 'US', radiusKm: 0 })).toBe(false);
+    expect(isCountryWideLocation({ label: 'Somewhere', country: 'US', lat: 30, lng: -97, radiusKm: 40 })).toBe(false);
+    expect(isCountryWideLocation({ label: 'Austin', country: 'US', radiusKm: 0 })).toBe(false);
+    expect(isCountryWideLocation({ label: 'Berlin', radiusKm: 0 })).toBe(false);
+    // Next to a city, either one admits the job.
+    const mixed = show(predicateFor('locations', { locations: [us, { label: '上海', city: '上海', radiusKm: 0 }] }, intl));
+    expect(mixed?.text).toContain(`(j."locationCountry" = $1) OR (lower(j."locationCity") = ANY(`);
   });
 
   it('a radius without coordinates is resolved from the city table', () => {

@@ -10,13 +10,15 @@
 import { useCallback, useMemo } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
-import { useTaxonomyLabels } from '../../../hooks/search/useFilterQueries';
-import { distanceUnitFor, radiusInUnit, type FilterField, type FilterLocation, type FilterSet } from '../../../hooks/search/filterModel';
+import { readableTaxonomyId, useTaxonomyLabelState } from '../../../hooks/search/useFilterQueries';
+import { distanceUnitFor, isCountryWideLocation, radiusInUnit, type FilterField, type FilterLocation, type FilterSet } from '../../../hooks/search/filterModel';
 
 export interface FilterLabels {
   field: (field: FilterField) => string;
   /** One list item, or a scalar value, of `field`. */
   value: (field: FilterField, value: unknown, fs?: FilterSet) => string;
+  /** Every value of `field` in one phrase: a list is joined in the UI language ("Remote, hybrid"). */
+  values: (field: FilterField, value: unknown, fs?: FilterSet) => string;
   country: (code: string) => string;
   radius: (km: FilterLocation['radiusKm'], country?: string | null) => string;
   money: (amount: number, currency: string) => string;
@@ -25,7 +27,7 @@ export interface FilterLabels {
 export function useFilterLabels(): FilterLabels {
   const t = useTranslations('filters');
   const locale = useLocale();
-  const taxonomy = useTaxonomyLabels();
+  const taxonomy = useTaxonomyLabelState();
 
   const regions = useMemo(() => {
     try {
@@ -71,8 +73,11 @@ export function useFilterLabels(): FilterLabels {
   const value = useCallback(
     (f: FilterField, v: unknown, fs?: FilterSet): string => {
       switch (f) {
-        case 'taxonomyIds':
-          return taxonomy.get(String(v)) ?? String(v);
+        case 'taxonomyIds': {
+          // Never a raw id ("swe_backend"): '' while the names load (callers hold the chip), a readable form after.
+          const id = String(v);
+          return taxonomy.labels.get(id) ?? (taxonomy.ready ? readableTaxonomyId(id) : '');
+        }
         case 'jobTypes':
         case 'workModels':
         case 'seniority':
@@ -93,6 +98,8 @@ export function useFilterLabels(): FilterLabels {
           return country(String(v));
         case 'locations': {
           const l = v as FilterLocation;
+          // A country with no city is the whole country: one localized label, no radius.
+          if (isCountryWideLocation(l)) return t('chips.anywhereIn', { country: country(l.country!) });
           return `${l.label} · ${radius(l.radiusKm, l.country ?? fs?.country)}`;
         }
         case 'salaryMin': {
@@ -122,7 +129,8 @@ export function useFilterLabels(): FilterLabels {
         case 'includeUndisclosedPay':
           return v === false ? t('chips.listedPayOnly') : t('options.any');
         case 'needsSponsorship':
-          return t('chips.sponsorshipNeeded');
+          // The stored answer can be "No" (false): never label that "Needs sponsorship".
+          return v === false ? t('chips.sponsorshipNotNeeded') : t('chips.sponsorshipNeeded');
         case 'hukouTag':
           return t('chips.hukouOnly');
         default:
@@ -132,5 +140,18 @@ export function useFilterLabels(): FilterLabels {
     [t, taxonomy, option, country, radius, money],
   );
 
-  return { field, value, country, radius, money };
+  const values = useCallback(
+    (f: FilterField, v: unknown, fs?: FilterSet): string => {
+      if (!Array.isArray(v)) return value(f, v, fs);
+      const parts = v.map((item) => value(f, item, fs)).filter(Boolean);
+      try {
+        return new Intl.ListFormat(locale, { style: 'short', type: 'unit' }).format(parts);
+      } catch {
+        return parts.join(', ');
+      }
+    },
+    [value, locale],
+  );
+
+  return { field, value, values, country, radius, money };
 }

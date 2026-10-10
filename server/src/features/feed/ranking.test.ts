@@ -15,6 +15,7 @@ import { GOAL_ADJUSTMENTS, ORDERING_RULES, RANKING_FACTORS } from './contract.js
 import {
   fitBadge,
   fitOf,
+  annualPay,
   freshness,
   goalAdjustment,
   passesTier,
@@ -184,6 +185,15 @@ describe('sorts and the tier view', () => {
     expect(sortCandidates([a, b, c], 'highest_pay', { currency: 'USD' }).map((x) => x.row.id)).toEqual(['b', 'a', 'c']);
     expect(sortCandidates([a, b, c], 'highest_pay', { currency: null }).map((x) => x.row.id)).toEqual(['a', 'b', 'c']);
     expect(sortCandidates([a, b, c], 'deadline', { currency: null, today: '2026-10-10' }).map((x) => x.row.id)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('FIX-3: "Highest pay" does not put a figure that cannot be pay ($60,000,000 an hour) at the top', () => {
+    const typo = cand('typo', 't', 0, null, { postedAt: hoursAgo(1), salaryDisclosed: true, salaryCurrency: 'USD', salaryPeriod: 'hour', salaryMin: 60_000_000, salaryMax: 90_000_000, salaryAnnualMin: null, salaryAnnualMax: null });
+    const real = cand('real', 'r', 0, null, { postedAt: hoursAgo(30), salaryDisclosed: true, salaryCurrency: 'USD', salaryPeriod: 'year', salaryMin: 150_000, salaryMax: 190_000, salaryAnnualMax: 190_000 });
+    const lower = cand('lower', 'l', 0, null, { postedAt: hoursAgo(20), salaryDisclosed: true, salaryCurrency: 'USD', salaryPeriod: 'hour', salaryMin: 40, salaryMax: 55, salaryAnnualMax: 114_400 });
+    expect(annualPay(typo.row)).toBeNull();
+    expect(annualPay(lower.row)).toBe(114_400);
+    expect(sortCandidates([typo, lower, real], 'highest_pay', { currency: 'USD' }).map((x) => x.row.id)).toEqual(['real', 'lower', 'typo']);
   });
 
   it('deadline: stated upcoming close dates first; undated, unquoted or past ones follow newest first (never dropped)', () => {

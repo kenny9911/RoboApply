@@ -242,6 +242,14 @@
   display: flex;
   min-width: 0;
 }
+/* The search box only (SearchTypeahead, a row item): fill the row up to a
+ * readable width. As a bare flex item the box shrank to the input's default 20
+ * characters and cut the placeholder. Not on `.combo` itself: the drawer's
+ * typeaheads sit in a column, where a flex-basis would be a height. */
+.searchCombo {
+  flex: 1 1 320px;
+  max-width: 560px;
+}
 .listbox {
   position: absolute;
   z-index: 3;
@@ -375,6 +383,16 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
+  min-width: 0;
+}
+/* "Saving…" while a filter change is on its way (FilterBar). Takes no room when empty. */
+.savingNote {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+}
+.savingNote:empty {
+  display: none;
 }
 .fitLabel {
   font-size: var(--fs-meta);
@@ -561,6 +579,28 @@
   .clearAll,
   .linkBtn {
     min-height: 44px;
+  }
+  /* The three fit views stay on one row on a phone: each takes a share of the
+   * width and a long label wraps inside its own segment. */
+  .fitBar > fieldset,
+  .fitBar .segmented {
+    width: 100%;
+  }
+  .fitBar .segmented {
+    display: flex;
+    flex-wrap: nowrap;
+  }
+  .fitBar .segment {
+    flex: 1 1 0;
+    justify-content: center;
+    padding: 4px 8px;
+    text-align: center;
+    line-height: var(--lh-meta);
+  }
+  /* The quick buttons scroll sideways inside the bar; the fading edge says there is more. */
+  .quickBar {
+    padding-inline-end: 24px;
+    mask-image: linear-gradient(to right, black calc(100% - 32px), transparent);
   }
 }
 

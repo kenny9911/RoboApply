@@ -245,7 +245,7 @@ export const FILTER_FIELD_SPECS: Readonly<Record<FilterField, FilterFieldSpec>> 
   jobTypes: { field: 'jobTypes', section: 'basic', markets: BOTH, predicate: 'employment type is one of these' },
   workModels: { field: 'workModels', section: 'basic', markets: BOTH, predicate: 'work model is one of these' },
   country: { field: 'country', section: 'basic', markets: BOTH, predicate: 'job country equals (remote jobs: hiring country includes)' },
-  locations: { field: 'locations', section: 'basic', markets: BOTH, predicate: 'within radiusKm of any location (0 = same city); remote jobs pass' },
+  locations: { field: 'locations', section: 'basic', markets: BOTH, predicate: 'within radiusKm of any location (0 = same city; a country with no city = the whole country); remote jobs pass' },
   seniority: { field: 'seniority', section: 'basic', markets: BOTH, predicate: 'level is one of these' },
   yearsRange: { field: 'yearsRange', section: 'basic', markets: BOTH, predicate: 'required years overlap the range; unknown passes' },
   postedWithinDays: { field: 'postedWithinDays', section: 'basic', markets: BOTH, predicate: 'postedAt within N days' },

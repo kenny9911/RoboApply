@@ -6,7 +6,7 @@ vi.mock('../../../services/LoggerService.js', () => ({ logger }));
 vi.mock('../../../lib/prisma.js', () => ({ default: {} }));
 
 import { Prisma } from '../../../generated/prisma/client.js';
-import { ENRICH_COST_SKU, createPrismaEnrichRepository, toJobUpdateData, type EnrichDb } from './repository.js';
+import { ENRICH_COST_SKU, createPrismaEnrichRepository, resetMissingCostUsersForTests, toJobUpdateData, type EnrichDb } from './repository.js';
 
 function fakeDb(overrides: Partial<Record<string, unknown>> = {}) {
   const calls: Record<string, unknown[]> = { findUnique: [], update: [], upsert: [], create: [] };
@@ -150,6 +150,28 @@ describe('prisma enrich repository', () => {
       },
     });
     expect(ENRICH_COST_SKU).toBe('ra_job_enrich');
+  });
+
+  it('FIX-3: a system user id that names no account is one warning, then skipped (not an ERROR per job)', async () => {
+    resetMissingCostUsersForTests();
+    vi.mocked(logger.error).mockClear();
+    vi.mocked(logger.warn).mockClear();
+    const fk = Object.assign(new Error('Foreign key constraint violated on the constraint: `UsageDeductionLog_userId_fkey`'), { code: 'P2003', meta: { constraint: 'UsageDeductionLog_userId_fkey' } });
+    const create = vi.fn(async () => Promise.reject(fk));
+    const { db } = fakeDb({ create });
+    const repo = createPrismaEnrichRepository(db);
+    const entry = { userId: 'system_cron_ra_v2', brand: 'roboapply', market: 'intl', model: 'm', promptTokens: 1, completionTokens: 1, costUsd: 0.001, requestId: null } as const;
+    for (let i = 0; i < 10; i++) await expect(repo.logCost({ ...entry, jobId: `j${i}` })).resolves.toBeUndefined();
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(String(vi.mocked(logger.warn).mock.calls[0]![1])).toMatch(/RA_SYSTEM_USER_ID/);
+    // The database is asked once, not once per job.
+    expect(create).toHaveBeenCalledTimes(1);
+    // Another (real) user is unaffected.
+    const ok = fakeDb();
+    await createPrismaEnrichRepository(ok.db).logCost({ ...entry, userId: 'real_user', jobId: 'j1' });
+    expect(ok.calls.create).toHaveLength(1);
+    resetMissingCostUsersForTests();
   });
 
   it('never throws when the cost row cannot be written', async () => {

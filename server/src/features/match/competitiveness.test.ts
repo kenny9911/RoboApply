@@ -75,7 +75,7 @@ describe('evaluatePost', () => {
 
   it('asked skills: the required ones, else every listed skill (feed skills-check rule)', () => {
     expect(askedSkills(post({ skillsDetail: [{ skill: 'Go', required: true }, { skill: 'SQL', required: false }] }))).toEqual(['Go']);
-    expect(askedSkills(post({ skills: ['python', 'sql'], skillsDetail: null }))).toEqual(['python', 'sql']);
+    expect(askedSkills(post({ skills: ['python', 'sql'], skillsDetail: null }))).toEqual(['Python', 'SQL']);
   });
 
   it('median', () => {

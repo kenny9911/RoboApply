@@ -8,6 +8,7 @@
 
 import { useTranslations } from 'next-intl';
 
+import { useBrand } from '../../../lib/brand';
 import type { MatchDimension } from '../../../lib/api/contracts/match';
 import { useEvidenceText } from './labels';
 import styles from './match.module.css';
@@ -23,6 +24,9 @@ export interface DimensionListProps {
 
 export function DimensionList({ dimensions, withHeading = true }: DimensionListProps) {
   const t = useTranslations('fit.compared');
+  const tCn = useTranslations('jobsCn.fit');
+  // GoApply compares location and pay only: there is no visa check on the mainland market, so the part is not named after one.
+  const cn = useBrand().market === 'cn';
   const evidenceText = useEvidenceText();
   const byKey = new Map(dimensions.map((d) => [d.key, d]));
   const ordered = DIMENSION_ORDER.map((k) => byKey.get(k)).filter((d): d is MatchDimension => !!d);
@@ -38,7 +42,7 @@ export function DimensionList({ dimensions, withHeading = true }: DimensionListP
       ) : null}
       <ul className={styles.parts}>
         {ordered.map((d) => {
-          const label = t(`keys.${d.key}`);
+          const label = cn && d.key === 'logistics' ? tCn('logistics') : t(`keys.${d.key}`);
           const scored = d.status === 'scored' && typeof d.score === 'number';
           return (
             <li key={d.key} className={styles.part} data-part={d.key} data-status={d.status}>

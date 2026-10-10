@@ -1,9 +1,10 @@
 'use client';
 
 // SimilarJobs — same role family and country, best fit first (PRODUCT F-JOB-05).
-// Fit is the deterministic quick estimate from the batch (no per-card score
-// requests); unknown fit renders "—", never 0, and any score carries the
-// honesty line under the list. Pay keeps the post's own period (weekly too)
+// Fit comes with the batch (no per-card score requests): the AI score the
+// user already has for a job — the same number its feed card shows — else the
+// deterministic quick estimate, labelled as one. Unknown fit renders "—",
+// never 0, and any score carries the honesty line under the list. Pay keeps the post's own period (weekly too)
 // or its words; only pay the post doesn't state renders "Pay not listed".
 // The caller renders this only while `jobs.recommendations` is on (R-14).
 

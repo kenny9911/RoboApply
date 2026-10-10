@@ -7,10 +7,15 @@
 // tailoring (WP-22's keyword report and WP-36a call `keywordRows`).
 //
 // "Your resume mentions it" is a whole-word, case-insensitive search of the
-// resume text (substring for CJK terms) plus the user's profile skills.
+// resume text (substring for CJK terms) plus the user's profile skills. A
+// broader term the post uses is also met by a named technology the resume
+// lists ("relational databases" by PostgreSQL; terms.ts) and the item says
+// which one counted (`via`). Each thing is listed once, in its usual spelling,
+// and a keyword already listed as a skill is not repeated under keywords.
 
 import type { KeywordRow, KeywordRowStatus } from './contract.js';
-import { degreeMeets, jobSkillList, mentions, normalizeText, skillKey, titleOverlap, userShows, type MatchJob, type MatchUser } from './preScore.js';
+import { degreeMeets, jobSkillList, mentions, normalizeText, shownVia, skillKey, titleOverlap, type MatchJob, type MatchUser } from './preScore.js';
+import { dedupeTerms, displayTerm, termKey } from './terms.js';
 
 export interface KeywordInput {
   keyword: string;
@@ -42,9 +47,12 @@ export function buildKeywordRows(input: {
   keywords: KeywordInput[] | null;
 }): KeywordRow[] {
   const { job, user } = input;
-  const shown = { skills: user.skills, resumeTextNorm: normalizeText(input.resumeText) };
+  const shown = { skills: user.skills, resumeTextNorm: normalizeText(input.resumeText), recentTitle: user.recentTitle };
   const skillSet = new Set(user.skills.map(skillKey));
-  const has = (term: string) => userShows(shown, term, skillSet);
+  const check = (term: string) => {
+    const r = shownVia(shown, term, skillSet);
+    return { found: r.shown, ...(r.via ? { via: r.via } : {}) };
+  };
 
   // Title and level: the same taxonomy overlap the score uses.
   const overlap = titleOverlap(user, job);
@@ -81,7 +89,7 @@ export function buildKeywordRows(input: {
 
   const skillItems = jobSkillList(job)
     .slice(0, MAX_SKILLS)
-    .map((s) => ({ term: s.skill, found: has(s.skill), required: s.required }));
+    .map((s) => ({ term: s.skill, ...check(s.skill), required: s.required }));
   const skillsFound = skillItems.filter((s) => s.found).length;
   const skills: KeywordRow = {
     key: 'skills',
@@ -93,11 +101,13 @@ export function buildKeywordRows(input: {
     items: skillItems,
   };
 
-  const kw = (input.keywords ?? [])
-    .filter((k) => k && typeof k.keyword === 'string' && k.keyword.trim() && k.importance !== 'low')
-    .filter((k, i, arr) => arr.findIndex((o) => skillKey(o.keyword) === skillKey(k.keyword)) === i)
+  // Keywords: one entry per thing, and nothing the skills row already lists.
+  const skillKeys = new Set(skillItems.map((s) => termKey(s.term)));
+  const wanted = (input.keywords ?? []).filter((k) => k && typeof k.keyword === 'string' && k.keyword.trim() && k.importance !== 'low');
+  const kw = dedupeTerms(wanted, (k) => k.keyword)
+    .filter((k) => !skillKeys.has(termKey(k.keyword)))
     .slice(0, MAX_KEYWORDS)
-    .map((k) => ({ term: k.keyword.trim(), found: has(k.keyword) }));
+    .map((k) => ({ term: displayTerm(k.keyword), ...check(k.keyword) }));
   const kwFound = kw.filter((k) => k.found).length;
   const keywords: KeywordRow = {
     key: 'keywords',

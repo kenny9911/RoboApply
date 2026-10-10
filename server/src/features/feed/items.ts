@@ -14,6 +14,7 @@
 //   - "Last checked {date}" comes from lastSeenAt.
 
 import type { MatchExplanation } from '../compliance/contract.js';
+import { payPlausible, statesAmount } from '../jobs/normalize/index.js';
 import type { MatchUser } from '../match/index.js';
 import type { FeedBadge, FeedItem, FitBadge, PublicFeedItem } from './contract.js';
 import type { FeedJobRow } from './types.js';
@@ -39,6 +40,10 @@ export function needsSponsorshipFor(user: Pick<MatchUser, 'needsSponsorship' | '
 function payOf(row: FeedJobRow): FeedItem['pay'] {
   if (!row.salaryDisclosed) return null;
   if (row.salaryMin === null && row.salaryMax === null && !row.salaryText) return null;
+  // A stored figure that cannot be pay for its period (a posting typo: "$60,000,000 an hour") is not shown as a number.
+  if (!payPlausible({ min: row.salaryMin, max: row.salaryMax, currency: row.salaryCurrency, period: row.salaryPeriod, months: row.salaryMonths })) return null;
+  // No figures, only words: they are shown only when they state an amount.
+  if (row.salaryMin === null && row.salaryMax === null && !statesAmount(row.salaryText)) return null;
   const period = row.salaryPeriod && PERIODS.has(row.salaryPeriod) ? (row.salaryPeriod as NonNullable<FeedItem['pay']>['period']) : 'year';
   return { min: row.salaryMin, max: row.salaryMax, currency: row.salaryCurrency ?? '', period, text: row.salaryText };
 }
@@ -141,6 +146,7 @@ export function publicItem(row: FeedJobRow, user: ItemContext['user'] = null, no
     pay: payOf(row),
     payMonths: row.market === 'cn' ? row.salaryMonths : null,
     postedAt: iso(row.postedAt),
+    postedAtEstimated: row.postedAtEstimated === true,
     lastSeenAt: iso(row.lastSeenAt),
     source: sourceOf(row),
     fromRecruiterBank: row.fromRecruiterBank,

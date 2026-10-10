@@ -9,7 +9,7 @@
 // The job-detail route (WP-34) mounts the MATCH handler, which answers the
 // MATCH `MatchFitView` (a superset of jobs/detail `FitView`).
 
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type UseMutationResult, type UseQueryResult } from '@tanstack/react-query';
 
 import { scoreJob } from '../../lib/api/jobs';
 import { apiErrorCode } from '../../lib/api/contracts/wire';
@@ -39,5 +39,42 @@ export function useJobFit(
     enabled: !!jobId && (options.enabled ?? true),
     staleTime: 5 * 60 * 1000,
     retry: shouldRetryMatch,
+  });
+}
+
+/** The rewrite did not happen: the server answered something other than the AI fit in the reader's language. */
+export class FitRewriteNotDoneError extends Error {
+  constructor() {
+    super('fit_rewrite_not_done');
+    this.name = 'FitRewriteNotDoneError';
+  }
+}
+
+/** Is this answer the AI fit, written in the language that was asked for? */
+export function isRewrittenFit(fit: MatchFitView | null | undefined): fit is MatchFitView {
+  return !!fit && fit.kind === 'ai' && fit.summaryLocaleStale === false;
+}
+
+/**
+ * Rewrite the AI-written parts of a fit in the reader's language (the score
+ * route's `regenerateExplanation`). The server keeps the stored score and its
+ * components and writes only the summary, strengths and gaps again, when the
+ * person asks. It is platform-paid like the score itself.
+ *
+ * The call can answer 200 without a rewrite (the day's limit is used up, the
+ * model failed): that answer is the stored fit still flagged, or a quick
+ * estimate. Neither replaces the fit on screen; the mutation fails instead, so
+ * the reader is told and the AI fit stays as it was.
+ */
+export function useRewriteFitText(jobId: string | null | undefined, options: { resumeVariantId?: string | null } = {}): UseMutationResult<MatchFitView, unknown, void> {
+  const qc = useQueryClient();
+  return useMutation<MatchFitView, unknown, void>({
+    mutationFn: async () => {
+      const res = await scoreJob(jobId!, { regenerateExplanation: true, ...(options.resumeVariantId ? { resumeVariantId: options.resumeVariantId } : {}) });
+      const fit = res.fit as unknown as MatchFitView;
+      if (!isRewrittenFit(fit)) throw new FitRewriteNotDoneError();
+      return fit;
+    },
+    onSuccess: (fit) => qc.setQueryData(jobFitKey(jobId ?? '', options.resumeVariantId), fit),
   });
 }

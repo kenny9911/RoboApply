@@ -1,3 +1,15 @@
 {
-  "fit": {}
+  "fit": {
+    "keywordCheck": {
+      "count": "{found} of {total} shown by your resume",
+      "shownBy": "your resume shows {term}",
+      "via": "from {term}"
+    },
+    "otherLanguage": {
+      "note": "The written parts of this analysis are in another language. The score is the same.",
+      "rewrite": "Rewrite them in this language",
+      "rewriting": "Rewriting…",
+      "failed": "We couldn't rewrite it. Try again."
+    }
+  }
 }

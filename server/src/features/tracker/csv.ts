@@ -21,6 +21,7 @@
 import { BRANDS, type ProductBrand } from '../../platform/brand/registry.js';
 import { createEmailTranslator, type EmailTranslator } from '../../platform/email/i18n.js';
 import type { TrackerEntryView } from './contract.js';
+import { userDayKey, zoneOffsetLabel, zonedMinute } from './facts.js';
 import type { TrackerMarket } from './stages.js';
 
 /** Column order of the file; each id is a key under `<group>.header`. */
@@ -94,17 +95,44 @@ export function csvCell(value: unknown): string {
   return s;
 }
 
-const day = (iso: string | null) => (iso ? iso.slice(0, 10) : '');
+export interface TrackerCsvOptions {
+  /**
+   * The user's IANA time zone. Days and the interview time are written in it
+   * (a job marked applied at 02:25 on Oct 11 in Taipei is "2026-10-11", not the
+   * UTC date), and the interview cell says which zone its time is in. Absent → UTC.
+   */
+  timeZone?: string | null;
+}
+
+/** A stored tracker date as the user's calendar day ('' when absent or unreadable). */
+function dayCell(iso: string | null, timeZone: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : userDayKey(d, timeZone);
+}
+
+/** "2026-10-20 10:30 UTC+08:00": the interview's local time with the zone it is in (a time with no zone cannot be read). */
+function momentCell(iso: string | null, timeZone: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : `${zonedMinute(d, timeZone)} ${zoneOffsetLabel(d, timeZone)}`;
+}
 
 const brandOf = (brand: ProductBrand | TrackerMarket): ProductBrand => (typeof brand === 'string' ? (brand === 'cn' ? BRANDS.goapply : BRANDS.roboapply) : brand);
 
 /**
  * The whole file: UTF-8 BOM (so spreadsheet apps read Chinese), CRLF line
  * ends. `brand` is the request's brand (a market is accepted for callers that
- * only know the market).
+ * only know the market). Dates are the user's own (`options.timeZone`).
  */
-export function trackerCsv(entries: readonly TrackerEntryView[], locale: string | null | undefined, brand: ProductBrand | TrackerMarket): string {
+export function trackerCsv(
+  entries: readonly TrackerEntryView[],
+  locale: string | null | undefined,
+  brand: ProductBrand | TrackerMarket,
+  options: TrackerCsvOptions = {},
+): string {
   const words = csvWords(locale, brandOf(brand));
+  const tz = options.timeZone ?? 'UTC';
   const rows: unknown[][] = [words.header];
   for (const e of entries) {
     const company = e.job?.companyName ?? e.externalSnapshot?.companyName ?? '';
@@ -115,10 +143,10 @@ export function trackerCsv(entries: readonly TrackerEntryView[], locale: string 
       title,
       words.stage(e.status),
       e.outcome ? words.outcome(e.outcome) : '',
-      day(e.dateSaved),
-      day(e.dateApplied),
-      e.interviewAt ? e.interviewAt.slice(0, 16).replace('T', ' ') : '',
-      day(e.followUpAt),
+      dayCell(e.dateSaved, tz),
+      dayCell(e.dateApplied, tz),
+      momentCell(e.interviewAt, tz),
+      dayCell(e.followUpAt, tz),
       e.deadline ?? '',
       e.maxSalary ?? '',
       e.maxSalary !== null ? (e.maxSalaryCurrency ?? '') : '',

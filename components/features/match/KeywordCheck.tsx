@@ -20,16 +20,25 @@ const STATUS_CLASS: Partial<Record<KeywordRowStatus, string>> = {
 
 export interface KeywordCheckProps {
   rows: KeywordRow[];
+  /** Render the section heading (default true). A caller that prints its own "Keyword check" title passes false. */
+  withHeading?: boolean;
 }
 
-export function KeywordCheck({ rows }: KeywordCheckProps) {
+export function KeywordCheck({ rows, withHeading = true }: KeywordCheckProps) {
   const t = useTranslations('fit.keywordCheck');
   const degree = useDegreeLabel();
   return (
-    <section className={styles.section} aria-labelledby="fit-keywords-heading" data-testid="fit-keyword-check">
-      <h3 id="fit-keywords-heading" className={styles.heading}>
-        {t('title')}
-      </h3>
+    <section
+      className={styles.section}
+      aria-labelledby={withHeading ? 'fit-keywords-heading' : undefined}
+      aria-label={withHeading ? undefined : t('title')}
+      data-testid="fit-keyword-check"
+    >
+      {withHeading ? (
+        <h3 id="fit-keywords-heading" className={styles.heading}>
+          {t('title')}
+        </h3>
+      ) : null}
       <p className={styles.intro}>{t('intro')}</p>
       <ul className={styles.rows}>
         {rows.map((r) => (
@@ -64,28 +73,38 @@ function RowDetail({ row, degree }: { row: KeywordRow; degree: ReturnType<typeof
   if (!lines.length && !row.items.length) return null;
   return (
     <div className={styles.rowDetail}>
-      {lines.map((l) => (
-        <span key={l}>{l}</span>
+      {/* Keys by position: "what the post asks" and "what you have" can be the same words (本科 / 本科). */}
+      {lines.map((l, i) => (
+        <span key={`${i}:${l}`}>{l}</span>
       ))}
       {row.items.length ? (
         <ul className={styles.chips}>
-          {row.items.map((it) => (
-            <li
-              key={it.term}
-              className={`${styles.chip} ${it.found ? styles.chipHave : styles.chipMissing}`}
-              aria-label={`${it.term}: ${it.found ? t('mentioned') : t('notMentioned')}${it.required ? ` (${t('required')})` : ''}`}
-            >
-              <span className={styles.chipMark} aria-hidden="true">
-                {it.found ? '✓' : '–'}
-              </span>
-              <span aria-hidden="true">{it.term}</span>
-              {it.required ? (
-                <span className={styles.source} aria-hidden="true">
-                  {t('required')}
+          {row.items.map((it, i) => {
+            // Met by something else the resume names ("Relational databases" by PostgreSQL): say what counted.
+            const state = !it.found ? t('notMentioned') : it.via ? t('shownBy', { term: it.via }) : t('mentioned');
+            return (
+              <li
+                key={`${i}:${it.term}`}
+                className={`${styles.chip} ${it.found ? styles.chipHave : styles.chipMissing}`}
+                aria-label={`${it.term}: ${state}${it.required ? ` (${t('required')})` : ''}`}
+              >
+                <span className={styles.chipMark} aria-hidden="true">
+                  {it.found ? '✓' : '–'}
                 </span>
-              ) : null}
-            </li>
-          ))}
+                <span aria-hidden="true">{it.term}</span>
+                {it.found && it.via ? (
+                  <span className={styles.source} aria-hidden="true">
+                    {t('via', { term: it.via })}
+                  </span>
+                ) : null}
+                {it.required ? (
+                  <span className={styles.source} aria-hidden="true">
+                    {t('required')}
+                  </span>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       ) : null}
     </div>
@@ -93,7 +112,7 @@ function RowDetail({ row, degree }: { row: KeywordRow; degree: ReturnType<typeof
 }
 
 /** The keyword check for a job, loaded through hooks/match. */
-export function JobKeywordCheck({ jobId, resumeVariantId }: { jobId: string; resumeVariantId?: string | null }) {
+export function JobKeywordCheck({ jobId, resumeVariantId, withHeading = true }: { jobId: string; resumeVariantId?: string | null; withHeading?: boolean }) {
   const t = useTranslations('fit.keywordCheck');
   const q = useKeywordCheck(jobId, { resumeVariantId });
   if (q.isPending) {
@@ -110,5 +129,5 @@ export function JobKeywordCheck({ jobId, resumeVariantId }: { jobId: string; res
       </p>
     );
   }
-  return <KeywordCheck rows={q.data.rows} />;
+  return <KeywordCheck rows={q.data.rows} withHeading={withHeading} />;
 }

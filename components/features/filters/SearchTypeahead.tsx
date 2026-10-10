@@ -12,7 +12,7 @@ import { useTranslations } from 'next-intl';
 
 import { toast } from '../../v3/primitives/Toast';
 import { cn } from '../../../lib/utils';
-import { useApplyFilters } from '../../../hooks/search/useApplyFilters';
+import { useApplyFilters, useOptimisticFilters } from '../../../hooks/search/useApplyFilters';
 import { typeaheadReady, useCompanySuggestions, useTitleSuggestions } from '../../../hooks/search/useFilterQueries';
 import type { FilterSetPatch } from '../../../hooks/search/filterModel';
 import type { SearchProfile } from '../../../hooks/search/useSearchProfiles';
@@ -31,11 +31,13 @@ export interface SearchTypeaheadProps {
   onApplied?: (profile: SearchProfile) => void;
 }
 
-export function SearchTypeahead({ profile, onApplied }: SearchTypeaheadProps) {
+export function SearchTypeahead({ profile: saved, onApplied }: SearchTypeaheadProps) {
   const t = useTranslations('filters.search');
   const tDrawer = useTranslations('filters.drawer');
   const ctx = useEditorContext();
   const { apply } = useApplyFilters();
+  // A pick is added to the filters as the user just left them (a change still being saved included).
+  const { profile } = useOptimisticFilters(saved);
   const listId = useId();
   const [text, setText] = useState(profile?.filters.q ?? '');
   const [open, setOpen] = useState(false);
@@ -102,7 +104,7 @@ export function SearchTypeahead({ profile, onApplied }: SearchTypeaheadProps) {
 
   let lastKind: Row['kind'] | null = null;
   return (
-    <div className={styles.combo} role="search">
+    <div className={`${styles.combo} ${styles.searchCombo}`} role="search">
       <label htmlFor={`${listId}-input`} className={styles.hidden}>
         {t('label')}
       </label>

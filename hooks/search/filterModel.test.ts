@@ -11,6 +11,7 @@ import {
   distanceUnitFor,
   filtersKey,
   hiddenFieldsFor,
+  isCountryWideLocation,
   mergePatch,
   normalizeFilters,
   onlyListedPay,
@@ -22,6 +23,9 @@ import {
   type FilterSet,
 } from './filterModel';
 import { withoutUnchangedSearchKeys } from './keys';
+import { localizedTaxonomyLabels, readableTaxonomyId } from './useFilterQueries';
+import stagedTaxonomy from '../../i18n/staging/taxonomy.en.json';
+import taxonomyV1 from '../../server/src/features/jobs/taxonomy/taxonomy.v1.json';
 
 describe('field lists', () => {
   it('cover every FilterSet field once, with the market-only sets', () => {
@@ -106,5 +110,66 @@ describe('class years and stale-draft guard', () => {
     const server = { roleTitles: ['A'], cities: ['X'], digest: 'daily' };
     expect(withoutUnchangedSearchKeys({ roleTitles: ['A'], cities: ['Y'], digest: 'weekly' }, server)).toEqual({ cities: ['Y'], digest: 'weekly' });
     expect(withoutUnchangedSearchKeys({ roleTitles: ['A'] }, null)).toEqual({ roleTitles: ['A'] });
+  });
+});
+
+// FIX-3: job-function names in the UI language (the server's tree has English and Simplified Chinese only).
+describe('localizedTaxonomyLabels', () => {
+  const nodes = [
+    { id: 'software_engineering', label: 'Software engineering' },
+    { id: 'swe_backend', label: 'Backend and platform' },
+    { id: 'data_scientist', label: 'Data scientist' },
+    { id: 'ux_designer', label: 'UX designer' },
+  ];
+  const messages = {
+    categories: { software_engineering: 'ソフトウェアエンジニアリング' },
+    groups: { swe_backend: 'バックエンド／プラットフォーム' },
+    roles: { data_scientist: 'データサイエンティスト', not_a_node: '—', ux_designer: '  ' },
+  };
+
+  it('takes the translated names where the bundle has them and the server name elsewhere', () => {
+    const ja = localizedTaxonomyLabels(nodes, 'ja', messages);
+    expect(ja.get('software_engineering')).toBe('ソフトウェアエンジニアリング');
+    expect(ja.get('swe_backend')).toBe('バックエンド／プラットフォーム');
+    expect(ja.get('data_scientist')).toBe('データサイエンティスト');
+    expect(ja.get('ux_designer')).toBe('UX designer'); // an empty translation is not a name
+    expect(ja.has('not_a_node')).toBe(false);
+  });
+
+  it('English and Simplified Chinese keep the server\'s own curated names', () => {
+    expect(localizedTaxonomyLabels(nodes, 'en', messages).get('swe_backend')).toBe('Backend and platform');
+    const zhNodes = [{ id: 'swe_backend', label: '后端与平台' }];
+    expect(localizedTaxonomyLabels(zhNodes, 'zh', { groups: { swe_backend: 'Backend and platform' } }).get('swe_backend')).toBe('后端与平台');
+    expect(localizedTaxonomyLabels(nodes, 'zh-TW', null).get('data_scientist')).toBe('Data scientist');
+  });
+
+  it('an id nobody has a name for is made readable, never shown raw', () => {
+    expect(readableTaxonomyId('swe_backend')).toBe('Swe backend');
+    expect(readableTaxonomyId('data_scientist')).toBe('Data scientist');
+  });
+
+  it('every role of the taxonomy is staged for translation, with the taxonomy\'s own English name', () => {
+    const staged = (stagedTaxonomy as { taxonomy: { roles: Record<string, string> } }).taxonomy.roles;
+    const roles = (taxonomyV1 as { nodes: Array<{ id: string; level: number; en: string }> }).nodes.filter((n) => n.level === 3);
+    expect(Object.keys(staged).sort()).toEqual(roles.map((r) => r.id).sort());
+    for (const r of roles) expect(staged[r.id], r.id).toBe(r.en);
+  });
+});
+
+describe('country-wide locations', () => {
+  it('a country with no city is the whole country; a city, or a label that is not the country, is not', () => {
+    expect(isCountryWideLocation({ label: 'US', country: 'US', radiusKm: 0 })).toBe(true);
+    expect(isCountryWideLocation({ label: 'United States', country: 'US', radiusKm: 40 })).toBe(true);
+    expect(isCountryWideLocation({ label: 'Anywhere in United States', country: 'US', radiusKm: 0 })).toBe(true);
+    expect(isCountryWideLocation({ label: 'Austin', country: 'US', radiusKm: 0 })).toBe(false);
+    expect(isCountryWideLocation({ label: 'US', city: 'Austin', country: 'US', radiusKm: 0 })).toBe(false);
+    expect(isCountryWideLocation({ label: 'US', country: 'US', lat: 1, lng: 2, radiusKm: 40 })).toBe(false);
+    expect(isCountryWideLocation({ label: 'Berlin', radiusKm: 0 })).toBe(false);
+  });
+
+  it('diffFilters treats an off toggle as no filter (only includeUndisclosedPay: false filters)', () => {
+    expect(diffFilters({}, { needsSponsorship: false, excludeAgencies: false })).toEqual([]);
+    expect(diffFilters({}, { includeUndisclosedPay: false })).toEqual([{ field: 'includeUndisclosedPay', kind: 'added', from: undefined, to: false }]);
+    expect(diffFilters({ needsSponsorship: true }, { needsSponsorship: false })).toEqual([{ field: 'needsSponsorship', kind: 'removed', from: true, to: undefined }]);
   });
 });

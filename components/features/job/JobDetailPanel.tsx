@@ -103,6 +103,9 @@ function useOpenJob(mode: JobDetailPanelProps['mode']): (jobId: string) => void 
   };
 }
 
+/** How long the header waits for the page data after an undo before showing what it has. */
+const UNDO_RESYNC_MS = 8_000;
+
 function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse; mode: JobDetailPanelProps['mode']; onClose?: () => void; refetch: () => void }) {
   const t = useTranslations('jobDetail');
   const format = useFormatter();
@@ -161,7 +164,17 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
   ];
   const idBase = `job-${job.id}-${mode}`;
   const saved = tracker != null;
-  const applied = checklist.applied || actions.lastApplied != null;
+  // After "Undo · I didn't apply" the page data is read again; until it arrives the header does not go on
+  // saying "In your applications" from the data it had before the undo (FIX-3).
+  const [undone, setUndone] = useState(false);
+  useEffect(() => setUndone(false), [detail]);
+  useEffect(() => {
+    if (!undone) return undefined;
+    const id = setTimeout(() => setUndone(false), UNDO_RESYNC_MS);
+    return () => clearTimeout(id);
+  }, [undone]);
+  const appliedOnServer = checklist.applied && !undone;
+  const applied = appliedOnServer || actions.lastApplied != null;
 
   const applyNow = async () => {
     const res = await actions.applyOnCompanySite();
@@ -178,13 +191,15 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
   };
 
   const iApplied = () => {
-    setUndoable(!checklist.applied);
+    setUndoable(!appliedOnServer);
     void actions.markApplied();
   };
 
   const undo = async () => {
     await actions.undoApplied();
     setUndoable(false);
+    setUndone(true);
+    refetch();
   };
 
   const share = async () => {
@@ -241,7 +256,7 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
             {t('actions.iApplied')}
           </Btn>
         ) : null}
-        {saved && !checklist.applied ? (
+        {saved && !appliedOnServer ? (
           <Btn aria-pressed="true" onClick={() => void actions.unsave()} disabled={actions.pending === 'unsave'} title={t('actions.unsave')}>
             {t('actions.saved')}
           </Btn>

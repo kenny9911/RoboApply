@@ -18,6 +18,7 @@ import {
   mergeClassYearTags,
   mergePostingTags,
   sourceNameOf,
+  statedCloseAt,
 } from '../card.js';
 import { publicItem } from '../../../feed/items.js';
 import { retrievalSql } from '../../../feed/sql.js';
@@ -51,6 +52,10 @@ describe('pay (F-SAL-01 cn)', () => {
   });
   it('not disclosed → no text (renders 薪资未披露), even with a stray figure elsewhere', () => {
     expect(cnSalary({ salaryDisclosed: false, salaryText: '面议', salaryMin: 8000 })).toEqual({ text: null, disclosed: false });
+    // FIX-3: a pasted pay line keeps its words but not its own label (the row already says 薪资: "薪资 薪资:18-28K·15薪").
+    expect(cnSalary({ salaryDisclosed: true, salaryText: '薪资:18-28K·15薪', salaryMin: 18000, salaryMax: 28000 })).toEqual({ text: '18-28K·15薪', disclosed: true });
+    expect(cnSalary({ salaryDisclosed: true, salaryText: '薪资范围：200-300元/天' })).toEqual({ text: '200-300元/天', disclosed: true });
+    expect(cnSalary({ salaryDisclosed: true, salaryText: '月薪 4万~5万' })).toEqual({ text: '月薪 4万~5万', disclosed: true }); // no label to remove
     expect(cnSalary({})).toEqual({ text: null, disclosed: false });
   });
   it('structured CNY pay in mainland notation', () => {
@@ -383,6 +388,38 @@ describe('buildCnCardMeta', () => {
     const meta = buildCnCardMeta({ lastSeenAt: new Date('2026-10-09T00:00:00Z') }, { licence: null });
     expect(meta.updatedAt).toBeNull();
     expect(meta.lastCheckedAt).toBe('2026-10-09T00:00:00.000Z');
+  });
+
+  it('FIX-3: a pasted job that states "网申截止：2026年11月30日" shows that date, not "截止日期未注明"', () => {
+    const text = '岗位职责：后端开发。\n网申截止：2026年11月30日\n工作地点：上海';
+    const tags = extractPostingTags(text);
+    expect(tags.map((t) => t.tag)).toContain('apply_closes:2026-11-30');
+    // A user's import has no source expiry of its own.
+    const now = new Date('2026-10-11T04:00:00Z');
+    const meta = buildCnCardMeta({ provider: 'user_import', visibility: 'private', expiresAt: null, marketTags: tags }, { licence: null }, now);
+    expect(meta.expiresAt).toBe('2026-11-30T15:59:59.000Z'); // the end of Nov 30 in Beijing
+    expect(statedCloseAt(tags, now)).toBe('2026-11-30T15:59:59.000Z');
+    // The stated date wins over a source expiry; a tag without its quote is not a stated date.
+    expect(buildCnCardMeta({ expiresAt: new Date('2026-12-31T00:00:00Z'), marketTags: tags }, { licence: null }, now).expiresAt).toBe('2026-11-30T15:59:59.000Z');
+    expect(statedCloseAt([{ tag: 'apply_closes:2026-11-30', evidenceQuote: '' }], now)).toBeNull();
+    expect(statedCloseAt([{ tag: 'apply_closes:2026-12-05', evidenceQuote: 'a' }, { tag: 'apply_closes:2026-11-30', evidenceQuote: 'b' }], now)).toBe('2026-11-30T15:59:59.000Z');
+  });
+
+  it('FIX-3: with two stated dates, one passed and one to come, the card shows the one to come (as the deadline sort does)', () => {
+    // 第一批网申 closed on Sep 30; 第二批 closes on Nov 30.
+    const tags = [
+      { tag: 'apply_closes:2026-09-30', evidenceQuote: '第一批网申截止：2026年9月30日' },
+      { tag: 'apply_closes:2026-11-30', evidenceQuote: '第二批网申截止：2026年11月30日' },
+    ];
+    const now = new Date('2026-10-11T04:00:00Z');
+    expect(statedCloseAt(tags, now)).toBe('2026-11-30T15:59:59.000Z');
+    expect(buildCnCardMeta({ marketTags: tags, expiresAt: null }, { licence: null }, now).expiresAt).toBe('2026-11-30T15:59:59.000Z');
+    // "Today" is the day in China: at 16:30 UTC on Sep 30 it is already Oct 1 there, so Sep 30 has passed.
+    expect(statedCloseAt(tags, new Date('2026-09-30T15:30:00Z'))).toBe('2026-09-30T15:59:59.000Z');
+    expect(statedCloseAt(tags, new Date('2026-09-30T16:30:00Z'))).toBe('2026-11-30T15:59:59.000Z');
+    // Every stated date has passed: the latest one, shown as passed. Never an earlier one, never none.
+    expect(statedCloseAt(tags, new Date('2026-12-15T04:00:00Z'))).toBe('2026-11-30T15:59:59.000Z');
+    expect(statedCloseAt([{ tag: 'apply_closes:2026-09-30', evidenceQuote: 'a' }], new Date('2026-12-15T04:00:00Z'))).toBe('2026-09-30T15:59:59.000Z');
   });
 
   it('unknown dates stay null (rendered "Not listed")', () => {
