@@ -35,8 +35,27 @@
 //     INTERVIEW_ENGINE_JOIN_TOKEN_TTL_SEC (default 3600)
 //     INTERVIEW_ENGINE_SESSION_EXPIRY_MIN (default 120)
 //     INTERVIEW_ENGINE_RECORDING_ENABLED  (default false — opt-in)
+//   Per brand (WP-63a, ARCHITECTURE.md §1.9, TASK_PLAN R-03): every LiveKit,
+//   S3, callback, recording and retention setting is read through
+//   `brandEnv(brand, NAME)` — unprefixed for RoboApply (exactly the Wave 0
+//   names above), `CN_` + NAME for GoApply, with NO fallback from CN_X to X:
+//     CN_LIVEKIT_URL / CN_LIVEKIT_API_KEY / CN_LIVEKIT_API_SECRET,
+//     CN_LIVEKIT_AGENT_CALLBACK_SECRET, CN_INTERVIEW_ENGINE_AGENT_NAME
+//        (default 'GoApply-Interview'), CN_S3_* (audio recordings + transcripts),
+//     CN_INTERVIEW_ENGINE_CALLBACK_BASE_URL, CN_INTERVIEW_ENGINE_RECORDING_ENABLED,
+//     CN_LLM_INTERVIEW_LIVE_MODEL (+ _REASONING_EFFORT), CN_LLM_INTERVIEW_BLUEPRINT_MODEL,
+//     CN_INTERVIEW_ENGINE_STT_MODEL / _STT_FALLBACK_MODELS / _TTS_MODEL /
+//        _TTS_VOICE(_MALE) (domestic speech only: dashscope/…).
+//   VOICE_PROVIDER / CN_VOICE_PROVIDER — livekit_cloud (default) |
+//     livekit_selfhosted | volcano | trtc (the last two reserved, unimplemented).
+//   INTERVIEW_RETENTION_DAYS / CN_INTERVIEW_RETENTION_DAYS — default 90, never
+//     longer than the 90 days both privacy notices publish.
 
 import { getTaskModel, getTaskReasoningEffort } from '../lib/llm/llmTaskSettings.js';
+import { brandEnv } from '../platform/brand/brandEnv.js';
+import { getBrand, DEFAULT_BRAND, type BrandId, type ProductBrand } from '../platform/brand/registry.js';
+import { getCurrentBrandId } from '../lib/requestContext.js';
+import { isGoApplyDirectProvider } from '../platform/llm/brandPolicy.js';
 import { parseReasoningEffort, type ReasoningEffort } from '../services/llm/reasoningEffort.js';
 import type { InterviewReasoningEffort } from './types.js';
 
@@ -46,6 +65,27 @@ export class InterviewEngineConfigError extends Error {
     super(message);
     this.name = 'InterviewEngineConfigError';
   }
+}
+
+// ─── Brand resolution ───────────────────────────────────────────────────
+
+/** A brand id or registry entry; omitted = the brand of the current unit of
+ *  work (request, cron or `runWithBrand`), else the default brand (RoboApply). */
+export type InterviewBrandRef = BrandId | ProductBrand | undefined;
+
+function safeCurrentBrandId(): BrandId | undefined {
+  try {
+    return getCurrentBrandId();
+  } catch {
+    return undefined;
+  }
+}
+
+/** Resolve a brand reference. No context → the default brand, whose names are
+ *  the unprefixed Wave 0 variables, so legacy callers read what they always did. */
+export function interviewBrand(brand?: InterviewBrandRef): ProductBrand {
+  if (brand && typeof brand === 'object') return brand;
+  return getBrand(brand ?? safeCurrentBrandId() ?? DEFAULT_BRAND);
 }
 
 // ─── LiveKit ────────────────────────────────────────────────────────────
@@ -58,36 +98,48 @@ export interface LiveKitCreds {
   agentName: string | null;
 }
 
-export function isLiveKitConfigured(): boolean {
-  return !!(
-    process.env.LIVEKIT_URL &&
-    process.env.LIVEKIT_API_KEY &&
-    process.env.LIVEKIT_API_SECRET
-  );
+export function isLiveKitConfigured(brand?: InterviewBrandRef): boolean {
+  const b = interviewBrand(brand);
+  return !!(brandEnv(b, 'LIVEKIT_URL') && brandEnv(b, 'LIVEKIT_API_KEY') && brandEnv(b, 'LIVEKIT_API_SECRET'));
 }
 
-/** Throws InterviewEngineConfigError if LiveKit is not configured. */
-export function getLiveKitCreds(): LiveKitCreds {
-  const url = process.env.LIVEKIT_URL?.trim();
-  const apiKey = process.env.LIVEKIT_API_KEY?.trim();
-  const apiSecret = process.env.LIVEKIT_API_SECRET?.trim();
+/** Throws InterviewEngineConfigError if LiveKit is not configured for the brand. */
+export function getLiveKitCreds(brand?: InterviewBrandRef): LiveKitCreds {
+  const b = interviewBrand(brand);
+  const url = brandEnv(b, 'LIVEKIT_URL');
+  const apiKey = brandEnv(b, 'LIVEKIT_API_KEY');
+  const apiSecret = brandEnv(b, 'LIVEKIT_API_SECRET');
   if (!url || !apiKey || !apiSecret) {
+    const p = b.market === 'cn' ? 'CN_' : '';
     throw new InterviewEngineConfigError(
-      'LiveKit is not configured. Set LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET.',
+      `LiveKit is not configured. Set ${p}LIVEKIT_URL, ${p}LIVEKIT_API_KEY, ${p}LIVEKIT_API_SECRET.`,
     );
   }
-  return { url, apiKey, apiSecret, agentName: process.env.LIVEKIT_AGENT_NAME?.trim() || null };
+  return { url, apiKey, apiSecret, agentName: brandEnv(b, 'LIVEKIT_AGENT_NAME') || null };
 }
 
 /** The wss:// URL minus protocol coercion — used to derive the HTTPS host for
  *  the server-side service clients (RoomServiceClient/EgressClient want https). */
-export function getLiveKitHttpUrl(): string {
-  const { url } = getLiveKitCreds();
+export function getLiveKitHttpUrl(brand?: InterviewBrandRef): string {
+  const { url } = getLiveKitCreds(brand);
   return url.replace(/^ws:/, 'http:').replace(/^wss:/, 'https:');
 }
 
-export function getAgentCallbackSecret(): string | null {
-  return process.env.LIVEKIT_AGENT_CALLBACK_SECRET?.trim() || null;
+/** The worker's shared callback secret for one brand (each brand runs its own worker). */
+export function getAgentCallbackSecret(brand?: InterviewBrandRef): string | null {
+  return brandEnv(interviewBrand(brand), 'LIVEKIT_AGENT_CALLBACK_SECRET') || null;
+}
+
+/** Every configured callback secret, one per brand that has one. Only a
+ *  cheap pre-filter: a callback is then checked against the secret of its
+ *  session's brand alone (InterviewSessionService.assertCallbackSecret). */
+export function getAgentCallbackSecrets(): string[] {
+  const out: string[] = [];
+  for (const id of ['roboapply', 'goapply'] as BrandId[]) {
+    const s = getAgentCallbackSecret(id);
+    if (s && !out.includes(s)) out.push(s);
+  }
+  return out;
 }
 
 /**
@@ -99,8 +151,22 @@ export function getAgentCallbackSecret(): string | null {
  * 'RoboHire-Interview' fallback once dispatched interviews to nobody on the
  * shared LiveKit project (silent-room outage, 2026-07-03).
  */
-export function getInterviewAgentName(): string {
-  return process.env.INTERVIEW_ENGINE_AGENT_NAME?.trim() || 'RoboApply-Interview';
+export function getInterviewAgentName(brand?: InterviewBrandRef): string {
+  const b = interviewBrand(brand);
+  // The registry carries the per-brand contract names ('RoboApply-Interview',
+  // 'GoApply-Interview'), so the two workers never take each other's rooms.
+  return brandEnv(b, 'INTERVIEW_ENGINE_AGENT_NAME') || b.interview.agentName;
+}
+
+// ─── Voice provider (VoiceSessionProvider seam, CN-E-06) ─────────────────
+
+export const VOICE_PROVIDER_IDS = ['livekit_cloud', 'livekit_selfhosted', 'volcano', 'trtc'] as const;
+export type VoiceProviderId = (typeof VOICE_PROVIDER_IDS)[number];
+
+/** VOICE_PROVIDER / CN_VOICE_PROVIDER; unset or unknown → livekit_cloud. */
+export function getVoiceProviderId(brand?: InterviewBrandRef): VoiceProviderId {
+  const raw = (brandEnv(interviewBrand(brand), 'VOICE_PROVIDER') || '').toLowerCase();
+  return (VOICE_PROVIDER_IDS as readonly string[]).includes(raw) ? (raw as VoiceProviderId) : 'livekit_cloud';
 }
 
 // ─── R2 / S3 ────────────────────────────────────────────────────────────
@@ -114,23 +180,56 @@ export interface R2Creds {
   forcePathStyle: boolean;
 }
 
-export function getR2Creds(): R2Creds | null {
-  const bucket = (process.env.S3_BUCKET || '').trim();
-  const accessKeyId = (process.env.S3_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || '').trim();
-  const secretAccessKey = (process.env.S3_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || '').trim();
+/**
+ * S3/R2 creds for interview artifacts. Per brand (no cross-brand fallback):
+ * RoboApply reads S3_* (and the AWS_* aliases), GoApply CN_S3_* (and
+ * CN_AWS_*), so a missing CN bucket disables GoApply storage instead of
+ * sending mainland recordings to the international bucket.
+ */
+export function getR2Creds(brand?: InterviewBrandRef): R2Creds | null {
+  const b = interviewBrand(brand);
+  const bucket = brandEnv(b, 'S3_BUCKET') || '';
+  const accessKeyId = brandEnv(b, 'S3_ACCESS_KEY_ID') || brandEnv(b, 'AWS_ACCESS_KEY_ID') || '';
+  const secretAccessKey = brandEnv(b, 'S3_SECRET_ACCESS_KEY') || brandEnv(b, 'AWS_SECRET_ACCESS_KEY') || '';
   if (!bucket || !accessKeyId || !secretAccessKey) return null;
+  if (b.market === 'cn' && sharesIntlBucketName(bucket)) return null;
   return {
     bucket,
-    region: (process.env.S3_REGION || process.env.AWS_REGION || 'auto').trim(),
-    endpoint: (process.env.S3_ENDPOINT || '').trim() || undefined,
+    region: brandEnv(b, 'S3_REGION') || brandEnv(b, 'AWS_REGION') || 'auto',
+    endpoint: brandEnv(b, 'S3_ENDPOINT') || undefined,
     accessKeyId,
     secretAccessKey,
-    forcePathStyle: ['true', '1', 'yes'].includes((process.env.S3_FORCE_PATH_STYLE || '').trim().toLowerCase()),
+    forcePathStyle: ['true', '1', 'yes'].includes((brandEnv(b, 'S3_FORCE_PATH_STYLE') || '').toLowerCase()),
   };
 }
 
-export function isR2Configured(): boolean {
-  return getR2Creds() !== null;
+let warnedSharedBucket = false;
+
+/**
+ * GoApply storage counts as NOT configured when CN_S3_BUCKET has the same name
+ * as RoboApply's S3_BUCKET. The interview storage client
+ * (storage/r2Storage.ts) caches its S3 client by bucket name only, so two
+ * brands with one bucket name — say an "interviews" bucket on R2 and another
+ * on a mainland OSS — would share one client: GoApply objects could land in the
+ * international store and retention could delete from the wrong one. Same
+ * name and same store would put mainland data in the international bucket,
+ * which CN L-11 forbids too. Either way GoApply recording and transcript
+ * upload stay off (and retention leaves the pointers for a later run) until
+ * the buckets have different names. Remove once the storage cache is keyed by
+ * endpoint + bucket + access key (request to the storage owner).
+ */
+function sharesIntlBucketName(cnBucket: string): boolean {
+  const intlBucket = (process.env.S3_BUCKET || '').trim();
+  if (!intlBucket || intlBucket !== cnBucket) return false;
+  if (!warnedSharedBucket) {
+    warnedSharedBucket = true;
+    console.warn('[interview-engine] CN_S3_BUCKET has the same name as S3_BUCKET; GoApply interview storage stays off until it has its own bucket name.');
+  }
+  return true;
+}
+
+export function isR2Configured(brand?: InterviewBrandRef): boolean {
+  return getR2Creds(brand) !== null;
 }
 
 /** All interview artifacts live under this R2 prefix. */
@@ -318,10 +417,36 @@ export function getWorkerLlmReasoningEffort(workerModel?: string): InterviewReas
   return liveModelAcceptsReasoningEffort(model) ? 'low' : undefined;
 }
 
+/**
+ * GoApply (R-13): the live worker runs an OpenAI-compatible domestic model
+ * (WP-63b `LLM_BACKEND=openai_compatible`), never LiveKit Inference's
+ * international catalog. CN_LLM_INTERVIEW_LIVE_MODEL (else the GoApply
+ * interview task model) is passed to the worker as-is, and must name a
+ * GoApply direct provider (deepseek, qwen, kimi, glm, doubao, minimax).
+ */
+function cnInterviewLlmRouting(brand: ProductBrand): InterviewLlmRouting {
+  const backendModel = getTaskModel('interview', brand);
+  if (!backendModel) {
+    throw new InterviewEngineConfigError('GoApply interview LLM is not configured. Set CN_LLM_INTERVIEW_MODEL.');
+  }
+  const workerModel = brandEnv(brand, 'LLM_INTERVIEW_LIVE_MODEL') || backendModel;
+  const provider = workerModel.split('/')[0]!.trim().toLowerCase();
+  if (!isGoApplyDirectProvider(provider)) {
+    throw new InterviewEngineConfigError(
+      `CN_LLM_INTERVIEW_LIVE_MODEL="${workerModel}" is not a domestic model. Use deepseek/, qwen/, kimi/, glm/, doubao/ or minimax/.`,
+    );
+  }
+  const effort = parseReasoningEffort(brandEnv(brand, 'LLM_INTERVIEW_LIVE_REASONING_EFFORT'));
+  return { backendModel, workerModel, ...(effort && effort !== 'max' ? { reasoningEffort: effort } : {}) };
+}
+
 /** Resolve the backend + worker pair once so a live-session claim is atomic
  *  with respect to hot configuration changes. The backend model (blueprint +
- *  evaluation) stays required: a session without it can never be prepared. */
-export function getInterviewLlmRouting(): InterviewLlmRouting {
+ *  evaluation) stays required: a session without it can never be prepared.
+ *  RoboApply (and no brand context) keeps the Wave 0 resolution unchanged. */
+export function getInterviewLlmRouting(brand?: InterviewBrandRef): InterviewLlmRouting {
+  const b = interviewBrand(brand);
+  if (b.market === 'cn') return cnInterviewLlmRouting(b);
   const backendModel = requireInterviewBackendModel();
   const workerModel = getWorkerLlmModel();
   return {
@@ -335,7 +460,10 @@ export function getInterviewLlmRouting(): InterviewLlmRouting {
 
 /** Model for the blueprint/prompt pipeline: LLM_INTERVIEW_BLUEPRINT_MODEL when
  *  set (e.g. a faster direct-provider model), else the interview task model. */
-export function getBlueprintModel(): string | undefined {
+export function getBlueprintModel(brand?: InterviewBrandRef): string | undefined {
+  const b = interviewBrand(brand);
+  // GoApply never inherits the international blueprint override (R-13).
+  if (b.market === 'cn') return brandEnv(b, 'LLM_INTERVIEW_BLUEPRINT_MODEL') || getTaskModel('interview', b);
   return process.env.LLM_INTERVIEW_BLUEPRINT_MODEL?.trim() || getTaskModel('interview');
 }
 
@@ -386,13 +514,82 @@ export function getWorkerSttFallbackModels(): string[] {
   return raw.split(',').map((m) => m.trim()).filter(Boolean);
 }
 
+// ─── GoApply speech (STT / TTS) — domestic only (R-13, CN L-11) ────────────
+
+/**
+ * Speech providers a GoApply worker may stream the candidate's voice to.
+ * DashScope (Paraformer STT, CosyVoice TTS) is what the GoApply worker
+ * implements (WP-63b). LiveKit Inference's catalog (deepgram/, cartesia/,
+ * elevenlabs/, …) is international and never allowed.
+ */
+export const GOAPPLY_SPEECH_PROVIDERS = ['dashscope'] as const;
+
+/** `model` is 'provider/model' with a domestic speech provider. */
+export function isGoApplySpeechModel(model: string | null | undefined): boolean {
+  const m = (model ?? '').trim();
+  const slash = m.indexOf('/');
+  if (slash <= 0 || slash === m.length - 1) return false;
+  return (GOAPPLY_SPEECH_PROVIDERS as readonly string[]).includes(m.slice(0, slash).toLowerCase());
+}
+
+export interface CnSpeechConfig {
+  sttModel: string;
+  sttFallbackModels: string[];
+  ttsModel: string;
+  /** CosyVoice voice ids; null = the worker's own default for that gender. */
+  voiceFemale: string | null;
+  voiceMale: string | null;
+}
+
+/**
+ * GoApply speech models (no fallback to the international names):
+ *   CN_INTERVIEW_ENGINE_STT_MODEL            e.g. dashscope/paraformer-realtime-v2
+ *   CN_INTERVIEW_ENGINE_STT_FALLBACK_MODELS  optional, comma-separated, domestic too
+ *   CN_INTERVIEW_ENGINE_TTS_MODEL            e.g. dashscope/cosyvoice-v2
+ *   CN_INTERVIEW_ENGINE_TTS_VOICE(_MALE)     optional CosyVoice voice ids
+ * Missing or non-domestic → InterviewEngineConfigError (503) before anything
+ * is persisted or connected, so the worker metadata never names an
+ * international STT/TTS for a GoApply session.
+ */
+export function getCnSpeechConfig(brand?: InterviewBrandRef): CnSpeechConfig {
+  const b = interviewBrand(brand);
+  const sttModel = brandEnv(b, 'INTERVIEW_ENGINE_STT_MODEL');
+  const ttsModel = brandEnv(b, 'INTERVIEW_ENGINE_TTS_MODEL');
+  if (!sttModel || !ttsModel) {
+    throw new InterviewEngineConfigError(
+      'GoApply interview speech is not configured. Set CN_INTERVIEW_ENGINE_STT_MODEL and CN_INTERVIEW_ENGINE_TTS_MODEL (dashscope/…).',
+    );
+  }
+  const sttFallbackModels = (brandEnv(b, 'INTERVIEW_ENGINE_STT_FALLBACK_MODELS') || '')
+    .split(',').map((m) => m.trim()).filter(Boolean);
+  for (const model of [sttModel, ttsModel, ...sttFallbackModels]) {
+    if (!isGoApplySpeechModel(model)) {
+      throw new InterviewEngineConfigError(
+        `GoApply speech model "${model}" is not a domestic provider. Use ${GOAPPLY_SPEECH_PROVIDERS.map((p) => `${p}/`).join(', ')}.`,
+      );
+    }
+  }
+  return {
+    sttModel,
+    sttFallbackModels,
+    ttsModel,
+    voiceFemale: brandEnv(b, 'INTERVIEW_ENGINE_TTS_VOICE') || null,
+    voiceMale: brandEnv(b, 'INTERVIEW_ENGINE_TTS_VOICE_MALE') || null,
+  };
+}
+
 // ─── Callback wiring ──────────────────────────────────────────────────────
 
-function explicitCallbackBaseUrl(): string | null {
-  const explicit =
-    process.env.INTERVIEW_ENGINE_CALLBACK_BASE_URL?.trim() ||
-    process.env.BACKEND_PUBLIC_URL?.trim() ||
-    process.env.PUBLIC_BACKEND_URL?.trim();
+function explicitCallbackBaseUrl(brand?: InterviewBrandRef): string | null {
+  const b = interviewBrand(brand);
+  // GoApply's worker calls back to the GoApply deployment only
+  // (CN_INTERVIEW_ENGINE_CALLBACK_BASE_URL); the shared public-URL aliases
+  // name the international backend, so they apply to RoboApply alone.
+  const explicit = b.market === 'cn'
+    ? brandEnv(b, 'INTERVIEW_ENGINE_CALLBACK_BASE_URL')
+    : process.env.INTERVIEW_ENGINE_CALLBACK_BASE_URL?.trim() ||
+      process.env.BACKEND_PUBLIC_URL?.trim() ||
+      process.env.PUBLIC_BACKEND_URL?.trim();
   return explicit ? explicit.replace(/\/+$/, '') : null;
 }
 
@@ -462,8 +659,9 @@ export function deriveRequestOrigin(
  */
 export function resolveSessionCallbackBaseUrl(
   headers?: Record<string, string | string[] | undefined>,
+  brand?: InterviewBrandRef,
 ): string | null {
-  if (explicitCallbackBaseUrl()) return null; // call-time env read stays authoritative
+  if (explicitCallbackBaseUrl(brand)) return null; // call-time env read stays authoritative
   if (!isProductionRuntime()) return null;
   const fromRequest = headers ? deriveRequestOrigin(headers) : null;
   if (fromRequest) return fromRequest;
@@ -473,8 +671,8 @@ export function resolveSessionCallbackBaseUrl(
 
 /** Base URL the agent worker uses to POST transcript / lifecycle callbacks.
  *  `persisted` is the per-session origin captured at create time (C13). */
-export function getCallbackBaseUrl(persisted?: string | null): string {
-  const explicit = explicitCallbackBaseUrl();
+export function getCallbackBaseUrl(persisted?: string | null, brand?: InterviewBrandRef): string {
+  const explicit = explicitCallbackBaseUrl(brand);
   if (explicit) return explicit;
   if (persisted && /^https?:\/\//.test(persisted)) return persisted.replace(/\/+$/, '');
   return localCallbackBaseUrl();
@@ -492,10 +690,40 @@ export function getSessionExpiryMinutes(): number {
   return Number.isFinite(raw) && raw >= 5 ? Math.floor(raw) : 120;
 }
 
-/** Opt-in: recording practice audio/video to R2 needs an explicit true. A
+/** Opt-in: recording practice audio/video to R2 needs an explicit true
+ *  (INTERVIEW_ENGINE_RECORDING_ENABLED, CN_ on GoApply; default false). A
  *  default-on recorder would store every practice session with no consent
- *  the moment storage credentials work. Per-session consent comes later. */
-export function isRecordingEnabled(): boolean {
-  const raw = (process.env.INTERVIEW_ENGINE_RECORDING_ENABLED || '').trim().toLowerCase();
+ *  the moment storage credentials work. The env switch is necessary, never
+ *  sufficient: each session also needs the user's recording consent (H8). */
+export function isRecordingEnabled(brand?: InterviewBrandRef): boolean {
+  const raw = (brandEnv(interviewBrand(brand), 'INTERVIEW_ENGINE_RECORDING_ENABLED') || '').toLowerCase();
   return ['true', '1', 'yes', 'on'].includes(raw);
+}
+
+// ─── Retention (both brands) ───────────────────────────────────────────────
+
+/** The retention both privacy notices publish for practice recordings and transcripts. */
+export const INTERVIEW_RETENTION_MAX_DAYS = 90;
+
+/** INTERVIEW_RETENTION_DAYS (CN_ on GoApply): a whole number of days, default
+ *  and maximum 90 — a shorter window is allowed, a longer one would break the
+ *  published retention schedule, so it is capped. */
+export function getInterviewRetentionDays(brand?: InterviewBrandRef): number {
+  const raw = Number(brandEnv(interviewBrand(brand), 'INTERVIEW_RETENTION_DAYS'));
+  if (!Number.isFinite(raw) || raw < 1) return INTERVIEW_RETENTION_MAX_DAYS;
+  return Math.min(INTERVIEW_RETENTION_MAX_DAYS, Math.floor(raw));
+}
+
+// ─── Media policy per brand (CN L-11) ──────────────────────────────────────
+
+export interface InterviewMediaPolicy {
+  /** The candidate may publish a camera track (GoApply: local preview only). */
+  cameraPublish: boolean;
+  /** Video frames may be recorded (GoApply: audio only, always). */
+  recordVideo: boolean;
+}
+
+export function getInterviewMediaPolicy(brand?: InterviewBrandRef): InterviewMediaPolicy {
+  const cn = interviewBrand(brand).market === 'cn';
+  return { cameraPublish: !cn, recordVideo: !cn };
 }

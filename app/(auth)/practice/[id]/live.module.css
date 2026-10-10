@@ -191,6 +191,30 @@
   font-size: var(--fs-label);
 }
 
+/* GoApply (WP-63a): the self-view is local only — say so on the tile. */
+.selfLocalOnly {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, #000 55%, transparent);
+  color: #fff;
+  padding: 2px 6px;
+  font-size: var(--fs-label);
+  font-weight: 600;
+}
+
+/* The written practice, when the candidate switched from voice (WP-63a). */
+.textRoom {
+  width: min(760px, 100%);
+  margin: 0 auto;
+  padding: var(--sp-5) var(--sp-4);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 /* The interviewer's own video (an avatar worker's camera), when published. */
 .agentFeed {
   width: 100%;

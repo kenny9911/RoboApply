@@ -32,6 +32,15 @@
 // rejoin attempt; only if that fails does the manual Rejoin screen appear. A
 // second tab taking the seat (duplicate identity) stops and asks instead of
 // rejoining, so two tabs never evict each other in a loop.
+//
+// Per brand (WP-63a): the server picks the brand's media plane (GoApply:
+// CN LiveKit, 'GoApply-Interview'); the page only reads `connection.url`. On
+// GoApply — or whenever the connection says `cameraPublish: false` — the
+// camera is a LOCAL preview only: no video track is ever published
+// (cameraPlan + useLocalCameraPreview). The device check also rates the
+// connection (NetworkPrecheck) and, on a weak one, offers to do the practice
+// in writing instead; that ends the unstarted live session (never charged)
+// and runs the written practice here.
 
 import { use, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
@@ -61,6 +70,10 @@ import '@livekit/components-styles';
 
 import { useMockCatalog } from '../../../../hooks/useMockV3';
 import { useAuth } from '../../../../lib/auth/AuthProvider';
+import { useBrand } from '../../../../lib/brand/BrandProvider';
+import { TextPracticeRoom } from '../../../../components/features/practice';
+import type { NetworkAssessment } from '../../../../components/features/practice/NetworkPrecheck';
+import { useLocalCameraPreview } from '../../../../components/v3/mock/YourTile';
 import { useMockRoleLabels } from '../../../../lib/mockRoleLabels';
 import { Btn } from '../../../../components/v3/primitives/Btn';
 import {
@@ -92,7 +105,10 @@ import {
 // Imported directly (not via the ./mock barrel) so non-live pages don't pull
 // livekit-client into their bundles.
 import {
+  cameraPlan,
   classifyDisconnect,
+  pendingLiveCopy,
+  type LiveCopyTranslator,
   qualityLevel,
   type QualityLevel,
 } from '../../../../components/v3/mock/liveConnection';
@@ -103,6 +119,7 @@ import type { CaptionSegment } from '../../../../components/v3/mock/parley/parle
 import {
   ieErrorInfo,
   interviewEngineApi,
+  practiceApi,
   postClientEvents,
   RETRYABLE_PREPARE_ERRORS,
   type IEClientEvent,
@@ -116,7 +133,7 @@ import styles from './live.module.css';
 type Phase =
   | 'loading' | 'preparing' | 'prepareFailed' | 'deviceCheck' | 'ready'
   | 'agentUnavailable' | 'reconnecting' | 'connectionLost' | 'superseded'
-  | 'connectError' | 'expired' | 'ended';
+  | 'connectError' | 'expired' | 'ended' | 'text';
 
 type PrepareErrorCode = 'llm_unavailable' | 'prepare_failed';
 
@@ -198,6 +215,7 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
   const { id } = use(params);
   const t = useTranslations('practice');
   const router = useRouter();
+  const brand = useBrand();
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [session, setSession] = useState<IESessionDetail | null>(null);
@@ -493,6 +511,42 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
     void enterRoom({ isRejoin: false });
   }, [enterRoom, trackEvent]);
 
+  // ── 2b. Connection check (WP-63a). The probe is one small, authenticated
+  // read of this session through lib/api: an HTTP error still proves the
+  // round trip, only a network failure counts as a lost probe.
+  const networkProbe = useCallback(
+    () => interviewEngineApi.get(id).then(
+      () => undefined,
+      (err: unknown) => { if (ieErrorInfo(err).network) throw err; },
+    ),
+    [id],
+  );
+  const onNetworkResult = useCallback((r: NetworkAssessment) => {
+    trackEvent('network_check', { level: r.level, rttMs: r.rttMs, jitterMs: r.jitterMs, failures: r.failures });
+  }, [trackEvent]);
+
+  // Weak connection → the written practice instead. Only before the live
+  // session started: ending an unstarted session is never charged.
+  const [switchingToText, setSwitchingToText] = useState(false);
+  const [textJobId, setTextJobId] = useState<string | null>(null);
+  const switchToText = useCallback(async () => {
+    if (endingRef.current) return;
+    setSwitchingToText(true);
+    trackEvent('switch_to_text');
+    let jobId: string | null = null;
+    try {
+      const { practice } = await practiceApi.info(id);
+      jobId = practice.job?.id ?? null;
+    } catch { /* no job: the written practice runs on the role */ }
+    endingRef.current = true;
+    intentionalEndRef.current = true;
+    flushEvents(true);
+    interviewEngineApi.endKeepalive(id);
+    setTextJobId(jobId);
+    setSwitchingToText(false);
+    setPhase('text');
+  }, [id, trackEvent, flushEvents]);
+
   // ── 4. End: fire the end request (keepalive) and go to the report now.
   // The server tells the interviewer to stop, waits for the final transcript
   // and scores in the background; the report page polls for it.
@@ -642,7 +696,27 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
     );
   }
 
+  if (phase === 'text') {
+    return (
+      <div className={styles.textRoom}>
+        <TextPracticeRoom
+          role={session.role}
+          interviewerId={session.personaId ?? ''}
+          typeId={session.interviewType}
+          language={session.language}
+          durationMinutes={session.durationMinutes}
+          jobId={textJobId}
+          onStartRefused={() => { router.push('/practice'); return true; }}
+          onExit={() => router.push('/practice')}
+        />
+      </div>
+    );
+  }
+
   if (phase === 'deviceCheck') {
+    // The written practice is offered only before the interview started, and
+    // only with a catalog interviewer to run it.
+    const canSwitchToText = session.status === 'created' && !!session.personaId;
     return (
       <DeviceCheck
         mode={session.mode}
@@ -650,6 +724,11 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
         busy={busy}
         onJoin={joinFromDeviceCheck}
         onBack={() => router.push('/practice')}
+        networkProbe={networkProbe}
+        onNetworkResult={onNetworkResult}
+        onSwitchToText={canSwitchToText ? () => void switchToText() : undefined}
+        switchingToText={switchingToText}
+        cameraLocalOnly={brand.market === 'cn'}
       />
     );
   }
@@ -741,7 +820,15 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
     );
   }
 
-  const wantCamera = connection.mode === 'video' && (devicePlan === null || devicePlan.camera === 'ok');
+  // WP-63a: publish the camera, keep it a local preview (GoApply, or the
+  // server said so), or leave it off (voice, or it failed in the check).
+  const camPlan = cameraPlan({
+    mode: connection.mode,
+    cameraPublish: (connection as IEConnection & { cameraPublish?: boolean }).cameraPublish,
+    market: brand.market,
+    deviceOk: devicePlan === null || devicePlan.camera === 'ok',
+  });
+  const wantCamera = camPlan.publish;
   const initialCamera: DeviceState =
     connection.mode !== 'video'
       ? 'off'
@@ -761,7 +848,8 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
           session={session}
           connection={connection}
           interviewer={interviewer}
-          wantCamera={wantCamera}
+          // Parley's camera is a local self-view already.
+          wantCamera={camPlan.publish || camPlan.previewStartsOn}
           initialCamera={initialCamera}
           transcript={transcript}
           onSegments={addCaptionSegments}
@@ -807,6 +895,8 @@ export default function MockLivePage({ params }: { params: Promise<{ id: string 
         connection={connection}
         interviewer={interviewer}
         wantCamera={wantCamera}
+        localPreview={camPlan.localPreview}
+        previewStartsOn={camPlan.previewStartsOn}
         initialCamera={initialCamera}
         transcript={transcript}
         onSegments={addSegments}
@@ -1077,7 +1167,7 @@ const READY_ATTRIBUTE = 'ie.client_ready';
 const READY_PACKET = new TextEncoder().encode(JSON.stringify({ type: 'client_ready' }));
 
 function RoomStage({
-  session, connection, interviewer, wantCamera, initialCamera,
+  session, connection, interviewer, wantCamera, localPreview, previewStartsOn, initialCamera,
   transcript, onSegments, agentJoined, onAgentJoined, onEnd, onBack, onEvent,
 }: {
   session: IESessionDetail;
@@ -1085,6 +1175,10 @@ function RoomStage({
   interviewer: RAMockInterviewer;
   /** Publish the camera once connected (video mode, and it worked in the check). */
   wantCamera: boolean;
+  /** Show the camera to the candidate only; it is never published (GoApply). */
+  localPreview: boolean;
+  /** The local preview starts on (the camera worked in the device check). */
+  previewStartsOn: boolean;
   /** Why the camera is off when it is not wanted (the device-check result). */
   initialCamera: DeviceState;
   transcript: LiveTurn[];
@@ -1124,6 +1218,17 @@ function RoomStage({
   const [micState, setMicState] = useState<DeviceState>('checking');
   const [camState, setCamState] = useState<DeviceState>(video && wantCamera ? 'checking' : initialCamera);
   const [camNoticeOpen, setCamNoticeOpen] = useState(video && isDeviceFailure(initialCamera));
+  // GoApply: a local self-view straight from getUserMedia, never handed to the room.
+  const preview = useLocalCameraPreview(video && localPreview && previewStartsOn, initialCamera);
+  // Only a failure of a preview that was asked for (the device-check result
+  // the preview starts with is already on screen).
+  const previewFailed = localPreview && preview.tried && isDeviceFailure(preview.state);
+  useEffect(() => {
+    if (previewFailed) {
+      setCamNoticeOpen(true);
+      onEvent('camera_preview_failed', { state: preview.state });
+    }
+  }, [previewFailed, preview.state, onEvent]);
 
   const enableMic = useCallback(async () => {
     setMicState('checking');
@@ -1138,6 +1243,8 @@ function RoomStage({
   }, [localParticipant, onEvent]);
 
   const enableCamera = useCallback(async () => {
+    // A local-only camera (GoApply) is never published, whatever asks.
+    if (localPreview) return;
     setCamState('checking');
     try {
       await localParticipant.setCameraEnabled(true);
@@ -1149,7 +1256,7 @@ function RoomStage({
       setCamNoticeOpen(true);
       onEvent('camera_failed', { state: s });
     }
-  }, [localParticipant, onEvent]);
+  }, [localParticipant, onEvent, localPreview]);
 
   const publishedRef = useRef(false);
   useEffect(() => {
@@ -1173,6 +1280,11 @@ function RoomStage({
   }, [isMicrophoneEnabled, localParticipant, enableMic]);
 
   const toggleCamera = useCallback(async () => {
+    if (localPreview) {
+      if (preview.on) preview.stop();
+      else preview.start();
+      return;
+    }
     if (isCameraEnabled) {
       try {
         await localParticipant.setCameraEnabled(false);
@@ -1181,7 +1293,7 @@ function RoomStage({
       return;
     }
     await enableCamera();
-  }, [isCameraEnabled, localParticipant, enableCamera]);
+  }, [isCameraEnabled, localParticipant, enableCamera, localPreview, preview]);
 
   const toggleRail = useCallback((tab: 'coach' | 'transcript') => {
     setRailTab((current) => (current === tab ? null : tab));
@@ -1418,7 +1530,11 @@ function RoomStage({
   const cameraLive = Boolean(
     isCameraEnabled && localCamera?.publication?.track && !localCamera.publication.isMuted,
   );
-  const cameraReason = isDeviceFailure(camState) ? deviceStateLabel(t, camState) : null;
+  const shownCamState: DeviceState = localPreview ? preview.state : camState;
+  // Requested copy (practice.live.cam.localOnlyShort); nothing until it exists.
+  const localOnlyShort = localPreview ? pendingLiveCopy(t as unknown as LiveCopyTranslator, 'camLocalOnlyShort') : null;
+  const camOn = localPreview ? preview.on : isCameraEnabled;
+  const cameraReason = isDeviceFailure(shownCamState) ? deviceStateLabel(t, shownCamState) : null;
 
   const aiState: AiState =
     state === 'speaking' ? 'asking' : state === 'listening' ? 'listening' : 'thinking';
@@ -1427,7 +1543,7 @@ function RoomStage({
   const roleLabel = localizeRole(session.role);
   const typeLabel = localizeType(session.interviewType, 'label');
   const micFix = deviceFix(t, 'mic', micState);
-  const camFix = video ? deviceFix(t, 'camera', camState) : null;
+  const camFix = video ? deviceFix(t, 'camera', shownCamState) : null;
 
   return (
     <>
@@ -1510,7 +1626,12 @@ function RoomStage({
                 name, so it sits below the stage as its own row. */}
             {video ? (
               <div className={`${styles.selfTile} ${styles.selfTileVideo}`}>
-                {cameraLive && localCamera ? (
+                {localPreview && preview.on && preview.stream ? (
+                  <>
+                    <LocalVideo stream={preview.stream} className={styles.selfFeed} />
+                    {localOnlyShort ? <span className={styles.selfLocalOnly}>{localOnlyShort}</span> : null}
+                  </>
+                ) : !localPreview && cameraLive && localCamera ? (
                   <VideoTrack trackRef={localCamera} className={styles.selfFeed} />
                 ) : (
                   <div className={styles.selfOff}>
@@ -1627,9 +1748,9 @@ function RoomStage({
           {video && (
             <ControlButton
               tone="device"
-              on={isCameraEnabled}
-              label={isCameraEnabled ? t('live.stopCam') : t('live.startCam')}
-              icon={isCameraEnabled ? <IconCamera size={19} /> : <IconCameraOff size={19} />}
+              on={camOn}
+              label={camOn ? t('live.stopCam') : t('live.startCam')}
+              icon={camOn ? <IconCamera size={19} /> : <IconCameraOff size={19} />}
               onClick={() => void toggleCamera()}
             />
           )}

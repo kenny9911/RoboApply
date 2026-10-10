@@ -19,18 +19,26 @@
 //                      → 'completed'; zero candidate turns → 'failed'/no_answer,
 //                      never charged)
 //
+// Per brand (WP-63a): every media-plane call goes through the session's
+// VoiceSessionProvider (../providers/), fixed at create from the request's
+// brand (`liveMetrics.voiceSeam`; absent = RoboApply on LiveKit Cloud, i.e.
+// every Wave 0 row). Session work that can arrive from anywhere (webhooks,
+// callbacks, crons) runs inside the session's brand, so S3, LLM routing and
+// content safety resolve for that brand: GoApply uses CN_LIVEKIT_*, the
+// 'GoApply-Interview' worker, CN_S3_* (audio only) and domestic models.
+//
 // Ownership: every read/mutation is scoped to the owning user (the human user
 // OR the API-key owner for external sessions); cross-tenant access 404s.
 
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { InterviewSession } from '../../generated/prisma/client.js';
 import prisma from '../../lib/prisma.js';
 import { logger, generateRequestId } from '../../services/LoggerService.js';
 import {
-  isLiveKitConfigured,
-  getInterviewAgentName,
+  getAgentCallbackSecrets,
   getAgentCallbackSecret,
   getCallbackBaseUrl,
+  getInterviewMediaPolicy,
   getSessionExpiryMinutes,
   getInterviewLlmRouting,
   getWorkerLlmModel,
@@ -41,15 +49,22 @@ import {
   type InterviewLlmRouting,
 } from '../config.js';
 import {
-  createInterviewRoom,
-  dispatchAgent,
-  mintJoinToken,
-  deleteInterviewRoom,
-  sendInterviewEndSignal,
-} from '../livekit/liveKitClient.js';
-import { startRoomRecording, stopRecording } from '../livekit/egress.js';
+  assertBrandSpeech,
+  inBrand,
+  isDefaultSeam,
+  readVoiceSeam,
+  resolveBrandSessionVoice,
+  resolveBrandStt,
+  resolveBrandVoice,
+  voiceProviderFor,
+  voiceSeamForBrand,
+  voiceSeamMetrics,
+  type VoiceSeam,
+  type VoiceSessionProvider,
+} from '../providers/index.js';
+import type { BrandId } from '../../platform/brand/registry.js';
 import { interviewR2Storage } from '../storage/r2Storage.js';
-import { resolveVoice, resolveSessionVoice, resolveStt, normalizeLocale } from '../voice/voiceCatalog.js';
+import { normalizeLocale } from '../voice/voiceCatalog.js';
 import { findPersona, findType, DEFAULT_PERSONA, DEFAULT_TYPE } from '../catalog/interviewCatalog.js';
 import { normalizeCharacteristics } from '../prompt/characteristics.js';
 import { interviewPromptService } from '../prompt/interviewPromptService.js';
@@ -275,6 +290,12 @@ export interface ConnectionDetails {
   expiresAt: string;
   agentDispatched: boolean;
   recording: boolean;
+  /**
+   * WP-63a: false when the brand keeps the camera as a local preview only
+   * (GoApply, CN L-11) — the token cannot publish a camera track, and the
+   * live room shows the camera to the candidate alone. Absent on Parley.
+   */
+  cameraPublish?: boolean;
   /** Present only for Parley sessions: url/token are then empty and the
    *  browser joins Parley with `parley` instead of a LiveKit room. */
   transport?: 'parley';
@@ -347,22 +368,35 @@ export class InterviewSessionService {
       }
     }
 
+    // WP-63a: the session runs on the requesting brand's media plane for its
+    // whole life. Resolving the provider here also refuses a reserved one
+    // (volcano / trtc → 503) before anything is persisted.
+    const brand = getCurrentBrandOrDefault();
+    const seam = voiceSeamForBrand(brand.id);
+    // The Parley pilot is an international service: a GoApply session never
+    // runs on it (it stays on the brand's own media plane instead).
+    const transport = brand.market === 'cn' ? undefined : input.transport;
+    if (transport !== 'parley') voiceProviderFor(seam);
+
     // A session created here is destined for the LiveKit worker. Validate the
     // interview model selectors before persisting a session that can never
     // connect (InterviewEngineConfigError → 503).
-    getInterviewLlmRouting();
+    getInterviewLlmRouting(brand);
 
     const characteristics = normalizeCharacteristics(input.characteristics, persona.difficulty);
     const candidateName = (input.candidateName ?? '').trim() || undefined;
     const resumeContext = (input.resumeContext ?? '').trim() || undefined;
 
-    const voice = resolveVoice(language, persona.voiceGender);
+    // GoApply: domestic STT/TTS only — unconfigured → 503 before anything is
+    // persisted (never the international voice catalog).
+    const voice = resolveBrandVoice(brand.id, language, persona.voiceGender);
+    if (transport !== 'parley') resolveBrandStt(brand.id, language);
     const roomName = `ie-${randomUUID()}`;
     const expiresAt = new Date(Date.now() + getSessionExpiryMinutes() * 60_000);
     const control: SessionControl = {
       ...(input.callbackBaseUrl ? { callbackBaseUrl: input.callbackBaseUrl } : {}),
       ...(input.creditExempt ? { creditExempt: true } : {}),
-      ...(input.transport === 'parley' ? { transport: 'parley' as const } : {}),
+      ...(transport === 'parley' ? { transport: 'parley' as const } : {}),
     };
     // H8: decide recording now, from the consent ledger — never from the env
     // default alone. getConnection starts egress only when this says so.
@@ -371,6 +405,8 @@ export class InterviewSessionService {
       source,
       mode,
       requested: input.recording,
+      // CN L-11: GoApply records audio only, whatever was asked.
+      allowVideo: getInterviewMediaPolicy(brand).recordVideo,
     });
     const practice: PracticeMeta | null =
       job || recording.audio
@@ -385,6 +421,7 @@ export class InterviewSessionService {
     const liveMetrics: Record<string, unknown> = {
       ...(Object.keys(control).length > 0 ? { control } : {}),
       ...(practice ? { practice } : {}),
+      ...voiceSeamMetrics(seam),
     };
 
     // C1: persist immediately as 'preparing'. Blueprint + prompt generation
@@ -409,6 +446,10 @@ export class InterviewSessionService {
         roomName,
         status: 'preparing',
         expiresAt,
+        // WP-43-S1 columns (SCHEMA-3), written alongside liveMetrics.practice
+        // during the transition; readers take the column first.
+        jobId: job?.id ?? null,
+        ...(source === 'roboapply' ? { recordingConsent: { audio: recording.audio, video: recording.video } } : {}),
         ...(Object.keys(liveMetrics).length > 0
           ? { liveMetrics: liveMetrics as unknown as object }
           : {}),
@@ -427,9 +468,10 @@ export class InterviewSessionService {
       creditExempt: input.creditExempt === true ? true : undefined,
       callbackOrigin: input.callbackBaseUrl ?? undefined,
       apiKeyId: input.apiKeyId ?? undefined,
-      transport: input.transport,
+      transport,
       jobId: job?.id,
       recording: recording.audio ? (recording.video ? 'audio+video' : 'audio') : 'off',
+      ...(isDefaultSeam(seam) ? {} : { brand: seam.brand, voiceProvider: seam.provider }),
       requestId: input.requestId,
     });
     return created;
@@ -477,7 +519,8 @@ export class InterviewSessionService {
 
     const inflight = this.inflightPrepares.get(session.id);
     if (inflight) return inflight;
-    const run = this.runPrepare(session, params).finally(() => {
+    const prepared = session;
+    const run = inBrand(readVoiceSeam(prepared.liveMetrics).brand, () => this.runPrepare(prepared, params)).finally(() => {
       this.inflightPrepares.delete(session.id);
     });
     this.inflightPrepares.set(session.id, run);
@@ -490,7 +533,7 @@ export class InterviewSessionService {
       const persona = (session.personaId && findPersona(session.personaId)) || DEFAULT_PERSONA;
       const type = findType(session.interviewType) || DEFAULT_TYPE;
       const characteristics = normalizeCharacteristics(session.characteristics, persona.difficulty);
-      const routing = getInterviewLlmRouting();
+      const routing = getInterviewLlmRouting(readVoiceSeam(session.liveMetrics).brand);
 
       const gen = await interviewPromptService.generate({
         role: session.role,
@@ -513,7 +556,7 @@ export class InterviewSessionService {
         strictLlm: params.strictLlm !== false,
       });
 
-      const voice = resolveVoice(session.language, persona.voiceGender);
+      const voice = resolveBrandVoice(readVoiceSeam(session.liveMetrics).brand, session.language, persona.voiceGender);
       // Conditional on 'preparing': a concurrent run elsewhere, a delete or an
       // end-by-owner must win over this (late) result.
       const persisted = await prisma.interviewSession.updateMany({
@@ -563,7 +606,7 @@ export class InterviewSessionService {
       // is the only LLM call on the prepare request. Best-effort.
       if (params.requestId) {
         const snap = logger.getRequestSnapshot(params.requestId);
-        void recordBlueprintCost(session.id, tokenCostFromSnapshot(snap, getBlueprintModel()));
+        void recordBlueprintCost(session.id, tokenCostFromSnapshot(snap, getBlueprintModel(readVoiceSeam(session.liveMetrics).brand)));
       }
       return current;
     } catch (err) {
@@ -603,6 +646,10 @@ export class InterviewSessionService {
     requestId?: string;
   }): Promise<ConnectionDetails> {
     const session = await this.loadOwned(params.userId, params.sessionId, params.apiKeyId);
+    return inBrand(readVoiceSeam(session.liveMetrics).brand, () => this.connectLoaded(session, params));
+  }
+
+  private async connectLoaded(session: InterviewSession, params: { requestId?: string }): Promise<ConnectionDetails> {
 
     // C4: a session that is still preparing, failed or already over can never
     // go (back) live — answer with a typed 409 the client can act on.
@@ -613,14 +660,17 @@ export class InterviewSessionService {
     }
 
     const mode = session.mode as InterviewMode;
-    const voice = resolveSessionVoice(
+    const seam = readVoiceSeam(session.liveMetrics);
+    const voice = resolveBrandSessionVoice(
+      seam.brand,
       session.voice as unknown as ResolvedVoice | null,
       session.language,
       session.personaId ? findPersona(session.personaId)?.voiceGender : undefined,
     );
     // Parley pilot: no room, dispatch or worker — the browser joins Parley.
     if (isParleySession(session)) return getParleyConnection(session, voice);
-    if (!isLiveKitConfigured()) {
+    const provider = voiceProviderFor(seam);
+    if (!provider.isConfigured()) {
       throw new InterviewEngineConfigError('LiveKit is not configured; cannot start a live interview.');
     }
     const identity = `candidate-${session.id}`;
@@ -630,7 +680,7 @@ export class InterviewSessionService {
     let resolvedMetadata: InterviewRoomMetadata | undefined;
     let resolvedMetadataStr: string | undefined;
     const resolveRoomConfig = () => {
-      const routing = resolvedRouting ?? getInterviewLlmRouting();
+      const routing = resolvedRouting ?? getInterviewLlmRouting(seam.brand);
       const metadata = resolvedMetadata ?? this.buildRoomMetadata(session, voice, routing);
       const metadataStr = resolvedMetadataStr ?? JSON.stringify(metadata);
       resolvedRouting = routing;
@@ -697,17 +747,16 @@ export class InterviewSessionService {
       // unavailable LiveKit must NEVER hang the connect request — wrap each in a
       // timeout. The candidate's join token is what actually matters.
       const { sid } = await withTimeout(
-        createInterviewRoom({ roomName: session.roomName, metadata: metadataStr }),
+        provider.createRoom({ roomName: session.roomName, metadata: metadataStr }),
         8000,
         { sid: null as string | null },
       );
 
-      const agentName = getInterviewAgentName();
       // Race the dispatch for the response (a slow LiveKit must not hang the
       // connect), but do NOT discard a slow-but-successful dispatch id: persist
       // it whenever it lands so the reconnect path can tell "dispatched late"
       // apart from "never dispatched" (and won't double-dispatch).
-      const dispatchPromise = dispatchAgent({ roomName: session.roomName, agentName, metadata: metadataStr });
+      const dispatchPromise = provider.dispatchAgent({ roomName: session.roomName, metadata: metadataStr });
       dispatchPromise
         .then((id) => (id ? this.persistDispatchIdIfUnset(session.id, id) : undefined))
         .catch((err) => {
@@ -729,14 +778,15 @@ export class InterviewSessionService {
       // H8 (WP-43): the env switch and storage are necessary, never
       // sufficient. Egress starts only for a session whose create-time
       // consent check said so; video frames only with the second opt-in.
-      const consented = readPracticeMeta(session.liveMetrics)?.recording ?? NO_RECORDING;
-      if (consented.audio && isRecordingEnabled() && interviewR2Storage.isConfigured()) {
+      const consented = readPracticeRecording(session);
+      if (consented.audio && isRecordingEnabled(seam.brand) && interviewR2Storage.isConfigured()) {
         recording = true;
         void this.startRecordingInBackground(
+          provider,
           session.id,
           session.roomName,
           interviewR2Storage.recordingKey(session.id, 'mp4'),
-          consented.video && mode === 'video' ? 'video' : 'voice',
+          consented.video && mode === 'video' && provider.media.recordVideo ? 'video' : 'voice',
         );
       }
 
@@ -768,9 +818,8 @@ export class InterviewSessionService {
       // both dispatch converge on one recorded id.
       if (fresh && fresh.status === 'live' && !fresh.agentDispatchId) {
         const { metadataStr } = resolveRoomConfig();
-        const redispatchPromise = dispatchAgent({
+        const redispatchPromise = provider.dispatchAgent({
           roomName: session.roomName,
-          agentName: getInterviewAgentName(),
           metadata: metadataStr,
         });
         redispatchPromise
@@ -792,7 +841,7 @@ export class InterviewSessionService {
 
     // Mint (or re-mint) the join token.
     const joinMeta = JSON.stringify({ role: 'candidate', sessionId: session.id, name: session.candidateName ?? undefined });
-    const tok = await mintJoinToken({
+    const tok = await provider.mintClientToken({
       roomName: session.roomName,
       identity,
       name: session.candidateName ?? 'Candidate',
@@ -817,6 +866,7 @@ export class InterviewSessionService {
       expiresAt: tok.expiresAt.toISOString(),
       agentDispatched,
       recording,
+      cameraPublish: mode === 'video' && provider.media.cameraPublish,
     };
   }
 
@@ -843,9 +893,15 @@ export class InterviewSessionService {
   /** Start Egress recording out-of-band. recordingKey/mime are persisted HERE,
    *  only once egress has actually started — a failed start leaves them unset
    *  so the session never advertises a recording that was never written. */
-  private async startRecordingInBackground(sessionId: string, roomName: string, filepath: string, mode: InterviewMode): Promise<void> {
+  private async startRecordingInBackground(
+    provider: VoiceSessionProvider,
+    sessionId: string,
+    roomName: string,
+    filepath: string,
+    mode: InterviewMode,
+  ): Promise<void> {
     try {
-      const rec = await startRoomRecording({ roomName, filepath, audioOnly: mode === 'voice' });
+      const rec = await provider.startRecording({ roomName, filepath, audioOnly: mode === 'voice' });
       if (rec) {
         await prisma.interviewSession.update({
           where: { id: sessionId },
@@ -868,7 +924,10 @@ export class InterviewSessionService {
     voice: ResolvedVoice,
     llmRouting: InterviewLlmRouting,
   ): InterviewRoomMetadata {
-    const stt = resolveStt(session.language);
+    const brand = readVoiceSeam(session.liveMetrics).brand;
+    const stt = resolveBrandStt(brand, session.language);
+    // GoApply: every speech model in the worker metadata must be domestic.
+    assertBrandSpeech(brand, voice, stt);
     const blueprint = (session.blueprint ?? {}) as Record<string, unknown>;
     const openingInstruction = typeof blueprint.openingInstruction === 'string' ? blueprint.openingInstruction : `Greet the candidate and begin the ${session.interviewType} interview.`;
     const openingLine = typeof blueprint.openingLine === 'string' ? blueprint.openingLine : '';
@@ -903,7 +962,10 @@ export class InterviewSessionService {
       },
       // C13: the origin captured from the create request (production, when
       // INTERVIEW_ENGINE_CALLBACK_BASE_URL is unset); env still wins.
-      callbackBaseUrl: getCallbackBaseUrl(readSessionControl(session.liveMetrics).callbackBaseUrl),
+      callbackBaseUrl: getCallbackBaseUrl(
+        readSessionControl(session.liveMetrics).callbackBaseUrl,
+        brand,
+      ),
     };
   }
 
@@ -914,7 +976,7 @@ export class InterviewSessionService {
     secret: string | undefined;
     turns: TranscriptTurn[];
   }): Promise<{ ok: true; total: number }> {
-    this.assertCallbackSecret(params.secret);
+    await this.assertCallbackSecret(params.sessionId, params.secret);
     // C11: the worker retries failed batches, so a turn can arrive twice —
     // dedupe on (role, ts) within the batch here and against the stored
     // transcript in the statement below.
@@ -992,7 +1054,7 @@ export class InterviewSessionService {
     reason?: string;
     message?: string;
   }): Promise<void> {
-    this.assertCallbackSecret(params.secret);
+    await this.assertCallbackSecret(params.sessionId, params.secret);
     if (params.event === 'started') {
       logger.info('INTERVIEW_ENGINE_SESSION', 'worker started', {
         sessionId: params.sessionId, joinMs: params.joinMs, greeting: params.greeting,
@@ -1102,8 +1164,11 @@ export class InterviewSessionService {
         logger.error('INTERVIEW_ENGINE_SESSION', 'session failed by worker error before any answer (not charged)', {
           sessionId, reason: code, fromStatus: row.status,
         });
-        if (row.egressId) void stopRecording(row.egressId).catch(() => { /* best-effort */ });
-        void deleteInterviewRoom(row.roomName).catch(() => { /* best-effort */ });
+        const provider = safeProvider(readVoiceSeam(row.liveMetrics));
+        if (provider) {
+          if (row.egressId) void provider.stopRecording(row.egressId).catch(() => { /* best-effort */ });
+          void provider.deleteRoom(row.roomName).catch(() => { /* best-effort */ });
+        }
         return;
       }
     }
@@ -1131,7 +1196,7 @@ export class InterviewSessionService {
     secret: string | undefined;
     events: unknown;
   }): Promise<{ ok: true; stored: number }> {
-    this.assertCallbackSecret(params.secret);
+    await this.assertCallbackSecret(params.sessionId, params.secret);
     const events = sanitizeMetricEvents(params.events);
     const row = await prisma.interviewSession.findUnique({
       where: { id: params.sessionId },
@@ -1186,13 +1251,24 @@ export class InterviewSessionService {
 
   // ─── Webhook handlers (LiveKit) ───────────────────────────────────────────
 
-  async handleEgressEnded(params: { egressId?: string; roomName?: string; sizeBytes?: number; durationSec?: number; location?: string }): Promise<void> {
+  /**
+   * @param params.signerBrand the brand whose LiveKit project signed the
+   *   webhook (`receiveBrandWebhook`). When given, an event for a session of
+   *   the other brand is ignored, so one brand's project can never touch the
+   *   other brand's sessions.
+   */
+  async handleEgressEnded(params: { egressId?: string; roomName?: string; sizeBytes?: number; durationSec?: number; location?: string; signerBrand?: BrandId }): Promise<void> {
     const where = params.egressId ? { egressId: params.egressId } : params.roomName ? { roomName: params.roomName } : null;
     if (!where) return;
-    const session = await prisma.interviewSession.findFirst({ where, select: { id: true, mode: true, recordingKey: true, liveMetrics: true } });
+    const session = await prisma.interviewSession.findFirst({ where, select: { id: true, mode: true, recordingKey: true, liveMetrics: true, recordingConsent: true } });
     if (!session) return;
-    // A video session recorded without the camera opt-in is audio-only (H8).
-    const recordedMode = session.mode === 'video' && readPracticeMeta(session.liveMetrics)?.recording.video ? 'video' : 'voice';
+    const seam = readVoiceSeam(session.liveMetrics);
+    if (!webhookSignerMatches(params.signerBrand, seam, session.id, 'egress_ended')) return;
+    // A video session recorded without the camera opt-in is audio-only (H8);
+    // GoApply records audio only, always (CN L-11).
+    const recordedMode = session.mode === 'video' && readPracticeRecording(session).video && getInterviewMediaPolicy(seam.brand).recordVideo
+      ? 'video'
+      : 'voice';
     // This webhook is the completion source of truth: a non-empty file result
     // means the recording really exists in R2, so backfill recordingKey if the
     // background-start persist was lost (restart between egress start and the
@@ -1214,9 +1290,11 @@ export class InterviewSessionService {
     logger.info('INTERVIEW_ENGINE_SESSION', 'egress ended', { sessionId: session.id, sizeBytes: params.sizeBytes, durationSec: params.durationSec });
   }
 
-  async handleRoomFinished(roomName: string): Promise<void> {
-    const session = await prisma.interviewSession.findFirst({ where: { roomName }, select: { id: true, status: true } });
+  /** @param signerBrand see handleEgressEnded. */
+  async handleRoomFinished(roomName: string, signerBrand?: BrandId): Promise<void> {
+    const session = await prisma.interviewSession.findFirst({ where: { roomName }, select: { id: true, status: true, liveMetrics: true } });
     if (!session) return;
+    if (!webhookSignerMatches(signerBrand, readVoiceSeam(session.liveMetrics), session.id, 'room_finished')) return;
     if (NON_FINALIZABLE.includes(session.status)) return;
     await this.finalize(session.id).catch((err) => {
       logger.error('INTERVIEW_ENGINE_SESSION', 'finalize from room_finished failed', {
@@ -1233,6 +1311,11 @@ export class InterviewSessionService {
   async finalize(sessionId: string, opts: { workerDrained?: boolean } = {}): Promise<InterviewSession> {
     const session = await prisma.interviewSession.findUnique({ where: { id: sessionId } });
     if (!session) throw new InterviewNotFoundError();
+    return inBrand(readVoiceSeam(session.liveMetrics).brand, () => this.finalizeLoaded(session, opts));
+  }
+
+  private async finalizeLoaded(session: InterviewSession, opts: { workerDrained?: boolean }): Promise<InterviewSession> {
+    const sessionId = session.id;
     // Terminal rows (completed / failed / expired) and an in-flight finalize
     // are never re-claimed: a late room_finished webhook or worker 'ended'
     // must not turn a failed (uncharged) session into a completed one.
@@ -1271,10 +1354,13 @@ export class InterviewSessionService {
     const parley = isParleySession(session);
 
     if (wentLive && !parley) {
-      // Stop recording if still active (best-effort).
-      if (session.egressId) await stopRecording(session.egressId);
-      // Tear down the room (best-effort; releases the worker).
-      await deleteInterviewRoom(session.roomName);
+      const provider = safeProvider(readVoiceSeam(session.liveMetrics));
+      if (provider) {
+        // Stop recording if still active (best-effort).
+        if (session.egressId) await provider.stopRecording(session.egressId);
+        // Tear down the room (best-effort; releases the worker).
+        await provider.deleteRoom(session.roomName);
+      }
     }
     if (wentLive && parley && !opts.workerDrained) {
       // Parley finalizing without a drain (lost webhook, expiry sweep): pull
@@ -1692,7 +1778,7 @@ export class InterviewSessionService {
     secret: string | undefined;
     modelUsage: LiveModelUsageItem[];
   }): Promise<{ ok: true }> {
-    this.assertCallbackSecret(params.secret);
+    await this.assertCallbackSecret(params.sessionId, params.secret);
     const items = Array.isArray(params.modelUsage) ? params.modelUsage : [];
     const stored = await prisma.interviewSession.findUnique({
       where: { id: params.sessionId },
@@ -1703,6 +1789,7 @@ export class InterviewSessionService {
       try {
         // Legacy session rows predate the persisted liveLlm snapshot.
         fallbackWorkerModel = getWorkerLlmModel();
+        // (Legacy rows are RoboApply rows: GoApply sessions always carry the snapshot.)
       } catch {
         // Usage is still recorded as `unreported`; metering must remain best-effort.
       }
@@ -1725,6 +1812,10 @@ export class InterviewSessionService {
    */
   async endByOwner(params: { sessionId: string; userId: string; apiKeyId?: string | null }): Promise<InterviewSession> {
     const session = await this.loadOwned(params.userId, params.sessionId, params.apiKeyId);
+    return inBrand(readVoiceSeam(session.liveMetrics).brand, () => this.endLoaded(session));
+  }
+
+  private async endLoaded(session: InterviewSession): Promise<InterviewSession> {
     if (session.status !== 'live') return this.finalize(session.id);
 
     const endedAt = session.endedAt ?? new Date();
@@ -1736,7 +1827,8 @@ export class InterviewSessionService {
 
     // Parley: stop the conversation and pull its final transcript directly.
     const parley = isParleySession(session);
-    const signalled = parley ? false : await withTimeout(sendInterviewEndSignal(session.roomName), 3000, false);
+    const endProvider = parley ? null : safeProvider(readVoiceSeam(session.liveMetrics));
+    const signalled = endProvider ? await withTimeout(endProvider.sendEndSignal(session.roomName), 3000, false) : false;
     const drained = parley
       ? await drainParleySession(this, session)
       : signalled ? await this.waitForWorkerEnded(session.id, endedAt.getTime()) : false;
@@ -1779,16 +1871,25 @@ export class InterviewSessionService {
    */
   async deleteByOwner(params: { sessionId: string; userId: string; apiKeyId?: string | null }): Promise<void> {
     const session = await this.loadOwned(params.userId, params.sessionId, params.apiKeyId);
+    return inBrand(readVoiceSeam(session.liveMetrics).brand, () => this.deleteLoaded(session, params));
+  }
 
+  private async deleteLoaded(
+    session: InterviewSession,
+    params: { userId: string; apiKeyId?: string | null },
+  ): Promise<void> {
     // Tear down any live LiveKit resources before dropping the row.
     if (session.status === 'created' || session.status === 'live' || session.status === 'finalizing') {
       if (isParleySession(session)) {
         await stopParleySession(session);
       } else {
-        if (session.egressId) {
-          await stopRecording(session.egressId).catch(() => { /* best-effort */ });
+        const provider = safeProvider(readVoiceSeam(session.liveMetrics));
+        if (provider) {
+          if (session.egressId) {
+            await provider.stopRecording(session.egressId).catch(() => { /* best-effort */ });
+          }
+          await provider.deleteRoom(session.roomName).catch(() => { /* best-effort */ });
         }
-        await deleteInterviewRoom(session.roomName).catch(() => { /* best-effort */ });
       }
     }
 
@@ -1819,6 +1920,15 @@ export class InterviewSessionService {
     transcriptUrl: string | null;
   }> {
     const session = await this.loadOwned(params.userId, params.sessionId, params.apiKeyId);
+    // Presigned links come from the session's own bucket (CN_S3_* on GoApply).
+    return inBrand(readVoiceSeam(session.liveMetrics).brand, () => this.reportLoaded(session));
+  }
+
+  private async reportLoaded(session: InterviewSession): Promise<{
+    session: InterviewSession;
+    recordingUrl: string | null;
+    transcriptUrl: string | null;
+  }> {
 
     // Self-healing: re-fire the LLM enrichment for reports stuck at the
     // deterministic version (a deploy/restart killed the fire-and-forget
@@ -1896,17 +2006,18 @@ export class InterviewSessionService {
     try {
       const fresh = await prisma.interviewSession.findUnique({
         where: { id: session.id },
-        select: { liveMetrics: true, endedAt: true },
+        select: { liveMetrics: true, endedAt: true, jobId: true, practiceCompletedAt: true },
       });
       if (!fresh) return false;
       const meta = readPracticeMeta(fresh.liveMetrics);
       if (meta?.checklistMarkedAt) return false;
+      const completedAt = fresh.practiceCompletedAt?.toISOString() ?? meta?.completedAt ?? null;
       return await completePractice({
         target: 'live',
         sessionId: session.id,
         userId: session.userId,
-        jobId: meta?.jobId ?? null,
-        completedAt: meta?.completedAt ? null : (fresh.endedAt ?? new Date()).toISOString(),
+        jobId: fresh.jobId ?? meta?.jobId ?? null,
+        completedAt: completedAt ? null : (fresh.endedAt ?? new Date()).toISOString(),
       });
     } catch (err) {
       logger.warn('INTERVIEW_ENGINE_SESSION', 'practice completion hook failed', {
@@ -1920,18 +2031,26 @@ export class InterviewSessionService {
   async getPracticeInfo(params: { sessionId: string; userId: string }): Promise<PracticeSessionInfo> {
     const session = await this.loadOwned(params.userId, params.sessionId);
     const meta = readPracticeMeta(session.liveMetrics);
+    // SCHEMA-3 columns first, liveMetrics.practice for older rows.
+    const jobId = session.jobId ?? meta?.jobId ?? null;
+    const recording = readPracticeRecording(session);
+    const completedAt = session.practiceCompletedAt?.toISOString() ?? meta?.completedAt ?? null;
     return {
       sessionId: session.id,
       status: session.status,
-      job: meta?.jobId
-        ? { id: meta.jobId, title: meta.jobTitle, companyName: meta.companyName }
+      job: jobId
+        ? {
+            id: jobId,
+            title: meta?.jobId === jobId ? meta.jobTitle : null,
+            companyName: meta?.jobId === jobId ? meta.companyName : null,
+          }
         : null,
       recording: {
-        consented: meta?.recording.audio === true,
-        video: meta?.recording.video === true,
+        consented: recording.audio === true,
+        video: recording.video === true,
         available: !!session.recordingKey,
       },
-      completedAt: session.status === 'completed' ? (meta?.completedAt ?? session.endedAt?.toISOString() ?? null) : null,
+      completedAt: session.status === 'completed' ? (completedAt ?? session.endedAt?.toISOString() ?? null) : null,
     };
   }
 
@@ -1950,9 +2069,12 @@ export class InterviewSessionService {
           userId,
           source: 'roboapply',
           status: 'completed',
-          OR: ids.map((id) => ({ liveMetrics: { path: ['practice', 'jobId'], equals: id } })),
+          OR: [
+            { jobId: { in: ids } },
+            ...ids.map((id) => ({ liveMetrics: { path: ['practice', 'jobId'], equals: id } })),
+          ],
         },
-        select: { liveMetrics: true, endedAt: true, createdAt: true },
+        select: { liveMetrics: true, endedAt: true, createdAt: true, jobId: true },
         orderBy: { createdAt: 'desc' },
         take: 500,
       }),
@@ -1965,7 +2087,7 @@ export class InterviewSessionService {
     };
     for (const row of rows) {
       const meta = readPracticeMeta(row.liveMetrics);
-      keepLatest(meta?.jobId ?? null, (row.endedAt ?? row.createdAt).toISOString());
+      keepLatest(row.jobId ?? meta?.jobId ?? null, (row.endedAt ?? row.createdAt).toISOString());
     }
     for (const row of written) {
       // A written practice counts once it was answered and scored (completedAt stamp).
@@ -2100,14 +2222,59 @@ export class InterviewSessionService {
     return session;
   }
 
-  private assertCallbackSecret(secret: string | undefined): void {
-    const expected = getAgentCallbackSecret();
-    if (!expected) throw new InterviewAuthError('Callback secret not configured');
-    if (!secret || secret !== expected) throw new InterviewAuthError('Invalid callback secret');
+  /**
+   * Each brand's worker carries its own secret (LIVEKIT_AGENT_CALLBACK_SECRET /
+   * CN_LIVEKIT_AGENT_CALLBACK_SECRET), and a callback may only touch a session
+   * of its own brand: the mainland worker's secret can never append to, end or
+   * meter a RoboApply session, nor the reverse. A secret no brand configured is
+   * refused before any database read; otherwise the session's brand (its
+   * stored seam) picks the one secret that is accepted. Constant-time compares.
+   * An unknown session id passes here (there is nothing of another brand to
+   * touch) and each callback handles not-found as before.
+   */
+  private async assertCallbackSecret(sessionId: string, secret: string | undefined): Promise<void> {
+    const configured = getAgentCallbackSecrets();
+    if (configured.length === 0) throw new InterviewAuthError('Callback secret not configured');
+    if (!secret || !configured.some((e) => secretEquals(secret, e))) throw new InterviewAuthError('Invalid callback secret');
+    const id = (sessionId ?? '').trim();
+    if (!id) return;
+    const row = await prisma.interviewSession.findUnique({ where: { id }, select: { liveMetrics: true } });
+    if (!row) return;
+    const expected = getAgentCallbackSecret(readVoiceSeam(row.liveMetrics).brand);
+    if (!expected || !secretEquals(secret, expected)) throw new InterviewAuthError('Invalid callback secret');
   }
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────
+
+function secretEquals(given: string, expected: string): boolean {
+  const a = Buffer.from(given, 'utf8');
+  const b = Buffer.from(expected, 'utf8');
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** The provider of a stored seam, or null when it can no longer be built
+ *  (a reserved provider id). Teardown is best-effort, so it never throws. */
+function safeProvider(seam: VoiceSeam): VoiceSessionProvider | null {
+  try {
+    return voiceProviderFor(seam);
+  } catch (err) {
+    logger.warn('INTERVIEW_ENGINE_SESSION', 'voice provider unavailable for teardown', {
+      brand: seam.brand, provider: seam.provider, error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
+/** A webhook signed by one brand's LiveKit project acts only on that brand's
+ *  sessions. No signer given (a caller that does not pass it) = accepted. */
+function webhookSignerMatches(signer: BrandId | undefined, seam: VoiceSeam, sessionId: string, event: string): boolean {
+  if (!signer || signer === seam.brand) return true;
+  logger.warn('INTERVIEW_ENGINE_WEBHOOK', 'ignored a webhook signed by another brand project', {
+    sessionId, event, signer, sessionBrand: seam.brand,
+  });
+  return false;
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -2233,6 +2400,23 @@ export function readPracticeMeta(liveMetrics: unknown): PracticeMeta | null {
   };
 }
 
+/** Parse the `InterviewSession.recordingConsent` column ({ audio, video }); null when absent or malformed. */
+export function parseRecordingConsent(value: unknown): PracticeRecordingChoice | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v.audio !== 'boolean') return null;
+  return { audio: v.audio, video: v.audio && v.video === true };
+}
+
+/**
+ * The recording the user consented to for a live session: the
+ * `recordingConsent` column (SCHEMA-3) first, else `liveMetrics.practice`
+ * (rows written before the column existed). No choice = nothing recorded.
+ */
+export function readPracticeRecording(row: { liveMetrics: unknown; recordingConsent?: unknown }): PracticeRecordingChoice {
+  return parseRecordingConsent(row.recordingConsent) ?? readPracticeMeta(row.liveMetrics)?.recording ?? NO_RECORDING;
+}
+
 /** A job id that is unknown, from the other market, or someone else's private import. */
 export class PracticeJobNotFoundError extends InterviewNotFoundError {
   readonly code = 'job_not_found' as const;
@@ -2310,6 +2494,8 @@ export interface PracticeDeps {
     patch: Record<string, unknown>,
     unlessSet?: 'checklistMarkedAt',
   ): Promise<boolean>;
+  /** Set `practiceCompletedAt` once (SCHEMA-3 column; never overwritten). */
+  stampPracticeCompleted(target: PracticeTarget, sessionId: string, at: Date): Promise<unknown>;
   /** Practice credits: can the user afford a practice of this length? */
   gatePractice(userId: string, plannedMinutes: number): Promise<{ ok: boolean; balance: number; required: number; tier: string }>;
   /** Pro-rated practice debit, idempotent per session id. */
@@ -2451,6 +2637,12 @@ async function completePractice(input: {
   try {
     if (input.completedAt) {
       await practiceDeps.mergePracticeMeta(input.target, input.sessionId, { completedAt: input.completedAt });
+      // The SCHEMA-3 column, set once (best-effort: liveMetrics stays the fallback).
+      await practiceDeps.stampPracticeCompleted(input.target, input.sessionId, new Date(input.completedAt)).catch((err: unknown) => {
+        logger.warn('INTERVIEW_ENGINE_SESSION', 'practiceCompletedAt stamp failed', {
+          sessionId: input.sessionId, target: input.target, error: err instanceof Error ? err.message : String(err),
+        });
+      });
     }
     await practiceDeps.markChecklistStep(input.userId, 'practice');
     const claimed = await practiceDeps.mergePracticeMeta(
@@ -2568,6 +2760,13 @@ const defaultPracticeDeps: PracticeDeps = {
     );
     return count === 1;
   },
+  async stampPracticeCompleted(target, sessionId, at) {
+    const where = { id: sessionId, practiceCompletedAt: null };
+    const data = { practiceCompletedAt: at };
+    return target === 'live'
+      ? prisma.interviewSession.updateMany({ where, data })
+      : prisma.rAMockSession.updateMany({ where, data });
+  },
   async gatePractice(userId, plannedMinutes) {
     return gateMockInterview(userId, plannedMinutes);
   },
@@ -2679,10 +2878,12 @@ export async function resolvePracticeRecording(input: {
   source: InterviewSource;
   mode: InterviewMode;
   requested?: { audio?: boolean; video?: boolean } | null;
+  /** False where the brand never records video (GoApply, CN L-11). Default true. */
+  allowVideo?: boolean;
 }): Promise<PracticeRecordingChoice> {
   const wantAudio = input.requested?.audio === true;
   if (!wantAudio) return NO_RECORDING;
-  const wantVideo = input.requested?.video === true && input.mode === 'video';
+  const wantVideo = input.requested?.video === true && input.mode === 'video' && input.allowVideo !== false;
   if (input.source === 'external') return { audio: true, video: wantVideo };
   if (input.source !== 'roboapply') return NO_RECORDING;
   const live = async (type: PracticeConsentType) => {

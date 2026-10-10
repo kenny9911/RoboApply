@@ -13,6 +13,11 @@
 //                                                  connect (full-duplex: publish
 //                                                  mic [+cam in video mode] +
 //                                                  subscribe + data).
+//
+// Per brand (WP-63a): every call uses the LiveKit project of the brand of the
+// current unit of work (`getLiveKitCreds()` reads CN_LIVEKIT_* on GoApply).
+// The VoiceSessionProvider (../providers/) runs each call inside its session's
+// brand, so these signatures stay exactly as Wave 0 shipped them.
 
 import {
   AccessToken,
@@ -25,29 +30,41 @@ import { DataPacket_Kind, TrackSource } from '@livekit/protocol';
 import { getLiveKitCreds, getLiveKitHttpUrl, getJoinTokenTtlSeconds } from '../config.js';
 import { logger } from '../../services/LoggerService.js';
 
-let roomClient: RoomServiceClient | null = null;
-let dispatchClient: AgentDispatchClient | null = null;
+// Memoized per LiveKit project (url + key): one brand's client is never
+// reused for the other brand's project.
+const roomClients = new Map<string, RoomServiceClient>();
+const dispatchClients = new Map<string, AgentDispatchClient>();
+
+function clientKey(): { key: string; url: string; apiKey: string; apiSecret: string } {
+  const { apiKey, apiSecret } = getLiveKitCreds();
+  const url = getLiveKitHttpUrl();
+  return { key: `${url}|${apiKey}`, url, apiKey, apiSecret };
+}
 
 function getRoomClient(): RoomServiceClient {
-  if (!roomClient) {
-    const { apiKey, apiSecret } = getLiveKitCreds();
-    roomClient = new RoomServiceClient(getLiveKitHttpUrl(), apiKey, apiSecret);
+  const { key, url, apiKey, apiSecret } = clientKey();
+  let client = roomClients.get(key);
+  if (!client) {
+    client = new RoomServiceClient(url, apiKey, apiSecret);
+    roomClients.set(key, client);
   }
-  return roomClient;
+  return client;
 }
 
 function getDispatchClient(): AgentDispatchClient {
-  if (!dispatchClient) {
-    const { apiKey, apiSecret } = getLiveKitCreds();
-    dispatchClient = new AgentDispatchClient(getLiveKitHttpUrl(), apiKey, apiSecret);
+  const { key, url, apiKey, apiSecret } = clientKey();
+  let client = dispatchClients.get(key);
+  if (!client) {
+    client = new AgentDispatchClient(url, apiKey, apiSecret);
+    dispatchClients.set(key, client);
   }
-  return dispatchClient;
+  return client;
 }
 
 /** For tests — drop memoized clients so new creds take effect. */
 export function __resetLiveKitClientsForTest(): void {
-  roomClient = null;
-  dispatchClient = null;
+  roomClients.clear();
+  dispatchClients.clear();
 }
 
 /**
