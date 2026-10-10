@@ -5,39 +5,39 @@
 // contract's views. Change a signature here only together with its contract.
 //
 // Endpoints:
-//   GET    /api/v1/roboapply/announcements/next
-//   POST   /api/v1/roboapply/announcements/:id/seen
+//   GET    /api/v1/roboapply/announcements/next?locale=
+//   POST   /api/v1/roboapply/announcements/:id/seen?locale=
 //   GET    /api/v1/roboapply/admin/announcements
 //   POST   /api/v1/roboapply/admin/announcements
 //   PATCH  /api/v1/roboapply/admin/announcements/:id
 //   DELETE /api/v1/roboapply/admin/announcements/:id
 
-import { call, type CallOptions, type In, type Items, seg, withQuery } from './contracts/wire';
+import { call, type CallOptions, type In, seg, withQuery } from './contracts/wire';
 import type * as AN from './contracts/announcements';
 
 /** `announcements.next` — GET /api/v1/roboapply/announcements/next */
-export function getNextAnnouncement(opts?: CallOptions): Promise<AN.NextAnnouncementResponse> {
-  return call<AN.NextAnnouncementResponse>('GET', `/api/v1/roboapply/announcements/next`, opts);
+export function getNextAnnouncement(query?: In<typeof AN.NextAnnouncementQuerySchema>, opts?: CallOptions): Promise<AN.NextAnnouncementResponse> {
+  return call<AN.NextAnnouncementResponse>('GET', withQuery(`/api/v1/roboapply/announcements/next`, query), opts);
 }
 
 /** `announcements.seen` — POST /api/v1/roboapply/announcements/:id/seen */
-export function markAnnouncementSeen(id: string, opts?: CallOptions): Promise<void> {
-  return call<void>('POST', `/api/v1/roboapply/announcements/${seg(id)}/seen`, opts);
+export function markAnnouncementSeen(id: string, query?: In<typeof AN.NextAnnouncementQuerySchema>, opts?: CallOptions): Promise<void> {
+  return call<void>('POST', withQuery(`/api/v1/roboapply/announcements/${seg(id)}/seen`, query), opts);
 }
 
 /** `announcements.admin.list` — GET /api/v1/roboapply/admin/announcements */
-export function adminListAnnouncements(query?: In<typeof AN.AdminAnnouncementsQuerySchema>, opts?: CallOptions): Promise<Items<AN.AnnouncementView>> {
-  return call<Items<AN.AnnouncementView>>('GET', withQuery(`/api/v1/roboapply/admin/announcements`, query), opts);
+export function adminListAnnouncements(query?: In<typeof AN.AdminAnnouncementsQuerySchema>, opts?: CallOptions): Promise<{ items: AN.AdminAnnouncementView[] }> {
+  return call<{ items: AN.AdminAnnouncementView[] }>('GET', withQuery(`/api/v1/roboapply/admin/announcements`, query), opts);
 }
 
 /** `announcements.admin.create` — POST /api/v1/roboapply/admin/announcements */
-export function adminCreateAnnouncement(body: In<typeof AN.UpsertAnnouncementBodySchema>, opts?: CallOptions): Promise<AN.AnnouncementView> {
-  return call<AN.AnnouncementView>('POST', `/api/v1/roboapply/admin/announcements`, { ...opts, body });
+export function adminCreateAnnouncement(body: In<typeof AN.UpsertAnnouncementBodySchema>, opts?: CallOptions): Promise<AN.AdminAnnouncementView> {
+  return call<AN.AdminAnnouncementView>('POST', `/api/v1/roboapply/admin/announcements`, { ...opts, body });
 }
 
 /** `announcements.admin.update` — PATCH /api/v1/roboapply/admin/announcements/:id */
-export function adminUpdateAnnouncement(id: string, body: In<typeof AN.PatchAnnouncementBodySchema> = {}, opts?: CallOptions): Promise<AN.AnnouncementView> {
-  return call<AN.AnnouncementView>('PATCH', `/api/v1/roboapply/admin/announcements/${seg(id)}`, { ...opts, body });
+export function adminUpdateAnnouncement(id: string, body: In<typeof AN.PatchAnnouncementBodySchema> = {}, opts?: CallOptions): Promise<AN.AdminAnnouncementView> {
+  return call<AN.AdminAnnouncementView>('PATCH', `/api/v1/roboapply/admin/announcements/${seg(id)}`, { ...opts, body });
 }
 
 /** `announcements.admin.delete` — DELETE /api/v1/roboapply/admin/announcements/:id */

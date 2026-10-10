@@ -1,8 +1,9 @@
-// /admin/announcements — route shell (FND-6b). Admin: "What's new" announcements.
-//
-// STUB. Owner: WP-61, who replaces this page. Renders inside the (auth) app shell.
-// Nothing links here until the owner ships and INT flips the entry.
+// /admin/announcements — "What's new" announcements per site, language and
+// audience (WP-61; F-NOTIF-09). Admin only; the console checks the role and
+// the API enforces it. Renders inside the (auth) app shell.
+
+import { AnnouncementsAdmin } from './AnnouncementsAdmin';
 
 export default function AdminAnnouncementsPage() {
-  return <div hidden data-route-stub="/admin/announcements" data-owner="WP-61" />;
+  return <AnnouncementsAdmin />;
 }

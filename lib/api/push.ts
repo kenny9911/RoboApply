@@ -7,6 +7,7 @@
 // Endpoints:
 //   GET    /api/v1/roboapply/push/vapid-public-key
 //   POST   /api/v1/roboapply/push/subscriptions
+//   POST   /api/v1/roboapply/push/subscriptions/lookup
 //   DELETE /api/v1/roboapply/push/subscriptions/:id
 
 import { call, type CallOptions, type In, seg } from './contracts/wire';
@@ -22,6 +23,17 @@ export function createPushSubscription(body: In<typeof PU.CreatePushSubscription
   return call<PU.PushSubscriptionView>('POST', `/api/v1/roboapply/push/subscriptions`, { ...opts, body });
 }
 
+/**
+ * `push.lookup` — POST /api/v1/roboapply/push/subscriptions/lookup
+ * The caller's own row for this browser's endpoint, or `{ subscription: null }`.
+ */
+export function lookupPushSubscription(
+  body: In<typeof PU.LookupPushSubscriptionBodySchema>,
+  opts?: CallOptions,
+): Promise<PU.PushSubscriptionLookupResponse> {
+  return call<PU.PushSubscriptionLookupResponse>('POST', `/api/v1/roboapply/push/subscriptions/lookup`, { ...opts, body });
+}
+
 /** `push.unsubscribe` — DELETE /api/v1/roboapply/push/subscriptions/:id */
 export function deletePushSubscription(id: string, opts?: CallOptions): Promise<void> {
   return call<void>('DELETE', `/api/v1/roboapply/push/subscriptions/${seg(id)}`, opts);
@@ -31,5 +43,6 @@ export function deletePushSubscription(id: string, opts?: CallOptions): Promise<
 export const pushApi = {
   getVapidPublicKey,
   createPushSubscription,
+  lookupPushSubscription,
   deletePushSubscription,
 };
