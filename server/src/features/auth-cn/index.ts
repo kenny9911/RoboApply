@@ -21,7 +21,7 @@ export * from './contract.js';
 export { createAuthCnAdminRouter, createPhoneAuthRouter, createWechatAuthRouter } from './routes.js';
 export { AuthCnError } from './errors.js';
 export { assertPhoneBound, hasBoundPhone, phoneBindingRequired, requirePhoneBound } from './phoneBinding.js';
-export { cnSignupMode, goapplySignupOpen, isCn0, requiredSignupConsents } from './signupPolicy.js';
+export { cnSignupMode, goapplySignupOpen, isCn0, requiredSignupConsents, requiredSignupConsentsWithProse } from './signupPolicy.js';
 export { isPlaceholderEmail, PLACEHOLDER_EMAIL_DOMAIN } from './accounts.js';
 export { redeemInviteIn, type InviteTx } from './inviteService.js';
 

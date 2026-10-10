@@ -10,3 +10,19 @@ export { WechatBrowserBanner, type WechatBrowserBannerProps } from './WechatBrow
 export { PhoneBindingNotice, type PhoneBindingNoticeProps } from './PhoneBindingNotice';
 export { AdminInvites } from './AdminInvites';
 export { isPhoneBindingRequired, isWechatBrowser, useIsWechatBrowser } from './shared';
+// The GoApply signup inputs the email form shares with the phone form and the WeChat button (INT-01).
+export { InviteCodeField, SignupConsents } from './SignupConsents';
+export {
+  agreementSatisfied,
+  consentsFromPolicy,
+  currentSignupLinkCodes,
+  errorMessage as authCnErrorMessage,
+  isConsentOutdated,
+  isInviteInvalid,
+  shownConsentsFromPolicy,
+  prefillAccessCode,
+  signupInputs,
+  signupLinkCodes,
+  useSignupInputs,
+  useSignupPolicy,
+} from './shared';

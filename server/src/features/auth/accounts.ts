@@ -91,6 +91,7 @@ export async function createSeekerAccount(tx: Tx, input: CreateSeekerAccountInpu
         consentType: c.consentType,
         granted: c.granted,
         proseVersion: c.proseVersion,
+        ...(c.proseHash ? { proseHash: c.proseHash } : {}),
       })),
     ],
   });

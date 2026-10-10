@@ -1,8 +1,6 @@
 {
   "authCn": {
     "consent": {
-      "agreement": "我已年满16周岁，已阅读并同意<terms>《用户协议》</terms><privacy>《隐私政策》</privacy>",
-      "crossBorder": "我同意将个人信息传输至中国境外（美国）存储和处理，处理方为：Neon（数据库）、Vercel（网站托管）、LiveKit Cloud（语音练习）、Deepgram 和 Cartesia（语音识别与合成）、Resend（邮件）。我可以随时撤回此同意；撤回后账号将被关闭并删除。",
       "agreeFirst": "请先勾选上方协议"
     },
     "phone": {
@@ -28,6 +26,8 @@
     "submit": "登录 / 注册",
     "submitting": "登录中…",
     "signupClosed": "暂未开放注册，已有账号可正常登录。",
+    "otherMethods": "其他方式",
+    "otherMethodsEmail": "邮箱和密码",
     "wechat": {
       "button": "微信登录",
       "inWechat": "微信登录",
@@ -47,6 +47,7 @@
       "invite_missing": "注册新账号需要填写邀请码。",
       "signup_closed": "暂未开放注册。",
       "consent_required": "请先同意必选协议后再注册。",
+      "consent_outdated": "协议内容已更新，请重新阅读并勾选后继续。",
       "phone_taken": "该手机号已被其他账号使用。",
       "phone_mismatch": "这不是你账号绑定的手机号。",
       "identity_proof_invalid": "身份验证未通过，请重试。",

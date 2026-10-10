@@ -7,8 +7,10 @@
 // (`phone_otp`) only when the `auth.phoneOtp` capability is on, so a missing
 // SMS provider never shows a dead form.
 //
-// G0 rules: the agreement box is required and unchecked, and both buttons
-// stay disabled until it is ticked (plus the cross-border box in CN-0);
+// G0 rules: every required consent has its own box (the agreement, the age
+// confirmation and, in CN-0, the cross-border consent), each unchecked and
+// showing the text the sign-up policy serves; both buttons stay disabled
+// until all of them are ticked;
 // +86 only (`^1[3-9]\d{9}$`, "请输入正确的手机号"); 获取验证码 with a 60 s
 // countdown; one flow — a new number creates an account, a known one signs
 // in; invite code when sign-up is invite-only. The SMS carries only the code
@@ -21,17 +23,21 @@ import { useTranslations } from 'next-intl';
 import { sendPhoneCode, verifyPhoneCode } from '../../../lib/api/authCn';
 import { apiErrorCode, apiErrorDetails } from '../../../lib/api/contracts/wire';
 import { useAuth } from '../../../lib/auth/AuthProvider';
+import { isTwoFactorRequired, twoFactorHref } from '../../../lib/auth/twoFactor';
 import { Btn } from '../../v3/primitives/Btn';
 import type { AuthMethodProps } from '../../auth/methods/registry';
 import { InviteCodeField, SignupConsents } from './SignupConsents';
 import {
   agreementSatisfied,
   consentsFromPolicy,
+  currentSignupLinkCodes,
   errorMessage,
+  isInviteInvalid,
   isValidCnPhone,
   maskPhoneInput,
   normalizePhoneInput,
   OTP_RE,
+  prefillAccessCode,
   safeNextPath,
   signupInputs,
   useCountdown,
@@ -62,6 +68,8 @@ export function PhoneMethod({ mode, next, onSuccess }: AuthMethodProps) {
   // The phone form hosts the shared agreement boxes (the WeChat button reads them).
   useEffect(() => {
     signupInputs.set({ host: 'phone' });
+    // A closed-beta access code in the link (`?invite=`) starts the invite field.
+    prefillAccessCode();
     return () => signupInputs.reset();
   }, []);
 
@@ -106,20 +114,29 @@ export function PhoneMethod({ mode, next, onSuccess }: AuthMethodProps) {
       return;
     }
     setSubmitting(true);
+    const safe = safeNextPath(next);
     try {
-      const safe = safeNextPath(next);
+      // The invite-friends code the visitor arrived with (`?ref=`), if any:
+      // read by the server only when this number is a new account.
+      const { ref } = currentSignupLinkCodes();
       const res = await verifyPhoneCode({
         phone: normalizePhoneInput(phone),
         code,
         consents: consentsFromPolicy(policy),
         ...(inputs.invite.trim() ? { inviteCode: inputs.invite.trim() } : {}),
         ...(safe ? { next: safe } : {}),
+        ...(ref ? { ref } : {}),
       });
       await refresh();
       if (onSuccess) onSuccess();
       else router.replace(res.nextRoute);
     } catch (err) {
-      if (apiErrorCode(err) === 'invite_invalid') setShowInvite(true);
+      // Two-step sign-in is on: the code was right, the authenticator code is next.
+      if (isTwoFactorRequired(err)) {
+        router.replace(twoFactorHref(err, safe));
+        return;
+      }
+      if (isInviteInvalid(err)) setShowInvite(true);
       setError(errorMessage(err, t));
     } finally {
       setSubmitting(false);

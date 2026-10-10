@@ -1,7 +1,8 @@
 'use client';
 
-// TwoFactorChallenge — /login/2fa, the second step of a password sign-in
-// (F-TRUST-07; TASK_PLAN.md WP-79). POST /auth/login answered 401
+// TwoFactorChallenge — /login/2fa, the second step of signing in
+// (F-TRUST-07; TASK_PLAN.md WP-79). A sign-in route (password, password
+// reset, email link, Google / LINE, phone code, WeChat) answered 401
 // `two_factor_required` and set the httpOnly challenge cookie; this page
 // takes a code from the authenticator app (or a recovery code) and, on
 // success, enters the app the way the email form does: /auth/me, then the

@@ -5,9 +5,9 @@
 //     signed up with (`ref` / `inviteCode` in the touch; the first that reads
 //     as a code). Pass `signals: { ip, userAgent, deviceId }` from the signup
 //     request for the risk check. EVERY sign-up path of a brand must call it
-//     before the brand is listed in INVITE_SIGNUP_WIRED_BRANDS (contract.ts):
-//     GoApply's phone and WeChat sign-ups (features/auth-cn) do not yet, so
-//     the programme is hidden on GoApply (request R-60-3).
+//     while the brand is listed in INVITE_SIGNUP_WIRED_BRANDS (contract.ts):
+//     features/auth (email, Google, LINE) and features/auth-cn (phone,
+//     WeChat; hooks.ts) both do, so both brands are listed.
 //   - checkReferralFor(userId): call after the user verifies their email or
 //     phone, links Google/LINE/WeChat, or finishes onboarding; it grants the
 //     invite credits at once when they are due (otherwise the

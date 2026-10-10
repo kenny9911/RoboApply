@@ -9,6 +9,8 @@
 //   email_required    → the provider shared no confirmed email (LINE often,
 //                       Google rarely): enter one; the account is created
 //                       only after the emailed link is clicked
+//   two_factor_required → the account has two-step sign-in on: no session
+//                       exists yet; go to /login/2fa for the code
 //   account_other_brand / failures → explained, with a way back.
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -20,6 +22,7 @@ import { completeOAuth, finishOAuth, submitOAuthEmail, type OAuthCallbackResult,
 import { RoboApiError } from '../../../lib/api/client';
 import { useAuth } from '../../../lib/auth/AuthProvider';
 import { browserTimeZone } from '../../../lib/auth/entry';
+import { isTwoFactorRequired, twoFactorHref } from '../../../lib/auth/twoFactor';
 import { useAuthMethodsInfo } from '../../../hooks/auth/useAuthAccount';
 import { useBrand } from '../../../lib/brand/BrandProvider';
 import { Btn } from '../../v3/primitives/Btn';
@@ -65,6 +68,10 @@ export function OAuthCallbackView({ provider }: { provider: OAuthProvider }) {
   const [submitting, setSubmitting] = useState(false);
 
   function fail(err: unknown) {
+    if (isTwoFactorRequired(err)) {
+      router.replace(twoFactorHref(err));
+      return;
+    }
     const code = codeOf(err);
     if (code === 'account_other_brand') setView({ kind: 'other_brand', url: otherBrandUrlOf((err as RoboApiError).payload) });
     else if (code === 'account_disabled') setView({ kind: 'failed', key: 'loginForm.disabled' });

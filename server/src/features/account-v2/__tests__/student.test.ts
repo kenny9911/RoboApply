@@ -238,13 +238,17 @@ describe('account-v2 routes', () => {
   let h: RouteHarness;
   let signedIn: boolean;
   const twoFactorStore = createMemoryTwoFactorStore();
+  const revokeOtherSessions = vi.fn(async (_userId: string, _keep: string | null) => undefined);
+  const cutOffBearerTokens = vi.fn(async (_userId: string, _at: Date) => undefined);
+  // The REAL sign-in path list (no override): every path is gated since INT-01,
+  // so the status endpoint reports that two-step sign-in can be turned on.
   const twoFactor = new TwoFactorService({
     store: twoFactorStore,
     env: () => ({ TOTP_ENCRYPTION_KEY: 'd'.repeat(64) }),
     now: () => START,
-    revokeOtherSessions: vi.fn(async () => undefined),
+    revokeOtherSessions,
+    cutOffBearerTokens,
     qrDataUrl: async () => null,
-    signInPaths: SIGN_IN_PATHS.map((p) => ({ ...p, gated: true })),
   });
   const studentT = setup();
 
@@ -283,13 +287,23 @@ describe('account-v2 routes', () => {
   });
 
   it('runs enrolment end to end and validates bodies', async () => {
+    // Enrolment is open on the real path list (readiness: every entry gated).
+    expect(SIGN_IN_PATHS.every((p) => p.gated)).toBe(true);
     expect((await h.request<{ data: { available: boolean } }>('GET', '/a/2fa')).body.data.available).toBe(true);
     const enrol = await h.request<{ data: { secret: string; otpauthUri: string } }>('POST', '/a/2fa/enrol');
     expect(enrol.status).toBe(200);
     expect(enrol.body.data.otpauthUri).toContain(encodeURIComponent('u@example.test'));
     expect((await h.request('POST', '/a/2fa/verify', { body: { code: '12' } })).status).toBe(422);
-    const verify = await h.request<{ data: { recoveryCodes: string[] } }>('POST', '/a/2fa/verify', { body: { code: totpAt(enrol.body.data.secret, START) } });
+    // The browser that turns it on stays signed in: its session cookie is the
+    // one kept, also when the request itself was authenticated another way
+    // (a bearer JWT, which is cut off at the same moment).
+    const verify = await h.request<{ data: { recoveryCodes: string[] } }>('POST', '/a/2fa/verify', {
+      body: { code: totpAt(enrol.body.data.secret, START) },
+      cookies: { ra_session_token: 'this-browser' },
+    });
     expect(verify.body.data.recoveryCodes).toHaveLength(10);
+    expect(revokeOtherSessions).toHaveBeenLastCalledWith('u1', 'this-browser');
+    expect(cutOffBearerTokens).toHaveBeenLastCalledWith('u1', START);
     expect((await h.request<{ data: { enabled: boolean } }>('GET', '/a/2fa')).body.data.enabled).toBe(true);
     const bad = await h.request<{ details: { reason: string } }>('POST', '/a/2fa/disable', { body: { code: '000000' } });
     expect([bad.status, bad.body.details.reason]).toEqual([422, 'totp_invalid']);

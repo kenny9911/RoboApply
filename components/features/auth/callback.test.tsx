@@ -141,3 +141,40 @@ describe('RoboApplyAccessGate (localized)', () => {
     expect(replace).toHaveBeenCalled();
   });
 });
+
+// ── INT-01: two-step sign-in on the provider and email-link paths ────────
+
+describe('two-step sign-in after a provider or an email link', () => {
+  const required = (next: string) =>
+    new RoboApiError('x', {
+      status: 401,
+      code: 'two_factor_required',
+      payload: { success: false, code: 'two_factor_required', error: 'x', details: { next, methods: ['totp', 'recovery'], expiresInSec: 300 } },
+    });
+
+  it('provider callback: goes to the code page the server names, without asking for a session', async () => {
+    const refresh = vi.fn(async () => null);
+    mockAuthState.value = buildAuthValue({ refresh: refresh as never });
+    api.finishOAuth.mockRejectedValue(required('/login/2fa?next=%2Fjobs%2Fcm1'));
+    renderWithBrand(<OAuthCallbackView provider="google" />, { flags: {} });
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/login/2fa?next=%2Fjobs%2Fcm1'));
+    expect(refresh).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('finishing the agreements step: the same redirect', async () => {
+    api.finishOAuth.mockResolvedValue({ status: 'consent_required', pendingToken: 'p'.repeat(20), next: '/jobs', name: null, email: 'n@example.test' });
+    api.completeOAuth.mockRejectedValue(required('/login/2fa?next=%2Fonboarding%2Fsituation'));
+    renderWithBrand(<OAuthCallbackView provider="google" />, { flags: {} });
+    await screen.findByRole('heading', { name: 'One more step' });
+    fireEvent.click(screen.getByLabelText("I'm 16 or older"));
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/login/2fa?next=%2Fonboarding%2Fsituation'));
+  });
+
+  it('email link: the code page, never an off-site address', async () => {
+    api.verifyEmail.mockRejectedValue(required('https://evil.example/login/2fa'));
+    renderWithBrand(<VerifyEmailView token="tok" />, { flags: {} });
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith('/login/2fa'));
+  });
+});

@@ -63,9 +63,21 @@ export const TOKEN_PATH_PREFIXES = ['reset-password', 'verify-email', 'unsubscri
 
 const TOKEN_PATH_RE = new RegExp(`(^|/)(${TOKEN_PATH_PREFIXES.join('|')})/[^/]+(?:/.*)?$`);
 
-/** The pathname without query or hash, with the secret segment of token routes replaced by `:token`. */
+/**
+ * Invite links (`/r/<code>`): the code names the inviter, so it never leaves
+ * the browser in an event or a landing path. Mirrors INVITE_PATH_RE in
+ * server/src/features/growth/events.ts (the server scrubs again).
+ */
+const INVITE_PATH_RE = /^\/r\/[^/]+(?:\/.*)?$/;
+
+/**
+ * The pathname without query or hash, with the secret segment of token routes
+ * replaced by `:token` and an invite code by `:code`.
+ */
 export function safePath(path: string): string {
-  return path.split(/[?#]/)[0]!.replace(TOKEN_PATH_RE, '$1$2/:token').slice(0, 512);
+  const pathname = path.split(/[?#]/)[0]!;
+  if (INVITE_PATH_RE.test(pathname)) return '/r/:code';
+  return pathname.replace(TOKEN_PATH_RE, '$1$2/:token').slice(0, 512);
 }
 
 // ── Tunables ─────────────────────────────────────────────────────────────

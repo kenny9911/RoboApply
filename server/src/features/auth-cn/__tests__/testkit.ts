@@ -9,6 +9,29 @@ import type { OtpSms, SmsSendResult } from '../../../platform/sms/index.js';
 import type { EnvSource } from '../../../platform/brand/brandEnv.js';
 import type { AuthCnDb } from '../db.js';
 import { createAuthCnServices, type AuthCnServices } from '../services.js';
+import type { AccountHooks } from '../hooks.js';
+import type { SignInGate } from '../accounts.js';
+
+/** Hooks that record every call (hooks.ts): invite attribution, invite check, the phone practice credit. */
+export function recordingHooks() {
+  const calls = {
+    attribution: [] as Array<{ userId: string; touch: Record<string, unknown>; options: Record<string, unknown> }>,
+    referralChecks: [] as string[],
+    phoneCredits: [] as string[],
+  };
+  const hooks: AccountHooks = {
+    async recordAttribution(userId, touch, options) {
+      calls.attribution.push({ userId, touch: { ...touch }, options: { ...options } });
+    },
+    async checkReferral(userId) {
+      calls.referralChecks.push(userId);
+    },
+    async grantPhoneCredit(userId) {
+      calls.phoneCredits.push(userId);
+    },
+  };
+  return { hooks, calls };
+}
 
 export function fakeDb(seed: Record<string, Array<Record<string, unknown>>> = {}) {
   const fake = createFakePrisma({
@@ -140,8 +163,13 @@ export function buildServices(opts: {
   consume?: ReturnType<typeof memoryLimiter>['consume'];
   sms?: ReturnType<typeof recordingSms>;
   fetch?: ReturnType<typeof fakeWechatFetch>['fetch'];
+  /** Growth / credit seams (hooks.ts). Absent = none run (an injected database never reaches the production seams). */
+  hooks?: AccountHooks;
+  signInGate?: SignInGate;
 }): AuthCnServices {
   return createAuthCnServices({
+    ...(opts.hooks ? { hooks: opts.hooks } : {}),
+    ...(opts.signInGate ? { signInGate: opts.signInGate } : {}),
     db: opts.db,
     env: opts.env ?? BASE_ENV,
     now: opts.now,

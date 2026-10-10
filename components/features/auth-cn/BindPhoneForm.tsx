@@ -15,6 +15,7 @@ import { useTranslations } from 'next-intl';
 import { bindPhone, sendPhoneCode } from '../../../lib/api/authCn';
 import { apiErrorCode } from '../../../lib/api/contracts/wire';
 import { useAuth } from '../../../lib/auth/AuthProvider';
+import { isTwoFactorRequired, twoFactorHref } from '../../../lib/auth/twoFactor';
 import { useFlag } from '../../../lib/flags';
 import { Btn } from '../../v3/primitives/Btn';
 import { errorMessage, isValidCnPhone, maskPhoneInput, normalizePhoneInput, OTP_RE, safeNextPath, useCountdown } from './shared';
@@ -100,6 +101,11 @@ export function BindPhoneForm({ next }: BindPhoneFormProps) {
       if (res.merged) setMerged(res.nextRoute);
       else router.replace(res.nextRoute);
     } catch (err) {
+      // The number belongs to an account with two-step sign-in on: finish there.
+      if (isTwoFactorRequired(err)) {
+        router.replace(twoFactorHref(err, safeNextPath(next)));
+        return;
+      }
       if (apiErrorCode(err) === 'unauthorized') await refresh();
       setError(errorMessage(err, t));
     } finally {

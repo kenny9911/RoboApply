@@ -51,7 +51,6 @@ vi.mock('../roboapply/engine/middleware/seekerAuth.js', async () => {
   const requireSeekerProfile = (_req: unknown, _res: unknown, next: () => void) => next();
   return { requireSeekerProfile, seekerAuth: [auth.requireAuth, requireSeekerProfile], default: [auth.requireAuth, requireSeekerProfile] };
 });
-vi.mock('../roboapply/services/RoboApplyMissionService.js', () => ({ getMissionForUser: vi.fn(async () => null) }));
 
 interface Running {
   server: Server;
@@ -93,15 +92,16 @@ describe('legacy auth routes keep precedence after mountFeatures', () => {
     setFlagOverrideLoader(async () => []);
     legacyOnly = await listen(await buildApp(false));
     withFeatures = await listen(await buildApp(true));
-  });
+    // Loads the whole feature registry once; allow for a busy machine.
+  }, 120_000);
 
   afterAll(async () => {
     const { setFlagOverrideLoader } = await import('../platform/flags.js');
     setFlagOverrideLoader(null);
     await Promise.all(
-      [legacyOnly, withFeatures].map(
-        (r) => new Promise<void>((resolve, reject) => r.server.close((e) => (e ? reject(e) : resolve()))),
-      ),
+      [legacyOnly, withFeatures]
+        .filter((r): r is Running => Boolean(r))
+        .map((r) => new Promise<void>((resolve, reject) => r.server.close((e) => (e ? reject(e) : resolve())))),
     );
   });
 

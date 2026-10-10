@@ -42,6 +42,7 @@ export const authErrors = {
     new AuthError('account_disabled', 403, 'This account has been suspended. Contact support if you believe this is an error.'),
   accountDeleted: () => new AuthError('account_deleted', 403, 'This account has been deleted.'),
   notSeekerAccount: () => new AuthError('not_a_seeker_account', 403, 'This account is not a job-seeker account.'),
+  signupClosed: () => new AuthError('signup_closed', 403, 'Sign-up is not open yet.'),
   consentLocked: (type: string) =>
     new AuthError('consent_locked', 422, 'This agreement is part of having an account and cannot be withdrawn here.', { type }),
 };

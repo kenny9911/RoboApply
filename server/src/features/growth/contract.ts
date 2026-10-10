@@ -117,14 +117,16 @@ export const REFERRAL_HOLD_SCORE = 50;
 /**
  * Brands where every sign-up path hands the invite code to
  * growth.recordAttribution, so a friend who signs up can actually be
- * rewarded. GoApply's phone and WeChat sign-ups (features/auth-cn) do not
- * pass `ref` yet (request R-60-3), so on GoApply the invite programme stays
- * hidden (`eligibility: 'not_available'`, plain /r/<code> landing) and no
- * invite is attached, even with the `invites` capability on. INT adds
- * 'goapply' here, and in the web twin `INVITE_REWARD_BRANDS`
- * (hooks/growth/useInvites.ts; a test keeps the two equal), once that wiring lands.
+ * rewarded. Both brands since the integration wave (INT-01): RoboApply's
+ * email and Google / LINE sign-ups (features/auth), and GoApply's phone,
+ * WeChat (web, in-app, mini program) and email sign-ups (features/auth-cn
+ * hooks.ts; features/auth). A brand that gains a sign-up path which does not
+ * attach invites must be taken out again: its users would then see
+ * `eligibility: 'not_available'` and the plain /r/<code> landing instead of
+ * a promise the product cannot keep. Web twin: `INVITE_REWARD_BRANDS`
+ * (hooks/growth/useInvites.ts; a test keeps the two equal).
  */
-export const INVITE_SIGNUP_WIRED_BRANDS: readonly string[] = ['roboapply'];
+export const INVITE_SIGNUP_WIRED_BRANDS: readonly string[] = ['roboapply', 'goapply'];
 export function inviteSignupWired(brand: string): boolean {
   return INVITE_SIGNUP_WIRED_BRANDS.includes(brand);
 }
@@ -159,8 +161,8 @@ export const INVITE_VIEW_STATUS: Record<ReferralStatus, InviteViewStatus> = {
 export interface InvitesResponse {
   /**
    * 'verify_account': the link appears once the inviter's own account is verified.
-   * 'not_available': this brand cannot attach invites at every sign-up yet
-   * (INVITE_SIGNUP_WIRED_BRANDS): show no link and promise no reward.
+   * 'not_available': this brand cannot attach invites at every sign-up
+   * (not in INVITE_SIGNUP_WIRED_BRANDS): show no link and promise no reward.
    */
   eligibility: 'ok' | 'verify_account' | 'not_available';
   /** Null until eligible. */

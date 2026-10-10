@@ -12,16 +12,19 @@
 // method whose keys are missing never shows a dead button. Email + password
 // needs no flag: it is the existing method and works everywhere.
 //
+// Placement: a brand's first methods are shown at once; a method listed in
+// SECONDARY_AUTH_METHODS for the brand sits behind a "其他方式 / Other ways to
+// sign in" button while another method is available (GoApply: email, behind
+// phone and WeChat; PRODUCT_PLAN.md G0 row 6). With nothing else available it
+// is shown at once, so the page never opens on an empty card.
+//
 // Components (props contract `AuthMethodProps`):
-//   email_password  components/auth/methods/EmailMethod.tsx      WP-10 (stub)
-//   google          components/auth/methods/GoogleMethod.tsx     WP-10 (stub)
-//   line            components/auth/methods/LineMethod.tsx       WP-10 (stub)
-//   phone_otp       components/features/auth-cn/PhoneMethod.tsx  WP-11 (stub: FND-6b)
-//   wechat          components/features/auth-cn/WechatMethod.tsx WP-11 (stub: FND-6b)
-// All five are wired below already; the stubs render nothing, so the owners
-// only fill the component files and never touch this hot file. Until WP-10
-// moves login/signup onto useAuthMethods(), those pages keep their current
-// form.
+//   email_password  components/auth/methods/EmailMethod.tsx      WP-10
+//   google          components/auth/methods/GoogleMethod.tsx     WP-10
+//   line            components/auth/methods/LineMethod.tsx       WP-10
+//   phone_otp       components/features/auth-cn/PhoneMethod.tsx  WP-11
+//   wechat          components/features/auth-cn/WechatMethod.tsx WP-11
+// Login and signup render them through `useAuthMethods()` (AuthEntryView).
 
 import type { ComponentType } from 'react';
 
@@ -73,6 +76,35 @@ export const AUTH_METHOD_COMPONENTS: Record<AuthMethod, ComponentType<AuthMethod
   phone_otp: PhoneMethod, // WP-11
   wechat: WechatMethod, // WP-11
 };
+
+/**
+ * Methods a brand keeps behind "Other ways to sign in" while it has another
+ * method to show first. GoApply's first methods are the phone code and
+ * WeChat; email + password is the fallback.
+ */
+export const SECONDARY_AUTH_METHODS: Readonly<Record<BrandId, readonly AuthMethod[]>> = {
+  roboapply: [],
+  goapply: ['email_password'],
+};
+
+export interface AuthMethodLayout {
+  /** Shown at once, in the brand's order. */
+  primary: AuthMethodEntry[];
+  /** Behind the "Other ways to sign in" button. */
+  secondary: AuthMethodEntry[];
+}
+
+/**
+ * Pure: split the methods a visitor can use into the ones shown at once and
+ * the ones behind "Other ways to sign in". A secondary method moves up when
+ * nothing else is available.
+ */
+export function layoutAuthMethods(brandId: BrandId, methods: readonly AuthMethodEntry[]): AuthMethodLayout {
+  const behind = SECONDARY_AUTH_METHODS[brandId] ?? [];
+  const primary = methods.filter((m) => !behind.includes(m.id));
+  if (primary.length === 0) return { primary: [...methods], secondary: [] };
+  return { primary, secondary: methods.filter((m) => behind.includes(m.id)) };
+}
 
 /** Pure: the methods a brand shows for these flags, in the brand's order. */
 export function authMethodsFor(brandId: BrandId, flags: Partial<ResolvedFlags> | null): AuthMethodEntry[] {

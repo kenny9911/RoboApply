@@ -142,9 +142,19 @@ describe('/invite', () => {
     await waitFor(() => expect(markInviteShared).toHaveBeenCalledWith({ channel: 'copy' }));
   });
 
-  it('on GoApply stays hidden (no reward promise, no request) until phone/WeChat sign-ups attach invites (R-60-3)', () => {
+  it('runs on both brands, and the web list equals the server list (GoApply sign-ups attach invites since INT-01)', async () => {
     expect([...INVITE_REWARD_BRANDS]).toEqual([...INVITE_SIGNUP_WIRED_BRANDS]);
+    expect([...INVITE_REWARD_BRANDS].sort()).toEqual(['goapply', 'roboapply']);
+    getInvites.mockResolvedValue(view({ link: 'https://www.goapply.top/r/ABCD2345' }));
     renderWithBrand(<InviteFriends />, { brand: 'goapply', flags: { invites: true } });
+    // The programme, not the "not available" notice.
+    expect(await screen.findByTestId('invite-link')).toBeTruthy();
+    expect(screen.queryByText("Invites aren't available here right now.")).toBeNull();
+    expect(getInvites).toHaveBeenCalled();
+  });
+
+  it('on GoApply with the capability off: no reward promise and no request', () => {
+    renderWithBrand(<InviteFriends />, { brand: 'goapply', flags: { invites: false } });
     expect(screen.getByText("Invites aren't available here right now.")).toBeTruthy();
     expect(getInvites).not.toHaveBeenCalled();
   });
@@ -193,10 +203,10 @@ describe('/settings#referrals', () => {
     expect(screen.queryByText('Email')).toBeNull();
   });
 
-  it('renders nothing with the capability off, or on GoApply until its sign-ups attach invites', () => {
+  it('renders nothing with the capability off, on either brand', () => {
     const { container } = renderWithBrand(<SettingsSection section="referrals" />, { flags: { invites: false } });
     expect(container.textContent).toBe('');
-    const go = renderWithBrand(<SettingsSection section="referrals" />, { brand: 'goapply', flags: { invites: true } });
+    const go = renderWithBrand(<SettingsSection section="referrals" />, { brand: 'goapply', flags: { invites: false } });
     expect(go.container.textContent).toBe('');
     expect(getInvites).not.toHaveBeenCalled();
   });
@@ -215,15 +225,21 @@ describe('/r/[code] landing', () => {
     expect(screen.queryByText(/A friend invited you/)).toBeNull();
   });
 
-  it('promises nothing when the invite programme is off, or on GoApply until its sign-ups attach invites', () => {
+  it('promises nothing when the invite programme is off, on either brand', () => {
     const off = renderWithBrand(<InviteLanding code="ABCD2345" />, { flags: { invites: false } });
     expect(screen.getByTestId('invite-landing-plain')).toBeTruthy();
     expect(off.container.textContent).not.toMatch(/credit|invite/i);
     expect(screen.getByText('Create an account').closest('a')!.getAttribute('href')).toBe('/signup');
     off.unmount();
-    const go = renderWithBrand(<InviteLanding code="ABCD2345" />, { brand: 'goapply', flags: { invites: true } });
+    const go = renderWithBrand(<InviteLanding code="ABCD2345" />, { brand: 'goapply', flags: { invites: false } });
     expect(screen.getByTestId('invite-landing-plain')).toBeTruthy();
     expect(go.container.textContent).not.toMatch(/credit/i);
+  });
+
+  it('on GoApply with the programme on: the invite landing, carrying the code to sign-up as `ref`', () => {
+    renderWithBrand(<InviteLanding code="abcd-2345" />, { brand: 'goapply', flags: { invites: true } });
+    expect(screen.getByTestId('invite-landing')).toBeTruthy();
+    expect(screen.getByTestId('invite-signup').getAttribute('href')).toBe('/signup?ref=ABCD2345&from=invite');
   });
 
   it('points a signed-in visitor to their own invites', () => {

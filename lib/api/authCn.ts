@@ -27,9 +27,13 @@
 import { apiUrl, call, type CallOptions, type In, withQuery } from './contracts/wire';
 import type * as AC from './contracts/auth-cn';
 
-/** `authCn.policy` — GET /api/v1/roboapply/auth/phone/policy */
-export function getSignupPolicy(opts?: CallOptions): Promise<AC.SignupPolicyResponse> {
-  return call<AC.SignupPolicyResponse>('GET', `/api/v1/roboapply/auth/phone/policy`, opts);
+/**
+ * `authCn.policy` — GET /api/v1/roboapply/auth/phone/policy?locale=
+ * `locale` is the language the form is read in: the policy carries the text
+ * of each required consent in that language (shown verbatim beside its box).
+ */
+export function getSignupPolicy(locale?: string | null, opts?: CallOptions): Promise<AC.SignupPolicyResponse> {
+  return call<AC.SignupPolicyResponse>('GET', withQuery(`/api/v1/roboapply/auth/phone/policy`, locale ? { locale } : null), opts);
 }
 
 /** `authCn.me` — GET /api/v1/roboapply/auth/phone/me */

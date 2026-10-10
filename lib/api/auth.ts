@@ -20,6 +20,7 @@ import type {
   VerifyEmailResult,
 } from './contracts/auth';
 import type { PublicJobCard } from './contracts/seo';
+import type { Touch } from './contracts/growth';
 
 export type {
   AuthMeAdditions,
@@ -76,6 +77,12 @@ export interface ConsentInput {
   type: string;
   granted: boolean;
   proseVersion: string;
+  /**
+   * GoApply email sign-up: the hash of the consent text shown beside the box
+   * (`prose.hash` from the sign-up policy). The server stores a consent
+   * record only for a text it serves, so the record names what was on screen.
+   */
+  proseHash?: string;
 }
 
 export interface SignupAttribution {
@@ -88,6 +95,13 @@ export interface SignupAttribution {
   utmCampaign?: string;
   alert?: string;
   landingPath?: string;
+  /**
+   * The visitor's stored touches (lib/analytics `getAttribution()`); the
+   * server reads them with growth `touchesFromClient`. The fields above are
+   * this page's own entry parameters.
+   */
+  firstTouch?: Touch;
+  lastTouch?: Touch | null;
 }
 
 export interface SignupPayload {
@@ -101,6 +115,8 @@ export interface SignupPayload {
   marketingOptIn?: boolean;
   attribution?: SignupAttribution;
   timezone?: string;
+  /** GoApply: the invite code, required while sign-up is invite-only. */
+  inviteCode?: string;
 }
 
 /** 201: the account exists and the session cookie is set. 200: the normal "check your email" answer. */
@@ -177,6 +193,19 @@ export interface OAuthStartParams {
   attribution?: SignupAttribution;
 }
 
+/** Longest `ft` / `lt` value the server reads (server twin: OAUTH_TOUCH_PARAM_MAX, features/auth/contract.ts). */
+export const OAUTH_TOUCH_PARAM_MAX = 1500;
+
+/** A stored touch as compact JSON for the start URL; without its landing page when too long, else left out. */
+function touchParam(touch: Touch | null | undefined): string | null {
+  if (!touch || typeof touch !== 'object') return null;
+  const full = JSON.stringify(touch);
+  if (full.length <= OAUTH_TOUCH_PARAM_MAX) return full;
+  const { landingPath: _landingPath, ...rest } = touch;
+  const short = JSON.stringify(rest);
+  return short.length <= OAUTH_TOUCH_PARAM_MAX ? short : null;
+}
+
 /** The browser navigates here (a full-page redirect to the provider). */
 export function oauthStartUrl(provider: OAuthProvider, params: OAuthStartParams = {}): string {
   const q = new URLSearchParams();
@@ -195,6 +224,12 @@ export function oauthStartUrl(provider: OAuthProvider, params: OAuthStartParams 
   if (a?.utmMedium) q.set('utm_medium', a.utmMedium);
   if (a?.utmCampaign) q.set('utm_campaign', a.utmCampaign);
   if (a?.alert) q.set('alert', a.alert);
+  // The stored touches ride along too: the provider callback is a GET with no
+  // body, so this is the only way a Google / LINE sign-up keeps them.
+  const ft = touchParam(a?.firstTouch);
+  const lt = touchParam(a?.lastTouch);
+  if (ft) q.set('ft', ft);
+  if (lt) q.set('lt', lt);
   const qs = q.toString();
   return `${AUTH}/oauth/${provider}/start${qs ? `?${qs}` : ''}`;
 }

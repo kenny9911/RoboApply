@@ -17,8 +17,16 @@
 //     POST /oauth/email                   P   provider gave no verified email: verify one first
 //   createAccountRouter() at /api/v1/roboapply/account
 //     GET/DELETE /identities[/:id]        S
-//     GET/POST   /consents                S
+//     GET/POST   /consents                S   (the compliance ledger; same records as /compliance/consents)
 //     GET/DELETE /sessions[/:id]          S
+//
+// Two-step sign-in (F-TRUST-07): every route here that signs a browser in
+// runs the second-factor gate first (features/account-v2). With two-step
+// sign-in on, the session just minted is revoked, no session cookie is sent
+// and the answer is 401 `two_factor_required` plus the challenge cookie (JSON)
+// or a 302 to /login/2fa (link and provider redirects), exactly as POST
+// /auth/login answers. Each call site carries its own `2fa-gate:` marker
+// (account-v2/readiness.ts checks one marker and one gate call per session call).
 //
 // Capabilities per route (R-04): Google/LINE need `auth.google`/`auth.line`
 // (credentials present; /oauth/email checks the pending token's provider);
@@ -32,7 +40,7 @@ import { getCurrentBrand } from '../../platform/brand/brandContext.js';
 import { brandEnv, type EnvSource } from '../../platform/brand/brandEnv.js';
 import type { ProductBrand } from '../../platform/brand/registry.js';
 import { parseBody, parseParams, parseQuery, requireUserId } from '../../platform/http.js';
-import { assertRateLimit, clientIp, rateLimit } from '../../platform/ratelimit/index.js';
+import { assertRateLimit, rateLimit } from '../../platform/ratelimit/index.js';
 import { buildCookieOptions, SESSION_COOKIE_NAME } from '../../lib/cookieOptions.js';
 import type { FeatureRouterDeps } from '../index.js';
 import {
@@ -47,7 +55,19 @@ import {
   SessionParamsSchema,
   VerifyEmailQuerySchema,
 } from './contract.js';
+import {
+  gateSessionForSignIn,
+  loginChallengeDeps,
+  redirectToTwoFactor,
+  sendTwoFactorRequired,
+  sendTwoFactorUnavailable,
+  TWO_FACTOR_UNAVAILABLE_CODE,
+  type GateOutcome,
+  type LoginChallengeDeps,
+} from '../account-v2/index.js';
+import { logger } from '../../services/LoggerService.js';
 import { authRoute, isAuthError } from './errors.js';
+import { signupRequestContext } from './requestContext.js';
 import { authService as defaultService, type AuthFeatureServiceImpl, type OAuthSignupContext } from './service.js';
 import type { OAuthProviderId } from './oauth/providers.js';
 
@@ -56,6 +76,8 @@ export interface AuthRouterDeps extends FeatureRouterDeps {
   service?: AuthFeatureServiceImpl;
   /** Test seam: skip the DB-backed rate limits. */
   rateLimits?: boolean;
+  /** Test seam: the second-factor gate's collaborators (default: account-v2 `loginChallengeDeps()`). */
+  loginChallenge?: () => LoginChallengeDeps;
 }
 
 const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -88,6 +110,13 @@ function country(req: Request): string | null {
   return raw && /^[A-Za-z]{2}$/.test(raw) ? raw.toUpperCase() : null;
 }
 
+/** The language the visitor reads the site in (`X-Robo-Locale`, else the locale cookie). */
+function uiLocale(req: Request): string | null {
+  const header = req.get('x-robo-locale');
+  const cookie = (req as Request & { cookies?: Record<string, string> }).cookies?.robo_locale;
+  return (header && header.trim()) || (cookie && cookie.trim()) || null;
+}
+
 function wantsJson(req: Request): boolean {
   return (req.get('accept') ?? '').includes('application/json');
 }
@@ -102,6 +131,20 @@ function setSession(req: Request, res: Response, token: string): void {
       sameSite: sameSite === 'strict' ? 'strict' : sameSite === 'none' ? 'none' : 'lax',
     }),
   );
+}
+
+/**
+ * Runs the second-factor gate for one sign-in. Returns null when the gate
+ * itself failed: the caller then answers "not available" and nobody is
+ * signed in (the gate has already revoked the session it was given).
+ */
+async function secondStep(req: Request, run: () => Promise<GateOutcome>): Promise<GateOutcome | null> {
+  try {
+    return await run();
+  } catch (err) {
+    logger.error?.('AUTH', 'two-step sign-in check failed; refusing sign-in', { error: err instanceof Error ? err.message : String(err) }, req.requestId);
+    return null;
+  }
 }
 
 function currentSessionToken(req: Request): string | null {
@@ -149,6 +192,21 @@ function signupContextFromStart(q: ReturnType<typeof OAuthStartQuerySchema.parse
   };
 }
 
+/** `ft` / `lt` of an OAuth start as `{ firstTouch, lastTouch }`; junk reads as nothing (the service sanitizes each touch). */
+function touchesFromStart(q: { ft?: string; lt?: string }): { firstTouch: unknown; lastTouch: unknown } | undefined {
+  const read = (raw: string | undefined): unknown => {
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as unknown;
+    } catch {
+      return null;
+    }
+  };
+  const firstTouch = read(q.ft);
+  const lastTouch = read(q.lt);
+  return firstTouch || lastTouch ? { firstTouch, lastTouch } : undefined;
+}
+
 /** 5 reset emails per hour per email hash (ARCH §3.10). Fails open on a DB error, like the middleware. */
 async function perEmailLimit(email: string): Promise<void> {
   try {
@@ -170,6 +228,7 @@ export function createAuthRouter(deps: AuthRouterDeps = {}): Router {
   const flag = (key: FlagKey) => requireFlag(key, { env: deps.env });
   const svc = () => deps.service ?? defaultService;
   const limit = (options: Parameters<typeof rateLimit>[0]): RequestHandler[] => (deps.rateLimits === false ? [] : [rateLimit(options)]);
+  const challengeDeps = (): LoginChallengeDeps => deps.loginChallenge?.() ?? loginChallengeDeps();
 
   router.get(
     '/methods',
@@ -199,8 +258,13 @@ export function createAuthRouter(deps: AuthRouterDeps = {}): Router {
       const { token, password } = parseBody(req, ResetPasswordBodySchema);
       const brand = brandOf(req);
       const signIn = await svc().resetPassword({ token, password, brand });
+      const next = await svc().signInRoute(brand, signIn.userId, null);
+      // 2fa-gate:password-reset — a new password alone never signs in an account with two-step sign-in.
+      const gate = await secondStep(req, () => gateSessionForSignIn(challengeDeps(), { userId: signIn.userId, brand, sessionToken: signIn.sessionToken }));
+      if (!gate) return sendTwoFactorUnavailable(res);
+      if (gate.kind === 'challenge') return sendTwoFactorRequired(req, res, gate, next);
       setSession(req, res, signIn.sessionToken);
-      return { next: await svc().signInRoute(brand, signIn.userId, null) };
+      return { next };
     }),
   );
 
@@ -227,8 +291,16 @@ export function createAuthRouter(deps: AuthRouterDeps = {}): Router {
       // A link opened straight against the API: do the work, then redirect.
       try {
         const { token } = parseQuery(req, VerifyEmailQuerySchema);
-        const result = await svc().verifyEmail({ token, brand: brandOf(req), userAgent: req.get('user-agent') ?? null });
-        if (result.status === 'signed_in' && result.signIn) setSession(req, res, result.signIn.sessionToken);
+        const brand = brandOf(req);
+        const result = await svc().verifyEmail({ token, brand, userAgent: req.get('user-agent') ?? null, request: signupRequestContext(req, brand) });
+        if (result.status === 'signed_in' && result.signIn) {
+          const signIn = result.signIn;
+          // 2fa-gate:email-verify-link
+          const gate = await secondStep(req, () => gateSessionForSignIn(challengeDeps(), { userId: signIn.userId, brand, sessionToken: signIn.sessionToken }));
+          if (!gate) return res.redirect(302, failurePath(TWO_FACTOR_UNAVAILABLE_CODE));
+          if (gate.kind === 'challenge') return redirectToTwoFactor(req, res, gate, result.next);
+          setSession(req, res, signIn.sessionToken);
+        }
         res.redirect(302, result.status === 'verified' ? '/settings?verified=1#account' : result.next);
       } catch (err) {
         res.redirect(302, `/settings?verified=0${isAuthError(err) ? `&reason=${err.code}` : ''}#account`);
@@ -236,9 +308,16 @@ export function createAuthRouter(deps: AuthRouterDeps = {}): Router {
     },
     authRoute(async (req, res) => {
       const { token } = parseQuery(req, VerifyEmailQuerySchema);
-      const result = await svc().verifyEmail({ token, brand: brandOf(req), userAgent: req.get('user-agent') ?? null });
-      if (result.status === 'signed_in' && result.signIn) setSession(req, res, result.signIn.sessionToken);
-      const { signIn: _signIn, ...wire } = result;
+      const brand = brandOf(req);
+      const result = await svc().verifyEmail({ token, brand, userAgent: req.get('user-agent') ?? null, request: signupRequestContext(req, brand) });
+      const { signIn, ...wire } = result;
+      if (result.status === 'signed_in' && signIn) {
+        // 2fa-gate:email-verify-json
+        const gate = await secondStep(req, () => gateSessionForSignIn(challengeDeps(), { userId: signIn.userId, brand, sessionToken: signIn.sessionToken }));
+        if (!gate) return sendTwoFactorUnavailable(res);
+        if (gate.kind === 'challenge') return sendTwoFactorRequired(req, res, gate, result.next);
+        setSession(req, res, signIn.sessionToken);
+      }
       return wire;
     }),
   );
@@ -259,6 +338,7 @@ export function createAuthRouter(deps: AuthRouterDeps = {}): Router {
           redirectUri: oauthRedirectUri(req, brand, provider, deps.env),
           next: q.next ?? null,
           signup: signupContextFromStart(q, req),
+          touches: touchesFromStart(q),
         });
         setBinder(req, res, binder);
         if (wantsJson(req)) return { url };
@@ -275,17 +355,24 @@ export function createAuthRouter(deps: AuthRouterDeps = {}): Router {
         // The provider redirected straight to the API (not the web page).
         try {
           const q = parseQuery(req, OAuthCallbackQuerySchema);
+          const brand = brandOf(req);
           const result = await svc().finishOAuthCallback({
             provider,
-            brand: brandOf(req),
+            brand,
             code: q.code,
             state: q.state,
             error: q.error,
             userAgent: req.get('user-agent') ?? null,
             binder: takeBinder(req, res),
+            request: signupRequestContext(req, brand),
           });
           if (result.status === 'signed_in') {
-            setSession(req, res, result.signIn.sessionToken);
+            const signIn = result.signIn;
+            // 2fa-gate:oauth-callback-redirect
+            const gate = await secondStep(req, () => gateSessionForSignIn(challengeDeps(), { userId: signIn.userId, brand, sessionToken: signIn.sessionToken }));
+            if (!gate) return res.redirect(302, failurePath(TWO_FACTOR_UNAVAILABLE_CODE));
+            if (gate.kind === 'challenge') return redirectToTwoFactor(req, res, gate, result.next);
+            setSession(req, res, signIn.sessionToken);
             res.redirect(302, result.next);
             return;
           }
@@ -297,17 +384,24 @@ export function createAuthRouter(deps: AuthRouterDeps = {}): Router {
       },
       authRoute(async (req, res) => {
         const q = parseQuery(req, OAuthCallbackQuerySchema);
+        const brand = brandOf(req);
         const result = await svc().finishOAuthCallback({
           provider,
-          brand: brandOf(req),
+          brand,
           code: q.code,
           state: q.state,
           error: q.error,
           userAgent: req.get('user-agent') ?? null,
           binder: takeBinder(req, res),
+          request: signupRequestContext(req, brand),
         });
         if (result.status === 'signed_in') {
-          setSession(req, res, result.signIn.sessionToken);
+          const signIn = result.signIn;
+          // 2fa-gate:oauth-callback-json
+          const gate = await secondStep(req, () => gateSessionForSignIn(challengeDeps(), { userId: signIn.userId, brand, sessionToken: signIn.sessionToken }));
+          if (!gate) return sendTwoFactorUnavailable(res);
+          if (gate.kind === 'challenge') return sendTwoFactorRequired(req, res, gate, result.next);
+          setSession(req, res, signIn.sessionToken);
           return { status: 'signed_in' as const, next: result.next, isNewUser: result.isNewUser };
         }
         return result;
@@ -320,18 +414,25 @@ export function createAuthRouter(deps: AuthRouterDeps = {}): Router {
     ...limit({ name: 'signupPerIp' }),
     authRoute(async (req, res) => {
       const body = parseBody(req, OAuthCompleteBodySchema);
+      const brand = brandOf(req);
       const result = await svc().completeOAuth({
         pendingToken: body.pendingToken,
-        brand: brandOf(req),
+        brand,
         consents: body.consents,
         marketingOptIn: body.marketingOptIn,
         locale: body.locale ?? null,
         timezone: body.timezone ?? null,
         country: country(req),
         userAgent: req.get('user-agent') ?? null,
+        request: signupRequestContext(req, brand),
       });
       if (result.status === 'signed_in') {
-        setSession(req, res, result.signIn.sessionToken);
+        const signIn = result.signIn;
+        // 2fa-gate:oauth-complete
+        const gate = await secondStep(req, () => gateSessionForSignIn(challengeDeps(), { userId: signIn.userId, brand, sessionToken: signIn.sessionToken }));
+        if (!gate) return sendTwoFactorUnavailable(res);
+        if (gate.kind === 'challenge') return sendTwoFactorRequired(req, res, gate, result.next);
+        setSession(req, res, signIn.sessionToken);
         return { status: 'signed_in' as const, next: result.next, isNewUser: result.isNewUser };
       }
       return result;
@@ -376,13 +477,20 @@ export function createAccountRouter(deps: AuthRouterDeps = {}): Router {
     }),
   );
 
-  router.get('/consents', ...auth, authRoute(async (req) => ({ consents: await svc().listConsents(requireUserId(req)) })));
+  // Both delegate to the compliance ledger (prose hash on every record; a
+  // withdrawal has its effect, incl. the CN-0 close-and-purge).
+  const consentCtx = (req: Request) => ({ locale: uiLocale(req), country: country(req) });
+  router.get(
+    '/consents',
+    ...auth,
+    authRoute(async (req) => ({ consents: await svc().listConsents(requireUserId(req), brandOf(req), consentCtx(req)) })),
+  );
   router.post(
     '/consents',
     ...auth,
     authRoute(async (req) => {
       const body = parseBody(req, RecordConsentBodySchema);
-      return svc().recordConsent(requireUserId(req), body, { ip: clientIp(req), userAgent: req.get('user-agent') ?? null });
+      return svc().recordConsent(requireUserId(req), brandOf(req), body, consentCtx(req));
     }),
   );
 

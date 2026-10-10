@@ -31,6 +31,15 @@ export interface TwoFactorDeps {
   now: () => Date;
   /** Signs out every other session of the user (after turning two-factor on or off). */
   revokeOtherSessions: (userId: string, keepSessionToken: string | null) => Promise<void>;
+  /**
+   * Ends every bearer JWT issued before `at` (`User.tokensValidAfter`; the
+   * auth middleware rejects older tokens). Called when two-step sign-in is
+   * turned on and when it is turned off, next to the session sign-out: a
+   * 7-day JWT taken before the change must not keep working. Optional so a
+   * caller that builds the service by hand keeps compiling; production
+   * (`defaultTwoFactorDeps`) always sets it.
+   */
+  cutOffBearerTokens?: (userId: string, at: Date) => Promise<void>;
   /** PNG data URL of a QR code for `text`, or null when it cannot be drawn (the text secret still works). */
   qrDataUrl: (text: string) => Promise<string | null>;
   /** The sign-in paths readiness checks (default SIGN_IN_PATHS; tests pass a fully gated list). */
@@ -65,12 +74,18 @@ async function defaultRevokeOtherSessions(userId: string, keep: string | null): 
   await prisma.session.deleteMany({ where: { userId, ...(keep ? { token: { not: keep } } : {}) } });
 }
 
+async function defaultCutOffBearerTokens(userId: string, at: Date): Promise<void> {
+  const { default: prisma } = await import('../../lib/prisma.js');
+  await prisma.user.update({ where: { id: userId }, data: { tokensValidAfter: at }, select: { id: true } });
+}
+
 export function defaultTwoFactorDeps(): TwoFactorDeps {
   return {
     store: createPrismaTwoFactorStore(),
     env: () => process.env,
     now: () => new Date(),
     revokeOtherSessions: defaultRevokeOtherSessions,
+    cutOffBearerTokens: defaultCutOffBearerTokens,
     qrDataUrl: defaultQrDataUrl,
   };
 }
@@ -137,9 +152,22 @@ export class TwoFactorService {
     const step = verifyTotp(this.openSecret(row, brand), code, this.d.now(), null);
     if (step === null) throw fail('invalid_request', ACCOUNT_V2_ERROR_CODES.totpInvalid, 'That code did not work. Check the time on your phone and try the newest code.');
     const recoveryCodes = generateRecoveryCodes();
-    await this.d.store.enable(userId, { enabledAt: this.d.now(), lastUsedStep: step, recoveryCodeHashes: recoveryCodes.map(hashRecoveryCode) });
+    const at = this.d.now();
+    // Older bearer JWTs end first: if that write fails nothing has been
+    // turned on, and the person simply tries the code again.
+    await this.cutOffBearerTokens(userId, at);
+    await this.d.store.enable(userId, { enabledAt: at, lastUsedStep: step, recoveryCodeHashes: recoveryCodes.map(hashRecoveryCode) });
     await this.d.revokeOtherSessions(userId, sessionToken);
     return { recoveryCodes };
+  }
+
+  /**
+   * Every bearer JWT issued before `at` stops working. Runs when two-step
+   * sign-in is turned on or off, before the change itself is stored, so a
+   * failure here leaves the setting as it was.
+   */
+  private async cutOffBearerTokens(userId: string, at: Date): Promise<void> {
+    if (this.d.cutOffBearerTokens) await this.d.cutOffBearerTokens(userId, at);
   }
 
   /** True when signing in needs a second factor. Missing table = nobody has it on. */
@@ -177,6 +205,7 @@ export class TwoFactorService {
     }
     const result = await this.checkSecondFactor(userId, brand, factor);
     if (!result.ok) throw fail('invalid_request', ACCOUNT_V2_ERROR_CODES.totpInvalid, 'That code did not work.');
+    await this.cutOffBearerTokens(userId, this.d.now());
     await this.d.store.remove(userId);
     await this.d.revokeOtherSessions(userId, sessionToken);
   }

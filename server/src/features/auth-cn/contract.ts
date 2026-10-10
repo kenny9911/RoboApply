@@ -73,6 +73,14 @@ export const ConsentInputSchema = z
 export type ConsentInput = z.infer<typeof ConsentInputSchema>;
 const ConsentInput = ConsentInputSchema;
 
+/**
+ * The invite-friends code the visitor arrived with (`/r/<code>` → `?ref=`).
+ * Separate from `inviteCode` (the closed-beta access code): it only says who
+ * invited this person, and is read when the account turns out to be new.
+ * An unreadable value is ignored, never an error.
+ */
+const FriendRef = z.string().trim().max(64).optional();
+
 /** POST /auth/phone/verify — one flow for sign-in and sign-up; new users must send the required consents. */
 export const VerifyCodeBodySchema = z
   .object({
@@ -82,6 +90,7 @@ export const VerifyCodeBodySchema = z
     /** Required on signup when CN_SIGNUP_MODE=invite (CN-0). */
     inviteCode: z.string().trim().min(4).max(32).optional(),
     next: z.string().max(512).regex(/^\/(?!\/)/).optional(),
+    ref: FriendRef,
   })
   .strict();
 export interface PhoneSessionResponse {
@@ -139,14 +148,41 @@ export interface PhoneStatusResponse {
   hasWechat: boolean;
 }
 
-/** GET /auth/phone/policy — what the G0 form needs before the first code. GoApply only. */
+/** The text of one signup consent as the form shows it (compliance catalog prose). */
+export interface SignupConsentProse {
+  /** Shown verbatim beside the checkbox. */
+  text: string;
+  /** Language of `text` (English when the catalog has no text in the language asked for). */
+  locale: 'en' | 'zh';
+  /** Catalog prose version (`CONSENT_PROSE_VERSION`). */
+  version: string;
+  /** sha256 over brand, type, version, locale and text (compliance `consentProseHash`). */
+  hash: string;
+}
+
+export interface SignupPolicyConsent {
+  type: string;
+  /** The legal-documents version the phone and WeChat rows record. */
+  proseVersion: string;
+  /** Absent only for a type the compliance catalog has no text for. */
+  prose?: SignupConsentProse;
+}
+
+/** GET /auth/phone/policy?locale= — what the G0 form needs before the first code. GoApply only. */
 export interface SignupPolicyResponse {
   /** False in production until counsel-approved documents and a live method exist (CN §2.3 rule 4). */
   signupOpen: boolean;
   /** CN_SIGNUP_MODE=invite: new accounts need an invite code. */
   inviteRequired: boolean;
-  /** Consents a NEW account must grant at signup (existing accounts send none). */
-  requiredConsents: Array<{ type: string; proseVersion: string }>;
+  /**
+   * Consents a NEW account must grant at signup (existing accounts send none),
+   * in display order. `prose` is the exact text the form shows beside the box,
+   * from the compliance catalog in the language asked for (`?locale=`), with
+   * its version and sha256. The email form sends `prose.hash` back, and the
+   * stored consent record carries that hash: the record names the text the
+   * person was shown, never a different wording.
+   */
+  requiredConsents: SignupPolicyConsent[];
   /** Live sign-in methods (credentials configured). */
   methods: { phoneOtp: boolean; wechatWeb: boolean; wechatInApp: boolean };
   /** Linkable legal documents. */
@@ -198,6 +234,7 @@ export const WechatStartBodySchema = z
     consents: z.array(ConsentInput).max(20).optional(),
     /** Invite code for a NEW account in invite mode. */
     inviteCode: z.string().trim().min(4).max(32).optional(),
+    ref: FriendRef,
   })
   .strict();
 export interface WechatStartResponse {
@@ -210,6 +247,8 @@ export const WechatCallbackQuerySchema = z.object({ code: z.string().max(512).op
  * Where the API sends the browser after a WeChat callback (relative, same
  * origin): `/auth/callback/wechat?result=ok|error&…`.
  *   result=ok     `next`, `bind=1` when a phone must be bound first, `new=1` for a new account
+ *                 (an account with two-step sign-in on is sent to /login/2fa instead, with the
+ *                 challenge cookie; no session exists until the code is entered)
  *   result=error  `code` (an AUTH_CN_ERROR_CODES value or `wechat_denied`)
  *   reverify      `reverify=<one-time token>` (purpose=reverify)
  */
@@ -232,6 +271,7 @@ export const WechatMiniLoginBodySchema = z
     phoneCode: z.string().min(1).max(512).optional(),
     consents: z.array(ConsentInput).max(20).optional(),
     inviteCode: z.string().trim().min(4).max(32).optional(),
+    ref: FriendRef,
   })
   .strict();
 export interface WechatMiniLoginResponse extends PhoneSessionResponse {

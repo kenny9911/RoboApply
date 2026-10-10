@@ -70,6 +70,9 @@ const NextPath = z
  * absent, and a brand-new user is asked for them before the account exists.
  */
 const Flag01 = z.enum(['0', '1']);
+/** Longest `ft` / `lt` value `/oauth/:provider/start` reads (web twin: lib/api/auth.ts). */
+export const OAUTH_TOUCH_PARAM_MAX = 1500;
+
 export const OAuthStartQuerySchema = z.object({
   next: NextPath.optional(),
   age: Flag01.optional(),
@@ -85,6 +88,14 @@ export const OAuthStartQuerySchema = z.object({
   utm_medium: z.string().max(120).optional(),
   utm_campaign: z.string().max(120).optional(),
   alert: z.string().max(200).optional(),
+  /**
+   * The visitor's stored first / last touch (lib/analytics `getAttribution()`),
+   * each as compact JSON. The callback is a GET with no body, so this is how
+   * a Google / LINE sign-up keeps an earlier campaign or invite code. A value
+   * that is too long or malformed is dropped: it never fails the sign-in.
+   */
+  ft: z.string().max(OAUTH_TOUCH_PARAM_MAX).optional().catch(undefined),
+  lt: z.string().max(OAUTH_TOUCH_PARAM_MAX).optional().catch(undefined),
 });
 export const OAuthCallbackQuerySchema = z.object({
   code: z.string().max(2048).optional(),
@@ -286,5 +297,25 @@ export const AUTH_ERROR_CODES = {
   accountDeleted: 'account_deleted',
   consentLocked: 'consent_locked',
   notSeekerAccount: 'not_a_seeker_account',
+  /** A provider sign-in may not create an account on this brand (GoApply: phone, WeChat or the email form do). */
+  signupClosed: 'signup_closed',
 } as const;
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[keyof typeof AUTH_ERROR_CODES];
+
+// ── `next` after sign-in ─────────────────────────────────────────────────
+
+/**
+ * `next` paths honoured right after sign-in or sign-up even while onboarding
+ * is unfinished: the public free-tool pages, where a signed-out visitor asked
+ * to keep a result and create an account (WP-57). Any other same-site `next`
+ * waits until onboarding is done (R-06). Web twin: `PRIORITY_NEXT_PATHS` in
+ * lib/auth/entry.ts (a test keeps the two equal).
+ */
+export const PRIORITY_NEXT_PATHS = ['/tools/resume-check', '/tools/resume-job-match'] as const;
+
+/** True when `next` (a same-site path, query and hash ignored) is one of PRIORITY_NEXT_PATHS. */
+export function isPriorityNext(next: string | null | undefined): boolean {
+  if (typeof next !== 'string') return false;
+  const path = next.split(/[?#]/)[0]!.replace(/\/+$/, '');
+  return (PRIORITY_NEXT_PATHS as readonly string[]).includes(path);
+}

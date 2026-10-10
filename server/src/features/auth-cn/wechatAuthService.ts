@@ -35,7 +35,9 @@ import type { FetchLike } from '../../platform/sms/index.js';
 import { WECHAT_RETURN_PATH, type ConsentInput, type WechatReturnQuery } from './contract.js';
 import { createGoApplyAccount, routeAfterSignIn, safeNext } from './accounts.js';
 import { isUniqueViolation, type AuthCnDb } from './db.js';
+import type { RawSignals } from '../growth/index.js';
 import { AuthCnError } from './errors.js';
+import { afterAccountCreated, afterPhoneBound, afterWechatLinked, cleanRef, type AccountHooks } from './hooks.js';
 import { redeemInviteIn } from './inviteService.js';
 import { sha256 } from './phoneAuthService.js';
 import { assertSignupOpen, checkSignupConsents, cnSignupMode, publicOrigin } from './signupPolicy.js';
@@ -59,6 +61,8 @@ export interface WechatAuthDeps {
   env: EnvSource;
   now: () => Date;
   fetch: FetchLike;
+  /** Invite attribution, invite check and the phone practice credit (hooks.ts). Absent = none run. */
+  hooks?: AccountHooks;
 }
 
 interface StatePayload {
@@ -68,6 +72,8 @@ interface StatePayload {
   /** Signup consents validated at start (POST body); null when none were given. */
   consents: ConsentInput[] | null;
   invite: string | null;
+  /** The invite-friends code from the signup link (`?ref=`); used only when the account turns out to be new. */
+  ref: string | null;
   purpose: 'signin' | 'reverify';
   /** sha256 of the browser-binding nonce (cookie). */
   nonceHash: string;
@@ -112,6 +118,7 @@ function parsePayload(raw: unknown): StatePayload | null {
     next: typeof p.next === 'string' ? p.next : null,
     consents: parseConsents(p.consents),
     invite: typeof p.invite === 'string' ? p.invite : null,
+    ref: typeof p.ref === 'string' ? cleanRef(p.ref) : null,
     purpose: p.purpose === 'reverify' ? 'reverify' : 'signin',
     nonceHash: p.nonceHash,
   };
@@ -153,6 +160,7 @@ export function createWechatAuthService(deps: WechatAuthDeps) {
     });
     if (!sibling) return null;
     await linkIdentity(brand, sibling.userId, app, identity);
+    await afterWechatLinked(deps.hooks, sibling.userId);
     return sibling.userId;
   }
 
@@ -184,10 +192,12 @@ export function createWechatAuthService(deps: WechatAuthDeps) {
     phoneE164?: string | null;
     next?: string | null;
     locale?: string | null;
+    ref?: string | null;
+    signals?: RawSignals;
   }): Promise<string> {
     const inviteRequired = cnSignupMode(deps.env) === 'invite';
     if (inviteRequired && !input.invite) throw new AuthCnError('invite_invalid', { missing: true });
-    return db.$transaction(async (tx) => {
+    const userId = await db.$transaction(async (tx) => {
       if (inviteRequired && input.invite) await redeemInviteIn(tx, input.brand.id, input.invite, deps.now());
       const userId = await createGoApplyAccount(tx, {
         brand: input.brand,
@@ -211,6 +221,13 @@ export function createWechatAuthService(deps: WechatAuthDeps) {
       });
       return userId;
     });
+    await afterAccountCreated(deps.hooks, userId, {
+      ref: input.ref,
+      signals: input.signals,
+      phoneVerified: Boolean(input.phoneE164),
+      now: deps.now(),
+    });
+    return userId;
   }
 
   return {
@@ -226,6 +243,8 @@ export function createWechatAuthService(deps: WechatAuthDeps) {
       next?: string;
       consents?: ConsentInput[];
       invite?: string;
+      /** The invite-friends code from the signup link (`?ref=`). */
+      ref?: string | null;
       purpose?: 'signin' | 'reverify';
       userId?: string | null;
     }): Promise<{ url: string; nonce: string }> {
@@ -241,6 +260,7 @@ export function createWechatAuthService(deps: WechatAuthDeps) {
         next: safeNext(input.next),
         consents,
         invite: input.invite ?? null,
+        ref: purpose === 'signin' ? cleanRef(input.ref) : null,
         purpose,
         nonceHash: sha256(nonce),
       };
@@ -269,6 +289,8 @@ export function createWechatAuthService(deps: WechatAuthDeps) {
       /** The browser-binding nonce from the cookie set at start. */
       nonce?: string | null;
       locale?: string | null;
+      /** Risk signals of the callback request (the same browser that started), for the invite check. */
+      signals?: RawSignals;
     }): Promise<WechatCallbackOutcome> {
       const now = deps.now();
       if (!input.state) return { kind: 'error', code: 'oauth_state_invalid' };
@@ -333,6 +355,8 @@ export function createWechatAuthService(deps: WechatAuthDeps) {
             invite: payload.invite,
             next: payload.next,
             locale: input.locale,
+            ref: payload.ref,
+            signals: input.signals,
           });
           isNew = true;
         }
@@ -359,6 +383,8 @@ export function createWechatAuthService(deps: WechatAuthDeps) {
       consents?: ConsentInput[];
       inviteCode?: string;
       locale?: string | null;
+      ref?: string | null;
+      signals?: RawSignals;
     }): Promise<{ userId: string; isNewUser: boolean; phoneBound: boolean; nextRoute: string }> {
       const app = appFor('mini');
       let identity: WechatIdentity;
@@ -377,6 +403,7 @@ export function createWechatAuthService(deps: WechatAuthDeps) {
         const owner = await db.user.findFirst({ where: { brand: input.brand.id, phoneE164: phone }, select: { id: true } });
         if (owner) {
           await linkIdentity(input.brand, owner.id, app, identity);
+          await afterWechatLinked(deps.hooks, owner.id);
           userId = owner.id;
         }
       }
@@ -391,6 +418,8 @@ export function createWechatAuthService(deps: WechatAuthDeps) {
           invite: input.inviteCode ?? null,
           phoneE164: phone,
           locale: input.locale,
+          ref: input.ref,
+          signals: input.signals,
         });
         isNew = true;
       } else if (phone) {
@@ -399,6 +428,7 @@ export function createWechatAuthService(deps: WechatAuthDeps) {
           const other = await db.user.findFirst({ where: { brand: input.brand.id, phoneE164: phone }, select: { id: true } });
           if (other && other.id !== userId) throw new AuthCnError('phone_taken');
           await db.user.update({ where: { id: userId }, data: { phoneE164: phone, phoneVerifiedAt: deps.now() } });
+          await afterPhoneBound(deps.hooks, userId);
         }
       }
       const state = await assertUsable(userId);

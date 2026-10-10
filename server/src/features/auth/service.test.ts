@@ -6,6 +6,12 @@
 // (find or create a seeker; link by verified email only within the brand;
 // other-brand → 409; LINE without email verifies one first), /auth/me
 // additions, identities, consents, sessions and the new-device email.
+// INT-01: signup attribution (marketing fields only where linking is
+// allowed; the invite attach and its risk signals), the invite check after
+// email verification and after a provider is linked (soft), `/auth/me`
+// unread count from the message centre, the region for the tips default,
+// consents through the compliance ledger (prose hash), and `next` to a free
+// tool page winning over onboarding.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -24,6 +30,11 @@ import { FLAG_KEYS } from '../../platform/flags.js';
 import { createAuthFeatureService, onboardingFor, type AuthDb } from './service.js';
 import { hashToken, purgeAuthTokens } from './tokens.js';
 import { AuthError } from './errors.js';
+import { CONSENT_PROSE_VERSION } from '../compliance/consents.js';
+import { createDelegateSignalStore, createGrowthService, createReferralService, type ReferralDb } from '../growth/index.js';
+import type { GrowthDb } from '../growth/service.js';
+import type { ReferralSignalDelegate } from '../growth/referralSignalStore.js';
+import { PRIORITY_NEXT_PATHS, isPriorityNext } from './contract.js';
 
 const ROBO = getBrand('roboapply');
 const GO = getBrand('goapply');
@@ -38,6 +49,7 @@ let db: ReturnType<typeof createFakePrisma>;
 let sent: Array<{ template: string; to: string; params: Record<string, unknown>; brand: unknown }>;
 let grants: string[][];
 let sessions: number;
+let referralChecks: string[];
 
 function seedUser(over: Record<string, unknown> = {}) {
   const user = {
@@ -82,6 +94,11 @@ function service(extra: Parameters<typeof createAuthFeatureService>[0] = {}) {
     summarizeEntitlements: async () => ({ planKey: 'free' }) as never,
     resolveFlags: async () => Object.fromEntries([...FLAG_KEYS.map((k) => [k, false]), ['hiringContacts', 'off']]) as never,
     recordAttribution: vi.fn(async () => undefined),
+    checkReferral: async (userId) => {
+      referralChecks.push(userId);
+    },
+    unreadCount: async () => 0,
+    rememberRegion: async () => undefined,
     ...extra,
   });
 }
@@ -107,6 +124,7 @@ beforeEach(() => {
   sent = [];
   grants = [];
   sessions = 0;
+  referralChecks = [];
   finish.mockReset();
 });
 
@@ -437,8 +455,15 @@ describe('/auth/me additions', () => {
   it('returns brand, onboarding, entitlements, flags, unread count and email status', async () => {
     seedUser();
     db.$rows('seekerProfile')[0]!.onboardingStep = 'account';
-    db.$rows('seekerNotification').push({ id: 'n1', userId: 'u1', readAt: null }, { id: 'n2', userId: 'u1', readAt: T0 });
-    const me = await service().meAdditions('u1', ROBO);
+    const asked: Array<[string, string]> = [];
+    const me = await service({
+      unreadCount: async (userId, brand) => {
+        asked.push([userId, brand.id]);
+        return 1;
+      },
+    }).meAdditions('u1', ROBO);
+    // The count comes from the message centre, for this brand.
+    expect(asked).toEqual([['u1', 'roboapply']]);
     expect(me).toMatchObject({
       brand: { id: 'roboapply', name: 'RoboApply', market: 'intl' },
       onboarding: { step: 'account', nextRoute: '/onboarding/situation' },
@@ -451,11 +476,36 @@ describe('/auth/me additions', () => {
 
   it('never invents numbers when a source fails', async () => {
     seedUser();
-    const failing = createFakePrisma({ failOn: { 'seekerNotification.count': new Error('no table') } });
-    for (const [k, rows] of [['user', db.$rows('user')], ['seekerProfile', db.$rows('seekerProfile')]] as const) failing.$rows(k).push(...rows);
-    const me = await service({ db: failing as unknown as AuthDb, summarizeEntitlements: async () => Promise.reject(new Error('down')) }).meAdditions('u1', ROBO);
+    const me = await service({
+      unreadCount: async () => Promise.reject(new Error('no table')),
+      summarizeEntitlements: async () => Promise.reject(new Error('down')),
+    }).meAdditions('u1', ROBO);
     expect(me.unreadCount).toBeNull();
     expect(me.entitlements).toBeNull();
+  });
+
+  it('offers the edge country to the message centre once per user (signup, login and /auth/me share it); never throws', async () => {
+    seedUser({ id: 'region-1' });
+    seedUser({ id: 'region-2', email: 'b@example.test' });
+    const stored: Array<[string, string | null]> = [];
+    const svc = service({
+      rememberRegion: async (userId, country) => {
+        stored.push([userId, country]);
+        if (userId === 'region-2') throw new Error('db down');
+      },
+    });
+    await svc.meAdditions('region-1', ROBO, { country: 'tw' });
+    await svc.meAdditions('region-1', ROBO, { country: 'TW' });
+    await svc.rememberRegion('region-1', 'TW');
+    expect(stored).toEqual([['region-1', 'TW']]);
+    // No country, or junk: nothing is stored.
+    await svc.rememberRegion('region-3', null);
+    await svc.rememberRegion('region-3', 'Taiwan');
+    expect(stored).toHaveLength(1);
+    // A failure is swallowed and tried again next time.
+    await expect(svc.rememberRegion('region-2', 'JP')).resolves.toBeUndefined();
+    await svc.rememberRegion('region-2', 'JP');
+    expect(stored.filter(([u]) => u === 'region-2')).toHaveLength(2);
   });
 });
 
@@ -474,18 +524,45 @@ describe('identities, consents, sessions', () => {
     expect(await authCode(svc.unlinkIdentity('u1', 'nope'))).toBe('not_found');
   });
 
-  it('records consents (canonical type, newest wins) and locks the age agreement', async () => {
+  it('records consents through the compliance ledger: prose hash stored, unknown and locked refused, outdated text → 409', async () => {
     seedUser();
     const svc = service();
-    expect(await authCode(svc.recordConsent('u1', { type: 'made_up', granted: true, proseVersion: 'v' }))).toBe('unknown_consent');
-    expect(await authCode(svc.recordConsent('u1', { type: 'age_16_plus', granted: false, proseVersion: 'v' }))).toBe('consent_locked');
-    await svc.recordConsent('u1', { type: 'analytics', granted: true, proseVersion: 'v1' });
-    clock = new Date(T0.getTime() + 1000);
-    await svc.recordConsent('u1', { type: 'analytics', granted: false, proseVersion: 'v2' }, { ip: '1.2.3.4', userAgent: MAC });
-    await svc.recordConsent('u1', { type: 'ai_resume_parse', granted: true, proseVersion: 'v1' });
-    const list = await svc.listConsents('u1');
-    expect(list.find((c) => c.type === 'analytics')).toMatchObject({ granted: false, proseVersion: 'v2' });
-    expect(list.map((c) => c.type)).toContain('ai_resume_parsing');
+    const V = CONSENT_PROSE_VERSION;
+    // Not offered on this brand (GoApply's cross-border consent) or made up.
+    await expect(svc.recordConsent('u1', ROBO, { type: 'made_up', granted: true, proseVersion: V })).rejects.toMatchObject({
+      code: 'invalid_request',
+      details: { reason: 'consent_unknown' },
+    });
+    await expect(svc.recordConsent('u1', ROBO, { type: 'pipl_cross_border', granted: true, proseVersion: V })).rejects.toMatchObject({
+      details: { reason: 'consent_unknown' },
+    });
+    // The age confirmation ends only with the account.
+    await expect(svc.recordConsent('u1', ROBO, { type: 'age_16_plus', granted: false, proseVersion: V })).rejects.toMatchObject({
+      details: { reason: 'consent_not_withdrawable' },
+    });
+    // The text changed since the client loaded it.
+    await expect(svc.recordConsent('u1', ROBO, { type: 'marketing_email', granted: true, proseVersion: 'old' })).rejects.toMatchObject({
+      code: 'version_conflict',
+    });
+    expect(db.$rows('seekerConsentRecord')).toEqual([]);
+
+    const on = await svc.recordConsent('u1', ROBO, { type: 'marketing_email', granted: true, proseVersion: V }, { locale: 'en', country: 'US' });
+    expect(on).toMatchObject({ type: 'marketing_email', granted: true, proseVersion: V, accountClosing: false });
+    expect(on.proseHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(db.$rows('seekerConsentRecord')[0]).toMatchObject({ consentType: 'marketing_email', granted: true, proseVersion: V, proseHash: on.proseHash });
+
+    // The in-memory database has no column defaults: stamp the rows as the database would.
+    db.$rows('seekerConsentRecord')[0]!.createdAt = T0;
+    await svc.recordConsent('u1', ROBO, { type: 'marketing_email', granted: false, proseVersion: V });
+    db.$rows('seekerConsentRecord')[1]!.createdAt = new Date(T0.getTime() + 1000);
+    const list = await svc.listConsents('u1', ROBO);
+    // Newest answer wins; the version is the record's own.
+    expect(list).toEqual([expect.objectContaining({ type: 'marketing_email', granted: false, proseVersion: V })]);
+    // Consents the catalog does not offer (the implicit signup row) are not listed.
+    db.$rows('seekerConsentRecord').push({ id: 'x', seekerProfileId: 'p-u1', consentType: 'seeker_app_optin', granted: true, proseVersion: 'v1', createdAt: T0 });
+    expect((await svc.listConsents('u1', ROBO)).map((c) => c.type)).toEqual(['marketing_email']);
+    // No seeker profile: nothing to list.
+    expect(await svc.listConsents('nobody', ROBO)).toEqual([]);
   });
 
   it('lists live sessions with the current one marked and revokes another', async () => {
@@ -541,4 +618,329 @@ describe('side mails', () => {
 it('AuthError carries code and status', () => {
   const e = new AuthError('weak_password', 422, 'x');
   expect([e.code, e.status]).toEqual(['weak_password', 422]);
+});
+
+// ── INT-01 ───────────────────────────────────────────────────────────────
+
+describe('signup attribution and the invite attach (WP-23 recipe, WP-60 signals)', () => {
+  const FRIEND = { userAgent: MAC, ip: '203.0.113.50', deviceId: 'anon_friend001' };
+
+  /** The real growth and invite services on the same in-memory database. */
+  function growthOnFake() {
+    const referrals = createReferralService({
+      db: db as unknown as ReferralDb,
+      signalStore: createDelegateSignalStore(db.rAReferralSignal as unknown as ReferralSignalDelegate),
+      grantPracticeCredit: async () => ({ status: 'granted', ledgerId: 'l', balanceAfter: 1 }),
+      enqueue: async () => ({ id: 'w1' }),
+      sendEmail: async () => ({ status: 'sent' }),
+      invitesEnabled: async () => true,
+      env: { NODE_ENV: 'test', REFERRAL_SIGNAL_SECRET: 'test-secret' },
+      now: () => clock,
+    });
+    const growth = createGrowthService({ db: db as unknown as GrowthDb, attachReferral: referrals.attachFromSignup, now: () => clock });
+    return { referrals, growth };
+  }
+
+  function seedInviter() {
+    seedUser({ id: 'inviter', email: 'inviter@example.test', emailVerified: true, createdAt: new Date(T0.getTime() - 48 * 3600e3) });
+    db.$rows('rAReferralCode').push({ id: 'c1', userId: 'inviter', brand: 'roboapply', code: 'ABCDEFGH', createdAt: new Date(T0.getTime() - 48 * 3600e3) });
+  }
+
+  it('stores utm and entry fields when linking is allowed, and only the functional fields when it is not', async () => {
+    const { growth } = growthOnFake();
+    const svc = service({ recordAttribution: growth.recordAttribution });
+    const attribution = { from: 'job', jobId: 'cm1', ref: 'newsletter', utmSource: 'x', utmCampaign: 'spring', landingPath: '/signup' };
+
+    seedUser({ id: 'allowed', email: 'allowed@example.test' });
+    await svc.afterAccountCreated('allowed', { attribution }, { ...FRIEND, anonId: 'anon_friend001', linkAllowed: true });
+    const allowed = db.$rows('rAAttribution').find((r) => r.userId === 'allowed')!;
+    expect(allowed.firstTouch).toMatchObject({ from: 'job', jobId: 'cm1', ref: 'newsletter', utmSource: 'x', utmCampaign: 'spring', landingPath: '/signup' });
+    expect(allowed.anonId).toBe('anon_friend001');
+
+    seedUser({ id: 'denied', email: 'denied@example.test' });
+    // No consent (EEA/UK/CH): the route passes no anonId and linkAllowed false.
+    await svc.afterAccountCreated('denied', { attribution }, { ...FRIEND, anonId: null, linkAllowed: false });
+    const denied = db.$rows('rAAttribution').find((r) => r.userId === 'denied')!;
+    expect(Object.keys(denied.firstTouch as object).sort()).toEqual(['at', 'jobId', 'ref']);
+    expect(denied.anonId ?? null).toBeNull();
+
+    // Marketing fields alone leave nothing to store without linking.
+    seedUser({ id: 'utm-only', email: 'utm@example.test' });
+    await svc.afterAccountCreated('utm-only', { attribution: { utmSource: 'x', from: 'ad' } }, { ...FRIEND, linkAllowed: false });
+    expect(db.$rows('rAAttribution').some((r) => r.userId === 'utm-only')).toBe(false);
+  });
+
+  it("reads the client's first and last touch; the signup link is the fallback", async () => {
+    const { growth } = growthOnFake();
+    const svc = service({ recordAttribution: growth.recordAttribution });
+    seedUser({ id: 'u-touch', email: 'touch@example.test' });
+    const earlier = new Date(T0.getTime() - 3 * 864e5).toISOString();
+    await svc.afterAccountCreated(
+      'u-touch',
+      { attribution: { from: 'job', jobId: 'cm9' } },
+      {
+        ...FRIEND,
+        anonId: 'anon_friend001',
+        linkAllowed: true,
+        clientTouches: { firstTouch: { utmSource: 'google', landingPath: '/', at: earlier }, lastTouch: { from: 'alert', alert: 'a1', at: T0.toISOString() } },
+      },
+    );
+    const row = db.$rows('rAAttribution').find((r) => r.userId === 'u-touch')!;
+    expect(row.firstTouch).toMatchObject({ utmSource: 'google', landingPath: '/', at: earlier });
+    expect(row.lastTouch).toMatchObject({ from: 'alert', alert: 'a1' });
+
+    // Only a first touch from the client: the signup link becomes the last touch.
+    seedUser({ id: 'u-touch2', email: 'touch2@example.test' });
+    await svc.afterAccountCreated(
+      'u-touch2',
+      { attribution: { from: 'job', jobId: 'cm9' } },
+      { ...FRIEND, linkAllowed: true, clientTouches: { firstTouch: { utmSource: 'google', at: earlier }, lastTouch: null } },
+    );
+    const row2 = db.$rows('rAAttribution').find((r) => r.userId === 'u-touch2')!;
+    expect(row2.firstTouch).toMatchObject({ utmSource: 'google' });
+    expect(row2.lastTouch).toMatchObject({ from: 'job', jobId: 'cm9' });
+  });
+
+  it('a signup with an invite code creates the invite and records hashed risk signals for the friend', async () => {
+    const { growth } = growthOnFake();
+    seedInviter();
+    seedUser({ id: 'friend', email: 'friend@example.test' });
+    const svc = service({ recordAttribution: growth.recordAttribution });
+    // No analytics consent: the referral is functional and still attached.
+    await svc.afterAccountCreated('friend', { attribution: { ref: 'abcd-efgh', from: 'invite' } }, { ...FRIEND, linkAllowed: false });
+    expect(db.$rows('rAReferral')).toEqual([expect.objectContaining({ inviterUserId: 'inviter', inviteeUserId: 'friend', brand: 'roboapply', status: 'pending' })]);
+    const signal = db.$rows('rAReferralSignal').find((r) => r.userId === 'friend')!;
+    expect(signal).toMatchObject({ brand: 'roboapply' });
+    expect(String(signal.ipHash)).toMatch(/^[0-9a-f]{32}$/);
+    expect(JSON.stringify(signal)).not.toContain('203.0.113.50');
+    expect(JSON.stringify(signal)).not.toContain('anon_friend001');
+  });
+
+  it('attaches an invite code that is only in the later touch (the friend first arrived another way)', async () => {
+    const { growth, referrals } = growthOnFake();
+    seedInviter();
+    seedUser({ id: 'friend', email: 'friend@example.test' });
+    const svc = service({ recordAttribution: growth.recordAttribution, attachReferral: referrals.attachFromSignup });
+    await svc.afterAccountCreated(
+      'friend',
+      { attribution: { ref: 'ABCDEFGH', from: 'invite' } },
+      { ...FRIEND, linkAllowed: true, clientTouches: { firstTouch: { utmSource: 'google', at: T0.toISOString() }, lastTouch: null } },
+    );
+    expect(db.$rows('rAReferral')).toEqual([expect.objectContaining({ inviterUserId: 'inviter', inviteeUserId: 'friend' })]);
+    // The first touch stays what it was.
+    expect((db.$rows('rAAttribution')[0]!.firstTouch as Record<string, unknown>).ref).toBeUndefined();
+  });
+
+  // The provider callback is a GET with no body: the touches the browser
+  // stored ride the start request and the state row.
+  describe('Google / LINE sign-up keeps the stored first and last touch', () => {
+    const earlier = new Date(T0.getTime() - 3 * 864e5).toISOString();
+    const STORED = {
+      firstTouch: { ref: 'abcd-efgh', utmSource: 'newsletter', landingPath: '/r/ABCDEFGH', at: earlier },
+      lastTouch: { from: 'job', jobId: 'cm7', at: T0.toISOString() },
+    };
+    const identity = (over: Record<string, unknown> = {}) => ({ provider: 'google', subject: 'g-friend', email: 'friend@example.test', emailVerified: true, name: 'Friend', avatarUrl: null, ...over });
+    const signupPage = { consents: AGE, marketingOptIn: false, locale: 'en', timezone: null, country: null };
+
+    function wired() {
+      const { growth, referrals } = growthOnFake();
+      seedInviter();
+      return service({ recordAttribution: growth.recordAttribution, attachReferral: referrals.attachFromSignup });
+    }
+    async function start(svc: ReturnType<typeof service>, provider: 'google' | 'line', signup: typeof signupPage | null, touches: unknown) {
+      const { url, binder } = await svc.startOAuth({ provider, brand: ROBO, redirectUri: `http://localhost:3621/auth/callback/${provider}`, next: null, signup, touches });
+      return { state: new URL(url).searchParams.get('state')!, binder };
+    }
+
+    it('signup page → Google: an invite code held only in the stored touch creates the invite; the earlier campaign is the first touch', async () => {
+      finish.mockResolvedValue(identity());
+      const svc = wired();
+      const { state, binder } = await start(svc, 'google', signupPage, STORED);
+      // What the state row keeps is the sanitized touches (the landing path of an invite link is scrubbed).
+      const stored = db.$rows('rAAuthToken').find((t) => t.kind === 'oauth_state')!.payload as { touches: { firstTouch: Record<string, unknown>; lastTouch: Record<string, unknown> } };
+      expect(stored.touches.firstTouch).toMatchObject({ ref: 'abcd-efgh', utmSource: 'newsletter', at: earlier });
+      expect(JSON.stringify(stored.touches)).not.toContain('/r/ABCDEFGH');
+
+      const res = await svc.finishOAuthCallback({ provider: 'google', brand: ROBO, code: 'c', state, binder, request: { ...FRIEND, anonId: 'anon_friend001', linkAllowed: true } });
+      expect(res).toMatchObject({ status: 'signed_in', isNewUser: true });
+      const friend = db.$rows('user').find((u) => u.email === 'friend@example.test')!;
+      const row = db.$rows('rAAttribution').find((r) => r.userId === friend.id)!;
+      expect(row.firstTouch).toMatchObject({ ref: 'abcd-efgh', utmSource: 'newsletter', at: earlier });
+      expect(row.lastTouch).toMatchObject({ from: 'job', jobId: 'cm7' });
+      expect(db.$rows('rAReferral')).toEqual([expect.objectContaining({ inviterUserId: 'inviter', inviteeUserId: friend.id, status: 'pending' })]);
+      expect(db.$rows('rAReferralSignal').some((r) => r.userId === friend.id)).toBe(true);
+    });
+
+    it('without analytics consent only the functional fields of the carried touch are stored (the invite still counts)', async () => {
+      finish.mockResolvedValue(identity());
+      const svc = wired();
+      const { state, binder } = await start(svc, 'google', signupPage, STORED);
+      await svc.finishOAuthCallback({ provider: 'google', brand: ROBO, code: 'c', state, binder, request: { ...FRIEND, anonId: null, linkAllowed: false } });
+      const friend = db.$rows('user').find((u) => u.email === 'friend@example.test')!;
+      const row = db.$rows('rAAttribution').find((r) => r.userId === friend.id)!;
+      expect(Object.keys(row.firstTouch as object).sort()).toEqual(['at', 'ref']);
+      expect(db.$rows('rAReferral')).toHaveLength(1);
+    });
+
+    it('login page → Google → agreements: the touches wait in the pending token and are recorded when the account is created', async () => {
+      finish.mockResolvedValue(identity());
+      const svc = wired();
+      const { state, binder } = await start(svc, 'google', null, STORED);
+      const res = await svc.finishOAuthCallback({ provider: 'google', brand: ROBO, code: 'c', state, binder, request: { ...FRIEND, linkAllowed: true } });
+      expect(res).toMatchObject({ status: 'consent_required' });
+      expect(db.$rows('rAAttribution')).toEqual([]);
+      const done = await svc.completeOAuth({
+        pendingToken: (res as { pendingToken: string }).pendingToken,
+        brand: ROBO,
+        consents: AGE,
+        marketingOptIn: false,
+        locale: 'en',
+        request: { ...FRIEND, linkAllowed: true },
+      });
+      expect(done).toMatchObject({ status: 'signed_in', isNewUser: true });
+      const friend = db.$rows('user').find((u) => u.email === 'friend@example.test')!;
+      expect(db.$rows('rAAttribution').find((r) => r.userId === friend.id)!.firstTouch).toMatchObject({ ref: 'abcd-efgh', utmSource: 'newsletter' });
+      expect(db.$rows('rAReferral')).toEqual([expect.objectContaining({ inviterUserId: 'inviter', inviteeUserId: friend.id })]);
+    });
+
+    it('LINE without an email: the touches follow the verification link, even when it is opened elsewhere', async () => {
+      finish.mockResolvedValue(identity({ provider: 'line', subject: 'line-friend', email: null, emailVerified: false }));
+      const svc = wired();
+      const { state, binder } = await start(svc, 'line', signupPage, STORED);
+      const res = await svc.finishOAuthCallback({ provider: 'line', brand: ROBO, code: 'c', state, binder, request: { ...FRIEND, linkAllowed: true } });
+      expect(res).toMatchObject({ status: 'email_required' });
+      await svc.oauthEmail({ pendingToken: (res as { pendingToken: string }).pendingToken, email: 'friend@example.test', brand: ROBO, consents: AGE, marketingOptIn: false, locale: 'en' });
+      const verified = await svc.verifyEmail({ token: lastLinkToken(), brand: ROBO, request: { userAgent: 'Another device', linkAllowed: true } });
+      expect(verified).toMatchObject({ status: 'signed_in', isNewUser: true });
+      const friend = db.$rows('user').find((u) => u.email === 'friend@example.test')!;
+      expect(db.$rows('rAAttribution').find((r) => r.userId === friend.id)!.firstTouch).toMatchObject({ ref: 'abcd-efgh' });
+      expect(db.$rows('rAReferral')).toEqual([expect.objectContaining({ inviterUserId: 'inviter', inviteeUserId: friend.id })]);
+    });
+
+    it('junk in place of touches is dropped and the sign-up goes on; an existing account records nothing', async () => {
+      finish.mockResolvedValue(identity());
+      const svc = wired();
+      const junk = await start(svc, 'google', signupPage, { firstTouch: 'x'.repeat(50), lastTouch: [1, 2], extra: { nested: true } });
+      expect((db.$rows('rAAuthToken').find((t) => t.kind === 'oauth_state')!.payload as { touches: unknown }).touches).toBeNull();
+      await expect(svc.finishOAuthCallback({ provider: 'google', brand: ROBO, code: 'c', state: junk.state, binder: junk.binder, request: { ...FRIEND, linkAllowed: true } })).resolves.toMatchObject({ isNewUser: true });
+      expect(db.$rows('rAAttribution')).toEqual([]);
+
+      // The same person signs in again from a link with a ref: nothing is recorded for an existing account.
+      const again = await start(svc, 'google', null, STORED);
+      await expect(svc.finishOAuthCallback({ provider: 'google', brand: ROBO, code: 'c', state: again.state, binder: again.binder, request: { ...FRIEND, linkAllowed: true } })).resolves.toMatchObject({ isNewUser: false });
+      expect(db.$rows('rAAttribution')).toEqual([]);
+      expect(db.$rows('rAReferral')).toEqual([]);
+    });
+  });
+
+  it('never throws: a failing growth seam does not fail the signup, and the device is still recorded', async () => {
+    seedUser();
+    const svc = service({
+      recordAttribution: async () => Promise.reject(new Error('growth down')),
+      attachReferral: async () => Promise.reject(new Error('growth down')),
+    });
+    await expect(
+      svc.afterAccountCreated('u1', { attribution: { ref: 'ABCDEFGH' } }, { ...FRIEND, linkAllowed: true, clientTouches: { firstTouch: { utmSource: 'x', at: T0.toISOString() } } }),
+    ).resolves.toBeUndefined();
+    expect(db.$rows('rAAuthToken').filter((t) => t.kind === 'known_device')).toHaveLength(1);
+    // Callers without a request may still pass the bare user agent.
+    await expect(svc.afterAccountCreated('u1', {}, MAC)).resolves.toBeUndefined();
+  });
+});
+
+describe('invite check after verification and linking (WP-60 #6)', () => {
+  const identity = (provider: 'google' | 'line') => ({ provider, subject: `${provider}-1`, email: 'ana@example.test', emailVerified: true, name: 'Ana', avatarUrl: null });
+
+  async function signInWith(svc: ReturnType<typeof service>, provider: 'google' | 'line') {
+    finish.mockResolvedValue(identity(provider));
+    const { url, binder } = await svc.startOAuth({ provider, brand: ROBO, redirectUri: `http://localhost:3621/auth/callback/${provider}`, next: null, signup: null });
+    return svc.finishOAuthCallback({ provider, brand: ROBO, code: 'c', state: new URL(url).searchParams.get('state')!, userAgent: MAC, binder });
+  }
+
+  it('checks the invite when the email is verified', async () => {
+    seedUser();
+    const svc = service();
+    await svc.sendVerificationEmail({ userId: 'u1', brand: ROBO });
+    await svc.verifyEmail({ token: lastLinkToken(), brand: ROBO });
+    expect(referralChecks).toEqual(['u1']);
+  });
+
+  it.each(['google', 'line'] as const)('checks the invite when %s is linked to an existing account', async (provider) => {
+    seedUser({ emailVerified: true });
+    const res = await signInWith(service(), provider);
+    expect(res).toMatchObject({ status: 'signed_in', isNewUser: false });
+    expect(db.$rows('rAAuthIdentity')).toEqual([expect.objectContaining({ userId: 'u1', provider })]);
+    expect(referralChecks).toEqual(['u1']);
+    // Signing in again with the linked provider links nothing and checks nothing.
+    await signInWith(service(), provider);
+    expect(referralChecks).toEqual(['u1']);
+  });
+
+  it('is soft: a failing check never fails the verification or the sign-in', async () => {
+    seedUser();
+    const failing = service({ checkReferral: async () => Promise.reject(new Error('growth down')) });
+    await failing.sendVerificationEmail({ userId: 'u1', brand: ROBO });
+    await expect(failing.verifyEmail({ token: lastLinkToken(), brand: ROBO })).resolves.toMatchObject({ status: 'verified' });
+    expect(db.$rows('user')[0]!.emailVerified).toBe(true);
+    await expect(signInWith(failing, 'google')).resolves.toMatchObject({ status: 'signed_in' });
+  });
+});
+
+describe('`next` to a free tool page (WP-57)', () => {
+  it('lists exactly the two tool pages; anything else is not a priority path', () => {
+    expect([...PRIORITY_NEXT_PATHS]).toEqual(['/tools/resume-check', '/tools/resume-job-match']);
+    expect(isPriorityNext('/tools/resume-check')).toBe(true);
+    expect(isPriorityNext('/tools/resume-job-match?x=1#top')).toBe(true);
+    expect(isPriorityNext('/tools/resume-check/')).toBe(true);
+    expect(isPriorityNext('/tools/resume-check/other')).toBe(false);
+    expect(isPriorityNext('/tools')).toBe(false);
+    expect(isPriorityNext('/jobs/cm1')).toBe(false);
+    expect(isPriorityNext('//evil.example/tools/resume-check')).toBe(false);
+    expect(isPriorityNext(null)).toBe(false);
+  });
+
+  it('wins over unfinished onboarding at sign-in; an unknown next still waits for onboarding', async () => {
+    seedUser();
+    db.$rows('seekerProfile')[0]!.onboardingStep = 'account';
+    const svc = service();
+    expect(await svc.signInRoute(ROBO, 'u1', '/tools/resume-check')).toBe('/tools/resume-check');
+    expect(await svc.signInRoute(ROBO, 'u1', '/tools/resume-job-match')).toBe('/tools/resume-job-match');
+    expect(await svc.signInRoute(ROBO, 'u1', '/jobs/cm1')).toBe('/onboarding/situation');
+    expect(await svc.signInRoute(ROBO, 'u1', '//evil.example/tools/resume-check')).toBe('/onboarding/situation');
+    db.$rows('seekerProfile')[0]!.onboardingStep = 'done';
+    expect(await svc.signInRoute(ROBO, 'u1', '/jobs/cm1')).toBe('/jobs/cm1');
+  });
+
+  it('a new provider account returns to the tool page instead of the first onboarding screen', async () => {
+    finish.mockResolvedValue({ provider: 'google', subject: 'g-tool', email: 'tool@example.test', emailVerified: true, name: null, avatarUrl: null });
+    const svc = service();
+    const start = async (next: string) => {
+      const { url, binder } = await svc.startOAuth({
+        provider: 'google',
+        brand: ROBO,
+        redirectUri: 'http://localhost:3621/auth/callback/google',
+        next,
+        signup: { consents: AGE, marketingOptIn: false, locale: 'en', timezone: null, country: null },
+      });
+      return svc.finishOAuthCallback({ provider: 'google', brand: ROBO, code: 'c', state: new URL(url).searchParams.get('state')!, userAgent: MAC, binder });
+    };
+    expect(await start('/tools/resume-job-match')).toMatchObject({ status: 'signed_in', isNewUser: true, next: '/tools/resume-job-match' });
+  });
+});
+
+describe('GoApply accounts are never created by a provider sign-in', () => {
+  it('refuses with signup_closed and creates nothing (phone, WeChat and the email form apply the invite and CN-0 consents)', async () => {
+    finish.mockResolvedValue({ provider: 'google', subject: 'g-cn', email: 'cn@example.test', emailVerified: true, name: null, avatarUrl: null });
+    const svc = service();
+    const { url, binder } = await svc.startOAuth({
+      provider: 'google',
+      brand: GO,
+      redirectUri: 'http://goapply.localhost:3621/auth/callback/google',
+      next: null,
+      signup: { consents: AGE, marketingOptIn: false, locale: 'zh', timezone: null, country: null },
+    });
+    const res = svc.finishOAuthCallback({ provider: 'google', brand: GO, code: 'c', state: new URL(url).searchParams.get('state')!, userAgent: MAC, binder });
+    expect(await authCode(res)).toBe('signup_closed');
+    expect(db.$rows('user')).toEqual([]);
+  });
 });

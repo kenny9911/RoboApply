@@ -34,7 +34,6 @@ vi.mock('../engine/services/SeekerAuthService.js', () => ({
 vi.mock('../engine/services/SeekerProfileService.js', () => ({ default: { getByUserId: vi.fn(async () => ({ id: 'profile1' })) } }));
 vi.mock('../engine/lib/seekerSession.js', () => ({ invalidateSeekerSession: mocks.invalidate }));
 vi.mock('../engine/middleware/seekerAuth.js', () => ({ requireSeekerProfile: (_req: unknown, _res: unknown, next: () => void) => next() }));
-vi.mock('../services/RoboApplyMissionService.js', () => ({ getMissionForUser: vi.fn(async () => null) }));
 
 describe('auth activity preserves login and /auth/me contracts', () => {
   let server: Server;

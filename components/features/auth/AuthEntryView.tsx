@@ -8,33 +8,46 @@
 //     LINE is offered only to zh-TW visitors and visitors from Taiwan, and
 //     then first (PRODUCT O0 row 3).
 //   - RoboApply: provider buttons, "or", then the email form.
-//     GoApply: phone (WP-11) first, WeChat, and email behind "Use email
-//     instead" (the fallback).
+//     GoApply: phone (WP-11) first, WeChat, and email behind "其他方式"
+//     (the fallback; `layoutAuthMethods` in the registry decides). The email
+//     form opens in place; with no other method available it is shown at once.
 //   - Contextual title from `action=apply` / `job` / `from`; the job title is
 //     looked up by id (never taken from the URL) and shown only when found.
 //     Every query parameter is carried to the other page.
+//   - Signup sends this page's entry parameters plus the visitor's stored
+//     first and last touch (`signupAttribution`).
 //   - Signup: the agreements (marketing unchecked, required age, PDPA for
 //     zh-TW/TW) are page state shared with every method.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 
-import { AUTH_METHOD_COMPONENTS, useAuthMethods, type AuthMethodEntry } from '../../auth/methods/registry';
+import { AUTH_METHOD_COMPONENTS, layoutAuthMethods, useAuthMethods, type AuthMethodEntry } from '../../auth/methods/registry';
 import { AuthEntryProvider, type SignupAgreements } from '../../auth/agreements';
 import { AuthBrandMark, AuthError } from '../../auth/AuthShell';
 import { useBrand } from '../../../lib/brand/BrandProvider';
-import { attributionFrom, carriedQuery, entryContext, safeNext } from '../../../lib/auth/entry';
+import { carriedQuery, entryContext, safeNext, signupAttribution } from '../../../lib/auth/entry';
 import { useAuthMethodsInfo, useEntryJob } from '../../../hooks/auth/useAuthAccount';
 import styles from './auth.module.css';
 
-const OAUTH_ERRORS = new Set(['oauth_failed', 'oauth_state_invalid', 'account_other_brand', 'account_disabled', 'account_deleted', 'not_a_seeker_account']);
+const OAUTH_ERRORS = new Set([
+  'oauth_failed',
+  'oauth_state_invalid',
+  'account_other_brand',
+  'account_disabled',
+  'account_deleted',
+  'not_a_seeker_account',
+  // The second-step check could not run after a provider or email-link sign-in: nobody was signed in.
+  'two_factor_unavailable',
+]);
 
 const OAUTH_ERROR_KEYS: Record<string, string> = {
   account_disabled: 'loginForm.disabled',
   account_deleted: 'loginForm.deleted',
   not_a_seeker_account: 'loginForm.notSeeker',
+  two_factor_unavailable: 'loginForm.twoFactorUnavailable',
 };
 
 /**
@@ -51,6 +64,7 @@ export function filterAndOrder(methods: AuthMethodEntry[], opts: { locale: strin
 
 export function AuthEntryView({ mode }: { mode: 'login' | 'signup' }) {
   const t = useTranslations('auth');
+  const tCn = useTranslations('authCn');
   const locale = useLocale();
   const brand = useBrand();
   const params = useSearchParams();
@@ -61,17 +75,24 @@ export function AuthEntryView({ mode }: { mode: 'login' | 'signup' }) {
   const pdpaRequired = info.data?.pdpaNoticeRequired ?? (brand.id === 'roboapply' && locale === 'zh-TW');
   const [agreements, setAgreements] = useState<Omit<SignupAgreements, 'pdpaRequired'>>({ age: false, pdpa: false, marketing: false });
   const [showEmail, setShowEmail] = useState(false);
+  const otherMethodsRef = useRef<HTMLDivElement | null>(null);
+  // Opening "Other ways to sign in" replaces the button with the email form:
+  // move focus into it so keyboard and screen-reader users land on the field.
+  useEffect(() => {
+    if (showEmail) otherMethodsRef.current?.querySelector<HTMLInputElement>('input')?.focus();
+  }, [showEmail]);
 
   const next = safeNext(params?.get('next'));
   const ctx = entryContext(params);
   const job = useEntryJob(ctx.jobId);
   const methods = useMemo(() => filterAndOrder(registryMethods, { locale, country }), [registryMethods, locale, country]);
-  const redirects = methods.filter((m) => m.kind === 'redirect');
-  const forms = methods.filter((m) => m.kind === 'form');
-  const emailEntry = forms.find((m) => m.id === 'email_password');
+  // GoApply keeps email behind "其他方式" while another way to sign in exists (G0 row 6).
+  const layout = useMemo(() => layoutAuthMethods(brand.id, methods), [brand.id, methods]);
+  const redirects = layout.primary.filter((m) => m.kind === 'redirect');
+  const forms = layout.primary.filter((m) => m.kind === 'form');
+  const emailEntry = methods.find((m) => m.id === 'email_password');
   const otherForms = forms.filter((m) => m.id !== 'email_password');
-  // GoApply keeps email behind a link when another way to sign in exists (G0 row 6).
-  const emailBehindLink = brand.market === 'cn' && (otherForms.length > 0 || redirects.length > 0);
+  const emailBehindLink = layout.secondary.some((m) => m.id === 'email_password');
 
   const errorCode = params?.get('error');
   // A job title appears only when the looked-up job exists (never from the URL).
@@ -83,7 +104,9 @@ export function AuthEntryView({ mode }: { mode: 'login' | 'signup' }) {
           ? t('contextual.signupJob', { jobTitle: job.title })
           : ctx.kind === 'resume_check'
             ? t('contextual.signupResumeCheck')
-            : t('contextual.signupDefault')
+            : ctx.kind === 'resume_job_match'
+              ? t('contextual.signupResumeJobMatch')
+              : t('contextual.signupDefault')
       : ctx.kind === 'apply' && job
         ? t('contextual.loginApply', { jobTitle: job.title })
         : t('login.title');
@@ -93,7 +116,7 @@ export function AuthEntryView({ mode }: { mode: 'login' | 'signup' }) {
     mode,
     agreements: mode === 'signup' ? { ...agreements, pdpaRequired } : null,
     setAgreements: mode === 'signup' ? (a: SignupAgreements) => setAgreements({ age: a.age, pdpa: a.pdpa, marketing: a.marketing }) : undefined,
-    attribution: attributionFrom(params, typeof window !== 'undefined' ? window.location.pathname : undefined),
+    attribution: signupAttribution(params, typeof window !== 'undefined' ? window.location.pathname : undefined),
     next,
     locale,
   };
@@ -123,9 +146,16 @@ export function AuthEntryView({ mode }: { mode: 'login' | 'signup' }) {
         {emailEntry ? (
           emailBehindLink && !showEmail ? (
             <div className={styles.methods}>
-              <button type="button" className={styles.oauthButton} onClick={() => setShowEmail(true)}>
-                {t('methods.useEmail')}
+              <button type="button" className={styles.oauthButton} data-testid="auth-other-methods-toggle" onClick={() => setShowEmail(true)}>
+                {brand.market === 'cn' ? tCn('otherMethods') : t('methods.useEmail')}
               </button>
+            </div>
+          ) : emailBehindLink ? (
+            <div id="auth-other-methods" ref={otherMethodsRef}>
+              <div className={styles.divider} role="separator">
+                {tCn('otherMethodsEmail')}
+              </div>
+              {render(emailEntry)}
             </div>
           ) : (
             <>

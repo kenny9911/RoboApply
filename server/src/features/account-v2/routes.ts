@@ -9,6 +9,7 @@
 // is counted or read.
 
 import { Router, type Request, type RequestHandler } from 'express';
+import { SESSION_COOKIE_NAME } from '../../lib/cookieOptions.js';
 import { seekerAuth } from '../../roboapply/engine/middleware/seekerAuth.js';
 import { getCurrentBrand } from '../../platform/brand/brandContext.js';
 import type { ProductBrand } from '../../platform/brand/registry.js';
@@ -50,9 +51,20 @@ function brandOf(req: Request): ProductBrand {
   return (req as Request & { brand?: ProductBrand }).brand ?? getCurrentBrand();
 }
 
+/**
+ * The caller's own session, kept when every other one is signed out. The
+ * auth middleware records it only when the request was authenticated by the
+ * session itself; a browser that also sends a bearer JWT is authenticated by
+ * the JWT, so the session cookie (or `X-Session-Token`) is read directly.
+ * The value is only ever used as "do not delete this one".
+ */
 function sessionTokenOf(req: Request): string | null {
   const token = (req as Request & { sessionToken?: unknown }).sessionToken;
-  return typeof token === 'string' && token ? token : null;
+  if (typeof token === 'string' && token) return token;
+  const cookie = (req as Request & { cookies?: Record<string, unknown> }).cookies?.[SESSION_COOKIE_NAME];
+  if (typeof cookie === 'string' && cookie) return cookie;
+  const header = req.get('x-session-token');
+  return header && header.trim() ? header.trim() : null;
 }
 
 function localeOf(req: Request): string | null {

@@ -60,8 +60,11 @@ export function confirmStudentEmail(body: In<typeof AV.StudentEmailConfirmBodySc
 // ── Sign-in, second step (legacy auth router, not in the feature mount table) ──
 //
 // POST /api/v1/roboapply/auth/login/2fa — body { code } | { recoveryCode };
-// the challenge rides in the httpOnly `ra_2fa` cookie set by POST /auth/login
-// (401 `two_factor_required`). Success sets the session cookie.
+// the challenge rides in the httpOnly `ra_2fa` cookie set by whichever
+// sign-in route answered 401 `two_factor_required` (password, password reset,
+// email link, Google / LINE, phone code, WeChat; lib/auth/twoFactor.ts sends
+// the browser to /login/2fa). Success sets the session cookie. `user` is null
+// when the first step was not the password form; the page reads /auth/me.
 
 export interface LoginTwoFactorResult {
   user: { id: string; email: string } | null;

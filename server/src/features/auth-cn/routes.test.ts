@@ -20,6 +20,7 @@ import { SESSION_COOKIE_NAME } from '../../lib/cookieOptions.js';
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import { createAuthCnAdminRouter, createPhoneAuthRouter, createWechatAuthRouter, WECHAT_NONCE_COOKIE } from './routes.js';
 import { BASE_ENV, buildServices, clock, CN0_CONSENTS, fakeDb, fakeWechatFetch, recordingSms } from './__tests__/testkit.js';
+import { CONSENT_PROSE_VERSION, consentProseHash } from '../compliance/consents.js';
 
 const GO = 'goapply.localhost:3621';
 const RA = 'localhost:3621';
@@ -108,6 +109,34 @@ describe('capabilities', () => {
 });
 
 describe('phone sign-in', () => {
+  it('policy serves the text of each required consent in the language asked for, with its version and hash', async () => {
+    const { harness } = await start();
+    type Row = { type: string; proseVersion: string; prose: { text: string; locale: string; version: string; hash: string } };
+    const get = async (qs: string) => ((await harness.request<Env>('GET', `${PHONE_API}/policy${qs}`, { host: GO })).body.data!.requiredConsents as Row[]);
+    const zh = await get('?locale=zh');
+    const en = await get('?locale=en');
+    for (const rows of [zh, en]) {
+      expect(rows.map((c) => c.type)).toEqual(['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border']);
+      for (const c of rows) {
+        // The hash is recomputable from exactly what is served (compliance `consentProseHash`).
+        expect(c.prose.hash).toBe(consentProseHash({ brand: 'goapply', type: c.type, version: c.prose.version, locale: c.prose.locale, text: c.prose.text }));
+        expect(c.prose.version).toBe(CONSENT_PROSE_VERSION);
+      }
+    }
+    expect(zh.map((c) => c.prose.locale)).toEqual(['zh', 'zh', 'zh']);
+    expect(en.map((c) => c.prose.locale)).toEqual(['en', 'en', 'en']);
+    // The agreement names both documents (the form links them), and the cross-border text names where data goes.
+    expect(zh[0]!.prose.text).toContain('《用户协议》');
+    expect(zh[0]!.prose.text).toContain('《隐私政策》');
+    expect(en[0]!.prose.text).toContain('User Agreement');
+    expect(en[0]!.prose.text).toContain('Privacy Policy');
+    expect(zh[2]!.prose.text).toContain('美国');
+    // No language, or one GoApply is not read in: the Chinese text.
+    expect(await get('')).toEqual(zh);
+    expect(await get('?locale=ja')).toEqual(zh);
+    expect(await get('?locale=' + 'x'.repeat(400))).toEqual(zh);
+  });
+
   it('policy reflects invite mode and the CN-0 consents', async () => {
     const { harness } = await start({ env: { ...BASE_ENV, CN_SIGNUP_MODE: 'invite' } });
     const res = await harness.request<Env>('GET', `${PHONE_API}/policy`, { host: GO });

@@ -15,6 +15,7 @@ import { useTranslations } from 'next-intl';
 import { verifyEmail } from '../../../lib/api/auth';
 import { RoboApiError } from '../../../lib/api/client';
 import { useAuth } from '../../../lib/auth/AuthProvider';
+import { isTwoFactorRequired, twoFactorHref } from '../../../lib/auth/twoFactor';
 import { AuthBrandMark } from '../../auth/AuthShell';
 import { Btn } from '../../v3/primitives/Btn';
 import styles from './auth.module.css';
@@ -51,6 +52,11 @@ export function VerifyEmailView({ token }: { token: string }) {
         void refresh();
       })
       .catch((err) => {
+        // The link would sign in an account with two-step sign-in on: the code page is next.
+        if (isTwoFactorRequired(err)) {
+          router.replace(twoFactorHref(err));
+          return;
+        }
         const code = err instanceof RoboApiError ? ((err.payload as { code?: string } | undefined)?.code ?? err.code) : undefined;
         setState({
           kind: 'failed',
