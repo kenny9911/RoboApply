@@ -30,13 +30,17 @@ import {
   CandidateResumeIngestError,
   type CandidateResumeIngestResult,
 } from '../../../lib/candidateResumeIngest.js';
+import { NotImplementedError } from '../../../platform/http.js';
+import { Prisma } from '../../../generated/prisma/client.js';
+import type { ImplicitAiLabel } from '../../../features/compliance/index.js';
 import {
-  fetchLinkedInProfileAsText,
-  cleanLinkedInExportText,
-  isLinkedInUrlImportConfigured,
-  normalizeLinkedInUrl,
-  LinkedInImportError,
-} from '../../../lib/linkedin/linkedInImport.js';
+  buildExportFileName,
+  defaultPageFor,
+  renderResumeDocx,
+  renderResumePdf,
+  type FileNameStyleKey,
+  type PageSize,
+} from '../lib/resumeExport.js';
 
 export type RAResumeKind = 'base' | 'tailored_for_jd' | 'from_template';
 
@@ -61,6 +65,15 @@ export interface RAResumeVariantView {
   lastEditedAt: string;
   createdAt: string;
   deletedAt: string | null;
+  // ── WP-36b (additive) ──
+  /** `RAResumeVariant.layout` (template, page, spacing, accent, date format), or null. */
+  layout: Record<string, unknown> | null;
+  /** The job title this resume is aimed at (hub), or null. */
+  targetTitle: string | null;
+  /** Inserted claims the user has not verified; >0 blocks export (ruling C12). */
+  unverifiedClaims: number;
+  /** True when AI wrote part of this resume (tailored, or AI text applied). */
+  aiAssisted: boolean;
 }
 
 export interface RAResumeVariantSummary {
@@ -75,6 +88,11 @@ export interface RAResumeVariantSummary {
   sourceKind: string | null;
   lastEditedAt: string;
   createdAt: string;
+  // ── WP-36b (additive) ──
+  targetTitle: string | null;
+  /** The base resume a tailored version was made from. */
+  basedOnVariantId: string | null;
+  unverifiedClaims: number;
 }
 
 export type ResumeCreateInput =
@@ -90,7 +108,126 @@ export type ResumeCreateInput =
 export interface ResumePatchInput {
   name?: string;
   resumeMarkdown?: string;
+  /** Hub "target title"; an empty string clears it. */
+  targetTitle?: string | null;
+  /** The editor saved AI-written text: stamps `aiAssistedAt` once (SR-36b-1). */
+  aiAssisted?: boolean;
 }
+
+/**
+ * True once SCHEMA-3 adds `RAResumeVariant.aiAssistedAt` (schema request
+ * SR-36b-1). Until then the flag is accepted and not stored.
+ */
+export const HAS_AI_ASSISTED_COLUMN: boolean = 'aiAssistedAt' in Prisma.RAResumeVariantScalarFieldEnum;
+
+/** Base resumes per user (Free and Pro); tailored versions do not count (PRODUCT_PLAN.md F-RES-02). */
+export const BASE_RESUME_LIMIT = 5;
+/** Variant kinds that take one of the base slots. */
+export const BASE_SLOT_KINDS: RAResumeKind[] = ['base', 'from_template'];
+
+/** The user already has BASE_RESUME_LIMIT base resumes (route → 409 resume_limit_reached). */
+export class ResumeLimitError extends Error {
+  readonly code = 'resume_limit_reached' as const;
+  readonly limit = BASE_RESUME_LIMIT;
+  constructor() {
+    super(`You can keep up to ${BASE_RESUME_LIMIT} resumes.`);
+    this.name = 'ResumeLimitError';
+  }
+}
+
+/** Export refused while inserted claims are unverified (route → 409 unverified_claims). */
+export class UnverifiedClaimsError extends Error {
+  readonly code = 'unverified_claims' as const;
+  constructor(readonly count: number) {
+    super('Some inserted details are not verified yet.');
+    this.name = 'UnverifiedClaimsError';
+  }
+}
+
+/** The tracker entry named for the file record is not the user's (route → 404). */
+export class TrackerEntryNotFoundError extends Error {
+  readonly code = 'tracker_entry_not_found' as const;
+  constructor() {
+    super('Application not found');
+    this.name = 'TrackerEntryNotFoundError';
+  }
+}
+
+/**
+ * Strip the "Page N of M" footers a LinkedIn "Save to PDF" export stamps on
+ * each page, and the blank runs its sidebar leaves behind.
+ */
+export function cleanProfileExportText(text: string): string {
+  if (!text || typeof text !== 'string') return text ?? '';
+  return text
+    .split('\n')
+    .filter((line) => !/^page\s+\d+\s+of\s+\d+$/i.test(line.trim()))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/** Template keys `PATCH /:id/layout` accepts (the contract's RESUME_TEMPLATES). */
+const LAYOUT_KEYS = [
+  'template', 'font', 'sizes', 'page', 'spacing', 'justify', 'headerAlign', 'accent',
+  'bullet', 'skillsLayout', 'eduOrder', 'dateFormat', 'hideDivider',
+] as const;
+
+/**
+ * Provenance of a tailored version, recorded where its text is produced:
+ * `tailored` = the tailor agent (a model) wrote it; `tailored_copy` = a plain
+ * copy of the base resume made without AI (no AI consent, or the agent
+ * failed). Only the first counts as AI-written.
+ */
+export const TAILORED_AI_SOURCE = 'tailored';
+export const TAILORED_COPY_SOURCE = 'tailored_copy';
+
+/**
+ * Whether AI wrote part of a variant: a tailored version the tailor agent
+ * wrote (`sourceKind: 'tailored'`), or any variant once AI text was applied to
+ * it (`aiAssistedAt`, schema request SR-36b-1 — read through this adapter
+ * until SCHEMA-3 adds the column). `kind` alone never decides it: a tailored
+ * copy made without AI is not AI content.
+ */
+export function isAiAssisted(row: { kind?: string | null; sourceKind?: string | null; aiAssistedAt?: Date | string | null }): boolean {
+  return row.sourceKind === TAILORED_AI_SOURCE || Boolean(row.aiAssistedAt);
+}
+
+export type ExportFormat = 'pdf' | 'docx';
+
+export interface ExportRequest {
+  format: ExportFormat;
+  nameStyle?: FileNameStyleKey | null;
+  /** Record the exact file on this application (RAApplicationArtifact). */
+  trackerEntryId?: string | null;
+  /** 'download' (hub/editor) | 'agent' | 'extension'. */
+  channel?: 'download' | 'agent' | 'extension';
+  locale?: string | null;
+  brand: 'roboapply' | 'goapply';
+  market: 'intl' | 'cn';
+  /** Visitor country (edge header), for the Letter/A4 default. */
+  country?: string | null;
+}
+
+export interface ExportResult {
+  buffer: Buffer;
+  fileName: string;
+  ext: ExportFormat;
+  contentType: string;
+  sha256: string;
+  artifactId: string | null;
+  storageKey: string | null;
+  /** The AI content id written into the file's metadata, or null. */
+  aiContentId: string | null;
+}
+
+const CONTENT_TYPES: Record<ExportFormat, string> = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+};
+
+/** Keyspace for exported application files (kept 180 days; compliance retention). */
+export const ARTIFACT_KEYSPACE = 'roboapply-artifacts';
 
 export class ResumeNotFoundError extends Error {
   constructor() {
@@ -175,6 +312,10 @@ function toView(row: any): RAResumeVariantView {
     lastEditedAt: isoDate(row.lastEditedAt),
     createdAt: isoDate(row.createdAt),
     deletedAt: row.deletedAt ? isoDate(row.deletedAt) : null,
+    layout: row.layout && typeof row.layout === 'object' ? (row.layout as Record<string, unknown>) : null,
+    targetTitle: row.targetTitle ?? null,
+    unverifiedClaims: typeof row.unverifiedClaims === 'number' ? row.unverifiedClaims : 0,
+    aiAssisted: isAiAssisted(row),
   };
 }
 
@@ -192,6 +333,9 @@ function toSummary(row: any, jobsById: Map<string, any>): RAResumeVariantSummary
     sourceKind: row.sourceKind ?? null,
     lastEditedAt: isoDate(row.lastEditedAt),
     createdAt: isoDate(row.createdAt),
+    targetTitle: row.targetTitle ?? null,
+    basedOnVariantId: row.basedOnVariantId ?? null,
+    unverifiedClaims: typeof row.unverifiedClaims === 'number' ? row.unverifiedClaims : 0,
   };
 }
 
@@ -250,9 +394,11 @@ export class RAResumeService {
         });
         return;
       }
-      // Zero primaries — promote the most-recently-edited active résumé, if any.
+      // Zero primaries — promote the most-recently-edited active BASE résumé,
+      // if any. A tailored version is job-specific and the hub hides it, so it
+      // never becomes the primary (F-RES-02).
       const next = await t.rAResumeVariant.findFirst({
-        where: { userId, deletedAt: null },
+        where: { userId, deletedAt: null, kind: { in: BASE_SLOT_KINDS } },
         orderBy: { lastEditedAt: 'desc' },
         select: { id: true },
       });
@@ -275,6 +421,10 @@ export class RAResumeService {
     const p = prisma as any;
     if (!body.name || !body.name.trim()) {
       throw new ResumeValidationError('name is required');
+    }
+
+    if (body.kind === 'base' || body.kind === 'from_template') {
+      await this.assertBaseSlotFree(userId);
     }
 
     if (body.kind === 'base') {
@@ -383,7 +533,8 @@ export class RAResumeService {
         resumeMarkdown: tailoredMarkdown,
         resumeContentHash: sha256(tailoredMarkdown),
         matchScoreCached: null,
-        sourceKind: 'tailored',
+        // Provenance: only text the agent wrote is AI content (CN-E-07 labels).
+        sourceKind: agentSucceeded ? TAILORED_AI_SOURCE : TAILORED_COPY_SOURCE,
         lastEditedAt: new Date(),
       },
     });
@@ -488,7 +639,8 @@ export class RAResumeService {
         resumeMarkdown: finalMd,
         resumeContentHash: sha256(finalMd),
         matchScoreCached: null,
-        sourceKind: 'tailored',
+        // The previewed text came from the tailor agent: AI content.
+        sourceKind: TAILORED_AI_SOURCE,
         lastEditedAt: new Date(),
         // parsedData is the variant's only JSON column; tailored variants
         // never carry an upload parse, so the namespaced key can't collide
@@ -557,6 +709,8 @@ export class RAResumeService {
         return this.reloadView(prior.id);
       }
     }
+    // Refuse before the 45-80 s parse: the hub keeps up to 5 base resumes.
+    await this.assertBaseSlotFree(userId);
 
     let ingest: CandidateResumeIngestResult;
     try {
@@ -703,21 +857,14 @@ export class RAResumeService {
   }
 
   /**
-   * Import a résumé from LinkedIn into a new kind='base' variant tagged
-   * `sourceKind: 'linkedin'`. Two modes, one parse pipeline:
+   * Import the user's own LinkedIn "Save to PDF" export into a new kind='base'
+   * variant tagged `sourceKind: 'linkedin'`. The PDF goes through the same
+   * candidate ingest as a normal upload, with the export's page footers
+   * stripped first. FREE (no quota debit), like /upload.
    *
-   *   - mode 'pdf': the member's "Save to PDF" export. The PDF bytes go through
-   *     the same candidate ingest as a normal upload, with a LinkedIn-specific
-   *     text pre-clean (footer stripping). Always available.
-   *
-   *   - mode 'url': a public profile URL. A config-gated enrichment provider
-   *     (Proxycurl-compatible) fetches the structured profile, which we render
-   *     to text and run through the identical parse pipeline. INERT unless
-   *     `LINKEDIN_ENRICH_API_KEY` is set — otherwise throws
-   *     ResumeUploadError('url_import_not_configured').
-   *
-   * FREE (no quota debit), mirroring upload-parse. The original file is only
-   * retained for the PDF mode (URL mode has no file).
+   * There is no LinkedIn URL import (TASK_PLAN.md H9; PRODUCT_PLAN.md O5): the
+   * only providers scrape LinkedIn. `mode: 'url'` answers
+   * `url_import_removed`.
    */
   async importFromLinkedIn(
     userId: string,
@@ -734,71 +881,22 @@ export class RAResumeService {
     // uses it for the AI summary/highlight shown on the résumé card.
     locale?: string,
   ): Promise<RAResumeVariantView> {
-    if (params.mode === 'pdf') {
-      if (!params.buffer || params.buffer.length === 0) {
-        throw new ResumeUploadError('file_required', 'A LinkedIn PDF export is required.');
-      }
-      let ingest: CandidateResumeIngestResult;
-      try {
-        ingest = await ingestCandidateResume({
-          buffer: params.buffer,
-          fileName: params.fileName || 'linkedin.pdf',
-          mimeType: params.mimeType || 'application/pdf',
-          requestId: params.requestId,
-          userId,
-          textTransform: cleanLinkedInExportText,
-          locale,
-        });
-      } catch (err) {
-        if (err instanceof CandidateResumeIngestError) {
-          throw new ResumeUploadError(err.code, err.message);
-        }
-        throw err;
-      }
-      return this.persistIngestedBase(userId, ingest, {
-        name: params.name,
-        sourceKind: 'linkedin',
-        fallbackFileName: params.fileName || 'LinkedIn export.pdf',
-        fallbackMimeType: params.mimeType || 'application/pdf',
-        fallbackSize: params.buffer.byteLength,
-      });
+    if (params.mode !== 'pdf') {
+      throw new ResumeUploadError('url_import_removed', 'LinkedIn URL import is not offered. Upload your LinkedIn PDF export instead.');
     }
-
-    // mode 'url' — config-gated enrichment fetch → text → same parse pipeline.
-    if (!isLinkedInUrlImportConfigured()) {
-      throw new ResumeUploadError(
-        'url_import_not_configured',
-        'LinkedIn URL import is not enabled on this deployment.',
-      );
+    if (!params.buffer || params.buffer.length === 0) {
+      throw new ResumeUploadError('file_required', 'A LinkedIn PDF export is required.');
     }
-    if (!normalizeLinkedInUrl(params.linkedinUrl || '')) {
-      throw new ResumeUploadError('invalid_url', 'That does not look like a LinkedIn profile URL.');
-    }
-
-    let profileText: string;
-    let profileName: string;
-    try {
-      const fetched = await fetchLinkedInProfileAsText(params.linkedinUrl!, {
-        requestId: params.requestId,
-      });
-      profileText = fetched.text;
-      profileName = fetched.displayName;
-    } catch (err) {
-      if (err instanceof LinkedInImportError) {
-        throw new ResumeUploadError(err.code, err.message);
-      }
-      throw err;
-    }
-
+    await this.assertBaseSlotFree(userId);
     let ingest: CandidateResumeIngestResult;
     try {
       ingest = await ingestCandidateResume({
-        buffer: Buffer.from(profileText, 'utf8'),
-        fileName: 'linkedin-profile.txt',
-        mimeType: 'text/plain',
+        buffer: params.buffer,
+        fileName: params.fileName || 'linkedin.pdf',
+        mimeType: params.mimeType || 'application/pdf',
         requestId: params.requestId,
         userId,
-        storeOriginal: false, // synthetic text, not a real uploaded file
+        textTransform: cleanProfileExportText,
         locale,
       });
     } catch (err) {
@@ -807,10 +905,12 @@ export class RAResumeService {
       }
       throw err;
     }
-
     return this.persistIngestedBase(userId, ingest, {
-      name: params.name || profileName,
+      name: params.name,
       sourceKind: 'linkedin',
+      fallbackFileName: params.fileName || 'LinkedIn export.pdf',
+      fallbackMimeType: params.mimeType || 'application/pdf',
+      fallbackSize: params.buffer.byteLength,
     });
   }
 
@@ -824,6 +924,11 @@ export class RAResumeService {
       where: { id, userId, deletedAt: null },
     });
     if (!existing) throw new ResumeNotFoundError();
+    // Only a base resume can be the primary (F-RES-02): tailored versions are
+    // job-specific and not shown as hub cards.
+    if (!BASE_SLOT_KINDS.includes(existing.kind as RAResumeKind)) {
+      throw new ResumeValidationError('Only a base resume can be your primary resume.');
+    }
     await prisma.$transaction([
       p.rAResumeVariant.updateMany({
         where: { userId, isPrimary: true, id: { not: id } },
@@ -855,6 +960,176 @@ export class RAResumeService {
     };
   }
 
+  /** How many of the BASE_RESUME_LIMIT base slots are taken (tailored versions excluded). */
+  async baseSlotsUsed(userId: string): Promise<number> {
+    const p = prisma as any;
+    return p.rAResumeVariant.count({ where: { userId, deletedAt: null, kind: { in: BASE_SLOT_KINDS } } });
+  }
+
+  /** Throws ResumeLimitError when every base slot is taken. */
+  async assertBaseSlotFree(userId: string): Promise<void> {
+    if ((await this.baseSlotsUsed(userId)) >= BASE_RESUME_LIMIT) throw new ResumeLimitError();
+  }
+
+  /**
+   * `PATCH /:id/layout` — merge a layout patch into `RAResumeVariant.layout`.
+   * `layout` arrives validated by the contract's ResumeLayoutSchema; keys the
+   * schema does not know (legacy editor keys) are dropped on write. The
+   * template lands in `layout.template`, which the resume check reads to flag
+   * the two-column template.
+   */
+  async patchLayout(userId: string, id: string, layout: Record<string, unknown>): Promise<RAResumeVariantView> {
+    const p = prisma as any;
+    const existing = await p.rAResumeVariant.findFirst({ where: { id, userId, deletedAt: null } });
+    if (!existing) throw new ResumeNotFoundError();
+    const prev = existing.layout && typeof existing.layout === 'object' ? (existing.layout as Record<string, unknown>) : {};
+    const merged: Record<string, unknown> = {};
+    for (const key of LAYOUT_KEYS) {
+      const next = key in layout ? layout[key] : prev[key];
+      if (next === undefined || next === null) continue;
+      if ((key === 'sizes' || key === 'spacing') && typeof next === 'object') {
+        const base = prev[key] && typeof prev[key] === 'object' ? (prev[key] as Record<string, unknown>) : {};
+        merged[key] = { ...base, ...(layout[key] as Record<string, unknown> | undefined) };
+      } else {
+        merged[key] = next;
+      }
+    }
+    const row = await p.rAResumeVariant.update({ where: { id }, data: { layout: merged, lastEditedAt: new Date() } });
+    logger.info('RA_V2_RESUME', 'resume layout saved', { userId, resumeId: id, template: merged.template ?? null });
+    return toView(row);
+  }
+
+  /**
+   * Unverified inserted claims for a variant. The tailor-session count
+   * (`resume.unverifiedClaimsCount`, WP-36a) wins; until that seam is filled
+   * the variant's own `unverifiedClaims` column answers.
+   */
+  private async pendingClaims(variant: { id: string; unverifiedClaims?: number | null }): Promise<number> {
+    const column = typeof variant.unverifiedClaims === 'number' ? variant.unverifiedClaims : 0;
+    try {
+      const { unverifiedClaimsCount } = await import('../../../features/resume/index.js');
+      return await unverifiedClaimsCount(variant.id);
+    } catch (err) {
+      if (err instanceof NotImplementedError || (err as { code?: string } | null)?.code === 'not_implemented') return column;
+      throw err;
+    }
+  }
+
+  /**
+   * Export a variant as PDF or DOCX (F-RES-13/15). Refuses while inserted
+   * claims are unverified (ruling C12). AI-written variants carry the
+   * machine-readable AI marks on both brands, plus the visible footer on
+   * GoApply when CN_AI_EXPORT_EXPLICIT_LABEL is on, and GoApply writes one
+   * RAAiContentLabelLog row. With `trackerEntryId` the exact bytes are stored
+   * and an RAApplicationArtifact row records sha256 + storage key.
+   */
+  async exportVariant(userId: string, id: string, req: ExportRequest): Promise<ExportResult> {
+    const p = prisma as any;
+    const variant = await p.rAResumeVariant.findFirst({ where: { id, userId, deletedAt: null } });
+    if (!variant) throw new ResumeNotFoundError();
+
+    const pending = await this.pendingClaims(variant);
+    if (pending > 0) throw new UnverifiedClaimsError(pending);
+
+    let tracker: { id: string; jobId: string | null; externalSnapshot: unknown } | null = null;
+    if (req.trackerEntryId) {
+      tracker = await p.rATrackerEntry.findFirst({
+        where: { id: req.trackerEntryId, userId, deletedAt: null },
+        select: { id: true, jobId: true, externalSnapshot: true },
+      });
+      if (!tracker) throw new TrackerEntryNotFoundError();
+    }
+
+    // File-name parts come only from data we hold (never invented).
+    const jobId = variant.targetJobId ?? tracker?.jobId ?? null;
+    const job = jobId ? await p.rAJob.findUnique({ where: { id: jobId }, select: { title: true, companyName: true } }) : null;
+    const snapshot = (tracker?.externalSnapshot ?? null) as { title?: unknown; companyName?: unknown } | null;
+    const tailorTarget = (variant.parsedData as { tailorTarget?: { company?: string | null; title?: string | null } } | null)?.tailorTarget ?? null;
+    const markdown: string = variant.resumeMarkdown ?? '';
+    const candidateName = /^#\s+(.+)$/m.exec(markdown)?.[1]?.replace(/[*_`]/g, '').trim() ?? null;
+    const company = job?.companyName ?? (typeof snapshot?.companyName === 'string' ? snapshot.companyName : null) ?? tailorTarget?.company ?? null;
+    const role = job?.title ?? (typeof snapshot?.title === 'string' ? snapshot.title : null) ?? tailorTarget?.title ?? variant.targetTitle ?? null;
+    const baseName = buildExportFileName(req.nameStyle ?? null, {
+      name: candidateName,
+      company,
+      role,
+      fallback: variant.name || 'Resume',
+    });
+
+    // AI labelling (WP-13 seams). No user text goes into the label.
+    let aiLabel: ImplicitAiLabel | null = null;
+    let footerLine: string | null = null;
+    let aiContentId: string | null = null;
+    const compliance = isAiAssisted(variant) ? await import('../../../features/compliance/index.js') : null;
+    if (compliance) {
+      aiContentId = compliance.newAiContentId(req.brand);
+      const editedAfter = variant.lastEditedAt && variant.createdAt && new Date(variant.lastEditedAt).getTime() - new Date(variant.createdAt).getTime() > 1000;
+      aiLabel = compliance.complianceService.implicitLabelMetadata({ contentId: aiContentId, provider: 'llm', brand: req.brand, userEdited: Boolean(editedAfter) });
+      if (compliance.explicitLabelEnabled(req.brand)) footerLine = compliance.explicitFooterLine(req.locale ?? (req.market === 'cn' ? 'zh' : 'en'));
+    }
+
+    const defaultPage: PageSize = defaultPageFor({ market: req.market, country: req.country, locale: req.locale });
+    const renderOptions = { layout: variant.layout, defaultPage, locale: req.locale, aiLabel, footerLine, title: candidateName ?? variant.name };
+    const buffer = req.format === 'pdf' ? await renderResumePdf(markdown, renderOptions) : await renderResumeDocx(markdown, renderOptions);
+    const sha = crypto.createHash('sha256').update(buffer).digest('hex');
+    const fileName = `${baseName}.${req.format}`;
+
+    let artifactId: string | null = null;
+    let storageKey: string | null = null;
+    if (tracker) {
+      const { resumeOriginalFileStorageService } = await import('../../../services/ResumeOriginalFileStorageService.js');
+      try {
+        const stored = await resumeOriginalFileStorageService.saveFile({
+          buffer,
+          fileName,
+          mimeType: CONTENT_TYPES[req.format],
+          size: buffer.byteLength,
+          userId,
+          keyspace: ARTIFACT_KEYSPACE,
+          brand: req.brand,
+          requestId: getCurrentRequestId() ?? undefined,
+        });
+        storageKey = stored?.key ?? null;
+      } catch (err) {
+        // The download still works; the record keeps the hash without a stored copy.
+        logger.warn('RA_V2_RESUME', 'export file not stored', {
+          userId,
+          resumeId: id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+      const artifact = await p.rAApplicationArtifact.create({
+        data: {
+          userId,
+          trackerEntryId: tracker.id,
+          kind: 'resume',
+          variantId: variant.id,
+          fileName,
+          format: req.format,
+          fileSha256: sha,
+          storageKey,
+          channel: req.channel ?? 'download',
+        },
+        select: { id: true },
+      });
+      artifactId = artifact.id;
+    }
+
+    if (compliance && aiContentId) {
+      await compliance.logAiContentLabel({ userId, contentId: aiContentId, kind: 'resume', provider: 'llm', artifactId: artifactId ?? variant.id, brand: req.brand });
+    }
+
+    logger.info('RA_V2_RESUME', 'resume exported', {
+      userId,
+      resumeId: id,
+      format: req.format,
+      artifactId,
+      stored: Boolean(storageKey),
+      aiLabelled: Boolean(aiContentId),
+    });
+    return { buffer, fileName, ext: req.format, contentType: CONTENT_TYPES[req.format], sha256: sha, artifactId, storageKey, aiContentId };
+  }
+
   async patch(userId: string, id: string, body: ResumePatchInput): Promise<RAResumeVariantView> {
     const p = prisma as any;
     const existing = await p.rAResumeVariant.findFirst({
@@ -863,6 +1138,13 @@ export class RAResumeService {
     if (!existing) throw new ResumeNotFoundError();
     const data: any = { lastEditedAt: new Date() };
     if (body.name !== undefined) data.name = body.name;
+    if (body.targetTitle !== undefined) {
+      const tt = typeof body.targetTitle === 'string' ? body.targetTitle.trim().slice(0, 120) : '';
+      data.targetTitle = tt || null;
+    }
+    if (body.aiAssisted === true && HAS_AI_ASSISTED_COLUMN && !existing.aiAssistedAt) {
+      data.aiAssistedAt = new Date();
+    }
     if (body.resumeMarkdown !== undefined) {
       data.resumeMarkdown = body.resumeMarkdown;
       data.resumeContentHash = sha256(body.resumeMarkdown);
@@ -910,3 +1192,33 @@ export class RAResumeService {
 }
 
 export const raResumeService = new RAResumeService();
+
+/**
+ * Delete the stored copy of an exported application file (RAApplicationArtifact
+ * .storageKey). Local keys go through the local provider, everything else
+ * through the brand bucket the key belongs to. False = not confirmed gone, so
+ * the caller holds the row back (never orphaned).
+ */
+export async function deleteArtifactObject(key: string): Promise<boolean> {
+  const { resumeOriginalFileStorageService, brandOfKey } = await import('../../../services/ResumeOriginalFileStorageService.js');
+  const mode = resumeOriginalFileStorageService.getProviderMode(brandOfKey(key));
+  return resumeOriginalFileStorageService.deleteFile({ provider: mode === 'local' ? 'local' : 's3', key, fileName: null, mimeType: null });
+}
+
+let deletersRegistered = false;
+
+/**
+ * Register the artifact-file deleter with compliance retention (180-day purge,
+ * WP-13) and the account purge (WP-10). Idempotent; the resumes router calls
+ * it when it loads.
+ */
+export async function registerResumeArtifactDeleters(): Promise<void> {
+  if (deletersRegistered) return;
+  deletersRegistered = true;
+  const [{ registerArtifactStorageDeleter }, { setArtifactStorageDeleter }] = await Promise.all([
+    import('../../../features/compliance/index.js'),
+    import('../../services/SeekerAccountPurgeService.js'),
+  ]);
+  registerArtifactStorageDeleter((row) => deleteArtifactObject(row.storageKey));
+  setArtifactStorageDeleter((key) => deleteArtifactObject(key));
+}
