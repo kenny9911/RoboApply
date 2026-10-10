@@ -35,6 +35,15 @@
         "cd ../parley && PORT=8080 PUBLIC_URL=http://localhost:8080 PARLEY_DATA_DIR=./data/roboapply-pilot PARLEY_ADMIN_PASSWORD=${PARLEY_ADMIN_PASSWORD:-dev} npm run dev"
       ],
       "port": 8080
+    },
+    {
+      "name": "clone",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/kenny/code/RoboApply/.claude/worktrees/jobright-clone && exec ./scripts/dev-clone.sh"
+      ],
+      "port": 3621
     }
   ]
 }

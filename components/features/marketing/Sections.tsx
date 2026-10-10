@@ -228,7 +228,9 @@ export function QuickSearch({ countries }: { countries: readonly string[] }) {
             <select className={styles.select} name="country" value={country} onChange={(e) => setCountry(e.target.value)}>
               <option value="">{t('anyCountry')}</option>
               {countries.map((c) => (
-                <option key={c} value={c}>
+                // Region names come from the runtime's own locale data, which differs between
+                // Node and browsers ("Hong Kong SAR China" vs "Hong Kong"): keep the server text.
+                <option key={c} value={c} suppressHydrationWarning>
                   {names?.of(c) ?? c}
                 </option>
               ))}
