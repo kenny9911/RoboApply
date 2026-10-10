@@ -14,14 +14,23 @@
 // category the way the Explore tile counts it — market and visibility rules
 // only, public rows, none of the user's saved filters.
 //
-// GoApply recruitment-info mode (R-14): the routes are gated as a whole by the
-// `jobs.feed` capability. The seams other areas call (counts, limiting
-// filters, preview, public list, samples, alert candidates) check the mode
-// themselves, so with CN_RECRUITMENT_INFO_MODE=off they return nothing.
+// GoApply recruitment-info mode (on by default, D5; `off` is the kill switch):
+// the routes are gated as a whole by the `jobs.feed` capability. The seams
+// other areas call (counts, limiting filters, preview, public list, samples,
+// alert candidates) check the mode themselves, so with
+// CN_RECRUITMENT_INFO_MODE=off they return nothing.
+//
+// Source contract (GOAPPLY_PARITY_PLAN §5): every item names its source and
+// carries its own apply link (items.ts, sourceLine.ts); on GoApply the query
+// response carries `sources { gohire, employerBoards }` for the header, counted
+// from the rows the query can reach (`sourcesSql`), and `thin` when the whole
+// list (not only the windows read so far) holds fewer than FEED_THIN_BELOW
+// results. A public mainland row with no
+// usable apply link is never listed (sql.ts `scopePredicates`).
 //
 // GoApply: with 个性化推荐 off or not yet chosen the list is ordered by date
-// posted and filters only, and no fit is used or shown (PIPL Art. 24; R-14 and
-// the `jobs.feed` capability are enforced on the routes). The NL query is the
+// posted and filters only, and no fit is used or shown (PIPL Art. 24; the mode
+// and the `jobs.feed` capability are enforced on the routes). The NL query is the
 // only model call here; it goes through `aiAllowed()` and the per-brand LLM layer.
 
 import { createHash } from 'node:crypto';
@@ -62,6 +71,7 @@ import { AFFINITY_DELTAS, EMPTY_AFFINITY, affinityKeys, applyAffinity, decayed, 
 import {
   FEED_ERROR_CODES,
   FEED_LIMITS,
+  FEED_THIN_BELOW,
   type ExploreResponse,
   type FeedCountResult,
   type FeedCountsResponse,
@@ -69,6 +79,7 @@ import {
   type FeedOrder,
   type FeedQueryResponse,
   type FeedSort,
+  type FeedSources,
   type FilterDiffProposal,
   type HideJobResponse,
   type LimitingFilter,
@@ -106,6 +117,7 @@ import {
   jobIdsSql,
   retrievalSql,
   rowsByIdSql,
+  sourcesSql,
   type SqlScope,
 } from './sql.js';
 import { requiredSkills, toMatchRecord, type FeedCtx, type FeedJobRow } from './types.js';
@@ -135,8 +147,8 @@ export interface FeedServiceDeps {
   now?: () => Date;
   exploreTtlMs?: number;
   /**
-   * May this market's third-party postings be shown (GoApply R-14)? Default:
-   * always outside `cn`; on `cn` only while CN_RECRUITMENT_INFO_MODE allows it.
+   * May this market's third-party postings be shown? Default: always outside
+   * `cn`; on `cn` unless CN_RECRUITMENT_INFO_MODE is `off` (on by default, D5).
    */
   postingsAllowed?: (market: Market) => boolean;
   env?: EnvSource;
@@ -231,7 +243,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
   const newCountTtl = deps.newCountTtlMs ?? 2 * 60_000;
   const newCountCache = new Map<string, { at: number; res: NewCountResponse }>();
 
-  /** Third-party postings may be shown in this market (GoApply recruitment-info mode, R-14). */
+  /** Third-party postings may be shown in this market (GoApply recruitment-info mode: on unless set to `off`). */
   function postingsAllowed(market: Market): boolean {
     if (deps.postingsAllowed) return deps.postingsAllowed(market);
     // The platform's one resolver of the mode (R-04); cn/jobs `cnJobCapabilities().postings` is this same test.
@@ -532,6 +544,31 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     return ids.map((id) => state.rowCache.get(id)).filter((r): r is FeedJobRow => !!r);
   }
 
+  /**
+   * The feed header facts for the rows this query can reach (mainland display
+   * rule: the header says where postings come from and never implies full
+   * coverage). Counted, never guessed: when the count cannot be read the field
+   * is left off and the list still answers.
+   */
+  async function sourcesFor(state: QueryState, since: Date): Promise<{ sources: FeedSources; listed: number } | undefined> {
+    if (state.ctx.market !== 'cn') return undefined;
+    try {
+      const { listed, ...sources } = await repo.querySources(
+        sourcesSql({
+          scope: scopeOf(state.ctx, state.browse),
+          filters: state.filters,
+          fields: state.browse ? FILTER_FIELDS.filter((f) => f !== 'taxonomyIds' && f !== 'titles') : FILTER_FIELDS,
+          extra: state.browse ? [browseTaxonomySql(state.filters.taxonomyIds ?? [])] : undefined,
+          from: floorOf(state.filters, since),
+        }),
+      );
+      return { sources, listed };
+    } catch (err) {
+      logger.warn('FEED', 'feed source header could not be counted; sent without it', { error: err instanceof Error ? err.message : String(err) });
+      return undefined;
+    }
+  }
+
   async function page(state: QueryState, session: FeedSessionRecord, offset: number, order: FeedOrder): Promise<FeedQueryResponse> {
     const s = await ensureFilled(state, session, offset + L.pageSize + 1);
     const ids = s.jobIds.slice(offset, offset + L.pageSize);
@@ -548,14 +585,23 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     const exhausted = state.sort === 'deadline' || !olderRemain(s, floor);
     const nextOffset = offset + L.pageSize;
     const more = nextOffset < s.jobIds.length || !exhausted;
+    const [cards, header] = await Promise.all([items(state.ctx, cands, state.user, offset, state.personalized), sourcesFor(state, s.createdAt)]);
+    const sources = header?.sources;
+    // Thin means the WHOLE list is short, not the part read so far: `jobIds` holds the windows fetched up to
+    // now (the first one reaches back 14 or 45 days, the list 120). So it is said only when that is known:
+    // the list has reached its age floor, or (GoApply) fewer public rows than the threshold match the query
+    // at all. While older rows may still come and nothing counts them, the answer is "not thin".
+    const thin = s.jobIds.length < FEED_THIN_BELOW && (exhausted || (header !== undefined && header.listed < FEED_THIN_BELOW));
     return {
-      items: await items(state.ctx, cands, state.user, offset, state.personalized),
+      items: cards,
       cursor: more ? `${s.id}:${nextOffset}` : null,
       endOfFeed: !more,
       hiddenByTier: Math.max(0, s.totalEstimate - s.jobIds.length),
       sessionId: s.id,
       order,
       sort: state.sort,
+      ...(sources ? { sources } : {}),
+      thin,
     };
   }
 

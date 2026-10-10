@@ -3,7 +3,11 @@
 // WP-35 — the import service end to end over the fake Prisma, the memory
 // credit stack and a spy `fetch` (no network, no database, no LLM):
 //   - SSRF: the only outbound call is the Firecrawl API; the job link itself
-//     is never fetched; denylisted, private and PI-carrying links never reach it;
+//     is never fetched; denylisted, private and PI-carrying links never reach it.
+//     The one exception is a MAINLAND deployment (DEPLOY_REGION=cn-mainland),
+//     where the server reads the one page itself when the provider cannot be
+//     used or reached, under the address rules of directFetch.ts (its own
+//     test); here that reader is a spy, so no test opens a connection;
 //   - drafts store nothing and spend nothing; saves are private RAJobs that no
 //     public count can see (checked through the company page's real count);
 //     dedupe to the user's own import (same content or link) or a public job;
@@ -21,14 +25,16 @@ vi.mock('../../../services/LoggerService.js', () => ({
 import { createFakePrisma } from '../../../test/fakePrisma.js';
 import { getBrand } from '../../../platform/brand/index.js';
 import { HttpError } from '../../../platform/http.js';
+import { EgressPolicyError } from '../../../platform/residency/index.js';
 import { createCreditTestKit } from '../../../platform/credits/testkit.js';
 import type { EnrichOutcome } from '../enrich/index.js';
 import type { MarketHookJob } from '../marketHooks.js';
-import { FIRECRAWL_SCRAPE_URL, scrapeJobPage } from './firecrawl.js';
+import { toScrapedPage } from './directFetch.js';
+import { FIRECRAWL_SCRAPE_URL, ScrapeError, scrapeJobPage, type ScrapedPage } from './firecrawl.js';
 import { draftImportId } from './importId.js';
 import { createImportLimitStore, type CounterDelegate } from './limits.js';
 import { createPrismaImportRepository } from './repository.js';
-import { createJobImportService, storedWarnings, type JobImportDeps } from './service.js';
+import { createJobImportService, linkCarriesPersonalInfo, storedWarnings, type JobImportDeps } from './service.js';
 import { createCompanyReadService, type CompaniesDb } from '../companies/index.js';
 import type { ImportJobResponse, ManualJob } from './contract.js';
 
@@ -60,6 +66,8 @@ function ldPage(over: Record<string, unknown> = {}, meta: Record<string, unknown
 let fake: ReturnType<typeof createFakePrisma>;
 let kit: ReturnType<typeof createCreditTestKit>;
 let fetchSpy: ReturnType<typeof vi.fn>;
+/** The plain server read (mainland only). A spy: no test opens a connection. Default: the page cannot be reached. */
+let directSpy: ReturnType<typeof vi.fn>;
 let enrich: ReturnType<typeof vi.fn>;
 let enqueueEnrich: ReturnType<typeof vi.fn>;
 let afterNormalize: ReturnType<typeof vi.fn>;
@@ -82,6 +90,7 @@ function service(over: Partial<JobImportDeps> = {}) {
     }),
     credits: kit.credits,
     scrape: (url, e) => scrapeJobPage(url, { apiKey: e.FIRECRAWL_API_KEY, fetch: fetchSpy as never }),
+    fetchDirect: directSpy as never,
     enrich: enrich as never,
     enqueueEnrich: enqueueEnrich as never,
     afterNormalize: afterNormalize as never,
@@ -110,6 +119,9 @@ beforeEach(() => {
   });
   kit = createCreditTestKit({ now: NOW });
   fetchSpy = vi.fn(async () => new Response(JSON.stringify(ldPage()), { status: 200 }));
+  directSpy = vi.fn(async (): Promise<ScrapedPage> => {
+    throw new ScrapeError('http_error', 'not reachable');
+  });
   enrich = vi.fn(async (): Promise<EnrichOutcome> => ({ status: 'enriched', model: 'test', costUsd: 0 }));
   enqueueEnrich = vi.fn(async () => ({}));
   afterNormalize = vi.fn(async (job: MarketHookJob) => job);
@@ -210,12 +222,152 @@ describe('reading a link (draft)', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('GoApply on the mainland stack never calls Firecrawl', async () => {
+  // ── Mainland deployment (G127): provider when usable, else one plain read, else paste ──
+
+  const CN_LINK = 'https://campus.example.cn/job/1';
+  const CN_TEXT = '负责数据平台的建设与运维，与产品和研发团队紧密协作，独立负责数据管道的设计、开发与上线，保障数据质量与时效。';
+  /** The page a plain read of an employer's career site returns: server-rendered HTML with its structured job data. */
+  const cnPage = (finalUrl = CN_LINK): ScrapedPage =>
+    toScrapedPage(
+      `<html><head><title>数据工程师 - 示例科技招聘</title><script type="application/ld+json">${JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'JobPosting',
+        title: '数据工程师',
+        hiringOrganization: { name: '示例科技' },
+        description: `<p>${CN_TEXT}</p>`,
+        jobLocation: { address: { addressLocality: '上海', addressCountry: 'CN' } },
+      })}</script></head><body><main><h1>数据工程师</h1><p>${CN_TEXT}</p></main></body></html>`,
+      finalUrl,
+      200,
+    );
+  /**
+   * GoApply on a mainland deployment. No fetch-provider key unless a test adds one: whether the provider may be
+   * used there is the residency policy's rule (it changes with the strict switch), so the tests that need the
+   * provider say so and inject the policy's answer.
+   */
+  const mainland = (extra: Record<string, string> = {}) => {
     brandId = 'goapply';
-    env = { ...env, DEPLOY_REGION: 'cn-mainland' };
-    const r = await service().importJob('u1', { url: 'https://campus.example.cn/job/1' });
-    expect(r).toMatchObject({ status: 'needs_text', reason: 'fetch_unavailable' });
+    env = { JWT_SECRET: 'jwt-test', DEPLOY_REGION: 'cn-mainland', ...extra };
+  };
+  const WITH_PROVIDER = { FIRECRAWL_API_KEY: 'fc-test' };
+
+  it('mainland: a reachable page is read by the server and its posting text comes back as a draft to confirm', async () => {
+    mainland();
+    directSpy.mockResolvedValueOnce(cnPage());
+    const r = await service().importJob('u1', { url: CN_LINK });
+    expect(directSpy).toHaveBeenCalledTimes(1);
+    expect(directSpy.mock.calls[0]![0]).toBe(CN_LINK);
     expect(fetchSpy).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ status: 'needs_fields', reason: null, jobId: null });
+    expect(r.draft).toMatchObject({ title: '数据工程师', company: '示例科技', applyUrl: CN_LINK });
+    expect(r.draft?.description).toContain('负责数据平台的建设与运维');
+    // A draft only: nothing is stored and nothing is spent until the user confirms (D1: nothing is submitted either).
+    expect(jobs()).toHaveLength(0);
+    expect(await used()).toBe(0);
+  });
+
+  it('mainland: a page that cannot be reached, or comes back empty, falls back to paste with the link kept', async () => {
+    mainland();
+    const unreachable = await service().importJob('u1', { url: CN_LINK });
+    expect(directSpy).toHaveBeenCalledTimes(1);
+    expect(unreachable).toMatchObject({ status: 'needs_text', reason: 'fetch_unavailable', draft: { applyUrl: CN_LINK, title: null } });
+    // A page drawn by scripts: the server sees an empty shell. Still "paste the text", never "no job here".
+    directSpy.mockResolvedValueOnce(toScrapedPage('<html><head></head><body><div id="app"></div></body></html>', CN_LINK, 200));
+    expect(await service().importJob('u1', { url: CN_LINK })).toMatchObject({ status: 'needs_text', reason: 'fetch_unavailable' });
+    for (const kind of ['timeout', 'too_large', 'bad_response', 'page_error'] as const) {
+      directSpy.mockRejectedValueOnce(new ScrapeError(kind, kind));
+      expect(await service().importJob('u1', { url: CN_LINK }), kind).toMatchObject({ status: 'needs_text', reason: 'fetch_unavailable' });
+    }
+  });
+
+  it('mainland: the configured provider is used when the deployment may reach it, and the plain read is not', async () => {
+    mainland(WITH_PROVIDER);
+    const r = await service({ assertNoPi: () => 'api.firecrawl.dev' }).importJob('u1', { url: CN_LINK });
+    expect(fetchSpy.mock.calls.map((c) => c[0])).toEqual([FIRECRAWL_SCRAPE_URL]);
+    expect(directSpy).not.toHaveBeenCalled();
+    expect(r.status).toBe('needs_fields');
+  });
+
+  it('mainland: a provider that is configured but out of reach, or refused for the brand, gives way to the plain read', async () => {
+    mainland(WITH_PROVIDER);
+    // Out of reach (the usual case from a mainland network).
+    fetchSpy.mockRejectedValueOnce(new Error('connect ETIMEDOUT'));
+    directSpy.mockResolvedValueOnce(cnPage());
+    const viaDirect = await service({ assertNoPi: () => 'api.firecrawl.dev' }).importJob('u1', { url: CN_LINK });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(directSpy).toHaveBeenCalledTimes(1);
+    expect(viaDirect).toMatchObject({ status: 'needs_fields', draft: { title: '数据工程师' } });
+    // Refused for the brand by the egress policy: the provider is not called at all.
+    fetchSpy.mockClear();
+    directSpy.mockResolvedValueOnce(cnPage());
+    const refused = await service({
+      assertNoPi: () => {
+        throw new EgressPolicyError('vendor_disabled_in_region', 'refused', 'api.firecrawl.dev');
+      },
+    }).importJob('u1', { url: CN_LINK });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(refused.status).toBe('needs_fields');
+  });
+
+  it('mainland under CN_RESIDENCY_STRICT: the provider is never called, whatever the policy says; the plain read still runs', async () => {
+    mainland({ ...WITH_PROVIDER, CN_RESIDENCY_STRICT: 'true' });
+    const assertNoPi = vi.fn(() => 'api.firecrawl.dev');
+    directSpy.mockResolvedValueOnce(cnPage());
+    const r = await service({ assertNoPi: assertNoPi as never }).importJob('u1', { url: CN_LINK });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(assertNoPi).not.toHaveBeenCalled();
+    expect(r.status).toBe('needs_fields');
+  });
+
+  it('mainland: a link that carries personal data is refused on the provider path too, before any read', async () => {
+    mainland(WITH_PROVIDER);
+    const piRefusal = () => {
+      throw new EgressPolicyError('pi_in_payload', 'personal information', 'api.firecrawl.dev');
+    };
+    expect(await service({ assertNoPi: piRefusal }).importJob('u1', { url: `${CN_LINK}?ref=ada@example.test` })).toMatchObject({ status: 'failed', reason: 'personal_info_in_link' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(directSpy).not.toHaveBeenCalled();
+  });
+
+  it('mainland: the URL policy and the no-PI rule run before any read, and a redirect onto a listed board is discarded', async () => {
+    mainland();
+    // A listed board is never read (no scraping): paste, no connection.
+    expect(await service().importJob('u1', { url: 'https://www.zhipin.com/job_detail/abc.html' })).toMatchObject({ status: 'needs_text', reason: 'blocked_site' });
+    // Private and IP addresses: refused outright.
+    for (const url of ['http://169.254.169.254/latest/meta-data', 'http://localhost:4611/api', 'http://10.1.2.3/', 'http://intranet/jobs']) {
+      expect(await service().importJob('u1', { url }), url).toMatchObject({ status: 'failed', reason: 'not_a_web_address', draft: null });
+    }
+    // The user's own e-mail (or a phone number) in the link: refused, the same answer as on the provider path.
+    expect(await service().importJob('u1', { url: `${CN_LINK}?ref=ada@example.test` })).toMatchObject({ status: 'failed', reason: 'personal_info_in_link' });
+    expect(await service().importJob('u1', { url: `${CN_LINK}?tel=13800138000` })).toMatchObject({ status: 'failed', reason: 'personal_info_in_link' });
+    expect(directSpy).not.toHaveBeenCalled();
+    // The page ended on a listed board: what came back is discarded.
+    directSpy.mockResolvedValueOnce(cnPage('https://www.zhipin.com/job_detail/abc.html'));
+    expect(await service().importJob('u1', { url: 'https://short.example.cn/abc' })).toMatchObject({ status: 'needs_text', reason: 'blocked_site', draft: { title: null } });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('the plain read is a mainland-deployment rule only: GoApply offshore and RoboApply never open the link themselves', async () => {
+    // GoApply offshore, no provider key: paste.
+    brandId = 'goapply';
+    env = { JWT_SECRET: 'jwt-test' };
+    expect(await service().importJob('u1', { url: CN_LINK })).toMatchObject({ status: 'needs_text', reason: 'fetch_unavailable' });
+    // RoboApply on a deployment marked mainland (not a supported topology, but the rule is the brand's market too).
+    brandId = 'roboapply';
+    env = { JWT_SECRET: 'jwt-test', DEPLOY_REGION: 'cn-mainland' };
+    expect(await service().importJob('u1', { url: LINK })).toMatchObject({ status: 'needs_text', reason: 'fetch_unavailable' });
+    // RoboApply with the provider failing: failed, as before; never the plain read.
+    env = { FIRECRAWL_API_KEY: 'fc-test', JWT_SECRET: 'jwt-test' };
+    fetchSpy.mockResolvedValueOnce(new Response('oops', { status: 502 }));
+    expect(await service().importJob('u1', { url: LINK })).toMatchObject({ status: 'failed', reason: 'fetch_failed' });
+    expect(directSpy).not.toHaveBeenCalled();
+  });
+
+  it('linkCarriesPersonalInfo: an e-mail, a phone or id number, or one of the user’s own values; an ordinary job link is clean', () => {
+    expect(linkCarriesPersonalInfo('https://careers.example.cn/jobs/42?src=campus', ['Ada Lovelace', 'ada@example.test'])).toBe(false);
+    expect(linkCarriesPersonalInfo('https://careers.example.cn/jobs/42?ref=ada%40example.test', [])).toBe(true);
+    expect(linkCarriesPersonalInfo('https://careers.example.cn/jobs/42?name=Ada%20Lovelace', ['Ada Lovelace'])).toBe(true);
+    expect(linkCarriesPersonalInfo('https://careers.example.cn/jobs/42?m=13800138000', [])).toBe(true);
   });
 
   it('without a Firecrawl key the user is asked to paste the text', async () => {

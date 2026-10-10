@@ -1,10 +1,12 @@
 // server/src/features/jobs/import/urlPolicy.ts — which links an import may
-// hand to Firecrawl (WP-35; ARCH §3.4, ruling H11, threat model "SSRF via job
-// import").
+// read (WP-35; ARCH §3.4, ruling H11, threat model "SSRF via job import").
 //
-// Our server never fetches an imported link itself: the only outbound call is
-// the Firecrawl API. On top of that, a link is refused before it reaches
-// Firecrawl when it
+// The link is read by the Firecrawl API, not by our server; the one exception
+// is a mainland deployment where the provider cannot be used, where
+// directFetch.ts reads the page itself and applies this policy to EVERY hop,
+// plus its own address rules (resolved addresses must be public, the
+// connection is pinned). On top of that, a link is refused before any reader
+// sees it when it
 //   - is not http(s), carries a login (`user:pass@`), uses a non-web port, or
 //     names an IP address / localhost / a single-label intranet host
 //     (`not_a_web_address`);

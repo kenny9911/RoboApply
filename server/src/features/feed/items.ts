@@ -11,8 +11,16 @@
 //   - the 网申 close date only when the posting states it (marketTags
 //     `apply_closes:<date>` + quote), never RAJob.expiresAt (often postedAt + 45 days);
 //   - no applicant count, no "new" / "closing soon" urgency badges;
-//   - "Last checked {date}" comes from lastSeenAt.
+//   - "Last checked {date}" comes from lastSeenAt;
+//   - every card names its source and carries its own apply link
+//     (`source.original / url / lastVerifiedAt / via`, `apply { url, target }`:
+//     sourceLine.ts; D1: the user opens the link, nothing is submitted);
+//   - `salary` is null when the posting states no pay ("薪资未披露", never
+//     面议): on GoApply the line is the posting's own words or the mainland
+//     notation of its figures (cn/jobs/card.ts `cnSalary`, the rule the card
+//     meta uses).
 
+import { cnSalary } from '../cn/jobs/contract.js';
 import type { MatchExplanation } from '../compliance/contract.js';
 import { payPlausible, statesAmount } from '../jobs/normalize/index.js';
 import type { MatchUser } from '../match/index.js';
@@ -20,9 +28,9 @@ import type { FeedBadge, FeedItem, FitBadge, PublicFeedItem } from './contract.j
 import type { FeedJobRow } from './types.js';
 import { marketTagsOf, statedApplyClose } from './types.js';
 import { SPONSORSHIP_NEGATION_REGEX, cnDate } from './sql.js';
+import { applyLinkOf, hasPayFigure, salaryLineOf, sourceFactsOf, sourceKindOf } from './sourceLine.js';
 
 const MAX_BADGES = 3;
-const ATS_PUBLIC_BOARDS = new Set(['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workable', 'ats_public']);
 const PERIODS = new Set(['year', 'month', 'week', 'day', 'hour']);
 const NEGATION = new RegExp(SPONSORSHIP_NEGATION_REGEX.replace(/\\m|\\M/g, '\\b'), 'i');
 
@@ -50,10 +58,21 @@ function payOf(row: FeedJobRow): FeedItem['pay'] {
 
 function sourceOf(row: FeedJobRow): FeedItem['source'] {
   const name = row.sourceName || row.originalSourceName || row.sourceBoard;
-  if (row.sourceBoard === 'user_import' || row.visibility === 'private') return { name, kind: 'user_import' };
-  if (row.fromRecruiterBank) return { name, kind: 'bank' };
-  if (ATS_PUBLIC_BOARDS.has(row.sourceBoard)) return { name, kind: 'ats_public' };
-  return { name, kind: 'provider' };
+  const kind = sourceKindOf(row);
+  return { name, kind, ...sourceFactsOf(row, kind) };
+}
+
+/** Pay as posted for the contract's `salary` (null = the posting states none). */
+function salaryOf(row: FeedJobRow, pay: FeedItem['pay']): FeedItem['salary'] {
+  if (row.market !== 'cn') return salaryLineOf(pay, pay?.text ?? null, null);
+  // Mainland: the line the card meta shows (the posting's own words when they carry a figure, else the
+  // mainland notation of the stated figures). Not disclosed, 面议 and figure-less text all give null.
+  const line = cnSalary(row as unknown as Record<string, unknown>);
+  if (line.disclosed && line.text) return salaryLineOf(pay, line.text, row.salaryMonths);
+  // The mainland notation covers CNY by the month, day, hour or year. Pay stated another way (USD at a
+  // multinational, a weekly rate) has no such line but is still stated pay: `salary` carries its figures,
+  // and null keeps meaning "the posting states none" (D3). A stored 0 is not a figure.
+  return hasPayFigure(pay) ? salaryLineOf(pay, pay?.text ?? null, row.salaryMonths) : null;
 }
 
 function sizeBandOf(row: FeedJobRow): NonNullable<FeedItem['company']['sizeBand']> | null {
@@ -130,6 +149,8 @@ export interface ItemContext {
 /** The public part of a card (no fit, no tracker) — also the visitor list item. */
 export function publicItem(row: FeedJobRow, user: ItemContext['user'] = null, now: Date = new Date()): PublicFeedItem {
   const workModel = row.workModel === 'remote' || row.workModel === 'hybrid' || row.workModel === 'onsite' ? row.workModel : null;
+  const pay = payOf(row);
+  const source = sourceOf(row);
   return {
     jobId: row.id,
     title: row.title,
@@ -143,12 +164,14 @@ export function publicItem(row: FeedJobRow, user: ItemContext['user'] = null, no
     workModel,
     employmentType: row.employmentType,
     seniority: row.seniority,
-    pay: payOf(row),
+    pay,
+    salary: salaryOf(row, pay),
     payMonths: row.market === 'cn' ? row.salaryMonths : null,
     postedAt: iso(row.postedAt),
     postedAtEstimated: row.postedAtEstimated === true,
     lastSeenAt: iso(row.lastSeenAt),
-    source: sourceOf(row),
+    source,
+    apply: applyLinkOf(row, source.kind),
     fromRecruiterBank: row.fromRecruiterBank,
     employerVerified: row.employerVerified,
     isAgency: row.isAgency === true,

@@ -55,6 +55,10 @@ export interface FeedJobRow {
   sourceBoard: string;
   sourceName: string | null;
   originalSourceName: string | null;
+  /** The posting's apply link (RAJob.applyUrl is not nullable; a legacy row can hold an empty string). */
+  applyUrl: string | null;
+  /** The original posting link. */
+  sourceUrl: string | null;
   atsType: string | null;
   isAgency: boolean | null;
   fromRecruiterBank: boolean;

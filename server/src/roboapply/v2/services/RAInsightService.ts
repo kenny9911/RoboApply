@@ -2,11 +2,20 @@
 //
 // The weekly card on /applications?view=date (ruling C40; WP-38).
 //
-//   getWeekly(userId, week?) → the week's counts (always, from the user's own
-//                               tracker rows) + the AI summary for that week
-//                               when one was written
-//   refresh(userId, locale)  → writes this week's AI summary with
+//   getWeekly(userId, week?, tz?) → the week's counts (always, from the
+//                               user's own tracker rows) + the AI summary for
+//                               that week when one was written
+//   refresh(userId, locale, { weekStartUtc?, tz? })
+//                            → writes this week's AI summary with
 //                               RACareerInsightAgent (route: 1 per hour)
+//
+// The reader's zone (FIX-3 carry-over): `tz` is the IANA zone the page shows
+// dates in. It is passed to `tracker.weeklyFacts`, which buckets the week in
+// that zone (an unknown or missing name falls back to the stored zone there).
+// `refresh` takes the same `weekStartUtc` the page asked the GET for, so the
+// summary is stored under the week the reader is looking at; only the current
+// week of some zone is accepted (the summary is written from recent activity,
+// never back-dated).
 //
 // Honesty (D3, WP-38): the counts are real counts; the summary exists only
 // when a model wrote it and is flagged `aiGenerated` (GoApply renders
@@ -15,17 +24,17 @@
 // AI consent (TASK_PLAN §2.2): no LLM call unless `aiAllowed(user)` and the
 // brand's `ai.text` capability is on. Free-text notes are redacted before
 // they reach the prompt.
-// Job scope (R-14; INT-13): the prompt names a tracked job only when this
+// Job scope (INT-13): the prompt names a tracked job only when this
 // viewer may read it (`legacyJobVisible`: the brand's market, public or the
 // user's own import, and on GoApply with CN_RECRUITMENT_INFO_MODE=off no
-// third-party posting). A tracked job that fails the check is sent without a
+// third-party posting; postings are readable by default, D5). A tracked job that fails the check is sent without a
 // title or company, including its stored snapshot (a copy of that posting).
 // The stored text is checked again on every read: `refresh` records which job
 // rows the prompt named (`metrics.namedJobIds`), and `getWeekly` shows the
 // summary only while the viewer may still read each of them. So a GoApply
 // summary written while postings were allowed is not shown after the mode is
 // switched off; the counts stay and a refresh writes a clean one. A summary
-// stored before the marker existed is shown except on GoApply with the mode off.
+// stored before the marker existed is shown except on GoApply with the mode set to off.
 
 import type { Prisma } from '../../../generated/prisma/client.js';
 import type { ExtendedPrismaClient } from '../../../lib/prisma.js';
@@ -72,6 +81,20 @@ export interface InsightServiceDeps {
 
 export function currentWeekStartUtc(now: Date = new Date()): string {
   return weekStartFor(now);
+}
+
+/**
+ * The week a refresh writes: the one the page shows when it is the current
+ * week of some time zone (the reader's Monday can be the UTC week before or
+ * after ours around a week boundary), else an error. A summary is written
+ * from the last weeks' activity, so it is never filed under an older week.
+ */
+export function refreshWeek(asked: string | null, now: Date): string {
+  const current = currentWeekStartUtc(now);
+  if (!asked || asked === current) return current;
+  const diff = Date.parse(`${asked}T00:00:00.000Z`) - Date.parse(`${current}T00:00:00.000Z`);
+  if (Number.isFinite(diff) && Math.abs(diff) === 7 * DAY_MS) return asked;
+  throw new HttpError('invalid_request', 'A summary can only be written for the current week.', { reason: 'not_current_week', currentWeekStartUtc: current });
 }
 
 export function weekRangeFor(weekStartUtc: string): { startUtc: string; endUtc: string } {
@@ -161,12 +184,12 @@ export function createInsightService(deps: InsightServiceDeps = {}) {
   }
 
   return {
-    async getWeekly(userId: string, weekStartUtc?: string): Promise<WeeklyInsightResponse> {
+    async getWeekly(userId: string, weekStartUtc?: string, tz?: string | null): Promise<WeeklyInsightResponse> {
       const db = await getDb();
       const week = weekStartUtc ?? currentWeekStartUtc(clock());
       const [row, facts, ai] = await Promise.all([
         db.rACareerInsight.findUnique({ where: { userId_weekStartUtc: { userId, weekStartUtc: new Date(`${week}T00:00:00.000Z`) } } }),
-        tracker.weeklyFacts(userId, week),
+        tracker.weeklyFacts(userId, week, tz ?? null),
         aiAvailable(userId),
       ]);
       const view = row ? toInsightView(row) : null;
@@ -174,12 +197,18 @@ export function createInsightService(deps: InsightServiceDeps = {}) {
       return { insight, facts, week: weekRangeFor(week), aiAvailable: ai };
     },
 
-    /** Write this week's AI summary. Throws `ai_unavailable` when consent, model or the call is missing. */
-    async refresh(userId: string, locale?: string): Promise<WeeklyInsightResponse> {
+    /**
+     * Write this week's AI summary. Throws `ai_unavailable` when consent, model
+     * or the call is missing. `options.weekStartUtc` is the week the page shows
+     * (the one it asked `getWeekly` for) and `options.tz` the reader's zone;
+     * without them the week is the current UTC week and the stored zone, as before.
+     */
+    async refresh(userId: string, locale?: string, options: { weekStartUtc?: string | null; tz?: string | null } = {}): Promise<WeeklyInsightResponse> {
       if (!(await aiAvailable(userId))) throw new HttpError('ai_unavailable', 'AI summaries are not available for this account.');
       const db = await getDb();
       const now = clock();
-      const week = currentWeekStartUtc(now);
+      const week = refreshWeek(options.weekStartUtc ?? null, now);
+      const tz = options.tz ?? null;
       const [goal, entries, resumes, facts] = await Promise.all([
         db.rACareerGoal.findUnique({ where: { userId } }),
         db.rATrackerEntry.findMany({
@@ -188,7 +217,7 @@ export function createInsightService(deps: InsightServiceDeps = {}) {
           take: 100,
         }),
         db.rAResumeVariant.findMany({ where: { userId, deletedAt: null }, orderBy: { lastEditedAt: 'desc' }, take: 20 }),
-        tracker.weeklyFacts(userId, week),
+        tracker.weeklyFacts(userId, week, tz),
       ]);
       const jobIds = [...new Set(entries.map((e) => e.jobId).filter((x): x is string => Boolean(x)))];
       const jobs = jobIds.length

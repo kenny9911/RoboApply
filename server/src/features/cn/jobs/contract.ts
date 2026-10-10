@@ -1,8 +1,9 @@
 // server/src/features/cn/jobs/contract.ts
 //
-// GoApply jobs: recruitment-info mode, GoHire honesty fields, anti-fraud,
-// market tags, external search deep links (TASK_PLAN.md R-14, WP-41;
-// CN_TW_LAUNCH_PLAN.md CN-E-05, CN-E-08, CN-L-04). Mounts:
+// GoApply jobs: recruitment-info mode (on by default, D5: `off` is the kill
+// switch), GoHire honesty fields, anti-fraud, market tags, external search
+// deep links (WP-41; GOAPPLY_PARITY_PLAN §3.2, §3.9; CN_TW_LAUNCH_PLAN.md
+// CN-E-05, CN-E-08, CN-L-04). Mounts:
 //   /api/v1/roboapply/cn/jobs        (seeker: deep links)
 //   /api/v1/roboapply/admin/cn/jobs  (admin: fraud review, employer blacklist)
 //
@@ -10,9 +11,17 @@
 // !isAgency`, otherwise "来源：{sourceName}"; never "not on other job
 // boards"; market tags (可落户/央国企/事业编/外企) only with an
 // `evidenceQuote`; deep links carry only the user's own query; with mode
-// `off` no GoApply route returns third-party postings.
+// `off` no GoApply route returns third-party postings. Every mainland card
+// names its source: the original publisher, the original link and when we
+// last verified it (`sourceLine.original / url`, `lastCheckedAt`); an indexed
+// posting's text carries no recruiter phone number or WeChat id.
 
 import { z } from 'zod';
+
+// The mainland pay line (one rule for the feed card, the job page and the card
+// meta). A pure module with no runtime import, re-exported here so other areas
+// read it through the contract.
+export { cnSalary, formatCnSalary } from './salary.js';
 
 export const CN_EXTERNAL_BOARDS = ['boss', 'zhaopin', 'liepin'] as const;
 export type CnExternalBoard = (typeof CN_EXTERNAL_BOARDS)[number];
@@ -115,7 +124,23 @@ export interface CnCardMeta {
     sourceName: string | null;
     /** For reposted jobs: the original publisher. */
     originalSourceName: string | null;
-    /** GoHire's HR-service licence (partner_deeplink / licensed modes, env-set only). */
+    /**
+     * "来源：{original}": the original publisher. The employer for a posting
+     * read from a public employer board; the stored original publisher for a
+     * repost; null when not known (then `sourceName` is the line). Always sent
+     * by the server (typed optional so an object built elsewhere is still a
+     * CnCardMeta; readers default it to null).
+     */
+    original?: string | null;
+    /** The original posting link (http/https), or null. Always sent by the server. */
+    url?: string | null;
+    /** How the posting reached us (the same value as the feed item's `source.via`); absent when it is none of these. */
+    via?: 'bank' | 'ats' | 'import';
+    /**
+     * GoHire's HR-service licence line. Only on a GoHire row, and only when
+     * CN_HR_LICENCE_HOLDER and CN_HR_LICENCE_NUMBER are both set (never a
+     * made-up licence, D3); null while the recruitment-info mode is off.
+     */
     licence: { holder: string; number: string } | null;
   };
   /** Verbatim `salaryText` (e.g. "15-25K·13薪"), structured pay rendered the same way, or not disclosed. */

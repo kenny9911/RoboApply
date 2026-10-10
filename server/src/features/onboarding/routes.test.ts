@@ -69,6 +69,23 @@ async function start(over: Partial<OnboardingDeps> = {}, routerOpts: { rateLimit
   });
 }
 
+/** Run `fn` with these process env values (the router reads capabilities from process.env), then restore. */
+async function withEnv(values: Record<string, string | undefined>, fn: () => Promise<void>): Promise<void> {
+  const prev = Object.fromEntries(Object.keys(values).map((k) => [k, process.env[k]]));
+  for (const [k, v] of Object.entries(values)) {
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
+  try {
+    await fn();
+  } finally {
+    for (const [k, v] of Object.entries(prev)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+}
+
 const call = <T = Record<string, unknown>>(method: string, path: string, body?: unknown, host = RA) =>
   h!.request<Body<T>>(method, `/onboarding${path}`, { host, body: method === 'GET' ? undefined : body });
 
@@ -198,15 +215,34 @@ describe('the flow over HTTP', () => {
       step === 'confirm' && !(body as Record<string, unknown>).experienceLevels ? { ok: true, answers: body as Record<string, unknown> } : { ok: false, issues: [{ path: ['experienceLevels'], message: 'not_an_option' }] };
     const cnSnapshot = async () => ({ jobCount: { value: 12, source: 'index' as const, asOf: '2026-10-10T00:00:00.000Z' }, windowDays: 30, pay: null, topSkills: [] });
     await start({ validateCnStep, cnSnapshot, cnFirstValueContext: (_a, caps) => ({ ...caps, cnIdentity: 'yingjie' as const }) });
-    mem.rows.get('u1')!.step = 'confirm';
-    const put = await call('PUT', '/steps/confirm', { heardFrom: 'friend' }, GO);
-    expect(put.status).toBe(200);
-    // Mode off and no campus calendar (the defaults): R-14 ends at /resume.
-    expect(put.body.data).toEqual({ stage: 'tour', nextStage: 'tour', nextRoute: '/resume' });
-    mem.rows.get('u1')!.step = 'confirm';
-    const post = await call('POST', '/confirm', { heardFrom: 'school' }, GO);
-    expect(post.status).toBe(200);
-    expect(post.body.data).toEqual({ stage: 'tour', nextRoute: '/resume' });
+    // The defaults (D5; neither switch set): the campus calendar and the job feed are on, so a 应届 user lands on /campus.
+    await withEnv({ CN_CAMPUS_CALENDAR_ENABLED: undefined, CN_RECRUITMENT_INFO_MODE: undefined }, async () => {
+      mem.rows.get('u1')!.step = 'confirm';
+      const put = await call('PUT', '/steps/confirm', { heardFrom: 'friend' }, GO);
+      expect(put.status).toBe(200);
+      expect(put.body.data).toEqual({ stage: 'tour', nextStage: 'tour', nextRoute: '/campus' });
+      mem.rows.get('u1')!.step = 'confirm';
+      const post = await call('POST', '/confirm', { heardFrom: 'school' }, GO);
+      expect(post.status).toBe(200);
+      expect(post.body.data).toEqual({ stage: 'tour', nextRoute: '/campus' });
+    });
+    // /resume only with BOTH off switches: no campus calendar and no job feed.
+    await withEnv({ CN_CAMPUS_CALENDAR_ENABLED: 'false', CN_RECRUITMENT_INFO_MODE: 'off' }, async () => {
+      mem.rows.get('u1')!.step = 'confirm';
+      expect((await call('PUT', '/steps/confirm', { heardFrom: 'friend' }, GO)).body.data).toEqual({ stage: 'tour', nextStage: 'tour', nextRoute: '/resume' });
+      mem.rows.get('u1')!.step = 'confirm';
+      expect((await call('POST', '/confirm', { heardFrom: 'school' }, GO)).body.data).toEqual({ stage: 'tour', nextRoute: '/resume' });
+    });
+    // One switch alone is not enough: the feed off but the calendar on still lands on /campus,
+    // and the calendar off but the feed on lands on /jobs.
+    await withEnv({ CN_RECRUITMENT_INFO_MODE: 'off', CN_CAMPUS_CALENDAR_ENABLED: undefined }, async () => {
+      mem.rows.get('u1')!.step = 'confirm';
+      expect((await call('POST', '/confirm', { heardFrom: 'school' }, GO)).body.data).toEqual({ stage: 'tour', nextRoute: '/campus' });
+    });
+    await withEnv({ CN_CAMPUS_CALENDAR_ENABLED: 'false', CN_RECRUITMENT_INFO_MODE: undefined }, async () => {
+      mem.rows.get('u1')!.step = 'confirm';
+      expect((await call('POST', '/confirm', { heardFrom: 'school' }, GO)).body.data).toEqual({ stage: 'tour', nextRoute: '/jobs' });
+    });
     // The RoboApply-only body is refused by the cn validator, not silently accepted.
     mem.rows.get('u1')!.step = 'confirm';
     expect((await call('POST', '/confirm', { experienceLevels: ['mid'] }, GO)).status).toBe(422);

@@ -8,13 +8,20 @@
 //     is not an agency (D3);
 //   - share: the public page only when the provider licence allows public
 //     display (`publicDisplay`), else the app link;
-//   - People: LinkedIn search links the user opens themselves; we fetch nothing.
+//   - People: LinkedIn search links the user opens themselves; we fetch nothing;
+//   - source and apply contract: the same rule as the feed card
+//     (feed/sourceLine.ts), so the card and the page never disagree. `salary`
+//     is null when the posting states no pay; on GoApply the line is the
+//     posting's own words or the mainland notation of its figures (cn/jobs
+//     card.ts `cnSalary`).
 
 import type { ProductBrand } from '../../../platform/brand/registry.js';
-import type { FeedItem, FitBadge } from '../../feed/contract.js';
+import { cnSalary } from '../../cn/jobs/contract.js';
+import { applyLinkOf, hasPayFigure, salaryLineOf, sourceFactsOf, sourceKindOf, type FeedItem, type FitBadge, type SalaryLine } from '../../feed/contract.js';
 import type { PreScoreResult } from '../../match/contract.js';
 import { payPlausible, statesAmount } from '../normalize/index.js';
 import { bestTaxonomyMatch, taxonomyLabel } from '../taxonomy/index.js';
+import { findCity, resolveCountry } from '../geo/index.js';
 import {
   JOB_REQUIREMENT_TAGS,
   PRE_APPLY_STATUSES,
@@ -239,7 +246,20 @@ function hostOf(url: string | null): string | null {
   }
 }
 
-export function sourceOf(row: Pick<JobRow, 'fromRecruiterBank' | 'sourceBoard' | 'sourceName' | 'originalSourceName' | 'sourceUrl'>): JobDetail['source'] {
+/** The columns the source and apply contract reads. */
+export type SourceRow = Pick<
+  JobRow,
+  'fromRecruiterBank' | 'sourceBoard' | 'sourceName' | 'originalSourceName' | 'sourceUrl' | 'applyUrl' | 'companyName' | 'lastSeenAt' | 'visibility'
+>;
+
+/**
+ * The source line of the job page. `kind` keeps the page's own reading (a
+ * board the page does not know as an aggregator reads as a public board, as it
+ * always has); the contract facts (`original`, `url`, `lastVerifiedAt`, `via`)
+ * come from the shared rule, which calls a row an employer board only when its
+ * source is a known board (feed/sourceLine.ts `sourceKindOf`, D3).
+ */
+export function sourceOf(row: Pick<JobRow, 'fromRecruiterBank' | 'sourceBoard' | 'sourceName' | 'originalSourceName' | 'sourceUrl'> & Partial<SourceRow>): JobDetail['source'] {
   const kind: JobDetail['source']['kind'] = row.fromRecruiterBank
     ? 'bank'
     : row.sourceBoard === 'user_import'
@@ -247,7 +267,28 @@ export function sourceOf(row: Pick<JobRow, 'fromRecruiterBank' | 'sourceBoard' |
       : API_BOARDS.has(row.sourceBoard)
         ? 'provider'
         : 'ats_public';
-  return { name: row.sourceName ?? row.originalSourceName ?? hostOf(row.sourceUrl) ?? '', kind, originalName: row.originalSourceName };
+  const facts = sourceFactsOf({ ...row, companyName: row.companyName ?? '' }, sourceKindOf(row));
+  return { name: row.sourceName ?? row.originalSourceName ?? hostOf(row.sourceUrl) ?? '', kind, originalName: row.originalSourceName, ...facts };
+}
+
+/** The posting's own apply link and where it leads (feed/sourceLine.ts); null without a usable link. */
+export function applyOf(row: Pick<JobRow, 'applyUrl' | 'sourceBoard' | 'fromRecruiterBank' | 'visibility'>): JobDetail['apply'] {
+  return applyLinkOf(row, sourceKindOf(row));
+}
+
+/**
+ * Pay as posted for the contract's `salary`; null when the posting states no
+ * pay. Mainland rows use the card's own line (`cnSalary`: the posting's words
+ * when they carry a figure, else the mainland notation of the stated figures;
+ * 面议 is not disclosed pay). `salary` is never null while `pay` holds
+ * figures: pay the mainland notation cannot write keeps its figures.
+ */
+export function toSalary(row: Pick<JobRow, 'market' | 'salaryMin' | 'salaryMax' | 'salaryCurrency' | 'salaryPeriod' | 'salaryText' | 'salaryDisclosed' | 'salaryMonths'>, pay: JobPay | null, payText: string | null): SalaryLine | null {
+  if (row.market !== 'cn') return salaryLineOf(pay, pay?.text ?? payText, null);
+  const line = cnSalary(row as unknown as Record<string, unknown>);
+  if (line.disclosed && line.text) return salaryLineOf(pay, line.text, row.salaryMonths ?? null);
+  // Stated pay the mainland notation has no line for (another currency, a weekly rate) is still stated pay.
+  return hasPayFigure(pay) ? salaryLineOf(pay, pay?.text ?? payText, row.salaryMonths ?? null) : null;
 }
 
 /** Badge rules shared with the feed card (WP-33): ≤3, real fields only. */
@@ -269,6 +310,7 @@ const WORK_MODELS = new Set(['remote', 'hybrid', 'onsite']);
 
 export function toJobDetail(row: JobRow, now: Date, campus: JobCampusInfo | null = null): JobDetail {
   const pay = toPay(row);
+  const payText = toPayText(row, pay);
   const summary = clean(row.summary);
   return {
     id: row.id,
@@ -279,13 +321,15 @@ export function toJobDetail(row: JobRow, now: Date, campus: JobCampusInfo | null
     employmentType: row.employmentType,
     seniority: row.seniority,
     pay,
-    payText: toPayText(row, pay),
+    payText,
+    salary: toSalary(row, pay, payText),
     summary: summary ? { text: summary, aiWritten: true } : null,
     sections: toSections(row),
     skills: toSkills(row.skillsDetail),
     sponsorship: toSponsorship(row),
     requirements: toRequirements(row.marketTags),
     applyUrl: clean(row.applyUrl),
+    apply: applyOf(row),
     postedAt: row.postedAt ? row.postedAt.toISOString() : null,
     postedAtEstimated: row.postedAtEstimated,
     lastSeenAt: row.lastSeenAt ? row.lastSeenAt.toISOString() : null,
@@ -329,6 +373,8 @@ export function toFitBadge(pre: PreScoreResult | undefined): FitBadge | null {
 /** A similar job as a feed card; pay keeps the posting's own period (weekly too) and its words-only text. */
 export function toSimilarItem(row: JobRow, now: Date, fit: FitBadge | null, tracker: { status: string } | null): SimilarJobItem {
   const pay = toPay(row);
+  const payText = toPayText(row, pay);
+  const source = sourceOf(row);
   return {
     jobId: row.id,
     title: row.title,
@@ -338,10 +384,12 @@ export function toSimilarItem(row: JobRow, now: Date, fit: FitBadge | null, trac
     employmentType: row.employmentType,
     seniority: row.seniority,
     pay,
-    payText: toPayText(row, pay),
+    payText,
+    salary: toSalary(row, pay, payText),
     postedAt: row.postedAt ? row.postedAt.toISOString() : null,
     lastSeenAt: row.lastSeenAt ? row.lastSeenAt.toISOString() : null,
-    source: { name: sourceOf(row).name, kind: sourceOf(row).kind },
+    source: { name: source.name, kind: source.kind, original: source.original, url: source.url, lastVerifiedAt: source.lastVerifiedAt, ...(source.via ? { via: source.via } : {}) },
+    apply: applyOf(row),
     fromRecruiterBank: row.fromRecruiterBank,
     employerVerified: row.employerVerified,
     isAgency: row.isAgency === true,
@@ -410,6 +458,8 @@ function distinct(values: string[], exclude: string, max: number): string[] {
 
 /** "Senior", "Sr.", "II", "Lead" …: who holds the role, not the role (people at any level do the job). */
 const LEVEL_WORDS = /\b(?:senior|sr|junior|jr|staff|principal|lead|intern|internship|entry[- ]level|mid[- ]level|associate|i{1,3}|iv|v)\b\.?/gi;
+/** A comma part that is nothing but level words ("Senior", "Staff II"). */
+const LEVEL_WORDS_ONLY = /^(?:\s*(?:senior|sr|junior|jr|staff|principal|lead|intern|internship|entry[- ]level|mid[- ]level|associate|i{1,3}|iv|v)\.?\s*)+$/i;
 
 /**
  * A taxonomy name that names one role ("Product designer"). Some names group
@@ -428,7 +478,9 @@ function namesOneRole(label: string): boolean {
  * word for word finds nobody. The role our taxonomy placed the job in is used
  * when its name is one role ("Product designer"); for a grouped name, or a job
  * we could not place, the title's first part without notes in brackets and
- * level words ("Barista").
+ * level words ("Barista"). A first part that is one bare word with its field
+ * after a comma ("Sr. Manager, Strategic Finance - EMEA") keeps that field
+ * ("Strategic Finance Manager"): "Manager" alone finds everyone and no one.
  */
 export function searchRole(job: { title: string; primaryTaxonomyId?: string | null }): string {
   const placed = job.primaryTaxonomyId ? taxonomyLabel(job.primaryTaxonomyId, 'en') : null;
@@ -438,14 +490,32 @@ export function searchRole(job: { title: string; primaryTaxonomyId?: string | nu
     const label = matched ? taxonomyLabel(matched.id, 'en') : null;
     if (label && namesOneRole(label)) return label;
   }
-  const head = job.title
+  const [first = '', ...fields] = job.title
     .normalize('NFKC')
     .replace(/[(（[【][^)）\]】]*[)）\]】]/g, ' ')
-    .split(/\s+[-–—|:]\s+|[,;|@]|\s+(?:at|for|in)\s+(?=[A-Z])/)[0]!
-    .replace(LEVEL_WORDS, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return head || job.title.replace(/\s+/g, ' ').trim();
+    .split(/\s+[-–—|:]\s+|[;|@]|\s+(?:at|for|in)\s+(?=[A-Z])/)[0]!
+    .split(',');
+  const head = first.replace(LEVEL_WORDS, ' ').replace(/\s+/g, ' ').trim();
+  if (!head) return job.title.replace(/\s+/g, ' ').trim();
+  // "Manager, Strategic Finance": one bare word, and the field it works in right after the comma.
+  const field = /\s/.test(head) ? null : fields.map((f) => f.replace(/\s+/g, ' ').trim()).find(isRoleField);
+  return field ? `${field} ${head}` : head;
+}
+
+/** Words after a title's comma that say where, how or at what level, not which field. */
+const NOT_A_FIELD = /^(?:remote|hybrid|on-?site|contract|contractor|temporary|temp|part[- ]time|full[- ]time|intern(?:ship)?|i{1,3}|iv|v)$/i;
+/** A region or country code as the title wrote it, in capitals (EMEA, APAC, UK). "Legal", "Risk", "Tax" are fields. */
+const REGION_CODE = /^[A-Z]{2,5}$/;
+
+/**
+ * Is this comma part of a title the field of the role ("Strategic Finance",
+ * "Product Management")? One to four plain words; not a place (a city, a
+ * country, a region code such as EMEA), a work arrangement or a level.
+ */
+function isRoleField(part: string): boolean {
+  if (!part || part.length > 48 || !/^[A-Za-z][A-Za-z&/+ .'-]*$/.test(part)) return false;
+  if (part.split(' ').length > 4 || NOT_A_FIELD.test(part) || REGION_CODE.test(part) || LEVEL_WORDS_ONLY.test(part)) return false;
+  return !findCity(part) && !resolveCountry(part);
 }
 
 /** Three people searches at the company; nothing is fetched by us. Empty for markets without LinkedIn search. */

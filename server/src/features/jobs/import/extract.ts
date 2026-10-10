@@ -19,10 +19,13 @@
 import { htmlToPlain } from '../normalize/index.js';
 import { MAX_DESCRIPTION_CHARS, MIN_DESCRIPTION_CHARS, REQUIRED_IMPORT_FIELDS, type ImportDraft, type ImportField } from './contract.js';
 import type { ScrapedPage } from './firecrawl.js';
+import { ldJsonBlocks, tagsOnly, withoutMarkdownLinks } from './html.js';
 
-const LD_JSON_RE = /<script\b[^>]*type\s*=\s*["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script>/gi;
-/** Cap on the structured-data blocks we parse (a page with hundreds is not a job post). */
-const MAX_LD_BLOCKS = 20;
+// A scraped page is somebody else's text. It is read with the linear helpers
+// of html.ts: the structured-data blocks come from one scan of the document
+// (`ldJsonBlocks`, at most MAX_LD_JSON_BLOCKS: a page with hundreds is not a
+// job post), a value that may hold markup goes through `tagsOnly` before the
+// shared `htmlToPlain`, and markdown links are removed in one pass.
 
 type Json = Record<string, unknown>;
 
@@ -52,11 +55,8 @@ function jobPostingsIn(value: unknown, out: Json[] = [], depth = 0): Json[] {
 /** The first JobPosting in the page's structured data, or null. */
 export function findJobPosting(rawHtml: string): Json | null {
   if (!rawHtml) return null;
-  let seen = 0;
-  LD_JSON_RE.lastIndex = 0;
-  for (let m = LD_JSON_RE.exec(rawHtml); m && seen < MAX_LD_BLOCKS; m = LD_JSON_RE.exec(rawHtml)) {
-    seen += 1;
-    const body = (m[1] ?? '').trim().replace(/^<!--|-->$/g, '').trim();
+  for (const block of ldJsonBlocks(rawHtml)) {
+    const body = block.trim().replace(/^<!--|-->$/g, '').trim();
     if (!body) continue;
     try {
       const found = jobPostingsIn(JSON.parse(body));
@@ -70,7 +70,7 @@ export function findJobPosting(rawHtml: string): Json | null {
 
 const text = (v: unknown): string | null => {
   if (typeof v === 'string') {
-    const s = htmlToPlain(v).replace(/\s+/g, ' ').trim();
+    const s = htmlToPlain(tagsOnly(v)).replace(/\s+/g, ' ').trim();
     return s || null;
   }
   if (typeof v === 'number') return String(v);
@@ -133,11 +133,10 @@ export function withoutPageChrome(plain: string, title: string | null): string {
 
 /** Page text, minus markdown images and link targets (and, with a title, the page chrome around the posting), kept to the description cap. */
 export function cleanPageText(markdown: string, title: string | null = null): string | null {
-  const plain = markdown
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+  const plain = withoutMarkdownLinks(markdown)
     .replace(/^#{1,6}\s+/gm, '')
-    .replace(/[ \t]+\n/g, '\n')
+    // Blanks before a line end, matched from the start of their run only (a long run is read once).
+    .replace(/(?<![ \t])[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
   const posting = withoutPageChrome(plain, title);
@@ -205,7 +204,7 @@ export function extractDraft(page: ScrapedPage, link: string): ExtractResult {
       draft.company = company;
       sources.company = 'job_data';
     }
-    const description = typeof posting.description === 'string' ? clip(htmlToPlain(posting.description) || null, MAX_DESCRIPTION_CHARS) : null;
+    const description = typeof posting.description === 'string' ? clip(htmlToPlain(tagsOnly(posting.description)) || null, MAX_DESCRIPTION_CHARS) : null;
     if (description) {
       draft.description = description;
       sources.description = 'job_data';

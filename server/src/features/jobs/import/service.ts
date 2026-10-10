@@ -1,7 +1,14 @@
 // server/src/features/jobs/import/service.ts — "Added by you" (WP-35;
 // PRODUCT_PLAN.md F-TRK-04, F-EXT-09 server side; ARCH §3.4).
 //
-//   importJob(userId, { url })      read the page (Firecrawl only) → a draft
+//   importJob(userId, { url })      read the page → a draft. The fetch
+//                                   provider (Firecrawl) reads it wherever the
+//                                   deployment may use it; on a mainland
+//                                   deployment, when the provider cannot be
+//                                   used or reached, the server reads the one
+//                                   page itself under the URL policy and the
+//                                   address rules of directFetch.ts, and only
+//                                   then asks the user to paste
 //   importJob(userId, { manual })   save the confirmed job (credit job_import)
 //   saveJob(userId, fields, opts)   the save on its own, for the extension's
 //                                   "Save" (WP-55a) and the Assistant's
@@ -19,6 +26,8 @@ import crypto from 'node:crypto';
 import { logger } from '../../../services/LoggerService.js';
 import { HttpError } from '../../../platform/http.js';
 import { getCurrentBrandOrDefault, type EnvSource, type ProductBrand } from '../../../platform/brand/index.js';
+import { cnResidencyStrict } from '../../../platform/brand/index.js';
+import { detectPii, knownValuePattern, type PiiKind } from '../../../platform/pii/index.js';
 import { assertNoPiInPayload, EgressPolicyError, isCnMainland } from '../../../platform/residency/index.js';
 import { isEnabled } from '../../../platform/flags.js';
 import { CreditReplayError, creditService, type CreditService } from '../../../platform/credits/index.js';
@@ -38,6 +47,7 @@ import {
   type ImportWarning,
   type ManualJob,
 } from './contract.js';
+import { fetchJobPageDirect } from './directFetch.js';
 import { extractDraft } from './extract.js';
 import { FIRECRAWL_SCRAPE_URL, ScrapeError, scrapeJobPage, type ScrapedPage } from './firecrawl.js';
 import { draftImportId, isConfirmableDraft, jobIdFromImportId, jobImportId, verifyDraftImportId } from './importId.js';
@@ -71,10 +81,15 @@ export interface JobImportDeps {
   limits: ImportLimitStore;
   credits: Pick<CreditService, 'withCredit'>;
   scrape: (url: string, env: EnvSource) => Promise<ScrapedPage>;
+  /**
+   * The plain server read of one page (mainland deployments only; see
+   * directFetch.ts for the address rules). Absent → the default reader.
+   */
+  fetchDirect?: (url: string, env: EnvSource) => Promise<ScrapedPage>;
   enrich: (jobId: string) => Promise<EnrichOutcome>;
   enqueueEnrich: (jobId: string, market: string) => Promise<unknown>;
   afterNormalize: (job: MarketHookJob, ctx: MarketHookContext) => Promise<MarketHookJob>;
-  /** Whether the brand's public listings may be shown to this user (R-14: off for GoApply until licensed). */
+  /** Whether the brand's public listings may be shown to this user (`jobs.feed`: on by default on both brands; GoApply's off switch is CN_RECRUITMENT_INFO_MODE=off). */
   publicListingsOn: (userId: string, brand: ProductBrand, env: EnvSource) => Promise<boolean>;
   assertNoPi: typeof assertNoPiInPayload;
   brand: () => ProductBrand;
@@ -89,6 +104,7 @@ export function defaultJobImportDeps(overrides: Partial<JobImportDeps> = {}): Jo
     limits: createImportLimitStore(),
     credits: creditService,
     scrape: (url, env) => scrapeJobPage(url, { apiKey: env.FIRECRAWL_API_KEY }),
+    fetchDirect: (url, env) => fetchJobPageDirect(url, { env }),
     enrich: (jobId) => enrichJob({ jobId }, { attempt: 1, maxAttempts: 1 }),
     enqueueEnrich: (jobId, market) => enqueueJobEnrich(jobId, { market }),
     afterNormalize: (job, ctx) => marketAfterNormalize(job, ctx),
@@ -111,6 +127,26 @@ export interface JobImportService {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
+
+/** The personal-data kinds a link may not carry (the same kinds `assertNoPiInPayload` refuses for a vendor query). */
+const LINK_PI_KINDS: readonly PiiKind[] = ['email', 'phone', 'prc_id', 'tw_id', 'us_ssn', 'gov_id'];
+
+/**
+ * Does the link itself carry personal data (an e-mail address, a phone or id
+ * number, or one of the user's own known values)? The provider path asks
+ * `assertNoPiInPayload`; the plain server read asks this, the same test, so a
+ * link is refused for the same reason whichever reader would open it.
+ */
+export function linkCarriesPersonalInfo(link: string, knownValues: readonly string[]): boolean {
+  let text = link;
+  try {
+    text = `${link}\n${decodeURIComponent(link)}`;
+  } catch {
+    // A link that does not decode is checked as written.
+  }
+  if (detectPii(text, LINK_PI_KINDS).length) return true;
+  return knownValues.some((v) => knownValuePattern(v)?.test(text) ?? false);
+}
 
 /** `[{ rule, evidence }]` from a stored or hook-written `fraudFlags` value. */
 export function warningsFrom(value: unknown): ImportWarning[] {
@@ -257,35 +293,67 @@ export function createJobImportService(partial: Partial<JobImportDeps> = {}): Jo
     }
     const link = check.url.toString();
     const allMissing: ImportJobResponse['missingFields'] = ['title', 'company', 'description'];
-    // GoApply on the mainland stack never calls Firecrawl (CN-1); nor does a deployment without a key.
-    if ((brand.market === 'cn' && isCnMainland(d.env)) || !d.env.FIRECRAWL_API_KEY?.trim()) {
-      return draftResponse(userId, 'needs_text', 'fetch_unavailable', linkOnlyDraft(link), allMissing);
-    }
-    try {
-      d.assertNoPi({ brand: brand.id, target: FIRECRAWL_SCRAPE_URL, payload: { url: link }, knownValues: await d.repo.knownValues(userId), env: d.env });
-    } catch (err) {
-      if (err instanceof EgressPolicyError && err.policyCode === 'pi_in_payload') {
-        return draftResponse(userId, 'failed', 'personal_info_in_link', null, allMissing);
+    const paste = () => draftResponse(userId, 'needs_text', 'fetch_unavailable', linkOnlyDraft(link), allMissing);
+    // A mainland deployment may read the page itself when the provider cannot (G127).
+    const mainland = brand.market === 'cn' && isCnMainland(d.env);
+    // The user's own values a link may not carry: read once, and only when a reader is about to be asked.
+    let known: string[] | null = null;
+    const knownValues = async (): Promise<string[]> => (known ??= await d.repo.knownValues(userId));
+
+    let page: ScrapedPage | null = null;
+    // 1. The configured fetch provider, where it is configured and the deployment may use it
+    //    (never under the strict mainland posture: CN_RESIDENCY_STRICT keeps the link in-region).
+    if (d.env.FIRECRAWL_API_KEY?.trim() && !(mainland && cnResidencyStrict(d.env))) {
+      let allowed = true;
+      try {
+        d.assertNoPi({ brand: brand.id, target: FIRECRAWL_SCRAPE_URL, payload: { url: link }, knownValues: await knownValues(), env: d.env });
+      } catch (err) {
+        if (err instanceof EgressPolicyError && err.policyCode === 'pi_in_payload') {
+          return draftResponse(userId, 'failed', 'personal_info_in_link', null, allMissing);
+        }
+        if (!(err instanceof EgressPolicyError)) throw err;
+        // The brand may not send this link to the provider.
+        if (!mainland) return paste();
+        allowed = false;
       }
-      if (err instanceof EgressPolicyError) return draftResponse(userId, 'needs_text', 'fetch_unavailable', linkOnlyDraft(link), allMissing);
-      throw err;
+      if (allowed) {
+        try {
+          page = await d.scrape(link, d.env);
+        } catch (err) {
+          const kind = err instanceof ScrapeError ? err.kind : 'http_error';
+          logger.info('JOB_IMPORT', 'page read failed', { host: check.host, kind, reader: 'provider' });
+          if (!mainland) {
+            if (kind === 'not_configured') return paste();
+            return draftResponse(userId, 'failed', kind === 'too_large' ? 'too_large' : 'fetch_failed', linkOnlyDraft(link), allMissing);
+          }
+          // Mainland: the provider is often simply out of reach. Try the plain read below before giving up.
+        }
+      }
     }
 
-    let page: ScrapedPage;
-    try {
-      page = await d.scrape(link, d.env);
-    } catch (err) {
-      const kind = err instanceof ScrapeError ? err.kind : 'http_error';
-      logger.info('JOB_IMPORT', 'page read failed', { host: check.host, kind });
-      if (kind === 'not_configured') return draftResponse(userId, 'needs_text', 'fetch_unavailable', linkOnlyDraft(link), allMissing);
-      return draftResponse(userId, 'failed', kind === 'too_large' ? 'too_large' : 'fetch_failed', linkOnlyDraft(link), allMissing);
+    // 2. Mainland only: one plain server read of the page the user gave, then paste.
+    let direct = false;
+    if (!page && mainland) {
+      if (linkCarriesPersonalInfo(link, await knownValues())) return draftResponse(userId, 'failed', 'personal_info_in_link', null, allMissing);
+      try {
+        page = await (d.fetchDirect ?? ((url: string, env: EnvSource) => fetchJobPageDirect(url, { env })))(link, d.env);
+        direct = true;
+      } catch (err) {
+        const kind = err instanceof ScrapeError ? err.kind : 'http_error';
+        logger.info('JOB_IMPORT', 'page read failed', { host: check.host, kind, reader: 'direct' });
+        return paste();
+      }
     }
+    if (!page) return paste();
+
     // A redirect onto a listed board: discard what came back.
     const finalHost = hostOfUrl(page.finalUrl);
     if (finalHost && isDeniedHost(finalHost, d.env)) return draftResponse(userId, 'needs_text', 'blocked_site', linkOnlyDraft(link), allMissing);
 
     const { draft, missingFields, foundAnything } = extractDraft(page, link);
-    if (!foundAnything) return draftResponse(userId, 'failed', 'nothing_found', linkOnlyDraft(link), allMissing);
+    // A plain read sees only what the server sends: a page drawn by scripts comes back empty. That is
+    // "we could not read it here", so the user is asked to paste, not told the link has no job.
+    if (!foundAnything) return direct ? paste() : draftResponse(userId, 'failed', 'nothing_found', linkOnlyDraft(link), allMissing);
     const warnings = await previewWarnings(
       userId,
       brand,

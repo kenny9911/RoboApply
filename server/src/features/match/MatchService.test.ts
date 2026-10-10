@@ -71,8 +71,8 @@ function setup(over: Partial<MatchServiceDeps> & { repo?: ReturnType<typeof crea
     costLog,
     profileSnapshot: async () => null,
     brand: () => getBrand('roboapply'),
-    // GoApply cases here score public postings, which needs the recruitment-info mode to allow them (R-14).
-    env: { CN_RECRUITMENT_INFO_MODE: 'partner_deeplink' },
+    // Nothing set: GoApply cases here score public postings, which the recruitment-info mode allows by default (D5).
+    env: {},
     now: () => new Date('2026-10-10T08:00:00Z'),
     ...over,
   });
@@ -293,24 +293,34 @@ describe('scoreJob — scorer v3', () => {
     expect(scorer.run).not.toHaveBeenCalled();
   });
 
-  it('GoApply with consent but an international scorer model: zero scorer calls (brand LLM policy, R-13)', async () => {
+  // Which routes a brand may use is the LLM policy's own rule (match/scorerRoute.ts and platform/llm: under D5
+  // GoApply scores on the shared stack unless CN_LLM_DOMESTIC_ONLY is set; that table is tested there). This
+  // service has one duty: ask the policy for the brand and the model, and make zero scorer calls when it says no.
+  it('GoApply with consent: a scorer model the brand LLM policy refuses means zero scorer calls; an allowed one scores', async () => {
     const scorer = { run: vi.fn(async () => scorerOutput()) };
+    const asked: Array<[string, string]> = [];
     const { service, repo } = setup({
       repo: createMemoryRepo({ jobs: [jobRecord({ market: 'cn' })] }),
       scorer,
       resolveModel: () => 'openrouter/openai/gpt-5.6-luna',
-      routeAllowed: undefined, // the real policy check
+      routeAllowed: (brand, model) => {
+        asked.push([brand.id, model]);
+        return false;
+      },
       brand: () => getBrand('goapply'),
     });
     const fit = await service.scoreJob('u1', 'job1');
     expect(fit).toMatchObject({ kind: 'pre', estimateReason: 'ai_unavailable' });
+    expect(asked).toEqual([['goapply', 'openrouter/openai/gpt-5.6-luna']]);
     expect(scorer.run).not.toHaveBeenCalled();
     expect(repo.state.scores).toHaveLength(0);
 
-    // A domestic route is allowed on GoApply; the same international one is fine on RoboApply.
-    const cn = setup({ repo: createMemoryRepo({ jobs: [jobRecord({ market: 'cn' })] }), resolveModel: () => 'deepseek/deepseek-chat', routeAllowed: undefined, brand: () => getBrand('goapply') });
-    expect((await cn.service.scoreJob('u1', 'job1')).kind).toBe('ai');
-    const intl = setup({ resolveModel: () => 'openrouter/openai/gpt-5.6-luna', routeAllowed: undefined });
+    // The policy allows the route (the shared model with no CN_ value, or a domestic one): the AI score, on both brands.
+    for (const model of ['openrouter/openai/gpt-5.6-luna', 'deepseek/deepseek-chat']) {
+      const cn = setup({ repo: createMemoryRepo({ jobs: [jobRecord({ market: 'cn' })] }), resolveModel: () => model, routeAllowed: () => true, brand: () => getBrand('goapply') });
+      expect((await cn.service.scoreJob('u1', 'job1')).kind, model).toBe('ai');
+    }
+    const intl = setup({ resolveModel: () => 'openrouter/openai/gpt-5.6-luna', routeAllowed: () => true });
     expect((await intl.service.scoreJob('u1', 'job1')).kind).toBe('ai');
   });
 
@@ -379,7 +389,7 @@ describe('scoreJob — scorer v3', () => {
       jobRecord({ id: 'gohire', market: 'cn' }),
       jobRecord({ id: 'mine', market: 'cn', visibility: 'private', ownerUserId: 'u1' }),
     ];
-    const off = setup({ repo: createMemoryRepo({ jobs }), brand: () => getBrand('goapply'), env: {} });
+    const off = setup({ repo: createMemoryRepo({ jobs }), brand: () => getBrand('goapply'), env: { CN_RECRUITMENT_INFO_MODE: 'off' } });
     for (const call of [
       () => off.service.scoreJob('u1', 'gohire'),
       () => off.service.fitAnalysis('u1', 'gohire', 'idem-key-0001'),
@@ -396,6 +406,11 @@ describe('scoreJob — scorer v3', () => {
     const on = setup({ repo: createMemoryRepo({ jobs }), brand: () => getBrand('goapply'), env: { CN_RECRUITMENT_INFO_MODE: 'licensed' } });
     expect((await on.service.keywordCheck('u1', 'gohire')).jobId).toBe('gohire');
     expect((await on.service.preScoreMany('u1', ['gohire', 'mine'])).map((p) => p.jobId)).toEqual(['gohire', 'mine']);
+
+    // Default (nothing set): postings are readable too (D5: the feed is on unless the switch says off).
+    const byDefault = setup({ repo: createMemoryRepo({ jobs }), brand: () => getBrand('goapply'), env: {} });
+    expect((await byDefault.service.keywordCheck('u1', 'gohire')).jobId).toBe('gohire');
+    expect((await byDefault.service.preScoreMany('u1', ['gohire', 'mine'])).map((p) => p.jobId)).toEqual(['gohire', 'mine']);
   });
 
   it('visibleTo gives the same answer as cn/jobs cnPostingVisible in every mode (one rule, two readers)', () => {
@@ -408,7 +423,7 @@ describe('scoreJob — scorer v3', () => {
       { market: 'intl', visibility: 'private', ownerUserId: 'u1' },
       { market: 'intl', visibility: 'private', ownerUserId: 'u2' },
     ];
-    for (const mode of [undefined, 'off', 'partner_deeplink', 'licensed']) {
+    for (const mode of [undefined, 'off', 'partner_deeplink', 'licensed', 'nonsense']) {
       const env = mode ? { CN_RECRUITMENT_INFO_MODE: mode } : {};
       for (const job of jobs) {
         const basic = job.visibility === 'public' || job.ownerUserId === 'u1';

@@ -11,6 +11,9 @@
 //   · visibility: the feed shows public rows plus the user's own imports;
 //     counts (`publicOnly`) never include private rows; the visitor list
 //     additionally needs `publicDisplay`.
+//   · market `cn`: a public row is listed only with a usable apply link (the
+//     read-side twin of the ingest rule; sourceLine.ts `cnListable`). The
+//     user's own import needs none.
 //
 // Predicates follow FILTER_SET specs in search/filterSet.ts (ruling C15).
 // Conventions this file relies on (handoff requests to the writers):
@@ -30,6 +33,7 @@ import { normalizeCompanyName, normalizeJobTitle, normalizeSkills } from '../job
 import { findCity, resolveCountry } from '../jobs/geo/index.js';
 import { expandTaxonomyIds, matchTitle } from '../jobs/taxonomy/index.js';
 import { includesUndisclosedPay, type FilterField, type FilterSet } from '../search/index.js';
+import { EMPLOYER_BOARD_SOURCES, GOHIRE_SOURCE_BOARD } from './sourceLine.js';
 
 export interface SqlScope {
   market: Market;
@@ -358,6 +362,8 @@ export function scopePredicates(scope: SqlScope): Prisma.Sql[] {
   ];
   if (scope.publicOnly || !scope.userId) out.push(Prisma.sql`j."visibility" = 'public'`);
   else out.push(Prisma.sql`(j."visibility" = 'public' OR j."ownerUserId" = ${scope.userId})`);
+  // Mainland: a public posting with no usable apply link is never listed (sourceLine.ts `cnListable`).
+  if (scope.market === 'cn') out.push(Prisma.sql`(j."visibility" <> 'public' OR j."applyUrl" ~* '^[[:space:]]*https?://')`);
   if (scope.publicDisplayOnly) {
     out.push(Prisma.sql`j."publicDisplay" = true`);
     out.push(Prisma.sql`(j."expiresAt" IS NULL OR j."expiresAt" > ${scope.now}::timestamp(3))`);
@@ -379,7 +385,7 @@ export const FEED_COLUMNS = Prisma.sql`j."id", j."market", j."visibility", j."ow
   j."salaryCurrency", j."salaryPeriod", j."salaryAnnualMin", j."salaryAnnualMax", j."salaryDisclosed", j."salaryText",
   j."salaryMonths", j."sponsorship", j."sponsorshipEvidence", j."citizenshipRequired", j."clearanceRequired", j."employerTags",
   j."marketTags", j."postedAt", j."postedAtEstimated", j."firstSeenAt", j."lastSeenAt", j."expiresAt", j."sourceBoard",
-  j."sourceName", j."originalSourceName", j."atsType", j."isAgency", j."fromRecruiterBank", j."employerVerified",
+  j."sourceName", j."originalSourceName", j."applyUrl", j."sourceUrl", j."atsType", j."isAgency", j."fromRecruiterBank", j."employerVerified",
   j."sourcePriority", j."archivedAt", (j."benefits" IS NOT NULL AND length(j."benefits") > 0) AS "hasBenefits",
   length(j."descriptionPlain")::int AS "descriptionLength", c."industries" AS "companyIndustries", c."sizeBand" AS "companySizeBand",
   c."facts" AS "companyFacts", c."displayName" AS "companyDisplayName", c."logoUrl" AS "companyLogo"`;
@@ -505,6 +511,39 @@ export function countSql(input: { scope: SqlScope; filters: FilterSet; fields: r
   return Prisma.sql`SELECT count(*)::int AS "count" FROM (SELECT 1 ${FROM}
 ${where(parts)}
 LIMIT ${input.cap + 1}) AS capped`;
+}
+
+export interface SourcesSqlInput {
+  scope: SqlScope;
+  filters: FilterSet;
+  fields: readonly FilterField[];
+  /** Extra predicates ANDed in (the browse category predicate). */
+  extra?: Prisma.Sql[];
+  /** The list's age floor (postedAt ≥ from), so the header counts what the list can reach. */
+  from: Date | null;
+}
+
+/**
+ * The feed header facts over the rows a query can reach (public rows, the
+ * query's own filters, the list's age floor): whether any GoHire bank row is
+ * listed, and the number of distinct employer boards. A board is one
+ * (ATS, board token): `externalId` of a board row is `<boardToken>:<postingId>`
+ * (jobs/sources/atsPublic `externalIdFor`). A row whose id has no board token
+ * counts by its employer name instead, so the number is never inflated to one
+ * "board" per posting (D3). `listed` is how many such rows there are: the
+ * service reads it to know a list is short before it has paged to the end
+ * (`thin`); it is not sent. One aggregate row, always.
+ */
+export function sourcesSql(input: SourcesSqlInput): Prisma.Sql {
+  const scope: SqlScope = { ...input.scope, publicOnly: true };
+  const parts = [...scopePredicates(scope), ...filterPredicates(input.filters, scope, input.fields), ...(input.extra ?? [])];
+  if (input.from) parts.push(Prisma.sql`j."postedAt" >= ${input.from}::timestamp(3)`);
+  return Prisma.sql`SELECT COALESCE(bool_or(j."fromRecruiterBank" = true AND j."sourceBoard" = ${GOHIRE_SOURCE_BOARD}), false) AS "gohire",
+  count(DISTINCT (j."sourceBoard" || ':' || CASE WHEN position(':' in j."externalId") > 1 THEN split_part(j."externalId", ':', 1) ELSE j."companyNameNormalized" END))
+    FILTER (WHERE j."fromRecruiterBank" = false AND j."sourceBoard" = ANY(${[...EMPLOYER_BOARD_SOURCES]}::text[]))::int AS "employerBoards",
+  count(*)::int AS "listed"
+${FROM}
+${where(parts)}`;
 }
 
 /**

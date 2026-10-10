@@ -1,5 +1,6 @@
 // @vitest-environment node
-// R-14 / R41-1b (WP-93): with CN_RECRUITMENT_INFO_MODE=off no seeker alert,
+// R41-1b (WP-93), restated for D5: GoApply alerts are on by default; the
+// kill switch is set explicitly. With CN_RECRUITMENT_INFO_MODE=off no seeker alert,
 // digest row or inbox row on GoApply carries a third-party posting.
 //
 // One public GoHire posting is seeded and read through the alerts' own seams:
@@ -50,6 +51,8 @@ function gohirePosting(over: Record<string, unknown> = {}) {
     ownerUserId: null,
     provider: 'gohire',
     sourceBoard: 'gohire',
+    // A bank row is listed only with its GoHire posting page (the ingest rule); the alert readers require the link too.
+    applyUrl: 'https://jobs.gohire.example/p/job_gh',
     isCanonical: true,
     archivedAt: null,
     closedAt: null,
@@ -96,8 +99,10 @@ describe('alert candidates: the selection seam', () => {
     expect(await select(OFF)(query())).toEqual({ ids: [], truncated: false });
     expect(await select(PARTNER)(query())).toEqual({ ids: ['job_gh'], truncated: false });
     expect(await select({ CN_RECRUITMENT_INFO_MODE: 'licensed' })(query())).toEqual({ ids: ['job_gh'], truncated: false });
-    // The default (variable unset) is off.
-    expect(await select({})(query())).toEqual({ ids: [], truncated: false });
+    // The default (variable unset) is on (D5): the posting is a candidate.
+    expect(await select({})(query())).toEqual({ ids: ['job_gh'], truncated: false });
+    // An unknown value is not the off switch either.
+    expect(await select({ CN_RECRUITMENT_INFO_MODE: 'nonsense' })(query())).toEqual({ ids: ['job_gh'], truncated: false });
   });
 
   it('mode off: the source is not even asked, whatever it is (join J4 swaps the source, not the gate)', async () => {
@@ -112,6 +117,19 @@ describe('alert candidates: the selection seam', () => {
     const w = world();
     expect(await w.repoFor(OFF).candidateJobIds(query())).toEqual({ ids: [], truncated: false });
     expect(await w.repoFor(PARTNER).candidateJobIds(query())).toEqual({ ids: ['job_gh'], truncated: false });
+  });
+
+  it('a public mainland posting with no usable apply link is never a candidate and never a card, whatever the mode (D1, D3)', async () => {
+    for (const applyUrl of ['', '   ', 'javascript:alert(1)', 'mailto:hr@example.cn']) {
+      const w = world([gohirePosting({ applyUrl }), gohirePosting({ id: 'job_ok', applyUrl: 'HTTPS://careers.example.cn/jobs/1', sourceBoard: 'greenhouse' })]);
+      for (const env of [PARTNER, {}]) {
+        expect((await w.repoFor(env).candidateJobIds(query())).ids, applyUrl).toEqual(['job_ok']);
+        expect((await w.repoFor(env).jobCards(['job_gh', 'job_ok'])).map((c) => c.id), applyUrl).toEqual(['job_ok']);
+      }
+    }
+    // The apply link is read for the check only; it is not part of the card.
+    const w = world();
+    expect(Object.keys((await w.repoFor(PARTNER).jobCards(['job_gh']))[0]!)).not.toContain('applyUrl');
   });
 
   it('a user’s own import never alerts, in either mode', async () => {
@@ -206,6 +224,7 @@ describe('job-alerts on GoApply', () => {
   it('the flag follows the mode (the first guard)', () => {
     expect(cnJobCapabilities(OFF)).toMatchObject({ postings: false, alerts: false });
     expect(cnJobCapabilities(PARTNER)).toMatchObject({ postings: true, alerts: true });
+    expect(cnJobCapabilities({})).toMatchObject({ postings: true, alerts: true });
   });
 
   it('mode off, even with the alerts flag on: no delivery, no inbox row, no email carries the posting', async () => {

@@ -10,10 +10,36 @@
 // when sourced; sponsorship badge only from a quoted signal. Every aggregate
 // and public count filters `visibility='public' AND isCanonical AND
 // archivedAt IS NULL AND market = brand.market`.
+//
+// Source and apply contract (GOAPPLY_PARITY_PLAN §5; consumed by the web cards,
+// the job page and the feed header): every item carries `apply { url, target }`,
+// `source { name, original, url, lastVerifiedAt, via }` and `salary` (null when
+// the posting states no pay); the query response carries `sources { gohire,
+// employerBoards }` on GoApply and `thin`. The rules are in feed/sourceLine.ts.
+// D1: `apply.url` is a link the user opens; nothing is submitted for them.
 
 import { z } from 'zod';
 import type { MatchExplanation } from '../compliance/contract.js';
 import type { FilterSet, FilterSetPatch } from '../search/contract.js';
+import type { ApplyLink, SalaryLine, SourceFacts } from './sourceLine.js';
+
+export type { ApplyLink, ApplyTarget, SalaryLine, SourceFacts, SourceKind, SourceVia } from './sourceLine.js';
+// The rules behind those fields, pure and dependency-free, for every area that
+// shows a job (job page, alerts, Ready to apply, the GoApply card meta).
+export {
+  EMPLOYER_BOARD_SOURCES,
+  GOHIRE_SOURCE_BOARD,
+  applyLinkOf,
+  cnListable,
+  cnListableWhere,
+  hasApplyLink,
+  hasPayFigure,
+  httpUrl,
+  salaryLineOf,
+  sourceFactsOf,
+  sourceKindOf,
+  viaOf,
+} from './sourceLine.js';
 
 const Id = z.string().min(1).max(64);
 
@@ -85,8 +111,31 @@ export interface FeedItem {
   postedAtEstimated?: boolean;
   /** "Last checked {date}" from lastSeenAt. */
   lastSeenAt: string | null;
-  /** Source line, e.g. aggregator + original host, or `{sourceName}`. */
-  source: { name: string; kind: 'provider' | 'bank' | 'ats_public' | 'user_import' };
+  /**
+   * Source line, e.g. aggregator + original host, or `{sourceName}`, with the
+   * facts every mainland card shows (来源 / 原始链接 / 最后核验): `original`
+   * (the original publisher: the employer for an employer-board row), `url`
+   * (the original posting link), `lastVerifiedAt` (when we last saw it live)
+   * and `via` ('bank' | 'ats' | 'import'; absent for an aggregator row).
+   * The four facts are always sent by the server (typed optional so an object
+   * built elsewhere is still a FeedItem; readers default them to null).
+   */
+  source: { name: string; kind: 'provider' | 'bank' | 'ats_public' | 'user_import' } & Partial<SourceFacts>;
+  /**
+   * The posting's own apply link, which the user opens (D1: we never submit).
+   * `target`: 'gohire' = the GoHire posting page (a GoHire bank row),
+   * 'employer' = the employer's own careers site or ATS page (an employer-board
+   * row), null = not known (a user's own import, an aggregator's link). The
+   * whole value is null when the row has no usable link. Always sent.
+   */
+  apply?: ApplyLink | null;
+  /**
+   * Pay as the posting states it, in one place for the card: `text` is the
+   * line as posted ("18-28K·15薪") where there is one. Null when the posting
+   * states no pay ("薪资未披露" / "Pay not listed"; never 面议, never 0).
+   * Always sent; agrees with `pay` (which stays for existing readers).
+   */
+  salary?: SalaryLine | null;
   fromRecruiterBank: boolean;
   employerVerified: boolean;
   isAgency: boolean;
@@ -166,6 +215,31 @@ export interface FeedQueryResponse {
   order?: FeedOrder;
   /** The sort actually applied (`recommended`/`best_fit` fall back to `newest` when `order` is `recency`). Always sent by WP-32. */
   sort?: FeedSort;
+  /**
+   * Where the postings this query can reach come from, for the feed header
+   * (GoApply: "来自 N 家企业招聘官网", or "来自 GoHire 与 N 家企业招聘官网" when
+   * `gohire` is true). Counted from the rows themselves (public rows matching
+   * the filters, inside the list's age window): `employerBoards` is the number
+   * of distinct employer boards, `gohire` whether any GoHire bank row is
+   * listed. Sent on market `cn`; left off when it could not be counted (never
+   * a guess, D3) and on other markets.
+   */
+  sources?: FeedSources;
+  /**
+   * True when the whole list holds fewer results than `FEED_THIN_BELOW`: the
+   * web shows the source header and, on GoApply, the search links to other
+   * sites. It is about the list, not the page or the part read so far: on
+   * GoApply it is known from the first page (the matching public rows are
+   * counted); elsewhere it turns true once the list has reached its age floor
+   * short. False while more results may still come and nothing counts them.
+   * Always sent.
+   */
+  thin?: boolean;
+}
+
+export interface FeedSources {
+  gohire: boolean;
+  employerBoards: number;
 }
 
 // ── GET /feed/counts ─────────────────────────────────────────────────────
@@ -382,13 +456,20 @@ export const GOAL_ADJUSTMENTS = {
   job_security: { points: 0, when: 'No adjustment.' },
 } as const;
 
+/**
+ * A result list shorter than this is "thin" (`FeedQueryResponse.thin`). It is
+ * the feed's existing thin-result threshold: the first window is widened from
+ * 14 to 45 days below the same number (`FEED_LIMITS.widenBelowRows`).
+ */
+export const FEED_THIN_BELOW = 60;
+
 /** Feed limits (ARCH §3.4, §3.10, §4.8). */
 export const FEED_LIMITS = {
   pageSize: 20,
   retrievalLimit: 400,
   firstWindowDays: 14,
   widenWindowDays: 45,
-  widenBelowRows: 60,
+  widenBelowRows: FEED_THIN_BELOW,
   maxAgeDays: 120,
   sessionTtlMin: 30,
   countCap: 5000,

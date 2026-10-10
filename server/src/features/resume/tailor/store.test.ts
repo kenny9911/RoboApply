@@ -34,7 +34,8 @@ describe('findJob scope', () => {
     expect(whereOf()).toEqual({ id: 'job_1', market: 'intl', AND: [{ OR: [{ visibility: 'public' }, { ownerUserId: 'u1' }] }] });
   });
 
-  it('GoApply with the recruitment-info mode off (default): only the user\'s own imports', async () => {
+  it('GoApply with CN_RECRUITMENT_INFO_MODE=off: only the user\'s own imports', async () => {
+    process.env.CN_RECRUITMENT_INFO_MODE = 'off';
     await createPrismaTailorStore().findJob('u1', 'job_1', 'cn');
     const where = whereOf();
     expect(where.market).toBe('cn');
@@ -45,6 +46,11 @@ describe('findJob scope', () => {
 
   it('GoApply with postings allowed: public postings and the user\'s own imports', async () => {
     process.env.CN_RECRUITMENT_INFO_MODE = 'licensed';
+    await createPrismaTailorStore().findJob('u1', 'job_1', 'cn');
+    expect(whereOf().AND[1]).toEqual({ OR: [{ visibility: 'public' }, { visibility: 'private', ownerUserId: 'u1' }] });
+  });
+
+  it('GoApply with nothing set (the default, D5): public postings and the user\'s own imports', async () => {
     await createPrismaTailorStore().findJob('u1', 'job_1', 'cn');
     expect(whereOf().AND[1]).toEqual({ OR: [{ visibility: 'public' }, { visibility: 'private', ownerUserId: 'u1' }] });
   });

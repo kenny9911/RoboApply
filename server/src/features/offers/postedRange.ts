@@ -7,7 +7,7 @@
 // AND market = brand.market (users' imported jobs never count), still open,
 // posted in the last 365 days; on GoApply also not fraud-flagged and only
 // while CN_RECRUITMENT_INFO_MODE lets the brand show third-party postings
-// (`cnPostingsWhere`; mode off → no rows, so no range and no posted pay in
+// (it does by default, D5; `cnPostingsWhere`; mode off → no rows, so no range and no posted pay in
 // the AI facts — the Assistant's salary_context is gated the same way). Pay per
 // posting is the midpoint of its stated range, in the OFFER'S currency, in one
 // period (the offer's own when it has enough rows, else the largest group).
@@ -98,7 +98,8 @@ export function roleScopeFor(job: JobScopeRow | null, fallbackTitle: string | nu
  * The public-aggregate `where` plus the role and place (no currency: that is
  * the "listed" part) — the feed seam's filter. On GoApply it also excludes
  * fraud-flagged postings and ANDs `cnPostingsWhere(null, env)`: with
- * CN_RECRUITMENT_INFO_MODE off that matches nothing (Wave 5 gate).
+ * CN_RECRUITMENT_INFO_MODE set to `off` that matches nothing; unset, it
+ * matches the public postings (D5).
  */
 export function postedPayWhere(q: Omit<PostedPayQuery, 'currency'>, env: EnvSource = process.env): Prisma.RAJobWhereInput {
   return marketSalaryWhere(q, env);

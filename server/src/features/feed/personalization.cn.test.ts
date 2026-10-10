@@ -35,8 +35,8 @@ import { FakeFeedRepo, feedRow } from './testkit.js';
 const NOW = new Date('2026-10-10T12:00:00.000Z');
 const P = '/api/v1/roboapply/feed';
 const GOAPPLY = 'goapply.localhost:3621';
-/** The feed needs the recruitment-info mode to allow postings (R-14); this file is about ordering. */
-const ENV = { CN_RECRUITMENT_INFO_MODE: 'partner_deeplink' };
+/** Nothing set: the GoApply feed is on by default (D5; `off` is the kill switch). This file is about ordering. */
+const ENV: Record<string, string> = {};
 
 type Env<T> = { success: boolean; data: T; code?: string };
 type QueryData = { items: FeedItem[]; order: FeedOrder; sort: string; hiddenByTier: number };

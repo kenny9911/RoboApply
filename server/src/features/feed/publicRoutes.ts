@@ -1,16 +1,17 @@
 // server/src/features/feed/publicRoutes.ts — the visitor job list (WP-78; F-FEED-16).
 //
 // GET /api/v1/public/feed?role&city&country → `VisitorFeedResponse`:
-//   - capability `jobs.feed` (GoApply: off unless the recruitment-info mode
-//     allows it, R-14) → 404 feature_disabled;
+//   - capability `jobs.feed` (on for both brands by default, D5; GoApply's off
+//     switch is CN_RECRUITMENT_INFO_MODE=off) → 404 feature_disabled;
 //   - 60 requests a minute per IP (DB counter, `publicFeedPerIp`) → 429;
 //   - at most 20 items, NO fit (there is no profile), `publicDisplay` jobs only;
 //   - every item is re-checked against the public-page predicate of ARCH §9.4
 //     (seo `basePublicWhere`: not expired, no fraud flag, a provider still in
 //     PUBLIC_DISPLAY_PROVIDERS or a consenting recruiter bank) when the list is
 //     built, so removing a provider takes effect within the cache window below;
-//   - each item carries its public job page (`/job/<id>-<slug>`), or null
-//     where the brand has no public job pages (GoApply);
+//   - each item carries its public job page (`/job/<id>-<slug>`) on both
+//     brands (D5, GOAPPLY_PARITY_PLAN §3.11): the public pages run under the
+//     same gates everywhere, and every listed item has just passed them;
 //   - cached 15 minutes per brand × query in process (behind the capability
 //     check, so switching `jobs.feed` off is immediate there). At the CDN:
 //     15 minutes on RoboApply; 60 seconds on market `cn`, so a GoApply
@@ -72,9 +73,14 @@ const defaultPublicList: NonNullable<PublicFeedDeps['publicList']> = async (inpu
   return feedService.publicList(input);
 };
 
-/** The public page of a job, or null where the brand has none (GoApply defers public job pages). */
-export function publicPathFor(item: Pick<PublicFeedItem, 'jobId' | 'title' | 'company'>, brand: ProductBrand): string | null {
-  if (brand.market === 'cn') return null;
+/**
+ * The public page of a job, on both brands (D5: public job pages follow the
+ * same gates on GoApply as on RoboApply; an item reaches this list only after
+ * the public-page re-check above). `brand` is kept in the signature for the
+ * callers; no brand has "no public page" any more, so the answer is never
+ * null today (the type stays `string | null` for the wire contract).
+ */
+export function publicPathFor(item: Pick<PublicFeedItem, 'jobId' | 'title' | 'company'>, _brand?: ProductBrand): string | null {
   return jobPath(item.jobId, item.title, item.company.name);
 }
 

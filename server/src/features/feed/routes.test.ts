@@ -90,6 +90,8 @@ const phoneGate: RequestHandler = (req, res, next) => {
 
 let h: RouteHarness;
 let off: RouteHarness;
+/** GoApply's kill switch set explicitly (D5: unset no longer means off). */
+let cnOff: RouteHarness;
 
 beforeAll(async () => {
   setFlagOverrideLoader(async () => []);
@@ -99,11 +101,14 @@ beforeAll(async () => {
     env: {},
     mounts: [[P, createFeedRouter({ ...deps, env: { [flagEnvName('roboapply', 'jobs.feed')]: 'false' } })]],
   });
+  const cnOffEnv = { CN_RECRUITMENT_INFO_MODE: 'off' };
+  cnOff = await startRouteHarness({ env: cnOffEnv, mounts: [[P, createFeedRouter({ ...deps, env: cnOffEnv })]] });
 });
 afterAll(async () => {
   setFlagOverrideLoader(null);
   await h.close();
   await off.close();
+  await cnOff.close();
 });
 beforeEach(() => {
   Object.assign(repo, new FakeFeedRepo());
@@ -143,10 +148,18 @@ describe('auth and capability', () => {
     expect(res.body.code).toBe('feature_disabled');
   });
 
-  it('GoApply in recruitment-info mode off: the feed is disabled (R-14)', async () => {
-    const res = await h.request<Env<unknown>>('POST', `${P}/query`, { host: 'goapply.localhost:3621', body: {} });
+  it('GoApply with CN_RECRUITMENT_INFO_MODE=off: the feed is disabled; RoboApply is not affected by that switch', async () => {
+    const res = await cnOff.request<Env<unknown>>('POST', `${P}/query`, { host: 'goapply.localhost:3621', body: {} });
     expect(res.status).toBe(404);
     expect(res.body.code).toBe('feature_disabled');
+    expect((await cnOff.request<Env<unknown>>('POST', `${P}/query`, { body: {} })).status).toBe(200);
+  });
+
+  it('GoApply with nothing set: the feed is on (D5 default)', async () => {
+    const res = await h.request<Env<{ items: unknown[] }>>('POST', `${P}/query`, { host: 'goapply.localhost:3621', body: {} });
+    expect(res.status).toBe(200);
+    expect(res.body.code).toBeUndefined();
+    expect(Array.isArray(res.body.data.items)).toBe(true);
   });
 });
 

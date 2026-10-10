@@ -2,10 +2,15 @@
 // classifier around the pipeline hooks, the LLM check worker, and the admin
 // fraud review and employer blacklist (CN-E-08, F-TRUST-04 cn, F-FEED-12 cn).
 //
-// Flow for one mainland job:
-//   ingest / import  → afterNormalize: keyword rules + blacklist on the
-//                      normalized job (`fraudFlags`, `class_year:` tags, and
-//                      `cnFraudWarnings` for a user's own import);
+// Flow for one mainland job (every `market = 'cn'` row, whatever its source:
+// GoHire bank, a public employer board, a user's import):
+//   ingest / import  → afterNormalize: at ingest, recruiter phone numbers and
+//                      WeChat ids are removed from the posting text before the
+//                      row is stored (text.ts `withoutContactInfo`; a user's
+//                      own import keeps its text as pasted); then keyword
+//                      rules + blacklist on the normalized job (`fraudFlags`,
+//                      `class_year:` tags, and `cnFraudWarnings` for a user's
+//                      own import);
 //   enrich           → afterEnrich: the same rules on the stored row (with
 //                      admin "cleared" memory), persisted; a posting with
 //                      gray-zone wording and no keyword flag gets one
@@ -43,7 +48,7 @@ import { detectCnFraudSignals, hasGrayCues } from './fraud/keywords.js';
 import { defaultFraudLlm, resolveFraudModel, runFraudCall, type FraudLlm } from './fraud/llm.js';
 import { defaultCnJobsRepository, type CnFraudJob, type CnJobsRepository } from './repository.js';
 import { BlacklistConflictError, blacklistHit, defaultCnJobsStore, type BlacklistEntry, type CnJobsStore, type FraudReview } from './store.js';
-import { postingText } from './text.js';
+import { postingText, withoutContactInfo } from './text.js';
 
 export const CN_JOBS_FRAUD_CHECK_KIND = 'cn.jobs.fraudCheck';
 /** Admin list page size. */
@@ -134,7 +139,10 @@ async function clearedKeysFor(deps: CnJobsDeps, ref: { id?: unknown; sourceBoard
 
 /**
  * afterNormalize for mainland jobs (ingest and import): GoHire source name,
- * rule flags, posting-stated tags. A read failure never drops the job:
+ * contact details removed from an indexed posting's text (ingest only: before
+ * anything is stored, and before the rules below so every stored quote exists
+ * in the stored text), rule flags, posting-stated tags. The rules run on every
+ * mainland row whatever its provider. A read failure never drops the job:
  *   - blacklist unreadable → keyword flags only (afterEnrich adds the
  *     blacklist flag; it propagates the error and the queue retries);
  *   - review log unreadable at ingest → no new flag is written at all. Which
@@ -149,6 +157,16 @@ export async function cnAfterNormalize(job: MarketHookJob, ctx: MarketHookContex
   if (job.market !== 'cn') return job;
   const out: MarketHookJob = { ...job };
   if (job.provider === 'bank_gohire' && !str(job.sourceName).trim()) out.sourceName = GOHIRE_SOURCE_NAME;
+  if (ctx.stage === 'ingest') {
+    // MARKET_STRATEGY §1.5 / JC-7: an indexed mainland posting never carries a recruiter's phone number or WeChat id.
+    const contact = withoutContactInfo(job);
+    if (contact.removed) {
+      Object.assign(out, contact.changed);
+      // Counted in the ingest run's notes (how many postings had contact details removed).
+      if (Array.isArray(job.notes)) out.notes = [...(job.notes as unknown[]), 'contact_info_removed'];
+    }
+  }
+  // From here on the rules read the text that will be stored (`out`).
   let blacklist: BlacklistEntry[] = [];
   try {
     blacklist = await deps.store.blacklistCached();
@@ -158,19 +176,19 @@ export async function cnAfterNormalize(job: MarketHookJob, ctx: MarketHookContex
   let cleared: Set<string> | null = null;
   try {
     // An admin "clear" holds on re-ingest too: matched by row id, or by sourceBoard:externalId.
-    cleared = clearedKeysIn(await deps.store.reviewsCached(), job);
+    cleared = clearedKeysIn(await deps.store.reviewsCached(), out);
   } catch (err) {
     logger.warn('CN_JOBS', 'review log unavailable at normalize; flags are decided after enrichment', { error: err instanceof Error ? err.message : String(err) });
   }
   if (cleared) {
-    out.fraudFlags = mergeCnFraudFlags(job.fraudFlags, ruleFlags(job, blacklist, deps.now()), ['keywords', 'blacklist'], cleared);
+    out.fraudFlags = mergeCnFraudFlags(out.fraudFlags, ruleFlags(out, blacklist, deps.now()), ['keywords', 'blacklist'], cleared);
   } else if (ctx.stage === 'import') {
-    out.fraudFlags = mergeCnFraudFlags(job.fraudFlags, ruleFlags(job, blacklist, deps.now()), ['keywords', 'blacklist']);
+    out.fraudFlags = mergeCnFraudFlags(out.fraudFlags, ruleFlags(out, blacklist, deps.now()), ['keywords', 'blacklist']);
   } else {
     // Nothing replaced, nothing added: the incoming flags, or null.
-    out.fraudFlags = mergeCnFraudFlags(job.fraudFlags, [], []);
+    out.fraudFlags = mergeCnFraudFlags(out.fraudFlags, [], []);
   }
-  out.marketTags = mergePostingTags(job.marketTags, extractPostingTags(postingText(job), job));
+  out.marketTags = mergePostingTags(out.marketTags, extractPostingTags(postingText(out), out));
   if (ctx.stage === 'import') out.cnFraudWarnings = cnImportWarnings(out);
   return out;
 }

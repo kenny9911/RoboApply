@@ -1,7 +1,9 @@
 // server/src/features/feed/routes.ts — /api/v1/roboapply/feed (WP-32; ARCH §3.4).
 //
-// Every route: seeker session → `jobs.feed` capability (GoApply R-14 recruitment-
-// info mode; off → 404 feature_disabled) → limits → handler.
+// Every route: seeker session → `jobs.feed` capability (on for both brands by
+// default, D5; GoApply's off switch is CN_RECRUITMENT_INFO_MODE=off → 404
+// feature_disabled) → limits → handler. `POST /query` answers the source and
+// apply contract of GOAPPLY_PARITY_PLAN §5 (contract.ts).
 //
 //   POST /query                 60/min; a refresh (no cursor) also 20 per 10 min
 //   GET  /counts

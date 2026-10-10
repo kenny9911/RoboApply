@@ -4,11 +4,16 @@
 //   - Source line: 企业直招 ("direct from employer") only when the job came
 //     from our recruiter bank AND the bank verified the employer AND it is not
 //     an agency (H13). Otherwise "来源：{sourceName}". The source name is
-//     always shown when known; never "not on other job boards".
-//   - Pay: the posting's own words (`salaryText`, e.g. "15-25K·13薪") when it
-//     has a figure; else structured pay in the same notation ("15-25K·13薪",
-//     "200-300元/天", "30-50万/年"); else not disclosed ("薪资未披露"). Never
-//     estimated (D3). 面议 / negotiable is not disclosed pay.
+//     always shown when known; never "not on other job boards". Every card
+//     also carries the original publisher and the original link
+//     (`sourceLine.original / url / via`, the same rule as the feed item's
+//     `source`: feed/sourceLine.ts) and "最后核验" (`lastCheckedAt`). The
+//     GoHire licence line is env-set only (CN_HR_LICENCE_HOLDER + _NUMBER).
+//   - Pay (salary.ts, re-exported here): the posting's own words
+//     (`salaryText`, e.g. "15-25K·13薪") when it has a figure; else structured
+//     pay in the same notation ("15-25K·13薪", "200-300元/天", "30-50万/年");
+//     else not disclosed ("薪资未披露"). Never estimated (D3). 面议 /
+//     negotiable is not disclosed pay.
 //   - Market tags 可落户 / 央国企 / 事业编 / 外企 only with an evidence quote.
 //   - 届别 as `class_year:<yyyy>` market tags with the quote (WP-18 reads them).
 //   - The other GoApply filter tags, each written only when the posting says
@@ -31,9 +36,11 @@
 //     and keeps every other tag (央国企 / 可落户 … from enrichment).
 //   - No applicant counts, view counts or funding data, ever.
 
+import { sourceFactsOf, sourceKindOf, type SourceKind } from '../../feed/contract.js';
 import { CN_MARKET_TAGS, type CnCardMeta, type CnMarketTag } from './contract.js';
 import type { CnJobCapabilities } from './mode.js';
 import { cnFlagsOf } from './fraud/flags.js';
+import { cnSalary } from './salary.js';
 import { quoteAround, splitSentences, type Sentence } from './text.js';
 
 /** GoHire's display name (a real source name, D3). */
@@ -46,7 +53,6 @@ export interface MarketTagEntry {
 }
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
-const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
 function iso(v: unknown): string | null {
   if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v.toISOString();
@@ -83,71 +89,24 @@ export function sourceNameOf(job: Record<string, unknown>): string | null {
   return str(job.sourceName);
 }
 
-// ── Pay ──────────────────────────────────────────────────────────────────
-
-const HAS_FIGURE = /[0-9０-９一二三四五六七八九十百千万]/u;
-
-function fmtK(n: number): string {
-  const k = n / 1000;
-  return Number.isInteger(k) ? String(k) : k.toFixed(1).replace(/\.0$/, '');
-}
-
-function fmtWan(n: number): string {
-  const w = n / 10000;
-  return Number.isInteger(w) ? String(w) : w.toFixed(1).replace(/\.0$/, '');
-}
-
-function range(a: string | null, b: string | null): string | null {
-  if (a && b) return a === b ? a : `${a}-${b}`;
-  return a ?? b;
-}
-
 /**
- * Structured CNY pay in mainland notation, or null when it cannot be stated
- * without guessing (no figure, no period, another currency).
+ * How a hook job reached us. A stored row is read from its own columns
+ * (feed/sourceLine.ts `sourceKindOf`); a job still in the pipeline carries
+ * `provider` instead of the bank flag or the board name.
  */
-export function formatCnSalary(job: Record<string, unknown>): string | null {
-  const min = num(job.salaryMin);
-  const max = num(job.salaryMax);
-  if (min === null && max === null) return null;
-  const currency = str(job.salaryCurrency)?.toUpperCase() ?? null;
-  if (currency !== 'CNY' && currency !== 'RMB') return null;
-  const months = num(job.salaryMonths);
-  switch (job.salaryPeriod) {
-    case 'month': {
-      const r = range(min !== null ? fmtK(min) : null, max !== null ? fmtK(max) : null);
-      const base = min !== null && max === null ? `${r}K起` : min === null ? `${r}K以内` : `${r}K`;
-      return months && months > 12 ? `${base}·${months}薪` : base;
-    }
-    case 'day': {
-      const r = range(min !== null ? String(min) : null, max !== null ? String(max) : null);
-      return `${r}元/天`;
-    }
-    case 'hour': {
-      const r = range(min !== null ? String(min) : null, max !== null ? String(max) : null);
-      return `${r}元/时`;
-    }
-    case 'year': {
-      const r = range(min !== null ? fmtWan(min) : null, max !== null ? fmtWan(max) : null);
-      return `${r}万/年`;
-    }
-    default:
-      return null;
-  }
+export function sourceKindOfJob(job: Record<string, unknown>): SourceKind {
+  const board = job.provider === 'user_import' ? 'user_import' : (str(job.sourceBoard) ?? '');
+  const kind = sourceKindOf({
+    sourceBoard: board,
+    visibility: typeof job.visibility === 'string' ? job.visibility : null,
+    fromRecruiterBank: job.fromRecruiterBank === true || job.provider === 'bank_gohire' || board === 'gohire',
+  });
+  return kind === 'provider' && job.provider === 'ats_public' ? 'ats_public' : kind;
 }
 
-/** The label a pasted pay line carries ("薪资：18-28K·15薪"); the row it is shown in is already labelled 薪资. */
-const PAY_LABEL = /^\s*(?:薪资|薪資|薪酬|待遇|月薪|年薪|日薪|时薪|時薪|工资|工資|薪水|salary|pay)(?:范围|範圍|\s+range)?\s*[:：]\s*/i;
+// ── Pay (salary.ts) ──────────────────────────────────────────────────────
 
-/** The pay line for a GoApply card. */
-export function cnSalary(job: Record<string, unknown>): CnCardMeta['salary'] {
-  if (job.salaryDisclosed !== true) return { text: null, disclosed: false };
-  const stored = str(job.salaryText);
-  const verbatim = stored ? stored.replace(PAY_LABEL, '').trim() || stored : null;
-  if (verbatim && HAS_FIGURE.test(verbatim)) return { text: verbatim.slice(0, 80), disclosed: true };
-  const structured = formatCnSalary(job);
-  return structured ? { text: structured, disclosed: true } : { text: null, disclosed: false };
-}
+export { cnSalary, formatCnSalary } from './salary.js';
 
 // ── Tags ─────────────────────────────────────────────────────────────────
 
@@ -487,11 +446,25 @@ export function buildCnCardMeta(job: Record<string, unknown>, caps: Pick<CnJobCa
   const sourceName = sourceNameOf(job);
   const isGoHire = sourceName === GOHIRE_SOURCE_NAME;
   const ownImport = job.visibility === 'private' || job.provider === 'user_import';
+  const facts = sourceFactsOf(
+    {
+      sourceBoard: str(job.sourceBoard) ?? '',
+      companyName: str(job.companyName) ?? '',
+      companyDisplayName: str(job.companyDisplayName),
+      originalSourceName: str(job.originalSourceName),
+      sourceUrl: str(job.sourceUrl),
+      applyUrl: str(job.applyUrl),
+    },
+    sourceKindOfJob(job),
+  );
   return {
     sourceLine: {
       kind: isDirectFromEmployer(job) ? 'direct' : 'source',
       sourceName,
       originalSourceName: str(job.originalSourceName),
+      original: facts.original,
+      url: facts.url,
+      ...(facts.via ? { via: facts.via } : {}),
       licence: isGoHire ? caps.licence : null,
     },
     salary: cnSalary(job),

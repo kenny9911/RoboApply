@@ -2,8 +2,9 @@
 //
 // WP-52 route tests: the agent router behind the route harness with injected
 // auth and an injected service (fake database, fake seams). Covers auth,
-// the `agent` capability (404 feature_disabled; 503 ai_unavailable on a
-// brand without a model), validation, the envelope, and domain errors.
+// the `agent` capability (404 feature_disabled; 503 ai_unavailable when the
+// brand's AI cannot run: on GoApply that is only an unusable content-safety
+// filter, never a missing CN model, D5), validation, the envelope, and domain errors.
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -37,6 +38,8 @@ const state = vi.hoisted(() => ({ userId: 'u1' as string | null, overrides: {} a
 let db = makeDb();
 let h: RouteHarness;
 let off: RouteHarness;
+/** GoApply with a content-safety filter that cannot run: the one configuration that turns its AI off (D5). */
+let unsafe: RouteHarness;
 
 function serviceNow() {
   return makeDeps(db, 'roboapply', state.overrides).service;
@@ -50,10 +53,13 @@ beforeAll(async () => {
   h = await startRouteHarness({ env: {}, mounts: [[BASE, createAgentRouter({ seekerAuth: auth, env: {} }, { service: lazy as never })]] });
   const envOff = { FLAG_ROBOAPPLY_AGENT: 'false' };
   off = await startRouteHarness({ env: envOff, mounts: [[BASE, createAgentRouter({ seekerAuth: auth, env: envOff }, { service: lazy as never })]] });
+  // An unknown filter provider under the strict switch is unusable before and after the "degrade to the built-in list" rule.
+  const envUnsafe = { CN_CONTENT_SAFETY_PROVIDER: 'nonsense', CN_RESIDENCY_STRICT: 'true' };
+  unsafe = await startRouteHarness({ env: envUnsafe, mounts: [[BASE, createAgentRouter({ seekerAuth: auth, env: envUnsafe }, { service: lazy as never })]] });
 });
 afterAll(async () => {
   setFlagOverrideLoader(null);
-  await Promise.all([h.close(), off.close()]);
+  await Promise.all([h.close(), off.close(), unsafe.close()]);
 });
 beforeEach(() => {
   db = makeDb();
@@ -103,10 +109,19 @@ describe('agent router: auth and capability', () => {
     expect(res.body.code).toBe('feature_disabled');
   });
 
-  it('503 ai_unavailable on GoApply without a domestic model (the whole area is AI-dependent)', async () => {
+  it('GoApply with no CN model is ON (D5: the shared stack): the capability gate lets the request through', async () => {
     const res = await h.request<Env<unknown>>('GET', `${BASE}/settings`, { host: GA });
+    expect(res.status).not.toBe(503);
+    expect(res.body.code).not.toBe('ai_unavailable');
+    expect(res.body.code).not.toBe('feature_disabled');
+  });
+
+  it('503 ai_unavailable on GoApply only when its content-safety filter cannot run (the whole area is AI-dependent)', async () => {
+    const res = await unsafe.request<Env<unknown>>('GET', `${BASE}/settings`, { host: GA });
     expect(res.status).toBe(503);
     expect(res.body.code).toBe('ai_unavailable');
+    // RoboApply does not read the GoApply filter.
+    expect((await unsafe.request<Env<unknown>>('GET', `${BASE}/settings`, { host: RA })).status).toBe(200);
   });
 });
 

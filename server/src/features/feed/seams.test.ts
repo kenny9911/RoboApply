@@ -7,7 +7,8 @@
 //   - publicList         the SEO pages' public rules (WP-78)
 //   - browse             POST /feed/query with overrides.taxonomyIds and no profile (WP-33)
 //   - cardMeta / explanation on FeedItem (WP-33, WP-41, WP-42, WP-13)
-//   - GoApply recruitment-info mode off: every seam answers empty (R-14)
+//   - GoApply: the seams return postings by default (D5); with the
+//     recruitment-info mode set to off every seam answers empty
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -430,8 +431,9 @@ describe('cardMeta and explanation on FeedItem', () => {
   });
 });
 
-describe('GoApply, CN_RECRUITMENT_INFO_MODE=off: the seams answer empty (R-14)', () => {
-  const off = { postingsAllowed: undefined, env: {} as Record<string, string> };
+describe('GoApply: the seams return postings by default, and answer empty with CN_RECRUITMENT_INFO_MODE=off', () => {
+  const off = { postingsAllowed: undefined, env: { CN_RECRUITMENT_INFO_MODE: 'off' } as Record<string, string> };
+  const byDefault = { postingsAllowed: undefined, env: {} as Record<string, string> };
   const on = { postingsAllowed: undefined, env: { CN_RECRUITMENT_INFO_MODE: 'partner_deeplink' } };
 
   beforeEach(() => {
@@ -450,6 +452,18 @@ describe('GoApply, CN_RECRUITMENT_INFO_MODE=off: the seams answer empty (R-14)',
     expect(await svc.publicList({ market: 'cn', now: NOW }, { limit: 20 })).toEqual([]);
     // Nothing was even read.
     expect(repo.queries).toHaveLength(0);
+  });
+
+  it('default (no CN_RECRUITMENT_INFO_MODE): counts, preview, sample, alert candidates return the public market cn rows (D5)', async () => {
+    const svc = service(byDefault);
+    expect(await svc.countForFilters(cnCtx(), {})).toEqual({ count: 3, capped: false });
+    expect(await svc.sampleForFilters(cnCtx(), {}, { limit: 400 })).toEqual(['j000', 'j001', 'j002']);
+    const preview = await svc.preview(cnCtx(), { limit: 10, sort: 'newest' });
+    expect(preview.map((i) => i.jobId)).toEqual(['j000', 'j001', 'j002']);
+    expect(preview.every((i) => i.source.kind === 'bank')).toBe(true);
+    const alerts = await svc.alertCandidates({ market: 'cn', now: NOW }, 'sp1', { since: daysAgo(30), limit: 100 });
+    expect(alerts.ids.length).toBe(3);
+    expect(repo.queries.length).toBeGreaterThan(0);
   });
 
   it('the seams follow cn/jobs cnJobCapabilities().postings in every mode (one mode, one resolver)', async () => {

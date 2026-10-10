@@ -11,9 +11,10 @@
 //   market = brand.market — a user's own imported job never counts — still
 //   open (closedAt IS NULL), posted in the last 365 days.
 // On GoApply additionally: not fraud-flagged, and the recruitment-info rule
-// (`cnAggregateWhere`, equal to cn/jobs `cnPostingsWhere(null)`): with
-// CN_RECRUITMENT_INFO_MODE off the brand shows no third-party posting, so the
-// filter matches nothing and every figure is suppressed (R-14).
+// (`cnAggregateWhere`, equal to cn/jobs `cnPostingsWhere(null)`): postings are
+// counted by default (D5); with CN_RECRUITMENT_INFO_MODE set to `off` the
+// brand shows no third-party posting, so the filter matches nothing and every
+// figure is suppressed.
 //
 // Pay per posting is the midpoint of its stated range, in ONE currency and
 // period (the largest group). Fewer than MIN_SAMPLE (20) postings → the

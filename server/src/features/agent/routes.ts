@@ -1,7 +1,8 @@
 // server/src/features/agent/routes.ts — Ready to apply API (WP-52; ARCH §3.7).
 // Mounted by features/index.ts at /api/v1/roboapply/agent. Capability `agent`
-// per route (off → 404 feature_disabled; no model for the brand → 503
-// ai_unavailable). The legacy V1/V2 queue routes (/v2/queue) are untouched
+// per route (off → 404 feature_disabled; the brand's AI cannot run → 503
+// ai_unavailable; GoApply runs on the shared model stack when it has no CN
+// model, D5). The legacy V1/V2 queue routes (/v2/queue) are untouched
 // (WP-75 removes them).
 //
 // D1: no route here submits anything or calls an employer endpoint. `open`

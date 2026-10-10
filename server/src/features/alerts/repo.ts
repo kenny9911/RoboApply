@@ -8,6 +8,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import type prismaClient from '../../lib/prisma.js';
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { BrandId, Market } from '../../platform/brand/registry.js';
+import { cnListable, cnListableWhere } from '../feed/contract.js';
 import { coerceFilterSet } from '../search/index.js';
 import { jobWhereForFilters } from './jobFilters.js';
 import { isLiveAccount } from './preferences.js';
@@ -91,14 +92,16 @@ async function defaultDb(): Promise<AlertsDb> {
 }
 
 /**
- * R-14 / R41-1b: the `where` fragment every alert query over GoApply jobs
- * ANDs in. Alerts have no viewer-owned rows (own imports never alert), so the
- * viewer is null: mode off → no row at all; otherwise public postings.
+ * R41-1b: the `where` fragments every alert query over GoApply jobs ANDs in.
+ * Alerts have no viewer-owned rows (own imports never alert), so the viewer
+ * is null: CN_RECRUITMENT_INFO_MODE=off → no row at all; otherwise (the
+ * default, D5) public postings, and only those with a usable apply link
+ * (feed/sourceLine.ts `cnListable`: a posting nobody can apply to never alerts).
  */
 async function cnModeWhere(market: Market, env: EnvSource): Promise<Prisma.RAJobWhereInput[]> {
   if (market !== 'cn') return [];
   const { cnPostingsWhere } = await import('../cn/jobs/index.js');
-  return [cnPostingsWhere(null, env) as Prisma.RAJobWhereInput];
+  return [cnPostingsWhere(null, env) as Prisma.RAJobWhereInput, cnListableWhere() as Prisma.RAJobWhereInput];
 }
 
 async function expandTaxonomy(): Promise<(ids: readonly string[]) => string[]> {
@@ -278,11 +281,12 @@ export function createPrismaAlertsRepo(options: PrismaAlertsRepoOptions = {}): A
       const rows = await p.rAJob.findMany({
         where: { id: { in: [...jobIds] } },
         select: {
-          // What the mode check reads (dropped from the card below).
+          // What the mode and apply-link checks read (dropped from the card below).
           market: true,
           visibility: true,
           ownerUserId: true,
           sourceBoard: true,
+          applyUrl: true,
           id: true,
           title: true,
           companyName: true,
@@ -298,9 +302,12 @@ export function createPrismaAlertsRepo(options: PrismaAlertsRepoOptions = {}): A
         },
       });
       // Second layer under the candidate query: a posting picked while the mode
-      // allowed it never reaches an alert, digest or inbox row once the mode is off.
+      // allowed it never reaches an alert, digest or inbox row once the mode is off,
+      // and a mainland posting that lost its apply link is not sent either.
       const { filterCnPostings } = await import('../cn/jobs/index.js');
-      return filterCnPostings(rows, null, env).map(({ market: _m, visibility: _v, ownerUserId: _o, sourceBoard: _s, ...card }) => card);
+      return filterCnPostings(rows, null, env)
+        .filter(cnListable)
+        .map(({ market: _m, visibility: _v, ownerUserId: _o, sourceBoard: _s, applyUrl: _a, ...card }) => card);
     },
 
     async noReplyCount(userId, now) {
