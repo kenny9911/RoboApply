@@ -1,20 +1,25 @@
-// /tools — route shell (FND-6b). Free tools index.
-//
-// STUB. Owner: WP-57, who replaces this page. Public page in HybridShell (R-23): the app shell with a session,
-// marketing chrome and the legal footer without one. Not indexed while a stub.
-// Nothing links here until the owner ships and INT flips the entry.
+// /tools — the free tools hub (WP-57; PRODUCT_PLAN.md F-TOOL-01). Public page
+// in HybridShell (R-23): the app shell with a session, marketing chrome and
+// the site footer (with the legal footer) without one. Where the tools are
+// off (GoApply CN-0) the hub lists no tool (the campus calendar link stays
+// when that capability is on).
 
 import type { Metadata } from 'next';
 
 import { HybridShell } from '../../components/v3/shell/HybridShell';
-import { LegalFooter } from '../../components/features/market';
+import { MarketingFooter } from '../../components/features/marketing';
+import { ToolsHub } from '../../components/features/tools';
+import { freeToolsOpenForRequest, toolsMetadata } from './meta';
 
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata(): Promise<Metadata> {
+  return toolsMetadata('hub', '/tools');
+}
 
-export default function ToolsPage() {
+export default async function ToolsPage() {
+  const open = await freeToolsOpenForRequest();
   return (
-    <HybridShell from="tools" footer={<LegalFooter />}>
-      <div hidden data-route-stub="/tools" data-owner="WP-57" />
+    <HybridShell from="tools" footer={<MarketingFooter />}>
+      <ToolsHub toolsOpen={open} />
     </HybridShell>
   );
 }

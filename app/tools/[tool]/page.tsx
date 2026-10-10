@@ -1,21 +1,33 @@
-// /tools/[tool] — route shell (FND-6b). One free tool (job-alerts: WP-78).
-//
-// STUB. Owner: WP-57, who replaces this page. Public page in HybridShell (R-23): the app shell with a session,
-// marketing chrome and the legal footer without one. Not indexed while a stub.
-// Nothing links here until the owner ships and INT flips the entry.
+// /tools/[tool] — one free tool (WP-57): `resume-check` (F-TOOL-02) and
+// `resume-job-match` (F-TOOL-03). Anything else is 404 (there is no
+// /tools/cover-letter page; /tools/job-alerts is WP-78's static route), and
+// so is every tool where the tools are off (GoApply CN-0). A result is never
+// read from the URL: the tool page picks up the one this tab asked to keep.
 
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 
 import { HybridShell } from '../../../components/v3/shell/HybridShell';
-import { LegalFooter } from '../../../components/features/market';
+import { MarketingFooter } from '../../../components/features/marketing';
+import { ToolRunner, toolBySlug } from '../../../components/features/tools';
+import { freeToolsOpenForRequest, toolsMetadata } from '../meta';
 
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+type Props = {
+  params: Promise<{ tool: string }>;
+};
 
-export default async function ToolsToolPage({ params }: { params: Promise<{ tool: string }> }) {
-  const { tool } = await params;
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const entry = toolBySlug((await params).tool);
+  if (!entry || !(await freeToolsOpenForRequest())) return { robots: { index: false, follow: false } };
+  return toolsMetadata(entry.key, `/tools/${entry.slug}`);
+}
+
+export default async function ToolsToolPage({ params }: Props) {
+  const entry = toolBySlug((await params).tool);
+  if (!entry || !(await freeToolsOpenForRequest())) notFound();
   return (
-    <HybridShell from="tools" footer={<LegalFooter />}>
-      <div hidden data-route-stub="/tools/[tool]" data-owner="WP-57" data-param={tool} />
+    <HybridShell from="tools" footer={<MarketingFooter />}>
+      <ToolRunner kind={entry.kind} />
     </HybridShell>
   );
 }
