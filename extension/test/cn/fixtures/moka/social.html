@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>演示制造社会招聘</title></head>
+<body>
+<div id="root">
+  <h1 class="job-title">机械设计工程师</h1>
+  <div class="org-name">演示制造</div>
+  <div class="steps"><span>1 个人信息</span><span>2 确认</span></div>
+  <form class="ant-form apply-form">
+    <div class="section">
+      <div class="section-title">基本信息</div>
+      <div class="ant-form-item"><div class="ant-form-item-label"><label for="s_name" class="ant-form-item-required">姓名</label></div><div class="ant-form-item-control"><input id="s_name" class="ant-input"></div></div>
+      <div class="ant-form-item"><div class="ant-form-item-label"><label for="s_phone" class="ant-form-item-required">手机</label></div><div class="ant-form-item-control"><input id="s_phone" class="ant-input"></div></div>
+      <div class="ant-form-item"><div class="ant-form-item-label"><label for="s_email" class="ant-form-item-required">电子邮箱</label></div><div class="ant-form-item-control"><input id="s_email" class="ant-input"></div></div>
+      <div class="ant-form-item"><div class="ant-form-item-label"><label for="s_political">政治面貌</label></div><div class="ant-form-item-control"><select id="s_political"><option value="">请选择</option><option>中共党员</option><option>共青团员</option><option>群众</option></select></div></div>
+      <div class="ant-form-item"><div class="ant-form-item-label"><label for="s_resume" class="ant-form-item-required">简历</label></div><div class="ant-form-item-control"><input id="s_resume" type="file"></div></div>
+    </div>
+    <div class="section">
+      <div class="section-header"><div class="section-title">家庭成员</div><button type="button" class="ant-btn">添加</button></div>
+      <div class="family-row">
+        <div class="ant-form-item"><div class="ant-form-item-label"><label for="fm0_rel">关系</label></div><div class="ant-form-item-control"><select id="fm0_rel"><option value="">请选择</option><option>父亲</option><option>母亲</option><option>配偶</option><option>其他</option></select></div></div>
+        <div class="ant-form-item"><div class="ant-form-item-label"><label for="fm0_name">姓名</label></div><div class="ant-form-item-control"><input id="fm0_name" class="ant-input"></div></div>
+        <div class="ant-form-item"><div class="ant-form-item-label"><label for="fm0_org">工作单位</label></div><div class="ant-form-item-control"><input id="fm0_org" class="ant-input"></div></div>
+        <div class="ant-form-item"><div class="ant-form-item-label"><label for="fm0_title">职务</label></div><div class="ant-form-item-control"><input id="fm0_title" class="ant-input"></div></div>
+      </div>
+      <div class="family-row">
+        <div class="ant-form-item"><div class="ant-form-item-label"><label for="fm1_rel">关系</label></div><div class="ant-form-item-control"><select id="fm1_rel"><option value="">请选择</option><option>父亲</option><option>母亲</option><option>配偶</option><option>其他</option></select></div></div>
+        <div class="ant-form-item"><div class="ant-form-item-label"><label for="fm1_name">姓名</label></div><div class="ant-form-item-control"><input id="fm1_name" class="ant-input"></div></div>
+        <div class="ant-form-item"><div class="ant-form-item-label"><label for="fm1_org">工作单位</label></div><div class="ant-form-item-control"><input id="fm1_org" class="ant-input"></div></div>
+        <div class="ant-form-item"><div class="ant-form-item-label"><label for="fm1_title">职务</label></div><div class="ant-form-item-control"><input id="fm1_title" class="ant-input"></div></div>
+      </div>
+    </div>
+    <div class="footer"><button type="button" class="ant-btn">上一步</button><button type="button" class="ant-btn ant-btn-primary">下一步</button></div>
+  </form>
+</div>
+</body>
+</html>

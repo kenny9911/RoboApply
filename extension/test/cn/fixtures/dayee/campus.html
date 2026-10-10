@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>示例食品校园招聘</title></head>
+<body>
+<div class="wrap">
+  <div class="post-head"><h1 class="post-name">质量管理培训生</h1><span class="corp-name">示例食品</span><span class="post-city">广州</span></div>
+  <form id="applyForm" name="applyForm" action="/apply/save" method="post">
+    <h3 class="module-title">个人信息</h3>
+    <table class="form-table">
+      <tbody>
+        <tr><th>姓名<span class="required">*</span></th><td><input type="text" name="userName" id="userName"></td><th>性别<span class="required">*</span></th><td><select name="sex" id="sex"><option value="">请选择</option><option value="1">男</option><option value="2">女</option></select></td></tr>
+        <tr><th>出生日期</th><td><input type="date" name="birthday" id="birthday"></td><th>手机<span class="required">*</span></th><td><input type="text" name="mobile" id="mobile"></td></tr>
+        <tr><th>电子邮箱<span class="required">*</span></th><td><input type="text" name="email" id="email"></td><th>籍贯</th><td><input type="text" name="nativePlace" id="nativePlace"></td></tr>
+        <tr><th>政治面貌</th><td><select name="political" id="political"><option value="">请选择</option><option>中共党员</option><option>中共预备党员</option><option>共青团员</option><option>群众</option></select></td><th>生源地</th><td><input type="text" name="studentFrom" id="studentFrom"></td></tr>
+        <tr><th>验证码</th><td><input type="text" name="checkCode" id="checkCode"></td><td></td><td></td></tr>
+      </tbody>
+    </table>
+    <h3 class="module-title">教育背景</h3>
+    <table class="form-table">
+      <tbody>
+        <tr><th>学校名称</th><td><input type="text" name="edu_school" id="edu_school"></td><th>学历</th><td><select name="edu_degree" id="edu_degree"><option value="">请选择</option><option>大专</option><option>本科</option><option>硕士</option><option>博士</option></select></td></tr>
+        <tr><th>专业</th><td><input type="text" name="edu_major" id="edu_major"></td><th>入学时间</th><td><input type="text" name="edu_start" id="edu_start" placeholder="yyyy-mm"></td></tr>
+        <tr><th>毕业时间</th><td><input type="text" name="edu_end" id="edu_end" placeholder="yyyy-mm"></td><td></td><td></td></tr>
+      </tbody>
+    </table>
+    <h3 class="module-title">简历附件</h3>
+    <table class="form-table"><tbody><tr><th>简历附件</th><td><input type="file" name="attachment" id="attachment"></td></tr></tbody></table>
+    <div class="btn-bar"><input type="button" class="btn" value="保存" id="btnSave"><input type="button" class="btn btn-primary" value="提交" id="btnSubmit"></div>
+  </form>
+</div>
+</body>
+</html>

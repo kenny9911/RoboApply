@@ -13,10 +13,21 @@
 //   markSubmitted(): the user's answer to "Did you submit this application?" —
 //     the only source of `userMarkedSubmitted`. Nothing here watches the page.
 //
+// Fill modes (GoApply 一键填表, WP-71): 全部填写 `all` (default), 只填空白
+// `blank` (a field that already holds something is left as it is) and
+// 填写选中区域 `selection` (only fields inside the part of the page the user
+// selected; nothing is reserved or read when the selection holds no field).
+// Portal adapters (adapters/cn) add a section-aware field map: education,
+// experience and family rows, and the optional 籍贯 / 政治面貌 / 生源地 /
+// 家庭成员 details, filled only from values the user entered.
+//
 // D1: nothing here presses Submit, Next or Continue; the adapter has no such
 // method and interact.ts refuses submit-like controls.
 
 import { restoreField } from '../adapters/_kit/fields';
+import { isPlaceholderOption } from '../adapters/_kit/options';
+import { CN_SENSITIVE_STORE_KEYS, planCnFields, resolveCnField, type CnFieldKey, type CnPlanEntry, type CnSection } from '../adapters/cn/fields';
+import { isCnAdapter } from '../adapters/cn/kit';
 import type { AtsAdapter, FieldHandle, FieldKey, FieldKind, FieldValue, FillFailure, FillResult, PreviousValue } from '../adapters/types';
 import { classifyField } from '../mapping/classify';
 import { protectedQuestionType } from '../mapping/questions';
@@ -40,7 +51,31 @@ export type ItemNote =
   | 'disabled'
   | 'undone'
   | 'ai_unavailable'
-  | 'draft_failed';
+  | 'draft_failed'
+  /** `blank` mode: the form already held a value; left as it is. */
+  | 'has_value'
+  /** A personal detail (性别, 出生日期, 身份证 …): only the user fills it. */
+  | 'personal'
+  /** A family-member row without a matching entry in the user's optional details. */
+  | 'family_none'
+  /** 籍贯 / 政治面貌 / family rows while the user has not turned on filling optional details (`autofill_sensitive`). */
+  | 'sensitive_consent'
+  /** About someone else (紧急联系人, 推荐人, 证明人 …): only the user fills it. */
+  | 'other_person'
+  /** Asked again under a heading we do not know: it may be about someone else. */
+  | 'check_whose'
+  /** A photo upload: only the user attaches one. */
+  | 'photo';
+
+/** 全部填写 / 只填空白 / 填写选中区域. */
+export const FILL_MODES = ['all', 'blank', 'selection'] as const;
+export type FillMode = (typeof FILL_MODES)[number];
+
+export interface StartOptions {
+  mode?: FillMode;
+  /** `selection` mode: is this element inside the user's selection? Absent → nothing was selected. */
+  inScope?: ((el: Element) => boolean) | null;
+}
 
 export interface Draft {
   text: string;
@@ -67,9 +102,23 @@ export interface ChecklistItem {
   /** Shown only in the panel until the user clicks "Use this answer". */
   draft?: Draft;
   fileName?: string;
+  /** Portal forms (cn): the field's key in the cn map, its section and whether it is a personal detail. */
+  cnKey?: CnFieldKey | null;
+  section?: CnSection;
+  personal?: boolean;
 }
 
-export type SessionError = 'credits_exhausted' | 'feature_disabled' | 'not_connected' | 'rate_limited' | 'network' | 'unknown';
+export type SessionError =
+  | 'credits_exhausted'
+  | 'feature_disabled'
+  | 'not_connected'
+  | 'rate_limited'
+  | 'network'
+  | 'unknown'
+  /** `selection` mode without a selection on the page. */
+  | 'no_selection'
+  /** `selection` mode: the selected part of the page holds no field. */
+  | 'no_fields_in_selection';
 
 export interface SessionState {
   phase: 'idle' | 'filling' | 'done' | 'error';
@@ -82,6 +131,8 @@ export interface SessionState {
   /** The job the server matched for this page; without one no tracker entry can move to Applied. */
   jobId: string | null;
   undo: { restored: number; notRestored: number } | null;
+  /** The mode of the last start(). */
+  mode: FillMode | null;
 }
 
 export interface FillSessionDeps {
@@ -164,7 +215,7 @@ export class FillSession {
 
   constructor(private readonly deps: FillSessionDeps) {
     this.aiAvailable = deps.aiAvailable;
-    this.state = { phase: 'idle', runId: null, items: [], error: null, resetsAt: null, submitted: 'unknown', jobId: deps.jobId ?? null, undo: null };
+    this.state = { phase: 'idle', runId: null, items: [], error: null, resetsAt: null, submitted: 'unknown', jobId: deps.jobId ?? null, undo: null, mode: null };
   }
 
   getState(): SessionState {
@@ -211,12 +262,28 @@ export class FillSession {
     return open ? 'partial' : 'filled';
   }
 
-  async start(): Promise<void> {
+  async start(opts: StartOptions = {}): Promise<void> {
     if (this.state.phase === 'filling') return;
     const { adapter, doc, api } = this.deps;
-    this.set({ phase: 'filling', error: null, resetsAt: null, undo: null });
+    const mode: FillMode = opts.mode ?? 'all';
 
-    const fields = adapter.listFields(doc);
+    const allFields = adapter.listFields(doc);
+    let fields = allFields;
+    if (mode === 'selection') {
+      // Checked before anything is reserved or read: no selection, no run.
+      const inScope = opts.inScope;
+      if (!inScope) {
+        this.set({ phase: 'error', error: 'no_selection', resetsAt: null, undo: null, mode });
+        return;
+      }
+      fields = fields.filter((f) => inScope(f.element) || (f.group ?? []).some((r) => inScope(r)));
+      if (fields.length === 0) {
+        this.set({ phase: 'error', error: 'no_fields_in_selection', resetsAt: null, undo: null, mode });
+        return;
+      }
+    }
+    this.set({ phase: 'filling', error: null, resetsAt: null, undo: null, mode });
+
     let host = '';
     try {
       host = new URL(this.deps.url).hostname;
@@ -245,7 +312,25 @@ export class FillSession {
     const profile: AutofillProfile = profileRes.data;
 
     this.fields = new Map(fields.map((f) => [f.id, f]));
+    // Planned on the whole form, so a selection holding only the second family member's block is still row 2.
+    const cnPlan: Map<string, CnPlanEntry> = isCnAdapter(adapter) ? planCnFields(adapter, allFields) : new Map();
     const items: ChecklistItem[] = fields.map((f) => {
+      const cn = cnPlan.get(f.id);
+      if (cn) {
+        return {
+          id: f.id,
+          label: f.label,
+          kind: f.kind,
+          required: f.required,
+          key: null,
+          protectedType: protectedQuestionType(f.label),
+          status: f.required ? 'needs_you' : 'skipped',
+          canDraft: false,
+          cnKey: cn.key,
+          section: cn.section,
+          personal: cn.personal,
+        };
+      }
       // A protected question wins over a profile key its label happens to
       // match, except for an adapter hint or an education field ("Degree").
       const classified = classifyField(f);
@@ -266,6 +351,15 @@ export class FillSession {
 
     for (const it of items) {
       const field = this.fields.get(it.id)!;
+      if (mode === 'blank' && hasValue(field)) {
+        this.updateItem(it.id, { status: 'skipped', note: 'has_value' });
+        continue;
+      }
+      const cn = cnPlan.get(it.id);
+      if (cn) {
+        await this.fillCn(it, field, cn, profile);
+        continue;
+      }
       if (FILE_KINDS.has(it.kind)) {
         await this.fillFile(it, field, runId);
         continue;
@@ -287,6 +381,25 @@ export class FillSession {
 
     await api({ op: 'patchRun', id: runId, body: { fieldsFilled: this.filledCount(), outcome: this.outcome() } });
     this.set({ phase: 'done' });
+  }
+
+  /** A field the portal map owns: the user's own value, or a note saying why it is left. */
+  private async fillCn(it: ChecklistItem, field: FieldHandle, cn: CnPlanEntry, profile: AutofillProfile): Promise<void> {
+    if (cn.key === 'photo') {
+      this.updateItem(it.id, { status: it.required ? 'needs_you' : 'skipped', note: 'photo' });
+      return;
+    }
+    const resolved = resolveCnField(field, cn, profile);
+    if (resolved) {
+      const res = await this.apply(it.id, resolved.value, resolved.source);
+      if (res.ok) this.updateItem(it.id, { status: 'filled', source: resolved.source, sensitive: resolved.sensitive, note: undefined });
+      else this.updateItem(it.id, { status: 'needs_you', note: noteFor(res.reason) });
+      return;
+    }
+    const note: ItemNote = cnNote(cn, it, profile);
+    // An unknown question in an education / experience block can still get a draft; personal details and family rows never.
+    const draftable = !cn.key && !cn.noDraft && !it.protectedType && DRAFTABLE.has(it.kind) && this.aiAvailable;
+    this.updateItem(it.id, { status: it.required ? 'needs_you' : 'skipped', note, canDraft: draftable });
   }
 
   private async fillFile(it: ChecklistItem, field: FieldHandle, runId: string): Promise<void> {
@@ -424,6 +537,46 @@ export class FillSession {
     });
     if (res.ok) this.set({ submitted: 'yes' });
     return res.ok;
+  }
+}
+
+/** Why a portal field the cn map owns was left for the user. */
+function cnNote(cn: CnPlanEntry, it: ChecklistItem, profile: AutofillProfile): ItemNote {
+  if (cn.leave) return cn.leave;
+  if (cn.personal) return 'personal';
+  // The optional details exist only with the consent: without it, say so instead of "add them".
+  if (cn.key && CN_SENSITIVE_STORE_KEYS.has(cn.key) && profile.sensitive === null) return 'sensitive_consent';
+  if (cn.section === 'family' && cn.key) return 'family_none';
+  return it.protectedType ? 'protected' : 'no_value';
+}
+
+/** Does the form already hold something in this field? (`blank` mode leaves such fields alone.) */
+export function hasValue(field: FieldHandle): boolean {
+  const el = field.element as HTMLInputElement;
+  switch (field.kind) {
+    case 'radio':
+      return (field.group ?? [el]).some((r) => r.checked);
+    case 'checkbox':
+      return el.checked;
+    case 'file':
+      return (el.files?.length ?? 0) > 0;
+    case 'select': {
+      const select = field.element as HTMLSelectElement;
+      const opt = select.selectedOptions?.[0];
+      return Boolean(select.value) && !(opt && isPlaceholderOption(opt.textContent ?? '', opt.value));
+    }
+    case 'combobox': {
+      if ((el.value ?? '').trim()) return true;
+      // Custom selects show the chosen option beside an empty search input.
+      let box: Element | null = el.parentElement;
+      for (let level = 0; box && level < 4; level++, box = box.parentElement) {
+        const shown = box.querySelector('[class*="selection-item"], [class*="selected-value"], [class*="select__value"]');
+        if (shown) return Boolean((shown.textContent ?? '').trim());
+      }
+      return false;
+    }
+    default:
+      return Boolean((el.value ?? '').trim());
   }
 }
 
