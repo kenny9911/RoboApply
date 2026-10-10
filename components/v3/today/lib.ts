@@ -1,5 +1,10 @@
 // components/v3/today/lib.ts
 //
+// @deprecated (WP-33). The /jobs feed moved to components/features/feed
+// (cardModel.ts holds the new pure card helpers). Nothing in the app imports
+// this file any more; only __tests__/utils/discovery.test.ts does. WP-75
+// deletes it together with that test.
+//
 // Pure display helpers for the Today match feed — formatting + the mapping
 // from real API shapes (RAJobListItem + RAJobMatchScoreView) onto the
 // prototype's card vocabulary (tags / facets / status). Kept framework-free
@@ -12,7 +17,13 @@ import type {
   RATrackerStatus,
   RAWorkType,
 } from '../../../lib/api/v2';
-import type { DiscoveryFilters } from './DiscoveryControls';
+
+/** The retired local filters (the DiscoveryControls component is deleted). */
+export interface DiscoveryFilters {
+  query: string;
+  workType: RAWorkType | 'all';
+  salaryOnly: boolean;
+}
 
 /** Client filters only narrow the already loaded collection. They do not
  * request another search or discard a job because its score is pending. */

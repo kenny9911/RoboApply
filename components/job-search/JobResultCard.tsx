@@ -1,5 +1,8 @@
 'use client';
 
+// @deprecated (WP-33). Only the deprecated JobSearchWorkspace renders this
+// card; feed cards are components/features/feed/JobCard.tsx. WP-75 deletes it.
+
 import { useLocale, useTranslations } from 'next-intl';
 import { Btn } from '../v3/primitives';
 import type { ProviderInfo, SearchJob } from '../../lib/api/job-search-types';
