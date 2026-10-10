@@ -454,3 +454,154 @@ export const ONBOARDING_ERROR_CODES = {
   /** The step cannot be skipped. */
   stepRequired: 'onboarding_step_required',
 } as const;
+
+// ── WP-30 extensions (additive; nothing above is changed) ─────────────────
+//
+// The views below EXTEND the FND-5 response types: every field FND declared is
+// still there with the same meaning; WP-30 adds what the screens need.
+
+/** O2 country picker (PRODUCT §4.3 MVP set) plus "Remote anywhere". */
+export const ONBOARDING_MVP_COUNTRIES = [
+  'US',
+  'CA',
+  'GB',
+  'IE',
+  'AU',
+  'NZ',
+  'SG',
+  'HK',
+  'TW',
+  'JP',
+  'KR',
+  'DE',
+  'FR',
+  'ES',
+  'PT',
+  'NL',
+  'REMOTE',
+] as const;
+export type OnboardingCountry = (typeof ONBOARDING_MVP_COUNTRIES)[number];
+
+/** O4 industries: the closed 19-item list the legacy preferences already store (labels are stored as-is; the UI localizes by slug). */
+export const ONBOARDING_INDUSTRIES = [
+  { id: 'Healthtech', slug: 'healthtech' },
+  { id: 'Climate', slug: 'climate' },
+  { id: 'Fintech', slug: 'fintech' },
+  { id: 'Edtech', slug: 'edtech' },
+  { id: 'Developer tools', slug: 'developer_tools' },
+  { id: 'AI / ML', slug: 'ai_ml' },
+  { id: 'B2B SaaS', slug: 'b2b_saas' },
+  { id: 'Consumer', slug: 'consumer' },
+  { id: 'E-commerce', slug: 'ecommerce' },
+  { id: 'Marketplaces', slug: 'marketplaces' },
+  { id: 'Logistics', slug: 'logistics' },
+  { id: 'Manufacturing', slug: 'manufacturing' },
+  { id: 'Cybersecurity', slug: 'cybersecurity' },
+  { id: 'Media', slug: 'media' },
+  { id: 'Gaming', slug: 'gaming' },
+  { id: 'Hardware', slug: 'hardware' },
+  { id: 'Bio / Pharma', slug: 'bio_pharma' },
+  { id: 'Real estate', slug: 'real_estate' },
+  { id: 'Legal-tech', slug: 'legal_tech' },
+] as const;
+
+/** O6 timing (PRODUCT §4.3): target p50 and the hard cap after which the rest is queued as `onboarding.match`. */
+export const ONBOARDING_MATCH_TARGET_MS = 45_000;
+export const ONBOARDING_MATCH_HARD_CAP_MS = 120_000;
+/** O6: how many top candidates get an AI fit analysis (queued `job.score`). */
+export const ONBOARDING_MATCH_AI_TOP_N = 20;
+/** O5: resumes a user may add through onboarding per day (persisted, `RARateCounter`). */
+export const ONBOARDING_RESUME_UPLOADS_PER_DAY = 10;
+/** POST /onboarding/match runs per user per hour (each run ingests and may queue AI scoring). */
+export const ONBOARDING_MATCH_RUNS_PER_HOUR = 5;
+/** Stages at which POST /onboarding/match may run (the O6 screen, or a deliberate re-run from O7 / the tour). */
+export const ONBOARDING_MATCH_STAGES = ['matching', 'confirm', 'tour'] as const;
+/** O5 upload limit (the existing upload route's limit). */
+export const ONBOARDING_RESUME_MAX_BYTES = 15 * 1024 * 1024;
+/** O5 paste door: minimum characters. */
+export const ONBOARDING_PASTE_MIN_CHARS = 200;
+
+/** UI-state keys (RAUserUiState) the onboarding screens use. */
+export const ONBOARDING_UI_KEYS = {
+  /** O8 overlay seen. */
+  tour: 'jobs.firstVisit',
+  /** "Finish setting up — {n} steps left" banner; demoted to Settings after 2 dismissals. */
+  finishBanner: 'onboarding.finishBanner',
+  /** O8 inline prompts (each shown once). */
+  scoreTip: 'onboarding.scoreTip',
+  resumeCheckBanner: 'onboarding.resumeCheckBanner',
+  skillsCheck: 'onboarding.skillsCheck',
+} as const;
+/** Dismissals after which the finish banner becomes a line in Settings. */
+export const FINISH_BANNER_MAX_DISMISSALS = 2;
+
+/** `onboardingAnswers.matching`: what O6 found (O7 reads it). */
+export interface OnboardingMatchResult {
+  /** Ranked jobs at Good fit or better (pre-score tiers until the AI scores land). */
+  jobCount: number;
+  /** Candidates compared. */
+  compared: number;
+  topJobIds: string[];
+  /** True while the remaining work runs as an `onboarding.match` queue item. */
+  continuedInBackground: boolean;
+  finishedAt: string;
+}
+
+/** `onboardingAnswers.resumeSuggestions`: what POST /onboarding/resume suggested (O7 chips). */
+export type OnboardingResumeSuggestions = OnboardingResumeResponse & { resumeVariantId: string };
+
+/** `onboardingAnswers.leftEarly`: the user closed onboarding after the account step (PRODUCT §4.1 "Leaving early"). */
+export interface OnboardingLeftEarly {
+  at: string;
+  /** The stage they left at; the finish banner links back to it. */
+  stage: OnboardingStage;
+}
+
+/** Steps the user skipped (`onboardingAnswers.skipped`). */
+export type OnboardingSkipped = OnboardingStage[];
+
+export interface OnboardingProgress {
+  /** Screens shown for this brand and branch (account/tour/done excluded). */
+  total: number;
+  /** Screens from the current (or left-at) stage to `confirm`, inclusive. 0 when finished. */
+  stepsLeft: number;
+  /** Set while the user has left onboarding early and not finished it. */
+  leftEarly: OnboardingLeftEarly | null;
+}
+
+/** GET /onboarding/state (extends FND's OnboardingStateResponse). */
+export interface OnboardingStateView extends OnboardingStateResponse {
+  brand: BrandId;
+  completed: boolean;
+  progress: OnboardingProgress;
+  /** Prefill the server knows from the request (never a guess about the person). */
+  defaults: {
+    /** From the visitor's country header or locale, when it is one of the MVP countries. */
+    country: OnboardingCountry | null;
+  };
+}
+
+/** GET /onboarding/title-suggest (extends FND's TitleSuggestion). */
+export interface TitleSuggestionView extends TitleSuggestion {
+  /** "Role group · Category" for roles; null for categories. */
+  context: string | null;
+  /** For a broad (level-1) title: more specific titles to offer as chips. */
+  children: Array<{ taxonomyId: string; label: string; level: 1 | 2 | 3 }>;
+}
+
+/** PUT /onboarding/steps/:step: `skip: true` keeps whatever was entered (validated leniently) and marks the step skipped. */
+export const STEP_SKIP_FLAG = 'skip' as const;
+
+/** WP-30 error codes (added to the FND set). */
+export const ONBOARDING_EXTRA_ERROR_CODES = {
+  /** The resume variant does not exist or is not the user's. */
+  resumeNotFound: 'onboarding_resume_not_found',
+  /** The resume has no readable text. */
+  resumeUnusable: 'onboarding_resume_unusable',
+  /** The daily onboarding resume limit is spent. */
+  resumeDailyLimit: 'onboarding_resume_daily_limit',
+  /** POST /complete before the tour. */
+  notFinished: 'onboarding_not_finished',
+  /** POST /match outside the O6 stage (before the resume step, or after setup). */
+  matchNotAvailable: 'onboarding_match_not_available',
+} as const;

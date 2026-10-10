@@ -1,29 +1,28 @@
 'use client';
 
-// /onboarding — route shell (FND-6b). The bare path used to redirect to /jobs
-// in next.config.mjs (FND-6a removed that rule so /onboarding/<stage> can
-// exist). Until WP-30 sends the user to their current stage (from
-// /auth/me.onboarding.nextRoute), it keeps the old behaviour: go to the
-// brand's home destination — the first visible nav entry (/jobs on
-// RoboApply) — once the capability flags are known.
-//
-// Owner: WP-30, who replaces this page.
+// /onboarding — sends the user to where their setup stands (WP-30):
+// GET /onboarding/state → `nextRoute` (the current or left-at screen), or the
+// jobs page once setup is finished. The "Finish setting up" banner links here.
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 
-import { homeHref, useVisibleNav } from '../../../components/v3/shell/destinations';
-import { useCapabilities } from '../../../lib/flags';
+import { useOnboardingState } from '../../../hooks/onboarding/useOnboarding';
 
 export default function OnboardingIndexPage() {
+  const t = useTranslations('onboarding.frame');
   const router = useRouter();
-  const nav = useVisibleNav();
-  const { status } = useCapabilities();
-  const target = status === 'loading' ? null : homeHref(nav);
+  const state = useOnboardingState();
+  const target = state.data ? (state.data.completed ? '/jobs' : (state.data.nextRoute ?? '/jobs')) : state.isError ? '/jobs' : null;
 
   useEffect(() => {
     if (target) router.replace(target);
   }, [router, target]);
 
-  return <div hidden data-route-stub="/onboarding" data-owner="WP-30" />;
+  return (
+    <p role="status" style={{ padding: 'var(--sp-6) var(--sp-4)', color: 'var(--text-muted)' }}>
+      {t('loading')}
+    </p>
+  );
 }

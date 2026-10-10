@@ -1,3 +1,10 @@
+// @deprecated (WP-30) — replaced by the server stage machine at
+// /api/v1/roboapply/onboarding/* (server/src/features/onboarding/). Nothing new
+// may call these routes; the legacy SetupPanel (components/v3/setup, still
+// imported by app/(auth)/jobs/page.tsx until WP-33) is the last caller.
+// WP-75 unmounts this router from server/src/roboapply/v2/routes/index.ts and
+// deletes it after a zero-importer grep.
+//
 // backend/src/roboapply/v2/routes/onboarding.ts
 //
 // Mounted at /api/v1/roboapply/v2/onboarding. First-run setup, two steps.
@@ -182,4 +189,5 @@ router.post('/seen', requireAuth, async (req: Request, res: Response) => {
   return ok(res, { autoOpens });
 });
 
+/** @deprecated WP-30: use features/onboarding (`/api/v1/roboapply/onboarding/*`); WP-75 deletes this router. */
 export default router;
