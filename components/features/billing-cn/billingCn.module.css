@@ -1,0 +1,159 @@
+/* components/features/billing-cn — GoApply WeChat Pay checkout (WP-62).
+   Clarity tokens only; light/dark come from app/globals.css, brand identity
+   from styles/brands/<brand>.css. Controls are at least 44 px tall. */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+.summary {
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.summaryHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.planName {
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.price {
+  font-size: var(--fs-title);
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.h3 {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.body {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--text-2);
+  line-height: 1.55;
+}
+
+.muted {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-height: 44px;
+  font-size: var(--fs-body);
+  color: var(--text-2);
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.check input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--action);
+}
+
+.link {
+  color: var(--action);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+  border-radius: var(--r-xs);
+}
+
+.notice {
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--warn-subtle);
+  color: var(--text);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+}
+
+.success {
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--ok-subtle);
+  color: var(--text);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.actions :global(.btn),
+.touch {
+  min-height: 44px;
+}
+
+/* The code is always dark on light so it scans in either theme. */
+.qrFrame {
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 232px;
+  max-width: 100%;
+  aspect-ratio: 1;
+  padding: var(--sp-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.qr {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--r-sm);
+}
+
+.facts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  font-size: var(--fs-body);
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
