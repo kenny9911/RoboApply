@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Product Designer - Example Co</title>
+  <meta property="og:title" content="Product Designer - Example Co">
+</head>
+<body>
+  <main>
+    <h1 data-ui="job-title">Product Designer</h1>
+    <span data-ui="job-location">Lisbon, Portugal</span>
+    <form data-ui="application-form" novalidate>
+      <h2>Personal information</h2>
+      <div data-ui="field"><label for="firstname">First name<span>*</span></label><input id="firstname" name="firstname" data-ui="firstname" type="text" required></div>
+      <div data-ui="field"><label for="lastname">Last name<span>*</span></label><input id="lastname" name="lastname" data-ui="lastname" type="text" required></div>
+      <div data-ui="field"><label for="email">Email<span>*</span></label><input id="email" name="email" data-ui="email" type="email" required></div>
+      <div data-ui="field"><label for="headline">Headline</label><input id="headline" name="headline" data-ui="headline" type="text"></div>
+      <div data-ui="field"><label for="phone">Phone</label><input id="phone" name="phone" data-ui="phone" type="tel"></div>
+      <div data-ui="field"><label for="address">Address</label><input id="address" name="address" data-ui="address" type="text"></div>
+      <div data-ui="field"><label for="avatar">Photo</label><input id="avatar" name="avatar" type="file" accept="image/*"></div>
+      <h2>Profile</h2>
+      <div data-ui="resume"><label id="resume-label">Resume<span>*</span></label><div data-role="dropzone"><input type="file" name="resume" data-ui="resume" aria-labelledby="resume-label" required><button type="button">Upload a file</button></div></div>
+      <div data-ui="field"><label for="summary">Summary</label><textarea id="summary" name="summary" data-ui="summary"></textarea></div>
+      <div data-ui="field"><label for="cover_letter">Cover letter</label><textarea id="cover_letter" name="cover_letter" data-ui="cover_letter"></textarea></div>
+      <button type="submit" data-ui="apply-button">Submit application</button>
+    </form>
+  </main>
+</body>
+</html>
