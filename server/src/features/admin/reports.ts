@@ -13,20 +13,24 @@
 // items say so and cannot be decided here.
 //
 // Decisions: `close` (closedAt + closeReason 'reported', like the feed's
-// three-report rule) or `restore` (clears closedAt/closeReason of a job closed
-// as 'reported' and drops its international scam flags; archivedAt is left
-// alone, so a posting that aged out or was removed by its source stays
-// archived). Each decision is stored as an RAJobInteraction row of kind
-// 'admin_review' by the admin (Schema request SR-74-2 asks for a proper review
-// table) and audited in SeekerActivityLog.
+// three-report rule) or `restore` — "Keep this job" in the console: it clears
+// closedAt/closeReason of a job closed as 'reported' and drops its
+// international scam flags; archivedAt is left alone, so a posting that aged
+// out or was removed by its source stays archived. Each decision is one
+// RAJobReview row (decision, note, by, at, and on restore the scam rule ids
+// that were cleared, `clearedRules`) plus an RAAdminAuditLog row (SR-74-2).
 //
-// Known limits until other owners act (handoff Requests):
-//   - The feed's three-report rule counts every report ever made, so the next
-//     single report closes a restored job again; it then reappears here as
-//     open (fresh reports), but the restore does not hold (WP-93 request).
-//   - The 'admin_review' rows sit under the admin's userId, so compliance
-//     retention (13 months) and the admin's data export include them
-//     (compliance-owner request; SR-74-2).
+// Decisions made before RAJobReview existed are RAJobInteraction rows of kind
+// 'admin_review' under the admin's user id. They are read (the list shows the
+// latest decision from either place) and never written again.
+//
+// What makes a kept job stay open is outside this module: the feed's
+// three-report rule must count only reports made after the job's latest
+// RAJobReview row, and re-enrichment must not bring back the `clearedRules`
+// of the job's latest restore row (that row always carries the whole set —
+// see `clearedRuleSet`).
+// `KEEP_DECISION_HOLDS` says whether those readers are in the tree; the
+// console words the Keep help text from it (never promises what is not so).
 
 import prisma from '../../lib/prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
@@ -47,7 +51,16 @@ import {
 export const REPORTS_PAGE_SIZE = 30;
 /** Jobs read per source when building the list (reports are rare; the cap keeps the read bounded). */
 export const REPORT_SOURCE_CAP = 500;
+/** RAJobInteraction.kind of decisions made before RAJobReview (read-only now). */
 export const ADMIN_REVIEW_KIND = 'admin_review';
+/**
+ * Does a "Keep" decision hold against later reports and re-enrichment?
+ * True only when features/feed (reporter count) and features/jobs/enrich read
+ * RAJobReview. `__tests__/services.test.ts` ("Keep holds only when the feed
+ * reads the decisions") compares this constant with the feed's source and
+ * fails when they disagree, in either direction.
+ */
+export const KEEP_DECISION_HOLDS = false;
 const NOTE_CHARS = 200;
 const MAX_NOTES = 3;
 
@@ -78,6 +91,8 @@ export interface DecisionRow {
   at: Date;
   by: string;
   note: string | null;
+  /** International scam rule ids cleared by a restore (empty for close and for old decisions). */
+  clearedRules: string[];
 }
 
 export interface ReportsStore {
@@ -89,9 +104,11 @@ export interface ReportsStore {
   flaggedIntlJobIds(take: number): Promise<string[]>;
   jobs(ids: readonly string[]): Promise<ReportJobRow[]>;
   reports(ids: readonly string[]): Promise<ReportRow[]>;
+  /** Every decision for these jobs: RAJobReview rows and the older 'admin_review' rows. */
   decisions(ids: readonly string[]): Promise<DecisionRow[]>;
   loadJob(id: string): Promise<ReportJobRow | null>;
   updateJob(id: string, data: { closedAt?: Date | null; archivedAt?: Date | null; closeReason?: string | null; fraudFlags?: unknown }): Promise<void>;
+  /** One RAJobReview row. */
   addDecision(row: DecisionRow): Promise<void>;
 }
 
@@ -121,12 +138,22 @@ function latestDecision(rows: readonly DecisionRow[]): Map<string, DecisionRow> 
   const out = new Map<string, DecisionRow>();
   for (const r of rows) {
     const prev = out.get(r.jobId);
-    if (!prev || prev.at <= r.at) out.set(r.jobId, r);
+    // On a tie the first row listed wins (the store lists RAJobReview rows first).
+    if (!prev || prev.at < r.at) out.set(r.jobId, r);
   }
   return out;
 }
 
 const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
+
+/**
+ * The scam rule ids a restore row records: the rules flagged now, plus the
+ * rules the job's earlier restores cleared (sorted, no repeats). Pure.
+ */
+export function clearedRuleSet(flaggedNow: readonly string[], earlier: readonly DecisionRow[]): string[] {
+  const carried = earlier.filter((d) => d.decision === 'restore').flatMap((d) => d.clearedRules);
+  return [...new Set([...flaggedNow, ...carried])].filter((r) => typeof r === 'string' && r.length > 0).sort();
+}
 
 /** Build one item and say whether it is open. Pure. */
 export function buildItem(job: ReportJobRow, reports: readonly ReportRow[], decision: DecisionRow | null): { item: ReportItem; open: boolean; sortAt: number } {
@@ -188,7 +215,7 @@ export async function listReports(
     store.flaggedIntlJobIds(REPORT_SOURCE_CAP),
   ]);
   const ids = [...new Set([...reported, ...closed, ...flagged])];
-  if (!ids.length) return { items: [], cursor: null };
+  if (!ids.length) return { items: [], cursor: null, keepHolds: KEEP_DECISION_HOLDS };
   const [jobs, reports, decisions] = await Promise.all([store.jobs(ids), store.reports(ids), store.decisions(ids)]);
   const latest = latestDecision(decisions);
   const reportsByJob = new Map<string, ReportRow[]>();
@@ -204,7 +231,7 @@ export async function listReports(
 
   const offset = query.cursor?.startsWith('o:') ? Math.max(0, Number(query.cursor.slice(2)) || 0) : 0;
   const page = built.slice(offset, offset + REPORTS_PAGE_SIZE).map((b) => b.item);
-  return { items: page, cursor: offset + REPORTS_PAGE_SIZE < built.length ? `o:${offset + REPORTS_PAGE_SIZE}` : null };
+  return { items: page, cursor: offset + REPORTS_PAGE_SIZE < built.length ? `o:${offset + REPORTS_PAGE_SIZE}` : null, keepHolds: KEEP_DECISION_HOLDS };
 }
 
 // ── Resolve ──────────────────────────────────────────────────────────────
@@ -226,31 +253,39 @@ export async function resolveReport(
   let state: 'open' | 'closed' = job.closedAt || job.archivedAt ? 'closed' : 'open';
   const before = { closedAt: iso(job.closedAt), closeReason: job.closeReason };
 
+  // The scam rules a restore clears, kept on the review row so re-enrichment can
+  // leave them out. The row carries the job's WHOLE cleared set: the rules
+  // flagged now plus those every earlier restore cleared. A second Keep (after a
+  // new report, or after a close in between) finds the flags already gone, and
+  // a reader of "the latest restore" must still see the first one's rules.
+  const flagged = intlScamFlags(job.fraudFlags);
+  const clearedRules = body.decision === 'restore' ? clearedRuleSet(flagged.map((f) => f.rule), await deps.store.decisions([job.id])) : [];
+
   if (body.decision === 'close') {
     if (!job.closedAt) {
       await deps.store.updateJob(job.id, { closedAt: now, closeReason: 'reported' });
     }
     state = 'closed';
   } else if (job.closeReason === 'reported') {
-    const flags = intlScamFlags(job.fraudFlags).length ? { fraudFlags: mergeFraudFlags(job.fraudFlags, []) } : {};
+    const flags = flagged.length ? { fraudFlags: mergeFraudFlags(job.fraudFlags, []) } : {};
     await deps.store.updateJob(job.id, { closedAt: null, closeReason: null, ...flags });
     state = job.archivedAt ? 'closed' : 'open';
-  } else if (intlScamFlags(job.fraudFlags).length) {
+  } else if (flagged.length) {
     await deps.store.updateJob(job.id, { fraudFlags: mergeFraudFlags(job.fraudFlags, []) });
   }
 
-  await deps.store.addDecision({ jobId: job.id, decision: body.decision, at: now, by: adminId, note });
+  await deps.store.addDecision({ jobId: job.id, decision: body.decision, at: now, by: adminId, note, clearedRules });
   await writeAdminAudit(deps.audit, {
     adminId,
     eventType: ADMIN_AUDIT_EVENTS.reportResolved,
-    payload: { jobId: job.id, decision: body.decision, note, before, after: { state } },
+    payload: { jobId: job.id, decision: body.decision, note, ...(clearedRules.length ? { clearedRules } : {}), before, after: { state } },
   });
   return { id: job.id, state, decision: body.decision };
 }
 
 // ── Prisma implementation ────────────────────────────────────────────────
 
-type Db = Pick<typeof prisma, 'rAJob' | 'rAJobInteraction'>;
+type Db = Pick<typeof prisma, 'rAJob' | 'rAJobInteraction' | 'rAJobReview'>;
 
 const JOB_SELECT = {
   id: true,
@@ -314,14 +349,27 @@ export function createPrismaReportsStore(db: Db = prisma): ReportsStore {
       return rows.map((r) => ({ jobId: r.jobId, reasonCode: r.reasonCode, note: noteOf(r.detail), createdAt: r.createdAt }));
     },
     async decisions(ids) {
-      const rows = await db.rAJobInteraction.findMany({
-        where: { jobId: { in: [...ids] }, kind: ADMIN_REVIEW_KIND },
-        orderBy: { createdAt: 'desc' },
-        select: { jobId: true, userId: true, reasonCode: true, detail: true, createdAt: true },
-      });
-      return rows
-        .filter((r) => r.reasonCode === 'close' || r.reasonCode === 'restore')
-        .map((r) => ({ jobId: r.jobId, decision: r.reasonCode as ResolveDecision, at: r.createdAt, by: r.userId, note: noteOf(r.detail) }));
+      const jobIds = [...ids];
+      const [reviews, legacy] = await Promise.all([
+        db.rAJobReview.findMany({
+          where: { jobId: { in: jobIds } },
+          orderBy: { at: 'desc' },
+          select: { jobId: true, decision: true, note: true, by: true, at: true, clearedRules: true },
+        }),
+        // Decisions from before RAJobReview (read-only).
+        db.rAJobInteraction.findMany({
+          where: { jobId: { in: jobIds }, kind: ADMIN_REVIEW_KIND },
+          orderBy: { createdAt: 'desc' },
+          select: { jobId: true, userId: true, reasonCode: true, detail: true, createdAt: true },
+        }),
+      ]);
+      const isDecision = (v: string | null): v is ResolveDecision => v === 'close' || v === 'restore';
+      return [
+        ...reviews.filter((r) => isDecision(r.decision)).map((r) => ({ jobId: r.jobId, decision: r.decision as ResolveDecision, at: r.at, by: r.by, note: r.note, clearedRules: r.clearedRules ?? [] })),
+        ...legacy
+          .filter((r) => isDecision(r.reasonCode))
+          .map((r) => ({ jobId: r.jobId, decision: r.reasonCode as ResolveDecision, at: r.createdAt, by: r.userId, note: noteOf(r.detail), clearedRules: [] })),
+      ];
     },
     loadJob(id) {
       return db.rAJob.findUnique({ where: { id }, select: JOB_SELECT });
@@ -335,8 +383,9 @@ export function createPrismaReportsStore(db: Db = prisma): ReportsStore {
       await db.rAJob.update({ where: { id }, data: update, select: { id: true } });
     },
     async addDecision(row) {
-      await db.rAJobInteraction.create({
-        data: { userId: row.by, jobId: row.jobId, kind: ADMIN_REVIEW_KIND, reasonCode: row.decision, detail: row.note ? { note: row.note } : undefined, createdAt: row.at },
+      await db.rAJobReview.create({
+        data: { jobId: row.jobId, decision: row.decision, note: row.note, by: row.by, at: row.at, clearedRules: row.clearedRules },
+        select: { id: true },
       });
     },
   };

@@ -17,6 +17,15 @@
 //     (alertDigest), the LinkedIn link, the acquisition answer
 //   - GoApply steps: validated by features/onboarding-cn (WP-31 seam);
 //     `cnFields` written only with the documented keys.
+//
+// GoApply (INT-08): the market snapshot goes to onboarding-cn's index counts
+// (`cnSnapshot`); the first-value route is built with the stored identity
+// (`cnFirstValueContext`: 社招 → /jobs when the feed is on, else R-14's
+// /campus → /jobs → /resume); POST /confirm takes the cn confirm body.
+//
+// When setup reaches `done` (the tour is finished, or the user leaves early)
+// `onSetupDone` runs once per call, softly: the invite programme checks the
+// user's referral there, and a failure never blocks finishing onboarding.
 
 import type { z } from 'zod';
 import { HttpError, parseInput } from '../../platform/http.js';
@@ -28,6 +37,7 @@ import {
   ONBOARDING_MVP_COUNTRIES,
   ROBOAPPLY_STEP_BODY_SCHEMAS,
   ResumeStepSchema,
+  firstValueRoute,
   isStageOfBrand,
   type FirstValueContext,
   type MarketSnapshotResponse,
@@ -102,6 +112,16 @@ export interface OnboardingDeps {
   /** WP-31 writer: the step's consent records (ledger), `RAProfile.cnFields` and default-filter patch. */
   applyCnStep(userId: string, brand: ProductBrand, result: CnStepValidation, opts: { locale?: string | null }): Promise<unknown>;
   snapshot(q: SnapshotQuery): Promise<MarketSnapshotResponse>;
+  /** GoApply: the same question answered from the cn index (onboarding-cn `marketSnapshotForOnboarding`). Absent = `snapshot`. */
+  cnSnapshot?(q: { taxonomyId: string; country: string; city?: string }): Promise<MarketSnapshotResponse>;
+  /** GoApply: the first-value context from the stored answers (onboarding-cn `cnFirstValueContext`; R-14). Absent = the request's capabilities only. */
+  cnFirstValueContext?(answers: Record<string, unknown> | null, caps: { campusCalendar: boolean; jobsFeed: boolean }): FirstValueContext;
+  /**
+   * Setup reached `done` for this user (finished the tour, or left early).
+   * Production wiring: growth `checkReferralFor`. Soft: awaited, but a
+   * rejection is only reported through `warn`.
+   */
+  onSetupDone?(userId: string): Promise<unknown>;
   titleSuggest(q: string, locale: string): TitleSuggestionView[];
   /** Deterministic resume seed (raResumeSeed). */
   seedResume(row: ResumeVariantRow): { roles: string[]; seniority: string | null; years: number | null };
@@ -126,7 +146,8 @@ export interface OnboardingServiceImpl {
   meFor(userId: string, brand: BrandId): Promise<OnboardingMe>;
   getState(userId: string, ctx: OnboardingContext): Promise<OnboardingStateView>;
   saveStep(userId: string, step: string, body: Record<string, unknown>, ctx: OnboardingContext): Promise<StepResponse>;
-  confirm(userId: string, body: z.infer<typeof OnboardingConfirmBodySchema>, ctx: OnboardingContext): Promise<OnboardingStageResponse>;
+  /** RoboApply: the O7 body. GoApply: the cn confirm body (validated by onboarding-cn, like PUT /steps/confirm). */
+  confirm(userId: string, body: z.infer<typeof OnboardingConfirmBodySchema> | Record<string, unknown>, ctx: OnboardingContext): Promise<OnboardingStageResponse>;
   complete(userId: string, ctx: OnboardingContext): Promise<OnboardingStageResponse>;
   skip(userId: string, ctx: OnboardingContext): Promise<OnboardingStageResponse>;
   titleSuggest(q: string, locale: string): TitleSuggestionView[];
@@ -170,6 +191,22 @@ export function createOnboardingService(deps: OnboardingDeps): OnboardingService
     const rec = await repo.read(userId);
     if (!rec) throw new HttpError('not_found', 'Finish creating your account first.');
     return rec;
+  }
+
+  /** Where the first-value screen is for this user (GoApply reads the stored identity; R-14). */
+  function firstValueOf(ctx: OnboardingContext, answers: OnboardingAnswers | null | undefined): FirstValueContext | undefined {
+    if (ctx.brand.id !== 'goapply' || !deps.cnFirstValueContext) return ctx.firstValue;
+    return deps.cnFirstValueContext(answers ?? null, { campusCalendar: ctx.firstValue?.campusCalendar === true, jobsFeed: ctx.firstValue?.jobsFeed === true });
+  }
+
+  /** Setup reached `done`: tell the invite programme. Never throws. */
+  async function setupDone(userId: string): Promise<void> {
+    if (!deps.onSetupDone) return;
+    try {
+      await deps.onSetupDone(userId);
+    } catch (err) {
+      deps.warn?.('after-setup step failed (non-fatal)', { userId, error: err instanceof Error ? err.message : String(err) });
+    }
   }
 
   /** Write a filter patch to the default profile; one retry on a version race. */
@@ -298,7 +335,7 @@ export function createOnboardingService(deps: OnboardingDeps): OnboardingService
       return {
         stage: out.transition.step,
         nextStage: out.transition.nextStage,
-        nextRoute: routeFor(brand.id, out.transition.nextStage, out.entry, ctx.firstValue),
+        nextRoute: routeFor(brand.id, out.transition.nextStage, out.entry, firstValueOf(ctx, out.answers)),
       };
     } catch (err) {
       return rethrow(err);
@@ -313,27 +350,29 @@ export function createOnboardingService(deps: OnboardingDeps): OnboardingService
     return {
       brand,
       stage: at,
-      nextRoute: completed ? null : routeFor(brand, at, rec.entry, ctx.firstValue),
+      nextRoute: completed ? null : routeFor(brand, at, rec.entry, firstValueOf(ctx, rec.answers)),
       branch: brand === 'roboapply' ? parseBranch(rec.path) : null,
       answers: rec.answers,
       entry: rec.entry,
       completed,
       progress: progressOf(brand, rec),
       defaults: { country: defaultCountry(ctx.country, ctx.locale) },
+      firstValueRoute: firstValueRoute(brand, firstValueOf(ctx, rec.answers)),
     };
   }
 
   async function complete(userId: string, ctx: OnboardingContext): Promise<OnboardingStageResponse> {
     const brand = ctx.brand.id;
     try {
-      const entry = await repo.mutate(userId, (cur) => {
+      const out = await repo.mutate(userId, (cur) => {
         const at = effectiveStage(brand, cur);
         if (at !== 'tour' && at !== 'done') throw new StageError('onboarding_not_finished', `Finish "${at}" first.`);
         const answers = { ...cur.answers };
         delete answers.leftEarly;
-        return { patch: { step: 'done', answers, completedAt: cur.completedAt ?? now() }, result: cur.entry };
+        return { patch: { step: 'done', answers, completedAt: cur.completedAt ?? now() }, result: { entry: cur.entry, answers } };
       });
-      return { stage: 'done', nextRoute: routeFor(brand, 'done', entry, ctx.firstValue) };
+      await setupDone(userId);
+      return { stage: 'done', nextRoute: routeFor(brand, 'done', out.entry, firstValueOf(ctx, out.answers)) };
     } catch (err) {
       return rethrow(err);
     }
@@ -342,15 +381,18 @@ export function createOnboardingService(deps: OnboardingDeps): OnboardingService
   async function skip(userId: string, ctx: OnboardingContext): Promise<OnboardingStageResponse> {
     const brand = ctx.brand.id;
     try {
-      const entry = await repo.mutate(userId, (cur) => {
+      const out = await repo.mutate(userId, (cur) => {
         const at = effectiveStage(brand, cur);
-        if (at === 'done') return { patch: null, result: cur.entry };
-        if (at === 'tour') return { patch: { step: 'done', completedAt: cur.completedAt ?? now() }, result: cur.entry };
+        const result = { entry: cur.entry, answers: cur.answers, reachedDone: at !== 'done' };
+        if (at === 'done') return { patch: null, result };
+        if (at === 'tour') return { patch: { step: 'done', completedAt: cur.completedAt ?? now() }, result };
         const answers: OnboardingAnswers = { ...cur.answers, leftEarly: { at: now().toISOString(), stage: at } };
-        return { patch: { step: 'done', answers, ...(cur.startedAt ? {} : { startedAt: now() }) }, result: cur.entry };
+        return { patch: { step: 'done', answers, ...(cur.startedAt ? {} : { startedAt: now() }) }, result };
       });
+      // The stored stage is `done` from here on (finished, or left early): the same moment the invite check waits for.
+      if (out.reachedDone) await setupDone(userId);
       // Leaving early lands on the first-value screen, never on the carried job's page mid-setup.
-      return { stage: 'done', nextRoute: routeFor(brand, 'done', { ...(entry ?? {}), jobId: undefined }, ctx.firstValue) };
+      return { stage: 'done', nextRoute: routeFor(brand, 'done', { ...(out.entry ?? {}), jobId: undefined }, firstValueOf(ctx, out.answers)) };
     } catch (err) {
       return rethrow(err);
     }
@@ -438,7 +480,10 @@ export function createOnboardingService(deps: OnboardingDeps): OnboardingService
     skip,
     titleSuggest: (q, locale) => deps.titleSuggest(q, locale),
     marketSnapshot: (query, ctx) =>
-      deps.snapshot({ market: ctx.brand.market, taxonomyId: query.taxonomyId, country: query.country, ...(query.city ? { city: query.city } : {}) }),
+      // GoApply counts come from the cn index (public, canonical, live, not fraud-flagged; pay only at ≥ MIN_SAMPLE).
+      ctx.brand.id === 'goapply' && deps.cnSnapshot
+        ? deps.cnSnapshot({ taxonomyId: query.taxonomyId, country: query.country, ...(query.city ? { city: query.city } : {}) })
+        : deps.snapshot({ market: ctx.brand.market, taxonomyId: query.taxonomyId, country: query.country, ...(query.city ? { city: query.city } : {}) }),
     resume,
     applyAnswers,
   };

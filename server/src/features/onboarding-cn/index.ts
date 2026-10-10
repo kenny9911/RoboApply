@@ -8,10 +8,14 @@
 //   store onboardingAnswers[step] = v.answers, advance the stage, then
 //   await applyCnStep(userId, brand, v, { locale })   // consents, cnFields, default filters
 //
-// Also here: 届别 defaults, the cn market snapshot (G4 panel, G7 counts), the
-// school/place data, the first-value context (R-14) and the 个性化推荐 seam the
-// feed reads (`rankingModeForUser`, `feedSortFor`). `createOnboardingCnRouter`
-// is exported for INT to mount at /api/v1/roboapply/onboarding/cn.
+// Also here: 届别 defaults, the cn market snapshot (G4 panel, G7 counts; WP-30's
+// GET /onboarding/market-snapshot is answered by `marketSnapshotForOnboarding`
+// on GoApply), the school/place data, the first-value context (R-14;
+// `cnFirstValueContext`, used by the onboarding service for every GoApply
+// route) and the 个性化推荐 answer (`rankingModeForUser`; the feed's own
+// `isFeedPersonalized` is the rule that orders the feed).
+// `createOnboardingCnRouter` is mounted at /api/v1/roboapply/onboarding/cn
+// (wrappers: lib/api/onboardingCn.ts).
 
 import type { BrandId, ProductBrand } from '../../platform/brand/registry.js';
 import type { FirstValueContext, MarketSnapshotResponse } from '../onboarding/contract.js';
@@ -50,7 +54,7 @@ export {
   searchSchools,
 } from './data.js';
 export { cnMarketSnapshot, cnCampusWhere, cnJobWhere, NOT_FRAUD_FLAGGED, SNAPSHOT_WINDOW_DAYS } from './marketSnapshot.js';
-export { feedRankingFor, feedSortFor, personalizedChoice, rankingModeFor, rankingModeForUser, type FeedRanking } from './personalization.js';
+export { feedSortFor, personalizedChoice, rankingModeFor, rankingModeForUser } from './personalization.js';
 
 export interface OnboardingCnService {
   /** Validate a GoApply step body; `ctx.answers` (stored onboardingAnswers) enables the cross-step rules. */

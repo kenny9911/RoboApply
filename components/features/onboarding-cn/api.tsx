@@ -11,17 +11,16 @@
 //   current answers     getConsents                 (resume gate: is AI processing on?)
 //   record a consent    recordConsent               (resume gate: turning AI processing on later)
 //   role typeahead      getTaxonomy                 (lib/api/search, WP-20; zh labels)
-//   open-jobs panel     getMarketSnapshot           (lib/api/onboarding; WP-30 dispatches GoApply to
-//                                                     onboarding-cn's index counts)
+//   open-jobs panel     getCnMarketSnapshot         (lib/api/onboardingCn: every chosen role and city
+//                                                     in one count, with the median, through `cnSnapshotView`)
 //   campus programmes   listCampusEvents / subscribeCampus (lib/api/campus, WP-58)
-// When INT mounts /onboarding/cn (handoff), `marketSnapshot` switches to the
-// cn route (every role and city in one count, plus the campus count and the
-// median) through `cnSnapshotView`. Until then a search with several roles or
-// cities shows the count for one of them, named in the copy (`scope`).
+// The campus count in the panel is the programme list's own (so it is absent
+// when the campus calendar is off, R-14) and is dated with the list's `asOf`.
 
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 
-import { getOnboardingState, getMarketSnapshot, putOnboardingStep } from '../../../lib/api/onboarding';
+import { getOnboardingState, putOnboardingStep } from '../../../lib/api/onboarding';
+import { cnSnapshotQuery, getCnMarketSnapshot } from '../../../lib/api/onboardingCn';
 import { getConsents, getSignupConsents, recordConsent } from '../../../lib/api/compliance';
 import { getTaxonomy } from '../../../lib/api/search';
 import { listCampusEvents, subscribeCampus } from '../../../lib/api/campus';
@@ -72,6 +71,8 @@ export interface CnSnapshotQuery {
 export interface CnProgramList {
   items: CampusEventView[];
   more: boolean;
+  /** When the list was read on the server (the oldest page when several cities were asked); null when the server states none. */
+  asOf?: string | null;
 }
 
 export interface CnOnboardingApi {
@@ -104,8 +105,9 @@ export function payFromOnboarding(pay: MarketSnapshotResponse['pay']): CnPayView
 
 /**
  * The cn route's answer (GET /onboarding/cn/market-snapshot, every role and
- * city at once) → the panel's view. For `defaultCnOnboardingApi` once INT
- * mounts that route and adds its lib/api wrapper.
+ * city at once) → the panel's view. `defaultCnOnboardingApi.marketSnapshot`
+ * uses it for the job count and the pay; it replaces the campus count with
+ * the programme list's (see `campusOpenFrom`).
  */
 export function cnSnapshotView(res: CnMarketSnapshotResponse, role: string): CnSnapshotView {
   return {
@@ -115,6 +117,18 @@ export function cnSnapshotView(res: CnMarketSnapshotResponse, role: string): CnS
       ? { kind: 'iqr', median: res.pay.medianMonthly, low: res.pay.p25Monthly, high: res.pay.p75Monthly, listedCount: res.pay.listedCount, sampleSize: res.pay.sampleSize, asOf: res.pay.asOf }
       : null,
   };
+}
+
+/** The campus count of the panel: the programme list's size, dated with the list's own `asOf`; null when the list is unavailable. */
+export function campusOpenFrom(list: CnProgramList | null): CnSnapshotView['campusOpen'] {
+  return list ? { value: list.items.length, more: list.more, asOf: list.asOf ?? null } : null;
+}
+
+/** The oldest of the pages' `asOf` values (a merged count is only as fresh as its oldest page); null when none is stated. */
+function oldestAsOf(pages: ReadonlyArray<{ asOf?: string | null }>): string | null {
+  const stated = pages.map((p) => p.asOf).filter((v): v is string => typeof v === 'string' && !Number.isNaN(Date.parse(v)));
+  if (stated.length !== pages.length || !stated.length) return null;
+  return stated.reduce((a, b) => (Date.parse(a) <= Date.parse(b) ? a : b));
 }
 
 async function campusPrograms(q: { classYear?: number | null; cities?: readonly string[] }): Promise<CnProgramList | null> {
@@ -132,7 +146,7 @@ async function campusPrograms(q: { classYear?: number | null; cities?: readonly 
         items.push(e);
       }
     }
-    return { items, more: pages.some((p) => !!p.cursor) };
+    return { items, more: pages.some((p) => !!p.cursor), asOf: oldestAsOf(pages) };
   } catch {
     return null;
   }
@@ -153,20 +167,13 @@ export const defaultCnOnboardingApi: CnOnboardingApi = {
     return res.suggestions.filter((s) => s.level >= 2).map((s) => ({ taxonomyId: s.id, label: s.label, context: s.context }));
   },
   async marketSnapshot(q) {
-    const scope = snapshotScope(q);
-    const [jobs, campus] = await Promise.all([
-      scope
-        ? getMarketSnapshot({ taxonomyId: scope.taxonomyId, country: 'CN', ...(scope.city ? { city: scope.city } : {}) }).catch(() => null)
-        : Promise.resolve(null),
-      campusPrograms({ classYear: q.classYear, cities: q.cities }),
-    ]);
-    if (!jobs || !scope) return null;
-    return {
-      jobs: { value: jobs.jobCount.value, asOf: jobs.jobCount.asOf, scope: { complete: scope.complete, role: scope.role, city: scope.city } },
-      // listCampusEvents states no as-of time, so none is shown (never the browser clock).
-      campusOpen: campus ? { value: campus.items.length, more: campus.more, asOf: null } : null,
-      pay: payFromOnboarding(jobs.pay),
-    };
+    if (!q.roles.length) return null;
+    const { query, exact } = cnSnapshotQuery(q);
+    // A role or city the route cannot take (a comma in it) would make the count cover less than the search: show none.
+    if (!exact) return null;
+    const [snapshot, campus] = await Promise.all([getCnMarketSnapshot(query).catch(() => null), campusPrograms({ classYear: q.classYear, cities: q.cities })]);
+    if (!snapshot) return null;
+    return { ...cnSnapshotView(snapshot, q.roles[0]!.label), campusOpen: campusOpenFrom(campus) };
   },
   campusPrograms: (q) => campusPrograms(q),
   async subscribeProgram(eventId) {

@@ -5,10 +5,11 @@
 //   GET  /system                      platform health (System panel)
 //   GET  /system/queue                work items by status/kind (dead items first)
 //   POST /system/queue/:id/retry      put a dead/failed item back in the queue
+//   GET  /system/audit                admin actions, newest first (RAAdminAuditLog)
 //   GET  /costs   · GET /costs.csv    cost by SKU × brand × day (UsageDeductionLog)
 //   GET  /safety                      GoApply content-safety readiness + recent events
 //   GET  /reports                     "Reports to review" (user job reports + intl scam signals)
-//   POST /reports/:id/resolve         close or restore a reported job (audited)
+//   POST /reports/:id/resolve         close or keep (restore) a reported job (RAJobReview row, audited)
 //   GET/POST /overrides · DELETE /overrides/:id   per-user overrides (audited; credits area service)
 //   GET  /copilot-feedback            Assistant feedback (copilot.listFeedback(), PII-redacted excerpt)
 //   POST /referrals/:id/moderate      GoApply referral-code moderation (cn/referrals service, audited)
@@ -306,6 +307,13 @@ export interface ReportItem {
 export interface ReportsResponse {
   items: ReportItem[];
   cursor: string | null;
+  /**
+   * True when a "Keep" decision holds: the feed's three-report rule counts
+   * only reports made after the latest decision, and re-enrichment leaves the
+   * cleared scam rules alone (KEEP_DECISION_HOLDS in reports.ts). False: one
+   * new report can close a kept job again, and the console says so.
+   */
+  keepHolds: boolean;
 }
 export interface ResolveReportResponse {
   id: string;
@@ -367,12 +375,45 @@ export interface AdminFeedbackResponse {
   cursor: string | null;
 }
 
-// ── Audit (SeekerActivityLog.eventType values written by this area) ───────
+// ── Audit (RAAdminAuditLog; GET /system/audit) ───────────────────────────
 
+export const AdminAuditQuerySchema = z.object({
+  eventType: z.string().max(80).optional(),
+  subjectUserId: Id.optional(),
+  adminId: Id.optional(),
+  cursor: z.string().max(120).optional(),
+});
+
+export interface AdminAuditView {
+  id: string;
+  /** The admin who acted (user id; no name is stored). */
+  adminId: string;
+  /** The person the action is about; null when it is about a job or the platform. */
+  subjectUserId: string | null;
+  /** ADMIN_AUDIT_EVENTS, or another area's event name. */
+  eventType: string;
+  /** The stored details on one line, contact details redacted, ≤400 characters. */
+  details: string;
+  createdAt: string;
+}
+export interface AdminAuditResponse {
+  items: AdminAuditView[];
+  cursor: string | null;
+}
+
+/**
+ * RAAdminAuditLog.eventType values the admin console has a label and a filter
+ * entry for. All but the last are written by this area. `inviteRewardReviewed`
+ * is the name reserved for the held-invite-reward decision, which is written by
+ * the growth admin router (features/growth/routes.ts, POST /:id/review) — that
+ * write is a request to the growth owner (INT-01); until it lands the filter
+ * entry simply finds no rows.
+ */
 export const ADMIN_AUDIT_EVENTS = {
   overrideCreated: 'admin_override_created',
   overrideDeleted: 'admin_override_deleted',
   reportResolved: 'admin_report_resolved',
   workItemRetried: 'admin_work_item_retried',
   referralModerated: 'admin_referral_moderated',
+  inviteRewardReviewed: 'admin_invite_reward_reviewed',
 } as const;

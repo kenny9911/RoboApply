@@ -3,12 +3,15 @@
 // components/v3/admin/ReportsConsole.tsx — /admin/reports, "Reports to review"
 // (WP-74; PRODUCT F-TRUST-04). Views, linkable with ?view=:
 //   jobs       user job reports (scam, closed, wrong data …) and the
-//              international scam signals (WP-17), with Close / Restore;
+//              international scam signals (WP-17), with Close / Keep. The
+//              Keep help text follows the API's `keepHolds`: it says a kept
+//              job stays open only when the feed honours the decision;
 //   referrals  GoApply referral codes waiting for a first check or hidden by
 //              reports (WP-54), with Approve / Reject (GoApply only);
 //   privacy    personal-data requests with their legal due dates (WP-13).
 // GoApply jobs reported only for fraud reasons are decided on /admin/fraud
-// (WP-41); their cards link there instead of offering a decision.
+// (WP-41); their cards link there instead of offering a decision. Held invite
+// rewards have their own page, /admin/reports/invites (InviteRewardsConsole).
 
 import { useState } from 'react';
 import Link from 'next/link';
@@ -100,7 +103,7 @@ function JobReports() {
         <p className={styles.muted}>{t(status === 'open' ? 'emptyOpen' : 'emptyResolved')}</p>
       ) : (
         <ul className={styles.list}>
-          {q.data.items.map((item) => <ReportCard key={item.id} item={item} />)}
+          {q.data.items.map((item) => <ReportCard key={item.id} item={item} keepHolds={q.data!.keepHolds === true} />)}
         </ul>
       )}
       {q.data?.cursor && <Btn variant="ghost" onClick={() => setCursor(q.data!.cursor ?? undefined)}>{t('more')}</Btn>}
@@ -109,7 +112,7 @@ function JobReports() {
   );
 }
 
-function ReportCard({ item }: { item: ReportItem }) {
+function ReportCard({ item, keepHolds }: { item: ReportItem; keepHolds: boolean }) {
   const t = useTranslations('admin.console.reports');
   const locale = useLocale();
   const resolve = useResolveReport();
@@ -170,7 +173,7 @@ function ReportCard({ item }: { item: ReportItem }) {
             {resolve.isError && <p className={styles.error} role="alert">{t('decideFailed')}</p>}
             {resolve.isSuccess && <p className={styles.success} role="status">{t('decided')}</p>}
           </div>
-          <p className={styles.muted}>{t('decisionHelp')}</p>
+          <p className={styles.muted}>{t(keepHolds ? 'decisionHelpHolds' : 'decisionHelp')}</p>
         </>
       )}
     </li>

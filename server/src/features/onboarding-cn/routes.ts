@@ -1,16 +1,14 @@
 // server/src/features/onboarding-cn/routes.ts — GoApply onboarding data routes (WP-31).
 //
-// NOT MOUNTED YET: features/index.ts is a hot file. Handoff request to INT
-// (WP-93): mount `createOnboardingCnRouter()` at
-// /api/v1/roboapply/onboarding/cn, and add the `lib/api` wrappers. Until
-// then the web steps read the school and place lists from the bundled data
-// files and the market panel through the onboarding wrapper.
+// Mounted by features/index.ts at /api/v1/roboapply/onboarding/cn (id
+// `onboarding-cn`); the web calls them through lib/api/onboardingCn.ts. The
+// step bodies themselves go through WP-30's PUT /onboarding/steps/:step.
 //
 //   GET /schools?q=&limit=        → CnSchoolSearchResponse (MOE lists, with source and as-of)
 //   GET /provinces                → CnProvincesResponse (GB/T 2260)
 //   GET /market-snapshot?roles=&taxonomyIds=&cities=&class=
 //                                 → CnMarketSnapshotResponse (D3 counts; pay only at ≥20 rows)
-//   GET /defaults                 → { graduationClass: { yingjie, zaixiao }, graduationMonth }
+//   GET /defaults                 → CnOnboardingDefaultsResponse ({ graduationClass: { yingjie, zaixiao }, graduationMonth })
 //
 // Seeker session required. GoApply only: on RoboApply every route answers
 // 404 feature_disabled (the screens do not exist there).
@@ -20,7 +18,7 @@ import { seekerAuth } from '../../roboapply/engine/middleware/seekerAuth.js';
 import { getCurrentBrandOrDefault } from '../../platform/brand/index.js';
 import { fail, parseQuery, route } from '../../platform/http.js';
 import type { FeatureRouterDeps } from '../index.js';
-import { CnMarketSnapshotQuerySchema, CnSchoolSearchQuerySchema } from './contract.js';
+import { CnMarketSnapshotQuerySchema, CnSchoolSearchQuerySchema, type CnOnboardingDefaultsResponse } from './contract.js';
 import { CN_DEFAULT_GRADUATION_MONTH, defaultGraduationClass } from './classYear.js';
 import { provincesResponse, schoolSearchResponse } from './data.js';
 import { cnMarketSnapshot, type SnapshotDb } from './marketSnapshot.js';
@@ -54,7 +52,7 @@ export function createOnboardingCnRouter(deps: OnboardingCnRouterDeps = {}): Rou
     const q = parseQuery(req, CnMarketSnapshotQuerySchema);
     return cnMarketSnapshot(q, { db: deps.db, now: now() });
   }));
-  router.get('/defaults', ...auth, gate, route(async () => {
+  router.get('/defaults', ...auth, gate, route(async (): Promise<CnOnboardingDefaultsResponse> => {
     const at = now();
     return {
       graduationClass: { yingjie: defaultGraduationClass('yingjie', at), zaixiao: defaultGraduationClass('zaixiao', at) },

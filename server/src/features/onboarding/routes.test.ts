@@ -192,6 +192,31 @@ describe('the flow over HTTP', () => {
     expect((await call('GET', '/state')).body.data).toMatchObject({ progress: { leftEarly: { stage: 'basics' } } });
   });
 
+  it('GoApply: PUT /steps/confirm and POST /confirm take the cn confirm body; the market snapshot reads the cn index', async () => {
+    await h!.close();
+    const validateCnStep = async (step: string, body: unknown) =>
+      step === 'confirm' && !(body as Record<string, unknown>).experienceLevels ? { ok: true, answers: body as Record<string, unknown> } : { ok: false, issues: [{ path: ['experienceLevels'], message: 'not_an_option' }] };
+    const cnSnapshot = async () => ({ jobCount: { value: 12, source: 'index' as const, asOf: '2026-10-10T00:00:00.000Z' }, windowDays: 30, pay: null, topSkills: [] });
+    await start({ validateCnStep, cnSnapshot, cnFirstValueContext: (_a, caps) => ({ ...caps, cnIdentity: 'yingjie' as const }) });
+    mem.rows.get('u1')!.step = 'confirm';
+    const put = await call('PUT', '/steps/confirm', { heardFrom: 'friend' }, GO);
+    expect(put.status).toBe(200);
+    // Mode off and no campus calendar (the defaults): R-14 ends at /resume.
+    expect(put.body.data).toEqual({ stage: 'tour', nextStage: 'tour', nextRoute: '/resume' });
+    mem.rows.get('u1')!.step = 'confirm';
+    const post = await call('POST', '/confirm', { heardFrom: 'school' }, GO);
+    expect(post.status).toBe(200);
+    expect(post.body.data).toEqual({ stage: 'tour', nextRoute: '/resume' });
+    // The RoboApply-only body is refused by the cn validator, not silently accepted.
+    mem.rows.get('u1')!.step = 'confirm';
+    expect((await call('POST', '/confirm', { experienceLevels: ['mid'] }, GO)).status).toBe(422);
+    const snap = await call<{ jobCount: { value: number } }>('GET', '/market-snapshot?taxonomyId=product_manager&country=CN', undefined, GO);
+    expect(snap.body.data.jobCount.value).toBe(12);
+    // RoboApply still needs its own body on POST /confirm.
+    mem.rows.get('u1')!.step = 'confirm';
+    expect((await call('POST', '/confirm', { heardFrom: 'friend' })).status).toBe(422);
+  });
+
   it('confirm validates the LinkedIn URL', async () => {
     mem.rows.get('u1')!.step = 'confirm';
     const res = await call('POST', '/confirm', { experienceLevels: ['mid'], linkedinUrl: 'https://example.com/me' });

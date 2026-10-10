@@ -373,6 +373,7 @@ export function adminCsvUrl(
 //   GET    /api/v1/roboapply/admin/system
 //   GET    /api/v1/roboapply/admin/system/queue
 //   POST   /api/v1/roboapply/admin/system/queue/:id/retry
+//   GET    /api/v1/roboapply/admin/system/audit   (admin actions, RAAdminAuditLog)
 //   GET    /api/v1/roboapply/admin/costs          (+ costs.csv, browser download)
 //   GET    /api/v1/roboapply/admin/safety
 //   GET    /api/v1/roboapply/admin/reports
@@ -384,11 +385,14 @@ export function adminCsvUrl(
 //   GET    /api/v1/roboapply/admin/cn/referrals/queue
 //   POST   /api/v1/roboapply/admin/referrals/:id/moderate   (WP-54 service + audit row)
 //   GET    /api/v1/roboapply/admin/credits/refund-quote
+// Held invite rewards (WP-60) use lib/api/growth.ts (listHeldReferrals / reviewReferral).
 
 
 const CONSOLE = '/api/v1/roboapply/admin';
 
 export type {
+  AdminAuditResponse,
+  AdminAuditView,
   AdminFeedbackItem,
   AdminFeedbackResponse,
   AdminOverrideView,
@@ -425,6 +429,11 @@ export function listWorkItems(query?: In<typeof AD.QueueListQuerySchema>, opts?:
 /** `admin.retryWorkItem` — POST /api/v1/roboapply/admin/system/queue/:id/retry */
 export function retryWorkItem(id: string, opts?: CallOptions): Promise<AD.RetryWorkItemResponse> {
   return call<AD.RetryWorkItemResponse>('POST', `${CONSOLE}/system/queue/${seg(id)}/retry`, opts);
+}
+
+/** `admin.audit` — GET /api/v1/roboapply/admin/system/audit */
+export function listAdminAudit(query?: In<typeof AD.AdminAuditQuerySchema>, opts?: CallOptions): Promise<AD.AdminAuditResponse> {
+  return call<AD.AdminAuditResponse>('GET', withQuery(`${CONSOLE}/system/audit`, query), opts);
 }
 
 /** `admin.costs` — GET /api/v1/roboapply/admin/costs */
@@ -479,8 +488,8 @@ export function listReferralQueue(query?: In<typeof CR.ReferralQueueQuerySchema>
 
 /**
  * `admin.moderateReferral` — POST /api/v1/roboapply/admin/referrals/:id/moderate.
- * Same body and rules as WP-54's /admin/cn/referrals/:id/moderate, plus a
- * SeekerActivityLog audit row (the console uses this one).
+ * Same body and rules as WP-54's /admin/cn/referrals/:id/moderate (both write
+ * an audit row; the console uses this one).
  */
 export function moderateReferralCode(id: string, body: In<typeof CR.ModerateReferralCodeBodySchema>, opts?: CallOptions): Promise<{ id: string; status: string }> {
   return call<{ id: string; status: string }>('POST', `${CONSOLE}/referrals/${seg(id)}/moderate`, { ...opts, body });
@@ -495,6 +504,7 @@ export const adminConsoleApi = {
   getSystemStatus,
   listWorkItems,
   retryWorkItem,
+  listAdminAudit,
   getCosts,
   costsCsvUrl,
   getSafety,

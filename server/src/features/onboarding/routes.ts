@@ -2,21 +2,27 @@
 //
 // Mounted by features/index.ts at /api/v1/roboapply/onboarding. Seeker session
 // required on every route; no flag (onboarding exists on both brands).
-// GoApply step bodies are validated by features/onboarding-cn (WP-31) through
-// its index.ts seam; until WP-31 fills it those steps answer 501.
+// This router is the only onboarding API: the V1 mission-based routes and the
+// /v2/onboarding/* router it replaced are gone (removed in Wave 5), and
+// /auth/me.onboarding is built from the same stage machine.
+//
+// GoApply: step bodies (consent, identity, education, intent, tags, confirm)
+// are validated and applied by features/onboarding-cn; its data routes
+// (schools, provinces, the multi-role market snapshot, 届别 defaults) are a
+// separate router at /api/v1/roboapply/onboarding/cn.
 //
 //   GET  /state                       → OnboardingStateView
 //   PUT  /steps/:step                 step body (+ skip) → StepResponse (idempotent upsert)
 //   GET  /title-suggest?q             → { items: TitleSuggestionView[] } · 60/min per user
-//   GET  /market-snapshot?taxonomyId&country[&city] → MarketSnapshotResponse (Sourced; 6 h cache)
+//   GET  /market-snapshot?taxonomyId&country[&city] → MarketSnapshotResponse (Sourced; 6 h cache on
+//                                       RoboApply; GoApply reads the cn index through onboarding-cn)
 //   POST /resume  { resumeVariantId } → OnboardingResumeResponse · 10/day per user (409 once setup is finished)
 //   POST /match                       → SSE: phase × 5 (each after its work), then done | error
 //                                       only at matching/confirm/tour (409 otherwise) · 5/hour per user
-//   POST /confirm                     ConfirmStep → OnboardingStageResponse
+//   POST /confirm                     RoboApply: ConfirmStep; GoApply: the cn confirm body
+//                                       (same as PUT /steps/confirm) → OnboardingStageResponse
 //   POST /complete                    → OnboardingStageResponse (tour → done)
 //   POST /skip                        → OnboardingStageResponse (leave early; finish banner)
-//
-// The legacy /v2/onboarding/* router keeps working until WP-75 removes it.
 
 import { Router, type Request } from 'express';
 import { seekerAuth } from '../../roboapply/engine/middleware/seekerAuth.js';
@@ -172,7 +178,12 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps = {}): Router 
   router.post(
     '/confirm',
     ...auth,
-    route(async (req) => (await svc()).confirm(requireUserId(req), parseBody(req, OnboardingConfirmBodySchema), contextOf(req))),
+    route(async (req) => {
+      const ctx = contextOf(req);
+      // The intl schema requires experienceLevels; GoApply's confirm has its own fields, checked by onboarding-cn.
+      const body = ctx.brand.id === 'goapply' ? parseBody(req, StepBodySchema) : parseBody(req, OnboardingConfirmBodySchema);
+      return (await svc()).confirm(requireUserId(req), body, ctx);
+    }),
   );
 
   router.post('/complete', ...auth, route(async (req) => (await svc()).complete(requireUserId(req), contextOf(req))));

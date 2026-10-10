@@ -222,7 +222,7 @@
     },
     "confirm": {
       "title": "Check your setup",
-      "foundJobs": "{count, plural, =0 {We didn't find jobs for your search yet} one {We found # job for your search} other {We found # jobs for your search}}",
+      "foundJobs": "{count, plural, =0 {No jobs at Good fit or better for your search yet} one {# job at Good fit or better for your search} other {# jobs at Good fit or better for your search}}",
       "indexJobs": "{count, plural, =0 {No open jobs in our index for your search yet} one {# open job in our index for your search} other {# open jobs in our index for your search}}",
       "programs": "{count, plural, =0 {No campus programs taking applications right now} one {# campus program taking applications} other {# campus programs taking applications}}",
       "source": "Counts come from jobs and campus programs in %BRAND%'s index.",

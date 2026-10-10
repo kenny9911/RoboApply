@@ -11,6 +11,15 @@
 //   ranking    sorted; the top 20 get an AI fit analysis queued (`job.score`)
 //              when AI is allowed; the result is stored for O7
 //
+// GoApply (INT-08): the search is the G4 intent (期望职位 × 期望城市), not the
+// RoboApply basics. When the user has not turned 个性化推荐 on (`personalized`
+// answers false; PIPL Art. 24, the feed's own rule) the jobs are NOT compared
+// with the profile: no pre-score, no AI analysis queued, and the result says
+// `ranked: false` with the number of open jobs found. While GoApply's job
+// feed is off (R-14 recruitment-info mode `off`; `searchAllowed` answers
+// false) no source is searched and no posting is counted: the three search
+// lines are reported as skipped, never as done.
+//
 // Hard cap 120 s (p50 target 45 s): when a phase ends past the cap, or the
 // client goes away, the rest is queued as one `onboarding.match` item that
 // queue-drain finishes (Vercel offers no work after the response).
@@ -48,6 +57,14 @@ export interface MatchPipelineDeps {
   ingest(searchProfileId: string, budgetMs: number): Promise<unknown>;
   preScore(userId: string, jobIds: string[]): Promise<PreScoreResult[]>;
   aiAllowed(userId: string): Promise<boolean>;
+  /**
+   * May this user's jobs be ordered and scored with their profile? (feed
+   * `isFeedPersonalized`: always true on RoboApply; on GoApply only with the
+   * 个性化推荐 consent.) Absent = true.
+   */
+  personalized?(userId: string): Promise<boolean>;
+  /** May this brand search and list jobs right now? (jobs/ingest `ingestAllowed`; GoApply: false in mode `off`.) Absent = true. */
+  searchAllowed?(): boolean | Promise<boolean>;
   enqueue(kind: string, payload: unknown, options: { userId: string; dedupeKey?: string; priority?: number }): Promise<unknown>;
   log?: (msg: string, meta: Record<string, unknown>) => void;
 }
@@ -68,11 +85,37 @@ export interface OnboardingMatchPayload {
   fromPhase: OnboardingMatchPhase;
 }
 
+const ANY_CITY = 'any';
+
+/** GoApply: the G4 intent's roles and cities (`onboardingAnswers.intent`, validated by onboarding-cn). */
+function cnCandidateQuery(answers: OnboardingAnswers): CandidateQuery | null {
+  const intent = answers.intent as { targetRoles?: unknown; cities?: unknown } | undefined;
+  const roles = Array.isArray(intent?.targetRoles)
+    ? intent.targetRoles.filter((r): r is { taxonomyId?: string; label?: string } => !!r && typeof r === 'object')
+    : [];
+  if (!roles.length) return null;
+  const cities = Array.isArray(intent?.cities) ? intent.cities.filter((c): c is string => typeof c === 'string' && c !== ANY_CITY && c.trim() !== '') : [];
+  return {
+    market: 'cn',
+    taxonomyIds: [...new Set(roles.map((r) => r.taxonomyId).filter((x): x is string => typeof x === 'string' && x !== ''))],
+    titles: [...new Set(roles.filter((r) => !r.taxonomyId && typeof r.label === 'string' && r.label.trim() !== '').map((r) => r.label as string))],
+    countries: [],
+    cities: [...new Set(cities)],
+    includeRemote: true,
+    limit: ONBOARDING_MATCH_CANDIDATES,
+  };
+}
+
 /**
- * What O6 searches for: the O2 answers (or the valid fields a skipped O2
- * kept), with the resume's suggested titles standing in when O2 named none.
+ * What O6 searches for. RoboApply: the O2 answers (or the valid fields a
+ * skipped O2 kept). GoApply: the G4 intent. Either way the resume's suggested
+ * titles stand in when the user named none.
  */
 export function candidateQueryFor(answers: OnboardingAnswers, market: 'intl' | 'cn'): CandidateQuery {
+  if (market === 'cn') {
+    const cn = cnCandidateQuery(answers);
+    if (cn) return cn;
+  }
   const b = validFieldsOf(ROBOAPPLY_STEP_BODY_SCHEMAS.basics, answers.basics) as Partial<z.infer<typeof ROBOAPPLY_STEP_BODY_SCHEMAS.basics>>;
   const countriesRaw = b.countries ?? [];
   const countries = [...new Set(countriesRaw.filter((c) => c !== 'REMOTE'))];
@@ -123,6 +166,10 @@ export async function runOnboardingMatch(deps: MatchPipelineDeps, userId: string
   let ranked: PreScoreResult[] = [];
   let compared = 0;
   let profile: SearchProfileRef | null = null;
+  // Read once per run: may the jobs be compared with the profile at all?
+  let personalized: boolean | null = null;
+  const mayRank = async (): Promise<boolean> => (personalized ??= deps.personalized ? await deps.personalized(userId) : true);
+  const searchOn = deps.searchAllowed ? await deps.searchAllowed() : true;
 
   async function queueRest(next: OnboardingMatchPhase, reason: string): Promise<void> {
     await deps.enqueue(ONBOARDING_MATCH_KIND, { userId, fromPhase: next } satisfies OnboardingMatchPayload, {
@@ -171,6 +218,10 @@ export async function runOnboardingMatch(deps: MatchPipelineDeps, userId: string
         emit({ event: 'phase', data: { phase } });
         break;
       case 'searching': {
+        if (!searchOn) {
+          emit({ event: 'phase', data: { phase, skipped: true } });
+          break;
+        }
         profile ??= await deps.applyAnswers(userId).catch(() => null);
         const remaining = Number.isFinite(cap) ? cap - (now() - started) - 30_000 : ONBOARDING_INGEST_BUDGET_MS;
         const budget = Math.max(5_000, Math.min(ONBOARDING_INGEST_BUDGET_MS, remaining));
@@ -186,13 +237,25 @@ export async function runOnboardingMatch(deps: MatchPipelineDeps, userId: string
         break;
       }
       case 'comparing': {
+        if (!searchOn) {
+          emit({ event: 'phase', data: { phase, skipped: true } });
+          break;
+        }
         const ids = await deps.repo.findCandidates(candidateQueryFor(answers, deps.brand.market));
         compared = ids.length;
-        ranked = ids.length ? rankPreScores(await deps.preScore(userId, ids)) : [];
-        emit({ event: 'phase', data: { phase } });
+        // Without the user's say-so the profile is not used: the jobs are found, not compared.
+        ranked = ids.length && (await mayRank()) ? rankPreScores(await deps.preScore(userId, ids)) : [];
+        emit({ event: 'phase', data: (await mayRank()) ? { phase } : { phase, skipped: true } });
         break;
       }
       case 'ranking': {
+        if (!searchOn || !(await mayRank())) {
+          const result: OnboardingMatchResult = { jobCount: compared, compared, topJobIds: [], continuedInBackground: false, finishedAt: new Date(now()).toISOString(), ranked: false };
+          await store(result, !opts.background);
+          emit({ event: 'phase', data: { phase, skipped: true } });
+          emit({ event: 'done', data: { jobCount: result.jobCount, topJobIds: [], continuedInBackground: false } });
+          return result;
+        }
         const good = ranked.filter((r) => r.tier === 'great' || r.tier === 'good');
         const top = ranked.filter((r) => r.score !== null).slice(0, ONBOARDING_MATCH_AI_TOP_N);
         if (top.length && (await deps.aiAllowed(userId))) {
@@ -206,6 +269,7 @@ export async function runOnboardingMatch(deps: MatchPipelineDeps, userId: string
           topJobIds: top.map((r) => r.jobId),
           continuedInBackground: false,
           finishedAt: new Date(now()).toISOString(),
+          ranked: true,
         };
         await store(result, !opts.background);
         emit({ event: 'phase', data: { phase } });

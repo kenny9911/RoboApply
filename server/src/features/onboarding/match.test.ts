@@ -3,6 +3,8 @@
 // WP-30 O6 contract: a phase is emitted only after its server work finished;
 // a run past the 120 s cap (or whose client left) leaves an `onboarding.match`
 // queue item; the queued worker finishes the rest; the real count is stored.
+// INT-08: GoApply searches the G4 intent, and without the 个性化推荐 consent the
+// jobs are found but not compared with the profile (no pre-score, no AI).
 
 import { describe, expect, it, vi } from 'vitest';
 
@@ -170,5 +172,87 @@ describe('the 120 s cap', () => {
   it('a malformed payload is permanent; an unknown phase restarts at saving', () => {
     expect(() => parseOnboardingMatchPayload({ payload: {}, userId: null })).toThrow(/userId/);
     expect(parseOnboardingMatchPayload({ payload: { fromPhase: 'warp' }, userId: 'u1' })).toEqual({ userId: 'u1', fromPhase: 'saving' });
+  });
+});
+
+// ── INT-08: GoApply ───────────────────────────────────────────────────────
+
+describe('GoApply O6', () => {
+  const INTENT = { targetRoles: [{ taxonomyId: 'product_manager', label: '产品经理' }, { label: '管培生' }], cities: ['上海', '杭州'], workType: 'full_time' };
+
+  function cn(personalized: boolean | undefined, answers: Record<string, unknown> = { intent: INTENT }) {
+    const t = setup({ path: null, answers });
+    t.deps.brand = { id: 'goapply', market: 'cn' };
+    if (personalized !== undefined) t.deps.personalized = vi.fn(async () => personalized);
+    return t;
+  }
+
+  it('searches the G4 roles and cities in the cn index (never the RoboApply basics)', () => {
+    expect(candidateQueryFor({ intent: INTENT, basics: { ...SAMPLE_BASICS } }, 'cn')).toEqual({
+      market: 'cn',
+      taxonomyIds: ['product_manager'],
+      titles: ['管培生'],
+      countries: [],
+      cities: ['上海', '杭州'],
+      includeRemote: true,
+      limit: 200,
+    });
+    // 不限 = every city.
+    expect(candidateQueryFor({ intent: { ...INTENT, cities: ['any'] } }, 'cn').cities).toEqual([]);
+    // No intent yet (left early before G4): the resume's titles stand in; RoboApply ignores a stray intent.
+    expect(candidateQueryFor({ resumeSuggestions: { suggestedTaxonomyIds: ['data_analyst'] } }, 'cn')).toMatchObject({ market: 'cn', taxonomyIds: ['data_analyst'] });
+    expect(candidateQueryFor({ intent: INTENT, basics: { ...SAMPLE_BASICS } }, 'intl')).toMatchObject({ market: 'intl', taxonomyIds: ['backend_engineer'] });
+  });
+
+  it('with 个性化推荐 on: compared with the profile, like RoboApply', async () => {
+    const { deps, mem, enqueued } = cn(true);
+    const result = await runOnboardingMatch(deps, 'u1');
+    expect(result).toMatchObject({ jobCount: 2, compared: 4, ranked: true });
+    expect(mem.candidateQueries[0]).toMatchObject({ market: 'cn', taxonomyIds: ['product_manager'], cities: ['上海', '杭州'] });
+    expect(enqueued.filter((e) => e.kind === 'job.score')).toHaveLength(3);
+  });
+
+  it('with 个性化推荐 off or unanswered: jobs are found, not compared — no pre-score, no AI analysis, ranked: false', async () => {
+    const { deps, mem, enqueued } = cn(false);
+    const events: OnboardingMatchEvent[] = [];
+    const result = await runOnboardingMatch(deps, 'u1', { emit: (e) => events.push(e) });
+    expect(result).toMatchObject({ jobCount: 4, compared: 4, topJobIds: [], ranked: false, continuedInBackground: false });
+    expect(deps.preScore).not.toHaveBeenCalled();
+    expect(deps.aiAllowed).not.toHaveBeenCalled();
+    expect(enqueued.filter((e) => e.kind === 'job.score')).toEqual([]);
+    // The two lines that did not happen are reported as skipped, never as done.
+    expect(events.filter((e) => e.event === 'phase').map((e) => (e.event === 'phase' ? [e.data.phase, e.data.skipped === true] : null))).toEqual([
+      ['reading', true],
+      ['saving', false],
+      ['searching', false],
+      ['comparing', true],
+      ['ranking', true],
+    ]);
+    expect(events.at(-1)).toEqual({ event: 'done', data: { jobCount: 4, topJobIds: [], continuedInBackground: false } });
+    expect(mem.rows.get('u1')).toMatchObject({ step: 'confirm', answers: { matching: { ranked: false, jobCount: 4 } } });
+    // The consent is read once per run.
+    expect(deps.personalized).toHaveBeenCalledTimes(1);
+  });
+
+  it('AI consent off (personalised on): the quick estimate only, zero model work queued', async () => {
+    const { deps, enqueued } = cn(true);
+    deps.aiAllowed = vi.fn(async () => false);
+    expect(await runOnboardingMatch(deps, 'u1')).toMatchObject({ jobCount: 2, ranked: true });
+    expect(enqueued.filter((e) => e.kind === 'job.score')).toEqual([]);
+  });
+
+  it('with the job feed off (R-14 mode off) nothing is searched or counted, and the lines say so', async () => {
+    const { deps, mem, enqueued } = cn(true);
+    deps.searchAllowed = () => false;
+    const events: OnboardingMatchEvent[] = [];
+    const result = await runOnboardingMatch(deps, 'u1', { emit: (e) => events.push(e) });
+    expect(result).toMatchObject({ jobCount: 0, compared: 0, topJobIds: [], ranked: false });
+    expect(deps.ingest).not.toHaveBeenCalled();
+    expect(mem.candidateQueries).toEqual([]);
+    expect(deps.preScore).not.toHaveBeenCalled();
+    expect(enqueued).toEqual([]);
+    expect(events.filter((e) => e.event === 'phase' && e.data.skipped === true).map((e) => (e.event === 'phase' ? e.data.phase : ''))).toEqual(['reading', 'searching', 'comparing', 'ranking']);
+    // Setup still moves on.
+    expect(mem.rows.get('u1')!.step).toBe('confirm');
   });
 });

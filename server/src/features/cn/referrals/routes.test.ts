@@ -4,7 +4,9 @@
 // feature_disabled with `cn.referralCodes` off, share → 201 pending,
 // moderation through the admin router (403 for a non-admin chain), report,
 // delete; sharing and reporting need a bound phone (403 phone_binding_required
-// for a WeChat-only GoApply account, through WP-11's real gate).
+// for a WeChat-only GoApply account, through WP-11's real gate). Every
+// moderation through the admin router writes one audit row (who, about whom,
+// the decision, status before and after); an audit failure never fails it.
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { RequestHandler } from 'express';
@@ -15,7 +17,8 @@ import { requirePhoneBound } from '../../auth-cn/index.js';
 import { flagEnvName, setFlagOverrideLoader } from '../../../platform/flags.js';
 import { fakeAuth, startRouteHarness, type RouteHarness } from '../../../test/routeHarness.js';
 import { normalizeCompanyName } from '../../jobs/normalize/index.js';
-import { createCnReferralsAdminRouter, createCnReferralsRouter } from './routes.js';
+import { ADMIN_AUDIT_EVENTS } from '../../admin/contract.js';
+import { createCnReferralsAdminRouter, createCnReferralsRouter, type ModerationAudit } from './routes.js';
 import { CnReferralService } from './service.js';
 import { createMemoryReferralStore } from './store.js';
 
@@ -24,7 +27,16 @@ const ADMIN = '/api/v1/roboapply/admin/cn/referrals';
 const GO = 'goapply.localhost:3621';
 type Env<T> = { success: boolean; data: T; code?: string };
 
-const service = new CnReferralService({ store: createMemoryReferralStore(), brandId: () => 'goapply', normalizeCompany: normalizeCompanyName, now: () => new Date('2026-10-10T12:30:00Z') });
+const store = createMemoryReferralStore();
+const audits: Array<Parameters<ModerationAudit['write']>[0]> = [];
+let auditFails = false;
+const audit: ModerationAudit = {
+  write: async (input) => {
+    if (auditFails) throw new Error('audit store down');
+    audits.push(input);
+  },
+};
+const service = new CnReferralService({ store, brandId: () => 'goapply', normalizeCompany: normalizeCompanyName, now: () => new Date('2026-10-10T12:30:00Z') });
 const seeker = fakeAuth((req) => (req.headers['x-test-anon'] ? null : { id: String(req.headers['x-user'] ?? 'u_a') }));
 const adminOnly: RequestHandler = (req, res, next) => {
   if (req.headers['x-admin'] !== '1') {
@@ -56,7 +68,7 @@ beforeAll(async () => {
     env: ENV_ON,
     mounts: [
       [BASE, createCnReferralsRouter({ seekerAuth: [seeker], env: ENV_ON }, { service, phoneGate })],
-      [ADMIN, createCnReferralsAdminRouter({ adminAuth: [fakeAuth({ id: 'admin_1', role: 'admin' }), adminOnly] }, { service })],
+      [ADMIN, createCnReferralsAdminRouter({ adminAuth: [fakeAuth({ id: 'admin_1', role: 'admin' }), adminOnly] }, { service, store, audit })],
     ],
   });
   off = await startRouteHarness({ env: ENV_OFF, mounts: [[BASE, createCnReferralsRouter({ seekerAuth: [seeker], env: ENV_OFF }, { service, phoneGate })]] });
@@ -108,8 +120,38 @@ describe('cn referral routes', () => {
     expect(queue.body.data.items.map((i) => i.id)).toEqual([id]);
     const noReason = await on.request<Env<unknown>>('POST', `${ADMIN}/${id}/moderate`, { host: GO, headers: { 'x-admin': '1' }, body: { decision: 'reject' } });
     expect(noReason.status).toBe(422);
+    expect(audits).toEqual([]); // nothing decided, nothing audited
     const ok = await on.request<Env<{ status: string }>>('POST', `${ADMIN}/${id}/moderate`, { host: GO, headers: { 'x-admin': '1' }, body: { decision: 'approve' } });
     expect(ok.body.data.status).toBe('approved');
+  });
+
+  it('every moderation writes one audit row: the admin, the person who shared the code, the decision and the status before and after', async () => {
+    expect(audits).toEqual([
+      {
+        adminId: 'admin_1',
+        subjectUserId: 'u_a',
+        eventType: ADMIN_AUDIT_EVENTS.referralModerated,
+        payload: { referralCodeId: id, decision: 'approve', reason: null, before: { status: 'pending' }, after: { status: 'approved' }, via: 'admin/cn/referrals' },
+      },
+    ]);
+    const reject = await on.request<Env<{ status: string }>>('POST', `${ADMIN}/${id}/moderate`, { host: GO, headers: { 'x-admin': '1' }, body: { decision: 'reject', reason: 'expired' } });
+    expect(reject.body.data.status).toBe('rejected');
+    expect(audits).toHaveLength(2);
+    expect(audits[1]).toMatchObject({ adminId: 'admin_1', subjectUserId: 'u_a', payload: { decision: 'reject', reason: 'expired', before: { status: 'approved' }, after: { status: 'rejected' } } });
+    // A non-admin and an unknown code write nothing.
+    await on.request('POST', `${ADMIN}/${id}/moderate`, { host: GO, body: { decision: 'approve' } });
+    const missing = await on.request('POST', `${ADMIN}/nope/moderate`, { host: GO, headers: { 'x-admin': '1' }, body: { decision: 'approve' } });
+    expect(missing.status).toBe(404);
+    expect(audits).toHaveLength(2);
+  });
+
+  it('an audit failure never fails the moderation', async () => {
+    auditFails = true;
+    const ok = await on.request<Env<{ status: string }>>('POST', `${ADMIN}/${id}/moderate`, { host: GO, headers: { 'x-admin': '1' }, body: { decision: 'approve' } });
+    auditFails = false;
+    expect(ok.status).toBe(200);
+    expect(ok.body.data.status).toBe('approved');
+    expect(audits).toHaveLength(2);
   });
 
   it('GET / lists the approved code for another user; report; delete by the sharer', async () => {

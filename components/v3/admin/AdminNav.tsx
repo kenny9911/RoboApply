@@ -5,8 +5,9 @@
 // `ADMIN_AREAS` is the one list of admin sub-routes, built by their owning
 // WPs: System and Reports to review (WP-74), Credits (WP-21b), Announcements
 // (WP-61, the "What's new" admin entry), Practice questions (WP-59), Coaches
-// (WP-72), Company job boards (WP-42), and GoApply's campus calendar (WP-58),
-// suspicious jobs (WP-41) and invite codes (WP-11). An area that belongs to
+// (WP-72), Company job boards (WP-42), held invite rewards (WP-60's review
+// routes; the page is /admin/reports/invites), and GoApply's campus calendar
+// (WP-58), suspicious jobs (WP-41) and invite codes (WP-11). An area that belongs to
 // one brand shows only on that brand's host. Admins see every area of their
 // brand whether or not its feature flag is on, so they can prepare it.
 //
@@ -33,6 +34,7 @@ export const ADMIN_AREAS: readonly AdminArea[] = [
   { id: 'overview', href: '/admin', owner: 'WP-74' },
   { id: 'system', href: '/admin/system', owner: 'WP-74' },
   { id: 'reports', href: '/admin/reports', owner: 'WP-74' },
+  { id: 'inviteRewards', href: '/admin/reports/invites', owner: 'WP-60' },
   { id: 'credits', href: '/admin/credits', owner: 'WP-21b' },
   { id: 'announcements', href: '/admin/announcements', owner: 'WP-61' },
   { id: 'questions', href: '/admin/questions', owner: 'WP-59' },
@@ -45,6 +47,20 @@ export const ADMIN_AREAS: readonly AdminArea[] = [
 
 export function adminAreasFor(brand: BrandId): AdminArea[] {
   return ADMIN_AREAS.filter((a) => !a.brands || a.brands.includes(brand));
+}
+
+/**
+ * The area the path belongs to: the longest href that is the path or a parent
+ * of it, so /admin/reports/invites marks "Held invite rewards", not "Reports
+ * to review" as well.
+ */
+export function currentAdminArea(pathname: string, areas: readonly AdminArea[]): AdminArea | null {
+  let best: AdminArea | null = null;
+  for (const a of areas) {
+    const hit = a.href === '/admin' ? pathname === '/admin' : pathname === a.href || pathname.startsWith(`${a.href}/`);
+    if (hit && (!best || a.href.length > best.href.length)) best = a;
+  }
+  return best;
 }
 
 export function AdminNav({ variant = 'bar' }: { variant?: 'grid' | 'bar' }) {
@@ -74,19 +90,17 @@ function AdminNavBar() {
   const t = useTranslations('admin.console.nav');
   const pathname = usePathname() ?? '';
   const areas = adminAreasFor(useBrandId());
+  const current = currentAdminArea(pathname, areas);
   return (
     <nav aria-label={t('label')}>
       <ul className={styles.bar}>
-        {areas.map((a) => {
-          const current = a.href === '/admin' ? pathname === '/admin' : pathname === a.href || pathname.startsWith(`${a.href}/`);
-          return (
-            <li key={a.id}>
-              <Link href={a.href} aria-current={current ? 'page' : undefined}>
-                {t(`${a.id}.title`)}
-              </Link>
-            </li>
-          );
-        })}
+        {areas.map((a) => (
+          <li key={a.id}>
+            <Link href={a.href} aria-current={a.id === current?.id ? 'page' : undefined}>
+              {t(`${a.id}.title`)}
+            </Link>
+          </li>
+        ))}
       </ul>
     </nav>
   );

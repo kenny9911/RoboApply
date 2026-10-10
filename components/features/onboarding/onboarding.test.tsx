@@ -430,7 +430,8 @@ describe('O6 matching', () => {
     renderWith(<OnboardingStepPage step="matching" />);
     expect(await screen.findByText(/Still checking more jobs/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(nav.push).toHaveBeenCalledWith('/onboarding/confirm');
+    // The page reads the new stage first, then moves on.
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/onboarding/confirm'));
   });
 });
 

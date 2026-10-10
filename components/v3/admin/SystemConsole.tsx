@@ -1,13 +1,15 @@
 'use client';
 
 // components/v3/admin/SystemConsole.tsx — /admin/system (WP-74; ARCHITECTURE.md
-// §10.4). Four views, linkable with ?view=:
+// §10.4). Five views, linkable with ?view=:
 //   health    ingest, queue (dead items with retry), provider calls, enrichment,
 //             AI scores, alert and email sends, Assistant, out-of-credits — per brand,
 //             with the metrics past their alert level listed first;
 //   costs     cost by SKU × brand × day, with a CSV download;
 //   feedback  Assistant thumbs up/down with a redacted excerpt and guard hits;
-//   safety    GoApply content-safety readiness and recent events.
+//   safety    GoApply content-safety readiness and recent events;
+//   audit     admin actions (overrides, report decisions, moderation, retries),
+//             newest first, read from the admin audit table (INT-08).
 // Every number is a live count from the API (refreshed each minute on Health);
 // a value the API does not have renders "—".
 
@@ -21,6 +23,7 @@ import { Tag } from '../primitives/Tag';
 import { Tabs, tabPanelProps } from '../primitives/Tabs';
 import { IconRefresh, IconUpload } from '../primitives/Iconset';
 import {
+  useAdminAudit,
   useAdminCosts,
   useCopilotFeedback,
   useRetryWorkItem,
@@ -36,7 +39,7 @@ import { fmtCount, fmtLongDate, fmtPercent } from './format';
 import { useViewParam } from './viewParam';
 import styles from './console.module.css';
 
-export const SYSTEM_VIEWS = ['health', 'costs', 'feedback', 'safety'] as const;
+export const SYSTEM_VIEWS = ['health', 'costs', 'feedback', 'safety', 'audit'] as const;
 export type SystemView = (typeof SYSTEM_VIEWS)[number];
 type T = ReturnType<typeof useTranslations>;
 
@@ -71,6 +74,7 @@ function SystemConsoleInner() {
         {view === 'costs' && <CostsView />}
         {view === 'feedback' && <FeedbackView />}
         {view === 'safety' && <SafetyView />}
+        {view === 'audit' && <AuditView />}
       </section>
     </div>
   );
@@ -497,5 +501,79 @@ export function ErrorPanel({ retry }: { retry: () => void }) {
       <strong>{t('error')}</strong>
       <div className={styles.actions}><Btn onClick={retry}>{t('retry')}</Btn></div>
     </div>
+  );
+}
+
+// ── Admin actions (RAAdminAuditLog) ──────────────────────────────────────
+
+/** Actions the filter offers (ADMIN_AUDIT_EVENTS, server/src/features/admin/contract.ts). Other areas' events still list under "All". */
+export const AUDIT_ACTIONS = ['admin_override_created', 'admin_override_deleted', 'admin_report_resolved', 'admin_work_item_retried', 'admin_referral_moderated', 'admin_invite_reward_reviewed'] as const;
+
+function AuditView() {
+  const t = useTranslations('admin.console.audit');
+  const locale = useLocale();
+  const [action, setAction] = useState<'' | (typeof AUDIT_ACTIONS)[number]>('');
+  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const q = useAdminAudit({ ...(action ? { eventType: action } : {}), ...(cursor ? { cursor } : {}) });
+  const actionLabel = (eventType: string) => (t.has(`action.${eventType}`) ? t(`action.${eventType}`) : eventType);
+  const time = (iso: string) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
+  return (
+    <section className={styles.panel} aria-labelledby="audit-title">
+      <div className={styles.panelHead}>
+        <div>
+          <h2 id="audit-title">{t('title')}</h2>
+          <p>{t('sub')}</p>
+        </div>
+      </div>
+      <div className={styles.filters}>
+        <label className={styles.field}>
+          {t('filter')}
+          <select value={action} onChange={(e) => { setCursor(undefined); setAction(e.target.value as typeof action); }}>
+            <option value="">{t('all')}</option>
+            {AUDIT_ACTIONS.map((a) => <option key={a} value={a}>{t(`action.${a}`)}</option>)}
+          </select>
+        </label>
+      </div>
+      {q.isError ? (
+        <ErrorPanel retry={() => void q.refetch()} />
+      ) : !q.data ? (
+        <p className={styles.muted} aria-busy="true">{t('loading')}</p>
+      ) : q.data.items.length === 0 ? (
+        <p className={styles.muted}>{t('empty')}</p>
+      ) : (
+        <div className={styles.tableWrap}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th scope="col">{t('when')}</th>
+                <th scope="col">{t('what')}</th>
+                <th scope="col">{t('admin')}</th>
+                <th scope="col">{t('about')}</th>
+                <th scope="col">{t('details')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {q.data.items.map((row) => (
+                <tr key={row.id}>
+                  <td>{time(row.createdAt)}</td>
+                  <td>{actionLabel(row.eventType)}</td>
+                  <td><Link className={styles.link} href={`/admin/users/${encodeURIComponent(row.adminId)}`} aria-label={t('adminPage', { id: row.adminId })}><span className={styles.code}>{row.adminId}</span></Link></td>
+                  <td>
+                    {row.subjectUserId ? (
+                      <Link className={styles.link} href={`/admin/users/${encodeURIComponent(row.subjectUserId)}`} aria-label={t('aboutPage', { id: row.subjectUserId })}><span className={styles.code}>{row.subjectUserId}</span></Link>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                  <td className={styles.wrap}>{row.details || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {q.data?.cursor && <Btn variant="ghost" onClick={() => setCursor(q.data!.cursor ?? undefined)}>{t('more')}</Btn>}
+      {cursor && <Btn variant="ghost" onClick={() => setCursor(undefined)}>{t('first')}</Btn>}
+    </section>
   );
 }
