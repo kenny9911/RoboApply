@@ -9,17 +9,17 @@
       "aiBadge": "AI 生成",
       "aiDisclosure": "這段文字由 AI 模型生成。",
       "aiLabel": "由 AI 撰寫。請先編輯，並且只在內容符合你的真實情況時使用。",
-      "bankLabel": "來自你儲存的答案",
+      "bankLabel": "來自你儲存的回答",
       "cost": "使用 1 點 AI 回答點數。",
       "dismiss": "關閉",
-      "editLabel": "答案草稿：{question}",
-      "save": "儲存這個答案",
-      "saveFailed": "這個答案沒有儲存成功。請重試。",
-      "saveHint": "下次表單出現這個問題時，會用你儲存的答案填入。",
-      "saveProtected": "關於你的答案會存在你的個人檔案裡，不是存在這裡。",
-      "saved": "已儲存到你的答案。",
+      "editLabel": "回答草稿：{question}",
+      "save": "儲存這個回答",
+      "saveFailed": "這個回答沒有儲存成功。請重試。",
+      "saveHint": "下次表單出現這個問題時，會用你儲存的回答填入。",
+      "saveProtected": "關於你的回答會存在你的個人檔案裡，不是存在這裡。",
+      "saved": "已儲存到你的回答。",
       "saving": "儲存中…",
-      "use": "使用這個答案",
+      "use": "使用這個回答",
       "write": "寫草稿",
       "writing": "撰寫中…"
     },
@@ -44,7 +44,7 @@
       }
     },
     "item": {
-      "checkSensitive": "敏感答案。送出前請先核對。",
+      "checkSensitive": "敏感問題的回答。送出前請先核對。",
       "unlabelled": "未標示名稱的欄位"
     },
     "job": {
@@ -56,7 +56,7 @@
     },
     "manifest": {
       "actionTitle": "填寫這份表單",
-      "description": "用你在 %BRAND% 的個人檔案填寫應徵表單。每個答案都由你核對，應徵也由你自己送出。",
+      "description": "用你在 %BRAND% 的個人檔案填寫應徵表單。每個回答都由你核對，應徵也由你自己送出。",
       "nameChrome": "%BRAND% Chrome 版",
       "nameEdge": "%BRAND% Edge 版",
       "shortName": "%BRAND%"
@@ -103,7 +103,7 @@
       "codeInvalid": "這組代碼無效。代碼是 8 個英文字母或數字，10 分鐘後會失效。",
       "codeLabel": "或輸入 %BRAND% 上顯示的 8 碼代碼",
       "connected": "已連結。",
-      "disconnect": "取消連結",
+      "disconnect": "中斷連結",
       "noFit": "這個職缺還沒有適合度。請在 %BRAND% 開啟它來查看。",
       "noJobFound": "這個頁面上找不到職缺。",
       "openFormSite": "請在 {site} 開啟應徵表單，然後選擇「填寫這份表單」。",
@@ -120,7 +120,7 @@
     },
     "source": {
       "ai": "你編輯過的草稿",
-      "bank": "來自你儲存的答案",
+      "bank": "來自你儲存的回答",
       "profile": "來自你的個人檔案",
       "resume": "你的履歷：{fileName}"
     },

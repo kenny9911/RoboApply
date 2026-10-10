@@ -88,13 +88,39 @@ describe('GoApply build: both distributions', () => {
   });
 });
 
-describe('RoboApply build is unchanged', () => {
-  it('uses extension.manifest and English only until translations carry it', () => {
+describe('RoboApply build', () => {
+  it('uses extension.manifest, with a _locales folder for every locale that translates it (WP-92)', () => {
     const locales = localeMessagesFor({ brandName: 'RoboApply', target: 'chrome', stringsKey: DEFAULT_MANIFEST_STRINGS_KEY, en, others, staged: {} }) as Locales;
     expect(locales.en.extName.message).toBe('RoboApply for Chrome');
-    expect(locales.zh_CN).toBeUndefined();
+    // English plus the eight translated locales, under Chrome's folder names.
+    expect(Object.keys(locales).sort()).toEqual(['de', 'en', 'es', 'fr', 'ja', 'ko', 'pt_BR', 'zh_CN', 'zh_TW']);
+    // Simplified Chinese is RoboApply's own listing, never GoApply's distribution name.
+    expect(locales.zh_CN.extName.message).toBe('RoboApply Chrome 版');
+    expect(locales.zh_CN.extName.message).not.toBe(goapplyLocales('chrome').zh_CN.extName.message);
+    const sources: Record<string, object> = { en, ...others };
+    const folderOf: Record<string, string> = { zh: 'zh_CN', 'zh-TW': 'zh_TW', pt: 'pt_BR' };
+    for (const [locale, bundle] of Object.entries(sources)) {
+      const l = locales[folderOf[locale] ?? locale];
+      const src = (bundle as { extension: { manifest: Record<string, string> } }).extension.manifest;
+      expect(l.extName.message, locale).toContain('RoboApply');
+      expect(JSON.stringify(l), locale).not.toMatch(/%BRAND%|GoApply/);
+      // Store limits, and nothing was cut to fit them: each string is the bundle's, whole.
+      expect(l.extName.message.length, locale).toBeLessThanOrEqual(75);
+      expect(l.extShortName.message.length, locale).toBeLessThanOrEqual(12);
+      expect(l.extDescription.message.length, locale).toBeLessThanOrEqual(132);
+      expect(l.extName.message, locale).toBe(src.nameChrome.replace(/%BRAND%/g, 'RoboApply'));
+      expect(l.extDescription.message, locale).toBe(src.description.replace(/%BRAND%/g, 'RoboApply'));
+      expect(l.actionTitle.message, locale).toBe(src.actionTitle);
+    }
     const edge = localeMessagesFor({ brandName: 'RoboApply', target: 'edge', en, others }) as Locales;
     expect(edge.en.extName.message).toBe('RoboApply for Edge');
+    expect(edge.zh_TW.extName.message).toBe('RoboApply Edge 版');
+  });
+
+  it('a locale whose bundle lacks the manifest strings gets no folder; English always does', () => {
+    const locales = localeMessagesFor({ brandName: 'RoboApply', target: 'chrome', stringsKey: DEFAULT_MANIFEST_STRINGS_KEY, en, others: { zh: { extension: {} }, ja: {} }, staged: {} }) as Locales;
+    expect(Object.keys(locales)).toEqual(['en']);
+    expect(locales.zh_CN).toBeUndefined();
   });
 });
 

@@ -6,10 +6,9 @@
 // server/src/i18n/email/staging/tracker.en.json), never from this file:
 //
 //   tracker.csv.*     the words for any brand and locale. The loader resolves
-//                     `en ← staging ← <locale>.json`, so RoboApply zh-TW (and
-//                     every other locale) reads English until WP-92 adds its
-//                     translation, and Traditional labels then appear with
-//                     no code change;
+//                     `en ← staging ← <locale>.json`: every shipped locale
+//                     translates the group (WP-92; zh-TW in Traditional
+//                     Chinese), and a key a locale lacks reads English;
 //   tracker.csvCn.*   GoApply's own ladder words in Simplified Chinese
 //                     (网申 / 测评 / 笔试 / AI面试 / 三方 / 未通过). Used only for
 //                     GoApply (mainland market) with a Simplified Chinese

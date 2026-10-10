@@ -107,7 +107,7 @@
     },
     "periods": {
       "month": "mes",
-      "period": "período de facturación",
+      "period": "periodo de facturación",
       "quarter": "3 meses",
       "week": "semana"
     },
@@ -130,7 +130,7 @@
       "bodyAuto": "{plan} se renueva automáticamente el {date} por {price} cada {period}.",
       "bodyManual": "{plan} termina el {date}. No se renueva y no se cobrará nada. Compra otro pase si quieres conservar Pro.",
       "bodyManualLegacy": "{plan} termina el {date}. No se renueva y no se cobrará nada. Consulta los planes actuales si quieres seguir practicando.",
-      "cancelLine": "¿No quieres que se renueve? Cancela con un clic en cualquier momento antes de esa fecha. Tus funciones de pago siguen activas hasta el final del período que pagaste.",
+      "cancelLine": "¿No quieres que se renueve? Cancela con un clic en cualquier momento antes de esa fecha. Tus funciones de pago siguen activas hasta el final del periodo que pagaste.",
       "ctaAuto": "Administrar o cancelar",
       "ctaManual": "Ver pases",
       "ctaManualLegacy": "Ver planes",
@@ -191,17 +191,17 @@
   },
   "notify": {
     "campusDeadline": {
-      "body": "Las postulaciones para {program} en {company} cierran el {date}. Postula en la página oficial.",
+      "body": "Las candidaturas para {program} en {company} cierran el {date}. Postúlate en la página oficial.",
       "cta": "Abrir la página oficial",
       "heading": "Se acerca la fecha límite para postular",
       "preheader": "{program} cierra el {date}.",
-      "subject": "{company}: las postulaciones para {program} cierran el {date}"
+      "subject": "{company}: las candidaturas para {program} cierran el {date}"
     },
     "campusFollowed": {
-      "body": "{program} en {company} ya está en el calendario de reclutamiento universitario, con el enlace a su página oficial. Revisa ahí las fechas antes de postular.",
+      "body": "{program} en {company} ya está en el calendario de campus, con el enlace a su página oficial. Revisa ahí las fechas antes de postularte.",
       "cta": "Ver el programa",
       "heading": "Una empresa que sigues publicó un programa",
-      "preheader": "{program} está en el calendario de reclutamiento universitario.",
+      "preheader": "{program} está en el calendario de campus.",
       "subject": "{company} publicó un nuevo programa de reclutamiento universitario",
       "subjectYear": "{company} publicó su programa de reclutamiento universitario para la promoción {year}"
     },
@@ -209,11 +209,11 @@
       "fitNote": "El encaje compara el anuncio con tu currículum. No es tu probabilidad de que te contraten.",
       "gapLine": "Todavía no está en tu currículum: {skill}",
       "payNotListed": "Sueldo no indicado",
-      "payPerDay": "{amount} por día",
+      "payPerDay": "{amount} al día",
       "payPerHour": "{amount} por hora",
-      "payPerMonth": "{amount} por mes",
-      "payPerWeek": "{amount} por semana",
-      "payPerYear": "{amount} por año",
+      "payPerMonth": "{amount} al mes",
+      "payPerWeek": "{amount} a la semana",
+      "payPerYear": "{amount} al año",
       "placeNotListed": "Ubicación no indicada",
       "remote": "Remoto",
       "tierGood": "Encaja bien",
@@ -229,7 +229,7 @@
       "subject": "Termina de configurar %BRAND%"
     },
     "followUp": {
-      "body": "Postulaste a {title} en {company} el {date}. No ha habido respuesta en {days} días. Un mensaje de seguimiento breve y cortés es normal.",
+      "body": "Te postulaste a {title} en {company} el {date}. No ha habido respuesta en {days} días. Un mensaje de seguimiento breve y cortés es normal.",
       "cta": "Abrir esta candidatura",
       "heading": "¿Es momento de dar seguimiento?",
       "preheader": "Sin respuesta desde hace {days} días.",
@@ -265,11 +265,11 @@
       "subject": "{count, plural, one {# empleo nuevo} other {# empleos nuevos}} para «{search}»"
     },
     "kitReady": {
-      "body": "Tu currículum adaptado y tus respuestas para {title} en {company} están listos. Revísalos y luego postula tú en el sitio de la empresa.",
+      "body": "Tu currículum adaptado y tus respuestas para {title} en {company} están listos. Revísalos y luego postúlate tú en el sitio de la empresa.",
       "cta": "Revisar el kit",
       "heading": "Tu kit está listo para revisar",
       "preheader": "Revisa tu kit para {title}.",
-      "subject": "Tu kit de postulación para {title} está listo"
+      "subject": "Tu kit de candidatura para {title} está listo"
     },
     "readyList": {
       "body": "{count, plural, one {# empleo está listo para que lo revises.} other {# empleos están listos para que los revises.}} Tú decides cuáles abrir, y cada candidatura la envías tú.",
@@ -280,7 +280,7 @@
     },
     "reasons": {
       "alerts": "Recibes este correo porque las alertas de empleo están activadas para tu búsqueda guardada «{search}» en %BRAND%.",
-      "campusFollow": "Recibes este correo porque sigues a {company} en el calendario de reclutamiento universitario de %BRAND%.",
+      "campusFollow": "Recibes este correo porque sigues a {company} en el calendario de campus de %BRAND%.",
       "digestDaily": "Recibes este correo porque elegiste un resumen diario de empleos para tu búsqueda guardada «{search}» en %BRAND%.",
       "digestWeekly": "Recibes este correo porque elegiste un resumen semanal de empleos para tu búsqueda guardada «{search}» en %BRAND%.",
       "reminders": "Recibes este correo porque trata sobre tu cuenta de %BRAND% y los empleos a los que das seguimiento. Puedes desactivar estos recordatorios."
@@ -355,7 +355,7 @@
       },
       "stage": {
         "accepted": "Oferta",
-        "ai_interview": "Entrevista con AI",
+        "ai_interview": "Entrevista con IA",
         "applied": "Enviada",
         "applying": "Enviada",
         "assessment": "Evaluación",
@@ -373,7 +373,7 @@
       }
     },
     "inbox": {
-      "deadline": "{days, plural, =0 {Las postulaciones para {name} cierran hoy.} =1 {Las postulaciones para {name} cierran mañana.} other {Las postulaciones para {name} cierran en # días.}}",
+      "deadline": "{days, plural, =0 {Las candidaturas para {name} cierran hoy.} =1 {Las candidaturas para {name} cierran mañana.} other {Las candidaturas para {name} cierran en # días.}}",
       "followUpDue": "Tu fecha de seguimiento para {name} es hoy.",
       "interview": "Entrevista con {name} en las próximas 24 horas.",
       "noReply": "Sin respuesta de {name} desde hace {days, plural, one {# día} other {# días}}.",
@@ -394,7 +394,7 @@
         "heading": "{count, plural, one {# empleo nuevo para tu alerta} other {# empleos nuevos para tu alerta}}",
         "intro": "Empleos nuevos desde tu último correo, para «{search}».",
         "more": "{count, plural, one {También coincide # empleo más.} other {También coinciden # empleos más.}}",
-        "pay": "{amount} {period, select, year {por año} month {por mes} week {por semana} day {por día} hour {por hora} other {}}",
+        "pay": "{amount} {period, select, year {al año} month {al mes} week {a la semana} day {al día} hour {por hora} other {}}",
         "payNotListed": "Sueldo no indicado",
         "placeNotListed": "Ubicación no indicada",
         "preheader": "Empleos nuevos para tu alerta.",

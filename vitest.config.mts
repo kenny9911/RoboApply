@@ -22,6 +22,14 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: false,
+    // Tests never talk to a real database. A local .env carries live Neon URLs,
+    // and a lazily imported Prisma client can slip past a factory mock (two
+    // concurrent dynamic imports), so pin both URLs to CI's closed-port
+    // placeholder: a stray query fails fast instead of reaching a real pool.
+    env: {
+      DATABASE_URL: 'postgresql://ci@127.0.0.1:1/ci',
+      DIRECT_DATABASE_URL: 'postgresql://ci@127.0.0.1:1/ci',
+    },
     setupFiles: ['./__tests__/setup.ts'],
     include: [
       '__tests__/**/*.test.ts',

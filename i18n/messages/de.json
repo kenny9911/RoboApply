@@ -81,7 +81,7 @@
       "ai_written": "Mit KI geschrieben. Prüf jede Zeile, bevor du es verwendest.",
       "search_results": "Suchergebnisse, nicht geprüft.",
       "sponsorship": "Laut Stellenanzeige. Lass dir das Visa-Sponsoring vom Arbeitgeber bestätigen.",
-      "you_submit": "Jede Bewerbung schickst du selbst ab."
+      "you_submit": "Jede Bewerbung sendest du selbst ab."
     },
     "inbox": "Posteingang",
     "invite": "Freunde einladen",
@@ -183,7 +183,7 @@
         "label": "Aktionen für {title}",
         "markedApplied": "Nach „Beworben“ verschoben.",
         "more": "Weitere Optionen",
-        "movedToApplied": "Nach „Beworben“ verschoben. Die Bewerbung schickst du selbst auf der Seite des Unternehmens ab.",
+        "movedToApplied": "Nach „Beworben“ verschoben. Die Bewerbung sendest du selbst auf der Seite des Unternehmens ab.",
         "notInterested": "Kein Interesse",
         "report": "Problem melden",
         "save": "Für später merken",
@@ -195,7 +195,7 @@
         "undone": "Wieder aus „Beworben“ entfernt."
       },
       "badge": {
-        "agency": "Von einer Personalvermittlung",
+        "agency": "Personaldienstleister",
         "citizens": "Nur für Staatsangehörige",
         "clearance": "Sicherheitsüberprüfung erforderlich",
         "closes": "Bewerbungsschluss: {date}",
@@ -318,14 +318,14 @@
     },
     "report": {
       "agencyNo": "Nicht jetzt",
-      "agencyOffer": "Alle Anzeigen von Personalvermittlungen ausblenden?",
-      "agencyOfferBody": "Diese Anzeigen stammen von Personalvermittlungen, nicht vom Arbeitgeber. Du kannst das später in deinen Filtern wieder ausschalten.",
-      "agencySaved": "Anzeigen von Personalvermittlungen sind ausgeblendet.",
-      "agencyYes": "Anzeigen von Personalvermittlungen ausblenden",
+      "agencyOffer": "Alle Anzeigen von Personaldienstleistern ausblenden?",
+      "agencyOfferBody": "Diese Anzeigen stammen von Personaldienstleistern, nicht vom Arbeitgeber. Du kannst das später in deinen Filtern wieder ausschalten.",
+      "agencySaved": "Anzeigen von Personaldienstleistern sind ausgeblendet.",
+      "agencyYes": "Personaldienstleister ausblenden",
       "failed": "Die Meldung wurde nicht gesendet. Versuch es erneut.",
       "noteLabel": "Details (optional)",
       "reason": {
-        "agency": "Anzeige einer Personalvermittlung, als Arbeitgeber dargestellt",
+        "agency": "Anzeige eines Personaldienstleisters, als Arbeitgeber dargestellt",
         "duplicate": "Doppelt gelistet",
         "expired": "Der Job ist nicht mehr offen",
         "fee_required": "Verlangt eine Gebühr",
@@ -364,7 +364,7 @@
       "errorBody": "Nichts ist verloren. Versuch es erneut, und wenn es weiter scheitert, lade die Seite neu.",
       "errorTitle": "Die Jobliste wurde nicht geladen.",
       "feedOff": "Stellenanzeigen sind hier noch nicht verfügbar. Du kannst trotzdem Jobs hinzufügen, die du selbst gefunden hast.",
-      "howRanking": "So funktioniert die Sortierung",
+      "howRanking": "So funktioniert das Ranking",
       "intro": "Jobs, sortiert danach, wie gut dein Lebenslauf zur jeweiligen Anzeige passt. Öffne einen, um zu sehen, was passt und was fehlt.",
       "listLabel": "Jobs für dich",
       "loadMore": "Mehr Jobs anzeigen",
@@ -1032,7 +1032,7 @@
       "letter_attached": "Anschreiben für diese Bewerbung",
       "letter_none": "Noch kein Anschreiben.",
       "letter_open": "Anschreiben öffnen",
-      "letter_write": "Anschreiben verfassen",
+      "letter_write": "Anschreiben schreiben",
       "load_error": "Dieser Teil wurde nicht geladen.",
       "next_steps": "Nächste Schritte",
       "not_found": "Diese Bewerbung wurde nicht gefunden.",
@@ -1197,7 +1197,7 @@
         "label": "Mach da weiter, wo du aufgehört hast",
         "count": "{count} zuletzt",
         "with": "mit {name}",
-        "unknownInterviewer": "deinem Interviewer",
+        "unknownInterviewer": "deiner Gesprächsperson",
         "replay": "Diese Sitzung noch einmal abspielen",
         "showMore": "{count} ältere zeigen",
         "showLess": "Weniger zeigen",
@@ -1652,7 +1652,7 @@
       "agentJoining": "Du wirst mit deiner Gesprächsperson verbunden…",
       "agentSlow": "Deine Gesprächsperson braucht einen Moment. Wenn in einer Minute nichts passiert, beende die Sitzung und starte eine neue.",
       "agentQualityPoor": "Die Verbindung der Gesprächsperson ist schlecht.",
-      "audioUnlockTitle": "Interviewton einschalten",
+      "audioUnlockTitle": "Ton fürs Gespräch einschalten",
       "audioUnlockBody": "Deine Gesprächsperson ist bereit. Schalte den Ton ein, damit du die erste Frage nicht verpasst.",
       "enableAudio": "Tipp, um den Ton einzuschalten",
       "reconnecting": "Verbindung wird wiederhergestellt…",
@@ -1893,7 +1893,7 @@
         }
       },
       "retry": "Erneut versuchen",
-      "scorePending": "Deine Punktzahl wird gerade berechnet. Diese Seite aktualisiert sich von selbst.",
+      "scorePending": "Deine Bewertung wird gerade berechnet. Diese Seite aktualisiert sich von selbst.",
       "noAnswer": {
         "title": "Keine Antworten aufgenommen",
         "body": "Das Gespräch endete, bevor eine deiner Antworten aufgenommen wurde, deshalb gibt es nichts zu bewerten. Diese Sitzung wurde dir nicht berechnet.",
@@ -1995,7 +1995,7 @@
       "sending": "Wird gesendet…",
       "skip": "Diese Frage überspringen",
       "starting": "Deine Fragen werden vorbereitet…",
-      "strengths": "Was gut lief",
+      "strengths": "Was funktioniert hat",
       "title": "Schriftliche Übung",
       "you": "Du"
     }
@@ -2252,7 +2252,7 @@
       "confirmationEmail": "Wir schicken dir per E-Mail eine Bestätigung, in der steht, wann die Löschung endgültig ist. Du wirst sofort überall abgemeldet."
     },
     "errors": {
-      "network": "Etwas ist schiefgegangen. Prüf deine Verbindung und versuch es erneut.",
+      "network": "Etwas ist schiefgelaufen. Prüf deine Verbindung und versuch es erneut.",
       "rateLimited": "Zu viele Versuche. Warte eine Minute und versuch es erneut."
     },
     "forgot": {
@@ -2389,7 +2389,7 @@
       "contactTitle": "Kontakt",
       "entity": "%BRAND% wird von {entity} betrieben.",
       "helpLink": "Hilfe und Kontaktformular",
-      "lead": "%BRAND% ist ein Tool für die Jobsuche, gemacht für alle, die sich bewerben und keine Antwort bekommen. Es zeigt dir, was jede Stelle verlangt und in deinem Lebenslauf fehlt, hilft dir, das zu ändern, und lässt dich das Vorstellungsgespräch üben.",
+      "lead": "%BRAND% ist ein Tool für die Jobsuche, gemacht für alle, die sich bewerben und keine Antwort bekommen. Es zeigt dir, was jeder Job verlangt und in deinem Lebenslauf fehlt, hilft dir, das zu ändern, und lässt dich das Vorstellungsgespräch üben.",
       "leadCn": "%BRAND% ist ein Assistent für die Jobsuche für Studierende und Jobsuchende in Festlandchina: ein Profil, ein Fristenkalender für Campus-Programme und Übung für KI-Interviews.",
       "metaDescription": "Was %BRAND% ist, was es nicht tut und wie du uns erreichst.",
       "metaTitle": "Über uns",
@@ -2397,7 +2397,7 @@
       "rule1": "Für dich eine Bewerbung absenden oder einen Arbeitgeber anschreiben.",
       "rule2": "Eine Zahl ohne Quelle zeigen. Unbekanntes wird als unbekannt angezeigt, nie als null.",
       "rule3": "Erfahrung in deinen Lebenslauf schreiben, die du nicht bestätigt hast.",
-      "rule4": "Einen Passungswert als deine Chance darstellen, eingestellt zu werden.",
+      "rule4": "Die Passgenauigkeit als deine Chance darstellen, eingestellt zu werden.",
       "rule5": "Erfahrungsberichte, Nutzerzahlen oder Bewertungen zeigen, die wir nicht belegen können.",
       "rulesTitle": "Was %BRAND% nicht tut",
       "title": "Über %BRAND%",
@@ -2437,7 +2437,7 @@
     },
     "example": {
       "label": "Beispiel",
-      "note": "Erfundener Lebenslauf und erfundene Stellen, um zu zeigen, wie es funktioniert. Keine echten Daten."
+      "note": "Erfundener Lebenslauf und erfundene Jobs, um zu zeigen, wie es funktioniert. Keine echten Daten."
     },
     "features": {
       "common": {
@@ -2451,7 +2451,7 @@
       "goapply": {
         "assistant": {
           "eyebrow": "Assistent",
-          "metaDescription": "Stell Fragen zu einer Stelle, deinem Lebenslauf oder deinen Bewerbungen und bekomm Antworten auf Basis deiner eigenen Daten.",
+          "metaDescription": "Stell Fragen zu einem Job, deinem Lebenslauf oder deinen Bewerbungen und bekomm Antworten auf Basis deiner eigenen Daten.",
           "metaTitle": "Assistent für die Jobsuche",
           "q1": {
             "a": "Nur, wenn du das Gedächtnis einschaltest. Du kannst es in den Einstellungen leeren.",
@@ -2479,7 +2479,7 @@
             "line3": "Von KI geschrieben."
           },
           "sub": "Der Assistent antwortet auf Basis der Stellenanzeige und deiner eigenen Daten. Mit deiner Einwilligung kann er sich deine Suche zwischen den Sitzungen merken.",
-          "title": "Frag zu einer Stelle, deinem Lebenslauf oder deinen Bewerbungen"
+          "title": "Frag zu einem Job, deinem Lebenslauf oder deinen Bewerbungen"
         },
         "campusCalendar": {
           "eyebrow": "Campus-Kalender",
@@ -2530,7 +2530,7 @@
             "title": "Installiere die Erweiterung"
           },
           "s2": {
-            "body": "Wähl „Dieses Formular ausfüllen“.",
+            "body": "Wähl „Formular ausfüllen“.",
             "title": "Öffne ein Bewerbungsformular"
           },
           "s3": {
@@ -2558,8 +2558,8 @@
             "q": "Ist der Bericht als KI-Text gekennzeichnet?"
           },
           "s1": {
-            "body": "Starte mit einer Stelle, die du dir gemerkt hast, oder mit einem gängigen Format.",
-            "title": "Wähl eine Stelle oder ein Format"
+            "body": "Starte mit einem Job, den du dir gemerkt hast, oder mit einem gängigen Format.",
+            "title": "Wähl einen Job oder ein Format"
           },
           "s2": {
             "body": "Lass dir zwischen den Sitzungen Zeit. Üb so oft, wie dein Tarif es erlaubt.",
@@ -2579,8 +2579,8 @@
         },
         "resume": {
           "eyebrow": "Lebenslauf",
-          "metaDescription": "Schreib deinen Lebenslauf einmal und erstelle für jede Stelle eine Version. Jede Änderung wird angezeigt.",
-          "metaTitle": "Chinesischen Lebenslauf erstellen, mit einer Version pro Stelle",
+          "metaDescription": "Schreib deinen Lebenslauf einmal und erstelle für jeden Job eine Version. Jede Änderung wird angezeigt.",
+          "metaTitle": "Chinesischen Lebenslauf erstellen, mit einer Version pro Job",
           "q1": {
             "a": "Nein. Du kannst von Hand schreiben und bearbeiten. KI wird erst genutzt, wenn du sie einschaltest.",
             "q": "Ist KI Pflicht?"
@@ -2594,8 +2594,8 @@
             "title": "Füg deinen Lebenslauf hinzu"
           },
           "s2": {
-            "body": "Erstelle eine Version für diese Stelle.",
-            "title": "Wähl eine Stelle"
+            "body": "Erstelle eine Version für diesen Job.",
+            "title": "Wähl einen Job"
           },
           "s3": {
             "body": "Exportiere, sobald jede Änderung bestätigt ist.",
@@ -2606,15 +2606,15 @@
             "line2": "Geändert: Projektabschnitt nach oben verschoben",
             "line3": "Von KI geschrieben. Prüf es, bevor du es verwendest."
           },
-          "sub": "Erstelle einen chinesischen Lebenslauf und dann eine Version für jede Stelle. Jede Änderung wird angezeigt, und ohne deine Bestätigung kommt nichts Neues hinzu.",
-          "title": "Ein Lebenslauf, eine Version für jede Stelle"
+          "sub": "Erstelle einen chinesischen Lebenslauf und dann eine Version für jeden Job. Jede Änderung wird angezeigt, und ohne deine Bestätigung kommt nichts Neues hinzu.",
+          "title": "Ein Lebenslauf, eine Version für jeden Job"
         }
       },
       "roboapply": {
         "assistant": {
           "eyebrow": "Assistent",
-          "metaDescription": "Stell Fragen zu einer Stelle, deinem Lebenslauf oder deiner Suche und bekomm Antworten auf Basis deiner eigenen Daten.",
-          "metaTitle": "Der Assistent: Frag zu jeder Stelle",
+          "metaDescription": "Stell Fragen zu einem Job, deinem Lebenslauf oder deiner Suche und bekomm Antworten auf Basis deiner eigenen Daten.",
+          "metaTitle": "Der Assistent: Frag zu jedem Job",
           "q1": {
             "a": "Nein. Er schlägt vor, und du gibst jede Änderung frei.",
             "q": "Handelt er, ohne zu fragen?"
@@ -2624,7 +2624,7 @@
             "q": "Gibt es ein Limit?"
           },
           "s1": {
-            "body": "Nutz die Schaltfläche „Fragen“ oder „Zu dieser Stelle fragen“.",
+            "body": "Nutz die Schaltfläche „Fragen“ oder „Frage zu diesem Job stellen“.",
             "title": "Öffne ihn überall"
           },
           "s2": {
@@ -2636,12 +2636,12 @@
             "title": "Gib jede Änderung frei"
           },
           "sample": {
-            "line1": "„Warum ist diese Stelle nur Möglich?“",
+            "line1": "„Warum ist dieser Job nur ‚Möglich‘?“",
             "line2": "Verlangt werden 5 Jahre Teamleitung, dein Lebenslauf zeigt 2.",
             "line3": "Von KI geschrieben. Die Zahlen stammen aus der Anzeige oder deinem Lebenslauf."
           },
           "sub": "Der Assistent antwortet auf Basis der Stellenanzeige, deines Lebenslaufs und deiner gespeicherten Suchen. Er kann eine Filteränderung vorschlagen, und du gibst sie frei.",
-          "title": "Frag zu jeder Stelle, deinem Lebenslauf oder deiner Suche"
+          "title": "Frag zu jedem Job, deinem Lebenslauf oder deiner Suche"
         },
         "chromeExtension": {
           "eyebrow": "%BRAND% für Chrome",
@@ -2660,7 +2660,7 @@
             "title": "Installiere die Erweiterung"
           },
           "s2": {
-            "body": "Wähl „Dieses Formular ausfüllen“.",
+            "body": "Wähl „Formular ausfüllen“.",
             "title": "Öffne eine Bewerbung"
           },
           "s3": {
@@ -2677,7 +2677,7 @@
         },
         "coverLetters": {
           "eyebrow": "Anschreiben",
-          "metaDescription": "Schreib ein Anschreiben für eine Stelle, aus der Anzeige und deinem eigenen Lebenslauf, und bearbeite es dann.",
+          "metaDescription": "Schreib ein Anschreiben für einen Job, aus der Anzeige und deinem eigenen Lebenslauf, und bearbeite es dann.",
           "metaTitle": "Anschreiben aus der Stellenanzeige und deinem Lebenslauf",
           "q1": {
             "a": "Nein. Du entscheidest, ob und wo du es verwendest.",
@@ -2688,8 +2688,8 @@
             "q": "Gibt es ein Limit?"
           },
           "s1": {
-            "body": "Starte auf der Seite der Stelle.",
-            "title": "Wähl die Stelle"
+            "body": "Starte auf der Seite des Jobs.",
+            "title": "Wähl den Job"
           },
           "s2": {
             "body": "Jede Angabe stammt aus deinem Lebenslauf oder der Anzeige.",
@@ -2705,26 +2705,26 @@
             "line3": "Von KI geschrieben. Lies es, bevor du es abschickst."
           },
           "sub": "Das Anschreiben nutzt, was die Anzeige verlangt und was dein Lebenslauf zeigt. Du bearbeitest es, bevor du es verwendest.",
-          "title": "Ein Anschreiben für diese Stelle, aus deinem eigenen Lebenslauf"
+          "title": "Ein Anschreiben für diesen Job, aus deinem eigenen Lebenslauf"
         },
         "interviewPractice": {
           "eyebrow": "Übungsgespräche",
           "metaDescription": "Live-Übungsgespräche, aufgebaut aus einer Stellenanzeige und deinem Lebenslauf, mit einem Bericht nach jedem Gespräch.",
-          "metaTitle": "Üb das Vorstellungsgespräch für eine bestimmte Stelle",
+          "metaTitle": "Üb das Vorstellungsgespräch für einen bestimmten Job",
           "q1": {
             "a": "Wir speichern eine schriftliche Mitschrift deiner Antworten, weil dein Bericht daraus geschrieben wird. Ton und Video werden standardmäßig nicht aufgezeichnet.",
             "q": "Wird es aufgezeichnet?"
           },
           "q2": {
             "a": "Nein. Er zeigt, wie deine Antworten in der Übung gewirkt haben, nicht, wie echte Gesprächspartner entscheiden werden.",
-            "q": "Heißt ein guter Bericht, dass ich die Stelle bekomme?"
+            "q": "Heißt ein guter Bericht, dass ich den Job bekomme?"
           },
           "s1": {
-            "body": "Starte mit einer beliebigen Stelle oder füg eine Anzeige ein.",
-            "title": "Wähl die Stelle"
+            "body": "Starte mit einem beliebigen Job oder füg eine Anzeige ein.",
+            "title": "Wähl den Job"
           },
           "s2": {
-            "body": "Antworte laut. Dein Gegenüber hakt nach, wie es ein Mensch tun würde.",
+            "body": "Antworte laut. Die Gesprächsperson hakt nach, wie es ein Mensch tun würde.",
             "title": "Sprich es durch"
           },
           "s3": {
@@ -2736,31 +2736,31 @@
             "line2": "Hinweis: Fang mit dem Ergebnis an. Es kam erst am Ende deiner Antwort.",
             "line3": "Bericht: eine stärkere Antwort pro Frage."
           },
-          "sub": "Ein Gesprächspartner für die Übung, der die Stellenanzeige und deinen Lebenslauf kennt, stellt die Fragen, die im echten Gespräch wahrscheinlich kommen. Danach bekommst du einen Bericht.",
-          "title": "Üb das Vorstellungsgespräch für genau diese Stelle"
+          "sub": "Eine Gesprächsperson, die die Stellenanzeige und deinen Lebenslauf kennt, stellt die Fragen, die im echten Gespräch wahrscheinlich kommen. Danach bekommst du einen Bericht.",
+          "title": "Üb das Vorstellungsgespräch für genau diesen Job"
         },
         "jobMatches": {
-          "eyebrow": "Passende Stellen",
-          "metaDescription": "%BRAND% sortiert aktuelle Stellenanzeigen danach, wie gut dein Lebenslauf passt, und jede Stelle beginnt mit dem, was fehlt.",
-          "metaTitle": "Stellen, die zu deinem Lebenslauf passen, mit Begründung",
+          "eyebrow": "Passende Jobs",
+          "metaDescription": "%BRAND% sortiert aktuelle Stellenanzeigen danach, wie gut dein Lebenslauf passt, und jeder Job beginnt mit dem, was fehlt.",
+          "metaTitle": "Jobs, die zu deinem Lebenslauf passen, mit Begründung",
           "q1": {
             "a": "Nach Passung, Aktualität, deinem gezeigten Interesse und der Quelle der Anzeige. Die Seite „So funktioniert das Ranking“ nennt jeden Faktor.",
             "q": "Wie wird die Liste sortiert?"
           },
           "q2": {
-            "a": "Nein. „Von Recruitern veröffentlicht“ ist ein Filter, den du einschalten kannst. Er schiebt nie eine Stelle in der Liste nach oben.",
-            "q": "Stehen von Recruitern veröffentlichte Stellen weiter oben?"
+            "a": "Nein. „Von Recruitern veröffentlicht“ ist ein Filter, den du einschalten kannst. Er schiebt nie einen Job in der Liste nach oben.",
+            "q": "Stehen von Recruitern veröffentlichte Jobs weiter oben?"
           },
           "s1": {
             "body": "Sag uns, welche Positionen, Orte und welches Gehalt du suchst. Den Rest erledigt dein Lebenslauf.",
             "title": "Füg Lebenslauf und Suche hinzu"
           },
           "s2": {
-            "body": "Jede Stelle zeigt, was sich deckt und was fehlt, bevor sie eine Zahl zeigt.",
+            "body": "Jeder Job zeigt, was sich deckt und was fehlt, bevor er eine Zahl zeigt.",
             "title": "Lies zuerst die Lücke"
           },
           "s3": {
-            "body": "Merk dir die Stelle, pass deinen Lebenslauf an oder üb das Vorstellungsgespräch.",
+            "body": "Merk dir den Job, pass deinen Lebenslauf an oder üb das Vorstellungsgespräch.",
             "title": "Mach etwas daraus"
           },
           "sample": {
@@ -2768,23 +2768,23 @@
             "line2": "Kubernetes wird zweimal verlangt. In deinem Lebenslauf kommt es nicht vor.",
             "line3": "Das ist nicht deine Chance, eingestellt zu werden."
           },
-          "sub": "Jede Stelle bekommt eine Passungsstufe und beginnt mit der Lücke: dem, was der Arbeitgeber verlangt und dein Lebenslauf nicht zeigt.",
-          "title": "Stellen nach Passung sortiert, mit der Begründung in klaren Worten"
+          "sub": "Jeder Job bekommt eine Passungsstufe und beginnt mit der Lücke: dem, was der Arbeitgeber verlangt und dein Lebenslauf nicht zeigt.",
+          "title": "Jobs nach Passung sortiert, mit der Begründung in klaren Worten"
         },
         "readyToApply": {
           "eyebrow": "Bereit zum Bewerben",
-          "metaDescription": "Jede Woche bereitet %BRAND% Unterlagen für passende Stellen vor. Du prüfst sie und sendest jede Bewerbung selbst ab.",
+          "metaDescription": "Jede Woche bereitet %BRAND% Unterlagen für passende Jobs vor. Du prüfst sie und sendest jede Bewerbung selbst ab.",
           "metaTitle": "Jede Woche vorbereitete Bewerbungen, die du selbst absendest",
           "q1": {
             "a": "Nein. Es sendet nie eine Bewerbung ab und kontaktiert nie einen Arbeitgeber.",
             "q": "Sendet es irgendetwas ab?"
           },
           "q2": {
-            "a": "Mach es mit einem Tippen rückgängig, und die Stelle ist wieder dort, wo sie war.",
-            "q": "Was, wenn ich mich nach dem Öffnen einer Stelle nicht beworben habe?"
+            "a": "Mach es mit einem Tippen rückgängig, und der Job ist wieder dort, wo er war.",
+            "q": "Was, wenn ich mich nach dem Öffnen eines Jobs nicht beworben habe?"
           },
           "s1": {
-            "body": "Wähl 5, 10, 20 oder 30 Stellen und die niedrigste Passung, die du akzeptierst.",
+            "body": "Wähl 5, 10, 20 oder 30 Jobs und die niedrigste Passung, die du akzeptierst.",
             "title": "Leg fest, wie viele pro Woche"
           },
           "s2": {
@@ -2792,20 +2792,20 @@
             "title": "Prüf jedes Paket"
           },
           "s3": {
-            "body": "Öffne die Seite des Arbeitgebers und sende die Bewerbung ab. Die Stelle wandert zu „Beworben“.",
+            "body": "Öffne die Seite des Arbeitgebers und sende die Bewerbung ab. Der Job wandert zu „Beworben“.",
             "title": "Sende sie selbst ab"
           },
           "sample": {
-            "line1": "5 Stellen diese Woche · Passt gut oder besser",
+            "line1": "5 Jobs diese Woche · Passt gut oder besser",
             "line2": "Paket fertig: angepasster Lebenslauf, Anschreiben, 4 Antworten",
             "line3": "Bewerbung öffnen → du prüfst sie und sendest sie ab"
           },
-          "sub": "Für passende Stellen bereitet %BRAND% einen angepassten Lebenslauf, ein Anschreiben und Antworten auf häufige Fragen vor. Du öffnest jede Bewerbung und sendest sie selbst ab.",
+          "sub": "Für passende Jobs bereitet %BRAND% einen angepassten Lebenslauf, ein Anschreiben und Antworten auf häufige Fragen vor. Du öffnest jede Bewerbung und sendest sie selbst ab.",
           "title": "Jede Woche vorbereitete Bewerbungen, die du prüfst"
         },
         "referrals": {
           "eyebrow": "Personen",
-          "metaDescription": "Finde Personen in einem Unternehmen, die du zu einer Stelle fragen kannst, und entwirf eine Nachricht, die du selbst sendest.",
+          "metaDescription": "Finde Personen in einem Unternehmen, die du zu einem Job fragen kannst, und entwirf eine Nachricht, die du selbst sendest.",
           "metaTitle": "Personen in einem Unternehmen",
           "q1": {
             "a": "Aus Suchen, die du selbst öffnest, und von Recruitern, die sich auf unseren Partnerseiten dafür entschieden haben, kontaktierbar zu sein.",
@@ -2817,7 +2817,7 @@
           },
           "s1": {
             "body": "Sieh die Suchlinks für dieses Unternehmen.",
-            "title": "Öffne „Personen“ bei einer Stelle"
+            "title": "Öffne „Personen“ bei einem Job"
           },
           "s2": {
             "body": "Starte mit einem kurzen Entwurf und mach ihn zu deinem eigenen.",
@@ -2833,12 +2833,12 @@
             "line3": "Du sendest sie selbst."
           },
           "sub": "Links zu Personen im Unternehmen und ein Nachrichtenentwurf, den du bearbeitest und selbst sendest.",
-          "title": "Finde Personen, die du zu einer Stelle fragen kannst"
+          "title": "Finde Personen, die du zu einem Job fragen kannst"
         },
         "resumeTailoring": {
           "eyebrow": "Lebenslauf anpassen",
-          "metaDescription": "Erstelle eine Version deines Lebenslaufs für eine Stelle, sieh jede Änderung und bestätige alles Neue, bevor du sie herunterlädst.",
-          "metaTitle": "Pass deinen Lebenslauf an jede Stelle an",
+          "metaDescription": "Erstelle eine Version deines Lebenslaufs für einen Job, sieh jede Änderung und bestätige alles Neue, bevor du sie herunterlädst.",
+          "metaTitle": "Pass deinen Lebenslauf an jeden Job an",
           "q1": {
             "a": "Es kann Formulierungen vorschlagen. Eine Behauptung, Zahl oder Fähigkeit, die nicht in deinem Lebenslauf steht, lässt sich aber erst herunterladen, wenn du sie bestätigst, bearbeitest oder entfernst.",
             "q": "Kann es Erfahrung erfinden?"
@@ -2848,8 +2848,8 @@
             "q": "Ändert es meinen Hauptlebenslauf?"
           },
           "s1": {
-            "body": "Starte mit einer Stelle aus deiner Liste oder einer, die du hinzugefügt hast.",
-            "title": "Wähl eine Stelle"
+            "body": "Starte mit einem Job aus deiner Liste oder einem, den du hinzugefügt hast.",
+            "title": "Wähl einen Job"
           },
           "s2": {
             "body": "Behalte, bearbeite oder entferne jede Änderung. Ohne deine Zustimmung kommt nichts Neues hinzu.",
@@ -2865,7 +2865,7 @@
             "line3": "Passung nach den Änderungen: Passt gut · 84 / 100"
           },
           "sub": "Sieh jede Änderung im direkten Vergleich. Alles, was der Entwurf hinzufügt und nicht in deinem Lebenslauf steht, wartet auf deine Bestätigung.",
-          "title": "Eine Version deines Lebenslaufs für jede Stelle"
+          "title": "Eine Version deines Lebenslaufs für jeden Job"
         },
         "visaSponsorship": {
           "eyebrow": "Visum und Arbeitserlaubnis",
@@ -2896,7 +2896,7 @@
             "line2": "Steht nichts dazu in der Anzeige, zeigen wir „nicht angegeben“.",
             "line3": "Wir zitieren die Anzeige. Aus fehlenden Angaben schließen wir nichts."
           },
-          "sub": "Sag uns, ob du in dem Land, in dem du suchst, Visa-Sponsoring brauchst. Stellen, die laut Anzeige kein Sponsoring bieten, werden nicht angezeigt, und wir zeigen den Wortlaut der Anzeige.",
+          "sub": "Sag uns, ob du in dem Land, in dem du suchst, Visa-Sponsoring brauchst. Jobs, die laut Anzeige kein Sponsoring bieten, werden nicht angezeigt, und wir zeigen den Wortlaut der Anzeige.",
           "title": "Sieh, was eine Anzeige zum Visa-Sponsoring sagt"
         }
       }
@@ -2918,11 +2918,11 @@
         "q": "Wie kündige ich ein Abo?"
       },
       "q3": {
-        "a": "Vielleicht wurde sie geschlossen, von ihrer Quelle entfernt oder durch einen Filter ausgeblendet, den du gesetzt hast. Bei geschlossenen Stellen steht, wann sie zuletzt gesehen wurden.",
-        "q": "Warum ist eine Stelle aus meiner Liste verschwunden?"
+        "a": "Vielleicht wurde er geschlossen, von seiner Quelle entfernt oder durch einen Filter ausgeblendet, den du gesetzt hast. Bei geschlossenen Jobs steht, wann sie zuletzt gesehen wurden.",
+        "q": "Warum ist ein Job aus meiner Liste verschwunden?"
       },
       "q4": {
-        "a": "Nutz „Rückgängig“ bei der Stelle oder ändere ihren Status in deiner Bewerbungsübersicht.",
+        "a": "Nutz „Rückgängig“ beim Job oder ändere seinen Status in deiner Bewerbungsübersicht.",
         "q": "Ich habe eine Bewerbung geöffnet, mich aber nicht beworben. Wie korrigiere ich das?"
       },
       "q5": {
@@ -2930,8 +2930,8 @@
         "q": "Wie lösche ich mein Konto?"
       },
       "q6": {
-        "a": "Weil er nur misst, wie gut dein Lebenslauf zur Anzeige passt. Eine Einstellung hängt von vielem ab, das wir nicht sehen können.",
-        "q": "Warum steht beim Passungswert, dass er nicht meine Chance ist, eingestellt zu werden?"
+        "a": "Weil sie nur misst, wie gut dein Lebenslauf zur Anzeige passt. Eine Einstellung hängt von vielem ab, das wir nicht sehen können.",
+        "q": "Warum steht bei der Passgenauigkeit, dass sie nicht meine Chance ist, eingestellt zu werden?"
       },
       "rankingLink": "So funktioniert das Ranking",
       "securityLink": "Sicherheit",
@@ -2941,29 +2941,29 @@
     "home": {
       "counters": {
         "addedThisWeek": "{count}+ in den letzten 7 Tagen hinzugekommen",
-        "method": "Gezählt aus dem %BRAND%-Index, stündlich aktualisiert, abgerundet. Gezählt werden nur Stellen, die alle sehen können. Stellen, die jemand für sich selbst hinzufügt, zählen nicht.",
+        "method": "Gezählt aus dem %BRAND%-Index, stündlich aktualisiert, abgerundet. Gezählt werden nur Jobs, die alle sehen können. Jobs, die jemand für sich selbst hinzufügt, zählen nicht.",
         "openRoles": "{count}+ offene Stellen",
-        "title": "Aus den Stellen, die wir gerade im Bestand haben"
+        "title": "Aus den Jobs, die wir gerade im Bestand haben"
       },
       "faq": {
         "q1": {
-          "a": "%BRAND% liest deinen Lebenslauf und aktuelle Stellenanzeigen. Für jede Stelle zeigt es, wie gut dein Lebenslauf passt und was die Anzeige verlangt, das dein Lebenslauf nicht zeigt. Danach hilft es dir, Lebenslauf und Anschreiben anzupassen und das Vorstellungsgespräch für diese Stelle zu üben.",
+          "a": "%BRAND% liest deinen Lebenslauf und aktuelle Stellenanzeigen. Für jeden Job zeigt es, wie gut dein Lebenslauf passt und was die Anzeige verlangt, das dein Lebenslauf nicht zeigt. Danach hilft es dir, Lebenslauf und Anschreiben anzupassen und das Vorstellungsgespräch für diesen Job zu üben.",
           "q": "Was ist %BRAND%?"
         },
         "q2": {
-          "a": "Nein. Du öffnest jede Bewerbung auf der Seite des Arbeitgebers und sendest sie selbst ab. Wenn du eine öffnest, wandert die Stelle in deiner Übersicht zu „Beworben“. Das kannst du rückgängig machen, wenn du dich nicht beworben hast.",
-          "q": "Schickt %BRAND% Bewerbungen für mich ab?"
+          "a": "Nein. Du öffnest jede Bewerbung auf der Seite des Arbeitgebers und sendest sie selbst ab. Wenn du eine öffnest, wandert der Job in deiner Bewerbungsübersicht zu „Beworben“. Das kannst du rückgängig machen, wenn du dich nicht beworben hast.",
+          "q": "Sendet %BRAND% Bewerbungen für mich ab?"
         },
         "q3": {
-          "a": "Er sagt, wie gut dein Lebenslauf zur Stellenanzeige passt: Jobbezeichnung und Ebene, Fähigkeiten, Branche, Ort, Gehalt und Arbeitserlaubnis sowie dein bisheriger Karriereweg. Er ist nicht deine Chance, eingestellt zu werden.",
-          "q": "Was bedeutet der Passungswert?"
+          "a": "Sie sagt, wie gut dein Lebenslauf zur Stellenanzeige passt: Jobbezeichnung und Ebene, Fähigkeiten, Branche, Ort, Gehalt und Arbeitserlaubnis sowie dein bisheriger Werdegang. Sie ist nicht deine Chance, eingestellt zu werden.",
+          "q": "Was bedeutet die Passgenauigkeit?"
         },
         "q4": {
-          "a": "Von Anbietern von Stellenanzeigen und von Recruitern, die auf unseren Partnerseiten veröffentlichen. Jede Stelle zeigt ihre Quelle und wann sie zuletzt geprüft wurde.",
-          "q": "Woher kommen die Stellen?"
+          "a": "Von Anbietern von Stellenanzeigen und von Recruitern, die auf unseren Partnerseiten veröffentlichen. Jeder Job zeigt seine Quelle und wann er zuletzt geprüft wurde.",
+          "q": "Woher kommen die Jobs?"
         },
         "q5": {
-          "a": "Der kostenlose Tarif umfasst die Jobliste, Passungswerte und deine Bewerbungsübersicht, mit Tageslimits für KI-Aktionen. Pro hebt diese Limits an. Alle Preise und Limits stehen auf der Preisseite.",
+          "a": "Der kostenlose Tarif umfasst die Jobliste, die Passgenauigkeit und deine Bewerbungsübersicht, mit Tageslimits für KI-Aktionen. Pro hebt diese Limits an. Alle Preise und Limits stehen auf der Preisseite.",
           "q": "Was kostet es?"
         },
         "q6": {
@@ -2978,15 +2978,15 @@
       },
       "hero": {
         "ctaSecondary": "Beispiel ansehen",
-        "eyebrow": "Lebenslauf lesen · Stelle lesen · Lücke benennen",
+        "eyebrow": "Lebenslauf lesen · Job lesen · Lücke benennen",
         "headline": "Finde heraus, warum du keine Einladungen bekommst.",
-        "reassure": "Kostenloser Tarif · Keine Karte nötig · Jede Bewerbung schickst du selbst ab",
+        "reassure": "Kostenloser Tarif · Keine Karte nötig · Jede Bewerbung sendest du selbst ab",
         "subCount": "Füg deinen Lebenslauf hinzu. Wir lesen {count}+ offene Stellen, zeigen dir die, die du wirklich bekommen kannst, und benennen genau, was fehlt.",
         "subPlain": "Füg deinen Lebenslauf hinzu. Wir zeigen dir die offenen Stellen, die du wirklich bekommen kannst, und benennen genau, was fehlt."
       },
       "meta": {
-        "description": "%BRAND% liest deinen Lebenslauf und aktuelle Stellenanzeigen, zeigt die Stellen, die du wirklich bekommen kannst, benennt, was jede verlangt und dein Lebenslauf nicht zeigt, und lässt dich das Vorstellungsgespräch üben. Kostenlos starten. Jede Bewerbung schickst du selbst ab.",
-        "ogDescription": "Sieh, welche offenen Stellen zu deinem Lebenslauf passen und was bei jeder fehlt, und üb das Vorstellungsgespräch für genau diese Stelle. Kostenlos starten.",
+        "description": "%BRAND% liest deinen Lebenslauf und aktuelle Stellenanzeigen, zeigt die Jobs, die du wirklich bekommen kannst, benennt, was jeder verlangt und dein Lebenslauf nicht zeigt, und lässt dich das Vorstellungsgespräch üben. Kostenlos starten. Jede Bewerbung sendest du selbst ab.",
+        "ogDescription": "Sieh, welche offenen Jobs zu deinem Lebenslauf passen und was bei jedem fehlt, und üb das Vorstellungsgespräch für genau diesen Job. Kostenlos starten.",
         "ogTitle": "%BRAND%: Finde heraus, warum du keine Einladungen bekommst",
         "title": "Finde heraus, warum du keine Einladungen bekommst | %BRAND%"
       },
@@ -2996,18 +2996,18 @@
         "notSet": "Preis steht noch nicht fest",
         "proNote": "Höhere Tageslimits für jede KI-Aktion",
         "seeAll": "Alle Tarife und Limits ansehen",
-        "sub": "Die Jobliste, Passungswerte, Filter und deine Bewerbungsübersicht sind kostenlos. Pro hebt die Tageslimits für die KI-Aktionen an.",
+        "sub": "Die Jobliste, die Passgenauigkeit, Filter und deine Bewerbungsübersicht sind kostenlos. Pro hebt die Tageslimits für die KI-Aktionen an.",
         "title": "Starte kostenlos. Steig um, wenn du mehr brauchst."
       },
       "sample": {
         "company": "Beispielfirma",
         "find": {
           "line1": "Dein Lebenslauf: 6 Jahre Entwicklung von Zahlungssystemen.",
-          "line2": "Diese Stelle verlangt Backend-Arbeit im Zahlungsverkehr, in deiner Stadt, auf deiner Ebene.",
+          "line2": "Dieser Job verlangt Backend-Arbeit im Zahlungsverkehr, in deiner Stadt, auf deiner Ebene.",
           "line3": "Passung: Passt gut · 78 / 100"
         },
         "fix": {
-          "line1": "Angepasste Kopie für diese Stelle, jede Änderung im direkten Vergleich.",
+          "line1": "Angepasste Kopie für diesen Job, jede Änderung im direkten Vergleich.",
           "line2": "In einer Zeile steht eine Zahl, die wir in deinem Lebenslauf nicht gefunden haben. Korrigiere oder entferne sie, bevor du herunterlädst."
         },
         "practice": {
@@ -3023,7 +3023,7 @@
           "understand": "Verstehen"
         },
         "tabsLabel": "Schritte des Beispiels",
-        "title": "So sieht eine einzelne Stelle aus",
+        "title": "So sieht ein einzelner Job aus",
         "understand": {
           "fitLine": "Das ist nicht deine Chance, eingestellt zu werden.",
           "gap": "Kubernetes wird zweimal verlangt. In deinem Lebenslauf kommt es nicht vor.",
@@ -3034,19 +3034,19 @@
         "eyebrow": "So funktioniert es",
         "find": {
           "body": "Aktuelle Stellenanzeigen werden mit deinem Lebenslauf und deiner Suche abgeglichen. Jede bekommt eine Passungsstufe: Passt sehr gut, Passt gut, Möglich oder Unwahrscheinlich.",
-          "title": "Finde Stellen, die passen"
+          "title": "Finde Jobs, die passen"
         },
         "fix": {
           "body": "Pass eine Kopie an und schreib ein Anschreiben aus der Anzeige. Alles Neue musst du bestätigen, bevor du es herunterlädst.",
-          "title": "Verbessere deinen Lebenslauf für diese Stelle"
+          "title": "Verbessere deinen Lebenslauf für diesen Job"
         },
         "practice": {
-          "body": "Führ ein Übungsgespräch für genau diese Stelle und bekomm einen Bericht, mit dem du vor dem echten Gespräch arbeiten kannst.",
+          "body": "Führ ein Übungsgespräch für genau diesen Job und bekomm einen Bericht, mit dem du vor dem echten Gespräch arbeiten kannst.",
           "title": "Üb das Vorstellungsgespräch"
         },
         "title": "Finden. Verstehen. Verbessern. Üben.",
         "understand": {
-          "body": "Jede Stelle beginnt mit dem, was der Arbeitgeber verlangt und dein Lebenslauf nicht zeigt, und mit dem, was sich schon deckt.",
+          "body": "Jeder Job beginnt mit dem, was der Arbeitgeber verlangt und dein Lebenslauf nicht zeigt, und mit dem, was sich schon deckt.",
           "title": "Sieh zuerst die Lücke"
         }
       }
@@ -3066,10 +3066,10 @@
       "faqTitle": "Fragen",
       "free": "Kostenlos",
       "freeAlways": "In jedem Tarif kostenlos",
-      "freeAlwaysBody": "Die Jobliste, Passungswerte und Hinweise zur Lücke, Filter, Suche, „Entdecken“ und deine Bewerbungsübersicht.",
+      "freeAlwaysBody": "Die Jobliste, die Passgenauigkeit und Hinweise zur Lücke, Filter, Suche, „Entdecken“ und deine Bewerbungsübersicht.",
       "freeAlwaysBodyNoFeed": "Dein Lebenslauf, deine Bewerbungsübersicht und Erinnerungen an Fristen.",
       "freeAlwaysCampus": "Der Campus-Kalender ist ebenfalls kostenlos.",
-      "freeNote": "Die Jobliste, Passungswerte, Filter und deine Bewerbungsübersicht, mit Tageslimits für KI-Aktionen.",
+      "freeNote": "Die Jobliste, die Passgenauigkeit, Filter und deine Bewerbungsübersicht, mit Tageslimits für KI-Aktionen.",
       "freeNoteNoFeed": "Dein Lebenslauf, deine Bewerbungsübersicht und Erinnerungen.",
       "freePrice": "Kostenlos",
       "instantAlerts": "Sofortige Job-Benachrichtigungen per E-Mail",
@@ -3092,7 +3092,7 @@
       },
       "q3": {
         "a": "Nein. Limits werden jeden Tag oder jede Woche zurückgesetzt, wie in der Tabelle angegeben. Übungspakete bleiben für die angegebenen Monate gültig.",
-        "q": "Wird ungenutztes Guthaben in den nächsten Zeitraum übertragen?"
+        "q": "Werden ungenutzte Credits in den nächsten Zeitraum übertragen?"
       },
       "refund1": "Deine erste Abo-Zahlung kann innerhalb von 7 Tagen erstattet werden (48 Stunden bei wöchentlicher Abrechnung), wenn du weniger als 5 Aktionen genutzt hast, die Pro erfordern.",
       "refund2": "Eine Verlängerung, die du nicht behalten wolltest, kann innerhalb von 3 Tagen erstattet werden.",
@@ -3111,58 +3111,58 @@
     "ranking": {
       "addsPoints": "+{points} Punkte",
       "affinity": {
-        "body": "Stellen, die denen ähneln, die du dir gemerkt oder geöffnet hast, rücken nach oben. Stellen, die denen ähneln, die du ausgeblendet hast, rücken nach unten. Ältere Aktionen zählen weniger.",
+        "body": "Jobs, die denen ähneln, die du dir gemerkt oder geöffnet hast, rücken nach oben. Jobs, die denen ähneln, die du ausgeblendet hast, rücken nach unten. Ältere Aktionen zählen weniger.",
         "title": "Woran du Interesse gezeigt hast"
       },
-      "cnNote": "Sind auf %BRAND% personalisierte Empfehlungen ausgeschaltet oder noch nicht gewählt, werden Stellen nur nach Datum und deinen Filtern sortiert.",
+      "cnNote": "Sind auf %BRAND% personalisierte Empfehlungen ausgeschaltet oder noch nicht gewählt, werden Jobs nur nach Datum und deinen Filtern sortiert.",
       "factorsTitle": "Die vier Faktoren",
       "fit": {
-        "body": "Dein Passungswert für die Stelle, auf einer Skala bis 100. Liegt noch keine vollständige Passungsanalyse vor, wird eine schnelle Schätzung verwendet, die etwas weniger zählt.",
+        "body": "Deine Passgenauigkeit für den Job, auf einer Skala bis 100. Liegt noch keine vollständige Passungsanalyse vor, wird eine schnelle Einschätzung verwendet, die etwas weniger zählt.",
         "title": "Passung zu deinem Lebenslauf und deiner Suche"
       },
       "fitParts": {
-        "careerPath": "Dein bisheriger Karriereweg",
+        "careerPath": "Dein bisheriger Werdegang",
         "industry": "Branchenerfahrung",
         "logistics": "Ort, Gehalt und Arbeitserlaubnis",
         "notChance": "Das ist nicht deine Chance, eingestellt zu werden.",
         "skills": "Fähigkeiten, die die Anzeige verlangt",
         "tiers": "Stufen: Passt sehr gut ab {great} · Passt gut {good} bis {goodTop} · Möglich {possible} bis {possibleTop} · Unwahrscheinlich unter {possible}.",
-        "title": "Was in den Passungswert einfließt",
+        "title": "Was in die Passgenauigkeit einfließt",
         "titleLevel": "Jobbezeichnung und Ebene",
-        "weight": "{pct} % des Passungswerts"
+        "weight": "{pct} % der Passgenauigkeit"
       },
       "freshness": {
         "body": "Neuere Anzeigen kommen zuerst. Der Effekt nimmt über etwa drei Tage ab.",
         "title": "Aktualität"
       },
-      "goalIntro": "Das Karriereziel, das du beim Einrichten deines Kontos gewählt hast, gibt Stellen, die dazu passen, zusätzliche Punkte.",
+      "goalIntro": "Das Karriereziel, das du beim Einrichten deines Kontos gewählt hast, gibt Jobs, die dazu passen, zusätzliche Punkte.",
       "goalOthers": "Andere Ziele ändern die Reihenfolge nicht.",
       "goalTitle": "Dein Ziel",
       "goals": {
-        "flexibility": "Mehr Flexibilität: Remote- oder Hybrid-Stellen",
-        "higherPay": "Höheres Gehalt: Stellen, die ein Gehalt über deinem Minimum nennen, in derselben Währung",
-        "management": "Menschen führen: Stellen mit Personalverantwortung",
-        "moreSenior": "Eine höhere Position: Stellen über der niedrigsten Ebene, die du gewählt hast"
+        "flexibility": "Mehr Flexibilität: Remote- oder Hybrid-Jobs",
+        "higherPay": "Höheres Gehalt: Jobs, die ein Gehalt über deinem Minimum nennen, in derselben Währung",
+        "management": "Menschen führen: Jobs mit Personalverantwortung",
+        "moreSenior": "Eine höhere Position: Jobs über der niedrigsten Ebene, die du gewählt hast"
       },
       "lead": "Die Liste „Für dich“ (Sortierung: Empfohlen) wird nach vier Faktoren geordnet. Hier steht jeder einzelne mit seinem Gewicht.",
       "metaDescription": "Jeder Faktor, den %BRAND% für die Reihenfolge der Liste „Für dich“ nutzt, und was nie einfließt.",
       "metaTitle": "So funktioniert das Ranking",
-      "never1": "Zahlungen von Arbeitgebern. Niemand kann dafür zahlen, dass eine Stelle nach oben rückt.",
-      "never2": "Ob eine Stelle von einem Recruiter veröffentlicht wurde. Das ist nur ein Filter.",
-      "never3": "Stellen, die als möglicher Betrug markiert sind, werden aus der Liste genommen, bis sie geprüft sind.",
+      "never1": "Zahlungen von Arbeitgebern. Niemand kann dafür zahlen, dass ein Job nach oben rückt.",
+      "never2": "Ob ein Job von einem Recruiter veröffentlicht wurde. Das ist nur ein Filter.",
+      "never3": "Jobs, die als möglicher Betrug markiert sind, werden aus der Liste genommen, bis sie geprüft sind.",
       "never4": "Dein Foto, dein Alter, dein Geschlecht oder Angaben zu deiner Familie.",
       "neverTitle": "Was nie ins Ranking einfließt",
       "otherSorts": "„Neueste“, „Beste Passung“ und „Höchstes Gehalt“ sortieren nur nach diesem einen Merkmal.",
       "otherSortsTitle": "Andere Sortierungen",
-      "pointsNote": "Jede Stelle bekommt aus den vier Faktoren einen Ranking-Wert auf einer Skala bis 100. Die Regeln und Ziele unten geben zusätzliche Punkte auf diesen Wert oder verschieben Stellen innerhalb der Liste.",
-      "pointsNoteRules": "Jede Stelle bekommt aus den vier Faktoren einen Ranking-Wert auf einer Skala bis 100. Die Regel unten gibt zusätzliche Punkte auf diesen Wert.",
+      "pointsNote": "Jeder Job bekommt aus den vier Faktoren einen Ranking-Wert auf einer Skala bis 100. Die Regeln und Ziele unten geben zusätzliche Punkte auf diesen Wert oder verschieben Jobs innerhalb der Liste.",
+      "pointsNoteRules": "Jeder Job bekommt aus den vier Faktoren einen Ranking-Wert auf einer Skala bis 100. Die Regel unten gibt zusätzliche Punkte auf diesen Wert.",
       "rules": {
         "skillsBoost": {
-          "body": "Wenn Fähigkeiten der einzige Filter sind, der deine Liste eingrenzt, stehen Stellen, die mehr deiner gewählten Fähigkeiten verlangen, bei „Empfohlen“ weiter oben, und zwar im Verhältnis dazu, wie viele davon die Stelle verlangt.",
+          "body": "Wenn Fähigkeiten der einzige Filter sind, der deine Liste eingrenzt, stehen Jobs, die mehr deiner gewählten Fähigkeiten verlangen, bei „Empfohlen“ weiter oben, und zwar im Verhältnis dazu, wie viele davon der Job verlangt.",
           "title": "Deine gewählten Fähigkeiten"
         },
         "sponsorshipFirst": {
-          "body": "Wenn du angegeben hast, dass du Visa-Sponsoring brauchst, kommen Stellen zuerst, deren Anzeige Sponsoring erwähnt, in der von dir gewählten Reihenfolge. Stellen, deren Anzeige sagt, dass kein Sponsoring angeboten wird, werden ausgeblendet. Das gilt bei jeder Sortierung.",
+          "body": "Wenn du angegeben hast, dass du Visa-Sponsoring brauchst, kommen Jobs zuerst, deren Anzeige Sponsoring erwähnt, in der von dir gewählten Reihenfolge. Jobs, deren Anzeige sagt, dass kein Sponsoring angeboten wird, werden ausgeblendet. Das gilt bei jeder Sortierung.",
           "title": "Visa-Sponsoring zuerst"
         }
       },
@@ -3171,7 +3171,7 @@
         "body": "Quellen, deren Anzeigen meist vollständig und aktuell sind, zählen etwas mehr.",
         "title": "Quelle der Anzeige"
       },
-      "spread": "Höchstens {max} Stellen desselben Unternehmens unter {window} aufeinanderfolgenden Einträgen.",
+      "spread": "Höchstens {max} Jobs desselben Unternehmens unter {window} aufeinanderfolgenden Einträgen.",
       "spreadTitle": "Vielfalt",
       "title": "So funktioniert das Ranking",
       "upToPoints": "Bis zu {points} Punkte",
@@ -3186,9 +3186,9 @@
       "role": "Jobbezeichnung",
       "rolePlaceholder": "z. B. Product Designer",
       "roleRequired": "Gib eine Jobbezeichnung ein.",
-      "signupNote": "Erstelle ein kostenloses Konto, um Stellen zu sehen, die zu dir passen.",
+      "signupNote": "Erstelle ein kostenloses Konto, um Jobs zu sehen, die zu dir passen.",
       "submit": "Jobs suchen",
-      "title": "Offene Stellen durchsuchen"
+      "title": "Offene Jobs durchsuchen"
     },
     "security": {
       "account1": "Passwörter werden nur als gesalzene Einweg-Hashes gespeichert. Wir können dein Passwort nicht lesen.",
@@ -3226,7 +3226,7 @@
         "productTitle": "Produkt",
         "ranking": "So funktioniert das Ranking",
         "security": "Sicherheit",
-        "tagline": "Finde heraus, was jede Stelle verlangt, schließ die Lücken und üb das Vorstellungsgespräch. Jede Bewerbung schickst du selbst ab.",
+        "tagline": "Finde heraus, was jeder Job verlangt, schließ die Lücken und üb das Vorstellungsgespräch. Jede Bewerbung sendest du selbst ab.",
         "taglineCn": "Weniger Formulare. Keine verpassten Fristen. Ruhigere Vorstellungsgespräche. Jede Bewerbung sendest du selbst ab.",
         "tools": "Kostenlose Tools"
       },
@@ -3584,7 +3584,7 @@
         },
         "sources": {
           "sub": "Karriereseiten von Unternehmen, die wir über ihre öffentlichen Stellen-Feeds lesen.",
-          "title": "Stellenseiten von Unternehmen"
+          "title": "Karriereseiten von Unternehmen"
         },
         "system": {
           "sub": "Jobquellen, Hintergrundaufgaben, E-Mails, Assistent und Kosten, live gezählt.",
@@ -3728,7 +3728,7 @@
         "note": "Notiz fürs Protokoll (optional)",
         "openPosting": "Stellenanzeige öffnen",
         "reason": {
-          "agency": "Anzeige einer Personalvermittlung",
+          "agency": "Anzeige eines Personaldienstleisters",
           "duplicate": "Duplikat",
           "expired": "Nicht mehr offen",
           "fee_required": "Verlangt eine Gebühr",
@@ -3748,7 +3748,7 @@
           "intl_messaging_app_only": "Kontakt nur über eine Messenger-App.",
           "intl_pay_to_apply": "Bewerbung nur gegen Bezahlung."
         },
-        "signalQuote": "\"{quote}\"",
+        "signalQuote": "„{quote}“",
         "signalsTitle": "In der Anzeige gefundene Betrugsanzeichen (regelbasiert, mit dem Satz, auf dem sie beruhen):",
         "stateClosed": "Geschlossen",
         "stateOpen": "Für Nutzer sichtbar",
@@ -3792,7 +3792,7 @@
           "ingest_new_low": "{brand}: {value} neue Jobs bisher heute, weniger als die Hälfte dessen, was nach dem 7-Tage-Durchschnitt um diese Uhrzeit zu erwarten wäre ({level}).",
           "none": "Gerade liegt nichts über seinem Warnwert.",
           "provider_budget": "{subject}: {value} Aufrufe heute, Warnwert {level}.",
-          "score_budget": "{brand}: {value} KI-Passungswerte heute, Warnwert {level}.",
+          "score_budget": "{brand}: {value} KI-Bewertungen der Passgenauigkeit heute, Warnwert {level}.",
           "title": "{count, plural, one {# Zahl solltest du dir ansehen} other {# Zahlen solltest du dir ansehen}}"
         },
         "asOf": "Gezählt um {time}. „Heute“ ist der UTC-Tag {day}.",
@@ -3823,7 +3823,7 @@
           "newJobsDetail": "Tagesdurchschnitt der letzten 7 Tage: {avg}",
           "queriesDue": "Fällige Jobsuchen",
           "queriesDueDetail": "{overdue} über eine Stunde verspätet · {failing} mit Fehlern",
-          "scores": "KI-Passungswerte",
+          "scores": "KI-Bewertungen der Passgenauigkeit",
           "scoresDetail": "Gemessen am Tagesbudget"
         },
         "providers": {
@@ -3879,7 +3879,7 @@
     "back": "Deine passenden Jobs",
     "developers": "API nutzen",
     "query": "Stelle oder Suchbegriffe",
-    "query_placeholder": "Jobtitel, Fähigkeit oder Unternehmen",
+    "query_placeholder": "Jobbezeichnung, Fähigkeit oder Unternehmen",
     "location": "Ort",
     "location_placeholder": "Stadt, Region oder Land",
     "country": "Land",
@@ -3895,7 +3895,7 @@
     "employment_all": "Alle Arten",
     "fulltime": "Vollzeit",
     "parttime": "Teilzeit",
-    "contractor": "Vertragstätigkeit",
+    "contractor": "Auf Vertragsbasis",
     "intern": "Praktikum",
     "filters": "Suche eingrenzen",
     "search": "Job suchen",
@@ -3917,7 +3917,7 @@
     "error_body": "Versuche es erneut. Falls das Problem weiterhin besteht, wähle eine andere verfügbare Quelle.",
     "rate_limited": "Du hast das Suchlimit erreicht. Warte einen Moment und versuche es erneut.",
     "empty_title": "Keine Stellen für diese Suche gefunden",
-    "empty_body": "Versuche einen allgemeineren Jobtitel, einen anderen Ort oder weniger Filter.",
+    "empty_body": "Versuche eine allgemeinere Jobbezeichnung, einen anderen Ort oder weniger Filter.",
     "results": "{count, plural, one {# Ergebnis} other {# Ergebnisse}}",
     "results_for": "Ergebnisse für „{query}“",
     "partial": "Einige Quellen konnten die Suche nicht abschließen. Unten siehst du die Ergebnisse der Quellen, die geantwortet haben.",
@@ -4094,7 +4094,7 @@
     "type": "Typ",
     "allTypes": "Alle Typen",
     "subscription": "Abonnement",
-    "topup": "Guthabenaufladung",
+    "topup": "Credit-Aufladung",
     "status": "Status",
     "allStatuses": "Alle Status",
     "paid": "Bezahlt",
@@ -4136,7 +4136,7 @@
     "refresh": "Aktualisieren",
     "refreshing": "Wird aktualisiert…",
     "export": "CSV exportieren",
-    "exportHint": "Exportiert die aktuell gefilterten Daten, bis zu 10,000 Zeilen.",
+    "exportHint": "Exportiert die aktuell gefilterten Daten, bis zu 10.000 Zeilen.",
     "updated": "Aktualisiert: {time}",
     "timezone": "Zeitzone: {tz}",
     "loading": "Daten werden geladen…",
@@ -4175,7 +4175,7 @@
       "career_insight": "Karriereberatung",
       "coach": "Interview-Coaching",
       "cover_letter": "Anschreiben",
-      "digest": "Stellenübersichten",
+      "digest": "Jobübersichten",
       "intent": "Analyse der Jobpräferenzen",
       "interview_coach": "Interview-Coaching",
       "interview_end": "Interview beenden",
@@ -4183,12 +4183,12 @@
       "interview_start": "Interview starten",
       "jd_parse": "Stellenbeschreibung analysieren",
       "job_apply": "Als beworben markieren",
-      "job_match": "Stellenabgleich",
-      "job_save": "Stelle speichern",
+      "job_match": "Job-Abgleich",
+      "job_save": "Job speichern",
       "job_search": "Jobsuche",
       "keyword_extract": "Schlüsselwörter ermitteln",
-      "match_score": "Stellenpassung bewerten",
-      "mock_interview": "Probeinterviews",
+      "match_score": "Passgenauigkeit bewerten",
+      "mock_interview": "Übungsgespräche",
       "negotiation": "Angebotsverhandlung",
       "onboarding": "Chat zum Einstieg",
       "onboarding_complete": "Kontoeinrichtung abschließen",
@@ -4203,22 +4203,22 @@
       "ra_resume_tailor": "Lebenslauf anpassen",
       "ra_cover_letter": "Anschreiben",
       "roboapply_cover_letter": "Anschreiben",
-      "ra_match_score": "Stellenpassung bewerten",
+      "ra_match_score": "Passgenauigkeit bewerten",
       "ra_insight": "Karriereberatung",
       "ra_jd_parse": "Stellenbeschreibung analysieren",
       "ra_keyword_extract": "Schlüsselwörter ermitteln",
       "ra_onboarding_turn": "Chat zum Einstieg",
       "roboapply_intent": "Analyse der Jobpräferenzen",
-      "roboapply_digest": "Stellenübersichten",
+      "roboapply_digest": "Jobübersichten",
       "seeker_apply": "Bewerbungen",
       "seeker_tailor": "Lebenslauf anpassen",
       "seeker_resume_refinement": "Lebenslauf anpassen",
-      "seeker_mock_interview": "Probeinterviews",
-      "seeker_mock": "Probeinterviews",
+      "seeker_mock_interview": "Übungsgespräche",
+      "seeker_mock": "Übungsgespräche",
       "seeker_coach_text": "Interview-Coaching",
       "seeker_negotiation": "Angebotsverhandlung",
       "seeker_interview_planner": "Interview-Vorbereitung",
-      "seeker_match": "Stellenpassung bewerten"
+      "seeker_match": "Passgenauigkeit bewerten"
     },
     "plan_purchase": "Tarifkauf",
     "renewal": "Aboverlängerung",
@@ -4245,7 +4245,7 @@
     },
     "common": {
       "cancel": "Abbrechen",
-      "generic": "Etwas hat nicht funktioniert. Versuch es erneut.",
+      "generic": "Etwas ist schiefgelaufen. Versuch es erneut.",
       "loadError": "Das konnten wir nicht laden. Versuch es erneut.",
       "loading": "Wird geladen…",
       "network": "Wir konnten %BRAND% nicht erreichen. Prüf deine Verbindung und versuch es erneut.",
@@ -4362,7 +4362,7 @@
           "ai_interview": "KI-Interview",
           "applied": "Beworben",
           "assessment": "Eignungstest",
-          "closed": "Stelle geschlossen",
+          "closed": "Job geschlossen",
           "final_round": "Letzte Runde",
           "first_call": "Erstes Gespräch",
           "interviewing": "Im Gespräch",
@@ -4419,8 +4419,8 @@
         "copy": "Entwurf kopieren",
         "cost": "Verbraucht {cost, plural, one {# Credit} other {# Credits}}, aber nur, wenn du bestätigst.",
         "cover_letter": {
-          "confirm": "Anschreiben erstellen",
-          "title": "Anschreiben für {job} erstellen"
+          "confirm": "Anschreiben schreiben",
+          "title": "Anschreiben für {job} schreiben"
         },
         "dismissed": "Nicht ausgeführt.",
         "done": "Erledigt.",
@@ -4622,7 +4622,7 @@
       "why_fit": "Warum passe ich zu diesem Job?"
     },
     "chips": {
-      "cover_letter": "Anschreiben erstellen",
+      "cover_letter": "Anschreiben schreiben",
       "label": "Schnelle Fragen zu diesem Job",
       "practice": "Für diesen Job üben",
       "resume_tips": "Lebenslauf-Tipps",
@@ -5107,7 +5107,7 @@
       "claim_rejected": "Die KI hat Zeilen geschrieben, die dein Lebenslauf nicht belegt. Deshalb wurde das Anschreiben nicht gespeichert. Es wurde kein Credit verbraucht. Versuch es erneut oder ergänz die fehlende Erfahrung in deinem Lebenslauf.",
       "content_blocked": "Die Inhaltsprüfung hat diese Anfrage gestoppt. Ändere die Stellenanzeige oder deine Anweisung und versuch es erneut. Es wurde kein Credit verbraucht.",
       "credits_exhausted": "Deine Anschreiben für heute sind aufgebraucht. Deine Credits werden morgen aufgefüllt.",
-      "failed": "Etwas ist schiefgegangen. Versuch es erneut.",
+      "failed": "Etwas ist schiefgelaufen. Versuch es erneut.",
       "not_found": "Dieses Anschreiben wurde nicht gefunden. Vielleicht wurde es gelöscht.",
       "pdf_unavailable": "PDF gibt es für diese Sprache noch nicht. Lade stattdessen die Word-Datei herunter.",
       "phone_binding_required": "Hinterleg eine Telefonnummer, um das Schreiben mit KI zu nutzen.",
@@ -5294,7 +5294,7 @@
     },
     "buckets": {
       "ai_answer": "KI-Antworten auf Formularfragen",
-      "assistant": "Assistent-Nachrichten",
+      "assistant": "Nachrichten an den Assistenten",
       "autofill": "Ausgefüllte Formulare",
       "competitiveness": "Vergleichsberichte",
       "contact_lookup": "Kontaktsuchen",
@@ -5342,7 +5342,7 @@
       "done": "Dein Abo ist gekündigt. Du behältst Pro bis zum {date}. Wir haben dir eine Bestätigung per E-Mail geschickt.",
       "doneNoDate": "Dein Abo ist gekündigt. Du behältst Pro bis zum Ende des Zeitraums, den du bezahlt hast. Wir haben dir eine Bestätigung per E-Mail geschickt.",
       "email": "E-Mail",
-      "error": "Etwas ist schiefgegangen. Versuch es erneut.",
+      "error": "Etwas ist schiefgelaufen. Versuch es erneut.",
       "footerLink": "Verträge hier kündigen",
       "invalidEmail": "Gib eine gültige E-Mail-Adresse ein.",
       "send": "Kündigungslink senden",
@@ -5441,8 +5441,8 @@
         "pro_quarterly": "Pro vierteljährlich",
         "pro_week_pass": "7-Tage-Pass (keine Verlängerung)",
         "pro_weekly": "Pro, wöchentliche Abrechnung (verlängert sich, bis du kündigst)",
-        "student_monthly": "Student monatlich",
-        "student_quarterly": "Student vierteljährlich"
+        "student_monthly": "Studierendentarif monatlich",
+        "student_quarterly": "Studierendentarif vierteljährlich"
       }
     },
     "price": {
@@ -5521,13 +5521,13 @@
       "version": "Version {version}"
     },
     "fill": {
-      "cta": "Dieses Formular ausfüllen",
+      "cta": "Formular ausfüllen",
       "install": "Hol dir die Erweiterung, um dieses Formular auszufüllen",
       "newTab": "(wird in einem neuen Tab geöffnet)",
-      "note": "Öffnet die Bewerbungsseite. Die Erweiterung füllt die Felder aus; prüf sie und schick die Bewerbung selbst ab."
+      "note": "Öffnet die Bewerbungsseite. Die Erweiterung füllt die Felder aus; prüf sie und sende die Bewerbung selbst ab."
     },
     "meta": {
-      "description": "Füll Bewerbungsformulare aus deinem Profil aus. Du prüfst jedes Feld und schickst jede Bewerbung selbst ab.",
+      "description": "Füll Bewerbungsformulare aus deinem Profil aus. Du prüfst jedes Feld und sendest jede Bewerbung selbst ab.",
       "title": "%BRAND% für deinen Browser",
       "uninstalledTitle": "Die %BRAND%-Erweiterung wurde entfernt"
     },
@@ -5536,13 +5536,13 @@
       "factsTitle": "Antworten über dich",
       "how": {
         "step1": "Öffne ein Bewerbungsformular auf einer unterstützten Website.",
-        "step2": "Klick auf „Dieses Formular ausfüllen“. Die Felder werden aus deinem Profil und deinen gespeicherten Antworten ausgefüllt.",
+        "step2": "Klick auf „Formular ausfüllen“. Die Felder werden aus deinem Profil und deinen gespeicherten Antworten ausgefüllt.",
         "step3": "Bei offenen Fragen auf Englisch oder Chinesisch erscheint in der Seitenleiste ein von KI geschriebener Entwurf. Nichts kommt ins Formular, bevor du „Diese Antwort verwenden“ wählst.",
-        "step4": "Prüf jedes Feld und schick die Bewerbung dann selbst ab. Sag der Erweiterung, ob du das getan hast, damit deine Bewerbungsliste stimmt."
+        "step4": "Prüf jedes Feld und sende die Bewerbung dann selbst ab. Sag der Erweiterung, ob du das getan hast, damit deine Bewerbungsliste stimmt."
       },
       "howTitle": "So funktioniert es",
-      "intro": "Füll Bewerbungsformulare aus deinem Profil aus. Du prüfst jedes Feld und schickst jede Bewerbung selbst ab.",
-      "privacy": "Auf Bewerbungsseiten, die sie unterstützt, und auf Websites, für die du sie einschaltest, sucht die Erweiterung beim Öffnen der Seite nach dem Bewerbungsformular. Auf jeder anderen Seite liest sie die Seite nur, wenn du auf die Erweiterung klickst. Sie schickt nie ein Formular ab und klickt nie auf „Weiter“ oder „Absenden“.",
+      "intro": "Füll Bewerbungsformulare aus deinem Profil aus. Du prüfst jedes Feld und sendest jede Bewerbung selbst ab.",
+      "privacy": "Auf Bewerbungsseiten, die sie unterstützt, und auf Websites, für die du sie einschaltest, sucht die Erweiterung beim Öffnen der Seite nach dem Bewerbungsformular. Auf jeder anderen Seite liest sie die Seite nur, wenn du auf die Erweiterung klickst. Sie sendet nie ein Formular ab und klickt nie auf „Weiter“ oder „Absenden“.",
       "privacyTitle": "Was sie liest",
       "signIn": "Anmelden",
       "signedOut": "Melde dich an, um deine Einrichtung zu prüfen und die Erweiterung zu verbinden.",
@@ -5553,7 +5553,7 @@
       "unavailable": "Die Erweiterung ist noch nicht verfügbar."
     },
     "prompt": {
-      "body": "Die %BRAND%-Erweiterung füllt Formulare aus deinem Profil aus. Du prüfst jedes Feld und schickst die Bewerbung selbst ab.",
+      "body": "Die %BRAND%-Erweiterung füllt Formulare aus deinem Profil aus. Du prüfst jedes Feld und sendest die Bewerbung selbst ab.",
       "close": "Schließen",
       "connectCta": "Verbinden",
       "cta": "Erweiterung holen",
@@ -5589,7 +5589,7 @@
         "title": "Diesen Browser verbinden"
       },
       "done": {
-        "body": "Die Erweiterung ist verbunden. Öffne ein Bewerbungsformular auf einer unterstützten Website und klick auf „Dieses Formular ausfüllen“.",
+        "body": "Die Erweiterung ist verbunden. Öffne ein Bewerbungsformular auf einer unterstützten Website und klick auf „Formular ausfüllen“.",
         "cta": "Jobs entdecken",
         "title": "Alles eingerichtet"
       },
@@ -6367,7 +6367,7 @@
   "jobDetail": {
     "actions": {
       "apply": "Auf der Unternehmensseite bewerben",
-      "applyHint": "Öffnet die Seite des Arbeitgebers in einem neuen Tab. Die Bewerbung schickst du dort ab.",
+      "applyHint": "Öffnet die Seite des Arbeitgebers in einem neuen Tab. Die Bewerbung sendest du dort selbst ab.",
       "ask": "Frage zu diesem Job stellen",
       "error": "Das hat nicht geklappt. Versuch es erneut.",
       "iApplied": "Ich habe mich beworben",
@@ -6399,7 +6399,7 @@
       "addToReady": "Zu „Bereit zum Bewerben“ hinzufügen",
       "addedToReady": "Zu „Bereit zum Bewerben“ hinzugefügt",
       "addingToReady": "Wird hinzugefügt…",
-      "coverLetter": "Anschreiben erstellen",
+      "coverLetter": "Anschreiben schreiben",
       "done": "Erledigt",
       "openCoverLetter": "Anschreiben öffnen",
       "openTailored": "Angepassten Lebenslauf öffnen",
@@ -6490,9 +6490,9 @@
       "private": "Nur du kannst diesen Job sehen",
       "quote": "In der Anzeige steht: „{quote}“",
       "seniority": {
-        "director_exec": "Bereichsleitung oder Geschäftsführung",
+        "director_exec": "Director oder Geschäftsleitung",
         "entry": "Berufseinstieg",
-        "intern_newgrad": "Praktikum oder Einstieg nach dem Abschluss",
+        "intern_newgrad": "Praktikum oder frisch von der Hochschule",
         "lead_staff": "Lead oder Staff",
         "mid": "Mittlere Ebene",
         "senior": "Senior"
@@ -6527,7 +6527,7 @@
     "overview": {
       "fitTitle": "Dein Lebenslauf im Vergleich",
       "fromPost": "Aus der Stellenanzeige",
-      "keywordTitle": "Keyword-Prüfung",
+      "keywordTitle": "Schlagwortprüfung",
       "noDescription": "Die Anzeige enthält keine Beschreibung.",
       "requirement": {
         "citizenship_not_required": "Staatsbürgerschaft nicht erforderlich",
@@ -6583,7 +6583,7 @@
   "jobImport": {
     "actions": {
       "cancel": "Abbrechen",
-      "confirmRemove": "Diesen Job aus deiner Liste entfernen?",
+      "confirmRemove": "Diesen Job von deiner Liste entfernen?",
       "confirmRemoveYes": "Ja, entfernen",
       "loadMore": "Mehr anzeigen",
       "openTracker": "Bewerbungsübersicht öffnen",
@@ -6625,7 +6625,7 @@
     "errors": {
       "creditsExhausted": "Du hast heute so viele Jobs hinzugefügt, wie an einem Tag möglich sind.",
       "draftGone": "Dieser angefangene Job ist nicht mehr verfügbar. Füg ihn noch einmal über seinen Link hinzu oder tipp ihn ein.",
-      "generic": "Etwas ist schiefgegangen. Versuch es erneut.",
+      "generic": "Etwas ist schiefgelaufen. Versuch es erneut.",
       "hourly": "Du hast in der letzten Stunde viele Jobs hinzugefügt. Versuch es in {minutes, plural, one {# Minute} other {# Minuten}} erneut.",
       "hourlyNoTime": "Du hast in der letzten Stunde viele Jobs hinzugefügt. Versuch es später erneut.",
       "invalid": "Einige Angaben sind nicht gültig. Prüf das Formular und versuch es erneut.",
@@ -6638,7 +6638,7 @@
       "checkTitle": "Prüf die Details",
       "company": "Unternehmen",
       "description": "Stellenbeschreibung",
-      "descriptionHelp": "Füg die vollständige Anzeige ein. Sie wird für deinen Passungswert, deinen angepassten Lebenslauf und das Üben fürs Vorstellungsgespräch verwendet.",
+      "descriptionHelp": "Füg die vollständige Anzeige ein. Sie wird für deine Passgenauigkeit, deinen angepassten Lebenslauf und das Üben fürs Vorstellungsgespräch verwendet.",
       "errors": {
         "applyUrl": "Verwende eine vollständige Webadresse, die mit http:// oder https:// beginnt.",
         "company": "Gib das Unternehmen an.",
@@ -6664,7 +6664,7 @@
     },
     "list": {
       "added": "Hinzugefügt am {date}",
-      "emptySub": "Füg einen Job von einer anderen Seite hinzu, dann bekommst du dafür einen Passungswert, einen angepassten Lebenslauf und Übungen fürs Vorstellungsgespräch.",
+      "emptySub": "Füg einen Job von einer anderen Seite hinzu, dann siehst du dafür die Passgenauigkeit und bekommst einen angepassten Lebenslauf und Übungen fürs Vorstellungsgespräch.",
       "emptyTitle": "Noch keine Jobs hinzugefügt",
       "error": "Deine Jobs konnten nicht geladen werden.",
       "fromHost": "Von {host}",
@@ -6680,7 +6680,7 @@
         "bookmarked": "Gemerkt",
         "interviewing": "Im Gespräch",
         "negotiating": "Angebot",
-        "rejected": "Nicht ausgewählt",
+        "rejected": "Absage",
         "withdrawn": "Zurückgezogen"
       },
       "typed": "Von dir eingetippt",
@@ -6739,7 +6739,7 @@
       },
       "errors": {
         "duplicate": "Diese Karriereseite ist schon in der Liste.",
-        "generic": "Etwas ist schiefgegangen. Versuch es erneut.",
+        "generic": "Etwas ist schiefgelaufen. Versuch es erneut.",
         "invalid": "Prüf die Felder und versuch es erneut."
       },
       "eyebrow": "Admin",
@@ -6768,7 +6768,7 @@
         "board_not_found": "Die Karriereseite wurde nicht gefunden. Prüf die ID der Karriereseite.",
         "network": "Die Karriereseite war nicht erreichbar.",
         "not_json": "Die Karriereseite hat etwas anderes als Jobdaten gesendet.",
-        "other": "Beim Lesen der Karriereseite ist etwas schiefgegangen.",
+        "other": "Beim Lesen der Karriereseite ist etwas schiefgelaufen.",
         "rate_limited": "Die Karriereseite hat uns gebeten, langsamer zu machen. Es wird später erneut versucht.",
         "redirect": "Die Karriereseite wollte uns an eine andere Adresse weiterleiten, deshalb wurde sie nicht gelesen.",
         "refused": "Das System der Karriereseite hat die Anfrage abgelehnt.",
@@ -6804,7 +6804,7 @@
       "viewPosting": "Originalanzeige öffnen"
     },
     "negotiable": {
-      "body": "Die Anzeige nennt keinen Betrag (zum Beispiel steht dort 面議 oder 依公司規定). Nach Artikel 5 des taiwanischen Arbeitsvermittlungsgesetzes (Employment Services Act) darf ein Arbeitgeber das Gehalt nur dann weglassen, wenn der regelmäßige Monatslohn NT$40,000 oder mehr beträgt.",
+      "body": "Die Anzeige nennt keinen Betrag (zum Beispiel steht dort 面議 oder 依公司規定). Nach Artikel 5 des taiwanischen Arbeitsvermittlungsgesetzes (Employment Services Act) darf ein Arbeitgeber das Gehalt nur dann weglassen, wenn der regelmäßige Monatslohn NT$40.000 oder mehr beträgt.",
       "filterHint": "Jobs mit der Angabe 面議 haben kein angegebenes Gehalt. Schalte „Nur Jobs mit Gehaltsangabe“ ein, um sie auszublenden.",
       "lawLink": "Artikel 5 in der nationalen Gesetzesdatenbank lesen",
       "notAFigure": "Diese Regel gilt für Arbeitgeber. Sie ist nicht das Gehalt dieses Jobs, und ein Gehalt, das in einer Anzeige nicht steht, wird hier nie geschätzt.",
@@ -6895,7 +6895,7 @@
         "logistics": "Der Ort oder das Arbeitsmodell passt vielleicht nicht zu deinen Wünschen.",
         "skills": "Einige Fähigkeiten, die diese Stelle verlangt, stehen nicht in deinem Lebenslauf.",
         "skillsMissing": "Verlangt, aber nicht in deinem Lebenslauf: {skills}",
-        "title_level": "Die Karrierestufe kann von deiner abweichen."
+        "title_level": "Die Ebene kann von deiner abweichen."
       },
       "headline": {
         "nonPersonalized": "Sortiert nach Veröffentlichungsdatum und deinen Filtern",
@@ -6907,13 +6907,13 @@
         "industry": "Die Stellenanzeige nennt keine Branche.",
         "logistics": "Die Stellenanzeige nennt den Ort oder das Arbeitsmodell nicht.",
         "skills": "Die Stellenanzeige führt keine Fähigkeiten auf.",
-        "title_level": "Die Stellenanzeige nennt keine Karrierestufe."
+        "title_level": "Die Stellenanzeige nennt keine Ebene."
       },
       "notice": {
-        "factors": "Grundlage sind dein Jobtitel und deine Karrierestufe, deine Fähigkeiten, deine Branche, deine Ortswünsche und dein Werdegang. Niemals Alter, Geschlecht, Geburtsort, Foto oder Familie.",
+        "factors": "Grundlage sind deine Jobbezeichnung und deine Ebene, deine Fähigkeiten, deine Branche, deine Ortswünsche und dein Werdegang. Niemals Alter, Geschlecht, Geburtsort, Foto oder Familie.",
         "factorsNone": "Dein Profil wird nicht verwendet, um diese Jobs zu sortieren.",
         "notHiringChance": "Das ist nicht deine Chance, eingestellt zu werden.",
-        "quickEstimate": "Schnelle Schätzung, ohne KI erstellt.",
+        "quickEstimate": "Schnelle Einschätzung, ohne KI erstellt.",
         "turnOff": "Um Jobs ohne dein Profil zu sortieren, schalte in den Einstellungen „Jobs anhand meines Profils sortieren“ aus.",
         "turnOn": "Um Jobs nach Passung zu sortieren, schalte in den Einstellungen „Jobs anhand meines Profils sortieren“ ein."
       },
@@ -6923,7 +6923,7 @@
         "logistics": "Ort und Arbeitsmodell passen zu deinen Wünschen.",
         "skills": "Deine Fähigkeiten decken ab, was diese Stelle verlangt.",
         "skillsAligned": "Fähigkeiten, die du hast und die diese Stelle verlangt: {skills}",
-        "title_level": "Dein Jobtitel und deine Karrierestufe passen zu dieser Stelle."
+        "title_level": "Deine Jobbezeichnung und deine Ebene passen zu dieser Stelle."
       },
       "title": "Warum dieser Job"
     },
@@ -7246,7 +7246,7 @@
       "functionsPlaceholder": "Jobbezeichnung eingeben",
       "functionsRequired": "Füg mindestens eine Jobbezeichnung hinzu.",
       "jobTypes": {
-        "contract": "Vertragstätigkeit",
+        "contract": "Auf Vertragsbasis",
         "full_time": "Vollzeit",
         "internship": "Praktikum",
         "part_time": "Teilzeit"
@@ -7306,7 +7306,7 @@
         "entry": "Berufseinstieg (0–2 Jahre)",
         "internship": "Praktikum",
         "lead_staff": "Lead / Staff",
-        "mid": "Mit Berufserfahrung (2–5 Jahre)",
+        "mid": "Mittlere Ebene (2–5 Jahre)",
         "senior": "Senior (5+ Jahre)"
       },
       "levelsLabel": "Erfahrungsstufe",
@@ -7394,8 +7394,8 @@
       "cards": {
         "practice": "Das Vorstellungsgespräch üben",
         "practiceBody": "Beantworte realistische Fragen zur Stelle und bekomm Feedback.",
-        "ready": "Vorbereitete Bewerbungsunterlagen — du reichst sie selbst ein",
-        "readyBody": "Wir bereiten die Unterlagen vor; du prüfst sie und reichst sie auf der Website des Unternehmens ein.",
+        "ready": "Bewerbungspakete — du sendest selbst ab",
+        "readyBody": "Wir bereiten die Unterlagen vor; du prüfst sie und sendest die Bewerbung selbst auf der Seite des Unternehmens ab.",
         "tailor": "Ein angepasster Lebenslauf für jeden Job",
         "tailorBody": "Pass deinen Lebenslauf an die Anforderungen eines Jobs an – nur mit dem, was wirklich auf dich zutrifft."
       },
@@ -7459,9 +7459,9 @@
       "removeSkill": "{label} entfernen",
       "sizes": {
         "1-50": "1–50",
-        "10000+": "10,000+",
-        "1001-10000": "1,001–10,000",
-        "201-1000": "201–1,000",
+        "10000+": "10.000+",
+        "1001-10000": "1.001–10.000",
+        "201-1000": "201–1.000",
         "51-200": "51–200",
         "any": "Jede Größe"
       },
@@ -7582,7 +7582,7 @@
       "resumeCheckAction": "Prüfung ansehen",
       "scoreBody": "„Passt sehr gut“, „Passt gut“, „Möglich“ und „Unwahrscheinlich“ vergleichen deinen Lebenslauf mit den Anforderungen des Jobs.",
       "scoreLine": "Das ist nicht deine Chance, eingestellt zu werden.",
-      "scoreTitle": "So liest du die Passung"
+      "scoreTitle": "So liest du die Passgenauigkeit"
     },
     "tour": {
       "cards": {
@@ -7590,8 +7590,8 @@
         "fitBody": "Jeder Job zeigt, wo dein Lebenslauf die Anforderungen erfüllt und wo nicht.",
         "practice": "Das Vorstellungsgespräch üben",
         "practiceBody": "Üb realistische Fragen zur Stelle und bekomm Feedback.",
-        "ready": "Vorbereitete Bewerbungsunterlagen — du reichst sie selbst ein",
-        "readyBody": "Wir bereiten die Unterlagen vor. Du prüfst sie und reichst sie auf der Website des Unternehmens ein.",
+        "ready": "Bewerbungspakete — du sendest selbst ab",
+        "readyBody": "Wir bereiten die Unterlagen vor. Du prüfst sie und sendest die Bewerbung selbst auf der Seite des Unternehmens ab.",
         "tailor": "Ein angepasster Lebenslauf für jeden Job",
         "tailorBody": "Pass deinen Lebenslauf an einen Job an – nur mit dem, was wirklich auf dich zutrifft."
       },
@@ -7637,7 +7637,7 @@
       "intro": "%BRAND% schreibt einen Entwurf. Du prüfst ihn und sendest ihn dann selbst.",
       "markSent": "Ich habe sie gesendet",
       "openLinkedIn": "LinkedIn öffnen",
-      "openMail": "In deiner E-Mail-App öffnen",
+      "openMail": "In deinem E-Mail-Programm öffnen",
       "openMailHint": "Deine E-Mail-App öffnet sich mit diesem Entwurf. Die Adresse trägst du selbst ein.",
       "save": "Änderungen speichern",
       "saveError": "Deine Änderungen konnten nicht gespeichert werden.",
@@ -7881,8 +7881,8 @@
           "ja": "Japanisch",
           "ko": "Koreanisch",
           "pt": "Portugiesisch",
-          "zh": "Chinesisch (vereinfacht)",
-          "zh_TW": "Chinesisch (traditionell)"
+          "zh": "Vereinfachtes Chinesisch",
+          "zh_TW": "Traditionelles Chinesisch"
         },
         "submit": "Frage veröffentlichen",
         "title": "Kurzer Titel"
@@ -7956,7 +7956,7 @@
     },
     "errors": {
       "aiOff": "Das Schreiben mit KI ist gerade nicht verfügbar, deshalb kann das nicht geschrieben werden.",
-      "blocked": "Das konnte nicht geschrieben werden. Probier eine andere Stelle oder Frage.",
+      "blocked": "Das konnte nicht geschrieben werden. Probier einen anderen Job oder eine andere Frage.",
       "generic": "Etwas ist schiefgelaufen. Versuch es erneut.",
       "guideLimit": "Du hast heute viele neue Leitfäden geöffnet. Versuch es morgen wieder.",
       "jobSetLimit": "Du hast heute viele Fragensets erstellt. Versuch es morgen wieder.",
@@ -7969,12 +7969,12 @@
     "job": {
       "aiHeading": "Von KI aus dieser Stellenanzeige geschrieben",
       "aiOff": "Das Schreiben mit KI ist gerade nicht verfügbar, deshalb stehen hier nur Fragen, die Nutzer geteilt haben.",
-      "loadError": "Die Fragen für diese Stelle wurden nicht geladen. Versuch es erneut.",
-      "loading": "Fragen für diese Stelle werden geladen…",
+      "loadError": "Die Fragen für diesen Job wurden nicht geladen. Versuch es erneut.",
+      "loading": "Fragen für diesen Job werden geladen…",
       "noReports": "Noch hat niemand Fragen zu {company} geteilt.",
-      "notFound": "Wir konnten diese Stelle nicht finden.",
+      "notFound": "Wir konnten diesen Job nicht finden.",
       "notWritten": "KI kann aus dieser Stellenanzeige Übungsfragen schreiben. Sie sind Übungsmaterial und keine Fragen, von denen jemand berichtet hat.",
-      "practice": "Für diese Stelle üben",
+      "practice": "Für diesen Job üben",
       "reportsHeading": "Von %BRAND%-Nutzern zu {company} geteilt",
       "seeAll": "Alle Fragen zu {company} ansehen",
       "sub": "bei {company}",
@@ -7985,8 +7985,8 @@
       "writtenOn": "Geschrieben am {date}"
     },
     "off": {
-      "back": "Vorstellungsgespräch üben",
-      "sub": "Du kannst trotzdem für jede Stelle ein Vorstellungsgespräch üben.",
+      "back": "Zu den Übungsgesprächen",
+      "sub": "Du kannst trotzdem für jeden Job ein Vorstellungsgespräch üben.",
       "title": "Übungsfragen gibt es hier noch nicht"
     },
     "report": {
@@ -8083,11 +8083,11 @@
       },
       "identity": "Deine aktuelle Situation",
       "intro": "Recruiter bei chinesischen Arbeitgebern fragen oft danach. Die Angaben werden nur zum Ausfüllen von Formularen genutzt.",
-      "jobSearchStatus": "Status der Stellensuche",
+      "jobSearchStatus": "Status der Jobsuche",
       "major": "Studienfach",
       "nativePlace": "Herkunftsort der Familie",
       "notAnswered": "Nicht beantwortet",
-      "optionalIntro": "Manche Bewerbungsformulare fragen danach. Die Angaben sind verschlüsselt, werden nur zum Ausfüllen dieser Formulare genutzt, nie zum Sortieren von Stellen verwendet und nie an KI gesendet.",
+      "optionalIntro": "Manche Bewerbungsformulare fragen danach. Die Angaben sind verschlüsselt, werden nur zum Ausfüllen dieser Formulare genutzt, nie zum Sortieren von Jobs verwendet und nie an KI gesendet.",
       "optionalTitle": "Optionale Angaben für Formulare",
       "photoUnavailable": "Fotos werden in dieser Version von %BRAND% nicht gespeichert.",
       "politicalStatus": "Politischer Status",
@@ -8129,7 +8129,7 @@
       "deleted": "Gelöscht",
       "disabilityStatus": "Behinderung",
       "gender": "Geschlecht",
-      "intro": "Manche US-Arbeitgeber stellen diese freiwilligen Fragen. Deine Antworten sind verschlüsselt, werden nur zum Ausfüllen dieser Fragen in Formularen genutzt, nie zum Sortieren von Stellen verwendet und nie an KI gesendet. Du kannst sie jederzeit löschen.",
+      "intro": "Manche US-Arbeitgeber stellen diese freiwilligen Fragen. Deine Antworten sind verschlüsselt, werden nur zum Ausfüllen dieser Fragen in Formularen genutzt, nie zum Sortieren von Jobs verwendet und nie an KI gesendet. Du kannst sie jederzeit löschen.",
       "notAnswered": "Leer lassen",
       "notConfigured": "Diese Antworten können gerade nicht gespeichert werden. Bitte versuch es später erneut.",
       "onlyUs": "Wird angezeigt, weil du in den USA arbeiten möchtest.",
@@ -8156,7 +8156,7 @@
     },
     "links": {
       "github": "GitHub",
-      "intro": "Zum Ausfüllen von Formularen und zum Öffnen der Profile von Personen. Wird nie zum Sortieren von Stellen verwendet.",
+      "intro": "Zum Ausfüllen von Formularen und zum Öffnen der Profile von Personen. Wird nie zum Sortieren von Jobs verwendet.",
       "invalid": "Gib einen vollständigen Link ein, der mit https:// beginnt",
       "linkedin": "LinkedIn-Profil",
       "linkedinHint": "Zum Beispiel https://www.linkedin.com/in/your-name",
@@ -8226,12 +8226,12 @@
       "links": "Links",
       "personal": "Persönliches",
       "skills": "Fähigkeiten",
-      "taiwan": "Stellenwünsche für Taiwan",
+      "taiwan": "Jobwünsche für Taiwan",
       "work": "Berufserfahrung",
       "workAuth": "Arbeitserlaubnis"
     },
     "sensitive": {
-      "intro": "Antworten, nach denen manche Bewerbungsformulare fragen. Sie sind verschlüsselt, nur für dich sichtbar, werden nie zum Sortieren von Stellen verwendet und nie an KI gesendet.",
+      "intro": "Antworten, nach denen manche Bewerbungsformulare fragen. Sie sind verschlüsselt, nur für dich sichtbar, werden nie zum Sortieren von Jobs verwendet und nie an KI gesendet.",
       "none": "Hier gibt es keine sensiblen Fragen zu beantworten.",
       "openProfile": "Rest deines Profils bearbeiten",
       "title": "Sensible Antworten",
@@ -8339,7 +8339,7 @@
       "places": "Orte, an denen du arbeiten würdest",
       "titles": "Gewünschte Jobbezeichnungen",
       "titlesHint": "Bis zu 5.",
-      "unavailable": "Stellenwünsche für Taiwan können noch nicht gespeichert werden. Das ist bald möglich."
+      "unavailable": "Jobwünsche für Taiwan können noch nicht gespeichert werden. Das ist bald möglich."
     },
     "work": {
       "add": "Stelle hinzufügen",
@@ -8365,7 +8365,7 @@
       "authorized": "{country}: Darfst du dort ohne neues Visum arbeiten?",
       "country": "Land",
       "empty": "Noch keine Länder.",
-      "intro": "Antworte für jedes Land, in dem du arbeiten möchtest. Formulare stellen diese Fragen, und mit deinen Antworten können wir Stellen kennzeichnen, in denen steht, dass kein Visum gesponsert wird.",
+      "intro": "Antworte für jedes Land, in dem du arbeiten möchtest. Formulare stellen diese Fragen, und mit deinen Antworten können wir Jobs kennzeichnen, in denen steht, dass kein Visum gesponsert wird.",
       "no": "Nein",
       "notAnswered": "Nicht beantwortet",
       "permit": "Arbeitserlaubnis in Taiwan",
@@ -8470,8 +8470,8 @@
       "disable": "Benachrichtigungen auf diesem Gerät ausschalten",
       "enable": "Benachrichtigungen auf diesem Gerät erhalten",
       "failed": "Das hat nicht geklappt. Versuch es erneut.",
-      "offBody": "Erhalte Hinweise auf neue Stellen und Erinnerungen als Benachrichtigungen auf diesem Gerät. Dein Browser fragt vorher nach deiner Erlaubnis.",
-      "onBody": "Hinweise auf neue Stellen und Erinnerungen erscheinen auch als Benachrichtigungen auf diesem Gerät.",
+      "offBody": "Erhalte Job-Benachrichtigungen und Erinnerungen als Mitteilungen auf diesem Gerät. Dein Browser fragt vorher nach deiner Erlaubnis.",
+      "onBody": "Job-Benachrichtigungen und Erinnerungen erscheinen auch als Mitteilungen auf diesem Gerät.",
       "title": "Benachrichtigungen auf diesem Gerät",
       "turnedOff": "Benachrichtigungen sind für dieses Gerät aus.",
       "turnedOn": "Benachrichtigungen sind für dieses Gerät an.",
@@ -8525,10 +8525,10 @@
       "lead": "Jede Woche wählt %BRAND% Jobs aus deiner Suche aus. Du entscheidest, für welche ein Paket vorbereitet wird.",
       "point_kit": "Für jeden Job, den du auswählst, ein Paket: dein Lebenslauf, angepasst an die Stellenanzeige, ein Anschreiben, wenn die Anzeige eines verlangt, und deine gespeicherten Antworten.",
       "point_list": "Eine Wochenliste mit Jobs, die zu deiner Suche passen. Du kannst jeden Job auch selbst hinzufügen.",
-      "point_open": "Du öffnest die Bewerbung auf der Seite des Unternehmens und schickst sie selbst ab.",
+      "point_open": "Du öffnest die Bewerbung auf der Seite des Unternehmens und sendest sie selbst ab.",
       "point_review": "Du prüfst jedes Paket, bevor du es nutzt. Alles, was in deinem Lebenslauf neu ist, musst du selbst bestätigen.",
       "start": "„Bereit zum Bewerben“ einrichten",
-      "title": "Bereite jede Bewerbung vor und schick sie dann selbst ab"
+      "title": "Bereite jede Bewerbung vor und sende sie dann selbst ab"
     },
     "list": {
       "empty": {
@@ -8588,7 +8588,7 @@
       "additional_information": "Gibt es noch etwas, das der Arbeitgeber wissen soll?",
       "awards": "Auszeichnungen",
       "family_members": "Familienmitglieder",
-      "how_did_you_hear": "Wie hast du von dieser Stelle erfahren?",
+      "how_did_you_hear": "Wie hast du von diesem Job erfahren?",
       "internship_days_per_week": "Wie viele Tage pro Woche kannst du im Praktikum arbeiten?",
       "internship_duration": "Wie lange kannst du ein Praktikum machen?",
       "notice_period": "Wie lang ist deine Kündigungsfrist?",
@@ -8601,7 +8601,7 @@
       "start_date": "Wann kannst du anfangen?",
       "why_this_company": "Warum möchtest du bei diesem Unternehmen arbeiten?",
       "why_this_role": "Warum interessiert dich diese Stelle?",
-      "work_authorization": "Darfst du in dem Land arbeiten, in dem die Stelle ist?",
+      "work_authorization": "Darfst du in dem Land arbeiten, in dem der Job ist?",
       "work_model_preference": "Arbeitest du lieber remote, hybrid oder vor Ort?"
     },
     "review": {
@@ -8830,7 +8830,7 @@
         "unsaved": "Deine Änderungen in diesem Schritt wurden nicht gespeichert. Speichere sie oder versuch es erneut."
       },
       "extension": {
-        "lead": "Die Browser-Erweiterung füllt Bewerbungsformulare mit deinem Profil und deinen Antworten aus, wenn du sie dazu aufforderst. Du prüfst das Formular und schickst es selbst ab.",
+        "lead": "Die Browser-Erweiterung füllt Bewerbungsformulare mit deinem Profil und deinen Antworten aus, wenn du sie dazu aufforderst. Du prüfst das Formular und sendest es selbst ab.",
         "skipNote": "Du kannst das überspringen und die Erweiterung später hinzufügen. Pakete funktionieren auch ohne sie: Kopier deine Antworten aus dem Paket."
       },
       "finish": "Einrichtung abschließen",
@@ -8933,7 +8933,7 @@
         "blocked": "Diesen Text konnten wir nicht verwenden. Formulier deine Notizen anders.",
         "citationGuard": "Jeder Vorschlag hat Zahlen ergänzt, die nicht in deinen Notizen stehen. Deshalb wird keiner angezeigt. Es wurde keine KI-Bearbeitung verbraucht.",
         "credits": "Du hast deine KI-Bearbeitungen vorerst aufgebraucht. Du kannst selbst weiterschreiben.",
-        "generic": "Etwas ist schiefgegangen. Es wurde keine KI-Bearbeitung verbraucht. Versuch es erneut.",
+        "generic": "Etwas ist schiefgelaufen. Es wurde keine KI-Bearbeitung verbraucht. Versuch es erneut.",
         "noSuggestion": "Es kam kein Vorschlag zurück. Es wurde keine KI-Bearbeitung verbraucht. Versuch es erneut oder schreib mehr Details in deine Notizen.",
         "unavailable": "Die Schreibhilfe ist gerade nicht verfügbar. Du kannst selbst weiterschreiben."
       },
@@ -8982,7 +8982,7 @@
       "add": "Hinzufügen",
       "addBullet": "Stichpunkt hinzufügen",
       "autobiography": "Persönliches Statement",
-      "autobiographyHint": "Ein paar Absätze: dein Werdegang, was du gelernt hast und warum diese Art von Stelle.",
+      "autobiographyHint": "Ein paar Absätze: dein Werdegang, was du gelernt hast und warum diese Art von Job.",
       "availableFrom": "Ab wann du anfangen kannst",
       "awards": "Auszeichnungen",
       "awardsHint": "Eine pro Zeile, mit Jahr.",
@@ -9124,7 +9124,7 @@
       "up": "{section} nach oben verschieben"
     },
     "personal": {
-      "intro": "Diese Angaben sind optional. Sie stehen nur in der heruntergeladenen Datei. Sie werden nie an ein KI-Modell gesendet und nie verwendet, um dich für Stellen einzustufen."
+      "intro": "Diese Angaben sind optional. Sie stehen nur in der heruntergeladenen Datei. Sie werden nie an ein KI-Modell gesendet und nie verwendet, um dich für Jobs einzustufen."
     },
     "photo": {
       "alt": "Dein Foto im Lebenslauf",
@@ -9153,7 +9153,7 @@
     },
     "step": {
       "autobiography": {
-        "hint": "Dein Werdegang, was dich geprägt hat und warum du diese Art von Stelle willst.",
+        "hint": "Dein Werdegang, was dich geprägt hat und warum du diese Art von Job willst.",
         "title": "Persönliches Statement"
       },
       "awards": {
@@ -9424,12 +9424,12 @@
       "section_skills_missing": {
         "how": "Füg einen Abschnitt „Fähigkeiten“ mit den Tools und Methoden hinzu, die du wirklich nutzt.",
         "title": "Kein Abschnitt „Fähigkeiten“",
-        "why": "In der Liste der Fähigkeiten suchen Menschen und Software nach den Tools, die eine Stelle verlangt."
+        "why": "In der Liste der Fähigkeiten suchen Menschen und Software nach den Tools, die ein Job verlangt."
       },
       "skills_too_few": {
         "how": "Führ die Tools, Sprachen und Methoden auf, die du nutzt, mindestens {min}.",
         "title": "Kurze Liste der Fähigkeiten ({count} aufgeführt)",
-        "why": "In einer kurzen Liste der Fähigkeiten fehlen leicht Tools, die eine Stelle verlangt."
+        "why": "In einer kurzen Liste der Fähigkeiten fehlen leicht Tools, die ein Job verlangt."
       },
       "spelling": {
         "how": "Meintest du „{suggestion}“?",
@@ -9443,12 +9443,12 @@
       },
       "summary_too_long": {
         "how": "Kürz es auf zwei oder drei Sätze.",
-        "title": "Langes Kurzprofil",
+        "title": "Zu langes Kurzprofil",
         "why": "Der Anfang eines Lebenslaufs wird überflogen; ein langes Kurzprofil wird übersprungen."
       },
       "summary_too_short": {
         "how": "Schreib zwei oder drei Sätze über deine Rolle, dein stärkstes Gebiet und ein Ergebnis.",
-        "title": "Sehr kurzes Kurzprofil",
+        "title": "Sehr knappes Kurzprofil",
         "why": "Ein sehr kurzes Kurzprofil sagt nicht, warum du passt."
       },
       "summary_vague": {
@@ -9563,71 +9563,71 @@
       "skills_too_few": "Kurze Liste der Fähigkeiten",
       "spelling": "Rechtschreibung",
       "summary_missing": "Kurzprofil",
-      "summary_too_long": "Langes Kurzprofil",
-      "summary_too_short": "Kurzes Kurzprofil",
+      "summary_too_long": "Zu langes Kurzprofil",
+      "summary_too_short": "Zu knappes Kurzprofil",
       "summary_vague": "Allgemeines Kurzprofil",
       "weak_verb": "Schwache Einstiege"
     }
   },
   "seo": {
     "breadcrumb": {
-      "browse": "Stellenlisten",
+      "browse": "Joblisten",
       "home": "Startseite"
     },
     "browse": {
       "children": {
         "city": "In {city}",
-        "count": "{count, plural, one {# Stelle} other {# Stellen}}",
+        "count": "{count, plural, one {# Job} other {# Jobs}}",
         "graduate": "Absolventenstellen",
         "remote": "Nur remote",
         "title": "Liste eingrenzen"
       },
       "empty": {
         "body": "Die Listen werden täglich aus aktuellen Stellenanzeigen aktualisiert, die wir öffentlich zeigen dürfen.",
-        "title": "Gerade keine Stellen auf dieser Liste"
+        "title": "Gerade keine Jobs auf dieser Liste"
       },
-      "eyebrow": "Stellenliste",
-      "filtered": "Es werden nur Stellen für dieses Land angezeigt: {country}.",
+      "eyebrow": "Jobliste",
+      "filtered": "Es werden nur Jobs für dieses Land angezeigt: {country}.",
       "hub": {
-        "empty": "Noch keine Stellenlisten. Schau bald wieder vorbei.",
-        "sub": "Listen aus aktuellen Stellenanzeigen, die wir öffentlich zeigen dürfen. Eine Liste erscheint in Suchmaschinen, sobald sie genug Stellen enthält.",
-        "title": "Stellenlisten"
+        "empty": "Noch keine Joblisten. Schau bald wieder vorbei.",
+        "sub": "Listen aus aktuellen Stellenanzeigen, die wir öffentlich zeigen dürfen. Eine Liste erscheint in Suchmaschinen, sobald sie genug Jobs enthält.",
+        "title": "Joblisten"
       },
       "intro": {
-        "count": "{count, plural, one {# offene Stelle auf dieser Liste.} other {# offene Stellen auf dieser Liste.}}",
-        "empty": "Gerade keine offenen Stellen auf dieser Liste. Die Listen werden täglich aktualisiert.",
+        "count": "{count, plural, one {# offener Job auf dieser Liste.} other {# offene Jobs auf dieser Liste.}}",
+        "empty": "Gerade keine offenen Jobs auf dieser Liste. Die Listen werden täglich aktualisiert.",
         "median": "Der Median der angegebenen Jahresgehälter liegt bei {median}, aus {sampleSize} Stellenanzeigen.",
-        "new": "{newLast7d, plural, =0 {In den letzten 7 Tagen kam keine hinzu.} one {# kam in den letzten 7 Tagen hinzu.} other {# kamen in den letzten 7 Tagen hinzu.}}",
-        "pay": "{payListed, plural, =0 {Keine nennt ein Gehalt.} one {# nennt ein Gehalt.} other {# nennen ein Gehalt.}}"
+        "new": "{newLast7d, plural, =0 {In den letzten 7 Tagen kam keiner hinzu.} one {# kam in den letzten 7 Tagen hinzu.} other {# kamen in den letzten 7 Tagen hinzu.}}",
+        "pay": "{payListed, plural, =0 {Keiner nennt ein Gehalt.} one {# nennt ein Gehalt.} other {# nennen ein Gehalt.}}"
       },
-      "jobsTitle": "Neueste Stellen auf dieser Liste",
-      "metaDescription": "{count, plural, =0 {Gerade keine offenen Stellen auf dieser Liste.} one {# offene Stelle aus aktuellen Stellenanzeigen.} other {# offene Stellen aus aktuellen Stellenanzeigen.}} Das Gehalt wird nur gezeigt, wenn die Stellenanzeige es nennt. Du bewirbst dich auf der Website des Unternehmens.",
-      "method": "So entsteht diese Liste: Eine Stelle wird nur aufgenommen, wenn in der Stellenanzeige steht, dass der Arbeitgeber Visa-Sponsoring anbietet, und wir zeigen diesen Satz. Stellenanzeigen, die nichts zum Sponsoring sagen, lassen wir weg. Das heißt nicht, dass diese Arbeitgeber kein Sponsoring anbieten.",
+      "jobsTitle": "Neueste Jobs auf dieser Liste",
+      "metaDescription": "{count, plural, =0 {Gerade keine offenen Jobs auf dieser Liste.} one {# offener Job aus aktuellen Stellenanzeigen.} other {# offene Jobs aus aktuellen Stellenanzeigen.}} Das Gehalt wird nur gezeigt, wenn die Stellenanzeige es nennt. Du bewirbst dich auf der Website des Unternehmens.",
+      "method": "So entsteht diese Liste: Ein Job wird nur aufgenommen, wenn in der Stellenanzeige steht, dass der Arbeitgeber Visa-Sponsoring anbietet, und wir zeigen diesen Satz. Stellenanzeigen, die nichts zum Sponsoring sagen, lassen wir weg. Das heißt nicht, dass diese Arbeitgeber kein Sponsoring anbieten.",
       "short": "Diese Liste ist kurz, deshalb zeigen Suchmaschinen sie noch nicht.",
       "showAll": "Ganze Liste anzeigen",
       "signup": {
-        "body": "Erstell ein kostenloses Konto und sieh Stellen nach Passung sortiert, jeweils mit dem, was die Stellenanzeige verlangt und dein Lebenslauf noch nicht zeigt.",
+        "body": "Erstell ein kostenloses Konto und sieh Jobs nach Passung sortiert, jeweils mit dem, was die Stellenanzeige verlangt und dein Lebenslauf noch nicht zeigt.",
         "cta": "Kostenloses Konto erstellen",
-        "title": "Sieh, wie jede Stelle zu deinem Lebenslauf passt"
+        "title": "Sieh, wie jeder Job zu deinem Lebenslauf passt"
       },
       "stats": {
         "companyCount": "{name} ({count})",
-        "jobCount": "Offene Stellen",
+        "jobCount": "Offene Jobs",
         "label": "Über diese Liste",
         "medianPay": "Median der angegebenen Jahresgehälter",
         "newLast7d": "In den letzten 7 Tagen hinzugekommen",
         "payListed": "Mit Gehaltsangabe",
         "payListedValue": "{payListed} von {count}",
-        "topCompanies": "Die meisten Stellen bei"
+        "topCompanies": "Die meisten Jobs bei"
       },
       "title": {
         "graduate_role": "Absolventenstellen im Bereich {role}",
-        "remote_role": "Remote-Stellen im Bereich {role}",
-        "role": "Stellen im Bereich {role}",
-        "role_city": "Stellen im Bereich {role} in {city}",
-        "segment_entry": "Stellen für den Berufseinstieg",
+        "remote_role": "Remote-Jobs im Bereich {role}",
+        "role": "Jobs im Bereich {role}",
+        "role_city": "Jobs im Bereich {role} in {city}",
+        "segment_entry": "Jobs für den Berufseinstieg",
         "segment_internships": "Praktika",
-        "sponsorship_role": "Stellen im Bereich {role} mit Visa-Sponsoring: {country}"
+        "sponsorship_role": "Jobs im Bereich {role} mit Visa-Sponsoring: {country}"
       },
       "unknown": {
         "body": "Probier eine gängigere Jobbezeichnung oder wähl eine der Listen unten.",
@@ -9635,11 +9635,11 @@
       },
       "unknownCity": {
         "body": "Probier eine größere Stadt in der Nähe oder wähl eine der Listen unten.",
-        "title": "Für Stellen im Bereich {role} in „{city}“ haben wir noch keine Liste"
+        "title": "Für Jobs im Bereich {role} in „{city}“ haben wir noch keine Liste"
       },
       "up": {
-        "hub": "Alle Stellenlisten",
-        "role": "Alle Stellen im Bereich {role}"
+        "hub": "Alle Joblisten",
+        "role": "Alle Jobs im Bereich {role}"
       }
     },
     "card": {
@@ -9656,20 +9656,20 @@
       "part_time": "Teilzeit"
     },
     "job": {
-      "about": "Über die Stelle",
+      "about": "Über den Job",
       "applyNote": "Du bewirbst dich auf der Website des Arbeitgebers. %BRAND% verschickt keine Bewerbungen.",
       "applyOnSite": "Auf der Unternehmensseite bewerben",
       "benefits": "Zusatzleistungen",
       "closes": "Bewerbungsschluss",
       "employment": "Anstellungsart",
-      "facts": "Fakten zur Stelle",
+      "facts": "Fakten zum Job",
       "location": "Ort",
       "metaDescription": "{title} bei {company}. Lies die Stellenanzeige und bewirb dich auf der Website des Unternehmens.",
       "metaTitle": "{title} bei {company}",
       "notFound": {
-        "body": "Vielleicht wurde sie geschlossen, oder die Quelle hat sie entfernt.",
+        "body": "Vielleicht wurde er geschlossen, oder die Quelle hat ihn entfernt.",
         "home": "Zur Startseite",
-        "title": "Diese Stelle ist nicht mehr gelistet"
+        "title": "Dieser Job ist nicht mehr ausgeschrieben"
       },
       "notListed": "Nicht angegeben",
       "openInApp": "In %BRAND% öffnen",
@@ -9679,7 +9679,7 @@
       "postedUnknown": "Nicht angegeben (erstmals gefunden am {date})",
       "qualifications": "Was verlangt wird",
       "responsibilities": "Deine Aufgaben",
-      "seeFit": "Sieh, wie die Stelle zu deinem Lebenslauf passt",
+      "seeFit": "Sieh, wie der Job zu deinem Lebenslauf passt",
       "source": "Quelle",
       "viewOriginal": "Originalanzeige ansehen",
       "workModel": "Arbeitsmodell"
@@ -9699,7 +9699,7 @@
       "foundDays": "Vor {n, plural, one {# Tag} other {# Tagen}} gefunden",
       "foundHours": "Vor {n, plural, one {# Stunde} other {# Stunden}} gefunden",
       "foundMinutes": "Vor {n, plural, one {# Min.} other {# Min.}} gefunden",
-      "note": "Die neuesten Stellen, die wir öffentlich zeigen dürfen.",
+      "note": "Die neuesten Jobs, die wir öffentlich zeigen dürfen.",
       "posted": "veröffentlicht am {date}",
       "title": "Gerade gefunden"
     },
@@ -9731,7 +9731,7 @@
       "stopped": "Diese Anpassung wurde vor dem Ende abgebrochen. Es wurde kein Credit verbraucht. Starte sie neu."
     },
     "picker": {
-      "empty": "Füg zuerst einen Lebenslauf hinzu und pass ihn dann an diese Stelle an.",
+      "empty": "Füg zuerst einen Lebenslauf hinzu und pass ihn dann an diesen Job an.",
       "error": "Deine Lebensläufe wurden nicht geladen. Versuch es erneut.",
       "loading": "Deine Lebensläufe werden geladen…",
       "primary": "Hauptlebenslauf",
@@ -9795,8 +9795,8 @@
       "keywordsLoading": "Die Stellenanzeige wird gelesen…",
       "keywordsNone": "Dein Lebenslauf zeigt bereits die Fähigkeiten, die diese Stellenanzeige nennt.",
       "keywordsSub": "Kreuz nur die an, die du wirklich hast. Wir ergänzen diese und sonst nichts.",
-      "keywordsTitle": "Fähigkeiten, die diese Stelle verlangt und die dein Lebenslauf nicht zeigt",
-      "keywordsUnavailable": "Die Liste der Fähigkeiten für diese Stelle ist nicht verfügbar. Anpassen kannst du trotzdem.",
+      "keywordsTitle": "Fähigkeiten, die dieser Job verlangt und die dein Lebenslauf nicht zeigt",
+      "keywordsUnavailable": "Die Liste der Fähigkeiten für diesen Job ist nicht verfügbar. Anpassen kannst du trotzdem.",
       "section": {
         "education": "Ausbildung",
         "experience": "Erfahrung",
@@ -9814,22 +9814,22 @@
       "titleFor": "Deinen Lebenslauf für {title} anpassen"
     },
     "target": {
-      "change": "Andere Stelle wählen",
+      "change": "Anderen Job wählen",
       "chosenLabel": "Anpassung für:",
       "chosenWithCompany": "{title} bei {company}",
       "companyLabel": "Unternehmen (optional)",
       "continue": "Weiter",
       "jobTitleLabel": "Jobbezeichnung",
       "pasteTitle": "Oder füg die Stellenanzeige ein",
-      "savedEmpty": "Du hast dir noch keine Stellen gemerkt. Füg die Stellenanzeige unten ein.",
-      "savedError": "Deine gemerkten Stellen wurden nicht geladen. Du kannst die Stellenanzeige trotzdem unten einfügen.",
-      "savedLoading": "Deine gemerkten Stellen werden geladen…",
-      "savedTitle": "Deine gemerkten Stellen",
-      "sub": "Wähl eine deiner gemerkten Stellen oder füg die Stellenanzeige ein. Dein Lebenslauf wird nur für diese Stelle angepasst.",
+      "savedEmpty": "Du hast dir noch keine Jobs gemerkt. Füg die Stellenanzeige unten ein.",
+      "savedError": "Deine gemerkten Jobs wurden nicht geladen. Du kannst die Stellenanzeige trotzdem unten einfügen.",
+      "savedLoading": "Deine gemerkten Jobs werden geladen…",
+      "savedTitle": "Deine gemerkten Jobs",
+      "sub": "Wähl einen deiner gemerkten Jobs oder füg die Stellenanzeige ein. Dein Lebenslauf wird nur für diesen Job angepasst.",
       "textHint": "Füg den vollständigen Text der Stellenanzeige ein.",
       "textLabel": "Text der Stellenanzeige",
       "textShort": "Füg mindestens {min} Zeichen ein (bisher {count}).",
-      "title": "Für welche Stelle ist das?"
+      "title": "Für welchen Job ist das?"
     },
     "verify": {
       "allDone": "Jede Angabe ist geprüft.",
@@ -9969,9 +9969,9 @@
     "consent": {
       "label": "Ich bin einverstanden, dass %BRAND% diesen Lebenslauf mit automatisierter Software liest, um diesen Bericht zu erstellen. Er wird nach {hours} Stunden gelöscht, wenn ich kein Konto erstelle.",
       "offshore": "Während der Beta wird das außerhalb von Festlandchina verarbeitet, in den USA.",
-      "privacyLink": "Datenschutzhinweis",
+      "privacyLink": "Datenschutzerklärung",
       "readingService": "Die Datei kann an {service} auf Servern in Festlandchina gesendet werden. Das ist der Dienst, mit dem %BRAND% Lebensläufe liest.",
-      "whereUnknown": "Wer ihn liest und wo er verarbeitet wird, steht im Datenschutzhinweis."
+      "whereUnknown": "Wer ihn liest und wo er verarbeitet wird, steht in der Datenschutzerklärung."
     },
     "errors": {
       "consent_required": "Setz das Häkchen, damit %BRAND% diesen Lebenslauf lesen darf.",
@@ -9999,7 +9999,7 @@
       "eyebrow": "Kostenlose Tools",
       "honesty": "Diese Prüfungen laufen automatisch. Sie zeigen, was in deinem Lebenslauf steht. Sie sagen nicht voraus, ob du eine Rückmeldung bekommst.",
       "jobAlerts": {
-        "body": "Erhalte neue Stellen zu einer Suche per E-Mail, täglich oder wöchentlich. Kein Konto nötig.",
+        "body": "Erhalte neue Jobs zu einer Suche per E-Mail, täglich oder wöchentlich. Kein Konto nötig.",
         "title": "Job-Benachrichtigungen per E-Mail"
       },
       "listLabel": "Tools",
@@ -10010,7 +10010,7 @@
       },
       "resumeJobMatch": {
         "body": "Füg eine Stellenbeschreibung ein. Sieh, welche Anforderungen dein Lebenslauf zeigt und welche Wörter fehlen.",
-        "title": "Abgleich von Lebenslauf und Stelle"
+        "title": "Abgleich von Lebenslauf und Job"
       },
       "sub": "Kein Konto nötig. Bis zu {limit} Prüfungen pro Tag mit jedem Tool.",
       "subNoLimit": "Kein Konto nötig.",
@@ -10018,7 +10018,7 @@
     },
     "match": {
       "eyebrow": "Kostenloses Tool",
-      "linkNotice": "Das sieht nach einem Link aus. Das kostenlose Tool öffnet keine Links: Füg stattdessen den Text der Stellenbeschreibung ein. Mit einem Konto kannst du eine Stelle über ihren Link hinzufügen.",
+      "linkNotice": "Das sieht nach einem Link aus. Das kostenlose Tool öffnet keine Links: Füg stattdessen den Text der Stellenbeschreibung ein. Mit einem Konto kannst du einen Job über seinen Link hinzufügen.",
       "postingText": "Stellenbeschreibung",
       "postingTextHint": "Füg den vollständigen Text der Stellenanzeige ein (mindestens {min} Zeichen).",
       "postingTitle": "Jobbezeichnung",
@@ -10026,14 +10026,14 @@
       "running": "Dein Lebenslauf wird mit der Stellenbeschreibung verglichen. Das kann bis zu einer Minute dauern.",
       "sub": "Füg eine Stellenbeschreibung ein und sieh, welche ihrer Anforderungen dein Lebenslauf zeigt.",
       "submit": "Vergleichen",
-      "title": "Abgleich von Lebenslauf und Stelle"
+      "title": "Abgleich von Lebenslauf und Job"
     },
     "matchReport": {
       "count": "{met} von {total}",
       "eduBelow": "Dein Abschluss liegt unter dem genannten Niveau.",
-      "eduMet": "Dein Abschluss entspricht dem genannten Niveau.",
+      "eduMet": "Dein Abschluss erfüllt das genannte Niveau.",
       "eduNotFound": "In deinem Lebenslauf wurde kein Abschluss gefunden.",
-      "eduNotListed": "Die Stellenanzeige nennt kein Abschlussniveau.",
+      "eduNotListed": "Die Stellenanzeige nennt kein Ausbildungsniveau.",
       "honest": "Ergänz ein fehlendes Wort nur, wenn es auf dich zutrifft.",
       "matched": "In deinem Lebenslauf",
       "missing": "Nicht in deinem Lebenslauf",
@@ -10053,11 +10053,11 @@
         "warn": "Teilweise erfüllt"
       },
       "title": "Dein Lebenslauf und „{title}“",
-      "titleFail": "Dein Lebenslauf zeigt diese Bezeichnung nicht. Wenn du diese Arbeit gemacht hast, nenn sie in einer Überschrift oder im Kurzprofil.",
-      "titlePass": "Dein Lebenslauf zeigt diese oder eine sehr ähnliche Bezeichnung.",
-      "titleWarn": "Dein Lebenslauf zeigt eine verwandte Bezeichnung.",
-      "yearsDetail": "Verlangt {required}+ Jahre. Deine Stationen mit Datum ergeben zusammen etwa {found}.",
-      "yearsNoDates": "In deinem Lebenslauf wurden keine Stationen mit Datum gefunden.",
+      "titleFail": "Dein Lebenslauf zeigt diese Jobbezeichnung nicht. Wenn du diese Arbeit gemacht hast, nenn sie in einer Überschrift oder im Kurzprofil.",
+      "titlePass": "Dein Lebenslauf zeigt diese Jobbezeichnung oder eine sehr ähnliche.",
+      "titleWarn": "Dein Lebenslauf zeigt eine verwandte Jobbezeichnung.",
+      "yearsDetail": "Verlangt werden {required}+ Jahre. Deine Erfahrung mit Datumsangaben ergibt zusammen etwa {found}.",
+      "yearsNoDates": "In deinem Lebenslauf wurde keine Erfahrung mit Datumsangaben gefunden.",
       "yearsNotListed": "Die Stellenanzeige nennt keine Anzahl an Jahren."
     },
     "meta": {
@@ -10084,32 +10084,32 @@
       "cached": "Du hast diese Datei heute schon geprüft, deshalb wurde dafür keine kostenlose Prüfung verbraucht.",
       "countsLabel": "Gefundene Punkte",
       "deletes": "Dieser Bericht wird am {when} gelöscht.",
-      "how": "So korrigierst du es",
+      "how": "So behebst du es",
       "label": {
         "excellent": "Ausgezeichnet",
-        "fair": "Mittel",
+        "fair": "Befriedigend",
         "good": "Gut",
-        "needs_work": "Verbesserungsbedarf"
+        "needs_work": "Noch zu verbessern"
       },
       "more": "{count, plural, one {# weiterer Punkt steht} other {# weitere Punkte stehen}} im vollständigen Bericht.",
-      "noIssues": "Auf dieser Checkliste gibt es nichts zu korrigieren.",
+      "noIssues": "Auf dieser Checkliste gibt es nichts zu beheben.",
       "quote": "Aus deinem Lebenslauf",
       "resultLabel": "Ergebnis",
       "severity": {
         "critical": "Wichtig",
         "optional": "Optional",
-        "urgent": "Zuerst korrigieren"
+        "urgent": "Zuerst beheben"
       },
       "topIssues": "Was du zuerst korrigieren solltest",
-      "why": "Warum es wichtig ist"
+      "why": "Warum das wichtig ist"
     },
     "signup": {
       "bodyCheck": "Erstell ein kostenloses Konto, um jeden Punkt zu sehen, diesen Lebenslauf zu behalten und ihn im Editor zu korrigieren.",
-      "bodyMatch": "Erstell ein kostenloses Konto, um diesen Lebenslauf zu behalten, ihn an diese Stelle anzupassen und eine Passgenauigkeit mit den Gründen dahinter zu sehen.",
+      "bodyMatch": "Erstell ein kostenloses Konto, um diesen Lebenslauf zu behalten, ihn an diesen Job anzupassen und die Passgenauigkeit mit den Gründen dahinter zu sehen.",
       "cta": "Kostenloses Konto erstellen",
       "login": "Ich habe ein Konto",
       "titleCheck": "Vollständigen Bericht ansehen und Lebenslauf korrigieren",
-      "titleMatch": "Diesen Lebenslauf an die Stelle anpassen"
+      "titleMatch": "Diesen Lebenslauf an den Job anpassen"
     },
     "unavailable": "Die kostenlosen Lebenslauf-Prüfungen sind hier noch nicht verfügbar.",
     "upload": {
@@ -10123,10 +10123,10 @@
   },
   "visitor": {
     "alerts": {
-      "another": "Weitere Benachrichtigung einrichten",
+      "another": "Weitere Job-Benachrichtigung einrichten",
       "city": "Stadt",
       "cityPlaceholder": "Zum Beispiel: Taipeh",
-      "consent": "Schickt mir neue Stellen zu dieser Suche per E-Mail. Ich kann das in jeder E-Mail mit einem Klick beenden.",
+      "consent": "Schickt mir neue Jobs zu dieser Suche per E-Mail. Ich kann das in jeder E-Mail mit einem Klick beenden.",
       "country": "Land oder Region",
       "countryAny": "Beliebig",
       "daily": "Einmal täglich",
@@ -10142,20 +10142,20 @@
       "frequency": "Wie oft",
       "loading": "Wird geladen…",
       "meta": {
-        "description": "Erhalte neue öffentliche Stellen zu einer Suche per E-Mail, einmal täglich oder einmal pro Woche. Kein Konto nötig; mit einem Klick beendet.",
+        "description": "Erhalte neue öffentliche Jobs zu einer Suche per E-Mail, einmal täglich oder einmal pro Woche. Kein Konto nötig; mit einem Klick beendet.",
         "title": "Job-Benachrichtigungen per E-Mail"
       },
       "privacy": "Wir speichern deine Adresse nur, um diese Benachrichtigungen zu senden. Nicht bestätigte Anmeldungen werden nach 72 Stunden gelöscht.",
-      "remote": "Nur Remote-Stellen",
+      "remote": "Nur Remote-Jobs",
       "role": "Jobbezeichnung oder Suchbegriffe",
       "rolePlaceholder": "Zum Beispiel: Datenanalyst",
       "sentBody": "Wenn {email} Benachrichtigungen erhalten kann, ist ein Bestätigungslink unterwegs. Solange du ihn nicht anklickst, wird nichts gesendet. Der Link gilt 72 Stunden.",
       "sentTitle": "Sieh in deinem Posteingang nach",
       "signupInstead": "Du möchtest Benachrichtigungen, die deinen Lebenslauf berücksichtigen? Erstell ein kostenloses Konto.",
-      "sub": "Kein Konto nötig. Gib eine Jobbezeichnung und einen Ort an, und wir schicken dir neue öffentliche Stellen per E-Mail, einmal täglich oder einmal pro Woche.",
+      "sub": "Kein Konto nötig. Gib eine Jobbezeichnung und einen Ort an, und wir schicken dir neue öffentliche Jobs per E-Mail, einmal täglich oder einmal pro Woche.",
       "submit": "Bestätigungs-E-Mail senden",
       "submitting": "Wird gesendet…",
-      "title": "Neue Stellen per E-Mail erhalten",
+      "title": "Neue Jobs per E-Mail erhalten",
       "unavailable": "Job-Benachrichtigungen per E-Mail sind hier nicht verfügbar.",
       "weekly": "Einmal pro Woche"
     },
@@ -10163,8 +10163,8 @@
       "aiLabel": "KI-Antwort",
       "chips": {
         "how": "Wie funktioniert %BRAND%?",
-        "pay": "Was verdient man in Stellen wie diesen?",
-        "remote": "Welche dieser Stellen sind remote möglich?"
+        "pay": "Was verdient man in Jobs wie diesen?",
+        "remote": "Welche dieser Jobs sind remote möglich?"
       },
       "errors": {
         "generic": "Etwas ist schiefgelaufen. Versuch es erneut.",
@@ -10172,9 +10172,9 @@
         "unavailable": "Der Assistent ist gerade nicht verfügbar."
       },
       "inputLabel": "Deine Frage",
-      "intro": "Frag nach den Stellen auf dieser Seite, nach dem Gehalt, wie es in den Anzeigen steht, oder danach, wie %BRAND% funktioniert. Die Antworten nutzen keinen Lebenslauf und sagen nie, wie gut du zu einer Stelle passt.",
-      "launcher": "Zu diesen Stellen fragen",
-      "lookingUp": "Stellen werden gesucht…",
+      "intro": "Frag nach den Jobs auf dieser Seite, nach dem Gehalt, wie es in den Anzeigen steht, oder danach, wie %BRAND% funktioniert. Die Antworten nutzen keinen Lebenslauf und sagen nie, wie gut du zu einem Job passt.",
+      "launcher": "Zu diesen Jobs fragen",
+      "lookingUp": "Jobs werden gesucht…",
       "note": "Die Antworten schreibt eine KI, sie können falsch sein. Nichts, was du hier eingibst, wird gespeichert.",
       "placeholder": "Stell eine Frage",
       "send": "Senden",
@@ -10225,40 +10225,40 @@
         "weekly": "einmal pro Woche"
       },
       "confirm": "Job-Benachrichtigungen bestätigen",
-      "confirmedBody": "Neue Stellen zur Suche „{search}“ kommen {cadence} per E-Mail. Jede E-Mail enthält einen Link zum Abmelden mit einem Klick.",
+      "confirmedBody": "Neue Jobs zur Suche „{search}“ kommen {cadence} per E-Mail. Jede E-Mail enthält einen Link zum Abmelden mit einem Klick.",
       "confirmedTitle": "Deine Job-Benachrichtigungen sind aktiv",
       "confirming": "Wird bestätigt…",
       "error": "Wir konnten diesen Link nicht prüfen. Versuch es erneut.",
       "invalidBody": "Bestätigungslinks gelten 72 Stunden. Trag dich erneut ein, um einen neuen zu bekommen.",
       "invalidTitle": "Dieser Link funktioniert nicht mehr",
       "loading": "Dein Link wird geprüft…",
-      "pendingBody": "{email} bekommt {cadence} neue Stellen zur Suche „{search}“.",
+      "pendingBody": "{email} bekommt {cadence} neue Jobs zur Suche „{search}“.",
       "pendingTitle": "Bestätige deine Job-Benachrichtigungen",
       "retry": "Erneut versuchen",
-      "searchAny": "alle Stellen",
+      "searchAny": "alle Jobs",
       "seeJobs": "Kostenloses Konto erstellen",
       "unavailable": "Job-Benachrichtigungen per E-Mail sind hier nicht verfügbar.",
       "unsubscribedBody": "Diese Adresse erhält diese Benachrichtigungen nicht mehr. Trag dich erneut ein, wenn du sie wieder haben möchtest.",
       "unsubscribedTitle": "Diese Benachrichtigungen sind aus"
     },
     "feed": {
-      "alertsLink": "Neue Stellen wie diese per E-Mail erhalten",
+      "alertsLink": "Neue Jobs wie diese per E-Mail erhalten",
       "asOf": "Aktualisiert: {time}",
-      "empty": "Für diese Seite gibt es gerade keine öffentlichen Stellen.",
-      "error": "Wir konnten die Stellen gerade nicht laden.",
+      "empty": "Für diese Seite gibt es gerade keine öffentlichen Jobs.",
+      "error": "Wir konnten die Jobs gerade nicht laden.",
       "fitNote": "Die Passgenauigkeit braucht deinen Lebenslauf, deshalb siehst du sie erst nach der Registrierung.",
-      "listLabel": "Aktuelle öffentliche Stellen",
-      "loading": "Stellen werden geladen…",
+      "listLabel": "Aktuelle öffentliche Jobs",
+      "loading": "Jobs werden geladen…",
       "retry": "Erneut versuchen",
-      "sub": "Bis zu 20 aktuelle öffentliche Stellen. Du kannst sie dir ohne Konto ansehen.",
-      "title": "Aktuelle Stellen für diese Seite"
+      "sub": "Bis zu 20 aktuelle öffentliche Jobs. Du kannst sie dir ohne Konto ansehen.",
+      "title": "Aktuelle Jobs für diese Seite"
     },
     "gate": {
-      "body": "Ein kostenloses Konto zeigt dir jede Stelle zu deiner Suche, vergleicht jede mit deinem Lebenslauf und hält fest, wo du dich beworben hast. Du bewirbst dich weiterhin selbst auf der Seite des jeweiligen Unternehmens.",
+      "body": "Ein kostenloses Konto zeigt dir jeden Job zu deiner Suche, vergleicht jeden mit deinem Lebenslauf und hält fest, wo du dich beworben hast. Du bewirbst dich weiterhin selbst auf der Seite des jeweiligen Unternehmens.",
       "cta": "Kostenloses Konto erstellen",
       "login": "Anmelden",
       "openJobs": "Deine Jobs öffnen",
-      "title": "Sieh jede Stelle zu deiner Suche und wie gut jede zu dir passt"
+      "title": "Sieh jeden Job zu deiner Suche und wie gut jeder zu dir passt"
     }
   }
 }

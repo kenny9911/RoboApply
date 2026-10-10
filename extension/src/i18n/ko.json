@@ -48,7 +48,7 @@
       "unlabelled": "이름 없는 입력란"
     },
     "job": {
-      "untitled": "이 페이지의 채용 공고"
+      "untitled": "이 페이지의 채용공고"
     },
     "launcher": {
       "label": "%BRAND%를 열어 이 양식 채우기",
@@ -97,7 +97,7 @@
       "undone": "입력란 {count}개를 원래대로 되돌렸어요."
     },
     "popup": {
-      "boardBody": "{site}의 채용 공고예요. 작업을 선택하기 전에는 이 페이지의 내용을 읽지 않아요.",
+      "boardBody": "{site}의 채용공고예요. 작업을 선택하기 전에는 이 페이지의 내용을 읽지 않아요.",
       "checkFit": "적합도 확인",
       "codeConnect": "코드로 연결",
       "codeInvalid": "이 코드는 사용할 수 없어요. 코드는 문자나 숫자 8자리이고, 10분이 지나면 만료돼요.",
@@ -105,14 +105,14 @@
       "connected": "연결됐어요.",
       "disconnect": "연결 해제",
       "noFit": "이 공고의 적합도는 아직 없어요. %BRAND%에서 공고를 열면 확인할 수 있어요.",
-      "noJobFound": "이 페이지에서 채용 공고를 찾지 못했어요.",
+      "noJobFound": "이 페이지에서 채용공고를 찾지 못했어요.",
       "openFormSite": "{site}에서 지원 양식을 연 뒤 ‘이 양식 채우기’를 선택해 주세요.",
       "otherSite": "이 사이트의 양식은 아직 채울 수 없어요.",
       "plannedSite": "{site}의 양식은 아직 채울 수 없어요.",
       "reconnect": "%BRAND% 다시 연결하기",
       "reconnectBody": "이 브라우저와 내 계정의 연결이 해제됐어요. 양식을 계속 채우려면 다시 연결해 주세요.",
       "requestSite": "이 사이트 요청하기",
-      "requested": "요청을 보냈어요. 감사해요.",
+      "requested": "요청을 보냈어요. 고마워요.",
       "saveJob": "공고 저장",
       "saved": "내 공고에 저장했어요. 나만 볼 수 있어요.",
       "title": "%BRAND%",
@@ -134,7 +134,7 @@
       "notYet": "아직 안 했어요",
       "question": "이 지원서를 제출했나요?",
       "thanks": "지원 현황에서 ‘지원함’으로 옮겼어요.",
-      "thanksNoJob": "감사해요. %BRAND%의 지원 현황에 추가해 주세요.",
+      "thanksNoJob": "고마워요. %BRAND%의 지원 현황에 추가해 주세요.",
       "yes": "네, 제출했어요"
     }
   }

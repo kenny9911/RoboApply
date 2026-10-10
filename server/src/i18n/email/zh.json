@@ -1,4 +1,13 @@
 {
+  "shell": {
+    "reasonTransactional": "你收到这封邮件，是因为它与你的 %BRAND% 账号有关。",
+    "reasonAlert": "你收到这封邮件，是因为你在 %BRAND% 里开启了职位提醒。",
+    "reasonTips": "你收到这封邮件，是因为你在 %BRAND% 的设置里开启了“小贴士和提醒”。",
+    "reasonMarketing": "你收到这封邮件，是因为你同意接收 %BRAND% 的产品动态。",
+    "unsubscribe": "退订",
+    "preferences": "邮件设置",
+    "sentBy": "发件方：{entity}"
+  },
   "tracker": {
     "csvCn": {
       "header": {
@@ -125,7 +134,7 @@
       "when": "我们会在 {days} 天内删除你的账号及其数据。备份会在此后 90 天内清除。"
     },
     "emailVerify": {
-      "body": "请确认这是你的邮箱地址。在你决定之前，可以继续使用 %BRAND%；完成验证后，你的免费面试练习即可使用。",
+      "body": "请确认这是你的邮箱地址。在你决定之前，可以继续使用 %BRAND%；完成验证后，你的免费练习面试即可使用。",
       "cta": "验证我的邮箱",
       "expiry": "链接将在 24 小时后失效。你可以在设置里重新发送。",
       "heading": "验证你的邮箱",
@@ -273,18 +282,18 @@
   "growth": {
     "footer": "你收到这封邮件，是因为它与你 %BRAND% 账号的额度有关。",
     "referralReward": {
-      "cta": "开始面试练习",
+      "cta": "开始一场练习面试",
       "invitee": {
-        "body": "你通过好友的邀请链接加入并完成了设置，所以我们给你的账号添加了 {credits, plural, other {# 次面试练习}}。",
-        "heading": "你获得了 {credits, plural, other {# 次面试练习}}",
+        "body": "你通过好友的邀请链接加入并完成了设置，所以我们给你的账号添加了 {credits, plural, other {# 个练习面试额度}}。",
+        "heading": "你获得了 {credits, plural, other {# 个练习面试额度}}",
         "subject": "你的邀请额度可以使用了"
       },
       "inviter": {
-        "body": "一位通过你的邀请链接注册的好友已验证账号并完成设置，所以我们给你的账号添加了 {credits, plural, other {# 次面试练习}}。",
-        "heading": "你获得了 {credits, plural, other {# 次面试练习}}",
+        "body": "一位通过你的邀请链接注册的好友已验证账号并完成设置，所以我们给你的账号添加了 {credits, plural, other {# 个练习面试额度}}。",
+        "heading": "你获得了 {credits, plural, other {# 个练习面试额度}}",
         "subject": "你邀请的好友已完成设置"
       },
-      "note": "额度仅用于 %BRAND% 的面试练习，不能兑换现金。"
+      "note": "额度仅用于 %BRAND% 的练习面试，不能兑换现金。"
     }
   },
   "notify": {
@@ -344,10 +353,10 @@
       "cta": "查看全部新职位",
       "headingDaily": "你的每日职位汇总",
       "headingWeekly": "你的每周职位汇总",
-      "introDaily": "{count, plural, other {昨天以来，有 # 个新职位符合你保存的搜索“{search}”。}}",
-      "introDailyNoTotal": "{count, plural, other {以下是昨天以来符合你保存的搜索“{search}”的 # 个新职位。}}你可以在 %BRAND% 里查看所有新职位。",
-      "introWeekly": "{count, plural, other {本周有 # 个新职位符合你保存的搜索“{search}”。}}",
-      "introWeeklyNoTotal": "{count, plural, other {以下是本周符合你保存的搜索“{search}”的 # 个新职位。}}你可以在 %BRAND% 里查看所有新职位。",
+      "introDaily": "{count, plural, other {昨天以来，有 # 个新职位符合你的订阅搜索“{search}”。}}",
+      "introDailyNoTotal": "{count, plural, other {以下是昨天以来符合你的订阅搜索“{search}”的 # 个新职位。}}你可以在 %BRAND% 里查看所有新职位。",
+      "introWeekly": "{count, plural, other {本周有 # 个新职位符合你的订阅搜索“{search}”。}}",
+      "introWeeklyNoTotal": "{count, plural, other {以下是本周符合你的订阅搜索“{search}”的 # 个新职位。}}你可以在 %BRAND% 里查看所有新职位。",
       "more": "{count, plural, one {另有 # 个新职位也符合。请在 %BRAND% 里查看。} other {另有 # 个新职位也符合。请在 %BRAND% 里查看。}}",
       "subjectDaily": "昨天以来，{count, plural, other {有 # 个新职位符合你的搜索}}",
       "subjectDailyNoTotal": "昨天以来，有新职位符合你的搜索",
@@ -359,7 +368,7 @@
     "jobAlertInstant": {
       "cta": "查看你的全部职位",
       "heading": "{count, plural, other {# 个新职位符合你的搜索}}",
-      "intro": "{count, plural, =1 {这个职位是最近发布的，符合你保存的搜索“{search}”。} other {这些职位是最近发布的，符合你保存的搜索“{search}”。}}",
+      "intro": "{count, plural, =1 {这个职位是最近发布的，符合你的订阅搜索“{search}”。} other {这些职位是最近发布的，符合你的订阅搜索“{search}”。}}",
       "subject": "“{search}”有 {count, plural, other {# 个新职位}}"
     },
     "kitReady": {
@@ -377,34 +386,34 @@
       "subject": "本周的“待投递”列表已备好"
     },
     "reasons": {
-      "alerts": "你收到这封邮件，是因为你在 %BRAND% 里为保存的搜索“{search}”开启了职位提醒。",
+      "alerts": "你收到这封邮件，是因为你在 %BRAND% 里为订阅搜索“{search}”开启了职位提醒。",
       "campusFollow": "你收到这封邮件，是因为你在 %BRAND% 校招日历上关注了 {company}。",
-      "digestDaily": "你收到这封邮件，是因为你在 %BRAND% 里为保存的搜索“{search}”选择了每日职位汇总。",
-      "digestWeekly": "你收到这封邮件，是因为你在 %BRAND% 里为保存的搜索“{search}”选择了每周职位汇总。",
+      "digestDaily": "你收到这封邮件，是因为你在 %BRAND% 里为订阅搜索“{search}”选择了每日职位汇总。",
+      "digestWeekly": "你收到这封邮件，是因为你在 %BRAND% 里为订阅搜索“{search}”选择了每周职位汇总。",
       "reminders": "你收到这封邮件，是因为它与你的 %BRAND% 账号和你跟踪的职位有关。你可以关闭这些提醒。"
     },
     "resumeCheck": {
       "body": "我们看了你的简历，列出了需要优先修改的地方。",
       "bodyCount": "{count, plural, =0 {我们看了你的简历，没有发现急需修改的地方。} other {我们看了你的简历，发现有 # 处需要优先修改。}}",
-      "cta": "查看简历检查结果",
-      "heading": "你的简历检查已完成",
+      "cta": "查看简历体检结果",
+      "heading": "你的简历体检已完成",
       "preheader": "看看简历上需要优先修改的地方。",
-      "subject": "你的简历检查已完成"
+      "subject": "你的简历体检已完成"
     },
     "tipsPractice": {
-      "body": "你有一次免费的面试练习。开口回答面试问题，并得到改进建议。任何内容都不会分享给企业。",
-      "bodyCredit": "你有一次面试练习可以使用。开口回答面试问题，并得到改进建议。任何内容都不会分享给企业。",
+      "body": "你有一场免费的练习面试。开口回答面试问题，并得到改进建议。任何内容都不会分享给企业。",
+      "bodyCredit": "你有一场练习面试可以使用。开口回答面试问题，并得到改进建议。任何内容都不会分享给企业。",
       "cta": "开始练习",
-      "heading": "试一次面试练习",
+      "heading": "试一场练习面试",
       "preheader": "开口回答面试问题，并得到反馈。",
-      "subject": "你的免费面试练习可以使用了",
-      "subjectCredit": "你的面试练习可以使用了"
+      "subject": "你的免费练习面试可以使用了",
+      "subjectCredit": "你的练习面试可以使用了"
     },
     "tipsReEngagement": {
-      "body": "{count, plural, other {自 {date} 以来，有 # 个新职位符合你保存的搜索“{search}”。}}",
+      "body": "{count, plural, other {自 {date} 以来，有 # 个新职位符合你的订阅搜索“{search}”。}}",
       "cta": "查看新职位",
       "heading": "你上次访问后的新职位",
-      "preheader": "有新职位符合你保存的搜索。",
+      "preheader": "有新职位符合你的订阅搜索。",
       "subject": "自 {date} 以来，{count, plural, other {有 # 个新职位符合你的搜索}}"
     },
     "tipsTailor": {

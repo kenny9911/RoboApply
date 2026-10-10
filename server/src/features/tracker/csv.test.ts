@@ -3,8 +3,9 @@
 // WP-93 (wave 3 i18n, WP-38): the tracker CSV takes its header and its stage
 // and outcome words from the server i18n loader (namespace `tracker` of the
 // email bundles, server/src/i18n/email), not from csv.ts.
-//   - English for every RoboApply locale until WP-92 translates `tracker.csv`
-//     (zh-TW included: Traditional labels then appear with no code change);
+//   - `tracker.csv` in the request locale for RoboApply: WP-92 translated it,
+//     so zh-TW reads Traditional labels and zh its own Simplified words (a
+//     key a locale lacks still falls back to English);
 //   - GoApply in Simplified Chinese keeps its own ladder words (`tracker.csvCn`).
 //     WP-91 routed them to zh.json at the merge; en.json keeps an English
 //     source for the same keys (every translated key has one).
@@ -29,6 +30,8 @@ type Group = Record<'header' | 'stage' | 'outcome', Record<string, string>>;
 const english = () => loadEnglishWithStaging(EMAIL_DIR) as unknown as { tracker: Record<'csv' | 'csvCn', Group> };
 /** The zh bundle, which holds GoApply's own words. */
 const chinese = () => JSON.parse(fs.readFileSync(path.join(EMAIL_DIR, 'zh.json'), 'utf8')) as { tracker: { csvCn: Group } };
+/** One shipped locale bundle (`tracker.csv` is translated in each; WP-92). */
+const localeBundle = (locale: string) => JSON.parse(fs.readFileSync(path.join(EMAIL_DIR, `${locale}.json`), 'utf8')) as { tracker: { csv: Group } };
 /** The words each group is exported with: `tracker.csv` in English, `tracker.csvCn` in Simplified Chinese. */
 const bundle = () => ({ tracker: { csv: english().tracker.csv, csvCn: chinese().tracker.csvCn } });
 
@@ -139,15 +142,26 @@ describe('which words an export uses', () => {
     expect(header(trackerCsv(rows, 'en', BRANDS.goapply))).toMatch(/^Company,Job title,Stage/);
   });
 
-  it('zh-TW on RoboApply falls back to English until the Traditional labels are translated', () => {
+  it('zh-TW on RoboApply reads the Traditional labels of zh-TW.json, never the mainland ladder words', () => {
     const rows = INTL_TRACKER_LADDER.map((status) => entry({ status }));
     const csv = trackerCsv([...rows, entry({ status: 'rejected', outcome: 'they_said_no' })], 'zh-TW', BRANDS.roboapply);
-    expect(header(csv)).toMatch(/^Company,Job title,Stage,How it ended/);
-    expect(rows.map((_r, i) => cells(csv, i + 1)[2])).toEqual(['Saved', 'Applied', 'First call', 'Interviewing', 'Final round', 'Offer', 'Rejected']);
-    // Never the mainland ladder words, and no Chinese at all yet.
-    expect(csv).not.toMatch(/网申|三方|未通过|[一-鿿]/);
-    // RoboApply in Simplified Chinese is English too (its own words arrive with WP-91), never GoApply's.
-    expect(trackerCsv(rows, 'zh', BRANDS.roboapply)).toBe(trackerCsv(rows, 'en', BRANDS.roboapply));
+    const tw = localeBundle('zh-TW').tracker.csv;
+    // Every column and every stage of the ladder comes from the zh-TW bundle: nothing is left in English.
+    expect(header(csv)).toBe(CSV_COLUMNS.map((c) => tw.header[c]).join(','));
+    expect(header(csv)).toMatch(/^公司,職稱,階段,/);
+    expect(header(csv)).not.toMatch(/[A-Za-z]/);
+    expect(rows.map((_r, i) => cells(csv, i + 1)[2])).toEqual(INTL_TRACKER_LADDER.map((status) => tw.stage[status]));
+    expect(cells(csv, rows.length + 1).slice(2, 4)).toEqual([tw.stage.rejected, tw.outcome.they_said_no]);
+    for (const word of [...Object.values(tw.header), ...Object.values(tw.stage), ...Object.values(tw.outcome)]) expect(word).not.toMatch(/^[A-Za-z ]+$/);
+    // Never the mainland ladder words, and no Simplified-only characters.
+    expect(csv).not.toMatch(/网申|三方|未通过|职|阶|测|笔试|终面/);
+    // RoboApply in Simplified Chinese reads its own `tracker.csv` words from zh.json, never GoApply's ladder (`tracker.csvCn`).
+    const zhCsv = trackerCsv(rows, 'zh', BRANDS.roboapply);
+    const zh = localeBundle('zh').tracker.csv;
+    expect(header(zhCsv)).toBe(CSV_COLUMNS.map((c) => zh.header[c]).join(','));
+    expect(rows.map((_r, i) => cells(zhCsv, i + 1)[2])).toEqual(INTL_TRACKER_LADDER.map((status) => zh.stage[status]));
+    expect(zhCsv).not.toBe(trackerCsv(rows, 'en', BRANDS.roboapply));
+    expect(zhCsv).not.toMatch(/网申|三方|未通过/);
   });
 
   it('once zh-TW.json translates `tracker.csv`, the export uses it with no code change', () => {

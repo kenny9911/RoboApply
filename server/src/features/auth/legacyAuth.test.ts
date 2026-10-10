@@ -53,6 +53,27 @@ vi.mock('../../roboapply/engine/middleware/seekerAuth.js', () => ({
   seekerAuth: [],
 }));
 vi.mock('../../roboapply/engine/services/SeekerProfileService.js', () => ({ default: { getByUserId: vi.fn(async () => ({ id: 'p' })) } }));
+// GET /auth/me summarises entitlements with the real services, handed the
+// in-memory database directly. Their default wiring loads `lib/prisma.js`
+// lazily from inside a `Promise.all`, and Vitest serves the REAL module to the
+// second of two concurrent dynamic imports of a factory mock (see
+// `requestWithMockedModule`: "this will not work if user does
+// Promise.all(import(), import())"). This file then opened a connection to
+// whatever DATABASE_URL names on the first /auth/me — about 2 s, which is
+// what timed it out on a busy machine — and read nothing useful from it.
+vi.mock('../../platform/credits/summary.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../platform/credits/summary.js')>();
+  const { createEntitlementService, createPrismaEntitlementSource } = await import('../../platform/credits/EntitlementService.js');
+  const { createCreditService } = await import('../../platform/credits/CreditService.js');
+  const { createPrismaCreditStore } = await import('../../platform/credits/store.js');
+  const { catalogFor } = await import('../../platform/credits/catalog.js');
+  const getDb = async () => h.db as never;
+  const entitlements = createEntitlementService({ source: createPrismaEntitlementSource(getDb), loadCatalog: async (brand) => catalogFor(brand, null) });
+  const credits = createCreditService({ store: createPrismaCreditStore(getDb), entitlements });
+  const summarizeEntitlementsForMe: typeof actual.summarizeEntitlementsForMe = (userId, options = {}) =>
+    actual.summarizeEntitlementsForMe(userId, { ...options, entitlements, credits });
+  return { ...actual, summarizeEntitlementsForMe };
+});
 
 import { startRouteHarness, type RouteHarness } from '../../test/routeHarness.js';
 import { SESSION_COOKIE_NAME } from '../../lib/cookieOptions.js';
@@ -446,6 +467,8 @@ describe('POST /auth/signup on GoApply (invite mode, CN-0 consents)', () => {
       emailVerified: false,
       // From the message centre (this brand's rows): a number, never a guess.
       unreadCount: 0,
+      // GoApply's free plan, with windows in the brand's default time zone.
+      entitlements: { planKey: 'free', planProfile: 'free', timezone: 'Asia/Shanghai' },
     });
     expect(me.body.data).not.toHaveProperty('mission');
     // The same account is not usable on the RoboApply host.
@@ -503,7 +526,8 @@ describe('GET /auth/me contract', () => {
       onboarding: { step: 'account', completed: false, nextRoute: '/onboarding/situation', path: null },
       emailVerified: false,
     });
-    expect(data).toHaveProperty('entitlements');
+    // The summary is computed (over the in-memory database), not the `null` of a failed lookup.
+    expect(data.entitlements).toMatchObject({ planKey: 'free', planProfile: 'free', timezone: expect.any(String), buckets: expect.any(Object) });
     // The message centre's count for this brand (0 for a new account), not a raw row count.
     expect(data.unreadCount).toBe(0);
     // The legacy block keeps its shape without the V1 mission read.

@@ -6,11 +6,11 @@
       "title": "Conecta tu cuenta"
     },
     "draft": {
-      "aiBadge": "Generado por AI",
-      "aiDisclosure": "Este texto fue generado por un modelo de AI.",
-      "aiLabel": "Escrito por AI. Edítalo y úsalo solo si es cierto en tu caso.",
+      "aiBadge": "Generado por IA",
+      "aiDisclosure": "Este texto fue generado por un modelo de IA.",
+      "aiLabel": "Escrito por IA. Edítalo y úsalo solo si es cierto en tu caso.",
       "bankLabel": "De tus respuestas guardadas",
-      "cost": "Usa 1 crédito de respuesta de AI.",
+      "cost": "Usa 1 crédito de respuesta de IA.",
       "dismiss": "Descartar",
       "editLabel": "Borrador de respuesta para: {question}",
       "save": "Guardar esta respuesta",
@@ -56,7 +56,7 @@
     },
     "manifest": {
       "actionTitle": "Llenar este formulario",
-      "description": "Llena formularios de postulación con tu perfil de %BRAND%. Tú revisas cada respuesta y envías la postulación por tu cuenta.",
+      "description": "Llena formularios de candidatura con tu perfil de %BRAND%. Tú revisas cada respuesta y envías la candidatura por tu cuenta.",
       "nameChrome": "%BRAND% para Chrome",
       "nameEdge": "%BRAND% para Edge",
       "shortName": "%BRAND%"
@@ -83,9 +83,9 @@
       "filling": "Llenando tus datos…",
       "newPage": "Estás en una página nueva de este formulario.",
       "newPageHint": "Llena también esta página.",
-      "newPageNoCost": "Es la misma postulación, así que no usa otro llenado de formulario.",
-      "noFields": "No se encontraron campos en esta página. Desplázate hasta el formulario o abre la página de postulación y luego inténtalo otra vez.",
-      "oneFill": "Toda la postulación usa 1 llenado de formulario.",
+      "newPageNoCost": "Es la misma candidatura, así que no usa otro llenado de formulario.",
+      "noFields": "No se encontraron campos en esta página. Desplázate hasta el formulario o abre la página de candidatura y luego inténtalo otra vez.",
+      "oneFill": "Toda la candidatura usa 1 llenado de formulario.",
       "pageByPage": "Este formulario tiene varias páginas. Llena cada página y luego usa el botón del propio formulario para continuar.",
       "site": "Formulario en {site}",
       "submitYourself": "Revisa el formulario y luego envíalo por tu cuenta.",
@@ -104,9 +104,9 @@
       "codeLabel": "O ingresa el código de 8 caracteres de %BRAND%",
       "connected": "Conectado.",
       "disconnect": "Desconectar",
-      "noFit": "Todavía no hay nivel de encaje para este empleo. Ábrelo en %BRAND% para verlo.",
+      "noFit": "Todavía no hay puntuación de encaje para este empleo. Ábrelo en %BRAND% para verla.",
       "noJobFound": "No se encontró ningún empleo en esta página.",
-      "openFormSite": "En {site}, abre el formulario de postulación y luego elige «Llenar este formulario».",
+      "openFormSite": "En {site}, abre el formulario de candidatura y luego elige «Llenar este formulario».",
       "otherSite": "Los formularios de este sitio todavía no se pueden llenar.",
       "plannedSite": "Los formularios de {site} todavía no se pueden llenar.",
       "reconnect": "Volver a conectar %BRAND%",
@@ -132,7 +132,7 @@
     "submitted": {
       "later": "Cuando la envíes, márcala como enviada en tus candidaturas.",
       "notYet": "Todavía no",
-      "question": "¿Enviaste esta postulación?",
+      "question": "¿Enviaste esta candidatura?",
       "thanks": "Se movió a Enviadas en tus candidaturas.",
       "thanksNoJob": "Gracias. Añádela a tus candidaturas en %BRAND%.",
       "yes": "Sí, la envié"

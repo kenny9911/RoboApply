@@ -67,7 +67,7 @@
     "cn_practice_short": "Entrevista",
     "cn_profile": "Mi perfil",
     "cn_ready": "Por postular",
-    "cn_referrals": "Códigos de referidos",
+    "cn_referrals": "Códigos de referido",
     "coaching": "Coaching",
     "credits": {
       "none_left": "No te quedan créditos {window, select, day {hoy} week {esta semana} other {este mes}}.",
@@ -151,7 +151,7 @@
       "unlikely": "Poco probable"
     },
     "score": {
-      "label": "Nivel de encaje",
+      "label": "Puntuación de encaje",
       "unit": "{score} / 100",
       "explainer": "{score} / 100 — qué tan bien encaja tu currículum con este anuncio",
       "disclaimer": "Esto no es tu probabilidad de que te contraten.",
@@ -161,7 +161,7 @@
         "title_level": "El puesto y el nivel — 35",
         "skills": "Las habilidades que piden — 30",
         "industry": "Experiencia en este sector — 15",
-        "location_pay_visa": "Ubicación, sueldo y visado — 10",
+        "location_pay_visa": "Ubicación, sueldo y visa — 10",
         "career_moves": "Cómo ha avanzado tu carrera hasta ahora — 10"
       }
     },
@@ -183,7 +183,7 @@
         "label": "Acciones para {title}",
         "markedApplied": "Se movió a Enviadas.",
         "more": "Más opciones",
-        "movedToApplied": "Se movió a Enviadas. Tú envías la postulación en el sitio de la empresa.",
+        "movedToApplied": "Se movió a Enviadas. Tú envías la candidatura en el sitio de la empresa.",
         "notInterested": "No me interesa",
         "report": "Reportar un problema",
         "save": "Guardar para después",
@@ -198,7 +198,7 @@
         "agency": "Anuncio de agencia",
         "citizens": "Solo ciudadanos",
         "clearance": "Se requiere autorización de seguridad",
-        "closes": "Las postulaciones cierran el {date}",
+        "closes": "Las candidaturas cierran el {date}",
         "direct": "Directo del empleador",
         "new": "Nuevo",
         "sponsorship": "Menciona patrocinio de visa",
@@ -375,7 +375,7 @@
       "retry": "Reintentar",
       "sort": {
         "best_fit": "Los que mejor encajan",
-        "deadline": "Cierre de postulaciones más próximo",
+        "deadline": "Cierre de candidaturas más próximo",
         "highest_pay": "Mayor sueldo",
         "newest": "Más recientes",
         "recommended": "Recomendados"
@@ -443,7 +443,7 @@
     },
     "tip": {
       "label": "Si estás empezando tu carrera",
-      "body": "Tener poca experiencia laboral no es un problema. Los trabajos de clase, los hackatones, los encargos freelance y los proyectos personales se convierten en líneas reales. Usa «Reescribir trabajo de estudios y prácticas» en cada línea."
+      "body": "Tener poca experiencia laboral no es un problema. Los trabajos de clase, los hackatones, los encargos freelance y los proyectos personales se convierten en líneas reales. Usa «Reescribir trabajo de estudios y pasantías» en cada línea."
     },
     "empty": {
       "title_lead": "Todavía no hay ",
@@ -506,7 +506,7 @@
       "linkedin": {
         "steps_title": "Guarda tu perfil de LinkedIn como PDF",
         "step1": "Abre tu perfil en LinkedIn",
-        "step2": "Pulsa «Más» y luego «Guardar en PDF»",
+        "step2": "Haz clic en «Más» y luego en «Guardar en PDF»",
         "step3": "Sube ese PDF aquí abajo",
         "upload_title": "Suelta aquí tu PDF de LinkedIn",
         "upload_sub": "El PDF que guardaste desde tu perfil",
@@ -520,7 +520,7 @@
       "done": {
         "title_scratch": "Borrador listo",
         "title_import": "Importado",
-        "body_scratch": "Abre el editor y empieza a rellenarlo. La ayuda línea a línea está en el margen derecho.",
+        "body_scratch": "Abre el editor y empieza a llenarlo. La ayuda línea a línea está en el margen derecho.",
         "body_import": "Se leyó tu currículum. Hay dos líneas flojas señaladas en el editor."
       },
       "cancel": "Cancelar",
@@ -604,7 +604,7 @@
         "desc": "«Dirigí» en lugar de «ayudé con»"
       },
       "junior": {
-        "label": "Reescribir trabajo de estudios y prácticas",
+        "label": "Reescribir trabajo de estudios y pasantías",
         "desc": "Dicho como lo diría un empleo"
       }
     },
@@ -781,7 +781,7 @@
         "experience_bullets_quantify": "{where}: ninguna de tus líneas tiene un número. Los resultados con cifras (30% más rápido, 8 millones de usuarios por semana) pegan más fuerte.",
         "experience_bullets_weak_start": "{where}: {count, plural, one {# línea empieza} other {# líneas empiezan}} con un verbo pasivo o flojo. Prueba «Lideré», «Lancé», «Reduje».",
         "experience_bullets_long": "{where}: {count, plural, one {# línea pasa} other {# líneas pasan}} de 32 palabras. Apunta a 1 o 2 renglones por línea.",
-        "skills_few": "{count, plural, =0 {Todavía no has puesto ninguna habilidad} one {Tienes 1 habilidad} other {Tienes # habilidades}}. La mayoría de las ofertas piden entre 8 y 15: añade las que menciona el empleo que quieres.",
+        "skills_few": "{count, plural, =0 {Todavía no has puesto ninguna habilidad} one {Tienes 1 habilidad} other {Tienes # habilidades}}. La mayoría de los anuncios piden entre 8 y 15: añade las que menciona el empleo que quieres.",
         "skills_many": "{count} habilidades son muchas: los reclutadores leen por encima. Deja las 12 a 15 más fuertes para el puesto.",
         "education_missing": "No hay formación académica. Si te graduaste, ponlo: no cuesta nada y muchos filtros lo piden."
       },
@@ -790,7 +790,7 @@
       "scoreUnit": "{score} / 100"
     },
     "export": {
-      "ai_note": "La AI escribió parte de este currículum. Los archivos PDF y Word lo indican en sus propiedades.",
+      "ai_note": "La IA escribió parte de este currículum. Los archivos PDF y Word lo indican en sus propiedades.",
       "blocked": "{count, plural, one {Una línea tiene un número que no encontramos en tu currículum. Corrígelo o quítalo antes de descargar.} other {# líneas tienen números o datos que no encontramos en tu currículum. Corrígelos o quítalos antes de descargar.}}",
       "name": {
         "company_role_name": "Empresa - Puesto - Tu nombre",
@@ -802,7 +802,7 @@
     },
     "hub": {
       "errors": {
-        "ai_off": "Leer un archivo de currículum usa AI, que está desactivada en tu cuenta. Activa el procesamiento con AI en Ajustes o crea tu currículum paso a paso.",
+        "ai_off": "Leer un archivo de currículum usa IA, que está desactivada en tu cuenta. Activa el procesamiento con IA en Ajustes o crea tu currículum paso a paso.",
         "image_unreadable": "Esta imagen no se pudo leer en este momento. Sube un archivo PDF o Word en su lugar.",
         "storage_unavailable": "El almacenamiento de archivos no está disponible en este momento. Inténtalo más tarde.",
         "upload_daily_limit": "Hoy subiste {limit} archivos de currículum, que es el límite diario. Inténtalo mañana."
@@ -925,7 +925,7 @@
       "final_round": "Ronda final",
       "offer": "Oferta",
       "rejected": "Rechazadas",
-      "ai_interview": "Entrevista con AI",
+      "ai_interview": "Entrevista con IA",
       "assessment": "Evaluación",
       "closed": "Retiraron el puesto",
       "signed": "Firmadas",
@@ -943,7 +943,7 @@
     },
     "follow_up": {
       "row": "{count, plural, one {1 empresa lleva 10 días sin responder.} other {# empresas llevan 10 días sin responder.}}",
-      "write_cta": "Escribir un recordatorio",
+      "write_cta": "Escribir un mensaje de seguimiento",
       "grounding": "Escrito a partir del anuncio y de tu currículum.",
       "open_mail": "Abrir en tu aplicación de correo"
     },
@@ -956,7 +956,7 @@
       "open": "Abrir los detalles de {name}"
     },
     "when": {
-      "follow_up": "Recordar el {date}",
+      "follow_up": "Dar seguimiento el {date}",
       "applied": "Enviada {ago}",
       "saved": "Guardada {ago}"
     },
@@ -975,7 +975,7 @@
       "final_round": "Todavía no hay rondas finales.",
       "offer": "Todavía no hay ofertas.",
       "rejected": "Aquí no hay rechazos.",
-      "ai_interview": "Todavía no hay entrevistas con AI.",
+      "ai_interview": "Todavía no hay entrevistas con IA.",
       "assessment": "Todavía no hay evaluaciones.",
       "signed": "Todavía no hay nada firmado.",
       "written_test": "Todavía no hay pruebas escritas."
@@ -1000,7 +1000,7 @@
       "field_company": "Empresa",
       "field_company_placeholder": "Stripe",
       "field_location": "Ubicación",
-      "field_location_placeholder": "Madrid · Híbrido",
+      "field_location_placeholder": "Ciudad de México · Híbrido",
       "field_status": "Etapa",
       "submit": "Añadirlo",
       "submitting": "Añadiendo…",
@@ -1015,7 +1015,7 @@
       "week_of": "Semana del {date}"
     },
     "drawer": {
-      "applied_on": "Fecha de postulación",
+      "applied_on": "Fecha de candidatura",
       "close": "Cerrar",
       "dates": "Fechas",
       "deadline": "Fecha límite para postular",
@@ -1063,7 +1063,7 @@
       "created": "Añadida en {stage}",
       "field": "Se cambió: {field}",
       "fields": {
-        "dateApplied": "Fecha de postulación",
+        "dateApplied": "Fecha de candidatura",
         "deadline": "Fecha límite",
         "excitementStars": "Valoración",
         "maxSalary": "Salario",
@@ -1136,7 +1136,7 @@
       "stage": "Por etapa"
     },
     "weekly": {
-      "ai_label": "Escrito por AI a partir de tus candidaturas. Compáralo con tus propios registros.",
+      "ai_label": "Escrito por IA a partir de tus candidaturas. Compáralo con tus propios registros.",
       "applied": "Enviadas",
       "counts_note": "Contado a partir de tus candidaturas.",
       "ended": "Terminadas",
@@ -1274,12 +1274,12 @@
           "registered-nurse": "Enfermería",
           "medical-doctor-physician": "Medicina",
           "pharmacist": "Farmacia",
-          "clinical-research-associate": "Monitorización de ensayos clínicos",
-          "healthcare-administrator": "Gestión sanitaria",
+          "clinical-research-associate": "Monitoreo de ensayos clínicos",
+          "healthcare-administrator": "Administración de servicios de salud",
           "medical-laboratory-scientist": "Laboratorio clínico",
           "physical-therapist": "Fisioterapia",
           "hr-business-partner": "HR Business Partner",
-          "technical-recruiter": "Selección de perfiles técnicos",
+          "technical-recruiter": "Reclutamiento técnico",
           "project-manager": "Dirección de proyectos",
           "operations-manager": "Dirección de operaciones",
           "supply-chain-logistics-manager": "Cadena de suministro / logística",
@@ -1307,7 +1307,7 @@
       },
       "format": {
         "title": "Cómo aparecerás",
-        "sub": "El vídeo se parece más a la realidad. La voz basta para calentar.",
+        "sub": "El video se parece más a la realidad. La voz basta para calentar.",
         "video": {
           "title": "Videollamada",
           "tag": "Sugerido"
@@ -1321,7 +1321,7 @@
         "role": "Puesto",
         "interviewer": "Quién entrevista",
         "format": "Formato",
-        "mode": "Vídeo o voz",
+        "mode": "Video o voz",
         "pickRole": "Elige un puesto",
         "pickInterviewer": "Elige quién te entrevista",
         "pickType": "Elige un formato",
@@ -1334,7 +1334,7 @@
       },
       "modeShort": {
         "voice": "Voz",
-        "video": "Vídeo"
+        "video": "Video"
       },
       "langDuration": {
         "title": "Idioma y duración",
@@ -1354,7 +1354,7 @@
         "loading": "Leyendo anuncios reales…",
         "error": "Esta vista previa no está disponible. Tu entrevista se construye igual para este puesto.",
         "retry": "Reintentar",
-        "previewBtn": "Enséñamelo",
+        "previewBtn": "Muéstramelo",
         "summaryLabel": "El puesto, en corto",
         "skillsLabel": "Habilidades que piden",
         "respLabel": "Lo que harías",
@@ -1379,7 +1379,7 @@
         },
         "nova": {
           "role": "La mirada amplia",
-          "blurb": "Curiosa y rápida. Recorre todo el campo y pregunta qué más hay ahí fuera.",
+          "blurb": "Curiosa y rápida. Recorre todo el campo y pregunta qué más hay ahí afuera.",
           "style": "Amplia · compara alternativas · atenta a las tendencias · se mueve a lo ancho más que a lo hondo",
           "company": "Principal en una consultora global"
         },
@@ -1408,10 +1408,10 @@
           "company": "Ingeniero distinguido en una gran tecnológica"
         },
         "bishop": {
-          "role": "El listón de contratación",
+          "role": "El nivel de exigencia",
           "blurb": "Quiere el fracaso, la discusión que perdiste y la prueba de que te hiciste cargo.",
           "style": "Responsabilidad · pide fracasos y conflictos · desconfía de las respuestas ensayadas · qué hiciste tú",
-          "company": "Director de selección en una empresa que crece rápido"
+          "company": "Director de contratación en una empresa que crece rápido"
         },
         "okonkwo": {
           "role": "El caso de negocio",
@@ -1423,7 +1423,7 @@
           "role": "La profundidad técnica",
           "blurb": "Baja tres niveles. Quiere la decisión exacta y el caso en que se rompió.",
           "style": "Profundidad técnica · silencios largos · cuéntame exactamente qué pasó",
-          "company": "Ingeniero senior staff en un gran equipo de infraestructura"
+          "company": "Ingeniero staff sénior en un gran equipo de infraestructura"
         },
         "voss": {
           "role": "La dirección escéptica",
@@ -1440,7 +1440,7 @@
         "mirae": {
           "role": "El panel rápido",
           "blurb": "Cambia de tema cada dos minutos y no para el reloj.",
-          "style": "Cambios rápidos de tema · respuestas cronometradas · ritmo alto · premia adaptarse deprisa",
+          "style": "Cambios rápidos de tema · respuestas cronometradas · ritmo alto · premia adaptarse rápido",
           "company": "Preside la ronda final en una gran tecnológica"
         },
         "osei": {
@@ -1493,7 +1493,7 @@
           "sub": "Historias reales: responsabilidad, conflicto, fracaso, influencia, dirigir personas"
         },
         "technical": {
-          "label": "Programar en directo",
+          "label": "Programación en vivo",
           "sub": "Resolver un problema en un editor compartido mientras lo explicas"
         },
         "system": {
@@ -1521,7 +1521,7 @@
           "sub": "Encontrar qué está roto, o revisar el código de otra persona"
         },
         "incident_sre": {
-          "label": "Incidencia en directo",
+          "label": "Incidente en vivo",
           "sub": "Gestionar una caída en producción: estabilizarla y luego explicar qué pasó"
         },
         "sql_analytics": {
@@ -1538,7 +1538,7 @@
         },
         "design_critique": {
           "label": "Crítica de diseño",
-          "sub": "Criticar un producto en directo, o bocetar una solución a un encargo nuevo"
+          "sub": "Criticar un producto en vivo, o bocetar una solución a un encargo nuevo"
         },
         "research_design": {
           "label": "Diseño de un estudio",
@@ -1546,7 +1546,7 @@
         },
         "sales_roleplay": {
           "label": "Simulación de llamada de ventas",
-          "sub": "Una llamada en directo contra alguien que hace de comprador"
+          "sub": "Una llamada en vivo contra alguien que hace de comprador"
         },
         "pitch_demo": {
           "label": "Presentación o demo",
@@ -1558,7 +1558,7 @@
         },
         "modeling_test": {
           "label": "Modelo financiero",
-          "sub": "Construir o tensionar un modelo y defenderlo"
+          "sub": "Construir un modelo o ponerlo a prueba, y defenderlo"
         },
         "finance_technical": {
           "label": "Preguntas de finanzas",
@@ -1605,10 +1605,10 @@
     "live": {
       "loading": "Preparando tu sala…",
       "backToSetup": "Volver a la configuración",
-      "livePill": "En directo",
-      "live": "En directo",
+      "livePill": "En vivo",
+      "live": "En vivo",
       "recording": "Grabando",
-      "modeVideo": "Vídeo",
+      "modeVideo": "Video",
       "modeVoice": "Voz",
       "progress": "Pregunta {current} de {total}",
       "aiInterviewer": "Quien entrevista",
@@ -1638,8 +1638,8 @@
       "composerLabel": "Tu respuesta",
       "coachLive": "Notas mientras respondes",
       "dismiss": "Ocultar",
-      "transcript": "Transcripción en directo",
-      "transcriptEmpty": "La transcripción aparece aquí mientras habláis.",
+      "transcript": "Transcripción en vivo",
+      "transcriptEmpty": "La transcripción aparece aquí mientras hablan.",
       "autoSaved": "Guardado automáticamente",
       "endEarly": "Terminar la entrevista antes",
       "ending": "Cerrando…",
@@ -1666,7 +1666,7 @@
       "micDeniedTitle": "Hace falta acceso al micrófono",
       "micDeniedBody": "No se pudo acceder al micrófono, así que no te oyen. Permite el acceso al micrófono en tu navegador e inténtalo otra vez.",
       "micRetry": "Reintentar",
-      "deviceFailure": "Hay un problema con tu micrófono o tu cámara. Revisa los ajustes de tu equipo: puede que no te oigan ni te vean.",
+      "deviceFailure": "Hay un problema con tu micrófono o tu cámara. Revisa los ajustes de tu dispositivo: puede que no te oigan ni te vean.",
       "interviewerUnavailableTitle": "Quien te entrevista no pudo entrar",
       "interviewerUnavailableBody": "No se pudo traer a la sala a quien te entrevista. Suele ser temporal. Inténtalo dentro de un momento.",
       "retry": "Reintentar",
@@ -1911,9 +1911,9 @@
       "phoneAction": "Añadir número de teléfono"
     },
     "gate": {
-      "consent": "La práctica con AI necesita tu consentimiento para el procesamiento con AI. Puedes activarlo en Ajustes.",
+      "consent": "La práctica con IA necesita tu consentimiento para el procesamiento con IA. Puedes activarlo en Ajustes.",
       "consentAction": "Abrir Ajustes",
-      "phone": "Añade un número de teléfono antes de usar la práctica con AI.",
+      "phone": "Añade un número de teléfono antes de usar la práctica con IA.",
       "phoneAction": "Añadir número de teléfono",
       "startText": "Empezar la práctica escrita",
       "voiceUnavailable": "La práctica por voz todavía no está disponible aquí, así que esta práctica es por escrito."
@@ -2051,7 +2051,7 @@
       "email": "Correo electrónico",
       "phone": "Teléfono",
       "location": "Ubicación",
-      "location_ph": "Ciudad, provincia",
+      "location_ph": "Ciudad, estado o provincia",
       "group_links": "Enlaces",
       "linkedin": "LinkedIn",
       "github": "GitHub",
@@ -2372,7 +2372,7 @@
   "landing": {
     "meta": {
       "title": "Por qué no te llaman a entrevistas | %BRAND%",
-      "description": "%BRAND% lee tu currículum, lee más de 1.000 vacantes abiertas, te muestra las que puedes conseguir de verdad y nombra exactamente lo que falta. Después, una entrevistadora de IA por voz te prepara. Empieza gratis. 9 idiomas.",
+      "description": "%BRAND% lee tu currículum, lee más de 1000 vacantes abiertas, te muestra las que puedes conseguir de verdad y nombra exactamente lo que falta. Después, una entrevistadora de IA por voz te prepara. Empieza gratis. 9 idiomas.",
       "ogTitle": "%BRAND% — descubre por qué no te llaman a entrevistas",
       "ogDescription": "Sube tu currículum. Mira qué vacantes puedes conseguir de verdad, qué pide cada una que a ti te falta, y practica la entrevista con una IA por voz. Empieza gratis.",
       "keywords": "por qué no me llaman a entrevistas, análisis de carencias del currículum, revisar currículum con IA, empleos que encajan con mi currículum, práctica de entrevistas con IA, entrevista simulada con IA, palabras clave del currículum, búsqueda de empleo"
@@ -2389,12 +2389,12 @@
       "contactTitle": "Contacto",
       "entity": "%BRAND% es operado por {entity}.",
       "helpLink": "Ayuda y formulario de contacto",
-      "lead": "%BRAND% es una herramienta de búsqueda de empleo para quienes postulan y no reciben respuesta. Muestra lo que cada empleo pide y tu currículum no tiene, te ayuda a corregirlo y te deja practicar la entrevista.",
+      "lead": "%BRAND% es una herramienta de búsqueda de empleo para quienes se postulan y no reciben respuesta. Muestra lo que cada empleo pide y tu currículum no tiene, te ayuda a corregirlo y te deja practicar la entrevista.",
       "leadCn": "%BRAND% es un asistente de búsqueda de empleo para estudiantes y personas que buscan trabajo en China continental: un solo perfil, un calendario de fechas límite de los programas de campus y práctica de entrevistas con IA.",
       "metaDescription": "Qué es %BRAND%, qué no hará y cómo contactarnos.",
       "metaTitle": "Acerca de",
       "noEntity": "Los datos de la empresa figuran en los términos del servicio.",
-      "rule1": "Enviar una postulación o escribirle a un empleador en tu lugar.",
+      "rule1": "Enviar una candidatura o escribirle a un empleador en tu lugar.",
       "rule2": "Mostrar una cifra sin su fuente. Lo que no se sabe se muestra como desconocido, nunca como cero.",
       "rule3": "Añadir a tu currículum experiencia que no has confirmado.",
       "rule4": "Presentar una puntuación de encaje como la probabilidad de que te contraten.",
@@ -2451,14 +2451,14 @@
       "goapply": {
         "assistant": {
           "eyebrow": "Asistente",
-          "metaDescription": "Pregunta sobre un empleo, tu currículum o tus postulaciones, con respuestas basadas en tus propios datos.",
+          "metaDescription": "Pregunta sobre un empleo, tu currículum o tus candidaturas, con respuestas basadas en tus propios datos.",
           "metaTitle": "Asistente de búsqueda de empleo",
           "q1": {
             "a": "Solo si activas la memoria. Puedes borrarla en Ajustes.",
             "q": "¿Me recuerda?"
           },
           "q2": {
-            "a": "No. Nunca contacta a un empleador ni envía una postulación.",
+            "a": "No. Nunca contacta a un empleador ni envía una candidatura.",
             "q": "¿Contacta a los empleadores?"
           },
           "s1": {
@@ -2474,12 +2474,12 @@
             "title": "Aprueba cada cambio"
           },
           "sample": {
-            "line1": "«¿Qué postulaciones cierran esta semana?»",
+            "line1": "«¿Qué candidaturas cierran esta semana?»",
             "line2": "Dos: Empresa de ejemplo (vie) y Banco de ejemplo (dom).",
             "line3": "Escrito por IA."
           },
           "sub": "El Asistente responde a partir del anuncio del empleo y de tus propios datos. Con tu consentimiento, puede recordar tu búsqueda entre sesiones.",
-          "title": "Pregunta sobre un empleo, tu currículum o tus postulaciones"
+          "title": "Pregunta sobre un empleo, tu currículum o tus candidaturas"
         },
         "campusCalendar": {
           "eyebrow": "Calendario de campus",
@@ -2503,26 +2503,26 @@
           },
           "s3": {
             "body": "Cada entrada enlaza a la página del propio empleador.",
-            "title": "Postula en el sitio oficial"
+            "title": "Postúlate en el sitio oficial"
           },
           "sample": {
-            "line1": "Empresa de ejemplo · graduados de 2027 · las postulaciones cierran el 31 de oct.",
+            "line1": "Empresa de ejemplo · graduados de 2027 · las candidaturas cierran el 31 de oct.",
             "line2": "Enlace oficial · revisado hace 2 días",
             "line3": "Recordatorio programado para 3 días antes"
           },
-          "sub": "Mira qué programas están abiertos para tu año de graduación, cuándo cierran las postulaciones y el enlace oficial. Recibe un recordatorio antes de la fecha.",
+          "sub": "Mira qué programas están abiertos para tu año de graduación, cuándo cierran las candidaturas y el enlace oficial. Recibe un recordatorio antes de la fecha.",
           "title": "Todos los programas de campus, con su fecha de cierre"
         },
         "formFiller": {
-          "eyebrow": "Rellenar formularios",
-          "metaDescription": "Rellena formularios de postulación en línea con los datos de tu perfil; luego los revisas y los envías tú.",
-          "metaTitle": "Rellena formularios de postulación con tu perfil",
+          "eyebrow": "Llenar formularios",
+          "metaDescription": "Llena formularios de candidatura en línea con los datos de tu perfil; luego los revisas y los envías tú.",
+          "metaTitle": "Llena formularios de candidatura con tu perfil",
           "q1": {
-            "a": "No. Se detiene cuando el formulario está rellenado. Tú lo revisas y lo envías.",
+            "a": "No. Se detiene cuando el formulario está lleno. Tú lo revisas y lo envías.",
             "q": "¿Envía el formulario?"
           },
           "q2": {
-            "a": "En los sistemas de postulación más comunes. Si un campo no se puede rellenar, te lo indica.",
+            "a": "En los sistemas de candidatura más comunes. Si un campo no se puede llenar, te lo indica.",
             "q": "¿En qué sitios funciona?"
           },
           "s1": {
@@ -2530,20 +2530,20 @@
             "title": "Instala la extensión"
           },
           "s2": {
-            "body": "Elige Rellenar este formulario.",
-            "title": "Abre un formulario de postulación"
+            "body": "Elige «Llenar este formulario».",
+            "title": "Abre un formulario de candidatura"
           },
           "s3": {
             "body": "La extensión nunca hace clic en Enviar.",
             "title": "Revisa y envía"
           },
           "sample": {
-            "line1": "Formación, pasantías y datos de contacto rellenados",
+            "line1": "Formación, pasantías y datos de contacto llenados",
             "line2": "2 preguntas necesitan tu respuesta",
             "line3": "Revisa el formulario y luego envíalo tú."
           },
-          "sub": "En la página de postulación de un empleador, la extensión rellena los campos que puede con los datos de tu perfil. Tú revisas el formulario y lo envías.",
-          "title": "Rellena formularios de postulación con tu perfil"
+          "sub": "En la página de candidatura de un empleador, la extensión llena los campos que puede con los datos de tu perfil. Tú revisas el formulario y lo envías.",
+          "title": "Llena formularios de candidatura con tu perfil"
         },
         "interviewPractice": {
           "eyebrow": "Práctica de entrevistas con IA",
@@ -2645,14 +2645,14 @@
         },
         "chromeExtension": {
           "eyebrow": "%BRAND% para Chrome",
-          "metaDescription": "Rellena formularios de postulación con los datos de tu perfil; luego los revisas y los envías tú.",
-          "metaTitle": "%BRAND% para Chrome: rellena formularios de postulación",
+          "metaDescription": "Llena formularios de candidatura con los datos de tu perfil; luego los revisas y los envías tú.",
+          "metaTitle": "%BRAND% para Chrome: llena formularios de candidatura",
           "q1": {
-            "a": "No. Se detiene cuando el formulario está rellenado. Tú lo revisas y lo envías.",
+            "a": "No. Se detiene cuando el formulario está lleno. Tú lo revisas y lo envías.",
             "q": "¿Envía el formulario?"
           },
           "q2": {
-            "a": "No. No vigila los envíos en las páginas de los empleadores. Tú nos dices si postulaste.",
+            "a": "No. No vigila los envíos en las páginas de los empleadores. Tú nos dices si te postulaste.",
             "q": "¿Vigila lo que envío?"
           },
           "s1": {
@@ -2660,20 +2660,20 @@
             "title": "Instala la extensión"
           },
           "s2": {
-            "body": "Elige Rellenar este formulario.",
-            "title": "Abre una postulación"
+            "body": "Elige «Llenar este formulario».",
+            "title": "Abre una candidatura"
           },
           "s3": {
             "body": "La extensión nunca hace clic en Enviar.",
             "title": "Revisa y envía"
           },
           "sample": {
-            "line1": "12 de 15 campos rellenados con tu perfil",
+            "line1": "12 de 15 campos llenados con tu perfil",
             "line2": "3 preguntas necesitan tu respuesta",
             "line3": "Revisa el formulario y luego envíalo tú."
           },
-          "sub": "En la página de postulación de un empleador, la extensión rellena los campos que puede con los datos de tu perfil. Tú revisas el formulario y lo envías.",
-          "title": "Rellena este formulario con tu perfil"
+          "sub": "En la página de candidatura de un empleador, la extensión llena los campos que puede con los datos de tu perfil. Tú revisas el formulario y lo envías.",
+          "title": "Llena este formulario con tu perfil"
         },
         "coverLetters": {
           "eyebrow": "Cartas de presentación",
@@ -2744,15 +2744,15 @@
           "metaDescription": "%BRAND% ordena los anuncios de empleo vigentes según qué tan bien encaja tu currículum, y cada empleo empieza por lo que falta.",
           "metaTitle": "Empleos que encajan con tu currículum, con las razones",
           "q1": {
-            "a": "Por encaje, por lo reciente que es el anuncio, por lo que te ha interesado y por la fuente del anuncio. La página Cómo se ordenan los empleos enumera cada factor.",
+            "a": "Por encaje, por lo reciente que es el anuncio, por lo que te ha interesado y por la fuente del anuncio. La página «Cómo se ordenan los empleos» enumera cada factor.",
             "q": "¿Cómo se ordena la lista?"
           },
           "q2": {
-            "a": "No. Publicado por reclutadores es un filtro que puedes activar. Nunca sube un empleo en la lista.",
+            "a": "No. «Empleos publicados por reclutadores» es un filtro que puedes activar. Nunca sube un empleo en la lista.",
             "q": "¿Los empleos publicados por reclutadores aparecen más arriba?"
           },
           "s1": {
-            "body": "Dinos qué puestos, lugares y salario quieres. Tu currículum hace el resto.",
+            "body": "Dinos qué puestos, lugares y sueldo quieres. Tu currículum hace el resto.",
             "title": "Añade tu currículum y tu búsqueda"
           },
           "s2": {
@@ -2773,15 +2773,15 @@
         },
         "readyToApply": {
           "eyebrow": "Listo para postular",
-          "metaDescription": "Cada semana, %BRAND% prepara materiales para empleos que encajan. Tú los revisas y tú envías cada postulación.",
-          "metaTitle": "Postulaciones preparadas cada semana; tú las envías",
+          "metaDescription": "Cada semana, %BRAND% prepara materiales para empleos que encajan. Tú los revisas y tú envías cada candidatura.",
+          "metaTitle": "Candidaturas preparadas cada semana; tú las envías",
           "q1": {
-            "a": "No. Nunca envía una postulación ni contacta a un empleador.",
+            "a": "No. Nunca envía una candidatura ni contacta a un empleador.",
             "q": "¿Envía algo?"
           },
           "q2": {
             "a": "Deshazlo con un toque y el empleo vuelve a donde estaba.",
-            "q": "¿Y si no postulé después de abrir un empleo?"
+            "q": "¿Y si no me postulé después de abrir un empleo?"
           },
           "s1": {
             "body": "Elige 5, 10, 20 o 30 empleos y el encaje más bajo que aceptarías.",
@@ -2792,16 +2792,16 @@
             "title": "Revisa cada kit"
           },
           "s3": {
-            "body": "Abre la página del empleador y envía la postulación. El empleo pasa a Enviadas.",
+            "body": "Abre la página del empleador y envía la candidatura. El empleo pasa a Enviadas.",
             "title": "Envíala tú"
           },
           "sample": {
             "line1": "5 empleos esta semana · Encaja bien o mejor",
             "line2": "Kit listo: currículum adaptado, carta de presentación, 4 respuestas",
-            "line3": "Abrir postulación → tú la revisas y la envías"
+            "line3": "Abrir candidatura → tú la revisas y la envías"
           },
-          "sub": "Para los empleos que encajan, %BRAND% prepara un currículum adaptado, una carta de presentación y respuestas a preguntas comunes. Tú abres cada postulación y la envías.",
-          "title": "Cada semana, postulaciones preparadas para que las revises"
+          "sub": "Para los empleos que encajan, %BRAND% prepara un currículum adaptado, una carta de presentación y respuestas a preguntas comunes. Tú abres cada candidatura y la envías.",
+          "title": "Cada semana, candidaturas preparadas para que las revises"
         },
         "referrals": {
           "eyebrow": "Personas",
@@ -2910,7 +2910,7 @@
       "metaTitle": "Ayuda y contacto",
       "pricingLink": "Precios y límites",
       "q1": {
-        "a": "En la página de inicio de sesión, elige la opción de contraseña olvidada y sigue el correo que te enviamos.",
+        "a": "En la página de inicio de sesión, elige «¿Olvidaste tu contraseña?» y sigue las instrucciones del correo que te enviamos.",
         "q": "¿Cómo restablezco mi contraseña?"
       },
       "q2": {
@@ -2922,8 +2922,8 @@
         "q": "¿Por qué desapareció un empleo de mi lista?"
       },
       "q4": {
-        "a": "Usa Deshacer en el empleo o cambia su estado en tu tablero de postulaciones.",
-        "q": "Abrí una postulación pero no postulé. ¿Cómo lo corrijo?"
+        "a": "Usa Deshacer en el empleo o cambia su estado en tu tablero de candidaturas.",
+        "q": "Abrí una candidatura pero no me postulé. ¿Cómo lo corrijo?"
       },
       "q5": {
         "a": "En Ajustes, en la sección de la cuenta. Antes puedes descargar una copia de tus datos.",
@@ -2951,11 +2951,11 @@
           "q": "¿Qué es %BRAND%?"
         },
         "q2": {
-          "a": "No. Tú abres cada postulación en el sitio del empleador y la envías tú. Cuando abres una, el empleo pasa a Enviadas en tu tablero, y puedes deshacerlo si no postulaste.",
-          "q": "¿%BRAND% envía postulaciones por mí?"
+          "a": "No. Tú abres cada candidatura en el sitio del empleador y la envías tú. Cuando abres una, el empleo pasa a Enviadas en tu tablero, y puedes deshacerlo si no te postulaste.",
+          "q": "¿%BRAND% envía candidaturas por mí?"
         },
         "q3": {
-          "a": "Indica qué tan bien encaja tu currículum con el anuncio: puesto y nivel, habilidades, sector, ubicación, salario y permiso de trabajo, y cómo ha avanzado tu carrera. No es la probabilidad de que te contraten.",
+          "a": "Indica qué tan bien encaja tu currículum con el anuncio: puesto y nivel, habilidades, sector, ubicación, sueldo y permiso de trabajo, y cómo ha avanzado tu carrera. No es la probabilidad de que te contraten.",
           "q": "¿Qué significa la puntuación de encaje?"
         },
         "q4": {
@@ -2963,11 +2963,11 @@
           "q": "¿De dónde salen los empleos?"
         },
         "q5": {
-          "a": "El plan gratuito incluye la lista de empleos, las puntuaciones de encaje y tu tablero de postulaciones, con límites diarios para las acciones de IA. Pro sube esos límites. Todos los precios y límites están en la página de precios.",
+          "a": "El plan gratuito incluye la lista de empleos, las puntuaciones de encaje y tu tablero de candidaturas, con límites diarios para las acciones de IA. Pro sube esos límites. Todos los precios y límites están en la página de precios.",
           "q": "¿Cuánto cuesta?"
         },
         "q6": {
-          "a": "Sí. En Ajustes puedes descargar una copia de tus datos y eliminar tu cuenta. Al eliminarla se borran tus currículums, postulaciones y entrevistas de práctica.",
+          "a": "Sí. En Ajustes puedes descargar una copia de tus datos y eliminar tu cuenta. Al eliminarla se borran tus currículums, candidaturas y entrevistas de práctica.",
           "q": "¿Puedo eliminar mis datos?"
         },
         "title": "Preguntas"
@@ -2980,12 +2980,12 @@
         "ctaSecondary": "Ver un ejemplo",
         "eyebrow": "Lee tu currículum · lee el empleo · nombra lo que falta",
         "headline": "Descubre por qué no te llaman a entrevistas.",
-        "reassure": "Plan gratuito · Sin tarjeta · Tú envías cada postulación",
+        "reassure": "Plan gratuito · Sin tarjeta · Tú envías cada candidatura",
         "subCount": "Añade tu currículum. Leemos más de {count} vacantes abiertas, te mostramos las que puedes conseguir de verdad y nombramos exactamente lo que falta.",
         "subPlain": "Añade tu currículum. Te mostramos las vacantes abiertas que puedes conseguir de verdad y nombramos exactamente lo que falta."
       },
       "meta": {
-        "description": "%BRAND% lee tu currículum y los anuncios de empleo vigentes, muestra los empleos que puedes conseguir de verdad, nombra lo que cada uno pide y tu currículum no muestra, y te deja practicar la entrevista. Empieza gratis. Tú envías cada postulación.",
+        "description": "%BRAND% lee tu currículum y los anuncios de empleo vigentes, muestra los empleos que puedes conseguir de verdad, nombra lo que cada uno pide y tu currículum no muestra, y te deja practicar la entrevista. Empieza gratis. Tú envías cada candidatura.",
         "ogDescription": "Mira qué empleos abiertos encajan con tu currículum, qué te falta para cada uno, y practica la entrevista para ese empleo exacto. Empieza gratis.",
         "ogTitle": "%BRAND%: descubre por qué no te llaman a entrevistas",
         "title": "Descubre por qué no te llaman a entrevistas | %BRAND%"
@@ -2996,7 +2996,7 @@
         "notSet": "Precio aún sin definir",
         "proNote": "Límites diarios más altos en todas las acciones de IA",
         "seeAll": "Ver todos los planes y límites",
-        "sub": "La lista de empleos, las puntuaciones de encaje, los filtros y tu tablero de postulaciones son gratis. Pro sube los límites diarios de las acciones de IA.",
+        "sub": "La lista de empleos, las puntuaciones de encaje, los filtros y tu tablero de candidaturas son gratis. Pro sube los límites diarios de las acciones de IA.",
         "title": "Empieza gratis. Mejora tu plan cuando necesites más."
       },
       "sample": {
@@ -3066,11 +3066,11 @@
       "faqTitle": "Preguntas",
       "free": "Gratis",
       "freeAlways": "Gratis en todos los planes",
-      "freeAlwaysBody": "La lista de empleos, las puntuaciones de encaje y lo que falta en cada empleo, los filtros, la búsqueda, Explorar y tu tablero de postulaciones.",
-      "freeAlwaysBodyNoFeed": "Tu currículum, tu tablero de postulaciones y los recordatorios de fechas límite.",
+      "freeAlwaysBody": "La lista de empleos, las puntuaciones de encaje y lo que falta en cada empleo, los filtros, la búsqueda, Explorar y tu tablero de candidaturas.",
+      "freeAlwaysBodyNoFeed": "Tu currículum, tu tablero de candidaturas y los recordatorios de fechas límite.",
       "freeAlwaysCampus": "El calendario de campus también es gratis.",
-      "freeNote": "La lista de empleos, las puntuaciones de encaje, los filtros y tu tablero de postulaciones, con límites diarios para las acciones de IA.",
-      "freeNoteNoFeed": "Tu currículum, tu tablero de postulaciones y los recordatorios.",
+      "freeNote": "La lista de empleos, las puntuaciones de encaje, los filtros y tu tablero de candidaturas, con límites diarios para las acciones de IA.",
+      "freeNoteNoFeed": "Tu currículum, tu tablero de candidaturas y los recordatorios.",
       "freePrice": "Gratis",
       "instantAlerts": "Correos de alerta de empleo al instante",
       "loading": "Cargando planes…",
@@ -3123,7 +3123,7 @@
       "fitParts": {
         "careerPath": "Cómo ha avanzado tu carrera",
         "industry": "Experiencia en el sector",
-        "logistics": "Ubicación, salario y permiso de trabajo",
+        "logistics": "Ubicación, sueldo y permiso de trabajo",
         "notChance": "Esto no es la probabilidad de que te contraten.",
         "skills": "Habilidades que pide el anuncio",
         "tiers": "Niveles: Encaja muy bien, {great} o más · Encaja bien, de {good} a {goodTop} · Posible, de {possible} a {possibleTop} · Poco probable, menos de {possible}.",
@@ -3140,7 +3140,7 @@
       "goalTitle": "Tu objetivo",
       "goals": {
         "flexibility": "Más flexibilidad: empleos remotos o híbridos",
-        "higherPay": "Mejor salario: empleos que indican un salario superior a tu mínimo, en la misma moneda",
+        "higherPay": "Un sueldo más alto: empleos que indican un sueldo superior a tu mínimo, en la misma moneda",
         "management": "Dirigir personas: empleos con personas a cargo",
         "moreSenior": "Un puesto de mayor nivel: empleos por encima del nivel más bajo que seleccionaste"
       },
@@ -3152,7 +3152,7 @@
       "never3": "Los empleos marcados como posibles estafas se quitan de la lista hasta que se revisan.",
       "never4": "Tu foto, edad, género o datos familiares.",
       "neverTitle": "Lo que el orden nunca usa",
-      "otherSorts": "Más recientes, Mejor encaje y Mayor salario ordenan solo por ese criterio.",
+      "otherSorts": "«Más recientes», «Los que mejor encajan» y «Mayor sueldo» ordenan solo por ese criterio.",
       "otherSortsTitle": "Otras formas de ordenar",
       "pointsNote": "Cada empleo recibe una puntuación de orden sobre 100 a partir de los cuatro factores. Las reglas y los objetivos de abajo suman puntos a esa puntuación o mueven empleos dentro de la lista.",
       "pointsNoteRules": "Cada empleo recibe una puntuación de orden sobre 100 a partir de los cuatro factores. La regla de abajo suma puntos a esa puntuación.",
@@ -3201,7 +3201,7 @@
       "aiSensitive": "Los datos sensibles, como una foto, la fecha de nacimiento, el género o los familiares, nunca se envían a un modelo de IA.",
       "aiTitle": "Procesamiento con IA",
       "data1": "Puedes descargar una copia de tus datos y eliminar tu cuenta desde Ajustes.",
-      "data2": "Nunca enviamos una postulación, un mensaje ni un formulario a un empleador en tu lugar.",
+      "data2": "Nunca enviamos una candidatura, un mensaje ni un formulario a un empleador en tu lugar.",
       "data3": "En %BRAND% no hay píxeles publicitarios ni rastreadores de terceros.",
       "dataTitle": "Tus datos",
       "lead": "Lo que hacemos realmente para proteger tu cuenta y tus datos. Si algo de esto cambia, esta página cambia también.",
@@ -3226,8 +3226,8 @@
         "productTitle": "Producto",
         "ranking": "Cómo se ordenan los empleos",
         "security": "Seguridad",
-        "tagline": "Descubre lo que pide cada empleo, corrige lo que falta y practica la entrevista. Tú envías cada postulación.",
-        "taglineCn": "Menos formularios. Ninguna fecha límite perdida. Entrevistas con más calma. Tú envías cada postulación.",
+        "tagline": "Descubre lo que pide cada empleo, corrige lo que falta y practica la entrevista. Tú envías cada candidatura.",
+        "taglineCn": "Menos formularios. Ninguna fecha límite perdida. Entrevistas con más calma. Tú envías cada candidatura.",
         "tools": "Herramientas gratuitas"
       },
       "nav": {
@@ -3252,12 +3252,12 @@
   },
   "admin": {
     "eyebrow": "Consola de operaciones",
-    "title": "Coste e",
+    "title": "Costo e",
     "titleAccent": "ingresos",
     "loading": "Cargando…",
-    "topCost": "mayor coste",
+    "topCost": "mayor costo",
     "estimated": "estimado",
-    "estimatedNote": "Los costes de voz a texto, texto a voz y salida de datos están modelados, no medidos.",
+    "estimatedNote": "Los costos de voz a texto, texto a voz y salida de datos están modelados, no medidos.",
     "export": {
       "csv": "Exportar CSV",
       "refresh": "Actualizar"
@@ -3285,18 +3285,18 @@
     "kpi": {
       "activeUsers": "Usuarios activos",
       "sessions": "Sesiones",
-      "cost": "Coste de modelo y medios",
+      "cost": "Costo de modelo y medios",
       "revenue": "Ingresos · MRR",
       "margin": "Margen bruto",
-      "costPerUser": "Coste / usuario activo",
+      "costPerUser": "Costo / usuario activo",
       "payingUsers": "{n} de pago"
     },
     "chart": {
-      "costVsRevenue": "Coste frente a ingresos",
-      "costByFeature": "Coste por función",
-      "costByModality": "Coste por tipo",
+      "costVsRevenue": "Costo frente a ingresos",
+      "costByFeature": "Costo por función",
+      "costByModality": "Costo por tipo",
       "legend": {
-        "cost": "Coste",
+        "cost": "Costo",
         "revenue": "Ingresos"
       },
       "netMargin": "Margen neto · {amount} ({pct})"
@@ -3320,7 +3320,7 @@
         "user": "Usuario",
         "tier": "Nivel",
         "mrr": "MRR",
-        "cost": "Coste del periodo",
+        "cost": "Costo del periodo",
         "margin": "Margen",
         "sessions": "Sesiones",
         "lastActive": "Última actividad"
@@ -3333,19 +3333,19 @@
       "titleAccent": "situación",
       "back": "Todos los usuarios",
       "summary": "Cuesta {cost} · Paga {revenue} → Margen {margin} ({pct})",
-      "lifetimeCost": "Coste total histórico",
-      "periodCost": "Coste de este periodo",
+      "lifetimeCost": "Costo total histórico",
+      "periodCost": "Costo de este periodo",
       "lifetimeRevenue": "Ingresos totales históricos",
-      "dailyCost": "Coste diario · últimos 30 d",
+      "dailyCost": "Costo diario · últimos 30 d",
       "avgDaily": "media {amount}/día",
-      "costByFeature": "Coste por función",
+      "costByFeature": "Costo por función",
       "interviewSessions": "Sesiones de entrevista",
       "setPlan": "Fijar plan",
       "renews": "Se renueva el {date}",
       "col": {
         "feature": "Función",
         "calls": "Llamadas",
-        "cost": "Coste",
+        "cost": "Costo",
         "pctSpend": "% del gasto",
         "split": "STT/TTS/modelo"
       }
@@ -3368,7 +3368,7 @@
         "role": "Puesto",
         "duration": "Dur.",
         "blueprint": "Plano",
-        "liveLlm": "Modelo en directo",
+        "liveLlm": "Modelo en vivo",
         "stt": "STT",
         "tts": "TTS",
         "eval": "Evaluación",
@@ -3384,11 +3384,11 @@
       }
     },
     "session": {
-      "eyebrow": "Coste de la sesión",
-      "title": "Desglose del coste de la sesión",
+      "eyebrow": "Costo de la sesión",
+      "title": "Desglose del costo de la sesión",
       "stage": {
         "blueprint": "Plano",
-        "liveLlm": "Modelo en directo",
+        "liveLlm": "Modelo en vivo",
         "stt": "STT",
         "tts": "TTS",
         "eval": "Evaluación",
@@ -3399,7 +3399,7 @@
         "model": "Modelo",
         "usage": "Uso",
         "unitRate": "Precio unitario",
-        "cost": "Coste"
+        "cost": "Costo"
       }
     },
     "rateCard": {
@@ -3407,7 +3407,7 @@
       "llm": "Tarifas por modelo",
       "speech": "Tarifas de voz",
       "media": "Tarifas de medios",
-      "note": "Tarifas de referencia para modelar el coste · edítalas en admin-config",
+      "note": "Tarifas de referencia para modelar el costo · edítalas en admin-config",
       "editSoon": "Editar tarifas todavía no está disponible",
       "col": {
         "model": "Modelo",
@@ -3547,7 +3547,7 @@
         },
         "campus": {
           "sub": "Fechas de reclutamiento universitario de fuentes oficiales, revisadas por una persona.",
-          "title": "Calendario de reclutamiento universitario"
+          "title": "Calendario de campus"
         },
         "coaches": {
           "sub": "La lista de coaches que aceptaron aparecer en ella.",
@@ -3772,11 +3772,11 @@
         "last7d": "Últimos 7 días: {verdict}",
         "loading": "Cargando…",
         "no": "No",
-        "notUsable": "No está en funcionamiento: las funciones de AI están desactivadas allí",
+        "notUsable": "No está en funcionamiento: las funciones de IA están desactivadas allí",
         "problems": "Problemas de configuración",
         "provider": "Proveedor de la revisión",
         "readiness": "Configuración de seguridad de contenido",
-        "sub": "La revisión que se aplica al texto de AI en el sitio de China continental: cómo está configurada y qué bloqueó o marcó en los últimos 7 días. Solo se guardan fragmentos cortos, sin datos de contacto.",
+        "sub": "La revisión que se aplica al texto de IA en el sitio de China continental: cómo está configurada y qué bloqueó o marcó en los últimos 7 días. Solo se guardan fragmentos cortos, sin datos de contacto.",
         "title": "Seguridad de contenido",
         "usable": "En funcionamiento",
         "verdict": "Resultado",
@@ -3792,7 +3792,7 @@
           "ingest_new_low": "{brand}: {value} empleos nuevos en lo que va de hoy, menos de la mitad de lo que el promedio de 7 días prevé para esta hora ({level}).",
           "none": "Nada supera su nivel de alerta en este momento.",
           "provider_budget": "{subject}: {value} llamadas hoy, nivel de alerta {level}.",
-          "score_budget": "{brand}: {value} puntuaciones de encaje con AI hoy, nivel de alerta {level}.",
+          "score_budget": "{brand}: {value} puntuaciones de encaje con IA hoy, nivel de alerta {level}.",
           "title": "{count, plural, one {# cifra necesita revisión} other {# cifras necesitan revisión}}"
         },
         "asOf": "Hora del conteo: {time}. «Hoy» es el día UTC {day}.",
@@ -3818,12 +3818,12 @@
           "enrichBacklog": "Empleos a la espera de detalles",
           "enrichBacklogDetail": "{share} de {open} empleos abiertos tienen detalles",
           "enrichCalls": "Llamadas de detalles de empleos",
-          "enrichCallsDetail": "Llamadas de AI que leen anuncios, frente al límite diario",
+          "enrichCallsDetail": "Llamadas de IA que leen anuncios, frente al límite diario",
           "newJobs": "Empleos nuevos hoy",
           "newJobsDetail": "Promedio diario de los últimos 7 días: {avg}",
           "queriesDue": "Búsquedas de empleo pendientes",
           "queriesDueDetail": "{overdue} con más de una hora de retraso · {failing} con fallos",
-          "scores": "Puntuaciones de encaje con AI",
+          "scores": "Puntuaciones de encaje con IA",
           "scoresDetail": "Frente al presupuesto diario"
         },
         "providers": {
@@ -3914,14 +3914,14 @@
     "start_body": "Describe arriba el trabajo que buscas y selecciona Buscar empleo. Verás las búsquedas realizadas, las ofertas encontradas y lo que aún debes confirmar en cada publicación.",
     "no_sources": "Selecciona al menos una fuente disponible.",
     "error_title": "No se pudo completar la búsqueda",
-    "error_body": "Inténtalo de nuevo. Si el problema continúa, elige otra fuente disponible.",
-    "rate_limited": "Alcanzaste el límite de búsquedas. Espera un momento e inténtalo de nuevo.",
+    "error_body": "Inténtalo otra vez. Si el problema continúa, elige otra fuente disponible.",
+    "rate_limited": "Alcanzaste el límite de búsquedas. Espera un momento e inténtalo otra vez.",
     "empty_title": "No encontramos empleos para esta búsqueda",
     "empty_body": "Prueba con un puesto más general, otra ubicación o menos filtros.",
     "results": "{count, plural, one {# resultado} other {# resultados}}",
     "results_for": "Resultados para «{query}»",
     "partial": "Algunas fuentes no pudieron completar la búsqueda. Los resultados de abajo provienen de las fuentes que respondieron.",
-    "all_failed": "Ninguna fuente pudo completar esta búsqueda. Inténtalo de nuevo o selecciona otra fuente.",
+    "all_failed": "Ninguna fuente pudo completar esta búsqueda. Inténtalo otra vez o selecciona otra fuente.",
     "coverage": "Resultados por fuente",
     "status_ok": "Completada",
     "status_empty": "Sin resultados",
@@ -3950,8 +3950,8 @@
     "details": "Ver detalles del puesto",
     "description": "Acerca del puesto",
     "description_missing": "No se incluyó una descripción. Abre la publicación original para ver todos los detalles del puesto.",
-    "apply": "Abrir página de postulación",
-    "apply_missing": "Enlace de postulación no disponible",
+    "apply": "Abrir página de candidatura",
+    "apply_missing": "Enlace para postular no disponible",
     "original": "Publicación original",
     "provenance": "También encontrado en",
     "freshness_note": "Las fechas de publicación las proporciona cada fuente. Abre la publicación original para confirmar que el puesto sigue disponible.",
@@ -3979,7 +3979,7 @@
     "query_coverage": "Resultados por consulta y fuente",
     "query_failed": "Esta consulta no pudo completarse. Se siguen mostrando los resultados de las consultas completadas.",
     "query_limited": "Esta consulta alcanzó el límite de búsqueda. Se siguen mostrando los resultados de las consultas completadas.",
-    "agent_unavailable": "El agente de búsqueda no está disponible temporalmente. Inténtalo de nuevo; no se han generado resultados.",
+    "agent_unavailable": "El agente de búsqueda no está disponible temporalmente. Inténtalo otra vez; no se han generado resultados.",
     "request_review": "Tu solicitud de búsqueda",
     "agent_results_for": "Ofertas encontradas según tu solicitud",
     "linkedin_empty": "Las fuentes elegidas no devolvieron ofertas de LinkedIn. Amplía los criterios o desactiva la búsqueda exclusiva de LinkedIn.",
@@ -3994,7 +3994,7 @@
     "docs": "Referencia de la API",
     "openapi": "Descargar OpenAPI",
     "contract_title": "Una solicitud. Un formato de respuesta uniforme.",
-    "contract_body": "Busca por puesto, ubicación, trabajo remoto, fecha de publicación y fuente. Los resultados comparten un formato para salario, empresa, enlaces de postulación y procedencia.",
+    "contract_body": "Busca por puesto, ubicación, trabajo remoto, fecha de publicación y fuente. Los resultados comparten un formato para salario, empresa, enlaces para postular y procedencia.",
     "reliability_title": "Conoce lo que devolvió cada fuente.",
     "reliability_body": "Consulta el estado de los proveedores y los resultados parciales. Los errores de las fuentes son visibles para que tu integración pueda decidir si vuelve a intentarlo.",
     "access_title": "Mantén el control del acceso.",
@@ -4006,7 +4006,7 @@
     "response_title": "Procesa la respuesta",
     "response_body": "Lee jobs para obtener los resultados normalizados y meta.providers para conocer el resultado de cada fuente. Revisa meta.partial antes de considerar completa una respuesta. Consulta las definiciones de campos y las respuestas de error en el documento OpenAPI.",
     "terms_title": "Disponibilidad y uso de las fuentes",
-    "terms_body": "Las fuentes disponibles dependen de la configuración del servidor y de los permisos contratados con los proveedores. Los datos de empleo siguen sujetos a los términos de cada proveedor, incluidos el almacenamiento y la redistribución. Este endpoint no envía postulaciones.",
+    "terms_body": "Las fuentes disponibles dependen de la configuración del servidor y de los permisos contratados con los proveedores. Los datos de empleo siguen sujetos a los términos de cada proveedor, incluidos el almacenamiento y la redistribución. Este endpoint no envía candidaturas.",
     "keys_title": "Claves de API",
     "keys_intro": "Conecta tu servidor a la búsqueda de empleo de %BRAND%. Cada clave pertenece a tu cuenta y se puede revocar de forma independiente.",
     "key_name": "Nombre de la clave",
@@ -4017,8 +4017,8 @@
     "keys_empty": "Aún no tienes claves de API",
     "keys_empty_body": "Crea una clave con nombre para conectar tu primera integración.",
     "keys_error": "No pudimos cargar tus claves de API.",
-    "create_error": "No pudimos crear la clave. Inténtalo de nuevo.",
-    "revoke_error": "No pudimos revocar la clave. Inténtalo de nuevo.",
+    "create_error": "No pudimos crear la clave. Inténtalo otra vez.",
+    "revoke_error": "No pudimos revocar la clave. Inténtalo otra vez.",
     "secret_title": "Guarda tu clave de API",
     "secret_body": "Esta es la única vez que se muestra la clave completa. Cópiala en un lugar seguro antes de cerrar este mensaje.",
     "secret_label": "Nueva clave de API",
@@ -4049,7 +4049,7 @@
     "sessions": "Entrevistas",
     "rateCard": "Tarifas de costos",
     "totalUsers": "Usuarios registrados",
-    "newUsers": "{count} nuevos en este período",
+    "newUsers": "{count} nuevos en este periodo",
     "activeUsers": "Usuarios activos",
     "activeHint": "Con inicios de sesión o uso de funciones registrados",
     "logins": "Inicios de sesión exitosos",
@@ -4057,7 +4057,7 @@
     "featureUses": "Solicitudes de funciones",
     "featureHint": "Solicitudes de uso del producto registradas",
     "payingUsers": "Usuarios con pagos",
-    "paidHint": "Con pagos exitosos en este período",
+    "paidHint": "Con pagos exitosos en este periodo",
     "collections": "Cobros",
     "nativeCurrency": "Monedas originales de las transacciones · CNY primero",
     "currencyNote": "Las monedas se contabilizan por separado. Los costos del servicio se registran en USD; no se muestran conversiones sin verificar ni un margen combinado.",
@@ -4065,7 +4065,7 @@
     "refunded": "Reembolsado",
     "net": "Cobro neto",
     "transactions": "{count} pagos",
-    "noPayments": "No hay registros de pagos en este período.",
+    "noPayments": "No hay registros de pagos en este periodo.",
     "serviceCost": "Costo del servicio · USD",
     "costHint": "Costos de modelos y medios registrados",
     "activityTrend": "Actividad del producto",
@@ -4075,7 +4075,7 @@
     "recentPayments": "Pagos recientes",
     "viewPayments": "Ver todos los pagos",
     "viewActivity": "Ver actividad",
-    "emptyActivity": "No hay actividad registrada en este período.",
+    "emptyActivity": "No hay actividad registrada en este periodo.",
     "coverage": "Acerca de estos registros",
     "coverageNote": "El historial solo incluye eventos capturados anteriormente. El nuevo registro de inicios de sesión y uso de funciones comienza al publicar esta actualización. La cantidad de solicitudes no equivale a resultados completados.",
     "regionNote": "La región corresponde a la región de facturación registrada, no a una ubicación física inferida.",
@@ -4142,7 +4142,7 @@
     "loading": "Cargando registros…",
     "retry": "Reintentar",
     "loadError": "No se pudieron cargar los registros",
-    "loadErrorHint": "Inténtalo de nuevo para cargar los datos más recientes.",
+    "loadErrorHint": "Inténtalo otra vez para cargar los datos más recientes.",
     "subscriptionPrice": "Precio de suscripción registrado",
     "priceUnknown": "Precio no registrado",
     "costCurrency": "Costos en USD",
@@ -4157,7 +4157,7 @@
     "recorded": "Registrado",
     "refundedAmount": "Importe reembolsado",
     "refundsNote": "Solo se muestran cobros brutos. Los reembolsos no se han conciliado en esta vista.",
-    "stripePartial": "El historial de Stripe está incompleto para este período. Los totales solo incluyen los registros cargados.",
+    "stripePartial": "El historial de Stripe está incompleto para este periodo. Los totales solo incluyen los registros cargados.",
     "stripeUnavailable": "El historial de Stripe no está disponible en este momento. Los totales solo incluyen los pagos de Alipay registrados.",
     "stripeNotConfigured": "Stripe no está conectado. Solo se muestran los pagos de Alipay registrados.",
     "usageLedger": "Uso medido",
@@ -4171,7 +4171,7 @@
     "prev": "Anterior",
     "next": "Siguiente",
     "features": {
-      "application": "Postulaciones",
+      "application": "Candidaturas",
       "career_insight": "Orientación profesional",
       "coach": "Preparación de entrevistas",
       "cover_letter": "Cartas de presentación",
@@ -4199,7 +4199,7 @@
       "resume_import": "Importar currículum",
       "resume_rewrite": "Reescribir currículum",
       "resume_tailor": "Adaptar currículum",
-      "tracker_update": "Actualizar seguimiento de postulaciones",
+      "tracker_update": "Actualizar seguimiento de candidaturas",
       "ra_resume_tailor": "Adaptar currículum",
       "ra_cover_letter": "Cartas de presentación",
       "roboapply_cover_letter": "Cartas de presentación",
@@ -4210,7 +4210,7 @@
       "ra_onboarding_turn": "Chat de primeros pasos",
       "roboapply_intent": "Análisis de preferencias laborales",
       "roboapply_digest": "Resúmenes de empleos",
-      "seeker_apply": "Postulaciones",
+      "seeker_apply": "Candidaturas",
       "seeker_tailor": "Adaptar currículum",
       "seeker_resume_refinement": "Adaptar currículum",
       "seeker_mock_interview": "Simulaciones de entrevistas",
@@ -4231,7 +4231,7 @@
     "challenge": {
       "backToLogin": "Volver al inicio de sesión",
       "codeLabel": "Código de 6 dígitos",
-      "expired": "Este paso del inicio de sesión expiró. Inicia sesión otra vez.",
+      "expired": "Este paso del inicio de sesión venció. Inicia sesión otra vez.",
       "invalid": "Ese código no funcionó.",
       "recoveryLabel": "Código de recuperación",
       "sub": "Abre tu aplicación de autenticación e ingresa el código de 6 dígitos de %BRAND%.",
@@ -4276,7 +4276,7 @@
         "email_unavailable": "No pudimos enviar el correo en este momento. Inténtalo más tarde.",
         "school_domain_not_eligible": "Usa la dirección de correo que te dio tu institución educativa, por ejemplo una que termina en .edu.",
         "school_email_in_use": "Este correo institucional ya está confirmado en otra cuenta.",
-        "student_code_expired": "Este código expiró. Envía uno nuevo.",
+        "student_code_expired": "Este código venció. Envía uno nuevo.",
         "student_code_invalid": "Ese código no funcionó."
       },
       "privacy": "Solo guardamos el dominio de tu institución educativa, no la dirección.",
@@ -4359,7 +4359,7 @@
         "followUps": "Para dar seguimiento",
         "open": "Abrir Candidaturas",
         "status": {
-          "ai_interview": "Entrevista con AI",
+          "ai_interview": "Entrevista con IA",
           "applied": "Enviadas",
           "assessment": "Evaluación",
           "closed": "Empleo cerrado",
@@ -4382,7 +4382,7 @@
         "official": "Página oficial",
         "reverify": "No se ha vuelto a verificar recientemente",
         "source": "Página oficial ({source})",
-        "title": "Plazos de postulación"
+        "title": "Plazos de candidatura"
       },
       "company": {
         "facts": {
@@ -4401,7 +4401,7 @@
       },
       "contacts": {
         "from": "De {source}",
-        "recruiter": "Recluta para este empleo",
+        "recruiter": "Reclutador de este empleo",
         "search": "Buscar personas (se abre en una pestaña nueva)",
         "sources": {
           "user_added": "personas que añadiste",
@@ -4459,7 +4459,7 @@
         "noProfile": "No hay ninguna búsqueda guardada que cambiar.",
         "notQuite": "No del todo",
         "revertFailed": "No se pudo restaurar la búsqueda anterior.",
-        "reverted": "Tu búsqueda anterior está de vuelta.",
+        "reverted": "Se restauró tu búsqueda anterior.",
         "show": "Ver {count, plural, one {# empleo} other {# empleos}}",
         "showCapped": "Ver {count}+ empleos",
         "showJobs": "Ver empleos",
@@ -4496,7 +4496,7 @@
       "interview": {
         "practice": "Practicar para este empleo",
         "source": {
-          "ai": "Escrita por AI",
+          "ai": "Escrita por IA",
           "bank": "De nuestro banco de preguntas",
           "posting": "Del anuncio"
         },
@@ -4513,11 +4513,11 @@
         "from": "Desde {amount}",
         "payNotListed": "Sueldo no indicado",
         "payPeriod": {
-          "day": "{amount} por día",
+          "day": "{amount} al día",
           "hour": "{amount} por hora",
-          "month": "{amount} por mes",
-          "week": "{amount} por semana",
-          "year": "{amount} por año"
+          "month": "{amount} al mes",
+          "week": "{amount} a la semana",
+          "year": "{amount} al año"
         },
         "range": "{min}–{max}",
         "seeAll": "Ver todos tus empleos",
@@ -4611,13 +4611,13 @@
           "title": "Cambiar tu búsqueda"
         }
       },
-      "intro": "Elige una pregunta para ponerla en el cuadro. Cámbiala si quieres y luego pulsa Enviar.",
+      "intro": "Elige una pregunta para ponerla en el cuadro. Cámbiala si quieres y luego presiona Enviar.",
       "title": "Qué puedes preguntar"
     },
     "chipPrompts": {
       "cover_letter": "Escribe una carta de presentación para este empleo.",
       "resume_tips": "Dame consejos sobre mi currículum para este empleo.",
-      "similar_jobs": "Muéstrame empleos parecidos a este.",
+      "similar_jobs": "Muéstrame empleos similares a este.",
       "whats_missing": "¿Qué me falta para este empleo?",
       "why_fit": "¿Por qué encajo en este empleo?"
     },
@@ -4626,7 +4626,7 @@
       "label": "Preguntas rápidas sobre este empleo",
       "practice": "Practicar para este empleo",
       "resume_tips": "Consejos para tu currículum",
-      "similar_jobs": "Empleos parecidos",
+      "similar_jobs": "Empleos similares",
       "whats_missing": "Qué me falta",
       "why_fit": "Por qué encajo"
     },
@@ -4713,31 +4713,31 @@
     },
     "name": "Asistente de %BRAND%",
     "nudge": {
-      "agency_report": "¿Ocultar anuncios de agencias de empleo?",
+      "agency_report": "¿Ocultar anuncios de agencias de personal?",
       "ask": "Preguntar al Asistente",
-      "campus_deadline": "Algunos plazos de postulación que sigues cierran pronto. ¿Revisarlos?",
+      "campus_deadline": "Algunos plazos de candidatura que sigues cierran pronto. ¿Revisarlos?",
       "low_rating": "Los empleos recientes no encajaban bien. ¿Ajustar tu búsqueda?",
       "notNow": "Ahora no",
       "pay_filter": "Muchos empleos indican el sueldo. ¿Añadir un sueldo mínimo a tu búsqueda?",
       "prompts": {
-        "agency_report": "Oculta los anuncios de agencias de empleo en mi búsqueda.",
-        "campus_deadline": "¿Cuáles de los plazos de postulación que sigo cierran pronto?",
+        "agency_report": "Oculta los anuncios de agencias de personal en mi búsqueda.",
+        "campus_deadline": "¿Cuáles de los plazos de candidatura que sigo cierran pronto?",
         "low_rating": "Ayúdame a ajustar mi búsqueda para que los empleos encajen mejor conmigo.",
         "pay_filter": "Añade un sueldo mínimo a mi búsqueda."
       }
     },
     "page": {
-      "aiOff": "El Asistente usa AI, y el procesamiento con AI está desactivado en tu cuenta. Puedes activarlo en tus ajustes de privacidad.",
+      "aiOff": "El Asistente usa IA, y el procesamiento con IA está desactivado en tu cuenta. Puedes activarlo en tus ajustes de privacidad.",
       "aiOffLink": "Abrir ajustes de privacidad",
       "title": "Asistente",
       "unavailable": "El Asistente no está disponible aquí."
     },
     "period": {
-      "day": "por día",
+      "day": "al día",
       "hour": "por hora",
-      "month": "por mes",
-      "week": "por semana",
-      "year": "por año"
+      "month": "al mes",
+      "week": "a la semana",
+      "year": "al año"
     },
     "short": "Asistente",
     "threads": {
@@ -4959,8 +4959,8 @@
       "applied": "Filtro quitado. Vuelve a generar el informe para ver las cifras nuevas.",
       "apply": "Quitar este filtro",
       "applying": "Quitando…",
-      "conflict": "Tu búsqueda guardada cambió mientras tanto. Recarga la página e inténtalo de nuevo.",
-      "error": "No pudimos cambiar el filtro. Inténtalo de nuevo.",
+      "conflict": "Tu búsqueda guardada cambió mientras tanto. Recarga la página e inténtalo otra vez.",
+      "error": "No pudimos cambiar el filtro. Inténtalo otra vez.",
       "extra": "+{count} empleos",
       "extraCapped": "+{count} empleos o más",
       "hidden": "{count, plural, one {# opción más} other {# opciones más}} en el informe completo con Pro.",
@@ -4973,7 +4973,7 @@
       "title": "Amplía tu búsqueda"
     },
     "error": {
-      "generic": "No pudimos crear el informe. No se cobró nada. Inténtalo de nuevo.",
+      "generic": "No pudimos crear el informe. No se cobró nada. Inténtalo otra vez.",
       "notFound": "Esta búsqueda guardada ya no existe. Elige otra.",
       "outOfCredits": "Ya usaste tus informes por ahora."
     },
@@ -4990,7 +4990,7 @@
       "open": "Volver al empleo",
       "title": "Este empleo"
     },
-    "loadError": "No pudimos cargar el informe. Inténtalo de nuevo en un momento.",
+    "loadError": "No pudimos cargar el informe. Inténtalo otra vez en un momento.",
     "loading": "Cargando el informe…",
     "meets": {
       "explain": "Anuncios que indican un título académico, años de experiencia o habilidades requeridas, y en los que cumples todo lo que indican.",
@@ -5048,7 +5048,7 @@
     "stale": "Tu búsqueda guardada cambió después de crear este informe. Vuelve a generarlo para ver las cifras actuales.",
     "start": {
       "intro": "Leemos los anuncios más recientes de esta búsqueda guardada y contamos:",
-      "noAi": "Se cuenta a partir de los anuncios de empleo. No se usa AI.",
+      "noAi": "Se cuenta a partir de los anuncios de empleo. No se usa IA.",
       "point1": "cuántos piden un título académico, años de experiencia o habilidades que tienes",
       "point2": "las habilidades que más piden",
       "point3": "los filtros que podrías quitar para ver más empleos, con cifras reales",
@@ -5070,13 +5070,13 @@
   "coverLetter": {
     "ai": {
       "label": "Escrita a partir del anuncio y de tu currículum.",
-      "off": "Escribir y reescribir cartas usa AI, que está desactivada en tu cuenta. Aún puedes editar, copiar y descargar tus cartas.",
-      "unavailable": "La escritura con AI no está disponible en este momento. Inténtalo más tarde. No se usó ningún crédito."
+      "off": "Escribir y reescribir cartas usa IA, que está desactivada en tu cuenta. Aún puedes editar, copiar y descargar tus cartas.",
+      "unavailable": "La escritura con IA no está disponible en este momento. Inténtalo más tarde. No se usó ningún crédito."
     },
     "editor": {
-      "attach": "Adjuntar a esta postulación",
-      "attachFailed": "No se pudo adjuntar la carta. Inténtalo de nuevo.",
-      "attached": "Adjunta a tu postulación",
+      "attach": "Adjuntar a esta candidatura",
+      "attachFailed": "No se pudo adjuntar la carta. Inténtalo otra vez.",
+      "attached": "Adjunta a tu candidatura",
       "back": "Todas las cartas de presentación",
       "bodyLabel": "Tu carta de presentación",
       "copied": "Copiado",
@@ -5085,7 +5085,7 @@
       "delete": "Eliminar",
       "deleteBody": "Se eliminan la carta y sus versiones. Los archivos que ya descargaste no se ven afectados.",
       "deleteConfirm": "Eliminar carta",
-      "deleteFailed": "No se pudo eliminar la carta. Inténtalo de nuevo.",
+      "deleteFailed": "No se pudo eliminar la carta. Inténtalo otra vez.",
       "deleteTitle": "¿Eliminar esta carta de presentación?",
       "detach": "Quitar",
       "downloadPdf": "Descargar PDF",
@@ -5096,25 +5096,25 @@
       "saved": "Guardado",
       "saving": "Guardando…",
       "tabLetter": "Carta",
-      "tabRewrite": "Reescribir con AI",
+      "tabRewrite": "Reescribir con IA",
       "tabSources": "Fuentes",
       "tabVersions": "Versiones",
       "tabs": "Carta de presentación",
       "unsaved": "Cambios sin guardar"
     },
     "error": {
-      "ai_unavailable": "La escritura con AI no está disponible en este momento. Inténtalo más tarde. No se usó ningún crédito.",
-      "claim_rejected": "La AI escribió frases que tu currículum no muestra, así que la carta no se guardó. No se usó ningún crédito. Inténtalo de nuevo o añade a tu currículum la experiencia que falta.",
-      "content_blocked": "La revisión de contenido detuvo esta solicitud. Cambia el anuncio o tu instrucción e inténtalo de nuevo. No se usó ningún crédito.",
+      "ai_unavailable": "La escritura con IA no está disponible en este momento. Inténtalo más tarde. No se usó ningún crédito.",
+      "claim_rejected": "La IA escribió frases que tu currículum no muestra, así que la carta no se guardó. No se usó ningún crédito. Inténtalo otra vez o añade a tu currículum la experiencia que falta.",
+      "content_blocked": "La revisión de contenido detuvo esta solicitud. Cambia el anuncio o tu instrucción e inténtalo otra vez. No se usó ningún crédito.",
       "credits_exhausted": "Ya usaste las cartas de presentación de hoy. Tus créditos se restablecen mañana.",
-      "failed": "Algo salió mal. Inténtalo de nuevo.",
+      "failed": "Algo salió mal. Inténtalo otra vez.",
       "not_found": "No se encontró esta carta. Puede que se haya eliminado.",
       "pdf_unavailable": "El PDF todavía no está disponible para este idioma. Descarga la versión en Word.",
-      "phone_binding_required": "Vincula un número de teléfono para usar la escritura con AI.",
+      "phone_binding_required": "Vincula un número de teléfono para usar la escritura con IA.",
       "posting_unavailable": "Para reescribir se necesita el anuncio, y el de esta carta no se conservó. Escribe una carta nueva y vuelve a pegar el anuncio.",
       "resume_too_short": "Este currículum es demasiado corto para escribir una carta a partir de él. Añade primero tu experiencia.",
       "resume_unverified": "Este currículum tiene líneas por revisar en «Verificar datos». Revísalas primero y luego escribe la carta.",
-      "rewrite_limit": "Puedes reescribir una carta {limit} veces al día. Edítala a mano o inténtalo de nuevo mañana.",
+      "rewrite_limit": "Puedes reescribir una carta {limit} veces al día. Edítala a mano o inténtalo otra vez mañana.",
       "safety_unavailable": "La revisión de contenido no está disponible en este momento, así que no se escribió nada. Inténtalo más tarde. No se usó ningún crédito."
     },
     "form": {
@@ -5122,13 +5122,13 @@
       "cancel": "Cancelar",
       "forChosenJob": "Para el empleo que abriste",
       "forJob": "Para {title} en {company}",
-      "honesty": "Escrita a partir del anuncio y de tu currículum. Cada línea de la AI se comprueba con ambos. Una carta que presente los requisitos del anuncio como experiencia tuya se vuelve a escribir o no se guarda.",
+      "honesty": "Escrita a partir del anuncio y de tu currículum. Cada línea de la IA se comprueba con ambos. Una carta que presente los requisitos del anuncio como experiencia tuya se vuelve a escribir o no se guarda.",
       "jdCompany": "Empresa",
       "jdText": "Anuncio de empleo",
       "jdTextHint": "Pega el anuncio completo. Al menos 50 caracteres.",
       "jdTitle": "Puesto",
       "jobLabel": "Empleo",
-      "neverSent": "%BRAND% nunca envía esta carta. Tú la copias o la descargas y la añades a tu postulación por tu cuenta.",
+      "neverSent": "%BRAND% nunca envía esta carta. Tú la copias o la descargas y la añades a tu candidatura por tu cuenta.",
       "noResume": "Añade primero un currículum. La carta se escribe solo a partir de lo que dice tu currículum.",
       "pasteIntro": "Pega el anuncio del empleo al que te postulas.",
       "resumeLabel": "Currículum para escribir la carta",
@@ -5144,13 +5144,13 @@
       "emptyTitle": "Todavía no hay cartas de presentación",
       "eyebrow": "Currículum",
       "listLabel": "Tus cartas de presentación",
-      "loadError": "No se pudieron cargar tus cartas. Inténtalo de nuevo.",
+      "loadError": "No se pudieron cargar tus cartas. Inténtalo otra vez.",
       "loadMore": "Mostrar más cartas",
       "loading": "Cargando tus cartas…",
       "new": "Escribir una carta de presentación",
       "open": "Abrir {title}",
       "retry": "Reintentar",
-      "sub": "Cartas escritas a partir de un anuncio y de tu currículum. Edítalas y luego cópialas o descárgalas para tu postulación.",
+      "sub": "Cartas escritas a partir de un anuncio y de tu currículum. Edítalas y luego cópialas o descárgalas para tu candidatura.",
       "title": "Cartas de presentación",
       "untitled": "Carta de presentación",
       "updated": "Editada el {when}"
@@ -5171,9 +5171,9 @@
     "rewrite": {
       "done": "Carta reescrita. El texto anterior está en Versiones.",
       "free": "Reescribir no usa créditos.",
-      "instructionHint": "Hasta 1,000 caracteres.",
+      "instructionHint": "Hasta 1000 caracteres.",
       "instructionLabel": "¿Qué debe cambiar?",
-      "intro": "Dile a la AI qué cambiar. Se limita a lo que dice tu currículum.",
+      "intro": "Dile a la IA qué cambiar. Se limita a lo que dice tu currículum.",
       "left": "{count, plural, =0 {Hoy no quedan reescrituras para esta carta} one {Hoy queda # reescritura para esta carta} other {Hoy quedan # reescrituras para esta carta}}",
       "needsPost": "Para reescribir se necesita el anuncio, y el de esta carta no se conservó. Para reescribir, escribe una carta nueva y vuelve a pegar el anuncio. Aún puedes editar esta carta a mano.",
       "newVersion": "Escribir una versión nueva",
@@ -5192,7 +5192,7 @@
       "empty": "Todavía no hay fuentes.",
       "intro": "De dónde sale cada frase.",
       "posting": "Del anuncio",
-      "quote": "“{text}”",
+      "quote": "«{text}»",
       "resume": "De tu currículum",
       "user": "Tus palabras"
     },
@@ -5208,13 +5208,13 @@
     "versions": {
       "current": "Se muestra ahora",
       "edit": "Tu edición",
-      "generated": "Escrita por AI",
+      "generated": "Escrita por IA",
       "intro": "Se guardan hasta 20 versiones. Al restaurar una versión, las demás se conservan.",
       "regenerate": "Versión nueva",
       "restore": "Restaurada",
       "restoreAction": "Restaurar",
       "restored": "Versión restaurada.",
-      "rewrite": "Reescritura con AI"
+      "rewrite": "Reescritura con IA"
     }
   },
   "credits": {
@@ -5293,19 +5293,19 @@
       "until": "Hasta el {date}"
     },
     "buckets": {
-      "ai_answer": "Respuestas de AI a preguntas de formularios",
+      "ai_answer": "Respuestas de IA a preguntas de formularios",
       "assistant": "Mensajes del Asistente",
       "autofill": "Llenado de formularios",
       "competitiveness": "Informes de competitividad",
       "contact_lookup": "Búsquedas de contactos",
       "cover_letter": "Cartas de presentación",
-      "fit_analysis": "Análisis de ajuste",
+      "fit_analysis": "Análisis de encaje",
       "job_import": "Empleos que añades",
       "outreach": "Borradores de mensajes",
       "practice": "Entrevistas de práctica",
       "ready_kits": "Kits listos para postular",
       "resume_check": "Revisiones de currículum",
-      "rewrite": "Ediciones con AI",
+      "rewrite": "Ediciones con IA",
       "tailor": "Currículums adaptados",
       "unknown": "Esta acción"
     },
@@ -5315,10 +5315,10 @@
       "button": "Cancelar suscripción",
       "cancelPageLink": "cancela sin iniciar sesión",
       "done": "Tu suscripción está cancelada. Conservas Pro hasta el {date}. Te enviamos una confirmación por correo.",
-      "doneNoDate": "Tu suscripción está cancelada. Conservas Pro hasta el final del período que pagaste. Te enviamos una confirmación por correo.",
-      "error": "No pudimos cancelar en este momento. Inténtalo de nuevo o",
+      "doneNoDate": "Tu suscripción está cancelada. Conservas Pro hasta el final del periodo que pagaste. Te enviamos una confirmación por correo.",
+      "error": "No pudimos cancelar en este momento. Inténtalo otra vez o",
       "help": "Se cancela con un solo clic. Conservas Pro hasta el {date}.",
-      "helpNoDate": "Se cancela con un solo clic. Conservas Pro hasta el final del período que pagaste.",
+      "helpNoDate": "Se cancela con un solo clic. Conservas Pro hasta el final del periodo que pagaste.",
       "pending": "Cancelando…",
       "survey": {
         "error": "No pudimos enviarlo. Tu suscripción sigue cancelada.",
@@ -5336,13 +5336,13 @@
     "cancelPage": {
       "already": "Esta suscripción ya estaba cancelada.",
       "confirm": "Cancelar ahora",
-      "confirmSub": "Esto detiene la renovación ahora. Conservas Pro hasta el final del período que pagaste.",
+      "confirmSub": "Esto detiene la renovación ahora. Conservas Pro hasta el final del periodo que pagaste.",
       "confirmTitle": "Cancelar tu suscripción",
       "confirming": "Cancelando…",
       "done": "Tu suscripción está cancelada. Conservas Pro hasta el {date}. Te enviamos una confirmación por correo.",
-      "doneNoDate": "Tu suscripción está cancelada. Conservas Pro hasta el final del período que pagaste. Te enviamos una confirmación por correo.",
+      "doneNoDate": "Tu suscripción está cancelada. Conservas Pro hasta el final del periodo que pagaste. Te enviamos una confirmación por correo.",
       "email": "Correo electrónico",
-      "error": "Algo salió mal. Inténtalo de nuevo.",
+      "error": "Algo salió mal. Inténtalo otra vez.",
       "footerLink": "Cancelar una suscripción",
       "invalidEmail": "Escribe una dirección de correo válida.",
       "send": "Enviar enlace de cancelación",
@@ -5400,7 +5400,7 @@
     "paymentFailed": {
       "action": "Actualizar método de pago",
       "body": "Volveremos a intentarlo automáticamente. Actualiza tu método de pago para conservar Pro.",
-      "portalError": "No pudimos abrir los ajustes de pago. Inténtalo de nuevo.",
+      "portalError": "No pudimos abrir los ajustes de pago. Inténtalo otra vez.",
       "title": "Tu último pago no se procesó"
     },
     "planSheet": {
@@ -5409,7 +5409,7 @@
       "continuing": "Abriendo la página de pago…",
       "empty": "Ahora mismo no hay planes a la venta.",
       "emptyCn": "Los planes de pago todavía no están disponibles.",
-      "error": "No pudimos abrir la página de pago. No se cobró nada. Inténtalo de nuevo.",
+      "error": "No pudimos abrir la página de pago. No se cobró nada. Inténtalo otra vez.",
       "loadError": "No pudimos cargar los planes.",
       "loading": "Cargando planes…",
       "manageInPortal": "Para cambiar cada cuánto se renueva Pro, usa «Administrar pago».",
@@ -5504,7 +5504,7 @@
       "added": "Conectado el {date}",
       "cancel": "Cancelar",
       "empty": "Todavía no hay ningún navegador conectado.",
-      "error": "No pudimos cargar tus navegadores. Inténtalo de nuevo.",
+      "error": "No pudimos cargar tus navegadores. Inténtalo otra vez.",
       "intro": "Cada navegador que conectaste. Desconecta el que ya no uses; deja de funcionar de inmediato.",
       "lastUsed": "Último uso: {date}",
       "loading": "Cargando…",
@@ -5512,7 +5512,7 @@
       "outdated": "Necesita una actualización",
       "revoke": "Desconectar",
       "revokeBody": "La extensión de ese navegador deja de funcionar hasta que la vuelvas a conectar.",
-      "revokeError": "Eso no funcionó. Inténtalo de nuevo.",
+      "revokeError": "Eso no funcionó. Inténtalo otra vez.",
       "revokeTitle": "¿Desconectar {name}?",
       "revoked": "Se desconectó {name}.",
       "setup": "Configurar la extensión",
@@ -5522,51 +5522,51 @@
     },
     "fill": {
       "cta": "Llenar este formulario",
-      "install": "Conseguir la extensión para llenar este formulario",
+      "install": "Obtener la extensión para llenar este formulario",
       "newTab": "(se abre en una pestaña nueva)",
-      "note": "Abre la página de postulación. La extensión llena los campos; revísalos y envía la postulación por tu cuenta."
+      "note": "Abre la página de candidatura. La extensión llena los campos; revísalos y envía la candidatura por tu cuenta."
     },
     "meta": {
-      "description": "Llena formularios de postulación con los datos de tu perfil. Tú revisas cada campo y envías cada postulación por tu cuenta.",
+      "description": "Llena formularios de candidatura con los datos de tu perfil. Tú revisas cada campo y envías cada candidatura por tu cuenta.",
       "title": "%BRAND% para tu navegador",
       "uninstalledTitle": "Se quitó la extensión de %BRAND%"
     },
     "page": {
-      "facts": "Las preguntas sobre permiso de trabajo, patrocinio de visa, salario, años de experiencia, títulos académicos y otras similares se llenan solo con las respuestas que guardaste. La AI nunca las escribe.",
+      "facts": "Las preguntas sobre autorización de trabajo, patrocinio de visa, salario, años de experiencia, títulos académicos y otras similares se llenan solo con las respuestas que guardaste. La IA nunca las escribe.",
       "factsTitle": "Respuestas sobre ti",
       "how": {
-        "step1": "Abre un formulario de postulación en un sitio compatible.",
+        "step1": "Abre un formulario de candidatura en un sitio compatible.",
         "step2": "Haz clic en «Llenar este formulario». Los campos se llenan con tu perfil y tus respuestas guardadas.",
-        "step3": "Para las preguntas abiertas en inglés o chino, aparece en el panel lateral un borrador escrito por AI. No se escribe nada en el formulario hasta que eliges «Usar esta respuesta».",
-        "step4": "Revisa cada campo y luego envía la postulación por tu cuenta. Dile a la extensión si la enviaste, para que tu lista de postulaciones se mantenga correcta."
+        "step3": "Para las preguntas abiertas en inglés o chino, aparece en el panel lateral un borrador escrito por IA. No se escribe nada en el formulario hasta que eliges «Usar esta respuesta».",
+        "step4": "Revisa cada campo y luego envía la candidatura por tu cuenta. Dile a la extensión si la enviaste, para que tu lista de candidaturas se mantenga correcta."
       },
       "howTitle": "Cómo funciona",
-      "intro": "Llena formularios de postulación con los datos de tu perfil. Tú revisas cada campo y envías cada postulación por tu cuenta.",
-      "privacy": "En los sitios de postulación compatibles, y en los sitios donde tú la actives, la extensión busca el formulario de postulación cuando se abre la página. En cualquier otra página, solo lee la página cuando haces clic en la extensión. Nunca envía un formulario y nunca presiona «Siguiente» ni «Enviar».",
+      "intro": "Llena formularios de candidatura con los datos de tu perfil. Tú revisas cada campo y envías cada candidatura por tu cuenta.",
+      "privacy": "En los sitios compatibles, y en los sitios donde tú la actives, la extensión busca el formulario de candidatura cuando se abre la página. En cualquier otra página, solo lee la página cuando haces clic en la extensión. Nunca envía un formulario y nunca presiona «Siguiente» ni «Enviar».",
       "privacyTitle": "Qué lee",
       "signIn": "Iniciar sesión",
       "signedOut": "Inicia sesión para revisar tu configuración y conectar la extensión.",
       "signedOutTitle": "Conéctala a tu cuenta",
-      "sites": "Formularios de postulación en {sites}. Puedes pedir otro sitio desde la extensión.",
+      "sites": "Formularios de candidatura en {sites}. Puedes pedir otro sitio desde la extensión.",
       "sitesTitle": "Sitios compatibles",
       "title": "%BRAND% para tu navegador",
       "unavailable": "La extensión todavía no está disponible."
     },
     "prompt": {
-      "body": "La extensión de %BRAND% llena formularios con los datos de tu perfil. Tú revisas cada campo y envías la postulación por tu cuenta.",
+      "body": "La extensión de %BRAND% llena formularios con los datos de tu perfil. Tú revisas cada campo y envías la candidatura por tu cuenta.",
       "close": "Cerrar",
       "connectCta": "Conectarla",
-      "cta": "Conseguir la extensión",
+      "cta": "Obtener la extensión",
       "dismiss": "Ahora no",
       "installed": "Extensión instalada (versión {version}).",
       "learnMore": "Cómo funciona",
       "mobile": "Abre %BRAND% en una computadora para añadir la extensión del navegador.",
-      "title": "Llena formularios de postulación más rápido",
+      "title": "Llena formularios de candidatura más rápido",
       "unsupported": "La extensión funciona en Chrome y Edge.",
       "updateNeeded": "Actualiza la extensión a la versión {version} o posterior."
     },
     "sensitive": {
-      "error": "Eso no se guardó. Inténtalo de nuevo.",
+      "error": "Eso no se guardó. Inténtalo otra vez.",
       "intro": "Desactivado a menos que lo actives. Cuando está activado, la extensión puede llenar las respuestas sobre igualdad de oportunidades y otras respuestas sensibles que guardaste, y marca cada una para que la revises.",
       "label": "Permitir que la extensión llene mis respuestas sensibles",
       "saving": "Guardando…",
@@ -5574,9 +5574,9 @@
     },
     "status": {
       "code": {
-        "body": "En la extensión, elige «Ingresar código» y escribe este código. Funciona durante 10 minutos.",
+        "body": "En la extensión, elige «Conectar con código» y escribe este código. Funciona durante 10 minutos.",
         "cta": "Mostrar un código",
-        "error": "No pudimos crear un código. Inténtalo de nuevo.",
+        "error": "No pudimos crear un código. Inténtalo otra vez.",
         "expires": "Funciona hasta las {time}",
         "pending": "Creando un código…",
         "title": "Conectar con un código"
@@ -5589,15 +5589,15 @@
         "title": "Conectar este navegador"
       },
       "done": {
-        "body": "La extensión está conectada. Abre un formulario de postulación en un sitio compatible y haz clic en «Llenar este formulario».",
+        "body": "La extensión está conectada. Abre un formulario de candidatura en un sitio compatible y haz clic en «Llenar este formulario».",
         "cta": "Explorar empleos",
         "title": "Todo listo"
       },
-      "error": "No pudimos cargar tu configuración. Inténtalo de nuevo.",
+      "error": "No pudimos cargar tu configuración. Inténtalo otra vez.",
       "install": {
         "body": "Añádela a tu navegador y luego vuelve a esta página.",
         "checking": "Buscando la extensión…",
-        "cta": "Conseguir la extensión",
+        "cta": "Obtener la extensión",
         "recheck": "Ya la instalé",
         "title": "Instalar la extensión"
       },
@@ -5620,7 +5620,7 @@
     },
     "uninstalled": {
       "back": "Volver a %BRAND%",
-      "error": "Eso no se envió. Inténtalo de nuevo.",
+      "error": "Eso no se envió. Inténtalo otra vez.",
       "intro": "Gracias por probarla. Si quieres, cuéntanos por qué la quitaste. Nos ayuda a corregir lo que te causó problemas.",
       "note": "¿Algo más? (opcional)",
       "pickOne": "Elige al menos un motivo.",
@@ -5633,7 +5633,7 @@
         "too_many_prompts": "Pedía mi atención con demasiada frecuencia",
         "wrong_fills": "Llenaba mal los campos"
       },
-      "reinstall": "¿Cambiaste de opinión? Vuelve a conseguir la extensión.",
+      "reinstall": "¿Cambiaste de opinión? Vuelve a obtener la extensión.",
       "send": "Enviar",
       "sending": "Enviando…",
       "sent": "Gracias por contárnoslo.",
@@ -5709,7 +5709,7 @@
       "show": "Ver empleos",
       "showCapped": "Ver {count}+ empleos",
       "showCount": "Ver {count, plural, one {# empleo} other {# empleos}}",
-      "sponsorshipNotSynced": "Filtros guardados. La respuesta sobre tu permiso de trabajo no se actualizó en tu perfil; puedes cambiarla allí.",
+      "sponsorshipNotSynced": "Filtros guardados. La respuesta sobre tu autorización de trabajo no se actualizó en tu perfil; puedes cambiarla allí.",
       "title": "Filtros"
     },
     "fields": {
@@ -6008,7 +6008,7 @@
     "keywordCheck": {
       "count": "Tu currículum menciona {found} de {total}",
       "error": "No pudimos hacer la revisión de palabras clave. Inténtalo otra vez.",
-      "intro": "Requisitos del anuncio, comparados con tu currículum. Son las mismas partes que usa el nivel de encaje.",
+      "intro": "Requisitos del anuncio, comparados con tu currículum. Son las mismas partes que usa la puntuación de encaje.",
       "loading": "Revisando tu currículum…",
       "mentioned": "Aparece en tu currículum",
       "notMentioned": "No aparece en tu currículum",
@@ -6199,20 +6199,20 @@
       "campus": {
         "deadline": {
           "body": "{program} cierra el {closes} (hora de Pekín), según indica la página oficial.",
-          "title": "{company}: las postulaciones cierran el {closesDay}"
+          "title": "{company}: las candidaturas cierran el {closesDay}"
         },
         "followed": {
-          "body": "{program} ya está en el calendario de reclutamiento universitario, con su enlace oficial.",
+          "body": "{program} ya está en el calendario de campus, con su enlace oficial.",
           "title": "{company} publicó su programa para la promoción {classYear}"
         }
       },
       "tracker": {
         "deadline": {
-          "title": "{days, plural, =0 {Las postulaciones para {company} cierran hoy.} =1 {Las postulaciones para {company} cierran mañana.} other {Las postulaciones para {company} cierran en # días.}}"
+          "title": "{days, plural, =0 {Las candidaturas para {company} cierran hoy.} =1 {Las candidaturas para {company} cierran mañana.} other {Las candidaturas para {company} cierran en # días.}}"
         },
         "followUp": {
           "body": "Te postulaste hace {days, plural, one {# día} other {# días}} y todavía no tienes respuesta.",
-          "title": "Es momento de dar seguimiento a tu postulación en {company}"
+          "title": "Es momento de dar seguimiento a tu candidatura en {company}"
         },
         "followUpDue": {
           "title": "Hoy es tu fecha de seguimiento con {company}."
@@ -6367,7 +6367,7 @@
   "jobDetail": {
     "actions": {
       "apply": "Postular en el sitio de la empresa",
-      "applyHint": "Abre la página del empleador en una pestaña nueva. Tú envías la postulación allí.",
+      "applyHint": "Abre la página del empleador en una pestaña nueva. Tú envías la candidatura allí.",
       "ask": "Preguntar sobre este empleo",
       "error": "Eso no funcionó. Inténtalo otra vez.",
       "iApplied": "Ya me postulé",
@@ -6386,14 +6386,14 @@
     },
     "campus": {
       "classYears": "Para quienes se gradúan en {years}",
-      "closesOnly": "Las postulaciones cierran el {closes}",
+      "closesOnly": "Las candidaturas cierran el {closes}",
       "needsCheck": "No se ha vuelto a revisar en los últimos 14 días. Confirma las fechas en la página oficial.",
       "note": "De la página de reclutamiento universitario del empleador, no de este anuncio.",
       "official": "Abrir la página oficial",
-      "opensOnly": "Las postulaciones abren el {opens}",
+      "opensOnly": "Las candidaturas abren el {opens}",
       "title": "Reclutamiento universitario {graduationClass} en {company}",
-      "window": "Postulaciones abiertas: {opens} – {closes}",
-      "windowUnknown": "Fechas de postulación no indicadas"
+      "window": "Candidaturas abiertas: {opens} – {closes}",
+      "windowUnknown": "Fechas de candidatura no indicadas"
     },
     "checklist": {
       "addToReady": "Añadir a Listo para postular",
@@ -6413,7 +6413,7 @@
       "readyFull": "Tu lista Listo para postular está llena.",
       "save": "Guardar para después",
       "step": {
-        "applied": "Postulación enviada",
+        "applied": "Candidatura enviada",
         "practiced": "Entrevista practicada",
         "saved": "Guardado",
         "tailored": "Currículum adaptado"
@@ -6493,7 +6493,7 @@
         "director_exec": "Dirección o nivel ejecutivo",
         "entry": "Nivel inicial",
         "intern_newgrad": "Pasantía o recién graduado",
-        "lead_staff": "Líder o especialista principal",
+        "lead_staff": "Líder o staff",
         "mid": "Nivel intermedio",
         "senior": "Sénior"
       },
@@ -6548,7 +6548,7 @@
         "not_offered": "No se ofrece patrocinio de visa",
         "offered": "Se ofrece patrocinio de visa"
       },
-      "summaryLabel": "Resumen escrito por AI a partir del anuncio",
+      "summaryLabel": "Resumen escrito por IA a partir del anuncio",
       "workAuthTitle": "Autorización de trabajo"
     },
     "people": {
@@ -6586,15 +6586,15 @@
       "confirmRemove": "¿Quitar este empleo de tu lista?",
       "confirmRemoveYes": "Sí, quitar",
       "loadMore": "Mostrar más",
-      "openTracker": "Abrir el seguimiento",
+      "openTracker": "Abrir Candidaturas",
       "practice": "Practicar la entrevista",
       "remove": "Quitar",
       "removeAria": "Quitar {title}",
       "tailor": "Adaptar currículum",
-      "track": "Guardar en el seguimiento",
-      "trackAria": "Guardar {title} en tu seguimiento",
-      "trackFailed": "No pudimos guardar este empleo en tu seguimiento. Inténtalo otra vez.",
-      "tracked": "Guardado en tu seguimiento.",
+      "track": "Guardar en Candidaturas",
+      "trackAria": "Guardar {title} en Candidaturas",
+      "trackFailed": "No pudimos guardar este empleo en Candidaturas. Inténtalo otra vez.",
+      "tracked": "Guardado en Candidaturas.",
       "tracking": "Guardando…",
       "view": "Ver empleo"
     },
@@ -6616,7 +6616,7 @@
     },
     "done": {
       "added": "Empleo añadido",
-      "addedSub": "Guárdalo en tu seguimiento, adapta tu currículum o practica para la entrevista.",
+      "addedSub": "Guárdalo en Candidaturas, adapta tu currículum o practica para la entrevista.",
       "public": "Este empleo ya está en nuestra lista de empleos",
       "publicSub": "Usamos el anuncio que ya existía en lugar de añadir una copia. No se usó ningún crédito.",
       "yours": "Ya habías añadido este empleo",
@@ -6638,7 +6638,7 @@
       "checkTitle": "Revisa los detalles",
       "company": "Empresa",
       "description": "Descripción del empleo",
-      "descriptionHelp": "Pega el anuncio completo. Se usa para tu nivel de encaje, tu currículum adaptado y la práctica de entrevistas.",
+      "descriptionHelp": "Pega el anuncio completo. Se usa para tu puntuación de encaje, tu currículum adaptado y la práctica de entrevistas.",
       "errors": {
         "applyUrl": "Usa una dirección web completa que empiece con http:// o https://.",
         "company": "Añade la empresa.",
@@ -6664,7 +6664,7 @@
     },
     "list": {
       "added": "Añadido el {date}",
-      "emptySub": "Añade un empleo de otro sitio para obtener su nivel de encaje, un currículum adaptado y práctica de entrevista.",
+      "emptySub": "Añade un empleo de otro sitio para obtener su puntuación de encaje, un currículum adaptado y práctica de entrevistas.",
       "emptyTitle": "Todavía no has añadido empleos",
       "error": "No pudimos cargar tus empleos.",
       "fromHost": "De {host}",
@@ -6826,7 +6826,7 @@
       "colUsedFor": "Se usa para",
       "none": "No se usa ningún conjunto de datos que exija citar la fuente.",
       "purpose": {
-        "agency_marking": "Marcar los anuncios de agencias de empleo y de selección de personal",
+        "agency_marking": "Marcar los anuncios de agencias de personal y de reclutamiento",
         "job_locations": "Nombres de ciudades y su posición, para la ubicación de los empleos",
         "role_categories": "Categorías de puestos"
       }
@@ -7060,7 +7060,7 @@
         "anon_alerts_unsubscribed": "Alertas de empleo de las que te diste de baja sin tener cuenta (con la dirección de correo)",
         "application_artifacts": "Copias de los archivos usados en candidaturas",
         "assistant_messages": "Conversaciones con el Asistente",
-        "auth_tokens": "Códigos y enlaces de inicio de sesión, después de que expiran",
+        "auth_tokens": "Códigos y enlaces de inicio de sesión, después de que vencen",
         "backups": "Copias de seguridad de la base de datos",
         "billing_consent_records": "Registros de que aceptaste la renovación automática de un plan o los términos de compra",
         "closed_accounts": "Datos de la cuenta después de que eliminas tu cuenta",
@@ -7268,7 +7268,7 @@
       "tooManyCities": "Elige hasta 5 ciudades en total."
     },
     "confirm": {
-      "aiSuggested": "Sugerido por AI a partir de tu currículum. Revísalo antes de usarlo.",
+      "aiSuggested": "Sugerido por IA a partir de tu currículum. Revísalo antes de usarlo.",
       "alertHint": "Solo una lista de empleos nuevos. Los consejos y las promociones tienen un ajuste aparte.",
       "alertLabel": "Envíame por correo los empleos nuevos que encajen conmigo",
       "alerts": {
@@ -7287,7 +7287,7 @@
       "extraHint": "Hasta 3.",
       "extraLabel": "¿Añadir estos puestos de tu currículum?",
       "heard": {
-        "ai_assistant": "Un asistente de AI (p. ej., ChatGPT)",
+        "ai_assistant": "Un asistente de IA (p. ej., ChatGPT)",
         "friend": "Un amigo o colega",
         "instagram": "Instagram",
         "linkedin": "LinkedIn",
@@ -7423,7 +7423,7 @@
     "preferences": {
       "addSkill": "Añadir habilidad",
       "industries": {
-        "ai_ml": "AI / ML",
+        "ai_ml": "IA / ML",
         "b2b_saas": "SaaS B2B",
         "bio_pharma": "Bio / Farma",
         "climate": "Clima",
@@ -7582,7 +7582,7 @@
       "resumeCheckAction": "Ver la revisión",
       "scoreBody": "Encaja muy bien, Encaja bien, Posible y Poco probable comparan tu currículum con los requisitos del empleo.",
       "scoreLine": "Esto no es tu probabilidad de que te contraten.",
-      "scoreTitle": "Cómo leer el nivel de encaje"
+      "scoreTitle": "Cómo leer la puntuación de encaje"
     },
     "tour": {
       "cards": {
@@ -7607,7 +7607,7 @@
   "people": {
     "composer": {
       "again": "Escribir otro borrador",
-      "aiLabel": "Borrador escrito por AI. Revisa cada línea antes de enviarlo.",
+      "aiLabel": "Borrador escrito por IA. Revisa cada línea antes de enviarlo.",
       "aiOff": "La redacción de borradores no está disponible en este momento. Aun así puedes escribir tu propio mensaje.",
       "body": "Mensaje",
       "channel": {
@@ -7682,7 +7682,7 @@
         "expiry_past": "Esta fecha ya pasó.",
         "failed": "Algo salió mal. Inténtalo otra vez.",
         "feature_disabled": "Los códigos de referido no están disponibles aquí.",
-        "phone_binding_required": "Añade un número de teléfono móvil verificado para compartir o reportar códigos.",
+        "phone_binding_required": "Añade un número de celular verificado para compartir o reportar códigos.",
         "referral_already_reported": "Ya reportaste este código.",
         "referral_code_duplicate": "Este código ya está publicado o en espera de revisión.",
         "referral_contact_details": "No incluyas números de teléfono, ID de WeChat, correos ni enlaces.",
@@ -7892,7 +7892,7 @@
       "approach": "Cómo abordarla",
       "commonMistakes": "Errores comunes",
       "followUps": "Posibles preguntas de seguimiento",
-      "guideAiLine": "Guía escrita por AI. Compárala con tu propia experiencia.",
+      "guideAiLine": "Guía escrita por IA. Compárala con tu propia experiencia.",
       "guideError": "La guía no se escribió. Inténtalo otra vez.",
       "guideLoading": "Escribiendo una guía para esta pregunta…",
       "guideUnavailable": "Por ahora no hay una guía disponible para esta pregunta.",
@@ -7955,7 +7955,7 @@
       "medium": "Media"
     },
     "errors": {
-      "aiOff": "La redacción con AI no está disponible en este momento, así que esto no se puede escribir.",
+      "aiOff": "La redacción con IA no está disponible en este momento, así que esto no se puede escribir.",
       "blocked": "Esto no se pudo escribir. Prueba con otro empleo o con otra pregunta.",
       "generic": "Algo salió mal. Inténtalo otra vez.",
       "guideLimit": "Hoy abriste muchas guías nuevas. Inténtalo otra vez mañana.",
@@ -7963,17 +7963,17 @@
       "limit": "Llegaste al límite de hoy. Inténtalo otra vez mañana.",
       "notFound": "No encontramos esto.",
       "phone": "Primero añade un número de teléfono a tu cuenta.",
-      "safetyDown": "La redacción con AI está en pausa por un momento. Inténtalo más tarde.",
+      "safetyDown": "La redacción con IA está en pausa por un momento. Inténtalo más tarde.",
       "shareLimit": "Hoy compartiste muchas preguntas. Inténtalo otra vez mañana."
     },
     "job": {
-      "aiHeading": "Escritas por AI a partir de este anuncio",
-      "aiOff": "La redacción con AI no está disponible en este momento, así que aquí solo se muestran preguntas compartidas por usuarios.",
+      "aiHeading": "Escritas por IA a partir de este anuncio",
+      "aiOff": "La redacción con IA no está disponible en este momento, así que aquí solo se muestran preguntas compartidas por usuarios.",
       "loadError": "Las preguntas de este empleo no se cargaron. Inténtalo otra vez.",
       "loading": "Cargando las preguntas de este empleo…",
       "noReports": "Todavía nadie ha compartido preguntas sobre {company}.",
       "notFound": "No encontramos este empleo.",
-      "notWritten": "La AI puede escribir preguntas de práctica a partir de este anuncio. Son material de práctica, no preguntas que alguien haya dicho que le hicieron.",
+      "notWritten": "La IA puede escribir preguntas de práctica a partir de este anuncio. Son material de práctica, no preguntas que alguien haya dicho que le hicieron.",
       "practice": "Practicar para este empleo",
       "reportsHeading": "Compartidas por usuarios de %BRAND% sobre {company}",
       "seeAll": "Ver todas las preguntas sobre {company}",
@@ -8028,12 +8028,12 @@
       "title": "Compartir una pregunta que te hicieron"
     },
     "source": {
-      "aiPractice": "Escrita por AI a partir del anuncio — no proviene de candidatos",
+      "aiPractice": "Escrita por IA a partir del anuncio — no proviene de candidatos",
       "curated": "Escrita por el equipo de %BRAND% — no proviene de candidatos",
       "userReport": "Compartida por alguien que usa %BRAND%, {period}",
       "userReportNoDate": "Compartida por alguien que usa %BRAND%"
     },
-    "sub": "Ensaya con preguntas que otros usuarios de %BRAND% compartieron después de sus entrevistas, preguntas generales que escribió nuestro equipo y preguntas escritas por AI a partir de un anuncio. Cada pregunta indica de dónde salió.",
+    "sub": "Ensaya con preguntas que otros usuarios de %BRAND% compartieron después de sus entrevistas, preguntas generales que escribió nuestro equipo y preguntas escritas por IA a partir de un anuncio. Cada pregunta indica de dónde salió.",
     "title": "Preguntas de práctica"
   },
   "profile": {
@@ -8087,7 +8087,7 @@
       "major": "Carrera",
       "nativePlace": "Lugar de origen familiar",
       "notAnswered": "Sin responder",
-      "optionalIntro": "Algunos formularios de postulación piden estos datos. Están cifrados, solo se usan para llenar esos formularios, nunca se usan para ordenar empleos y nunca se envían a la AI.",
+      "optionalIntro": "Algunos formularios de candidatura piden estos datos. Están cifrados, solo se usan para llenar esos formularios, nunca se usan para ordenar empleos y nunca se envían a la IA.",
       "optionalTitle": "Datos opcionales para formularios",
       "photoUnavailable": "En esta versión de %BRAND% no se guardan fotos.",
       "politicalStatus": "Afiliación política",
@@ -8129,7 +8129,7 @@
       "deleted": "Eliminadas",
       "disabilityStatus": "Discapacidad",
       "gender": "Género",
-      "intro": "Algunos empleadores de Estados Unidos hacen estas preguntas opcionales. Tus respuestas están cifradas, solo se usan para llenar esas preguntas en los formularios, nunca se usan para ordenar empleos y nunca se envían a la AI. Puedes eliminarlas en cualquier momento.",
+      "intro": "Algunos empleadores de Estados Unidos hacen estas preguntas opcionales. Tus respuestas están cifradas, solo se usan para llenar esas preguntas en los formularios, nunca se usan para ordenar empleos y nunca se envían a la IA. Puedes eliminarlas en cualquier momento.",
       "notAnswered": "Dejar en blanco",
       "notConfigured": "Estas respuestas no se pueden guardar en este momento. Inténtalo más tarde.",
       "onlyUs": "Se muestra porque te gustaría trabajar en Estados Unidos.",
@@ -8195,7 +8195,7 @@
     "personal": {
       "addressLine1": "Calle y número",
       "city": "Ciudad",
-      "contactEmail": "Correo electrónico para postulaciones",
+      "contactEmail": "Correo electrónico para candidaturas",
       "country": "País",
       "countryPlaceholder": "Elige un país",
       "firstName": "Nombre",
@@ -8219,7 +8219,7 @@
       "summaryHint": "Unas cuantas frases con tus propias palabras."
     },
     "sections": {
-      "answers": "Respuestas para postulaciones",
+      "answers": "Respuestas para candidaturas",
       "basics": "Información básica",
       "education": "Formación",
       "eeo": "Respuestas sobre igualdad de oportunidades",
@@ -8228,10 +8228,10 @@
       "skills": "Habilidades",
       "taiwan": "Preferencias de empleo en Taiwán",
       "work": "Experiencia laboral",
-      "workAuth": "Autorización para trabajar"
+      "workAuth": "Autorización de trabajo"
     },
     "sensitive": {
-      "intro": "Respuestas que piden algunos formularios de postulación. Están cifradas, solo se te muestran a ti, nunca se usan para ordenar empleos y nunca se envían a la AI.",
+      "intro": "Respuestas que piden algunos formularios de candidatura. Están cifradas, solo se te muestran a ti, nunca se usan para ordenar empleos y nunca se envían a la IA.",
       "none": "Aquí no hay preguntas sensibles que responder.",
       "openProfile": "Editar el resto de tu perfil",
       "title": "Respuestas sensibles",
@@ -8504,12 +8504,12 @@
       "lead": "Escribe respuestas a las preguntas que los formularios suelen hacer. Los kits las muestran con botones para copiar. Estas respuestas solo las escribes tú.",
       "loadFailed": "Tus respuestas guardadas no se pudieron cargar.",
       "optional": "(opcional)",
-      "protectedNote": "La AI nunca responde esta pregunta. Solo se completa con tu respuesta.",
+      "protectedNote": "La IA nunca responde esta pregunta. Solo se llena con tu respuesta.",
       "remove": "Quitar",
       "save": "Guardar respuestas",
       "saved": "Respuestas guardadas.",
       "saving": "Guardando…",
-      "sensitiveNote": "Esto solo lo completas tú. Nunca se envía a la AI."
+      "sensitiveNote": "Esto solo lo llenas tú. Nunca se envía a la IA."
     },
     "error": {
       "retry": "Reintentar",
@@ -8525,15 +8525,15 @@
       "lead": "Cada semana %BRAND% elige empleos de tu búsqueda. Tú eliges para cuáles preparar un kit.",
       "point_kit": "Para cada empleo que elijas, un kit: tu currículum adaptado al anuncio, una carta de presentación cuando el anuncio la pide y tus respuestas guardadas.",
       "point_list": "Una lista semanal de empleos que encajan con tu búsqueda. También puedes añadir cualquier empleo por tu cuenta.",
-      "point_open": "Abres la postulación en el sitio de la empresa y la envías tú.",
+      "point_open": "Abres la candidatura en el sitio de la empresa y la envías tú.",
       "point_review": "Revisas cada kit antes de usarlo. Todo lo nuevo en tu currículum lo tienes que confirmar tú.",
       "start": "Configurar Listo para postular",
-      "title": "Deja lista cada postulación y luego envíala tú"
+      "title": "Deja lista cada candidatura y luego envíala tú"
     },
     "list": {
       "empty": {
         "done": {
-          "sub": "Los empleos que abres u omites aparecen aquí.",
+          "sub": "Los empleos que abres o saltas aparecen aquí.",
           "title": "Todavía no hay nada aquí"
         },
         "prepare": {
@@ -8563,7 +8563,7 @@
       "costUnknown": "Usa {what}. Créditos disponibles: —",
       "description": "Antes de empezar, esto es lo que se va a usar.",
       "noTailor": "Tu currículum se usa tal como está (la adaptación está desactivada en Ajustes).",
-      "noTailorAi": "La redacción con AI está desactivada en tu cuenta, así que los kits usan tu currículum tal como está.",
+      "noTailorAi": "La redacción con IA está desactivada en tu cuenta, así que los kits usan tu currículum tal como está.",
       "noTailorAsIs": "No se usan créditos de adaptación: los kits usan tu currículum tal como está.",
       "notEnough": "Por ahora solo alcanza para preparar {left}.",
       "quoteFailed": "No se pudo comprobar el costo. No se usó nada. Inténtalo otra vez.",
@@ -8591,7 +8591,7 @@
       "how_did_you_hear": "¿Cómo te enteraste de este empleo?",
       "internship_days_per_week": "¿Cuántos días a la semana puedes dedicar a la pasantía?",
       "internship_duration": "¿Cuánto tiempo puedes hacer la pasantía?",
-      "notice_period": "¿Cuál es tu período de preaviso?",
+      "notice_period": "¿Cuál es tu periodo de preaviso?",
       "political_status": "Afiliación política",
       "preferred_cities": "¿En qué ciudades quieres trabajar?",
       "relocation": "¿Aceptarías mudarte?",
@@ -8605,7 +8605,7 @@
       "work_model_preference": "¿Prefieres trabajo remoto, híbrido o presencial?"
     },
     "review": {
-      "aiOff": "La redacción con AI está desactivada en tu cuenta, así que los kits usan tu currículum tal como está.",
+      "aiOff": "La redacción con IA está desactivada en tu cuenta, así que los kits usan tu currículum tal como está.",
       "answers": {
         "add": "Añadir respuestas",
         "addToProfile": "Añadir a tu perfil",
@@ -8620,7 +8620,7 @@
       "copy": "Copiar",
       "copyFailed": "No se pudo copiar. Selecciona el texto y cópialo.",
       "errors": {
-        "aiUnavailable": "La redacción con AI no está disponible para tu cuenta en este momento.",
+        "aiUnavailable": "La redacción con IA no está disponible para tu cuenta en este momento.",
         "changed": "Este kit cambió mientras tanto. La página ahora muestra su estado más reciente.",
         "closed": "La empresa ya no publica este empleo.",
         "full": "Tu lista está llena. Quita un empleo primero.",
@@ -8632,7 +8632,7 @@
       "expired": "La empresa ya no publica este empleo.",
       "failed": "Este kit no se pudo preparar.",
       "failedReason": {
-        "aiUnavailable": "La redacción con AI no estaba disponible para este kit. Inténtalo más tarde.",
+        "aiUnavailable": "La redacción con IA no estaba disponible para este kit. Inténtalo más tarde.",
         "credits": "No te quedaban créditos para este kit. Inténtalo otra vez cuando se renueven.",
         "jobClosed": "La empresa dejó de publicar este empleo.",
         "noResume": "Añade primero un currículum y luego inténtalo otra vez.",
@@ -8643,7 +8643,7 @@
         "failed": "No se pudo crear el archivo. Inténtalo otra vez.",
         "letterPdf": "Descargar carta de presentación (PDF)",
         "pdf": "Descargar currículum (PDF)",
-        "recorded": "Guardado en esta postulación como:",
+        "recorded": "Guardado en esta candidatura como:",
         "saved": "Se descargó {name}.",
         "title": "Archivos",
         "willBe": "Tu currículum se descarga como:"
@@ -8665,7 +8665,7 @@
         "moved": "Ahora: {state}",
         "none": "Todavía no ha pasado nada con este kit.",
         "notice": "Recordatorio: este kit está listo y todavía no se abrió",
-        "opened": "Postulación abierta; se movió a Enviadas",
+        "opened": "Candidatura abierta; se movió a Enviadas",
         "revised": {
           "letter": "Se pidieron cambios en la carta de presentación",
           "resume": "Se pidieron cambios en el currículum"
@@ -8695,19 +8695,19 @@
       },
       "notPrepared": "Este kit todavía no está preparado.",
       "open": {
-        "again": "Abrir otra vez la página de postulación",
+        "again": "Abrir otra vez la página de candidatura",
         "alreadyApplied": "Este empleo ya estaba en Candidaturas.",
-        "button": "Abrir la postulación",
+        "button": "Abrir candidatura",
         "changeInApplications": "Cambiar el estado en Candidaturas",
         "iApplied": "Ya me postulé",
-        "lead": "Abre la página de postulación de la empresa en una pestaña nueva y mueve este empleo a Enviadas.",
+        "lead": "Abre la página de candidatura de la empresa en una pestaña nueva y mueve este empleo a Enviadas.",
         "moved": "Se movió a Enviadas.",
         "movedOn": "Se movió a Enviadas el {date}.",
-        "noLink": "Este empleo no tiene enlace de postulación. Si te postulaste de otra forma, márcalo aquí.",
+        "noLink": "Este empleo no tiene enlace para postular. Si te postulaste de otra forma, márcalo aquí.",
         "seeApplication": "Verlo en Candidaturas",
-        "title": "Postulación",
+        "title": "Postular",
         "undo": "Deshacer · No me postulé",
-        "undone": "Se movió de vuelta. Esta postulación no está marcada como enviada."
+        "undone": "Se movió de vuelta. Esta candidatura no está marcada como enviada."
       },
       "practice": {
         "button": "Practicar para este empleo",
@@ -8734,8 +8734,8 @@
         "resume": "¿Qué debería cambiar en el currículum?"
       },
       "reviseSend": "Enviar",
-      "skip": "Omitir este empleo",
-      "skipped": "Omitiste este empleo. Vuelve a ponerlo en tu lista para prepararle un kit."
+      "skip": "Saltar este empleo",
+      "skipped": "Saltaste este empleo. Vuelve a ponerlo en tu lista para prepararle un kit."
     },
     "row": {
       "loading": "Cargando empleo…",
@@ -8749,7 +8749,7 @@
       "reviewOpen": "Revisar y abrir",
       "seeApplication": "Ver en Candidaturas",
       "select": "Seleccionar {title}",
-      "skip": "Omitir",
+      "skip": "Saltar",
       "unknownJob": "Datos del empleo no disponibles"
     },
     "search": {
@@ -8775,7 +8775,7 @@
       "none": {
         "no_feed": "Ahora mismo no se pueden añadir empleos.",
         "no_matches": "Todavía no hay empleos nuevos que coincidan con estos filtros.",
-        "queue_full": "Tu lista está llena. Prepara, omite o quita algunos empleos primero.",
+        "queue_full": "Tu lista está llena. Prepara, salta o quita algunos empleos primero.",
         "target_reached": "La lista de esta semana ya tiene tantos empleos como indica tu ajuste semanal."
       },
       "only": "Solo {value}",
@@ -8824,14 +8824,14 @@
         "calibration": "Califica 3 empleos para terminar este paso.",
         "generic": "Ese paso no se pudo guardar. Inténtalo otra vez.",
         "goToStep": "Ir a «{step}»",
-        "notSkippable": "Este paso no se puede omitir.",
+        "notSkippable": "Este paso no se puede saltar.",
         "outOfOrder": "Termina primero «{step}». Lo que guardaste en este paso sigue guardado.",
         "outOfOrderUnknown": "Termina primero los pasos anteriores. Lo que guardaste en este paso sigue guardado.",
         "unsaved": "Tus cambios en este paso no se guardaron. Guárdalos o inténtalo otra vez."
       },
       "extension": {
-        "lead": "La extensión del navegador completa los formularios de postulación con tu perfil y tus respuestas cuando se lo pides. Revisas el formulario y lo envías tú.",
-        "skipNote": "Puedes omitir esto y añadir la extensión más adelante. Los kits funcionan sin ella: copia tus respuestas desde el kit."
+        "lead": "La extensión del navegador llena los formularios de candidatura con tu perfil y tus respuestas cuando se lo pides. Tú revisas el formulario y lo envías.",
+        "skipNote": "Puedes saltar esto y añadir la extensión más adelante. Los kits funcionan sin ella: copia tus respuestas desde el kit."
       },
       "finish": "Terminar la configuración",
       "firstList": "Configuración terminada. {count, plural, one {Hay # empleo} other {Hay # empleos}} en tu lista de esta semana.",
@@ -8839,16 +8839,16 @@
       "profile": {
         "allSet": "Tu perfil tiene todo lo que los formularios suelen pedir.",
         "complete": "Completa tu perfil",
-        "lead": "Los formularios de postulación piden estos datos. Los kits usan lo que hay en tu perfil, así que revisa que esté bien.",
+        "lead": "Los formularios de candidatura piden estos datos. Los kits usan lo que hay en tu perfil, así que revisa que esté bien.",
         "missing": "Falta",
         "missingNote": "Puedes continuar ahora. Cada kit indica lo que todavía falta para que lo completes en el formulario.",
         "missingTitle": "{count, plural, one {Falta # dato que los formularios piden} other {Faltan # datos que los formularios piden}}"
       },
-      "skip": "Omitir por ahora",
+      "skip": "Saltar por ahora",
       "stepDone": "(terminado)",
       "stepHeading": "Paso {n} de {total}: {name}",
       "steps": {
-        "answers": "Respuestas para postulaciones",
+        "answers": "Respuestas para candidaturas",
         "calibrate": "Revisa tu búsqueda",
         "extension": "Obtén la extensión",
         "profile": "Confirma tu perfil",
@@ -8858,15 +8858,15 @@
       "title": "Configurar Listo para postular"
     },
     "state": {
-      "applied": "Postulación enviada",
+      "applied": "Candidatura enviada",
       "approved": "Listo para abrir",
       "expired": "Ya no se publica",
       "failed": "No se pudo preparar",
-      "opened": "Postulación abierta",
+      "opened": "Candidatura abierta",
       "picked": "Todavía sin preparar",
       "preparing": "Preparando",
       "ready_for_review": "Listo para que lo revises",
-      "skipped": "Omitido"
+      "skipped": "Saltado"
     },
     "suggestions": {
       "add": "Añadir",
@@ -8897,7 +8897,7 @@
         "when_required": "Solo cuando el anuncio la pide"
       },
       "exampleCompany": "Empresa",
-      "exampleName": "Tu Nombre",
+      "exampleName": "Tu nombre",
       "exampleRole": "Puesto",
       "failed": "Tus ajustes no se guardaron. Inténtalo otra vez.",
       "fileName": "Nombre del archivo",
@@ -8937,10 +8937,10 @@
         "noSuggestion": "No llegó ninguna sugerencia. No se usó ninguna reescritura. Inténtalo otra vez o añade más detalle a tus notas.",
         "unavailable": "La ayuda para escribir no está disponible en este momento. Puedes seguir escribiendo por tu cuenta."
       },
-      "note": "Escrito por AI a partir de tus notas. Lee cada sugerencia y añádela solo si es cierta.",
+      "note": "Escrito por IA a partir de tus notas. Lee cada sugerencia y añádela solo si es cierta.",
       "notesFirst": "Primero escribe algunas notas. Las sugerencias solo usan lo que tú escribes.",
-      "off": "La ayuda para escribir está desactivada en tu cuenta, así que nada de lo que hay aquí se envía a un modelo de AI. Puedes escribir cada parte por tu cuenta.",
-      "suggestBullets": "Sugerir viñetas a partir de mis notas",
+      "off": "La ayuda para escribir está desactivada en tu cuenta, así que nada de lo que hay aquí se envía a un modelo de IA. Puedes escribir cada parte por tu cuenta.",
+      "suggestBullets": "Sugerir líneas a partir de mis notas",
       "suggestSelfEvaluation": "Sugerir un párrafo para «Sobre mí»",
       "suggestSummary": "Sugerir un resumen",
       "use": "Usar esta"
@@ -8980,14 +8980,14 @@
     },
     "field": {
       "add": "Añadir",
-      "addBullet": "Añadir una viñeta",
+      "addBullet": "Añadir una línea",
       "autobiography": "Presentación personal",
       "autobiographyHint": "Unos párrafos: tu historia, lo que has aprendido y por qué quieres este tipo de empleo.",
       "availableFrom": "Cuándo puedes empezar",
       "awards": "Premios",
       "awardsHint": "Uno por línea, con el año.",
-      "bulletN": "Viñeta {n}",
-      "bullets": "Viñetas",
+      "bulletN": "Línea {n}",
+      "bullets": "Líneas",
       "campusOrganization": "Club o grupo",
       "campusTitle": "Cargo",
       "certificates": "Certificados",
@@ -9007,7 +9007,7 @@
       "linksHint": "LinkedIn, portafolio o GitHub. Sepáralos con comas.",
       "location": "Ubicación",
       "major": "Carrera",
-      "moreBullets": "Más viñetas",
+      "moreBullets": "Más líneas",
       "nativePlace": "Lugar de origen",
       "notes": "¿Qué hiciste aquí?",
       "notesHint": "Bastan unas notas sencillas: en qué trabajaste, cómo y qué resultó. Solo se puede usar lo que escribas aquí.",
@@ -9016,7 +9016,7 @@
       "politicalStatus": "Afiliación política",
       "projectName": "Nombre del proyecto",
       "quickAdd": "Añadir rápido",
-      "removeBullet": "Quitar la viñeta {n}",
+      "removeBullet": "Quitar la línea {n}",
       "removeTag": "Quitar {tag}",
       "role": "Tu rol",
       "salary": "Sueldo esperado",
@@ -9054,7 +9054,7 @@
       "error": "No pudimos ajustar el currículum. No cambió nada. Inténtalo otra vez.",
       "fitted": "{pages, plural, one {Ahora cabe en # página.} other {Ahora cabe en # páginas.}} Solo cambiaron el espaciado, los márgenes y el tamaño del texto.",
       "one": "Ajustar a una página",
-      "tooLong": "{target, plural, one {Es demasiado largo para caber en # página sin quitar texto.} other {Es demasiado largo para caber en # páginas sin quitar texto.}} No cambió nada. Intenta acortar algunas viñetas.",
+      "tooLong": "{target, plural, one {Es demasiado largo para caber en # página sin quitar texto.} other {Es demasiado largo para caber en # páginas sin quitar texto.}} No cambió nada. Intenta acortar algunas líneas.",
       "two": "Ajustar a dos páginas",
       "undo": "Deshacer",
       "undone": "El espaciado, los márgenes y el tamaño del texto volvieron a estar como antes."
@@ -9124,7 +9124,7 @@
       "up": "Subir {section}"
     },
     "personal": {
-      "intro": "Estos datos son opcionales. Solo aparecen en el archivo descargado. Nunca se envían a un modelo de AI ni se usan para evaluar tu encaje con los empleos."
+      "intro": "Estos datos son opcionales. Solo aparecen en el archivo descargado. Nunca se envían a un modelo de IA ni se usan para evaluar tu encaje con los empleos."
     },
     "photo": {
       "alt": "La foto de tu currículum",
@@ -9140,7 +9140,7 @@
     },
     "progress": "Paso {current} de {total}",
     "prompts": {
-      "bullets": "Empieza cada viñeta con lo que hiciste, luego cómo y luego qué resultó. Usa números solo cuando sean reales.",
+      "bullets": "Empieza cada línea con lo que hiciste, luego cómo y luego qué resultó. Usa números solo cuando sean reales.",
       "star": "Describe cada proyecto en cuatro partes breves: la situación, tu tarea, lo que hiciste y el resultado."
     },
     "retry": "Reintentar",
@@ -9272,7 +9272,7 @@
       "creditLeft": "Usa 1 crédito de revisión del currículum (te quedan {left}).",
       "creditNone": "No te quedan créditos de revisión del currículum: la lista de verificación funciona igual, pero no se revisa la ortografía.",
       "cta": "Hacer la revisión",
-      "noAi": "Solo la lista de verificación: las revisiones con AI están desactivadas en tu cuenta. No se usa ningún crédito.",
+      "noAi": "Solo la lista de verificación: las revisiones con IA están desactivadas en tu cuenta. No se usa ningún crédito.",
       "targetLabel": "Puesto al que aspiras (opcional)",
       "targetPlaceholder": "Por ejemplo: Analista de datos",
       "title": "Revisar este currículum"
@@ -9282,7 +9282,7 @@
       "cta": "Revisión del currículum"
     },
     "errors": {
-      "ai_unavailable": "La AI no está disponible en este momento.",
+      "ai_unavailable": "La IA no está disponible en este momento.",
       "already_running": "Ya hay una revisión en curso para este currículum.",
       "credits_exhausted": "Ya usaste tus revisiones del currículum por ahora.",
       "failed": "No se pudo hacer la revisión. Inténtalo otra vez.",
@@ -9301,18 +9301,18 @@
       "again": "Escribir otra",
       "applied": "Actualizado en tu currículum.",
       "applyFailed": "No se pudo actualizar el currículum. Abre el editor y cámbialo ahí.",
-      "blocked": "{count, plural, one {Se ocultó una versión con AI} other {Se ocultaron # versiones con AI}} porque {count, plural, one {añadía} other {añadían}} números que no están en tu currículum.",
+      "blocked": "{count, plural, one {Se ocultó una versión con IA} other {Se ocultaron # versiones con IA}} porque {count, plural, one {añadía} other {añadían}} números que no están en tu currículum.",
       "cancelEdit": "Cancelar",
-      "credit": "Cada versión con AI usa 1 crédito de reescritura.",
-      "creditLeft": "Cada versión con AI usa 1 crédito de reescritura (te quedan {left}).",
+      "credit": "Cada versión con IA usa 1 crédito de reescritura.",
+      "creditLeft": "Cada versión con IA usa 1 crédito de reescritura (te quedan {left}).",
       "edit": "Editar",
-      "editLabel": "Editar la versión con AI",
+      "editLabel": "Editar la versión con IA",
       "errors": {
-        "ai_unavailable": "Las versiones con AI no están disponibles en este momento. No se usó ningún crédito.",
+        "ai_unavailable": "Las versiones con IA no están disponibles en este momento. No se usó ningún crédito.",
         "changed": "Este texto cambió después de la revisión. Haz la revisión otra vez.",
-        "citation_guard": "La versión con AI añadía números que no están en tu currículum, así que no se mostró. No se usó ningún crédito.",
+        "citation_guard": "La versión con IA añadía números que no están en tu currículum, así que no se mostró. No se usó ningún crédito.",
         "credits_exhausted": "Ya usaste tus créditos de reescritura por ahora.",
-        "failed": "No llegó ninguna versión con AI. No se usó ningún crédito. Inténtalo otra vez."
+        "failed": "No llegó ninguna versión con IA. No se usó ningún crédito. Inténtalo otra vez."
       },
       "instructionLabel": "¿Algo que tener en cuenta? (opcional)",
       "instructionPlaceholder": "Por ejemplo: menciona el tamaño del equipo",
@@ -9321,10 +9321,10 @@
       "save": "Guardar en el currículum",
       "shorter": "Más corta",
       "stronger": "Más fuerte",
-      "suggestion": "Versión con AI",
+      "suggestion": "Versión con IA",
       "use": "Usar esta",
-      "write": "Escribir una versión con AI",
-      "writing": "Escribiendo una versión con AI"
+      "write": "Escribir una versión con IA",
+      "writing": "Escribiendo una versión con IA"
     },
     "focus": {
       "gone": "El problema que abriste no está en la última revisión. Puede que ya esté corregido."
@@ -9332,9 +9332,9 @@
     "honesty": "Esta es una lista de verificación para tu currículum. No predice si recibirás respuesta.",
     "issue": {
       "bullet_too_long": {
-        "how": "Deja cada viñeta en una o dos líneas: lo que hiciste y el resultado.",
-        "title": "Viñeta larga",
-        "why": "Las viñetas largas son difíciles de leer rápido."
+        "how": "Deja cada línea en uno o dos renglones: lo que hiciste y el resultado.",
+        "title": "Línea larga",
+        "why": "Las líneas largas son difíciles de leer rápido."
       },
       "buzzwords": {
         "how": "Cámbialas por un ejemplo concreto de la cualidad a la que te refieres.",
@@ -9397,19 +9397,19 @@
         "why": "Puede que el software de la empresa no lea esto. Los emojis y los símbolos decorativos pueden convertirse en caracteres extraños."
       },
       "layout_table": {
-        "how": "Convierte la tabla en líneas simples o viñetas.",
+        "how": "Convierte la tabla en texto simple o en líneas con viñeta.",
         "title": "Tabla en tu currículum",
         "why": "Puede que el software de la empresa no lea esto. Las tablas suelen quedar desordenadas cuando el software de contratación lee un currículum."
       },
       "length_too_long": {
-        "how": "Déjalo en una o dos páginas: quita las viñetas más antiguas o menos relevantes.",
+        "how": "Déjalo en una o dos páginas: quita las líneas más antiguas o menos relevantes.",
         "title": "Más de dos páginas",
         "why": "Es probable que este currículum tenga más de dos páginas, y los lectores rara vez llegan tan lejos."
       },
       "no_numbers": {
         "how": "Añade un número real donde lo tengas: personas, tiempo, dinero, volumen o porcentaje. No adivines.",
-        "title": "Pocos resultados con números ({withNumbers} de {total} viñetas)",
-        "why": "Pocas de tus viñetas muestran un resultado que se pueda medir."
+        "title": "Pocos resultados con números ({withNumbers} de {total} líneas)",
+        "why": "Pocas de tus líneas muestran un resultado que se pueda medir."
       },
       "section_education_missing": {
         "how": "Añade una sección de Formación con centro de estudios, título y fechas.",
@@ -9469,7 +9469,7 @@
       "eduNotFound": "No se encontró ningún título en tu currículum.",
       "eduNotListed": "El anuncio no indica un nivel de estudios.",
       "error": "No se pudo cargar la revisión de palabras clave.",
-      "fit": "Nivel de encaje de este currículum",
+      "fit": "Puntuación de encaje de este currículum",
       "fitHonesty": "Esto no es tu probabilidad de que te contraten.",
       "fitNone": "Todavía no hay puntuación de encaje para esta versión de tu currículum.",
       "fromPosting": "Palabras clave leídas del texto del anuncio.",
@@ -9506,9 +9506,9 @@
       "good": "Bueno",
       "needs_work": "Necesita mejoras"
     },
-    "method": "Revisado con {rules} reglas{ai, select, yes {, más una lectura con AI para detectar errores de ortografía y un resumen genérico} other {}}.",
-    "methodAiFailed": "No se revisó la ortografía: la lectura con AI no terminó. No se usó ningún crédito.",
-    "methodNoAi": "Las revisiones con AI están desactivadas en tu cuenta, así que no se revisó la ortografía.",
+    "method": "Revisado con {rules} reglas{ai, select, yes {, más una lectura con IA para detectar errores de ortografía y un resumen genérico} other {}}.",
+    "methodAiFailed": "No se revisó la ortografía: la lectura con IA no terminó. No se usó ningún crédito.",
+    "methodNoAi": "Las revisiones con IA están desactivadas en tu cuenta, así que no se revisó la ortografía.",
     "methodNoCredit": "No se revisó la ortografía: no te quedan créditos de revisión del currículum. La lista de verificación es gratis.",
     "noIssues": "No hay nada que corregir en esta lista de verificación.",
     "openEditor": "Abrir en el editor",
@@ -9541,7 +9541,7 @@
     "targetTitle": "Revisado para el puesto: {title}",
     "title": "Revisión del currículum",
     "typeName": {
-      "bullet_too_long": "Viñetas largas",
+      "bullet_too_long": "Líneas largas",
       "buzzwords": "Frases comunes",
       "cn_english_cert_missing": "Certificado de inglés",
       "cn_internship_missing": "Pasantía (实习)",
@@ -9657,7 +9657,7 @@
     },
     "job": {
       "about": "Acerca del empleo",
-      "applyNote": "Tú te postulas en el sitio del empleador. %BRAND% no envía postulaciones.",
+      "applyNote": "Tú te postulas en el sitio del empleador. %BRAND% no envía candidaturas.",
       "applyOnSite": "Postular en el sitio de la empresa",
       "benefits": "Beneficios",
       "closes": "Cierre",
@@ -9717,7 +9717,7 @@
     },
     "error": {
       "aiFailed": "La adaptación no terminó. No se usó ningún crédito. Inténtalo otra vez.",
-      "aiUnavailable": "La adaptación con AI no está disponible para tu cuenta en este momento.",
+      "aiUnavailable": "La adaptación con IA no está disponible para tu cuenta en este momento.",
       "conflict": "Esta línea cambió. Recarga para ver la versión más reciente.",
       "contentBlocked": "Esta solicitud no se pudo procesar. Cambia la indicación e inténtalo otra vez.",
       "creditsExhausted": "Ya usaste tus créditos de adaptación por ahora.",
@@ -9727,7 +9727,7 @@
       "notReviewable": "Esta versión adaptada ya no se puede cambiar aquí.",
       "reload": "Recargar",
       "retry": "Reintentar",
-      "safetyUnavailable": "La adaptación con AI está en pausa por un momento. Inténtalo más tarde.",
+      "safetyUnavailable": "La adaptación con IA está en pausa por un momento. Inténtalo más tarde.",
       "stopped": "Esta adaptación se detuvo antes de terminar. No se usó ningún crédito. Empieza de nuevo."
     },
     "picker": {
@@ -9758,9 +9758,9 @@
       "finalizing": "Guardando…",
       "noChanges": "No hacía falta cambiar nada en las secciones que elegiste.",
       "open": "Abrir este currículum",
-      "pendingBlock": "{count, plural, one {Revisa 1 detalle antes de usar este currículum.} other {Revisa # detalles antes de usar este currículum.}}",
+      "pendingBlock": "{count, plural, one {Revisa 1 dato antes de usar este currículum.} other {Revisa # datos antes de usar este currículum.}}",
       "scoreAfter": "Después",
-      "scoreAfterPending": "Lo verás después de revisar cada detalle y usar este currículum.",
+      "scoreAfterPending": "Lo verás después de revisar cada dato y usar este currículum.",
       "scoreBefore": "Antes",
       "scoreHeading": "Puntuación de encaje",
       "scoreNone": "La puntuación de encaje no está disponible para esta versión.",
@@ -9832,7 +9832,7 @@
       "title": "¿Para qué empleo es?"
     },
     "verify": {
-      "allDone": "Todos los detalles están revisados.",
+      "allDone": "Todos los datos están revisados.",
       "cancel": "Cancelar",
       "copies": "Esta línea aparece {count} veces. Tu elección se aplica a todas.",
       "editLabel": "Escribe lo que hiciste en realidad",
@@ -9853,7 +9853,7 @@
       },
       "sub": "Estas líneas dicen algo que tu currículum no decía antes. Conserva una línea solo si es verdad.",
       "terms": "Nuevo aquí: {terms}",
-      "title": "Verificar los detalles",
+      "title": "Verificar datos",
       "was": "Tu currículum decía: {text}"
     }
   },
@@ -9862,7 +9862,7 @@
       "administration": "Administración",
       "consulting": "Consultoría, estrategia y sector público",
       "customer": "Soporte y éxito del cliente",
-      "data_ai": "Datos y AI",
+      "data_ai": "Datos e IA",
       "design": "Diseño",
       "education": "Educación e investigación",
       "engineering": "Ingeniería",
@@ -9911,7 +9911,7 @@
       "life_sciences": "Investigación en ciencias de la vida",
       "marketing_brand": "Marketing y marca",
       "mechanical_manufacturing": "Mecánica y manufactura",
-      "ml_ai": "Aprendizaje automático y AI",
+      "ml_ai": "Aprendizaje automático e IA",
       "online_operations": "Operaciones en línea",
       "process_energy": "Química, energía y medio ambiente",
       "product_design": "Diseño de producto y UX",
@@ -9993,7 +9993,7 @@
     },
     "hub": {
       "campus": {
-        "body": "Fechas de postulación para programas de recién graduados, tomadas de la página oficial de cada empresa.",
+        "body": "Fechas de candidatura para programas de recién graduados, tomadas de la página oficial de cada empresa.",
         "title": "Calendario de reclutamiento universitario"
       },
       "eyebrow": "Herramientas gratis",
@@ -10131,7 +10131,7 @@
       "countryAny": "Cualquiera",
       "daily": "Una vez al día",
       "email": "Dirección de correo",
-      "emailHint": "Primero enviamos un enlace de confirmación. No se envía nada más hasta que lo pulses.",
+      "emailHint": "Primero enviamos un enlace de confirmación. No se envía nada más hasta que hagas clic en él.",
       "errors": {
         "consent": "Marca la casilla para aceptar estos correos.",
         "email": "Escribe una dirección de correo válida.",
@@ -10149,7 +10149,7 @@
       "remote": "Solo empleos remotos",
       "role": "Puesto o palabras clave",
       "rolePlaceholder": "Por ejemplo: analista de datos",
-      "sentBody": "Si {email} puede recibir alertas, le llegará un enlace de confirmación. No se envía nada hasta que lo pulses. El enlace funciona durante 72 horas.",
+      "sentBody": "Si {email} puede recibir alertas, le llegará un enlace de confirmación. No se envía nada hasta que hagas clic en él. El enlace funciona durante 72 horas.",
       "sentTitle": "Revisa tu bandeja de entrada",
       "signupInstead": "¿Quieres alertas que usen tu currículum? Crea una cuenta gratis.",
       "sub": "No necesitas cuenta. Elige un empleo y un lugar, y te enviamos por correo los empleos públicos nuevos una vez al día o una vez a la semana.",
@@ -10160,7 +10160,7 @@
       "weekly": "Una vez a la semana"
     },
     "assistant": {
-      "aiLabel": "Respuesta de AI",
+      "aiLabel": "Respuesta de IA",
       "chips": {
         "how": "¿Cómo funciona %BRAND%?",
         "pay": "¿Cuánto pagan empleos como estos?",
@@ -10175,7 +10175,7 @@
       "intro": "Pregunta por los empleos de esta página, por el sueldo tal como lo indican los anuncios o por cómo funciona %BRAND%. Las respuestas no usan ningún currículum y nunca dicen qué tan bien encajas en un empleo.",
       "launcher": "Preguntar por estos empleos",
       "lookingUp": "Buscando empleos…",
-      "note": "Las respuestas están escritas por AI y pueden estar equivocadas. Nada de lo que escribes aquí se guarda.",
+      "note": "Las respuestas están escritas por IA y pueden estar equivocadas. Nada de lo que escribes aquí se guarda.",
       "placeholder": "Haz una pregunta",
       "send": "Enviar",
       "signupCta": "Crear una cuenta gratis",
@@ -10185,25 +10185,25 @@
     },
     "card": {
       "badge": {
-        "agency": "Agencia de empleo",
+        "agency": "Agencia de personal",
         "citizens": "Solo ciudadanos",
-        "clearance": "Requiere autorización de seguridad",
-        "closes": "Las postulaciones cierran el {date}",
-        "direct": "Directo de la empresa",
-        "sponsorshipNotOffered": "Dice que no patrocina visa",
+        "clearance": "Se requiere autorización de seguridad",
+        "closes": "Las candidaturas cierran el {date}",
+        "direct": "Directo del empleador",
+        "sponsorshipNotOffered": "Dice que no hay patrocinio de visa",
         "sponsorshipOffered": "Menciona patrocinio de visa"
       },
       "from": "Desde {amount}",
-      "lastChecked": "Última verificación: {date}",
+      "lastChecked": "Última revisión: {date}",
       "payNotListed": "Sueldo no indicado",
       "payPeriod": {
-        "day": "{amount} por día",
+        "day": "{amount} al día",
         "hour": "{amount} por hora",
-        "month": "{amount} por mes",
-        "week": "{amount} por semana",
-        "year": "{amount} por año"
+        "month": "{amount} al mes",
+        "week": "{amount} a la semana",
+        "year": "{amount} al año"
       },
-      "placeNotListed": "Lugar no indicado",
+      "placeNotListed": "Ubicación no indicada",
       "posted": "Publicado el {date}",
       "range": "{min}–{max}",
       "source": {

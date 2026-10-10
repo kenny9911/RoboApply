@@ -9,7 +9,7 @@
       "subject": "Dein Studierenden-Code für %BRAND%: {code}"
     },
     "winback": {
-      "body": "Dein bezahlter Tarif ist am {date} ausgelaufen. Deine Lebensläufe, gemerkten Stellen und Bewerbungen sind weiterhin in deinem Konto, und der kostenlose Tarif funktioniert weiter.",
+      "body": "Dein bezahlter Tarif ist am {date} ausgelaufen. Deine Lebensläufe, gemerkten Jobs und Bewerbungen sind weiterhin in deinem Konto, und der kostenlose Tarif funktioniert weiter.",
       "cta": "Tarife ansehen",
       "heading": "Dein Konto ist noch da",
       "once": "Das ist die einzige E-Mail, die wir dazu schicken.",
@@ -219,12 +219,12 @@
       "tierGood": "Passt gut",
       "tierGreat": "Passt sehr gut",
       "tierPossible": "Möglich",
-      "viewJob": "Stelle ansehen"
+      "viewJob": "Job ansehen"
     },
     "finishSetup": {
-      "body": "Deine bisherigen Antworten sind gespeichert. Schließ die Einrichtung ab, um Stellen für deine Suche zu sehen und zu erfahren, was du an deinem Lebenslauf verbessern solltest.",
+      "body": "Deine bisherigen Antworten sind gespeichert. Schließ die Einrichtung ab, um Jobs für deine Suche zu sehen und zu erfahren, was du an deinem Lebenslauf verbessern solltest.",
       "cta": "Einrichtung fortsetzen",
-      "heading": "Mach dort weiter, wo du aufgehört hast",
+      "heading": "Mach da weiter, wo du aufgehört hast",
       "preheader": "Deine Antworten sind gespeichert. Schließ die Einrichtung ab, wenn du so weit bist.",
       "subject": "Schließ die Einrichtung von %BRAND% ab"
     },
@@ -237,32 +237,32 @@
     },
     "interview": {
       "body": "Dein Vorstellungsgespräch für {title} bei {company} ist am {date}. Eine kurze Übungsrunde kann dir bei der Vorbereitung helfen.",
-      "cta": "Für diese Stelle üben",
+      "cta": "Für diesen Job üben",
       "heading": "Dein Vorstellungsgespräch steht bald an",
       "preheader": "Vorstellungsgespräch für {title} am {date}.",
       "subject": "Vorstellungsgespräch bei {company} am {date}"
     },
     "jobAlertDigest": {
-      "cta": "Alle neuen Stellen ansehen",
-      "headingDaily": "Deine tägliche Stellenübersicht",
-      "headingWeekly": "Deine wöchentliche Stellenübersicht",
-      "introDaily": "{count, plural, one {# neue Stelle passt seit gestern zu deiner gespeicherten Suche „{search}“.} other {# neue Stellen passen seit gestern zu deiner gespeicherten Suche „{search}“.}}",
-      "introDailyNoTotal": "{count, plural, one {Hier ist # neue Stelle, die seit gestern zu deiner gespeicherten Suche „{search}“ passt.} other {Hier sind # neue Stellen, die seit gestern zu deiner gespeicherten Suche „{search}“ passen.}} Alle neuen Stellen siehst du in %BRAND%.",
-      "introWeekly": "{count, plural, one {# neue Stelle passt diese Woche zu deiner gespeicherten Suche „{search}“.} other {# neue Stellen passen diese Woche zu deiner gespeicherten Suche „{search}“.}}",
-      "introWeeklyNoTotal": "{count, plural, one {Hier ist # neue Stelle, die diese Woche zu deiner gespeicherten Suche „{search}“ passt.} other {Hier sind # neue Stellen, die diese Woche zu deiner gespeicherten Suche „{search}“ passen.}} Alle neuen Stellen siehst du in %BRAND%.",
-      "more": "{count, plural, one {# weitere neue Stelle passt ebenfalls. Sieh sie dir in %BRAND% an.} other {# weitere neue Stellen passen ebenfalls. Sieh sie dir in %BRAND% an.}}",
-      "subjectDaily": "{count, plural, one {# neue Stelle passt} other {# neue Stellen passen}} seit gestern zu deiner Suche",
-      "subjectDailyNoTotal": "Neue Stellen passen seit gestern zu deiner Suche",
-      "subjectWeekly": "{count, plural, one {# neue Stelle passt} other {# neue Stellen passen}} diese Woche zu deiner Suche",
-      "subjectWeeklyNoTotal": "Neue Stellen passen diese Woche zu deiner Suche",
+      "cta": "Alle neuen Jobs ansehen",
+      "headingDaily": "Deine tägliche Jobübersicht",
+      "headingWeekly": "Deine wöchentliche Jobübersicht",
+      "introDaily": "{count, plural, one {# neuer Job passt seit gestern zu deiner gespeicherten Suche „{search}“.} other {# neue Jobs passen seit gestern zu deiner gespeicherten Suche „{search}“.}}",
+      "introDailyNoTotal": "{count, plural, one {Hier ist # neuer Job, der seit gestern zu deiner gespeicherten Suche „{search}“ passt.} other {Hier sind # neue Jobs, die seit gestern zu deiner gespeicherten Suche „{search}“ passen.}} Alle neuen Jobs siehst du in %BRAND%.",
+      "introWeekly": "{count, plural, one {# neuer Job passt diese Woche zu deiner gespeicherten Suche „{search}“.} other {# neue Jobs passen diese Woche zu deiner gespeicherten Suche „{search}“.}}",
+      "introWeeklyNoTotal": "{count, plural, one {Hier ist # neuer Job, der diese Woche zu deiner gespeicherten Suche „{search}“ passt.} other {Hier sind # neue Jobs, die diese Woche zu deiner gespeicherten Suche „{search}“ passen.}} Alle neuen Jobs siehst du in %BRAND%.",
+      "more": "{count, plural, one {# weiterer neuer Job passt ebenfalls. Sieh ihn dir in %BRAND% an.} other {# weitere neue Jobs passen ebenfalls. Sieh sie dir in %BRAND% an.}}",
+      "subjectDaily": "{count, plural, one {# neuer Job passt} other {# neue Jobs passen}} seit gestern zu deiner Suche",
+      "subjectDailyNoTotal": "Neue Jobs passen seit gestern zu deiner Suche",
+      "subjectWeekly": "{count, plural, one {# neuer Job passt} other {# neue Jobs passen}} diese Woche zu deiner Suche",
+      "subjectWeeklyNoTotal": "Neue Jobs passen diese Woche zu deiner Suche",
       "trackerCta": "Deine Bewerbungen öffnen",
       "trackerLine": "{count, plural, one {# Bewerbung ist seit 10 Tagen ohne Antwort.} other {# Bewerbungen sind seit 10 Tagen ohne Antwort.}}"
     },
     "jobAlertInstant": {
-      "cta": "Alle deine Stellen ansehen",
-      "heading": "{count, plural, one {# neue Stelle für deine Suche} other {# neue Stellen für deine Suche}}",
-      "intro": "{count, plural, one {Diese Stelle wurde vor Kurzem veröffentlicht und passt zu deiner gespeicherten Suche „{search}“.} other {Diese Stellen wurden vor Kurzem veröffentlicht und passen zu deiner gespeicherten Suche „{search}“.}}",
-      "subject": "{count, plural, one {# neue Stelle} other {# neue Stellen}} für „{search}“"
+      "cta": "Alle deine Jobs ansehen",
+      "heading": "{count, plural, one {# neuer Job für deine Suche} other {# neue Jobs für deine Suche}}",
+      "intro": "{count, plural, one {Dieser Job wurde vor Kurzem veröffentlicht und passt zu deiner gespeicherten Suche „{search}“.} other {Diese Jobs wurden vor Kurzem veröffentlicht und passen zu deiner gespeicherten Suche „{search}“.}}",
+      "subject": "{count, plural, one {# neuer Job} other {# neue Jobs}} für „{search}“"
     },
     "kitReady": {
       "body": "Dein angepasster Lebenslauf und deine Antworten für {title} bei {company} sind fertig. Sieh sie dir an und bewirb dich dann selbst auf der Seite des Unternehmens.",
@@ -272,18 +272,18 @@
       "subject": "Dein Bewerbungspaket für {title} ist fertig"
     },
     "readyList": {
-      "body": "{count, plural, one {# Stelle liegt für dich zum Durchsehen bereit.} other {# Stellen liegen für dich zum Durchsehen bereit.}} Du entscheidest, welche du öffnest, und du schickst jede Bewerbung selbst ab.",
+      "body": "{count, plural, one {# Job liegt für dich zum Durchsehen bereit.} other {# Jobs liegen für dich zum Durchsehen bereit.}} Du entscheidest, welche du öffnest, und du sendest jede Bewerbung selbst ab.",
       "cta": "Liste ansehen",
       "heading": "Deine Liste für diese Woche",
-      "preheader": "Stellen, die für dich zum Durchsehen bereitliegen.",
+      "preheader": "Jobs, die für dich zum Durchsehen bereitliegen.",
       "subject": "Deine Liste „Bereit zum Bewerben“ für diese Woche ist fertig"
     },
     "reasons": {
-      "alerts": "Du bekommst diese E-Mail, weil in %BRAND% Stellenbenachrichtigungen für deine gespeicherte Suche „{search}“ eingeschaltet sind.",
+      "alerts": "Du bekommst diese E-Mail, weil in %BRAND% Job-Benachrichtigungen für deine gespeicherte Suche „{search}“ eingeschaltet sind.",
       "campusFollow": "Du bekommst diese E-Mail, weil du {company} im Campus-Kalender von %BRAND% folgst.",
-      "digestDaily": "Du bekommst diese E-Mail, weil du in %BRAND% eine tägliche Stellenübersicht für deine gespeicherte Suche „{search}“ gewählt hast.",
-      "digestWeekly": "Du bekommst diese E-Mail, weil du in %BRAND% eine wöchentliche Stellenübersicht für deine gespeicherte Suche „{search}“ gewählt hast.",
-      "reminders": "Du bekommst diese E-Mail, weil es um dein %BRAND%-Konto und die Stellen in deiner Bewerbungsübersicht geht. Du kannst diese Erinnerungen ausschalten."
+      "digestDaily": "Du bekommst diese E-Mail, weil du in %BRAND% eine tägliche Jobübersicht für deine gespeicherte Suche „{search}“ gewählt hast.",
+      "digestWeekly": "Du bekommst diese E-Mail, weil du in %BRAND% eine wöchentliche Jobübersicht für deine gespeicherte Suche „{search}“ gewählt hast.",
+      "reminders": "Du bekommst diese E-Mail, weil es um dein %BRAND%-Konto und die Jobs in deiner Bewerbungsübersicht geht. Du kannst diese Erinnerungen ausschalten."
     },
     "resumeCheck": {
       "body": "Wir haben deinen Lebenslauf gelesen und aufgelistet, was du zuerst verbessern solltest.",
@@ -303,19 +303,19 @@
       "subjectCredit": "Dein Übungsgespräch steht bereit"
     },
     "tipsReEngagement": {
-      "body": "{count, plural, one {# neue Stelle passt seit dem {date} zu deiner gespeicherten Suche „{search}“.} other {# neue Stellen passen seit dem {date} zu deiner gespeicherten Suche „{search}“.}}",
-      "cta": "Neue Stellen ansehen",
-      "heading": "Neue Stellen seit deinem letzten Besuch",
-      "preheader": "Neue Stellen passen zu deiner gespeicherten Suche.",
-      "subject": "{count, plural, one {# neue Stelle passt} other {# neue Stellen passen}} seit dem {date} zu deiner Suche"
+      "body": "{count, plural, one {# neuer Job passt seit dem {date} zu deiner gespeicherten Suche „{search}“.} other {# neue Jobs passen seit dem {date} zu deiner gespeicherten Suche „{search}“.}}",
+      "cta": "Neue Jobs ansehen",
+      "heading": "Neue Jobs seit deinem letzten Besuch",
+      "preheader": "Neue Jobs passen zu deiner gespeicherten Suche.",
+      "subject": "{count, plural, one {# neuer Job passt} other {# neue Jobs passen}} seit dem {date} zu deiner Suche"
     },
     "tipsTailor": {
-      "body": "Eine Version deines Lebenslaufs für eine bestimmte Stelle stellt die Fähigkeiten nach vorn, die in der Stellenanzeige gefordert werden. Du prüfst jede Änderung, bevor du sie verwendest.",
-      "bodyJob": "{title} bei {company} gehört zu den Stellen, die bisher am besten zu dir passen. Eine Version deines Lebenslaufs für diese Stelle stellt die Fähigkeiten nach vorn, die in der Stellenanzeige gefordert werden. Du prüfst jede Änderung, bevor du sie verwendest.",
+      "body": "Eine Version deines Lebenslaufs für einen bestimmten Job stellt die Fähigkeiten nach vorn, die in der Stellenanzeige gefordert werden. Du prüfst jede Änderung, bevor du sie verwendest.",
+      "bodyJob": "{title} bei {company} gehört zu den Jobs, die bisher am besten zu dir passen. Eine Version deines Lebenslaufs für diesen Job stellt die Fähigkeiten nach vorn, die in der Stellenanzeige gefordert werden. Du prüfst jede Änderung, bevor du sie verwendest.",
       "cta": "Meinen Lebenslauf anpassen",
       "heading": "Zeig Arbeitgebern die Fähigkeiten, nach denen sie fragen",
-      "preheader": "Eine Lebenslauf-Version für eine Stelle, bei der du jede Änderung prüfst.",
-      "subject": "Pass deinen Lebenslauf an eine Stelle an, die dir gefällt",
+      "preheader": "Eine Lebenslauf-Version für einen Job, bei der du jede Änderung prüfst.",
+      "subject": "Pass deinen Lebenslauf an einen Job an, der dir gefällt",
       "subjectJob": "Pass deinen Lebenslauf für {title} an"
     },
     "welcome": {
@@ -323,7 +323,7 @@
       "intro": "Hier sind drei Dinge für den Anfang. Jeder Punkt führt dich direkt dorthin.",
       "preheader": "Drei Dinge für den Anfang in %BRAND%.",
       "stepCampus": "Termine der Campus-Programme ansehen",
-      "stepJobs": "Stellen für deine Suche ansehen",
+      "stepJobs": "Jobs für deine Suche ansehen",
       "stepPractice": "Ein Vorstellungsgespräch üben",
       "stepResume": "Deinen Lebenslauf prüfen",
       "stepTracker": "Den Überblick über deine Bewerbungen behalten",
@@ -346,7 +346,7 @@
         "savedOn": "Gemerkt am",
         "source": "Hinzugefügt über",
         "stage": "Phase",
-        "title": "Stellenbezeichnung"
+        "title": "Jobbezeichnung"
       },
       "outcome": {
         "i_withdrew": "Ich habe zurückgezogen",
@@ -383,29 +383,29 @@
   "visitor": {
     "email": {
       "confirm": {
-        "body": "Jemand, hoffentlich du, hat %BRAND% gebeten, neue Stellen für „{search}“ {cadence, select, daily {einmal täglich} other {einmal pro Woche}} an diese Adresse zu schicken.",
-        "cta": "Stellenbenachrichtigungen bestätigen",
-        "heading": "Bestätige deine Stellenbenachrichtigungen",
+        "body": "Jemand, hoffentlich du, hat %BRAND% gebeten, neue Jobs für „{search}“ {cadence, select, daily {einmal täglich} other {einmal pro Woche}} an diese Adresse zu schicken.",
+        "cta": "Job-Benachrichtigungen bestätigen",
+        "heading": "Bestätige deine Job-Benachrichtigungen",
         "ignore": "Wenn du das nicht warst, ignoriere diese E-Mail. Es wird nichts gesendet, solange niemand auf den Link klickt, und nach {hours} Stunden funktioniert er nicht mehr.",
-        "preheader": "Klick auf den Button, um deine Stellenbenachrichtigungen zu starten.",
-        "subject": "Bestätige deine Stellenbenachrichtigungen von %BRAND%"
+        "preheader": "Klick auf den Button, um deine Job-Benachrichtigungen zu starten.",
+        "subject": "Bestätige deine Job-Benachrichtigungen von %BRAND%"
       },
       "digest": {
-        "heading": "{count, plural, one {# neue Stelle für deine Benachrichtigung} other {# neue Stellen für deine Benachrichtigung}}",
+        "heading": "{count, plural, one {# neuer Job für deine Job-Benachrichtigung} other {# neue Jobs für deine Job-Benachrichtigung}}",
         "intro": "Neu seit deiner letzten E-Mail, für „{search}“.",
-        "more": "{count, plural, one {# weitere Stelle passt ebenfalls.} other {# weitere Stellen passen ebenfalls.}}",
+        "more": "{count, plural, one {# weiterer Job passt ebenfalls.} other {# weitere Jobs passen ebenfalls.}}",
         "pay": "{amount} {period, select, year {pro Jahr} month {pro Monat} week {pro Woche} day {pro Tag} hour {pro Stunde} other {}}",
         "payNotListed": "Gehalt nicht angegeben",
         "placeNotListed": "Ort nicht angegeben",
-        "preheader": "Neue Stellen für deine Benachrichtigung.",
-        "reason": "Du bekommst diese E-Mail, weil du bei %BRAND% Stellenbenachrichtigungen für „{search}“ bestätigt hast. Du hast kein Konto.",
+        "preheader": "Neue Jobs für deine Job-Benachrichtigung.",
+        "reason": "Du bekommst diese E-Mail, weil du bei %BRAND% Job-Benachrichtigungen für „{search}“ bestätigt hast. Du hast kein Konto.",
         "remote": "Remote",
-        "signup": "Erstell ein kostenloses Konto, um zu sehen, wie gut jede Stelle zu deinem Lebenslauf passt.",
+        "signup": "Erstell ein kostenloses Konto, um zu sehen, wie gut jeder Job zu deinem Lebenslauf passt.",
         "signupCta": "Kostenloses Konto erstellen",
-        "subject": "{count, plural, one {# neue Stelle} other {# neue Stellen}} für „{search}“",
-        "viewJob": "Stelle ansehen"
+        "subject": "{count, plural, one {# neuer Job} other {# neue Jobs}} für „{search}“",
+        "viewJob": "Job ansehen"
       },
-      "searchAny": "alle Stellen"
+      "searchAny": "alle Jobs"
     }
   }
 }

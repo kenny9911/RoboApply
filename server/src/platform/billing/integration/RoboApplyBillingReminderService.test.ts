@@ -88,7 +88,9 @@ describe('runRenewalReminderSweep', () => {
     expect(monthly.text).toContain('Cancel any time');
     const pass = sent.find((s) => s.to[0] === 'u3@example.test')!;
     expect(pass.subject).toContain('GoApply');
-    expect(pass.text).toContain('does not renew');
+    // GoApply's default language is Simplified Chinese (WP-92): "it does not renew, nothing is charged".
+    expect(pass.text).toContain('不会续费');
+    expect(pass.text).not.toContain('does not renew');
     const logs = await fake.db.rAEmailLog.findMany({});
     expect(logs).toHaveLength(3);
     expect(logs.every((l: any) => l.template === 'billing.renewal_reminder' && l.status === 'sent')).toBe(true);

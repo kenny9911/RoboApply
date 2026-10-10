@@ -536,8 +536,12 @@ describe('reminder rules', () => {
     expect(reminderInboxTitle({ ...f, reason: 'no_reply_10d', days: 12 }, go, 'zh')).toBe('Analyst 已 12 天没有回复。');
     expect(reminderInboxTitle({ ...f, reason: 'follow_up_due', days: null }, go, 'zh')).toBe('今天是你为 Analyst 设定的跟进日期。');
     expect(reminderInboxTitle({ ...f, reason: 'interview_tomorrow', days: null }, go, 'zh')).toBe('Analyst 的面试将在 24 小时内开始。');
-    // RoboApply in Traditional Chinese (Taiwan) never gets the mainland words: English until WP-92 translates `tracker.inbox`.
-    expect(reminderInboxTitle(f, robo, 'zh-TW')).toBe('Applications for Analyst close tomorrow.');
+    // RoboApply in Traditional Chinese (Taiwan) reads its own `tracker.inbox` sentence (WP-92), never the mainland words.
+    expect(reminderInboxTitle(f, robo, 'zh-TW')).toBe('Analyst 明天截止應徵。');
+    expect(reminderInboxTitle({ ...f, days: 3 }, robo, 'zh-TW')).toBe('Analyst 將在 3 天後截止應徵。');
+    // RoboApply in Simplified Chinese reads `tracker.inbox` too, not GoApply's `tracker.inboxCn` (网申).
+    expect(reminderInboxTitle({ ...f, days: 3 }, robo, 'zh')).toBe('Analyst 的申请还有 3 天截止。');
+    for (const locale of ['zh', 'zh-TW']) expect(reminderInboxTitle(f, robo, locale)).not.toMatch(/网申/);
   });
 
   it('a reminder email is used only when every value it states is real for the entry', () => {

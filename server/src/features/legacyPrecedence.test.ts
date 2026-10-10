@@ -112,10 +112,15 @@ describe('legacy auth routes keep precedence after mountFeatures', () => {
     mocks.activity.mockResolvedValue({ id: 'a1' });
   });
 
+  // `Expires` is the wall-clock second each response was written, and the two
+  // requests can fall either side of a second boundary. `Max-Age` states the
+  // same lifetime and is compared as sent.
+  const cookieOf = (r: Response) => r.headers.get('set-cookie')?.replace(/Expires=[^;]+/gi, 'Expires=<at>') ?? null;
+
   async function both(path: string, init: RequestInit = {}) {
     const a = await fetch(`${legacyOnly.base}${path}`, init);
     const b = await fetch(`${withFeatures.base}${path}`, init);
-    return { a: { status: a.status, body: await a.text(), cookie: a.headers.get('set-cookie') }, b: { status: b.status, body: await b.text(), cookie: b.headers.get('set-cookie') } };
+    return { a: { status: a.status, body: await a.text(), cookie: cookieOf(a) }, b: { status: b.status, body: await b.text(), cookie: cookieOf(b) } };
   }
 
   const json = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
@@ -124,6 +129,9 @@ describe('legacy auth routes keep precedence after mountFeatures', () => {
     const { a, b } = await both('/api/v1/roboapply/auth/login', json({ email: 'u@example.test', password: 'test-password' }));
     expect(a.status).toBe(200);
     expect(b).toEqual(a);
+    // The comparison above is not vacuous: login sets the session cookie with a stated lifetime.
+    expect(a.cookie).toMatch(/ra_session_token=/);
+    expect(a.cookie).toMatch(/Max-Age=\d+/);
     expect(JSON.parse(b.body)).toEqual({ success: true, data: { user: result.user, seekerProfile: result.seekerProfile, token: result.token } });
   });
 

@@ -60,17 +60,17 @@
       "aiBadge": "AI 生成",
       "aiDisclosure": "这段文字由 AI 模型生成。",
       "aiLabel": "由 AI 生成。请先修改，内容符合你的真实情况时再使用。",
-      "bankLabel": "来自你保存的答案",
+      "bankLabel": "来自你保存的回答",
       "cost": "消耗 1 个 AI 回答额度。",
       "dismiss": "关闭",
-      "editLabel": "答案草稿：{question}",
-      "save": "保存这个答案",
-      "saveFailed": "这个答案没有保存成功。请重试。",
-      "saveHint": "下次表单里再出现这个问题时，会用你保存的答案来填。",
-      "saveProtected": "关于你本人的答案保存在个人资料里，不保存在这里。",
-      "saved": "已保存到你的答案。",
+      "editLabel": "回答草稿：{question}",
+      "save": "保存这个回答",
+      "saveFailed": "这个回答没有保存成功。请重试。",
+      "saveHint": "下次表单里再出现这个问题时，会用你保存的回答来填。",
+      "saveProtected": "关于你本人的回答保存在个人资料里，不保存在这里。",
+      "saved": "已保存到你的回答。",
       "saving": "保存中…",
-      "use": "使用这个答案",
+      "use": "使用这个回答",
       "write": "写一份草稿",
       "writing": "生成中…"
     },
@@ -95,7 +95,7 @@
       }
     },
     "item": {
-      "checkSensitive": "敏感问题的答案，提交前请核对。",
+      "checkSensitive": "敏感问题的回答，提交前请核对。",
       "unlabelled": "未标注的栏位"
     },
     "job": {
@@ -171,7 +171,7 @@
     },
     "source": {
       "ai": "你修改过的草稿",
-      "bank": "来自你保存的答案",
+      "bank": "来自你保存的回答",
       "profile": "来自你的个人资料",
       "resume": "你的简历：{fileName}"
     },

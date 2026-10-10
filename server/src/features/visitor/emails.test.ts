@@ -67,11 +67,17 @@ describe('visitor email templates', () => {
     expect(formatDigestPay({ min: 1, max: 2, currency: 'CNY', period: 'month', text: '15-25K·13薪' }, t)).toBe('15-25K·13薪');
   });
 
-  it('falls back to the English source until INT stages the strings; uses the bundle once present', () => {
+  it('uses the bundle when it has the key (GoApply in Simplified Chinese reads its translation); the English source is only the fallback', () => {
     const t = createEmailTranslator(GO, 'zh');
-    expect(visitorText(t, 'visitor.email.searchAny')).toBe('any job');
+    // WP-91 merged the strings and WP-92 translated them: the zh bundle answers.
+    expect(t.has('visitor.email.searchAny')).toBe(true);
+    expect(visitorText(t, 'visitor.email.searchAny')).toBe('任意职位');
+    expect(visitorText(createEmailTranslator(ROBO, 'en'), 'visitor.email.searchAny')).toBe('any job');
     const fake = Object.assign((key: string) => `bundle:${key}`, { locale: 'en', brand: ROBO, has: () => true }) as unknown as typeof t;
     expect(visitorText(fake, 'visitor.email.searchAny')).toBe('bundle:visitor.email.searchAny');
+    // A translator whose bundles lack the key still gets the English source, never a raw key.
+    const bare = Object.assign((key: string) => key, { locale: 'zh', brand: GO, has: () => false }) as unknown as typeof t;
+    expect(visitorText(bare, 'visitor.email.searchAny')).toBe('any job');
     expect(() => visitorText(createEmailTranslator(ROBO, 'en'), 'visitor.email.nope')).toThrow();
   });
 });

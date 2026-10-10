@@ -106,7 +106,11 @@ test('fills the Greenhouse form, attaches the resume, and never submits', async 
   await expect(page.getByText('Did you submit this application?')).toBeVisible();
 
   // D1: nothing was submitted or pressed on the employer's form.
-  const counts = await page.evaluate(() => (window as unknown as { __submits: number; __pressed: number }));
+  // Read the two counters as plain numbers: `window` itself does not survive serialization out of the page.
+  const counts = await page.evaluate(() => {
+    const w = window as unknown as { __submits: number; __pressed: number };
+    return { __submits: w.__submits, __pressed: w.__pressed };
+  });
   expect(counts.__submits).toBe(0);
   expect(counts.__pressed).toBe(0);
   expect(employerRequests).toEqual([]);

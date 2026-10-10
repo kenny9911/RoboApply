@@ -6,12 +6,12 @@
       "title": "Conecte sua conta"
     },
     "draft": {
-      "aiBadge": "Gerado por AI",
-      "aiDisclosure": "Este texto foi gerado por um modelo de AI.",
-      "aiLabel": "Escrito por AI. Edite e só use se for verdade no seu caso.",
+      "aiBadge": "Gerado por IA",
+      "aiDisclosure": "Este texto foi gerado por um modelo de IA.",
+      "aiLabel": "Escrito por IA. Edite e só use se for verdade no seu caso.",
       "bankLabel": "Das suas respostas salvas",
-      "cost": "Usa 1 crédito de resposta por AI.",
-      "dismiss": "Ocultar",
+      "cost": "Usa 1 crédito de resposta por IA.",
+      "dismiss": "Descartar",
       "editLabel": "Rascunho de resposta para: {question}",
       "save": "Salvar esta resposta",
       "saveFailed": "Não foi possível salvar esta resposta. Tente de novo.",
@@ -33,7 +33,7 @@
       "unknown": "Algo deu errado. Nada foi enviado. Tente de novo."
     },
     "fit": {
-      "note": "Isso não é a sua chance de ser contratado.",
+      "note": "Isso não é a sua chance de conseguir a vaga.",
       "quickEstimate": "Estimativa rápida",
       "score": "{score} / 100",
       "tier": {
@@ -88,7 +88,7 @@
       "oneFill": "A candidatura inteira usa 1 preenchimento de formulário.",
       "pageByPage": "Este formulário tem várias páginas. Preencha cada página e use o botão do próprio formulário para avançar.",
       "site": "Formulário em {site}",
-      "submitYourself": "Confira o formulário e depois envie por conta própria.",
+      "submitYourself": "Confira o formulário; quem envia é você.",
       "summary": "Campos preenchidos: {filled} de {total}.",
       "summaryNeedsYou": "Precisam de você: {count}.",
       "title": "Preencher este formulário",
@@ -104,7 +104,7 @@
       "codeLabel": "Ou digite o código de 8 caracteres do %BRAND%",
       "connected": "Conectado.",
       "disconnect": "Desconectar",
-      "noFit": "Ainda não há nível de encaixe para esta vaga. Abra a vaga no %BRAND% para ver.",
+      "noFit": "Ainda não há encaixe calculado para esta vaga. Abra a vaga no %BRAND% para ver.",
       "noJobFound": "Nenhuma vaga encontrada nesta página.",
       "openFormSite": "Em {site}, abra o formulário de candidatura e escolha Preencher este formulário.",
       "otherSite": "Ainda não é possível preencher formulários neste site.",

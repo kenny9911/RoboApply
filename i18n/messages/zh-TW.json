@@ -26,7 +26,7 @@
     "badge_no_reply": "{count} 家 10 天內沒有回覆",
     "search_aria": "搜尋職缺和公司",
     "search_placeholder": "搜尋職缺、公司…",
-    "account_menu": "你的帳戶",
+    "account_menu": "你的帳號",
     "settings": "設定",
     "billing": "方案與帳單",
     "sign_out": "登出",
@@ -39,7 +39,7 @@
       "group_jobs": "職缺",
       "searching": "搜尋中…",
       "empty": "找不到結果。試試公司名稱或職稱。",
-      "empty_jobs": "你的清單中沒有符合的職缺。已儲存搜尋的篩選條件在這裡也會套用。",
+      "empty_jobs": "你的清單中沒有符合的職缺。這裡也會套用你已儲存的搜尋裡的篩選條件。",
       "empty_pages": "沒有這個名稱的頁面。",
       "error": "搜尋沒有成功。請重試。",
       "placeholder_pages": "前往某個頁面…",
@@ -81,7 +81,7 @@
       "ai_written": "由 AI 撰寫。使用前請逐行檢查。",
       "search_results": "搜尋結果，未經查證。",
       "sponsorship": "根據職缺說明的內容。簽證贊助請向雇主確認。",
-      "you_submit": "每一筆應徵都由你自己送出。"
+      "you_submit": "每一份應徵都由你自己送出。"
     },
     "inbox": "收件匣",
     "invite": "邀請朋友",
@@ -99,7 +99,7 @@
     "settingsNotes": {
       "group_lists": "你自己的清單",
       "intent_sub": "自由填寫的文字，會和你的設定一起保存。不會用來篩選職缺。",
-      "lists_sub": "給你自己看的筆記。要隱藏職缺，請變更已儲存搜尋裡的篩選條件。",
+      "lists_sub": "給你自己看的筆記。要隱藏職缺，請變更已儲存的搜尋裡的篩選條件。",
       "save_failed": "你的變更沒有儲存。請重試。",
       "sign_out_failed": "你仍然是登入狀態。請重試。"
     },
@@ -112,7 +112,7 @@
       "privacy": "隱私與資料",
       "referrals": "邀請朋友",
       "security": "登入與安全性",
-      "sensitive": "敏感答案"
+      "sensitive": "敏感問題的回答"
     },
     "signing_out": "登出中…",
     "source": {
@@ -121,7 +121,7 @@
       "estimate_method": "由 AI 根據職缺說明推算，所以可能有誤。",
       "label": {
         "ai": "AI 估計",
-        "bank": "{sourceName} 上招募方刊登的職缺",
+        "bank": "{sourceName} 上招募人員刊登的職缺",
         "company_website": "公司網站",
         "dol_lca": "美國勞工部的簽證申請文件",
         "employer": "雇主",
@@ -238,12 +238,12 @@
     "explore": {
       "back": "所有工作類別",
       "categoriesLabel": "工作類別",
-      "categoryEmpty": "沒有開放中的職缺",
+      "categoryEmpty": "沒有招募中的職缺",
       "categoryResults": "{category} 的職缺",
       "count": "{count, plural, one {# 個職缺} other {# 個職缺}}",
       "intro": "依工作類別瀏覽我們收錄的所有職缺，或描述你想找的工作。",
       "loadFailed": "類別沒有載入出來。",
-      "metaDescription": "依工作類別瀏覽開放中的職缺，或用你自己的話描述想找的工作。",
+      "metaDescription": "依工作類別瀏覽招募中的職缺，或用你自己的話描述想找的工作。",
       "metaTitle": "探索職缺",
       "nlCancel": "取消",
       "nlConfirm": "使用這些篩選條件",
@@ -265,7 +265,7 @@
       "changeFailed": "搜尋沒有更新成功。這個職缺仍然是隱藏的。",
       "changeSaved": "搜尋已更新。",
       "countAfter": "仍會顯示 {count, plural, one {# 個職缺} other {# 個職缺}}。",
-      "detailLabel": "還有其他想說的嗎？（選填）",
+      "detailLabel": "還有其他想說的嗎？（可不填）",
       "intro": "告訴我們原因，我們就不會再顯示這類職缺。在你做出選擇之前，不會有任何變更。",
       "keepFilters": "只隱藏這個職缺",
       "proposalIntro": "這項變更也會讓類似的職缺不再顯示。儲存前請先確認。",
@@ -300,7 +300,7 @@
       "fixTitle": "要變更你的搜尋嗎？",
       "high": "非常有用",
       "low": "沒有用",
-      "noteLabel": "還有其他想說的嗎？（選填）",
+      "noteLabel": "還有其他想說的嗎？（可不填）",
       "reason": {
         "jobs_old": "職缺看起來很舊",
         "missing_skills": "漏掉我具備的技能",
@@ -323,7 +323,7 @@
       "agencySaved": "已隱藏人力仲介刊登的職缺。",
       "agencyYes": "隱藏人力仲介刊登的職缺",
       "failed": "回報沒有送出。請重試。",
-      "noteLabel": "詳細說明（選填）",
+      "noteLabel": "詳細說明（可不填）",
       "reason": {
         "agency": "人力仲介刊登，卻顯示為雇主",
         "duplicate": "重複刊登",
@@ -1042,7 +1042,7 @@
       "notes_placeholder": "人名、連結、談了什麼",
       "open_posting": "開啟職缺頁面",
       "outcome_none": "仍在進行中",
-      "practice": "為這個職缺練習",
+      "practice": "針對這個職缺練習",
       "salary": "你記下的薪資",
       "salary_amount": "金額",
       "salary_currency": "幣別",
@@ -1927,7 +1927,7 @@
         "chosen": "使用你選的履歷：{name}",
         "latest": "使用你最近的履歷：{name}",
         "none": "沒有已存的履歷。面試官只會根據職缺說明進行。",
-        "primary": "使用你的主要履歷：{name}",
+        "primary": "使用你的主履歷：{name}",
         "tailored": "使用你針對這個職缺調整的履歷：{name}"
       },
       "title": "{company} 的 {title}"
@@ -1940,7 +1940,7 @@
         "desc": "只有聲音，就像講電話。適合先把回答的架構理清楚。"
       }
     },
-    "questionsLink": "練習題目",
+    "questionsLink": "練習題",
     "recording": {
       "audio": "錄音和逐字稿",
       "audioVideo": "錄音、錄影和逐字稿",
@@ -2009,7 +2009,7 @@
       "notif": "通知",
       "appearance": "外觀",
       "billing": "方案與帳單",
-      "account": "帳戶",
+      "account": "帳號",
       "danger": "危險操作"
     },
     "savebar": {
@@ -2033,7 +2033,7 @@
       "dark": "深色"
     },
     "identity": {
-      "eyebrow": "帳戶",
+      "eyebrow": "帳號",
       "title_before": "關於",
       "title_em": "你自己",
       "title_after": "。",
@@ -2145,7 +2145,7 @@
         "tooShort": "密碼至少要 8 個字元。",
         "mismatch": "兩次輸入的密碼不一致。",
         "wrongPassword": "這不是你目前的密碼。",
-        "noPassword": "這個帳戶沒有設定密碼。",
+        "noPassword": "這個帳號沒有設定密碼。",
         "weakPassword": "請換一個更強的密碼。",
         "rateLimited": "嘗試次數太多。等一分鐘再試。",
         "generic": "密碼沒有變更成功。請重試。"
@@ -2158,9 +2158,9 @@
       "title_after": "的按鈕。",
       "sub": "每一項都會要你確認一次。確認之後就無法復原。",
       "delete_data_title": "刪除你的求職資料",
-      "delete_data_desc": "清空你的職缺清單和應徵紀錄。你的帳戶和履歷會保留。",
+      "delete_data_desc": "清空你的職缺清單和應徵紀錄。你的帳號和履歷會保留。",
       "delete_data_btn": "刪除求職資料",
-      "delete_data_confirm": "這會清空你的職缺清單、應徵紀錄和歷史紀錄。你的帳戶和履歷會保留。",
+      "delete_data_confirm": "這會清空你的職缺清單、應徵紀錄和歷史紀錄。你的帳號和履歷會保留。",
       "delete_data_confirm_label": "確認",
       "delete_data_confirm_hint": "輸入 {keyword} 以確認。",
       "delete_data_confirm_keyword": "DELETE",
@@ -2168,23 +2168,23 @@
       "delete_data_confirm_error": "請一字不差地輸入 {keyword} 以確認。",
       "delete_data_cancel": "取消",
       "delete_data_error": "資料沒有刪除成功。請重試。",
-      "delete_data_success": "已刪除 {count} 筆紀錄。你的帳戶和履歷沒有受影響。",
+      "delete_data_success": "已刪除 {count} 筆紀錄。你的帳號和履歷沒有受影響。",
       "delete_data_done": "完成",
-      "delete_account_title": "刪除你的帳戶",
+      "delete_account_title": "刪除你的帳號",
       "delete_account_desc": "會刪掉所有東西：履歷、應徵紀錄、逐字稿和錄音。無法復原。",
-      "delete_account_btn": "刪除帳戶",
-      "deleteAccount": "刪除帳戶",
-      "deleteDescription": "會刪掉你的帳戶、履歷、面試錄音和訂閱。無法復原。",
+      "delete_account_btn": "刪除帳號",
+      "deleteAccount": "刪除帳號",
+      "deleteDescription": "會刪掉你的帳號、履歷、面試錄音和訂閱。無法復原。",
       "confirmEmailLabel": "確認你的電子郵件",
       "confirmEmailHint": "輸入 {email} 以確認。",
       "reasonLabel": "原因",
       "reasonPlaceholder": "告訴我們你為什麼要離開（必填）",
       "cancel": "取消",
-      "delete": "刪除我的帳戶",
+      "delete": "刪除我的帳號",
       "error": {
-        "mismatch": "這不是這個帳戶的電子郵件。",
+        "mismatch": "這不是這個帳號的電子郵件。",
         "reasonRequired": "請告訴我們你為什麼要離開。",
-        "generic": "帳戶沒有刪除成功。請重試。"
+        "generic": "帳號沒有刪除成功。請重試。"
       }
     }
   },
@@ -2196,16 +2196,16 @@
       "password": "密碼",
       "submit": "登入",
       "submitting": "登入中…",
-      "no_account": "還沒有帳戶？",
+      "no_account": "還沒有帳號？",
       "signup_cta": "建立一個",
       "error_generic": "電子郵件和密碼對不上。請檢查後重試。"
     },
     "signup": {
       "email": "電子郵件",
       "password": "密碼",
-      "has_account": "已經有帳戶了？",
+      "has_account": "已經有帳號了？",
       "login_cta": "登入",
-      "error_generic": "帳戶沒有建立成功。請重試；如果一直失敗，換一個電子郵件。"
+      "error_generic": "帳號沒有建立成功。請重試；如果一直失敗，換一個電子郵件。"
     },
     "field": {
       "show_password": "顯示密碼",
@@ -2245,14 +2245,14 @@
       "signupDefault": "建立你的免費帳號",
       "signupJob": "建立免費帳號，儲存 {jobTitle}",
       "signupResumeCheck": "建立免費帳號，保留你的履歷檢查",
-      "signupResumeJobMatch": "建立免費帳號，保留你的履歷與職缺符合度結果",
+      "signupResumeJobMatch": "建立免費帳號，保留你的履歷和職缺比對結果",
       "signupSubtitle": "看看哪些職缺適合你，以及該先改什麼。"
     },
     "danger": {
       "confirmationEmail": "我們會寄一封確認信給你，說明刪除何時正式完成。你會立刻在所有裝置上登出。"
     },
     "errors": {
-      "network": "發生問題。請檢查網路連線，然後重試。",
+      "network": "出了點問題。請檢查網路連線，然後重試。",
       "rateLimited": "嘗試次數太多。等一分鐘再試。"
     },
     "forgot": {
@@ -2296,7 +2296,7 @@
       "job": "你剛才在看 {jobTitle}。註冊後就能看到你的履歷和它的適合度。",
       "jobAtCompany": "你剛才在看 {company} 的 {jobTitle}。註冊後就能看到你的履歷和它的適合度。",
       "resumeCheck": "保留你的履歷檢查，再針對你選的每個職缺調整履歷。",
-      "resumeJobMatch": "保留你的符合度結果，再針對那個職缺調整履歷。"
+      "resumeJobMatch": "保留你的比對結果，再針對那個職缺調整履歷。"
     },
     "reset": {
       "expired": "這個重設連結已過期。",
@@ -2408,7 +2408,7 @@
       "invalidEmail": "請輸入有效的電子郵件地址。",
       "message": "訊息內容",
       "messageHint": "至少 10 個字。請不要填寫密碼或卡號。",
-      "name": "你的姓名（選填）",
+      "name": "你的姓名（可不填）",
       "notSent": "訊息沒有傳送成功。請改寄電子郵件到 {email}。",
       "rateLimited": "你今天可以傳送的訊息則數已達上限。請改寄電子郵件到 {email}。",
       "send": "傳送訊息",
@@ -2432,7 +2432,7 @@
       }
     },
     "cta": {
-      "createAccount": "免費建立帳號",
+      "createAccount": "建立免費帳號",
       "start": "免費開始"
     },
     "example": {
@@ -2514,7 +2514,7 @@
           "title": "每一個校園徵才計畫，連同截止日期"
         },
         "formFiller": {
-          "eyebrow": "一鍵填表",
+          "eyebrow": "表單填寫",
           "metaDescription": "用你的個人檔案填寫線上應徵表單，再由你自己檢查並送出。",
           "metaTitle": "用你的個人檔案填寫應徵表單",
           "q1": {
@@ -2789,7 +2789,7 @@
           },
           "s2": {
             "body": "使用前，想改哪裡都可以。",
-            "title": "檢查每一份應徵資料包"
+            "title": "檢查每一份應徵準備包"
           },
           "s3": {
             "body": "開啟雇主的頁面並送出。職缺會移到「已應徵」。",
@@ -2797,7 +2797,7 @@
           },
           "sample": {
             "line1": "本週 5 個職缺 · 還算適合以上",
-            "line2": "資料包已備妥：針對職缺調整的履歷、求職信、4 則回答",
+            "line2": "應徵準備包已備妥：針對職缺調整的履歷、求職信、4 則回答",
             "line3": "開啟應徵頁面 → 由你檢查並送出"
           },
           "sub": "針對適合的職缺，%BRAND% 會準備一份調整過的履歷、一封求職信，以及常見問題的回答。每一份應徵都由你自己開啟並送出。",
@@ -2922,7 +2922,7 @@
         "q": "為什麼有個職缺從我的清單消失了？"
       },
       "q4": {
-        "a": "在那個職缺上使用「復原」，或到你的應徵進度看板變更它的狀態。",
+        "a": "在那個職缺上使用「復原」，或到你的應徵紀錄看板變更它的狀態。",
         "q": "我開啟了應徵頁面，但沒有應徵。要怎麼修正？"
       },
       "q5": {
@@ -2963,7 +2963,7 @@
           "q": "職缺是從哪裡來的？"
         },
         "q5": {
-          "a": "免費版包含職缺清單、適合度分數和你的應徵進度看板，AI 功能有每日上限。Pro 會提高這些上限。所有價格和上限都列在價格頁面上。",
+          "a": "免費版包含職缺清單、適合度分數和你的應徵紀錄看板，AI 功能有每日上限。Pro 會提高這些上限。所有價格和上限都列在價格頁面上。",
           "q": "費用是多少？"
         },
         "q6": {
@@ -2996,7 +2996,7 @@
         "notSet": "價格尚未設定",
         "proNote": "每一項 AI 功能的每日上限都更高",
         "seeAll": "查看所有方案和上限",
-        "sub": "職缺清單、適合度分數、篩選條件和你的應徵進度看板都免費。Pro 會提高 AI 功能的每日上限。",
+        "sub": "職缺清單、適合度分數、篩選條件和你的應徵紀錄看板都免費。Pro 會提高 AI 功能的每日上限。",
         "title": "免費開始。需要更多時再升級。"
       },
       "sample": {
@@ -3066,11 +3066,11 @@
       "faqTitle": "常見問題",
       "free": "免費版",
       "freeAlways": "每個方案都免費的功能",
-      "freeAlwaysBody": "職缺清單、適合度分數和落差說明、篩選條件、搜尋、「探索」，以及你的應徵進度看板。",
-      "freeAlwaysBodyNoFeed": "你的履歷、你的應徵進度看板，以及截止日提醒。",
+      "freeAlwaysBody": "職缺清單、適合度分數和落差說明、篩選條件、搜尋、「探索」，以及你的應徵紀錄看板。",
+      "freeAlwaysBodyNoFeed": "你的履歷、你的應徵紀錄看板，以及截止日提醒。",
       "freeAlwaysCampus": "校園徵才行事曆也免費。",
-      "freeNote": "職缺清單、適合度分數、篩選條件和你的應徵進度看板，AI 功能有每日上限。",
-      "freeNoteNoFeed": "你的履歷、你的應徵進度看板和提醒。",
+      "freeNote": "職缺清單、適合度分數、篩選條件和你的應徵紀錄看板，AI 功能有每日上限。",
+      "freeNoteNoFeed": "你的履歷、你的應徵紀錄看板和提醒。",
       "freePrice": "免費",
       "instantAlerts": "即時職缺通知電子郵件",
       "loading": "正在載入方案…",
@@ -3152,7 +3152,7 @@
       "never3": "被標記為可能是詐騙的職缺，在審查完成前會從清單中移除。",
       "never4": "你的照片、年齡、性別或家庭資料。",
       "neverTitle": "排序絕不使用的因素",
-      "otherSorts": "「最新」、「最適合」和「薪資最高」只依那一項排序。",
+      "otherSorts": "「最新」、「最適合你」和「薪資最高」只依那一項排序。",
       "otherSortsTitle": "其他排序方式",
       "pointsNote": "每個職缺會依這四項因素得到一個滿分 100 的排序分數。下面的規則和目標會在這個分數上加分，或調整職缺在清單中的位置。",
       "pointsNoteRules": "每個職缺會依這四項因素得到一個滿分 100 的排序分數。下面這條規則會在這個分數上加分。",
@@ -3186,7 +3186,7 @@
       "role": "職稱",
       "rolePlaceholder": "例如：產品設計師",
       "roleRequired": "請輸入職稱。",
-      "signupNote": "免費建立帳號，查看適合你的職缺。",
+      "signupNote": "建立免費帳號，查看適合你的職缺。",
       "submit": "搜尋職缺",
       "title": "搜尋招募中的職缺"
     },
@@ -3528,7 +3528,7 @@
           "disposable_email": "拋棄式電子郵件地址",
           "invitee_no_profile": "朋友的帳號沒有個人檔案",
           "same_browser": "與邀請人使用同一個瀏覽器",
-          "same_device": "與邀請人使用同一部裝置",
+          "same_device": "與邀請人使用同一台裝置",
           "same_ip": "與邀請人的網路位址相同",
           "signals_missing": "兩個帳號中有一個沒有裝置或網路紀錄",
           "signals_unavailable": "裝置與網路檢查無法執行"
@@ -3576,7 +3576,7 @@
         },
         "questions": {
           "sub": "使用者分享的題目，公開前先經過審核。",
-          "title": "練習題目"
+          "title": "練習題"
         },
         "reports": {
           "sub": "使用者檢舉的職缺、詐騙跡象和個人資料請求。",
@@ -3731,8 +3731,8 @@
           "agency": "人力仲介刊登",
           "duplicate": "重複",
           "expired": "已不再徵才",
-          "fee_required": "要求付費",
-          "offensive": "冒犯性內容",
+          "fee_required": "要求收費",
+          "offensive": "內容令人反感",
           "other": "其他",
           "pay_to_work": "付費才能工作",
           "scam": "詐騙",
@@ -3792,7 +3792,7 @@
           "ingest_new_low": "{brand}：今天到目前為止有 {value} 個新職缺，不到依 7 天平均在這個時間點應有數量的一半（{level}）。",
           "none": "目前沒有任何數字超過警示值。",
           "provider_budget": "{subject}：今天有 {value} 次呼叫，警示值 {level}。",
-          "score_budget": "{brand}：今天有 {value} 次 AI 符合度評分，警示值 {level}。",
+          "score_budget": "{brand}：今天有 {value} 次 AI 適合度評分，警示值 {level}。",
           "title": "{count, plural, other {有 # 個數字需要查看}}"
         },
         "asOf": "統計時間：{time}。「今天」指的是 UTC 日期 {day}。",
@@ -3816,14 +3816,14 @@
           "emailFailures": "寄送失敗的電子郵件（24 小時）",
           "emailFailuresDetail": "同一段 24 小時內寄出 {sent} 封",
           "enrichBacklog": "等待補上詳細資料的職缺",
-          "enrichBacklogDetail": "{open} 個開放中的職缺中，{share} 已有詳細資料",
+          "enrichBacklogDetail": "{open} 個招募中的職缺中，{share} 已有詳細資料",
           "enrichCalls": "職缺詳細資料呼叫",
           "enrichCallsDetail": "讀取職缺說明的 AI 呼叫，對照每日上限",
           "newJobs": "今天的新職缺",
           "newJobsDetail": "最近 7 天的每日平均：{avg}",
           "queriesDue": "待執行的職缺搜尋",
           "queriesDueDetail": "{overdue} 個延遲超過一小時 · {failing} 個持續失敗",
-          "scores": "AI 符合度評分",
+          "scores": "AI 適合度評分",
           "scoresDetail": "對照每日預算"
         },
         "providers": {
@@ -3907,7 +3907,7 @@
     "unavailable": "尚未串接",
     "loading_sources": "正在確認已串接的來源…",
     "sources_error": "無法載入搜尋來源。",
-    "retry": "再試一次",
+    "retry": "重試",
     "unconfigured_title": "尚未串接搜尋來源",
     "unconfigured_body": "串接來源後即可搜尋職缺。你仍然可以瀏覽目前適合你的職缺。",
     "start_title": "從搜尋開始，找到下一份工作",
@@ -3933,7 +3933,7 @@
     "source_count": "{count} 筆結果",
     "cached": "快取結果",
     "retrieved": "取得時間：{date}",
-    "posted": "刊登時間：{date}",
+    "posted": "刊登於 {date}",
     "posted_unknown": "未提供刊登日期",
     "salary_unknown": "未揭露薪資",
     "location_unknown": "未提供工作地點",
@@ -3978,7 +3978,7 @@
     "plan_unverified_hint": "現有職缺資料不足以可靠確認這些偏好。",
     "query_coverage": "依關鍵字與來源查看結果",
     "query_failed": "這次查詢未能完成。已完成查詢的結果仍會顯示。",
-    "query_limited": "這次查詢已達搜尋額度。已完成查詢的結果仍會顯示。",
+    "query_limited": "這次查詢已達搜尋上限。已完成查詢的結果仍會顯示。",
     "agent_unavailable": "求職助理暫時無法使用。請再試一次；目前尚未產生搜尋結果。",
     "request_review": "你的搜尋需求",
     "agent_results_for": "依照你的需求找到的職缺",
@@ -4162,7 +4162,7 @@
     "stripeNotConfigured": "尚未連接 Stripe，僅顯示已記錄的支付寶付款。",
     "usageLedger": "計量用量",
     "featureRequest": "功能請求",
-    "signup": "帳戶已建立",
+    "signup": "帳號已建立",
     "trackingSince": "自 {date} 起記錄登入與功能使用",
     "active": "活躍",
     "inactive": "不活躍",
@@ -4184,23 +4184,23 @@
       "jd_parse": "職缺說明分析",
       "job_apply": "標記已應徵",
       "job_match": "職缺配對",
-      "job_save": "收藏職缺",
+      "job_save": "儲存職缺",
       "job_search": "搜尋職缺",
       "keyword_extract": "關鍵字擷取",
       "match_score": "職缺適合度評分",
       "mock_interview": "模擬面試",
       "negotiation": "錄取條件協商",
       "onboarding": "入門引導對話",
-      "onboarding_complete": "完成帳戶設定",
+      "onboarding_complete": "完成帳號設定",
       "other": "其他",
       "preferences_update": "更新偏好設定",
       "resume_create": "建立履歷",
       "resume_edit": "編輯履歷",
       "resume_import": "匯入履歷",
       "resume_rewrite": "改寫履歷",
-      "resume_tailor": "客製履歷",
-      "tracker_update": "更新應徵進度",
-      "ra_resume_tailor": "客製履歷",
+      "resume_tailor": "調整履歷",
+      "tracker_update": "更新應徵紀錄",
+      "ra_resume_tailor": "調整履歷",
       "ra_cover_letter": "求職信",
       "roboapply_cover_letter": "求職信",
       "ra_match_score": "職缺適合度評分",
@@ -4211,8 +4211,8 @@
       "roboapply_intent": "求職意向分析",
       "roboapply_digest": "職缺摘要",
       "seeker_apply": "職缺應徵",
-      "seeker_tailor": "客製履歷",
-      "seeker_resume_refinement": "客製履歷",
+      "seeker_tailor": "調整履歷",
+      "seeker_resume_refinement": "調整履歷",
       "seeker_mock_interview": "模擬面試",
       "seeker_mock": "模擬面試",
       "seeker_coach_text": "面試指導",
@@ -4370,7 +4370,7 @@
           "other": "其他",
           "rejected": "未錄取",
           "saved": "已儲存",
-          "signed": "已簽錄取通知",
+          "signed": "已簽約",
           "withdrawn": "已退出",
           "written_test": "筆試"
         },
@@ -4419,7 +4419,7 @@
         "copy": "複製草稿",
         "cost": "只有在你確認後，才會使用 {cost, plural, one {# 點} other {# 點}}。",
         "cover_letter": {
-          "confirm": "寫求職信",
+          "confirm": "撰寫求職信",
           "title": "為 {job} 寫一封求職信"
         },
         "dismissed": "沒有執行。",
@@ -4449,15 +4449,15 @@
       "filterDiff": {
         "applied": "已套用變更。",
         "apply": "套用變更",
-        "better": "看起來比較好",
+        "better": "變好了",
         "conflict": "這個建議提出之後，你的搜尋條件改過了。以下是對照你目前搜尋條件的變更。",
         "conflictClosed": "這個建議提出之後，你的搜尋條件改過了，所以沒有套用。請再問一次，取得新的建議。",
         "countAfter": "套用這項變更後會顯示的職缺數：{count}",
         "countNow": "你的搜尋目前顯示的職缺數：{count}",
         "dismissed": "沒有套用。你的搜尋條件維持原樣。",
-        "missingProfile": "這個建議所針對的已儲存搜尋已經不在了。沒有變更任何東西。",
-        "noProfile": "沒有可以變更的已儲存搜尋。",
-        "notQuite": "不太對",
+        "missingProfile": "這個建議針對的那個已儲存的搜尋已經不在了。沒有變更任何東西。",
+        "noProfile": "沒有已儲存的搜尋可以變更。",
+        "notQuite": "還不太對",
         "revertFailed": "先前的搜尋條件沒有還原成功。",
         "reverted": "已還原成你先前的搜尋條件。",
         "show": "顯示 {count, plural, one {# 個職缺} other {# 個職缺}}",
@@ -4537,11 +4537,11 @@
         "saved": "已儲存。你可以在「設定」查看或刪除。",
         "title": "要記住這件事，供之後的對話使用嗎？"
       },
-      "notNow": "暫時不要",
+      "notNow": "先不要",
       "notice": {
         "ai_unavailable": "助理現在無法使用。",
         "content_blocked": "這個回答有一部分被擋下了。",
-        "copilot_budget_exhausted": "助理現在很忙。請稍後再試。沒有收取任何費用。",
+        "copilot_budget_exhausted": "助理現在很忙。請稍後再試。沒有扣點。",
         "credits_exhausted": "今天的助理訊息已經用完。",
         "proposal_expired": "這個建議已過期。請再問一次，取得新的建議。",
         "rate_limited": "短時間內訊息太多。請稍等一下再試。"
@@ -4622,7 +4622,7 @@
       "why_fit": "我為什麼適合這個職缺？"
     },
     "chips": {
-      "cover_letter": "寫求職信",
+      "cover_letter": "寫一封求職信",
       "label": "關於這個職缺的快速提問",
       "practice": "針對這個職缺練習",
       "resume_tips": "履歷建議",
@@ -4649,7 +4649,7 @@
     "errors": {
       "ai_unavailable": "助理現在無法使用。",
       "content_blocked": "這個回答剩下的部分被擋下了。",
-      "copilot_budget_exhausted": "助理現在很忙。請稍後再試。沒有收取任何費用。",
+      "copilot_budget_exhausted": "助理現在很忙。請稍後再試。沒有扣點。",
       "credits_exhausted": "今天的助理訊息已經用完。",
       "default": "回答提前中斷了。",
       "feature_disabled": "助理現在無法使用。",
@@ -4717,7 +4717,7 @@
       "ask": "詢問助理",
       "campus_deadline": "你追蹤的一些應徵截止日期快到了。要看看嗎？",
       "low_rating": "最近的職缺不太適合你。要調整搜尋條件嗎？",
-      "notNow": "暫時不要",
+      "notNow": "先不要",
       "pay_filter": "很多職缺都有列出薪資。要在搜尋條件裡加上最低薪資嗎？",
       "prompts": {
         "agency_report": "在我的搜尋中隱藏人力仲介公司刊登的職缺。",
@@ -4772,7 +4772,7 @@
       "other": "處理中…",
       "propose_filter_change": "正在準備搜尋條件的變更…",
       "salary_context": "正在讀取刊登的薪資…",
-      "search_jobs": "正在查找職缺…",
+      "search_jobs": "正在搜尋職缺…",
       "top_fit_jobs": "正在找出最適合你的職缺…"
     },
     "voice": {
@@ -4984,7 +4984,7 @@
       "rerun": "重新產生報告"
     },
     "honesty": "這是拿你和職缺說明做比較，不是和其他人比較。我們沒有其他應徵者的資料。這不代表你被錄取的機率。",
-    "intro": "你的個人檔案和履歷，與某個已儲存搜尋裡的職缺要求相比的情況。",
+    "intro": "你的個人檔案和履歷，與你某個已儲存的搜尋裡的職缺要求相比的情況。",
     "job": {
       "intro": "這則職缺的要求，以及你履歷上寫的內容。",
       "open": "返回這個職缺",
@@ -5047,7 +5047,7 @@
     },
     "stale": "這份報告產生後，你已儲存的搜尋有變動。重新產生報告就能看到目前的數字。",
     "start": {
-      "intro": "我們會讀取這個已儲存搜尋裡最新的職缺，然後統計：",
+      "intro": "我們會讀取這個已儲存的搜尋裡最新的職缺，然後統計：",
       "noAi": "直接從職缺說明統計，沒有使用 AI。",
       "point1": "有多少則要求的學位、年資或技能是你具備的",
       "point2": "最常被要求的技能",
@@ -5153,7 +5153,7 @@
       "sub": "根據職缺說明和你的履歷寫成的求職信。編輯好之後，複製或下載下來用於你的應徵。",
       "title": "求職信",
       "untitled": "求職信",
-      "updated": "{when}編輯"
+      "updated": "修改於 {when}"
     },
     "language": {
       "en": "英文",
@@ -5532,12 +5532,12 @@
       "uninstalledTitle": "%BRAND% 擴充功能已移除"
     },
     "page": {
-      "facts": "工作許可、簽證贊助、薪資、年資、學位這類問題，只會用你儲存過的答案來填。AI 絕不會撰寫這些答案。",
-      "factsTitle": "關於你的答案",
+      "facts": "工作許可、簽證贊助、薪資、年資、學位這類問題，只會用你儲存過的回答來填。AI 絕不會撰寫這些回答。",
+      "factsTitle": "關於你的回答",
       "how": {
         "step1": "在支援的網站上開啟應徵表單。",
-        "step2": "點選「填寫這份表單」。欄位會用你的個人檔案和你儲存的答案填入。",
-        "step3": "遇到英文或中文的開放式問題時，側邊面板會出現 AI 寫的草稿。在你選擇「使用這個答案」之前，不會有任何內容填進表單。",
+        "step2": "點選「填寫這份表單」。欄位會用你的個人檔案和你儲存的回答填入。",
+        "step3": "遇到英文或中文的開放式問題時，側邊面板會出現 AI 寫的草稿。在你選擇「使用這個回答」之前，不會有任何內容填進表單。",
         "step4": "核對每個欄位，然後自己送出應徵。送出後請告訴擴充功能，這樣你的應徵紀錄才會正確。"
       },
       "howTitle": "運作方式",
@@ -5567,10 +5567,10 @@
     },
     "sensitive": {
       "error": "沒有儲存成功。請重試。",
-      "intro": "除非你開啟，否則這項功能是關閉的。開啟後，擴充功能可以填入你儲存的平等就業機會和其他敏感問題的答案，並把每一項標示出來讓你核對。",
-      "label": "讓擴充功能填入我的敏感答案",
+      "intro": "除非你開啟，否則這項功能是關閉的。開啟後，擴充功能可以填入你儲存的平等就業機會和其他敏感問題的回答，並把每一項標示出來讓你核對。",
+      "label": "讓擴充功能填入我對敏感問題的回答",
       "saving": "儲存中…",
-      "title": "敏感答案"
+      "title": "敏感問題的回答"
     },
     "status": {
       "code": {
@@ -5690,11 +5690,11 @@
     "diff": {
       "added": "新增",
       "changed": "變更",
-      "cleared": "{field}: 不限",
-      "fromTo": "{field}: {from} → {to}",
+      "cleared": "{field}：不限",
+      "fromTo": "{field}：{from} → {to}",
       "none": "沒有任何變更。",
       "removed": "移除",
-      "setTo": "{field}: {value}",
+      "setTo": "{field}：{value}",
       "title": "將會變更的內容"
     },
     "drawer": {
@@ -5741,7 +5741,7 @@
       "recruiterJobsOnly": "招募人員刊登的職缺",
       "roleType": "職務類型",
       "salaryMin": "最低薪資",
-      "salaryMonthsMin": "年薪月數",
+      "salaryMonthsMin": "每年發薪月數",
       "schoolTiers": "你的學校",
       "seniority": "層級",
       "skills": "技能",
@@ -5766,7 +5766,7 @@
       "needsSponsorship": "優先顯示有提到簽證贊助的職缺，並隱藏職缺說明寫明不提供贊助的職缺。這個回答也會儲存到你的個人檔案。",
       "preferredCompanies": "這些公司的職缺會排在比較前面。其他職缺仍會顯示。",
       "recruiterJobsOnly": "只顯示招募人員在 {sourceName} 刊登的職缺。",
-      "salaryMonthsMin": "沒有寫明年薪月數的職缺仍會留在清單中。",
+      "salaryMonthsMin": "沒有寫明每年發薪月數的職缺仍會留在清單中。",
       "schoolTiers": "隱藏對學校層級有要求、而你不符合的職缺。絕不會用來排序職缺。",
       "skills": "要求其中任何一項技能的職缺。",
       "taxonomyIds": "選一個職務類別或特定職務。至少輸入 2 個字元。",
@@ -5882,7 +5882,7 @@
       "deleteFailed": "這個搜尋沒有刪除成功。請重試。",
       "inUse": "使用中",
       "label": "已儲存的搜尋",
-      "limitReached": "你已達到方案的已儲存搜尋數量上限。",
+      "limitReached": "你已儲存的搜尋數量已達方案上限。",
       "main": "主要",
       "makeMain": "設為主要搜尋",
       "namePlaceholder": "為這個搜尋命名",
@@ -5936,7 +5936,7 @@
     },
     "unnamed": "你的主要搜尋",
     "unnamedNumbered": "已儲存的搜尋 {n}",
-    "unnamedOther": "未命名的已儲存搜尋"
+    "unnamedOther": "已儲存的搜尋（未命名）"
   },
   "fit": {
     "analysis": {
@@ -5950,16 +5950,16 @@
         "unknown": "我們找不到你的學歷。請加到你的個人檔案。",
         "yours": "你的學歷：{degree}"
       },
-      "error": "發生問題。沒有扣除任何額度。請重試。",
+      "error": "出了點問題。沒有扣點。請重試。",
       "gaps": "落差",
       "highlights": "亮點",
       "intro": "逐項細看你的履歷和這個職缺的吻合程度。",
-      "notCharged": "沒有扣除額度：這項結果來自你已經有的比對。",
+      "notCharged": "沒有扣點：這項結果來自你已經有的比對。",
       "outOfCredits": "你今天的適合度分析次數已用完。",
       "run": "取得完整的適合度分析",
       "running": "正在比對你的履歷和這個職缺…",
       "title": "適合度分析",
-      "unavailable": "我們現在無法寫出適合度分析。沒有扣除任何額度。請稍後再試。"
+      "unavailable": "我們現在無法寫出適合度分析。沒有扣點。請稍後再試。"
     },
     "compared": {
       "evidence": {
@@ -5970,7 +5970,7 @@
         "location_not_met": "地點不在你要求的範圍內：{text}",
         "pay_met": "標示的薪資達到你的最低要求：{text}",
         "pay_not_met": "標示的薪資低於你的最低要求：{text}",
-        "quote": "“{text}”",
+        "quote": "「{text}」",
         "seniority": "層級：{text}",
         "skill_have": "你的履歷或個人檔案有提到 {text}",
         "skill_missing": "他們要求 {text}，而你的履歷沒有提到",
@@ -5989,7 +5989,7 @@
         "title_level": "職稱與層級"
       },
       "notStated": "資料不足以比對，所以不計入分數。",
-      "partLabel": "{label}: {score} / 100",
+      "partLabel": "{label}：{score} / 100",
       "source": {
         "posting": "來自職缺說明",
         "resume": "來自你的履歷"
@@ -6042,7 +6042,7 @@
     },
     "quickEstimate": "快速估算",
     "quickEstimateWhy": {
-      "ai_failed": "我們沒能完成完整比對。這個估算是根據你的個人檔案和職缺說明算出的。沒有扣除任何額度。",
+      "ai_failed": "我們沒能完成完整比對。這個估算是根據你的個人檔案和職缺說明算出的。沒有扣點。",
       "ai_off": "這是在沒有使用 AI 的情況下算出的，因為你的帳號已關閉 AI。",
       "ai_unavailable": "完整比對目前無法使用。這個估算是根據你的個人檔案和職缺說明算出的。",
       "budget": "完整比對今天暫停提供。這個估算是根據你的個人檔案和職缺說明算出的。",
@@ -6134,7 +6134,7 @@
       "alertsNone": "你還沒有已儲存的搜尋。儲存一個之後，職缺通知就會開始。",
       "alertsProNote": "Pro 可以一有新職缺就收到通知。",
       "alertsSub": "職缺通知會依照你已儲存的搜尋發送。每個搜尋都有自己的設定。",
-      "channelToggle": "{category}: {channel}",
+      "channelToggle": "{category}：{channel}",
       "channels": {
         "email": "電子郵件",
         "in_app": "收件匣",
@@ -6166,7 +6166,7 @@
       "retry": "重試",
       "rows": {
         "alert": "職缺通知",
-        "alertSub": "符合你已儲存搜尋的新職缺。",
+        "alertSub": "你已儲存的搜尋找到的新職缺。",
         "invitation": "邀請",
         "invitationSub": "雇主邀請你應徵的訊息。",
         "reminder": "提醒",
@@ -6244,7 +6244,7 @@
         "tips": "小提示與提醒已關閉，電子郵件和收件匣都不會再收到。已經寄出的電子郵件仍可能送達。"
       },
       "doneTitle": "你已取消訂閱",
-      "failed": "操作沒有成功。請重試。",
+      "failed": "沒有成功。請重試。",
       "invalidSub": "連結可能不完整，或來自其他網站。請登入後到「設定」變更你的電子郵件設定。",
       "invalidTitle": "這個連結無法使用",
       "lists": {
@@ -6255,7 +6255,7 @@
         "tips": "小提示與提醒"
       },
       "loading": "正在檢查你的連結…",
-      "noteLabel": "還有其他想說的嗎？（選填）",
+      "noteLabel": "還有其他想說的嗎？（可不填）",
       "pageTitle": "電子郵件偏好設定",
       "previewFailed": "我們現在無法檢查這個連結。你的電子郵件設定沒有變更。",
       "reasons": {
@@ -6270,7 +6270,7 @@
       "settings": "通知設定",
       "signIn": "登入",
       "surveyFailed": "你的回覆沒有送出。請重試。",
-      "surveyTitle": "你為什麼取消訂閱？（選填）",
+      "surveyTitle": "你為什麼取消訂閱？（可不填）",
       "thanks": "謝謝你告訴我們。"
     }
   },
@@ -6321,7 +6321,7 @@
       "title": "透過邀請連結加入 %BRAND%"
     },
     "link": {
-      "copied": "連結已複製",
+      "copied": "已複製連結",
       "copy": "複製連結",
       "copyFailed": "無法複製。請選取連結後自行複製。",
       "email": "電子郵件",
@@ -6404,11 +6404,11 @@
       "openCoverLetter": "開啟求職信",
       "openTailored": "開啟調整後的履歷",
       "people": "{company} 的人員",
-      "practice": "為這個職缺練習",
+      "practice": "針對這個職缺練習",
       "practiceCredits": "{count, plural, =0 {沒有剩餘的練習點數} one {還剩 # 點練習點數} other {還剩 # 點練習點數}}",
       "practiceCreditsUnknown": "剩餘練習點數：—",
       "practiceNotLinked": "練習場次還沒有和職缺連結，所以我們無法標示這個步驟。",
-      "practiceQuestions": "{company} 的練習題目",
+      "practiceQuestions": "{company} 的練習題",
       "readyError": "沒有加入成功。請重試。",
       "readyFull": "你的「準備應徵」清單已滿。",
       "save": "儲存，稍後再看",
@@ -6440,8 +6440,8 @@
         "website": "網站"
       },
       "factsLabel": "公司基本資料",
-      "jobsEmpty": "沒有列出其他開放中的職缺。",
-      "jobsTitle": "{company} 開放中的職缺",
+      "jobsEmpty": "沒有列出其他招募中的職缺。",
+      "jobsTitle": "{company} 招募中的職缺",
       "news": {
         "empty": "找不到最近的新聞。",
         "error": "新聞沒有載入成功。",
@@ -6452,8 +6452,8 @@
       },
       "noRecord": "關於這家公司，我們只有職缺說明裡寫的內容。",
       "notListed": "未列出",
-      "openJobs": "{company} 在 %BRAND% 上{count, plural, =0 {沒有開放中的職缺} one {有 # 個開放中的職缺} other {有 # 個開放中的職缺}}",
-      "openJobsUnknown": "{company} 在 %BRAND% 上開放中的職缺：—",
+      "openJobs": "{company} 在 %BRAND% 上{count, plural, =0 {沒有招募中的職缺} one {有 # 個招募中的職缺} other {有 # 個招募中的職缺}}",
+      "openJobsUnknown": "{company} 在 %BRAND% 上招募中的職缺：—",
       "sizeValue": "{size} 名員工",
       "title": "關於 {company}"
     },
@@ -6583,18 +6583,18 @@
   "jobImport": {
     "actions": {
       "cancel": "取消",
-      "confirmRemove": "要從你的清單移除這個職缺嗎？",
+      "confirmRemove": "要把這個職缺從你的清單移除嗎？",
       "confirmRemoveYes": "是，移除",
       "loadMore": "顯示更多",
-      "openTracker": "開啟應徵進度",
+      "openTracker": "開啟應徵紀錄",
       "practice": "練習面試",
       "remove": "移除",
       "removeAria": "移除 {title}",
       "tailor": "調整履歷",
-      "track": "儲存到應徵進度",
-      "trackAria": "把 {title} 儲存到你的應徵進度",
-      "trackFailed": "這個職缺沒有儲存到你的應徵進度。請重試。",
-      "tracked": "已儲存到你的應徵進度。",
+      "track": "儲存到應徵紀錄",
+      "trackAria": "把 {title} 儲存到你的應徵紀錄",
+      "trackFailed": "這個職缺沒有儲存到你的應徵紀錄。請重試。",
+      "tracked": "已儲存到你的應徵紀錄。",
       "tracking": "儲存中…",
       "view": "查看職缺"
     },
@@ -6616,7 +6616,7 @@
     },
     "done": {
       "added": "職缺已新增",
-      "addedSub": "你可以把它儲存到應徵進度、調整履歷，或練習面試。",
+      "addedSub": "你可以把它儲存到應徵紀錄、調整履歷，或練習面試。",
       "public": "這個職缺已經在我們的職缺列表中",
       "publicSub": "我們直接使用現有的職缺，沒有另外新增一份。沒有扣點。",
       "yours": "你已經新增過這個職缺",
@@ -6625,7 +6625,7 @@
     "errors": {
       "creditsExhausted": "你今天可新增職缺的次數已用完。",
       "draftGone": "那個尚未完成的職缺已經無法使用。請用它的連結重新新增，或手動輸入。",
-      "generic": "發生問題。請重試。",
+      "generic": "出了點問題。請重試。",
       "hourly": "你在過去一小時內新增了很多職缺。請在 {minutes, plural, one {# 分鐘} other {# 分鐘}}後再試。",
       "hourlyNoTime": "你在過去一小時內新增了很多職缺。請稍後再試。",
       "invalid": "有些資料不正確。請檢查表單後再試。",
@@ -6633,7 +6633,7 @@
       "lockedNoTime": "多次嘗試都沒有成功，新增職缺的功能已暫停一段時間。"
     },
     "form": {
-      "applyUrl": "職缺說明的連結（選填）",
+      "applyUrl": "職缺說明的連結（可不填）",
       "checkSub": "這些資料是從頁面複製來的，我們沒有查證。儲存前請逐項核對。",
       "checkTitle": "核對資料",
       "company": "公司",
@@ -6645,7 +6645,7 @@
         "description": "請貼上至少 {min} 個字元的職缺說明。",
         "title": "請填寫職稱。"
       },
-      "location": "工作地點（選填）",
+      "location": "工作地點（可不填）",
       "locationPlaceholder": "城市，或遠端",
       "manualSub": "貼上職缺說明，再填寫職稱和公司。",
       "manualTitle": "職缺詳細資訊",
@@ -6728,7 +6728,7 @@
       "add": {
         "adding": "新增中…",
         "company": "公司名稱",
-        "country": "主要招募國家（選填）",
+        "country": "主要招募國家（可不填）",
         "countryHint": "兩個英文字母，例如 TW。只用來判斷只寫城市、沒寫國家的職缺位在哪個國家。",
         "submit": "新增徵才頁面",
         "system": "徵才系統",
@@ -6739,7 +6739,7 @@
       },
       "errors": {
         "duplicate": "這個徵才頁面已經在清單中。",
-        "generic": "發生問題。請重試。",
+        "generic": "出了點問題。請重試。",
         "invalid": "請檢查欄位後再試。"
       },
       "eyebrow": "管理台",
@@ -6763,7 +6763,7 @@
       },
       "loading": "載入中…",
       "notAuthorized": "只有管理員可以查看這個頁面。",
-      "offNote": "關閉或移除徵才頁面後，它開放中的職缺會從職缺清單中移除。重新開啟後會再次讀取這個徵才頁面。",
+      "offNote": "關閉或移除徵才頁面後，它招募中的職缺會從職缺清單中移除。重新開啟後會再次讀取這個徵才頁面。",
       "problem": {
         "board_not_found": "找不到這個徵才頁面。請檢查徵才頁面 ID。",
         "network": "無法連上這個徵才頁面。",
@@ -6798,7 +6798,7 @@
         "tw_work_permit_support": "協助辦理工作許可"
       },
       "postedWords": "職缺原文：{text}",
-      "quoteLabel": "摘自職缺",
+      "quoteLabel": "摘自職缺說明",
       "regionLabel": "薪資與工作許可",
       "source": "來源：{name}",
       "viewPosting": "開啟原始職缺頁面"
@@ -6815,7 +6815,7 @@
     "aiBadge": {
       "audio": "AI 語音",
       "document": "AI 輔助產生的文件",
-      "text": "AI 產生",
+      "text": "AI 生成",
       "title": "由 AI 撰寫。使用前請先檢查。"
     },
     "attributions": {
@@ -6971,7 +6971,7 @@
     "privacy": {
       "cancel": "取消",
       "conflict": "你已經有一筆同類型的請求還在處理中。",
-      "deleteBody": "如果要刪除整個帳號和裡面的所有內容，請使用「危險操作」中的「刪除帳戶」。",
+      "deleteBody": "如果要刪除整個帳號和裡面的所有內容，請使用「危險操作」中的「刪除帳號」。",
       "deleteLink": "前往危險操作",
       "deleteTitle": "刪除你的帳號",
       "detailHint": "如果有幫助，請告訴我們是哪些資料。",
@@ -7816,7 +7816,7 @@
           "duplicate": "已經發布過",
           "nda_or_test_content": "受保密協議約束的筆試或測驗內容",
           "not_a_question": "不是題目",
-          "offensive": "冒犯性內容",
+          "offensive": "內容令人反感",
           "other": "其他",
           "personal_info": "姓名或聯絡方式"
         },
@@ -7908,7 +7908,7 @@
       "behavioral": "關於你和過往經歷",
       "coding": "寫程式",
       "domain_design": "設計與建模",
-      "hr": "HR 面談",
+      "hr": "HR 面試",
       "label": "題目類別",
       "role_specific": "職務所需技能",
       "system_design": "系統設計"
@@ -7974,7 +7974,7 @@
       "noReports": "還沒有人分享 {company} 的題目。",
       "notFound": "找不到這個職缺。",
       "notWritten": "AI 可以根據這則職缺說明撰寫練習題。這些是練習用的內容，不是任何人回報的題目。",
-      "practice": "為這個職缺練習",
+      "practice": "針對這個職缺練習",
       "reportsHeading": "%BRAND% 使用者分享的 {company} 題目",
       "seeAll": "查看 {company} 的全部題目",
       "sub": "在 {company}",
@@ -8467,15 +8467,15 @@
     },
     "push": {
       "blocked": "這個網站的通知已被封鎖。請在瀏覽器的網站設定中允許通知，然後再試一次。",
-      "disable": "停止在這部裝置接收通知",
-      "enable": "在這部裝置接收通知",
+      "disable": "停止在這台裝置接收通知",
+      "enable": "在這台裝置接收通知",
       "failed": "沒有成功。請重試。",
-      "offBody": "在這部裝置上以推播通知接收職缺通知和提醒。瀏覽器會先詢問你是否允許。",
-      "onBody": "職缺通知和提醒也會以推播通知顯示在這部裝置上。",
-      "title": "這部裝置的通知",
-      "turnedOff": "這部裝置的通知已關閉。",
-      "turnedOn": "這部裝置的通知已開啟。",
-      "unavailable": "你的帳號目前無法開啟這部裝置的通知。",
+      "offBody": "在這台裝置上以推播通知接收職缺通知和提醒。瀏覽器會先詢問你是否允許。",
+      "onBody": "職缺通知和提醒也會以推播通知顯示在這台裝置上。",
+      "title": "這台裝置的通知",
+      "turnedOff": "這台裝置的通知已關閉。",
+      "turnedOn": "這台裝置的通知已開啟。",
+      "unavailable": "你的帳號目前無法開啟這台裝置的通知。",
       "working": "處理中…"
     }
   },
@@ -8624,7 +8624,7 @@
         "changed": "這份應徵準備包剛才有變動。頁面現在顯示的是最新狀態。",
         "closed": "這個職缺公司已不再刊登。",
         "full": "你的清單已滿。請先移除一個職缺。",
-        "generic": "這次操作沒有成功。請重試。",
+        "generic": "沒有成功。請重試。",
         "preparing": "這份應徵準備包還在準備中。請稍後再試。",
         "undoExpired": "這裡已經無法復原了。",
         "unverified": "使用前，請先核對調整後的履歷新增的細節。"
@@ -8763,7 +8763,7 @@
       "drawerDescription": "正在編輯：{name}",
       "drawerTitle": "每週清單的篩選條件",
       "edit": "變更篩選條件",
-      "excluded": "不含 {value}",
+      "excluded": "排除 {value}",
       "failed": "篩選條件沒有儲存成功。請重試。",
       "filtersLabel": "篩選條件",
       "from": "已儲存的搜尋：{name}",
@@ -8778,7 +8778,7 @@
         "queue_full": "你的清單已滿。請先準備、略過或移除一些職缺。",
         "target_reached": "本週清單的職缺數量已達到你的每週設定。"
       },
-      "only": "只限 {value}",
+      "only": "僅限 {value}",
       "ownChanges": "這裡的清單使用的是你只為「準備應徵」保留的篩選條件變更。「職缺」頁仍顯示你的主要搜尋。",
       "ownRemoved": "完成。這裡的清單會再次使用你的主要搜尋。",
       "save": "儲存",
@@ -8811,7 +8811,7 @@
           "missing_skills": "需要我沒有的技能",
           "other": "其他原因",
           "pay": "薪資太低",
-          "wrong_level": "職級不符",
+          "wrong_level": "層級不符",
           "wrong_location": "地點不符",
           "wrong_title": "職稱不符"
         },
@@ -8933,7 +8933,7 @@
         "blocked": "這段文字我們無法使用。請換個方式寫你的筆記再試。",
         "citationGuard": "每一則建議都加入了你筆記裡沒有的數字，所以一則都沒有顯示。沒有扣改寫點數。",
         "credits": "你目前的改寫點數已經用完。你可以繼續自己寫。",
-        "generic": "發生錯誤。沒有扣改寫點數。請重試。",
+        "generic": "出了點問題。沒有扣改寫點數。請重試。",
         "noSuggestion": "沒有產生任何建議。沒有扣改寫點數。請重試，或在筆記裡多寫一些細節。",
         "unavailable": "寫作協助目前無法使用。你可以繼續自己寫。"
       },
@@ -9231,7 +9231,7 @@
           "title": "你的評等"
         },
         "issues": {
-          "body": "每個問題都會說明我們發現了什麼、為什麼重要。打開它看看怎麼修正，再到編輯器裡修改。",
+          "body": "每個問題都會說明我們發現了什麼、為什麼重要。點開它看看怎麼修正，再到編輯器裡修改。",
           "title": "修正一個問題"
         },
         "recheck": {
@@ -9467,7 +9467,7 @@
       "eduBelow": "你的學位低於職缺列出的程度。",
       "eduMet": "你的學位符合職缺列出的程度。",
       "eduNotFound": "在你的履歷裡找不到學位。",
-      "eduNotListed": "這則職缺沒有列出學歷程度。",
+      "eduNotListed": "這則職缺沒有列出學歷要求。",
       "error": "關鍵字檢查沒有載入成功。",
       "fit": "這份履歷的適合度分數",
       "fitHonesty": "這不是你被錄取的機率。",
@@ -9475,8 +9475,8 @@
       "fromPosting": "關鍵字取自職缺說明的內文。",
       "honest": "缺少的關鍵字，只有在確實符合你的情況時才加上去。",
       "loading": "正在讀取職缺說明",
-      "matched": "在你的履歷裡",
-      "missing": "不在你的履歷裡",
+      "matched": "你的履歷裡有",
+      "missing": "你的履歷裡沒有",
       "none": "無",
       "row": {
         "education": "學歷",
@@ -9579,7 +9579,7 @@
         "city": "在 {city}",
         "count": "{count, plural, one {# 個職缺} other {# 個職缺}}",
         "graduate": "應屆畢業生職缺",
-        "remote": "僅限遠端",
+        "remote": "只看遠端",
         "title": "縮小這份清單的範圍"
       },
       "empty": {
@@ -9645,7 +9645,7 @@
     "card": {
       "found": "收錄時間：{date}",
       "payNotListed": "未列出薪資",
-      "posted": "刊登時間：{date}",
+      "posted": "刊登於 {date}",
       "source": "來源：{sourceName}",
       "sponsorQuote": "職缺說明寫道：「{quote}」"
     },
@@ -9658,7 +9658,7 @@
     "job": {
       "about": "關於這個職缺",
       "applyNote": "你在雇主的網站上應徵。%BRAND% 不會送出應徵申請。",
-      "applyOnSite": "到公司網站應徵",
+      "applyOnSite": "前往公司網站應徵",
       "benefits": "福利",
       "closes": "截止日期",
       "employment": "工作類型",
@@ -10047,7 +10047,7 @@
         "years": "年資"
       },
       "status": {
-        "fail": "未符合",
+        "fail": "不符合",
         "pass": "符合",
         "unknown": "未列出",
         "warn": "部分符合"
@@ -10084,21 +10084,21 @@
       "cached": "你今天稍早已經檢查過這個檔案，所以這次沒有用掉免費檢查次數。",
       "countsLabel": "發現的問題",
       "deletes": "這份報告會在 {when} 刪除。",
-      "how": "怎麼改",
+      "how": "怎麼修正",
       "label": {
         "excellent": "優秀",
         "fair": "尚可",
         "good": "良好",
-        "needs_work": "需要改進"
+        "needs_work": "需要加強"
       },
       "more": "{count, plural, other {還有 # 個問題}}在完整報告裡。",
-      "noIssues": "這份檢查清單上沒有需要改的地方。",
+      "noIssues": "這份檢查清單上沒有需要修正的地方。",
       "quote": "來自你的履歷",
       "resultLabel": "結果",
       "severity": {
         "critical": "重要",
-        "optional": "可再加強",
-        "urgent": "優先修改"
+        "optional": "可改可不改",
+        "urgent": "優先修正"
       },
       "topIssues": "該先改的地方",
       "why": "為什麼重要"
@@ -10174,27 +10174,27 @@
       "inputLabel": "你的問題",
       "intro": "你可以問這個頁面上的職缺、職缺說明列出的薪資，或 %BRAND% 是怎麼運作的。回答不會用到履歷，也絕不會評論你和某個職缺的適合度。",
       "launcher": "詢問這些職缺",
-      "lookingUp": "正在查詢職缺…",
+      "lookingUp": "正在搜尋職缺…",
       "note": "回答由 AI 撰寫，可能有錯。你在這裡輸入的內容都不會被儲存。",
       "placeholder": "輸入你的問題",
       "send": "送出",
       "signupCta": "建立免費帳號",
       "title": "詢問這個頁面的內容",
-      "writing": "正在撰寫回答…",
+      "writing": "正在寫回答…",
       "you": "你"
     },
     "card": {
       "badge": {
         "agency": "人力仲介公司",
         "citizens": "僅限公民",
-        "clearance": "需通過安全查核",
-        "closes": "應徵截止：{date}",
+        "clearance": "需要安全許可",
+        "closes": "{date} 截止應徵",
         "direct": "雇主直接刊登",
         "sponsorshipNotOffered": "寫明不提供簽證贊助",
         "sponsorshipOffered": "有提到簽證贊助"
       },
       "from": "{amount} 起",
-      "lastChecked": "上次確認：{date}",
+      "lastChecked": "上次確認於 {date}",
       "payNotListed": "未列出薪資",
       "payPeriod": {
         "day": "日薪 {amount}",
@@ -10204,7 +10204,7 @@
         "year": "年薪 {amount}"
       },
       "placeNotListed": "未列出地點",
-      "posted": "刊登時間：{date}",
+      "posted": "刊登於 {date}",
       "range": "{min}–{max}",
       "source": {
         "ats_public": "來自 {name} 的徵才頁面",
@@ -10231,7 +10231,7 @@
       "error": "這個連結沒有確認成功。請重試。",
       "invalidBody": "確認連結的有效時間是 72 小時。重新訂閱就能拿到新的連結。",
       "invalidTitle": "這個連結已經失效",
-      "loading": "正在確認你的連結…",
+      "loading": "正在檢查你的連結…",
       "pendingBody": "{email} 會收到搜尋條件「{search}」的新職缺，頻率是{cadence}。",
       "pendingTitle": "確認你的職缺通知",
       "retry": "重試",

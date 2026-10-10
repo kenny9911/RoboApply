@@ -452,15 +452,17 @@ describe('account purge worker (withdrawn cross-border consent)', () => {
 });
 
 describe('export-ready email', () => {
-  it('every key has an English string (no raw keys) and the email links to Settings → Privacy, never to the file', () => {
+  it('every key has a string in the brand\'s default language (no raw keys) and the email links to Settings → Privacy, never to the file', () => {
     resetEmailI18nCache();
     const template = getEmailTemplate(DATA_EXPORT_READY_TEMPLATE)!;
+    // RoboApply's default is English; GoApply's is Simplified Chinese (translated by WP-92).
+    const keepsFor = { [roboapply.id]: '7 days', [goapply.id]: '7 天' };
     for (const brand of [roboapply, goapply]) {
       const t = createEmailTranslator(brand, brand.defaultLocale);
       for (const key of COMPLIANCE_EMAIL_KEYS) expect(t(key, { days: 7 })).not.toContain('compliance.');
       const body = template.render({ brand, t, params: { days: 7 }, origin: 'https://example.test' });
       expect(body.subject).toContain(brand.name);
-      expect(body.bodyText).toContain('7 days');
+      expect(body.bodyText).toContain(keepsFor[brand.id]);
       expect(body.bodyText).toContain('https://example.test/settings#privacy');
       expect(body.bodyHtml.match(/href="[^"]*"/g)).toEqual(['href="https://example.test/settings#privacy"']);
     }

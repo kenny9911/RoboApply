@@ -26,7 +26,7 @@
     "badge_no_reply": "{count} 家 10 天内没有回复",
     "search_aria": "搜索职位和公司",
     "search_placeholder": "搜索职位、公司…",
-    "account_menu": "你的账户",
+    "account_menu": "你的账号",
     "settings": "设置",
     "billing": "套餐和账单",
     "sign_out": "退出登录",
@@ -82,7 +82,7 @@
     "honesty": {
       "ai_written": "由 AI 辅助生成。使用前请逐行核对。",
       "search_results": "搜索结果，未经核实。",
-      "sponsorship": "依据职位说明中的内容。签证担保请向企业确认。",
+      "sponsorship": "依据职位描述中的内容。签证担保请向企业确认。",
       "you_submit": "每份申请都由你自己提交。"
     },
     "inbox": "消息中心",
@@ -118,7 +118,7 @@
     "source": {
       "as_of": "截至 {date}",
       "estimate": "估算。",
-      "estimate_method": "由 AI 根据职位说明推算，可能有误。",
+      "estimate_method": "由 AI 根据职位描述推算，可能有误。",
       "label": {
         "ai": "AI 估算",
         "bank": "招聘方在 {sourceName} 发布的职位",
@@ -127,7 +127,7 @@
         "employer": "企业",
         "index": "我们收录的职位",
         "other": "其他渠道",
-        "posting": "职位说明",
+        "posting": "职位描述",
         "provider": "职位信息服务商",
         "public_record": "公开记录",
         "user": "你",
@@ -151,11 +151,11 @@
       "unlikely": "不太合适"
     },
     "score": {
-      "label": "合适度评分",
+      "label": "匹配度",
       "unit": "{score} / 100",
-      "explainer": "{score} / 100 —— 你的简历和这份职位说明的吻合程度",
+      "explainer": "{score} / 100 —— 你的简历和这份职位描述的吻合程度",
       "disclaimer": "这不是你被录用的概率。",
-      "empty": "这份职位还没有合适度评分。",
+      "empty": "这个职位还没有匹配度评分。",
       "rubric_title": "这个分数算了什么",
       "rubric": {
         "title_level": "职位名称和层级 —— 35",
@@ -231,7 +231,7 @@
       },
       "whatLinesUp": "吻合的地方",
       "whatsMissing": "缺少的地方",
-      "whyThisJob": "为什么是这个职位",
+      "whyThisJob": "为什么推荐",
       "workAi": "已通读职位描述全文，并与你的简历对照。",
       "workPre": "已将职位名称、技能和地点与你的简历对照。"
     },
@@ -404,7 +404,7 @@
     "title_lead": "写出",
     "title_accent": "你自己也想录用",
     "title_after": "的简历。",
-    "subtitle": "从空白开始写、上传你现有的那份，或者从 LinkedIn 导入。然后为每一个想要的职位调整出一份专用的。",
+    "subtitle": "从空白开始写、上传你现有的那份，或者从 LinkedIn 导入。然后为每一个想要的职位定制一份专用的。",
     "common": {
       "cancel": "取消",
       "close": "关闭"
@@ -435,7 +435,7 @@
       "title": "你的简历"
     },
     "card": {
-      "base": "主简历 —— 没有针对某个职位调整",
+      "base": "主简历 —— 没有为某个职位定制",
       "edited": "修改于 {when}",
       "score_unit": "/100",
       "delete": "删除简历",
@@ -553,7 +553,7 @@
       "coach": "逐行检查",
       "hide_coach": "隐藏逐行检查",
       "download": "下载",
-      "tailor": "为某个职位调整",
+      "tailor": "为某个职位定制",
       "delete": "删除"
     },
     "section": {
@@ -694,7 +694,7 @@
         "strong_verbs": "没有无力的开头。保持住。",
         "no_bullets": "这份简历还没有要点。把每段经历拆成以结果结尾的要点。",
         "too_many_bullets": "这里的要点太多了。每段经历留最强的 3 到 5 条。",
-        "good_density": "长度合适。可以单独改写某一条要点，或者为某一个职位调整整份简历。"
+        "good_density": "长度合适。可以单独改写某一条要点，或者为某一个职位定制整份简历。"
       }
     },
     "citation": {
@@ -756,7 +756,7 @@
       "remove": "移除"
     },
     "analyzer": {
-      "title": "简历检查",
+      "title": "简历体检",
       "empty": "没有要改的地方。这份简历读起来很干净。",
       "severity": {
         "critical": "必须改",
@@ -769,7 +769,7 @@
         "contact_email": "填一个邮箱地址 —— 招聘方要有办法联系到你。",
         "contact_phone": "填一个电话号码。级别高一些的职位，往往先从一通电话开始。",
         "contact_location": "填上你所在的城市 —— 很多公司会直接筛掉没写地点的简历。",
-        "contact_links": "加一个领英或作品集链接，让招聘方有地方深入了解你。",
+        "contact_links": "加一个 LinkedIn 或作品集链接，让招聘方有地方深入了解你。",
         "title_missing": "写上你想投的职位名称，整份简历才能讲同一个故事。",
         "summary_missing": "写 2 到 3 句个人简介。这是招聘方最先读到的内容。",
         "summary_short": "你的个人简介有 {words} 个词。目标是 40 到 60 个 —— 够说清你的卖点，又能一眼扫完。",
@@ -944,7 +944,7 @@
     "follow_up": {
       "row": "{count, plural, other {有 # 家公司 10 天内没有回复。}}",
       "write_cta": "写一封跟进邮件",
-      "grounding": "根据职位说明和你的简历写成。",
+      "grounding": "根据职位描述和你的简历写成。",
       "open_mail": "在你的邮件应用里打开"
     },
     "card": {
@@ -993,7 +993,7 @@
     "add": {
       "cta": "添加职位",
       "title": "添加一个在别处找到的职位",
-      "field_url": "职位说明的链接",
+      "field_url": "职位页面的链接",
       "field_url_placeholder": "https://example.com/jobs/1234",
       "field_title": "职位名称",
       "field_title_placeholder": "高级产品经理",
@@ -1040,7 +1040,7 @@
       "note_label": "在历史记录中添加一条备注",
       "notes": "备注",
       "notes_placeholder": "姓名、链接、聊了什么",
-      "open_posting": "打开职位说明",
+      "open_posting": "打开职位页面",
       "outcome_none": "仍在进行中",
       "practice": "针对这个职位练习",
       "salary": "你记下的薪资",
@@ -1167,7 +1167,7 @@
         "viewReport": "查看报告",
         "roleLegend": "你要面试哪个职位？",
         "categories": "职位类别",
-        "noMatch": "没有职位匹配“{query}”。换个更短的词，或者直接粘贴职位说明。",
+        "noMatch": "没有职位匹配“{query}”。换个更短的词，或者直接粘贴职位描述。",
         "planLegend": "你的这场面试",
         "planHint": "已按职位配好，哪项都能改。",
         "pickRoleFirst": "先在上面选一个职位。",
@@ -1212,9 +1212,9 @@
         "searchPlaceholder": "高级产品经理、iOS、机器学习…",
         "more": "还有 {count} 个 —— 请缩小搜索范围",
         "tabBrowse": "浏览职位",
-        "tabPaste": "粘贴职位说明",
-        "jdPlaceholder": "粘贴完整的职位说明 —— 职位名称、你要做的事、他们的要求。问题会根据它来出。",
-        "jdHint": "粘贴完整的职位说明。问题会围绕它的要求来出。",
+        "tabPaste": "粘贴职位描述",
+        "jdPlaceholder": "粘贴完整的职位描述 —— 职位名称、你要做的事、他们的要求。问题会根据它来出。",
+        "jdHint": "粘贴完整的职位描述。问题会围绕它的要求来出。",
         "jdCount": "{count} 个字符",
         "jdTooShort": "再多一点。把你要做的事和他们的要求都贴上，问题才会准确。",
         "categories": {
@@ -1330,7 +1330,7 @@
         "start": "开始面试",
         "starting": "开始中…",
         "language": "语言",
-        "roleFromJd": "（来自你粘贴的职位说明）"
+        "roleFromJd": "（来自你粘贴的职位描述）"
       },
       "modeShort": {
         "voice": "语音",
@@ -1349,8 +1349,8 @@
       },
       "preview": {
         "title": "这个职位会被问到什么",
-        "sub": "这场面试会覆盖的内容，取自在招职位说明。",
-        "empty": "先选一个职位或粘贴职位说明，再选面试官和形式，就能看到问题会覆盖什么。",
+        "sub": "这场面试会覆盖的内容，取自在招职位的描述。",
+        "empty": "先选一个职位或粘贴职位描述，再选面试官和形式，就能看到问题会覆盖什么。",
         "loading": "正在读取在招职位…",
         "error": "这个预览暂时看不了。你的面试仍然会按这个职位来准备。",
         "retry": "重试",
@@ -1362,7 +1362,7 @@
         "questionsLabel": "开场问题示例",
         "sourcesLabel": "取自在招职位",
         "sourcesGeneric": "基于这个职位的通用情况。",
-        "fromJd": "取自你粘贴的职位说明"
+        "fromJd": "取自你粘贴的职位描述"
       },
       "personas": {
         "maya": {
@@ -1922,11 +1922,11 @@
       "clear": "不针对这个职位练习",
       "closed": "这个职位已经下架。你仍然可以针对它练习。",
       "eyebrow": "正在针对这个职位练习",
-      "notFound": "这里找不到这个职位。请改为选择一个职位，或粘贴职位说明。",
+      "notFound": "这里找不到这个职位。请改为选择一个职位，或粘贴职位描述。",
       "resume": {
         "chosen": "使用你选的简历：{name}",
         "latest": "使用你最近的一份简历：{name}",
-        "none": "还没有简历。面试官只依据职位说明提问。",
+        "none": "还没有简历。面试官只依据职位描述提问。",
         "primary": "使用你的主简历：{name}",
         "tailored": "使用你为这个职位定制的简历：{name}"
       },
@@ -1940,7 +1940,7 @@
         "desc": "只有语音，像打电话一样。适合先理清回答的结构。"
       }
     },
-    "questionsLink": "练习题",
+    "questionsLink": "面试题库",
     "recording": {
       "audio": "录音和文字记录",
       "audioVideo": "录音、录像和文字记录",
@@ -2009,7 +2009,7 @@
       "notif": "通知",
       "appearance": "外观",
       "billing": "套餐和账单",
-      "account": "账户",
+      "account": "账号",
       "danger": "危险操作"
     },
     "savebar": {
@@ -2033,11 +2033,11 @@
       "dark": "深色"
     },
     "identity": {
-      "eyebrow": "账户",
+      "eyebrow": "账号",
       "title_before": "关于",
       "title_em": "你自己",
       "title_after": "。",
-      "sub": "每一次申请、每一份调整过的简历，都是从这里出发的。",
+      "sub": "每一次申请、每一份定制简历，都是从这里出发的。",
       "group_profile": "个人资料",
       "full_name": "姓名",
       "pronouns": "称谓",
@@ -2145,7 +2145,7 @@
         "tooShort": "密码至少要 8 个字符。",
         "mismatch": "两次输入的密码不一致。",
         "wrongPassword": "这不是你当前的密码。",
-        "noPassword": "这个账户没有设置密码。",
+        "noPassword": "这个账号没有设置密码。",
         "weakPassword": "请换一个更强的密码。",
         "rateLimited": "尝试次数太多。等一分钟再试。",
         "generic": "密码没有修改成功。请重试。"
@@ -2158,9 +2158,9 @@
       "title_after": "的按钮。",
       "sub": "每一项都会让你确认一次。确认之后就无法撤销。",
       "delete_data_title": "删除你的求职数据",
-      "delete_data_desc": "清空你的职位列表和申请记录。你的账户和简历会保留。",
+      "delete_data_desc": "清空你的职位列表和申请记录。你的账号和简历会保留。",
       "delete_data_btn": "删除求职数据",
-      "delete_data_confirm": "这会清空你的职位列表、申请记录和历史记录。你的账户和简历会保留。",
+      "delete_data_confirm": "这会清空你的职位列表、申请记录和历史记录。你的账号和简历会保留。",
       "delete_data_confirm_label": "确认",
       "delete_data_confirm_hint": "输入 {keyword} 以确认。",
       "delete_data_confirm_keyword": "DELETE",
@@ -2168,23 +2168,23 @@
       "delete_data_confirm_error": "请一字不差地输入 {keyword} 以确认。",
       "delete_data_cancel": "取消",
       "delete_data_error": "数据没有删除成功。请重试。",
-      "delete_data_success": "已删除 {count} 条记录。你的账户和简历没有受影响。",
+      "delete_data_success": "已删除 {count} 条记录。你的账号和简历没有受影响。",
       "delete_data_done": "完成",
-      "delete_account_title": "删除你的账户",
+      "delete_account_title": "删除你的账号",
       "delete_account_desc": "会删掉所有东西：简历、申请记录、面试文字记录和录音。无法撤销。",
-      "delete_account_btn": "删除账户",
-      "deleteAccount": "删除账户",
-      "deleteDescription": "会删掉你的账户、简历、面试录音和订阅。无法撤销。",
+      "delete_account_btn": "删除账号",
+      "deleteAccount": "删除账号",
+      "deleteDescription": "会删掉你的账号、简历、面试录音和订阅。无法撤销。",
       "confirmEmailLabel": "确认你的邮箱",
       "confirmEmailHint": "输入 {email} 以确认。",
       "reasonLabel": "原因",
       "reasonPlaceholder": "告诉我们你为什么要离开（必填）",
       "cancel": "取消",
-      "delete": "删除我的账户",
+      "delete": "删除我的账号",
       "error": {
-        "mismatch": "这不是这个账户的邮箱。",
+        "mismatch": "这不是这个账号的邮箱。",
         "reasonRequired": "请告诉我们你为什么要离开。",
-        "generic": "账户没有删除成功。请重试。"
+        "generic": "账号没有删除成功。请重试。"
       }
     }
   },
@@ -2196,16 +2196,16 @@
       "password": "密码",
       "submit": "登录",
       "submitting": "登录中…",
-      "no_account": "还没有账户？",
+      "no_account": "还没有账号？",
       "signup_cta": "创建一个",
       "error_generic": "邮箱和密码对不上。请检查后重试。"
     },
     "signup": {
       "email": "邮箱",
       "password": "密码",
-      "has_account": "已经有账户了？",
+      "has_account": "已经有账号了？",
       "login_cta": "登录",
-      "error_generic": "账户没有创建成功。请重试；如果一直失败，换一个邮箱。"
+      "error_generic": "账号没有创建成功。请重试；如果一直失败，换一个邮箱。"
     },
     "field": {
       "show_password": "显示密码",
@@ -2222,14 +2222,14 @@
     },
     "agreements": {
       "age": "我已年满 16 周岁",
-      "legal": "创建账户即表示你同意<terms>用户协议</terms>和<privacy>隐私政策</privacy>。",
+      "legal": "创建账号即表示你同意<terms>用户协议</terms>和<privacy>隐私政策</privacy>。",
       "marketing": "向我发送产品动态和使用技巧",
       "pdpa": "我已阅读<notice>个人资料告知</notice>（台湾《个人资料保护法》）。"
     },
     "callback": {
-      "consentBody": "请确认以下内容，以创建你的账户。",
+      "consentBody": "请确认以下内容，以创建你的账号。",
       "consentTitle": "还差一步",
-      "emailBody": "{provider} 没有提供已验证的邮箱地址。请填写一个邮箱并完成验证。你打开我们发送的链接后，账户才会创建。",
+      "emailBody": "{provider} 没有提供已验证的邮箱地址。请填写一个邮箱并完成验证。你打开我们发送的链接后，账号才会创建。",
       "emailSubmit": "发送验证链接",
       "emailTitle": "填写你的邮箱",
       "failed": "登录没有完成",
@@ -2241,11 +2241,11 @@
     },
     "contextual": {
       "loginApply": "登录后查看你与 {jobTitle} 的匹配度",
-      "signupApply": "免费注册账户，查看你与 {jobTitle} 的匹配度",
-      "signupDefault": "创建你的免费账户",
-      "signupJob": "免费注册账户，保存 {jobTitle}",
-      "signupResumeCheck": "免费注册账户，保留你的简历检查结果",
-      "signupResumeJobMatch": "免费注册账户，保留你的简历和职位匹配结果",
+      "signupApply": "免费注册账号，查看你与 {jobTitle} 的匹配度",
+      "signupDefault": "创建你的免费账号",
+      "signupJob": "免费注册账号，保存 {jobTitle}",
+      "signupResumeCheck": "免费注册账号，保留你的简历体检结果",
+      "signupResumeJobMatch": "免费注册账号，保留你的简历和职位匹配结果",
       "signupSubtitle": "看看哪些职位适合你，以及应该先改哪里。"
     },
     "danger": {
@@ -2256,13 +2256,13 @@
       "rateLimited": "尝试次数太多。等一分钟再试。"
     },
     "forgot": {
-      "sentBody": "如果 {email} 已注册账户，重置链接已经发出。链接 30 分钟内有效。",
+      "sentBody": "如果 {email} 已注册账号，重置链接已经发出。链接 30 分钟内有效。",
       "sentTitle": "请查看你的邮箱",
       "submit": "发送重置链接",
       "submitting": "发送中…",
-      "subtitle": "输入你注册时用的邮箱。如果它已注册账户，我们会发送一个 30 分钟内有效的链接。",
+      "subtitle": "输入你注册时用的邮箱。如果它已注册账号，我们会发送一个 30 分钟内有效的链接。",
       "title": "重置密码",
-      "unavailable": "暂时无法通过邮件重置密码。请联系客服找回你的账户。"
+      "unavailable": "暂时无法通过邮件重置密码。请联系客服找回你的账号。"
     },
     "gate": {
       "redirecting": "这个应用面向求职者。正在带你前往 {site}…"
@@ -2274,10 +2274,10 @@
       "title": "请在浏览器中打开，再使用 {provider} 账号继续"
     },
     "loginForm": {
-      "deleted": "这个账户已被删除。",
-      "disabled": "这个账户已被停用。如果你认为这是误判，请联系客服。",
+      "deleted": "这个账号已被删除。",
+      "disabled": "这个账号已被停用。如果你认为这是误判，请联系客服。",
       "forgot": "忘记密码？",
-      "notSeeker": "这个邮箱对应的账户不是求职者账户。请换一个邮箱登录。",
+      "notSeeker": "这个邮箱对应的账号不是求职者账号。请换一个邮箱登录。",
       "oauthError": "通过该服务登录没有完成。请重试，或改用邮箱。",
       "twoFactorUnavailable": "暂时无法登录。请一分钟后再试。"
     },
@@ -2288,14 +2288,14 @@
       "useEmail": "改用邮箱"
     },
     "otherBrand": {
-      "body": "这个账户属于 %OTHER_BRAND%。请前往那里继续。",
+      "body": "这个账号属于 %OTHER_BRAND%。请前往那里继续。",
       "cta": "前往 %OTHER_BRAND%",
-      "title": "这个账户属于 %OTHER_BRAND%"
+      "title": "这个账号属于 %OTHER_BRAND%"
     },
     "panel": {
       "job": "你刚才在看 {jobTitle}。注册后可以查看你的简历与它的匹配度。",
       "jobAtCompany": "你刚才在看 {company} 的 {jobTitle}。注册后可以查看你的简历与它的匹配度。",
-      "resumeCheck": "保留你的简历检查结果，然后为你选中的每个职位定制简历。",
+      "resumeCheck": "保留你的简历体检结果，然后为你选中的每个职位定制简历。",
       "resumeJobMatch": "保留你的匹配结果，然后为那个职位定制简历。"
     },
     "reset": {
@@ -2335,22 +2335,22 @@
       "ageRequired": "请确认你已年满 16 周岁，然后继续。",
       "checkEmailBody": "我们已向 {email} 发送了一封邮件。请打开邮件继续。",
       "checkEmailTitle": "请查看你的邮箱",
-      "closed": "暂未开放邮箱注册。已有账户可以正常登录。",
+      "closed": "暂未开放邮箱注册。已有账号可以正常登录。",
       "emailInvalid": "请输入有效的邮箱地址。",
-      "emailTaken": "这个邮箱已注册过账户。<signin>直接登录。</signin>",
+      "emailTaken": "这个邮箱已注册过账号。<signin>直接登录。</signin>",
       "pdpaRequired": "请阅读并同意个人资料告知，然后继续。",
       "ruleDigit": "至少包含一个数字",
       "ruleLength": "至少 8 个字符",
       "ruleLetter": "至少包含一个字母",
       "ruleMet": "（已满足）",
       "rulesLabel": "密码要求",
-      "submit": "创建账户",
-      "submitting": "正在创建账户…",
+      "submit": "创建账号",
+      "submitting": "正在创建账号…",
       "weakPassword": "请使用至少 8 个字符，并包含至少一个字母和一个数字。"
     },
     "verify": {
-      "accountExistsBody": "这个邮箱已注册过账户。没有创建新账户，也没有为它添加新的登录方式。请用你平时的方式登录。",
-      "accountExistsTitle": "你已经有账户了",
+      "accountExistsBody": "这个邮箱已注册过账号。没有创建新账号，也没有为它添加新的登录方式。请用你平时的方式登录。",
+      "accountExistsTitle": "你已经有账号了",
       "expired": "链接已过期。请在设置里重新发送。",
       "failedTitle": "这个链接无法使用",
       "invalid": "链接无效，或者已经用过。",
@@ -2464,7 +2464,7 @@
       "practice": {
         "title": "AI面试练习",
         "sub": "模拟企业常用的 AI 面试形式。每次练习结束都有报告：哪些回答不错，哪些需要改。",
-        "cta": "试一次面试练习"
+        "cta": "试一场练习面试"
       },
       "free": {
         "title": "核心功能免费",
@@ -2579,7 +2579,7 @@
           },
           "s1": {
             "title": "选职位或形式",
-            "body": "从收藏的职位或常见形式开始。"
+            "body": "从保存的职位或常见形式开始。"
           },
           "s2": {
             "title": "回答问题",
@@ -2813,7 +2813,7 @@
             "title": "先看差距"
           },
           "s3": {
-            "body": "收藏职位、定制简历，或者练习面试。",
+            "body": "保存职位、定制简历，或者练习面试。",
             "title": "采取行动"
           },
           "sample": {
@@ -2857,7 +2857,7 @@
           "title": "每周备好申请材料，等你检查"
         },
         "referrals": {
-          "eyebrow": "联系人",
+          "eyebrow": "人脉",
           "metaDescription": "找到公司里可以询问职位情况的人，并起草一条由你自己发送的消息。",
           "metaTitle": "公司里的联系人",
           "q1": {
@@ -2870,7 +2870,7 @@
           },
           "s1": {
             "body": "查看这家公司的搜索链接。",
-            "title": "在职位页打开“联系人”"
+            "title": "在职位页打开“人脉”"
           },
           "s2": {
             "body": "从一份简短的草稿开始，改成你自己的话。",
@@ -2962,31 +2962,31 @@
       "plansTitle": "套餐",
       "free": "免费版",
       "freePrice": "免费",
-      "freeNote": "职位列表、匹配度、筛选和投递记录，AI 功能有每日次数。",
-      "freeNoteNoFeed": "简历、投递记录和提醒。",
+      "freeNote": "职位列表、匹配度、筛选和申请记录，AI 功能有每日次数。",
+      "freeNoteNoFeed": "简历、申请记录和提醒。",
       "notSet": "价格尚未设定",
       "notOpen": "暂未开放",
       "notOpenNote": "付费会员暂时还不能购买。以下是开放后适用的收费标准。",
-      "practiceCredits": "{count, plural, other {# 次面试练习}}{per, select, period {，每个计费周期} month {，每月} other {}}",
+      "practiceCredits": "{count, plural, other {# 场练习面试}}{per, select, period {，每个计费周期} month {，每月} other {}}",
       "cta": "免费开始",
       "loading": "正在加载套餐…",
       "error": "套餐加载失败，请刷新重试。",
       "capsTitle": "次数上限",
-      "capsSub": "会员也有次数上限，用来防止滥用。我们把它写在这里，让你付费前就知道。",
+      "capsSub": "Pro 会员也有次数上限，用来防止滥用。我们把它写在这里，让你付费前就知道。",
       "capsAction": "功能",
       "capsFree": "免费版",
-      "capsPro": "会员",
+      "capsPro": "Pro",
       "savedSearches": "订阅搜索",
       "instantAlerts": "即时职位提醒邮件",
       "count": "{count}",
       "perDay": "每天 {count} 次",
       "upToPerDay": "每天最多 {count} 次",
       "freeAlways": "所有套餐都免费",
-      "freeAlwaysBody": "职位列表、匹配度和差距说明、筛选、搜索、发现和投递记录。",
-      "freeAlwaysBodyNoFeed": "简历、投递记录和截止日期提醒。",
+      "freeAlwaysBody": "职位列表、匹配度和差距说明、筛选、搜索、探索和申请记录。",
+      "freeAlwaysBodyNoFeed": "简历、申请记录和截止日期提醒。",
       "freeAlwaysCampus": "校招日历也免费。",
       "refundTitle": "退款",
-      "refund1": "首次订阅付款后 7 天内（按周计费为 48 小时内），如果使用需要会员的功能少于 5 次，可以退款。",
+      "refund1": "首次订阅付款后 7 天内（按周计费为 48 小时内），如果使用需要 Pro 会员的功能少于 5 次，可以退款。",
       "refund2": "不想要的自动续费，可在 3 天内退款。",
       "refund3": "未使用的面试练习包可以退款。",
       "refund4": "在欧盟和英国，你可以在 14 天内撤回并全额退款，除非你要求立即开始使用付费功能。",
@@ -3007,7 +3007,7 @@
         "a": "这个功能要等次数重置后才能再用：每日次数在当地时间零点重置，每周次数在当地时间周一零点重置。其他功能照常使用。"
       },
       "q3": {
-        "q": "没用完的次数会累积吗？",
+        "q": "没用完的额度会累积吗？",
         "a": "不会。次数按天或按周重置，见上表。面试练习包在标明的月数内有效。"
       }
     },
@@ -3078,7 +3078,7 @@
       },
       "q4": {
         "q": "我打开了申请页面但没投，怎么改？",
-        "a": "在职位上点“撤销”，或在投递记录里修改状态。"
+        "a": "在职位上点“撤销”，或在申请记录里修改状态。"
       },
       "q5": {
         "q": "怎么删除账号？",
@@ -3134,7 +3134,7 @@
       },
       "affinity": {
         "title": "你表现出的兴趣",
-        "body": "和你收藏或打开过的职位相似的会靠前，和你隐藏过的相似的会靠后。越早的操作影响越小。"
+        "body": "和你保存或打开过的职位相似的会靠前，和你隐藏过的相似的会靠后。越早的操作影响越小。"
       },
       "source": {
         "title": "职位来源",
@@ -3147,7 +3147,7 @@
         "industry": "行业经验",
         "logistics": "地点、薪资与工作许可",
         "careerPath": "你的职业发展路径",
-        "tiers": "档位：很合适 {great} 分及以上 · 比较合适 {good} 到 {goodTop} 分 · 可以试试 {possible} 到 {possibleTop} 分 · 差距较大 低于 {possible} 分。",
+        "tiers": "档位：很合适 {great} 分及以上 · 较合适 {good} 到 {goodTop} 分 · 可能合适 {possible} 到 {possibleTop} 分 · 不太合适 低于 {possible} 分。",
         "notChance": "这不是你被录用的概率。",
         "weight": "占匹配度的 {pct}%"
       },
@@ -3199,7 +3199,7 @@
           "q": "%BRAND% 是什么？"
         },
         "q2": {
-          "a": "不会。每份申请都由你在企业的网站上打开并自己提交。你打开申请页面后，这个职位会在投递记录里移到“已申请”；如果你没有申请，可以撤销。",
+          "a": "不会。每份申请都由你在企业的网站上打开并自己提交。你打开申请页面后，这个职位会在申请记录里移到“已申请”；如果你没有申请，可以撤销。",
           "q": "%BRAND% 会替我提交申请吗？"
         },
         "q3": {
@@ -3211,7 +3211,7 @@
           "q": "这些职位从哪里来？"
         },
         "q5": {
-          "a": "免费版包含职位列表、匹配度和投递记录，AI 功能有每日次数上限。Pro 会提高这些上限。所有价格和次数上限都在价格页上。",
+          "a": "免费版包含职位列表、匹配度和申请记录，AI 功能有每日次数上限。Pro 会提高这些上限。所有价格和次数上限都在价格页上。",
           "q": "费用是多少？"
         },
         "q6": {
@@ -3244,7 +3244,7 @@
         "notSet": "价格尚未设定",
         "proNote": "每项 AI 功能的每日次数上限更高",
         "seeAll": "查看全部套餐和次数上限",
-        "sub": "职位列表、匹配度、筛选和投递记录都免费。Pro 提高 AI 功能的每日次数上限。",
+        "sub": "职位列表、匹配度、筛选和申请记录都免费。Pro 提高 AI 功能的每日次数上限。",
         "title": "免费开始。需要更多时再升级。"
       },
       "sample": {
@@ -3797,7 +3797,7 @@
         "marketIntl": "国际",
         "more": "显示更多",
         "note": "存档备注（选填）",
-        "openPosting": "打开职位说明",
+        "openPosting": "打开职位页面",
         "reason": {
           "agency": "中介发布",
           "duplicate": "重复",
@@ -3820,7 +3820,7 @@
           "intl_pay_to_apply": "申请需要付费。"
         },
         "signalQuote": "“{quote}”",
-        "signalsTitle": "在职位说明中发现的诈骗迹象（由规则判定，附所依据的原句）：",
+        "signalsTitle": "在职位描述中发现的诈骗迹象（由规则判定，附所依据的原句）：",
         "stateClosed": "已关闭",
         "stateOpen": "对用户可见",
         "status": "显示",
@@ -3889,7 +3889,7 @@
           "enrichBacklog": "等待补全详情的职位",
           "enrichBacklogDetail": "{open} 个在招职位中，{share} 已有详情",
           "enrichCalls": "职位详情调用",
-          "enrichCallsDetail": "读取职位说明的 AI 调用次数，对比每日上限",
+          "enrichCallsDetail": "读取职位描述的 AI 调用次数，对比每日上限",
           "newJobs": "今天新增职位",
           "newJobsDetail": "最近 7 天的日均：{avg}",
           "queriesDue": "到期待运行的职位搜索",
@@ -4069,7 +4069,7 @@
     "reliability_title": "了解每个来源返回了什么。",
     "reliability_body": "查看服务商状态和部分返回的结果。来源故障会明确显示，让你的集成程序决定是否重试。",
     "access_title": "访问权限由你掌控。",
-    "access_body": "为你的服务器创建具名密钥，并随时从账户中撤销。请将密钥保存在后端，不要放入浏览器代码。",
+    "access_body": "为你的服务器创建具名密钥，并随时从账号中撤销。请将密钥保存在后端，不要放入浏览器代码。",
     "quickstart": "发起第一次搜索",
     "quickstart_body": "创建密钥，将它保存在服务器的环境变量中，然后向你的 %BRAND% 部署地址发送以下请求。",
     "example": "请求示例",
@@ -4079,7 +4079,7 @@
     "terms_title": "来源可用性与使用规则",
     "terms_body": "可用来源取决于服务器配置和服务商授权。职位数据的使用、存储和再分发仍须遵守服务商条款。此端点不会提交求职申请。",
     "keys_title": "API 密钥",
-    "keys_intro": "将你的服务器连接到 %BRAND% 职位搜索。每个密钥归属于你的账户，可单独撤销。",
+    "keys_intro": "将你的服务器连接到 %BRAND% 职位搜索。每个密钥归属于你的账号，可单独撤销。",
     "key_name": "密钥名称",
     "key_placeholder": "例如：招聘门户",
     "create": "创建 API 密钥",
@@ -4233,7 +4233,7 @@
     "stripeNotConfigured": "尚未连接 Stripe，仅显示已记录的支付宝支付。",
     "usageLedger": "计量用量",
     "featureRequest": "功能请求",
-    "signup": "账户已创建",
+    "signup": "账号已创建",
     "trackingSince": "自 {date} 起记录登录与功能使用",
     "active": "活跃",
     "inactive": "不活跃",
@@ -4255,14 +4255,14 @@
       "jd_parse": "职位描述分析",
       "job_apply": "标记已申请",
       "job_match": "职位匹配",
-      "job_save": "收藏职位",
+      "job_save": "保存职位",
       "job_search": "职位搜索",
       "keyword_extract": "关键词提取",
       "match_score": "职位匹配评分",
       "mock_interview": "模拟面试",
       "negotiation": "录用薪酬谈判",
       "onboarding": "入门引导对话",
-      "onboarding_complete": "完成账户设置",
+      "onboarding_complete": "完成账号设置",
       "other": "其他",
       "preferences_update": "更新偏好",
       "resume_create": "创建简历",
@@ -4392,9 +4392,9 @@
     },
     "wechatBrowser": {
       "title": "在浏览器中打开",
-      "download": "微信内无法下载文件。请点击右上角 ··· 选择「在浏览器中打开」。",
+      "download": "微信内无法下载文件。请点击右上角 ··· 选择“在浏览器中打开”。",
       "extension": "微信内无法使用浏览器插件。请在电脑浏览器中打开此页面。",
-      "general": "微信内无法使用此功能。请点击右上角 ··· 选择「在浏览器中打开」。",
+      "general": "微信内无法使用此功能。请点击右上角 ··· 选择“在浏览器中打开”。",
       "copy": "复制链接",
       "copied": "链接已复制"
     },
@@ -4415,8 +4415,8 @@
       "createTitle": "生成邀请码",
       "count": "数量",
       "maxUses": "每个可用次数",
-      "expiresAt": "到期日期（可选）",
-      "note": "备注（可选）",
+      "expiresAt": "到期日期（选填）",
+      "note": "备注（选填）",
       "create": "生成邀请码",
       "creating": "生成中…",
       "newCodes": "新邀请码，请立即复制，之后不会再显示。",
@@ -4785,10 +4785,10 @@
     "retry": "重试",
     "settings": {
       "alertsGroup": "职位提醒",
-      "alertsLoadFailed": "已保存的搜索没有加载出来。",
-      "alertsNone": "你还没有保存任何搜索。保存一个后，提醒就会开始。",
+      "alertsLoadFailed": "订阅搜索没有加载出来。",
+      "alertsNone": "你还没有订阅搜索。保存一个后，提醒就会开始。",
       "alertsProNote": "Pro 会员可以在新职位出现时立即收到提醒。",
-      "alertsSub": "提醒按你保存的搜索发送。每个搜索有各自的设置。",
+      "alertsSub": "提醒按你的订阅搜索发送。每个搜索有各自的设置。",
       "channelToggle": "{category}：{channel}",
       "channels": {
         "email": "邮件",
@@ -4821,7 +4821,7 @@
       "retry": "重试",
       "rows": {
         "alert": "职位提醒",
-        "alertSub": "符合你已保存搜索的新职位。",
+        "alertSub": "符合你订阅搜索的新职位。",
         "invitation": "邀请",
         "invitationSub": "企业邀请你申请职位的消息。",
         "reminder": "提醒事项",
@@ -4957,7 +4957,7 @@
     },
     "admin": {
       "title": "可疑职位待审核",
-      "sub": "规则、AI 检查或用户举报标记的职位。被标记的职位不会出现在推荐和职位探索中；用户自己导入的职位仍对其本人可见，并附带风险提示。",
+      "sub": "规则、AI 检查或用户举报标记的职位。被标记的职位不会出现在推荐和“探索”中；用户自己导入的职位仍对其本人可见，并附带风险提示。",
       "loading": "加载中…",
       "loadError": "列表加载失败，请稍后再试。",
       "tabsLabel": "审核状态",
@@ -4998,7 +4998,7 @@
       "reviewedNoName": "于 {date}{decision, select, clear {放行} other {确认}}",
       "blacklist": {
         "title": "企业黑名单",
-        "sub": "黑名单企业的所有在招职位都会被标记，不会出现在推荐和职位探索中。移出黑名单后，没有其他风险信号的职位会恢复。",
+        "sub": "黑名单企业的所有在招职位都会被标记，不会出现在推荐和“探索”中。移出黑名单后，没有其他风险信号的职位会恢复。",
         "employer": "企业名称",
         "reason": "原因",
         "add": "加入黑名单",
@@ -5018,7 +5018,7 @@
       "text": "AI 辅助生成",
       "document": "AI 辅助生成的文件",
       "audio": "AI 合成语音",
-      "title": "由人工智能辅助生成，使用前请核对。"
+      "title": "由 AI 辅助生成，使用前请核对。"
     },
     "docs": {
       "terms": "用户协议",
@@ -5096,22 +5096,22 @@
         "auto": "到期自动删除",
         "provider": "由数据库服务商设置",
         "manual": "尚未自动删除",
-        "minimum": "至少保存这么久；注销账户时一并删除"
+        "minimum": "至少保存这么久；注销账号时一并删除"
       },
       "rows": {
         "assistant_messages": "求职助手对话",
-        "job_interactions": "职位浏览、收藏等操作记录",
+        "job_interactions": "职位浏览、保存等操作记录",
         "feed_impressions": "向你展示的职位列表",
         "product_events": "产品使用事件",
-        "closed_accounts": "注销账户后的账户数据",
+        "closed_accounts": "注销账号后的账号数据",
         "soft_deleted_rows": "你删除的简历、求职信、跟踪的职位和求职助手记忆",
         "application_artifacts": "投递所用文件的副本",
-        "inactive_accounts": "长期未登录的账户（提前 30 天邮件通知）",
+        "inactive_accounts": "长期未登录的账号（提前 30 天邮件通知）",
         "auth_tokens": "验证码和登录链接（过期后）",
         "known_devices": "你登录过的设备（自该设备最后一次登录起）",
         "ai_label_logs": "AI 生成内容标识记录",
         "content_safety_events": "内容安全检查记录",
-        "interview_recordings": "面试练习录音和文字记录",
+        "interview_recordings": "练习面试录音和文字记录",
         "tool_results": "免费工具的结果（报告和从你的文件中读取的文字）",
         "anon_alerts_unconfirmed": "未确认的职位提醒订阅（自最后一封确认邮件起）",
         "anon_alerts_unsubscribed": "未登录时订阅、已退订的职位提醒（含邮箱地址）",
@@ -5124,7 +5124,7 @@
       "title": "隐私与个人数据",
       "intro": "获取你的数据副本，申请更正或删除，并查看我们保存数据的期限。",
       "exportTitle": "下载我的数据",
-      "exportBody": "我们会把你账户中的全部数据整理成一个文件。准备好后会显示在这里，并发邮件通知你。",
+      "exportBody": "我们会把你账号中的全部数据整理成一个文件。准备好后会显示在这里，并发邮件通知你。",
       "exportCta": "准备我的数据",
       "exportStarting": "正在提交…",
       "exportQueued": "正在准备文件，完成后此页面会自动更新。",
@@ -5162,8 +5162,8 @@
         "done": "已完成",
         "rejected": "未通过"
       },
-      "deleteTitle": "注销账户",
-      "deleteBody": "如需注销整个账户并删除其中全部数据，请前往“危险操作”中的注销账户。",
+      "deleteTitle": "注销账号",
+      "deleteBody": "如需注销整个账号并删除其中全部数据，请前往“危险操作”中的注销账号。",
       "deleteLink": "前往危险操作"
     },
     "consents": {
@@ -5177,25 +5177,25 @@
       "turnOn": "开启",
       "turnOff": "关闭",
       "changed": "更改于 {date}",
-      "notWithdrawable": "此项只能通过注销账户结束。",
+      "notWithdrawable": "此项只能通过注销账号结束。",
       "englishOnly": "以英文显示：此文本尚无经审核的译文。",
       "loadError": "你的授权未能加载。",
       "retry": "重试",
       "error": "更改未保存，请重试。",
       "outdated": "此文本已更新，请刷新后阅读最新版本。",
       "reload": "刷新",
-      "closeTitle": "撤回授权并注销账户？",
-      "closeBody": "内测期间本服务在中国大陆境外运行，没有此项授权无法继续提供服务。撤回后会立即关闭你的账户并删除你的数据，且无法恢复。",
-      "closeConfirm": "撤回并注销我的账户",
-      "closeKeep": "保留我的账户",
-      "closing": "你的账户已关闭，数据正在删除，你将被退出登录。"
+      "closeTitle": "撤回授权并注销账号？",
+      "closeBody": "内测期间本服务在中国大陆境外运行，没有此项授权无法继续提供服务。撤回后会立即关闭你的账号并删除你的数据，且无法恢复。",
+      "closeConfirm": "撤回并注销我的账号",
+      "closeKeep": "保留我的账号",
+      "closing": "你的账号已关闭，数据正在删除，你将被退出登录。"
     },
     "explain": {
       "title": "为什么推荐",
       "fromResume": "来自你的简历",
       "fromPosting": "来自职位描述",
       "headline": {
-        "personalized": "为什么推荐：{tier, select, great {很合适} good {比较合适} possible {可以试试} other {差距较大}}",
+        "personalized": "为什么推荐：{tier, select, great {很合适} good {较合适} possible {可能合适} other {不太合适}}",
         "personalizedNoScore": "为什么推荐",
         "nonPersonalized": "按发布时间和筛选条件排序"
       },
@@ -5282,7 +5282,7 @@
   },
   "notifyCn": {
     "subscribe": {
-      "channelOff": "你在通知设置中关闭了微信提醒，这条提醒只会出现在站内消息里。",
+      "channelOff": "你在通知设置中关闭了微信提醒，这条提醒只会出现在消息中心里。",
       "settingsLink": "通知设置"
     },
     "share": {
@@ -5296,7 +5296,7 @@
       "add": "填写 offer 信息",
       "edit": "修改 offer",
       "remove": "删除 offer 信息",
-      "remove_confirm": "确定从这条投递记录中删除 offer 信息吗？",
+      "remove_confirm": "确定从这条申请记录中删除 offer 信息吗？",
       "remove_yes": "删除",
       "remove_keep": "保留",
       "loading": "正在加载 offer 信息…",
@@ -5416,7 +5416,7 @@
       "intro": "并排对比，只使用你填写的数字。",
       "loading": "正在加载你的 offer…",
       "load_error": "暂时无法加载你的 offer，请稍后再试。",
-      "need_two": "至少在两条投递记录中填写 offer 信息后才能对比。打开一条投递记录，选择“填写 offer 信息”。",
+      "need_two": "至少在两条申请记录中填写 offer 信息后才能对比。打开一条申请记录，选择“填写 offer 信息”。",
       "pick": "选择要对比的 offer（最多 {max} 个）",
       "pick_two": "请至少选择两个 offer 进行对比。",
       "table_label": "Offer 并排对比",
@@ -5620,8 +5620,8 @@
         "payNotEnough": "写明薪资的职位还不够多，暂不显示薪资参考。",
         "source": "来自 %BRAND% 收录的职位，按发布薪资统计。截至 {date}。",
         "allCities": "全部城市。",
-        "jobsFor": "{count, plural, =0 {收录中暂时没有{city}的「{role}」在招职位} other {收录中{city}有 # 个「{role}」在招职位}}",
-        "jobsForAllCities": "{count, plural, =0 {收录中暂时没有「{role}」在招职位（全部城市）} other {收录中有 # 个「{role}」在招职位（全部城市）}}",
+        "jobsFor": "{count, plural, =0 {收录中暂时没有{city}的“{role}”在招职位} other {收录中{city}有 # 个“{role}”在招职位}}",
+        "jobsForAllCities": "{count, plural, =0 {收录中暂时没有“{role}”在招职位（全部城市）} other {收录中有 # 个“{role}”在招职位（全部城市）}}",
         "partial": "这个数量只统计了你的其中一项选择，其他选择的数量暂时无法在这里显示。",
         "payPosted": "这些职位写明的月薪：{low}–{high}。"
       }
@@ -5666,7 +5666,7 @@
     },
     "confirm": {
       "title": "确认你的设置",
-      "foundJobs": "{count, plural, =0 {暂时没有找到合适的职位} other {找到 # 个合适的职位}}",
+      "foundJobs": "{count, plural, =0 {暂时没有“较合适”及以上的职位} other {找到 # 个“较合适”及以上的职位}}",
       "indexJobs": "{count, plural, =0 {收录中暂时没有符合条件的在招职位} other {收录中有 # 个符合条件的在招职位}}",
       "programs": "{count, plural, =0 {目前没有正在网申的校招项目} other {# 个校招项目正在网申}}",
       "source": "数量来自 %BRAND% 收录的职位和校招项目。",
@@ -5742,10 +5742,10 @@
       "intro": "%BRAND% 先写好草稿，你检查后自己发送。",
       "channelLabel": "消息类型",
       "channel": {
-        "linkedin_note": "领英好友申请留言",
+        "linkedin_note": "LinkedIn 好友申请留言",
         "email": "邮件",
         "referral_ask": "请人帮忙内推",
-        "follow_up": "投递后跟进",
+        "follow_up": "申请后跟进",
         "wechat": "内推请求（微信/脉脉）"
       },
       "toLabel": "发给",
@@ -5762,13 +5762,13 @@
       "copied": "已复制",
       "openMail": "在邮件应用中打开",
       "openMailHint": "邮件应用会带着这份草稿打开，收件人请你自己填写。",
-      "openLinkedIn": "打开领英",
+      "openLinkedIn": "打开 LinkedIn",
       "markSent": "我已发送",
       "sentOn": "你在 {date} 标记为已发送。",
       "save": "保存修改",
       "saved": "已保存",
       "saveError": "修改没有保存成功。",
-      "savedOnApplication": "已保存到这条投递记录。",
+      "savedOnApplication": "已保存到这条申请记录。",
       "youSend": "%BRAND% 不会替任何人发消息，消息由你自己发送。",
       "aiOff": "目前无法生成草稿。你仍然可以自己写消息。",
       "history": "这个职位的草稿",
@@ -5804,7 +5804,7 @@
         "paid": "有人要求付费",
         "other": "其他问题"
       },
-      "reportNote": "补充说明（可选）",
+      "reportNote": "补充说明（选填）",
       "reportSubmit": "举报",
       "reported": "谢谢，审核人员会尽快查看。",
       "reportedAlready": "你已举报过这个内推码。",
@@ -5817,14 +5817,14 @@
       "shareTitle": "分享一个内推码",
       "fieldCompany": "公司",
       "fieldCode": "内推码",
-      "fieldProgramme": "招聘项目（可选）",
-      "fieldExpires": "截止日期（可选）",
-      "fieldNote": "备注（可选）",
+      "fieldProgramme": "招聘项目（选填）",
+      "fieldExpires": "截止日期（选填）",
+      "fieldNote": "备注（选填）",
       "notePlaceholder": "例如：仅限技术岗",
       "rules": "请勿填写手机号、微信号、邮箱或链接。不要分享需要付费的内推码。",
       "shareSubmit": "提交审核",
       "sharing": "正在提交…",
-      "sharedPending": "谢谢！审核通过后，你的内推码就会显示。",
+      "sharedPending": "谢谢。审核通过后，你的内推码就会显示。",
       "mineTitle": "我分享的内推码",
       "status": {
         "pending": "等待审核",
@@ -5848,7 +5848,7 @@
       "unavailable": "这里暂不提供内推码。",
       "error": {
         "referral_code_duplicate": "这个内推码已经展示或正在审核。",
-        "referral_share_limit": "每天最多分享 10 个内推码，明天再来吧。",
+        "referral_share_limit": "每天最多分享 10 个内推码，请明天再试。",
         "referral_contact_details": "请去掉手机号、微信号、邮箱和链接。",
         "referral_already_reported": "你已经举报过这个内推码。",
         "expiry_past": "这个日期已经过了。",
@@ -6050,7 +6050,7 @@
       },
       "personal": {
         "title": "照片和个人信息",
-        "hint": "都是可选项，不想填的可以留空。"
+        "hint": "都是选填项，不想填的可以留空。"
       },
       "review": {
         "title": "检查",
@@ -6086,7 +6086,7 @@
       "school": "学校",
       "degree": "学历",
       "major": "专业",
-      "gpa": "成绩或排名（可选）",
+      "gpa": "成绩或排名（选填）",
       "start": "开始时间",
       "end": "结束时间",
       "endHint": "如果仍在进行，请留空。",
@@ -6103,7 +6103,7 @@
       "moreBullets": "补充要点",
       "projectName": "项目名称",
       "role": "你的角色",
-      "link": "链接（可选）",
+      "link": "链接（选填）",
       "star": {
         "situation": "背景（S）",
         "situationHint": "当时的情况或要解决的问题是什么？",
@@ -6220,7 +6220,7 @@
       "error": "调整失败，没有改动。请重试。"
     },
     "assistant": {
-      "ask": "就这份简历问问助手",
+      "ask": "就这份简历问问求职助手",
       "prompt": "我正在修改简历，请帮我改得更好。"
     },
     "order": {
@@ -6444,8 +6444,8 @@
     "signup": {
       "titleCheck": "查看完整报告并修改",
       "bodyCheck": "注册免费账号，查看所有问题，保留这份简历并在编辑器里修改。",
-      "titleMatch": "按这个职位修改简历",
-      "bodyMatch": "注册免费账号，保留这份简历，按这个职位修改，并查看附带理由的匹配度评分。",
+      "titleMatch": "为这个职位定制简历",
+      "bodyMatch": "注册免费账号，保留这份简历，为这个职位定制，并查看附带理由的匹配度评分。",
       "cta": "注册免费账号",
       "login": "我已有账号"
     },
@@ -6480,7 +6480,7 @@
       "run_in_progress": "已有一项检查正在进行，请等它完成后再试。",
       "too_many_attempts": "今天尝试次数太多，请明天再试。"
     },
-    "unavailable": "免费简历检查暂未在这里开放。"
+    "unavailable": "免费简历体检暂未在这里开放。"
   },
   "accountV2": {
     "challenge": {
@@ -6602,11 +6602,11 @@
         "open": {
           "added_jobs": "打开你添加的职位",
           "job": "打开这个职位",
-          "people": "打开这个职位的“联系人”标签页",
+          "people": "打开这个职位的“人脉”标签页",
           "practice": "针对这个职位练习面试",
           "report": "查看报告",
           "resume": "打开你的简历",
-          "resume_check": "打开简历检查"
+          "resume_check": "打开简历体检"
         },
         "sort": "职位排序方式：{sort}"
       },
@@ -6626,7 +6626,7 @@
           "rejected": "未录用",
           "saved": "已保存",
           "signed": "已签约",
-          "withdrawn": "已撤回",
+          "withdrawn": "已退出",
           "written_test": "笔试"
         },
         "title": "你的申请"
@@ -6686,8 +6686,8 @@
         },
         "outreach": {
           "confirm": "写草稿",
-          "kept": "草稿已放在这个职位的“联系人”标签页。",
-          "open": "在这个职位的“联系人”标签页打开",
+          "kept": "草稿已放在这个职位的“人脉”标签页。",
+          "open": "在这个职位的“人脉”标签页打开",
           "title": "起草一条关于 {job} 的消息"
         },
         "rewrite": {
@@ -6710,8 +6710,8 @@
         "countAfter": "改动后会显示的职位数：{count}",
         "countNow": "当前搜索显示的职位数：{count}",
         "dismissed": "未应用。你的搜索条件保持不变。",
-        "missingProfile": "这条建议对应的已保存搜索已经不存在。没有做任何改动。",
-        "noProfile": "没有可以修改的已保存搜索。",
+        "missingProfile": "这条建议对应的订阅搜索已经不存在。没有做任何改动。",
+        "noProfile": "没有可以修改的订阅搜索。",
         "notQuite": "还不太对",
         "revertFailed": "之前的搜索条件没有恢复成功。",
         "reverted": "已恢复之前的搜索条件。",
@@ -6796,7 +6796,7 @@
       "notice": {
         "ai_unavailable": "求职助手暂时不可用。",
         "content_blocked": "这条回答有一部分被拦截了。",
-        "copilot_budget_exhausted": "求职助手现在繁忙，请稍后再试。这次没有扣费。",
+        "copilot_budget_exhausted": "求职助手现在繁忙，请稍后再试。没有扣除额度。",
         "credits_exhausted": "今天的求职助手消息次数已用完。",
         "proposal_expired": "这条建议已过期。请重新提问，获取新的建议。",
         "rate_limited": "短时间内消息太多。请稍等一下再试。"
@@ -6805,14 +6805,14 @@
       "proposalExpired": "这条建议已过期。请重新提问，获取新的建议。",
       "resumeTips": {
         "none": "上一次检查没有发现需要修改的地方。",
-        "open": "打开简历检查",
+        "open": "打开简历体检",
         "stale": "这次检查之后，你的简历有过改动。请重新检查，获取最新的建议。",
         "title": "简历建议"
       },
       "rewriteReady": {
         "blocked": "{count, plural, other {有 # 条建议因为加入了你简历里没有的数字，已被去掉。}}",
-        "none": "这一条没能生成改写。你可以在简历检查里自己修改。",
-        "open": "在简历检查里查看并应用",
+        "none": "这一条没能生成改写。你可以在简历体检里自己修改。",
+        "open": "在简历体检里查看并应用",
         "title": "改写建议"
       },
       "salary": {
@@ -6898,13 +6898,13 @@
       "resume": "关于这份简历"
     },
     "empty": {
-      "body": "回答会用到你的个人资料、已保存的搜索和你列表里的职位。任何改动都会先展示给你，只有你确认后才会执行。",
+      "body": "回答会用到你的个人资料、订阅搜索和你列表里的职位。任何改动都会先展示给你，只有你确认后才会执行。",
       "title": "问问职位、搜索条件或简历"
     },
     "errors": {
       "ai_unavailable": "求职助手暂时不可用。",
       "content_blocked": "这条回答的剩余部分被拦截了。",
-      "copilot_budget_exhausted": "求职助手现在繁忙，请稍后再试。这次没有扣费。",
+      "copilot_budget_exhausted": "求职助手现在繁忙，请稍后再试。没有扣除额度。",
       "credits_exhausted": "今天的求职助手消息次数已用完。",
       "default": "回答提前中断了。",
       "feature_disabled": "求职助手暂时不可用。",
@@ -6930,7 +6930,7 @@
       "cancel": "取消",
       "down": "没有帮助",
       "failed": "反馈没有发送成功。",
-      "note": "还有要补充的吗？（可选）",
+      "note": "还有要补充的吗？（选填）",
       "reasonTitle": "这条回答有什么问题？",
       "reasons": {
         "other": "其他问题",
@@ -6982,7 +6982,7 @@
       }
     },
     "page": {
-      "aiOff": "求职助手需要使用 AI，而你的账户已关闭 AI 处理。你可以在隐私设置里开启。",
+      "aiOff": "求职助手需要使用 AI，而你的账号已关闭 AI 处理。你可以在隐私设置里开启。",
       "aiOffLink": "打开隐私设置",
       "title": "求职助手",
       "unavailable": "这里暂不提供求职助手。"
@@ -7090,9 +7090,9 @@
           "noBookingPath": "显示这位教练之前，请先添加预约页面或接收请求的邮箱。",
           "price": "价格须为不小于 0 的数字。",
           "required": "请填写姓名、一句话介绍和教练简介。",
-          "userNotFound": "没有账户使用这个 ID。请检查关联的账户 ID，或留空。",
-          "userTaken": "这个账户已关联到另一位教练。",
-          "userWrongBrand": "这个账户属于另一个站点。请关联这位教练所在站点的账户。"
+          "userNotFound": "没有账号使用这个 ID。请检查关联的账号 ID，或留空。",
+          "userTaken": "这个账号已关联到另一位教练。",
+          "userWrongBrand": "这个账号属于另一个站点。请关联这位教练所在站点的账号。"
         },
         "headline": "一句话介绍",
         "introVideoUrl": "介绍视频链接",
@@ -7111,8 +7111,8 @@
         "specialtiesHint": "用逗号分隔，例如：面试练习, 简历点评",
         "titleEdit": "编辑 {name}",
         "titleNew": "添加教练",
-        "userId": "关联的账户 ID",
-        "userIdHint": "可选。仅在教练在这里有账户时填写。"
+        "userId": "关联的账号 ID",
+        "userIdHint": "可选。仅在教练在这里有账号时填写。"
       },
       "list": "在站点上显示",
       "listed": "已显示",
@@ -7181,7 +7181,7 @@
       "close": "关闭",
       "description": "我们会把这些内容用邮件发给 {name} 和我们的辅导团队。{name} 会直接回复你，和你商定时间和价格。",
       "email": "接收教练回复的邮箱",
-      "emailHint": "如果这不是你账户已验证的邮箱，我们会告知教练该邮箱未经验证。",
+      "emailHint": "如果这不是你账号已验证的邮箱，我们会告知教练该邮箱未经验证。",
       "errors": {
         "consent": "请勾选同意，把你的请求发送给教练。",
         "generic": "请求没有发送成功。请稍后再试。",
@@ -7201,7 +7201,7 @@
       "sending": "发送中…",
       "sent": "请求已发送给 {name}。请留意 {email} 收到的回复。",
       "shareConsent": "把我的名字、邮箱和留言发送给 {name}。对方不属于 %BRAND%。",
-      "shareNote": "只会发送你在这里填写的内容。不会分享你的简历和账户信息。",
+      "shareNote": "只会发送你在这里填写的内容。不会分享你的简历和账号信息。",
       "times": "你方便的时间",
       "timesPlaceholder": "例如：工作日晚上 7 点以后",
       "title": "向 {name} 发送预约请求",
@@ -7234,7 +7234,7 @@
     },
     "eyebrow": "报告",
     "footer": {
-      "charged": "这份报告用掉了 1 次。",
+      "charged": "这份报告使用了 1 个额度。",
       "created": "生成于 {date}",
       "rerun": "重新生成报告"
     },
@@ -7260,7 +7260,7 @@
     "meta": {
       "title": "你与企业要求的对比"
     },
-    "notCharged": "可比较的职位不够，所以没有扣次数。",
+    "notCharged": "可比较的职位不够，所以没有使用额度。",
     "req": {
       "degree": "学历",
       "notEnough": "写明这项要求的职位太少，给不出数字。",
@@ -7276,7 +7276,7 @@
       "yoursYears": "你的：{years, plural, other {# 年}}"
     },
     "retry": "重试",
-    "reused": "搜索和个人资料与今天早些时候相同，所以还是同一份报告。未扣次数。",
+    "reused": "搜索和个人资料与今天早些时候相同，所以还是同一份报告。没有使用额度。",
     "sample": {
       "line": "取自这个搜索中{size, plural, other {最新的 # 个职位}}。",
       "lineWithTotal": "取自这个搜索中{size, plural, other {最新的 # 个职位}}（共 {total} 个）。",
@@ -7324,9 +7324,9 @@
   },
   "coverLetter": {
     "ai": {
-      "label": "根据职位说明和你的简历写成。",
+      "label": "根据职位描述和你的简历写成。",
       "off": "撰写和改写求职信需要用到 AI，而你的账号已关闭 AI。你仍然可以编辑、复制和下载求职信。",
-      "unavailable": "AI 写作暂时不可用。请稍后重试。未扣次数。"
+      "unavailable": "AI 写作暂时不可用。请稍后重试。没有使用额度。"
     },
     "editor": {
       "attach": "附到这份申请",
@@ -7358,34 +7358,34 @@
       "unsaved": "有未保存的修改"
     },
     "error": {
-      "ai_unavailable": "AI 写作暂时不可用。请稍后重试。未扣次数。",
-      "claim_rejected": "AI 写出了你简历上没有的内容，所以这封求职信没有保存。未扣次数。请重试，或者把缺少的经历补充到简历里。",
-      "content_blocked": "内容检查拦下了这次请求。请修改职位说明或你填写的要求后重试。未扣次数。",
-      "credits_exhausted": "今天的求职信次数已用完，明天重置。",
+      "ai_unavailable": "AI 写作暂时不可用。请稍后重试。没有使用额度。",
+      "claim_rejected": "AI 写出了你简历上没有的内容，所以这封求职信没有保存。没有使用额度。请重试，或者把缺少的经历补充到简历里。",
+      "content_blocked": "内容检查拦下了这次请求。请修改职位描述或你填写的要求后重试。没有使用额度。",
+      "credits_exhausted": "今天的求职信额度已用完，明天重置。",
       "failed": "出了点问题，请重试。",
       "not_found": "没有找到这封求职信，它可能已被删除。",
       "pdf_unavailable": "这种语言暂不支持 PDF。请改为下载 Word。",
       "phone_binding_required": "绑定手机号后才能使用 AI 写作。",
-      "posting_unavailable": "改写需要职位说明，而这封求职信对应的职位说明没有保留。请新写一封，并重新粘贴职位说明。",
+      "posting_unavailable": "改写需要职位描述，而这封求职信对应的职位描述没有保留。请新写一封，并重新粘贴职位描述。",
       "resume_too_short": "这份简历内容太少，没法据此写求职信。请先补充你的经历。",
       "resume_unverified": "这份简历在“核对细节”里还有待核对的内容。请先核对，再写求职信。",
       "rewrite_limit": "一封求职信每天可以改写 {limit} 次。你可以手动修改，或明天再试。",
-      "safety_unavailable": "内容检查暂时不可用，所以没有写出任何内容。请稍后重试。未扣次数。"
+      "safety_unavailable": "内容检查暂时不可用，所以没有写出任何内容。请稍后重试。没有使用额度。"
     },
     "form": {
       "addResume": "添加简历",
       "cancel": "取消",
       "forChosenJob": "针对你打开的职位",
       "forJob": "针对 {company} 的 {title}",
-      "honesty": "根据职位说明和你的简历写成。AI 写的每一句都会与这两者核对。如果求职信把职位说明里的要求写成了你的经历，就会重写，或者不予保存。",
+      "honesty": "根据职位描述和你的简历写成。AI 写的每一句都会与这两者核对。如果求职信把职位描述里的要求写成了你的经历，就会重写，或者不予保存。",
       "jdCompany": "公司",
-      "jdText": "职位说明",
-      "jdTextHint": "粘贴完整的职位说明，至少 50 个字符。",
+      "jdText": "职位描述",
+      "jdTextHint": "粘贴完整的职位描述，至少 50 个字符。",
       "jdTitle": "职位名称",
       "jobLabel": "职位",
       "neverSent": "%BRAND% 从不发送这封求职信。你自己复制或下载，再自己把它加到申请里。",
       "noResume": "请先添加一份简历。求职信只根据你简历上的内容来写。",
-      "pasteIntro": "粘贴你要申请的职位的职位说明。",
+      "pasteIntro": "粘贴你要申请的职位的描述。",
       "resumeLabel": "依据的简历",
       "resumeLoading": "正在加载你的简历…",
       "resumePrimary": "{name}（主简历）",
@@ -7395,7 +7395,7 @@
     },
     "hub": {
       "backToResumes": "返回简历列表",
-      "emptySub": "打开一个职位并选择“写求职信”，或者在这里粘贴职位说明。",
+      "emptySub": "打开一个职位并选择“写求职信”，或者在这里粘贴职位描述。",
       "emptyTitle": "还没有求职信",
       "eyebrow": "简历",
       "listLabel": "你的求职信",
@@ -7405,14 +7405,14 @@
       "new": "写求职信",
       "open": "打开 {title}",
       "retry": "重试",
-      "sub": "根据职位说明和你的简历写成的求职信。修改后可以复制或下载，用于你的申请。",
+      "sub": "根据职位描述和你的简历写成的求职信。修改后可以复制或下载，用于你的申请。",
       "title": "求职信",
       "untitled": "求职信",
       "updated": "修改于 {when}"
     },
     "language": {
       "en": "英文",
-      "hint": "申请外企，或职位说明是英文时，用英文写。",
+      "hint": "申请外企，或职位描述是英文时，用英文写。",
       "label": "语言",
       "zh": "中文"
     },
@@ -7425,15 +7425,15 @@
     },
     "rewrite": {
       "done": "已改写。之前的文字保存在“版本”里。",
-      "free": "改写不扣次数。",
+      "free": "改写不使用额度。",
       "instructionHint": "最多 1,000 个字符。",
       "instructionLabel": "需要怎么改？",
       "intro": "告诉 AI 要改什么。它只依据你简历上写的内容。",
       "left": "{count, plural, =0 {这封求职信今天的改写次数已用完} other {这封求职信今天还可以改写 # 次}}",
-      "needsPost": "改写需要职位说明，而这封求职信对应的职位说明没有保留。要改写，请新写一封并重新粘贴职位说明。你仍然可以手动修改这封求职信。",
+      "needsPost": "改写需要职位描述，而这封求职信对应的职位描述没有保留。要改写，请新写一封并重新粘贴职位描述。你仍然可以手动修改这封求职信。",
       "newVersion": "写一个新版本",
       "newVersionDone": "新版本已写好。之前的文字保存在“版本”里。",
-      "newVersionIntro": "根据职位说明和你的简历重新写一遍。",
+      "newVersionIntro": "根据职位描述和你的简历重新写一遍。",
       "newVersionTitle": "更改语气或篇幅",
       "quick": "快捷修改",
       "quickFormal": "更正式一些",
@@ -7446,7 +7446,7 @@
     "sources": {
       "empty": "还没有来源。",
       "intro": "每句话的出处。",
-      "posting": "来自职位说明",
+      "posting": "来自职位描述",
       "quote": "“{text}”",
       "resume": "来自你的简历",
       "user": "你写的内容"
@@ -7476,7 +7476,7 @@
     "admin": {
       "caps": {
         "brand": "品牌",
-        "bucket": "次数类型",
+        "bucket": "额度类型",
         "default": "默认",
         "error": "没有保存成功，未作任何更改。",
         "free": "免费版",
@@ -7486,7 +7486,7 @@
         "save": "保存上限",
         "saved": "上限已保存。",
         "sub": "单元格留空则使用默认值。更改会对该品牌、该套餐下的所有用户生效。",
-        "title": "次数上限"
+        "title": "额度上限"
       },
       "fx": {
         "asOf": "汇率日期",
@@ -7513,7 +7513,7 @@
         "filter": "用户 ID",
         "invalid": "请检查用户 ID、调整项、值和原因。",
         "key": "调整项",
-        "keyHelp": "调整项：某项次数（bucket:tailor）、某项权益（entitlement:saved_searches）或某个功能（flag:coaching）。值：整数、true 或 false，或 off / deeplinks_only / on。",
+        "keyHelp": "调整项：某项额度（bucket:tailor）、某项权益（entitlement:saved_searches）或某个功能（flag:coaching）。值：整数、true 或 false，或 off / deeplinks_only / on。",
         "loadError": "调整记录没有加载出来。",
         "never": "无结束日期",
         "reason": "原因",
@@ -7523,8 +7523,8 @@
         "userId": "用户 ID",
         "value": "值"
       },
-      "sub": "各套餐的次数上限、单用户调整、台湾参考汇率和台湾银行卡收入。",
-      "title": "次数与套餐",
+      "sub": "各套餐的额度上限、单用户调整、台湾参考汇率和台湾银行卡收入。",
+      "title": "额度与套餐",
       "tw": {
         "asOf": "来源：{source}，截至 {date}",
         "level": "增值税登记门槛",
@@ -7557,7 +7557,7 @@
       "fit_analysis": "匹配度分析",
       "job_import": "你添加的职位",
       "outreach": "消息草稿",
-      "practice": "面试练习",
+      "practice": "练习面试",
       "ready_kits": "待投递材料包",
       "resume_check": "简历体检",
       "rewrite": "AI 改写",
@@ -7618,12 +7618,12 @@
       "endsCancelled": "已取消。Pro 可以用到 {date}。",
       "error": "你的套餐没有加载出来。",
       "history": "账单和收据",
-      "legacyNote": "你的练习套餐保留原来的价格和每月的面试练习次数。其他功能按免费版的上限计算。",
+      "legacyNote": "你的练习套餐保留原来的价格和每月的练习面试次数。其他功能按免费版的上限计算。",
       "loading": "正在加载你的套餐…",
       "manage": "管理付款",
       "passEnds": "你的时长卡 {date} 到期",
-      "practice": "剩余面试练习次数：{n}",
-      "practiceUnknown": "剩余面试练习次数：—",
+      "practice": "剩余练习面试次数：{n}",
+      "practiceUnknown": "剩余练习面试次数：—",
       "renew": "再买一张时长卡",
       "renews": "{date} 续费",
       "switch": "切换到 Pro",
@@ -7633,22 +7633,22 @@
     "outOfCredits": {
       "continue": "先不用这项功能",
       "continueSub": "其他功能照常使用。",
-      "getPack": "获取面试练习次数",
+      "getPack": "获取练习额度",
       "getPackSub": "购买面试练习包。",
       "getPro": "开通 Pro",
       "getProPracticeSub": "看看 Pro 包含什么。",
       "getProSub": "每日次数上限更高。",
-      "practiceTitle": "你的面试练习次数已用完",
-      "title": "这项功能{window, select, day {今天} week {本周} other {本月}}的次数已用完",
-      "titleUnknown": "这项功能的次数已用完",
+      "practiceTitle": "你的练习面试次数已用完",
+      "title": "这项功能{window, select, day {今天} week {本周} other {本月}}的额度已用完",
+      "titleUnknown": "这项功能的额度已用完",
       "wait": "等到 {when}",
-      "waitSub": "届时次数会重置。",
-      "waitUnknown": "等待次数重置"
+      "waitSub": "届时额度会重置。",
+      "waitUnknown": "等待额度重置"
     },
-    "packNote": "{credits} 次面试练习，{months} 个月内有效",
+    "packNote": "{credits} 场练习面试，{months} 个月内有效",
     "page": {
       "back": "返回设置",
-      "sub": "你的套餐、付款和可用次数。",
+      "sub": "你的套餐、付款和额度。",
       "title": "套餐和账单"
     },
     "passNote": "{days} 天 Pro。只付一次，不会续费。",
@@ -7728,9 +7728,9 @@
       "back": "返回套餐和账单",
       "cancelSub": "未扣款。你可以随时重新选择套餐。",
       "cancelTitle": "付款未完成",
-      "packActive": "面试练习次数已到账，你现在有 {n} 次。",
-      "packPaid": "付款到账后，面试练习次数会立即加上。收据会通过邮件发给你。",
-      "packPending": "面试练习次数会在一分钟内到账。本页面会自动再次查询。",
+      "packActive": "练习面试次数已到账，你现在有 {n} 次。",
+      "packPaid": "付款到账后，练习面试次数会立即加上。收据会通过邮件发给你。",
+      "packPending": "练习面试次数会在一分钟内到账。本页面会自动再次查询。",
       "slow": "这次比平时慢一些。收据会通过邮件发给你；过几分钟再查看套餐和账单。",
       "successActive": "Pro 已生效。",
       "successPending": "你的套餐会在一分钟内更新。本页面会自动再次查询。",
@@ -7741,7 +7741,7 @@
     "save": "比按月付费省 {pct}%",
     "usage": {
       "bonus": "+{n} 赠送",
-      "error": "你的次数没有加载出来。",
+      "error": "你的额度没有加载出来。",
       "historyEmpty": "还没有使用记录。",
       "historyTitle": "最近使用",
       "historyUnavailable": "最近的使用记录暂时无法查看。",
@@ -7749,8 +7749,8 @@
       "loading": "加载中…",
       "practiceLeft": "剩余 {n} 次",
       "resets": "{when} 重置",
-      "sub": "次数不会累积；每一行都标明何时重置。只有操作成功才会扣次数。",
-      "title": "你的可用次数",
+      "sub": "额度不会累积；每一行都标明何时重置。只有操作成功才会使用额度。",
+      "title": "你的额度",
       "used": "{n, plural, other {已用 # 次}}"
     }
   },
@@ -7787,12 +7787,12 @@
       "uninstalledTitle": "%BRAND% 插件已移除"
     },
     "page": {
-      "facts": "工作许可、签证担保、薪资、工作年限、学历这类问题，只用你保存过的答案来填。AI 从不撰写这些答案。",
-      "factsTitle": "关于你本人的答案",
+      "facts": "工作许可、签证担保、薪资、工作年限、学历这类问题，只用你保存过的回答来填。AI 从不撰写这些回答。",
+      "factsTitle": "关于你本人的回答",
       "how": {
         "step1": "在支持的网站上打开网申表单。",
-        "step2": "点击“一键填表”。各项内容会用你的个人资料和你保存的答案来填。",
-        "step3": "对于英文或中文的开放式问题，侧边栏会显示 AI 写的草稿。在你选择“使用这个答案”之前，不会有任何内容填入表单。",
+        "step2": "点击“一键填表”。各项内容会用你的个人资料和你保存的回答来填。",
+        "step3": "对于英文或中文的开放式问题，侧边栏会显示 AI 写的草稿。在你选择“使用这个回答”之前，不会有任何内容填入表单。",
         "step4": "核对每一项，然后自己提交申请。提交后请告诉插件，这样你的申请记录才准确。"
       },
       "howTitle": "怎么用",
@@ -7822,10 +7822,10 @@
     },
     "sensitive": {
       "error": "没有保存成功。请重试。",
-      "intro": "默认关闭，除非你自己开启。开启后，插件可以填写你保存的平等就业类及其他敏感问题的答案，并逐项标出，供你核对。",
-      "label": "允许插件填写我的敏感问题答案",
+      "intro": "默认关闭，除非你自己开启。开启后，插件可以填写你保存的平等就业类及其他敏感问题的回答，并逐项标出，供你核对。",
+      "label": "允许插件填写我的敏感问题回答",
       "saving": "保存中…",
-      "title": "敏感问题的答案"
+      "title": "敏感问题的回答"
     },
     "status": {
       "code": {
@@ -7845,7 +7845,7 @@
       },
       "done": {
         "body": "插件已连接。在支持的网站上打开网申表单，然后点击“一键填表”。",
-        "cta": "发现职位",
+        "cta": "探索职位",
         "title": "设置完成"
       },
       "error": "你的设置情况没有加载出来。请重试。",
@@ -8029,7 +8029,7 @@
       "yearsRange": "没有写明年限要求的职位仍会保留在列表中。"
     },
     "hunt": {
-      "moved": "职位名称、地点、薪资、公司和行业筛选现在都放在下方已保存的搜索里，这样职位列表和提醒使用同一套筛选条件。"
+      "moved": "职位名称、地点、薪资、公司和行业筛选现在都放在下方的订阅搜索里，这样职位列表和提醒使用同一套筛选条件。"
     },
     "options": {
       "any": "不限",
@@ -8065,7 +8065,7 @@
       },
       "fitTier": {
         "all": "全部",
-        "good": "“比较合适”及以上",
+        "good": "“较合适”及以上",
         "great": "只看“很合适”"
       },
       "jobTypes": {
@@ -8127,17 +8127,17 @@
     },
     "saved": {
       "cancel": "取消",
-      "cannotDeleteLast": "至少需要保留一个已保存的搜索。",
+      "cannotDeleteLast": "至少需要保留一个订阅搜索。",
       "cannotDeleteMain": "删除这个搜索前，请先把另一个搜索设为主搜索。",
-      "capNote": "你的套餐最多可保存 {max, plural, other {# 个搜索}}。",
+      "capNote": "你的套餐最多可保存 {max, plural, other {# 个订阅搜索}}。",
       "confirmDelete": "删除“{name}”？它的提醒也会停止。",
       "confirmDeleteAction": "删除搜索",
       "createFailed": "这个搜索没有保存。请重试。",
       "delete": "删除",
       "deleteFailed": "这个搜索没有删除。请重试。",
       "inUse": "使用中",
-      "label": "已保存的搜索",
-      "limitReached": "你已达到套餐可保存搜索的数量上限。",
+      "label": "订阅搜索",
+      "limitReached": "你的订阅搜索数量已达到套餐上限。",
       "main": "主搜索",
       "makeMain": "设为主搜索",
       "namePlaceholder": "给这个搜索起个名字",
@@ -8145,7 +8145,7 @@
       "rename": "重命名",
       "save": "保存",
       "saveAs": "另存为新搜索",
-      "seePro": "了解 Pro 会员",
+      "seePro": "了解 Pro",
       "use": "使用这个搜索"
     },
     "search": {
@@ -8183,15 +8183,15 @@
         "5": "每天最多 5 条",
         "100": "有新职位就发送"
       },
-      "loadFailed": "已保存的搜索没有加载出来。",
-      "loading": "正在加载已保存的搜索…",
+      "loadFailed": "订阅搜索没有加载出来。",
+      "loading": "正在加载订阅搜索…",
       "retry": "重试",
-      "sub": "主搜索决定你最先看到哪些职位。提醒也按你保存的搜索发送。",
-      "title": "已保存的搜索"
+      "sub": "主搜索决定你最先看到哪些职位。提醒也按你的订阅搜索发送。",
+      "title": "订阅搜索"
     },
     "unnamed": "你的主搜索",
-    "unnamedNumbered": "已保存的搜索 {n}",
-    "unnamedOther": "未命名的搜索"
+    "unnamedNumbered": "订阅搜索 {n}",
+    "unnamedOther": "未命名的订阅搜索"
   },
   "fit": {
     "analysis": {
@@ -8205,16 +8205,16 @@
         "unknown": "没有找到你的学历。请在个人资料中补充。",
         "yours": "你的学历：{degree}"
       },
-      "error": "出了点问题，没有扣除次数。请重试。",
+      "error": "出了点问题，没有扣除额度。请重试。",
       "gaps": "差距",
       "highlights": "亮点",
       "intro": "逐项细看你的简历和这个职位的吻合程度。",
-      "notCharged": "没有消耗次数：这来自你已有的一次对比。",
+      "notCharged": "没有使用额度：这来自你已有的一次对比。",
       "outOfCredits": "今天的匹配度分析次数已用完。",
       "run": "获取完整的匹配度分析",
       "running": "正在对比你的简历和这个职位…",
       "title": "匹配度分析",
-      "unavailable": "暂时无法生成匹配度分析，没有扣除次数。请稍后再试。"
+      "unavailable": "暂时无法生成匹配度分析，没有扣除额度。请稍后再试。"
     },
     "compared": {
       "evidence": {
@@ -8297,7 +8297,7 @@
     },
     "quickEstimate": "快速估算",
     "quickEstimateWhy": {
-      "ai_failed": "完整对比没有完成。这个估算依据你的个人资料和职位描述。没有扣除次数。",
+      "ai_failed": "完整对比没有完成。这个估算依据你的个人资料和职位描述。没有扣除额度。",
       "ai_off": "没有使用 AI 计算，因为你的账号已关闭 AI。",
       "ai_unavailable": "完整对比暂时不可用。这个估算依据你的个人资料和职位描述。",
       "budget": "今天的完整对比已暂停。这个估算依据你的个人资料和职位描述。",
@@ -8332,14 +8332,14 @@
       "close": "关闭",
       "closeLabel": "隐藏“开始使用”清单",
       "done": "已完成",
-      "intro": "完成全部三项，可获得 {credits, plural, other {# 次面试练习}}。",
+      "intro": "完成全部三项，可获得 {credits, plural, other {# 个练习面试额度}}。",
       "notDone": "还没完成",
-      "pendingReward": "三项都已完成。面试练习次数还没有添加到你的账号。",
+      "pendingReward": "三项都已完成。练习面试额度还没有添加到你的账号。",
       "progress": "已完成 {done} / {total}",
       "regionLabel": "开始使用",
-      "rewarded": "三项都已完成。{credits, plural, other {# 次面试练习}}已添加到你的账号。",
+      "rewarded": "三项都已完成。{credits, plural, other {# 个练习面试额度}}已添加到你的账号。",
       "steps": {
-        "practice": "做一次面试练习",
+        "practice": "做一场练习面试",
         "save_job": "保存一个职位，留着以后看",
         "tailor": "为一个职位定制简历"
       },
@@ -8363,38 +8363,38 @@
         "checking": "审核中",
         "not_counted": "未计入",
         "over_limit": "超出今年上限",
-        "rewarded": "练习次数已添加",
+        "rewarded": "额度已添加",
         "signed_up": "尚未完成设置"
       },
       "statusHelp": {
-        "checking": "部分邀请会先由人工审核，再添加练习次数。",
+        "checking": "部分邀请会先由人工审核，再添加额度。",
         "not_counted": "这次注册不符合条件，例如是同一个人或同一台设备。",
-        "over_limit": "你的好友已获得练习次数。你此前已达到今年的上限。",
-        "rewarded": "你们各自都已获得练习次数。",
-        "signed_up": "好友验证账号并完成设置后，你的练习次数就会添加。"
+        "over_limit": "你的好友已获得额度。你此前已达到今年的上限。",
+        "rewarded": "你们各自都已获得额度。",
+        "signed_up": "好友验证账号并完成设置后，你的额度就会添加。"
       },
       "title": "已加入的好友"
     },
-    "honesty": "获得的次数只能用于面试练习，没有现金价值。我们不会要求你发帖宣传我们或写评价作为交换。",
+    "honesty": "额度只能用于练习面试，没有现金价值。我们不会要求你发帖宣传我们或写评价作为交换。",
     "how": {
       "step1": "把你的链接分享给正在找工作的好友。",
       "step2": "好友通过链接注册新的 %BRAND% 账号，完成验证（{market, select, cn {手机号、微信或邮箱} other {邮箱、Google 或 LINE}}），并完成设置。",
-      "step3": "你们各获得 {credits, plural, other {# 次面试练习}}。如果你的账号有邮箱地址，添加后我们会发邮件通知你。",
+      "step3": "你们各获得 {credits, plural, other {# 个练习面试额度}}。如果你的账号有邮箱地址，添加后我们会发邮件通知你。",
       "title": "邀请流程"
     },
     "landing": {
       "codeLabel": "邀请码：{code}",
-      "existingNote": "邀请获得的练习次数仅适用于新账号。",
+      "existingNote": "邀请额度仅适用于新账号。",
       "invalidAction": "注册账号",
       "invalidBody": "请向发给你链接的好友确认。没有邀请链接也可以注册账号。",
       "invalidTitle": "这个邀请链接似乎有问题",
       "login": "我已有账号",
       "plainJobs": "前往职位",
       "plainTitle": "注册你的 %BRAND% 账号",
-      "reward": "通过这个链接注册新账号，完成验证和设置。如果链接仍然有效，你和分享链接的好友各获得一次面试练习。",
+      "reward": "通过这个链接注册新账号，完成验证和设置。如果链接仍然有效，你和分享链接的好友各获得一个练习面试额度。",
       "rewardTitle": "你能获得什么",
       "signedInAction": "邀请好友",
-      "signedInBody": "邀请获得的练习次数仅适用于新账号。你可以邀请自己的好友。",
+      "signedInBody": "邀请额度仅适用于新账号。你可以邀请自己的好友。",
       "signedInTitle": "你已经有账号了",
       "start": "注册账号",
       "sub": "%BRAND% 帮你找到合适的职位、为职位定制简历，并练习面试。",
@@ -8405,13 +8405,13 @@
       "copy": "复制链接",
       "copyFailed": "复制失败。请选中链接后手动复制。",
       "email": "邮件",
-      "emailBody": "我一直在用 %BRAND% 找工作。你通过我的链接加入并完成设置后，我们各获得一次免费的面试练习：{link}",
+      "emailBody": "我一直在用 %BRAND% 找工作。你通过我的链接加入并完成设置后，我们各获得一个免费的练习面试额度：{link}",
       "emailSubject": "和我一起试试 %BRAND%",
       "label": "你的邀请链接",
       "regionLabel": "你的邀请链接",
       "selfSend": "分享会打开你自己的应用。%BRAND% 不会替你给任何人发消息。",
       "share": "分享",
-      "shareText": "通过我的链接加入 %BRAND%。你完成设置后，我们各获得一次免费的面试练习。",
+      "shareText": "通过我的链接加入 %BRAND%。你完成设置后，我们各获得一个免费的练习面试额度。",
       "verifyAction": "前往账号设置",
       "verifyBody": "{market, select, cn {请绑定手机号、用微信登录，或验证你的邮箱地址。} other {请验证你的邮箱地址，或用 Google 或 LINE 登录。}}然后回到这里获取你的链接。",
       "verifyTitle": "验证账号后即可获取链接"
@@ -8419,7 +8419,7 @@
     "page": {
       "loadError": "邀请信息没有加载出来。请检查网络后重试。",
       "retry": "重试",
-      "sub": "分享你的链接。好友加入并完成设置后，你们各获得 {credits, plural, other {# 次面试练习}}。",
+      "sub": "分享你的链接。好友加入并完成设置后，你们各获得 {credits, plural, other {# 个练习面试额度}}。",
       "title": "邀请好友",
       "unavailable": "这里暂时无法使用邀请功能。"
     },
@@ -8427,7 +8427,7 @@
       "count": "今年 {granted} / {cap}",
       "limitNote": "你每年最多可获得 {cap} 次奖励。达到上限后，你的好友仍会获得他们的奖励。",
       "meterLabel": "今年已用的奖励次数",
-      "reached": "你已达到今年的上限。加入的好友仍会获得练习次数。",
+      "reached": "你已达到今年的上限。加入的好友仍会获得额度。",
       "title": "你在 {year} 年的奖励"
     },
     "settings": {
@@ -8440,7 +8440,7 @@
       "copied": "消息已复制",
       "copy": "复制消息",
       "help": "复制后粘贴到微信聊天或朋友圈。",
-      "text": "通过我的链接加入 %BRAND%。你完成设置后，我们各获得一次面试练习。{link}",
+      "text": "通过我的链接加入 %BRAND%。你完成设置后，我们各获得一个练习面试额度。{link}",
       "title": "微信消息"
     }
   },
@@ -8573,7 +8573,7 @@
         "director_exec": "总监或高管",
         "entry": "初级",
         "intern_newgrad": "实习或应届",
-        "lead_staff": "资深或主管",
+        "lead_staff": "团队负责人或专家",
         "mid": "中级",
         "senior": "高级"
       },
@@ -8698,9 +8698,9 @@
       "added": "职位已添加",
       "addedSub": "你可以把它保存到申请记录、定制简历，或者练习面试。",
       "public": "这个职位已经在我们的职位列表里",
-      "publicSub": "我们直接使用了已有的职位，没有重复添加。没有消耗添加次数。",
+      "publicSub": "我们直接使用了已有的职位，没有重复添加。没有使用额度。",
       "yours": "你已经添加过这个职位",
-      "yoursSub": "这是你之前添加的那一个。没有消耗添加次数。"
+      "yoursSub": "这是你之前添加的那一个。没有使用额度。"
     },
     "errors": {
       "creditsExhausted": "今天添加职位的次数已用完。",
@@ -9053,7 +9053,7 @@
       "cards": {
         "practice": "练习面试",
         "practiceBody": "回答这个职位贴近实际的面试问题，并获得反馈。",
-        "ready": "备好的申请材料包 —— 由你自己提交",
+        "ready": "待投递材料包 —— 由你自己提交",
         "readyBody": "我们准备材料；你检查后，自己在公司网站上提交。",
         "tailor": "为每个职位定制简历",
         "tailorBody": "按职位要求调整你的简历，只使用关于你的真实信息。"
@@ -9237,7 +9237,7 @@
     "tips": {
       "close": "关闭",
       "dismiss": "知道了",
-      "resumeCheck": "{count, plural, =0 {你的简历检查已完成。} other {你的简历检查已完成：有 # 处需要修改。}}",
+      "resumeCheck": "{count, plural, =0 {你的简历体检已完成。} other {你的简历体检已完成：有 # 处需要修改。}}",
       "resumeCheckAction": "查看检查结果",
       "scoreBody": "“很合适”“较合适”“可能合适”“不太合适”是把你的简历和职位要求比对后得出的。",
       "scoreLine": "这不是你被录用的概率。",
@@ -9249,7 +9249,7 @@
         "fitBody": "每个职位都会显示你的简历哪些地方符合要求，哪些地方不符合。",
         "practice": "练习面试",
         "practiceBody": "演练这个职位贴近实际的面试问题，并获得反馈。",
-        "ready": "备好的申请材料包 —— 由你自己提交",
+        "ready": "待投递材料包 —— 由你自己提交",
         "readyBody": "我们准备材料。你检查后，自己在公司网站上提交。",
         "tailor": "为每个职位定制简历",
         "tailorBody": "针对某一个职位调整你的简历，只使用关于你的真实信息。"
@@ -9304,7 +9304,7 @@
         "received": "收到于 {date}",
         "reject": "驳回",
         "rejectForm": "驳回这道题",
-        "rejectNote": "备注（可选）",
+        "rejectNote": "备注（选填）",
         "rejectReason": "原因",
         "rejectedFor": "已驳回：{reason}",
         "suggestedGroup": "用户选择的分类：{group}",
@@ -9448,20 +9448,20 @@
       "shareLimit": "你今天已经分享了很多题目，请明天再试。"
     },
     "job": {
-      "aiHeading": "由 AI 根据这份职位说明撰写",
+      "aiHeading": "由 AI 根据这份职位描述撰写",
       "aiOff": "AI 撰写暂时不可用，所以这里只显示用户分享的题目。",
       "loadError": "这个职位的题目加载失败，请重试。",
       "loading": "正在加载这个职位的题目…",
       "noReports": "还没有人分享关于 {company} 的题目。",
       "notFound": "没有找到这个职位。",
-      "notWritten": "AI 可以根据这份职位说明撰写练习题。它们是练习材料，不是任何人反馈的面试题。",
+      "notWritten": "AI 可以根据这份职位描述撰写练习题。它们是练习材料，不是任何人反馈的面试题。",
       "practice": "针对这个职位练习",
       "reportsHeading": "%BRAND% 用户分享的关于 {company} 的题目",
       "seeAll": "查看关于 {company} 的全部题目",
       "sub": "公司：{company}",
       "thisCompany": "这家公司",
       "title": "针对“{title}”的练习",
-      "write": "根据这份职位说明撰写练习题",
+      "write": "根据这份职位描述撰写练习题",
       "writing": "正在撰写题目…",
       "writtenOn": "撰写于 {date}"
     },
@@ -9475,7 +9475,7 @@
       "error": "举报没有发送成功，请重试。",
       "hidden": "谢谢。在工作人员查看之前，它会先被隐藏。",
       "limit": "你今天已经提交了很多举报，请明天再试。",
-      "note": "补充说明（可选）",
+      "note": "补充说明（选填）",
       "reason": "它有什么问题？",
       "reasons": {
         "confidential": "它包含有人承诺保密的笔试内容",
@@ -9494,7 +9494,7 @@
       "companyError": "请填写你面试的公司。",
       "done": "完成",
       "error": "题目没有提交成功。请检查填写内容后重试。",
-      "group": "题目分类（可选）",
+      "group": "题目分类（选填）",
       "groupNone": "不确定",
       "intro": "每道题在任何人看到之前，都会由工作人员审核。它会显示为由一位 %BRAND% 用户分享，并标注你被问到的月份，不会显示你的姓名。",
       "open": "分享你被问到的面试题",
@@ -9502,19 +9502,19 @@
       "periodError": "请选择你被问到的月份，不能晚于本月。",
       "question": "题目",
       "questionHint": "按你的记忆，用自己的话写下来。",
-      "role": "职位（可选）",
+      "role": "职位（选填）",
       "rules": "请不要分享你承诺保密的笔试或测评题、从笔试或书里照搬的文字，以及任何人的姓名或联系方式。",
       "sent": "谢谢。工作人员审核后它才会显示。",
       "submit": "提交审核",
       "title": "分享你被问到的面试题"
     },
     "source": {
-      "aiPractice": "由 AI 根据职位说明撰写 —— 不是求职者反馈的题目",
+      "aiPractice": "由 AI 根据职位描述撰写 —— 不是求职者反馈的题目",
       "curated": "由 %BRAND% 工作人员编写 —— 不是求职者反馈的题目",
       "userReport": "由一位 %BRAND% 用户分享于 {period}",
       "userReportNoDate": "由一位 %BRAND% 用户分享"
     },
-    "sub": "用这些题目来练习：其他 %BRAND% 用户面试后分享的题目、工作人员编写的通用题目，以及 AI 根据职位说明撰写的题目。每道题都标明了来源。",
+    "sub": "用这些题目来练习：其他 %BRAND% 用户面试后分享的题目、工作人员编写的通用题目，以及 AI 根据职位描述撰写的题目。每道题都标明了来源。",
     "title": "面试题库"
   },
   "profile": {
@@ -9610,7 +9610,7 @@
       "deleted": "已删除",
       "disabilityStatus": "残障情况",
       "gender": "性别",
-      "intro": "有些美国雇主会问这些选答问题。你的回答经过加密保存，只用于填写表单上的这些问题，不会用于职位排序，也不会发送给 AI。你可以随时删除。",
+      "intro": "有些美国企业会问这些选答问题。你的回答经过加密保存，只用于填写表单上的这些问题，不会用于职位排序，也不会发送给 AI。你可以随时删除。",
       "notAnswered": "留空",
       "notConfigured": "这些回答暂时无法保存，请稍后再试。",
       "onlyUs": "因为你希望在美国工作，所以显示这些问题。",
@@ -9632,7 +9632,7 @@
         "yes": "是，我有残障（或曾经有过）"
       },
       "raceEthnicity": "种族或族裔",
-      "storedNotAsked": "你之前保存过这些问题的回答。只有美国雇主会问这些问题，所以现在不显示。你可以在这里删除。",
+      "storedNotAsked": "你之前保存过这些问题的回答。只有美国企业会问这些问题，所以现在不显示。你可以在这里删除。",
       "veteranStatus": "退伍军人身份"
     },
     "links": {
@@ -9662,7 +9662,7 @@
     },
     "missingTag": "未填写",
     "notResume": "个人资料和你的简历是分开的。修改资料不会改动任何一份简历。",
-    "optionalTag": "可选",
+    "optionalTag": "选填",
     "page": {
       "eyebrow": "个人资料",
       "loadError": "个人资料加载失败。",
@@ -9709,7 +9709,7 @@
       "skills": "技能",
       "taiwan": "台湾求职偏好",
       "work": "工作经历",
-      "workAuth": "工作资格"
+      "workAuth": "工作许可"
     },
     "sensitive": {
       "intro": "有些申请表会问到的回答。它们经过加密保存，只有你能看到，不会用于职位排序，也不会发送给 AI。",
@@ -9853,10 +9853,10 @@
       "permits": {
         "citizen_or_resident": "有户籍或居留身份，无需许可",
         "gold_card": "我持有就业金卡",
-        "work_permit_needed": "需要雇主申请工作许可"
+        "work_permit_needed": "需要企业申请工作许可"
       },
       "removeCountry": "移除 {country}",
-      "sponsorship": "你在 {country} 工作需要雇主提供签证担保吗？",
+      "sponsorship": "你在 {country} 工作需要企业提供签证担保吗？",
       "sponsorshipLater": "是，将来需要",
       "sponsorshipNo": "否",
       "sponsorshipNow": "是，现在需要",
@@ -9891,7 +9891,7 @@
         "content": "各语言文案",
         "createTitle": "新建公告",
         "ctaHref": "按钮链接（可选，/path 或 https://…）",
-        "ctaLabel": "按钮文字（可选）",
+        "ctaLabel": "按钮文字（选填）",
         "datesHint": "留空则立即开始，持续 30 天。",
         "editTitle": "编辑“{key}”",
         "endsAt": "结束时间",
@@ -10004,7 +10004,7 @@
     "intro": {
       "continue": "继续设置",
       "lead": "%BRAND% 每周从你的搜索中挑选职位。为哪些职位准备材料包，由你来选。",
-      "point_kit": "你选中的每个职位都有一份材料包：按职位说明定制的简历、职位说明要求时附上的求职信，以及你保存的回答。",
+      "point_kit": "你选中的每个职位都有一份材料包：按职位描述定制的简历、职位描述要求时附上的求职信，以及你保存的回答。",
       "point_list": "每周一份符合你搜索条件的职位列表。你也可以自己添加任何职位。",
       "point_open": "你在公司官网打开申请页面，自己提交。",
       "point_review": "每份材料包都由你检查后再使用。简历里新增的任何内容，都必须经你确认。",
@@ -10083,7 +10083,7 @@
       "why_this_company": "你为什么想在这家公司工作？",
       "why_this_role": "你为什么对这个职位感兴趣？",
       "work_authorization": "你是否可以在职位所在国家合法工作？",
-      "work_model_preference": "你更倾向远程、混合办公还是到岗办公？"
+      "work_model_preference": "你更倾向远程、混合办公还是现场办公？"
     },
     "review": {
       "aiOff": "你的账号未开启 AI 写作，材料包会直接使用你的原简历。",
@@ -10192,7 +10192,7 @@
       },
       "practice": {
         "button": "针对这个职位练习",
-        "sub": "根据这份职位说明进行的一场练习面试。",
+        "sub": "根据这份职位描述进行的一场练习面试。",
         "title": "针对这个职位练习"
       },
       "prepare": "准备材料包",
@@ -10366,7 +10366,7 @@
     "title": "待投递",
     "unavailable": {
       "back": "前往职位",
-      "sub": "你仍然可以收藏职位、定制简历，并在各公司官网申请。",
+      "sub": "你仍然可以保存职位、定制简历，并在各公司官网申请。",
       "title": "“待投递”在这里暂未开放"
     },
     "weekly": {
@@ -10375,7 +10375,7 @@
       "coverLetterModes": {
         "always": "每个职位都写",
         "never": "不写",
-        "when_required": "仅在职位说明要求时写"
+        "when_required": "仅在职位描述要求时写"
       },
       "exampleCompany": "公司",
       "exampleName": "你的姓名",
@@ -10426,15 +10426,15 @@
       "last": "上次检查：{label} · {urgent} 处需要先改",
       "open": "打开完整检查",
       "quick": "编辑时的快速检查",
-      "run": "做一次完整的简历检查",
+      "run": "做一次完整的简历体检",
       "staleNote": "那之后你修改过简历。",
-      "title": "简历检查"
+      "title": "简历体检"
     },
     "empty": {
       "body": "按优先级列出要改的地方，每一项都附简短的原因和修改方法。",
-      "creditAi": "使用 1 次简历检查额度。",
-      "creditLeft": "使用 1 次简历检查额度（还剩 {left} 次）。",
-      "creditNone": "简历检查额度已用完：清单检查照常进行，但不检查拼写。",
+      "creditAi": "使用 1 个简历体检额度。",
+      "creditLeft": "使用 1 个简历体检额度（还剩 {left} 个）。",
+      "creditNone": "简历体检额度已用完：清单检查照常进行，但不检查拼写。",
       "cta": "开始检查",
       "noAi": "仅检查清单：你的账号未开启 AI 检查，不会使用额度。",
       "targetLabel": "目标职位（选填）",
@@ -10442,13 +10442,13 @@
       "title": "检查这份简历"
     },
     "entry": {
-      "aria": "{name} 的简历检查",
-      "cta": "简历检查"
+      "aria": "{name} 的简历体检",
+      "cta": "简历体检"
     },
     "errors": {
       "ai_unavailable": "AI 暂时不可用。",
       "already_running": "这份简历已有一项检查正在进行。",
-      "credits_exhausted": "你的简历检查额度暂时用完了。",
+      "credits_exhausted": "你的简历体检额度暂时用完了。",
       "failed": "检查未能运行，请重试。",
       "not_found": "没有找到这份简历。"
     },
@@ -10467,8 +10467,8 @@
       "applyFailed": "简历没有更新成功。请打开编辑器，在那里修改。",
       "blocked": "{count, plural, one {有 # 个 AI 版本} other {有 # 个 AI 版本}}加入了你简历里没有的数字，已隐藏。",
       "cancelEdit": "取消",
-      "credit": "每个 AI 版本使用 1 次改写额度。",
-      "creditLeft": "每个 AI 版本使用 1 次改写额度（还剩 {left} 次）。",
+      "credit": "每个 AI 版本使用 1 个改写额度。",
+      "creditLeft": "每个 AI 版本使用 1 个改写额度（还剩 {left} 个）。",
       "edit": "编辑",
       "editLabel": "编辑 AI 版本",
       "errors": {
@@ -10673,7 +10673,7 @@
     "method": "已按 {rules} 条规则检查{ai, select, yes {，另由 AI 检查拼写和个人简介是否笼统} other {}}。",
     "methodAiFailed": "没有检查拼写：AI 检查没有完成。没有使用额度。",
     "methodNoAi": "你的账号未开启 AI 检查，所以没有检查拼写。",
-    "methodNoCredit": "没有检查拼写：你的简历检查额度已用完。清单检查是免费的。",
+    "methodNoCredit": "没有检查拼写：你的简历体检额度已用完。清单检查是免费的。",
     "noIssues": "这份清单上没有需要修改的地方。",
     "openEditor": "在编辑器中打开",
     "running": {
@@ -10703,7 +10703,7 @@
     },
     "sub": "这份简历的检查清单：最该先改什么、为什么重要、怎么改。",
     "targetTitle": "按目标职位检查：{title}",
-    "title": "简历检查",
+    "title": "简历体检",
     "typeName": {
       "bullet_too_long": "要点过长",
       "buzzwords": "常见套话",
@@ -10775,7 +10775,7 @@
         "title": "看看每个职位与你简历的匹配度"
       },
       "stats": {
-        "companyCount": "{name} ({count})",
+        "companyCount": "{name}（{count}）",
         "jobCount": "在招职位",
         "label": "关于这个列表",
         "medianPay": "已写明年薪的中位数",
@@ -10807,7 +10807,7 @@
       }
     },
     "card": {
-      "found": "发现于 {date}",
+      "found": "收录于 {date}",
       "payNotListed": "薪资未披露",
       "posted": "发布于 {date}",
       "source": "来源：{sourceName}",
@@ -10840,7 +10840,7 @@
       "originalPublisher": "最初由 {name} 发布",
       "pay": "薪资",
       "posted": "发布日期",
-      "postedUnknown": "未注明（首次发现于 {date}）",
+      "postedUnknown": "未注明（首次收录于 {date}）",
       "qualifications": "职位要求",
       "responsibilities": "工作内容",
       "seeFit": "看看它与你简历的匹配度",
@@ -10856,16 +10856,16 @@
         "week": "每周",
         "year": "每年"
       },
-      "range": "{min} – {max} {period}",
-      "single": "{amount} {period}"
+      "range": "{period} {min} – {max}",
+      "single": "{period} {amount}"
     },
     "ticker": {
-      "foundDays": "{n, plural, one {# 天} other {# 天}}前发现",
-      "foundHours": "{n, plural, one {# 小时} other {# 小时}}前发现",
-      "foundMinutes": "{n, plural, one {# 分钟} other {# 分钟}}前发现",
+      "foundDays": "{n, plural, other {# 天}}前收录",
+      "foundHours": "{n, plural, other {# 小时}}前收录",
+      "foundMinutes": "{n, plural, other {# 分钟}}前收录",
       "note": "我们可以公开展示的最新职位。",
       "posted": "发布于 {date}",
-      "title": "刚刚发现"
+      "title": "刚刚收录"
     },
     "workModel": {
       "hybrid": "混合办公",
@@ -10942,7 +10942,7 @@
       "title": "正在定制你的简历"
     },
     "setup": {
-      "cost": "使用 1 次定制额度。如果没有完成，不会使用额度。",
+      "cost": "使用 1 个定制额度。如果没有完成，不会使用额度。",
       "depth": {
         "full": "深度：要点可能被改写、合并或删去",
         "quick": "轻度：只调整现有内容的措辞和顺序"
@@ -11152,7 +11152,7 @@
       "errors": {
         "generic": "出了点问题，请重试。",
         "rateLimited": "未注册账号时可提问的次数已用完。注册免费账号后可以继续提问。",
-        "unavailable": "助手暂时无法使用。"
+        "unavailable": "求职助手暂时无法使用。"
       },
       "inputLabel": "你的问题",
       "intro": "可以问这个页面上的职位、职位发布中写明的薪资，或者 %BRAND% 是怎么运作的。回答不会用到简历，也不会说你和某个职位有多匹配。",
@@ -11177,7 +11177,7 @@
         "sponsorshipOffered": "提到签证担保"
       },
       "from": "{amount} 起",
-      "lastChecked": "最后核实 {date}",
+      "lastChecked": "最后核对于 {date}",
       "payNotListed": "薪资未披露",
       "payPeriod": {
         "day": "{amount}/天",

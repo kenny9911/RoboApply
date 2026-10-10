@@ -229,15 +229,15 @@
       "subject": "%BRAND%の初期設定を完了してください"
     },
     "followUp": {
-      "body": "{date}に{company}の{title}に応募しました。それから{days}日間、返信がありません。短く丁寧なフォローアップの連絡をするのは、一般的なことです。",
+      "body": "{date}に{company}の{title}に応募しました。それから{days}日間、返信がありません。短く丁寧に状況を問い合わせるのは、一般的なことです。",
       "cta": "この応募を開く",
-      "heading": "フォローアップの連絡をしますか？",
+      "heading": "連絡してみますか？",
       "preheader": "{days}日間、返信がありません。",
       "subject": "{company}から{days}日間、返信がありません"
     },
     "interview": {
       "body": "{company}の{title}の面接は{date}です。短い練習をしておくと、準備に役立ちます。",
-      "cta": "この求人に向けて練習する",
+      "cta": "この求人の面接を練習する",
       "heading": "面接が近づいています",
       "preheader": "{date}に{title}の面接があります。",
       "subject": "{date}に{company}との面接があります"
@@ -269,10 +269,10 @@
       "cta": "キットを確認する",
       "heading": "キットを確認できるようになりました",
       "preheader": "{title}のキットをご確認ください。",
-      "subject": "{title}の応募用キットの準備ができました"
+      "subject": "{title}の応募キットの準備ができました"
     },
     "readyList": {
-      "body": "{count, plural, other {#件の求人を確認できます。}}どれを開くかはあなたが決め、応募はすべてご自身で提出します。",
+      "body": "{count, plural, other {#件の求人を確認できます。}}どれを開くかはあなたが決め、応募はすべてご自身で送信します。",
       "cta": "リストを確認する",
       "heading": "今週のリスト",
       "preheader": "確認できる求人があります。",
@@ -374,7 +374,7 @@
     },
     "inbox": {
       "deadline": "{days, plural, =0 {{name}の応募は今日が締め切りです。} =1 {{name}の応募は明日が締め切りです。} other {{name}の応募は#日後に締め切られます。}}",
-      "followUpDue": "{name}へのフォローアップ予定日は今日です。",
+      "followUpDue": "{name}への連絡予定日は今日です。",
       "interview": "{name}との面接が24時間以内にあります。",
       "noReply": "{name}から{days, plural, other {#日間}}、返信がありません。",
       "unnamed": "この応募先"

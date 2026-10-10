@@ -20,11 +20,11 @@
   },
   "auth": {
     "accountDeleted": {
-      "body": "Você pediu para apagarmos sua conta do %BRAND%. Encerramos sua sessão em todos os lugares e você não consegue mais entrar.",
-      "heading": "Sua conta está agendada para ser apagada",
+      "body": "Você pediu para excluirmos sua conta do %BRAND%. Encerramos sua sessão em todos os lugares e você não consegue mais entrar.",
+      "heading": "Sua conta está agendada para exclusão",
       "notYou": "Se você não pediu isso, responda a este e-mail ou fale com o suporte imediatamente.",
-      "subject": "Sua conta do %BRAND% está agendada para ser apagada",
-      "when": "Apagamos sua conta e os dados dela em até {days} dias. Os backups são eliminados em até 90 dias depois disso."
+      "subject": "Sua conta do %BRAND% está agendada para exclusão",
+      "when": "Excluímos sua conta e os dados dela em até {days} dias. Os backups são eliminados em até 90 dias depois disso."
     },
     "emailVerify": {
       "body": "Confirme que este é o seu endereço de e-mail. Você pode continuar usando o %BRAND% enquanto decide; a confirmação libera sua entrevista de treino gratuita.",
@@ -116,15 +116,15 @@
       "practice_pack_15": "Pacote de treino (15)",
       "practice_pack_5": "Pacote de treino (5)",
       "pro": "Pro",
-      "pro_monthly": "Pro Mensal",
+      "pro_monthly": "Pro mensal",
       "pro_monthlyCn": "Passe mensal Pro",
-      "pro_quarterly": "Pro Trimestral",
+      "pro_quarterly": "Pro trimestral",
       "pro_quarterlyCn": "Passe trimestral Pro",
       "pro_week_pass": "Passe de 7 dias",
       "pro_week_passCn": "Passe semanal Pro",
       "pro_weekly": "Pro, cobrado por semana",
-      "student_monthly": "Estudante Mensal",
-      "student_quarterly": "Estudante Trimestral"
+      "student_monthly": "Estudante mensal",
+      "student_quarterly": "Estudante trimestral"
     },
     "renewalReminder": {
       "bodyAuto": "O {plan} será renovado automaticamente em {date} por {price} a cada {period}.",
@@ -198,15 +198,15 @@
       "subject": "{company}: as candidaturas para {program} se encerram em {date}"
     },
     "campusFollowed": {
-      "body": "{program}, da empresa {company}, agora está no calendário universitário, com o link para a página oficial. Confira as datas lá antes de se candidatar.",
+      "body": "{program}, da empresa {company}, agora está no calendário de recrutamento universitário, com o link para a página oficial. Confira as datas lá antes de se candidatar.",
       "cta": "Ver o programa",
       "heading": "Uma empresa que você segue publicou um programa",
-      "preheader": "{program} está no calendário universitário.",
+      "preheader": "{program} está no calendário de recrutamento universitário.",
       "subject": "{company} publicou um novo programa de recrutamento universitário",
       "subjectYear": "{company} publicou seu programa de recrutamento universitário para formandos de {year}"
     },
     "common": {
-      "fitNote": "O nível de encaixe compara o anúncio da vaga com o seu currículo. Não é a sua chance de contratação.",
+      "fitNote": "O encaixe compara o anúncio da vaga com o seu currículo. Isso não é a sua chance de conseguir a vaga.",
       "gapLine": "Ainda não está no seu currículo: {skill}",
       "payNotListed": "Salário não informado",
       "payPerDay": "{amount} por dia",
@@ -276,11 +276,11 @@
       "cta": "Revisar a lista",
       "heading": "Sua lista desta semana",
       "preheader": "Vagas prontas para você revisar.",
-      "subject": "A lista Pronto para se candidatar desta semana está pronta"
+      "subject": "Sua lista Prontas para candidatura desta semana chegou"
     },
     "reasons": {
       "alerts": "Você recebe este e-mail porque os alertas de vagas estão ativados para a sua busca salva \"{search}\" no %BRAND%.",
-      "campusFollow": "Você recebe este e-mail porque segue a empresa {company} no calendário universitário do %BRAND%.",
+      "campusFollow": "Você recebe este e-mail porque segue a empresa {company} no calendário de recrutamento universitário do %BRAND%.",
       "digestDaily": "Você recebe este e-mail porque escolheu um resumo diário de vagas para a sua busca salva \"{search}\" no %BRAND%.",
       "digestWeekly": "Você recebe este e-mail porque escolheu um resumo semanal de vagas para a sua busca salva \"{search}\" no %BRAND%.",
       "reminders": "Você recebe este e-mail porque ele trata da sua conta do %BRAND% e das vagas que você acompanha. Você pode desativar estes lembretes."
@@ -355,7 +355,7 @@
       },
       "stage": {
         "accepted": "Proposta",
-        "ai_interview": "Entrevista com AI",
+        "ai_interview": "Entrevista com IA",
         "applied": "Enviada",
         "applying": "Enviada",
         "assessment": "Avaliação",

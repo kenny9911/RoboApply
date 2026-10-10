@@ -206,7 +206,7 @@
       "subjectYear": "{company}에서 {year}년 졸업자 대상 캠퍼스 채용 프로그램을 올렸어요"
     },
     "common": {
-      "fitNote": "적합도는 채용 공고와 내 이력서를 비교한 결과예요. 합격 확률이 아니에요.",
+      "fitNote": "적합도는 채용공고와 내 이력서를 비교한 결과예요. 합격 확률이 아니에요.",
       "gapLine": "아직 내 이력서에 없는 항목: {skill}",
       "payNotListed": "급여 정보 없음",
       "payPerDay": "일급 {amount}",
@@ -261,7 +261,7 @@
     "jobAlertInstant": {
       "cta": "내 공고 전체 보기",
       "heading": "{count, plural, one {내 검색에 맞는 새 공고 #건} other {내 검색에 맞는 새 공고 #건}}",
-      "intro": "{count, plural, one {최근에 올라온 공고이고, 저장한 검색 ‘{search}’에 맞아요.} other {최근에 올라온 공고들이고, 저장한 검색 ‘{search}’에 맞아요.}}",
+      "intro": "{count, plural, =1 {최근에 올라온 공고이고, 저장한 검색 ‘{search}’에 맞아요.} other {최근에 올라온 공고들이고, 저장한 검색 ‘{search}’에 맞아요.}}",
       "subject": "‘{search}’ 검색에 맞는 {count, plural, one {새 공고 #건} other {새 공고 #건}}"
     },
     "kitReady": {
@@ -276,7 +276,7 @@
       "cta": "목록 확인하기",
       "heading": "이번 주 목록",
       "preheader": "확인할 공고가 준비됐어요.",
-      "subject": "이번 주 ‘지원 준비’ 목록이 준비됐어요"
+      "subject": "이번 주 ‘지원 준비 완료’ 목록이 준비됐어요"
     },
     "reasons": {
       "alerts": "%BRAND%에서 저장한 검색 ‘{search}’의 공고 알림이 켜져 있어서 이 이메일을 보내드려요.",

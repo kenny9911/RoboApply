@@ -11,7 +11,7 @@
       "aiLabel": "Von KI geschrieben. Bearbeite den Text und nutze ihn nur, wenn er auf dich zutrifft.",
       "bankLabel": "Aus deinen gespeicherten Antworten",
       "cost": "Verbraucht 1 Credit für KI-Antworten.",
-      "dismiss": "Ausblenden",
+      "dismiss": "Verwerfen",
       "editLabel": "Antwortentwurf für: {question}",
       "save": "Diese Antwort speichern",
       "saveFailed": "Diese Antwort konnte nicht gespeichert werden. Versuch es erneut.",
@@ -24,8 +24,8 @@
       "writing": "Wird geschrieben…"
     },
     "error": {
-      "credits_exhausted": "Du hast deine Formularausfüllungen vorerst aufgebraucht.",
-      "credits_exhaustedUntil": "Du hast deine Formularausfüllungen vorerst aufgebraucht. Mehr gibt es ab {time}.",
+      "credits_exhausted": "Dein Kontingent an ausgefüllten Formularen ist vorerst aufgebraucht.",
+      "credits_exhaustedUntil": "Dein Kontingent an ausgefüllten Formularen ist vorerst aufgebraucht. Mehr gibt es ab {time}.",
       "feature_disabled": "Das Ausfüllen von Formularen ist für dein Konto nicht verfügbar.",
       "network": "%BRAND% ist gerade nicht erreichbar. Prüf deine Verbindung und versuch es erneut.",
       "not_connected": "Verbinde zuerst %BRAND%. Öffne %BRAND% und versuch es dann erneut.",
@@ -48,7 +48,7 @@
       "unlabelled": "Feld ohne Beschriftung"
     },
     "job": {
-      "untitled": "Stelle auf dieser Seite"
+      "untitled": "Job auf dieser Seite"
     },
     "launcher": {
       "label": "%BRAND% öffnen, um dieses Formular auszufüllen",
@@ -83,29 +83,29 @@
       "filling": "Deine Angaben werden eingetragen…",
       "newPage": "Du bist auf einer neuen Seite dieses Formulars.",
       "newPageHint": "Füll auch diese Seite aus.",
-      "newPageNoCost": "Es ist dieselbe Bewerbung, also wird keine weitere Formularausfüllung verbraucht.",
+      "newPageNoCost": "Es ist dieselbe Bewerbung, also zählt sie nicht als weiteres ausgefülltes Formular.",
       "noFields": "Auf dieser Seite wurden keine Felder gefunden. Scroll zum Formular oder öffne die Bewerbungsseite und versuch es dann erneut.",
-      "oneFill": "Die ganze Bewerbung verbraucht 1 Formularausfüllung.",
+      "oneFill": "Die ganze Bewerbung zählt als 1 ausgefülltes Formular.",
       "pageByPage": "Dieses Formular hat mehrere Seiten. Füll jede Seite aus und geh dann mit dem Button des Formulars weiter.",
       "site": "Formular auf {site}",
       "submitYourself": "Prüf das Formular und sende es dann selbst ab.",
       "summary": "{filled} von {total} Feldern ausgefüllt.",
-      "summaryNeedsYou": "Braucht dich: {count}.",
+      "summaryNeedsYou": "Bei {count} bist du gefragt.",
       "title": "Formular ausfüllen",
       "undo": "Ausfüllen rückgängig machen",
       "undoPartial": "Auswahlfelder, die sich hier nicht rückgängig machen lassen: {count}. Ändere sie im Formular.",
       "undone": "Zurückgesetzte Felder: {count}."
     },
     "popup": {
-      "boardBody": "Stelle auf {site}. Auf dieser Seite wird nichts gelesen, bis du eine Aktion wählst.",
+      "boardBody": "Job auf {site}. Auf dieser Seite wird nichts gelesen, bis du eine Aktion wählst.",
       "checkFit": "Passung prüfen",
       "codeConnect": "Mit Code verbinden",
       "codeInvalid": "Dieser Code funktioniert nicht. Codes haben 8 Buchstaben oder Ziffern und laufen nach 10 Minuten ab.",
       "codeLabel": "Oder gib den 8-stelligen Code aus %BRAND% ein",
       "connected": "Verbunden.",
       "disconnect": "Verbindung trennen",
-      "noFit": "Für diese Stelle gibt es noch keine Passung. Öffne sie in %BRAND%, um eine zu sehen.",
-      "noJobFound": "Auf dieser Seite wurde keine Stelle gefunden.",
+      "noFit": "Für diesen Job gibt es noch keine Passung. Öffne ihn in %BRAND%, um eine zu sehen.",
+      "noJobFound": "Auf dieser Seite wurde kein Job gefunden.",
       "openFormSite": "Öffne auf {site} das Bewerbungsformular und wähle dann „Formular ausfüllen“.",
       "otherSite": "Formulare auf dieser Website können noch nicht ausgefüllt werden.",
       "plannedSite": "Formulare auf {site} können noch nicht ausgefüllt werden.",
@@ -113,8 +113,8 @@
       "reconnectBody": "Dieser Browser wurde von deinem Konto getrennt. Verbinde ihn erneut, um weiter Formulare auszufüllen.",
       "requestSite": "Diese Website anfragen",
       "requested": "Anfrage gesendet. Danke.",
-      "saveJob": "Stelle speichern",
-      "saved": "In deinen Stellen gespeichert. Nur du kannst sie sehen.",
+      "saveJob": "Job speichern",
+      "saved": "In deinen Jobs gespeichert. Nur du kannst ihn sehen.",
       "title": "%BRAND%",
       "version": "Version {version}"
     },
@@ -126,7 +126,7 @@
     },
     "status": {
       "filled": "Ausgefüllt",
-      "needs_you": "Braucht dich",
+      "needs_you": "Du bist gefragt",
       "skipped": "Leer gelassen"
     },
     "submitted": {
