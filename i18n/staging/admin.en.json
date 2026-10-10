@@ -1,3 +1,159 @@
 {
-  "admin": {}
+  "admin": {
+    "console": {
+      "sources": {
+        "eyebrow": "Admin",
+        "title": "Job sources",
+        "sub": "Where this site gets its jobs, what each source did when it was last checked, and why some postings were left out.",
+        "loading": "Loading…",
+        "refresh": "Refresh",
+        "refreshing": "Refreshing…",
+        "panelTitle": "Where the jobs come from",
+        "panelTitleBrand": "Where the jobs come from: {brand}",
+        "panelSub": "Each source is checked on its own schedule. Numbers are from the last check, not live.",
+        "empty": "This site has no job source yet.",
+        "name": {
+          "bank": "{sourceName} recruiter jobs",
+          "ats_public": "Company job boards",
+          "activejobs": "Active Jobs DB",
+          "jsearch": "JSearch",
+          "linkedin": "LinkedIn job search",
+          "user_import": "Jobs people add themselves",
+          "other": "{provider}"
+        },
+        "about": {
+          "bank": "Jobs that recruiters publish on {sourceName} for a named employer.",
+          "ats_public": "Postings from companies' own public job boards. Each one links to the company's own page.",
+          "activejobs": "A job search service. Used for searches people ask for.",
+          "jsearch": "A job search service. Used for searches people ask for.",
+          "linkedin": "A job search service that is no longer used.",
+          "user_import": "A person pastes a link or a posting. Only that person sees it.",
+          "other": "A job source."
+        },
+        "state": {
+          "on": "On",
+          "off": "Off"
+        },
+        "transport": {
+          "db": "Read from its database",
+          "api": "Read over a secure web connection",
+          "syndication": "Read from its job feed",
+          "board_api": "Read from each board's public job feed",
+          "rapidapi": "Search service",
+          "off": "Not connected"
+        },
+        "reason": {
+          "kill_switch": "Turned off in the server settings.",
+          "transport_off": "Turned off in the server settings.",
+          "tls_required": "Its database connection is not encrypted, so we do not open it.",
+          "tls_required_no_api_key": "Its database connection is not encrypted and no web key is set, so we cannot read it.",
+          "no_api_key": "No web key is set for it.",
+          "not_configured": "Not set up on this server.",
+          "cross_tenant_unconfirmed": "Reading this source has not been confirmed for this site.",
+          "not_registered": "Not available on this server.",
+          "wrong_market": "Not a source for this site.",
+          "disabled": "Turned off, or its key is missing.",
+          "other": "Off ({code})."
+        },
+        "facts": {
+          "lastRun": "Last checked",
+          "never": "Not checked yet",
+          "written": "Jobs saved in the last check",
+          "open": "Jobs people can see now",
+          "held": "Jobs saved but not shown",
+          "boards": "Boards we read",
+          "boardsValue": "{enabled} of {total} on",
+          "boardsFailing": "{count, plural, one {# board could not be read last time} other {# boards could not be read last time}}"
+        },
+        "lastError": "The last check failed: {error}",
+        "notShown": {
+          "title": "These jobs are saved but not shown",
+          "body": "{source} has no public page for a single job yet, so a person would have nowhere to apply. We keep its jobs up to date and show them once that page exists. To turn this on, set {variable} to the address of that page.",
+          "count": "{count, plural, one {# published job is waiting} other {# published jobs are waiting}}"
+        },
+        "pageSet": "Its public job page is set. Each job links to that page.",
+        "skips": {
+          "title": "What the last check counted",
+          "countedAt": "Counted in the check on {time}.",
+          "none": "Nothing was left out in the last check.",
+          "bank_synced": "Published jobs with a named employer: {count}",
+          "bank_unpublished": "Open but not published by the recruiter: {count}",
+          "bank_no_company": "No employer named: {count}",
+          "bank_test_posting": "Test postings: {count}",
+          "bank_no_public_page": "No public job page to link to: {count}",
+          "bank_closed": "Closed by the recruiter: {count}",
+          "bank_page_cap": "Checks that stopped at the page limit: {count}",
+          "bank_pass_cut_short": "Checks that ran out of time: {count}",
+          "wrong_market_cn": "Located outside mainland China: {count}",
+          "wrong_market_intl": "Located in mainland China, so not for this site: {count}",
+          "no_apply_url": "No link to apply: {count}",
+          "missing_title_or_company": "No job title or employer name: {count}",
+          "private_row": "Already saved privately by a user, left as it is: {count}",
+          "normalize_failed": "Could not be read: {count}",
+          "no_external_id": "No posting ID from the source: {count}",
+          "boards_read": "Boards checked: {count}",
+          "board_errors": "Boards that could not be read: {count}",
+          "board_backlog": "Postings still to read: {count}"
+        },
+        "boards": {
+          "title": "Company job boards",
+          "sub": "Public job boards of companies that hire in mainland China. We read each board's own public job feed and keep the postings located there. Every job links to the company's own page.",
+          "systems": "We can read boards on {names}.",
+          "add": {
+            "title": "Add a company's job board",
+            "system": "Job board system",
+            "token": "Board ID",
+            "tokenHint": "The company's short name in its job board address.",
+            "company": "Company name",
+            "companyHint": "As the company writes it on its own board.",
+            "submit": "Add board",
+            "adding": "Adding…"
+          },
+          "list": {
+            "title": "Boards on this site",
+            "empty": "No board yet. Add one above.",
+            "loadError": "The list could not be loaded.",
+            "never": "Not checked yet",
+            "columns": {
+              "company": "Company",
+              "system": "System",
+              "board": "Board ID",
+              "status": "Status",
+              "lastChecked": "Last checked",
+              "jobs": "Postings listed",
+              "problem": "Last problem",
+              "actions": "Actions"
+            },
+            "on": "On",
+            "off": "Off",
+            "noProblem": "None"
+          },
+          "actions": {
+            "check": "Check now",
+            "checking": "Checking…",
+            "turnOff": "Turn off",
+            "turnOn": "Turn on",
+            "remove": "Remove",
+            "confirmRemove": "Remove and hide its jobs",
+            "cancel": "Cancel",
+            "checkLabel": "Check {company} now",
+            "toggleLabel": "Turn {company} on or off",
+            "removeLabel": "Remove {company}"
+          },
+          "offNote": "Turning a board off or removing it hides its jobs. Turning it back on reads the board again.",
+          "run": {
+            "queued": "{company}: the board lists {listed, plural, one {# posting} other {# postings}} for this site. Reading them has started.",
+            "waiting": "{company}: the board lists {listed, plural, one {# posting} other {# postings}} for this site. They are read at the next scheduled check.",
+            "error": "{company}: {problem}"
+          },
+          "errors": {
+            "duplicate": "This board is already in the list.",
+            "otherSite": "This board is already read for the other site, so it cannot be added here. A board is read for one site at a time.",
+            "invalid": "Check the board ID and the company name.",
+            "generic": "That did not work. Try again."
+          }
+        }
+      }
+    }
+  }
 }

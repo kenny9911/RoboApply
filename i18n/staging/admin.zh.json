@@ -1,0 +1,159 @@
+{
+  "admin": {
+    "console": {
+      "sources": {
+        "eyebrow": "管理后台",
+        "title": "职位来源",
+        "sub": "本站的职位从哪里来、每个来源上次检查的结果，以及部分职位未被收录的原因。",
+        "loading": "加载中…",
+        "refresh": "刷新",
+        "refreshing": "刷新中…",
+        "panelTitle": "职位来源",
+        "panelTitleBrand": "职位来源：{brand}",
+        "panelSub": "每个来源按各自的时间表检查。数字来自上次检查，不是实时数据。",
+        "empty": "本站还没有职位来源。",
+        "name": {
+          "bank": "{sourceName} 招聘方职位",
+          "ats_public": "企业招聘官网",
+          "activejobs": "Active Jobs DB",
+          "jsearch": "JSearch",
+          "linkedin": "LinkedIn 职位搜索",
+          "user_import": "用户自己添加的职位",
+          "other": "{provider}"
+        },
+        "about": {
+          "bank": "招聘方在 {sourceName} 上为具名雇主发布的职位。",
+          "ats_public": "来自企业自己公开招聘页面的职位，每个职位都链接到企业自己的页面。",
+          "activejobs": "职位搜索服务，用于用户发起的搜索。",
+          "jsearch": "职位搜索服务，用于用户发起的搜索。",
+          "linkedin": "已不再使用的职位搜索服务。",
+          "user_import": "用户粘贴链接或职位描述，只有本人可见。",
+          "other": "职位来源。"
+        },
+        "state": {
+          "on": "已开启",
+          "off": "已关闭"
+        },
+        "transport": {
+          "db": "从其数据库读取",
+          "api": "通过加密的网络连接读取",
+          "syndication": "从其职位数据接口读取",
+          "board_api": "从各招聘页面的公开数据接口读取",
+          "rapidapi": "搜索服务",
+          "off": "未连接"
+        },
+        "reason": {
+          "kill_switch": "已在服务器设置中关闭。",
+          "transport_off": "已在服务器设置中关闭。",
+          "tls_required": "其数据库连接未加密，因此我们不会打开它。",
+          "tls_required_no_api_key": "其数据库连接未加密，也没有设置网络密钥，因此无法读取。",
+          "no_api_key": "尚未为它设置网络密钥。",
+          "not_configured": "本服务器尚未配置。",
+          "cross_tenant_unconfirmed": "尚未确认本站可以读取该来源。",
+          "not_registered": "本服务器不提供该来源。",
+          "wrong_market": "不是本站的来源。",
+          "disabled": "已关闭，或缺少密钥。",
+          "other": "已关闭（{code}）。"
+        },
+        "facts": {
+          "lastRun": "上次检查",
+          "never": "尚未检查",
+          "written": "上次检查保存的职位",
+          "open": "用户现在能看到的职位",
+          "held": "已保存但未展示的职位",
+          "boards": "读取的招聘页面",
+          "boardsValue": "{total} 个中 {enabled} 个已开启",
+          "boardsFailing": "上次有 {count} 个页面无法读取"
+        },
+        "lastError": "上次检查失败：{error}",
+        "notShown": {
+          "title": "这些职位已保存，但未展示",
+          "body": "{source} 还没有单个职位的公开页面，用户无处投递。我们会持续更新这些职位，待该页面上线后再展示。要开启展示，请把 {variable} 设置为该页面的地址。",
+          "count": "有 {count} 个已发布的职位在等待"
+        },
+        "pageSet": "已设置公开职位页面，每个职位都链接到该页面。",
+        "skips": {
+          "title": "上次检查的统计",
+          "countedAt": "统计于 {time} 的检查。",
+          "none": "上次检查没有职位被排除。",
+          "bank_synced": "已发布且有具名雇主的职位：{count}",
+          "bank_unpublished": "开放但招聘方未发布：{count}",
+          "bank_no_company": "未注明雇主：{count}",
+          "bank_test_posting": "测试职位：{count}",
+          "bank_no_public_page": "没有可链接的公开职位页面：{count}",
+          "bank_closed": "招聘方已关闭：{count}",
+          "bank_page_cap": "因页数上限而停止的检查：{count}",
+          "bank_pass_cut_short": "因超时而中断的检查：{count}",
+          "wrong_market_cn": "工作地点不在中国大陆：{count}",
+          "wrong_market_intl": "工作地点在中国大陆，不属于本站：{count}",
+          "no_apply_url": "没有投递链接：{count}",
+          "missing_title_or_company": "缺少职位名称或雇主名称：{count}",
+          "private_row": "用户已私下保存，保持原样：{count}",
+          "normalize_failed": "无法读取：{count}",
+          "no_external_id": "来源未提供职位编号：{count}",
+          "boards_read": "已检查的招聘页面：{count}",
+          "board_errors": "无法读取的招聘页面：{count}",
+          "board_backlog": "尚待读取的职位：{count}"
+        },
+        "boards": {
+          "title": "企业招聘官网",
+          "sub": "在中国大陆招聘的企业的公开招聘页面。我们读取每个页面自己的公开数据接口，只保留工作地点在中国大陆的职位。每个职位都链接到企业自己的页面。",
+          "systems": "可以读取以下系统上的招聘页面：{names}。",
+          "add": {
+            "title": "添加企业招聘页面",
+            "system": "招聘系统",
+            "token": "页面标识",
+            "tokenHint": "企业招聘页面地址中的简称。",
+            "company": "企业名称",
+            "companyHint": "按企业在自己招聘页面上的写法填写。",
+            "submit": "添加",
+            "adding": "添加中…"
+          },
+          "list": {
+            "title": "本站的招聘页面",
+            "empty": "还没有招聘页面，请在上方添加。",
+            "loadError": "列表加载失败。",
+            "never": "尚未检查",
+            "columns": {
+              "company": "企业",
+              "system": "系统",
+              "board": "页面标识",
+              "status": "状态",
+              "lastChecked": "上次检查",
+              "jobs": "列出的职位",
+              "problem": "上次的问题",
+              "actions": "操作"
+            },
+            "on": "已开启",
+            "off": "已关闭",
+            "noProblem": "无"
+          },
+          "actions": {
+            "check": "立即检查",
+            "checking": "检查中…",
+            "turnOff": "关闭",
+            "turnOn": "开启",
+            "remove": "移除",
+            "confirmRemove": "移除并隐藏其职位",
+            "cancel": "取消",
+            "checkLabel": "立即检查 {company}",
+            "toggleLabel": "开启或关闭 {company}",
+            "removeLabel": "移除 {company}"
+          },
+          "offNote": "关闭或移除招聘页面会隐藏它的职位；重新开启后会再次读取。",
+          "run": {
+            "queued": "{company}：该页面为本站列出 {listed} 个职位，已开始读取。",
+            "waiting": "{company}：该页面为本站列出 {listed} 个职位，将在下次定时检查时读取。",
+            "error": "{company}：{problem}"
+          },
+          "errors": {
+            "duplicate": "这个招聘页面已在列表中。",
+            "otherSite": "另一个站点已在读取这个招聘页面，因此无法在这里添加。一个招聘页面同一时间只供一个站点读取。",
+            "invalid": "请检查页面标识和企业名称。",
+            "generic": "操作未成功，请重试。"
+          }
+        }
+      }
+    }
+  }
+}

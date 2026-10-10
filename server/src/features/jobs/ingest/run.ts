@@ -14,6 +14,7 @@ import { leaseBatch } from './config.js';
 import type { IngestDb } from './db.js';
 import { leaseDueQueries, runIngestQuery, type EnqueueManyFn, type PipelineContext, type QueryRunResult } from './pipeline.js';
 import { ensureBankSyncQueries, planQueries, tuplesFromFilters, upsertPlannedQueries } from './planner.js';
+import { emptyRunStatus, isSourceStatusNote, writeSourceStatus, type SourceRunStatus } from './status.js';
 import { perQueryTrackingAvailable } from './tracking.js';
 
 export const INGEST_QUERY_KIND = 'ingest.query';
@@ -31,10 +32,32 @@ export interface IngestTally {
   closed: number;
   errors: number;
   budgetStops: string[];
+  /** Skip tallies by reason, over every source of the run (wrong_market, no_apply_url, bank_no_public_page …). */
+  notes: Record<string, number>;
 }
 
 export function emptyTally(): IngestTally {
-  return { queries: 0, calls: 0, received: 0, inserted: 0, updated: 0, skippedRows: 0, enrichQueued: 0, closed: 0, errors: 0, budgetStops: [] };
+  return { queries: 0, calls: 0, received: 0, inserted: 0, updated: 0, skippedRows: 0, enrichQueued: 0, closed: 0, errors: 0, budgetStops: [], notes: {} };
+}
+
+/** Adds one query's result to its source's run status (the admin sources panel reads it). */
+export function addToSourceStatus(status: SourceRunStatus, r: QueryRunResult): void {
+  if (r.status === 'budget' || r.status === 'seed_budget' || r.status === 'disabled') return;
+  status.queries += 1;
+  status.calls += r.calls;
+  status.closed += r.closed ?? 0;
+  if (r.status === 'error') {
+    status.ok = false;
+    status.error = r.error ?? 'error';
+  }
+  if (r.process) {
+    status.received += r.process.received;
+    status.written += r.process.written;
+    status.inserted += r.process.inserted;
+    status.skipped += r.process.skipped;
+  }
+  // Skip reasons and source counts only; informational notes stay in the log tally (addToTally).
+  for (const [k, v] of Object.entries(r.notes ?? {})) if (isSourceStatusNote(k)) status.notes[k] = (status.notes[k] ?? 0) + v;
 }
 
 export function addToTally(t: IngestTally, r: QueryRunResult): void {
@@ -43,6 +66,7 @@ export function addToTally(t: IngestTally, r: QueryRunResult): void {
   if (r.status === 'error') t.errors += 1;
   if (r.status === 'budget' && !t.budgetStops.includes(r.provider)) t.budgetStops.push(r.provider);
   t.closed += r.closed ?? 0;
+  for (const [k, v] of Object.entries(r.notes ?? {})) t.notes[k] = (t.notes[k] ?? 0) + v;
   if (r.process) {
     t.received += r.process.received;
     t.inserted += r.process.inserted;
@@ -77,6 +101,7 @@ export async function runIngestTick(options: TickOptions): Promise<IngestTally &
   // Keep a margin to finish the query in flight: 5 s for a cron, 10% of a short (targeted) budget.
   const reserveMs = Math.min(5_000, Math.floor(options.budgetMs * 0.1));
   let tracking = options.perQueryTracking;
+  const statuses = new Map<string, SourceRunStatus>();
 
   const run = await runForBudget(
     async (budget: Budget) => {
@@ -96,9 +121,24 @@ export async function runIngestTick(options: TickOptions): Promise<IngestTally &
           enqueueMany: options.enqueueMany,
           publicDisplayProviders: options.publicDisplayProviders,
           perQueryTracking: tracking,
+          // A source that makes several requests per fetch (the bank's HTTPS pass, the employer
+          // boards) must stop inside what is left of this tick, not inside a budget of its own.
+          budgetMs: Math.max(0, budget.remainingMs() - reserveMs),
         };
         const result = await runIngestQuery(ctx, adapter, row);
         addToTally(tally, result);
+        let status = statuses.get(row.provider);
+        if (!status) {
+          let transport: string | null = null;
+          try {
+            transport = adapter.transport?.() ?? null;
+          } catch {
+            transport = null;
+          }
+          status = emptyRunStatus(ctx.now, transport);
+          statuses.set(row.provider, status);
+        }
+        addToSourceStatus(status, result);
         if (result.status === 'budget') enabled.delete(row.provider);
         if (budget.exhausted(reserveMs)) break;
       }
@@ -106,6 +146,12 @@ export async function runIngestTick(options: TickOptions): Promise<IngestTally &
     },
     { budgetMs: options.budgetMs, reserveMs, maxSteps: 500 },
   );
+  // One status document per source that ran (never fails the tick).
+  const finishedAt = now().toISOString();
+  for (const [provider, status] of statuses) {
+    if (status.queries === 0) continue;
+    await writeSourceStatus(options.db, options.brand.market, provider, { ...status, at: finishedAt });
+  }
   return { ...tally, stoppedBy: run.stoppedBy };
 }
 

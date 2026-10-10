@@ -14,13 +14,26 @@
 // the read: the connector uses them to read postings we do not have yet first
 // and then the longest-unrefreshed ones (per-run caps), and the closure check
 // compares the listing against them.
+//
+// A board is read for the market on its source row. The connector keeps the
+// postings located in that market (mainland China → cn, anything else → intl)
+// and counts the rest; the listing diff therefore compares like with like: our
+// open rows of this board IN THAT MARKET against the board's postings of that
+// market.
+//
+// `lastSyncedAt` is always the time of the read (both board managers print it
+// as "Last checked"). A mainland board with postings still unread after the
+// per-run caps is read again after BACKLOG_INTERVAL_MS instead of the usual
+// interval: the ingest adapter remembers those boards in its own cursor and
+// passes them to `dueCareerSources` as `backlogIds`. The source row is not
+// used to carry that state.
 
 import type prisma from '../../../../lib/prisma.js';
 import type { Market } from '../../../../platform/brand/index.js';
 import { connectorFor, type BoardRead } from './connectors.js';
 import type { HttpDeps } from './http.js';
 import { BoardFetchError } from './http.js';
-import { externalIdPrefix, isPublicAts, SYNC_INTERVAL_MS } from './shared.js';
+import { BACKLOG_INTERVAL_MS, externalIdPrefix, isPublicAts, SYNC_INTERVAL_MS } from './shared.js';
 
 /** Typed delegates this module reads and writes (no untyped client casts). */
 export type CareerSourceDb = Pick<typeof prisma, 'rACareerSiteSource' | 'rAJob'>;
@@ -56,10 +69,17 @@ function errorText(err: unknown): string {
   return err instanceof Error ? `unexpected:${err.message.slice(0, 160)}` : 'unexpected';
 }
 
-/** Our open public rows of this board: externalId → RAJob.lastSeenAt (when ingest last saved it). */
-export async function loadOpenBoardRows(db: CareerSourceDb, source: Pick<CareerSourceRow, 'ats' | 'boardToken'>): Promise<Map<string, Date | null>> {
+const marketOf = (source: { market?: string | null }): Market | null => (source.market === 'cn' ? 'cn' : source.market === 'intl' ? 'intl' : null);
+
+/**
+ * Our open public rows of this board in the source's market: externalId →
+ * RAJob.lastSeenAt (when ingest last saved it). A source without a market
+ * (callers that pass only the board) compares every open row of the board.
+ */
+export async function loadOpenBoardRows(db: CareerSourceDb, source: Pick<CareerSourceRow, 'ats' | 'boardToken'> & { market?: string | null }): Promise<Map<string, Date | null>> {
+  const market = marketOf(source);
   const open = await db.rAJob.findMany({
-    where: { sourceBoard: source.ats, externalId: { startsWith: externalIdPrefix(source.boardToken) }, archivedAt: null, visibility: 'public' },
+    where: { sourceBoard: source.ats, externalId: { startsWith: externalIdPrefix(source.boardToken) }, archivedAt: null, visibility: 'public', ...(market ? { market } : {}) },
     select: { externalId: true, lastSeenAt: true },
     take: OPEN_ROWS_LIMIT,
   });
@@ -73,7 +93,7 @@ export function closedExternalIds(open: ReadonlyMap<string, unknown>, listedIds:
 }
 
 /** Open public rows of this board that are not in the listing. */
-export async function findClosedExternalIds(db: CareerSourceDb, source: Pick<CareerSourceRow, 'ats' | 'boardToken'>, listedIds: readonly string[]): Promise<string[]> {
+export async function findClosedExternalIds(db: CareerSourceDb, source: Pick<CareerSourceRow, 'ats' | 'boardToken'> & { market?: string | null }, listedIds: readonly string[]): Promise<string[]> {
   return closedExternalIds(await loadOpenBoardRows(db, source), listedIds);
 }
 
@@ -90,7 +110,7 @@ export async function readCareerSource(db: CareerSourceDb, source: CareerSourceR
       read = await connectorFor(source.ats).read(
         { ats: source.ats, boardToken: source.boardToken, companyName: source.companyName, countryCode: source.countryCode },
         deps,
-        { known: open },
+        { known: open, market: marketOf(source) ?? undefined },
       );
     } catch (err) {
       error = errorText(err);
@@ -100,6 +120,7 @@ export async function readCareerSource(db: CareerSourceDb, source: CareerSourceR
   await db.rACareerSiteSource.update({
     where: { id: source.id },
     data: {
+      // Always the time of this read: the board managers show it as "Last checked".
       lastSyncedAt: deps.now,
       lastError: error,
       ...(read ? { lastJobCount: read.listedIds.length } : {}),
@@ -108,8 +129,19 @@ export async function readCareerSource(db: CareerSourceDb, source: CareerSourceR
   return { source, read, closedExternalIds: closed, calls: read?.calls ?? (error === 'unsupported_job_board' ? 0 : 1), error };
 }
 
-/** Up to `limit` due sources: never-read boards first, then the longest unread. */
-export async function dueCareerSources(db: CareerSourceDb, market: Market, now: Date, limit: number): Promise<CareerSourceRow[]> {
+/**
+ * Up to `limit` due sources: never-read boards first, then the longest unread
+ * (read more than SYNC_INTERVAL_MS ago), then the boards in `backlogIds` (still
+ * holding postings we have not stored) that were read more than
+ * BACKLOG_INTERVAL_MS ago.
+ */
+export async function dueCareerSources(
+  db: CareerSourceDb,
+  market: Market,
+  now: Date,
+  limit: number,
+  options: { backlogIds?: readonly string[] } = {},
+): Promise<CareerSourceRow[]> {
   if (limit <= 0) return [];
   const fresh = await db.rACareerSiteSource.findMany({
     where: { market, enabled: true, lastSyncedAt: null },
@@ -122,5 +154,20 @@ export async function dueCareerSources(db: CareerSourceDb, market: Market, now: 
     orderBy: { lastSyncedAt: 'asc' },
     take: limit - fresh.length,
   });
-  return [...fresh, ...stale];
+  const due = [...fresh, ...stale];
+  const backlogIds = [...new Set(options.backlogIds ?? [])].filter((id) => !due.some((s) => s.id === id));
+  if (due.length >= limit || backlogIds.length === 0) return due;
+  const backlog = await db.rACareerSiteSource.findMany({
+    where: { id: { in: backlogIds }, market, enabled: true, lastSyncedAt: { lt: new Date(now.getTime() - BACKLOG_INTERVAL_MS) } },
+    orderBy: { lastSyncedAt: 'asc' },
+    take: limit - due.length,
+  });
+  return [...due, ...backlog];
+}
+
+/** The ids among `ids` that are still enabled sources of the market (a removed or switched-off board leaves the backlog list). */
+export async function liveSourceIds(db: CareerSourceDb, market: Market, ids: readonly string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const rows = await db.rACareerSiteSource.findMany({ where: { id: { in: [...ids] }, market, enabled: true }, select: { id: true } });
+  return new Set(rows.map((r) => r.id));
 }

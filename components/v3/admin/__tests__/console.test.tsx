@@ -61,6 +61,7 @@ const admin = () => buildAuthValue({ user: { ...buildFakeUser(), role: 'admin' }
 const brand = (over: Partial<BrandHealth> = {}): BrandHealth => ({
   brand: 'roboapply',
   market: 'intl',
+  sources: [],
   ingest: { due: 3, overdue: 1, failing: 0, newJobsToday: 12, newJobs7dAvg: 40, openJobs: 200, enrichBacklog: 20, enrichedShare: 0.9, enrichBudget: { used: 10, limit: 8000 } },
   precompute: { used: 5, limit: 20000 },
   alerts: { sent: 4, failed: 1 },
@@ -147,7 +148,8 @@ describe('admin navigation', () => {
     const navCopy = adminCopy.admin.console.nav as Record<string, unknown>;
     for (const a of ADMIN_AREAS) expect(navCopy[a.id], a.id).toMatchObject({ title: expect.any(String), sub: expect.any(String) });
     expect(adminAreasFor('goapply').map((a) => a.id)).toEqual(expect.arrayContaining(['campus', 'fraud', 'invites']));
-    expect(adminAreasFor('goapply').map((a) => a.id)).not.toContain('sources');
+    // Job sources are shown on both sites: each brand's admin sees its own (D5).
+    for (const b of ['roboapply', 'goapply'] as const) expect(adminAreasFor(b).map((a) => a.id)).toContain('sources');
     expect(adminAreasFor('roboapply').map((a) => a.id)).not.toContain('fraud');
   });
 
@@ -155,7 +157,7 @@ describe('admin navigation', () => {
     nav.pathname = '/admin/fraud';
     renderWithBrand(<AdminNav />, { brand: 'goapply' });
     expect(screen.getByRole('link', { name: 'Suspicious jobs' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.queryByRole('link', { name: 'Company job boards' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Company job boards' })).toHaveAttribute('href', '/admin/sources');
     expect(screen.getByRole('link', { name: 'Coaches' })).toBeInTheDocument();
   });
 

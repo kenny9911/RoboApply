@@ -15,6 +15,8 @@ import { atsTypeFromUrls } from './ats.js';
 import { buildCompanyUpsert } from './company.js';
 import { buildSearchText, dedupeKey, resolveExpiresAt, resolvePostedAt, toDate } from './identity.js';
 import {
+  educationFromLabel,
+  educationFromText,
   employmentTypeFromLabel,
   employmentTypeFromTitle,
   roleTypeFromTitle,
@@ -60,6 +62,99 @@ function defaultMarket(provider: NormalizeProvider): Market {
   return provider === 'bank_gohire' ? 'cn' : 'intl';
 }
 
+// ── Location and the market it implies ────────────────────────────────────
+
+interface ResolvedLocations {
+  texts: string[];
+  parsed: ParsedLocation[];
+  primary: ParsedLocation | null;
+  /** The provider's own (not search-copied) country for the posting. */
+  providerCountry: string | null;
+  /** The provider's own region field for the posting ("HK", "Taiwan", "Guangdong"). */
+  providerRegion: string | null;
+  searchCountry: string | null;
+  hadHint: boolean;
+}
+
+/**
+ * The provider's separate city / region / country fields describe the first
+ * location only; for it the provider's country is binding (an ambiguous
+ * "Cambridge" + GB is Cambridge, England). The search's country
+ * (`countryHint`, or a country the provider copied from the search,
+ * `locationCountryEstimated`) is a weak hint for every location: it picks
+ * among same-name cities and fills a missing country. Later locations of a
+ * multi-location post get the provider's country only as that weak hint.
+ */
+function resolveLocations(raw: ProviderJobInput, countryHint: string | null | undefined): ResolvedLocations {
+  const texts = [...(raw.locations ?? []), raw.location].filter((t): t is string => typeof t === 'string' && !!t.trim());
+  const providerCountry = raw.locationCountryEstimated ? null : cleanOrNull(raw.locationCountry);
+  const searchCountry = cleanOrNull(countryHint) ?? (raw.locationCountryEstimated ? cleanOrNull(raw.locationCountry) : null);
+  const providerHint = { city: cleanOrNull(raw.locationCity), region: cleanOrNull(raw.locationRegion), country: providerCountry, searchCountry };
+  const laterHint = { searchCountry: providerCountry ?? searchCountry };
+  const parsed = uniqueLocations(texts.map((t, i) => parseLocation(t, i === 0 ? providerHint : laterHint)));
+  const hadHint = !!(providerHint.city || providerHint.region || providerHint.country || searchCountry);
+  if (!parsed.length && hadHint) parsed.push(parseLocation('', providerHint));
+  const primary = parsed.find((p) => p.city) ?? parsed.find((p) => p.cityName || p.country) ?? parsed[0] ?? null;
+  return { texts, parsed, primary, providerCountry, providerRegion: cleanOrNull(raw.locationRegion), searchCountry, hadHint };
+}
+
+/** Hong Kong, Macau and Taiwan are not mainland China, however the text ends ("Hong Kong SAR, China"). */
+const NOT_MAINLAND_RE = /hong\s*kong|\bhksar\b|\bmacau\b|\bmacao\b|\btaiwan\b|\btaipei\b|香港|澳门|澳門|台湾|台灣|臺灣/i;
+/**
+ * Districts and cities of Hong Kong, Macau and Taiwan that postings name
+ * without those words ("Kowloon, China", "Tsim Sha Tsui" filed under country
+ * cn, "Hsinchu, China"). Read only when the text resolved to no mainland city
+ * or province, so 重庆市九龙坡区 and "Taoyuan, Hunan" stay mainland.
+ */
+const NOT_MAINLAND_PLACE_RE =
+  /\bhk\b|\bkowloon\b|\bnew\s+territories\b|\bwan\s*chai\b|\btsim\s*sha\s*tsui\b|\bkwun\s*tong\b|\bcauseway\s*bay\b|\bsha\s*tin\b|\btsuen\s*wan\b|\bcotai\b|\btaipa\b|\bhsinchu\b|\bzhubei\b|\btaichung\b|\btainan\b|\bkaohsiung\b|\btaoyuan\b|九龙|九龍|新界|湾仔|灣仔|尖沙咀|观塘|觀塘|铜锣湾|銅鑼灣|沙田|荃湾|荃灣|路氹|氹仔|新竹|竹北|台中|臺中|台南|臺南|高雄|桃园|桃園|台北|臺北|新北/i;
+const NOT_MAINLAND_COUNTRIES: ReadonlySet<string> = new Set(['HK', 'MO', 'TW']);
+/** A region field that names Hong Kong, Macau or Taiwan (a code or the name). */
+const isNotMainlandRegion = (region: string | null | undefined): boolean =>
+  !!region && (/^(?:hk|mo|tw)$/i.test(region.trim()) || NOT_MAINLAND_RE.test(region));
+
+/**
+ * Is the posting's own (primary) location in mainland China? True only when
+ * the posting itself says so: the location text names China or a mainland
+ * city, or the provider states the country for this posting. A country that
+ * was merely filled from a board tag or the search (a weak hint) never counts,
+ * so a global board tagged CN does not turn its "Remote" postings mainland.
+ *
+ * Hong Kong, Macau and Taiwan are decided from the resolved place, not only
+ * from those three words: some boards file them under country "cn"
+ * (SmartRecruiters) or end the text with "China". A posting is not mainland
+ * when its text or region names one of them, when the place it names is one
+ * of their cities in the city table, or when it names one of their well-known
+ * districts and neither a mainland city nor a mainland province was resolved.
+ */
+function isMainlandChina(loc: ResolvedLocations): boolean {
+  const p = loc.primary;
+  if (!p || p.country !== 'CN') return false;
+  if (NOT_MAINLAND_RE.test(p.raw) || (p.cityName && NOT_MAINLAND_RE.test(p.cityName))) return false;
+  if (isNotMainlandRegion(loc.providerRegion) || isNotMainlandRegion(p.region)) return false;
+  if (!p.city && !p.region) {
+    // Neither a mainland city nor a mainland province resolved: is the named place a Hong Kong, Macau or Taiwan one?
+    if (NOT_MAINLAND_PLACE_RE.test(p.raw) || (p.cityName && NOT_MAINLAND_PLACE_RE.test(p.cityName))) return false;
+    const elsewhere = p.cityName ? parseLocation(p.cityName).city : null;
+    if (elsewhere && NOT_MAINLAND_COUNTRIES.has(elsewhere.country)) return false;
+  }
+  if (p.countrySource === 'hint') return resolveCountry(loc.providerCountry)?.code === 'CN';
+  return true;
+}
+
+/**
+ * The market an employer-board posting belongs to, from its own resolved
+ * location: mainland China → 'cn', anything else → 'intl'. Each posting is in
+ * exactly one market (GOAPPLY_PARITY_PLAN.md §3.9, MARKET_STRATEGY JC-4); a
+ * posting with locations in both markets follows its primary location (the
+ * second copy is the market wave's part of JC-4). The public board connectors
+ * call this on the listing BEFORE their per-board cap; the normalizer applies
+ * the same function, so the two can never disagree.
+ */
+export function marketOfPosting(raw: ProviderJobInput, countryHint: string | null = null): Market {
+  return isMainlandChina(resolveLocations(raw, countryHint)) ? 'cn' : 'intl';
+}
+
 function toNormalizedLocation(p: ParsedLocation, market: Market): NormalizedLocation {
   const city = p.city ? (market === 'cn' ? (p.city.zh ?? p.city.name) : p.city.name) : p.cityName;
   return { city, cityId: p.city?.id ?? null, region: p.region, country: p.country, lat: p.lat, lng: p.lng };
@@ -73,7 +168,11 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
   const meta = PROVIDER_META[provider];
   if (!meta) throw new Error(`normalizeProviderJob: unknown provider ${String(provider)}`);
   const now = ctx.now ?? new Date();
-  const market = ctx.market ?? defaultMarket(provider);
+  // ── Location (rules: resolveLocations above) and the market ──
+  const located = resolveLocations(raw, ctx.countryHint);
+  const { texts, parsed, primary, providerCountry } = located;
+  // An employer-board posting's market is its own location, whatever market reads the board.
+  const market: Market = provider === 'ats_public' ? (isMainlandChina(located) ? 'cn' : 'intl') : (ctx.market ?? defaultMarket(provider));
   const notes: string[] = [];
   const fieldSources: NormalizedJob['fieldSources'] = {};
 
@@ -88,22 +187,6 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
   // from the description (pay, years, work model, search text) still reads the NFKC form above.
   const descriptionShown = asWritten(raw.descriptionHtml) || asWritten(raw.description);
 
-  // ── Location ──
-  // The provider's separate city / region / country fields describe the first
-  // location only; for it the provider's country is binding (an ambiguous
-  // "Cambridge" + GB is Cambridge, England). The search's country
-  // (ctx.countryHint, or a country the provider copied from the search,
-  // `locationCountryEstimated`) is a weak hint for every location: it picks
-  // among same-name cities and fills a missing country. Later locations of a
-  // multi-location post get the provider's country only as that weak hint.
-  const texts = [...(raw.locations ?? []), raw.location].filter((t): t is string => typeof t === 'string' && !!t.trim());
-  const providerCountry = raw.locationCountryEstimated ? null : cleanOrNull(raw.locationCountry);
-  const searchCountry = cleanOrNull(ctx.countryHint) ?? (raw.locationCountryEstimated ? cleanOrNull(raw.locationCountry) : null);
-  const providerHint = { city: cleanOrNull(raw.locationCity), region: cleanOrNull(raw.locationRegion), country: providerCountry, searchCountry };
-  const laterHint = { searchCountry: providerCountry ?? searchCountry };
-  const parsed = uniqueLocations(texts.map((t, i) => parseLocation(t, i === 0 ? providerHint : laterHint)));
-  if (!parsed.length && (providerHint.city || providerHint.region || providerHint.country || searchCountry)) parsed.push(parseLocation('', providerHint));
-  const primary = parsed.find((p) => p.city) ?? parsed.find((p) => p.cityName || p.country) ?? parsed[0] ?? null;
   const locations = parsed.filter((p) => p.cityName || p.country).map((p) => toNormalizedLocation(p, market));
   const primaryLoc = primary ? toNormalizedLocation(primary, market) : null;
   if (primary?.country) {
@@ -137,6 +220,19 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
   else {
     employmentType = employmentTypeFromTitle(title);
     if (employmentType) fieldSources.employmentType = 'title';
+  }
+
+  // Education: the provider's label first, then the posting's own words (Chinese postings).
+  let educationLevel = educationFromLabel(raw.educationLevel);
+  let educationEvidence: string | null = null;
+  if (educationLevel) fieldSources.educationLevel = 'provider';
+  else {
+    const stated = educationFromText(descriptionPlain);
+    if (stated) {
+      educationLevel = stated.level;
+      educationEvidence = stated.quote;
+      fieldSources.educationLevel = 'posting_text';
+    }
   }
 
   let years = yearsFromProvider(raw.experienceLevel, raw.experienceMonths);
@@ -198,7 +294,10 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
   const source = sourceFields({ provider, sourceBoard: raw.sourceBoard, sourcePublisher: raw.sourcePublisher, sourceUrl: raw.sourceUrl, applyUrl });
   if (isLinkedInBranded(raw.sourcePublisher)) notes.push('linkedin_publisher_dropped');
   const atsType = atsTypeFromUrls(applyUrl, raw.sourceUrl);
-  const isAgency = resolveIsAgency(companyName, raw.isAgency);
+  // The company record: our staffing-firm list, the name, or the provider's own flag.
+  const companyIsAgency = resolveIsAgency(companyName, raw.isAgency);
+  // The job: also an agency posting when a recruiter placed it for a named employer (代招).
+  const isAgency = raw.agencyPosting === true ? true : companyIsAgency;
 
   // ── Applicant count: a named, citable source only; never LinkedIn-derived ──
   let applicantCount: number | null = null;
@@ -271,6 +370,9 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
     remoteScope,
 
     employmentType,
+    educationLevel,
+    educationEvidence,
+    headcount: typeof raw.headcount === 'number' && Number.isInteger(raw.headcount) && raw.headcount > 0 ? raw.headcount : null,
     ...salary,
 
     taxonomyIds: tax.ids,
@@ -300,7 +402,7 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
       displayName: companyName,
       nameNormalized: companyNameNormalized,
       logoUrl: companyLogoUrl,
-      isAgency,
+      isAgency: companyIsAgency,
       bankCompanyRef: raw.bankCompanyRef ?? null,
       facts: raw.companyFacts,
       logoSource: `provider:${provider}`,

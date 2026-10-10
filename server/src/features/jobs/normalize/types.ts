@@ -16,6 +16,8 @@ export type WorkModel = 'remote' | 'hybrid' | 'onsite';
 export type Seniority = 'intern_newgrad' | 'entry' | 'mid' | 'senior' | 'lead_staff' | 'director_exec';
 export type RoleType = 'ic' | 'manager';
 export type EmploymentType = 'full_time' | 'part_time' | 'contract' | 'internship';
+/** RAJob.educationLevel: the lowest education a posting asks for ('none' = it says any level is fine). */
+export type EducationLevel = 'none' | 'associate' | 'bachelor' | 'master' | 'phd';
 export type SalaryPeriod = 'year' | 'month' | 'week' | 'day' | 'hour';
 export type SalarySource = 'provider' | 'posting_text';
 export type AtsType =
@@ -123,8 +125,20 @@ export interface ProviderJobInput {
   /** Provider-extracted skills (lower-cased, de-duplicated, max 25 kept). */
   skills?: readonly string[] | null;
 
-  /** The provider's own agency flag. */
+  /** A provider education label ("本科", "bachelor", "associate", "不限"). */
+  educationLevel?: string | null;
+  /** Openings the provider states for the posting (a recruiter bank's 招聘人数). */
+  headcount?: number | null;
+
+  /** The provider's own agency flag: the COMPANY named on the posting is a staffing / recruitment firm. */
   isAgency?: boolean | null;
+  /**
+   * The POSTING is placed by a recruiter on behalf of the named employer (a
+   * recruiter-bank job whose employer the bank has not verified: 代招). Marks
+   * the job as an agency posting; it says nothing about the employer, so the
+   * company record is not marked as an agency.
+   */
+  agencyPosting?: boolean | null;
   /** Bank jobs: the bank's verified-employer field. */
   employerVerified?: boolean | null;
   /** Bank jobs: the bank recorded the employer's consent to syndicate (OPS-A4). */
@@ -141,7 +155,12 @@ export interface ProviderJobInput {
 }
 
 export interface NormalizeContext {
-  /** The brand market the job enters; default 'cn' for bank_gohire, else 'intl'. */
+  /**
+   * The brand market the job enters; default 'cn' for bank_gohire, else 'intl'.
+   * Ignored for `ats_public`: an employer-board posting's market is its own
+   * resolved location (mainland China → 'cn', anything else → 'intl'), so the
+   * caller compares `job.market` with its own market and skips the rest.
+   */
   market?: Market;
   /** Clock for expiry and "posted in the future" checks (tests pass a fixed date). */
   now?: Date;
@@ -257,6 +276,12 @@ export type NormalizedJob = {
   remoteScope: string | null;
 
   employmentType: EmploymentType | null;
+  /** The lowest education the posting asks for; null = not stated (never guessed). */
+  educationLevel: EducationLevel | null;
+  /** The posting's own words the level was read from (posting_text only; not stored on the row). */
+  educationEvidence: string | null;
+  /** Openings the provider states. Carried, not stored: RAJob has no column for it yet (schema request). */
+  headcount: number | null;
 
   salaryMin: number | null;
   salaryMax: number | null;
@@ -292,7 +317,7 @@ export type NormalizedJob = {
   searchText: string;
 
   company: CompanyUpsert;
-  fieldSources: Partial<Record<'workModel' | 'seniority' | 'years' | 'roleType' | 'employmentType' | 'salary' | 'country' | 'taxonomy' | 'skills', FieldSource>>;
+  fieldSources: Partial<Record<'workModel' | 'seniority' | 'years' | 'roleType' | 'employmentType' | 'educationLevel' | 'salary' | 'country' | 'taxonomy' | 'skills', FieldSource>>;
   /** ARCH §4.5 skip rule: enrichment may skip the LLM when `complete`. */
   coverage: { taxonomy: boolean; seniority: boolean; skills: number; complete: boolean };
   /** Values the normalizer refused, for ingest logs (e.g. 'applicant_count_dropped:linkedin'). */

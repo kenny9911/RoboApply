@@ -5,9 +5,12 @@
 // Each returns `{ skipped }` at once when there is nothing to do and reports
 // the work it did otherwise.
 //
-// GoApply (market cn): the inventory is the GoHire bank, used only when the
-// R-14 recruitment-info mode lets jobs reach users (`jobs.feed` or
-// `jobs.recommendations`); in mode `off` plan and ingest skip ('disabled').
+// Both brands plan, ingest and maintain by default (D5). GoApply (market cn)
+// reads the employer boards' mainland postings and the GoHire bank; its feed
+// capabilities are on unless CN_RECRUITMENT_INFO_MODE=off, the kill switch,
+// under which plan and ingest skip ('disabled'). Before planning, a market
+// that ships a verified seed list of employer boards registers it once
+// (sources/atsPublic/seeds.ts).
 
 import prisma from '../../../lib/prisma.js';
 import { logger } from '../../../services/LoggerService.js';
@@ -21,10 +24,11 @@ import { runPlanner } from './planner.js';
 import { adaptersForBrand } from './providers.js';
 import { runIngestTick } from './run.js';
 import { perQueryTrackingAvailable } from './tracking.js';
+import type { SeedResult } from '../sources/atsPublic/index.js';
 
 const TAG = 'JOBS_INGEST';
 
-/** Whether the brand's market may ingest right now (R-14 for GoApply). */
+/** Whether the brand's market may ingest right now (GoApply: false only under CN_RECRUITMENT_INFO_MODE=off). */
 export function ingestAllowed(brand: ProductBrand, env: EnvSource = process.env): boolean {
   if (brand.market !== 'cn') return true;
   return isEnabledForBrand('jobs.feed', brand, env) || isEnabledForBrand('jobs.recommendations', brand, env);
@@ -55,9 +59,21 @@ export const runJobsPlan: CronTask = async (ctx): Promise<CronResult> => {
   if (!ingestAllowed(ctx.brand, env())) return { skipped: 'disabled' };
   const adapters = adaptersForBrand(ctx.brand, env());
   if (adapters.length === 0) return { skipped: 'no_providers' };
+  // The market's verified seed list of employer boards, registered once per seed version.
+  let seed: SeedResult | null = null;
+  if (adapters.some((a) => a.provider === 'ats_public' && a.isEnabled())) {
+    try {
+      // Loaded on demand through the boards' public surface (that area imports ingest's own surface back).
+      const { ensureSeedCareerSources } = await import('../sources/atsPublic/index.js');
+      seed = await ensureSeedCareerSources(db(), ctx.brand.market);
+    } catch (err) {
+      // Planning goes on: the boards an admin already added are still read.
+      logger.warn(TAG, 'employer board seed not registered', { brand: ctx.brand.id, error: err instanceof Error ? err.message.slice(0, 160) : 'error' });
+    }
+  }
   const result = await runPlanner(db(), ctx.brand, adapters, { now: ctx.now, env: env() });
-  logger.info(TAG, 'jobs-plan', { brand: ctx.brand.id, ...result });
-  return { processed: result.written + result.bankQueries, ...result };
+  logger.info(TAG, 'jobs-plan', { brand: ctx.brand.id, ...result, seedBoardsAdded: seed?.added ?? 0 });
+  return { processed: result.written + result.bankQueries + (seed?.added ?? 0), ...result, seedBoardsAdded: seed?.added ?? 0 };
 };
 
 /** jobs-ingest (every 10 min): fetch → normalize → upsert per brand (ARCH §4.4). */

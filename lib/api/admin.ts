@@ -402,6 +402,8 @@ export type {
   BrandHealth,
   CostRow,
   CostsResponse,
+  JobSourceRunView,
+  JobSourceView,
   ProviderUsageRow,
   QueueKindRow,
   ReportItem,

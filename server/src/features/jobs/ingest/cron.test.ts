@@ -1,5 +1,6 @@
 // @vitest-environment node
-// WP-16b: the three crons (idle in < 2 s, GoApply R-14 gate, reporting),
+// WP-16b: the three crons (idle in < 2 s, reporting; GoApply ingests by default
+// and stops only under CN_RECRUITMENT_INFO_MODE=off; the seed boards),
 // maintenance SQL (45-day expiry, per-query missed refreshes behind the
 // SR-16b-1 probe, dedupe repair), targeted ingest for onboarding and the
 // `ingest.query` worker.
@@ -42,7 +43,7 @@ function stubAdapter(provider: JobSourceAdapter['provider'], over: Partial<JobSo
   };
 }
 
-const BUILTINS = ['activejobs', 'linkedin', 'jsearch', 'bank_robohire', 'bank_gohire'] as const;
+const BUILTINS = ['activejobs', 'jsearch', 'bank_robohire', 'bank_gohire'] as const;
 
 /** Replace every built-in with a stub (disabled unless given) so no real client is ever reachable. */
 function installStubs(list: JobSourceAdapter[]): void {
@@ -66,7 +67,7 @@ afterEach(() => {
 
 describe('crons', () => {
   it('jobs-ingest answers no_work fast when nothing is due (one lease statement)', async () => {
-    installStubs([stubAdapter('activejobs'), stubAdapter('linkedin'), stubAdapter('jsearch'), stubAdapter('bank_robohire', { kind: 'cursor' })]);
+    installStubs([stubAdapter('activejobs'), stubAdapter('jsearch'), stubAdapter('bank_robohire', { kind: 'cursor' })]);
     const { db, fake } = createIngestFake();
     setIngestCronDepsForTests({ db, env: {} });
     const started = Date.now();
@@ -96,15 +97,65 @@ describe('crons', () => {
     expect(kick).toHaveBeenCalledWith(['job.enrich']);
   });
 
-  it('GoApply plans and ingests only when recruitment-info mode lets jobs reach users (R-14)', async () => {
-    expect(ingestAllowed(go, {})).toBe(false);
+  it('GoApply plans and ingests by default; only CN_RECRUITMENT_INFO_MODE=off stops it', async () => {
+    expect(ingestAllowed(go, {})).toBe(true);
     expect(ingestAllowed(go, { CN_RECRUITMENT_INFO_MODE: 'partner_deeplink' })).toBe(true);
+    expect(ingestAllowed(go, { CN_RECRUITMENT_INFO_MODE: 'licensed' })).toBe(true);
+    expect(ingestAllowed(go, { CN_RECRUITMENT_INFO_MODE: 'off' })).toBe(false);
     expect(ingestAllowed(robo, {})).toBe(true);
+    expect(ingestAllowed(robo, { CN_RECRUITMENT_INFO_MODE: 'off' })).toBe(true);
     const { db, fake } = createIngestFake();
-    setIngestCronDepsForTests({ db, env: {} });
+    setIngestCronDepsForTests({ db, env: { CN_RECRUITMENT_INFO_MODE: 'off' } });
     expect(await runJobsIngest(ctx(go))).toEqual({ skipped: 'disabled' });
     expect(await runJobsPlan({ ...ctx(go), name: 'jobs-plan' })).toEqual({ skipped: 'disabled' });
     expect(fake.$sql.calls).toHaveLength(0);
+  });
+
+  it('GoApply by default: the bank and the employer boards are its sources; no_providers only when none is on', async () => {
+    const boards = stubAdapter('ats_public', { kind: 'cursor', markets: ['intl', 'cn'], sourceBoards: ['greenhouse'], dailyCallLimit: () => null });
+    // The bank is off (no transport) and the boards are on: ingest runs, it does not answer no_providers.
+    installStubs([boards]);
+    const { db } = createIngestFake();
+    setIngestCronDepsForTests({ db, env: {} });
+    expect(await runJobsIngest(ctx(go))).toEqual({ skipped: 'no_work' });
+    // With the bank's transport enabled (the HTTPS reader) the bank alone is enough.
+    installStubs([stubAdapter('bank_gohire', { kind: 'cursor', markets: ['cn'], dailyCallLimit: () => null })]);
+    expect(await runJobsIngest(ctx(go))).toEqual({ skipped: 'no_work' });
+    // Nothing on at all: no_providers.
+    installStubs([]);
+    expect(await runJobsIngest(ctx(go))).toEqual({ skipped: 'no_providers' });
+    // JOB_PROVIDERS_GOAPPLY narrows the list: with only the (disabled) bank left, no provider is on.
+    installStubs([boards]);
+    setIngestCronDepsForTests({ db, env: { JOB_PROVIDERS_GOAPPLY: 'bank_gohire' } });
+    expect(await runJobsIngest(ctx(go))).toEqual({ skipped: 'no_providers' });
+  });
+
+  it('GoApply jobs-plan registers the verified seed boards once, plans no search query and calls no provider', async () => {
+    const boards = stubAdapter('ats_public', { kind: 'cursor', markets: ['intl', 'cn'], sourceBoards: ['greenhouse'], dailyCallLimit: () => null });
+    const jsearch = stubAdapter('jsearch');
+    installStubs([boards, jsearch, stubAdapter('bank_gohire', { kind: 'cursor', markets: ['cn'], dailyCallLimit: () => null })]);
+    const { db, fake } = createIngestFake();
+    setIngestCronDepsForTests({ db, env: { INGEST_SEED_ROLES: '2', INGEST_SEED_CITIES_PER_COUNTRY: '1', CN_EXTERNAL_PROVIDERS: 'jsearch' } });
+    const first = await runJobsPlan({ ...ctx(go), name: 'jobs-plan' });
+    // No search adapter serves market cn: nothing is planned for a provider, only the two standing syncs.
+    expect(first).toMatchObject({ planned: 0, bankQueries: 2 });
+    expect(Number(first.seedBoardsAdded)).toBeGreaterThanOrEqual(10);
+    const sources = [...fake.$rows('rACareerSiteSource')];
+    expect(sources).toHaveLength(Number(first.seedBoardsAdded));
+    expect(sources.every((r) => r.market === 'cn' && r.countryCode === 'CN' && r.enabled === true && String(r.createdBy).startsWith('seed:'))).toBe(true);
+    expect(fake.$rows('rAIngestQuery').map((q) => [q.provider, q.market, q.origin]).sort()).toEqual([
+      ['ats_public', 'cn', 'bank_sync'],
+      ['bank_gohire', 'cn', 'bank_sync'],
+    ]);
+    // A second run adds nothing (once per seed version), even after an admin removed a board.
+    await db.rACareerSiteSource.delete({ where: { id: String(sources[0]!.id) } });
+    expect(await runJobsPlan({ ...ctx(go), name: 'jobs-plan' })).toMatchObject({ seedBoardsAdded: 0 });
+    expect(fake.$rows('rACareerSiteSource')).toHaveLength(sources.length - 1);
+    expect(jsearch.fetch).not.toHaveBeenCalled();
+    expect(boards.fetch).not.toHaveBeenCalled();
+    // RoboApply ships no seed list in this wave: its plan adds no board.
+    expect(await runJobsPlan({ ...ctx(), name: 'jobs-plan' })).toMatchObject({ seedBoardsAdded: 0 });
+    expect(fake.$rows('rACareerSiteSource').every((r) => r.market === 'cn')).toBe(true);
   });
 
   it('jobs-plan writes queries without calling providers', async () => {
@@ -113,8 +164,8 @@ describe('crons', () => {
     const { db } = createIngestFake();
     setIngestCronDepsForTests({ db, env: { INGEST_SEED_ROLES: '2', INGEST_SEED_CITIES_PER_COUNTRY: '1' } });
     const res = await runJobsPlan({ ...ctx(), name: 'jobs-plan' });
-    // 2 seeds × 3 search adapters (planned even while a key is missing; leases skip disabled providers).
-    expect(res).toMatchObject({ seedTuples: 2, planned: 6, bankQueries: 1 });
+    // 2 seeds × 2 search adapters, activejobs and jsearch (planned even while a key is missing; leases skip disabled providers).
+    expect(res).toMatchObject({ seedTuples: 2, planned: 4, bankQueries: 1 });
     expect(a.fetch).not.toHaveBeenCalled();
   });
 
@@ -171,8 +222,8 @@ describe('crons', () => {
     setIngestCronDepsForTests({ db, env: {}, perQueryTracking: true });
     const res = await runJobsMaintain({ ...ctx(), name: 'jobs-maintain' });
     expect(res).toMatchObject({ missedRule: true });
-    // activejobs, linkedin, jsearch — never the bank (it closes its own jobs).
-    expect(fake.$sql.texts().filter((t) => t.includes(`'source_removed'`))).toHaveLength(3);
+    // activejobs, jsearch — never the bank (it closes its own jobs).
+    expect(fake.$sql.texts().filter((t) => t.includes(`'source_removed'`))).toHaveLength(2);
   });
 });
 

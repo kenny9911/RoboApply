@@ -4,7 +4,8 @@
 // §10.4). Five views, linkable with ?view=:
 //   health    ingest, queue (dead items with retry), provider calls, enrichment,
 //             AI scores, alert and email sends, Assistant, out-of-credits — per brand,
-//             with the metrics past their alert level listed first;
+//             with the metrics past their alert level listed first; then each
+//             brand's job sources (what each did in its last check);
 //   costs     cost by SKU × brand × day, with a CSV download;
 //   feedback  Assistant thumbs up/down with a redacted excerpt and guard hits;
 //   safety    GoApply content-safety readiness and recent events;
@@ -35,6 +36,7 @@ import { costsCsvUrl, type AlertHit, type BrandHealth, type SystemStatusResponse
 import { AiGeneratedBadge } from '../../features/market';
 import { AdminGate } from './AdminGate';
 import { AdminNav } from './AdminNav';
+import { JobSourcesPanel } from './SourcesConsole';
 import { fmtCount, fmtLongDate, fmtPercent } from './format';
 import { useViewParam } from './viewParam';
 import styles from './console.module.css';
@@ -111,6 +113,8 @@ function HealthView() {
         <Btn variant="ghost" icon={<IconRefresh size={15} />} disabled={q.isFetching} onClick={() => void q.refetch()}>{t(q.isFetching ? 'refreshing' : 'refresh')}</Btn>
       </div>
       {d.brands.map((b) => <BrandPanel key={b.brand} health={b} alerts={d.alerts} />)}
+      {/* Each brand's own job sources, from the job source registry (the shared panel of /admin/sources). */}
+      {d.brands.map((b) => <JobSourcesPanel key={`sources-${b.brand}`} health={b} showBrand />)}
       <QueuePanel status={d} />
       <ProvidersPanel status={d} />
     </div>

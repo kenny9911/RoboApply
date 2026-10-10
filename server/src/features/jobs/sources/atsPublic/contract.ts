@@ -5,6 +5,13 @@
 // (Greenhouse `boards-api…/jobs?content=true`, Lever `?mode=json`, Ashby
 // posting API, SmartRecruiters postings). No Workday scraping. Admin mount:
 // /api/v1/roboapply/admin/career-sources.
+//
+// Both brands (GOAPPLY_PARITY_PLAN.md §3.9): a source belongs to one market
+// (`market`), the market of the brand whose admin added it, and feeds that
+// brand with the board's postings located in that market (mainland China →
+// cn, anything else → intl). An admin sees and changes the sources of the
+// brand they are signed in to; `market` in a request may only name that
+// market (it defaults to it).
 
 import { z } from 'zod';
 
@@ -13,7 +20,8 @@ export type PublicAts = (typeof PUBLIC_ATS)[number];
 
 export const CareerSourceBodySchema = z
   .object({
-    market: z.enum(['intl', 'cn']).default('intl'),
+    /** Optional: the market of the brand the admin is on (the default). Naming the other market is refused. */
+    market: z.enum(['intl', 'cn']).optional(),
     ats: z.enum(PUBLIC_ATS),
     boardToken: z.string().trim().regex(/^[A-Za-z0-9_.-]{1,120}$/),
     companyName: z.string().trim().min(1).max(200),

@@ -1,8 +1,11 @@
 // server/src/features/jobs/ingest/adapters/rapidApi.ts — RapidAPI search adapters (WP-16b).
 //
 // Wraps the existing clients as ingest fetchers (ARCH §4.2): Active Jobs DB
-// and the LinkedIn Job Search API (raFantasticJobs.ts) and JSearch
-// /search-v2 (raRapidApiJobs.ts). One RAPID_API_KEY; each API must be
+// (raFantasticJobs.ts) and JSearch /search-v2 (raRapidApiJobs.ts). These are
+// RoboApply's search providers and serve market intl ONLY: no RapidAPI
+// adapter ever serves market cn (MARKET_STRATEGY M-6: JSearch country=cn rows
+// carry no apply link and are third-hand copies of a mainland board's
+// postings). One RAPID_API_KEY; each API must be
 // subscribed on app 8974502 (OPS-A3). The clients keep their own guards
 // (LRU cache, circuit breaker, in-memory daily budget, kill switches
 // RA_ONBOARDING_*_DISABLED and RA_ONBOARDING_EXTERNAL_JOBS_DISABLED); ingest
@@ -87,11 +90,13 @@ export interface RapidApiAdapterDeps {
 }
 
 export function createRapidApiAdapter(id: ExternalSourceBoard, deps: RapidApiAdapterDeps = {}): JobSourceAdapter {
-  const markets: readonly Market[] = id === 'jsearch' ? ['intl', 'cn'] : ['intl'];
+  // International only, for every RapidAPI provider (see the header).
+  const markets: readonly Market[] = ['intl'];
   return {
     provider: id,
     kind: 'search',
     markets,
+    transport: () => 'rapidapi',
     sourceBoards: [id],
     isEnabled: () => {
       try {

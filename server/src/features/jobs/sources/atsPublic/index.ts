@@ -9,3 +9,5 @@ export { atsPublicEnabled, createAtsPublicAdapter, ATS_PUBLIC_KILL_SWITCH } from
 export { CONNECTORS, connectorFor } from './connectors.js';
 export { extractPermitTags } from './permitTags.js';
 export { careerSourcesService } from './service.js';
+export { ensureSeedCareerSources, parseSeedFile, seedFileFor } from './seeds.js';
+export type { SeedBoard, SeedFile, SeedResult } from './seeds.js';

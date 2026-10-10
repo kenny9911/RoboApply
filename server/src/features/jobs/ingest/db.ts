@@ -9,7 +9,17 @@ import type prisma from '../../../lib/prisma.js';
 
 export type IngestDb = Pick<
   typeof prisma,
-  'rAJob' | 'rACompany' | 'rAIngestQuery' | 'rAProviderUsage' | 'rASearchProfile' | 'user' | 'rAH1bEmployerStat' | '$queryRaw' | '$executeRaw'
+  | 'rAJob'
+  | 'rACompany'
+  | 'rAIngestQuery'
+  | 'rAProviderUsage'
+  | 'rASearchProfile'
+  | 'user'
+  | 'rAH1bEmployerStat'
+  | 'rACareerSiteSource'
+  | 'appConfig'
+  | '$queryRaw'
+  | '$executeRaw'
 >;
 
 const ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';

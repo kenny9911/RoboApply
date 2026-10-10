@@ -4,11 +4,12 @@
 // RapidAPI clients still need RAPID_API_KEY and their own kill switches).
 //
 //   INGEST_<PROVIDER>_DAILY_CALLS   per-provider daily call budget in RAProviderUsage
-//                                   (defaults: activejobs 300, linkedin 150, jsearch 200)
+//                                   (defaults: activejobs 300, jsearch 200)
 //   PUBLIC_DISPLAY_PROVIDERS        providers whose licence allows public redisplay
 //                                   (comma list; DEFAULT EMPTY — owner decision OPS-A4)
-//   CN_EXTERNAL_PROVIDERS           external providers GoApply may use (testing only;
-//                                   only 'jsearch' is honoured, with country=cn)
+//   JOB_PROVIDERS_<BRAND>           narrows a brand's source list (comma list, subset only;
+//                                   read in ../sources/registry.ts)
+// CN_EXTERNAL_PROVIDERS is no longer read: GoApply has no search provider.
 //   INGEST_LEASE_BATCH              queries leased per step (default 4)
 //   INGEST_SEED_ROLES               SEO seed roles (taxonomy L3, table order; default 300)
 //   INGEST_SEED_CITIES_PER_COUNTRY  SEO seed cities per country (default 3)
@@ -22,7 +23,6 @@ import type { IngestProvider } from '../sources/index.js';
 
 export const DEFAULT_DAILY_CALLS: Readonly<Partial<Record<IngestProvider, number>>> = {
   activejobs: 300,
-  linkedin: 150,
   jsearch: 200,
 };
 
@@ -65,11 +65,6 @@ export function dailyCallLimit(provider: IngestProvider, env: EnvSource = proces
 /** Providers whose licence allows public redisplay. Default empty (OPS-A4). */
 export function publicDisplayProviders(env: EnvSource = process.env): string[] {
   return listEnv(env, 'PUBLIC_DISPLAY_PROVIDERS');
-}
-
-/** External providers GoApply may query (testing only). Only 'jsearch' is supported. */
-export function cnExternalProviders(env: EnvSource = process.env): IngestProvider[] {
-  return listEnv(env, 'CN_EXTERNAL_PROVIDERS').filter((p): p is 'jsearch' => p === 'jsearch');
 }
 
 export function leaseBatch(env: EnvSource = process.env): number {

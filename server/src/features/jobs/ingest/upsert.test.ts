@@ -63,8 +63,28 @@ describe('batch upsert SQL (snapshot)', () => {
     expect(updateSet).toContain(`"seniority" = COALESCE(EXCLUDED."seniority", "RAJob"."seniority")`);
   });
 
-  it('revives only rows the source had dropped or the bank had closed', () => {
-    expect(recorded.text).toContain(`"archivedAt" = CASE WHEN "RAJob"."closeReason" IN ('source_removed', 'bank_closed') THEN NULL`);
+  it('revives only rows the source had dropped, the bank had closed, or that had no apply target', () => {
+    for (const column of ['archivedAt', 'closedAt', 'closeReason']) {
+      expect(recorded.text).toContain(`"${column}" = CASE WHEN "RAJob"."closeReason" IN ('source_removed', 'bank_closed', 'no_apply_target') THEN NULL`);
+    }
+    // 'expired', 'reported', 'duplicate' and a user's own removal stand.
+    expect(recorded.text).not.toMatch(/IN \([^)]*'(expired|reported|duplicate|removed_by_user)'/);
+  });
+
+  it('educationLevel is written and kept when the source now says nothing', () => {
+    expect(UPSERT_COLUMNS).toContain('educationLevel');
+    expect(recorded.text).toContain(`"educationLevel" = COALESCE(EXCLUDED."educationLevel", "RAJob"."educationLevel")`);
+  });
+
+  it('a level read from the posting text never replaces the level of an enriched row; a provider label always does', () => {
+    const fromText = normalizeProviderJob(input({ description: '任职要求：本科及以上学历。' }), 'activejobs', { now: NOW });
+    expect(fromText.fieldSources.educationLevel).toBe('posting_text');
+    expect(toUpsertRow(fromText, null).educationLevel).toBe('bachelor');
+    // Sent as NULL, so the statement's COALESCE keeps what enrichment stored.
+    expect(toUpsertRow(fromText, null, 'c1', { keepStoredEducation: true }).educationLevel).toBeNull();
+    const fromProvider = normalizeProviderJob(input({ educationLevel: '硕士' }), 'activejobs', { now: NOW });
+    expect(fromProvider.fieldSources.educationLevel).toBe('provider');
+    expect(toUpsertRow(fromProvider, null, 'c1', { keepStoredEducation: true }).educationLevel).toBe('master');
   });
 
   it('the VALUES column order matches UPSERT_COLUMNS and the row mapping', () => {
@@ -96,7 +116,7 @@ describe('batch upsert SQL (snapshot)', () => {
     // Never a plain overwrite of either column.
     expect(updateSet).not.toContain('"fraudFlags" = EXCLUDED."fraudFlags"');
     expect(updateSet).not.toContain('"marketTags" = EXCLUDED."marketTags"');
-    expect(recorded.text).toMatch(/"publicDisplay", "fraudFlags", "marketTags", "firstSeenAt"/);
+    expect(recorded.text).toMatch(/"publicDisplay", "fraudFlags", "marketTags", "educationLevel", "firstSeenAt"/);
   });
 
   it('writes in batches of 100', async () => {

@@ -1,17 +1,26 @@
-// server/src/features/jobs/ingest/providers.ts — which sources a brand's ingest runs (ARCH §4.2).
+// server/src/features/jobs/ingest/providers.ts — which sources a brand's ingest runs
+// (ARCH §4.2; GOAPPLY_PARITY_PLAN.md §3.9).
 //
-//   RoboApply (intl): activejobs (10) → bank_robohire (15) → linkedin (20) → jsearch (30)
-//                     + any registered adapter for the market (WP-42's ats_public)
-//   GoApply   (cn):   bank_gohire (15); CN_EXTERNAL_PROVIDERS=jsearch adds JSearch
-//                     with country=cn for testing only. Never scraped boards.
-// `user_import` is not an ingest source (WP-35 writes those rows).
+// The list itself is the job source registry's (../sources/registry.ts):
+//
+//   RoboApply (intl): activejobs (10) → bank_robohire (15) → jsearch (30)
+//                     + adapters registered for the market (ats_public)
+//   GoApply   (cn):   bank_gohire + adapters registered for the market
+//                     (ats_public: employer-board postings in mainland China).
+//                     No search provider: the RapidAPI adapters serve market
+//                     intl only, so JSearch can never be a GoApply source
+//                     (MARKET_STRATEGY M-6). Never scraped boards.
+//
+// JOB_PROVIDERS_<BRAND> narrows a brand's list (a subset only).
+// `user_import` is not an ingest source (job import writes those rows).
+// This module registers the built-in adapters and hands ingest the adapters
+// of a brand; it adds no rule of its own.
 
 import type { EnvSource, ProductBrand } from '../../../platform/brand/index.js';
-import { getSourceAdapter, registerSourceAdapter, sourceAdaptersForMarket } from '../sources/index.js';
-import type { IngestProvider, JobSourceAdapter } from '../sources/index.js';
+import { getSourceAdapter, jobSourcesForBrand, registerSourceAdapter, sourceProvidersForBrand } from '../sources/index.js';
+import type { IngestProvider, JobSourceAdapter, JobSourceDescription } from '../sources/index.js';
 import { createBankAdapter } from './adapters/bank.js';
 import { createRapidApiAdapter } from './adapters/rapidApi.js';
-import { cnExternalProviders } from './config.js';
 
 let builtinsRegistered = false;
 
@@ -20,7 +29,6 @@ export function ensureBuiltinAdapters(): void {
   if (builtinsRegistered && getSourceAdapter('activejobs')) return;
   for (const adapter of [
     createRapidApiAdapter('activejobs'),
-    createRapidApiAdapter('linkedin'),
     createRapidApiAdapter('jsearch'),
     createBankAdapter('robohire'),
     createBankAdapter('gohire'),
@@ -30,24 +38,26 @@ export function ensureBuiltinAdapters(): void {
   builtinsRegistered = true;
 }
 
-/** Providers the brand's ingest uses, in priority order. */
+/** Providers the brand's ingest uses, in priority order (the registry list without `user_import`). */
 export function ingestProvidersForBrand(brand: ProductBrand, env: EnvSource = process.env): IngestProvider[] {
-  const out: IngestProvider[] = brand.jobProviders.filter((p) => p !== 'user_import');
-  if (brand.market === 'cn') for (const p of cnExternalProviders(env)) if (!out.includes(p)) out.push(p);
-  return out;
+  return sourceProvidersForBrand(brand, env).filter((p) => p !== 'user_import');
+}
+
+/** The brand's sources as the registry describes them, with the built-in adapters registered (admin sources panel). */
+export function sourcesForBrand(brand: ProductBrand, env: EnvSource = process.env): JobSourceDescription[] {
+  ensureBuiltinAdapters();
+  return jobSourcesForBrand(brand, env);
 }
 
 /**
  * Registered adapters for the brand: its own providers first (registry
- * order), then extra adapters registered for the market (ats_public).
+ * order), then the adapters registered for its market (ats_public). An
+ * adapter of another market is never returned, whatever a list says.
  */
 export function adaptersForBrand(brand: ProductBrand, env: EnvSource = process.env): JobSourceAdapter[] {
-  ensureBuiltinAdapters();
-  const wanted = ingestProvidersForBrand(brand, env);
-  const own = wanted.map((p) => getSourceAdapter(p)).filter((a): a is JobSourceAdapter => !!a && a.markets.includes(brand.market));
-  const builtin = new Set<IngestProvider>(['activejobs', 'linkedin', 'jsearch', 'bank_robohire', 'bank_gohire', 'user_import']);
-  const extra = sourceAdaptersForMarket(brand.market).filter((a) => !builtin.has(a.provider) && !own.includes(a));
-  return [...own, ...extra];
+  return sourcesForBrand(brand, env)
+    .map((s) => s.adapter)
+    .filter((a): a is JobSourceAdapter => !!a);
 }
 
 /** Test seam. */

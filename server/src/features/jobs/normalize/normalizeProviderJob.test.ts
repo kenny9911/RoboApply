@@ -15,6 +15,7 @@ import {
   inputFromFantasticJob,
   inputFromJSearchJob,
   isLinkedInBranded,
+  marketOfPosting,
   normalizeProviderJob,
   normalizeSkills,
   taxonomyIdsForTitle,
@@ -595,5 +596,102 @@ describe('review regressions: end to end', () => {
     // A posting with no usable host stores NULL, never a job board's or LinkedIn's host.
     const none = toUpsertRow(normalizeProviderJob({ ...base, applyUrl: 'https://www.linkedin.com/jobs/view/1', sourceUrl: null }, 'linkedin', { now }), null);
     expect(none.originalHost === null || !/linkedin/.test(none.originalHost)).toBe(true);
+  });
+});
+
+describe('PAR-7: mainland normalisation and the market of an employer-board posting', () => {
+  const board = (over: Record<string, unknown> = {}) => ({
+    externalId: 'acme:1',
+    sourceBoard: 'greenhouse',
+    title: '后端工程师',
+    company: 'Acme',
+    applyUrl: 'https://boards.greenhouse.io/acme/jobs/1',
+    location: '上海',
+    description: '岗位职责：负责后端服务开发。\n任职要求：本科及以上学历，3年以上经验。\n工作性质：全职\n薪资：1.5-2.5万',
+    ...over,
+  });
+
+  it('a posting whose text says 本科及以上 gets bachelor with its quote; a provider label wins over the text', () => {
+    const fromText = normalizeProviderJob(board(), 'ats_public', { now });
+    expect(fromText).toMatchObject({ educationLevel: 'bachelor', educationEvidence: '本科及以上学历' });
+    expect(fromText.fieldSources.educationLevel).toBe('posting_text');
+    const fromProvider = normalizeProviderJob(board({ educationLevel: '硕士' }), 'ats_public', { now });
+    expect(fromProvider).toMatchObject({ educationLevel: 'master', educationEvidence: null });
+    expect(fromProvider.fieldSources.educationLevel).toBe('provider');
+    const silent = normalizeProviderJob(board({ description: '负责后端服务开发。' }), 'ats_public', { now });
+    expect(silent.educationLevel).toBeNull();
+    expect(silent.fieldSources.educationLevel).toBeUndefined();
+  });
+
+  it('全职 becomes full_time and a mainland posting\'s 1.5-2.5万 becomes 15,000-25,000 CNY a month', () => {
+    const job = normalizeProviderJob(board({ employmentType: '全职' }), 'ats_public', { now });
+    expect(job).toMatchObject({ employmentType: 'full_time', salaryMin: 15000, salaryMax: 25000, salaryCurrency: 'CNY', salaryPeriod: 'month', salaryDisclosed: true });
+    expect(normalizeProviderJob(board({ employmentType: '劳务' }), 'ats_public', { now }).employmentType).toBe('contract');
+  });
+
+  it('an ats_public posting takes the market of its own location, whatever market the caller reads the board for', () => {
+    for (const ctxMarket of ['intl', 'cn', undefined] as const) {
+      expect(normalizeProviderJob(board(), 'ats_public', { now, market: ctxMarket }).market).toBe('cn');
+      expect(normalizeProviderJob(board({ location: 'Singapore' }), 'ats_public', { now, market: ctxMarket }).market).toBe('intl');
+    }
+    // The company record follows the job's market, and the mainland city is shown in Chinese.
+    const cn = normalizeProviderJob(board({ location: 'Shanghai, China' }), 'ats_public', { now, market: 'intl' });
+    expect(cn).toMatchObject({ market: 'cn', locationCountry: 'CN', locationCity: '上海' });
+    expect(cn.company.market).toBe('cn');
+  });
+
+  it.each([
+    // Review cases: named without the words Hong Kong, Macau or Taiwan, filed under China.
+    [{ location: 'Kowloon, China' }],
+    [{ location: 'Wan Chai, HK, CN' }],
+    [{ location: 'Tsim Sha Tsui', locationCountry: 'cn' }],
+    [{ location: 'New Territories', locationCountry: 'CN' }],
+    [{ location: 'Cotai', locationCountry: 'cn' }],
+    [{ location: 'Hsinchu, China' }],
+    [{ location: 'Kaohsiung City, China' }],
+    [{ location: 'Tainan, China' }],
+    [{ location: 'Zhubei', locationCountry: 'cn' }],
+    [{ location: 'Taichung', locationCountry: 'cn' }],
+    // The region field says so.
+    [{ location: 'Kwun Tong', locationCity: 'Kwun Tong', locationRegion: 'HK', locationCountry: 'cn' }],
+    [{ location: 'Central', locationRegion: 'Hong Kong', locationCountry: 'cn' }],
+    // A Taiwan city the city table knows, filed under China (no pattern needed).
+    [{ location: 'Keelung, China' }],
+    // The three words themselves, as before.
+    [{ location: 'Hong Kong SAR, China' }],
+    [{ location: 'Macau SAR, China' }],
+    [{ location: '新竹', locationCountry: 'cn' }],
+  ])('Hong Kong, Macau and Taiwan are never mainland China: %j', (place) => {
+    expect(marketOfPosting({ externalId: 'x:1', title: 'Engineer', company: 'Acme', ...place })).toBe('intl');
+    expect(normalizeProviderJob(board(place), 'ats_public', { now, market: 'cn' }).market).toBe('intl');
+  });
+
+  it.each([
+    [{ location: 'Shanghai, China' }],
+    [{ location: 'Shenzhen', locationCountry: 'cn' }],
+    [{ location: 'Suzhou, Jiangsu, China' }],
+    // 九龙 inside a mainland address, and a mainland county that shares a Taiwan city's name.
+    [{ location: '重庆市九龙坡区' }],
+    [{ location: 'Taoyuan, Hunan, China' }],
+    // A mainland town the city table does not know.
+    [{ location: 'Kunshan', locationCountry: 'cn' }],
+  ])('a mainland place stays mainland: %j', (place) => {
+    expect(marketOfPosting({ externalId: 'x:1', title: 'Engineer', company: 'Acme', ...place })).toBe('cn');
+  });
+
+  it('every other provider keeps the caller\'s market (a bank or search row is never re-routed by its location)', () => {
+    expect(normalizeProviderJob(board({ sourceBoard: 'jsearch' }), 'jsearch', { now, market: 'intl' }).market).toBe('intl');
+    expect(normalizeProviderJob(board({ sourceBoard: 'robohire' }), 'bank_robohire', { now }).market).toBe('intl');
+    expect(normalizeProviderJob(board({ sourceBoard: 'gohire', location: 'Singapore' }), 'bank_gohire', { now }).market).toBe('cn');
+  });
+
+  it('an agency posting marks the job, never the employer\'s company record', () => {
+    const job = normalizeProviderJob(board({ sourceBoard: 'gohire', agencyPosting: true }), 'bank_gohire', { now });
+    expect(job.isAgency).toBe(true);
+    expect(job.company.isAgency).toBeNull();
+    // A staffing firm by name is an agency in both places, as before.
+    const firm = normalizeProviderJob(board({ sourceBoard: 'gohire', company: '某某人力资源服务有限公司' }), 'bank_gohire', { now });
+    expect(firm.isAgency).toBe(true);
+    expect(firm.company.isAgency).toBe(true);
   });
 });

@@ -15,6 +15,12 @@
 //     parsed as usual.
 //   - Mainland China: "15-25K·14薪" → monthly 15000–25000 CNY, salaryMonths 14;
 //     "200-300元/天" → daily; "30-50万/年" → yearly; "面议" → not disclosed.
+//     A K / 万 figure with no period is a month's pay by the market's
+//     convention ("1.5-2.5万" → 15,000–25,000 CNY a month) while it stays under
+//     100,000; a larger one ("30-50万") keeps no period. A bare number with no
+//     unit, currency or period ("15000-25000") is not pay we can read: it is
+//     never filterable. No pay text means no pay (never 面议 unless the posting
+//     says so).
 //   - Text from a job description is read clause by clause. A clause counts
 //     only when it names pay (salary, pay range, 薪资, 待遇, 月薪 …), names no
 //     bonus / stipend / equity / benefit plan / years of experience / 年终奖 /
@@ -178,6 +184,13 @@ const RANGE_RE = new RegExp(String.raw`(?<![\d.])${AMOUNT}\s*(?:元|塊)?\s*(?:-
 const SINGLE_RE = new RegExp(String.raw`(?<![\d.])${AMOUNT}`);
 const CJK_MARKET_CURRENCY: Record<string, string> = { CN: 'CNY', TW: 'TWD', HK: 'HKD', MO: 'MOP' };
 const MONTHS_RE = /[·・.\s]\s*(1[2-9]|2[0-4])\s*薪/;
+/**
+ * A mainland K / 千 / 万 figure with no stated period is read as monthly only
+ * when its top is below this amount (CNY). From 50,000 up ("5-8万", "6万-9万",
+ * "30-50万") a figure with no period is often a year's pay, and reading it as
+ * a month's would overstate it twelve times, so it keeps no period.
+ */
+const MAINLAND_MONTHLY_BELOW = 50_000;
 
 function multiplier(m: string | undefined, cjk: boolean): number | null {
   if (!m) return 1;
@@ -244,11 +257,20 @@ export function parseSalaryText(text: string | null | undefined, opts: { country
   let period = periodFromText(s);
   // CN "15-25K·14薪": monthly by definition of the N薪 format.
   if (!period && months != null) period = 'month';
+  const hasUnit = /[kK千万萬]|[wW](?=\W|$)/.test(range?.[0] ?? scrubbed);
+  const hasSymbol = new RegExp(CUR_PREFIX).test(range?.[0] ?? scrubbed);
+  const mainland = market === 'cn' || country === 'CN';
   let currency = currencyFromText(s, country, market);
   // Chinese-language pay text in a Chinese-speaking market without a symbol ("15-25K·14薪", "月薪 4萬~5萬").
   if (!currency && cjk) currency = CJK_MARKET_CURRENCY[country ?? ''] ?? (market === 'cn' ? 'CNY' : null);
-  const hasUnit = /[kK千万萬]|[wW](?=\W|$)/.test(range?.[0] ?? scrubbed);
-  const hasSymbol = new RegExp(CUR_PREFIX).test(range?.[0] ?? scrubbed);
+  // A mainland posting's K / 千 / 万 figure that names no currency is yuan, with or without Chinese words ("15-25K").
+  if (!currency && hasUnit && mainland) currency = 'CNY';
+  // Mainland convention: a K / 千 / 万 figure that names no period is a month's pay ("1.5-2.5万",
+  // "15-25K"). Only below MAINLAND_MONTHLY_BELOW: "5-8万" or "30-50万" with no period may be a
+  // year's pay, so it keeps no period and is shown as posted (never guessed; not filterable).
+  if (!period && hasUnit && currency === 'CNY' && mainland && Math.max(min ?? 0, max ?? 0) < MAINLAND_MONTHLY_BELOW) {
+    period = 'month';
+  }
   // A bare pair of numbers ("2-3") with no currency sign, unit or period is not pay.
   if (!currency && !period && !hasUnit && !hasSymbol) {
     return negotiable ? { min: null, max: null, currency: null, period: null, months: null, negotiable: true, text: verbatim } : null;
