@@ -1,0 +1,32 @@
+{
+  "offset": 0,
+  "limit": 100,
+  "totalFound": 2,
+  "content": [
+    {
+      "id": "744000098765432",
+      "name": "Sales Representative",
+      "uuid": "0b2f0000-aaaa-bbbb-cccc-000000000001",
+      "refNumber": "REF-1",
+      "company": { "identifier": "HarborFoods", "name": "Harbor Foods" },
+      "releasedDate": "2026-09-25T08:00:00.000Z",
+      "location": { "city": "Taichung", "region": "Taichung City", "country": "tw", "remote": false, "hybrid": false, "fullLocation": "Taichung, Taichung City, Taiwan" },
+      "industry": { "id": "food_production", "label": "Food Production" },
+      "department": { "id": "1", "label": "Sales" },
+      "function": { "id": "sales", "label": "Sales" },
+      "typeOfEmployment": { "id": "permanent", "label": "Full-time" },
+      "experienceLevel": { "id": "entry_level", "label": "Entry Level" },
+      "ref": "https://api.smartrecruiters.com/v1/companies/HarborFoods/postings/744000098765432"
+    },
+    {
+      "id": "744000098765433",
+      "name": "Warehouse Lead",
+      "company": { "identifier": "HarborFoods", "name": "Harbor Foods" },
+      "releasedDate": "2026-09-26T08:00:00.000Z",
+      "location": { "city": "Taoyuan", "country": "tw", "remote": false, "fullLocation": "Taoyuan, Taiwan" },
+      "typeOfEmployment": { "id": "permanent", "label": "Full-time" },
+      "experienceLevel": { "id": "mid_senior_level", "label": "Mid-Senior Level" },
+      "ref": "https://api.smartrecruiters.com/v1/companies/HarborFoods/postings/744000098765433"
+    }
+  ]
+}

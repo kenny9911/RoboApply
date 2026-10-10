@@ -1,0 +1,323 @@
+/* Taiwan job meta (JobMetaTw, NegotiablePayNote) and the admin company job
+   boards panel (WP-42). Clarity tokens only; light + dark come from the token
+   values; touch targets are at least 44px. */
+
+/* ── Job meta ─────────────────────────────────────────────────────────── */
+
+.cardLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-2);
+  font-size: var(--fs-label);
+  line-height: var(--lh-meta, 1.5);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  max-width: 100%;
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--fs-label);
+  overflow-wrap: anywhere;
+}
+
+.pillPermit {
+  border-color: var(--action-subtle);
+  background: var(--action-subtle);
+  color: var(--action);
+}
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  min-width: 0;
+}
+
+.detailTitle {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+}
+
+.pay {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-body);
+  overflow-wrap: anywhere;
+}
+
+.permits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.permit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.quote {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-inline-start: 3px solid var(--rule-strong);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  line-height: var(--lh-meta, 1.5);
+  overflow-wrap: anywhere;
+}
+
+.postedWords {
+  margin: var(--sp-1) 0 0;
+  color: var(--text-muted);
+  font-size: var(--fs-label);
+  overflow-wrap: anywhere;
+}
+
+.quoteLabel {
+  color: var(--text-muted);
+  font-size: var(--fs-label);
+}
+
+.source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-label);
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--action);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link:focus-visible,
+.summary:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--r-xs);
+}
+
+/* ── Negotiable pay note ──────────────────────────────────────────────── */
+
+.note {
+  min-width: 0;
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+}
+
+.summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--action);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.noteBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-2);
+  line-height: var(--lh-body, 1.6);
+}
+
+.noteBody p {
+  margin: 0;
+}
+
+/* ── Admin panel ──────────────────────────────────────────────────────── */
+
+.admin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-width: 0;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  min-width: 0;
+}
+
+.sectionTitle {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--sp-4);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.label {
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+}
+
+.hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-label);
+  line-height: var(--lh-meta, 1.5);
+  overflow-wrap: anywhere;
+}
+
+.input,
+.select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
+}
+
+.input:focus-visible,
+.select:focus-visible {
+  outline: none;
+  border-color: var(--action);
+  box-shadow: var(--focus-ring);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--fs-meta);
+}
+
+.status {
+  margin: 0;
+  padding: var(--sp-3);
+  border-inline-start: 3px solid var(--action);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+}
+
+.statusError {
+  border-inline-start-color: var(--danger);
+}
+
+.tableWrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+  font-size: var(--fs-meta);
+}
+
+.table th,
+.table td {
+  padding: var(--sp-3) var(--sp-2);
+  border-bottom: 1px solid var(--rule);
+  text-align: start;
+  vertical-align: top;
+}
+
+.table th {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.token {
+  color: var(--text-2);
+  font-size: var(--fs-label);
+  overflow-wrap: anywhere;
+}
+
+.problem {
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}
+
+.off {
+  color: var(--text-muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.actions :global(.btn) {
+  min-height: 44px;
+}
+
+@media (max-width: 640px) {
+  .panel {
+    padding: var(--sp-4);
+  }
+}
