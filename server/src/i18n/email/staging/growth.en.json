@@ -1,3 +1,19 @@
 {
-  "growth": {}
+  "growth": {
+    "footer": "You get this email because it is about credits on your %BRAND% account.",
+    "referralReward": {
+      "inviter": {
+        "subject": "A friend you invited finished setting up",
+        "heading": "You got {credits, plural, one {# practice interview credit} other {# practice interview credits}}",
+        "body": "A friend who signed up with your invite link has verified their account and finished setting up, so we added {credits, plural, one {# practice interview credit} other {# practice interview credits}} to your account."
+      },
+      "invitee": {
+        "subject": "Your invite credit is ready",
+        "heading": "You got {credits, plural, one {# practice interview credit} other {# practice interview credits}}",
+        "body": "You joined with a friend's invite link and finished setting up, so we added {credits, plural, one {# practice interview credit} other {# practice interview credits}} to your account."
+      },
+      "note": "Credits are for practice interviews on %BRAND%. They have no cash value.",
+      "cta": "Start a practice interview"
+    }
+  }
 }

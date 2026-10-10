@@ -1,3 +1,92 @@
 {
-  "invite": {}
+  "invite": {
+    "page": {
+      "title": "Invite friends",
+      "sub": "Share your link. When a friend joins and finishes setting up, you each get {credits, plural, one {# practice interview credit} other {# practice interview credits}}.",
+      "unavailable": "Invites aren't available here right now.",
+      "loadError": "We couldn't load your invites. Check your connection and try again.",
+      "retry": "Try again"
+    },
+    "link": {
+      "regionLabel": "Your invite link",
+      "label": "Your invite link",
+      "copy": "Copy link",
+      "copied": "Link copied",
+      "copyFailed": "Couldn't copy. Select the link and copy it yourself.",
+      "share": "Share",
+      "email": "Email",
+      "emailSubject": "Try %BRAND% with me",
+      "emailBody": "I've been using %BRAND% for my job search. If you join with my link and finish setting up, we each get a free practice interview credit: {link}",
+      "shareText": "Join %BRAND% with my link. When you finish setting up, we each get a free practice interview credit.",
+      "selfSend": "Sharing opens your own apps. %BRAND% doesn't message anyone for you.",
+      "verifyTitle": "Confirm your account to get your link",
+      "verifyBody": "{market, select, cn {Add a phone number, sign in with WeChat or confirm your email address.} other {Confirm your email address, or sign in with Google or LINE.}} Then come back here for your link.",
+      "verifyAction": "Go to account settings"
+    },
+    "wechat": {
+      "title": "WeChat message",
+      "help": "Copy this and paste it into a WeChat chat or Moments post.",
+      "text": "Join %BRAND% with my link. When you finish setting up, we each get a practice interview credit. {link}",
+      "copy": "Copy message",
+      "copied": "Message copied"
+    },
+    "how": {
+      "title": "How it works",
+      "step1": "Share your link with a friend who is looking for a job.",
+      "step2": "Your friend creates a new %BRAND% account with the link, confirms it ({market, select, cn {a phone number, WeChat or email} other {email, Google or LINE}}) and finishes setting up.",
+      "step3": "You each get {credits, plural, one {# practice interview credit} other {# practice interview credits}}. If your account has an email address, we email you when it's added."
+    },
+    "progress": {
+      "title": "Your rewards in {year}",
+      "count": "{granted} of {cap} this year",
+      "meterLabel": "Rewards used this year",
+      "limitNote": "You can get up to {cap} a year. After that your friends still get theirs.",
+      "reached": "You've reached this year's limit. Friends who join still get their credit."
+    },
+    "friends": {
+      "title": "Friends who joined",
+      "empty": "No one has joined with your link yet.",
+      "joined": "Friend joined {date}",
+      "privacy": "We don't show who your friends are.",
+      "status": {
+        "signed_up": "Not set up yet",
+        "checking": "Being checked",
+        "rewarded": "Credit added",
+        "over_limit": "Over this year's limit",
+        "not_counted": "Not counted"
+      },
+      "statusHelp": {
+        "signed_up": "Your credit is added once your friend confirms their account and finishes setting up.",
+        "checking": "Some invites are checked by a person before credits are added.",
+        "rewarded": "You each got your credit.",
+        "over_limit": "Your friend got their credit. You had already reached this year's limit.",
+        "not_counted": "This sign-up didn't qualify, for example because it was the same person or the same device."
+      }
+    },
+    "honesty": "Credits are for practice interviews and have no cash value. We never ask you to post about us or write a review in return.",
+    "terms": "Invite terms",
+    "settings": {
+      "title": "Invite friends",
+      "summary": "{granted} of {cap} rewards used this year",
+      "open": "See your invites"
+    },
+    "landing": {
+      "title": "Join %BRAND% with an invite link",
+      "sub": "%BRAND% helps you find jobs that fit, tailor your resume and practice interviews.",
+      "rewardTitle": "What you get",
+      "reward": "Create a new account with this link, confirm it and finish setting up. If the link is still active, you and the friend who shared it each get a practice interview credit.",
+      "start": "Create your account",
+      "login": "I already have an account",
+      "existingNote": "Invite credits are for new accounts only.",
+      "signedInTitle": "You already have an account",
+      "signedInBody": "Invite credits are for new accounts. You can invite your own friends instead.",
+      "signedInAction": "Invite friends",
+      "invalidTitle": "This invite link doesn't look right",
+      "invalidBody": "Check the link with the friend who sent it. You can still create an account without it.",
+      "invalidAction": "Create an account",
+      "codeLabel": "Invite code: {code}",
+      "plainTitle": "Create your %BRAND% account",
+      "plainJobs": "Go to jobs"
+    }
+  }
 }

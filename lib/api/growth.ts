@@ -6,19 +6,22 @@
 //
 // Endpoints:
 //   GET    /api/v1/roboapply/invites
-//   POST   /api/v1/roboapply/invites/email
+//   POST   /api/v1/roboapply/invites/shared
 //   POST   /api/v1/public/events
-//   GET    /api/v1/roboapply/growth/checklist          (mount pending, see below)
-//   POST   /api/v1/roboapply/growth/checklist/dismiss  (mount pending, see below)
+//   GET    /api/v1/roboapply/growth/checklist
+//   POST   /api/v1/roboapply/growth/checklist/dismiss
+//   GET    /api/v1/roboapply/admin/growth/referrals/held         (admin; mount pending, see below)
+//   POST   /api/v1/roboapply/admin/growth/referrals/:id/review   (admin; mount pending, see below)
 //
-// The checklist router (server/src/features/growth/routes.ts
-// `createGrowthRouter`) is not in FEATURE_MOUNTS yet: features/index.ts is
-// owned by FND/INT, and WP-23 requested the row
-//   { id: 'growth', area: 'growth', path: s('/growth'), kind: 'seeker', owner: 'WP-23', build: createGrowthRouter }.
-// Until it lands the two calls below answer 404 and the checklist card
-// renders nothing. INT: when adding the row, switch their doc comments to
-// the standard "`id` — METHOD /path" form so __tests__/contracts/fixtures
-// verifies them against the mount table.
+// There is no "email my friends" call: people share their invite link
+// themselves (copy, the device share sheet, their own mail app, WeChat), so
+// nothing is sent to someone who never asked for it (WP-60).
+//
+// The admin review router (`createInvitesAdminRouter`) is not in
+// FEATURE_MOUNTS yet (features/index.ts is INT's); WP-60 requested the row
+//   { id: 'growth.referrals.admin', area: 'growth', path: a('/growth/referrals'), kind: 'admin', owner: 'WP-60', build: createInvitesAdminRouter }.
+// Until it lands the two admin calls answer 404. INT: when adding the row,
+// switch their doc comments to the standard "`id` — METHOD /path" form.
 
 import { API_BASE } from '../config';
 import { devBrandHeader } from './client';
@@ -32,9 +35,9 @@ export function getInvites(opts?: CallOptions): Promise<G.InvitesResponse> {
   return call<G.InvitesResponse>('GET', `/api/v1/roboapply/invites`, opts);
 }
 
-/** `invites.email` — POST /api/v1/roboapply/invites/email */
-export function sendInviteEmail(body: In<typeof G.InviteEmailBodySchema>, opts?: CallOptions): Promise<void> {
-  return call<void>('POST', `/api/v1/roboapply/invites/email`, { ...opts, body });
+/** `invites.shared` — POST /api/v1/roboapply/invites/shared */
+export function markInviteShared(body: In<typeof G.InviteSharedBodySchema>, opts?: CallOptions): Promise<G.InviteSharedResponse> {
+  return call<G.InviteSharedResponse>('POST', `/api/v1/roboapply/invites/shared`, { ...opts, body });
 }
 
 /** `growth.events` — POST /api/v1/public/events */
@@ -77,10 +80,24 @@ export function dismissChecklist(opts?: CallOptions): Promise<G.ChecklistView> {
   return call<G.ChecklistView>('POST', `/api/v1/roboapply/growth/checklist/dismiss`, opts);
 }
 
+// Admin review of held invite rewards (mount pending; see the header).
+
+/** growth.referrals.admin.held: GET /api/v1/roboapply/admin/growth/referrals/held (mount pending) */
+export function listHeldReferrals(opts?: CallOptions): Promise<G.HeldReferralsResponse> {
+  return call<G.HeldReferralsResponse>('GET', `/api/v1/roboapply/admin/growth/referrals/held`, opts);
+}
+
+/** growth.referrals.admin.review: POST /api/v1/roboapply/admin/growth/referrals/:id/review (mount pending) */
+export function reviewReferral(id: string, body: In<typeof G.ReferralReviewBodySchema>, opts?: CallOptions): Promise<G.ReferralReviewResponse> {
+  return call<G.ReferralReviewResponse>('POST', `/api/v1/roboapply/admin/growth/referrals/${encodeURIComponent(id)}/review`, { ...opts, body });
+}
+
 /** Every wrapper of this area, for callers that prefer one import. */
 export const growthApi = {
   getInvites,
-  sendInviteEmail,
+  markInviteShared,
+  listHeldReferrals,
+  reviewReferral,
   sendEvents,
   sendEventsBeacon,
   getChecklist,

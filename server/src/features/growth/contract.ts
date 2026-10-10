@@ -2,7 +2,7 @@
 //
 // First-party events, attribution, getting-started checklist, invite
 // friends (ARCHITECTURE.md §2.12, §3.9; TASK_PLAN.md WP-23, WP-60). Mounts:
-//   /api/v1/roboapply/invites   (seeker; capability `invites` per route)
+//   /api/v1/roboapply/invites   (seeker; capability `invites` per route; WP-60)
 //   /api/v1/public/events       (public/session; ≤50 events per batch, 120/min/anonId)
 //   /api/v1/roboapply/growth    (seeker; checklist read + dismiss — mount requested from INT)
 //
@@ -97,19 +97,123 @@ export interface ChecklistView extends ChecklistState {
 }
 
 // ── Invite friends (/invites, flag `invites`; WP-60) ─────────────────────
+//
+// F-GROW-01 (ADAPT): a personal link `/r/<code>`; when the friend creates a
+// new account, verifies it (email, Google/LINE/WeChat sign-in or a phone
+// number) and finishes setup, both people get 1 practice interview credit.
+// The inviter's rewards are capped at 10 per calendar year (UTC); the friend
+// still gets theirs when the inviter is over the cap. Rewards are credits,
+// never cash, and nothing is asked in return (no posts, no reviews: F-GROW-02
+// is SKIP). Rewards whose risk score reaches REFERRAL_HOLD_SCORE are held for
+// a person to review. Separate from GoApply's 内推码 hub (`cn.referralCodes`).
 
-export interface InvitesResponse {
-  code: string;
-  link: string;
-  invites: Array<{ status: 'signed_up' | 'qualified' | 'rewarded' | 'held'; at: string }>;
-  rewards: { granted: number; capPerYear: number };
-}
+/** The reward each side gets: deterministic, the same on both brands. */
+export const REFERRAL_REWARD = { bucket: 'practice', credits: 1 } as const;
+/** Inviter rewards per calendar year (UTC). */
 export const INVITE_REWARD_CAP_PER_YEAR = 10;
-export const InviteEmailBodySchema = z.object({ emails: z.array(z.string().trim().toLowerCase().email()).min(1).max(10) }).strict();
+/** Risk score at which a qualified referral is held for review (referralRisk.ts). */
+export const REFERRAL_HOLD_SCORE = 50;
+
+/**
+ * Brands where every sign-up path hands the invite code to
+ * growth.recordAttribution, so a friend who signs up can actually be
+ * rewarded. GoApply's phone and WeChat sign-ups (features/auth-cn) do not
+ * pass `ref` yet (request R-60-3), so on GoApply the invite programme stays
+ * hidden (`eligibility: 'not_available'`, plain /r/<code> landing) and no
+ * invite is attached, even with the `invites` capability on. INT adds
+ * 'goapply' here, and in the web twin `INVITE_REWARD_BRANDS`
+ * (hooks/growth/useInvites.ts; a test keeps the two equal), once that wiring lands.
+ */
+export const INVITE_SIGNUP_WIRED_BRANDS: readonly string[] = ['roboapply'];
+export function inviteSignupWired(brand: string): boolean {
+  return INVITE_SIGNUP_WIRED_BRANDS.includes(brand);
+}
+
+/** 8 characters of Crockford base32 (no I, L, O, U). */
+export const REFERRAL_CODE_RE = /^[0-9A-HJKMNP-TV-Z]{8}$/;
+
+/**
+ * RAReferral.status (stored):
+ *   pending   the friend signed up; not verified or not set up yet
+ *   held      qualified, but the risk check holds the rewards for review
+ *   rewarded  both credits granted
+ *   qualified the friend's credit granted; the inviter was over the yearly cap
+ *   rejected  not counted (self-invite, same person, or rejected on review)
+ */
+export const REFERRAL_STATUSES = ['pending', 'held', 'rewarded', 'qualified', 'rejected'] as const;
+export type ReferralStatus = (typeof REFERRAL_STATUSES)[number];
+
+/** What the inviter sees per friend (no names, no contact details). */
+export const INVITE_VIEW_STATUSES = ['signed_up', 'checking', 'rewarded', 'over_limit', 'not_counted'] as const;
+export type InviteViewStatus = (typeof INVITE_VIEW_STATUSES)[number];
+
+export const INVITE_VIEW_STATUS: Record<ReferralStatus, InviteViewStatus> = {
+  pending: 'signed_up',
+  held: 'checking',
+  rewarded: 'rewarded',
+  qualified: 'over_limit',
+  rejected: 'not_counted',
+};
+
+/** GET /api/v1/roboapply/invites → data. */
+export interface InvitesResponse {
+  /**
+   * 'verify_account': the link appears once the inviter's own account is verified.
+   * 'not_available': this brand cannot attach invites at every sign-up yet
+   * (INVITE_SIGNUP_WIRED_BRANDS): show no link and promise no reward.
+   */
+  eligibility: 'ok' | 'verify_account' | 'not_available';
+  /** Null until eligible. */
+  code: string | null;
+  /** `/r/<code>` (the web builds the absolute link from its own origin). */
+  path: string | null;
+  /** Absolute link on the brand's canonical origin. */
+  link: string | null;
+  reward: { bucket: typeof REFERRAL_REWARD.bucket; credits: number };
+  /** Friends who signed up with the link, newest first. `at` = when they signed up. */
+  invites: Array<{ status: InviteViewStatus; at: string }>;
+  rewards: {
+    /** Inviter rewards granted this calendar year (UTC). */
+    granted: number;
+    capPerYear: number;
+    year: number;
+  };
+}
+
+export const INVITE_SHARE_CHANNELS = ['copy', 'share', 'email', 'wechat'] as const;
+export type InviteShareChannel = (typeof INVITE_SHARE_CHANNELS)[number];
+
+/** POST /api/v1/roboapply/invites/shared — the inviter copied or shared the link. */
+export const InviteSharedBodySchema = z.object({ channel: z.enum(INVITE_SHARE_CHANNELS) }).strict();
+export interface InviteSharedResponse {
+  ok: true;
+}
+
+// Admin review (createInvitesAdminRouter; mount requested from INT at
+// /api/v1/roboapply/admin/growth/referrals).
+
+export interface HeldReferralView {
+  id: string;
+  brand: string;
+  inviterUserId: string;
+  inviteeUserId: string;
+  riskScore: number;
+  riskReasons: string[];
+  signedUpAt: string;
+  qualifiedAt: string | null;
+}
+export interface HeldReferralsResponse {
+  items: HeldReferralView[];
+}
+export const ReferralReviewParamsSchema = z.object({ id: z.string().min(1).max(64) }).strict();
+export const ReferralReviewBodySchema = z.object({ decision: z.enum(['approve', 'reject']) }).strict();
+export interface ReferralReviewResponse {
+  id: string;
+  status: ReferralStatus;
+}
 
 export const GROWTH_ERROR_CODES = {
   unknownEvent: 'unknown_event',
   /** The checklist store is not available on this deployment (schema request SR-23-1 not applied). */
   checklistUnavailable: 'feature_disabled',
-  inviteCap: 'invite_reward_cap',
 } as const;

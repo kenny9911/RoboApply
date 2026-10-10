@@ -5,7 +5,9 @@
 //                       linked to an anonId/account only where the consent rules allow)
 //   recordAttribution   WP-10 signup: firstTouch once, lastTouch on later visits;
 //                       links the visitor's earlier anonId events to the account;
-//                       marketing fields only with `linkAllowed: true`
+//                       marketing fields only with `linkAllowed: true`; an invite
+//                       code (`ref` / `inviteCode`) attaches the account to its
+//                       inviter (WP-60, referrals.ts)
 //   deleteEventsForUser WP-10 account wipe: rows by userId and by linked anonIds
 //   markChecklistStep   WP-34 save, WP-36a tailor finalize, WP-43 completed practice;
 //                       the only path that completes a step or grants the reward
@@ -22,6 +24,9 @@ import { consumeRateLimit, rateLimitKey, rateLimitWindows, type RateLimitResult,
 import type { PracticeGrantReason, PracticeGrantResult } from '../../platform/credits/index.js';
 import { logger } from '../../services/LoggerService.js';
 import { functionalTouch, sanitizeTouch } from './attribution.js';
+import { normalizeReferralCode } from './referralCodes.js';
+import type { RawSignals } from './referralRisk.js';
+import type { AttachResult } from './referrals.js';
 import { STEP_FIELD, resolvePrismaChecklistStore, type ChecklistRow, type ChecklistStore } from './checklistStore.js';
 import {
   CHECKLIST_REWARD,
@@ -77,6 +82,8 @@ export interface GrowthServiceDeps {
   checklistStore?: ChecklistStore | null | (() => Promise<ChecklistStore | null>);
   grantPracticeCredit?: (userId: string, reason: PracticeGrantReason, idempotencyKey: string) => Promise<PracticeGrantResult>;
   consumeRateLimit?: (options: { key: string; windows: readonly RateWindow[]; cost: number }) => Promise<RateLimitResult>;
+  /** Invite friends (WP-60): attach a new account to the invite code it signed up with. Default: referrals.ts. */
+  attachReferral?: (inviteeUserId: string, code: string, options: { signals?: RawSignals }) => Promise<AttachResult>;
   now?: () => Date;
 }
 
@@ -92,6 +99,12 @@ export interface RecordAttributionOptions {
    * action) are kept and no anonId is linked.
    */
   linkAllowed?: boolean;
+  /**
+   * The signup request's IP, User-Agent and `ra_anon` id (WP-60's invite
+   * risk check; hashed before storage, kept 30 days). Pass
+   * `{ ip: clientIp(req), userAgent, deviceId: req.cookies.ra_anon }`.
+   */
+  signals?: RawSignals;
 }
 
 export interface GrowthService {
@@ -170,6 +183,16 @@ export function createGrowthService(deps: GrowthServiceDeps = {}): GrowthService
     }
     if (!limit.allowed) {
       throw new HttpError('rate_limited', undefined, { retryAfterSec: limit.retryAfterSec }, { 'Retry-After': String(limit.retryAfterSec) });
+    }
+  }
+
+  async function attach(userId: string, code: string, signals: RawSignals | undefined): Promise<void> {
+    try {
+      const fn = deps.attachReferral ?? (await import('./referrals.js')).referralServiceImpl.attachFromSignup;
+      const result = await fn(userId, code, { signals });
+      if (result.status !== 'created') logger.info('GROWTH', 'invite code not attached', { userId, result });
+    } catch (err) {
+      logger.warn('GROWTH', 'invite attach failed', { userId, error: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -264,6 +287,13 @@ export function createGrowthService(deps: GrowthServiceDeps = {}): GrowthService
       const sanitized = sanitizeTouch(touch, at);
       const clean = linkAllowed ? sanitized : functionalTouch(sanitized, at);
       if (!clean) return;
+      // Invite friends (WP-60): the signup carried an invite code (`?ref=` or
+      // `?invite=`). Functional, so it is read whatever the analytics choice.
+      // Only at signup (not on later visits); never breaks the signup.
+      // The first of `ref` / `inviteCode` that reads as a code wins, so a
+      // marketing `ref=newsletter` never hides a real `invite=<code>`.
+      const inviteCode = [clean.ref, clean.inviteCode].find((c) => normalizeReferralCode(c) !== null);
+      if (inviteCode && !options.lastTouchOnly) await attach(userId, inviteCode, options.signals);
       const anonId = linkAllowed && options.anonId && ANON_ID_RE.test(options.anonId) ? options.anonId : null;
       const d = await db();
       const existing = await d.rAAttribution.findUnique({ where: { userId }, select: { userId: true, anonId: true } });
