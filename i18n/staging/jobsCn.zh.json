@@ -8,6 +8,7 @@
       "directHint": "由合作招聘方核验过的企业发布。",
       "from": "来源：{sourceName}",
       "unknown": "来源未注明",
+      "addedByYou": "你添加的职位",
       "reposted": "首发于{name}",
       "licence": "{holder} 人力资源服务许可证 {number}"
     },
@@ -53,7 +54,14 @@
       "link": "在{board}搜索",
       "newTab": "（在新标签页打开）",
       "loading": "正在生成链接…",
-      "error": "链接暂时无法生成，请稍后再试。"
+      "error": "链接暂时无法生成，请稍后再试。",
+      "panel": {
+        "title": "去其他招聘网站搜索",
+        "intro": "%BRAND% 暂未展示其他网站的职位。你可以自己去搜索，再把感兴趣的职位添加进来，在这里跟进和准备。",
+        "label": "你想找什么职位？",
+        "placeholder": "职位名称或关键词",
+        "submit": "生成搜索链接"
+      }
     },
     "admin": {
       "title": "可疑职位待审核",

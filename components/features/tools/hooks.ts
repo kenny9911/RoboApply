@@ -10,10 +10,12 @@ import type { ClaimToolResultResponse, ResumeCheckReport, ResumeJobMatchReport, 
 export const TOOLS_CONFIG_KEY = ['tools', 'config'] as const;
 export const toolResultKey = (id: string) => ['tools', 'result', id] as const;
 
-export function useToolsConfig() {
+/** `enabled: false` skips the read (callers that only need it on one brand). */
+export function useToolsConfig(options: { enabled?: boolean } = {}) {
   return useQuery<ToolsConfigView>({
     queryKey: TOOLS_CONFIG_KEY,
     queryFn: ({ signal }) => getToolsConfig({ signal }),
+    enabled: options.enabled ?? true,
     staleTime: 60_000,
     retry: 1,
   });

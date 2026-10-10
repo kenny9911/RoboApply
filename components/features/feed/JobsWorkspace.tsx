@@ -10,13 +10,17 @@
 //                 the skills check, the getting-started checklist
 //   filters       FilterBar (WP-20) with the "Hiding {n} weaker fits" number
 //   sort          Recommended · Newest · Your best fits · Highest pay
-//                 (+ GoApply deadline) and "How ranking works"
+//                 (+ GoApply deadline) and "How ranking works". `?sort=<key>`
+//                 opens the list in that order (the Assistant's "Show jobs
+//                 sorted this way" link); a key this market does not offer is
+//                 ignored. Picking a sort keeps the address in step.
 //   list          infinite, 20 per page; the rating card after 10 cards
 //   split detail  desktop `?job=<id>` renders JobDetailPanel (WP-34) beside
 //                 the list; on a phone a job opens as /jobs/[id]
 //
 // GoApply without a licensed feed (`jobs.feed` off, R-14): no list at all —
-// only the way to jobs the user adds.
+// only the way to jobs the user adds, and "Search other job sites" (links the
+// user opens themselves, started from their saved search words; CN L-5).
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -27,6 +31,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { FilterBar } from '../filters';
 import { GettingStartedChecklist } from '../growth';
 import { JobDetailPanel } from '../job';
+import { ExternalSearchPanel } from '../market';
 import { useBrand } from '../../../lib/brand/BrandProvider';
 import { useFlag } from '../../../lib/flags';
 import { useActiveSearchProfile } from '../../../hooks/search';
@@ -40,7 +45,7 @@ import { FeedList } from './FeedList';
 import { FeedTabs, feedTabPanelProps } from './FeedTabs';
 import { RatingCard, RatingFixes, type RatingFix } from './RatingCard';
 import { SkillsCheck } from './SkillsCheck';
-import { SortMenu, sortsFor } from './SortMenu';
+import { SortMenu, sortFromQuery, sortsFor } from './SortMenu';
 import { ZeroResults } from './ZeroResults';
 import styles from './feed.module.css';
 
@@ -58,7 +63,27 @@ export function JobsWorkspace() {
 
   const profiles = useActiveSearchProfile();
   const profile = profiles.profile;
-  const [sort, setSort] = useState<FeedSort>('recommended');
+  // `?sort=` picks the order; anything this market's menu does not offer is ignored.
+  const urlSort = sortFromQuery(params?.get('sort') ?? null, market);
+  const [sort, setSortState] = useState<FeedSort>(urlSort ?? 'recommended');
+  // A link to /jobs?sort=… followed while the page is already open (the
+  // Assistant rail) changes the query, not the component: follow it.
+  const [seenUrlSort, setSeenUrlSort] = useState<FeedSort | null>(urlSort);
+  if (urlSort !== seenUrlSort) {
+    setSeenUrlSort(urlSort);
+    if (urlSort) setSortState(urlSort);
+  }
+  const setSort = useCallback(
+    (next: FeedSort) => {
+      setSortState(next);
+      const query = new URLSearchParams(params?.toString() ?? '');
+      if (next === 'recommended') query.delete('sort');
+      else query.set('sort', next);
+      const qs = query.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [params, pathname, router],
+  );
   const fitTier = profile?.filters.fitTier ?? 'all';
 
   const feed = useFeed({
@@ -137,14 +162,18 @@ export function JobsWorkspace() {
 
       <div {...feedTabPanelProps(feedOn ? 'forYou' : 'added')} className={styles.workspace}>
         {!feedOn ? (
-          <div className={styles.prompt}>
-            <p className={styles.help}>{t('feedOff')}</p>
-            <div className={styles.row}>
-              <Link href="/jobs/added" className={styles.link}>
-                {t('addJob')}
-              </Link>
+          <>
+            <div className={styles.prompt}>
+              <p className={styles.help}>{t('feedOff')}</p>
+              <div className={styles.row}>
+                <Link href="/jobs/added" className={styles.link}>
+                  {t('addJob')}
+                </Link>
+              </div>
             </div>
-          </div>
+            {/* GoApply only (renders nothing on RoboApply). */}
+            <ExternalSearchPanel initialQuery={profile?.filters.q ?? profile?.filters.titles?.[0] ?? null} />
+          </>
         ) : (
           <>
             <AfterChangeCheck />

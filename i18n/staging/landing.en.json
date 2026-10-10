@@ -4,6 +4,7 @@
       "nav": {
         "label": "Main",
         "features": "Features",
+        "tools": "Free tools",
         "pricing": "Pricing",
         "help": "Help",
         "signIn": "Sign in",
@@ -17,6 +18,7 @@
         "helpTitle": "Help",
         "popularTitle": "Popular job lists",
         "langTitle": "%BRAND% in your language",
+        "tools": "Free tools",
         "pricing": "Pricing",
         "about": "About",
         "security": "Security",
@@ -891,9 +893,30 @@
         "notChance": "This is not your chance of getting hired.",
         "weight": "{pct}% of the fit score"
       },
+      "rulesTitle": "{count, plural, one {One more rule} other {More rules}}",
+      "pointsNote": "Each job gets a ranking score out of 100 from the four factors. The rules and goals below add points to that score or move jobs within the list.",
+      "pointsNoteRules": "Each job gets a ranking score out of 100 from the four factors. The rule below adds points to that score.",
+      "upToPoints": "Up to {points} points",
+      "addsPoints": "+{points} points",
+      "rules": {
+        "sponsorshipFirst": {
+          "title": "Visa sponsorship first",
+          "body": "If you said you need visa sponsorship, jobs whose post mentions sponsorship come first, in the order you chose, and jobs whose post says it does not sponsor are hidden. This applies under every sort."
+        },
+        "skillsBoost": {
+          "title": "Your chosen skills",
+          "body": "When skills are the only filter narrowing your list, jobs that ask for more of your chosen skills rank higher in Recommended, in proportion to how many of them the job asks for."
+        }
+      },
       "goalTitle": "Your goal",
-      "goal1": "If you said you want to manage people, manager roles move up.",
-      "goal2": "If you said you want higher pay, jobs that list pay above your minimum move up.",
+      "goalIntro": "The career goal you chose when you set up your account adds points to jobs that match it.",
+      "goals": {
+        "moreSenior": "A more senior role: jobs above the lowest level you selected",
+        "management": "Managing people: jobs that manage people",
+        "higherPay": "Higher pay: jobs that list pay above your minimum, in the same currency",
+        "flexibility": "More flexibility: remote or hybrid jobs"
+      },
+      "goalOthers": "Other goals do not change the order.",
       "spreadTitle": "Variety",
       "spread": "No more than {max} jobs from the same company in any {window} in a row.",
       "neverTitle": "What ranking never uses",

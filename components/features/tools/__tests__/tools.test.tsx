@@ -32,7 +32,7 @@ import { RoboApiError } from '../../../../lib/api/client';
 import type { ResumeCheckReport, ResumeJobMatchReport, ToolsConfigView } from '../../../../lib/api/contracts/tools';
 import { TOOLS_CONSENT_VERSION } from '../../../../server/src/features/tools/contract';
 import { ARM_TTL_MS, PENDING_RESULT_KEY, armPendingResult, readPendingResult } from '../pendingResult';
-import { CLIENT_CONSENT_VERSION } from '../catalog';
+import { CLIENT_CONSENT_VERSION, JOB_ALERTS_ENTRY } from '../catalog';
 import { ToolResultClaimHost, ToolRunner, ToolsHub, isBareLink, signupHref, toolBySlug } from '..';
 import { intlErrors, renderTool } from './render';
 
@@ -215,6 +215,40 @@ describe('ToolsHub', () => {
     const cards = [...container.querySelectorAll('[data-tool-card]')].map((c) => c.getAttribute('data-tool-card'));
     expect(cards).toEqual(['resume-check', 'campus', 'resume-job-match']);
     expect(container.querySelector('[data-tool-card="campus"]')?.getAttribute('href')).toBe('/campus');
+  });
+
+  // INT-06 (wave5 WP-93 #30): the job-alerts card.
+  it('lists "Job alerts by email" last, linking /tools/job-alerts, when job alerts and email are both on', () => {
+    const { container } = renderTool(<ToolsHub />, { flags: { 'jobs.alerts': true, 'notify.email': true } });
+    const cards = [...container.querySelectorAll('[data-tool-card]')].map((c) => c.getAttribute('data-tool-card'));
+    expect(cards).toEqual(['resume-check', 'resume-job-match', 'job-alerts']);
+    const card = screen.getByRole('link', { name: /Job alerts by email/ });
+    expect(card.getAttribute('href')).toBe('/tools/job-alerts');
+    expect(card.textContent).toContain('daily or weekly');
+    expect(JOB_ALERTS_ENTRY.flags).toEqual(['jobs.alerts', 'notify.email']);
+  });
+
+  it.each([
+    ['job alerts off', { 'jobs.alerts': false, 'notify.email': true }],
+    ['email off', { 'jobs.alerts': true, 'notify.email': false }],
+    ['both off', {}],
+  ] as const)('hides the job-alerts card with %s', (_name, flags) => {
+    const { container } = renderTool(<ToolsHub />, { flags });
+    expect(container.querySelector('[data-tool-card="job-alerts"]')).toBeNull();
+    expect(screen.queryByText(/Job alerts by email/)).toBeNull();
+    expect(container.querySelector('[data-tool-card="resume-check"]')).not.toBeNull();
+  });
+
+  it('GoApply: no job-alerts card while it lists no third-party posts; in Chinese once alerts and email are on', () => {
+    const off = renderTool(<ToolsHub toolsOpen={false} />, { brand: 'goapply', flags: { 'jobs.alerts': false, 'notify.email': true, 'jobs.campusCalendar': true } });
+    expect(off.container.querySelector('[data-tool-card="job-alerts"]')).toBeNull();
+    off.unmount();
+    // The card does not depend on the upload tools being open (CN-0).
+    const on = renderTool(<ToolsHub toolsOpen={false} />, { brand: 'goapply', flags: { 'jobs.alerts': true, 'notify.email': true }, locale: 'zh' });
+    const card = on.container.querySelector('[data-tool-card="job-alerts"]') as HTMLElement;
+    expect(within(card).getByRole('heading').textContent).toBe('职位邮件提醒');
+    expect(card.getAttribute('href')).toBe('/tools/job-alerts');
+    expect(intlErrors).toEqual([]);
   });
 
   it('GoApply without the campus capability has no campus entry', () => {

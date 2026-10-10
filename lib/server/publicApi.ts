@@ -48,6 +48,12 @@ const SEO_API = '/api/v1/public/seo';
 export const PAGE_TTL = 900;
 export const SITEMAP_TTL = 3600;
 export const TICKER_TTL = 300;
+/**
+ * The home page's ticker is decoration: its read gives up after this long
+ * (milliseconds) so a slow or hung API cannot hold the page. The other reads
+ * are the page itself and keep the platform's own limits.
+ */
+export const TICKER_TIMEOUT_MS = 2500;
 
 export type PublicResult<T> =
   | { status: 'ok'; data: T }
@@ -56,7 +62,10 @@ export type PublicResult<T> =
   | { status: 'disabled' };
 
 type Env = Record<string, string | undefined>;
-export type FetchImpl = (url: string, init: { headers: Record<string, string>; cache: 'no-store' }) => Promise<{ status: number; json(): Promise<unknown> }>;
+export type FetchImpl = (
+  url: string,
+  init: { headers: Record<string, string>; cache: 'no-store'; signal?: AbortSignal },
+) => Promise<{ status: number; json(): Promise<unknown> }>;
 
 /** Where the Next server reaches the API for this brand. */
 export function publicApiOrigin(brand: ProductBrand, env: Env = process.env): string {
@@ -118,17 +127,25 @@ class PublicApiError extends Error {
   }
 }
 
-/** One uncached read, mapped to a PublicResult (throws on transient failures). */
+/**
+ * One uncached read, mapped to a PublicResult (throws on transient failures).
+ * `timeoutMs` aborts the request after that long; the abort throws like any
+ * other transient failure, so it is never cached.
+ */
 export async function readPublic<T>(
   brandId: BrandId,
   path: string,
   query: Record<string, string | undefined> = {},
-  deps: { fetch?: FetchImpl; env?: Env; clientIp?: string | null } = {},
+  deps: { fetch?: FetchImpl; env?: Env; clientIp?: string | null; timeoutMs?: number } = {},
 ): Promise<PublicResult<T>> {
   const brand = getBrand(brandId);
   const env = deps.env ?? process.env;
   const doFetch: FetchImpl = deps.fetch ?? ((url, init) => fetch(url, init));
-  const res = await doFetch(publicApiUrl(brand, path, query, env), { headers: publicApiHeaders(brand, env, deps.clientIp), cache: 'no-store' });
+  const res = await doFetch(publicApiUrl(brand, path, query, env), {
+    headers: publicApiHeaders(brand, env, deps.clientIp),
+    cache: 'no-store',
+    ...(deps.timeoutMs ? { signal: AbortSignal.timeout(deps.timeoutMs) } : {}),
+  });
   const body = (await res.json().catch(() => null)) as { success?: boolean; data?: T; code?: string; details?: { reason?: unknown } } | null;
   if (res.status === 200 && body?.success) return { status: 'ok', data: body.data as T };
   if (res.status === 410) return { status: 'gone' };
@@ -175,7 +192,9 @@ export function loadPublicJob(brandId: BrandId, id: string, ctx: LoadContext = {
 }
 
 export function loadTicker(brandId: BrandId): Promise<PublicResult<TickerResponse>> {
-  return cachedRead(brandId, ['ticker'], [seoCacheTag(brandId, 'ticker', 'all')], TICKER_TTL, () => readPublic<TickerResponse>(brandId, '/ticker'));
+  return cachedRead(brandId, ['ticker'], [seoCacheTag(brandId, 'ticker', 'all')], TICKER_TTL, () =>
+    readPublic<TickerResponse>(brandId, '/ticker', {}, { timeoutMs: TICKER_TIMEOUT_MS }),
+  );
 }
 
 export function loadSitemapIndex(brandId: BrandId): Promise<PublicResult<SitemapIndexResponse>> {

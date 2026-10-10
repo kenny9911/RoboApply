@@ -8,6 +8,7 @@
       "directHint": "Posted by an employer our recruiter partner has verified.",
       "from": "Source: {sourceName}",
       "unknown": "Source not listed",
+      "addedByYou": "Added by you",
       "reposted": "First posted on {name}",
       "licence": "{holder}, HR service licence {number}"
     },
@@ -53,7 +54,14 @@
       "link": "Search on {board}",
       "newTab": "(opens in a new tab)",
       "loading": "Preparing links…",
-      "error": "These links could not be prepared. Try again in a moment."
+      "error": "These links could not be prepared. Try again in a moment.",
+      "panel": {
+        "title": "Search other job sites",
+        "intro": "%BRAND% does not list jobs from other sites here yet. Search them yourself, then add the jobs you like so you can track them and prepare for them here.",
+        "label": "What job are you looking for?",
+        "placeholder": "Job title or keyword",
+        "submit": "Show search links"
+      }
     },
     "admin": {
       "title": "Suspicious jobs to review",

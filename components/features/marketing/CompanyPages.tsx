@@ -8,7 +8,10 @@
 // counts. /security lists only what the code does today (bcrypt password
 // hashes, httpOnly secure cookies, new-device sign-in email, DB-backed rate
 // limits, export + delete, no third-party pixels, AI routing per brand).
-// /help/ranking prints every Recommended factor with its weight.
+// /help/ranking prints every Recommended factor with its weight, the two
+// ordering rules and the points a career goal adds — the numbers the ranking
+// code reads (catalog.ts mirrors the feed contract; a parity test keeps them
+// equal).
 
 import Link from 'next/link';
 import type { ReactNode } from 'react';
@@ -16,7 +19,7 @@ import { useTranslations } from 'next-intl';
 
 import { useBrand } from '../../../lib/brand';
 import { CancelFooterLink } from '../credits';
-import { COMPANY_SPREAD, FIT_PARTS, FIT_TIER_FLOORS, HELP_FAQ_KEYS, RANKING_FACTORS } from './catalog';
+import { COMPANY_SPREAD, FIT_PARTS, FIT_TIER_FLOORS, GOAL_ADJUSTMENTS, HELP_FAQ_KEYS, ORDERING_RULES, RANKING_FACTORS } from './catalog';
 import { ContactForm } from './ContactForm';
 import { Faq } from './Sections';
 import styles from './marketing.module.css';
@@ -185,6 +188,9 @@ export function RankingPage() {
   const t = useTranslations('landing.ranking');
   const brand = useBrand();
   const tiers = FIT_TIER_FLOORS;
+  const rules = ORDERING_RULES.filter((r) => (r.markets as readonly string[]).includes(brand.market));
+  // GoApply does not ask for a career goal, so its page has no goal block and its note does not mention one.
+  const goals = brand.market === 'intl';
   return (
     <>
       <Intro id="ranking-title" title={t('title')} lead={t('lead')} />
@@ -223,12 +229,36 @@ export function RankingPage() {
         </p>
         <p className={styles.muted}>{t('fitParts.notChance')}</p>
       </Block>
-      <Block id="ranking-goal" title={t('goalTitle')}>
-        <ul className={styles.list}>
-          <li>{t('goal1')}</li>
-          <li>{t('goal2')}</li>
+      <Block id="ranking-rules" title={t('rulesTitle', { count: rules.length })}>
+        <p className={styles.body}>{t(goals ? 'pointsNote' : 'pointsNoteRules')}</p>
+        <ul className={`${styles.plainList} ${styles.form} ${styles.spaced}`}>
+          {rules.map((r) => (
+            <li key={r.key} className={styles.card} data-rule={r.server}>
+              <h3 className={styles.h3}>{t(`rules.${r.key}.title`)}</h3>
+              {r.points !== null ? <p className={styles.stepNumber}>{t('upToPoints', { points: r.points })}</p> : null}
+              <p className={styles.body}>{t(`rules.${r.key}.body`)}</p>
+            </li>
+          ))}
         </ul>
       </Block>
+      {goals ? (
+        <Block id="ranking-goal" title={t('goalTitle')}>
+          <p className={styles.body}>{t('goalIntro')}</p>
+          <div className={`${styles.tableWrap} ${styles.spaced}`}>
+            <table className={styles.table}>
+              <tbody>
+                {GOAL_ADJUSTMENTS.map((g) => (
+                  <tr key={g.key} data-goal={g.server}>
+                    <th scope="row">{t(`goals.${g.key}`)}</th>
+                    <td>{t('addsPoints', { points: g.points })}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className={`${styles.muted} ${styles.spaced}`}>{t('goalOthers')}</p>
+        </Block>
+      ) : null}
       <Block id="ranking-spread" title={t('spreadTitle')}>
         <p className={styles.body}>{t('spread', { max: COMPANY_SPREAD.max, window: COMPANY_SPREAD.window })}</p>
       </Block>

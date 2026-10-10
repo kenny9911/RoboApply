@@ -15,14 +15,31 @@
 // first click offers "Tailor first" once per job (until "Don't ask again"),
 // and only while the brand's text model is usable (`ai.text`). Similar jobs
 // show only while `jobs.recommendations` is on (R-14).
+//
+// A job with no application link (one the user typed in) has no "Apply on
+// company site"; the header offers "I applied" instead, which only records
+// what the user tells us. The line that points at that button goes away once
+// the job is marked applied (the button is gone by then).
+//
+// GoApply: the market block (JobMetaCn) carries the job's pay, dates and
+// source in place of the header's own lines, so it sits above the tabs and
+// stays on screen on Company and People too. Elsewhere the market block stays
+// in the Overview tab.
+//
+// GoApply: <WechatShareCard> sets the card WeChat shows when this job is
+// shared from inside WeChat — the job's title and company, its place and the
+// pay as the post lists it (left out when the post lists none). It renders
+// nothing and does nothing outside WeChat.
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTranslations } from 'next-intl';
 
 import { Btn, Tabs, tabPanelProps, toast, type TabItem } from '../../v3/primitives';
 import { CompanyTab } from '../company';
+import { MarketJobMeta, marketMetaCoversBasics, readCnMeta, withOwnImport } from '../market';
+import { WechatShareCard } from '../notify-cn';
 import { useJob, useApplyIntercept } from '../../../hooks/job';
 import { useJobFit } from '../../../hooks/match';
 import { useJobActions } from '../../../hooks/shared/useJobActions';
@@ -38,7 +55,7 @@ import { JobHeader, JobHeaderActions } from './JobHeader';
 import { JobOverview } from './JobOverview';
 import { PeopleTab } from './PeopleTab';
 import { SimilarJobs, jobDetailHref } from './SimilarJobs';
-import { validDate } from './format';
+import { payLine, shareDescription, validDate } from './format';
 import styles from './job.module.css';
 
 export interface JobDetailPanelProps {
@@ -187,6 +204,29 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
   };
 
   const lastSeen = validDate(job.lastSeenAt);
+  const locale = useLocale();
+
+  // Pay for the share card, only as the post lists it: GoApply's verbatim pay
+  // text, else the post's own pay text, else its listed figures. None → left out.
+  const cnPay = readCnMeta(detail.marketMeta)?.salary;
+  const listedPay = payLine(job.pay, locale);
+  const payAsListed =
+    (cnPay?.disclosed ? cnPay.text : null) ??
+    (job.payText?.trim() || null) ??
+    (job.pay?.text?.trim() || null) ??
+    (listedPay
+      ? listedPay.kind === 'exact'
+        ? t('header.payExact', { amount: listedPay.amount, period: t(`header.period.${listedPay.period}`) })
+        : listedPay.kind === 'range'
+          ? t('header.payRange', { min: listedPay.min, max: listedPay.max, period: t(`header.period.${listedPay.period}`) })
+          : listedPay.kind === 'from'
+            ? t('header.payFrom', { min: listedPay.min, period: t(`header.period.${listedPay.period}`) })
+            : t('header.payUpTo', { max: listedPay.max, period: t(`header.period.${listedPay.period}`) })
+      : null);
+  const noApplyLink = open && !job.applyUrl;
+  const ownImport = job.source.kind === 'user_import';
+  // The market block replaces the header's pay, date and source lines: keep it on every tab.
+  const metaAboveTabs = marketMetaCoversBasics(brand.market, detail.marketMeta);
 
   const headerActions = (
     <>
@@ -194,6 +234,11 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
         {open && job.applyUrl && !applied ? (
           <Btn variant="primary" onClick={apply} disabled={actions.pending === 'apply'} data-testid="apply-button">
             {t('actions.apply')}
+          </Btn>
+        ) : null}
+        {noApplyLink && !applied ? (
+          <Btn variant="primary" onClick={iApplied} disabled={actions.pending === 'markApplied'} data-testid="i-applied-button">
+            {t('actions.iApplied')}
           </Btn>
         ) : null}
         {saved && !checklist.applied ? (
@@ -217,7 +262,11 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
         ) : null}
       </JobHeaderActions>
       {open && job.applyUrl && !applied ? <p className={styles.hint}>{t('actions.applyHint')}</p> : null}
-      {open && !job.applyUrl ? <p className={styles.hint}>{t('actions.noApplyLink')}</p> : null}
+      {noApplyLink && !(ownImport && applied) ? (
+        <p className={styles.hint} data-testid="no-apply-link">
+          {ownImport ? t('actions.noApplyLinkYours') : t('actions.noApplyLink')}
+        </p>
+      ) : null}
       {actions.lastApplied && undoable ? (
         <div className={styles.undoBar} role="status" data-testid="undo-bar">
           <span>{t('actions.movedToApplied')}</span>
@@ -242,6 +291,13 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
 
   return (
     <article className={cn(styles.panel, mode === 'page' ? styles.page : styles.split)} data-testid="job-detail" data-mode={mode} data-job-status={job.status}>
+      {brand.market === 'cn' ? (
+        <WechatShareCard
+          title={`${job.title} · ${company.name || job.companyName}`}
+          description={shareDescription({ location: job.location, payAsListed })}
+          path={jobDetailHref(job.id)}
+        />
+      ) : null}
       <JobHeader detail={detail} mode={mode} onClose={onClose} actions={headerActions} />
 
       {!open ? (
@@ -256,9 +312,10 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
 
       <div className={styles.layout}>
         <div className={styles.main}>
+          {metaAboveTabs ? <MarketJobMeta jobId={job.id} meta={withOwnImport(detail.marketMeta, ownImport)} variant="detail" /> : null}
           <Tabs ariaLabel={t('tabs.label')} idBase={idBase} tabs={tabs} value={tab} onChange={setTab} />
           <div {...tabPanelProps(idBase, 'overview')} hidden={tab !== 'overview'}>
-            {tab === 'overview' ? <JobOverview detail={detail} /> : null}
+            {tab === 'overview' ? <JobOverview detail={detail} marketMeta={!metaAboveTabs} /> : null}
           </div>
           <div {...tabPanelProps(idBase, 'company')} hidden={tab !== 'company'}>
             {tab === 'company' ? <CompanyTab jobId={job.id} company={company} showNews={showNews} onOpenJob={openJob} /> : null}

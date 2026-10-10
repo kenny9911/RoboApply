@@ -1,5 +1,6 @@
-// lib/pricing — the currency rule and the plan price table the public landing
-// page (and its JSON-LD) render from.
+// lib/pricing — the currency rule and the legacy practice-plan price table.
+// (The public pages print plan prices from the plan catalog config; their
+// JSON-LD carries no prices at all — asserted at the end.)
 //
 // The rule under test is the owner's: mainland China pays RMB, everyone else —
 // Taiwan and Hong Kong included — pays US dollars. The table under test must
@@ -12,6 +13,7 @@ import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 
 import {
+  MARKET_CURRENCY,
   PLAN_PRICES_MINOR,
   formatMoney,
   marketFromCountry,
@@ -19,7 +21,7 @@ import {
   planPriceMinor,
   resolveMarket,
 } from '../../lib/pricing';
-import { landingJsonLd } from '../../lib/seo';
+import { marketingJsonLd } from '../../lib/seo';
 
 describe('lib/pricing', () => {
   it('matches the owner-locked defaults in server/src/lib/mockInterviewPlans.ts', () => {
@@ -83,18 +85,32 @@ describe('lib/pricing', () => {
     expect(formatMoney('en', 0, 'USD')).toBe('$0');
   });
 
-  it('the landing JSON-LD offers follow the market', () => {
-    const usd = landingJsonLd('en');
-    expect(usd).toContain('"priceCurrency":"USD"');
-    expect(usd).toContain('"name":"Starter","price":"15"');
-    expect(usd).toContain('"highPrice":"29"');
-    expect(usd).not.toContain('CNY');
+  // These were asserted through the legacy landing's JSON-LD (deleted in
+  // INT-06). The prices and the market rule are the pricing module's own, so
+  // they are asserted on it directly.
+  it('each market is charged in its own currency, at the table price', () => {
+    expect(MARKET_CURRENCY).toEqual({ cn: 'CNY', other: 'USD' });
+    const shown = (plan: 'free' | 'starter' | 'growth', market: 'cn' | 'other', locale: string) =>
+      formatMoney(locale, planPriceMinor(plan, market), MARKET_CURRENCY[market]);
+    expect(shown('free', 'other', 'en')).toBe('$0');
+    expect(shown('starter', 'other', 'en')).toBe('$15');
+    expect(shown('growth', 'other', 'en')).toBe('$29');
+    expect(shown('free', 'cn', 'zh')).toBe('¥0');
+    expect(shown('starter', 'cn', 'zh')).toBe('¥19');
+    expect(shown('growth', 'cn', 'zh')).toBe('¥45');
+    // The highest price of a market is its Growth price (what the old AggregateOffer printed as highPrice).
+    for (const market of ['cn', 'other'] as const) {
+      const prices = (['free', 'starter', 'growth'] as const).map((plan) => planPriceMinor(plan, market));
+      expect(Math.max(...prices)).toBe(planPriceMinor('growth', market));
+    }
+  });
 
-    const cny = landingJsonLd('zh', 'cn');
-    expect(cny).toContain('"priceCurrency":"CNY"');
-    expect(cny).toContain('"name":"Starter","price":"19"');
-    expect(cny).toContain('"name":"Growth","price":"45"');
-    expect(cny).toContain('"highPrice":"45"');
-    expect(cny).not.toContain('USD');
+  it('the marketing JSON-LD of both brands carries no price, offer, rating or review (D3)', () => {
+    for (const [brandId, locale] of [['roboapply', 'en'], ['goapply', 'zh']] as const) {
+      const json = marketingJsonLd({ brandId, locale, path: '/pricing', name: 'Pricing', description: 'Plans and what each one includes.' });
+      const types = (JSON.parse(json)['@graph'] as Array<{ '@type': string }>).map((n) => n['@type']);
+      expect(types).toEqual(['Organization', 'WebSite', 'WebPage']);
+      expect(json).not.toMatch(/"price"|priceCurrency|lowPrice|highPrice|AggregateOffer|"Offer"|AggregateRating|"Review"|USD|CNY/);
+    }
   });
 });

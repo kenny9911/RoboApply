@@ -7,11 +7,21 @@
 // (app/[locale]/page.tsx). Canonical and hreflang follow the request's brand
 // (lib/seo.ts homeMetadata); the JSON-LD carries a FAQPage for the FAQ the
 // page renders, and never prices, ratings or reviews (D3).
+//
+// RoboApply's home carries the live job ticker (F-MKT-02): <JobTicker /> is a
+// server component that lists the newest jobs we may show publicly and renders
+// nothing when there are none (or when the read fails) — no placeholder rows,
+// no invented counts. It sits in its own Suspense boundary, so the page is
+// sent without waiting for the job read (which also gives up after
+// TICKER_TIMEOUT_MS). GoApply's home has no ticker (its public job pages are
+// deferred; the campus strip takes that place).
 
+import { Suspense } from 'react';
 import type { Metadata } from 'next';
 
 import { GoApplyHome, JsonLd, RoboApplyHome } from '../components/features/marketing';
 import { CN_HOME_FAQ_KEYS, HOME_FAQ_KEYS } from '../components/features/marketing/catalog';
+import { JobTicker } from '../components/features/seo/server';
 import { getBrand } from '../lib/brand/registry.generated';
 import { getServerBrandId } from '../lib/server/brand';
 import { resolveLocale } from '../lib/serverLocale';
@@ -51,7 +61,15 @@ export default async function LandingPage() {
   return (
     <>
       <JsonLd json={json} />
-      {cn ? <GoApplyHome /> : <RoboApplyHome />}
+      {cn ? <GoApplyHome /> : (
+        <RoboApplyHome
+          ticker={
+            <Suspense fallback={null}>
+              <JobTicker />
+            </Suspense>
+          }
+        />
+      )}
     </>
   );
 }

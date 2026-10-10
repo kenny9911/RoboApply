@@ -59,15 +59,47 @@ export function extensionStoreId(brand: BrandId): string | null {
 }
 
 /**
- * The published "How ranking works" factors (TASK_PLAN.md WP-32 ranking:
- * rank = 0.55·fit + 0.20·freshness + 0.15·affinity + 0.10·sourceQuality).
- * WP-32 owns the formula; a change there must change this table.
+ * The published "How ranking works" numbers: a mirror of
+ * server/src/features/feed/contract.ts (`RANKING_FACTORS`, `ORDERING_RULES`,
+ * `GOAL_ADJUSTMENTS`, `FEED_LIMITS`), which the ranking code itself reads
+ * (rank = 0.55·fit + 0.20·freshness + 0.15·affinity + 0.10·sourceQuality,
+ * plus the goal and skills points). The page cannot import the server module
+ * (it would pull zod into every marketing bundle), so
+ * __tests__/links.test.ts compares this table with the contract entry by
+ * entry: a weight, a rule or a goal changed on the server fails that test
+ * until this file and the page copy say the same.
+ *
+ * `server` is the contract's key; `key` names the copy under
+ * `landing.ranking.*`.
  */
 export const RANKING_FACTORS = [
-  { key: 'fit', pct: 55 },
-  { key: 'freshness', pct: 20 },
-  { key: 'affinity', pct: 15 },
-  { key: 'source', pct: 10 },
+  { key: 'fit', server: 'fit', pct: 55 },
+  { key: 'freshness', server: 'freshness', pct: 20 },
+  { key: 'affinity', server: 'affinity', pct: 15 },
+  { key: 'source', server: 'source_quality', pct: 10 },
+] as const;
+
+/**
+ * Ordering rules besides the four factors (server `ORDERING_RULES`).
+ * `points` null = the rule reorders or hides instead of adding points.
+ * `markets`: sponsorship is a RoboApply question (GoApply has no such filter).
+ */
+export const ORDERING_RULES = [
+  { key: 'sponsorshipFirst', server: 'sponsorship_first', points: null, markets: ['intl'] },
+  { key: 'skillsBoost', server: 'skills_boost', points: 10, markets: ['intl', 'cn'] },
+] as const;
+
+/**
+ * Points a career goal adds to a matching job (server `GOAL_ADJUSTMENTS`).
+ * Only the goals that change the order are listed; the server's other goals
+ * add 0 and the page says so in one line. The goal is a RoboApply onboarding
+ * answer, so the block shows on RoboApply only.
+ */
+export const GOAL_ADJUSTMENTS = [
+  { key: 'moreSenior', server: 'more_senior', points: 6 },
+  { key: 'management', server: 'management', points: 6 },
+  { key: 'higherPay', server: 'higher_pay', points: 6 },
+  { key: 'flexibility', server: 'flexibility', points: 4 },
 ] as const;
 
 /** Fit score parts (server `DEFAULT_MATCH_WEIGHTS`, R-09 35/30/15/10/10; parity-tested). */
@@ -82,7 +114,7 @@ export const FIT_PARTS = [
 /** Fit tiers: the shared client mirror of the server's `DEFAULT_MATCH_TIERS` (R-09). */
 export { DEFAULT_MATCH_TIERS as FIT_TIER_FLOORS } from '../common';
 
-/** Company spread in the Recommended order (WP-32: ≤ 2 per company per 20). */
+/** Company spread in the Recommended order (server `FEED_LIMITS.companyMaxPerWindow` / `companyWindow`; parity-tested). */
 export const COMPANY_SPREAD = { max: 2, window: 20 } as const;
 
 // ── FAQ keys per page (shared by the client pages and the server JSON-LD) ──

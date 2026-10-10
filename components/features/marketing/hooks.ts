@@ -7,7 +7,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 
+import { useBrand } from '../../../lib/brand';
 import { useCapabilities, type FlagKey } from '../../../lib/flags';
+import { useToolsConfig } from '../tools';
 import { getCreditCaps, getIndexStats } from '../../../lib/api/support';
 import type { CreditCapsResponse, IndexStatsResponse } from '../../../lib/api/contracts/support';
 import { buildSignupHref } from './links';
@@ -59,4 +61,16 @@ export function useMarketingFlag(key: FlagKey | 'hiringContacts:on'): boolean {
   if (!flags) return false;
   if (key === 'hiringContacts:on') return flags.hiringContacts === 'on';
   return flags[key] === true;
+}
+
+/**
+ * Whether the site chrome links the free tools hub (/tools). RoboApply: always
+ * (the tools run there). GoApply: only once the tools config says they run on
+ * this stack (they do not in CN-0, where the hub has nothing to open), and
+ * not before that answer arrives — a link to an empty page is a dead end.
+ */
+export function useFreeToolsLinked(): boolean {
+  const cn = useBrand().market === 'cn';
+  const config = useToolsConfig({ enabled: cn });
+  return cn ? config.data?.available === true : true;
 }

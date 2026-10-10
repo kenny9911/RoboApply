@@ -210,6 +210,8 @@
       "relaxed": "Filter removed."
     },
     "explore": {
+      "metaTitle": "Explore jobs",
+      "metaDescription": "Browse open jobs by kind of work, or describe the job you want in your own words.",
       "title": "Explore",
       "intro": "Browse every job in our index by kind of work, or describe what you want.",
       "categoriesLabel": "Kinds of work",

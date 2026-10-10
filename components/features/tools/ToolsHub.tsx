@@ -6,14 +6,18 @@
 // disabled feature has no entry). Where the tools are off (GoApply CN-0: the
 // page passes `toolsOpen={false}`, and /config says `available: false`) the
 // tool entries are absent.
+//
+// "Job alerts by email" (/tools/job-alerts, WP-78) is listed last, only while
+// job alerts and email are both on for this brand — the two capabilities the
+// alerts form itself needs. It does not depend on the upload tools being open.
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
 import { useBrand } from '../../../lib/brand/BrandProvider';
-import { useFlag } from '../../../lib/flags';
+import { useCapabilities, useFlag } from '../../../lib/flags';
 import { PageHeader } from '../../v3/primitives';
-import { TOOLS, toolHref } from './catalog';
+import { JOB_ALERTS_ENTRY, TOOLS, toolHref } from './catalog';
 import { useToolsConfig } from './hooks';
 import styles from './tools.module.css';
 
@@ -33,6 +37,9 @@ export function ToolsHub({ toolsOpen = true }: ToolsHubProps) {
   const t = useTranslations('tools');
   const brand = useBrand();
   const campus = useFlag('jobs.campusCalendar');
+  const { flags } = useCapabilities();
+  // Unresolved capabilities count as off (R-04: fail closed).
+  const alertsOn = JOB_ALERTS_ENTRY.flags.every((f) => flags?.[f] === true);
   const config = useToolsConfig();
   const open = toolsOpen && config.data?.available !== false;
   // The allowance is shown only once the server has said what it is (RATE_LIMITS_JSON may change it).
@@ -50,6 +57,14 @@ export function ToolsHub({ toolsOpen = true }: ToolsHubProps) {
       href: '/campus',
       title: t('hub.campus.title'),
       body: t('hub.campus.body'),
+    });
+  }
+  if (alertsOn) {
+    cards.push({
+      id: JOB_ALERTS_ENTRY.id,
+      href: JOB_ALERTS_ENTRY.href,
+      title: t(`hub.${JOB_ALERTS_ENTRY.key}.title`),
+      body: t(`hub.${JOB_ALERTS_ENTRY.key}.body`),
     });
   }
 

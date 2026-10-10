@@ -20,6 +20,7 @@ import {
   loadPublicJob,
   loadSitemapPart,
   loadTicker,
+  TICKER_TIMEOUT_MS,
   loadBrowseHub,
   publicApiHeaders,
   publicJobHtmlStatus,
@@ -124,6 +125,27 @@ describe('result mapping', () => {
     await expect(readPublic('roboapply', '/x', {}, { fetch: reply(503, null) })).rejects.toThrow(/503/);
     await expect(readPublic('roboapply', '/x', {}, { fetch: reply(429, { success: false, code: 'rate_limited' }) })).rejects.toThrow();
   });
+
+  // INT-06: a read with a time limit gives up instead of holding the page.
+  it('timeoutMs aborts a hung request and throws (never cached); without it no signal is sent', async () => {
+    const seen: Array<AbortSignal | undefined> = [];
+    const hung: FetchImpl = (_url, init) => {
+      seen.push(init.signal);
+      return new Promise((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(init.signal!.reason));
+      });
+    };
+    await expect(readPublic('roboapply', '/x', {}, { fetch: hung, timeoutMs: 20 })).rejects.toThrow();
+    expect(seen[0]).toBeInstanceOf(AbortSignal);
+    expect(seen[0]!.aborted).toBe(true);
+
+    const quick: FetchImpl = async (_url, init) => {
+      seen.push(init.signal);
+      return { status: 200, json: async () => ({ success: true, data: 1 }) };
+    };
+    await readPublic('roboapply', '/x', {}, { fetch: quick });
+    expect(seen[1]).toBeUndefined();
+  });
 });
 
 describe('unstable_cache keys and tags', () => {
@@ -164,5 +186,15 @@ describe('unstable_cache keys and tags', () => {
       ['seo:roboapply:sitemap:roles-1', 'seo:roboapply:sitemap:roles'],
     ]);
     expect(cache.calls[0]!.keys).not.toEqual(cache.calls[1]!.keys);
+  });
+
+  // INT-06: the ticker is decoration on the home page, so only its read is time-limited.
+  it('only the ticker read carries a time limit', async () => {
+    await loadTicker('roboapply');
+    await loadPublicJob('roboapply', 'cm1');
+    const inits = fetchMock.mock.calls.map((c) => (c as unknown as [string, { signal?: AbortSignal }])[1]);
+    expect(TICKER_TIMEOUT_MS).toBeLessThanOrEqual(3000);
+    expect(inits[0]!.signal).toBeInstanceOf(AbortSignal);
+    expect(inits[1]!.signal).toBeUndefined();
   });
 });

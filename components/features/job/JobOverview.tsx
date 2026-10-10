@@ -6,19 +6,25 @@
 // the user's resume compares (fit with its honesty line, "Why this job",
 // keyword check). GoApply campus jobs show the employer's verified 网申
 // window and 届别 first.
+//
+// The market block (MarketJobMeta) sits here unless the panel already shows it
+// above the tabs (`marketMeta={false}`): on GoApply it carries the job's pay,
+// dates and source, which must stay on screen on every tab.
 
 import { useFormatter, useTranslations } from 'next-intl';
 
 import { Markdown } from '../../v3/primitives';
 import { JobFit, JobKeywordCheck } from '../match';
 import { WhyThisJob } from '../compliance';
-import { AiGeneratedBadge, MarketJobMeta } from '../market';
+import { AiGeneratedBadge, MarketJobMeta, withOwnImport } from '../market';
 import type { JobDetailResponse, JobCampusInfo } from '../../../lib/api/contracts/jobs/detail';
 import { validDate } from './format';
 import styles from './job.module.css';
 
 export interface JobOverviewProps {
   detail: JobDetailResponse;
+  /** False when the caller renders the market block itself (default true). */
+  marketMeta?: boolean;
 }
 
 export function CampusWindow({ campus, company }: { campus: JobCampusInfo; company: string }) {
@@ -53,7 +59,7 @@ export function CampusWindow({ campus, company }: { campus: JobCampusInfo; compa
   );
 }
 
-export function JobOverview({ detail }: JobOverviewProps) {
+export function JobOverview({ detail, marketMeta = true }: JobOverviewProps) {
   const t = useTranslations('jobDetail.overview');
   const tq = useTranslations('jobDetail.header');
   const { job } = detail;
@@ -67,7 +73,7 @@ export function JobOverview({ detail }: JobOverviewProps) {
   return (
     <div className={styles.main} data-testid="job-overview">
       {job.campus ? <CampusWindow campus={job.campus} company={job.companyName} /> : null}
-      <MarketJobMeta jobId={job.id} meta={detail.marketMeta} variant="detail" />
+      {marketMeta ? <MarketJobMeta jobId={job.id} meta={withOwnImport(detail.marketMeta, job.source.kind === 'user_import')} variant="detail" /> : null}
 
       {job.summary ? (
         <section className={styles.summary} data-testid="job-summary">

@@ -72,6 +72,9 @@ exports[`robots per host > goapply 1`] = `
         "/invite",
         "/coaching",
         "/referrals",
+        "/alerts/confirm/",
+        "/unsubscribe/",
+        "/r/",
       ],
       "userAgent": "*",
     },
@@ -94,6 +97,9 @@ exports[`robots per host > goapply 1`] = `
         "/invite",
         "/coaching",
         "/referrals",
+        "/alerts/confirm/",
+        "/unsubscribe/",
+        "/r/",
         "/job/",
       ],
       "userAgent": [
@@ -132,6 +138,9 @@ exports[`robots per host > goapply 1`] = `
         "/invite",
         "/coaching",
         "/referrals",
+        "/alerts/confirm/",
+        "/unsubscribe/",
+        "/r/",
       ],
       "userAgent": "Baiduspider",
     },
@@ -163,6 +172,9 @@ exports[`robots per host > roboapply 1`] = `
         "/invite",
         "/coaching",
         "/referrals",
+        "/alerts/confirm/",
+        "/unsubscribe/",
+        "/r/",
       ],
       "userAgent": "*",
     },
@@ -185,6 +197,9 @@ exports[`robots per host > roboapply 1`] = `
         "/invite",
         "/coaching",
         "/referrals",
+        "/alerts/confirm/",
+        "/unsubscribe/",
+        "/r/",
         "/job/",
       ],
       "userAgent": [
@@ -231,6 +246,9 @@ exports[`static sitemap per host > GoApply: zh-CN home with the cross-domain en 
   },
   {
     "loc": "https://www.goapply.top/help",
+  },
+  {
+    "loc": "https://www.goapply.top/help/ranking",
   },
   {
     "loc": "https://www.goapply.top/signup",
@@ -407,6 +425,9 @@ exports[`static sitemap per host > RoboApply: hreflang only for seoLocales plus 
   },
   {
     "loc": "https://www.roboapply.io/help",
+  },
+  {
+    "loc": "https://www.roboapply.io/help/ranking",
   },
   {
     "loc": "https://www.roboapply.io/features/job-matches",

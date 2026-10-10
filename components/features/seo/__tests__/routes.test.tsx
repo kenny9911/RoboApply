@@ -49,7 +49,9 @@ import { VisitorFeed } from '../../../features/visitor';
 import { BrowsePage } from '../BrowsePage';
 import { BrowseUnknown } from '../BrowseHub';
 import { JobPage } from '../JobPage';
-import { job, page } from './fixtures';
+import { JobTicker } from '../JobTicker';
+import { JobTickerView } from '../JobTickerView';
+import { TICKER, job, page } from './fixtures';
 
 const ok = <T,>(data: T) => ({ status: 'ok' as const, data });
 type El = React.ReactElement<{ children?: unknown; json?: string; data?: unknown; query?: unknown; job?: unknown }>;
@@ -98,6 +100,66 @@ describe.each(['roboapply', 'goapply'] as const)('crawl files on the %s host', (
     const text = await res.text();
     expect(text).toMatchSnapshot();
     expect(text).not.toMatch(/auto[- ]?apply/i);
+  });
+});
+
+// INT-06 (wave4 WP-93 #13, wave5 WP-93 #30): tools in /sitemaps/static.xml per brand and stage.
+describe('sitemaps/static.xml — free tools', () => {
+  const staticLocs = async () => {
+    const res = await sitemapFile(new Request('https://x/'), { params: Promise.resolve({ file: 'static.xml' }) });
+    return [...(await res.text()).matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]!);
+  };
+  afterEach(() => {
+    delete process.env.DEPLOY_REGION;
+  });
+
+  it('RoboApply: /tools, /tools/resume-check, /tools/resume-job-match and /tools/job-alerts', async () => {
+    const locs = await staticLocs();
+    for (const p of ['/tools', '/tools/resume-check', '/tools/resume-job-match', '/tools/job-alerts', '/help/ranking']) expect(locs).toContain(`https://www.roboapply.io${p}`);
+  });
+
+  it('GoApply while CN-0 (offshore stack): /tools only', async () => {
+    h.brand.id = 'goapply';
+    h.api.loadSitemapIndex.mockResolvedValue(ok({ parts: [], surfaces: { browse: false, campus: true } }));
+    const locs = await staticLocs();
+    expect(locs).toContain('https://www.goapply.top/tools');
+    for (const p of ['/tools/resume-check', '/tools/resume-job-match', '/tools/job-alerts']) expect(locs).not.toContain(`https://www.goapply.top${p}`);
+  });
+
+  it('GoApply on the mainland stack (CN-1): the two tool pages are listed, job alerts still are not', async () => {
+    h.brand.id = 'goapply';
+    process.env.DEPLOY_REGION = 'cn-mainland';
+    h.api.loadSitemapIndex.mockResolvedValue(ok({ parts: [], surfaces: { browse: false, campus: true } }));
+    const locs = await staticLocs();
+    for (const p of ['/tools', '/tools/resume-check', '/tools/resume-job-match']) expect(locs).toContain(`https://www.goapply.top${p}`);
+    expect(locs).not.toContain('https://www.goapply.top/tools/job-alerts');
+  });
+
+  it('there is no campus-<n> partition (the campus API lists programmes, not URLs)', async () => {
+    h.brand.id = 'goapply';
+    expect((await sitemapFile(new Request('https://x/'), { params: Promise.resolve({ file: 'campus-1.xml' }) })).status).toBe(404);
+    expect(h.api.loadSitemapPart).not.toHaveBeenCalled();
+  });
+});
+
+// INT-06 (wave4 WP-93 #13): the server ticker shows real jobs or nothing.
+describe('<JobTicker /> (server)', () => {
+  it('renders the view with the public jobs the API returned', async () => {
+    h.api.loadTicker.mockResolvedValue(ok({ items: TICKER }));
+    const el = (await JobTicker()) as React.ReactElement<{ items: unknown[]; now: string }> | null;
+    expect(el?.type).toBe(JobTickerView);
+    expect(el?.props.items).toEqual(TICKER);
+    expect(Number.isNaN(Date.parse(el!.props.now))).toBe(false);
+    expect(h.api.loadTicker).toHaveBeenCalledWith('roboapply');
+  });
+
+  it('renders nothing when there are no public jobs, when the API is unavailable, or when the read throws', async () => {
+    h.api.loadTicker.mockResolvedValue(ok({ items: [] }));
+    expect(await JobTicker()).toBeNull();
+    h.api.loadTicker.mockResolvedValue({ status: 'not_found', reason: null });
+    expect(await JobTicker()).toBeNull();
+    h.api.loadTicker.mockRejectedValue(new Error('down'));
+    expect(await JobTicker()).toBeNull();
   });
 });
 

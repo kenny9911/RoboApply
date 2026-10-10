@@ -13,6 +13,7 @@ const api = vi.hoisted(() => ({
   sendSupportMessage: vi.fn(),
   getPlans: vi.fn(),
   listPublicCampusEvents: vi.fn(),
+  getToolsConfig: vi.fn(),
   push: vi.fn(),
   search: { value: '' },
 }));
@@ -24,6 +25,7 @@ vi.mock('../../../../lib/api/support', () => ({
 }));
 vi.mock('../../../../lib/api/credits', async (orig) => ({ ...(await orig<Record<string, unknown>>()), getPlans: api.getPlans }));
 vi.mock('../../../../lib/api/campus', () => ({ listPublicCampusEvents: api.listPublicCampusEvents }));
+vi.mock('../../../../lib/api/tools', async (orig) => ({ ...(await orig<Record<string, unknown>>()), getToolsConfig: api.getToolsConfig }));
 vi.mock('../../market', () => ({
   LegalFooter: () => <footer data-testid="legal-footer" />,
   PriceReference: () => null,
@@ -51,6 +53,7 @@ beforeEach(() => {
   api.getPlans.mockImplementation(async () => plansView('roboapply'));
   api.getIndexStats.mockResolvedValue(stats(12_000, 1_300));
   api.listPublicCampusEvents.mockResolvedValue({ items: [] });
+  api.getToolsConfig.mockResolvedValue({ available: false });
 });
 afterEach(() => {
   cleanup();
@@ -91,6 +94,24 @@ describe('RoboApply home', () => {
     await waitFor(() => expect(api.getIndexStats).toHaveBeenCalled());
     expect(container.querySelector('[data-index-counters]')).toBeNull();
     expect(screen.getByText(/We show you the open roles/)).toBeInTheDocument();
+  });
+
+  // INT-06 (wave4 WP-93 #13): the ticker slot the route fills with <JobTicker />.
+  it('shows the ticker the route hands it between the counters and the quick search, and nothing in its place otherwise', async () => {
+    const { JobTickerView } = await import('../../seo');
+    const item = { id: 'cmjob0000000000000000001', idSlug: 'cmjob0000000000000000001-backend-engineer', path: '/job/cmjob0000000000000000001-backend-engineer', title: 'Backend engineer', companyName: 'Example Co', location: 'Berlin, Germany', firstSeenAt: '2026-10-10T11:30:00.000Z', postedAt: null };
+    const withTicker = renderWithBrand(<RoboApplyHome ticker={<JobTickerView items={[item]} now={AS_OF} />} />);
+    const ticker = withTicker.container.querySelector('[data-seo-ticker]') as HTMLElement;
+    expect(within(ticker).getByRole('link', { name: 'Backend engineer' })).toHaveAttribute('href', item.path);
+    expect(ticker).toHaveTextContent('Found 30 min ago');
+    const search = withTicker.container.querySelector('form[role="search"]') as HTMLElement;
+    expect(ticker.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    withTicker.unmount();
+
+    // No public jobs: <JobTicker /> renders null, and the home shows no ticker, heading or placeholder.
+    const without = renderWithBrand(<RoboApplyHome ticker={null} />);
+    expect(without.container.querySelector('[data-seo-ticker]')).toBeNull();
+    expect(screen.queryByRole('heading', { name: /just found|new jobs/i })).toBeNull();
   });
 
   it('labels the interactive sample "Example" and steps through the four verbs', () => {
@@ -166,6 +187,17 @@ describe('RoboApply home', () => {
     expect(container.querySelector('[data-feature-link="interview-practice"]')).toBeNull();
   });
 
+  // INT-06 (wave4 WP-93 #14): /tools in the site navigation and the footer.
+  it('links the free tools from the header nav and the footer, without asking the API', async () => {
+    const { container } = renderWithBrand(<RoboApplyHome />);
+    const nav = screen.getByRole('navigation', { name: 'Main' });
+    expect(within(nav).getByRole('link', { name: 'Free tools' })).toHaveAttribute('href', '/tools');
+    const footer = container.querySelector('[data-marketing-footer]') as HTMLElement;
+    expect(within(footer).getByRole('link', { name: 'Free tools' })).toHaveAttribute('href', '/tools');
+    await waitFor(() => expect(api.getIndexStats).toHaveBeenCalled());
+    expect(api.getToolsConfig).not.toHaveBeenCalled();
+  });
+
   it('links interview practice only while voice practice works', () => {
     const { container } = renderWithBrand(<RoboApplyHome />, { flags: { 'ai.interviewVoice': true } });
     expect(container.querySelector('[data-feature-link="interview-practice"]')).not.toBeNull();
@@ -217,6 +249,22 @@ describe('GoApply home', () => {
     await waitFor(() => expect(api.getPlans).toHaveBeenCalledTimes(2));
     await new Promise((r) => setTimeout(r, 0));
     expect(screen.queryByText('Paid plans are not open yet.')).toBeNull();
+  });
+
+  // INT-06: on GoApply the tools link waits for the tools to run there (not in CN-0).
+  it('GoApply links the free tools only once the tools run on its stack', async () => {
+    api.getToolsConfig.mockResolvedValue({ available: false });
+    const closed = renderWithBrand(<GoApplyHome />, { brand: 'goapply' });
+    await waitFor(() => expect(api.getToolsConfig).toHaveBeenCalled());
+    expect(screen.queryByRole('link', { name: 'Free tools' })).toBeNull();
+    expect(closed.container.querySelector('[href="/tools"]')).toBeNull();
+    closed.unmount();
+
+    api.getToolsConfig.mockResolvedValue({ available: true });
+    const open = renderWithBrand(<GoApplyHome />, { brand: 'goapply' });
+    await waitFor(() => expect(open.container.querySelector('[data-footer-link="tools"]')).not.toBeNull());
+    expect(open.container.querySelector('[data-nav="tools"]')).toHaveAttribute('href', '/tools');
+    expect(open.container.querySelector('[data-footer-link="tools"]')).toHaveAttribute('href', '/tools');
   });
 
   it('the English GoApply page carries no Chinese text (footer tagline included)', () => {

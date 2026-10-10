@@ -5,12 +5,20 @@
 // site" (opens the employer's page; the job moves to Applied at once with an
 // inline Undo — rulings R1/C11). D1: we never send anything; the user applies
 // on the employer's page.
+//
+// GoApply: the job's market block (JobMetaCn, which the panel shows under the
+// header on every tab) prints the pay as the post states it, the post's own
+// date, "Last checked" and the source ("Added by you" for the user's own job).
+// When it does, the header leaves its own pay, date and source lines out, so
+// each fact is on the page once. "Only you can see this job" stays here.
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
 
 import { cn } from '../../../lib/utils';
+import { useBrand } from '../../../lib/brand';
+import { marketMetaCoversBasics } from '../market';
 import type { JobDetailResponse } from '../../../lib/api/contracts/jobs/detail';
 import { initialOf, jobDetailHref, payLine, validDate } from './format';
 import styles from './job.module.css';
@@ -30,7 +38,10 @@ export function JobHeader({ detail, mode, onClose, actions }: JobHeaderProps) {
   const t = useTranslations('jobDetail');
   const format = useFormatter();
   const locale = useLocale();
+  const brand = useBrand();
   const { job, company } = detail;
+  const slotHasBasics = marketMetaCoversBasics(brand.market, detail.marketMeta);
+  const ownImport = job.source.kind === 'user_import';
   const pay = payLine(job.pay, locale);
   const posted = validDate(job.postedAt);
   const checked = validDate(job.lastSeenAt);
@@ -42,7 +53,7 @@ export function JobHeader({ detail, mode, onClose, actions }: JobHeaderProps) {
   if (job.employmentType && KNOWN_EMPLOYMENT.has(job.employmentType)) chips.push(t(`header.employmentType.${job.employmentType}`));
   if (job.seniority && KNOWN_SENIORITY.has(job.seniority)) chips.push(t(`header.seniority.${job.seniority}`));
 
-  const sourceLine = job.source.kind === 'user_import'
+  const sourceLine = ownImport
     ? t('header.source.user_import')
     : job.source.name
       ? t(`header.source.${job.source.kind}`, { sourceName: job.source.name })
@@ -88,7 +99,7 @@ export function JobHeader({ detail, mode, onClose, actions }: JobHeaderProps) {
         </ul>
       ) : null}
 
-      {pay ? (
+      {slotHasBasics ? null : pay ? (
         <p className={styles.pay} data-testid="job-pay">
           {pay.kind === 'exact'
             ? t('header.payExact', { amount: pay.amount, period: t(`header.period.${pay.period}`) })
@@ -108,15 +119,17 @@ export function JobHeader({ detail, mode, onClose, actions }: JobHeaderProps) {
         </p>
       )}
 
-      <p className={styles.meta}>
-        {posted ? <span>{job.postedAtEstimated ? t('header.firstSeen', { date: fmt(posted) }) : t('header.posted', { date: fmt(posted) })}</span> : null}
-        {checked ? <span>{t('header.lastChecked', { date: fmt(checked) })}</span> : null}
-        <span data-testid="job-source">{sourceLine}</span>
-        {job.source.originalName && job.source.originalName !== job.source.name ? (
-          <span>{t('header.originalSource', { sourceName: job.source.originalName })}</span>
-        ) : null}
-        {job.visibility === 'private' ? <span>{t('header.private')}</span> : null}
-      </p>
+      {slotHasBasics && job.visibility !== 'private' ? null : (
+        <p className={styles.meta}>
+          {!slotHasBasics && posted ? <span>{job.postedAtEstimated ? t('header.firstSeen', { date: fmt(posted) }) : t('header.posted', { date: fmt(posted) })}</span> : null}
+          {!slotHasBasics && checked ? <span>{t('header.lastChecked', { date: fmt(checked) })}</span> : null}
+          {!slotHasBasics ? <span data-testid="job-source">{sourceLine}</span> : null}
+          {!slotHasBasics && job.source.originalName && job.source.originalName !== job.source.name ? (
+            <span>{t('header.originalSource', { sourceName: job.source.originalName })}</span>
+          ) : null}
+          {job.visibility === 'private' ? <span>{t('header.private')}</span> : null}
+        </p>
+      )}
 
       {job.badges.length ? (
         <ul className={styles.badges}>

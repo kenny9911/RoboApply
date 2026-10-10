@@ -11,6 +11,7 @@
 // it live (our crawl time is never presented as an update by the source):
 //   - 企业直招 only when the server's three-field rule held; otherwise
 //     "来源：{sourceName}" (+ GoHire's licence line when the server sent it);
+//     a job the user added has no source name and reads "Added by you";
 //   - pay verbatim or "薪资未披露";
 //   - 可落户 / 央国企 / 事业编 / 外企 and 届别 only with the posting's quote,
 //     shown on hover/focus and to screen readers;
@@ -23,7 +24,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 import { AiGeneratedBadge } from '../AiGeneratedBadge';
 import type { MarketJobMetaSlotProps } from '../types';
 import { SalaryCn } from './SalaryCn';
-import { parseDate, readCnMeta, ruleKey } from './meta';
+import { isOwnImport, parseDate, readCnMeta, ruleKey } from './meta';
 import styles from './cnJobs.module.css';
 
 export function JobMetaCn({ jobId, meta, variant }: MarketJobMetaSlotProps) {
@@ -45,7 +46,11 @@ export function JobMetaCn({ jobId, meta, variant }: MarketJobMetaSlotProps) {
         {t('source.direct')}
       </span>
     ) : null;
-  const sourceText = sourceLine.sourceName ? t('source.from', { sourceName: sourceLine.sourceName }) : t('source.unknown');
+  const sourceText = sourceLine.sourceName
+    ? t('source.from', { sourceName: sourceLine.sourceName })
+    : isOwnImport(meta)
+      ? t('source.addedByYou')
+      : t('source.unknown');
   const updatedText = updated ? t('dates.updated', { date: fmt(updated) }) : t('dates.updatedUnknown');
   const checkedText = checked ? t('dates.lastChecked', { date: fmt(checked) }) : null;
   const expiresText = expires ? t(expired ? 'dates.expired' : 'dates.expires', { date: fmt(expires) }) : t('dates.expiresUnknown');
@@ -103,7 +108,7 @@ export function JobMetaCn({ jobId, meta, variant }: MarketJobMetaSlotProps) {
       <div className={styles.card} data-testid="job-meta-cn" data-variant="card">
         <p className={styles.line}>
           {source}
-          <span>{sourceText}</span>
+          <span data-testid="cn-source">{sourceText}</span>
           <span aria-hidden="true">·</span>
           <span>{updatedText}</span>
           <span aria-hidden="true">·</span>
@@ -141,7 +146,7 @@ export function JobMetaCn({ jobId, meta, variant }: MarketJobMetaSlotProps) {
           <dt className={styles.srOnly}>{sourceText}</dt>
           <dd className={styles.sourceBlock}>
             {source}
-            <span>{sourceText}</span>
+            <span data-testid="cn-source">{sourceText}</span>
             {sourceLine.originalSourceName ? <span className={styles.muted}>{t('source.reposted', { name: sourceLine.originalSourceName })}</span> : null}
             {sourceLine.licence ? <span className={styles.muted}>{t('source.licence', sourceLine.licence)}</span> : null}
           </dd>

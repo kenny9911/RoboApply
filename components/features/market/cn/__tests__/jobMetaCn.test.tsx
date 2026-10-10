@@ -3,8 +3,9 @@
 // 企业直招 only from the server rule, tags only with a quote, deep links only
 // from the user's query.
 
+import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 
 import { renderWithBrand } from '../../../../../__tests__/shell/helpers';
 
@@ -12,7 +13,7 @@ const api = vi.hoisted(() => ({ getExternalLinks: vi.fn() }));
 vi.mock('../../../../../lib/api/cnJobs', async (orig) => ({ ...(await orig<Record<string, unknown>>()), ...api }));
 
 import { MarketJobMeta } from '../../MarketJobMeta';
-import { ExternalSearchLinks, SalaryCn, readCnMeta } from '..';
+import { ExternalSearchLinks, ExternalSearchPanel, SalaryCn, readCnMeta, withOwnImport } from '..';
 
 const META = {
   cn: {
@@ -43,6 +44,35 @@ describe('JobMetaCn (card)', () => {
     expect(within(box).getByText(/^Open until /)).toBeInTheDocument();
     expect(within(box).getByText('15-25K·13薪')).toBeInTheDocument();
     expect(within(box).queryByText('Direct from employer')).toBeNull();
+  });
+
+  // INT-06: the user's own job has no source name; the slot says whose it is.
+  it('a job the user added reads "Added by you"; any other job with no source name reads "Source not listed"', () => {
+    const noName = { cn: { ...META.cn, sourceLine: { kind: 'source', sourceName: null, originalSourceName: null, licence: null } } };
+    for (const variant of ['card', 'detail'] as const) {
+      const own = renderWithBrand(<MarketJobMeta jobId="j1" meta={withOwnImport(noName, true)} variant={variant} />, { brand: 'goapply' });
+      expect(screen.getByTestId('cn-source')).toHaveTextContent('Added by you');
+      expect(screen.getByTestId('job-meta-cn')).not.toHaveTextContent('Source not listed');
+      own.unmount();
+      const listed = renderWithBrand(<MarketJobMeta jobId="j1" meta={noName} variant={variant} />, { brand: 'goapply' });
+      expect(screen.getByTestId('cn-source')).toHaveTextContent('Source not listed');
+      listed.unmount();
+    }
+    // A named source is never replaced.
+    renderWithBrand(<MarketJobMeta jobId="j1" meta={withOwnImport(META, true)} variant="card" />, { brand: 'goapply' });
+    expect(screen.getByTestId('cn-source')).toHaveTextContent('Source: GoHire');
+  });
+
+  it('withOwnImport leaves the meta alone unless the job is the user\'s own and has a cn block', () => {
+    const noCn = { ats_public: { country: 'TW' } };
+    expect(withOwnImport(META, false)).toBe(META);
+    expect(withOwnImport(noCn, true)).toBe(noCn);
+    expect(withOwnImport(null, true)).toBeNull();
+    expect(withOwnImport(undefined, true)).toBeUndefined();
+    const marked = withOwnImport(META, true)!;
+    expect(marked).not.toBe(META);
+    expect(readCnMeta(marked)).toEqual(readCnMeta(META));
+    expect(META.cn).not.toHaveProperty('ownImport');
   });
 
   it('"Last checked" shows our crawl date separately from the posting\'s own "Updated" date', () => {
@@ -153,6 +183,67 @@ describe('ExternalSearchLinks', () => {
   it('renders nothing on RoboApply or for an empty query', () => {
     renderWithBrand(<ExternalSearchLinks query="product" />, { brand: 'roboapply' });
     renderWithBrand(<ExternalSearchLinks query="   " />, { brand: 'goapply' });
+    expect(screen.queryByTestId('cn-external-links')).toBeNull();
+    expect(api.getExternalLinks).not.toHaveBeenCalled();
+  });
+});
+
+// INT-06 (wave3 WP-93 #8): the panel the jobs pages show while GoApply lists
+// no third-party posts.
+describe('ExternalSearchPanel', () => {
+  const LINKS = { links: [{ board: 'boss', label: 'BOSS直聘', url: 'https://www.zhipin.com/web/geek/job?query=x' }] };
+
+  it('asks for the user\'s own words and only then builds links for them', async () => {
+    api.getExternalLinks.mockResolvedValue(LINKS);
+    renderWithBrand(<ExternalSearchPanel />, { brand: 'goapply' });
+    const panel = screen.getByTestId('cn-external-search');
+    expect(within(panel).getByRole('heading', { level: 2, name: 'Search other job sites' })).toBeInTheDocument();
+    expect(panel).toHaveTextContent('does not list jobs from other sites here yet');
+    expect(within(panel).getByRole('button', { name: 'Show search links' })).toBeDisabled();
+    expect(api.getExternalLinks).not.toHaveBeenCalled();
+
+    fireEvent.change(within(panel).getByLabelText('What job are you looking for?'), { target: { value: ' 产品经理 ' } });
+    expect(api.getExternalLinks).not.toHaveBeenCalled();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Show search links' }));
+    expect(await within(panel).findByRole('link', { name: /Search on BOSS直聘/ })).toHaveAttribute('target', '_blank');
+    expect(api.getExternalLinks).toHaveBeenCalledTimes(1);
+    expect(api.getExternalLinks).toHaveBeenCalledWith({ q: '产品经理' }, expect.anything());
+  });
+
+  /** The saved search arrives after the panel mounted (a late profile load). */
+  function LateStart() {
+    const [loaded, setLoaded] = useState(false);
+    return (
+      <>
+        <button type="button" onClick={() => setLoaded(true)}>
+          load saved search
+        </button>
+        <ExternalSearchPanel initialQuery={loaded ? '数据分析' : null} city="上海" />
+      </>
+    );
+  }
+
+  it('starts from the saved search words, also when they load after the panel', async () => {
+    api.getExternalLinks.mockResolvedValue(LINKS);
+    renderWithBrand(<LateStart />, { brand: 'goapply' });
+    expect(screen.getByLabelText('What job are you looking for?')).toHaveValue('');
+    fireEvent.click(screen.getByRole('button', { name: 'load saved search' }));
+    expect(screen.getByLabelText('What job are you looking for?')).toHaveValue('数据分析');
+    await screen.findByRole('link', { name: /Search on BOSS直聘/ });
+    expect(api.getExternalLinks).toHaveBeenCalledWith({ q: '数据分析', city: '上海' }, expect.anything());
+  });
+
+  it('words the user typed are not replaced by a saved search that loads later', () => {
+    renderWithBrand(<LateStart />, { brand: 'goapply' });
+    fireEvent.change(screen.getByLabelText('What job are you looking for?'), { target: { value: '运营' } });
+    fireEvent.click(screen.getByRole('button', { name: 'load saved search' }));
+    expect(screen.getByLabelText('What job are you looking for?')).toHaveValue('运营');
+    expect(api.getExternalLinks).not.toHaveBeenCalled();
+  });
+
+  it('renders nothing on RoboApply', () => {
+    renderWithBrand(<ExternalSearchPanel initialQuery="product manager" />, { brand: 'roboapply' });
+    expect(screen.queryByTestId('cn-external-search')).toBeNull();
     expect(screen.queryByTestId('cn-external-links')).toBeNull();
     expect(api.getExternalLinks).not.toHaveBeenCalled();
   });
