@@ -1,0 +1,121 @@
+# The Express API in listen mode (deploy/cn/Dockerfile.api).
+#
+# Secrets: every credential comes from the `goapply-api-env` Secret, created by
+# ops from an env file that never enters git (docs/runbooks/cn-deploy.md §4):
+#   kubectl -n goapply create secret generic goapply-api-env --from-env-file=deploy/cn/.env.cn
+# The fixed values below are set explicitly so a stray line in that file cannot
+# switch the stack to another region, brand or cron mode (explicit `env` wins
+# over `envFrom`).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels:
+    app.kubernetes.io/name: goapply-api
+    app.kubernetes.io/part-of: goapply
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: goapply-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: goapply-api
+        app.kubernetes.io/part-of: goapply
+    spec:
+      automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: acr-pull
+      # Long enough for a request at Vercel's maxDuration (300 s) to finish.
+      terminationGracePeriodSeconds: 330
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      initContainers:
+        # Refuses to start the API when the mainland checks fail (residency,
+        # Aliyun Green readiness, cron mode). Prints problem codes, never values.
+        - name: preflight
+          image: goapply-api
+          command: ["node", "deploy/cn/preflight.mjs"]
+          envFrom:
+            - secretRef: { name: goapply-api-env }
+          env:
+            - { name: NODE_ENV, value: "production" }
+            - { name: PORT, value: "4607" }
+            - { name: DEPLOY_REGION, value: "cn-mainland" }
+            - { name: ALLOWED_BRANDS, value: "goapply" }
+            - { name: ROBOAPPLY_CRON_DISABLED, value: "true" }
+            - { name: FILE_LOGGING, value: "false" }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+      containers:
+        - name: api
+          image: goapply-api
+          ports:
+            - { name: http, containerPort: 4607 }
+          envFrom:
+            - secretRef: { name: goapply-api-env }
+          env:
+            - { name: NODE_ENV, value: "production" }
+            - { name: PORT, value: "4607" }
+            - { name: DEPLOY_REGION, value: "cn-mainland" }
+            - { name: ALLOWED_BRANDS, value: "goapply" }
+            - { name: ROBOAPPLY_CRON_DISABLED, value: "true" }
+            - { name: FILE_LOGGING, value: "false" }
+          startupProbe:
+            httpGet: { path: /api/v1/health, port: http }
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            httpGet: { path: /api/v1/health, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/v1/health, port: http }
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          lifecycle:
+            # Let the Service drop this endpoint before the process gets SIGTERM.
+            preStop:
+              exec: { command: ["node", "-e", "setTimeout(() => {}, 10000)"] }
+          resources:
+            # Vercel gives the API function 2 GB.
+            requests: { cpu: 500m, memory: 1Gi }
+            limits: { memory: 2Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  labels:
+    app.kubernetes.io/name: goapply-api
+    app.kubernetes.io/part-of: goapply
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: goapply-api
+  ports:
+    - { name: http, port: 4607, targetPort: http }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: goapply-api

@@ -1,0 +1,85 @@
+# syntax=docker/dockerfile:1.7
+#
+# GoApply mainland stack (CN-1) — the Next.js standalone server (WP-76).
+#
+# next.config.mjs already sets `output: 'standalone'`, so `next build` emits
+# .next/standalone/server.js with only the traced files (content/legal is
+# traced through outputFileTracingIncludes). public/ and .next/static are
+# copied next to it, as the Next.js self-hosting guide requires.
+#
+# Build from the repository root:
+#
+#   docker build -f deploy/cn/Dockerfile.web -t goapply-web .
+#   docker build --check -f deploy/cn/Dockerfile.web .        # lint only, builds nothing
+#
+# Build-time public values (inlined into the browser bundle by `next build`):
+#   --build-arg NEXT_PUBLIC_CN_EXT_ID=…  --build-arg NEXT_PUBLIC_CN_EXT_STORE_URL=…
+# NEXT_PUBLIC_API_URL is deliberately NOT a build arg: the browser must call
+# the API same-origin (/api/v1/* is routed by the gateway). The web container
+# sets NEXT_PUBLIC_API_URL at RUNTIME only, for the server-side SEO reads
+# (lib/server/publicApi.ts reads it from process.env off Vercel).
+#
+# Optional BuildKit secret for multi-build Server Function compatibility:
+#   --secret id=next_actions_key,env=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+
+ARG NODE_IMAGE=node:24-slim
+
+# ── Stage 1: dependencies + next build ─────────────────────────────────────
+FROM ${NODE_IMAGE} AS build
+WORKDIR /app
+ARG NPM_REGISTRY=https://registry.npmjs.org/
+ARG PRISMA_ENGINES_MIRROR=
+ARG NEXT_PUBLIC_EXT_ID=
+ARG NEXT_PUBLIC_EXT_STORE_URL=
+ARG NEXT_PUBLIC_CN_EXT_ID=
+ARG NEXT_PUBLIC_CN_EXT_STORE_URL=
+ENV NPM_CONFIG_REGISTRY=${NPM_REGISTRY} \
+    PRISMA_ENGINES_MIRROR=${PRISMA_ENGINES_MIRROR} \
+    NEXT_TELEMETRY_DISABLED=1 \
+    CHECKPOINT_DISABLE=1 \
+    NEXT_PUBLIC_EXT_ID=${NEXT_PUBLIC_EXT_ID} \
+    NEXT_PUBLIC_EXT_STORE_URL=${NEXT_PUBLIC_EXT_STORE_URL} \
+    NEXT_PUBLIC_CN_EXT_ID=${NEXT_PUBLIC_CN_EXT_ID} \
+    NEXT_PUBLIC_CN_EXT_STORE_URL=${NEXT_PUBLIC_CN_EXT_STORE_URL}
+
+# `postinstall` runs `prisma generate`, which needs the config and the schema.
+COPY package.json package-lock.json prisma.config.ts ./
+COPY server/prisma ./server/prisma
+RUN npm ci --no-audit --no-fund
+
+COPY . .
+RUN --mount=type=secret,id=next_actions_key,required=false \
+    if [ -s /run/secrets/next_actions_key ]; then \
+      export NEXT_SERVER_ACTIONS_ENCRYPTION_KEY="$(cat /run/secrets/next_actions_key)"; \
+    fi; \
+    npm run build:web
+
+# ── Stage 2: runtime ───────────────────────────────────────────────────────
+FROM ${NODE_IMAGE}
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates tini \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build --chown=node:node /app/.next/standalone ./
+COPY --from=build --chown=node:node /app/.next/static ./.next/static
+COPY --from=build --chown=node:node /app/public ./public
+
+# HOSTNAME: Kubernetes sets it to the pod name; the standalone server binds to
+# it, so pin 0.0.0.0 (the k8s manifest pins it again).
+ENV NODE_ENV=production \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0 \
+    NEXT_TELEMETRY_DISABLED=1 \
+    DEPLOY_REGION=cn-mainland \
+    ALLOWED_BRANDS=goapply
+
+EXPOSE 3000
+USER node
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["node", "server.js"]
