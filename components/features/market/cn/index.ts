@@ -1,12 +1,12 @@
-// components/features/market/cn — GoApply job-card lines: 届别, 网申 window,
-// recruitment-info source, market tags (TASK_PLAN.md WP-41).
+// components/features/market/cn — GoApply job-card lines (届别, recruitment-info
+// source, pay, quoted market tags, fraud warnings on own imports), external
+// search links and the admin fraud review (TASK_PLAN.md WP-41).
 //
-// STUB (FND-6b). Owner: WP-41. Renders nothing. Reached only through
-// components/features/market/MarketJobMeta.tsx when brand.market === 'cn';
-// reads `meta.cn`.
+// JobMetaCn is reached only through components/features/market/MarketJobMeta.tsx
+// when brand.market === 'cn'; it reads `meta.cn` (server CnCardMeta).
 
-import type { MarketJobMetaSlotProps } from '../types';
-
-export function JobMetaCn(_props: MarketJobMetaSlotProps): null {
-  return null;
-}
+export { JobMetaCn } from './JobMetaCn';
+export { SalaryCn, type SalaryCnProps } from './SalaryCn';
+export { ExternalSearchLinks, type ExternalSearchLinksProps } from './ExternalSearchLinks';
+export { FraudQueue } from './FraudQueue';
+export { readCnMeta } from './meta';
