@@ -9,6 +9,10 @@
 // D1: the extension fills forms; the user clicks Submit. It never watches
 // submits; `userMarkedSubmitted` is only what the user tells us. Protected
 // question types never get an AI answer.
+//
+// Errors keep the platform `code` generic and put the area reason in
+// `details.reason` (EXTENSION_ERROR_CODES): a revoked device answers
+// `401 unauthorized` + `details.reason = 'device_revoked'`.
 
 import { z } from 'zod';
 
@@ -17,6 +21,14 @@ const Id = z.string().min(1).max(64);
 /** Device token format: 'rax_' + 32 random bytes, base64url. Stored hashed. */
 export const EXT_TOKEN_PREFIX = 'rax_';
 export const EXT_TOKEN_RE = /^rax_[A-Za-z0-9_-]{20,}$/;
+
+/** Pair codes: 8 characters, no 0/O/1/I so they read back without mistakes. */
+export const PAIR_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+export const PAIR_CODE_TTL_MS = 10 * 60_000;
+/** Signed resume links live this long (ARCH §3.8). */
+export const FILE_URL_TTL_MS = 5 * 60_000;
+/** `lastSeenAt` is written at most this often per device. */
+export const LAST_SEEN_WRITE_MS = 10 * 60_000;
 
 const DeviceInfo = {
   name: z.string().trim().min(1).max(80),
@@ -41,13 +53,34 @@ export interface DeviceView {
 }
 export const DeviceParamsSchema = z.object({ id: Id });
 
+/**
+ * GET /ext/status (session) — what the /extension page and #devices need:
+ * the paired devices of this brand and the lowest extension version the
+ * server still accepts (`MIN_EXT_VERSION` / `CN_MIN_EXT_VERSION`; null = any).
+ */
+export interface ExtStatusResponse {
+  minExtVersion: string | null;
+  devices: DeviceView[];
+}
+
 /** POST /ext/pair-codes (session) → 8-char code, +10 min. 10/h. */
 export interface PairCodeResponse {
   code: string;
   expiresAt: string;
 }
-/** POST /ext/pair-codes/redeem (public) → token. 10/h/IP. */
-export const RedeemPairCodeBodySchema = z.object({ code: z.string().regex(/^[A-Z0-9]{8}$/), ...DeviceInfo }).strict();
+/** POST /ext/pair-codes/redeem (public) → a device token. 10/h/IP. */
+/** Codes are case-insensitive for the person typing them: trimmed and uppercased before the format check. */
+export const PAIR_CODE_RE = /^[A-HJ-NP-Z2-9]{8}$/;
+export const RedeemPairCodeBodySchema = z
+  .object({
+    code: z
+      .string()
+      .trim()
+      .transform((s) => s.toUpperCase())
+      .pipe(z.string().regex(PAIR_CODE_RE)),
+    ...DeviceInfo,
+  })
+  .strict();
 
 /** GET /ext/me (device). */
 export interface ExtMeResponse {
@@ -55,7 +88,10 @@ export interface ExtMeResponse {
   brand: { id: 'roboapply' | 'goapply'; name: string };
   entitlements: unknown;
   flags: Record<string, unknown>;
-  profileCompleteness: number;
+  /** 0–100 from the user's own profile, or null when it could not be read. */
+  profileCompleteness: number | null;
+  /** Below this version the extension shows "Update the extension". */
+  minExtVersion: string | null;
 }
 
 /** GET /ext/autofill-profile (device) — EEO / CN sensitive only with consent `autofill_sensitive`. */
@@ -66,6 +102,7 @@ export interface AutofillProfile {
   links: Record<string, string>;
   workAuth: Array<{ country: string; authorized: boolean | null; sponsorship: 'now' | 'later' | 'no' | null }>;
   answers: Array<{ questionKey: string; questionText: string; answer: string }>;
+  /** Null without a live `autofill_sensitive` consent (or when nothing is stored). Fill these only for review. */
   sensitive: Record<string, unknown> | null;
 }
 
@@ -76,10 +113,38 @@ const PageJob = {
   location: z.string().trim().max(200).optional(),
   descriptionText: z.string().max(60_000),
 };
-/** POST /ext/page-job (device, user click only) → `{ jobId?, fit? }`. 120/day. */
+/** POST /ext/page-job (device, user click only — never on page load) → `{ jobId, fit }`. 120/day. */
 export const PageJobBodySchema = z.object(PageJob).strict();
+/**
+ * The fit chip. `jobId` is the matching job in the user's listings (public
+ * in this market, or the user's own import), or null when the page is not
+ * one of them; `fit` is the same scorer the app uses: a cached AI score when
+ * there is one, otherwise the deterministic "Quick estimate" (`kind: 'pre'`).
+ * Never a chance of being hired.
+ */
+export interface PageJobResponse {
+  jobId: string | null;
+  fit: {
+    score: number | null;
+    tier: string | null;
+    kind: 'pre' | 'ai';
+    topOverlap: string | null;
+    topGap: string | null;
+  } | null;
+}
+
+/** Same floor as a job added by hand (jobs/import MIN_DESCRIPTION_CHARS): shorter page text is not a job post. */
+export const SAVE_MIN_DESCRIPTION_CHARS = 50;
 /** POST /ext/jobs/save (device) → tracker entry (private RAJob when unmatched). 100/day. */
-export const SaveJobBodySchema = z.object(PageJob).strict();
+export const SaveJobBodySchema = z
+  .object({ ...PageJob, descriptionText: z.string().trim().min(SAVE_MIN_DESCRIPTION_CHARS).max(60_000) })
+  .strict();
+export interface SaveJobResponse {
+  jobId: string;
+  trackerEntryId: string;
+  /** The job already existed: in our listings (`public`) or among the user's own imports (`yours`). */
+  matched: 'public' | 'yours' | null;
+}
 
 /** POST /ext/autofill-runs (device) — reserves an `autofill` credit. */
 export const CreateAutofillRunBodySchema = z
@@ -91,12 +156,30 @@ export const CreateAutofillRunBodySchema = z
     fieldsTotal: z.number().int().min(0).max(1000),
   })
   .strict();
+export interface CreateAutofillRunResponse {
+  runId: string;
+  /** The job the run is linked to (null when the page is not a job we know). */
+  jobId: string | null;
+}
 export const AUTOFILL_OUTCOMES = ['filled', 'partial', 'failed'] as const;
 /** PATCH /ext/autofill-runs/:id — commits (fieldsFilled > 0) or releases. */
 export const PatchAutofillRunBodySchema = z
   .object({ fieldsFilled: z.number().int().min(0).max(1000), outcome: z.enum(AUTOFILL_OUTCOMES), userMarkedSubmitted: z.boolean().optional() })
   .strict();
 export const RunParamsSchema = z.object({ id: Id });
+export interface PatchAutofillRunResponse {
+  runId: string;
+  outcome: (typeof AUTOFILL_OUTCOMES)[number];
+  fieldsFilled: number;
+  /** The `autofill` credit was spent (only when at least one field was filled). */
+  charged: boolean;
+  /** True once the user said they submitted (never detected). */
+  userMarkedSubmitted: boolean;
+  /** The tracker entry moved to Applied, or null (no job linked to the run). */
+  trackerEntryId: string | null;
+  /** The entry was already at Applied or further along (nothing to undo). */
+  alreadyApplied: boolean;
+}
 
 /** Question types that never get an AI answer (bank/profile only, or left to the user). */
 export const PROTECTED_QUESTION_TYPES = [
@@ -106,6 +189,8 @@ export const PROTECTED_QUESTION_TYPES = [
   'eeo',
   'disability',
   'veteran',
+  /** Birth date, age, marital status, 政治面貌, 籍贯, ID numbers, health: never in a prompt (§2.2). */
+  'personal',
   'salary_history',
   'salary_expectation',
   'years_of_experience',
@@ -114,6 +199,9 @@ export const PROTECTED_QUESTION_TYPES = [
   'clearance',
   'notice_period',
 ] as const;
+export type ProtectedQuestionType = (typeof PROTECTED_QUESTION_TYPES)[number];
+/** Every type the classifier answers; `free_text` is the only one AI may draft. */
+export type QuestionType = ProtectedQuestionType | 'free_text';
 
 /** POST /ext/answers (device) — bank hit free; AI answer costs `ai_answer`. */
 export const AnswerQuestionBodySchema = z
@@ -125,23 +213,49 @@ export const AnswerQuestionBodySchema = z
     options: z.array(z.string().max(300)).max(100).optional(),
   })
   .strict();
+/**
+ * Why no answer came back (`source: 'none'`). `unsupported_language`: the
+ * question is not in English or Chinese, so AI does not draft it (the
+ * classifier cannot vouch that it is not a fact about the person).
+ */
+export const ANSWER_NONE_REASONS = ['protected', 'choice_field', 'unsupported_language', 'ai_off', 'ai_unavailable', 'empty'] as const;
 export interface AnswerQuestionResponse {
   answer: string | null;
+  /**
+   * `bank`: the user's own saved answer. `ai`: a draft shown ONLY in the side
+   * panel; nothing goes into the page until the user clicks "Use this
+   * answer" for that field. Never `ai` for a protected question type.
+   */
   source: 'bank' | 'ai' | 'none';
+  /** The user may save this answer to their bank (AI drafts only). */
   saveable: boolean;
+  questionType: QuestionType;
+  reason: (typeof ANSWER_NONE_REASONS)[number] | null;
 }
 
-/** POST /ext/resume-for-job (device) → signed URL (5 min). */
-export const ResumeForJobBodySchema = z.object({ jobId: Id, runId: Id }).strict();
+/**
+ * POST /ext/resume-for-job (device) → signed URL (5 min). `jobId` defaults to
+ * the run's job. On a page that is not one of the user's jobs (run `jobId`
+ * null) the main resume comes back and the download is not recorded on an
+ * application; to record it, save the job first (POST /ext/jobs/save, one
+ * `job_import`) and pass the returned `jobId`.
+ */
+export const ResumeForJobBodySchema = z.object({ jobId: Id.optional(), runId: Id }).strict();
 export interface ResumeForJobResponse {
   variantId: string;
   isTailored: boolean;
   fileName: string;
   downloadUrl: string;
+  /** A tailored copy exists but still has details to verify, so the main resume is used. */
+  tailoredNeedsReview: boolean;
 }
 export const FileTokenParamsSchema = z.object({ signedToken: z.string().min(16).max(1024) });
 
-/** POST /ext/site-requests (device) — 10/day. */
+/**
+ * POST /ext/site-requests (device) — 10/day. Only the page's origin and path
+ * are kept (no query string). The stored host is always the URL's own host;
+ * `host` is accepted for older extension builds and ignored.
+ */
 export const SiteRequestBodySchema = z
   .object({ host: z.string().trim().min(1).max(255), url: z.string().url().max(2000), note: z.string().max(500).optional() })
   .strict();
@@ -154,8 +268,54 @@ export const UninstallSurveyBodySchema = z
 /** `RASurveyResponse.answers` (documented JSON column). */
 export const SurveyAnswersSchema = z.object({ reasons: z.array(z.string()), note: z.string().optional() }).strict();
 
+/**
+ * ATS types each market's extension build can fill (ARCHITECTURE.md §6.2:
+ * the GoApply build's host permissions are Moka / Beisen / Feishu / Dayee,
+ * which have no adapter until WP-71). The web mirror is
+ * `hooks/extension/bridge.ts#EXTENSION_ATS_BY_BRAND`; a test keeps them equal.
+ */
+export const EXTENSION_ATS_TYPES_BY_MARKET = {
+  intl: ['greenhouse', 'lever', 'ashby'],
+  cn: [],
+} as const satisfies Record<'intl' | 'cn', readonly string[]>;
+
+/** Area reasons, sent in `details.reason` under a generic platform code. */
 export const EXTENSION_ERROR_CODES = {
   deviceRevoked: 'device_revoked',
   pairCodeInvalid: 'pair_code_invalid',
   protectedQuestion: 'protected_question',
+  runNotFound: 'run_not_found',
+  noResume: 'no_resume',
+  fileLinkExpired: 'file_link_expired',
+  /** resume-for-job named a job other than the one the autofill run is linked to. */
+  runJobMismatch: 'run_job_mismatch',
 } as const;
+
+// ── Web page ↔ extension messages (chrome.runtime.sendMessage; WP-55b answers) ──
+//
+// The /extension page talks to the installed extension through
+// `externally_connectable` with the brand's extension id
+// (NEXT_PUBLIC_EXT_ID / NEXT_PUBLIC_CN_EXT_ID). The device token travels only
+// in the `pair` message; it never touches page storage.
+
+/** `{ type: 'ping' }` → ExtPingReply. */
+export interface ExtPingMessage {
+  type: 'ping';
+}
+export interface ExtPingReply {
+  ok: true;
+  version: string;
+  /** The extension holds a device token for this brand. */
+  paired: boolean;
+  brand?: 'roboapply' | 'goapply';
+}
+/** `{ type: 'pair', token, apiOrigin }` → `{ ok }`. */
+export interface ExtPairMessage {
+  type: 'pair';
+  token: string;
+  apiOrigin: string;
+}
+export interface ExtPairReply {
+  ok: boolean;
+}
+export type ExtWebMessage = ExtPingMessage | ExtPairMessage;

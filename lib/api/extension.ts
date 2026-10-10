@@ -13,10 +13,11 @@
 //   POST   /api/v1/roboapply/ext/devices
 //   GET    /api/v1/roboapply/ext/devices
 //   DELETE /api/v1/roboapply/ext/devices/:id
+//   GET    /api/v1/roboapply/ext/status
 //   POST   /api/v1/roboapply/ext/pair-codes
 //   POST   /api/v1/public/ext/uninstall-survey
 
-import { call, type CallOptions, type In, type Items, seg } from './contracts/wire';
+import { apiUrl, call, type CallOptions, type In, type Items, seg } from './contracts/wire';
 import type * as E from './contracts/extension';
 
 /** `ext.createDevice` — POST /api/v1/roboapply/ext/devices */
@@ -34,6 +35,11 @@ export function revokeDevice(id: string, opts?: CallOptions): Promise<void> {
   return call<void>('DELETE', `/api/v1/roboapply/ext/devices/${seg(id)}`, opts);
 }
 
+/** `ext.status` — GET /api/v1/roboapply/ext/status */
+export function getStatus(opts?: CallOptions): Promise<E.ExtStatusResponse> {
+  return call<E.ExtStatusResponse>('GET', `/api/v1/roboapply/ext/status`, opts);
+}
+
 /** `ext.createPairCode` — POST /api/v1/roboapply/ext/pair-codes */
 export function createPairCode(opts?: CallOptions): Promise<E.PairCodeResponse> {
   return call<E.PairCodeResponse>('POST', `/api/v1/roboapply/ext/pair-codes`, opts);
@@ -44,11 +50,22 @@ export function submitUninstallSurvey(body: In<typeof E.UninstallSurveyBodySchem
   return call<void>('POST', `/api/v1/public/ext/uninstall-survey`, { ...opts, body });
 }
 
+/**
+ * The API origin the extension should call after pairing: the configured API
+ * base in development, the page's own origin in production (same-origin /api).
+ */
+export function extensionApiOrigin(): string {
+  const base = apiUrl('');
+  if (/^https?:\/\//.test(base)) return base.replace(/\/$/, '');
+  return typeof window !== 'undefined' ? window.location.origin : '';
+}
+
 /** Every wrapper of this area, for callers that prefer one import. */
 export const extensionApi = {
   createDevice,
   listDevices,
   revokeDevice,
+  getStatus,
   createPairCode,
   submitUninstallSurvey,
 };
