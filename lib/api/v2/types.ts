@@ -619,8 +619,9 @@ export interface RATailorDiff {
   companyName: string;
   roleTitle: string;
   /** 0..100 */
-  matchBefore: number;
-  matchAfter: number;
+  /** Real fit scores, or null when none was computed (D3: never invented; WP-36a). Render null as "—". */
+  matchBefore: number | null;
+  matchAfter: number | null;
   /** True when matchAfter is a heuristic estimate rather than a real re-score
    *  of the tailored resume. Optional for back-compat with older payloads. */
   estimated?: boolean;

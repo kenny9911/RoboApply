@@ -97,6 +97,7 @@ export function createSupportService(deps: SupportServiceDeps = {}): SupportServ
         to,
         userId,
         brand,
+        replyTo: input.email,
         params: {
           replyEmail: input.email,
           name: input.name?.trim() || null,

@@ -28,6 +28,7 @@
 import { Router, type Request, type Response } from 'express';
 import multer from 'multer';
 import { requireAuth } from '../lib/raAuth.js';
+import { legacyAiGates } from '../lib/legacyAiGates.js';
 import { getRequestLocale } from '../lib/raLocale.js';
 import { FILE_NAME_STYLE_KEYS, defaultPageFor, type FileNameStyleKey } from '../lib/resumeExport.js';
 import { logger } from '../../../services/LoggerService.js';
@@ -541,7 +542,7 @@ router.post('/:id/rewrite', requireAuth, async (req: Request<{ id: string }>, re
 });
 
 // POST /:id/tailor-diff — propose a tailor diff for a (resume, job) pair.
-router.post('/:id/tailor-diff', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
+router.post('/:id/tailor-diff', requireAuth, ...legacyAiGates(), async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const body = (req.body ?? {}) as TailorDiffInput;
@@ -573,7 +574,7 @@ router.post('/:id/tailor-diff', requireAuth, async (req: Request<{ id: string }>
 // (omitted = accept all) reverts the deselected reversible changes in the
 // tailored markdown before persisting. targetCompany/targetTitle carry the
 // manual-target lineage when there is no saved job.
-router.post('/:id/tailor-apply', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
+router.post('/:id/tailor-apply', requireAuth, ...legacyAiGates(), async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const body = (req.body ?? {}) as {

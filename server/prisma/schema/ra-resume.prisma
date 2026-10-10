@@ -34,7 +34,10 @@ model RAResumeVariant {
   /// a user creates/uploads is auto-promoted to primary.
   isPrimary   Boolean @default(false)
   /// How this variant entered the system: 'upload' | 'scratch' | 'template' |
-  /// 'linkedin' | 'tailored'. Drives the resume-card source chip.
+  /// 'linkedin' | 'tailored' | 'tailored_copy'. Drives the resume-card source
+  /// chip. 'tailored' only when a model wrote the text; 'tailored_copy' = a
+  /// tailored version saved without the AI step (no consent / agent failed),
+  /// which exports without AI labels (WP-36b, CN-E-07).
   sourceKind  String?
   /// Upload-parse lifecycle for kind='base' uploads: 'parsed' | 'parsing' |
   /// 'failed'. NULL for variants that never went through the parse pipeline.
@@ -91,6 +94,9 @@ model RAResumeVariant {
   unverifiedClaims     Int               @default(0)
   /// 'none' | 'running' | 'done' | 'failed'
   analysisStatus       String?
+  /// First time a model wrote text into this variant (editor AI fix, tailor).
+  /// Set once; drives the AI-content labels on export (SCHEMA-3, SR-36b-1).
+  aiAssistedAt         DateTime?
   grades               RAResumeGrade[]
   tailorSessionsBase   RATailorSession[] @relation("TailorBase")
   tailorSessionsResult RATailorSession[] @relation("TailorResult")
@@ -129,6 +135,10 @@ model RAResumeGrade {
   creditLedgerId String?
   createdAt      DateTime        @default(now())
   completedAt    DateTime?
+  /// First authenticated read of the completed check by its owner (stamped by
+  /// the resume-check GET). Null = not known to be viewed; the lifecycle
+  /// "check ready and unopened" message needs it (SCHEMA-3, SR-39a-1).
+  viewedAt       DateTime?
 
   @@index([variantId, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
@@ -156,10 +166,14 @@ model RATailorSession {
   scoreBefore      Int?
   scoreAfter       Int?
   /// `[{ id, text, kind: 'keyword'|'number'|'claim',
-  ///    status: 'pending'|'kept'|'removed'|'edited', evidence?: { source: 'resume', ref } }]`
+  ///    status: 'pending'|'kept'|'removed'|'edited', evidence?: { source: 'resume', ref },
+  ///    copies?: [{ section?, original }] }]` — one claim covers every copy of a line (WP-36a).
   claims           Json             @default("[]")
   /// 'draft' | 'generating' | 'review' | 'finalized' | 'failed'
   status           String           @default("draft")
+  /// Hash of the base resume content when the session was generated, so the
+  /// view can say the base changed after tailoring (SCHEMA-3, SR-36a-1, optional).
+  baseContentHash  String?
   creditLedgerId   String?
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt

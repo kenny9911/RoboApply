@@ -258,6 +258,19 @@ describe('useJobActions', () => {
     expect(opened).toEqual([]);
   });
 
+  it('no Undo after a click or "I applied" that changed nothing (alreadyApplied: true; WP-34)', async () => {
+    handler = (url) =>
+      url.includes('/apply-click')
+        ? ok({ applyUrl: 'https://jobs.example.com/1', atsType: null, extensionSupported: false, trackerEntryId: 'trk_1', alreadyApplied: true })
+        : ok({ trackerEntryId: 'trk_1', alreadyApplied: true });
+    const { result, opened } = setup('https://jobs.example.com/1');
+    await act(async () => void (await result.current.applyOnCompanySite()));
+    expect(opened).toEqual(['https://jobs.example.com/1']);
+    expect(result.current.lastApplied).toBeNull();
+    await act(async () => result.current.markApplied());
+    expect(result.current.lastApplied).toBeNull();
+  });
+
   it('closes the placeholder tab when the click fails, and keeps the error', async () => {
     handler = () => fail(404, 'not_found');
     const { result, placeholder } = setup(null);

@@ -1,11 +1,4 @@
 {
   "//": "Raw /api/v1/ literals outside lib/api that existed when scripts/check-api-boundary.mjs landed (FND-7). The gate fails only on new ones. The owner removes each row when it moves the call into lib/api/<area>.ts.",
-  "apiLiterals": [
-    {
-      "file": "lib/resumeDownload.ts",
-      "count": 1,
-      "owner": "WP-36b",
-      "note": "resume file download URL; moves to lib/api/resumes.ts"
-    }
-  ]
+  "apiLiterals": []
 }

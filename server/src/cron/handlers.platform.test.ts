@@ -135,7 +135,8 @@ describe('cron routes over HTTP', () => {
     expect((await h.request('GET', '/api/v1/cron/queue-drain', { headers: { authorization: 'Bearer wrong' } })).status).toBe(401);
   });
 
-  it.each(PLANNED.filter(([n]) => n !== 'queue-drain' && n !== 'jobs-maintain').map(([n]) => n))(
+  // `reminders` goes through the WP-39a runner, which reports no_work (its own test below).
+  it.each(PLANNED.filter(([n]) => n !== 'queue-drain' && n !== 'jobs-maintain' && n !== 'reminders').map(([n]) => n))(
     '%s answers 200 {skipped: not_implemented} in under 2 s',
     async (name) => {
       const started = Date.now();
@@ -173,10 +174,17 @@ describe('cron routes over HTTP', () => {
     expect(m.releaseStale).toHaveBeenCalledOnce();
   });
 
-  it('reminders skip the campus producer outside the cn market', async () => {
-    const res = await h.request<{ results: Record<string, Record<string, { skipped?: string }>> }>('GET', '/api/v1/cron/reminders', auth);
-    expect(res.body.results.roboapply!.campus).toEqual({ skipped: 'not_for_market' });
-    expect(res.body.results.goapply!.campus).toEqual({ skipped: 'not_implemented' });
+  it('reminders run the registered producers per brand through the WP-39a runner; campus only on the cn market', async () => {
+    type Run = { reminders: { producers?: Record<string, { skipped?: string }> } };
+    const res = await h.request<{ ok: boolean; skipped?: string; results: Record<string, Run> }>('GET', '/api/v1/cron/reminders', auth);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, skipped: 'no_work' });
+    expect(Object.keys(res.body.results.roboapply!.reminders.producers ?? {})).toEqual(['tracker', 'agent']);
+    expect(res.body.results.goapply!.reminders.producers).toEqual({
+      tracker: { skipped: 'not_implemented' },
+      agent: { skipped: 'not_implemented' },
+      campus: { skipped: 'not_implemented' },
+    });
   });
 
   it('the existing crons are still served', async () => {

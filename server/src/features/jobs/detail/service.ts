@@ -31,6 +31,7 @@ import type { EnvSource } from '../../../platform/brand/brandEnv.js';
 import type { CompanyProfile } from '../companies/contract.js';
 import type { MatchFitView, PreScoreResult } from '../../match/contract.js';
 import type { MatchExplanation } from '../../compliance/contract.js';
+import { cnPostingVisible } from '../../cn/jobs/index.js';
 import {
   JOB_DETAIL_ERROR_CODES,
   UNDO_APPLIED_WINDOW_MS,
@@ -114,6 +115,12 @@ export interface JobDetailServiceDeps {
   /** Practice for this job; null while practice sessions are not linked to jobs (SR-34-1). */
   practicedForJob?: (userId: string, jobId: string) => Promise<boolean | null>;
   markChecklistStep?: (userId: string, step: 'save_job') => Promise<unknown>;
+  /**
+   * Feed affinity (WP-32 `feedService.recordInteraction`): +0.1 save, +0.15 apply click,
+   * +0.25 applied; it honours the GoApply 个性化推荐 grant itself. Called softly after a
+   * tracker write that changed something.
+   */
+  recordInteraction?: (userId: string, jobId: string, kind: 'save' | 'apply_click' | 'applied') => Promise<unknown>;
   isEnabled?: (key: DetailFlag, userId: string) => Promise<boolean>;
   hiringContacts?: (userId: string) => Promise<HiringContactsMode>;
   marketMeta?: (row: JobRow, brand: ProductBrand) => Record<string, Record<string, unknown>>;
@@ -170,6 +177,10 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
   async function loadJob(userId: string, jobId: string): Promise<JobRow> {
     const row = (await db.rAJob.findUnique({ where: { id: jobId }, select: JOB_ROW_SELECT })) as JobRow | null;
     if (!row || !isVisibleTo(row, userId, deps.brand().market)) throw notFound();
+    // GoApply recruitment-info mode (R-14, WP-41 R41-1b): in mode `off` a
+    // third-party posting is invisible (same 404 as a missing job); the user's
+    // own import stays visible. Non-cn rows pass through. (Wave 3 gate fix.)
+    if (!cnPostingVisible(row, userId, deps.env ?? process.env)) throw notFound();
     return row;
   }
 
@@ -191,6 +202,11 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
 
   async function interaction(userId: string, jobId: string, kind: string, detail?: Record<string, unknown>) {
     await soft('interaction', () => db.rAJobInteraction.create({ data: { userId, jobId, kind, ...(detail ? { detail: detail as object } : {}) } }), null);
+  }
+
+  /** Feed affinity for a save / apply click / applied that changed the tracker (never blocks the action). */
+  async function affinity(userId: string, jobId: string, kind: 'save' | 'apply_click' | 'applied') {
+    if (deps.recordInteraction) await soft('affinity', () => deps.recordInteraction!(userId, jobId, kind), null);
   }
 
   async function touchUserState(userId: string, jobId: string, data: { viewedAt?: Date; applyClickedAt?: Date }) {
@@ -391,9 +407,11 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
 
     async save(userId, jobId) {
       const row = await loadJob(userId, jobId);
+      let isNew = false;
       const entry = await withEntryLock(userId, jobId, async (tx) => {
         const existing = await trackerOf(userId, jobId, tx);
         if (existing) return existing;
+        isNew = true;
         const created = (await tx.rATrackerEntry.create({
           data: {
             userId,
@@ -408,6 +426,7 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
         return created;
       });
       await interaction(userId, jobId, 'save');
+      if (isNew) await affinity(userId, jobId, 'save');
       // Every save counts (idempotent on the growth side; ruling C20). Never blocks the save.
       if (deps.markChecklistStep) await soft('checklist', () => deps.markChecklistStep!(userId, 'save_job'), null);
       return { tracker: toTrackerState(entry) };
@@ -434,7 +453,10 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
       const at = now();
       const { entry, changed } = await writeStatus(userId, row, { appliedAt: at, via: 'apply_click', source: 'feed' });
       await touchUserState(userId, jobId, { applyClickedAt: at });
-      if (changed) await interaction(userId, jobId, 'apply_click');
+      if (changed) {
+        await interaction(userId, jobId, 'apply_click');
+        await affinity(userId, jobId, 'apply_click');
+      }
       const atsType = row.atsType ?? null;
       const extOn = await flag('extension', userId);
       return {
@@ -451,7 +473,10 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
       const at = appliedAt ? new Date(appliedAt) : now();
       if (at.getTime() > now().getTime() + 60_000) throw new HttpError('invalid_request', 'The date applied is in the future.');
       const { entry, changed } = await writeStatus(userId, row, { appliedAt: at, via: 'manual', source: 'manual' });
-      if (changed) await interaction(userId, jobId, 'applied');
+      if (changed) {
+        await interaction(userId, jobId, 'applied');
+        await affinity(userId, jobId, 'applied');
+      }
       return { tracker: toTrackerState(entry)!, alreadyApplied: !changed };
     },
 

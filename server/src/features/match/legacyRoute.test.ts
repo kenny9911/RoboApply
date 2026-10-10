@@ -28,7 +28,13 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../lib/prisma.js', () => ({
   default: {
     rAJob: {
-      findUnique: vi.fn(async () => ({ id: 'job1', title: 'Backend Engineer', description: 'Build APIs.', qualifications: 'TypeScript', benefits: null, workType: 'remote', sourceBoard: 'greenhouse' })),
+      // In the request brand's market; on GoApply the user's own import (readable in every R-14 mode; legacyJobScope.ts).
+      findUnique: vi.fn(async () => ({
+        id: 'job1', title: 'Backend Engineer', description: 'Build APIs.', qualifications: 'TypeScript', benefits: null, workType: 'remote',
+        ...(mocks.brandId === 'goapply'
+          ? { market: 'cn', visibility: 'private', ownerUserId: 'user1', sourceBoard: 'user_import', provider: 'user_import' }
+          : { market: 'intl', visibility: 'public', ownerUserId: null, sourceBoard: 'greenhouse' }),
+      })),
     },
     rAResumeVariant: {
       findFirst: vi.fn(async () => ({ id: 'variant1', userId: 'user1', resumeMarkdown: '# Ada\nTypeScript', resumeContentHash: 'resume-hash', targetJobId: null })),

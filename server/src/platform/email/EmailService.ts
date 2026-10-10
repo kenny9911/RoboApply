@@ -62,6 +62,12 @@ export interface SendEmailInput<P = Record<string, unknown>> {
   params: P;
   /** Explicit brand (workers/crons); otherwise the current unit of work's brand. */
   brand?: BrandId | ProductBrand;
+  /**
+   * Reply-To for this message instead of the brand's support inbox, e.g. the
+   * visitor's own address on a support-form email to staff (WP-40 request,
+   * Wave 3 gate). Ignored unless it is a valid address.
+   */
+  replyTo?: string | null;
 }
 
 export interface SendEmailResult {
@@ -248,7 +254,7 @@ export async function sendEmail<P>(input: SendEmailInput<P>, deps: EmailServiceD
       subject: body.subject,
       html: shell.html,
       text: shell.text,
-      replyTo: replyToFor(brand, env),
+      replyTo: (input.replyTo && addressOf(input.replyTo)) || replyToFor(brand, env),
       headers,
     };
   } catch (err) {

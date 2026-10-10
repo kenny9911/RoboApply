@@ -11,9 +11,8 @@
 //     scanned 2xx body, so the check cannot pass with nothing scanned. A route
 //     that is still an FND-5 stub is listed as it.todo naming its owner;
 //   - jobs.companies: the real CompanyReadService over a fake database holding
-//     one public GoHire posting, read by a signed-in user. Not mode-gated yet:
-//     Request R41-1 (blocking for INT, owner WP-16b). The leak is pinned with
-//     it.fails; flip it to `it` when R41-1 lands;
+//     one public GoHire posting, read by a signed-in user. Mode-gated since
+//     the Wave 3 gate applied Request R41-1 (the router ANDs cnPostingsWhere);
 //   - NOT_EXERCISED readers (tracker, match, seeker alerts, saved searches)
 //     need data seeded through their own seams: it.todo with the owner WP.
 
@@ -24,6 +23,9 @@ import { setFlagOverrideLoader } from '../../../../platform/flags.js';
 import { isStubHandler } from '../../../../platform/http.js';
 import { fakeAuth, startRouteHarness, type HarnessResponse, type RouteHarness } from '../../../../test/routeHarness.js';
 import { createCompanyReadService, type CompaniesDb } from '../../../jobs/companies/service.js';
+import { createJobDetailService, type JobDetailDb } from '../../../jobs/detail/service.js';
+import { getCurrentBrandOrDefault } from '../../../../platform/brand/index.js';
+import { createFakePrisma } from '../../../../test/fakePrisma.js';
 
 const GA = 'goapply.localhost:3621';
 /** Routers that only ever return third-party postings: gated as a whole. */
@@ -88,9 +90,65 @@ function baseDeps(env: Record<string, string>): FeatureRouterDeps {
   };
 }
 
+/**
+ * Per-router seams so live routers answer without a database (Wave 3 gate):
+ *   - feed (WP-32): a service whose every call fails fast, a pass-through
+ *     limiter and phone gate — the mode-on check only asserts "not
+ *     feature_disabled", and without these the default service and limiter
+ *     reach for the real database;
+ *   - jobs.detail (WP-34): the real JobDetailService over a fake database
+ *     holding the viewer's own import at `test-id` (what `fill` calls every
+ *     `:id`) and one public GoHire posting at `job_gh`; MATCH's score handler
+ *     and the news limiter stubbed.
+ */
+const failingFeedService = new Proxy(
+  { now: () => new Date('2026-10-10T00:00:00Z') } as Record<string, unknown>,
+  // `then` stays undefined so `await service` does not treat the proxy as a promise.
+  { get: (t, k) => (k === 'then' ? undefined : k in t ? t[k as string] : async () => { throw new Error('fake feed service'); }) },
+);
+
+function detailJob(over: Record<string, unknown>): Record<string, unknown> {
+  return {
+    title: '产品经理', titleNormalized: '产品经理', companyId: null, companyName: '示例科技有限公司', companyLogoUrl: null,
+    location: '上海', locationCountry: 'CN', workModel: 'onsite', employmentType: null, seniority: null,
+    salaryMin: null, salaryMax: null, salaryCurrency: null, salaryPeriod: null, salaryText: null, salaryDisclosed: false,
+    description: '负责产品规划。', qualifications: null, responsibilities: null, benefits: null, summary: null, skillsDetail: null,
+    sponsorship: null, sponsorshipEvidence: null, marketTags: null, fraudFlags: null, applyUrl: '', atsType: null,
+    postedAt: new Date('2026-10-01T00:00:00Z'), postedAtEstimated: false, lastSeenAt: new Date('2026-10-09T00:00:00Z'),
+    closedAt: null, archivedAt: null, originalSourceName: null, sourceUrl: null, isAgency: false,
+    market: 'cn', isCanonical: true, publicDisplay: false, slug: null, primaryTaxonomyId: null,
+    ...over,
+  };
+}
+
+const OWN_IMPORT = detailJob({ id: 'test-id', visibility: 'private', ownerUserId: 'u1', sourceBoard: 'user_import', sourceName: null, fromRecruiterBank: false, employerVerified: false });
+const GOHIRE_POSTING = detailJob({ id: 'job_gh', visibility: 'public', ownerUserId: null, sourceBoard: 'gohire', sourceName: 'GoHire', fromRecruiterBank: true, employerVerified: true, applyUrl: 'https://gohire.top/jobs/1' });
+
+function fakeDetailService(env: Record<string, string>) {
+  const db = createFakePrisma({
+    seed: {
+      rAJob: [OWN_IMPORT, GOHIRE_POSTING],
+      rATrackerEntry: [], rATrackerEvent: [], rAJobUserState: [], rAJobInteraction: [], rAResumeVariant: [], rACoverLetter: [], rACampusEvent: [],
+    },
+  });
+  return createJobDetailService({ db: db as unknown as JobDetailDb, brand: () => getCurrentBrandOrDefault(), env, isEnabled: async () => false });
+}
+
+function seamsFor(id: string, env: Record<string, string>): Record<string, unknown> {
+  if (id === 'feed') return { service: failingFeedService, limiter: () => passThrough, phoneGate: passThrough };
+  if (id === 'jobs.detail') {
+    const noScore: RequestHandler = (_req, res) => void res.status(204).end();
+    return { service: fakeDetailService(env), scoreHandler: noScore, newsLimiter: passThrough };
+  }
+  return {};
+}
+
 function harnessFor(env: Record<string, string>, ids: string[]): Promise<RouteHarness> {
   const deps = baseDeps(env);
-  return startRouteHarness({ env, mounts: ids.map((id) => [mountOf(id).path, mountOf(id).build(deps)] as [string, Router]) });
+  return startRouteHarness({
+    env,
+    mounts: ids.map((id) => [mountOf(id).path, mountOf(id).build({ ...deps, ...seamsFor(id, env) } as FeatureRouterDeps)] as [string, Router]),
+  });
 }
 
 async function call(h: RouteHarness, mount: FeatureMount, r: RouteInfo): Promise<HarnessResponse<{ code?: string }>> {
@@ -153,6 +211,24 @@ describe('GoApply, CN_RECRUITMENT_INFO_MODE=off', () => {
       expect(scanned, `${id}: no 2xx body scanned — seed a GoHire posting through the router's seam`).toBeGreaterThan(0);
     });
   }
+
+  it('jobs.detail: a GoHire posting is a 404 on every job route in mode off, and opens once the mode allows postings (control) [R41-1b]', async () => {
+    const path = mountOf('jobs.detail').path;
+    for (const suffix of ['', '/similar', '/apply-click']) {
+      const method = suffix === '/apply-click' ? 'POST' : 'GET';
+      const res = await off.request<{ code?: string }>(method, `${path}/job_gh${suffix}`, { host: GA, body: method === 'GET' ? undefined : {} });
+      expect(res.status, `${method} ${suffix}`).toBe(404);
+      expect(thirdPartyPostings(res.body)).toEqual([]);
+    }
+    const h = await startRouteHarness({ env: MODE_ON, mounts: [[path, mountOf('jobs.detail').build({ ...baseDeps(MODE_ON), ...seamsFor('jobs.detail', MODE_ON) } as FeatureRouterDeps)]] });
+    try {
+      const res = await h.request<unknown>('GET', `${path}/job_gh`, { host: GA });
+      expect(res.status).toBe(200);
+      expect(thirdPartyPostings(res.body).length).toBeGreaterThan(0);
+    } finally {
+      await h.close();
+    }
+  });
 
   for (const [id, owner] of Object.entries(NOT_EXERCISED)) {
     it.todo(`${id}: with mode off, no response carries a third-party posting (owner ${owner}: seed a GoHire posting through the router's seam)`);
@@ -284,10 +360,9 @@ describe('jobs.companies on GoApply (signed-in viewer)', () => {
     }
   });
 
-  // R41-1 (blocking for INT, owner WP-16b): companies.jobs() and profile() must AND
-  // cnPostingsWhere(viewerId) when market === 'cn'. Today GET /companies/:id/jobs
-  // lists the GoHire posting and the profile counts it. Flip to `it` when R41-1 lands.
-  it.fails('mode off: GET /companies/:id/jobs lists no third-party posting and the profile counts none [R41-1]', async () => {
+  // R41-1 (applied at the Wave 3 gate): companies.jobs() and profile() AND
+  // cnPostingsWhere(viewerId) when market === 'cn'.
+  it('mode off: GET /companies/:id/jobs lists no third-party posting and the profile counts none [R41-1]', async () => {
     const h = await companiesHarness(MODE_OFF);
     try {
       const { profile, jobs } = await readCompany(h);

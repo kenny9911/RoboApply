@@ -97,11 +97,13 @@ exports[`predicates (one snapshot per FilterSet field) > employerTags 1`] = `
 
 exports[`predicates (one snapshot per FilterSet field) > employmentType 1`] = `
 {
-  "text": "(j."employmentType" = 'internship' OR EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(j."marketTags") = 'array' THEN j."marketTags" ELSE '[]'::jsonb END) AS t(e) WHERE t.e->>'tag' = ANY($1::text[])) OR (EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(j."marketTags") = 'array' THEN j."marketTags" ELSE '[]'::jsonb END) AS t(e) WHERE t.e->>'tag' = ANY($2::text[])) OR (j."employmentType" IS DISTINCT FROM 'internship' AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(j."marketTags") = 'array' THEN j."marketTags" ELSE '[]'::jsonb END) AS t(e) WHERE t.e->>'tag' LIKE $3))))",
+  "text": "(j."employmentType" = 'internship' OR (EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(j."marketTags") = 'array' THEN j."marketTags" ELSE '[]'::jsonb END) AS t(e) WHERE t.e->>'tag' = ANY($1::text[])) OR (j."employmentType" IS DISTINCT FROM 'internship' AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(j."marketTags") = 'array' THEN j."marketTags" ELSE '[]'::jsonb END) AS t(e) WHERE t.e->>'tag' LIKE $2) AND EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(j."marketTags") = 'array' THEN j."marketTags" ELSE '[]'::jsonb END) AS t(e) WHERE t.e->>'tag' LIKE $3))) OR (EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(j."marketTags") = 'array' THEN j."marketTags" ELSE '[]'::jsonb END) AS t(e) WHERE t.e->>'tag' = ANY($4::text[])) OR (j."employmentType" IS DISTINCT FROM 'internship' AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(j."marketTags") = 'array' THEN j."marketTags" ELSE '[]'::jsonb END) AS t(e) WHERE t.e->>'tag' LIKE $5))))",
   "values": [
     [
       "cn_hire:campus",
     ],
+    "cn_hire:%",
+    "class_year:%",
     [
       "cn_hire:social",
     ],

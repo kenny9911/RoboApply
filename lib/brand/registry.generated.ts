@@ -79,6 +79,10 @@ export interface BrandFlags {
   student: boolean;
   /** Weekly competitiveness report. */
   competitiveness: boolean;
+  /** Company news on the job page (Tavily search results, labelled as such; WP-34). Dark until the owner turns it on. */
+  companyNews: boolean;
+  /** Programmatic browse pages are live (`/browse/*`, WP-56); the marketing quick search links there (WP-40). */
+  'seo.browse': boolean;
 }
 
 export interface ProductBrand {
@@ -201,6 +205,8 @@ export const BRANDS: Record<BrandId, ProductBrand> = {
       totp: true,
       student: true,
       competitiveness: true,
+      companyNews: false,
+      'seo.browse': false,
     },
   },
   goapply: {
@@ -267,6 +273,8 @@ export const BRANDS: Record<BrandId, ProductBrand> = {
       totp: true,
       student: false,
       competitiveness: true,
+      companyNews: false,
+      'seo.browse': false,
     },
   },
 };

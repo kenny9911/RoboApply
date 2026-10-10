@@ -12,10 +12,13 @@
 // the contract (roboapply/lib/api/v2/types.ts → MockCatalogResponse /
 // MockRecentSessionsResponse / MockStartResponse / MockNextTurnResponse /
 // MockScoreResponse). All reads/writes are scoped to the authed user inside
-// RAMockService (404 on cross-tenant).
+// RAMockService (404 on cross-tenant). The three model routes pass the GoApply
+// phone gate and the AI consent gate first (legacyAiGates; Wave 3 gate) —
+// 403 phone_binding_required / 503 ai_unavailable with zero model calls.
 
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../lib/raAuth.js';
+import { legacyAiGates } from '../lib/legacyAiGates.js';
 import { getRequestLocale } from '../lib/raLocale.js';
 import { logger } from '../../../services/LoggerService.js';
 import {
@@ -55,7 +58,7 @@ router.get('/recent-sessions', requireAuth, async (req: Request, res: Response) 
 });
 
 // POST /start — create a session + generate questions.
-router.post('/start', requireAuth, async (req: Request, res: Response) => {
+router.post('/start', requireAuth, ...legacyAiGates(), async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
     const { role, interviewerId, typeId, format, language, durationMinutes } = req.body ?? {};
@@ -81,7 +84,7 @@ router.post('/start', requireAuth, async (req: Request, res: Response) => {
 });
 
 // POST /next-turn — submit an answer; get the interviewer follow-up.
-router.post('/next-turn', requireAuth, async (req: Request, res: Response) => {
+router.post('/next-turn', requireAuth, ...legacyAiGates(), async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
     const { sessionId, answer, questionIndex } = req.body ?? {};
@@ -108,7 +111,7 @@ router.post('/next-turn', requireAuth, async (req: Request, res: Response) => {
 });
 
 // POST /:sessionId/score — mark complete + return the scored report.
-router.post('/:sessionId/score', requireAuth, async (req: Request<{ sessionId: string }>, res: Response) => {
+router.post('/:sessionId/score', requireAuth, ...legacyAiGates(), async (req: Request<{ sessionId: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const result = await raMockService.score(userId, req.params.sessionId);

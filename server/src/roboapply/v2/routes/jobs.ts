@@ -39,6 +39,7 @@
 import { Router, type Request, type Response } from 'express';
 import prisma from '../../../lib/prisma.js';
 import { requireAuth } from '../lib/raAuth.js';
+import { legacyJobVisible, requireLegacyVisibleJob } from '../lib/legacyJobScope.js';
 import { getRequestLocale, RA_DEFAULT_LOCALE, type RaLocale } from '../lib/raLocale.js';
 import { writeDeductionLog } from '../../../lib/matchBilling.js';
 import { costPatchFromTally } from '../../../lib/deductionCost.js';
@@ -146,7 +147,9 @@ router.get('/:id', requireAuth, async (req: Request<{ id: string }>, res: Respon
     // Seed demo rows are never user-visible — even by direct id, even when
     // archived (fake postings with dead applyUrls). Real archived jobs stay
     // viewable so tracker deep-links keep working.
-    if (!row || row.sourceBoard === 'seed') {
+    // Same scope as the job-detail area (market, public or own import, R-14 mode on GoApply);
+    // seed rows never. Real archived jobs stay viewable so tracker deep-links keep working.
+    if (!legacyJobVisible(row, userId)) {
       return res.status(404).json({ error: 'not_found' });
     }
 
@@ -232,7 +235,7 @@ router.get('/:id', requireAuth, async (req: Request<{ id: string }>, res: Respon
   }
 });
 
-router.post('/:id/apply', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
+router.post('/:id/apply', requireAuth, requireLegacyVisibleJob, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const jobId = req.params.id;
@@ -257,7 +260,7 @@ router.post('/:id/apply', requireAuth, async (req: Request<{ id: string }>, res:
   }
 });
 
-router.post('/:id/save', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
+router.post('/:id/save', requireAuth, requireLegacyVisibleJob, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const jobId = req.params.id;
@@ -281,7 +284,7 @@ router.post('/:id/save', requireAuth, async (req: Request<{ id: string }>, res: 
   }
 });
 
-router.post('/:id/score', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
+router.post('/:id/score', requireAuth, requireLegacyVisibleJob, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const jobId = req.params.id;

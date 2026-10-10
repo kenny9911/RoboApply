@@ -112,6 +112,18 @@ describe('sendEmail', () => {
     expect(JSON.stringify(log)).not.toContain('Example.com');
   });
 
+  it('a per-message replyTo (a valid address) replaces the brand support inbox; an invalid one is ignored', async () => {
+    const { t, sent } = fakeTransport();
+    registerEmailTransport('resend', t);
+    const env = { ...ENV, SUPPORT_EMAIL: 'support@roboapply.io' };
+    const send = (replyTo?: string) =>
+      runWithBrand('roboapply', () => sendEmail({ template: 'test.reset', to: 'staff@roboapply.io', replyTo, params: { url: 'https://x.test/r' } }, { db: db as unknown as EmailDb, env }));
+    await send('visitor@example.test');
+    await send('not an address');
+    await send();
+    expect(sent.map((m) => m.replyTo)).toEqual(['visitor@example.test', 'support@roboapply.io', 'support@roboapply.io']);
+  });
+
   it('refuses .invalid placeholder and malformed addresses without calling the transport', async () => {
     const { t, sent } = fakeTransport();
     registerEmailTransport('resend', t);

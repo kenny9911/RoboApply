@@ -71,6 +71,18 @@ model RAMockSession {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  // ── Jobright clone (SCHEMA-3: WP-43-S2 + SR-34-1) ──
+  /// The RAJob this written practice was started from (`/practice?job=`),
+  /// loaded and market-checked on the server. Plain scalar, no FK, so a job
+  /// archive never touches practice history. Feeds the job page's
+  /// "Practiced" step. (SR-34-1 asked for `raJobId`; WP-43 writes `jobId`,
+  /// matching InterviewSession.jobId and RACoverLetter.jobId.)
+  jobId               String?
+  /// When an answered practice was scored and counted as completed (checklist
+  /// + "Practiced"). Null = not completed. (WP-43-S2)
+  practiceCompletedAt DateTime?
+
   @@index([userId, createdAt(sort: Desc)])
   @@index([userId, status])
+  @@index([userId, jobId])
 }

@@ -4783,7 +4783,7 @@ model MockInterviewCreditLedger {
   balanceAfter     Float
   reason           String // grant_purchase | grant_renewal | grant_free_monthly | signup_bonus | debit_interview | refund | admin_adjust | expire
   tier             String?
-  relatedSessionId String? // InterviewSession id for debit/refund (idempotency key)
+  relatedSessionId String? // InterviewSession id, or RAMockSession id for a written-practice debit (WP-43), for debit/refund (idempotency key)
   source           String? // stripe | alipay | system | admin
   metadata         Json?
   createdAt        DateTime @default(now())
@@ -5329,10 +5329,25 @@ model InterviewSession {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
+  // ── Jobright clone: practice from a job (SCHEMA-3, WP-43-S1) ──
+  /// The RAJob the practice was started from (`/practice?job=`), loaded and
+  /// market-checked on the server. Plain scalar, no FK.
+  jobId               String?
+  /// The recording the user chose at create: `{ audio: boolean, video: boolean }`
+  /// (video only with audio). Egress starts only with a matching consent grant;
+  /// null = no choice recorded (legacy rows: not consented). Today WP-43 keeps
+  /// these facts in `liveMetrics.practice` (readPracticeMeta) until it moves to
+  /// these columns.
+  recordingConsent    Json?
+  /// When the session counted as a completed practice (checklist + the job
+  /// page's "Practiced" step). Null = not completed.
+  practiceCompletedAt DateTime?
+
   @@index([userId, createdAt(sort: Desc)])
   @@index([userId, status])
   @@index([apiKeyId])
   @@index([status])
+  @@index([userId, jobId, status])
 }
 
 // ════════════════════════════════════════════════════════════════════════

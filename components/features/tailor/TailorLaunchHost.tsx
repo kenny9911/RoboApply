@@ -30,7 +30,8 @@ export interface TailorLaunchHostProps {
 export function TailorLaunchHost({ resumeId = null }: TailorLaunchHostProps) {
   const params = useSearchParams();
   const router = useRouter();
-  const pathname = usePathname();
+  // usePathname() is `string | null` under Next's pages-router compat types (pages/ exists).
+  const pathname = usePathname() ?? (typeof window !== 'undefined' ? window.location.pathname : '/');
   const jobId = params?.get(TAILOR_QUERY)?.trim() || null;
   const sessionId = params?.get(TAILOR_SESSION_QUERY)?.trim() || null;
 

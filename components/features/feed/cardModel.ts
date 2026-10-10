@@ -12,11 +12,14 @@
 //     arrives without those facts; otherwise a bank job gets the source line
 //     "Posted on {sourceName} by a recruiter";
 //   • the sponsorship badge needs the quote it is based on (its tooltip shows
-//     it) AND the post's stance: 'offered' → "Visa sponsorship mentioned",
-//     'not_offered' → "Says no visa sponsorship". Without a quote, or without a
-//     stance we can read, it is dropped — never guessed from the label;
-//   • a deadline is shown only when the post states one; there is no
-//     invented urgency;
+//     it). WP-32 sends the post's stance as the badge kind: 'sponsorship' →
+//     "Visa sponsorship mentioned", 'no_sponsorship' → "Says no visa
+//     sponsorship". Without a quote it is dropped — never guessed;
+//   • clearance / citizens-only requirements and GoApply employer tags show
+//     only with the quote they rest on (tooltip);
+//   • a deadline is shown only when the post states one (`campus.applyClosesAt`,
+//     from an `apply_closes:` tag with its quote); there is no invented
+//     urgency — the reserved `closing_soon` badge is never used;
 //   • at most 3 badges, fixed priority.
 
 import type { FeedItem } from '../../../lib/api/contracts/feed';
@@ -25,33 +28,39 @@ import type { MarketCardMeta } from '../market';
 export type CardBadge =
   | { kind: 'direct' }
   | { kind: 'sponsorship'; status: SponsorshipStatus; quote: string }
+  | { kind: 'clearance'; quote: string }
+  | { kind: 'citizens'; quote: string }
   | { kind: 'agency' }
-  | { kind: 'market'; label: string }
-  | { kind: 'closes'; at: string }
+  | { kind: 'market'; label: string; quote: string | null }
+  | { kind: 'closes'; at: string; quote: string | null }
   | { kind: 'new' };
 
 export type SponsorshipStatus = 'offered' | 'not_offered';
 
 export const MAX_BADGES = 3;
 
-/**
- * The post's sponsorship stance from a feed badge. Narrow adapter: the
- * contract badge has no `status` yet (requested from WP-32); until it does,
- * this returns null and the badge is not shown. Pure.
- */
+/** The post's sponsorship stance from a feed badge: WP-32 encodes it in the kind. Pure. */
 export function sponsorshipStatus(badge: FeedItem['badges'][number]): SponsorshipStatus | null {
-  const status = (badge as { status?: unknown }).status;
-  return status === 'offered' || status === 'not_offered' ? status : null;
+  if (badge.kind === 'sponsorship') return 'offered';
+  if (badge.kind === 'no_sponsorship') return 'not_offered';
+  return null;
 }
 
 const BADGE_ORDER: Record<CardBadge['kind'], number> = {
   direct: 0,
   sponsorship: 1,
-  agency: 2,
-  market: 3,
-  closes: 4,
-  new: 5,
+  clearance: 2,
+  citizens: 3,
+  agency: 4,
+  market: 5,
+  closes: 6,
+  new: 7,
 };
+
+function quoteOf(badge: FeedItem['badges'][number]): string | null {
+  const q = typeof badge.quote === 'string' ? badge.quote.trim() : '';
+  return q || null;
+}
 
 export function isDirectFromEmployer(item: Pick<FeedItem, 'fromRecruiterBank' | 'employerVerified' | 'isAgency'>): boolean {
   return item.fromRecruiterBank === true && item.employerVerified === true && item.isAgency !== true;
@@ -75,24 +84,39 @@ export function cardBadges(item: FeedItem): CardBadge[] {
   if (item.isAgency) push({ kind: 'agency' });
   for (const b of item.badges ?? []) {
     switch (b.kind) {
-      case 'sponsorship': {
+      case 'sponsorship':
+      case 'no_sponsorship': {
         const status = sponsorshipStatus(b);
-        if (status && typeof b.quote === 'string' && b.quote.trim()) push({ kind: 'sponsorship', status, quote: b.quote.trim() });
+        const quote = quoteOf(b);
+        if (status && quote) push({ kind: 'sponsorship', status, quote });
+        break;
+      }
+      case 'clearance_required': {
+        const quote = quoteOf(b);
+        if (quote) push({ kind: 'clearance', quote });
+        break;
+      }
+      case 'citizens_only': {
+        const quote = quoteOf(b);
+        if (quote) push({ kind: 'citizens', quote });
         break;
       }
       case 'market_tag':
-        if (typeof b.label === 'string' && b.label.trim()) push({ kind: 'market', label: b.label.trim() });
-        break;
-      case 'closing_soon':
-        if (validDate(item.campus?.applyClosesAt)) push({ kind: 'closes', at: item.campus!.applyClosesAt! });
+        if (typeof b.label === 'string' && b.label.trim()) push({ kind: 'market', label: b.label.trim(), quote: quoteOf(b) });
         break;
       case 'new':
         push({ kind: 'new' });
         break;
-      // 'direct_from_employer' is decided from the fields above, never from the badge alone.
+      // 'direct_from_employer' is decided from the fields above, never from the badge alone;
+      // 'closing_soon' is reserved and never emitted (the stated date below is the only deadline).
       default:
         break;
     }
+  }
+  const closes = item.campus?.applyClosesAt;
+  if (validDate(closes)) {
+    const quote = typeof item.campus?.applyClosesQuote === 'string' ? item.campus.applyClosesQuote.trim() : '';
+    push({ kind: 'closes', at: closes, quote: quote || null });
   }
   return out.sort((a, b) => BADGE_ORDER[a.kind] - BADGE_ORDER[b.kind]).slice(0, MAX_BADGES);
 }
@@ -126,7 +150,7 @@ export interface PayText {
   /** Already formatted amount or range ("$120K–$150K"), or the post's own text. */
   amount: string;
   /** null when `amount` is the post's own text (it carries its own period). */
-  period: 'year' | 'month' | 'day' | 'hour' | null;
+  period: 'year' | 'month' | 'week' | 'day' | 'hour' | null;
 }
 
 function money(locale: string, currency: string, value: number, period: string): string {
@@ -167,11 +191,12 @@ export function payText(
   return { amount, period: pay.period };
 }
 
-/** "3 Oct 2026" in the UI locale; null for a missing or broken date. */
+/** "3 Oct 2026" in the UI locale; null for a missing or broken date. A bare yyyy-mm-dd is that calendar day in every time zone. */
 export function shortDate(iso: string | null | undefined, locale: string): string | null {
   if (!validDate(iso)) return null;
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(iso);
   try {
-    return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso));
+    return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric', ...(dateOnly ? { timeZone: 'UTC' } : {}) }).format(new Date(iso));
   } catch {
     return null;
   }

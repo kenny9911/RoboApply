@@ -27,6 +27,7 @@ import { createAccountRouter, createAuthRouter } from './auth/routes.js';
 import { createAuthCnAdminRouter, createPhoneAuthRouter, createWechatAuthRouter } from './auth-cn/routes.js';
 import { createComplianceAdminRouter, createComplianceRouter, createLegalPublicRouter } from './compliance/routes.js';
 import { createOnboardingRouter } from './onboarding/routes.js';
+import { createOnboardingCnRouter } from './onboarding-cn/routes.js';
 import { createProfileRouter } from './profile/routes.js';
 import { createSearchProfilesRouter, createTaxonomyRouter } from './search/routes.js';
 import { createFeedRouter } from './feed/routes.js';
@@ -128,6 +129,8 @@ export const FEATURE_MOUNTS: readonly FeatureMount[] = [
   { id: 'compliance.legal', area: 'compliance', path: pub('/legal'), kind: 'public', owner: 'WP-13', build: createLegalPublicRouter },
   { id: 'compliance.admin', area: 'compliance', path: a('/compliance'), kind: 'admin', owner: 'WP-13', build: createComplianceAdminRouter },
 
+  // GoApply G1–G7 data (schools, provinces, market snapshot, defaults); mounted at the Wave 3 gate (WP-31 request).
+  { id: 'onboarding-cn', area: 'onboarding-cn', path: s('/onboarding/cn'), kind: 'seeker', owner: 'WP-31', build: createOnboardingCnRouter },
   { id: 'onboarding', area: 'onboarding', path: s('/onboarding'), kind: 'seeker', owner: 'WP-30', build: createOnboardingRouter },
   { id: 'profile', area: 'profile', path: s('/profile'), kind: 'seeker', owner: 'WP-19', build: createProfileRouter },
   { id: 'search.profiles', area: 'search', path: s('/search-profiles'), kind: 'seeker', owner: 'WP-20', build: createSearchProfilesRouter },

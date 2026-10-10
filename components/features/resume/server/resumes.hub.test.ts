@@ -324,22 +324,28 @@ describe('resume hub routes (WP-36b)', () => {
   });
 
   describe('AI provenance (SR-36b-1)', () => {
-    it('accepts aiAssisted on PATCH and stores nothing until the column exists', async () => {
+    // SCHEMA-3 added RAResumeVariant.aiAssistedAt (SR-36b-1), so the adapter now stores it.
+    it('SR-36b-1: PATCH { aiAssisted: true } stamps RAResumeVariant.aiAssistedAt once', async () => {
       const v = variant();
       const res = await json(`/${v.id}`, { method: 'PATCH', body: JSON.stringify({ resumeMarkdown: MD, aiAssisted: true }) });
       expect(res.status).toBe(200);
-      expect('aiAssistedAt' in mocks.db.variants[0]!).toBe(false);
-      expect(res.body.resume.aiAssisted).toBe(false);
+      const first = mocks.db.variants[0]!.aiAssistedAt;
+      expect(first).toBeInstanceOf(Date);
+      expect(res.body.resume.aiAssisted).toBe(true);
+      const again = await json(`/${v.id}`, { method: 'PATCH', body: JSON.stringify({ resumeMarkdown: MD, aiAssisted: true }) });
+      expect(again.status).toBe(200);
+      expect(mocks.db.variants[0]!.aiAssistedAt).toBe(first);
     });
 
-    it.todo('SR-36b-1: PATCH { aiAssisted: true } stamps RAResumeVariant.aiAssistedAt once, and the export then carries the AI marks');
+    it.todo('SR-36b-1: after an aiAssisted PATCH the export carries the AI marks (PDF Info / XMP / DOCX properties)');
 
     it.each(['roboapply', 'goapply'] as const)(
       '%s: a tailored copy made without AI is stored as a plain copy and exports with no AI marks and no label log',
       async (brand) => {
         mocks.brand = brand;
         process.env.CN_AI_EXPORT_EXPLICIT_LABEL = 'on';
-        mocks.db.jobs.push({ id: 'job1', title: 'Engineer', companyName: 'Acme' });
+        // The user's own import in the brand's market (readable in every GoApply recruitment-info mode).
+        mocks.db.jobs.push({ id: 'job1', title: 'Engineer', companyName: 'Acme', market: brand === 'goapply' ? 'cn' : 'intl', visibility: 'private', ownerUserId: 'user1', sourceBoard: 'user_import', provider: 'user_import' });
         const baseRow = variant({ isPrimary: true });
         // resumeAiAvailable() is false in this suite (no AI consent), so the
         // tailor agent never runs and the copy is the base resume.

@@ -130,7 +130,7 @@ export const MORE_LABEL_KEY: Record<BrandId, string> = { roboapply: 'more', goap
  */
 export const SURFACES_READY = {
   assistant: false,
-  jobDetail: false,
+  jobDetail: true, // WP-34 shipped /jobs/[id]; flipped at the Wave 3 gate (WP-34 / WP-35 request)
 } as const;
 
 /** The dev override: show entries whose page is not ready yet. Never set in production. */

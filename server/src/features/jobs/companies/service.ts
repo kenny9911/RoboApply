@@ -206,6 +206,13 @@ export function escapeLike(s: string): string {
 export interface CompanyReadViewer {
   /** True when there is no session: only `publicDisplay` jobs are listed or counted. */
   publicOnly: boolean;
+  /**
+   * Extra Prisma `where` fragment ANDed into the job list and the open-job
+   * count. The router passes `cnPostingsWhere(viewerId)` on GoApply, so in
+   * recruitment-info mode `off` no third-party posting is listed or counted
+   * (R-14; WP-41 R41-1, applied at the Wave 3 gate).
+   */
+  restrict?: Record<string, unknown>;
 }
 
 /** Public, live, canonical, this market (TASK_PLAN §2.2 count rule); `publicOnly` adds publicDisplay (OPS-A4). */
@@ -217,6 +224,7 @@ export function liveJobWhere(market: Market, companyId: string, viewer: CompanyR
     isCanonical: true,
     archivedAt: null,
     ...(viewer.publicOnly ? { publicDisplay: true } : {}),
+    ...(viewer.restrict ? { AND: [viewer.restrict] } : {}),
   };
 }
 

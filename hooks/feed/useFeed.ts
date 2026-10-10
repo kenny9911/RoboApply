@@ -11,15 +11,17 @@
 //   • fit scores come in the batch (`FeedItem.fit`); there is no per-card
 //     score request;
 //   • pages append; a job that appears twice across pages is shown once;
-//   • a refresh with no cursor is rate-limited by the server
-//     (`feed_refresh_limited`): the list is not refetched on focus or by job
-//     actions (see keys.ts).
+//   • a refresh with no cursor is rate-limited by the server (429
+//     `rate_limited`, `details.reason: feed_refresh_limited`): the list is not
+//     refetched on focus or by job actions (see keys.ts);
+//   • a next page whose server session expired (409 `conflict`,
+//     `details.reason: feed_session_expired`) restarts the list from page 1.
 
-import { useMemo } from 'react';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useEffect, useMemo } from 'react';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 
 import { queryFeed } from '../../lib/api/feed';
-import { apiErrorCode } from '../../lib/api/contracts/wire';
+import { apiErrorReason } from '../../lib/api/contracts/wire';
 import type { FeedItem, FeedQueryResponse, FeedSort } from '../../lib/api/contracts/feed';
 import { feedKeys, type FeedFitView } from './keys';
 
@@ -78,8 +80,10 @@ function stableKey(value: unknown): string {
 export function useFeed(params: UseFeedParams): FeedListState {
   const { searchProfileId, version, sort, fitTier, overrides } = params;
   const overridesKey = stableKey(overrides);
+  const queryClient = useQueryClient();
+  const queryKey = feedKeys.list({ searchProfileId, version, sort, fitTier, overridesKey });
   const query = useInfiniteQuery({
-    queryKey: feedKeys.list({ searchProfileId, version, sort, fitTier, overridesKey }),
+    queryKey,
     queryFn: ({ pageParam, signal }) =>
       queryFeed(
         {
@@ -100,6 +104,14 @@ export function useFeed(params: UseFeedParams): FeedListState {
     retry: false,
   });
 
+  const reason = apiErrorReason(query.error);
+  const sessionExpired = query.isFetchNextPageError && reason === 'feed_session_expired';
+  const queryKeyHash = JSON.stringify(queryKey);
+  useEffect(() => {
+    // The server session behind the cursor is gone (30 min): start again from page 1.
+    if (sessionExpired) void queryClient.resetQueries({ queryKey: JSON.parse(queryKeyHash) as readonly unknown[], exact: true });
+  }, [sessionExpired, queryClient, queryKeyHash]);
+
   const pages = query.data?.pages;
   const items = useMemo(() => flattenFeedPages(pages), [pages]);
   const first = pages?.[0];
@@ -113,7 +125,7 @@ export function useFeed(params: UseFeedParams): FeedListState {
     isPending: query.isPending,
     isError: query.isError,
     error: query.error,
-    refreshLimited: apiErrorCode(query.error) === 'feed_refresh_limited',
+    refreshLimited: reason === 'feed_refresh_limited',
     isFetchingNextPage: query.isFetchingNextPage,
     hasNextPage: !!query.hasNextPage,
     fetchNextPage: () => {

@@ -8,3 +8,6 @@ export type { MarketCardMeta, MarketJobMetaProps, MarketJobMetaSlotProps } from 
 export { LegalFooter, type LegalFooterProps } from './LegalFooter';
 export { AiGeneratedBadge, type AiGeneratedBadgeProps } from './AiGeneratedBadge';
 export { PriceReference, type PriceReferenceProps } from './PriceReference';
+// Taiwan pieces other areas place (WP-42; re-exported at the Wave 3 gate):
+// the 面議 note beside pay filters / job pages, and the TW card-meta reader.
+export { NegotiablePayNote, TW_PAY_LAW_URL, type NegotiablePayNoteProps, CareerSourcesPanel, readTwMeta } from './tw';

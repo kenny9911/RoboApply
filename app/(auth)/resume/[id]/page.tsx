@@ -40,6 +40,7 @@
 // a negative-margin wrapper that spans the viewport width of the main column.
 
 import {
+  Suspense,
   use,
   useCallback,
   useEffect,
@@ -59,6 +60,7 @@ import {
   usePatchResumeLayoutMutation,
 } from '../../../../hooks/useResumes';
 import { LayoutPanel, layoutPatch, resolveLayout } from '../../../../components/features/resume';
+import { TailorLaunchHost } from '../../../../components/features/tailor';
 import { DeleteResumeConfirm } from '../../../../components/resumes/DeleteResumeConfirm';
 import layoutStyles from '../../../../components/features/resume/ResumeHub.module.css';
 import {
@@ -500,6 +502,10 @@ export default function ResumeEditorPage({
     // Break out of .main-inner padding so the split pane is full-bleed like the
     // prototype. The (auth) main column is the positioning context.
     <div style={{ margin: '-28px -32px -80px' }}>
+      {/* Runs the tailor flow for this resume from `?tailor=<jobId>` (WP-36a; mounted at the Wave 3 gate). */}
+      <Suspense fallback={null}>
+        <TailorLaunchHost resumeId={id} />
+      </Suspense>
       <div className="rb-editor">
         <EditorToolbar
           name={resumeName}

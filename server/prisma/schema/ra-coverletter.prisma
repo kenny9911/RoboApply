@@ -12,16 +12,26 @@ model RACoverLetter {
   resumeVariantId String
   resumeVariant   RAResumeVariant @relation(fields: [resumeVariantId], references: [id], onDelete: Cascade)
   title           String
-  /// 'professional' | 'warm' | 'direct' | 'enthusiastic'
+  /// Written by the clone: 'plain' | 'warm' | 'formal' (WP-37; the service
+  /// always sets it). Legacy values 'professional' | 'direct' | 'enthusiastic'
+  /// and the old default stay readable; SR-37-2 asks for default "plain"
+  /// (an ALTER of the existing default, so it waits for the owner).
   tone            String          @default("professional")
-  /// 'short' | 'medium' | 'long'
+  /// Written by the clone: 'short' | 'standard' (WP-37). Legacy 'medium' |
+  /// 'long' and the old default stay readable; SR-37-2 asks for default
+  /// "standard" (owner decision, as for tone).
   length          String          @default("medium")
   locale          String
   bodyMarkdown    String          @db.Text
   /// `[{ body, reason, createdAt }]`, max 20.
   versions        Json            @default("[]")
-  /// `[{ sentenceIdx, source: 'resume'|'posting', ref }]`
+  /// `[{ sentenceIdx, source: 'resume'|'posting'|'user', ref }]` ('user' = a
+  /// sentence the user wrote, WP-37)
   citations       Json            @default("[]")
+  /// The pasted job post a letter was written from, `{ title, company, text }`,
+  /// so rewrite and regenerate can read it again. Null for letters written from
+  /// a job id (the post is re-read from RAJob) and for older rows (SCHEMA-3, SR-37-1).
+  postingSnapshot Json?
   model           String?
   creditLedgerId  String?
   createdAt       DateTime        @default(now())

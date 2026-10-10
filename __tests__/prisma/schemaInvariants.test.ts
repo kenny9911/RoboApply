@@ -112,6 +112,7 @@ const PLACEMENT: Record<string, string> = {
   RAUserUiState: 'ra-notify.prisma',
   RAEmailLog: 'ra-notify.prisma',
   RAAnonAlertSubscription: 'ra-notify.prisma',
+  RAUnsubscribeFeedback: 'ra-notify.prisma', // SCHEMA-3 (SR-39b-1)
   // ra-growth
   RAReferralCode: 'ra-growth.prisma',
   RAReferral: 'ra-growth.prisma',
@@ -130,6 +131,8 @@ const PLACEMENT: Record<string, string> = {
   RAPhoneOtp: 'ra-cn.prisma',
   RACampusEvent: 'ra-cn.prisma',
   RACampusSubscription: 'ra-cn.prisma',
+  RACnEmployerBlacklist: 'ra-cn.prisma', // SCHEMA-3 (SR-41-1)
+  RACnFraudReview: 'ra-cn.prisma', // SCHEMA-3 (SR-41-2)
   // ra-compliance (R-17)
   RAAiContentLabelLog: 'ra-compliance.prisma',
   RAContentSafetyEvent: 'ra-compliance.prisma',
@@ -235,6 +238,7 @@ const SCOPE: Record<string, Scope> = {
   RAUserUiState: 'user',
   RAEmailLog: 'brand',
   RAAnonAlertSubscription: 'brand',
+  RAUnsubscribeFeedback: 'brand', // SCHEMA-3 (SR-39b-1)
   RAReferralCode: 'brand',
   RAReferral: 'brand',
   RAAttribution: 'user',
@@ -249,6 +253,8 @@ const SCOPE: Record<string, Scope> = {
   RAPhoneOtp: 'brand',
   RACampusEvent: 'brand',
   RACampusSubscription: 'user',
+  RACnEmployerBlacklist: 'brand', // SCHEMA-3 (SR-41-1): market
+  RACnFraudReview: 'global', // SCHEMA-3 (SR-41-2): child of RAJob (brand)
   RAAiContentLabelLog: 'brand',
   RAContentSafetyEvent: 'brand',
   RAPersonalInfoRequest: 'brand',

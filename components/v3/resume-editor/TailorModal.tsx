@@ -360,8 +360,7 @@ export function TailorModal({ resumeId, resumeName, onClose, onCreated }: Props)
                   <div className="rb-tailor-score-shift">
                     <div className="rb-tailor-score-before">
                       <span className="rb-tailor-score-num">
-                        {diff.estimated ? '~' : ''}
-                        {diff.matchBefore}
+                        {diff.matchBefore == null ? '—' : `${diff.estimated ? '~' : ''}${diff.matchBefore}`}
                       </span>
                       <span className="rb-tailor-score-lbl">
                         {t('tailor.before')}
@@ -370,8 +369,7 @@ export function TailorModal({ resumeId, resumeName, onClose, onCreated }: Props)
                     <div className="rb-tailor-arrow">→</div>
                     <div className="rb-tailor-score-after">
                       <span className="rb-tailor-score-num">
-                        {diff.estimated ? '~' : ''}
-                        {diff.matchAfter}
+                        {diff.matchAfter == null ? '—' : `${diff.estimated ? '~' : ''}${diff.matchAfter}`}
                       </span>
                       <span className="rb-tailor-score-lbl">
                         {t('tailor.after')}

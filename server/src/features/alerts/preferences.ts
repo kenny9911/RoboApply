@@ -9,10 +9,13 @@
 //     the UK, Switzerland and Canada (ePrivacy, CASL, PRC Advertising Law
 //     Art. 43), OFF when we do not know the country, ON elsewhere.
 //   - Alerts, digests and reminders follow the per-category channel choice
-//     WP-39b stores in `SeekerProfile.notificationPreferences`
-//     (`channels: { alert: ['email', …], reminder: [...] }`), plus the legacy
-//     keys (`matchAlerts`, `applicationUpdates`) and a one-click unsubscribe
-//     record (`unsubscribed: { <list>: <iso> }`) when present.
+//     and quiet hours the Settings page (WP-39b) stores under
+//     `SeekerProfile.notificationPreferences.center` (`channels`, `quietHours`,
+//     `unsubscribed`, `regionCountry`). Those win over the same keys at the
+//     root (the earlier shape), which are still read, as are the legacy keys
+//     (`matchAlerts`, `applicationUpdates`). An unsubscribe in either place
+//     counts. The tips regional default uses `center.regionCountry` before the
+//     billing country and market, so Settings and the gates agree.
 //   - Product news needs the `marketing_email` opt-in.
 //
 // `createEmailPreferenceGate()` turns this into the platform email gate
@@ -55,6 +58,8 @@ export interface StoredNotificationPrefs {
   quietHours?: QuietHours;
   /** One-click unsubscribes by list (`alerts`, `digest`, `reminders`, `tips`, `marketing`) → ISO time. */
   unsubscribed?: Partial<Record<string, string>>;
+  /** The country WP-39b resolved the tips regional default for (`center.regionCountry`). */
+  regionCountry?: string;
   /** Legacy shape (pre-clone): `{ matchAlerts, applicationUpdates, weeklyDigest }`. */
   matchAlerts?: boolean;
   applicationUpdates?: boolean;
@@ -65,25 +70,45 @@ function isObj(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === 'object' && !Array.isArray(v);
 }
 
-/** Lenient read of the stored JSON: unknown keys and malformed values are ignored. */
+function readChannels(src: unknown): Record<string, PrefChannel[]> | undefined {
+  if (!isObj(src)) return undefined;
+  const channels: Record<string, PrefChannel[]> = {};
+  for (const [k, v] of Object.entries(src)) {
+    if (Array.isArray(v)) channels[k] = v.filter((c): c is PrefChannel => c === 'email' || c === 'in_app' || c === 'push' || c === 'wechat');
+  }
+  return channels;
+}
+
+function readQuietHours(src: unknown): QuietHours | undefined {
+  return isObj(src) && typeof src.start === 'string' && typeof src.end === 'string' ? normalizeQuietHours({ start: src.start, end: src.end }) : undefined;
+}
+
+function readUnsubscribed(src: unknown): Record<string, string> | undefined {
+  if (!isObj(src)) return undefined;
+  const u: Record<string, string> = {};
+  for (const [k, v] of Object.entries(src)) if (typeof v === 'string' || v === true) u[k] = String(v);
+  return u;
+}
+
+/**
+ * Lenient read of the stored JSON: unknown keys and malformed values are
+ * ignored. `center` (WP-39b Settings) is overlaid on the root keys: its
+ * channel choice per category and its quiet hours win; unsubscribes from
+ * both places count.
+ */
 export function parseStoredPrefs(raw: unknown): StoredNotificationPrefs {
   if (!isObj(raw)) return {};
   const out: StoredNotificationPrefs = {};
-  if (isObj(raw.channels)) {
-    const channels: Record<string, PrefChannel[]> = {};
-    for (const [k, v] of Object.entries(raw.channels)) {
-      if (Array.isArray(v)) channels[k] = v.filter((c): c is PrefChannel => c === 'email' || c === 'in_app' || c === 'push' || c === 'wechat');
-    }
-    out.channels = channels;
-  }
-  if (isObj(raw.quietHours) && typeof raw.quietHours.start === 'string' && typeof raw.quietHours.end === 'string') {
-    out.quietHours = normalizeQuietHours({ start: raw.quietHours.start, end: raw.quietHours.end });
-  }
-  if (isObj(raw.unsubscribed)) {
-    const u: Record<string, string> = {};
-    for (const [k, v] of Object.entries(raw.unsubscribed)) if (typeof v === 'string' || v === true) u[k] = String(v);
-    out.unsubscribed = u;
-  }
+  const center = isObj(raw.center) ? raw.center : {};
+  const rootChannels = readChannels(raw.channels);
+  const centerChannels = readChannels(center.channels);
+  if (rootChannels || centerChannels) out.channels = { ...(rootChannels ?? {}), ...(centerChannels ?? {}) };
+  const quiet = readQuietHours(center.quietHours) ?? readQuietHours(raw.quietHours);
+  if (quiet) out.quietHours = quiet;
+  const rootUnsub = readUnsubscribed(raw.unsubscribed);
+  const centerUnsub = readUnsubscribed(center.unsubscribed);
+  if (rootUnsub || centerUnsub) out.unsubscribed = { ...(rootUnsub ?? {}), ...(centerUnsub ?? {}) };
+  if (typeof center.regionCountry === 'string' && /^[A-Za-z]{2}$/.test(center.regionCountry.trim())) out.regionCountry = center.regionCountry.trim().toUpperCase();
   for (const k of ['matchAlerts', 'applicationUpdates', 'weeklyDigest'] as const) {
     if (typeof raw[k] === 'boolean') out[k] = raw[k] as boolean;
   }
@@ -163,6 +188,25 @@ async function countryCode(...values: Array<string | null | undefined>): Promise
   return null;
 }
 
+/**
+ * The country the tips regional default is resolved for, in the order the
+ * Settings page (WP-39b `resolveCountry`) uses — the person's own country, an
+ * EU market, the region Settings recorded — then the billing country and the
+ * market as a last resort. Null when unknown (tips stay off).
+ */
+export async function preferenceCountry(input: {
+  profileCountry?: string | null;
+  market?: string | null;
+  regionCountry?: string | null;
+  billingCountry?: string | null;
+}): Promise<string | null> {
+  const own = await countryCode(input.profileCountry);
+  if (own) return own;
+  if (input.market === 'eu') return 'EU';
+  if (input.regionCountry) return input.regionCountry;
+  return (await countryCode(input.billingCountry)) ?? (input.market ? MARKET_COUNTRY[input.market] ?? null : null);
+}
+
 /** False for a deactivated account or a soft-deleted seeker profile (no non-transactional message goes there). */
 export function isLiveAccount<T extends { isActive: boolean; seekerProfile?: { deletedAt: Date | null } | null }>(user: T | null | undefined): user is T {
   if (!user || user.isActive === false) return false;
@@ -211,9 +255,13 @@ export function createPrismaPreferencesRepo(): PreferencesRepo {
           if (r.consentType === 'marketing_email' && marketingGranted === null) marketingGranted = r.granted;
         }
       }
-      const marketCountry = sp?.market ? MARKET_COUNTRY[sp.market] ?? null : null;
-      const country = (await countryCode(user.raProfile?.country, sp?.subscription?.billingCountry)) ?? marketCountry;
       const prefs = parseStoredPrefs(sp?.notificationPreferences);
+      const country = await preferenceCountry({
+        profileCountry: user.raProfile?.country,
+        market: sp?.market,
+        regionCountry: prefs.regionCountry,
+        billingCountry: sp?.subscription?.billingCountry,
+      });
       return {
         userId,
         brand,
@@ -257,10 +305,40 @@ export function createEmailPreferenceGate(repo: PreferencesRepo = createPrismaPr
 
 let installed = false;
 
-/** Install the gate once per process (idempotent). Called by the email worker and the crons on import. */
+/**
+ * The message center's gate (WP-39b, `notificationEmailPreferenceGate`): it
+ * reads the settings people edit (`notificationPreferences.center`), the
+ * brand's channel capabilities (`jobs.alerts`) and logged-out subscription
+ * status. Loaded lazily so this module never imports the notifications area
+ * at load time. Fails closed.
+ */
+const messageCenterGate: EmailPreferenceGate = async (input) => {
+  try {
+    const { notificationEmailPreferenceGate } = await import('../notifications/index.js');
+    return await notificationEmailPreferenceGate(input);
+  } catch (err) {
+    logger.warn('NOTIFY', 'message-center email gate failed; not sending', { error: err instanceof Error ? err.message : String(err) });
+    return false;
+  }
+};
+
+/** Both gates must allow the email (each fails closed). */
+export function allGates(...gates: EmailPreferenceGate[]): EmailPreferenceGate {
+  return async (input) => {
+    for (const gate of gates) if (!(await gate(input))) return false;
+    return true;
+  };
+}
+
+/**
+ * Install the gate once per process (idempotent). Called by the email worker and the crons on import.
+ * Production (no `repo`): this area's gate AND the message center's (Wave 3 gate integration of
+ * WP-39a with WP-39b, whose settings live under `notificationPreferences.center`). Tests that pass a
+ * `repo` get this area's gate alone.
+ */
 export function installEmailPreferenceGate(repo?: PreferencesRepo): void {
   if (installed && !repo) return;
-  setEmailPreferenceGate(createEmailPreferenceGate(repo));
+  setEmailPreferenceGate(repo ? createEmailPreferenceGate(repo) : allGates(createEmailPreferenceGate(), messageCenterGate));
   installed = true;
   logger.debug('NOTIFY', 'email preference gate installed');
 }

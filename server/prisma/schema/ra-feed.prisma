@@ -52,11 +52,18 @@ model RAFeedSession {
   sort            String
   queryHash       String
   jobIds          String[]
-  /// `[{ jobId, fit, kind: 'pre'|'ai', rank }]`
+  /// `[{ jobId, fit, kind: 'pre'|'ai', rank }]`. Until the feed reads
+  /// `windowEndsId` (SR-32-4) the feed repo may store the envelope
+  /// `{ entries: [...], windowEndsId }` here instead of the bare array; readers
+  /// accept both (features/feed/repo.ts packRanks/unpackRanks).
   ranks           Json
   totalEstimate   Int
   /// Older boundary of the retrieval window (for the next refill).
   windowEndsAt    DateTime
+  /// Keyset id paired with windowEndsAt: refills read `(postedAt, id) <
+  /// (windowEndsAt, windowEndsId)` to match `ORDER BY postedAt DESC, id DESC`
+  /// (SCHEMA-3, SR-32-4). Null = a short window (strict postedAt < windowEndsAt).
+  windowEndsId    String?
   createdAt       DateTime @default(now())
   expiresAt       DateTime
 

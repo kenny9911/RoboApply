@@ -81,7 +81,6 @@ const BASE_ROUTE_SAMPLES: Record<string, RouteSample> = {
   'feed POST /rating': { body: { score: 7, reasons: ['wrong_level'] } },
   'feed POST /nl-query': { body: { text: 'remote data jobs' } },
   // jobs
-  'jobs.import POST /': { body: { url: 'https://boards.example.test/jobs/1' } },
   'jobs.companies GET /': { query: { q: 'ac' } },
   'jobs.careerSources.admin POST /': { body: { ats: 'greenhouse', boardToken: 'acme', companyName: 'Acme', countryCode: 'TW' } },
   'match POST /competitiveness': { body: { searchProfileId: 'sp_1' } },

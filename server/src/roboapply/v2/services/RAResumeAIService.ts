@@ -47,6 +47,7 @@ import {
 import { RAResumeTailorAgent } from '../agents/RAResumeTailorAgent.js';
 import { RAJobMatchScorerAgent } from '../agents/RAJobMatchScorerAgent.js';
 import { getResumeAIMessages, format } from '../lib/raResumeAIMessages.js';
+import { loadLegacyVisibleJob } from '../lib/legacyJobScope.js';
 import { mergeTailored, resumeAiAvailable, resumeForLlm, TAILOR_SECTIONS } from '../../../features/resume/index.js';
 
 // ─── Public wire types (mirror lib/api/v2/types.ts) ───────────────────────
@@ -613,10 +614,9 @@ export class RAResumeAIService {
     return row;
   }
 
-  /** Resolve job context for tailor / rewrite bias. */
-  private async loadJob(jobId: string): Promise<any | null> {
-    const p = prisma as any;
-    return p.rAJob.findUnique({ where: { id: jobId } });
+  /** Resolve job context for tailor / rewrite bias: only a job this user may read (market, own import, R-14 mode). */
+  private async loadJob(userId: string, jobId: string): Promise<any | null> {
+    return loadLegacyVisibleJob(userId, jobId);
   }
 
   // ── rewrite ──
@@ -636,7 +636,7 @@ export class RAResumeAIService {
     // Optional job context to bias the rewrite.
     let jobContext: { title?: string; description?: string } | undefined;
     if (body.targetJobId) {
-      const job = await this.loadJob(body.targetJobId);
+      const job = await this.loadJob(userId, body.targetJobId);
       if (job) jobContext = { title: job.title, description: job.descriptionPlain ?? job.description ?? '' };
     }
 
@@ -793,7 +793,7 @@ export class RAResumeAIService {
     let cachedBase: number | null = null;
 
     if (body.targetJobId) {
-      const job = await this.loadJob(body.targetJobId);
+      const job = await this.loadJob(userId, body.targetJobId);
       if (job) {
         jobId = job.id;
         companyName = job.companyName ?? companyName;

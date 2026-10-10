@@ -55,6 +55,7 @@ function createDefault(): JobDetailServiceImpl {
     },
     practicedForJob: async () => null,
     markChecklistStep: async (userId, step) => (await import('../../growth/index.js')).markChecklistStep(userId, step),
+    recordInteraction: async (userId, jobId, kind) => (await import('../../feed/index.js')).feedService.recordInteraction(userId, jobId, kind),
     isEnabled: detailFlag,
     hiringContacts: async (userId) => hiringContactsMode(getCurrentBrandOrDefault(), process.env, await loadUserFlagOverrides(userId)),
     marketMeta: (row: JobRow, brand) => cardMeta({ ...row, market: brand.market }, { brand: brand.id, market: brand.market, stage: 'card' }),

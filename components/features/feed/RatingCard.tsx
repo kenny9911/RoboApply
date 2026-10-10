@@ -15,7 +15,7 @@ import { useTranslations } from 'next-intl';
 import { Btn, toast } from '../../v3/primitives';
 import { FiltersDrawer, type DrawerSection } from '../filters';
 import { rateFeed } from '../../../lib/api/feed';
-import { apiErrorCode } from '../../../lib/api/contracts/wire';
+import { apiErrorReason } from '../../../lib/api/contracts/wire';
 import { track } from '../../../lib/analytics';
 import type { FilterSetPatch } from '../../../lib/api/contracts/search';
 import { useProposalApply } from './useProposalApply';
@@ -88,7 +88,7 @@ export function RatingCard({ sessionId, onClose, onRated }: RatingCardProps) {
       toast({ message: t('thanks'), tone: 'ok' });
       onRated(proposal.profile ? ratingFixes(sent, proposal.profile.filters ?? {}) : []);
     } catch (err) {
-      if (apiErrorCode(err) === 'feed_rating_already_today') {
+      if (apiErrorReason(err) === 'feed_rating_already_today') {
         toast({ message: t('already'), tone: 'info' });
         onClose();
       } else {

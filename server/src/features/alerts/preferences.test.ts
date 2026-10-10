@@ -8,12 +8,15 @@ import {
   categoryAllowed,
   channelAllowed,
   createEmailPreferenceGate,
+  createPrismaPreferencesRepo,
   parseStoredPrefs,
   tipsEnabled,
   tipsRemindersDefault,
   type PreferenceFacts,
 } from './preferences.js';
 import { getBrand } from '../../platform/brand/registry.js';
+import { inQuietHours, normalizeQuietHours } from './time.js';
+import { tipsRemindersDefault as centerTipsDefault } from '../notifications/contract.js';
 
 const facts = (over: Partial<PreferenceFacts> = {}): PreferenceFacts => ({
   userId: 'u1',
@@ -120,5 +123,72 @@ describe('the platform email preference gate', () => {
     expect(await gateFor(null)(input('alerts', null))).toBe(true);
     expect(await gateFor(null)(input('tips', null))).toBe(false);
     expect(await gateFor(null)(input('alerts'))).toBe(false);
+  });
+});
+
+describe('Settings (WP-39b `notificationPreferences.center`) drive the senders', () => {
+  /** A prisma double for `createPrismaPreferencesRepo().load` (the module mock above is `{}`). */
+  async function loadWith(notificationPreferences: unknown, over: { raCountry?: string | null; market?: string | null; billingCountry?: string | null } = {}) {
+    const prisma = (await import('../../lib/prisma.js')).default as unknown as Record<string, unknown>;
+    prisma.user = {
+      findUnique: async () => ({
+        brand: 'roboapply',
+        isActive: true,
+        seekerProfile: {
+          id: 'sp1',
+          deletedAt: null,
+          notificationPreferences,
+          timezone: 'America/New_York',
+          market: over.market ?? null,
+          weeklyNudgeOptOut: false,
+          subscription: over.billingCountry ? { billingCountry: over.billingCountry } : null,
+        },
+        raProfile: { country: over.raCountry ?? null },
+      }),
+    };
+    prisma.seekerConsentRecord = { findMany: async () => [] };
+    return (await createPrismaPreferencesRepo().load('u1'))!;
+  }
+
+  it('center channels, quiet hours and unsubscribes win over the root keys (unsubscribes from both count)', () => {
+    const p = parseStoredPrefs({
+      channels: { alert: ['email', 'in_app'], reminder: ['email'] },
+      quietHours: { start: '20:00', end: '09:00' },
+      unsubscribed: { tips: '2026-09-01T00:00:00Z' },
+      center: {
+        v: 1,
+        channels: { alert: ['in_app', 'push'] },
+        quietHours: { start: '23:00', end: '07:00' },
+        unsubscribed: { digest: '2026-10-01T00:00:00Z' },
+        regionCountry: 'us',
+      },
+    });
+    expect(p.channels).toEqual({ alert: ['in_app', 'push'], reminder: ['email'] });
+    expect(p.quietHours).toEqual({ start: '23:00', end: '07:00' });
+    expect(p.unsubscribed).toEqual({ tips: '2026-09-01T00:00:00Z', digest: '2026-10-01T00:00:00Z' });
+    expect(p.regionCountry).toBe('US');
+    expect(channelAllowed(p, 'alert', 'email')).toBe(false);
+    expect(channelAllowed(p, 'alert', 'push')).toBe(true);
+  });
+
+  it('quiet hours set in Settings (23:00–07:00) defer at 23:30 local, not at 22:30 (the 21:00 default would)', async () => {
+    const f = await loadWith({ center: { v: 1, quietHours: { start: '23:00', end: '07:00' } } });
+    expect(f.quietHours).toEqual({ start: '23:00', end: '07:00' });
+    // America/New_York is UTC-4 in October.
+    expect(inQuietHours(new Date('2026-10-11T02:30:00Z'), f.timeZone, f.quietHours)).toBe(false); // 22:30 local
+    expect(inQuietHours(new Date('2026-10-11T03:30:00Z'), f.timeZone, f.quietHours)).toBe(true); // 23:30 local
+    expect(inQuietHours(new Date('2026-10-11T02:30:00Z'), f.timeZone, normalizeQuietHours(undefined))).toBe(true);
+  });
+
+  it('a US regionCountry gives "Tips and reminders" ON in both areas; a DE one OFF in both, whatever the UI-language market', async () => {
+    const us = await loadWith({ center: { v: 1, regionCountry: 'US' } });
+    expect(us.country).toBe('US');
+    expect(tipsEnabled(us)).toBe(true);
+    expect(centerTipsDefault({ market: 'intl', country: 'US' })).toBe(true);
+
+    const de = await loadWith({ center: { v: 1, regionCountry: 'DE' } }, { market: 'us' });
+    expect(de.country).toBe('DE');
+    expect(tipsEnabled(de)).toBe(false);
+    expect(centerTipsDefault({ market: 'intl', country: 'DE' })).toBe(false);
   });
 });

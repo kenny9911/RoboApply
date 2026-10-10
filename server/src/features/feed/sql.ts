@@ -265,7 +265,14 @@ export function predicateFor(field: FilterField, filters: FilterSet, scope: Pick
       if (intl || !f.employmentType?.length) return null;
       const parts: Prisma.Sql[] = [];
       if (f.employmentType.includes('internship')) parts.push(Prisma.sql`j."employmentType" = 'internship'`);
-      if (f.employmentType.includes('campus')) parts.push(hasTagIn(['cn_hire:campus']));
+      if (f.employmentType.includes('campus')) {
+        // 校招: stated as such, or (until a producer writes `cn_hire:` tags) a non-internship
+        // posting with no 校招/社招 statement that names a 届别 — a stated class year is
+        // evidence of a campus posting (same leniency as classYear above).
+        parts.push(
+          Prisma.sql`(${hasTagIn(['cn_hire:campus'])} OR (j."employmentType" IS DISTINCT FROM 'internship' AND NOT ${hasTagPrefix('cn_hire:')} AND ${hasTagPrefix('class_year:')}))`,
+        );
+      }
       if (f.employmentType.includes('social')) {
         // 社招: stated as such, or a non-internship posting with no 校招 statement.
         parts.push(Prisma.sql`(${hasTagIn(['cn_hire:social'])} OR (j."employmentType" IS DISTINCT FROM 'internship' AND NOT ${hasTagPrefix('cn_hire:')}))`);

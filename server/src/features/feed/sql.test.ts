@@ -105,6 +105,15 @@ describe('predicates (one snapshot per FilterSet field)', () => {
     expect(roleTaxonomyIds({ taxonomyIds: ['software_engineering'] }).length).toBeGreaterThan(3);
   });
 
+  it('校招 matches a stated cn_hire:campus tag, or a 届别-tagged non-internship posting with no cn_hire statement', () => {
+    const text = show(predicateFor('employmentType', { employmentType: ['campus'] }, cn))!.text;
+    const values = show(predicateFor('employmentType', { employmentType: ['campus'] }, cn))!.values;
+    expect(values).toContainEqual(['cn_hire:campus']);
+    expect(values).toContain('class_year:%');
+    expect(values).toContain('cn_hire:%');
+    expect(text).toContain(`j."employmentType" IS DISTINCT FROM 'internship' AND NOT EXISTS`);
+  });
+
   it('school tier is a user-side filter only (no ranking column is read)', () => {
     expect(show(predicateFor('schoolTiers', { schoolTiers: ['985'] }, cn))?.text).toContain("LIKE");
   });

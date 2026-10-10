@@ -18,6 +18,7 @@
 
 import prisma from '../../../lib/prisma.js';
 import { getCurrentBrandOrDefault } from '../../../platform/brand/brandContext.js';
+import { legacyJobListScope } from '../lib/legacyJobScope.js';
 
 /** Hard cap on rows one legacy search reads (the feed replaces this path; WP-32). */
 export const LEGACY_SEARCH_MAX_ROWS = 500;
@@ -170,6 +171,9 @@ export class RAJobIndexService {
       isCanonical: true,
       visibility: 'public',
     };
+    // GoApply recruitment-info mode (R-14): with mode off no third-party posting is listed.
+    const modeScope = legacyJobListScope(userId);
+    if (modeScope) where.AND = [modeScope];
     if (params.q && params.q.trim()) {
       const tokens = params.q
         .toLowerCase()

@@ -48,12 +48,21 @@ describe('feed index plan', () => {
     expect(declared.has(name)).toBe(true);
   });
 
-  it.todo('SR-32-1: RAJob @@index([market, isCanonical, archivedAt, firstSeenAt(sort: Desc)]) for new-count');
-  it.todo('SR-32-2: RAJob @@index([employerTags], type: Gin) for GoApply employer-tag / 户口 filters');
-  it.todo('SR-32-3: RAJob @@index([geoLat, geoLng]) for the radius bounding box');
+  it('SR-32-1: RAJob @@index([market, isCanonical, archivedAt, firstSeenAt(sort: Desc)]) for new-count', () => {
+    expect(PLANNED_FEED_INDEXES).toHaveProperty('RAJob_market_isCanonical_archivedAt_firstSeenAt_idx');
+    expect(declared.has('RAJob_market_isCanonical_archivedAt_firstSeenAt_idx')).toBe(true);
+  });
+  it('SR-32-2: RAJob @@index([employerTags], type: Gin) for GoApply employer-tag / 户口 filters', () => {
+    expect(PLANNED_FEED_INDEXES).toHaveProperty('RAJob_employerTags_idx');
+    expect(declared.has('RAJob_employerTags_idx')).toBe(true);
+  });
+  it('SR-32-3: RAJob @@index([geoLat, geoLng]) for the radius bounding box', () => {
+    expect(PLANNED_FEED_INDEXES).toHaveProperty('RAJob_geoLat_geoLng_idx');
+    expect(declared.has('RAJob_geoLat_geoLng_idx')).toBe(true);
+  });
 
-  it('requested indexes are not declared yet (move them to PLANNED once SCHEMA-3 lands)', () => {
-    for (const name of Object.keys(REQUESTED_FEED_INDEXES)) expect(declared.has(name)).toBe(false);
+  it('no feed index is still waiting on a schema request (SCHEMA-3 applied SR-32-1…3)', () => {
+    expect(REQUESTED_FEED_INDEXES).toEqual({});
   });
 
   it('finds index names anywhere in an EXPLAIN (FORMAT JSON) plan', () => {
@@ -70,7 +79,7 @@ describe('feed index plan', () => {
     expect(s.cnEmployerTags.text).toContain('j."employerTags" @>');
     expect(s.geo.text).toContain('j."geoLat" BETWEEN');
     for (const [index, statement] of Object.entries(REQUESTED_INDEX_STATEMENT)) {
-      expect(REQUESTED_FEED_INDEXES).toHaveProperty(index);
+      expect(PLANNED_FEED_INDEXES).toHaveProperty(index);
       expect(s).toHaveProperty(statement);
     }
   });
@@ -87,9 +96,10 @@ describe.skipIf(process.env.FEED_INDEX_PROOF !== '1')('index proof against the d
     expect(result.plans.retrieval.some((n) => n === 'RAJobUserState_pkey' || n === 'RAJobUserState_userId_hiddenAt_idx')).toBe(true);
     expect(result.plans.refill).toContain('RAJob_market_isCanonical_archivedAt_postedAt_idx');
     expect(result.plans.count.length).toBeGreaterThan(0);
-    // Requested indexes (SR-32-1…3): once SCHEMA-3 created one, its statement must use it.
+    // SCHEMA-3 indexes (SR-32-1…3): each statement must use its index.
+    expect(result.missingRequested).toEqual([]);
     for (const [index, statement] of Object.entries(REQUESTED_INDEX_STATEMENT)) {
-      if (!result.missingRequested.includes(index)) expect(result.plans[statement]).toContain(index);
+      expect(result.plans[statement]).toContain(index);
     }
   });
 });

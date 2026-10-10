@@ -152,7 +152,9 @@ export function useJobActions(jobId: string, options: JobActionsOptions = {}): J
       else if (res?.applyUrl) opener.open(res.applyUrl);
       else placeholder?.close();
     }
-    if (res) setLastApplied({ trackerEntryId: res.trackerEntryId, at: new Date().toISOString() });
+    // Undo is offered only for a move to Applied this click made: a no-op click
+    // (already applied or later) answers `alreadyApplied: true` (WP-34 request, Wave 3 gate).
+    if (res && res.alreadyApplied !== true) setLastApplied({ trackerEntryId: res.trackerEntryId, at: new Date().toISOString() });
     return res;
   }, [jobId, opener, options.applyUrl, runAction]);
 
@@ -173,11 +175,9 @@ export function useJobActions(jobId: string, options: JobActionsOptions = {}): J
     share: () => runAction('share', () => shareJob(jobId)),
     applyOnCompanySite,
     markApplied: async (appliedAt) => {
-      const ok = await runAction('markApplied', async () => {
-        await markApplied(jobId, appliedAt ? { appliedAt } : {});
-        return true;
-      });
-      if (ok) setLastApplied({ trackerEntryId: null, at: appliedAt ?? new Date().toISOString() });
+      const done = await runAction('markApplied', async () => ({ res: await markApplied(jobId, appliedAt ? { appliedAt } : {}) }));
+      // Same rule as apply: no Undo when nothing changed (`alreadyApplied: true`).
+      if (done && done.res?.alreadyApplied !== true) setLastApplied({ trackerEntryId: null, at: appliedAt ?? new Date().toISOString() });
     },
     undoApplied: async () => {
       const ok = await runAction('undoApplied', async () => {

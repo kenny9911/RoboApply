@@ -17,6 +17,10 @@ vi.mock('../../../lib/prisma.js', () => ({
     rAJob: {
       findUnique: vi.fn(async () => ({
         id: 'job1',
+        market: 'intl',
+        visibility: 'public',
+        ownerUserId: null,
+        sourceBoard: 'greenhouse',
         title: 'Backend Engineer',
         description: 'Build APIs.',
         qualifications: 'TypeScript',

@@ -34,6 +34,10 @@ export const ok = (data: unknown, status = 200) =>
 export const fail = (status: number, code: string, details?: unknown) =>
   new Response(JSON.stringify({ success: false, code, error: code, details }), { status, headers: { 'Content-Type': 'application/json' } });
 
+/** The server's real envelope for an area reason: generic platform `code`, the reason in `details.reason` (platform/http.ts mapError). */
+export const failReason = (status: 409 | 429, reason: string, extra: Record<string, unknown> = {}) =>
+  fail(status, status === 429 ? 'rate_limited' : 'conflict', { reason, ...extra });
+
 /** Install a fetch double. Unknown routes answer 404. */
 export function installFetch(routes: Record<string, Route>) {
   const calls: RecordedCall[] = [];

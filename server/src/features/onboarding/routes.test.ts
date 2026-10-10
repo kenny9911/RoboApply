@@ -30,10 +30,11 @@ async function start(over: Partial<OnboardingDeps> = {}, routerOpts: { rateLimit
   const deps: OnboardingDeps = {
     repo: mem.repo,
     searchProfiles: sp.api,
-    profile: { setLinkedin: async () => undefined, setSponsorship: async () => undefined, setCnFields: async () => undefined },
+    profile: { setLinkedin: async () => undefined, setSponsorship: async () => undefined },
     validateCnStep: async () => {
       throw new NotImplementedError('onboardingCn.validateCnStep');
     },
+    applyCnStep: async () => undefined,
     snapshot: async () => ({ jobCount: { value: 3, source: 'index' as const, sampleSize: 3, asOf: '2026-10-10T00:00:00.000Z' }, windowDays: 30, pay: null, topSkills: [] }),
     titleSuggest: suggestTitles,
     seedResume: () => ({ roles: ['Backend Engineer'], seniority: null, years: 4 }),

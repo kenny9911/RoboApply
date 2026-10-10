@@ -21,6 +21,7 @@ import prisma from '../../../lib/prisma.js';
 import type { FeatureRouterDeps } from '../../index.js';
 import { CompanyIdOrSlugParamsSchema, CompanyIdParamsSchema, CompanyJobsQuerySchema, CompanyTypeaheadQuerySchema } from './contract.js';
 import { createCompanyReadService, type CompanyReadService, type CompanyReadViewer } from './service.js';
+import { cnPostingsWhere } from '../../cn/jobs/index.js';
 
 export interface CompaniesRouterDeps extends FeatureRouterDeps {
   /** Test seam (default: the service over the shared Prisma client). */
@@ -35,7 +36,15 @@ export function createCompaniesRouter(deps: CompaniesRouterDeps = {}): Router {
   const service = (): CompanyReadService => (lazy ??= createCompanyReadService(prisma));
   const market = () => getCurrentBrandOrDefault().market;
   // optionalAuth sets req.user only for a valid session; anyone else is anonymous.
-  const viewer = (req: Request): CompanyReadViewer => ({ publicOnly: !(req as Request & { user?: unknown }).user });
+  // GoApply: the recruitment-info mode decides whether third-party postings
+  // are listed or counted at all (R-14; WP-41 R41-1, Wave 3 gate).
+  const viewer = (req: Request): CompanyReadViewer => {
+    const user = (req as Request & { user?: { id?: string } }).user;
+    return {
+      publicOnly: !user,
+      ...(market() === 'cn' ? { restrict: cnPostingsWhere(user?.id ?? null, deps.env ?? process.env) } : {}),
+    };
+  };
 
   router.get(
     '/',

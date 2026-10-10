@@ -348,7 +348,7 @@ describe('support routes', () => {
     });
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ success: true, data: { received: true } });
-    expect(sent[0]).toMatchObject({ to: 'support@roboapply.example', userId: null, template: SUPPORT_CONTACT_TEMPLATE });
+    expect(sent[0]).toMatchObject({ to: 'support@roboapply.example', userId: null, template: SUPPORT_CONTACT_TEMPLATE, replyTo: 'visitor@example.test' });
     expect(sent[0]!.params).toMatchObject({ replyEmail: 'visitor@example.test', topic: 'billing', pageUrl: null });
 
     const cn = await h.request('POST', '/api/v1/roboapply/support/contact', { host: 'goapply.localhost:3621', body: message });

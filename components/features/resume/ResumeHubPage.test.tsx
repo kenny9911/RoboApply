@@ -9,7 +9,12 @@ import type { ResumeSummary } from '../../../lib/api/resumes';
 
 const state = vi.hoisted(() => ({ resumes: [] as unknown[], market: 'intl' as 'intl' | 'cn', setPrimary: vi.fn() }));
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+// The hub mounts TailorLaunchHost (Wave 3 gate), which reads the query string.
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/resume',
+}));
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...rest}>

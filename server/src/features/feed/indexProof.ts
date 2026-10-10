@@ -29,14 +29,14 @@ export const PLANNED_FEED_INDEXES: Readonly<Record<string, string>> = {
   RAFeedSession_userId_createdAt_idx: 'session lookup',
   RAFeedRating_userId_dayKey_key: 'one rating a day',
   RAJobMatchScore_userId_jobId_resumeVariantId_key: 'cached AI scores join',
-};
-
-/** Indexes requested from SCHEMA-3 (handoff SR-32-1…3); reported, not required, until they land. */
-export const REQUESTED_FEED_INDEXES: Readonly<Record<string, string>> = {
+  // Added by SCHEMA-3 (handoff SR-32-1…3).
   RAJob_market_isCanonical_archivedAt_firstSeenAt_idx: 'SR-32-1: new-count (firstSeenAt > last visit)',
   RAJob_employerTags_idx: 'SR-32-2: GoApply employer-tag / 户口 filters (GIN)',
   RAJob_geoLat_geoLng_idx: 'SR-32-3: radius bounding box',
 };
+
+/** Indexes requested from a later SCHEMA-n gate; reported, not required, until they land. None open after SCHEMA-3. */
+export const REQUESTED_FEED_INDEXES: Readonly<Record<string, string>> = {};
 
 type Db = Pick<typeof prismaClient, '$queryRaw' | '$transaction'>;
 
@@ -83,7 +83,7 @@ export function proofStatements(now: Date): Record<string, Prisma.Sql> {
   };
 }
 
-/** Which proof statement each requested index should appear in once it exists. */
+/** Which proof statement each SCHEMA-3 index (SR-32-1…3, now planned) must appear in. */
 export const REQUESTED_INDEX_STATEMENT: Readonly<Record<string, string>> = {
   RAJob_market_isCanonical_archivedAt_firstSeenAt_idx: 'newCount',
   RAJob_employerTags_idx: 'cnEmployerTags',

@@ -158,6 +158,9 @@ function setup(opts: { jobs?: Record<string, unknown>[]; seed?: Record<string, R
     hiringContacts: async () => 'deeplinks_only',
     marketMeta: () => ({}),
     extensionAts: () => new Set(['greenhouse']),
+    // GoApply rows below model a recruitment-info mode that allows postings;
+    // the mode-off case has its own test ('GoApply recruitment-info mode off').
+    env: { CN_RECRUITMENT_INFO_MODE: 'licensed' },
     ...opts.deps,
   };
   return { db, deps, flags, markChecklistStep, service: createJobDetailService(deps) };
@@ -332,6 +335,19 @@ describe('GET /jobs/:id (service)', () => {
     expect((await off.service.get('u1', 'j1')).people).toEqual({ mode: 'off', searchLinks: [] });
   });
 
+  it('GoApply recruitment-info mode off (R-14, R41-1b): a third-party posting is a 404 everywhere; the user’s own import still opens', async () => {
+    const gohire = job({ id: 'gh1', market: 'cn', sourceBoard: 'gohire', sourceName: 'GoHire', fromRecruiterBank: true });
+    const own = job({ id: 'own1', market: 'cn', visibility: 'private', ownerUserId: 'u1', sourceBoard: 'user_import' });
+    const s = setup({ brand: cn, jobs: [gohire, own], deps: { env: {} } });
+    await expect(s.service.get('u1', 'gh1')).rejects.toMatchObject({ code: 'not_found' });
+    await expect(s.service.similar('u1', 'gh1')).rejects.toMatchObject({ code: 'not_found' });
+    await expect(s.service.recordApplyClick('u1', 'gh1')).rejects.toMatchObject({ code: 'not_found' });
+    expect((await s.service.get('u1', 'own1')).job.id).toBe('own1');
+    await expect(s.service.get('u2', 'own1')).rejects.toMatchObject({ code: 'not_found' });
+    const on = setup({ brand: cn, jobs: [gohire], deps: { env: { CN_RECRUITMENT_INFO_MODE: 'partner_deeplink' } } });
+    expect((await on.service.get('u1', 'gh1')).job.id).toBe('gh1');
+  });
+
   it('GoApply campus job: the employer’s verified programme window and 届别, behind jobs.campusCalendar', async () => {
     const goJob = job({ market: 'cn', seniority: 'intern_newgrad', companyName: '示例科技', companyId: 'cc1' });
     const events = [
@@ -468,6 +484,24 @@ describe('save, share, similar, company news', () => {
     expect(markChecklistStep).toHaveBeenCalledWith('u1', 'save_job');
     const failing = setup({ deps: { markChecklistStep: async () => Promise.reject(new Error('growth down')) } });
     await expect(failing.service.save('u1', 'j1')).resolves.toMatchObject({ tracker: { status: 'bookmarked' } });
+  });
+
+  it('feed affinity learns from a new save, an apply click and "I applied" (once each; a failure never blocks)', async () => {
+    const recordInteraction = vi.fn(async () => undefined);
+    const { service } = setup({ jobs: [job(), job({ id: 'j2' })], deps: { recordInteraction } });
+    await service.save('u1', 'j1');
+    await service.save('u1', 'j1'); // already saved: no second bump
+    await service.recordApplyClick('u1', 'j1');
+    await service.recordApplyClick('u1', 'j1'); // already applied
+    await service.markApplied('u1', 'j2');
+    expect(recordInteraction.mock.calls).toEqual([
+      ['u1', 'j1', 'save'],
+      ['u1', 'j1', 'apply_click'],
+      ['u1', 'j2', 'applied'],
+    ]);
+    const failing = setup({ deps: { recordInteraction: async () => Promise.reject(new Error('feed down')) } });
+    await expect(failing.service.save('u1', 'j1')).resolves.toMatchObject({ tracker: { status: 'bookmarked' } });
+    await expect(failing.service.recordApplyClick('u1', 'j1')).resolves.toMatchObject({ alreadyApplied: false });
   });
 
   it('unsave removes a Saved entry and refuses one already applied', async () => {

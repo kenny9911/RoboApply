@@ -48,6 +48,7 @@
       "payPeriod": {
         "year": "{amount} a year",
         "month": "{amount} a month",
+        "week": "{amount} a week",
         "day": "{amount} a day",
         "hour": "{amount} an hour"
       },
@@ -68,7 +69,9 @@
         "sponsorshipQuote": "The post says: “{quote}”",
         "agency": "Agency post",
         "new": "New",
-        "closes": "Applications close {date}"
+        "closes": "Applications close {date}",
+        "clearance": "Security clearance required",
+        "citizens": "Citizens only"
       },
       "whyThisJob": "Why this job",
       "actions": {

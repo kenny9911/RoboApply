@@ -120,6 +120,18 @@ export function apiErrorCode(err: unknown): string | null {
   return typeof payload?.code === 'string' ? payload.code : null;
 }
 
+/**
+ * The area-specific reason of a failed call. Areas keep the platform `code`
+ * generic (`rate_limited`, `conflict`, …) and put their own reason in
+ * `details.reason` (`feed_refresh_limited`, `feed_session_expired`, …).
+ */
+export function apiErrorReason(err: unknown): string | null {
+  if (!(err instanceof RoboApiError)) return null;
+  const payload = err.payload as { details?: { reason?: unknown } | null } | undefined;
+  const reason = payload?.details && typeof payload.details === 'object' ? payload.details.reason : undefined;
+  return typeof reason === 'string' ? reason : null;
+}
+
 /** The `details` object of a failed call (e.g. the credits-exhausted bucket). */
 export function apiErrorDetails<T = Record<string, unknown>>(err: unknown): T | null {
   if (!(err instanceof RoboApiError)) return null;

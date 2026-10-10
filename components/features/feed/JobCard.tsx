@@ -54,9 +54,25 @@ export interface JobCardProps {
 const SAVED_STATUSES = new Set(['bookmarked', 'saved']);
 const APPLIED_STATUSES = new Set(['applied', 'interviewing', 'interview', 'offer', 'screen', 'phone_screen']);
 
+/** A badge whose tooltip (and screen-reader description) is the sentence it rests on. */
+function QuotedBadge({ label, tip }: { label: string; tip: string | null }) {
+  const tipId = useId();
+  if (!tip) return <span className={styles.badge}>{label}</span>;
+  return (
+    <span className={styles.badge} title={tip} aria-describedby={tipId}>
+      {label}
+      <span id={tipId} className="sr-only">
+        {tip}
+      </span>
+    </span>
+  );
+}
+
+const CN_EMPLOYER_TAG_COPY = new Set(['soe', 'bianzhi', 'hukou', 'foreign']);
+
 function BadgeView({ badge, locale }: { badge: CardBadge; locale: string }) {
   const t = useTranslations('jobs.card.badge');
-  const tipId = useId();
+  const tCn = useTranslations('jobsCn.tags');
   switch (badge.kind) {
     case 'direct':
       return <span className={`${styles.badge} ${styles.badgeDirect}`}>{t('direct')}</span>;
@@ -65,20 +81,19 @@ function BadgeView({ badge, locale }: { badge: CardBadge; locale: string }) {
     case 'new':
       return <span className={styles.badge}>{t('new')}</span>;
     case 'market':
-      return <span className={styles.badge}>{badge.label}</span>;
+      // GoApply employer tags have copy; an id without copy is never shown raw.
+      if (!CN_EMPLOYER_TAG_COPY.has(badge.label)) return null;
+      return <QuotedBadge label={tCn(badge.label as 'soe')} tip={badge.quote ? tCn('quote', { quote: badge.quote }) : null} />;
     case 'closes': {
       const date = shortDate(badge.at, locale);
-      return date ? <span className={styles.badge}>{t('closes', { date })}</span> : null;
+      return date ? <QuotedBadge label={t('closes', { date })} tip={badge.quote ? t('sponsorshipQuote', { quote: badge.quote }) : null} /> : null;
     }
+    case 'clearance':
+      return <QuotedBadge label={t('clearance')} tip={t('sponsorshipQuote', { quote: badge.quote })} />;
+    case 'citizens':
+      return <QuotedBadge label={t('citizens')} tip={t('sponsorshipQuote', { quote: badge.quote })} />;
     case 'sponsorship':
-      return (
-        <span className={styles.badge} title={t('sponsorshipQuote', { quote: badge.quote })} aria-describedby={tipId}>
-          {badge.status === 'not_offered' ? t('sponsorshipNo') : t('sponsorship')}
-          <span id={tipId} className="sr-only">
-            {t('sponsorshipQuote', { quote: badge.quote })}
-          </span>
-        </span>
-      );
+      return <QuotedBadge label={badge.status === 'not_offered' ? t('sponsorshipNo') : t('sponsorship')} tip={t('sponsorshipQuote', { quote: badge.quote })} />;
   }
 }
 

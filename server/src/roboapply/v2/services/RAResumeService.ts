@@ -41,6 +41,7 @@ import {
   type FileNameStyleKey,
   type PageSize,
 } from '../lib/resumeExport.js';
+import { loadLegacyVisibleJob } from '../lib/legacyJobScope.js';
 
 export type RAResumeKind = 'base' | 'tailored_for_jd' | 'from_template';
 
@@ -482,7 +483,8 @@ export class RAResumeService {
       where: { id: body.basedOnVariantId, userId, deletedAt: null },
     });
     if (!base) throw new ResumeNotFoundError();
-    const targetJob = await p.rAJob.findUnique({ where: { id: body.targetJobId } });
+    // Only a job this user may read (market, own import, GoApply R-14 mode): its text reaches the model.
+    const targetJob = await loadLegacyVisibleJob(userId, body.targetJobId);
     if (!targetJob) throw new ResumeValidationError('targetJobId not found');
 
     let tailoredMarkdown: string = base.resumeMarkdown;
@@ -613,7 +615,7 @@ export class RAResumeService {
     let targetJobId: string | null = null;
     let jobLabel = '';
     if (body.targetJobId) {
-      const job = await p.rAJob.findUnique({ where: { id: body.targetJobId } });
+      const job = await loadLegacyVisibleJob(userId, body.targetJobId);
       if (job) {
         targetJobId = job.id;
         jobLabel = `${job.companyName} — ${job.title}`;

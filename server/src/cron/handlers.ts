@@ -56,6 +56,7 @@ import { runLifecycleEmails } from '../features/lifecycle/cron.js';
 import { produceReminders as produceTrackerReminders } from '../features/tracker/cron.js';
 import { produceReminders as produceAgentReminders, runReadyWeekly } from '../features/agent/cron.js';
 import { produceReminders as produceCampusReminders } from '../features/cn/campus/cron.js';
+import { registerReminderProducer, runReminders } from '../features/alerts/reminders.js';
 import { runSeoRebuild } from '../features/seo/cron.js';
 import { runComplianceDaily } from '../features/compliance/cron.js';
 import { runInterviewRetention } from '../features/interview/cron.js';
@@ -336,6 +337,16 @@ const queueDrainJob: PlatformCronJob = {
   },
 };
 
+// The hourly `reminders` runner (WP-39a) calls every registered producer for
+// the brand (skipping producers not meant for its market), isolates failures,
+// then drains `email.send` in the same tick. Wave 3 gate wiring (WP-39a
+// request): the area producers are registered here by name; an area that
+// registers itself must pass the same function reference (a different task
+// under a taken name throws).
+registerReminderProducer({ name: 'tracker', task: produceTrackerReminders });
+registerReminderProducer({ name: 'agent', task: produceAgentReminders });
+registerReminderProducer({ name: 'campus', task: produceCampusReminders, markets: ['cn'] });
+
 /** Every platform cron (TASK_PLAN.md §4.1.d). vercel.json must list each with the same schedule. */
 export const PLATFORM_CRON_JOBS: readonly PlatformCronJob[] = [
   brandCronJob('jobs-plan', '0 2 * * *', 'WP-16b', [{ name: 'plan', task: runJobsPlan }]),
@@ -359,11 +370,7 @@ export const PLATFORM_CRON_JOBS: readonly PlatformCronJob[] = [
   ),
   brandCronJob('score-precompute', '*/15 * * * *', 'WP-18', [{ name: 'precompute', task: runScorePrecompute }]),
   brandCronJob('job-alerts', '*/15 * * * *', 'WP-39a', [{ name: 'alerts', task: runJobAlerts }]),
-  brandCronJob('reminders', '0 * * * *', 'WP-39a', [
-    { name: 'tracker', task: produceTrackerReminders },
-    { name: 'agent', task: produceAgentReminders },
-    { name: 'campus', task: produceCampusReminders, markets: ['cn'] },
-  ]),
+  brandCronJob('reminders', '0 * * * *', 'WP-39a', [{ name: 'reminders', task: runReminders }]),
   brandCronJob('lifecycle-emails', '15 * * * *', 'WP-39a', [{ name: 'lifecycle', task: runLifecycleEmails }]),
   brandCronJob('ready-weekly', '5 * * * *', 'WP-52', [{ name: 'readyWeekly', task: runReadyWeekly }]),
   brandCronJob('seo-rebuild', '0 4 * * *', 'WP-56', [{ name: 'seo', task: runSeoRebuild }]),

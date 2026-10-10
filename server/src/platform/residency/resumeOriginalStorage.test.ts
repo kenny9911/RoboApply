@@ -159,9 +159,9 @@ describe('GoApply on the mainland stack', () => {
     expect(svc.describeStorageProvider('goapply')).toMatchObject({ mode: 's3', bucket: 'cn-bucket' });
   });
 
-  // REQ-WP15-02 (FND/INT: storage_unavailable → 503 in platform/http.ts ERROR_STATUS) and
-  // REQ-WP15-04 (WP-36b/WP-22: the upload route calls assertAvailable() before accepting the file).
-  it.todo('REQ-WP15-02/04: POST a resume on cn-mainland without CN_S3_* → 503 {code:"storage_unavailable"} and zero PutObject calls');
+  // REQ-WP15-02/04 route case (cn-mainland without CN_S3_* → 503 storage_unavailable,
+  // zero PutObject calls) is covered by WP-36b in
+  // components/features/resume/server/resumes.hub.test.ts (Wave 3 gate).
 
   it('refuses a CN_S3_ENDPOINT that is not mainland object storage (e.g. AWS us-east-1)', async () => {
     const aws = 'https://s3.us-east-1.amazonaws.com';

@@ -14,7 +14,7 @@ import { seedDraftFromParsedResume } from '../../roboapply/v2/lib/raResumeSeed.j
 import { searchTaxonomy, taxonomyChildren, taxonomyLabel } from '../jobs/taxonomy/index.js';
 import { searchProfileService } from '../search/index.js';
 import { createProfileService, type ProfileServiceImpl } from '../profile/index.js';
-import { validateCnStep } from '../onboarding-cn/index.js';
+import { onboardingCnService, validateCnStep } from '../onboarding-cn/index.js';
 import { ONBOARDING_RESUME_UPLOADS_PER_DAY, type TitleSuggestionView } from './contract.js';
 import { createPrismaOnboardingRepo, type OnboardingRepo, type ResumeVariantRow } from './repo.js';
 import { createSnapshotLoader, type SnapshotDb } from './snapshot.js';
@@ -84,9 +84,6 @@ const profileEffects: OnboardingDeps['profile'] = {
     const rows = sponsorshipToWorkAuth(needs, view.workAuth);
     if (rows) await profiles().patch(userId, { workAuth: rows as typeof view.workAuth }, { brand });
   },
-  async setCnFields(userId, fields, brand) {
-    await profiles().patch(userId, { cnFields: fields }, { brand });
-  },
 };
 
 export function createDefaultOnboardingDeps(repo: OnboardingRepo = createPrismaOnboardingRepo()): OnboardingDeps {
@@ -105,6 +102,7 @@ export function createDefaultOnboardingDeps(repo: OnboardingRepo = createPrismaO
     },
     profile: profileEffects,
     validateCnStep,
+    applyCnStep: (userId, brand, result, opts) => onboardingCnService.applyCnStep(userId, brand, result, opts),
     snapshot: createSnapshotLoader(async () => (await import('../../lib/prisma.js')).default as unknown as SnapshotDb),
     titleSuggest: suggestTitles,
     seedResume,

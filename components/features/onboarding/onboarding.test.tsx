@@ -535,12 +535,14 @@ describe('errors and GoApply', () => {
     expect(screen.getByRole('radio', { name: 'In the next few months' })).toHaveAttribute('aria-checked', 'true');
   });
 
-  it('GoApply renders its own screens from onboarding-cn (stubs render nothing until WP-31)', async () => {
+  it('GoApply renders its own screens from onboarding-cn', async () => {
+    // Wave 3 gate: WP-31 replaced the onboarding-cn stubs (which rendered
+    // nothing) with real steps, so G1 now renders the CN consent screen.
     installFetch({ [`GET ${P}/state`]: () => ok(state({ brand: 'goapply', stage: 'consent', nextRoute: '/onboarding/consent', progress: { total: 8, stepsLeft: 8, leftEarly: null } })) });
-    const { container } = renderWith(<OnboardingStepPage step="consent" />, { brand: 'goapply' });
+    renderWith(<OnboardingStepPage step="consent" />, { brand: 'goapply' });
     await waitFor(() => expect(screen.queryByText('Loading your setup…')).toBeNull());
     expect(nav.replace).not.toHaveBeenCalled();
-    expect(container.querySelector('form')).toBeNull();
+    expect(await screen.findByRole('heading', { name: 'Before you start' })).toBeInTheDocument();
   });
 });
 

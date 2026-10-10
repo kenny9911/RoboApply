@@ -13,6 +13,8 @@ import { getBrand } from '../../platform/brand/registry.js';
 import { NotImplementedError } from '../../platform/http.js';
 import { createOnboardingService, defaultCountry, type OnboardingDeps } from './service.js';
 import { SAMPLE_BASICS, createMemoryRepo, createMemorySearchProfiles } from './testkit.js';
+import { CONSENT_PROSE_VERSION } from '../compliance/index.js';
+import { createOnboardingCnService } from '../onboarding-cn/index.js';
 
 const RA = { brand: getBrand('roboapply') };
 const GO = { brand: getBrand('goapply') };
@@ -20,7 +22,8 @@ const GO = { brand: getBrand('goapply') };
 function setup(over: Partial<OnboardingDeps> = {}, seed: Parameters<typeof createMemoryRepo>[0] = { u1: {} }) {
   const mem = createMemoryRepo(seed);
   const sp = createMemorySearchProfiles();
-  const profile = { setLinkedin: vi.fn(async () => undefined), setSponsorship: vi.fn(async () => undefined), setCnFields: vi.fn(async () => undefined) };
+  const profile = { setLinkedin: vi.fn(async () => undefined), setSponsorship: vi.fn(async () => undefined) };
+  const applyCnStep = vi.fn(async () => undefined);
   const aiSeedRoles = vi.fn(async () => ['Data analyst']);
   const deps: OnboardingDeps = {
     repo: mem.repo,
@@ -30,6 +33,7 @@ function setup(over: Partial<OnboardingDeps> = {}, seed: Parameters<typeof creat
     validateCnStep: async () => {
       throw new NotImplementedError('onboardingCn.validateCnStep');
     },
+    applyCnStep,
     snapshot: vi.fn(async () => ({ jobCount: { value: 0, source: 'index' as const, asOf: 'x' }, windowDays: 30, pay: null, topSkills: [] })),
     titleSuggest: () => [],
     seedResume: () => ({ roles: [], seniority: null, years: 3 }),
@@ -40,7 +44,7 @@ function setup(over: Partial<OnboardingDeps> = {}, seed: Parameters<typeof creat
     queueResumeCheck: vi.fn(async () => undefined),
     ...over,
   };
-  return { svc: createOnboardingService(deps), mem, sp, profile, deps, aiSeedRoles };
+  return { svc: createOnboardingService(deps), mem, sp, profile, deps, aiSeedRoles, applyCnStep };
 }
 
 describe('state', () => {
@@ -220,20 +224,65 @@ describe('GoApply steps go through onboarding-cn', () => {
     await expect(svc.saveStep('u1', 'consent', { agreement: true }, GO)).rejects.toMatchObject({ code: 'not_implemented' });
   });
 
-  it('stores the validated answers and writes only the cnFields the validator returns', async () => {
-    const validateCnStep = vi.fn(async () => ({
+  it('stores the validated answers and hands the whole WP-31 result (effects included) to applyCnStep', async () => {
+    const result = {
       ok: true,
       answers: { cnIdentity: 'yingjie', graduationClass: 2027 },
-      cnFields: { identity: 'yingjie', graduationClass: 2027 },
-      filtersPatch: { classYear: 2027 },
-    }));
-    const { svc, mem, profile, sp } = setup({ validateCnStep }, { u1: { step: 'identity' } });
-    const res = await svc.saveStep('u1', 'identity', { cnIdentity: 'yingjie', graduationClass: 2027 }, GO);
+      effects: { consents: [], cnFields: { identity: 'yingjie', graduationClass: 2027 }, filterPatch: { classYear: 2027 } },
+    };
+    const validateCnStep = vi.fn(async () => result);
+    const { svc, mem, applyCnStep } = setup({ validateCnStep }, { u1: { step: 'identity', answers: { consent: { agreement: true } } } });
+    const res = await svc.saveStep('u1', 'identity', { cnIdentity: 'yingjie', graduationClass: 2027 }, { ...GO, locale: 'zh' });
     expect(res).toEqual({ stage: 'education', nextStage: 'education', nextRoute: '/onboarding/education' });
+    expect(validateCnStep).toHaveBeenCalledWith('identity', { cnIdentity: 'yingjie', graduationClass: 2027 }, { answers: { consent: { agreement: true } } });
     expect(mem.rows.get('u1')!.answers.identity).toEqual({ cnIdentity: 'yingjie', graduationClass: 2027 });
-    expect(profile.setCnFields).toHaveBeenCalledWith('u1', { identity: 'yingjie', graduationClass: 2027 }, GO.brand);
-    expect(sp.state.filters).toEqual({ classYear: 2027 });
+    expect(applyCnStep).toHaveBeenCalledWith('u1', GO.brand, result, { locale: 'zh' });
     expect(mem.rows.get('u1')!.path).toBeNull();
+  });
+
+  describe('with the real WP-31 validator and writer', () => {
+    function realCn(seed: Parameters<typeof createMemoryRepo>[0]) {
+      const recordConsent = vi.fn(async () => ({}));
+      const patchCnFields = vi.fn(async () => ({}));
+      const patchDefaultFilters = vi.fn(async () => ({}));
+      const cn = createOnboardingCnService({ recordConsent, patchCnFields, patchDefaultFilters });
+      const t = setup({ validateCnStep: (step, body, ctx) => cn.validateCnStep(step, body, ctx), applyCnStep: (u, b, r, o) => cn.applyCnStep(u, b, r, o) }, seed);
+      return { ...t, recordConsent, patchCnFields, patchDefaultFilters };
+    }
+
+    it('G1 consent writes the six consent records to the ledger with the prose version shown', async () => {
+      const prev = process.env.DEPLOY_REGION;
+      delete process.env.DEPLOY_REGION; // offshore deployment: the cross-border record is required
+      try {
+        const { svc, recordConsent } = realCn({ u1: { step: 'consent' } });
+        const body = { agreement: true, crossBorder: true, aiProcessing: true, personalizedRecommendation: true, marketing: false, proseVersion: CONSENT_PROSE_VERSION };
+        await svc.saveStep('u1', 'consent', body, { ...GO, locale: 'zh' });
+        const types = recordConsent.mock.calls.map((c) => {
+          const input = (c as unknown as [{ type: string; granted: boolean; proseVersion: string; locale: string }])[0];
+          expect(input).toMatchObject({ userId: 'u1', proseVersion: CONSENT_PROSE_VERSION, locale: 'zh' });
+          return `${input.type}:${input.granted}`;
+        });
+        expect(types.sort()).toEqual(
+          ['age_16_plus:true', 'ai_resume_parsing:true', 'marketing_email:false', 'personalized_recommendation:true', 'pipl_basic_processing:true', 'pipl_cross_border:true'].sort(),
+        );
+      } finally {
+        if (prev === undefined) delete process.env.DEPLOY_REGION;
+        else process.env.DEPLOY_REGION = prev;
+      }
+    });
+
+    it('a 应届 student (stored G2 identity) cannot skip G3 education: 422', async () => {
+      const { svc, patchCnFields } = realCn({ u1: { step: 'education', answers: { identity: { cnIdentity: 'yingjie', graduationClass: 2027 } } } });
+      await expect(svc.saveStep('u1', 'education', { skip: true }, GO)).rejects.toMatchObject({ code: 'invalid_request', details: { issues: [{ path: ['skip'] }] } });
+      expect(patchCnFields).not.toHaveBeenCalled();
+    });
+
+    it('G2 identity writes cnFields and the default-filter patch', async () => {
+      const { svc, patchCnFields, patchDefaultFilters } = realCn({ u1: { step: 'identity' } });
+      await svc.saveStep('u1', 'identity', { cnIdentity: 'yingjie', graduationClass: 2027 }, GO);
+      expect(patchCnFields).toHaveBeenCalledWith('u1', GO.brand, expect.objectContaining({ identity: 'yingjie', graduationClass: 2027 }));
+      expect(patchDefaultFilters).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('refused answers are 422 with the validator issues', async () => {

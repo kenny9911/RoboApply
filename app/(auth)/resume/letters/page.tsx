@@ -11,5 +11,6 @@ const one = (v: string | string[] | undefined): string | null => (typeof v === '
 
 export default async function ResumeLettersPage({ searchParams }: { searchParams?: Promise<Search> }) {
   const sp: Search = (await searchParams) ?? {};
-  return <CoverLetterHub jobId={one(sp.jobId)} trackerEntryId={one(sp.entry)} />;
+  // `?job=` is accepted too: the job page's checklist links with it (WP-34; Wave 3 gate).
+  return <CoverLetterHub jobId={one(sp.jobId) ?? one(sp.job)} trackerEntryId={one(sp.entry)} />;
 }

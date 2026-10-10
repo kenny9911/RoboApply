@@ -16,6 +16,7 @@ import {
   EMPTY_UI_STATE,
   feedItem,
   fail,
+  failReason,
   installFetch,
   installPopupGate,
   ok,
@@ -160,6 +161,29 @@ describe('/jobs workspace', () => {
     expect(screen.queryByRole('button', { name: 'Show more jobs' })).toBeNull();
   });
 
+  it('an expired feed session (409 feed_session_expired) restarts the list from page 1', async () => {
+    let expired = true;
+    const net = installFetch(
+      baseRoutes({
+        [`POST ${FEED}/query`]: (c) => {
+          if ((c.body as { cursor?: string }).cursor === 'fs_1:20') {
+            if (expired) {
+              expired = false;
+              return failReason(409, 'feed_session_expired');
+            }
+            return ok(page(items(21, 20), { endOfFeed: true }));
+          }
+          return ok(page(items(1, 20), { cursor: 'fs_1:20', endOfFeed: false }));
+        },
+      }),
+    );
+    renderFeed(<JobsWorkspace />);
+    await waitFor(() => expect(screen.getAllByTestId('job-card')).toHaveLength(20));
+    fireEvent.click(screen.getByRole('button', { name: 'Show more jobs' }));
+    await waitFor(() => expect(net.to('POST', `${FEED}/query`).map((c) => (c.body as { cursor?: string }).cursor)).toEqual([undefined, 'fs_1:20', undefined]));
+    await waitFor(() => expect(screen.getAllByTestId('job-card')).toHaveLength(20));
+  });
+
   it('Apply on company site opens the employer page, moves to Applied, and Undo takes it back', async () => {
     const opened = vi.fn(() => ({ opener: null, location: { href: '' }, close: vi.fn() }));
     vi.stubGlobal('open', opened);
@@ -258,13 +282,23 @@ describe('/jobs workspace', () => {
   });
 
   it('a post that says no sponsorship is labelled so, with its quote', async () => {
-    const badges = [{ kind: 'sponsorship', label: 'Visa', quote: 'We cannot sponsor visas.', status: 'not_offered' }] as unknown as ReturnType<typeof feedItem>['badges'];
+    // WP-32's real shape: the stance is the kind (feed/items.ts badgesFor).
+    const badges: ReturnType<typeof feedItem>['badges'] = [{ kind: 'no_sponsorship', label: 'no_sponsorship', quote: 'We cannot sponsor visas.' }];
     installFetch(baseRoutes({ [`POST ${FEED}/query`]: () => ok(page([feedItem(1, { badges })])) }));
     renderFeed(<JobsWorkspace />);
     const card = await screen.findByTestId('job-card');
     expect(within(card).getByText('Says no visa sponsorship')).toBeInTheDocument();
     expect(within(card).queryByText('Visa sponsorship mentioned')).toBeNull();
     expect(within(card).getByText(/We cannot sponsor visas\./)).toBeInTheDocument();
+  });
+
+  it('GoApply employer tags render their copy, never the raw id', async () => {
+    const badges: ReturnType<typeof feedItem>['badges'] = [{ kind: 'market_tag', label: 'soe', quote: '国有独资企业' }];
+    installFetch(baseRoutes({ [`POST ${FEED}/query`]: () => ok(page([feedItem(1, { badges })])) }));
+    renderFeed(<JobsWorkspace />);
+    const card = await screen.findByTestId('job-card');
+    expect(within(card).getByText('State-owned employer')).toBeInTheDocument();
+    expect(within(card).queryByText('soe')).toBeNull();
   });
 
   it('opening the feed clears the Jobs nav badge once the list is on screen', async () => {
@@ -392,6 +426,15 @@ describe('/jobs workspace', () => {
     expect(await screen.findByRole('button', { name: 'Show jobs from the past week only' })).toBeInTheDocument();
   });
 
+  it('a second rating the same day (409 feed_rating_already_today) says so and closes the card', async () => {
+    installFetch(baseRoutes({ [`POST ${FEED}/query`]: () => ok(page(items(1, 10))), [`POST ${FEED}/rating`]: () => failReason(409, 'feed_rating_already_today') }));
+    renderFeed(<JobsWorkspace />);
+    const card = await screen.findByTestId('rating-card');
+    fireEvent.click(within(card).getByRole('button', { name: '9' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(screen.queryByTestId('rating-card')).toBeNull());
+  });
+
   it('a rating is marked done as soon as it is saved: applying a fix reloads the list without asking again', async () => {
     let version = 3;
     const net = installFetch(
@@ -506,7 +549,7 @@ describe('/jobs workspace', () => {
   });
 
   it('a refused refresh says to wait, politely', async () => {
-    installFetch(baseRoutes({ [`POST ${FEED}/query`]: () => fail(429, 'feed_refresh_limited') }));
+    installFetch(baseRoutes({ [`POST ${FEED}/query`]: () => failReason(429, 'feed_refresh_limited', { retryAfterSec: 600 }) }));
     renderFeed(<JobsWorkspace />);
     expect(await screen.findByText(/refreshed the list many times/)).toBeInTheDocument();
   });

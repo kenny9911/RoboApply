@@ -95,6 +95,8 @@ export const PRODUCT_FLAG_KEYS = [
   'totp',
   'student',
   'competitiveness',
+  'companyNews',
+  'seo.browse',
 ] as const satisfies readonly ProductFlagKey[];
 
 // Compile-time check: every boolean registry flag is listed above.

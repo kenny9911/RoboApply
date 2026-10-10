@@ -62,7 +62,9 @@ model RAUserUiState {
   /// `{ tours: { key: seenAt }, dismissals: { key: { count, at } }, popupLastShownAt,
   ///    announcementsSeen: string[] }`
   state           Json      @default("{}")
-  /// Stamped by GET /feed/new-count; the Jobs nav badge counts ≥ Good fit jobs since then.
+  /// Stamped by the first page of POST /feed/query (and by GET /feed/new-count
+  /// only with markVisited=true, so the polling nav badge never resets itself;
+  /// WP-32). The Jobs nav badge counts ≥ Good fit jobs since then.
   lastFeedVisitAt DateTime?
   updatedAt       DateTime  @updatedAt
 }
@@ -113,4 +115,24 @@ model RAAnonAlertSubscription {
 
   @@index([brand, status, lastSentAt])
   @@index([emailHash])
+}
+
+/// Why people leave an email list, counted in aggregate (SCHEMA-3, SR-39b-1,
+/// optional). No userId and no address: the unsubscribe survey stores only the
+/// list, the reason code and an optional note. Until WP-39b writes here, the
+/// last 5 answers live on SeekerProfile.notificationPreferences.
+model RAUnsubscribeFeedback {
+  id        String   @id @default(cuid())
+  brand     String
+  /// 'alerts' | 'digest' | 'reminders' | 'tips' | 'marketing' | 'anon'
+  list      String
+  /// Reason code from the survey.
+  reason    String
+  /// Free text the person typed (optional; never logged).
+  note      String?
+  /// Email template that carried the unsubscribe link, when known.
+  template  String?
+  createdAt DateTime @default(now())
+
+  @@index([brand, list, createdAt])
 }

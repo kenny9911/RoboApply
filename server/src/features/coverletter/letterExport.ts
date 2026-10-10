@@ -33,10 +33,17 @@ interface FontPair {
   bold: string;
 }
 
-function fontPair(family: 'SC' | 'TC'): FontPair | null {
-  const regular = path.join(FONT_DIR, `NotoSans${family}-Regular.ttf`);
-  const bold = path.join(FONT_DIR, `NotoSans${family}-Bold.ttf`);
+function filePair(base: string, ext: string): FontPair | null {
+  const regular = path.join(FONT_DIR, `${base}-Regular.${ext}`);
+  const bold = path.join(FONT_DIR, `${base}-Bold.${ext}`);
   return fs.existsSync(regular) && fs.existsSync(bold) ? { regular, bold } : null;
+}
+
+function fontPair(family: 'SC' | 'TC'): FontPair | null {
+  // WP-36b bundles the Traditional face as `HanSansTC-*.otf` (Source Han Sans
+  // TW, renamed under its licence); Google's NotoSansTC-*.ttf wins when present
+  // (server/assets/fonts/README.md). Wave 3 gate integration fix.
+  return filePair(`NotoSans${family}`, 'ttf') ?? (family === 'TC' ? filePair('HanSansTC', 'otf') : null);
 }
 
 /** The bundled CJK faces for a locale (zh-TW prefers TC, falls back to SC), or null (Latin-only Helvetica). */

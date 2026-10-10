@@ -6,9 +6,13 @@ import { cardBadges, companyInitial, isDirectFromEmployer, itemExtras, payText, 
 import { feedItem } from './feed.testkit';
 import type { FeedItem } from '../../../lib/api/contracts/feed';
 
-/** A sponsorship badge; `status` is the field requested from WP-32 (not in the contract yet). */
-const sponsorship = (quote?: string, status?: string) =>
-  ({ kind: 'sponsorship', label: 'Visa', ...(quote !== undefined ? { quote } : {}), ...(status ? { status } : {}) }) as FeedItem['badges'][number];
+/** A sponsorship badge as WP-32 (`feed/items.ts` badgesFor) sends it: the stance is the kind. */
+const sponsorship = (quote?: string, stance: 'offered' | 'not_offered' = 'offered') =>
+  ({
+    kind: stance === 'offered' ? 'sponsorship' : 'no_sponsorship',
+    label: stance === 'offered' ? 'sponsorship' : 'no_sponsorship',
+    ...(quote !== undefined ? { quote } : {}),
+  }) as FeedItem['badges'][number];
 
 const fmt = {
   locale: 'en-US',
@@ -54,15 +58,34 @@ describe('badges', () => {
     ]);
   });
 
-  it('drops a sponsorship badge whose stance is missing or unknown (no guessing from the label)', () => {
-    expect(cardBadges(feedItem(1, { badges: [sponsorship('We sponsor H-1B visas.')] }))).toEqual([]);
-    expect(cardBadges(feedItem(1, { badges: [sponsorship('We sponsor H-1B visas.', 'maybe')] }))).toEqual([]);
+  it('never reads a stance from a label or an extra field (only the kind)', () => {
+    const odd = { kind: 'remote', label: 'sponsorship', quote: 'We sponsor H-1B visas.', status: 'offered' } as unknown as FeedItem['badges'][number];
+    expect(cardBadges(feedItem(1, { badges: [odd] }))).toEqual([]);
+  });
+
+  it('clearance and citizens-only requirements show only with their quote', () => {
+    const item = feedItem(1, {
+      badges: [
+        { kind: 'clearance_required', label: 'clearance_required', quote: 'Active TS/SCI clearance required.' },
+        { kind: 'citizens_only', label: 'citizens_only', quote: 'Must be a U.S. citizen.' },
+      ],
+    });
+    expect(cardBadges(item)).toEqual([
+      { kind: 'clearance', quote: 'Active TS/SCI clearance required.' },
+      { kind: 'citizens', quote: 'Must be a U.S. citizen.' },
+    ]);
+    expect(cardBadges(feedItem(1, { badges: [{ kind: 'clearance_required', label: 'clearance_required' }] }))).toEqual([]);
   });
 
   it('shows a deadline only when the post states one (no invented urgency)', () => {
     expect(cardBadges(feedItem(1, { badges: [{ kind: 'closing_soon', label: 'soon' }] }))).toEqual([]);
-    const dated = feedItem(1, { badges: [{ kind: 'closing_soon', label: 'soon' }], campus: { applyClosesAt: '2026-11-01T00:00:00.000Z', classYears: [] } });
-    expect(cardBadges(dated)).toEqual([{ kind: 'closes', at: '2026-11-01T00:00:00.000Z' }]);
+    const dated = feedItem(1, { campus: { applyClosesAt: '2026-11-01', applyClosesQuote: '网申截止11月1日', classYears: [2027] } });
+    expect(cardBadges(dated)).toEqual([{ kind: 'closes', at: '2026-11-01', quote: '网申截止11月1日' }]);
+    expect(shortDate('2026-11-01', 'en-US')).toBe('Nov 1, 2026');
+  });
+
+  it('GoApply employer tags keep their quote', () => {
+    expect(cardBadges(feedItem(1, { badges: [{ kind: 'market_tag', label: 'soe', quote: '国有独资企业' }] }))).toEqual([{ kind: 'market', label: 'soe', quote: '国有独资企业' }]);
   });
 
   it('keeps at most 3 in a fixed priority', () => {

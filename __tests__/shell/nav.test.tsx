@@ -165,8 +165,8 @@ describe('registry (pure)', () => {
     expect(homeHref(buildNav(ctx({ brandId: 'goapply', flags: flagsWith() })))).toBe('/applications');
   });
 
-  it('palette job hits go to the feed until the detail page ships, /jobs/[id] after', () => {
-    expect(jobHref('cm_1', false)).toBe('/jobs');
+  it('palette job hits go to /jobs/[id] now that the detail page shipped (WP-34; Wave 3 gate)', () => {
+    expect(jobHref('cm_1', false)).toBe('/jobs/cm_1');
     expect(jobHref('cm 1', true)).toBe('/jobs/cm%201');
   });
 

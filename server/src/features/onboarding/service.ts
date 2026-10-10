@@ -96,9 +96,11 @@ export interface OnboardingDeps {
   profile: {
     setLinkedin(userId: string, url: string, brand: ProductBrand): Promise<void>;
     setSponsorship(userId: string, needs: Record<string, 'yes' | 'no' | 'not_sure'>, brand: ProductBrand): Promise<void>;
-    setCnFields(userId: string, fields: Record<string, unknown>, brand: ProductBrand): Promise<void>;
   };
-  validateCnStep(step: string, body: unknown): Promise<CnStepValidation>;
+  /** WP-31 validator; `ctx.answers` (stored onboardingAnswers) carries the G2 identity G3/G4 depend on. */
+  validateCnStep(step: string, body: unknown, ctx: { answers: Record<string, unknown> | null }): Promise<CnStepValidation>;
+  /** WP-31 writer: the step's consent records (ledger), `RAProfile.cnFields` and default-filter patch. */
+  applyCnStep(userId: string, brand: ProductBrand, result: CnStepValidation, opts: { locale?: string | null }): Promise<unknown>;
   snapshot(q: SnapshotQuery): Promise<MarketSnapshotResponse>;
   titleSuggest(q: string, locale: string): TitleSuggestionView[];
   /** Deterministic resume seed (raResumeSeed). */
@@ -183,20 +185,18 @@ export function createOnboardingService(deps: OnboardingDeps): OnboardingService
     }
   }
 
-  /** Validate one step body. Returns the answers to store. */
+  /** Validate one step body. Returns the answers to store (and, for GoApply, the WP-31 result whose effects are applied). */
   async function validate(
     brand: ProductBrand,
     step: OnboardingStage,
     body: Record<string, unknown>,
     skip: boolean,
-  ): Promise<{ answers: Record<string, unknown>; cnFields?: Record<string, unknown>; filtersPatch?: FilterSetPatch }> {
+    stored: OnboardingAnswers,
+  ): Promise<{ answers: Record<string, unknown>; cn?: CnStepValidation }> {
     if (brand.id === 'goapply' && CN_STEPS.has(step)) {
-      const res = await deps.validateCnStep(step, body);
+      const res = await deps.validateCnStep(step, body, { answers: stored });
       if (!res.ok) throw new HttpError('invalid_request', 'The answers are not valid.', { where: 'body', issues: res.issues ?? [] });
-      // Optional outputs WP-31 may add to CnStepValidation: the documented cnFields
-      // keys to store on RAProfile, and a FilterSetPatch for the default search profile.
-      const extra = res as CnStepValidation & { cnFields?: Record<string, unknown>; filtersPatch?: FilterSetPatch };
-      return { answers: res.answers ?? {}, ...(extra.cnFields ? { cnFields: extra.cnFields } : {}), ...(extra.filtersPatch ? { filtersPatch: extra.filtersPatch } : {}) };
+      return { answers: res.answers ?? {}, cn: res };
     }
     if (step === 'resume') return { answers: parseInput(ResumeStepSchema, body) as Record<string, unknown> };
     const schema = brand.id === 'roboapply' ? ROBOAPPLY_STEP_BODY_SCHEMAS[step as keyof typeof ROBOAPPLY_STEP_BODY_SCHEMAS] : undefined;
@@ -214,10 +214,11 @@ export function createOnboardingService(deps: OnboardingDeps): OnboardingService
     answers: Record<string, unknown>,
     all: OnboardingAnswers,
     skip: boolean,
-    cn: { cnFields?: Record<string, unknown>; filtersPatch?: FilterSetPatch } = {},
+    cn: CnStepValidation | undefined,
+    locale: string | null | undefined,
   ): Promise<void> {
-    if (cn.cnFields && Object.keys(cn.cnFields).length) await deps.profile.setCnFields(userId, cn.cnFields, brand);
-    if (cn.filtersPatch && Object.keys(cn.filtersPatch).length) await patchFilters(userId, cn.filtersPatch);
+    // GoApply: WP-31 records the consents (with the prose version shown), merges cnFields and patches the default filters.
+    if (cn) await deps.applyCnStep(userId, brand, cn, { locale: locale ?? null });
     if (brand.id !== 'roboapply') return;
     switch (step) {
       case 'situation':
@@ -264,7 +265,7 @@ export function createOnboardingService(deps: OnboardingDeps): OnboardingService
       const step = stepRaw as OnboardingStage;
       const skip = body.skip === true;
       const rec = await readOrThrow(userId);
-      const { answers, cnFields, filtersPatch } = await validate(brand, step, body, skip && step !== 'resume');
+      const { answers, cn } = await validate(brand, step, body, skip && step !== 'resume', rec.answers);
       const branchAfter: OnboardingBranch | null =
         brand.id !== 'roboapply' ? null : step === 'situation' ? branchForTiming(String(answers.timing)) : parseBranch(rec.path);
       assertStepSavable(brand.id, rec, step, { skip: skip || answers.skip === true, branchAfter });
@@ -293,7 +294,7 @@ export function createOnboardingService(deps: OnboardingDeps): OnboardingService
         return { patch, result: { transition, answers: nextAnswers, entry: cur.entry } };
       });
 
-      await applyEffects(userId, brand, step, answers, out.answers, skip, { cnFields, filtersPatch });
+      await applyEffects(userId, brand, step, answers, out.answers, skip, cn, ctx.locale);
       return {
         stage: out.transition.step,
         nextStage: out.transition.nextStage,

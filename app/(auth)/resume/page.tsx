@@ -22,7 +22,7 @@
 // The (auth) layout already wraps children in `.main-inner`, so this page does
 // NOT render its own wrapper. All strings live under the `resume` namespace.
 
-import { useMemo, useState } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 
@@ -62,6 +62,7 @@ import {
   TailoredVersions,
   isBaseSlot,
 } from '../../../components/features/resume';
+import { TailorLaunchHost } from '../../../components/features/tailor';
 import checkStyles from '../../../components/features/resume/ResumeCheck.module.css';
 import hubStyles from '../../../components/features/resume/ResumeHub.module.css';
 import type { RAResumeVariant, ResumeCreateBody } from '../../../lib/api/v2/types';
@@ -319,6 +320,11 @@ export default function ResumesPage() {
       />
 
       <ResumeHubTabs active="resumes" />
+
+      {/* Runs the tailor flow from `?tailor=<jobId>` / `?tailorSession=<id>` (WP-36a; mounted at the Wave 3 gate). */}
+      <Suspense fallback={null}>
+        <TailorLaunchHost />
+      </Suspense>
 
       {limitNotice ? (
         <p className={hubStyles.notice} role="status">

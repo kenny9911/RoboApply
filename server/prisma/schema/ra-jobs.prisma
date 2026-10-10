@@ -184,7 +184,8 @@ model RAJob {
   lastSeenAt           DateTime  @default(now())
   expiresAt            DateTime?
   closedAt             DateTime?
-  /// 'expired' | 'source_removed' | 'bank_closed' | 'reported' | 'duplicate'
+  /// 'expired' | 'source_removed' | 'bank_closed' | 'reported' | 'duplicate' |
+  /// 'removed_by_user' (a user archived their own import; SCHEMA-3, SR-35-1)
   closeReason          String?
   /// Missed-refresh tracking (SCHEMA-2, SR-16b-1): the RAIngestQuery that last
   /// returned this job and that query's runCount at the time. Archived as
@@ -219,6 +220,8 @@ model RAJob {
   publicDisplay Boolean   @default(false)
 
   userStates RAJobUserState[]
+  /// GoApply admin fraud reviews of this job (SCHEMA-3, SR-41-2).
+  cnFraudReviews RACnFraudReview[]
 
   @@unique([externalId, sourceBoard])
   @@index([workType, archivedAt])
@@ -238,6 +241,14 @@ model RAJob {
   @@index([ownerUserId])
   @@index([salaryCurrency, salaryAnnualMax])
   @@index([lastSeenQueryId])
+  // SCHEMA-3 (WP-32): SR-32-1 feed new-count (firstSeenAt > last visit),
+  // SR-32-2 GoApply employer-tag / 户口 filters, SR-32-3 radius bounding box.
+  @@index([market, isCanonical, archivedAt, firstSeenAt(sort: Desc)])
+  @@index([employerTags], type: Gin)
+  @@index([geoLat, geoLng])
+  // SCHEMA-3 (WP-42, optional): ATS board reads `sourceBoard = ? AND externalId
+  // LIKE '<board>:%'`; text_pattern_ops lets the prefix use a btree.
+  @@index([sourceBoard, externalId(ops: raw("text_pattern_ops"))])
 }
 
 // ── Jobright clone: INGEST models (FND-1b; ARCH §2.4) ──────────────────────

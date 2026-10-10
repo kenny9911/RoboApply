@@ -83,10 +83,10 @@ describe('check-api-boundary', () => {
     expect(v[0]).toContain('server/src/features/feed/service.ts:1');
   });
 
-  it('this checkout passes (only the one baselined offender exists)', () => {
+  it('this checkout passes (no raw /api/v1 literal is left outside lib/api)', () => {
     expect(boundary.evaluate(process.cwd()).violations).toEqual([]);
     const offenders = [...boundary.findOffenders(process.cwd()).apiLiterals.keys()].sort();
-    expect(offenders).toEqual(['lib/resumeDownload.ts']);
+    expect(offenders).toEqual([]);
   });
 });
 

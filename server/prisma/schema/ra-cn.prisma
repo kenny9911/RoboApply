@@ -86,3 +86,47 @@ model RACampusSubscription {
   @@index([eventId])
   @@index([companyNameNormalized, graduationClass])
 }
+
+/// GoApply employer block list (CN-E-08). Admin-curated; a blocked employer's
+/// postings are flagged at ingest and kept out of feeds and Explore (SCHEMA-3,
+/// SR-41-1). Until WP-41's store moves here it lives in AppConfig
+/// `cn.jobs.employerBlacklist.v1`.
+model RACnEmployerBlacklist {
+  id           String   @id @default(cuid())
+  market       String   @default("cn")
+  /// As the admin typed it.
+  employerName String
+  /// `employerKey(employerName)` (features/cn/jobs/text.ts); short keys match
+  /// at the start of a company name.
+  employerKey  String   @unique
+  reason       String
+  /// Admin user id.
+  createdBy    String
+  createdAt    DateTime @default(now())
+}
+
+/// Admin review of a GoApply job's fraud flags (evidence retention, CN-E-08;
+/// SCHEMA-3, SR-41-2). Until WP-41's store moves here it lives in AppConfig
+/// `cn.jobs.fraudReviews.v1` (capped at 2,000 rows).
+model RACnFraudReview {
+  id          String   @id @default(cuid())
+  jobId       String
+  job         RAJob    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  /// `fraudSourceKey(sourceBoard, externalId)`: matches a re-ingested posting at
+  /// afterNormalize, before it has a row id.
+  sourceKey   String?
+  /// 'clear' | 'confirm'
+  decision    String
+  note        String?
+  /// Admin user id.
+  by          String
+  at          DateTime @default(now())
+  /// `flagKey`s of the CN flags this review cleared (a re-run never brings them back).
+  clearedKeys String[] @default([])
+  /// The CN flags the job carried when reviewed: `[{ rule, evidence, at, ... }]`.
+  flags       Json?
+
+  @@index([jobId])
+  @@index([sourceKey])
+  @@index([decision, at])
+}
