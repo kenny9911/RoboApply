@@ -1,0 +1,179 @@
+{
+  "tools": {
+    "meta": {
+      "hub": {
+        "title": "免费求职工具",
+        "description": "检查你的简历，或把简历和职位描述对照。免费，无需注册。"
+      },
+      "resumeCheck": {
+        "title": "免费简历体检",
+        "description": "上传简历，自动检查出最该先改的地方，告诉你为什么重要、怎么改。无需注册。"
+      },
+      "resumeJobMatch": {
+        "title": "简历与职位描述对照",
+        "description": "粘贴职位描述，看简历写到了其中哪些要求和关键词。免费，无需注册。"
+      }
+    },
+    "hub": {
+      "eyebrow": "免费工具",
+      "title": "求职免费工具",
+      "sub": "无需注册。每个工具每天最多 {limit} 次。",
+      "subNoLimit": "无需注册。",
+      "open": "打开",
+      "listLabel": "工具",
+      "resumeCheck": {
+        "title": "简历体检",
+        "body": "上传简历，看看最该先改什么、为什么重要、怎么改。"
+      },
+      "resumeJobMatch": {
+        "title": "简历与职位对照",
+        "body": "粘贴职位描述，看简历写到了哪些要求，还缺哪些词。"
+      },
+      "campus": {
+        "title": "校招日历",
+        "body": "各公司校招项目的网申时间，取自公司官方页面。"
+      },
+      "honesty": "这些检查都是自动完成的，只反映简历里写了什么，不能预测你会不会收到回复。"
+    },
+    "back": "全部免费工具",
+    "upload": {
+      "label": "你的简历",
+      "choose": "选择文件",
+      "replace": "换一个文件",
+      "hint": "PDF、Word 或纯文本，不超过 {mb} MB。",
+      "selected": "已选择：{name}",
+      "none": "还没有选择文件"
+    },
+    "privacy": "我们不保存你的文件。报告和从文件中读取的文字会在 {hours} 小时后删除，除非你注册账号并选择保留。结果只能在这个浏览器中打开。",
+    "consent": {
+      "label": "我同意 %BRAND% 用自动化软件读取这份简历，生成这份报告。除非我注册账号，内容会在 {hours} 小时后删除。",
+      "readingService": "文件可能会发送给 %BRAND% 使用的简历解析服务 {service}，服务器位于中国大陆。",
+      "offshore": "测试期间，处理在中国大陆以外进行，地点为美国。",
+      "whereUnknown": "由谁读取、在哪里处理，请见隐私政策。",
+      "privacyLink": "隐私政策"
+    },
+    "allowance": {
+      "left": "{count, plural, =0 {今天的免费次数已用完} other {今天还剩 # 次免费检查}}",
+      "limit": "每天最多 {limit} 次免费检查"
+    },
+    "check": {
+      "eyebrow": "免费工具",
+      "title": "简历体检",
+      "sub": "上传简历，我们按检查清单逐项检查，告诉你最该先改什么。",
+      "submit": "开始体检",
+      "running": "正在读取简历，最多可能需要一分钟。"
+    },
+    "match": {
+      "eyebrow": "免费工具",
+      "title": "简历与职位对照",
+      "sub": "粘贴职位描述，看简历写到了其中哪些要求。",
+      "postingTitle": "职位名称",
+      "postingTitleHint": "按职位描述里的写法填写。",
+      "postingText": "职位描述",
+      "postingTextHint": "粘贴职位描述的完整内容（至少 {min} 个字符）。",
+      "linkNotice": "这看起来是一个链接。免费工具不会打开链接，请粘贴职位描述的文字。注册账号后可以通过链接添加职位。",
+      "submit": "开始对照",
+      "running": "正在对照简历和职位描述，最多可能需要一分钟。"
+    },
+    "report": {
+      "automated": "自动检查清单",
+      "automatedNote": "由软件按 {rules} 条规则检查，没有人工审阅，也不代表你能否收到回复。",
+      "automatedNoteNoCount": "由软件检查，没有人工审阅，也不代表你能否收到回复。",
+      "resultLabel": "结果",
+      "label": {
+        "excellent": "很好",
+        "good": "良好",
+        "fair": "一般",
+        "needs_work": "需要修改"
+      },
+      "severity": {
+        "urgent": "先改",
+        "critical": "重要",
+        "optional": "可选"
+      },
+      "countsLabel": "发现的问题",
+      "topIssues": "最该先改的",
+      "allIssues": "所有要改的地方",
+      "noIssues": "这份清单上没有需要修改的地方。",
+      "more": "还有 {count} 个问题在完整报告里。",
+      "why": "为什么重要",
+      "how": "怎么改",
+      "quote": "简历原文",
+      "cached": "你今天已经检查过这个文件，这次没有占用免费次数。",
+      "deletes": "这份报告将在 {when} 删除。",
+      "again": "检查另一个文件"
+    },
+    "matchReport": {
+      "title": "你的简历与“{title}”",
+      "noScore": "这里对照的是要求和用词，不是匹配度评分，也不代表你被录用的机会。",
+      "row": {
+        "title": "职位名称",
+        "years": "工作年限",
+        "education": "学历",
+        "skills": "专业技能",
+        "keywords": "关键词"
+      },
+      "status": {
+        "pass": "符合",
+        "warn": "部分符合",
+        "fail": "不符合",
+        "unknown": "未注明"
+      },
+      "count": "{total} 项中符合 {met} 项",
+      "titlePass": "简历里写有这个职位名称或相近的名称。",
+      "titleWarn": "简历里写有相关的职位名称。",
+      "titleFail": "简历里没有这个职位名称。如果你做过这类工作，可以在标题或个人总结里写明。",
+      "yearsDetail": "要求 {required} 年以上，你简历中注明日期的经历合计约 {found} 年。",
+      "yearsNotListed": "职位描述没有写明年限要求。",
+      "yearsNoDates": "简历里没有找到注明日期的经历。",
+      "eduNotListed": "职位描述没有写明学历要求。",
+      "eduNotFound": "简历里没有找到学历信息。",
+      "eduMet": "你的学历达到要求。",
+      "eduBelow": "你的学历低于要求。",
+      "matched": "简历里有",
+      "missing": "简历里没有",
+      "none": "无",
+      "honest": "只有符合你真实情况的词，才加进简历。"
+    },
+    "signup": {
+      "titleCheck": "查看完整报告并修改",
+      "bodyCheck": "注册免费账号，查看所有问题，保留这份简历并在编辑器里修改。",
+      "titleMatch": "按这个职位修改简历",
+      "bodyMatch": "注册免费账号，保留这份简历，按这个职位修改，并查看附带理由的匹配度评分。",
+      "cta": "注册免费账号",
+      "login": "我已有账号"
+    },
+    "claim": {
+      "title": "把这份简历保存到账号",
+      "body": "把检查过的简历加入你的简历列表，并查看完整报告。",
+      "cta": "保存",
+      "saving": "正在保存",
+      "done": "已保存，可以在你的简历列表里找到。",
+      "alreadySaved": "这份简历已经保存到账号里。",
+      "openCheck": "查看完整体检",
+      "openResumes": "前往我的简历",
+      "limit": "你的账号保存的简历已达上限。删除一份后再试。",
+      "gone": "这个结果已无法打开。结果只在完成检查的浏览器中保留 24 小时，请重新检查。",
+      "error": "保存失败，请重试。"
+    },
+    "errors": {
+      "file_missing": "请选择简历文件。",
+      "file_unreadable": "无法从这个文件读取文字。如果是扫描件或照片，请改用从文字处理软件导出的 PDF。",
+      "file_too_large": "文件超过 {mb} MB。",
+      "file_wrong_type": "请使用 PDF、Word 或纯文本文件。",
+      "consent_required": "请勾选同意 %BRAND% 读取这份简历。",
+      "posting_title_missing": "请填写职位名称。",
+      "posting_too_short": "请粘贴完整的职位描述（至少 {min} 个字符）。",
+      "posting_too_long": "职位描述太长，请粘贴主要部分。",
+      "rate_limited": "这个工具今天的 {limit} 次免费检查已用完。请明天再试，或注册免费账号继续使用。",
+      "rate_limited_unknown": "这个工具今天的免费检查已用完。请明天再试，或注册免费账号继续使用。",
+      "result_expired": "这个结果已在 24 小时后删除，请重新检查。",
+      "network": "网络好像断开了，请检查连接后重试。",
+      "generic": "出了点问题，请重试。",
+      "result_missing": "无法打开这个结果。结果只能在完成检查的浏览器中打开，保留 24 小时。请重新检查。",
+      "run_in_progress": "已有一项检查正在进行，请等它完成后再试。",
+      "too_many_attempts": "今天尝试次数太多，请明天再试。"
+    },
+    "unavailable": "免费简历检查暂未在这里开放。"
+  }
+}
