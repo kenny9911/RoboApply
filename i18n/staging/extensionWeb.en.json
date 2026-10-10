@@ -1,3 +1,143 @@
 {
-  "extensionWeb": {}
+  "extensionWeb": {
+    "meta": {
+      "title": "%BRAND% for your browser",
+      "description": "Fill job application forms from your profile. You check every field and submit each application yourself.",
+      "uninstalledTitle": "The %BRAND% extension was removed"
+    },
+    "page": {
+      "title": "%BRAND% for your browser",
+      "intro": "Fill job application forms from your profile. You check every field and submit each application yourself.",
+      "howTitle": "How it works",
+      "how": {
+        "step1": "Open an application form on a supported site.",
+        "step2": "Click Fill this form. Fields are filled from your profile and your saved answers.",
+        "step3": "For open questions in English or Chinese, a draft written by AI appears in the side panel. Nothing goes into the form until you choose Use this answer.",
+        "step4": "Check every field, then submit the application yourself. Tell the extension if you did, so your applications list stays right."
+      },
+      "privacyTitle": "What it reads",
+      "privacy": "On application sites it supports, and on sites you turn it on for, the extension looks for the application form when the page opens. On any other page, it reads the page only when you click the extension. It never submits a form and never presses Next or Submit.",
+      "factsTitle": "Answers about you",
+      "facts": "Work authorization, sponsorship, salary, years of experience, degrees and similar questions are filled only from answers you saved. AI never writes them.",
+      "sitesTitle": "Supported sites",
+      "sites": "Application forms on {sites}. You can ask for another site from the extension.",
+      "signedOutTitle": "Connect it to your account",
+      "signedOut": "Sign in to check your setup and connect the extension.",
+      "signIn": "Sign in",
+      "unavailable": "The extension is not available yet."
+    },
+    "status": {
+      "title": "Your setup",
+      "loading": "Checking your setup…",
+      "step": "Step {current} of 3",
+      "profile": {
+        "title": "Complete your profile first",
+        "body": "The extension fills forms from your profile. Add the missing details so it has something to fill.",
+        "cta": "Complete profile"
+      },
+      "install": {
+        "title": "Install the extension",
+        "body": "Add it to your browser, then come back to this page.",
+        "cta": "Get the extension",
+        "recheck": "I installed it",
+        "checking": "Looking for the extension…"
+      },
+      "mobile": "Browser extensions don't run on phones or tablets. Open this page on a computer to install it.",
+      "unsupported": "The extension works in Chrome and Edge. Open this page in one of them to install it.",
+      "update": {
+        "title": "Update the extension",
+        "body": "You have version {version}. Update it from your browser's extensions page, then reload this page.",
+        "cta": "Open the store listing"
+      },
+      "connect": {
+        "title": "Connect this browser",
+        "body": "Link the extension to your account so it can read your profile.",
+        "cta": "Connect",
+        "pending": "Connecting…",
+        "failed": "The extension didn't answer. Use a code instead."
+      },
+      "code": {
+        "title": "Connect with a code",
+        "body": "In the extension, choose Enter code and type this code. It works for 10 minutes.",
+        "cta": "Show a code",
+        "pending": "Making a code…",
+        "expires": "Works until {time}",
+        "error": "We couldn't make a code. Try again."
+      },
+      "done": {
+        "title": "You're set",
+        "body": "The extension is connected. Open an application form on a supported site and click Fill this form.",
+        "cta": "Explore jobs"
+      },
+      "error": "We couldn't load your setup. Try again.",
+      "retry": "Try again"
+    },
+    "sensitive": {
+      "title": "Sensitive answers",
+      "intro": "Off unless you turn it on. When it's on, the extension can fill the equal-opportunity and other sensitive answers you saved, and marks each one for you to check.",
+      "label": "Let the extension fill my sensitive answers",
+      "saving": "Saving…",
+      "error": "That didn't save. Try again."
+    },
+    "prompt": {
+      "title": "Fill application forms faster",
+      "body": "The %BRAND% extension fills forms from your profile. You check every field and submit the application yourself.",
+      "cta": "Get the extension",
+      "learnMore": "How it works",
+      "dismiss": "Not now",
+      "close": "Close",
+      "installed": "Extension installed (version {version}).",
+      "updateNeeded": "Update the extension to version {version} or later.",
+      "connectCta": "Connect it",
+      "mobile": "Open %BRAND% on a computer to add the browser extension.",
+      "unsupported": "The extension works in Chrome and Edge."
+    },
+    "fill": {
+      "cta": "Fill this form",
+      "note": "Opens the application page. The extension fills the fields; check them and submit the application yourself.",
+      "install": "Get the extension to fill this form",
+      "newTab": "(opens in a new tab)"
+    },
+    "devices": {
+      "title": "Browsers with the extension",
+      "intro": "Each browser you connected. Disconnect one you no longer use; it stops working at once.",
+      "loading": "Loading…",
+      "empty": "No browser is connected yet.",
+      "setup": "Set up the extension",
+      "lastUsed": "Last used {date}",
+      "neverUsed": "Not used yet",
+      "added": "Connected {date}",
+      "version": "Version {version}",
+      "unknownVersion": "Version not reported",
+      "outdated": "Needs an update",
+      "revoke": "Disconnect",
+      "revokeTitle": "Disconnect {name}?",
+      "revokeBody": "The extension in that browser stops working until you connect it again.",
+      "cancel": "Cancel",
+      "revoked": "{name} was disconnected.",
+      "revokeError": "That didn't work. Try again.",
+      "error": "We couldn't load your browsers. Try again."
+    },
+    "uninstalled": {
+      "title": "The extension was removed",
+      "intro": "Thanks for trying it. If you like, tell us why you removed it. It helps us fix what got in the way.",
+      "question": "Why did you remove it?",
+      "reasons": {
+        "not_useful": "It wasn't useful for me",
+        "wrong_fills": "It filled fields wrongly",
+        "privacy": "I had privacy concerns",
+        "too_many_prompts": "It asked for my attention too often",
+        "site_not_supported": "The sites I apply on weren't supported",
+        "other": "Something else"
+      },
+      "note": "Anything else? (optional)",
+      "send": "Send",
+      "sending": "Sending…",
+      "sent": "Thanks for telling us.",
+      "error": "That didn't send. Try again.",
+      "pickOne": "Choose at least one reason.",
+      "reinstall": "Changed your mind? Get the extension again.",
+      "back": "Back to %BRAND%"
+    }
+  }
 }
