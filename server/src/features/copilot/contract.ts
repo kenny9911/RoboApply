@@ -9,8 +9,13 @@
 // charged only when the proposal is applied. Guardrails: no submission
 // claims, no number that is in neither a tool result nor the user's text
 // ("No source found for that number."), card job ids only from tool results.
+//
+// Streaming note (WP-50): text is released sentence by sentence, each
+// sentence after the guard has checked it, so nothing unchecked reaches the
+// client. `done.content` repeats the final, guarded reply.
 
 import { z } from 'zod';
+import type { Sourced } from '../../platform/http.js';
 
 const Id = z.string().min(1).max(64);
 
@@ -36,6 +41,9 @@ export const CARD_TYPES = [
   'notice',
   'campus_deadlines',
   'competitiveness',
+  // WP-50 additions (F-RES-11 resume scope; PRODUCT §5.7 RESUME_TIPS):
+  'resume_tips',
+  'rewrite_ready',
 ] as const;
 export type CardType = (typeof CARD_TYPES)[number];
 
@@ -71,21 +79,92 @@ export const CopilotToolCallsSchema = z.array(
   z.object({ id: z.string(), name: z.string(), args: z.unknown(), resultDigest: z.string(), ms: z.number(), ok: z.boolean() }).strict(),
 );
 
-/** `RACopilotProposal.payload` (documented JSON column). */
+/** `RACopilotProposal.payload` (documented JSON column). `messageId` = the assistant message that carries the card. */
 export const FilterChangePayloadSchema = z
   .object({
     searchProfileId: z.string(),
     baseVersion: z.number().int(),
     ops: z.array(z.object({ op: z.enum(['add', 'remove', 'set']), path: z.string(), value: z.unknown() }).strict()),
+    reason: z.string().max(300).optional(),
+    messageId: z.string().optional(),
   })
   .strict();
+export const CREDIT_ACTIONS = ['tailor', 'cover_letter', 'outreach', 'job_import', 'rewrite'] as const;
+export type CreditAction = (typeof CREDIT_ACTIONS)[number];
 export const CreditActionPayloadSchema = z
-  .object({ action: z.enum(['tailor', 'cover_letter', 'outreach', 'job_import']), args: z.record(z.string(), z.unknown()), bucket: z.string(), cost: z.number().int().min(0) })
+  .object({
+    action: z.enum(CREDIT_ACTIONS),
+    args: z.record(z.string(), z.unknown()),
+    bucket: z.string(),
+    cost: z.number().int().min(0),
+    messageId: z.string().optional(),
+  })
   .strict();
+export const MemoryAddPayloadSchema = z.object({ fact: z.string().min(1).max(200), messageId: z.string().optional() }).strict();
 export const PROPOSAL_KINDS = ['filter_change', 'credit_action', 'memory_add'] as const;
 export type ProposalKind = (typeof PROPOSAL_KINDS)[number];
+export type ProposalStatus = 'pending' | 'applied' | 'dismissed' | 'expired' | 'conflict';
 /** Proposals expire after 24 h. */
 export const PROPOSAL_TTL_MS = 24 * 60 * 60 * 1000;
+
+// ── Card payloads (`card.data`) for the proposal and action cards ────────
+
+/** `filter_diff`: what changes, the job counts before and after, and the proposal to apply. */
+export interface FilterDiffCardData {
+  proposalId: string;
+  status: ProposalStatus;
+  expiresAt: string;
+  searchProfileId: string;
+  baseVersion: number;
+  reason: string | null;
+  /** One row per changed field (search.diffFilterSets). */
+  changes: Array<{ field: string; kind: 'added' | 'removed' | 'changed'; addedItems?: unknown[]; removedItems?: unknown[]; from?: unknown; to?: unknown }>;
+  /** Feed counts (null = not known; never 0 for unknown). `capped` = "N+". */
+  countBefore: CountView | null;
+  countAfter: CountView | null;
+}
+
+/** A job count on the wire (D3): `Sourced<number>` from the index; null = not known ("—"). `capped` = "N+". */
+export interface CountView {
+  count: Sourced<number> | null;
+  capped: boolean;
+}
+
+/** `credit_action`: a paid action waiting for the user's click; shows the cost line. */
+export interface CreditActionCardData {
+  proposalId: string;
+  status: ProposalStatus;
+  expiresAt: string;
+  action: CreditAction;
+  jobId: string | null;
+  bucket: string;
+  /** Credits the action uses when applied. */
+  cost: number;
+  /** Credits left in the bucket's current window (window + grants); null when unknown. */
+  remaining: number | null;
+  resetsAt: string | null;
+}
+
+/** `memory_add`: a fact the user may confirm; GoApply needs the `copilot_memory` consent first. */
+export interface MemoryAddCardData {
+  proposalId: string;
+  status: ProposalStatus;
+  expiresAt: string;
+  fact: string;
+  /** True on GoApply without a live `copilot_memory` consent: ask it before applying. */
+  consentRequired: boolean;
+}
+
+/** `action`: a client-side action (sort change, open a link). Nothing is applied on the server. */
+export type ActionCardData =
+  | { kind: 'set_sort'; sort: string }
+  | { kind: 'open_link'; href: string; label: 'people' | 'resume' | 'resume_check' | 'added_jobs' | 'report' | 'practice' | 'job' };
+
+/** `competitiveness`: links to the report page (flag `competitiveness`). */
+export interface CompetitivenessCardData {
+  href: string;
+  jobId: string | null;
+}
 
 // ── Threads and messages ─────────────────────────────────────────────────
 
@@ -106,14 +185,21 @@ export interface MessageView {
   cards: CopilotCard[];
   createdAt: string;
   feedback: 'up' | 'down' | null;
+  /** True for assistant replies (GoApply renders AiGeneratedBadge). */
+  aiGenerated?: boolean;
 }
 
 /** Per-job chips (UI). */
 export const COPILOT_CHIPS = ['why_fit', 'whats_missing', 'resume_tips', 'tailor', 'cover_letter', 'practice', 'similar_jobs', 'connections'] as const;
+export type CopilotChip = (typeof COPILOT_CHIPS)[number];
 
-/** POST /copilot/threads/:id/messages → SSE. Credit `assistant` per user turn. */
+/**
+ * POST /copilot/threads/:id/messages → SSE. Credit `assistant` per user turn;
+ * the `Idempotency-Key` header is required (one per user intent).
+ * `resumeId` scopes the turn to one resume (F-RES-11, the resume page).
+ */
 export const SendMessageBodySchema = z
-  .object({ text: z.string().trim().min(1).max(4000), chip: z.enum(COPILOT_CHIPS).optional(), contextJobId: Id.optional() })
+  .object({ text: z.string().trim().min(1).max(4000), chip: z.enum(COPILOT_CHIPS).optional(), contextJobId: Id.optional(), resumeId: Id.optional() })
   .strict();
 
 export type CopilotSseEvent =
@@ -122,7 +208,18 @@ export type CopilotSseEvent =
   | { event: 'tool'; data: { id: string; name: string; phase: 'start' | 'end'; ok?: boolean } }
   | { event: 'card'; data: CopilotCard }
   | { event: 'error'; data: { code: string; message: string; retryable: boolean } }
-  | { event: 'done'; data: { messageId: string; usage: { inputTokens: number; outputTokens: number }; creditsRemaining: number | null } };
+  | {
+      event: 'done';
+      data: {
+        messageId: string;
+        usage: { inputTokens: number; outputTokens: number };
+        creditsRemaining: number | null;
+        /** The final reply after the guard (what was stored). */
+        content?: string;
+        /** True when the guard replaced or removed a sentence. */
+        guarded?: boolean;
+      };
+    };
 
 // ── Proposals ────────────────────────────────────────────────────────────
 
@@ -133,6 +230,18 @@ export interface ApplyProposalResponse {
   applied: boolean;
   result: unknown;
 }
+/**
+ * `result` per kind:
+ *   filter_change  { searchProfileId, version, countAfter: CountView | null }
+ *   credit_action  { card }  (tailor_ready | cover_letter | job_imported | rewrite_ready)
+ *   memory_add     { memory: MemoryFactView }
+ * A filter conflict answers 409 `version_conflict` with
+ * `details: { currentVersion, card }` (a fresh `filter_diff` card).
+ */
+export interface ApplyProposalResult {
+  card?: CopilotCard;
+  [key: string]: unknown;
+}
 
 // ── Feedback and memory ──────────────────────────────────────────────────
 
@@ -141,12 +250,40 @@ export const MessageFeedbackBodySchema = z.object({ value: z.enum(['up', 'down']
 
 /** Max 50 confirmed facts; GoApply long-term memory needs the `copilot_memory` consent. */
 export const COPILOT_MEMORY_MAX = 50;
+export const COPILOT_MEMORY_FACT_MAX = 200;
 export interface MemoryFactView {
   id: string;
   fact: string;
   createdAt: string;
 }
 export const MemoryParamsSchema = z.object({ id: Id });
+
+// ── Proactive nudge (F-ORION-08; at most one per session, client-side) ───
+
+/**
+ * GET /copilot/nudge — at most one nudge, from real signals only:
+ *   adjust_search    the latest feed rating (last 7 days) was below 6
+ *   hide_agencies    the user reported a job in the last 14 days and agency posts are shown
+ *   add_min_pay      no minimum pay set and ≥ MIN_SAMPLE jobs in the search list pay
+ *   campus_deadline  (GoApply) an official 网申 window the user follows closes within 7 days
+ */
+export const NUDGE_KINDS = ['adjust_search', 'hide_agencies', 'add_min_pay', 'campus_deadline'] as const;
+export type NudgeKind = (typeof NUDGE_KINDS)[number];
+export interface NudgeView {
+  kind: NudgeKind;
+  /**
+   * Debug-only English text (logs, tests). The client never sends or shows it:
+   * the chip label AND the message it sends come from the i18n keys
+   * `assistant.nudge.<kind>.label` / `assistant.nudge.<kind>.prompt`, so zh and
+   * GoApply users send text in their own language.
+   */
+  prompt: string;
+  /** Facts behind the nudge (counts carry their source). */
+  facts: Record<string, unknown>;
+}
+export interface NudgeResponse {
+  nudge: NudgeView | null;
+}
 
 // ── Visitor turn (WP-78 calls handleVisitorTurn) ─────────────────────────
 
@@ -174,6 +311,40 @@ export interface CopilotFeedbackRow {
 
 export const COPILOT_ERROR_CODES = {
   proposalExpired: 'proposal_expired',
+  proposalClosed: 'proposal_closed',
   dailyBudget: 'copilot_budget_exhausted',
   threadNotFound: 'thread_not_found',
+  messageNotFound: 'message_not_found',
+  idempotencyKeyRequired: 'idempotency_key_required',
+  memoryFull: 'memory_full',
+  memoryConsentRequired: 'copilot_memory_consent_required',
+  aiOff: 'ai_off',
 } as const;
+
+/** Tools the signed-in Assistant may offer (ARCH §5.2 + WP-50 additions). */
+export const COPILOT_TOOL_NAMES = [
+  'search_jobs',
+  'top_fit_jobs',
+  'get_current_filters',
+  'propose_filter_change',
+  'set_sort',
+  'get_job',
+  'analyze_fit',
+  'company_insights',
+  'find_connections',
+  'draft_outreach',
+  'tailor_resume',
+  'write_cover_letter',
+  'interview_prep',
+  'salary_context',
+  'application_summary',
+  'add_external_job',
+  'remember',
+  'get_profile_gaps',
+  'resume_issues',
+  'rewrite_resume_section',
+  'campus_deadlines',
+  'competitiveness',
+  'explain_feature',
+] as const;
+export type CopilotToolName = (typeof COPILOT_TOOL_NAMES)[number];
