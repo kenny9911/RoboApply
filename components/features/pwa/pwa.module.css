@@ -1,0 +1,113 @@
+/* components/features/pwa — install prompt, "Alerts on this device" and the
+ * "What's new" announcement (WP-61). Clarity tokens only; light and dark come
+ * from app/globals.css, brand identity from styles/brands/<brand>.css.
+ * Controls are 40px on wide screens and at least 44px on phones. */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.text {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: 1.55;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.body {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  max-width: 68ch;
+}
+
+.meta {
+  margin: 0;
+  font-size: var(--fs-meta);
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.error {
+  margin: 0;
+  font-size: var(--fs-meta);
+  line-height: 1.5;
+  color: var(--danger);
+}
+
+.label {
+  margin: 0;
+  font-size: var(--fs-label);
+  font-weight: 600;
+  color: var(--action);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+
+.actions :global(.btn) {
+  min-height: 40px;
+}
+
+/* ── "Alerts on this device" card ─────────────────────────────────────── */
+
+.card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3) var(--sp-4);
+  padding: var(--sp-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  min-width: 0;
+}
+
+.cardText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.cardAction :global(.btn) {
+  min-height: 40px;
+}
+
+@media (max-width: 760px) {
+  .actions :global(.btn),
+  .cardAction :global(.btn) {
+    min-height: 44px;
+  }
+  .actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+  .cardAction {
+    width: 100%;
+  }
+  .cardAction :global(.btn) {
+    width: 100%;
+    justify-content: center;
+  }
+}

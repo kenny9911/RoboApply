@@ -1,31 +1,55 @@
-// server/src/features/announcements/routes.ts — STUB (FND-5). Owner: WP-61.
+// server/src/features/announcements/routes.ts — "What's new" for seekers (WP-61).
 // Mounted by features/index.ts at /api/v1/roboapply/announcements (seeker; no flag).
 // The admin router lives in adminRoutes.ts.
+//
+//   GET  /next?locale=   → { announcement: AnnouncementView | null }  (at most one; null while
+//                          the 24 h popup budget is spent, or when nothing is left to show)
+//   POST /:id/seen       → null  (shown once; the first time also writes an inbox row)
 
-import { Router, type RequestHandler } from 'express';
-import type { ZodType } from 'zod';
+import { Router, type Request } from 'express';
 import { seekerAuth } from '../../roboapply/engine/middleware/seekerAuth.js';
-import { markStub, NotImplementedError, parseBody, parseParams, parseQuery, route } from '../../platform/http.js';
+import { getCurrentBrandOrDefault } from '../../platform/brand/brandContext.js';
+import { parseParams, parseQuery, requireUserId, route } from '../../platform/http.js';
 import type { FeatureRouterDeps } from '../index.js';
-import { AnnouncementParamsSchema } from './contract.js';
+import { AnnouncementParamsSchema, NextAnnouncementQuerySchema } from './contract.js';
+import { AnnouncementsService, announcementsService } from './service.js';
 
-function stub(what: string, s: { params?: ZodType; query?: ZodType; body?: ZodType } = {}): RequestHandler {
-  return markStub(
-    route(async (req) => {
-      if (s.params) parseParams(req, s.params);
-      if (s.query) parseQuery(req, s.query);
-      if (s.body) parseBody(req, s.body);
-      throw new NotImplementedError(what);
-    }),
-  );
+export interface AnnouncementsRouterDeps extends FeatureRouterDeps {
+  service?: AnnouncementsService;
 }
 
-export function createAnnouncementsRouter(deps: FeatureRouterDeps = {}): Router {
+/** The UI language: `?locale=`, else the `x-ra-locale` header, else the NEXT_LOCALE cookie. */
+export function requestLocale(req: Request, fromQuery?: string): string | null {
+  const v = fromQuery ?? req.get('x-ra-locale') ?? (req.cookies as Record<string, unknown> | undefined)?.NEXT_LOCALE;
+  return typeof v === 'string' && v ? v : null;
+}
+
+export function createAnnouncementsRouter(deps: AnnouncementsRouterDeps = {}): Router {
   const router = Router();
   const auth = [...(deps.seekerAuth ?? seekerAuth)];
+  const service = () => deps.service ?? announcementsService();
 
-  router.get('/next', ...auth, stub('announcements.next'));
-  router.post('/:id/seen', ...auth, stub('announcements.seen', { params: AnnouncementParamsSchema }));
+  router.get(
+    '/next',
+    ...auth,
+    route(async (req) => {
+      const userId = requireUserId(req);
+      const { locale } = parseQuery(req, NextAnnouncementQuerySchema);
+      return service().next(userId, getCurrentBrandOrDefault(), requestLocale(req, locale));
+    }),
+  );
+
+  router.post(
+    '/:id/seen',
+    ...auth,
+    route(async (req) => {
+      const userId = requireUserId(req);
+      const { id } = parseParams(req, AnnouncementParamsSchema);
+      const { locale } = parseQuery(req, NextAnnouncementQuerySchema);
+      await service().markSeen(userId, getCurrentBrandOrDefault(), id, requestLocale(req, locale));
+      return null;
+    }),
+  );
 
   return router;
 }
