@@ -1,3 +1,909 @@
 {
-  "landing": {}
+  "landing": {
+    "site": {
+      "nav": {
+        "label": "Main",
+        "features": "Features",
+        "pricing": "Pricing",
+        "help": "Help",
+        "signIn": "Sign in",
+        "getStarted": "Start free",
+        "homeAria": "%BRAND% home page"
+      },
+      "footer": {
+        "label": "Site",
+        "productTitle": "Product",
+        "companyTitle": "Company",
+        "helpTitle": "Help",
+        "popularTitle": "Popular job lists",
+        "langTitle": "%BRAND% in your language",
+        "pricing": "Pricing",
+        "about": "About",
+        "security": "Security",
+        "help": "Help and contact",
+        "ranking": "How ranking works",
+        "tagline": "Find out what each job asks for, fix what's missing, and practice the interview. You send every application yourself.",
+        "taglineCn": "Fewer forms. No missed deadlines. Calmer interviews. You submit every application yourself.",
+        "copyright": "© {year} %BRAND%"
+      }
+    },
+    "example": {
+      "label": "Example",
+      "note": "Made-up resume and jobs, to show how it works. Not real data."
+    },
+    "cta": {
+      "start": "Start free",
+      "createAccount": "Create a free account"
+    },
+    "home": {
+      "meta": {
+        "title": "Find out why you're not getting interviews | %BRAND%",
+        "description": "%BRAND% reads your resume and live job posts, shows the jobs you can actually get, names what each one asks for that your resume doesn't show, and lets you practice the interview. Free to start. You send every application yourself.",
+        "ogTitle": "%BRAND%: find out why you're not getting interviews",
+        "ogDescription": "See which open jobs fit your resume, what each one is missing, and practice the interview for that exact job. Free to start."
+      },
+      "hero": {
+        "eyebrow": "Read your resume · read the job · name the gap",
+        "headline": "Find out why you're not getting interviews.",
+        "subCount": "Add your resume. We read {count}+ open roles, show you the ones you can actually get, and name exactly what's missing.",
+        "subPlain": "Add your resume. We show you the open roles you can actually get, and name exactly what's missing.",
+        "ctaSecondary": "See an example",
+        "reassure": "Free plan · No card needed · You send every application yourself"
+      },
+      "sample": {
+        "title": "What one job looks like",
+        "tabsLabel": "Steps of the example",
+        "role": "Backend engineer, payments",
+        "company": "Example company",
+        "tabs": {
+          "find": "Find",
+          "understand": "Understand",
+          "fix": "Fix",
+          "practice": "Practice"
+        },
+        "find": {
+          "line1": "Your resume: 6 years building payment systems.",
+          "line2": "This job asks for backend work in payments, in your city, at your level.",
+          "line3": "Fit: Good fit · 78 / 100"
+        },
+        "understand": {
+          "gap": "They ask for Kubernetes twice. Your resume never mentions it.",
+          "overlap": "Your payments background matches the area they name 3 times.",
+          "fitLine": "This is not your chance of getting hired."
+        },
+        "fix": {
+          "line1": "Tailored copy for this job, with every change shown side by side.",
+          "line2": "One line has a number we couldn't find on your resume. Fix it or remove it before you download."
+        },
+        "practice": {
+          "line1": "A practice interview built from this job post and your resume.",
+          "line2": "Likely question: \"Tell me about a time a payment system failed. What did you do?\"",
+          "line3": "After the call: a report with one stronger answer per question."
+        }
+      },
+      "verbs": {
+        "eyebrow": "How it works",
+        "title": "Find. Understand. Fix. Practice.",
+        "find": {
+          "title": "Find jobs that fit",
+          "body": "Live job posts are read against your resume and your search. Each one gets a fit tier: Great fit, Good fit, Possible or Unlikely."
+        },
+        "understand": {
+          "title": "See the gap first",
+          "body": "Every job leads with what the employer asks for that your resume doesn't show, and what already overlaps."
+        },
+        "fix": {
+          "title": "Fix your resume for that job",
+          "body": "Tailor a copy and write a cover letter from the post. Anything new must be confirmed by you before you download it."
+        },
+        "practice": {
+          "title": "Practice the interview",
+          "body": "Run a practice interview for that exact job and get a report you can act on before the real one."
+        }
+      },
+      "counters": {
+        "title": "From the jobs we hold right now",
+        "openRoles": "{count}+ open roles",
+        "addedThisWeek": "{count}+ added in the last 7 days",
+        "method": "Counted from the %BRAND% index, updated hourly, rounded down. Only jobs anyone can see are counted; jobs people add for themselves are not."
+      },
+      "pricing": {
+        "eyebrow": "Pricing",
+        "title": "Start free. Upgrade when you need more.",
+        "sub": "The job list, fit scores, filters and your applications board are free. Pro raises the daily limits on the AI actions.",
+        "freeNote": "Daily limits on AI actions",
+        "proNote": "Higher daily limits on every AI action",
+        "notSet": "Price not set yet",
+        "seeAll": "See every plan and limit"
+      },
+      "faq": {
+        "title": "Questions",
+        "q1": {
+          "q": "What is %BRAND%?",
+          "a": "%BRAND% reads your resume and live job posts. For each job it shows how well your resume lines up and what the post asks for that your resume doesn't show. Then it helps you tailor your resume and cover letter, and practice the interview for that job."
+        },
+        "q2": {
+          "q": "Does %BRAND% send applications for me?",
+          "a": "No. You open each application on the employer's site and submit it yourself. When you open one, the job moves to Applied on your board, and you can undo that if you didn't apply."
+        },
+        "q3": {
+          "q": "What does the fit score mean?",
+          "a": "It says how well your resume lines up with the job post: title and level, skills, industry, location, pay and work permit, and how your career has moved. It is not your chance of getting hired."
+        },
+        "q4": {
+          "q": "Where do the jobs come from?",
+          "a": "From job listing providers and from recruiters who post on our partner sites. Every job shows its source and when it was last checked."
+        },
+        "q5": {
+          "q": "How much does it cost?",
+          "a": "The free plan includes the job list, fit scores and your applications board, with daily limits on AI actions. Pro raises those limits. Every price and limit is on the pricing page."
+        },
+        "q6": {
+          "q": "Can I delete my data?",
+          "a": "Yes. In Settings you can download a copy of your data and delete your account. Deleting it removes your resumes, applications and practice interviews."
+        }
+      },
+      "final": {
+        "title": "Find out what's missing.",
+        "sub": "Add your resume, say what you're looking for, and read your first gap."
+      }
+    },
+    "search": {
+      "title": "Search open jobs",
+      "role": "Job title",
+      "rolePlaceholder": "e.g. Product designer",
+      "country": "Country",
+      "anyCountry": "Any country",
+      "city": "City",
+      "cityPlaceholder": "e.g. Toronto",
+      "remote": "Remote only",
+      "submit": "Search jobs",
+      "signupNote": "Create a free account to see jobs that fit you.",
+      "roleRequired": "Enter a job title."
+    },
+    "cnHome": {
+      "meta": {
+        "title": "%BRAND%：少填表、不错过截止、面试不慌",
+        "description": "%BRAND% helps students and job seekers in mainland China keep one profile, keep track of application deadlines and practice the AI interview formats employers commonly use. The core is free. You submit every application yourself.",
+        "ogTitle": "%BRAND%: fewer forms, no missed deadlines, calmer interviews",
+        "ogDescription": "One profile, a deadline calendar for campus programmes, and AI interview practice. Free to start."
+      },
+      "hero": {
+        "eyebrow": "For campus and experienced hires",
+        "headline": "Fewer forms. No missed deadlines. Calmer interviews.",
+        "sub": "Keep one resume and profile, track every application and its deadline, and practice the AI interview formats employers commonly use.",
+        "subNoAi": "Keep one resume and profile, and track every application and its deadline in one place.",
+        "ctaSecondary": "See what's free",
+        "reassure": "Free core · You submit every application yourself"
+      },
+      "pillars": {
+        "title": "Three things, in one place",
+        "forms": {
+          "title": "Fewer forms",
+          "body": "Write your resume once, then make a version for each job. Your profile keeps the details application forms keep asking for."
+        },
+        "deadlines": {
+          "title": "No missed deadlines",
+          "body": "Every application sits on one board with its status and dates, and you get a reminder before a date you set."
+        },
+        "interview": {
+          "title": "Calmer interviews",
+          "body": "Practice the AI interview formats employers commonly use, then read a report with what to change."
+        }
+      },
+      "campus": {
+        "title": "Campus calendar",
+        "sub": "Programmes open for your graduation year, when applications close, and the official link.",
+        "open": "Open the campus calendar",
+        "closes": "Applications close {date}",
+        "noDate": "Closing date not announced",
+        "source": "Source: {source} · checked {date}",
+        "needsCheck": "Not re-checked in the last 14 days",
+        "empty": "No programmes are listed yet."
+      },
+      "practice": {
+        "title": "AI interview practice",
+        "sub": "Practice the AI interview formats employers commonly use. Each session ends with a report: what you said well and what to change.",
+        "cta": "Try a practice interview"
+      },
+      "free": {
+        "title": "The core is free",
+        "body": "Your resume, the applications board and reminders are free. A paid membership only raises the daily limits on AI actions.",
+        "notOpen": "Paid plans are not open yet.",
+        "pricing": "See the fee schedule"
+      },
+      "faq": {
+        "title": "Questions",
+        "q1": {
+          "q": "Does %BRAND% submit applications or message employers for me?",
+          "a": "No. %BRAND% never submits an application and never messages an employer. You fill in and submit every application yourself."
+        },
+        "q2": {
+          "q": "Where do campus programme dates come from?",
+          "a": "Each programme links to the employer's official page and shows when it was last checked. A date that hasn't been re-checked for 14 days is marked."
+        },
+        "q3": {
+          "q": "Is AI used on my resume?",
+          "a": "Only after you turn on AI processing. You can turn it off in Settings at any time."
+        }
+      },
+      "final": {
+        "title": "Start with your resume.",
+        "sub": "Add it once, then keep every application and deadline in one place."
+      }
+    },
+    "features": {
+      "common": {
+        "howTitle": "How it works",
+        "faqTitle": "Questions",
+        "ctaTitle": "Try it with your own resume",
+        "unavailable": "This page isn't available.",
+        "backHome": "Back to the home page",
+        "allFeatures": "All features"
+      },
+      "roboapply": {
+        "jobMatches": {
+          "metaTitle": "Jobs that fit your resume, with the reasons",
+          "metaDescription": "%BRAND% ranks live job posts by how well your resume fits, and every job leads with what's missing.",
+          "eyebrow": "Job matches",
+          "title": "Jobs ranked by fit, with the reason in plain words",
+          "sub": "Every job gets a fit tier and leads with the gap: what the employer asks for that your resume doesn't show.",
+          "sample": {
+            "line1": "Good fit · 78 / 100",
+            "line2": "They ask for Kubernetes twice. Your resume never mentions it.",
+            "line3": "This is not your chance of getting hired."
+          },
+          "s1": {
+            "title": "Add your resume and search",
+            "body": "Tell us the roles, places and pay you want. Your resume does the rest."
+          },
+          "s2": {
+            "title": "Read the gap first",
+            "body": "Each job shows what overlaps and what's missing before it shows a number."
+          },
+          "s3": {
+            "title": "Act on it",
+            "body": "Save the job, tailor your resume, or practice the interview."
+          },
+          "q1": {
+            "q": "How is the list ordered?",
+            "a": "By fit, freshness, what you've shown interest in and the listing source. The How ranking works page lists every factor."
+          },
+          "q2": {
+            "q": "Do recruiter-posted jobs rank higher?",
+            "a": "No. Recruiter-posted is a filter you can turn on. It never moves a job up the list."
+          }
+        },
+        "resumeTailoring": {
+          "metaTitle": "Tailor your resume for each job",
+          "metaDescription": "Make a version of your resume for one job, see every change, and confirm anything new before you download.",
+          "eyebrow": "Resume tailoring",
+          "title": "A version of your resume for each job",
+          "sub": "See every change side by side. Anything the draft adds that isn't on your resume waits for you to confirm it.",
+          "sample": {
+            "line1": "Changed: summary now names payments infrastructure.",
+            "line2": "One line has a number we couldn't find on your resume. Fix it or remove it before you download.",
+            "line3": "Fit after changes: Good fit · 84 / 100"
+          },
+          "s1": {
+            "title": "Pick a job",
+            "body": "Start from any job in your list or one you added."
+          },
+          "s2": {
+            "title": "Review the changes",
+            "body": "Keep, edit or remove each change. Nothing new is added without your say."
+          },
+          "s3": {
+            "title": "Download",
+            "body": "Export a PDF or Word file once every new detail is confirmed."
+          },
+          "q1": {
+            "q": "Can it invent experience?",
+            "a": "It can suggest wording, but a claim, number or skill that isn't on your resume can't be downloaded until you confirm, edit or remove it."
+          },
+          "q2": {
+            "q": "Does it change my main resume?",
+            "a": "No. Each tailored copy is separate, and your main resume stays as it is."
+          }
+        },
+        "coverLetters": {
+          "metaTitle": "Cover letters from the job post and your resume",
+          "metaDescription": "Write a cover letter for one job from the post and your own resume, then edit it.",
+          "eyebrow": "Cover letters",
+          "title": "A cover letter for this job, from your own resume",
+          "sub": "The letter uses what the post asks for and what your resume shows. You edit it before you use it.",
+          "sample": {
+            "line1": "Opening names the role and the team from the post.",
+            "line2": "Middle paragraph uses two results from your resume.",
+            "line3": "Written by AI. Read it before you send it."
+          },
+          "s1": {
+            "title": "Choose the job",
+            "body": "Start from the job page."
+          },
+          "s2": {
+            "title": "Read the draft",
+            "body": "Every fact comes from your resume or the post."
+          },
+          "s3": {
+            "title": "Edit and download",
+            "body": "Change anything, then copy it or download it."
+          },
+          "q1": {
+            "q": "Is it sent to the employer?",
+            "a": "No. You decide where and whether to use it."
+          },
+          "q2": {
+            "q": "Is there a limit?",
+            "a": "Yes, a daily limit per plan. The pricing page lists it."
+          }
+        },
+        "readyToApply": {
+          "metaTitle": "Applications prepared each week; you submit them",
+          "metaDescription": "Each week %BRAND% prepares materials for jobs that fit. You review them and submit each application yourself.",
+          "eyebrow": "Ready to apply",
+          "title": "Each week, applications prepared for you to review",
+          "sub": "For jobs that fit, %BRAND% prepares a tailored resume, a cover letter and answers to common questions. You open each application and submit it yourself.",
+          "sample": {
+            "line1": "5 jobs this week · Good fit or better",
+            "line2": "Kit ready: tailored resume, cover letter, 4 answers",
+            "line3": "Open application → you check it and submit"
+          },
+          "s1": {
+            "title": "Set how many a week",
+            "body": "Choose 5, 10, 20 or 30 jobs and the lowest fit you'll accept."
+          },
+          "s2": {
+            "title": "Review each kit",
+            "body": "Change anything before you use it."
+          },
+          "s3": {
+            "title": "Submit it yourself",
+            "body": "Open the employer's page and submit. The job moves to Applied."
+          },
+          "q1": {
+            "q": "Does it submit anything?",
+            "a": "No. It never submits an application or contacts an employer."
+          },
+          "q2": {
+            "q": "What if I didn't apply after opening a job?",
+            "a": "Undo it in one tap and the job goes back where it was."
+          }
+        },
+        "interviewPractice": {
+          "metaTitle": "Practice the interview for a specific job",
+          "metaDescription": "Live practice interviews built from a job post and your resume, with a report after each one.",
+          "eyebrow": "Interview practice",
+          "title": "Practice the interview for this exact job",
+          "sub": "A practice interviewer briefed on the job post and your resume asks the questions that panel is likely to ask. Afterwards you get a report.",
+          "sample": {
+            "line1": "Likely question: \"Walk me through a payment outage you handled.\"",
+            "line2": "Note: lead with the result; it came at the end of your answer.",
+            "line3": "Report: one stronger answer per question."
+          },
+          "s1": {
+            "title": "Pick the job",
+            "body": "Start from any job, or paste a post."
+          },
+          "s2": {
+            "title": "Talk it through",
+            "body": "Answer out loud. The interviewer follows up like a person would."
+          },
+          "s3": {
+            "title": "Read the report",
+            "body": "See what worked and what to change, question by question."
+          },
+          "q1": {
+            "q": "Is it recorded?",
+            "a": "We keep a written transcript of your answers, because your report is written from it. Audio and video aren't recorded by default."
+          },
+          "q2": {
+            "q": "Does a good report mean I'll get the job?",
+            "a": "No. It shows how your answers came across in practice, not what a real panel will decide."
+          }
+        },
+        "assistant": {
+          "metaTitle": "The Assistant: ask about any job",
+          "metaDescription": "Ask questions about a job, your resume or your search, and get answers based on your own data.",
+          "eyebrow": "Assistant",
+          "title": "Ask about any job, your resume or your search",
+          "sub": "The Assistant answers from the job post, your resume and your saved searches. It can suggest a filter change; you approve it.",
+          "sample": {
+            "line1": "\"Why is this job only a Possible?\"",
+            "line2": "They ask for 5 years of team leadership; your resume shows 2.",
+            "line3": "Written by AI. Numbers come from the post or your resume."
+          },
+          "s1": {
+            "title": "Open it anywhere",
+            "body": "Use the Ask button or \"Ask about this job\"."
+          },
+          "s2": {
+            "title": "Get a sourced answer",
+            "body": "A number with no source is removed from the answer."
+          },
+          "s3": {
+            "title": "Approve any change",
+            "body": "Suggested changes to filters or your resume wait for you."
+          },
+          "q1": {
+            "q": "Does it act without asking?",
+            "a": "No. It suggests; you approve each change."
+          },
+          "q2": {
+            "q": "Is there a limit?",
+            "a": "Yes, a daily number of messages per plan, listed on the pricing page."
+          }
+        },
+        "visaSponsorship": {
+          "metaTitle": "Visa sponsorship and work permits, per country",
+          "metaDescription": "Say whether you need sponsorship in the country you're searching, and see what each post says about it.",
+          "eyebrow": "Visa and work permits",
+          "title": "Know what a post says about sponsorship",
+          "sub": "Tell us if you need sponsorship in the country you're searching. Jobs that say they don't sponsor are left out, and we show the post's own words.",
+          "sample": {
+            "line1": "The post says: \"We are able to sponsor visas for this role.\"",
+            "line2": "No mention in the post: shown as not stated.",
+            "line3": "We quote the post. We don't guess from silence."
+          },
+          "s1": {
+            "title": "Answer one question",
+            "body": "Do you need sponsorship to work in this country?"
+          },
+          "s2": {
+            "title": "Read the quote",
+            "body": "A sponsorship badge appears only when the post says so."
+          },
+          "s3": {
+            "title": "Confirm with the employer",
+            "body": "Posts can be out of date. Check before you rely on it."
+          },
+          "q1": {
+            "q": "Is this legal advice?",
+            "a": "No. It shows what the post says. Rules differ by country; check with the employer or an adviser."
+          },
+          "q2": {
+            "q": "Which countries?",
+            "a": "Any country you search in. The question follows the country, not just the US."
+          }
+        },
+        "referrals": {
+          "metaTitle": "People at a company",
+          "metaDescription": "Find people at a company to ask about a job, and draft a message you send yourself.",
+          "eyebrow": "People",
+          "title": "Find people to ask about a job",
+          "sub": "Links to people at the company, and a message draft you edit and send yourself.",
+          "sample": {
+            "line1": "Search for people at this company on LinkedIn",
+            "line2": "Draft: a short, specific question about the team",
+            "line3": "You send it yourself."
+          },
+          "s1": {
+            "title": "Open People on a job",
+            "body": "See the search links for that company."
+          },
+          "s2": {
+            "title": "Draft a message",
+            "body": "Start from a short draft and make it yours."
+          },
+          "s3": {
+            "title": "Send it yourself",
+            "body": "%BRAND% never contacts anyone for you."
+          },
+          "q1": {
+            "q": "Where do the people come from?",
+            "a": "From searches you open yourself, and from recruiters who chose to be contactable on our partner sites."
+          },
+          "q2": {
+            "q": "Do you sell contact details?",
+            "a": "No. We don't buy or show contact data from data brokers."
+          }
+        },
+        "chromeExtension": {
+          "metaTitle": "%BRAND% for Chrome: fill application forms",
+          "metaDescription": "Fill application forms from your profile, then check and submit them yourself.",
+          "eyebrow": "%BRAND% for Chrome",
+          "title": "Fill this form from your profile",
+          "sub": "On an employer's application page, the extension fills the fields it can from your profile. You check the form and submit it yourself.",
+          "sample": {
+            "line1": "12 of 15 fields filled from your profile",
+            "line2": "3 questions need your answer",
+            "line3": "Check the form, then submit it yourself."
+          },
+          "s1": {
+            "title": "Install the extension",
+            "body": "Connect it to your account."
+          },
+          "s2": {
+            "title": "Open an application",
+            "body": "Choose Fill this form."
+          },
+          "s3": {
+            "title": "Check and submit",
+            "body": "The extension never clicks Submit."
+          },
+          "q1": {
+            "q": "Does it submit the form?",
+            "a": "No. It stops at a filled form. You review it and submit."
+          },
+          "q2": {
+            "q": "Does it watch what I submit?",
+            "a": "No. It doesn't watch employer pages for submits. You tell us if you applied."
+          }
+        }
+      },
+      "goapply": {
+        "campusCalendar": {
+          "metaTitle": "Campus calendar: open programmes and closing dates",
+          "metaDescription": "Campus programmes open for your graduation year, their closing dates and official links, with reminders.",
+          "eyebrow": "Campus calendar",
+          "title": "Every campus programme, with the date it closes",
+          "sub": "See which programmes are open for your graduation year, when applications close and the official link. Get a reminder before the date.",
+          "sample": {
+            "line1": "Example company · 2027 graduates · applications close 31 Oct",
+            "line2": "Official link · checked 2 days ago",
+            "line3": "Reminder set for 3 days before"
+          },
+          "s1": {
+            "title": "Choose your year",
+            "body": "Filter by graduation year, city and role."
+          },
+          "s2": {
+            "title": "Follow programmes",
+            "body": "Follow a company or a single programme."
+          },
+          "s3": {
+            "title": "Apply on the official site",
+            "body": "Every entry links to the employer's own page."
+          },
+          "q1": {
+            "q": "Where do the dates come from?",
+            "a": "From the employer's official page, checked by our team. Each entry shows when it was last checked."
+          },
+          "q2": {
+            "q": "What if a date changes?",
+            "a": "Entries not re-checked for 14 days are marked. Always confirm on the official page."
+          }
+        },
+        "resume": {
+          "metaTitle": "Chinese resume builder with a version per job",
+          "metaDescription": "Write your resume once and make a version for each job, with every change shown.",
+          "eyebrow": "Resume",
+          "title": "One resume, a version for each job",
+          "sub": "Build a Chinese resume, then make a version for each job. Every change is shown, and nothing new is added without your confirmation.",
+          "sample": {
+            "line1": "Version for: Example company · data analyst intern",
+            "line2": "Changed: project section moved up",
+            "line3": "Written by AI. Check before you use it."
+          },
+          "s1": {
+            "title": "Add your resume",
+            "body": "Upload a file or fill it in by hand."
+          },
+          "s2": {
+            "title": "Pick a job",
+            "body": "Make a version for that job."
+          },
+          "s3": {
+            "title": "Download",
+            "body": "Export once every change is confirmed."
+          },
+          "q1": {
+            "q": "Is AI required?",
+            "a": "No. You can write and edit by hand. AI is used only after you turn it on."
+          },
+          "q2": {
+            "q": "Are personal details like a photo sent to the AI?",
+            "a": "No. Photo, hometown, political status, birth date, gender and family details are never sent to an AI model."
+          }
+        },
+        "interviewPractice": {
+          "metaTitle": "AI interview practice in common employer formats",
+          "metaDescription": "Practice the AI interview formats employers commonly use and get a report after each session.",
+          "eyebrow": "AI interview practice",
+          "title": "Practice the AI interview formats employers commonly use",
+          "sub": "Answer questions in the formats employers commonly use for AI interviews, then read a report with what to change.",
+          "sample": {
+            "line1": "Format: timed answers to set questions",
+            "line2": "Note: your answer ran past the time limit",
+            "line3": "Report: one stronger answer per question"
+          },
+          "s1": {
+            "title": "Choose a job or format",
+            "body": "Start from a job you saved or a common format."
+          },
+          "s2": {
+            "title": "Answer the questions",
+            "body": "Take your time between sessions; practice as often as your plan allows."
+          },
+          "s3": {
+            "title": "Read the report",
+            "body": "See what worked and what to change."
+          },
+          "q1": {
+            "q": "Is this the employer's real interview?",
+            "a": "No. It is practice in formats employers commonly use. It is not connected to any employer or vendor."
+          },
+          "q2": {
+            "q": "Is the report labelled as AI?",
+            "a": "Yes. Every AI-written part is labelled."
+          }
+        },
+        "assistant": {
+          "metaTitle": "Job search assistant",
+          "metaDescription": "Ask about a job, your resume or your applications, with answers based on your own data.",
+          "eyebrow": "Assistant",
+          "title": "Ask about a job, your resume or your applications",
+          "sub": "The Assistant answers from the job post and your own data. With your consent it can remember your search between sessions.",
+          "sample": {
+            "line1": "\"Which applications close this week?\"",
+            "line2": "Two: Example company (Fri) and Example bank (Sun).",
+            "line3": "Written by AI."
+          },
+          "s1": {
+            "title": "Ask a question",
+            "body": "Use the Ask button anywhere."
+          },
+          "s2": {
+            "title": "Read a sourced answer",
+            "body": "Answers use your data and the job post."
+          },
+          "s3": {
+            "title": "Approve any change",
+            "body": "Suggestions wait for your approval."
+          },
+          "q1": {
+            "q": "Does it remember me?",
+            "a": "Only if you turn memory on. You can clear it in Settings."
+          },
+          "q2": {
+            "q": "Does it contact employers?",
+            "a": "No. It never contacts an employer or submits an application."
+          }
+        },
+        "formFiller": {
+          "metaTitle": "Fill application forms from your profile",
+          "metaDescription": "Fill online application forms from your profile, then check and submit them yourself.",
+          "eyebrow": "Form filler",
+          "title": "Fill application forms from your profile",
+          "sub": "On an employer's application page, the extension fills the fields it can from your profile. You check the form and submit it yourself.",
+          "sample": {
+            "line1": "Education, internships and contact details filled",
+            "line2": "2 questions need your answer",
+            "line3": "Check the form, then submit it yourself."
+          },
+          "s1": {
+            "title": "Install the extension",
+            "body": "Connect it to your account."
+          },
+          "s2": {
+            "title": "Open an application form",
+            "body": "Choose Fill this form."
+          },
+          "s3": {
+            "title": "Check and submit",
+            "body": "The extension never clicks Submit."
+          },
+          "q1": {
+            "q": "Does it submit the form?",
+            "a": "No. It stops at a filled form. You review it and submit."
+          },
+          "q2": {
+            "q": "Which sites does it work on?",
+            "a": "Common application systems. Where a field can't be filled, it says so."
+          }
+        }
+      }
+    },
+    "pricingPage": {
+      "metaTitle": "Pricing",
+      "metaDescription": "Every %BRAND% plan, price, limit and refund rule.",
+      "title": "Pricing",
+      "sub": "Every price, renewal rule and usage limit is on this page.",
+      "plansTitle": "Plans",
+      "free": "Free",
+      "freePrice": "Free",
+      "freeNote": "The job list, fit scores, filters and your applications board, with daily limits on AI actions.",
+      "freeNoteNoFeed": "Your resume, your applications board and reminders.",
+      "notSet": "Price not set yet",
+      "notOpen": "Not open yet",
+      "notOpenNote": "Paid plans can't be bought yet. This is the fee schedule that will apply when they open.",
+      "practiceCredits": "{count, plural, one {# practice interview} other {# practice interviews}} {per, select, period {each billing period} month {a month} other {included}}",
+      "cta": "Start free",
+      "loading": "Loading plans…",
+      "error": "Plans couldn't be loaded. Refresh to try again.",
+      "capsTitle": "Limits",
+      "capsSub": "Pro has limits too. They stop abuse and are printed here so you know them before you pay.",
+      "capsAction": "Action",
+      "capsFree": "Free",
+      "capsPro": "Pro",
+      "savedSearches": "Saved searches",
+      "instantAlerts": "Instant job alert emails",
+      "count": "{count}",
+      "perDay": "{count} a day",
+      "upToPerDay": "Up to {count} a day",
+      "freeAlways": "Free on every plan",
+      "freeAlwaysBody": "The job list, fit scores and gap lines, filters, search, Explore and your applications board.",
+      "freeAlwaysBodyNoFeed": "Your resume, your applications board and deadline reminders.",
+      "freeAlwaysCampus": "The campus calendar is free too.",
+      "refundTitle": "Refunds",
+      "refund1": "Your first subscription payment can be refunded within 7 days (48 hours for weekly billing) if you used fewer than 5 actions that need Pro.",
+      "refund2": "A renewal you didn't mean to keep can be refunded within 3 days.",
+      "refund3": "Unused practice packs can be refunded.",
+      "refund4": "In the EU and UK you can withdraw within 14 days for a full refund, unless you asked to start using paid features at once.",
+      "refundLink": "Read the refund policy",
+      "renewTitle": "Renewals and cancelling",
+      "renew1": "Plans that renew say so on this page and at checkout. You get a reminder email before each monthly or quarterly renewal.",
+      "renew2": "Cancel in Settings, or without signing in on the cancel page. You keep access until the end of the period you paid for.",
+      "cancelLink": "Cancel a subscription",
+      "cnRefund": "Refund rules will be published before paid plans open.",
+      "cnPasses": "Memberships are one-time passes. They never renew automatically.",
+      "faqTitle": "Questions",
+      "q1": {
+        "q": "Do I need a card to start?",
+        "a": "No. The free plan needs no payment details."
+      },
+      "q2": {
+        "q": "What happens when I reach a limit?",
+        "a": "That action waits until its limit resets: daily limits at local midnight, weekly limits at local midnight on Monday. Everything else keeps working."
+      },
+      "q3": {
+        "q": "Do unused credits roll over?",
+        "a": "No. Limits reset each day or each week, as shown in the table. Practice packs stay valid for the months listed."
+      }
+    },
+    "about": {
+      "metaTitle": "About",
+      "metaDescription": "What %BRAND% is, what it will not do, and how to reach us.",
+      "title": "About %BRAND%",
+      "lead": "%BRAND% is a job-search tool for people who apply and hear nothing back. It shows what each job asks for that your resume doesn't, helps you fix it, and lets you practice the interview.",
+      "leadCn": "%BRAND% is a job-search assistant for students and job seekers in mainland China: one profile, a deadline calendar for campus programmes, and AI interview practice.",
+      "rulesTitle": "What %BRAND% will not do",
+      "rule1": "Submit an application, or message an employer, for you.",
+      "rule2": "Show a number without its source. Unknown is shown as unknown, never as zero.",
+      "rule3": "Add experience to your resume that you haven't confirmed.",
+      "rule4": "Present a fit score as your chance of getting hired.",
+      "rule5": "Show testimonials, user counts or ratings we can't back up.",
+      "whoTitle": "Who runs it",
+      "entity": "%BRAND% is operated by {entity}.",
+      "noEntity": "Company details are listed in the terms of service.",
+      "contactTitle": "Contact",
+      "contactBody": "Questions, problems or feedback go to our support inbox:",
+      "helpLink": "Help and contact form"
+    },
+    "security": {
+      "metaTitle": "Security",
+      "metaDescription": "How %BRAND% protects your account and data, in plain words.",
+      "title": "Security",
+      "lead": "What we actually do to protect your account and your data. If something here changes, this page changes with it.",
+      "accountTitle": "Your account",
+      "account1": "Passwords are stored only as salted one-way hashes. We can't read your password.",
+      "account2": "Sign-in cookies can't be read by scripts on the page and travel only over encrypted connections.",
+      "account3": "When your account signs in from a new browser or device, we email you.",
+      "account4": "Sign-in attempts and other sensitive actions are rate-limited.",
+      "dataTitle": "Your data",
+      "data1": "You can download a copy of your data and delete your account from Settings.",
+      "data2": "We never send an application, message or form to an employer for you.",
+      "data3": "There are no third-party advertising pixels or trackers on %BRAND%.",
+      "aiTitle": "AI processing",
+      "aiIntl": "Your resume and job data go only to the AI providers named in the privacy policy. They are never sent to AI services in mainland China.",
+      "aiCn": "AI processing starts only after you turn it on, and you can turn it off at any time. Where data is processed and stored is stated in the privacy policy.",
+      "aiSensitive": "Sensitive details such as a photo, birth date, gender or family members are never sent to an AI model.",
+      "privacyLink": "Read the privacy policy",
+      "reportTitle": "Report a security problem",
+      "reportBody": "Email our support inbox with \"Security\" in the subject. Please don't test against other people's accounts:"
+    },
+    "help": {
+      "metaTitle": "Help and contact",
+      "metaDescription": "Answers to common questions about %BRAND%, and how to contact support.",
+      "title": "Help",
+      "sub": "Answers to common questions. Can't find yours? Write to us below.",
+      "emailLine": "Support inbox:",
+      "linksTitle": "Useful pages",
+      "rankingLink": "How ranking works",
+      "cancelLink": "Cancel a subscription",
+      "pricingLink": "Pricing and limits",
+      "securityLink": "Security",
+      "faqTitle": "Common questions",
+      "q1": {
+        "q": "How do I reset my password?",
+        "a": "On the sign-in page, choose Forgot password and follow the email we send."
+      },
+      "q2": {
+        "q": "How do I cancel a subscription?",
+        "a": "In Settings under Billing, or without signing in on the cancel page. Access continues until the end of the period you paid for."
+      },
+      "q3": {
+        "q": "Why did a job disappear from my list?",
+        "a": "It may have closed, been removed by its source, or been hidden by a filter you set. Closed jobs show when they were last seen."
+      },
+      "q4": {
+        "q": "I opened an application but didn't apply. How do I fix it?",
+        "a": "Use Undo on the job, or change its status on your applications board."
+      },
+      "q5": {
+        "q": "How do I delete my account?",
+        "a": "In Settings, under the account section. You can download a copy of your data first."
+      },
+      "q6": {
+        "q": "Why does the fit score say it isn't my chance of getting hired?",
+        "a": "Because it only measures how well your resume lines up with the post. Hiring depends on many things we can't see."
+      }
+    },
+    "contact": {
+      "title": "Contact support",
+      "sub": "We read every message. There is no set reply time.",
+      "email": "Your email",
+      "name": "Your name (optional)",
+      "topic": "Topic",
+      "message": "Message",
+      "messageHint": "At least 10 characters. Don't include passwords or card numbers.",
+      "send": "Send message",
+      "sending": "Sending…",
+      "sent": "Message sent to our support inbox. We'll reply to the email you gave.",
+      "sendAnother": "Send another message",
+      "invalidEmail": "Enter a valid email address.",
+      "tooShort": "Write at least 10 characters.",
+      "rateLimited": "You've sent the most messages allowed for today. Email us at {email} instead.",
+      "notSent": "Your message couldn't be sent. Email us at {email} instead.",
+      "topics": {
+        "account": "Account and sign-in",
+        "billing": "Billing and plans",
+        "jobs": "Jobs and search",
+        "resume": "Resume and cover letters",
+        "practice": "Interview practice",
+        "extension": "Browser extension",
+        "privacy": "Privacy and data",
+        "bug": "Something isn't working",
+        "other": "Something else"
+      }
+    },
+    "ranking": {
+      "metaTitle": "How ranking works",
+      "metaDescription": "Every factor %BRAND% uses to order the For you list, and what it never uses.",
+      "title": "How ranking works",
+      "lead": "The For you list (sort: Recommended) is ordered by four factors. Here is each one, with its weight.",
+      "factorsTitle": "The four factors",
+      "weight": "{pct}% of the order",
+      "fit": {
+        "title": "Fit to your resume and search",
+        "body": "Your fit score for the job, out of 100. When a full fit analysis isn't available yet, a quick estimate is used, counted slightly lower."
+      },
+      "freshness": {
+        "title": "Freshness",
+        "body": "Newer posts come first. The effect fades over about three days."
+      },
+      "affinity": {
+        "title": "What you've shown interest in",
+        "body": "Jobs like the ones you saved or opened move up; jobs like the ones you hid move down. Older actions count for less."
+      },
+      "source": {
+        "title": "Listing source",
+        "body": "Sources whose posts are usually complete and current count slightly more."
+      },
+      "fitParts": {
+        "title": "What goes into the fit score",
+        "titleLevel": "Title and level",
+        "skills": "Skills the post asks for",
+        "industry": "Industry experience",
+        "logistics": "Location, pay and work permit",
+        "careerPath": "How your career has moved",
+        "tiers": "Tiers: Great fit {great} and up · Good fit {good} to {goodTop} · Possible {possible} to {possibleTop} · Unlikely under {possible}.",
+        "notChance": "This is not your chance of getting hired.",
+        "weight": "{pct}% of the fit score"
+      },
+      "goalTitle": "Your goal",
+      "goal1": "If you said you want to manage people, manager roles move up.",
+      "goal2": "If you said you want higher pay, jobs that list pay above your minimum move up.",
+      "spreadTitle": "Variety",
+      "spread": "No more than {max} jobs from the same company in any {window} in a row.",
+      "neverTitle": "What ranking never uses",
+      "never1": "Payment from employers. No one can pay to move a job up.",
+      "never2": "Whether a job was posted by a recruiter. That is a filter only.",
+      "never3": "Jobs flagged as possible scams are taken out of the list until they're reviewed.",
+      "never4": "Your photo, age, gender or family details.",
+      "otherSortsTitle": "Other ways to sort",
+      "otherSorts": "Newest, Best fit and Highest pay sort by that one thing only.",
+      "cnNote": "On %BRAND%, if personalised recommendations are off or not chosen yet, jobs are ordered by date and your filters only."
+    }
+  }
 }

@@ -1,20 +1,28 @@
-// /pricing — route shell (FND-6b). Public pricing.
-//
-// STUB. Owner: WP-40, who replaces this page. Public page in HybridShell (R-23): the app shell with a session,
-// marketing chrome and the legal footer without one. Not indexed while a stub.
-// Nothing links here until the owner ships and INT flips the entry.
+// /pricing — public pricing for both brands (TASK_PLAN.md WP-40; F-BILL-02;
+// PRODUCT §6). In HybridShell (R-23): the app shell with a session, marketing
+// chrome without one. Prices come from GET /billing/plans and caps from the
+// credit catalog; GoApply shows the fee schedule as "Not open yet" until CN
+// payments open (R-15).
 
 import type { Metadata } from 'next';
 
 import { HybridShell } from '../../components/v3/shell/HybridShell';
-import { LegalFooter } from '../../components/features/market';
+import { JsonLd, MarketingFooter, PricingPage } from '../../components/features/marketing';
+import { PRICING_FAQ_KEYS } from '../../components/features/marketing/catalog';
+import { marketingRequest, subpageJsonLd, subpageMetadata } from '../../components/features/marketing/serverPage';
 
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+const NS = 'landing.pricingPage';
 
-export default function PricingPage() {
+export async function generateMetadata(): Promise<Metadata> {
+  return subpageMetadata(await marketingRequest(), NS, '/pricing');
+}
+
+export default async function PricingRoute() {
+  const req = await marketingRequest();
   return (
-    <HybridShell from="pricing" footer={<LegalFooter />}>
-      <div hidden data-route-stub="/pricing" data-owner="WP-40" />
+    <HybridShell from="pricing" footer={<MarketingFooter />}>
+      <JsonLd json={subpageJsonLd(req, NS, '/pricing', { base: NS, keys: PRICING_FAQ_KEYS })} />
+      <PricingPage />
     </HybridShell>
   );
 }
