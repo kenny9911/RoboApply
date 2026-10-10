@@ -1,6 +1,7 @@
 // lib/api/notifications.ts — Message center, notification preferences, email unsubscribe.
 //
-// Thin typed wrappers over the area contract (FND-7). Owner: WP-39b.
+// Thin typed wrappers over the area contract (FND-7; filled by WP-39b).
+// The unsubscribe calls are public (no session): the /unsubscribe/<token> page uses them signed out.
 // Request types are the contract's zod input types; response types are the
 // contract's views. Change a signature here only together with its contract.
 //
@@ -30,18 +31,18 @@ export function getUnreadCount(opts?: CallOptions): Promise<N.UnreadCountRespons
 }
 
 /** `notifications.readAll` — POST /api/v1/roboapply/notifications/read-all */
-export function markAllRead(opts?: CallOptions): Promise<void> {
-  return call<void>('POST', `/api/v1/roboapply/notifications/read-all`, opts);
+export function markAllRead(opts?: CallOptions): Promise<{ updated: number }> {
+  return call<{ updated: number }>('POST', `/api/v1/roboapply/notifications/read-all`, opts);
 }
 
 /** `notifications.getPreferences` — GET /api/v1/roboapply/notifications/preferences */
-export function getNotificationPreferences(opts?: CallOptions): Promise<N.NotificationPreferences> {
-  return call<N.NotificationPreferences>('GET', `/api/v1/roboapply/notifications/preferences`, opts);
+export function getNotificationPreferences(opts?: CallOptions): Promise<N.NotificationPreferencesView> {
+  return call<N.NotificationPreferencesView>('GET', `/api/v1/roboapply/notifications/preferences`, opts);
 }
 
 /** `notifications.patchPreferences` — PATCH /api/v1/roboapply/notifications/preferences */
-export function patchNotificationPreferences(body: In<typeof N.PatchNotificationPreferencesBodySchema> = {}, opts?: CallOptions): Promise<N.NotificationPreferences> {
-  return call<N.NotificationPreferences>('PATCH', `/api/v1/roboapply/notifications/preferences`, { ...opts, body });
+export function patchNotificationPreferences(body: In<typeof N.PatchNotificationPreferencesBodySchema> = {}, opts?: CallOptions): Promise<N.NotificationPreferencesView> {
+  return call<N.NotificationPreferencesView>('PATCH', `/api/v1/roboapply/notifications/preferences`, { ...opts, body });
 }
 
 /** `notifications.read` — POST /api/v1/roboapply/notifications/:id/read */
@@ -50,13 +51,13 @@ export function markRead(id: string, opts?: CallOptions): Promise<void> {
 }
 
 /** `notifications.respond` — POST /api/v1/roboapply/notifications/:id/respond */
-export function respondToInvitation(id: string, body: In<typeof N.RespondInvitationBodySchema>, opts?: CallOptions): Promise<void> {
-  return call<void>('POST', `/api/v1/roboapply/notifications/${seg(id)}/respond`, { ...opts, body });
+export function respondToInvitation(id: string, body: In<typeof N.RespondInvitationBodySchema>, opts?: CallOptions): Promise<N.NotificationView> {
+  return call<N.NotificationView>('POST', `/api/v1/roboapply/notifications/${seg(id)}/respond`, { ...opts, body });
 }
 
 /** `email.unsubscribePreview` — GET /api/v1/public/email/unsubscribe */
-export function getUnsubscribePreview(query: In<typeof N.UnsubscribeQuerySchema>, opts?: CallOptions): Promise<Pick<N.UnsubscribeResponse, 'category'>> {
-  return call<Pick<N.UnsubscribeResponse, 'category'>>('GET', withQuery(`/api/v1/public/email/unsubscribe`, query), opts);
+export function getUnsubscribePreview(query: In<typeof N.UnsubscribeQuerySchema>, opts?: CallOptions): Promise<N.UnsubscribePreview> {
+  return call<N.UnsubscribePreview>('GET', withQuery(`/api/v1/public/email/unsubscribe`, query), opts);
 }
 
 /** `email.unsubscribe` — POST /api/v1/public/email/unsubscribe */
