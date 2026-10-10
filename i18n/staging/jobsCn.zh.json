@@ -1,3 +1,116 @@
 {
-  "jobsCn": {}
+  "jobsCn": {
+    "meta": {
+      "label": "职位信息"
+    },
+    "source": {
+      "direct": "企业直招",
+      "directHint": "由合作招聘方核验过的企业发布。",
+      "from": "来源：{sourceName}",
+      "unknown": "来源未注明",
+      "reposted": "首发于{name}",
+      "licence": "{holder} 人力资源服务许可证 {number}"
+    },
+    "dates": {
+      "updated": "{date}更新",
+      "updatedUnknown": "更新日期未注明",
+      "lastChecked": "{date}最后核对",
+      "expires": "{date}截止",
+      "expiresUnknown": "截止日期未注明",
+      "expired": "已于{date}截止"
+    },
+    "salary": {
+      "label": "薪资",
+      "notDisclosed": "薪资未披露"
+    },
+    "tags": {
+      "label": "职位原文写明",
+      "hukou": "可落户",
+      "soe": "央国企",
+      "bianzhi": "事业编",
+      "foreign": "外企",
+      "classYear": "{year}届",
+      "quote": "原文：“{quote}”"
+    },
+    "warning": {
+      "title": "这个职位可能是骗局",
+      "body": "求职不应缴纳任何费用、押金或贷款。提供个人信息前，请先核实用人单位。",
+      "evidence": "原文：“{evidence}”"
+    },
+    "rules": {
+      "training_to_hire": "招转培",
+      "training_loan": "培训贷",
+      "upfront_fee": "要求先交钱",
+      "mlm": "拉人头 / 传销",
+      "gambling": "涉赌",
+      "telecom_lure": "刷单或境外高薪诱骗",
+      "blacklisted_employer": "企业在黑名单中",
+      "other": "其他风险信号"
+    },
+    "external": {
+      "title": "去其他招聘网站搜索",
+      "sub": "在新标签页打开该网站对“{query}”的搜索结果。%BRAND% 不会替你登录，也不会向该网站发送任何信息。",
+      "link": "在{board}搜索",
+      "newTab": "（在新标签页打开）",
+      "loading": "正在生成链接…",
+      "error": "链接暂时无法生成，请稍后再试。"
+    },
+    "admin": {
+      "title": "可疑职位待审核",
+      "sub": "规则、AI 检查或用户举报标记的职位。被标记的职位不会出现在推荐和职位探索中；用户自己导入的职位仍对其本人可见，并附带风险提示。",
+      "loading": "加载中…",
+      "loadError": "列表加载失败，请稍后再试。",
+      "tabsLabel": "审核状态",
+      "tabs": {
+        "flagged": "待审核",
+        "cleared": "已放行",
+        "confirmed": "已确认"
+      },
+      "empty": {
+        "flagged": "暂无待审核职位。",
+        "cleared": "暂无已放行职位。",
+        "confirmed": "暂无已确认职位。"
+      },
+      "more": "加载更多",
+      "company": "{company}",
+      "sourceLine": "来源：{sourceName}",
+      "sourceUnknown": "来源未注明",
+      "ownImport": "用户自行添加",
+      "flaggedAt": "{date}标记",
+      "reports": "{count, plural, =0 {暂无用户举报} other {# 条用户举报}}",
+      "evidence": "“{evidence}”",
+      "method": {
+        "keywords": "关键词规则",
+        "llm": "AI 检查",
+        "blacklist": "黑名单",
+        "admin": "管理员"
+      },
+      "noFlags": "规则未发现风险信号，来自用户举报。",
+      "note": "备注（选填）",
+      "notePlaceholder": "说明判断依据",
+      "blacklistEmployer": "同时将{company}加入黑名单",
+      "clear": "不是骗局",
+      "confirm": "确认骗局并下架",
+      "confirmOwnImport": "确认骗局",
+      "saving": "保存中…",
+      "resolveError": "保存失败，请重试。",
+      "reviewed": "{by} 于 {date}{decision, select, clear {放行} other {确认}}",
+      "reviewedNoName": "于 {date}{decision, select, clear {放行} other {确认}}",
+      "blacklist": {
+        "title": "企业黑名单",
+        "sub": "黑名单企业的所有在招职位都会被标记，不会出现在推荐和职位探索中。移出黑名单后，没有其他风险信号的职位会恢复。",
+        "employer": "企业名称",
+        "reason": "原因",
+        "add": "加入黑名单",
+        "adding": "添加中…",
+        "exists": "该企业已在黑名单中。",
+        "addError": "添加失败，请重试。",
+        "remove": "将{employer}移出黑名单",
+        "removeError": "移出失败，请重试。",
+        "empty": "黑名单为空。",
+        "added": "{date}加入",
+        "matched": "{count, plural, =0 {没有在招职位与该名称匹配。请检查拼写，或填写企业全称。} other {# 个在招职位与该名称匹配，已全部标记。}}"
+      }
+    }
+  }
 }
