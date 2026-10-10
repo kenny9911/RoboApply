@@ -2,27 +2,41 @@
 //
 // PRODUCT §7.3 rows 2–10: one lifecycle message a day at most, quiet hours
 // 21:00–08:00, consent checks; rows 5, 6 and 10 (and the former Friday
-// practice nudge) are "Tips and reminders" and send only with that
-// preference on. The cron entry (`lifecycle-emails`) calls ./cron.ts.
+// practice nudge, now row 6) are "Tips and reminders" and send only with that
+// preference on (default off for EEA/UK/CH/CA and GoApply). The cron entry
+// (`lifecycle-emails`) calls ./cron.ts; rows 7–9 come from the reminder
+// producers and may ask `lifecycleService.canSend` first.
 
-import { NotImplementedError } from '../../platform/http.js';
+import {
+  CRON_STEPS,
+  LIFECYCLE_STEPS,
+  LIFECYCLE_TEMPLATE_KEYS,
+  LIFECYCLE_TIMING,
+  RE_ENGAGEMENT_MAX_UNANSWERED,
+  RE_ENGAGEMENT_MIN_JOBS,
+  STEP_TEMPLATE,
+  TIPS_STEPS,
+  eligibleSteps,
+  stepForTemplate,
+  type LifecycleStep,
+} from './rules.js';
 
-/** PRODUCT §7.3 rows 2–10, in order. `tips_*` rows are "Tips and reminders". */
-export const LIFECYCLE_STEPS = [
-  'welcome', // 2
-  'finish_setup', // 3
-  'resume_check_ready', // 4
-  'tips_first_tailor', // 5
-  'tips_practice', // 6 (replaces the Friday nudge)
-  'follow_up_reminder', // 7
-  'interview_date_reminder', // 8
-  'ready_list_ready', // 9
-  'tips_re_engagement', // 10 (14 and 30 days inactive; never when N < 3)
-] as const;
-
-/** Steps sent only when the "Tips and reminders" preference is on. */
-export const TIPS_STEPS: readonly LifecycleStep[] = ['tips_first_tailor', 'tips_practice', 'tips_re_engagement'];
-export type LifecycleStep = (typeof LIFECYCLE_STEPS)[number];
+export {
+  CRON_STEPS,
+  LIFECYCLE_STEPS,
+  LIFECYCLE_TEMPLATE_KEYS,
+  LIFECYCLE_TIMING,
+  RE_ENGAGEMENT_MAX_UNANSWERED,
+  RE_ENGAGEMENT_MIN_JOBS,
+  STEP_TEMPLATE,
+  TIPS_STEPS,
+  eligibleSteps,
+  stepForTemplate,
+};
+export type { LifecycleFacts, LifecycleStep, SentRecord } from './rules.js';
+export { canSendWith, createLifecycleTask, runForPerson } from './service.js';
+export type { LifecycleDeps } from './service.js';
+export type { LifecyclePerson, LifecycleRepo } from './repo.js';
 
 export interface LifecycleService {
   /** Whether a step is allowed for this user now (consent, quiet hours, one-a-day). */
@@ -30,7 +44,12 @@ export interface LifecycleService {
 }
 
 export const lifecycleService: LifecycleService = {
-  async canSend() {
-    throw new NotImplementedError('lifecycle.canSend');
+  async canSend(userId, step, now = new Date()) {
+    const [{ canSendWith }, { createPrismaLifecycleRepo }, { createPrismaPreferencesRepo }] = await Promise.all([
+      import('./service.js'),
+      import('./repo.js'),
+      import('../alerts/index.js'),
+    ]);
+    return canSendWith(userId, step, now, { repo: createPrismaLifecycleRepo(), prefs: createPrismaPreferencesRepo() });
   },
 };
