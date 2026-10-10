@@ -200,7 +200,7 @@ export const BRANDS: Record<BrandId, ProductBrand> = {
       invites: true,
       'cn.referralCodes': false,
       offers: true,
-      visitorAssistant: true,
+      visitorAssistant: false, // off by default (TASK_PLAN WP-78); enable per environment with FLAG_ROBOAPPLY_VISITOR_ASSISTANT=true
       totp: true,
       student: true,
       competitiveness: true,
