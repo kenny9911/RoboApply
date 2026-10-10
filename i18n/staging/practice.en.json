@@ -1,3 +1,13 @@
 {
-  "practice": {}
+  "practice": {
+    "setup": {
+      "creditCost": "Costs {n, plural, one {# credit} other {# credits}}",
+      "creditsRemaining": "{n, plural, one {# credit} other {# credits}} left",
+      "insufficientCredits": "This interview needs {required, plural, one {# credit} other {# credits}} and you have {balance}. Add credits to continue.",
+      "insufficientCreditsNoPurchase": "This interview needs {required, plural, one {# credit} other {# credits}} and you have {balance}.",
+      "flow": {
+        "costShort": "{n, plural, one {# credit} other {# credits}} — more than you have"
+      }
+    }
+  }
 }

@@ -17,6 +17,8 @@
 //     written them; a note says the checks themselves are keyword checks.
 // The STAR marks, the filler counts and their summaries are plain keyword
 // checks on the user's own words, so the filler block carries no AI label.
+// `typed` (the written practice): the answers were typed, so the filler note
+// says so and does not mention speech-to-text.
 
 import { useTranslations } from 'next-intl';
 
@@ -28,6 +30,8 @@ const STAR_ORDER: readonly StarPart[] = ['situation', 'task', 'action', 'result'
 
 export interface CnReportViewProps {
   report: CnPracticeReport;
+  /** The answers were typed (the written practice), not transcribed from speech. Default false. */
+  typed?: boolean;
 }
 
 function AreaCard({ area }: { area: CnAreaScore }) {
@@ -50,7 +54,7 @@ function AreaCard({ area }: { area: CnAreaScore }) {
   );
 }
 
-export function CnReportView({ report }: CnReportViewProps) {
+export function CnReportView({ report, typed = false }: CnReportViewProps) {
   const t = useTranslations('practiceCn.report');
   const answered = report.answers.length > 0;
   const aiAreas = report.areas.some((a) => a.basis === 'ai_review' || a.basis === 'mixed');
@@ -151,7 +155,7 @@ export function CnReportView({ report }: CnReportViewProps) {
             </ul>
           </div>
         ) : null}
-        <p className={styles.source}>{t('fillers.note')}</p>
+        <p className={styles.source} data-testid="cn-fillers-note">{t(typed ? 'fillers.noteTyped' : 'fillers.note')}</p>
       </div>
 
       <details className={styles.how}>

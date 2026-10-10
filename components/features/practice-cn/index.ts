@@ -3,7 +3,7 @@
 //
 //   CnReport      — the blocks for an interview-engine session (`{ sessionId }`);
 //   CnReportView  — the same blocks from a report block (the written practice
-//                   can render it with the block its score returns);
+//                   renders it with the block its score returns, with `typed`);
 //   CnQuestionTiming — the per-question timing line, from the numbers in
 //                   blueprint.cnFormat (text-practice UI renders it);
 //   buildCnPracticeReport / normalizeCnTurns — the client mirror of the rubric;

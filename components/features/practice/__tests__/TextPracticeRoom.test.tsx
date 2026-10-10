@@ -115,8 +115,95 @@ describe('TextPracticeRoom', () => {
       </QueryClientProvider>,
     );
     await answerAll();
-    expect(await screen.findByText('0')).toBeTruthy();
+    // Nothing was answered: the score shows "—", not a 0 out of 100.
+    const score = await screen.findByTestId('text-practice-score');
+    expect(score.textContent).toContain('—');
+    expect(score.textContent).not.toMatch(/0|\/100/);
     expect(spy).not.toHaveBeenCalledWith({ queryKey: CHECKLIST_QUERY_KEY });
+  });
+
+  // FIX-6: the interviewer writes light markdown (the server contract says so).
+  it('renders the interviewer’s markdown instead of showing the ** markers', async () => {
+    m.start.mockResolvedValue({
+      sessionId: 't1',
+      questions: [
+        { q: 'Design a Top-K over **256MB** of memory.', hint: 'Give the **complexity** of each option.', coachTip: null },
+        { q: 'Why this team?', hint: '', coachTip: null },
+      ],
+    });
+    m.nextTurn.mockReset();
+    m.nextTurn.mockResolvedValueOnce({
+      nextIndex: 1,
+      turns: [{ who: 'them', text: 'Right direction, but **you gave no numbers**.\n\nNext: why this team?' }],
+      coachTip: null,
+    });
+    renderRoom();
+    const bold = await screen.findByText('256MB');
+    expect(bold.tagName).toBe('STRONG');
+    expect(screen.getByText('complexity').tagName).toBe('STRONG');
+    expect(document.body.textContent).not.toContain('**');
+
+    // What the user types is shown as typed, markers included.
+    fireEvent.change(screen.getByLabelText('Your answer'), { target: { value: 'Use a **heap** of size K.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send answer' }));
+    expect(await screen.findByText('Use a **heap** of size K.')).toBeTruthy();
+
+    const reply = await screen.findByText('you gave no numbers');
+    expect(reply.tagName).toBe('STRONG');
+    const turn = reply.closest('li')!;
+    // Bold text in a reply is not styled as the speaker label, and paragraphs stay apart.
+    expect(turn.querySelector('[data-turn-who]')!.textContent).toBe('Interviewer');
+    expect(reply.hasAttribute('data-turn-who')).toBe(false);
+    expect(turn.querySelectorAll('p')).toHaveLength(2);
+    expect(turn.textContent).not.toContain('**');
+  });
+
+  // FIX-6 review: the written brief asks for code and multi-part questions, so
+  // the interviewer's text is block markdown. A fenced block with a blank line
+  // stays one block, a numbered list keeps its list, and neither sits in a <p>.
+  it('keeps a code block whole and a numbered list numbered', async () => {
+    const code = '```python\ndef f(x):\n    a = 1\n\n    return a\n```';
+    m.start.mockResolvedValue({
+      sessionId: 't1',
+      questions: [
+        { q: `Read this:\n\n${code}\n\nThen answer:\n\n1. What is the complexity?\n2. Where is the bug?`, hint: 'Start with the loop.', coachTip: null },
+        { q: 'Why this team?', hint: '', coachTip: null },
+      ],
+    });
+    m.nextTurn.mockReset();
+    m.nextTurn.mockResolvedValueOnce({
+      nextIndex: 1,
+      turns: [{ who: 'them', text: `Close. Look again:\n\n${code}\n\n1. First point\n2. Second point` }],
+      coachTip: null,
+    });
+    renderRoom();
+
+    const card = (await screen.findByText('Read this:')).closest('[data-question-card]')!;
+    const pres = card.querySelectorAll('pre');
+    expect(pres).toHaveLength(1);
+    expect(pres[0]!.textContent).toBe('def f(x):\n    a = 1\n\n    return a\n');
+    const list = card.querySelector('ol')!;
+    expect(list.querySelectorAll('li')).toHaveLength(2);
+    // Tailwind's reset removes list markers; the block renderer puts them back.
+    expect(list.style.listStyle).toContain('decimal');
+    expect(card.querySelector('p pre, p ol, p ul, p p, p div')).toBeNull();
+    expect(card.textContent).not.toContain('```');
+    // The hint still reads on the same line as its label.
+    expect(screen.getByText('Start with the loop.').tagName).toBe('P');
+
+    // Typed code keeps its own line breaks and is not parsed.
+    const typed = 'for x in xs:\n    print(x)\n\n1. done';
+    fireEvent.change(screen.getByLabelText('Your answer'), { target: { value: typed } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send answer' }));
+
+    const reply = (await screen.findByText('Close. Look again:')).closest('li')!;
+    expect(reply.querySelectorAll('pre')).toHaveLength(1);
+    expect(reply.querySelector('pre')!.textContent).toBe('def f(x):\n    a = 1\n\n    return a\n');
+    expect(reply.querySelectorAll('ol > li')).toHaveLength(2);
+    expect(reply.querySelector('p pre, p ol, p ul, p p, p div')).toBeNull();
+
+    const mine = screen.getByText((_, el) => el?.tagName === 'P' && el.textContent === typed);
+    expect(mine.querySelector('ol, pre')).toBeNull();
   });
 
   it('a start the setup page handles (402, gate) leaves without a retry', async () => {
@@ -208,7 +295,7 @@ describe('TextPracticeRoom: the GoApply AI-interview format', () => {
     renderCnRoom();
     const question = await screen.findByText(CN_QUESTIONS[0]!.q);
     // The question card.
-    expect(question.parentElement!.querySelector('[data-ai-label]')).not.toBeNull();
+    expect(question.closest('[data-question-card]')!.querySelector('[data-ai-label]')).not.toBeNull();
     expect(labels()).toBe(1);
     fireEvent.change(screen.getByLabelText('Your answer'), { target: { value: '我是一名应届毕业生。' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send answer' }));
@@ -244,6 +331,9 @@ describe('TextPracticeRoom: the GoApply AI-interview format', () => {
     // The report says what it is and is not.
     expect(report).toHaveTextContent('say nothing about the result of a real interview');
     expect(report.textContent).not.toMatch(/\b0 out of 100/);
+    // FIX-6: the answers were typed, so nothing mentions a transcript or speech-to-text.
+    expect(screen.getByTestId('cn-fillers-note').textContent).toBe('Counted from the answers you typed.');
+    expect(report.textContent).not.toMatch(/speech-to-text|transcript/i);
   });
 
   it('a plan that does not match the questions shows no timing (never under the wrong question)', async () => {

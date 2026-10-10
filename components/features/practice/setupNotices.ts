@@ -8,7 +8,11 @@ export interface SetupNoticeInput {
   setup: PracticeSetup | null;
   /** The ?job= id answered 404. */
   jobNotFound: boolean;
-  /** The credit balance is known and does not cover this practice. */
+  /**
+   * The user is short of credits: the balance is known and covers none of the
+   * offered lengths. A balance that covers a shorter practice is not "short"
+   * here (the setup offers that length instead).
+   */
   creditsShort: boolean;
   /** The first-practice state carried by a 402, if the last Start returned one. */
   firstPracticeFrom402?: PracticeFirstState | null;

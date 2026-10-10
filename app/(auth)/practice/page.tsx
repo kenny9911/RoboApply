@@ -30,6 +30,16 @@
 //     the "your report is ready" notice (SubscribeOnTap; inside WeChat only).
 //   - The setup may grant the free first practice; the balance is refetched
 //     when it does, so Start is not left disabled.
+//
+// What the first plan on screen promises (FIX-6):
+//   - The length starts on one the balance covers: the type's own length when
+//     it is affordable, else the longest offered length that is. A new user
+//     with one credit is not shown a 45-minute plan with Start turned off.
+//   - Where the practice runs in writing (or voice is not available at all),
+//     no video or voice format is offered.
+//   - "Get credits" appears only where something is on sale (a practice pack,
+//     or a plan that raises the allowance), and the "verify to get your first
+//     practice free" notice only when the balance covers no length at all.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -42,6 +52,7 @@ import { useBrand } from '../../../lib/brand';
 import { useCredits as useCreditSummary } from '../../../hooks/shared/useCredits';
 import { reportCreditsExhausted } from '../../../hooks/shared/useCreditGate';
 import { useFlag } from '../../../lib/flags';
+import { usePlans, visiblePlans } from '../../../hooks/credits/usePlans';
 import {
   PracticeJobBanner,
   PracticeNotices,
@@ -59,6 +70,7 @@ import {
   PracticeSetupError,
   PracticeSetupSkeleton,
   JD_MIN_CHARS,
+  practiceDurationOptions,
   type RoleSourceMode,
 } from '../../../components/v3/mock';
 import { useInterviewPreview } from '../../../hooks/useInterviewPreview';
@@ -67,6 +79,9 @@ import { useMockRoleLabels } from '../../../lib/mockRoleLabels';
 import { formatRelativeTime } from '../../../lib/relativeTime';
 import { INTERVIEW_LOCALES } from '../../../lib/localeConfig';
 import {
+  canAffordMinutes,
+  defaultPracticeMinutes,
+  longestAffordableMinutes,
   mockCreditsForMinutes,
   normalizeMockCreditMinutes,
 } from '../../../lib/mockInterviewCredits';
@@ -162,7 +177,10 @@ export default function MockSetupPage() {
   const [firstPracticeFrom402, setFirstPracticeFrom402] = useState<PracticeFirstState | null>(null);
   const [textRun, setTextRun] = useState<TextRun | null>(null);
   const showQuestionsLink = useFlag('interviewBank');
+  const studentPlans = useFlag('student');
   const creditSummary = useCreditSummary();
+  // The server says whether a sellable plan raises the allowance.
+  const upgradable = creditSummary.data?.summary.upgradable === true;
 
   // Recent sessions come from the engine (completed voice interviews), mapped to
   // the strip's shape using the catalog for display names.
@@ -352,9 +370,25 @@ export default function MockSetupPage() {
     [role, sourceMode, catalog],
   );
 
+  // Mirror the server's runtime credit policy. The optional-field fallback is
+  // only for a rolling deployment where the frontend reaches an older API.
+  const creditMinutes = normalizeMockCreditMinutes(creditsQ.data?.creditMinutes);
+  const creditBalance = creditsQ.data?.balance;
+  const durationOptions = useMemo(() => practiceDurationOptions(type), [type]);
+
   // GoApply's AI-interview practice runs 20–30 minutes: the length shown, priced
   // and sent is the one the server will run (it clamps the same way).
-  const durationMinutes = plannedMinutesForType(type?.id, durationOverride ?? type?.minutes ?? DEFAULT_DURATION_MINUTES);
+  // Until the user picks a length, the plan starts on one the balance covers
+  // (the type's own length when it does; the longest offered one otherwise).
+  const durationMinutes = plannedMinutesForType(
+    type?.id,
+    durationOverride ?? defaultPracticeMinutes({
+      preferred: plannedMinutesForType(type?.id, type?.minutes ?? DEFAULT_DURATION_MINUTES),
+      options: durationOptions,
+      balance: creditBalance,
+      creditMinutes,
+    }),
+  );
 
   // The effective role comes from EITHER the picked chip (browse) or the pasted
   // JD's working title — a single source of truth for launch + the LaunchBar.
@@ -507,7 +541,7 @@ export default function MockSetupPage() {
       reportCreditsExhausted({
         bucket: 'practice',
         resetsAt: null,
-        upgradable: creditSummary.data?.summary.upgradable === true,
+        upgradable,
       });
       void queryClient.invalidateQueries({ queryKey: accountKeys.credits() });
       return true;
@@ -582,11 +616,22 @@ export default function MockSetupPage() {
     }
   }
 
-  // Mirror the server's runtime credit policy. The optional-field fallback is
-  // only for a rolling deployment where the frontend reaches an older API.
-  const creditMinutes = normalizeMockCreditMinutes(creditsQ.data?.creditMinutes);
   const creditCost = mockCreditsForMinutes(durationMinutes, creditMinutes);
-  const canAfford = creditsQ.data === undefined || creditsQ.data.balance + 1e-9 >= creditCost;
+  const canAfford = creditBalance === undefined || canAffordMinutes(durationMinutes, creditBalance, creditMinutes);
+  // The balance covers none of the offered lengths: only then is the user
+  // "short of credits" in the sense the first-practice notice means. A balance
+  // that covers a shorter length is repaired by "Use N min instead".
+  const noLengthAffordable =
+    creditBalance !== undefined && longestAffordableMinutes(durationOptions, creditBalance, creditMinutes) === null;
+
+  // Is there anything to buy? A plan that raises the allowance (the server
+  // says so), or a practice pack on sale right now (GoApply sells none before
+  // payments open). The plans are only read when a shortfall is on screen and
+  // the summary has not already answered.
+  const plansQ = usePlans({ enabled: (!canAfford || insufficientCredits !== null) && !upgradable });
+  const canGetCredits =
+    upgradable ||
+    visiblePlans(plansQ.data?.plans, { studentEnabled: studentPlans }).some((plan) => plan.kind === 'pack' && plan.sellable);
 
   // Fetch the market-grounded requirements preview for the current selection.
   // User-triggered (the panel's Preview button); never auto-fires.
@@ -631,7 +676,7 @@ export default function MockSetupPage() {
   const notices = setupNotices({
     setup,
     jobNotFound,
-    creditsShort: !canAfford,
+    creditsShort: !canAfford && noLengthAffordable,
     firstPracticeFrom402,
   });
   const recordingChoice: PracticeRecordingRequest = {
@@ -692,6 +737,8 @@ export default function MockSetupPage() {
       recommendedTypeIds={recs?.typeIds}
       format={format}
       onFormatChange={setFormat}
+      // Video or voice is a choice only where the voice practice can run.
+      formatChoice={setup ? setup.voice.available : true}
       language={language}
       onLanguageChange={setLanguage}
       durationMinutes={durationMinutes}
@@ -719,6 +766,7 @@ export default function MockSetupPage() {
       canAfford={canAfford}
       startError={startError}
       insufficientCredits={insufficientCredits}
+      canGetCredits={canGetCredits}
       canLaunch={canLaunch}
       starting={starting}
       onStart={() => void launch()}

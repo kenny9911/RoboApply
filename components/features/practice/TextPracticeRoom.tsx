@@ -15,24 +15,33 @@
 // block carries AiGeneratedBadge (it renders only on GoApply). The score line
 // says what it is: a score of this practice, not a prediction.
 //
+// The interviewer's lines, the questions and the hints are markdown (the
+// server contract: RAMockTurn.text). They render through the sanitized
+// Markdown primitive in block mode, so a numbered list keeps its numbers and a
+// code block keeps its lines. What the user typed is shown as typed, line
+// breaks included. A practice with no answer shows "—" for the score, never a
+// 0 out of 100.
+//
 // GoApply AI-interview format (WP-66): when the start returns the format's
 // plan, each question shows its thinking and answer time (CnQuestionTiming,
 // from the plan's numbers), and a score that carries the `cn` report block is
 // followed by the practice report (CnReportView): three areas, the STAR check
-// on story answers and filler-word counts. RoboApply gets neither.
+// on story answers and filler-word counts. RoboApply gets neither. The report
+// is told the answers were typed, so it never mentions speech-to-text.
 
 import { useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
 import { QueryClientContext } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 
 import { Btn } from '../../v3/primitives/Btn';
+import { Markdown } from '../../v3/primitives/Markdown';
 import { AiGeneratedBadge } from '../market';
 import { CnQuestionTiming, CnReportView, asCnPracticeReport, cnTimingFor } from '../practice-cn';
 import {
   textPracticeApi,
   type TextPracticeCnFormat,
   type TextPracticeQuestion,
-  type TextPracticeScore,
+  type TextPracticeScoreResult,
   type TextPracticeTurn,
 } from '../../../lib/api/interviewEngine';
 import { refreshChecklist } from '../../../hooks/growth';
@@ -59,6 +68,18 @@ export interface TextPracticeRoomProps {
 
 type Phase = 'starting' | 'answering' | 'scoring' | 'done' | 'error';
 
+/**
+ * AI-written text (an interviewer line, a question, a hint): block markdown.
+ * The wrapper is a <div> because lists and code blocks cannot sit inside a <p>.
+ */
+function AiText({ text, className }: { text: string; className?: string }) {
+  return (
+    <div className={`${styles.aiText} ${className ?? ''}`}>
+      <Markdown block>{text}</Markdown>
+    </div>
+  );
+}
+
 export function TextPracticeRoom({
   role,
   interviewerId,
@@ -81,7 +102,7 @@ export function TextPracticeRoom({
   const [answer, setAnswer] = useState('');
   const [sending, setSending] = useState(false);
   const [finished, setFinished] = useState(false);
-  const [score, setScore] = useState<TextPracticeScore | null>(null);
+  const [score, setScore] = useState<TextPracticeScoreResult | null>(null);
   const [failedStep, setFailedStep] = useState<'start' | 'turn' | 'score' | null>(null);
   const startedRef = useRef(false);
 
@@ -161,6 +182,8 @@ export function TextPracticeRoom({
   const timing = cnTimingFor(cnFormat, index, questions.length);
   const cnReport = score ? asCnPracticeReport(score.cn) : null;
   const hasInterviewerTurn = turns.some((turn) => turn.who === 'them');
+  // The server says whether any question was answered (`practiceCounted`).
+  const answered = score?.practiceCounted !== false;
 
   return (
     <section className={styles.room} aria-labelledby="text-practice-title">
@@ -191,20 +214,27 @@ export function TextPracticeRoom({
             <ul className={styles.turns} aria-live="polite">
               {turns.map((turn, i) => (
                 <li key={i} className={`${styles.turn} ${turn.who === 'you' ? styles.turnYou : ''}`}>
-                  <strong>{turn.who === 'you' ? t('you') : t('interviewer')}</strong>
-                  {turn.text}
+                  <span className={styles.turnWho} data-turn-who>{turn.who === 'you' ? t('you') : t('interviewer')}</span>
+                  {turn.who === 'you'
+                    ? <p className={`${styles.turnText} ${styles.turnTyped}`}>{turn.text}</p>
+                    : <AiText text={turn.text} className={styles.turnText} />}
                 </li>
               ))}
             </ul>
           ) : null}
 
           {!finished && current ? (
-            <div className={styles.card}>
+            <div className={styles.card} data-question-card>
               <p className={styles.cardLabel}>{t('question', { n: index + 1, total: questions.length })}</p>
-              <p className={styles.question}>{current.q}</p>
+              <AiText text={current.q} className={styles.question} />
               <AiGeneratedBadge />
               {timing ? <CnQuestionTiming prepSeconds={timing.prepSeconds} answerSeconds={timing.answerSeconds} /> : null}
-              {current.hint ? <p className={styles.muted}>{t('hint')}: {current.hint}</p> : null}
+              {current.hint ? (
+                <div className={`${styles.muted} ${styles.hint}`}>
+                  <span>{t('hint')}: </span>
+                  <AiText text={current.hint} />
+                </div>
+              ) : null}
               <label className={styles.cardLabel} htmlFor={answerId}>{t('answerLabel')}</label>
               <textarea
                 id={answerId}
@@ -240,10 +270,17 @@ export function TextPracticeRoom({
         <div className={styles.card} aria-labelledby="text-practice-result">
           <h2 id="text-practice-result" className={styles.question}>{t('resultTitle')}</h2>
           <AiGeneratedBadge />
-          <p className={styles.score}>
+          <p className={styles.score} data-testid="text-practice-score">
             <span className={styles.cardLabel}>{t('overall')}</span>{' '}
-            <strong>{Math.max(0, Math.min(100, Math.round(score.overall)))}</strong>
-            <span>/100</span>
+            {answered ? (
+              <>
+                <strong>{Math.max(0, Math.min(100, Math.round(score.overall)))}</strong>
+                <span>/100</span>
+              </>
+            ) : (
+              // Nothing was answered: there is no score to show.
+              <strong>—</strong>
+            )}
           </p>
           {score.strengths.length > 0 ? (
             <>
@@ -268,7 +305,7 @@ export function TextPracticeRoom({
       ) : null}
 
       {/* GoApply: the practice report for this written practice (its blocks carry their own AI labels). */}
-      {phase === 'done' && cnReport ? <CnReportView report={cnReport} /> : null}
+      {phase === 'done' && cnReport ? <CnReportView report={cnReport} typed /> : null}
     </section>
   );
 }

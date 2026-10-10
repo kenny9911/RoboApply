@@ -70,6 +70,8 @@ vi.mock('../../../../hooks/useAccount', () => ({
 }));
 vi.mock('../../../../lib/api/compliance', () => ({ getConsents: vi.fn(async () => ({ items: [] })), recordConsent: vi.fn() }));
 vi.mock('../../../../hooks/shared/useCredits', () => ({ useCredits: () => ({ data: { summary: { upgradable: true } } }) }));
+// The setup reads the plans only when a credit shortfall is on screen; none is here.
+vi.mock('../../../../hooks/credits/usePlans', () => ({ usePlans: () => ({ data: undefined }), visiblePlans: () => [] }));
 vi.mock('../../../../hooks/shared/useCreditGate', () => ({ reportCreditsExhausted: vi.fn() }));
 vi.mock('../../../../lib/flags', () => ({ useFlag: () => false }));
 vi.mock('next/navigation', () => ({

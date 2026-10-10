@@ -1,3 +1,9 @@
 {
-  "practiceCn": {}
+  "practiceCn": {
+    "report": {
+      "fillers": {
+        "noteTyped": "Counted from the answers you typed."
+      }
+    }
+  }
 }
