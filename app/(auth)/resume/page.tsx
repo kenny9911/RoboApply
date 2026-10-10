@@ -1,6 +1,10 @@
 'use client';
 
-// /resumes — V3 Resume builder LIBRARY (Lane E). Replaces the V2 list body.
+// /resume — the resume hub (WP-36b; PRODUCT_PLAN.md F-RES-02). Tabs: Resumes ·
+// Cover letters (/resume/letters, WP-37). Up to 5 base resumes (Free and Pro)
+// with one primary and a target title each; tailored versions are listed per
+// job underneath and do not take a slot. LinkedIn means the user's own
+// "Save to PDF" export only (no URL import; hidden on GoApply).
 //
 // Layout (source: RoboApply_V3/resume.jsx ResumeLibrary):
 //   PageHeader (eyebrow + h1 + sub)
@@ -43,17 +47,24 @@ import {
   useCreateResumeMutation,
   useUploadResumeMutation,
   useImportLinkedInMutation,
-  useLinkedInImportConfig,
   useDeleteResumeMutation,
+  useSetPrimaryResumeMutation,
 } from '../../../hooks/useResumes';
+import { patchResume, BASE_RESUME_LIMIT, type ResumeSummary } from '../../../lib/api/resumes';
+import { useQueryClient } from '@tanstack/react-query';
+import { useBrand } from '../../../lib/brand';
 import { DeleteResumeConfirm } from '../../../components/resumes/DeleteResumeConfirm';
-import { ResumeCheckEntry } from '../../../components/features/resume';
+import {
+  BaseSlots,
+  ResumeCheckEntry,
+  ResumeHubMeta,
+  ResumeHubTabs,
+  TailoredVersions,
+  isBaseSlot,
+} from '../../../components/features/resume';
 import checkStyles from '../../../components/features/resume/ResumeCheck.module.css';
-import type {
-  RAResumeVariant,
-  RAResumeVariantSummary,
-  ResumeCreateBody,
-} from '../../../lib/api/v2/types';
+import hubStyles from '../../../components/features/resume/ResumeHub.module.css';
+import type { RAResumeVariant, ResumeCreateBody } from '../../../lib/api/v2/types';
 
 // Stub-side seed markdown for an upload / LinkedIn import or a fresh scratch
 // draft. The real upload-parse + LinkedIn pull is a Wave-later concern; for the
@@ -111,19 +122,29 @@ export default function ResumesPage() {
   const createMut = useCreateResumeMutation();
   const uploadMut = useUploadResumeMutation();
   const importLinkedInMut = useImportLinkedInMutation();
-  const linkedinConfig = useLinkedInImportConfig();
   const deleteMut = useDeleteResumeMutation();
+  const primaryMut = useSetPrimaryResumeMutation();
+  const qc = useQueryClient();
+  const brand = useBrand();
+  // GoApply has no LinkedIn door (PRODUCT_PLAN.md G-onboarding resume step).
+  const showLinkedIn = brand.market !== 'cn';
 
   const [importing, setImporting] = useState<ImportSource | null>(null);
+  const [limitNotice, setLimitNotice] = useState(false);
   const [deleteTarget, setDeleteTarget] =
-    useState<RAResumeVariantSummary | null>(null);
+    useState<ResumeSummary | null>(null);
 
-  const resumes = data?.resumes ?? [];
+  const resumes = useMemo(() => data?.resumes ?? [], [data]);
 
-  // Sort newest-edited first for display.
+  // Base resumes (they take a slot), primary first, then newest edit.
   const sorted = useMemo(() => {
-    return [...resumes].sort((a, b) => b.lastEditedAt.localeCompare(a.lastEditedAt));
+    return resumes
+      .filter(isBaseSlot)
+      .sort((a, b) => Number(Boolean(b.isPrimary)) - Number(Boolean(a.isPrimary)) || b.lastEditedAt.localeCompare(a.lastEditedAt));
   }, [resumes]);
+  const tailored = useMemo(() => resumes.filter((r) => !isBaseSlot(r)), [resumes]);
+  const baseNames = useMemo(() => new Map(resumes.map((r) => [r.id, r.name])), [resumes]);
+  const slotsFull = sorted.length >= BASE_RESUME_LIMIT;
 
   // Version label: oldest created = v1, ascending. Derived (no contract field).
   const versionById = useMemo(() => {
@@ -133,18 +154,25 @@ export default function ResumesPage() {
     return map;
   }, [resumes]);
 
-  function editedLabel(r: RAResumeVariantSummary): string {
-    let when: string;
+  function formatDate(iso: string): string {
     try {
-      when = new Date(r.lastEditedAt).toLocaleDateString(undefined, {
+      return new Date(iso).toLocaleDateString(undefined, {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
       });
     } catch {
-      when = '—';
+      return '—';
     }
-    return t('card.edited', { when });
+  }
+
+  function editedLabel(r: ResumeSummary): string {
+    return t('card.edited', { when: formatDate(r.lastEditedAt) });
+  }
+
+  async function saveTargetTitle(id: string, title: string) {
+    await patchResume(id, { targetTitle: title });
+    await qc.invalidateQueries({ queryKey: ['v2', 'resumes'] });
   }
 
   // Build the create body for the scratch source (template clone). `file` and
@@ -166,14 +194,9 @@ export default function ResumesPage() {
     if (ctx.source === 'file' && ctx.file) {
       return uploadMut.mutateAsync({ file: ctx.file });
     }
-    // LinkedIn import — a "Save to PDF" file (pdf mode) or a public profile URL
-    // (url mode, only reachable when the URL field is enabled). Parses for real.
-    if (ctx.source === 'linkedin') {
-      return importLinkedInMut.mutateAsync({
-        mode: ctx.file ? 'pdf' : 'url',
-        file: ctx.file ?? undefined,
-        linkedinUrl: ctx.linkedinUrl || undefined,
-      });
+    // LinkedIn import — the user's own "Save to PDF" file. Parses for real.
+    if (ctx.source === 'linkedin' && ctx.file) {
+      return importLinkedInMut.mutateAsync({ mode: 'pdf', file: ctx.file });
     }
     return createMut.mutateAsync(buildCreateBody(ctx));
   }
@@ -188,10 +211,7 @@ export default function ResumesPage() {
         { k: t('ingest.scratch.ready'), v: t('ingest.scratch.ready_v') },
       ];
     }
-    const readValue =
-      source === 'file'
-        ? (ctx.fileName ?? t('import.demo_file_name'))
-        : (ctx.fileName ?? ctx.linkedinUrl) || 'linkedin.com/in/you';
+    const readValue = ctx.fileName ?? t('import.demo_file_name');
     return [
       { k: t('ingest.import.read'), v: readValue },
       { k: t('ingest.import.identity'), v: t('ingest.import.identity_v') },
@@ -223,10 +243,6 @@ export default function ResumesPage() {
     linkedinUploadTitle: t('import.linkedin.upload_title'),
     linkedinUploadSub: t('import.linkedin.upload_sub'),
     linkedinReady: t('import.linkedin.ready'),
-    linkedinOr: t('import.linkedin.or'),
-    linkedinUrlLabel: t('import.linkedin.url_label'),
-    linkedinPlaceholder: t('import.linkedin.placeholder'),
-    linkedinHint: t('import.linkedin.hint'),
     ingestTitleScratch: t('import.ingest_title.scratch'),
     ingestTitleParse: t('import.ingest_title.parse'),
     working: t('import.working'),
@@ -267,9 +283,17 @@ export default function ResumesPage() {
     unsupported_format: t('import.errors.unsupported_format'),
     file_too_large: t('import.errors.file_too_large'),
     file_required: t('import.errors.file_required'),
+    resume_limit_reached: t('hub.slots.limit_error', { limit: BASE_RESUME_LIMIT }),
+    storage_unavailable: t('hub.errors.storage_unavailable'),
   };
 
   function handleSelect(source: CreateSource) {
+    // Every base slot is taken: say so instead of opening a doomed import.
+    if (slotsFull) {
+      setLimitNotice(true);
+      return;
+    }
+    setLimitNotice(false);
     setImporting(source);
   }
 
@@ -294,6 +318,14 @@ export default function ResumesPage() {
         sub={t('subtitle')}
       />
 
+      <ResumeHubTabs active="resumes" />
+
+      {limitNotice ? (
+        <p className={hubStyles.notice} role="status">
+          {t('hub.slots.limit_error', { limit: BASE_RESUME_LIMIT })}
+        </p>
+      ) : null}
+
       {/* Create cards */}
       <div className="rb-create">
         <CreateCard
@@ -312,24 +344,22 @@ export default function ResumesPage() {
           meta={t('create.file.meta')}
           onSelect={handleSelect}
         />
-        <CreateCard
-          source="linkedin"
-          icon={<LinkedInGlyph />}
-          title={t('create.linkedin.title')}
-          description={t('create.linkedin.desc')}
-          meta={t('create.linkedin.meta')}
-          onSelect={handleSelect}
-        />
+        {showLinkedIn ? (
+          <CreateCard
+            source="linkedin"
+            icon={<LinkedInGlyph />}
+            title={t('create.linkedin.title')}
+            description={t('create.linkedin.desc')}
+            meta={t('create.linkedin.meta')}
+            onSelect={handleSelect}
+          />
+        ) : null}
       </div>
 
       {/* Existing resumes */}
-      <div className="rb-section-head">
-        <div className="iv-section-label" style={{ marginBottom: 0 }}>
-          <span>{t('library.title')}</span>
-          <span style={{ color: 'var(--text-muted)' }}>
-            {t('library.count', { count: resumes.length })}
-          </span>
-        </div>
+      <div className={hubStyles.sectionHead}>
+        <h2 className={hubStyles.sectionTitle}>{t('library.title')}</h2>
+        {data ? <BaseSlots used={sorted.length} /> : null}
       </div>
 
       {isLoading ? (
@@ -369,22 +399,41 @@ export default function ResumesPage() {
         <div className="rb-list">
           {sorted.map((r) => (
             // Each card carries a Resume check entry (WP-22; F-RES-02).
-            <div key={r.id} className={checkStyles.entryWrap}>
+            <div key={r.id} className={`${checkStyles.entryWrap} ${hubStyles.cardStack}`}>
               <ResumeCard
                 resume={r}
                 version={versionById.get(r.id) ?? 'v1'}
                 editedLabel={editedLabel(r)}
-                baseLabel={t('card.base')}
+                baseLabel={r.targetTitle ? t('hub.target.for', { title: r.targetTitle }) : t('card.base')}
                 scoreUnit={t('card.score_unit')}
                 onOpen={() => router.push(`/resume/${r.id}`)}
                 onDelete={() => setDeleteTarget(r)}
                 deleteLabel={t('card.delete')}
+              />
+              <ResumeHubMeta
+                resume={r}
+                primaryBusy={primaryMut.isPending}
+                onMakePrimary={() => primaryMut.mutate(r.id)}
+                onSaveTargetTitle={(title) => saveTargetTitle(r.id, title)}
               />
               <ResumeCheckEntry resumeId={r.id} name={r.name} />
             </div>
           ))}
         </div>
       )}
+
+      {/* Tailored versions, grouped per job (not counted in the 5). */}
+      {data && !isError ? (
+        <section aria-labelledby="hub-tailored">
+          <div className={hubStyles.sectionHead}>
+            <h2 className={hubStyles.sectionTitle} id="hub-tailored">
+              {t('hub.tailored.title')}
+            </h2>
+            <p className={hubStyles.muted}>{t('hub.tailored.sub')}</p>
+          </div>
+          <TailoredVersions resumes={tailored} baseNames={baseNames} formatDate={formatDate} />
+        </section>
+      ) : null}
 
       {/* Young-career coach FYI */}
       <div className="rb-foot-tip">
@@ -413,7 +462,6 @@ export default function ResumesPage() {
         <ImportModal
           source={importing}
           labels={importLabels}
-          linkedinUrlEnabled={linkedinConfig.data?.urlImportEnabled ?? false}
           errorMessages={importErrorMessages}
           lostResponseCodes={LOST_RESPONSE_CODES}
           onCheckList={handleCheckList}

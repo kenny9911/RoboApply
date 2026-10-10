@@ -6,7 +6,7 @@
 //   source  ∈ 'scratch' | 'file' | 'linkedin'
 //   stage   ∈ 'input'   | 'parsing' | 'done'
 //
-//   • input   — scratch: pick a template · file: drop zone · linkedin: URL field
+//   • input   — scratch: pick a template · file: drop zone · linkedin: the user's own PDF export (no URL import, TASK_PLAN.md H9)
 //   • parsing — animated "what I picked up" ingest rows (cosmetic) WHILE the real
 //               `onCreate` mutation runs in the background
 //   • done    — success check; "Open editor" hands the created variant to the page
@@ -36,8 +36,6 @@ export interface ImportCreateContext {
   fileName: string | null;
   /** the real uploaded File (file source) — sent to the upload endpoint */
   file: File | null;
-  /** pasted LinkedIn URL (linkedin) — display only in the stub */
-  linkedinUrl: string;
 }
 
 /** Accepted résumé upload types (mirrors the backend accepted-MIME list —
@@ -94,10 +92,6 @@ interface Labels {
   linkedinUploadTitle: string;
   linkedinUploadSub: string;
   linkedinReady: string;
-  linkedinOr: string;
-  linkedinUrlLabel: string;
-  linkedinPlaceholder: string;
-  linkedinHint: string;
   // ingest
   ingestTitleScratch: string;
   ingestTitleParse: string;
@@ -122,9 +116,6 @@ interface Labels {
 interface Props {
   source: ImportSource;
   labels: Labels;
-  /** Whether the optional LinkedIn URL-import path is available on this
-   *  deployment. When false (the default), only the PDF-export uploader shows. */
-  linkedinUrlEnabled?: boolean;
   /** Localized failure copy keyed by backend error code (invalid_url,
    *  fetch_failed, parse_failed, …). Falls back to `labels.error` when a code
    *  is unmapped or absent. */
@@ -157,7 +148,6 @@ const TEMPLATES: { key: string; lblKey: keyof Labels }[] = [
 export function ImportModal({
   source,
   labels,
-  linkedinUrlEnabled = false,
   errorMessages,
   lostResponseCodes,
   onCheckList,
@@ -167,7 +157,6 @@ export function ImportModal({
   onDone,
 }: Props) {
   const [stage, setStage] = useState<Stage>('input');
-  const [url, setUrl] = useState('');
   const [file, setFile] = useState<{ name: string; size: string } | null>(null);
   const [realFile, setRealFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -202,8 +191,7 @@ export function ImportModal({
   const canStart =
     source === 'scratch' ||
     (source === 'file' && !!file) ||
-    (source === 'linkedin' &&
-      (!!file || (linkedinUrlEnabled && url.trim().length > 8)));
+    (source === 'linkedin' && !!file);
 
   // ESC closes (mirror the V3 Modal primitive) + lock scroll while open.
   const handleKey = useCallback(
@@ -231,7 +219,6 @@ export function ImportModal({
       templateKey,
       fileName: file?.name ?? null,
       file: realFile,
-      linkedinUrl: url.trim(),
     };
 
     // Cosmetic ingest reveal.
@@ -282,7 +269,7 @@ export function ImportModal({
         createErrorCode = readApiErrorCode(err);
         tryFinish();
       });
-  }, [source, templateKey, file, realFile, url, ingestRows, onCreate]);
+  }, [source, templateKey, file, realFile, ingestRows, onCreate]);
 
   // Resolve the failure message: specific per-code copy when we have it, else
   // the generic label.
@@ -461,7 +448,6 @@ export function ImportModal({
                       if (f) {
                         setRealFile(f);
                         setFile({ name: f.name, size: humanSize(f.size) });
-                        setUrl(''); // a picked PDF takes precedence over a URL
                         setError(false);
                       }
                     }}
@@ -498,60 +484,6 @@ export function ImportModal({
                   )}
                 </button>
 
-                {/* Optional URL path — only when an enrichment provider is set. */}
-                {linkedinUrlEnabled && (
-                  <>
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 10,
-                        margin: '16px 0 12px',
-                        color: 'var(--text-muted)',
-                        fontSize: 12,
-                      }}
-                    >
-                      <span style={{ flex: 1, height: 1, background: 'var(--rule)' }} />
-                      <span>{labels.linkedinOr}</span>
-                      <span style={{ flex: 1, height: 1, background: 'var(--rule)' }} />
-                    </div>
-                    <div
-                      style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 8 }}
-                    >
-                      {labels.linkedinUrlLabel}
-                    </div>
-                    <div className="rb-input-row">
-                      <div className="rb-input-prefix" aria-hidden="true">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M20.5 2h-17A1.5 1.5 0 0 0 2 3.5v17A1.5 1.5 0 0 0 3.5 22h17a1.5 1.5 0 0 0 1.5-1.5v-17A1.5 1.5 0 0 0 20.5 2ZM8 19H5V8h3v11Zm-1.5-12.3a1.7 1.7 0 1 1 0-3.5 1.7 1.7 0 0 1 0 3.5ZM19 19h-3v-5.6c0-1.4-.5-2.3-1.8-2.3-1 0-1.5.6-1.8 1.3 0 .2-.1.5-.1.8V19h-3V8h3v1.4c.4-.6 1.1-1.5 2.7-1.5 2 0 3.5 1.3 3.5 4V19Z" />
-                        </svg>
-                      </div>
-                      <input
-                        className="rb-input"
-                        placeholder={labels.linkedinPlaceholder}
-                        value={url}
-                        onChange={(e) => {
-                          setUrl(e.target.value);
-                          if (e.target.value.trim()) {
-                            // a typed URL takes precedence over a picked file
-                            setRealFile(null);
-                            setFile(null);
-                          }
-                        }}
-                      />
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 12.5,
-                        color: 'var(--text-muted)',
-                        marginTop: 10,
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      {labels.linkedinHint}
-                    </div>
-                  </>
-                )}
               </>
             )}
 

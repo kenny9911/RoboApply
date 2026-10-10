@@ -7,3 +7,35 @@ export { KeywordReport, KeywordReportView, type KeywordReportProps } from './Key
 export { ResumeCheckEntry, resumeCheckHref, type ResumeCheckEntryProps } from './ResumeCheckEntry';
 export { EditorCheckSummary } from './EditorCheckSummary';
 export { issueText, issueTypeName, issueParams } from './issueText';
+// WP-36b: hub, layout and export pieces.
+export { LayoutPanel, type LayoutPanelProps } from './LayoutPanel';
+export {
+  ResumeHubTabs,
+  BaseSlots,
+  ResumeHubMeta,
+  TailoredVersions,
+  groupTailored,
+  isBaseSlot,
+  type HubTab,
+  type ResumeHubMetaProps,
+  type TailoredGroup,
+  type TailoredVersionsProps,
+} from './ResumeHub';
+export {
+  TEMPLATES,
+  RECOMMENDED_TEMPLATE,
+  WARN_TEMPLATES,
+  SPACING_PRESETS,
+  ACCENTS,
+  DATE_FORMATS,
+  formatDatesIn,
+  isSidebarSection,
+  layoutPatch,
+  normalizeTemplate,
+  pageAspect,
+  resolveLayout,
+  spacingPresetOf,
+  type DateFormat,
+  type ResolvedLayout,
+  type SpacingPreset,
+} from './layout';

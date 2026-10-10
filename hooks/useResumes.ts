@@ -8,9 +8,15 @@
 //   - useCreateResumeMutation()    POST /resumes
 //   - useDeleteResumeMutation()    DELETE /resumes/:id
 //
-// All calls go through `raV2Api` so they auto-route to the in-memory stub
-// (Wave 2 default) or the real fetch backend (Wave 4+). Query keys live
-// here too so future cache invalidations have one place to land.
+// The legacy CRUD keeps going through `raV2Api` (frozen client, TASK_PLAN.md
+// §2.1 rule 9): it auto-routes to the in-memory stub in tests and stub demos,
+// and WP-36b's server changes to those endpoints are additive. New calls
+// (layout, export, target title) go through lib/api/resumes.ts. Query keys
+// live here too so cache invalidations have one place to land.
+//
+// WP-36b additions: usePatchResumeLayoutMutation, useResumeExportMutation,
+// and the hub fields (targetTitle, layout, unverifiedClaims, aiAssisted,
+// defaultPage) on the types (absent from stub rows; every reader defaults).
 
 import {
   useMutation,
@@ -21,16 +27,24 @@ import {
 } from '@tanstack/react-query';
 
 import { raV2Api } from '../lib/api/v2';
+import {
+  downloadResumeExport,
+  patchResume,
+  patchResumeLayout,
+  type ResumeExportOptions,
+  type ResumeExportResult,
+  type ResumeHubPatch,
+  type ResumeLayout,
+  type ResumeListResult,
+  type ResumeSummary,
+  type ResumeVariant,
+} from '../lib/api/resumes';
 import type {
   RAResumeKind,
-  RAResumeVariant,
-  RAResumeVariantSummary,
   LinkedInImportArgs,
   LinkedInImportConfigResponse,
   ResumeCoachTipsResponse,
   ResumeCreateBody,
-  ResumeListResponse,
-  ResumePatchBody,
   ResumeRewriteBody,
   ResumeRewriteResponse,
   ResumeTailorDiffBody,
@@ -38,6 +52,12 @@ import type {
   ResumeTailorApplyBody,
   ResumeTailorApplyResponse,
 } from '../lib/api/v2/types';
+
+/** The hub's variant (legacy shape + WP-36b fields). */
+type RAResumeVariant = ResumeVariant;
+/** The hub's list row (legacy shape + WP-36b fields). */
+type RAResumeVariantSummary = ResumeSummary;
+type ResumeListResponse = ResumeListResult;
 
 // ─────────────────────────────────────────────────────────────────────
 // Query keys
@@ -67,7 +87,7 @@ export function useResumeList(
   return useQuery({
     queryKey: resumeKeys.list(params?.kind),
     queryFn: async (): Promise<ResumeListResponse> => {
-      return raV2Api.resumes.list(params);
+      return (await raV2Api.resumes.list(params)) as ResumeListResponse;
     },
   });
 }
@@ -81,7 +101,7 @@ export function useResume(
     queryFn: async (): Promise<RAResumeVariant> => {
       if (!id) throw new Error('Resume id is required');
       const r = await raV2Api.resumes.get(id);
-      return r.resume;
+      return r.resume as RAResumeVariant;
     },
   });
 }
@@ -99,7 +119,7 @@ export function useCreateResumeMutation(): UseMutationResult<
   return useMutation({
     mutationFn: async (body: ResumeCreateBody): Promise<RAResumeVariant> => {
       const r = await raV2Api.resumes.create(body);
-      return r.resume;
+      return r.resume as RAResumeVariant;
     },
     onSuccess: () => {
       // Invalidate every list variant (filtered or not) so the new row
@@ -111,15 +131,19 @@ export function useCreateResumeMutation(): UseMutationResult<
 
 export function usePatchResumeMutation(
   id: string,
-): UseMutationResult<RAResumeVariant, Error, ResumePatchBody> {
+): UseMutationResult<RAResumeVariant, Error, ResumeHubPatch> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: ResumePatchBody): Promise<RAResumeVariant> => {
-      const r = await raV2Api.resumes.patch(id, body);
-      return r.resume;
+    mutationFn: async (body: ResumeHubPatch): Promise<RAResumeVariant> => {
+      // targetTitle is a WP-36b field the frozen V2 client does not type.
+      if (body.targetTitle !== undefined) return patchResume(id, body);
+      // `aiAssisted` is additive on the same endpoint; the frozen client passes it through.
+      const r = await raV2Api.resumes.patch(id, body as Parameters<typeof raV2Api.resumes.patch>[1]);
+      return r.resume as RAResumeVariant;
     },
     onSuccess: (resume) => {
-      qc.setQueryData(resumeKeys.detail(id), resume);
+      // Merge: the PATCH echo has no request-scoped fields (defaultPage).
+      qc.setQueryData(resumeKeys.detail(id), (prev: RAResumeVariant | undefined) => ({ ...prev, ...resume }));
       qc.invalidateQueries({ queryKey: ['v2', 'resumes', 'list'] });
     },
   });
@@ -153,7 +177,7 @@ export function useUploadResumeMutation(): UseMutationResult<
   return useMutation({
     mutationFn: async ({ file, name }): Promise<RAResumeVariant> => {
       const r = await raV2Api.resumes.upload(file, name ? { name } : undefined);
-      return r.resume;
+      return r.resume as RAResumeVariant;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: resumeKeys.all });
@@ -170,7 +194,8 @@ export function useLinkedInImportConfig(): UseQueryResult<
 > {
   return useQuery({
     queryKey: ['v2', 'resumes', 'linkedinConfig'] as const,
-    queryFn: () => raV2Api.resumes.linkedinConfig(),
+    // URL import is gone (TASK_PLAN.md H9); kept so older callers compile.
+    queryFn: async () => ({ urlImportEnabled: false }),
     staleTime: 5 * 60_000,
   });
 }
@@ -185,8 +210,9 @@ export function useImportLinkedInMutation(): UseMutationResult<
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (args: LinkedInImportArgs): Promise<RAResumeVariant> => {
-      const r = await raV2Api.resumes.importLinkedIn(args);
-      return r.resume;
+      if (args.mode !== 'pdf' || !args.file) throw new Error('A LinkedIn PDF export is required.');
+      const r = await raV2Api.resumes.importLinkedIn({ mode: 'pdf', file: args.file, name: args.name });
+      return r.resume as RAResumeVariant;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: resumeKeys.all });
@@ -204,7 +230,7 @@ export function useSetPrimaryResumeMutation(): UseMutationResult<
   return useMutation({
     mutationFn: async (id: string): Promise<RAResumeVariant> => {
       const r = await raV2Api.resumes.setPrimary(id);
-      return r.resume;
+      return r.resume as RAResumeVariant;
     },
     onSuccess: (resume) => {
       qc.setQueryData(resumeKeys.detail(resume.id), resume);
@@ -270,7 +296,47 @@ export function useResumeCoachTips(
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Hub (WP-36b): layout and export
+// ─────────────────────────────────────────────────────────────────────
+
+/** Save template / page / spacing / accent / date format. Writes the returned
+ *  variant into the detail cache so the preview and the export agree. */
+export function usePatchResumeLayoutMutation(
+  id: string,
+): UseMutationResult<RAResumeVariant, Error, Partial<ResumeLayout>> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (layout: Partial<ResumeLayout>) => patchResumeLayout(id, { layout }),
+    // Optimistic: the preview follows the pick at once; a failure rolls back.
+    onMutate: async (layout) => {
+      await qc.cancelQueries({ queryKey: resumeKeys.detail(id) });
+      const prev = qc.getQueryData<RAResumeVariant>(resumeKeys.detail(id));
+      if (prev) qc.setQueryData(resumeKeys.detail(id), { ...prev, layout: { ...(prev.layout ?? {}), ...layout } });
+      return { prev };
+    },
+    onError: (_err, _layout, ctx) => {
+      const prev = (ctx as { prev?: RAResumeVariant } | undefined)?.prev;
+      if (prev) qc.setQueryData(resumeKeys.detail(id), prev);
+    },
+    onSuccess: (resume) => {
+      qc.setQueryData(resumeKeys.detail(id), (prev: RAResumeVariant | undefined) => ({ ...prev, ...resume }));
+    },
+  });
+}
+
+/** Download a PDF/DOCX export. Rejects with the server code
+ *  (`unverified_claims`, …) readable through `apiErrorCode(err)`. */
+export function useResumeExportMutation(
+  id: string,
+  fallbackName: string,
+): UseMutationResult<ResumeExportResult, Error, ResumeExportOptions> {
+  return useMutation({
+    mutationFn: (options: ResumeExportOptions) => downloadResumeExport(id, options, fallbackName),
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Convenience exports
 // ─────────────────────────────────────────────────────────────────────
 
-export type { RAResumeVariant, RAResumeVariantSummary, RAResumeKind };
+export type { RAResumeVariant, RAResumeVariantSummary, RAResumeKind, ResumeLayout };

@@ -56,8 +56,11 @@ import {
   useResumeRewrite,
   useResumeCoachTips,
   useDeleteResumeMutation,
+  usePatchResumeLayoutMutation,
 } from '../../../../hooks/useResumes';
+import { LayoutPanel, layoutPatch, resolveLayout } from '../../../../components/features/resume';
 import { DeleteResumeConfirm } from '../../../../components/resumes/DeleteResumeConfirm';
+import layoutStyles from '../../../../components/features/resume/ResumeHub.module.css';
 import {
   parseResumeMarkdown,
   serializeResumeMarkdown,
@@ -103,6 +106,10 @@ export default function ResumeEditorPage({
   const aiEnabled = resumeCheck.data?.aiAvailable !== false;
   const del = useDeleteResumeMutation();
   const { data: coachData } = useResumeCoachTips(id);
+  const layoutMut = usePatchResumeLayoutMutation(id);
+  // WP-36b: template / page / spacing / accent / date format, saved per resume.
+  const defaultPage = resume?.defaultPage ?? 'letter';
+  const layout = useMemo(() => resolveLayout(resume?.layout ?? null, defaultPage), [resume?.layout, defaultPage]);
 
   const [structured, setStructured] = useState<StructuredResume | null>(null);
   const [resumeName, setResumeName] = useState('');
@@ -143,6 +150,22 @@ export default function ResumeEditorPage({
     skipNextAutoSaveRef.current = true;
   }, [resume]);
 
+  // AI provenance (WP-36b): remember every AI-written text the editor was
+  // offered; once one of them lands in the saved resume, the next save tells
+  // the server, so exports carry the AI marks (CN-E-07). Skills shorter than
+  // 4 characters are too common to attribute.
+  const aiTextsRef = useRef<Set<string>>(new Set());
+  const aiReportedRef = useRef(false);
+  const runAiRewrite = useCallback(
+    async (body: Parameters<typeof rewrite.mutateAsync>[0]) => {
+      const res = await rewrite.mutateAsync(body);
+      const texts = [res.rewrite, ...(res.options ?? []).map((o) => o.text), ...(res.skills ?? [])];
+      for (const text of texts) if (text && text.trim().length >= 4) aiTextsRef.current.add(text.trim());
+      return res;
+    },
+    [rewrite],
+  );
+
   // Debounced auto-save of structured edits.
   useEffect(() => {
     if (!structured || !resume) return;
@@ -163,7 +186,10 @@ export default function ResumeEditorPage({
       lastSerializedRef.current = serialized;
       dirtyRef.current = false;
       try {
-        await patch.mutateAsync({ resumeMarkdown: serialized });
+        const aiLanded =
+          !aiReportedRef.current && [...aiTextsRef.current].some((text) => serialized.includes(text));
+        await patch.mutateAsync(aiLanded ? { resumeMarkdown: serialized, aiAssisted: true } : { resumeMarkdown: serialized });
+        if (aiLanded) aiReportedRef.current = true;
         setSaveState('saved');
       } catch {
         lastSerializedRef.current = prev;
@@ -447,7 +473,7 @@ export default function ResumeEditorPage({
   async function suggestSkills() {
     setSkillsBusy(true);
     try {
-      const res = await rewrite.mutateAsync({ mode: 'skills' });
+      const res = await runAiRewrite({ mode: 'skills' });
       setSkillSuggestions(res.skills ?? []);
     } catch {
       /* non-fatal */
@@ -571,7 +597,7 @@ export default function ResumeEditorPage({
               <SummaryEditor
                 value={structured.summary}
                 onChange={(v) => updateStructured({ ...structured, summary: v })}
-                runRewrite={(body) => rewrite.mutateAsync(body)}
+                runRewrite={runAiRewrite}
                 aiEnabled={aiEnabled}
               />
             </EditorSection>
@@ -691,7 +717,7 @@ export default function ResumeEditorPage({
                         onFocusHandled={() => {
                           pendingBulletFocusRef.current = null;
                         }}
-                        runRewrite={(body) => rewrite.mutateAsync(body)}
+                        runRewrite={runAiRewrite}
                         aiEnabled={aiEnabled}
                         targetJobId={resume.targetJobId}
                       />
@@ -879,8 +905,18 @@ export default function ResumeEditorPage({
                 <span>{t('preview.page')}</span>
               </div>
             </div>
+            <details className={layoutStyles.layoutDetails}>
+              <summary className={layoutStyles.layoutSummary}>{t('layout.title')}</summary>
+              <LayoutPanel
+                value={layout}
+                defaultPage={defaultPage}
+                saving={layoutMut.isPending}
+                error={layoutMut.isError}
+                onChange={(change) => layoutMut.mutate(layoutPatch(change))}
+              />
+            </details>
             <div className="rb-paper-wrap">
-              <ResumePaper resume={structured} />
+              <ResumePaper resume={structured} layout={layout} />
             </div>
           </div>
         </div>
@@ -913,6 +949,8 @@ export default function ResumeEditorPage({
           resumeId={id}
           resumeName={resumeName}
           resumeMarkdown={serializeResumeMarkdown(structured)}
+          unverifiedClaims={resume.unverifiedClaims ?? 0}
+          aiAssisted={resume.aiAssisted ?? false}
           onClose={() => setDownloadOpen(false)}
         />
       ) : null}

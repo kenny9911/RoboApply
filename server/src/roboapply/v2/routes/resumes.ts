@@ -12,6 +12,14 @@
 //   (rewrite + tailor-diff answer 503 ai_unavailable when the user's AI consent
 //   is off or the brand has no text model; WP-22, TASK_PLAN.md §2.2)
 //   GET    /:id/coach-tips  — V3 editor coach tips (free, deterministic)
+//   PATCH  /:id/layout      — template, page size, spacing, accent, date format (WP-36b)
+//   GET    /:id/export      — PDF/DOCX; 409 unverified_claims; records the file
+//                             on an application with ?trackerEntryId= (WP-36b)
+//
+// Hub rules (WP-36b): up to 5 base resumes (409 resume_limit_reached);
+// tailored versions do not count. Uploads check the brand's file storage
+// first (503 storage_unavailable on the mainland stack without CN_S3_*).
+// There is no LinkedIn URL import (TASK_PLAN.md H9).
 //
 // Quota note: `tailored_for_jd` create + `/rewrite` + `/tailor-diff` are
 // LLM ops — they write a `ra_resume_tailor` deduction row on SUCCESS only
@@ -21,19 +29,27 @@ import { Router, type Request, type Response } from 'express';
 import multer from 'multer';
 import { requireAuth } from '../lib/raAuth.js';
 import { getRequestLocale } from '../lib/raLocale.js';
-import { renderResumePdf, renderResumeDocx } from '../lib/resumeExport.js';
+import { FILE_NAME_STYLE_KEYS, defaultPageFor, type FileNameStyleKey } from '../lib/resumeExport.js';
 import { logger } from '../../../services/LoggerService.js';
 import {
   isAcceptedResumeUpload,
   readCandidateResumeOriginal,
 } from '../../../lib/candidateResumeIngest.js';
-import { isLinkedInUrlImportConfigured } from '../../../lib/linkedin/linkedInImport.js';
+import { resumeOriginalFileStorageService } from '../../../services/ResumeOriginalFileStorageService.js';
+import { getCurrentBrandOrDefault } from '../../../platform/brand/brandContext.js';
+import { PatchLayoutBodySchema } from '../../../features/resume/index.js';
 import {
+  BASE_RESUME_LIMIT,
   raResumeService,
+  registerResumeArtifactDeleters,
   ResumeInUseError,
+  ResumeLimitError,
   ResumeNotFoundError,
   ResumeUploadError,
   ResumeValidationError,
+  TrackerEntryNotFoundError,
+  UnverifiedClaimsError,
+  type ExportFormat,
   type RAResumeKind,
   type ResumeCreateInput,
 } from '../services/RAResumeService.js';
@@ -47,6 +63,41 @@ import {
 } from '../services/RAResumeAIService.js';
 
 const router = Router();
+
+// The artifact-file deleters (compliance retention, account purge) are
+// registered when this router loads at boot.
+void registerResumeArtifactDeleters().catch((err) => {
+  logger.error('RA_V2_RESUMES', 'artifact deleter registration failed', {
+    error: err instanceof Error ? err.message : String(err),
+  });
+});
+
+/** 409 body when every base slot is taken. */
+function limitBody() {
+  return { error: 'resume_limit_reached', code: 'resume_limit_reached', details: { limit: BASE_RESUME_LIMIT } };
+}
+
+/**
+ * Residency (WP-15 REQ-WP15-04): refuse an upload before reading the file when
+ * the brand's storage is required but missing.
+ */
+function requireUploadStorage(req: Request, res: Response, next: (err?: any) => void): void {
+  try {
+    resumeOriginalFileStorageService.assertAvailable();
+    next();
+  } catch (err) {
+    const code = (err as { code?: string } | null)?.code;
+    if (code === 'storage_unavailable') {
+      res.status(503).json({ error: 'storage_unavailable', code: 'storage_unavailable' });
+      return;
+    }
+    if (code === 'brand_context_missing') {
+      res.status(500).json({ error: 'brand_context_missing', code: 'brand_context_missing' });
+      return;
+    }
+    next(err);
+  }
+}
 
 const VALID_KINDS: RAResumeKind[] = ['base', 'tailored_for_jd', 'from_template'];
 
@@ -145,6 +196,9 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
     const resume = await raResumeService.create(userId, body as ResumeCreateInput, getRequestLocale(req));
     return res.status(201).json({ resume });
   } catch (err) {
+    if (err instanceof ResumeLimitError) {
+      return res.status(409).json(limitBody());
+    }
     if (err instanceof ResumeNotFoundError) {
       return res.status(404).json({ error: 'not_found' });
     }
@@ -162,7 +216,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
 // POST /upload — multipart résumé upload → parse → new base variant.
 // FREE (no quota debit), matching recruiter upload-parse. Reuses the RoboHire
 // parse pipeline via lib/candidateResumeIngest; writes ONLY candidate tables.
-router.post('/upload', requireAuth, handleResumeUpload, async (req: Request, res: Response) => {
+router.post('/upload', requireAuth, requireUploadStorage, handleResumeUpload, async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
     const file = (req as Request & { file?: Express.Multer.File }).file;
@@ -185,6 +239,9 @@ router.post('/upload', requireAuth, handleResumeUpload, async (req: Request, res
     }, getRequestLocale(req));
     return res.status(201).json({ resume });
   } catch (err) {
+    if (err instanceof ResumeLimitError) {
+      return res.status(409).json(limitBody());
+    }
     if (err instanceof ResumeUploadError) {
       return res.status(422).json({ error: err.code, code: err.code });
     }
@@ -196,26 +253,22 @@ router.post('/upload', requireAuth, handleResumeUpload, async (req: Request, res
   }
 });
 
-// ── Import from LinkedIn ────────────────────────────────────────────────────
-// GET  /import-linkedin/config — whether this deployment offers URL import.
-// POST /import-linkedin        — mode 'pdf' (Save-to-PDF upload) | 'url'
-//                                (config-gated enrichment fetch). FREE, like
-//                                /upload. URL mode 422s `url_import_not_configured`
-//                                until LINKEDIN_ENRICH_API_KEY is set.
-// Registered before GET /:id (distinct multi-segment paths; order kept for clarity).
+// ── Import from a LinkedIn PDF export ───────────────────────────────────────
+// GET  /import-linkedin/config — kept for older clients; URL import is gone
+//                                (TASK_PLAN.md H9), so it always says false.
+// POST /import-linkedin        — the user's own "Save to PDF" export (mode
+//                                'pdf'). FREE, like /upload. mode 'url' → 422
+//                                url_import_removed.
 router.get('/import-linkedin/config', requireAuth, (_req: Request, res: Response) => {
-  return res.json({ urlImportEnabled: isLinkedInUrlImportConfigured() });
+  return res.json({ urlImportEnabled: false });
 });
 
-router.post('/import-linkedin', requireAuth, handleResumeUpload, async (req: Request, res: Response) => {
+router.post('/import-linkedin', requireAuth, requireUploadStorage, handleResumeUpload, async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
     const file = (req as Request & { file?: Express.Multer.File }).file;
     const modeRaw = typeof req.body?.mode === 'string' ? req.body.mode : '';
-    const mode: 'pdf' | 'url' =
-      modeRaw === 'url' || modeRaw === 'pdf' ? modeRaw : file ? 'pdf' : 'url';
-    const linkedinUrl =
-      typeof req.body?.linkedinUrl === 'string' ? req.body.linkedinUrl.trim() : '';
+    const mode: 'pdf' | 'url' = modeRaw === 'url' ? 'url' : 'pdf';
     const nameRaw = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
 
     const resume = await raResumeService.importFromLinkedIn(userId, {
@@ -223,12 +276,14 @@ router.post('/import-linkedin', requireAuth, handleResumeUpload, async (req: Req
       buffer: file?.buffer,
       fileName: file?.originalname,
       mimeType: file?.mimetype,
-      linkedinUrl: linkedinUrl || undefined,
       name: nameRaw || undefined,
       requestId: (req as any).requestId,
     }, getRequestLocale(req));
     return res.status(201).json({ resume });
   } catch (err) {
+    if (err instanceof ResumeLimitError) {
+      return res.status(409).json(limitBody());
+    }
     if (err instanceof ResumeUploadError) {
       return res.status(422).json({ error: err.code, code: err.code });
     }
@@ -244,7 +299,7 @@ router.get('/:id', requireAuth, async (req: Request<{ id: string }>, res: Respon
   try {
     const userId = req.user!.id;
     const resume = await raResumeService.getById(userId, req.params.id);
-    return res.json({ resume });
+    return res.json({ resume: { ...resume, defaultPage: requestDefaultPage(req) } });
   } catch (err) {
     if (err instanceof ResumeNotFoundError) {
       return res.status(404).json({ error: 'not_found' });
@@ -311,6 +366,10 @@ router.post('/:id/primary', requireAuth, async (req: Request<{ id: string }>, re
     if (err instanceof ResumeNotFoundError) {
       return res.status(404).json({ error: 'not_found' });
     }
+    if (err instanceof ResumeValidationError) {
+      // A tailored version cannot be the primary (F-RES-02).
+      return res.status(422).json({ error: 'not_base_resume', message: err.message });
+    }
     logger.error('RA_V2_RESUMES', 'setPrimary failed', {
       userId: req.user?.id,
       resumeId: req.params.id,
@@ -348,40 +407,100 @@ router.get('/:id/original-file', requireAuth, async (req: Request<{ id: string }
   }
 });
 
-// GET /:id/export?format=pdf — render the variant's CURRENT markdown to a
-// real downloadable file (owner-only). Unlike /original-file (which echoes the
-// uploaded bytes), this exports the BUILT/TAILORED resume itself. PDF today;
-// docx is added alongside renderResumeDocx.
+// PATCH /:id/layout — template, page size, spacing, accent, date format.
+// Validated by the RES contract (ResumeLayoutSchema); merged into the stored
+// layout. Mounted here, before the RES feature router, so this handler wins.
+router.patch('/:id/layout', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
+  const parsed = PatchLayoutBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(422).json({
+      error: 'validation_failed',
+      code: 'validation_failed',
+      details: { issues: parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })) },
+    });
+  }
+  try {
+    const resume = await raResumeService.patchLayout(req.user!.id, req.params.id, parsed.data.layout as Record<string, unknown>);
+    return res.json({ resume: { ...resume, defaultPage: requestDefaultPage(req) } });
+  } catch (err) {
+    if (err instanceof ResumeNotFoundError) {
+      return res.status(404).json({ error: 'not_found' });
+    }
+    logger.error('RA_V2_RESUMES', 'layout failed', {
+      userId: req.user?.id,
+      resumeId: req.params.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/** The visitor's country from the edge (Vercel), when present. */
+function requestCountry(req: Request): string | null {
+  const raw = req.headers['x-vercel-ip-country'];
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  return typeof v === 'string' && /^[A-Za-z]{2}$/.test(v) ? v.toUpperCase() : null;
+}
+
+/** Letter or A4 for this request when the resume has no page size saved. */
+function requestDefaultPage(req: Request): 'letter' | 'a4' {
+  const brand = getCurrentBrandOrDefault();
+  return defaultPageFor({ market: brand.market, country: requestCountry(req), locale: getRequestLocale(req) });
+}
+
+// GET /:id/export?format=pdf|docx&nameStyle=&trackerEntryId= — render the
+// variant's CURRENT markdown with its layout (owner-only). 409
+// unverified_claims while any inserted claim is unverified (ruling C12). With
+// trackerEntryId the exact bytes are kept and an RAApplicationArtifact row
+// records sha256 + storage key; its id comes back in X-Artifact-Id.
 router.get('/:id/export', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const format = String(req.query.format ?? 'pdf').toLowerCase();
     if (format !== 'pdf' && format !== 'docx') {
-      return res.status(422).json({ error: 'unsupported_format', supported: ['pdf', 'docx'] });
+      return res.status(422).json({ error: 'unsupported_format', code: 'unsupported_format', supported: ['pdf', 'docx'] });
     }
-    const variant = await raResumeService.getById(userId, req.params.id);
-    const markdown = variant.resumeMarkdown ?? '';
-    const isPdf = format === 'pdf';
-    const buffer = isPdf ? await renderResumePdf(markdown) : await renderResumeDocx(markdown);
-    const ext = isPdf ? 'pdf' : 'docx';
-    const contentType = isPdf
-      ? 'application/pdf'
-      : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    const nameStyleRaw = typeof req.query.nameStyle === 'string' ? req.query.nameStyle : '';
+    if (nameStyleRaw && !(FILE_NAME_STYLE_KEYS as readonly string[]).includes(nameStyleRaw)) {
+      return res.status(422).json({ error: 'invalid_name_style', code: 'validation_failed', details: { allowed: FILE_NAME_STYLE_KEYS } });
+    }
+    const trackerRaw = typeof req.query.trackerEntryId === 'string' ? req.query.trackerEntryId.trim() : '';
+    if (trackerRaw.length > 64) {
+      return res.status(422).json({ error: 'invalid_tracker_entry', code: 'validation_failed' });
+    }
+    const brand = getCurrentBrandOrDefault();
+    const result = await raResumeService.exportVariant(userId, req.params.id, {
+      format: format as ExportFormat,
+      nameStyle: (nameStyleRaw || null) as FileNameStyleKey | null,
+      trackerEntryId: trackerRaw || null,
+      channel: 'download',
+      locale: getRequestLocale(req),
+      brand: brand.id,
+      market: brand.market,
+      country: requestCountry(req),
+    });
 
     // ASCII filename for legacy clients + RFC 5987 filename* for CJK names.
-    const rawName = (variant.name || 'resume').trim() || 'resume';
     const asciiName =
-      rawName.replace(/[^\x20-\x7E]/g, '_').replace(/["\\/]/g, '_').trim() || 'resume';
-    const encoded = encodeURIComponent(rawName);
-    res.setHeader('Content-Type', contentType);
+      result.fileName.replace(/[^\x20-\x7E]/g, '_').replace(/["\\/]/g, '_').trim() || `resume.${result.ext}`;
+    res.setHeader('Content-Type', result.contentType);
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="${asciiName}.${ext}"; filename*=UTF-8''${encoded}.${ext}`,
+      `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(result.fileName)}`,
     );
-    return res.send(buffer);
+    res.setHeader('X-Content-Sha256', result.sha256);
+    if (result.artifactId) res.setHeader('X-Artifact-Id', result.artifactId);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Artifact-Id, X-Content-Sha256');
+    return res.send(result.buffer);
   } catch (err) {
     if (err instanceof ResumeNotFoundError) {
       return res.status(404).json({ error: 'not_found' });
+    }
+    if (err instanceof UnverifiedClaimsError) {
+      return res.status(409).json({ error: 'unverified_claims', code: 'unverified_claims', details: { count: err.count } });
+    }
+    if (err instanceof TrackerEntryNotFoundError) {
+      return res.status(404).json({ error: 'tracker_entry_not_found', code: 'tracker_entry_not_found' });
     }
     logger.error('RA_V2_RESUMES', 'export failed', {
       userId: req.user?.id,
