@@ -1,0 +1,38 @@
+{
+  "name": "roboapply-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser extension (MV3) for both product brands: fills application forms the user opened; the user reviews and submits them (D1). Not part of the root workspace.",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs --brand=roboapply --target=chrome",
+    "build:dev": "node scripts/build.mjs --brand=roboapply --target=chrome --dev",
+    "build:goapply": "node scripts/build.mjs --brand=goapply --target=edge",
+    "build:all": "node scripts/build.mjs --all",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.e2e.json --noEmit",
+    "check:no-submit": "node ../scripts/check-extension-no-submit.mjs",
+    "test": "vitest run && npm run check:no-submit",
+    "test:watch": "vitest",
+    "e2e": "node scripts/build.mjs --brand=roboapply --target=chrome --dev --api-origin=http://127.0.0.1:4799 --out=dist/e2e && playwright test -c playwright.config.ts"
+  },
+  "dependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@types/chrome": "0.3.5",
+    "@types/node": "24.19.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "esbuild": "0.28.2",
+    "jsdom": "30.1.2",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3"
+  }
+}

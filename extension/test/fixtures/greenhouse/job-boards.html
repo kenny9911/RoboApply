@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+<head><title>Job Application for Product Designer at Demo Studio</title></head>
+<body>
+<main class="job-post">
+  <div class="job__header">
+    <div class="job__title"><h1 class="section-header">Product Designer</h1></div>
+    <div class="job__company">Demo Studio</div>
+    <div class="job__location">London, United Kingdom</div>
+  </div>
+  <div class="job__description"><p>Design the editor our customers use every day.</p></div>
+  <form id="application-form" class="application--form" novalidate>
+    <div class="application--questions">
+      <div class="text-input-wrapper"><div class="input-wrapper">
+        <label id="first_name-label" for="first_name" class="label">First Name<span aria-hidden="true">*</span></label>
+        <input id="first_name" class="input" aria-required="true" type="text" autocomplete="given-name">
+      </div></div>
+      <div class="text-input-wrapper"><div class="input-wrapper">
+        <label id="last_name-label" for="last_name" class="label">Last Name<span aria-hidden="true">*</span></label>
+        <input id="last_name" class="input" aria-required="true" type="text" autocomplete="family-name">
+      </div></div>
+      <div class="text-input-wrapper"><div class="input-wrapper">
+        <label id="preferred_name-label" for="preferred_name" class="label">Preferred First Name</label>
+        <input id="preferred_name" class="input" type="text">
+      </div></div>
+      <div class="text-input-wrapper"><div class="input-wrapper">
+        <label id="email-label" for="email" class="label">Email<span aria-hidden="true">*</span></label>
+        <input id="email" class="input" aria-required="true" type="text" autocomplete="email">
+      </div></div>
+      <div class="file-upload">
+        <div id="upload-label-resume" class="label upload-label">Resume/CV<span aria-hidden="true">*</span></div>
+        <input id="resume" type="file" class="visually-hidden" aria-labelledby="upload-label-resume" accept=".pdf,.doc,.docx,.txt,.rtf">
+        <button type="button" class="btn btn--pill">Attach</button>
+      </div>
+      <div class="text-input-wrapper"><div class="input-wrapper">
+        <label id="question_301-label" for="question_301" class="label">LinkedIn Profile</label>
+        <input id="question_301" class="input" type="text">
+      </div></div>
+      <div class="select__container">
+        <label id="question_302-label" for="question_302" class="label select__label">Will you require visa sponsorship to work in the UK?<span aria-hidden="true">*</span></label>
+        <div class="select__control">
+          <input id="question_302" role="combobox" aria-labelledby="question_302-label" aria-controls="react-select-question_302-listbox" aria-expanded="false" aria-required="true" autocomplete="off" type="text" value="">
+        </div>
+        <div id="react-select-question_302-listbox" role="listbox" hidden>
+          <div role="option" id="react-select-question_302-option-0">Yes</div>
+          <div role="option" id="react-select-question_302-option-1">No</div>
+        </div>
+      </div>
+      <div class="text-input-wrapper"><div class="input-wrapper">
+        <label id="question_303-label" for="question_303" class="label">What is a design decision you changed your mind about?<span aria-hidden="true">*</span></label>
+        <textarea id="question_303" class="input" aria-required="true"></textarea>
+      </div></div>
+    </div>
+    <button type="submit" class="btn btn--pill">Submit application</button>
+  </form>
+</main>
+</body>
+</html>

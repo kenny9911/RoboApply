@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+<head><title>Job Application for Platform Engineer at Example Co</title></head>
+<body>
+<div id="app_body">
+  <div id="header">
+    <h1 class="app-title">Platform Engineer</h1>
+    <span class="company-name">at Example Co</span>
+    <div class="location">Remote, United States</div>
+  </div>
+  <div id="content"><p>Example Co builds tools for small teams.</p><p>You will run the deployment platform.</p></div>
+  <form id="application_form" action="/exampleco/jobs/1001" method="post" enctype="multipart/form-data">
+    <input type="hidden" name="utf8" value="✓">
+    <input type="hidden" name="authenticity_token" value="x">
+    <div id="main_fields">
+      <div class="field">
+        <label for="first_name">First Name <span class="asterisk">*</span></label>
+        <input type="text" id="first_name" name="job_application[first_name]" aria-required="true">
+      </div>
+      <div class="field">
+        <label for="last_name">Last Name <span class="asterisk">*</span></label>
+        <input type="text" id="last_name" name="job_application[last_name]" aria-required="true">
+      </div>
+      <div class="field">
+        <label for="email">Email <span class="asterisk">*</span></label>
+        <input type="text" id="email" name="job_application[email]" aria-required="true">
+      </div>
+      <div class="field">
+        <label for="phone">Phone</label>
+        <input type="text" id="phone" name="job_application[phone]">
+      </div>
+      <div class="field" id="resume_fieldset">
+        <label>Resume/CV <span class="asterisk">*</span></label>
+        <div class="attach-or-paste">
+          <button type="button" class="link-button" data-source="attach">Attach</button>
+          <input type="file" id="resume_file" name="job_application[resume]" style="display:none">
+        </div>
+      </div>
+      <div class="field" id="cover_letter_fieldset">
+        <label>Cover Letter</label>
+        <input type="file" id="cover_letter_file" name="job_application[cover_letter]" style="display:none">
+      </div>
+    </div>
+    <div id="custom_fields">
+      <div class="field">
+        <label>LinkedIn Profile
+          <input type="text" id="job_application_answers_attributes_0_text_value" name="job_application[answers_attributes][0][text_value]">
+        </label>
+      </div>
+      <div class="field">
+        <label>Are you legally authorized to work in the United States? <span class="asterisk">*</span>
+          <select id="job_application_answers_attributes_1_boolean_value" name="job_application[answers_attributes][1][boolean_value]" aria-required="true">
+            <option value="">--</option>
+            <option value="1">Yes</option>
+            <option value="0">No</option>
+          </select>
+        </label>
+      </div>
+      <div class="field">
+        <label>Will you now or in the future require sponsorship for employment visa status? <span class="asterisk">*</span>
+          <select id="job_application_answers_attributes_2_boolean_value" name="job_application[answers_attributes][2][boolean_value]" aria-required="true">
+            <option value="">--</option>
+            <option value="1">Yes</option>
+            <option value="0">No</option>
+          </select>
+        </label>
+      </div>
+      <div class="field">
+        <label>Why do you want to work at Example Co? <span class="asterisk">*</span>
+          <textarea id="job_application_answers_attributes_3_text_value" name="job_application[answers_attributes][3][text_value]" aria-required="true"></textarea>
+        </label>
+      </div>
+      <div class="field">
+        <label>What are your salary expectations?
+          <input type="text" id="job_application_answers_attributes_4_text_value" name="job_application[answers_attributes][4][text_value]">
+        </label>
+      </div>
+    </div>
+    <div id="eeoc_fields">
+      <div class="field">
+        <label for="job_application_gender">Gender</label>
+        <select id="job_application_gender" name="job_application[gender]">
+          <option value="">Please select</option>
+          <option value="1">Male</option>
+          <option value="2">Female</option>
+          <option value="3">Decline To Self Identify</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="job_application_veteran_status">Veteran Status</label>
+        <select id="job_application_veteran_status" name="job_application[veteran_status]">
+          <option value="">Please select</option>
+          <option value="1">I am not a protected veteran</option>
+          <option value="2">I identify as one or more of the classifications of protected veteran</option>
+          <option value="3">I don't wish to answer</option>
+        </select>
+      </div>
+    </div>
+    <div id="submit_buttons">
+      <input type="button" id="submit_app" value="Submit Application">
+    </div>
+  </form>
+</div>
+</body>
+</html>
