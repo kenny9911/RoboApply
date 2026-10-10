@@ -7,10 +7,10 @@
 //   - how long data is kept                   the retention schedule
 //   - datasets used under an attribution licence   jobDataAttributions()
 //
-// Public page in HybridShell (R-23), like /legal/[doc]. It lists only the
-// documents that can be served: production GoApply serves no document until
-// CN_LEGAL_DOCS_VERSION is set, and then this page is a 404 too. Not indexed
-// while any listed document is a draft.
+// Public page in HybridShell (R-23), like /legal/[doc]. It lists the brand's
+// documents on both brands; a draft is listed and marked as one (GoApply no
+// longer hides drafts in production). Not indexed while any listed document
+// is a draft.
 
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';

@@ -8,7 +8,8 @@
 //   - keeps the GoApply phone gate and the AI-consent gate, with zero model
 //     calls when either says no;
 //   - answers 402 without a credit, and never reaches a job the user may not
-//     read (other market, GoApply recruitment-info mode off).
+//     read (another market's job; the GoApply mode-off rule is the tailor
+//     store's and is tested with it).
 // End to end through the real route, RAResumeService, the resume area's real
 // wiring (`defaultTailorDeps`) and the real TailorService. Faked: the tailor
 // store (the in-memory twin), credits (the platform test kit), the tailor
@@ -155,6 +156,8 @@ beforeEach(() => {
   m.chat.mockReset();
   m.score.mockReset().mockResolvedValue(null);
   m.labelLog.mockReset().mockResolvedValue(undefined);
+  // A reset only. Unset = GoApply postings are shown (the default, D5); no test here
+  // depends on the mode (the in-memory tailor store does not model it), so none sets `off`.
   delete process.env.CN_RECRUITMENT_INFO_MODE;
   m.store.variants.set('rv_1', memoryTailorVariant('u1', 'rv_1', BASE_MD, 'Main'));
   m.store.jobs.set('job_1', memoryTailorJob('job_1', { descriptionPlain: 'Analyst role. Tableau dashboards for the sales team.', skills: ['Tableau'] }));

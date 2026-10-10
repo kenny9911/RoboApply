@@ -135,7 +135,7 @@ export interface ProfileAvailability {
   eeo: boolean;
   /** GoApply optional 籍贯 / 政治面貌. */
   cnSensitive: boolean;
-  /** GoApply photo: hidden in CN-0 (no original upload or photo is stored, WP-15 rule). */
+  /** GoApply photo: offered wherever the brand can keep a file (its own bucket or the shared store); hidden where nothing is kept. */
   cnPhoto: boolean;
 }
 
@@ -339,7 +339,7 @@ export const PROFILE_ERROR_CODES = {
   resumeNotFound: 'profile_resume_not_found',
   /** A change in `accept` is not in the current diff (the profile or resume changed). */
   staleDiff: 'profile_sync_stale',
-  /** A field this brand or deployment does not hold (e.g. cnFields on RoboApply, a photo in CN-0). */
+  /** A field this brand or deployment does not hold (e.g. cnFields on RoboApply, a photo where no file can be kept). */
   fieldNotAvailable: 'profile_field_not_available',
   /** No SENSITIVE_DATA_KEY on this deployment. */
   sensitiveNotConfigured: 'profile_sensitive_not_configured',

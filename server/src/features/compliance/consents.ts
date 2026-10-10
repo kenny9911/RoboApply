@@ -32,9 +32,26 @@
 //     required (G1) and can be renewed in Settings. A record with no hash
 //     cannot be compared: the answer is null (unknown), and no screen says
 //     the text changed.
-//   - Withdrawing `pipl_cross_border` on GoApply while data is processed
-//     offshore (CN-0) closes and purges the account: a personal-information
-//     request is opened and a `compliance.purge` work item is enqueued.
+//   - `pipl_cross_border` is asked on GoApply whenever personal information
+//     leaves mainland China on this deployment, and only then: the deployment
+//     runs offshore, or part of GoApply's stack is the shared (offshore) one,
+//     or a configured AI model is served abroad (`crossBorderConsentApplies`;
+//     D5 made the shared stack GoApply's fallback, so the region alone no
+//     longer answers this). Its text names the processors and the AI
+//     destination of the stack really in use.
+//   - The AI part of a text and of that rule reads the admin model overrides
+//     kept in the database. `listConsents` and `recordConsent` load them first
+//     (`loadAiStackSnapshot`), so every instance, cold or warm, serves and
+//     stores the same hash. The pure helpers (`resolveConsentProse`,
+//     `isConsentRequired`, `validateSignupConsents`, ...) are synchronous:
+//     a caller that uses them for the live process awaits the loader itself.
+//   - Withdrawing `pipl_cross_border` on GoApply while it applies closes and
+//     purges the account: a personal-information request is opened and a
+//     `compliance.purge` work item is enqueued.
+//   - `interview_video` is offered on both brands (D5: camera video in
+//     practice follows one policy). GoApply stops offering it only when the
+//     operator restores audio-only practice (CN_INTERVIEW_CAMERA_PUBLISH set
+//     to a value that is not true, e.g. false).
 //   - The agreement and the age confirmation cannot be withdrawn one by one;
 //     they end with the account (delete account in #danger).
 //   - Adding an entry never changes another entry's hash: the hash covers the
@@ -47,8 +64,8 @@
 import crypto from 'node:crypto';
 import prisma from '../../lib/prisma.js';
 import { HttpError } from '../../platform/http.js';
-import type { BrandId, ProductBrand } from '../../platform/brand/registry.js';
-import type { EnvSource } from '../../platform/brand/brandEnv.js';
+import { getBrand, type BrandId, type ProductBrand } from '../../platform/brand/registry.js';
+import { parseBoolEnv, type EnvSource } from '../../platform/brand/brandEnv.js';
 import { enqueue, kickDrain } from '../../platform/queue/index.js';
 import { isSeekerConsentType, type SeekerConsentType } from '../../roboapply/engine/lib/seekerConsentTypes.js';
 import {
@@ -60,17 +77,22 @@ import {
 } from './contract.js';
 import { piRequestDueAt } from './piRequests.js';
 import { COMPLIANCE_WORK_KINDS } from './kinds.js';
-import { isOffshore } from './deployment.js';
+import { crossBorderConsentApplies, loadAiStackSnapshot } from './disclosures.js';
 import { aiPlaceSentence, offshoreProcessorsSentence } from './processingStatement.js';
 
-export { isOffshore } from './deployment.js';
+export { crossBorderApplies, isOffshore } from './deployment.js';
+export { crossBorderConsentApplies } from './disclosures.js';
 
 /**
  * Bump when any prose below changes (≤ 40 chars; stored on every record).
  * v2 (2026-10-11): the cross-border and AI-processing texts state processors
  * and AI destinations from configuration; `tips_reminders` is translated.
+ * v3 (2026-10-11, D5 parity): the cross-border text no longer speaks of a
+ * closed beta or of all data being offshore; it states that services outside
+ * mainland China process or store personal information, names them and says
+ * where AI requests go, for the stack really in use.
  */
-export const CONSENT_PROSE_VERSION = '2026-10-11.fix8.v2';
+export const CONSENT_PROSE_VERSION = '2026-10-11.par5.v3';
 
 // Languages a consent text may be written in: declared in the contract (the language of a served
 // prose is on the wire of other areas too), re-exported here for this area's callers.
@@ -80,19 +102,25 @@ export { CONSENT_PROSE_LOCALES, type ConsentProseLocale };
 export const OFFSHORE_PROCESSORS_TOKEN = '%OFFSHORE_PROCESSORS%';
 export const AI_PLACE_TOKEN = '%AI_PLACE%';
 
-export type ConsentRequirement = 'always' | 'offshore' | 'tw' | 'never';
+/**
+ * `cross_border` = personal information leaves mainland China on this
+ * deployment for the entry's brand (`crossBorderConsentApplies`).
+ */
+export type ConsentRequirement = 'always' | 'cross_border' | 'tw' | 'never';
 /**
  * When the catalog offers a consent. `never` = defined so a record can be
  * written and read (`recordConsent` does not look at applicability), but not
  * offered: `listConsents` shows it only once the user has a record of it.
+ * `camera_video` = the brand's practice may publish the camera (always on
+ * RoboApply; on GoApply unless CN_INTERVIEW_CAMERA_PUBLISH is set and is not a true value).
  */
-export type ConsentApplicability = 'always' | 'offshore' | 'tw' | 'gohire_parse_intl' | 'never';
+export type ConsentApplicability = 'always' | 'cross_border' | 'tw' | 'gohire_parse_intl' | 'camera_video' | 'never';
 
 export interface ConsentDefinition {
   type: SeekerConsentType;
   brand: BrandId;
   requiredWhen: ConsentRequirement;
-  /** When the consent is offered at all (e.g. the cross-border consent only while offshore). */
+  /** When the consent is offered at all (e.g. the cross-border consent only while personal information leaves the mainland). */
   appliesWhen: ConsentApplicability;
   stage: 'signup' | 'in_context';
   control: 'checkbox' | 'toggle' | 'two_option';
@@ -154,8 +182,8 @@ export const CONSENT_CATALOG: readonly ConsentDefinition[] = [
   {
     type: 'pipl_cross_border',
     brand: 'goapply',
-    requiredWhen: 'offshore',
-    appliesWhen: 'offshore',
+    requiredWhen: 'cross_border',
+    appliesWhen: 'cross_border',
     stage: 'signup',
     control: 'checkbox',
     withdrawable: true,
@@ -163,12 +191,15 @@ export const CONSENT_CATALOG: readonly ConsentDefinition[] = [
     defaultGranted: false,
     prose: {
       // %OFFSHORE_PROCESSORS% = the /legal processor rows outside mainland China, in words
-      // (each with its country and region). No processor or region is written here.
+      // (each with its country and region); %AI_PLACE% = where AI requests go under the routing
+      // rule in force. No processor, region or AI service is written here. The text is true
+      // wherever this consent is asked: on an offshore deployment and on a mainland one that
+      // uses the shared stack.
       zh:
-        '在当前内测阶段，你的个人信息在中国大陆境外处理和存储。%OFFSHORE_PROCESSORS%' +
-        '我同意上述境外处理。我知道撤回此同意会关闭我的账户并删除我的数据。',
+        '使用 %BRAND% 时，你的个人信息会由中国大陆境外的服务处理或存储。%OFFSHORE_PROCESSORS%%AI_PLACE%' +
+        '我同意上述境外处理。我知道撤回此同意会关闭我的账号并删除我的数据。',
       en:
-        'During this closed beta your personal information is processed and stored outside mainland China. %OFFSHORE_PROCESSORS%' +
+        'When you use %BRAND%, your personal information is processed or stored by services outside mainland China. %OFFSHORE_PROCESSORS%%AI_PLACE%' +
         'I agree to this processing. I understand that withdrawing this consent closes my account and deletes my data.',
     },
   },
@@ -287,15 +318,16 @@ export const CONSENT_CATALOG: readonly ConsentDefinition[] = [
     // records audio only. `interview_recording` keeps its audio-and-transcript
     // wording: video is this separate, later choice.
     //
-    // NOT OFFERED on GoApply (`appliesWhen: 'never'`): GoApply records audio
-    // only, always (CN L-11, getInterviewMediaPolicy: cameraPublish and
-    // recordVideo are false), so asking for this consent would state processing
-    // that does not happen. The practice sheet keeps saying video is not
-    // offered. Change this to 'always' only together with CN L-11.
+    // Offered on GoApply as on RoboApply (D5; GOAPPLY_PARITY_PLAN.md §3.5: the
+    // same camera and video-recording policy on both brands, behind the
+    // per-session consents). `camera_video` stops offering it only when the
+    // operator restores audio-only practice with
+    // CN_INTERVIEW_CAMERA_PUBLISH=false (the former CN L-11 rule): asking for
+    // this consent then would state processing that does not happen.
     type: 'interview_video',
     brand: 'goapply',
     requiredWhen: 'never',
-    appliesWhen: 'never',
+    appliesWhen: 'camera_video',
     stage: 'in_context',
     control: 'toggle',
     withdrawable: true,
@@ -507,19 +539,35 @@ function isTaiwan(ctx: ConsentContext): boolean {
   return (ctx.country ?? '').toUpperCase() === 'TW' || ctx.locale === 'zh-TW';
 }
 
-function holds(cond: ConsentRequirement | ConsentApplicability, ctx: ConsentContext): boolean {
+/**
+ * GoApply practice may publish the camera unless the operator set
+ * `CN_INTERVIEW_CAMERA_PUBLISH` to something that is not a true value
+ * (`false`, `0`, `no`, `off`, …): the reading the interview engine applies to
+ * the same variable (`getInterviewMediaPolicy`), so the consent is offered
+ * exactly when video can be recorded. Unset or blank = allowed. RoboApply
+ * always may; it never reads the GoApply switch.
+ */
+export function cameraVideoOffered(brand: BrandId, env: EnvSource = process.env): boolean {
+  if (getBrand(brand).market !== 'cn') return true;
+  const raw = (env.CN_INTERVIEW_CAMERA_PUBLISH ?? '').trim();
+  return raw === '' || parseBoolEnv(raw);
+}
+
+function holds(cond: ConsentRequirement | ConsentApplicability, def: Pick<ConsentDefinition, 'brand'>, ctx: ConsentContext): boolean {
   const env = ctx.env ?? process.env;
   switch (cond) {
     case 'always':
       return true;
     case 'never':
       return false;
-    case 'offshore':
-      return isOffshore(env);
+    case 'cross_border':
+      return crossBorderConsentApplies(getBrand(def.brand), env);
     case 'tw':
       return isTaiwan(ctx);
     case 'gohire_parse_intl':
       return gohireParseForIntl(env);
+    case 'camera_video':
+      return cameraVideoOffered(def.brand, env);
   }
 }
 
@@ -532,11 +580,11 @@ export function findConsentDefinition(brand: BrandId, type: string): ConsentDefi
 }
 
 export function isConsentApplicable(def: ConsentDefinition, ctx: ConsentContext): boolean {
-  return holds(def.appliesWhen, ctx);
+  return holds(def.appliesWhen, def, ctx);
 }
 
 export function isConsentRequired(def: ConsentDefinition, ctx: ConsentContext): boolean {
-  return holds(def.appliesWhen, ctx) && holds(def.requiredWhen, ctx);
+  return holds(def.appliesWhen, def, ctx) && holds(def.requiredWhen, def, ctx);
 }
 
 // ── Prose, version and hash ─────────────────────────────────────────────────
@@ -715,6 +763,8 @@ export async function listConsents(
   deps: ConsentServiceDeps = {},
 ): Promise<ConsentCatalogItem[]> {
   const db = deps.db ?? prisma;
+  // The texts and the cross-border requirement read the AI stack; load its snapshot first so every instance serves the same hash.
+  await loadAiStackSnapshot(ctx.env ?? deps.env ?? process.env);
   const profileId = await profileIdFor(db, userId);
   const defs = consentDefinitionsFor(brand.id);
   const records = await db.seekerConsentRecord.findMany({
@@ -738,7 +788,7 @@ export async function listConsents(
         stage: d.stage,
         control: d.control,
         withdrawable: d.withdrawable,
-        onWithdraw: d.onWithdraw === 'close_and_purge_account' && isOffshore(env) ? d.onWithdraw : 'none',
+        onWithdraw: d.onWithdraw === 'close_and_purge_account' && crossBorderConsentApplies(brand, env) ? d.onWithdraw : 'none',
         defaultGranted: false as const,
         prose: prose.text,
         proseVersion: prose.version,
@@ -764,9 +814,10 @@ export interface RecordConsentInput {
 }
 
 /**
- * Write one consent record with the prose hash. Withdrawing the CN-0
- * cross-border consent opens a personal-information request and enqueues the
- * account purge (`compliance.purge`).
+ * Write one consent record with the prose hash. Withdrawing the cross-border
+ * consent while it applies (personal information leaves the mainland on this
+ * deployment) opens a personal-information request and enqueues the account
+ * purge (`compliance.purge`).
  */
 export async function recordConsent(input: RecordConsentInput, deps: ConsentServiceDeps = {}): Promise<RecordConsentResponse> {
   const db = deps.db ?? prisma;
@@ -788,9 +839,11 @@ export async function recordConsent(input: RecordConsentInput, deps: ConsentServ
     });
   }
 
+  // Same snapshot as the text the form was served from (`listConsents`, the sign-up policy), so the hash stored is the hash shown.
+  await loadAiStackSnapshot(env);
   const prose = resolveConsentProse(def, input.brand, input.locale, env);
   const profileId = await profileIdFor(db, input.userId);
-  const closing = !input.granted && def.onWithdraw === 'close_and_purge_account' && isOffshore(env);
+  const closing = !input.granted && def.onWithdraw === 'close_and_purge_account' && crossBorderConsentApplies(input.brand, env);
 
   // The consent record and (for a closing withdrawal) its request commit
   // together. A retry reuses the open withdrawal request instead of opening a

@@ -18,10 +18,12 @@ function stripNs(key: string): string {
 export function WhyThisJob({ explanation }: { explanation: MatchExplanation }) {
   const t = useTranslations('legal');
   const text = (l: ExplainLine) => t(stripNs(l.key), l.params ?? {});
+  // The label, the colon and the quotation marks are one message per source,
+  // so each language uses its own punctuation (full-width in zh / zh-TW / ja).
   const evidence = (l: ExplainLine) =>
     l.params?.evidence ? (
       <span className={styles.quote}>
-        {l.params.source === 'posting' ? t('explain.fromPosting') : t('explain.fromResume')}: “{String(l.params.evidence)}”
+        {t(l.params.source === 'posting' ? 'explain.quoteFromPosting' : 'explain.quoteFromResume', { evidence: String(l.params.evidence) })}
       </span>
     ) : null;
   return (

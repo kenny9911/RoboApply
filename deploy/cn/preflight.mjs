@@ -1,22 +1,33 @@
 #!/usr/bin/env node
-// deploy/cn/preflight.mjs — mainland (CN-1) readiness check for the API
-// container (WP-76). Runs as the API Deployment's initContainer, and by hand
-// before a first deploy:
+// deploy/cn/preflight.mjs — mainland readiness check for the API container
+// (WP-76; D5 parity, GOAPPLY_PARITY_PLAN.md §3.6). Runs as the API
+// Deployment's initContainer, and by hand before a first deploy:
 //
 //   docker run --rm --env-file deploy/cn/.env.cn <api image> node deploy/cn/preflight.mjs
 //
-// It refuses (exit 1) when the API would boot in a state the mainland stack
-// must not run in. On top of the boot-time residency assertions the API
-// already makes (server/src/platform/residency/startupAssertions.ts, WP-15),
-// it requires:
+// It mirrors the boot-time residency assertions the API makes
+// (server/src/platform/residency/startupAssertions.ts) and adds the checks of
+// the mainland kit itself.
+//
+// REFUSED (exit 1), always: the things the mainland kit cannot run without.
 //   - DEPLOY_REGION=cn-mainland (otherwise the residency checks assert nothing);
-//   - content safety READY for CN-1: Aliyun Green with credentials and a
-//     mainland endpoint (`contentSafetyReadiness().cn1Ready`, WP-24). Since the
-//     Wave 5 gate the boot check also asserts this when Aliyun Green is chosen
-//     (`content_safety_not_ready`); the preflight reports it once either way;
+//   - every residency FAILURE: an unknown region, a database that is not on
+//     the CN allowlist, a deployment that would serve RoboApply;
 //   - CRON_SECRET (the CronJobs authenticate with it);
 //   - ROBOAPPLY_CRON_DISABLED=true (the CronJobs replace node-cron; both on
-//     would run every sweep twice).
+//     would run every sweep twice);
+//   - VERCEL unset (the API would not listen).
+//
+// WARNED (exit 0), by default: a China-specific provider that is not set. The
+// API then boots and GoApply runs on the shared stack for that part:
+//   - no ICP number, no CN model route on the domestic allowlist, no bucket of
+//     its own (CN_S3_*) or one that is not mainland storage, content safety
+//     that is not Aliyun Green or not ready, email through Resend.
+//
+// With CN_RESIDENCY_STRICT=true every warning of that second list is a
+// failure again (exit 1), and content safety must be READY for the mainland:
+// Aliyun Green with credentials and a mainland endpoint
+// (`contentSafetyReadiness().cn1Ready`, WP-24).
 // It never prints secret values, only variable names and problem codes.
 
 import { dirname, join, resolve } from 'node:path';
@@ -34,7 +45,7 @@ function set(env, name) {
  * own functions (passed in so tests use the TypeScript sources and the image
  * uses server/dist).
  *
- * @returns {{ ok: boolean, failures: Array<{code: string, message: string}>, warnings: string[] }}
+ * @returns {{ ok: boolean, strict: boolean, failures: Array<{code: string, message: string}>, warnings: string[] }}
  */
 export function runPreflight({ env, checkResidency, contentSafetyReadiness }) {
   const failures = [];
@@ -48,16 +59,21 @@ export function runPreflight({ env, checkResidency, contentSafetyReadiness }) {
   }
 
   const residency = checkResidency(env);
+  // The strict mainland posture is the operator's explicit choice (CN_RESIDENCY_STRICT).
+  const strict = residency.strict === true;
+  const advisories = residency.advisories ?? [];
   failures.push(...residency.failures.map((f) => ({ code: f.code, message: f.message })));
+  // Provider checks that did not pass: the API boots on the shared stack for that part.
+  warnings.push(...advisories.map((a) => `[${a.code}] ${a.message}`));
   warnings.push(...residency.warnings);
 
   const safety = contentSafetyReadiness(env);
-  const reportedByResidency = residency.failures.some((f) => f.code === 'content_safety_not_ready');
-  if (!safety.cn1Ready && !reportedByResidency) {
+  const reported = (list) => list.some((f) => f.code === 'content_safety_not_ready');
+  if (!safety.cn1Ready && strict && !reported(residency.failures)) {
     const detail = safety.problems.length ? ` Problems: ${safety.problems.join('; ')}.` : '';
     failures.push({
       code: 'content_safety_not_cn1_ready',
-      message: `Content safety is not ready for CN-1 (provider ${safety.provider}): Aliyun Green with ALIYUN_GREEN_ACCESS_KEY_ID / ALIYUN_GREEN_ACCESS_KEY_SECRET and a mainland region is required.${detail}`,
+      message: `Content safety is not ready for the strict mainland posture (provider ${safety.provider}): Aliyun Green with ALIYUN_GREEN_ACCESS_KEY_ID / ALIYUN_GREEN_ACCESS_KEY_SECRET and a mainland region is required.${detail}`,
     });
   }
 
@@ -81,11 +97,12 @@ export function runPreflight({ env, checkResidency, contentSafetyReadiness }) {
     warnings.push('CN_CANONICAL_ORIGIN is not set: links in emails and sitemaps use the registry default origin.');
   }
 
-  return { ok: failures.length === 0, failures, warnings };
+  return { ok: failures.length === 0, strict, failures, warnings };
 }
 
 export function formatReport(report) {
-  const lines = [report.ok ? 'CN-1 preflight: OK' : 'CN-1 preflight: REFUSED'];
+  const head = report.ok ? (report.warnings.length ? 'CN-1 preflight: OK, with warnings' : 'CN-1 preflight: OK') : 'CN-1 preflight: REFUSED';
+  const lines = [head];
   for (const f of report.failures) lines.push(`  ✗ [${f.code}] ${f.message}`);
   for (const w of report.warnings) lines.push(`  ! ${w}`);
   return lines.join('\n');

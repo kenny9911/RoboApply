@@ -83,11 +83,12 @@ export function legalDocsFor(market: LegalMarket, locale?: string | null): Legal
 }
 
 /**
- * Block placeholders rendered as live components on the page. The last three
+ * Block placeholders rendered as live components on the page. The last four
  * come from the code that enforces them (residency summary, the AI routing
- * policy lists, the job data sources) — never typed into a document.
+ * policy lists, the job data sources, the cross-border rule): never typed
+ * into a document.
  */
-export const LEGAL_BLOCKS = ['retention_schedule', 'ai_models', 'processors', 'processing_facts', 'llm_endpoints', 'data_attributions'] as const;
+export const LEGAL_BLOCKS = ['retention_schedule', 'ai_models', 'processors', 'processing_facts', 'llm_endpoints', 'data_attributions', 'offshore_notice'] as const;
 export type LegalBlock = (typeof LEGAL_BLOCKS)[number];
 
 export type LegalSegment = { kind: 'markdown'; text: string } | { kind: 'block'; block: LegalBlock };

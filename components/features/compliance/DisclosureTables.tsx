@@ -4,10 +4,16 @@
 // configured with (GET /api/v1/public/legal/disclosures). Unknown countries
 // render "Not listed"; filing numbers appear only when set; no model → AI off.
 //
-// ProcessingFacts, LlmEndpoints and DataAttributions render what the server
-// derives from the code that enforces it (the residency summary, the AI
-// routing policy lists, the job data sources). No vendor, host or dataset name
-// is written in this file or in the bundles: every one comes from the response.
+// ProcessingFacts, LlmEndpoints, CrossBorderNotice and DataAttributions render
+// what the server derives from the code that enforces it (the residency
+// summary, the AI routing rule and lists, the cross-border rule, the job data
+// sources). No vendor, host or dataset name is written in this file or in the
+// bundles: every one comes from the response.
+//
+// The lists describe the stack the brand really uses on this deployment. A
+// GoApply deployment on the shared stack therefore shows the shared processors
+// and the AI rule `open`; "mainland only" is said only when the server reports
+// that rule.
 
 import { useQuery } from '@tanstack/react-query';
 import { useFormatter, useTranslations } from 'next-intl';
@@ -108,6 +114,25 @@ export function ProcessingFacts({ data }: { data?: DisclosuresResponse }) {
   );
 }
 
+/**
+ * Whether personal information leaves mainland China on this deployment
+ * ({{offshore_notice}} in the GoApply privacy notice). The server decides
+ * (`offshore`: an offshore deployment, part of the stack on the shared one, or
+ * an AI model served abroad); the processors table and the AI endpoints block
+ * of the same document name who and where.
+ */
+export function CrossBorderNotice({ data }: { data?: DisclosuresResponse }) {
+  const t = useTranslations('legal');
+  const q = useDisclosures(data);
+  const d = data ?? q.data;
+  if (!d) return <p className={styles.muted}>{q.isError ? t('disclosures.error') : t('disclosures.loading')}</p>;
+  return (
+    <p data-testid="cross-border-notice" data-applies={d.offshore ? 'true' : 'false'}>
+      {d.offshore ? t('crossBorder.applies') : t('crossBorder.none')}
+    </p>
+  );
+}
+
 /** The AI endpoints the routing policy allows and refuses ({{llm_endpoints}}). */
 export function LlmEndpoints({ data }: { data?: DisclosuresResponse }) {
   const t = useTranslations('legal');
@@ -115,9 +140,13 @@ export function LlmEndpoints({ data }: { data?: DisclosuresResponse }) {
   const d = data ?? q.data;
   if (!d) return <p className={styles.muted}>{q.isError ? t('disclosures.error') : t('disclosures.loading')}</p>;
   const e = d.llmEndpoints;
+  // `open` (GoApply by default): no host is allowed or refused by rule, so
+  // there is no host list to print. Its own keys: the select of
+  // `llmEndpoints.rule` would fall to the "never mainland" sentence.
+  const open = e.rule === 'open';
   return (
     <div data-testid="llm-endpoints" data-rule={e.rule}>
-      <p>{t('llmEndpoints.rule', { rule: e.rule })}</p>
+      <p>{open ? t('llmEndpoints.open') : t('llmEndpoints.rule', { rule: e.rule })}</p>
       {e.providers.length > 0 ? (
         <div className={styles.tableWrap}>
           <table className={styles.table}>
@@ -140,14 +169,18 @@ export function LlmEndpoints({ data }: { data?: DisclosuresResponse }) {
       ) : (
         <p className={styles.muted}>{t('disclosures.notListed')}</p>
       )}
-      <p>{t('llmEndpoints.hosts', { rule: e.rule })}</p>
-      <ul className={styles.hostList} data-list="mainland-hosts">
-        {e.mainlandHosts.map((h) => (
-          <li key={h} className={styles.host}>
-            {h}
-          </li>
-        ))}
-      </ul>
+      {!open && e.mainlandHosts.length > 0 ? (
+        <>
+          <p>{t('llmEndpoints.hosts', { rule: e.rule })}</p>
+          <ul className={styles.hostList} data-list="mainland-hosts">
+            {e.mainlandHosts.map((h) => (
+              <li key={h} className={styles.host}>
+                {h}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
       {e.excludedUpstreams.length > 0 ? (
         <>
           <p>{t('llmEndpoints.excluded')}</p>

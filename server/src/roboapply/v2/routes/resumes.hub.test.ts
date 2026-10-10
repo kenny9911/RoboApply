@@ -167,14 +167,16 @@ vi.mock('../../../services/ResumeOriginalFileStorageService.js', async () => {
 });
 
 import { runWithBrand } from '../../../lib/requestContext.js';
+import { setConsentLookup } from '../../../platform/consent/index.js';
 import { ResumeOriginalFileStorageService } from '../../../services/ResumeOriginalFileStorageService.js';
 
-/** A storage service over a fake S3 that counts PutObject calls. */
-function realStorage(env: Record<string, string | undefined>) {
+/** A storage service over a fake S3 that counts PutObject calls (and, when asked, records every command). */
+function realStorage(env: Record<string, string | undefined>, commands?: Array<{ name: string; bucket: unknown }>) {
   return new ResumeOriginalFileStorageService({
     env,
     createS3Client: () => ({
-      send: (async (command: { constructor: { name: string } }) => {
+      send: (async (command: { constructor: { name: string }; input?: { Bucket?: unknown } }) => {
+        commands?.push({ name: command.constructor.name, bucket: command.input?.Bucket });
         if (command.constructor.name === 'PutObjectCommand') {
           mocks.putObjects += 1;
           const body = (command as unknown as { input?: { Body?: unknown } }).input?.Body;
@@ -268,6 +270,8 @@ describe('resume hub routes (WP-36b)', () => {
     mocks.aiAvailable = false;
     mocks.createTailorSession.mockReset();
     delete process.env.CN_AI_EXPORT_EXPLICIT_LABEL;
+    // Unset = postings are shown on GoApply (the default, D5). A test that
+    // means "mode off" sets CN_RECRUITMENT_INFO_MODE=off itself.
     delete process.env.CN_RECRUITMENT_INFO_MODE;
   });
 
@@ -283,14 +287,24 @@ describe('resume hub routes (WP-36b)', () => {
       expect(mocks.setPurge).toHaveBeenCalledTimes(1);
       const deleter = mocks.registerCompliance.mock.calls[0]![0] as (row: Row) => Promise<boolean>;
       const deleteFile = vi.fn(async () => true);
-      mocks.storage = { getProviderMode: () => 'local', deleteFile };
+      // The key names its store; the storage service says which provider wrote it.
+      mocks.storage = { providerOfKey: () => 'local', deleteFile };
       await expect(deleter({ id: 'a', storageKey: 'roboapply-artifacts/u/x.pdf', userId: 'u' })).resolves.toBe(true);
       expect(deleteFile).toHaveBeenCalledWith({ provider: 'local', key: 'roboapply-artifacts/u/x.pdf', fileName: null, mimeType: null });
       const purge = mocks.setPurge.mock.calls[0]![0] as (key: string) => Promise<boolean>;
-      mocks.storage = { getProviderMode: () => 's3', deleteFile };
+      mocks.storage = { providerOfKey: () => 's3', deleteFile };
       await purge('cn/roboapply-artifacts/u/x.pdf');
       expect(deleteFile).toHaveBeenLastCalledWith({ provider: 's3', key: 'cn/roboapply-artifacts/u/x.pdf', fileName: null, mimeType: null });
+      await purge('goapply/roboapply-artifacts/u/x.pdf');
+      expect(deleteFile).toHaveBeenLastCalledWith({ provider: 's3', key: 'goapply/roboapply-artifacts/u/x.pdf', fileName: null, mimeType: null });
+
+      // With the real storage service: a GoApply artifact on the shared store is deleted in the shared bucket.
+      const commands: Array<{ name: string; bucket: unknown }> = [];
+      mocks.storage = realStorage({ ...INTL_S3 }, commands);
+      await expect(purge('goapply/roboapply-artifacts/u/x.pdf')).resolves.toBe(true);
+      expect(commands).toEqual([{ name: 'DeleteObjectCommand', bucket: INTL_S3.S3_BUCKET }]);
     });
+
   });
 
   describe('hub: base slots, target title, list fields', () => {
@@ -618,6 +632,7 @@ describe('resume hub routes (WP-36b)', () => {
 
       it('GoApply, recruitment-info mode off: a third-party posting is never named, in the file name or on the resume card', async () => {
         mocks.brand = 'goapply';
+        process.env.CN_RECRUITMENT_INFO_MODE = 'off';
         // A GoHire posting the variant was tailored for while postings were shown.
         mocks.db.jobs.push({ id: 'gh1', title: '后端工程师', companyName: '某某科技', market: 'cn', visibility: 'public', provider: 'gohire', sourceBoard: 'gohire' });
         const v = variant({ kind: 'tailored_for_jd', sourceKind: 'tailored', targetJobId: 'gh1' });
@@ -637,6 +652,7 @@ describe('resume hub routes (WP-36b)', () => {
 
       it('GoApply, mode off: the user\'s own imported job is named', async () => {
         mocks.brand = 'goapply';
+        process.env.CN_RECRUITMENT_INFO_MODE = 'off';
         mocks.db.jobs.push({ id: 'own1', title: '产品经理', companyName: '我的公司', market: 'cn', visibility: 'private', ownerUserId: 'user1', provider: 'user_import', sourceBoard: 'user_import' });
         const v = variant({ kind: 'tailored_for_jd', sourceKind: 'tailored', targetJobId: 'own1' });
         const name = await nameOf(v.id);
@@ -644,12 +660,16 @@ describe('resume hub routes (WP-36b)', () => {
         expect(name).toContain('产品经理');
       });
 
-      it('GoApply with postings allowed: the posting is named', async () => {
+      it('GoApply with postings allowed (the default, and the explicit modes): the posting is named', async () => {
         mocks.brand = 'goapply';
-        process.env.CN_RECRUITMENT_INFO_MODE = 'licensed';
         mocks.db.jobs.push({ id: 'gh2', title: '后端工程师', companyName: '某某科技', market: 'cn', visibility: 'public', provider: 'gohire', sourceBoard: 'gohire' });
         const v = variant({ kind: 'tailored_for_jd', sourceKind: 'tailored', targetJobId: 'gh2' });
+        // Unset: the feed is on by default (D5).
         expect(await nameOf(v.id)).toContain('某某科技');
+        for (const mode of ['licensed', 'partner_deeplink']) {
+          process.env.CN_RECRUITMENT_INFO_MODE = mode;
+          expect(await nameOf(v.id)).toContain('某某科技');
+        }
       });
 
       it('never names a job from the other market, another user\'s import or a seed row', async () => {
@@ -829,8 +849,8 @@ describe('resume hub routes (WP-36b)', () => {
       expect(res.headers.get('x-photo-omitted')).toBe('1');
       expect(Buffer.from(await res.arrayBuffer()).toString('latin1')).not.toMatch(/\/Subtype \/Image/);
       expect(mocks.db.artifacts).toHaveLength(1);
-      // RoboApply stores the recorded file in object storage here; whatever is stored has no image.
-      if (brand === 'roboapply') expect(mocks.putBodies).toHaveLength(1);
+      // Both brands store the recorded file in object storage here (GoApply on the shared store, D5); whatever is stored has no image.
+      expect(mocks.putBodies).toHaveLength(1);
       for (const body of mocks.putBodies) {
         expect(body.toString('latin1')).toContain('%PDF');
         expect(body.toString('latin1')).not.toMatch(/\/Subtype \/Image/);
@@ -860,19 +880,37 @@ describe('resume hub routes (WP-36b)', () => {
     });
   });
 
-  describe('upload residency (WP-15 REQ-WP15-04)', () => {
-    it('GoApply on cn-mainland without CN_S3_* → 503 storage_unavailable, file never read, zero PutObject calls', async () => {
-      mocks.brand = 'goapply';
-      mocks.storage = realStorage({ ...INTL_S3, DEPLOY_REGION: 'cn-mainland' });
+  describe('upload residency (WP-15 REQ-WP15-04; D5: a missing CN bucket never refuses an upload)', () => {
+    const pdfForm = () => {
       const fd = new FormData();
       fd.append('file', new Blob(['%PDF-1.4 resume'], { type: 'application/pdf' }), 'cv.pdf');
-      const res = await fetch(`${base}/upload`, { method: 'POST', body: fd });
+      return fd;
+    };
+
+    it.each([{}, { DEPLOY_REGION: 'cn-mainland' }])('GoApply with only S3_* set (%o): the upload is accepted, no 503 storage_unavailable', async (region) => {
+      mocks.brand = 'goapply';
+      mocks.storage = realStorage({ ...INTL_S3, ...region });
+      // The user agreed to AI reading the resume (the GoApply consent gate is not what this test is about).
+      setConsentLookup(async (_userId, types) => ({ consentType: types[0]!, granted: true, createdAt: new Date('2026-10-01T00:00:00Z') }));
+      mocks.ingest.mockResolvedValue({ markdown: MD, displayName: 'Ada', rawText: 'Ada', parsed: {}, summary: '', highlight: '', original: null });
+      const res = await fetch(`${base}/upload`, { method: 'POST', body: pdfForm() });
+      expect(res.status).toBe(201);
+      expect(mocks.ingest).toHaveBeenCalledTimes(1);
+      const li = await fetch(`${base}/import-linkedin`, { method: 'POST', body: pdfForm() });
+      expect(li.status).toBe(201);
+      setConsentLookup(null);
+    });
+
+    it('GoApply under CN_RESIDENCY_STRICT without CN_S3_* → 503 storage_unavailable, file never read, zero PutObject calls', async () => {
+      mocks.brand = 'goapply';
+      mocks.storage = realStorage({ ...INTL_S3, DEPLOY_REGION: 'cn-mainland', CN_RESIDENCY_STRICT: 'true' });
+      const res = await fetch(`${base}/upload`, { method: 'POST', body: pdfForm() });
       expect(res.status).toBe(503);
       expect(await res.json()).toEqual({ error: 'storage_unavailable', code: 'storage_unavailable' });
       expect(mocks.ingest).not.toHaveBeenCalled();
       expect(mocks.putObjects).toBe(0);
 
-      const li = await fetch(`${base}/import-linkedin`, { method: 'POST', body: fd });
+      const li = await fetch(`${base}/import-linkedin`, { method: 'POST', body: pdfForm() });
       expect(li.status).toBe(503);
     });
 

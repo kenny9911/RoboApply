@@ -29,13 +29,16 @@
 //
 // Hub rules (WP-36b): up to 5 base resumes (409 resume_limit_reached);
 // tailored versions do not count. Uploads check the brand's file storage
-// first (503 storage_unavailable on the mainland stack without CN_S3_*).
+// first (503 storage_unavailable only for GoApply under CN_RESIDENCY_STRICT
+// without a mainland bucket of its own; by default GoApply files are kept on
+// the shared store under goapply/, D5).
 // Uploads and LinkedIn PDF imports share a persisted cap of 10 a day per user
 // (429 rate_limited + Retry-After, details.reason resume_upload_daily_limit).
 // POST /upload on RoboApply reads the file with the local parser when the form
 // carries `localParser=1`, and always for a user without a live
 // `intl_cross_border_cn_parse` grant (the GoHire parser is never used then).
-// GoApply ignores `localParser`: GoHire is its in-country parser.
+// GoApply ignores `localParser`: GoHire is its preferred parser, with the
+// local parser as the fallback.
 // GoApply: a file is read only with the user's AI consent (`ai_resume_parsing`);
 // without it both upload routes answer 503 ai_unavailable (details.reason
 // ai_consent_required) before the file is read, and no model is called.
@@ -107,8 +110,10 @@ function limitBody() {
 }
 
 /**
- * Residency (WP-15 REQ-WP15-04): refuse an upload before reading the file when
- * the brand's storage is required but missing.
+ * Refuse an upload before reading the file when the brand's storage is
+ * required but missing (WP-15 REQ-WP15-04). That is GoApply under
+ * CN_RESIDENCY_STRICT without a mainland bucket of its own, and nothing else:
+ * a missing CN bucket alone never refuses an upload (D5).
  */
 function requireUploadStorage(req: Request, res: Response, next: (err?: any) => void): void {
   try {
@@ -587,7 +592,7 @@ async function sendExport(req: Request<{ id: string }>, res: Response, input: Ex
       return res.status(422).json({ error: 'invalid_photo', code: 'validation_failed', details: { reason: 'invalid_photo', maxBytes: MAX_EXPORT_PHOTO_BYTES } });
     }
     const brand = getCurrentBrandOrDefault();
-    // The photo is never stored on our servers (every brand; GoApply CN-0
+    // The photo is never stored on our servers (every brand: data
     // minimization and the "stays in this browser" promise). A file recorded on
     // an application is stored as an artifact, so it is made without the photo.
     const photoOmitted = Boolean(photo && trackerRaw);
@@ -655,6 +660,10 @@ router.post('/:id/export', requireAuth, (req: Request<{ id: string }>, res: Resp
 
 // POST /:id/rewrite — bullet | summary | skills inline rewrite.
 //
+// The response carries `source: 'model' | 'fallback'` (additive): `fallback` is
+// the service's standard rewording, which is not charged, so the editor can
+// say so.
+//
 // One `rewrite` credit per call (PRODUCT_PLAN.md §6: rewrite = inline AI edits
 // of a bullet, the summary or the skills; 20 a day). The credit is reserved
 // before the model runs and committed only when the model wrote what comes
@@ -672,6 +681,9 @@ router.post('/:id/export', requireAuth, (req: Request<{ id: string }>, res: Resp
 // check fix): a GoApply WeChat account with no bound phone gets 403
 // phone_binding_required (WP-11), and a user without the AI consent, or a
 // brand without a text model, gets 503 ai_unavailable.
+
+/** Who wrote the text a rewrite returns: the model (charged) or the service's standard rewording (free). */
+export type RewriteSource = 'model' | 'fallback';
 
 /** Carries the canned answer out of `withCredit`, which releases the reservation on a throw. */
 class CannedRewrite extends Error {
@@ -696,12 +708,12 @@ router.post('/:id/rewrite', requireAuth, ...legacyAiGates(), async (req: Request
         return out.result;
       },
     );
-    return res.json(result);
+    return res.json({ ...result, source: 'model' satisfies RewriteSource });
   } catch (err) {
     // The model wrote nothing: the user still gets the fallback text, and the
     // credit reserved for this call has been released.
     if (err instanceof CannedRewrite) {
-      return res.json(err.result);
+      return res.json({ ...err.result, source: 'fallback' satisfies RewriteSource });
     }
     if (err instanceof ResumeAINotFoundError || err instanceof ResumeNotFoundError) {
       return res.status(404).json({ error: 'not_found' });

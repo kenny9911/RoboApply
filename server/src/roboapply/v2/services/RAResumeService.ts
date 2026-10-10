@@ -640,7 +640,8 @@ export class RAResumeService {
       /**
        * RoboApply: read the file on this server only (no GoHire parse),
        * whatever the consent answer. Ignored on GoApply, where GoHire is the
-       * in-country parser and the local pipeline can end in vision OCR.
+       * preferred parser whenever it is configured (the local pipeline is its
+       * fallback).
        */
       localParser?: boolean;
     },
@@ -676,8 +677,8 @@ export class RAResumeService {
     await this.consumeUploadAllowance(userId);
     // Privacy: the file leaves this server for GoHire only when the user's
     // brand and consent allow it. On GoApply the caller's `localParser` flag
-    // is ignored: GoHire is the in-country parser there, so the flag protects
-    // nothing, and the local pipeline can end in vision OCR on a scanned PDF.
+    // is ignored: GoHire is its preferred parser, tried first whenever it is
+    // configured, and the local pipeline is the fallback.
     const cnMarket = getCurrentBrandOrDefault().market === 'cn';
     const forceLocalParser = !cnMarket && (params.localParser === true || !(await remoteParseAllowed(userId)));
 
@@ -1265,9 +1266,11 @@ export const raResumeService = new RAResumeService();
  * the caller holds the row back (never orphaned).
  */
 export async function deleteArtifactObject(key: string): Promise<boolean> {
-  const { resumeOriginalFileStorageService, brandOfKey } = await import('../../../services/ResumeOriginalFileStorageService.js');
-  const mode = resumeOriginalFileStorageService.getProviderMode(brandOfKey(key));
-  return resumeOriginalFileStorageService.deleteFile({ provider: mode === 'local' ? 'local' : 's3', key, fileName: null, mimeType: null });
+  const { resumeOriginalFileStorageService } = await import('../../../services/ResumeOriginalFileStorageService.js');
+  // The key names its store (`cn/` = GoApply's own bucket, anything else the shared store), so the
+  // object is found wherever it was written, whatever the brand's storage rule is today.
+  const provider = resumeOriginalFileStorageService.providerOfKey(key);
+  return resumeOriginalFileStorageService.deleteFile({ provider, key, fileName: null, mimeType: null });
 }
 
 let deletersRegistered = false;

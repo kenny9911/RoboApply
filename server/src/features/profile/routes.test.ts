@@ -140,7 +140,8 @@ describe('GET / PATCH /profile', () => {
     const ok = await call<ProfileView>('PATCH', '/', { cnFields: { graduationClass: 2026, major: 'CS' } }, GO);
     expect(ok.status).toBe(200);
     expect(ok.body.data.cnFields).toEqual({ identity: 'yingjie', schoolTags: ['985'], graduationClass: 2026, major: 'CS' });
-    expect(ok.body.data.availability).toMatchObject({ market: 'cn', eeo: false, cnSensitive: true, cnPhoto: false, twFields: false });
+    // The photo is offered wherever GoApply can keep a file: here local disk, as on RoboApply in development (D5).
+    expect(ok.body.data.availability).toMatchObject({ market: 'cn', eeo: false, cnSensitive: true, cnPhoto: true, twFields: false });
     const bad = await call('PATCH', '/', { cnFields: { identity: 'astronaut' } }, GO);
     expect(bad.status).toBe(422);
   });
@@ -307,21 +308,43 @@ describe('sensitive answers', () => {
     expect((await call<SensitiveAnswersView>('GET', '/sensitive', undefined, GO)).body.data.availability.eeo).toBe(false);
   });
 
-  it('GoApply 籍贯 / 政治面貌 / 家庭成员 are accepted; the photo is refused in CN-0; RoboApply refuses the cn block', async () => {
+  it('GoApply 籍贯 / 政治面貌 / 家庭成员 are accepted; RoboApply refuses the cn block', async () => {
     await start();
     const ok = await call<SensitiveAnswersView>('PUT', '/sensitive', { cn: { nativePlace: '湖南', politicalStatus: '群众', familyMembers: [{ relation: '母亲', name: '李某' }] } }, GO);
     expect(ok.status).toBe(200);
-    const photo = await call('PUT', '/sensitive', { cn: { photoAssetId: 'asset1' } }, GO);
-    expect(photo.status).toBe(422);
-    expect(photo.body.details).toMatchObject({ field: 'cn.photoAssetId' });
     expect((await call('PUT', '/sensitive', { cn: { nativePlace: 'x' } })).status).toBe(422);
   });
 
-  it('allows the photo when the deployment is in mainland China', async () => {
-    await start({ env: { ...KEY, DEPLOY_REGION: 'cn-mainland' } });
+  const SHARED_BUCKET = { NODE_ENV: 'production', S3_BUCKET: 'shared', S3_ACCESS_KEY_ID: 'i', S3_SECRET_ACCESS_KEY: 's' };
+  const CN_BUCKET = { CN_S3_ENDPOINT: 'https://oss-cn-shanghai.aliyuncs.com', CN_S3_BUCKET: 'cn', CN_S3_ACCESS_KEY_ID: 'i', CN_S3_SECRET_ACCESS_KEY: 's' };
+
+  it.each([
+    ['only the shared bucket, offshore', { ...SHARED_BUCKET }],
+    ['only the shared bucket, on a mainland deployment', { ...SHARED_BUCKET, DEPLOY_REGION: 'cn-mainland' }],
+    ['its own bucket', { NODE_ENV: 'production', ...CN_BUCKET }],
+    ['its own mainland bucket under CN_RESIDENCY_STRICT', { NODE_ENV: 'production', ...CN_BUCKET, CN_RESIDENCY_STRICT: 'true', DEPLOY_REGION: 'cn-mainland' }],
+  ])('the GoApply photo is offered wherever a file can be kept: %s', async (_label, env) => {
+    await start({ env: { ...KEY, ...env } });
     const res = await call<SensitiveAnswersView>('PUT', '/sensitive', { cn: { photoAssetId: 'asset1' } }, GO);
     expect(res.status).toBe(200);
     expect(res.body.data.availability.cnPhoto).toBe(true);
+  });
+
+  it.each([
+    ['production with no store at all', { NODE_ENV: 'production' }],
+    ['CN_STORAGE_MODE=discard (nothing is kept)', { ...SHARED_BUCKET, CN_STORAGE_MODE: 'discard' }],
+    ['CN_RESIDENCY_STRICT without a mainland bucket', { ...SHARED_BUCKET, CN_RESIDENCY_STRICT: 'true' }],
+  ])('the GoApply photo is refused where nothing can be kept: %s', async (_label, env) => {
+    await start({ env: { ...KEY, ...env } });
+    const photo = await call('PUT', '/sensitive', { cn: { photoAssetId: 'asset1' } }, GO);
+    expect(photo.status).toBe(422);
+    expect(photo.body.details).toMatchObject({ field: 'cn.photoAssetId' });
+    expect((await call<SensitiveAnswersView>('GET', '/sensitive', undefined, GO)).body.data.availability.cnPhoto).toBe(false);
+  });
+
+  it('RoboApply never has the GoApply photo, whatever the storage', async () => {
+    await start({ env: { ...KEY, ...SHARED_BUCKET } });
+    expect((await call<SensitiveAnswersView>('GET', '/sensitive')).body.data.availability.cnPhoto).toBe(false);
   });
 
   it('without SENSITIVE_DATA_KEY nothing is saved (501) and GET says so', async () => {

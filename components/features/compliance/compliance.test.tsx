@@ -36,6 +36,7 @@ import type { ConsentCatalogItem, DisclosuresResponse, LegalFooterModel, PiReque
 import { AiGeneratedBadge, LegalFooter } from '../market';
 import {
   ConsentsPanel,
+  CrossBorderNotice,
   DataAttributions,
   LegalDocument,
   LegalFooterView,
@@ -59,7 +60,7 @@ function disclosuresFor(brand: 'roboapply' | 'goapply', env: Record<string, stri
 
 const RA_DISCLOSURES: DisclosuresResponse = {
   ...disclosuresFor('roboapply'),
-  models: [{ task: 'default', vendor: 'openrouter', model: 'google/gemini', region: 'US', filingNo: null }],
+  models: [{ task: 'default', vendor: 'openrouter', model: 'google/gemini', region: 'US', filingNo: null, source: 'shared' }],
   processors: [{ name: 'Neon', purpose: 'database', country: 'US', region: 'us-east-2' }],
 };
 
@@ -109,7 +110,13 @@ describe('catalog parity (web mirror = server contract)', () => {
   });
 
   it('splits the WP-93 fact blocks too, and leaves inline placeholders in the text', () => {
-    expect(webCatalog.LEGAL_BLOCKS).toEqual(['retention_schedule', 'ai_models', 'processors', 'processing_facts', 'llm_endpoints', 'data_attributions']);
+    expect(webCatalog.LEGAL_BLOCKS).toEqual(['retention_schedule', 'ai_models', 'processors', 'processing_facts', 'llm_endpoints', 'data_attributions', 'offshore_notice']);
+    // The cross-border notice is a block too: the page renders it from the server's answer.
+    expect(webCatalog.splitLegalBlocks('## 六、境外处理\n\n{{offshore_notice}}\n\n当前部署的处理方式：')).toEqual([
+      { kind: 'markdown', text: '## 六、境外处理\n\n' },
+      { kind: 'block', block: 'offshore_notice' },
+      { kind: 'markdown', text: '\n\n当前部署的处理方式：' },
+    ]);
     expect(webCatalog.splitLegalBlocks('{{processing_facts}}\n\nA {{takedown_contact}}\n\n  {{ llm_endpoints }}  \n{{data_attributions}}\n{{unknown_block}}')).toEqual([
       { kind: 'block', block: 'processing_facts' },
       { kind: 'markdown', text: '\n\nA {{takedown_contact}}\n\n' },
@@ -335,8 +342,39 @@ describe('facts rendered from the server response (no hard-coded vendor list)', 
     for (const row of rows) for (const host of MAINLAND_LLM_HOST_SUFFIXES) expect(row.textContent).not.toContain(host);
   });
 
-  it('GoApply (offshore beta): files not kept, identifiers removed, images discarded; domestic endpoints only', () => {
-    const data = disclosuresFor('goapply');
+  it('GoApply by default (D5): files kept, nothing removed or discarded; the AI rule is open, never "mainland only"', () => {
+    const data = disclosuresFor('goapply', { LLM_PROVIDER: 'openrouter', LLM_MODEL: 'openai/gpt-5' });
+    renderWithBrand(
+      <>
+        <ProcessingFacts data={data} />
+        <LlmEndpoints data={data} />
+      </>,
+      { brand: 'goapply' },
+    );
+    const facts = screen.getByTestId('processing-facts');
+    expect(facts).toHaveAttribute('data-stage', 'cn0');
+    expect(facts.querySelector('[data-fact="region"]')).toHaveTextContent('This service runs outside mainland China.');
+    expect(facts.querySelector('[data-fact="files"]')?.textContent).toBe('Resume files you upload are kept in our own file storage.');
+    expect(facts.querySelector('[data-fact="redacted"]')).toBeNull();
+    expect(facts.querySelector('[data-fact="images"]')).toBeNull();
+
+    const endpoints = screen.getByTestId('llm-endpoints');
+    expect(endpoints).toHaveAttribute('data-rule', 'open');
+    expect(endpoints).toHaveTextContent('AI requests go to the model services listed under AI models. Some of them can be outside mainland China.');
+    // Neither of the two rule sentences that would be false here.
+    expect(endpoints).not.toHaveTextContent('Only AI services in mainland China are used.');
+    expect(endpoints).not.toHaveTextContent('never sent to an AI service in mainland China');
+    // No host is allowed or refused by rule, so no host list and no excluded upstreams are printed.
+    expect(endpoints.querySelector('[data-list="mainland-hosts"]')).toBeNull();
+    expect(endpoints.querySelector('[data-list="excluded-upstreams"]')).toBeNull();
+    const providers = [...endpoints.querySelectorAll('tr[data-provider]')].map((r) => r.getAttribute('data-provider'));
+    expect(providers).toEqual(data.llmEndpoints.providers.map((p) => p.provider));
+    // Every provider it can reach: the shared ones and the domestic ones.
+    for (const reachable of ['openai', 'openrouter', 'anthropic', 'deepseek']) expect(providers).toContain(reachable);
+  });
+
+  it('GoApply with the opt-in storage rule and the domestic-only wall: files not kept, identifiers removed, images discarded; domestic endpoints only', () => {
+    const data = disclosuresFor('goapply', { CN_STORAGE_MODE: 'discard', CN_LLM_DOMESTIC_ONLY: 'true' });
     renderWithBrand(
       <>
         <ProcessingFacts data={data} />
@@ -356,9 +394,69 @@ describe('facts rendered from the server response (no hard-coded vendor list)', 
     expect(endpoints).toHaveAttribute('data-rule', 'mainland_only');
     expect(endpoints).toHaveTextContent('Only AI services in mainland China are used.');
     expect(endpoints.querySelector('[data-list="excluded-upstreams"]')).toBeNull();
+    expect([...endpoints.querySelectorAll('[data-list="mainland-hosts"] li')].map((li) => li.textContent)).toEqual([...MAINLAND_LLM_HOST_SUFFIXES]);
     const providers = [...endpoints.querySelectorAll('tr[data-provider]')].map((r) => r.getAttribute('data-provider'));
     expect(providers).toEqual(data.llmEndpoints.providers.map((p) => p.provider));
     for (const offshore of ['openai', 'openrouter', 'anthropic', 'google']) expect(providers).not.toContain(offshore);
+  });
+
+  it('the processors table shows the stack GoApply really uses: the shared processors, each with a translated purpose', () => {
+    const data = disclosuresFor('goapply', {
+      DATABASE_URL: 'postgres://u@ep-a.us-east-2.aws.neon.tech/db',
+      RESEND_API_KEY: 'k',
+      CN_EMAIL_TRANSPORT: 'resend',
+      LIVEKIT_URL: 'wss://proj.livekit.cloud',
+      S3_BUCKET: 'shared',
+      VAPID_PUBLIC_KEY: 'pub',
+      VAPID_PRIVATE_KEY: 'priv',
+      VAPID_SUBJECT: 'mailto:ops@example.com',
+      LLM_PROVIDER: 'openrouter',
+      LLM_MODEL: 'openai/gpt-5',
+    });
+    renderWithBrand(<ProcessorsTable data={data} />, { brand: 'goapply' });
+    const rows = screen.getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell').map((c) => c.textContent));
+    expect(rows).toEqual([
+      ['Neon', 'Database', 'US / us-east-2'],
+      ['Resend', 'Email delivery', 'US'],
+      ['LiveKit Cloud', 'Voice practice', 'Not listed'],
+      ['Object storage', 'File storage', 'Not listed'],
+      [data.processors.find((p) => p.purpose === 'push')!.name, 'Push notifications', 'Not listed'],
+      ['openai', 'AI models', 'US'],
+    ]);
+    // Every purpose the server can send has a label (none renders as a dotted key).
+    for (const purpose of serverContract.PROCESSOR_PURPOSES) expect(rows.flat().join(' '), purpose).not.toContain(`processors.${purpose}`);
+  });
+
+  it('the cross-border notice follows the server: stated when personal information leaves the mainland, the mainland sentence otherwise', () => {
+    // A mainland deployment on the shared stack sends data abroad (D5), so the notice applies there too.
+    const shared = disclosuresFor('goapply', { DEPLOY_REGION: 'cn-mainland', LLM_PROVIDER: 'openrouter', LLM_MODEL: 'openai/gpt-5' });
+    expect(shared.offshore).toBe(true);
+    const first = renderWithBrand(<CrossBorderNotice data={shared} />, { brand: 'goapply' });
+    const applies = screen.getByTestId('cross-border-notice');
+    expect(applies).toHaveAttribute('data-applies', 'true');
+    expect(applies).toHaveTextContent('Your personal information is processed or stored by services outside mainland China.');
+    expect(applies).toHaveTextContent('Withdrawing that consent closes your account and deletes your data.');
+    // The notice names no processor or country itself: the tables beside it do.
+    expect(applies).not.toHaveTextContent(/Neon|OpenRouter|openai|United States/);
+    first.unmount();
+    // A mainland deployment with a complete stack of its own.
+    const own = disclosuresFor('goapply', {
+      DEPLOY_REGION: 'cn-mainland',
+      CN_LLM_PROVIDER: 'deepseek',
+      CN_LLM_MODEL: 'deepseek-chat',
+      CN_LIVEKIT_URL: 'wss://rtc.goapply.example.cn',
+      CN_INTERVIEW_ENGINE_STT_MODEL: 'dashscope/paraformer',
+      CN_INTERVIEW_ENGINE_TTS_MODEL: 'dashscope/cosyvoice',
+      CN_S3_BUCKET: 'cn',
+      CN_S3_ENDPOINT: 'https://oss-cn-shanghai.aliyuncs.com',
+      CN_VAPID_PUBLIC_KEY: 'pub',
+      CN_EMAIL_TRANSPORT: 'aliyun_dm',
+    });
+    expect(own.offshore).toBe(false);
+    renderWithBrand(<CrossBorderNotice data={own} />, { brand: 'goapply' });
+    const none = screen.getByTestId('cross-border-notice');
+    expect(none).toHaveAttribute('data-applies', 'false');
+    expect(none.textContent).toBe('Your personal information is processed and stored in mainland China.');
   });
 
   it('a mainland deployment and kept files read differently — the page follows the configuration', () => {
@@ -666,9 +764,33 @@ describe('ConsentsPanel (#consents, GoApply)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Turn off' }));
     expect(api.recordConsent).not.toHaveBeenCalled();
     expect(screen.getByText('Withdraw and delete your account?')).toBeInTheDocument();
+    // The reason given holds wherever the server asks for this consent: an offshore deployment, or a
+    // mainland one on the shared stack. It no longer speaks of a beta that runs outside the mainland.
+    expect(screen.getByText(/relies on providers outside mainland China, so it cannot run without this consent/)).toBeInTheDocument();
+    expect(screen.queryByText(/during the beta/)).toBeNull();
     fireEvent.click(screen.getByTestId('consents-close-confirm'));
     await waitFor(() => expect(api.recordConsent).toHaveBeenCalledWith(expect.objectContaining({ type: 'pipl_cross_border', granted: false })));
     expect(await screen.findByTestId('consents-closing')).toHaveTextContent('Your account is closed');
+  });
+
+  it('the video-recording choice is offered on GoApply: listed from the catalog, off until the user turns it on (D5; G8)', async () => {
+    const video = '在面试练习中录制我的摄像头画面，并与录音一起保存，供我回看。保存 90 天后自动删除。未开启时不会录制摄像头画面。';
+    api.getConsents.mockResolvedValue({
+      items: [
+        consent({ type: 'interview_recording', stage: 'in_context', prose: '保存我的面试练习录音和文字记录，供我回看。保存 90 天后自动删除。' }),
+        consent({ type: 'interview_video', stage: 'in_context', prose: video }),
+      ],
+    });
+    api.recordConsent.mockResolvedValue({ type: 'interview_video', granted: true, proseVersion: 'v1', proseHash: 'h', at: 'x', accountClosing: false });
+    renderWithBrand(<ConsentsPanel />, { brand: 'goapply' });
+    const row = (await screen.findByText(video)).closest('li') as HTMLElement;
+    expect(row).toHaveAttribute('data-consent', 'interview_video');
+    // Optional and not answered: nothing is on by default.
+    expect(row).toHaveAttribute('data-state', 'notChosen');
+    expect(within(row).getByText('Optional')).toBeInTheDocument();
+    fireEvent.click(within(row).getByRole('button', { name: 'Turn on' }));
+    // Granting it records the version of the text that was shown.
+    await waitFor(() => expect(api.recordConsent).toHaveBeenCalledWith({ type: 'interview_video', granted: true, proseVersion: 'v1', locale: 'en' }));
   });
 
   // Review finding: a consent given under the old text was shown as agreed next to the new text.

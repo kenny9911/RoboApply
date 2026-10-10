@@ -8,6 +8,7 @@ import { buildDisclosures, configuredProcessors, storageCountry } from './disclo
 import { describeProcessor, offshoreProcessors, unplacedProcessors } from './processingStatement.js';
 import {
   answeredCurrentText,
+  cameraVideoOffered,
   CONSENT_CATALOG,
   CONSENT_PROSE_LOCALES,
   CONSENT_PROSE_VERSION,
@@ -28,17 +29,37 @@ import {
 const goapply = getBrand('goapply');
 const roboapply = getBrand('roboapply');
 const OFFSHORE = { DEPLOY_REGION: '' };
+/**
+ * A mainland deployment with nothing China-specific: GoApply runs on the shared
+ * (offshore) stack there, so its personal information leaves the mainland (D5).
+ */
 const MAINLAND = { DEPLOY_REGION: 'cn-mainland' };
+/** A mainland deployment with a complete stack of GoApply's own: nothing leaves the mainland. */
+const MAINLAND_OWN = {
+  DEPLOY_REGION: 'cn-mainland',
+  DATABASE_URL: 'postgresql://u:p@10.0.0.12:5432/goapply',
+  CN_LLM_PROVIDER: 'deepseek',
+  CN_LLM_MODEL: 'deepseek-chat',
+  CN_LIVEKIT_URL: 'wss://rtc.goapply.example.cn',
+  CN_INTERVIEW_ENGINE_STT_MODEL: 'dashscope/paraformer',
+  CN_INTERVIEW_ENGINE_TTS_MODEL: 'dashscope/cosyvoice',
+  CN_S3_BUCKET: 'cn',
+  CN_S3_ENDPOINT: 'https://oss-cn-shanghai.aliyuncs.com',
+  CN_VAPID_PUBLIC_KEY: 'pub',
+  CN_EMAIL_TRANSPORT: 'aliyun_dm',
+};
+/** The domestic-only wall: the router refuses every non-mainland AI endpoint. */
+const WALL = { CN_LLM_DOMESTIC_ONLY: 'true' };
 /** The deployment the browser check ran on: a Neon database in us-west-2 and a mainland AI model; no voice, no email, not on Vercel. */
 const QA_ENV = { DEPLOY_REGION: '', DATABASE_URL: 'postgresql://u:p@ep-quiet.us-west-2.aws.neon.tech/db', CN_LLM_MODEL: 'deepseek/deepseek-v4-flash' };
-/** A deployment with every offshore service on. */
+/** A deployment with every offshore service on: the shared stack. */
 const FULL_ENV = {
   DEPLOY_REGION: '',
   DATABASE_URL: 'postgresql://u:p@ep-quiet.us-east-1.aws.neon.tech/db',
   VERCEL: '1',
   RESEND_API_KEY: 'k',
   CN_EMAIL_TRANSPORT: 'resend',
-  CN_LIVEKIT_URL: 'wss://lk.example',
+  LIVEKIT_URL: 'wss://lk.livekit.cloud',
   DEEPGRAM_API_KEY: 'k',
   CARTESIA_API_KEY: 'k',
   CN_LLM_MODEL: 'deepseek/deepseek-v4-flash',
@@ -80,15 +101,37 @@ describe('consent catalog (no optional consent pre-checked)', () => {
     const def = findConsentDefinition('goapply', 'pipl_cross_border')!;
     for (const text of [def.prose.zh!, def.prose.en]) {
       expect(text).toContain('%OFFSHORE_PROCESSORS%');
-      expect(text).not.toMatch(/Neon|Vercel|LiveKit|Deepgram|Cartesia|Resend|美国|United States|US East/);
+      // Where AI requests go is part of this consent too, and comes from the routing rule in force.
+      expect(text).toContain('%AI_PLACE%');
+      expect(text).not.toMatch(/Neon|Vercel|LiveKit|Deepgram|Cartesia|Resend|OpenRouter|美国|United States|US East/);
     }
     expect(def.prose.zh).not.toMatch(/境内存储|数据不出境/);
+    // It is true wherever it is asked: it no longer speaks of a closed beta, nor says ALL data is offshore.
+    expect(def.prose.zh).not.toMatch(/内测/);
+    expect(def.prose.en).not.toMatch(/closed beta/i);
   });
 
   it('required consents per brand and context', () => {
     const cross = findConsentDefinition('goapply', 'pipl_cross_border')!;
     expect(isConsentRequired(cross, { env: OFFSHORE })).toBe(true);
-    expect(isConsentRequired(cross, { env: MAINLAND })).toBe(false);
+    // The cross-border consent follows the stack in use, not only the region (critic finding C6):
+    // a mainland deployment on the shared stack sends personal information abroad, so it is asked there too.
+    expect(isConsentRequired(cross, { env: MAINLAND })).toBe(true);
+    expect(isConsentApplicable(cross, { env: MAINLAND })).toBe(true);
+    expect(isConsentRequired(cross, { env: { ...MAINLAND, LLM_MODEL: 'openai/gpt-5', S3_BUCKET: 'shared', RESEND_API_KEY: 'k' } })).toBe(true);
+    // One shared part is enough: its own stack except the bucket, or except email.
+    expect(isConsentRequired(cross, { env: { ...MAINLAND_OWN, CN_S3_BUCKET: '' } })).toBe(true);
+    expect(isConsentRequired(cross, { env: { ...MAINLAND_OWN, CN_EMAIL_TRANSPORT: 'resend' } })).toBe(true);
+    // A complete stack of its own on the mainland: not offered at all.
+    expect(isConsentRequired(cross, { env: MAINLAND_OWN })).toBe(false);
+    expect(isConsentApplicable(cross, { env: MAINLAND_OWN })).toBe(false);
+    expect(isConsentApplicable(cross, { env: { ...MAINLAND_OWN, ...WALL } })).toBe(false);
+    // ...unless its own model provider is itself outside the mainland (and no wall refuses it).
+    const abroad = { ...MAINLAND_OWN, CN_LLM_PROVIDER: 'openrouter', CN_LLM_MODEL: 'openai/gpt-5' };
+    expect(isConsentRequired(cross, { env: abroad })).toBe(true);
+    expect(isConsentRequired(cross, { env: { ...abroad, ...WALL } })).toBe(false);
+    // The same complete stack on an offshore deployment is still offshore.
+    expect(isConsentRequired(cross, { env: { ...MAINLAND_OWN, DEPLOY_REGION: '' } })).toBe(true);
     const tw = findConsentDefinition('roboapply', 'tw_pdpa_notice')!;
     expect(isConsentRequired(tw, { country: 'TW' })).toBe(true);
     expect(isConsentRequired(tw, { locale: 'zh-TW' })).toBe(true);
@@ -101,6 +144,10 @@ describe('consent prose and the legal disclosures state the same processors and 
   const cross = findConsentDefinition('goapply', 'pipl_cross_border')!;
   const ai = findConsentDefinition('goapply', 'ai_resume_parsing')!;
 
+  /** The sentence(s) that name processors: offshore ones, then those whose country is not listed. */
+  const offshoreOf = (text: string) => /(?:境外处理方：|Processors outside mainland China: )([^。.]*)/.exec(text)?.[1] ?? '';
+  const unplacedOf = (text: string) => /(?:以下处理方的所在国家\/地区未披露：|Processors whose country is not listed: )([^。.]*)/.exec(text)?.[1] ?? '';
+
   it('names exactly the configured offshore processors, with the region /legal shows — nothing that is switched off', () => {
     const zh = resolveConsentProse(cross, goapply, 'zh', QA_ENV).text;
     const en = resolveConsentProse(cross, goapply, 'en', QA_ENV).text;
@@ -109,38 +156,67 @@ describe('consent prose and the legal disclosures state the same processors and 
       { name: 'Neon', purpose: 'database', country: 'US', region: 'us-west-2' },
       { name: 'deepseek', purpose: 'ai_models', country: 'CN', region: null },
     ]);
-    expect(zh).toContain('境外处理方：数据库 Neon（美国，us-west-2）。');
-    expect(en).toContain('Processors outside mainland China: Neon (database, United States, us-west-2). ');
+    expect(zh).toBe(
+      '使用 GoApply 时，你的个人信息会由中国大陆境外的服务处理或存储。境外处理方：数据库 Neon（美国，us-west-2）。' +
+        'AI 请求会发送到这些 AI 服务：deepseek（中国大陆）。我同意上述境外处理。我知道撤回此同意会关闭我的账号并删除我的数据。',
+    );
+    expect(en).toBe(
+      'When you use GoApply, your personal information is processed or stored by services outside mainland China. ' +
+        'Processors outside mainland China: Neon (database, United States, us-west-2). ' +
+        'AI requests are sent to these AI services: deepseek (mainland China). ' +
+        'I agree to this processing. I understand that withdrawing this consent closes my account and deletes my data.',
+    );
     for (const text of [zh, en]) {
       expect(text).not.toMatch(/美国东部|US East/);
       expect(text).not.toMatch(/Vercel|LiveKit|Deepgram|Cartesia|Resend/);
-      // A mainland AI provider is not an offshore processor.
-      expect(text).not.toContain('deepseek');
+      // A mainland AI provider is not an offshore processor: it is named only where AI requests go.
+      expect(offshoreOf(text)).not.toContain('deepseek');
       expect(text).not.toContain('%');
     }
   });
 
   it('every /legal processor row outside mainland China is in the consent, and no mainland one is', () => {
-    for (const env of [QA_ENV, FULL_ENV]) {
+    for (const env of [QA_ENV, FULL_ENV, { ...FULL_ENV, CN_LLM_MODEL: '', LLM_PROVIDER: 'openrouter', LLM_MODEL: 'openai/gpt-5' }]) {
       const rows = buildDisclosures(goapply, env).processors;
       for (const locale of ['zh', 'en'] as const) {
         const text = resolveConsentProse(cross, goapply, locale, env).text;
         for (const row of rows) {
-          // GoApply's AI is mainland-only by routing, so no AI model row is a processor of this consent.
-          if (row.country === 'CN' || row.purpose === 'ai_models') expect(text, row.name).not.toContain(row.name);
-          else expect(text, row.name).toContain(describeProcessor(row, locale));
+          const named = describeProcessor(row, locale);
+          if (row.country === 'CN') {
+            // In mainland China: neither offshore nor unplaced.
+            expect(offshoreOf(text), row.name).not.toContain(named);
+            expect(unplacedOf(text), row.name).not.toContain(named);
+          } else if (row.country === null) expect(unplacedOf(text), row.name).toContain(named);
+          else expect(offshoreOf(text), row.name).toContain(named);
         }
       }
       expect(offshoreProcessors(goapply, env).map((p) => p.name)).toEqual(rows.filter((r) => r.country !== null && r.country !== 'CN').map((r) => r.name));
-      expect(unplacedProcessors(goapply, env).map((p) => p.name)).toEqual(rows.filter((r) => r.country === null && r.purpose !== 'ai_models').map((r) => r.name));
+      expect(unplacedProcessors(goapply, env).map((p) => p.name)).toEqual(rows.filter((r) => r.country === null).map((r) => r.name));
     }
     const full = resolveConsentProse(cross, goapply, 'zh', FULL_ENV).text;
-    const offshoreSentence = /境外处理方：([^。]*)。/.exec(full)![1]!;
+    const offshoreSentence = offshoreOf(full);
     for (const name of ['Neon（美国，us-east-1）', 'Vercel（美国）', 'Resend（美国）', 'Deepgram（美国）', 'Cartesia（美国）']) expect(offshoreSentence).toContain(name);
     // A processor whose country the configuration does not establish is disclosed, in its own sentence — not called offshore.
     expect(offshoreSentence).not.toContain('LiveKit');
-    expect(full).toContain('以下处理方的所在国家/地区未披露：语音练习 LiveKit Cloud。我同意');
-    expect(resolveConsentProse(cross, goapply, 'en', FULL_ENV).text).toContain('Processors whose country is not listed: LiveKit Cloud (voice practice). I agree');
+    expect(full).toContain('以下处理方的所在国家/地区未披露：语音练习 LiveKit Cloud。AI 请求会发送到这些 AI 服务：deepseek（中国大陆）。我同意');
+    expect(resolveConsentProse(cross, goapply, 'en', FULL_ENV).text).toContain(
+      'Processors whose country is not listed: LiveKit Cloud (voice practice). AI requests are sent to these AI services: deepseek (mainland China). I agree',
+    );
+  });
+
+  it('on the shared model stack the AI vendor is an offshore processor like any other, and the AI sentence names it (rule open, D5)', () => {
+    const env = { DEPLOY_REGION: 'cn-mainland', DATABASE_URL: 'postgresql://u:p@10.0.0.12:5432/goapply', LLM_PROVIDER: 'openrouter', LLM_MODEL: 'openai/gpt-5', RESEND_API_KEY: 'k', CN_EMAIL_TRANSPORT: 'resend' };
+    expect(buildDisclosures(goapply, env).llmEndpoints.rule).toBe('open');
+    const zh = resolveConsentProse(cross, goapply, 'zh', env).text;
+    expect(zh).toBe(
+      '使用 GoApply 时，你的个人信息会由中国大陆境外的服务处理或存储。境外处理方：邮件发送 Resend（美国）、AI 模型 openai（美国）。' +
+        'AI 请求会发送到这些 AI 服务：openai（美国）。我同意上述境外处理。我知道撤回此同意会关闭我的账号并删除我的数据。',
+    );
+    // Nothing that is not configured is named.
+    expect(zh).not.toMatch(/Neon|Vercel|LiveKit|Deepgram|Cartesia|Stripe/);
+    expect(resolveConsentProse(ai, goapply, 'en', env).text).toContain('AI requests are sent to these AI services: openai (United States). When this is off');
+    // It never says requests stay in the mainland while they do not.
+    for (const def of [cross, ai]) expect(resolveConsentProse(def, goapply, 'zh', env).text).not.toContain('只发送到中国大陆境内');
   });
 
   // Review finding: with a mainland bucket and a model vendor that has no known country, the
@@ -163,16 +239,31 @@ describe('consent prose and the legal disclosures state the same processors and 
     ]);
     const unlisted = { ...env, CN_LLM_MODEL: 'some-model' };
     expect(configuredProcessors(goapply, unlisted).at(-1)).toEqual({ name: 'siliconflow', purpose: 'ai_models', country: null, region: null });
+
+    // Behind the domestic-only wall every non-mainland AI route is refused, so no AI row is a processor of this consent.
     for (const e of [env, unlisted]) {
-      expect(resolveConsentProse(cross, goapply, 'zh', e).text).toBe(
-        '在当前内测阶段，你的个人信息在中国大陆境外处理和存储。境外处理方：数据库 Neon（美国，us-west-2）。我同意上述境外处理。我知道撤回此同意会关闭我的账户并删除我的数据。',
+      const walled = { ...e, ...WALL };
+      expect(resolveConsentProse(cross, goapply, 'zh', walled).text).toBe(
+        '使用 GoApply 时，你的个人信息会由中国大陆境外的服务处理或存储。境外处理方：数据库 Neon（美国，us-west-2）。AI 请求只发送到中国大陆境内的 AI 服务。我同意上述境外处理。我知道撤回此同意会关闭我的账号并删除我的数据。',
       );
-      const en = resolveConsentProse(cross, goapply, 'en', e).text;
-      expect(en).toContain('Processors outside mainland China: Neon (database, United States, us-west-2). I agree');
+      const en = resolveConsentProse(cross, goapply, 'en', walled).text;
+      expect(en).toContain('Processors outside mainland China: Neon (database, United States, us-west-2). AI requests are sent only to AI services in mainland China. I agree');
       expect(en).not.toMatch(/Object storage|siliconflow|qwen|not listed/i);
       // The AI consent that follows says the same thing about AI.
-      expect(resolveConsentProse(ai, goapply, 'zh', e).text).toContain('AI 请求只发送到中国大陆境内的 AI 服务。');
+      expect(resolveConsentProse(ai, goapply, 'zh', walled).text).toContain('AI 请求只发送到中国大陆境内的 AI 服务。');
     }
+
+    // Without the wall nothing refuses a route, so the text states what is configured and no more:
+    // a mainland vendor is named as mainland, and a vendor with no known country as "not listed" (never as mainland, never as offshore).
+    const zhKnown = resolveConsentProse(cross, goapply, 'zh', env).text;
+    expect(offshoreOf(zhKnown)).toBe('数据库 Neon（美国，us-west-2）');
+    expect(zhKnown).toContain('AI 请求会发送到这些 AI 服务：qwen（中国大陆）。');
+    expect(zhKnown).not.toContain('Object storage');
+    const zhUnknown = resolveConsentProse(cross, goapply, 'zh', unlisted).text;
+    expect(offshoreOf(zhUnknown)).toBe('数据库 Neon（美国，us-west-2）');
+    expect(unplacedOf(zhUnknown)).toBe('AI 模型 siliconflow');
+    expect(zhUnknown).toContain('AI 请求会发送到这些 AI 服务：siliconflow（所在国家/地区未披露）。');
+    expect(zhUnknown).not.toContain('只发送到中国大陆境内');
   });
 
   it('the bucket is in mainland China only when its endpoint establishes it', () => {
@@ -188,31 +279,45 @@ describe('consent prose and the legal disclosures state the same processors and 
     expect(at('https://oss-cn-hongkong.aliyuncs.com')).toBeNull();
     expect(at('http://10.0.0.8:9000')).toBeNull();
     expect(at('http://10.0.0.8:9000', { DEPLOY_REGION: 'cn-mainland' })).toBe('CN');
-    // The international bucket has no country we can read, whatever host it names.
+    // The shared bucket has no country we can read, whatever host it names: for RoboApply, and for GoApply when it is its fallback.
     expect(storageCountry(roboapply, { S3_BUCKET: 'b', S3_ENDPOINT: 'https://oss-cn-shanghai.aliyuncs.com' })).toBeNull();
-    // A bucket with no established country is disclosed in its own sentence, not as offshore.
+    expect(storageCountry(goapply, { S3_BUCKET: 'b', S3_ENDPOINT: 'https://oss-cn-shanghai.aliyuncs.com' })).toBeNull();
+    // A bucket with no established country is disclosed in its own sentence, not as offshore, and is not called a CN bucket.
     const text = resolveConsentProse(cross, goapply, 'zh', { CN_S3_BUCKET: 'b', CN_S3_ENDPOINT: 'https://oss-cn-hongkong.aliyuncs.com' }).text;
-    expect(text).toContain('以下处理方的所在国家/地区未披露：文件存储 Object storage (CN)。');
+    expect(text).toContain('以下处理方的所在国家/地区未披露：文件存储 Object storage。');
+    expect(text).not.toContain('Object storage (CN)');
     expect(text).not.toContain('境外处理方：');
+    // GoApply on the shared bucket: the same row RoboApply shows, disclosed the same way.
+    expect(resolveConsentProse(cross, goapply, 'zh', { S3_BUCKET: 'shared' }).text).toContain('以下处理方的所在国家/地区未披露：文件存储 Object storage。');
   });
 
   it('with no processor configured it names none and points at the Legal information page', () => {
     const zh = resolveConsentProse(cross, goapply, 'zh', {}).text;
     expect(buildDisclosures(goapply, {}).processors).toEqual([]);
     expect(zh).toContain('境外处理方的清单见“法律信息”页面。');
+    expect(zh).toContain('AI 请求可能发送到中国大陆境外的 AI 服务，具体服务见“法律信息”页面。我同意');
     expect(zh).not.toMatch(/Neon|Vercel|美国/);
-    expect(resolveConsentProse(cross, goapply, 'en', {}).text).toContain('The processors are listed on the Legal information page. I agree');
+    expect(resolveConsentProse(cross, goapply, 'en', {}).text).toContain(
+      'The processors are listed on the Legal information page. AI requests may be sent to AI services outside mainland China. The Legal information page lists them. I agree',
+    );
   });
 
   it('the AI consent says where AI requests go, from the routing rule /legal prints', () => {
-    expect(buildDisclosures(goapply, QA_ENV).llmEndpoints.rule).toBe('mainland_only');
-    const zh = resolveConsentProse(ai, goapply, 'zh', QA_ENV).text;
-    const en = resolveConsentProse(ai, goapply, 'en', QA_ENV).text;
+    // By default (rule open): the AI services really configured, each with its country.
+    expect(buildDisclosures(goapply, QA_ENV).llmEndpoints.rule).toBe('open');
+    expect(resolveConsentProse(ai, goapply, 'zh', QA_ENV).text).toContain('AI 请求会发送到这些 AI 服务：deepseek（中国大陆）。关闭时');
+    expect(resolveConsentProse(ai, goapply, 'en', QA_ENV).text).toContain('AI requests are sent to these AI services: deepseek (mainland China). When this is off');
+    // Behind the wall (rule mainland_only), and only then: "mainland only".
+    const walled = { ...QA_ENV, ...WALL };
+    expect(buildDisclosures(goapply, walled).llmEndpoints.rule).toBe('mainland_only');
+    const zh = resolveConsentProse(ai, goapply, 'zh', walled).text;
+    const en = resolveConsentProse(ai, goapply, 'en', walled).text;
     expect(zh).toContain('AI 请求只发送到中国大陆境内的 AI 服务。关闭时');
     expect(en).toContain('AI requests are sent only to AI services in mainland China. When this is off');
-    // The old onboarding note claimed the opposite.
     expect(zh).not.toMatch(/境外/);
     expect(en).not.toMatch(/outside mainland China/);
+    // CN_RESIDENCY_STRICT implies the wall.
+    expect(resolveConsentProse(ai, goapply, 'zh', { ...QA_ENV, CN_RESIDENCY_STRICT: 'true' }).text).toContain('AI 请求只发送到中国大陆境内的 AI 服务。');
   });
 
   it('a changed deployment changes the text and therefore the hash the record stores', () => {
@@ -250,12 +355,19 @@ describe('validateSignupConsents', () => {
     expect(validateSignupConsents('roboapply', [grant('age_16_plus')], { country: 'TW' }).missing).toEqual(['tw_pdpa_notice']);
   });
 
-  it('GoApply CN-0 needs the agreement, age and cross-border consent', () => {
-    const r = validateSignupConsents('goapply', [grant('age_16_plus')], { env: OFFSHORE });
-    expect(r.missing.sort()).toEqual(['pipl_basic_processing', 'pipl_cross_border']);
-    const ok = validateSignupConsents('goapply', ['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border'].map(grant), { env: OFFSHORE });
-    expect(ok.ok).toBe(true);
-    expect(validateSignupConsents('goapply', ['pipl_basic_processing', 'age_16_plus'].map(grant), { env: MAINLAND }).ok).toBe(true);
+  it('GoApply needs the agreement, age and, wherever personal information leaves the mainland, the cross-border consent', () => {
+    for (const env of [OFFSHORE, MAINLAND]) {
+      const r = validateSignupConsents('goapply', [grant('age_16_plus')], { env });
+      expect(r.missing.sort()).toEqual(['pipl_basic_processing', 'pipl_cross_border']);
+      const ok = validateSignupConsents('goapply', ['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border'].map(grant), { env });
+      expect(ok.ok).toBe(true);
+      expect(validateSignupConsents('goapply', ['pipl_basic_processing', 'age_16_plus'].map(grant), { env }).ok).toBe(false);
+    }
+    // A mainland deployment with a complete stack of its own: two consents are enough, and the third is not offered.
+    expect(validateSignupConsents('goapply', ['pipl_basic_processing', 'age_16_plus'].map(grant), { env: MAINLAND_OWN }).ok).toBe(true);
+    expect(validateSignupConsents('goapply', ['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border'].map(grant), { env: MAINLAND_OWN }).invalid).toEqual(['pipl_cross_border']);
+    expect('pipl_cross_border' in initialConsentFormState('goapply', { env: MAINLAND_OWN })).toBe(false);
+    expect('pipl_cross_border' in initialConsentFormState('goapply', { env: MAINLAND })).toBe(true);
   });
 
   it('rejects declined required consents, unknown types and outdated prose', () => {
@@ -426,13 +538,26 @@ describe('recordConsent', () => {
     expect(fake.$rows('rAPersonalInfoRequest')).toHaveLength(1);
   });
 
-  it('withdrawing other consents (or on the mainland) does not purge', async () => {
+  it('withdrawing other consents, or the cross-border one where nothing leaves the mainland, does not purge', async () => {
     const enqueue = vi.fn();
-    const deps = { db: db() as unknown as ConsentDb, env: MAINLAND, enqueue, kick: vi.fn() };
+    const deps = { db: db() as unknown as ConsentDb, env: MAINLAND_OWN, enqueue, kick: vi.fn() };
     await recordConsent({ userId: 'u1', brand: goapply, type: 'ai_resume_parsing', granted: false, proseVersion: CONSENT_PROSE_VERSION }, deps);
     const out = await recordConsent({ userId: 'u1', brand: goapply, type: 'pipl_cross_border', granted: false, proseVersion: CONSENT_PROSE_VERSION }, deps);
     expect(out.accountClosing).toBe(false);
     expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('on a mainland deployment that runs on the shared stack, withdrawing the cross-border consent closes the account, as offshore', async () => {
+    const fake = db();
+    const enqueue = vi.fn(async () => ({ id: 'w1', kind: 'compliance.purge', status: 'queued' as const, dedupeKey: null, created: true }));
+    const deps = { db: fake as unknown as ConsentDb, env: MAINLAND, enqueue, kick: vi.fn() };
+    const out = await recordConsent({ userId: 'u1', brand: goapply, type: 'pipl_cross_border', granted: false, proseVersion: CONSENT_PROSE_VERSION }, deps);
+    expect(out.accountClosing).toBe(true);
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(fake.$rows('rAPersonalInfoRequest')).toHaveLength(1);
+    // The settings panel is told the same thing before the user confirms.
+    const listed = (await listConsents('u1', goapply, { env: MAINLAND, locale: 'zh' }, deps)).find((i) => i.type === 'pipl_cross_border')!;
+    expect(listed).toMatchObject({ required: true, onWithdraw: 'close_and_purge_account' });
   });
 });
 
@@ -451,8 +576,11 @@ describe('listConsents', () => {
     expect(items.find((i) => i.type === 'personalized_recommendation')!.granted).toBeNull();
     expect(items.find((i) => i.type === 'pipl_cross_border')!.onWithdraw).toBe('close_and_purge_account');
     expect(items.every((i) => i.defaultGranted === false)).toBe(true);
+    // A mainland deployment on the shared stack asks it too; with a complete stack of its own it is not listed.
     const mainland = await listConsents('u1', goapply, { env: MAINLAND }, { db: fake as unknown as ConsentDb });
-    expect(mainland.some((i) => i.type === 'pipl_cross_border')).toBe(false);
+    expect(mainland.find((i) => i.type === 'pipl_cross_border')).toMatchObject({ required: true, onWithdraw: 'close_and_purge_account' });
+    const own = await listConsents('u1', goapply, { env: MAINLAND_OWN }, { db: fake as unknown as ConsentDb });
+    expect(own.some((i) => i.type === 'pipl_cross_border')).toBe(false);
   });
 
   // Review finding: a grant given under the old cross-border text (v1: "Neon（美国东部）、Vercel、LiveKit Cloud、
@@ -461,7 +589,7 @@ describe('listConsents', () => {
     const V1 = '2026-10-10.wp13.v1';
     const crossV1 =
       '在当前内测阶段，你的个人信息在中国大陆境外处理和存储，处理地区为美国。境外处理方：数据库 Neon（美国东部）、网站托管 Vercel（美国）、语音练习 LiveKit Cloud、语音识别与合成 Deepgram / Cartesia、邮件发送 Resend。' +
-      '我同意上述境外处理。我知道撤回此同意会关闭我的账户并删除我的数据。';
+      '我同意上述境外处理。我知道撤回此同意会关闭我的账号并删除我的数据。';
     const agreement = resolveConsentProse(findConsentDefinition('goapply', 'pipl_basic_processing')!, goapply, 'zh', QA_ENV);
     const at = new Date('2026-10-10T08:00:00Z');
     const fake = db({
@@ -514,23 +642,25 @@ describe('listConsents', () => {
 
 describe('new consent entries: listed for the right brand, unticked, hashed', () => {
   // `offered: false` = defined (a record can be written and read back) but not
-  // put in front of the user by the catalog: GoApply never records video
-  // (CN L-11), and the coaching share is asked on the coaching form only.
-  const NEW: Array<{ brand: 'roboapply' | 'goapply'; type: string; zh: boolean; control: string; offered: boolean; draft?: true }> = [
-    { brand: 'goapply', type: 'tips_reminders', zh: true, control: 'toggle', offered: true },
-    { brand: 'goapply', type: 'interview_video', zh: true, control: 'toggle', offered: false },
-    { brand: 'roboapply', type: 'interview_video', zh: false, control: 'toggle', offered: true },
-    { brand: 'goapply', type: 'coaching_share_with_coach', zh: true, control: 'checkbox', offered: false, draft: true },
+  // put in front of the user by the catalog: the coaching share is asked on the
+  // coaching form only. `applies` is the catalog rule behind `offered`: the
+  // video consent is offered on both brands (D5), on GoApply through the
+  // `camera_video` rule (off only with CN_INTERVIEW_CAMERA_PUBLISH=false).
+  const NEW: Array<{ brand: 'roboapply' | 'goapply'; type: string; zh: boolean; control: string; offered: boolean; applies: string; draft?: true }> = [
+    { brand: 'goapply', type: 'tips_reminders', zh: true, control: 'toggle', offered: true, applies: 'always' },
+    { brand: 'goapply', type: 'interview_video', zh: true, control: 'toggle', offered: true, applies: 'camera_video' },
+    { brand: 'roboapply', type: 'interview_video', zh: false, control: 'toggle', offered: true, applies: 'always' },
+    { brand: 'goapply', type: 'coaching_share_with_coach', zh: true, control: 'checkbox', offered: false, applies: 'never', draft: true },
   ];
 
-  it.each(NEW)('$brand $type: optional, in context, off by default, withdrawable', ({ brand, type, zh, control, offered, draft }) => {
+  it.each(NEW)('$brand $type: optional, in context, off by default, withdrawable', ({ brand, type, zh, control, offered, applies, draft }) => {
     expect(SEEKER_CONSENT_TYPES).toContain(type);
     const def = findConsentDefinition(brand, type)!;
     expect(def).toBeTruthy();
     expect(def).toMatchObject({
       brand,
       requiredWhen: 'never',
-      appliesWhen: offered ? 'always' : 'never',
+      appliesWhen: applies,
       stage: 'in_context',
       control,
       withdrawable: true,
@@ -597,21 +727,59 @@ describe('new consent entries: listed for the right brand, unticked, hashed', ()
     expect(CONSENT_CATALOG.filter((d) => d.proseStatus === 'draft').map((d) => `${d.brand}:${d.type}`)).toEqual(['goapply:coaching_share_with_coach']);
   });
 
-  it('GoApply is never asked for camera recording: it records audio only (CN L-11)', async () => {
+  it('the video-recording consent is offered on GoApply as on RoboApply (D5; G8), in either region', async () => {
     const fake = db();
     const deps = { db: fake as unknown as ConsentDb, enqueue: vi.fn(), kick: vi.fn() };
-    for (const env of [OFFSHORE, MAINLAND]) {
+    for (const env of [OFFSHORE, MAINLAND, MAINLAND_OWN]) {
       for (const locale of ['zh', 'en']) {
-        const types = (await listConsents('u1', goapply, { env, locale }, deps)).map((i) => i.type);
+        const items = await listConsents('u1', goapply, { env, locale }, deps);
+        const types = items.map((i) => i.type);
         expect(types).toContain('interview_recording');
-        expect(types).not.toContain('interview_video');
-        // The draft coaching wording is not a standalone switch either.
+        expect(types).toContain('interview_video');
+        expect(items.find((i) => i.type === 'interview_video')).toMatchObject({ required: false, granted: null, defaultGranted: false, withdrawable: true });
+        // The draft coaching wording is not a standalone switch.
         expect(types).not.toContain('coaching_share_with_coach');
         expect(types).toContain('tips_reminders');
       }
     }
-    // RoboApply does record video with this consent, so it is offered there.
+    expect((await listConsents('u1', goapply, { env: OFFSHORE, locale: 'zh' }, deps)).find((i) => i.type === 'interview_video')!.prose).toContain('摄像头');
     expect((await listConsents('u1', roboapply, { env: OFFSHORE }, deps)).map((i) => i.type)).toContain('interview_video');
+  });
+
+  it('granting the GoApply video consent creates a versioned consent record', async () => {
+    const fake = db();
+    const deps = { db: fake as unknown as ConsentDb, env: OFFSHORE, enqueue: vi.fn(), kick: vi.fn() };
+    const def = findConsentDefinition('goapply', 'interview_video')!;
+    const prose = resolveConsentProse(def, goapply, 'zh', OFFSHORE);
+    const out = await recordConsent({ userId: 'u1', brand: goapply, type: 'interview_video', granted: true, proseVersion: CONSENT_PROSE_VERSION, locale: 'zh' }, deps);
+    expect(out).toMatchObject({ type: 'interview_video', granted: true, proseVersion: CONSENT_PROSE_VERSION, proseHash: prose.hash, accountClosing: false });
+    expect(fake.$rows('seekerConsentRecord')).toEqual([
+      expect.objectContaining({ consentType: 'interview_video', granted: true, proseVersion: CONSENT_PROSE_VERSION, proseHash: prose.hash }),
+    ]);
+  });
+
+  it('CN_INTERVIEW_CAMERA_PUBLISH set to a value that is not true restores audio-only practice: the choice is not shown on GoApply', async () => {
+    const fake = db();
+    const deps = { db: fake as unknown as ConsentDb, enqueue: vi.fn(), kick: vi.fn() };
+    const def = findConsentDefinition('goapply', 'interview_video')!;
+    // The interview engine's reading of the same variable: set and not a true value = audio only.
+    for (const off of ['false', 'FALSE', '0', 'no', 'off', ' false ', 'maybe']) {
+      const env = { ...OFFSHORE, CN_INTERVIEW_CAMERA_PUBLISH: off };
+      expect(cameraVideoOffered('goapply', env), off).toBe(false);
+      expect(isConsentApplicable(def, { env }), off).toBe(false);
+      expect((await listConsents('u1', goapply, { env, locale: 'zh' }, deps)).map((i) => i.type)).not.toContain('interview_video');
+      // RoboApply never reads the GoApply switch.
+      expect(cameraVideoOffered('roboapply', env)).toBe(true);
+      expect((await listConsents('u1', roboapply, { env }, deps)).map((i) => i.type)).toContain('interview_video');
+    }
+    // Unset, blank and the true values leave it on (the default).
+    for (const on of [undefined, '', '  ', 'true', 'TRUE', '1', 'yes', 'on']) {
+      expect(cameraVideoOffered('goapply', on === undefined ? {} : { CN_INTERVIEW_CAMERA_PUBLISH: on }), String(on)).toBe(true);
+    }
+    // A grant given before the switch was set stays visible, so it can be withdrawn.
+    await recordConsent({ userId: 'u1', brand: goapply, type: 'interview_video', granted: true, proseVersion: CONSENT_PROSE_VERSION, locale: 'zh' }, { ...deps, env: OFFSHORE });
+    const after = await listConsents('u1', goapply, { env: { ...OFFSHORE, CN_INTERVIEW_CAMERA_PUBLISH: 'false' }, locale: 'zh' }, deps);
+    expect(after.find((i) => i.type === 'interview_video')).toMatchObject({ granted: true, withdrawable: true });
   });
 
   it("GoApply tips and reminders: its own entry, with RoboApply's English and Chinese text", () => {
@@ -681,7 +849,7 @@ describe('prose versions: a text changes only with a version bump, and a bump ch
   /** Texts v2 rewrote: processors and the AI destination now come from configuration. */
   const REWRITTEN_IN_V2 = ['goapply:pipl_cross_border:en', 'goapply:pipl_cross_border:zh', 'goapply:ai_resume_parsing:en', 'goapply:ai_resume_parsing:zh'];
 
-  // sha256 prefix per brand:type:locale under the current version, with nothing configured (env {}).
+  // sha256 prefix per brand:type:locale under version 2026-10-11.fix8.v2, with nothing configured (env {}).
   const V2: Record<string, string> = {
     'goapply:pipl_basic_processing:en': '520789b8392a7cf9',
     'goapply:pipl_basic_processing:zh': 'bc9c1c6a359efe55',
@@ -730,6 +898,64 @@ describe('prose versions: a text changes only with a version bump, and a bump ch
     'roboapply:tips_reminders:de': '63b4e4404bf7de39',
   };
 
+  /**
+   * Texts v3 (D5 parity) changed, as served with nothing configured: the
+   * cross-border text was reworded (it now holds on a mainland deployment that
+   * uses the shared stack, and states where AI requests go), and the AI
+   * sentence of the AI consent follows the rule `open` (GoApply's default)
+   * instead of "mainland only".
+   */
+  const REWRITTEN_IN_V3 = ['goapply:pipl_cross_border:en', 'goapply:pipl_cross_border:zh', 'goapply:ai_resume_parsing:en', 'goapply:ai_resume_parsing:zh'];
+
+  // sha256 prefix per brand:type:locale under the current version, with nothing configured (env {}).
+  const V3: Record<string, string> = {
+    'goapply:pipl_basic_processing:en': '9adcd5ba16c11a01',
+    'goapply:pipl_basic_processing:zh': '976fe2c1e0ecc0e8',
+    'goapply:age_16_plus:en': '2d8136e86caa6564',
+    'goapply:age_16_plus:zh': 'ab04cd948972c8ba',
+    'goapply:pipl_cross_border:en': '9b0f80681a2a0767',
+    'goapply:pipl_cross_border:zh': '18590cf6f9c5868e',
+    'goapply:ai_resume_parsing:en': '39dc382fa70cea6e',
+    'goapply:ai_resume_parsing:zh': 'c9df0198ea6aa01a',
+    'goapply:personalized_recommendation:en': '71891078dce29849',
+    'goapply:personalized_recommendation:zh': 'cb8665036f14fb41',
+    'goapply:marketing_email:en': 'c01e8fdfb55061fa',
+    'goapply:marketing_email:zh': '684d10461e2f307b',
+    'goapply:pipl_sensitive_pi:en': 'd09bd208dab4d50f',
+    'goapply:pipl_sensitive_pi:zh': '31fe46d77216fd3f',
+    'goapply:autofill_sensitive:en': 'dff324de99aae3fd',
+    'goapply:autofill_sensitive:zh': '90ee7dcc160e7034',
+    'goapply:share_with_gohire:en': '43f24b926b435edd',
+    'goapply:share_with_gohire:zh': 'b60b4ccd58fe4ec5',
+    'goapply:interview_recording:en': '5443605e747cfccf',
+    'goapply:interview_recording:zh': '9a50f23154b1436d',
+    'goapply:interview_video:en': '2b5ac5e2bde25801',
+    'goapply:interview_video:zh': 'e865916dd96f70cf',
+    'goapply:copilot_memory:en': 'cc5226e30d3e943e',
+    'goapply:copilot_memory:zh': 'f0872fa132212599',
+    'goapply:tips_reminders:en': 'ea7abd0b15af7d57',
+    'goapply:tips_reminders:zh': 'd9cd3e46cefec4f6',
+    'goapply:coaching_share_with_coach:en': 'e8539c53856ecace',
+    'goapply:coaching_share_with_coach:zh': 'ab2c00a18be4c36f',
+    'roboapply:age_16_plus:en': 'c1fee86e9cee3385',
+    'roboapply:tw_pdpa_notice:en': '7b3780806c317365',
+    'roboapply:marketing_email:en': 'dbbfa59af353425e',
+    'roboapply:intl_cross_border_cn_parse:en': '044584d6f99a82aa',
+    'roboapply:interview_recording:en': 'ee1cf8173043b4db',
+    'roboapply:interview_video:en': '9f4e1a9a40262f6e',
+    'roboapply:copilot_memory:en': 'c4f50e369d07b848',
+    'roboapply:autofill_sensitive:en': '23808aa5626df2cb',
+    'roboapply:tips_reminders:en': '0572eceaaf88ea85',
+    'roboapply:tips_reminders:zh': 'fb07fa5498f27f6b',
+    'roboapply:tips_reminders:zh-TW': '9e5ee27aa1ca692f',
+    'roboapply:tips_reminders:ja': '5215d9c0e32432e5',
+    'roboapply:tips_reminders:ko': 'fb8bf71de9938ad9',
+    'roboapply:tips_reminders:es': '86e2fabd9d9fa5fb',
+    'roboapply:tips_reminders:fr': '91d238c94af7e8f1',
+    'roboapply:tips_reminders:pt': '8199661a4127da18',
+    'roboapply:tips_reminders:de': 'cf47e28ca13d0b34',
+  };
+
   /** Every text the catalog can serve, resolved with nothing configured. */
   function served(): Array<{ key: string; brand: 'roboapply' | 'goapply'; type: string; locale: string; text: string; hash: string }> {
     const out = [];
@@ -744,9 +970,30 @@ describe('prose versions: a text changes only with a version bump, and a bump ch
   }
 
   it('every text hashes to its pinned value under the current version (a changed text needs a new version)', () => {
-    expect(CONSENT_PROSE_VERSION).toBe('2026-10-11.fix8.v2');
+    expect(CONSENT_PROSE_VERSION).toBe('2026-10-11.par5.v3');
+    expect(CONSENT_PROSE_VERSION.length).toBeLessThanOrEqual(40);
     const now = Object.fromEntries(served().map((p) => [p.key, p.hash.slice(0, 16)]));
-    expect(now).toEqual(V2);
+    expect(now).toEqual(V3);
+  });
+
+  it('the v3 bump changed only the cross-border and AI-processing texts: every other v2 text is word for word the same', () => {
+    expect(Object.keys(V2).sort()).toEqual(Object.keys(V3).sort());
+    const byKey = new Map(served().map((p) => [p.key, p]));
+    for (const [key, hash] of Object.entries(V2)) {
+      const p = byKey.get(key)!;
+      const underV2 = consentProseHash({ brand: p.brand, type: p.type, version: '2026-10-11.fix8.v2', locale: p.locale, text: p.text }).slice(0, 16);
+      if (REWRITTEN_IN_V3.includes(key)) expect(underV2, key).not.toBe(hash);
+      else expect(underV2, key).toBe(hash);
+    }
+    // So a grant given under v2 to an unchanged text is still a grant of today's text; one given to a changed text is asked again.
+    const video = findConsentDefinition('goapply', 'interview_video')!;
+    const v2Video = consentProseHash({ brand: 'goapply', type: 'interview_video', version: '2026-10-11.fix8.v2', locale: 'zh', text: resolveConsentProse(video, goapply, 'zh', {}).text });
+    expect(answeredCurrentText(video, goapply, { proseHash: v2Video, proseVersion: '2026-10-11.fix8.v2' }, {})).toBe(true);
+    const cross = findConsentDefinition('goapply', 'pipl_cross_border')!;
+    const oldText = '在当前内测阶段，你的个人信息在中国大陆境外处理和存储。境外处理方的清单见“法律信息”页面。我同意上述境外处理。我知道撤回此同意会关闭我的账户并删除我的数据。';
+    const v2Cross = consentProseHash({ brand: 'goapply', type: 'pipl_cross_border', version: '2026-10-11.fix8.v2', locale: 'zh', text: oldText });
+    expect(v2Cross.slice(0, 16)).toBe(V2['goapply:pipl_cross_border:zh']);
+    expect(answeredCurrentText(cross, goapply, { proseHash: v2Cross, proseVersion: '2026-10-11.fix8.v2' }, {})).toBe(false);
   });
 
   it('the v2 bump rewrote only the cross-border and AI-processing texts: every other v1 text is word for word the same', () => {

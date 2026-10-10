@@ -5,7 +5,8 @@
 //     or never answered, `intl_cross_border_cn_parse` (and only when the owner
 //     opted RoboApply in at all);
 //   - reads the file locally when the form carries `localParser=1` (RoboApply
-//     only: GoApply ignores the flag and keeps the file on its in-country parser);
+//     only: GoApply ignores the flag and tries GoHire, its preferred parser,
+//     first; the local pipeline is its fallback, as on RoboApply, D5);
 //   - keeps a persisted cap of 10 uploads a day per user (429 + Retry-After),
 //     shared with the LinkedIn PDF import;
 //   - GoApply: reads no file at all without the user's AI consent
@@ -355,19 +356,27 @@ describe('POST /upload — GoApply', () => {
     expect(pdfService.extractText).not.toHaveBeenCalled();
   });
 
-  it('an image with GoHire down fails closed: 422 image_parse_unavailable, no local OCR, nothing saved', async () => {
+  it('an image with GoHire down is read by the local pipeline, as on RoboApply: 201, the resume is saved', async () => {
     upstream.mockImplementation(async () => new Response('upstream error', { status: 500 }));
     const res = await upload({ fileName: 'cv.png', type: 'image/png', bytes: PNG_1X1 });
-    expect(res.status).toBe(422);
-    expect(res.body).toEqual({ error: 'image_parse_unavailable', code: 'image_parse_unavailable' });
-    expect(documentParsingService.extractText).not.toHaveBeenCalled();
-    expect(pdfService.extractText).not.toHaveBeenCalled();
-    expect(pdfService.extractImage).not.toHaveBeenCalled();
-    expect(resumeParseAgent.parse).not.toHaveBeenCalled();
-    expect(mocks.variants).toHaveLength(0);
+    expect(res.status).toBe(201);
+    // GoHire was tried first (the image wrapped into a one-page PDF), then the local reader.
+    expect(upstream).toHaveBeenCalledTimes(1);
+    expect(documentParsingService.extractText).toHaveBeenCalledTimes(1);
+    expect(resumeParseAgent.parse).toHaveBeenCalledTimes(1);
+    expect(mocks.variants).toHaveLength(1);
   });
 
-  it('a PDF with localParser=1 still goes to GoHire: the flag never opens the local pipeline (and its OCR) on GoApply', async () => {
+  it('without a GoHire key a GoApply PDF is read by the local pipeline: 201, no call leaves the server for parsing', async () => {
+    delete process.env.GOHIRE_API_KEY;
+    const res = await upload();
+    expect(res.status).toBe(201);
+    expect(upstream).not.toHaveBeenCalled();
+    expect(pdfService.extractText).toHaveBeenCalledTimes(1);
+    expect(mocks.variants).toHaveLength(1);
+  });
+
+  it('a PDF with localParser=1 still goes to GoHire first: the flag is a RoboApply privacy choice and does not apply on GoApply', async () => {
     for (const flag of ['1', 'true']) {
       upstream.mockClear();
       const res = await upload({ fields: { localParser: flag } });
@@ -382,11 +391,21 @@ describe('POST /upload — GoApply', () => {
     expect(mocks.variants.every((v) => String(v.rawText).includes('Read by the parse service.'))).toBe(true);
   });
 
-  it('localParser=1 does not open local OCR for an image', async () => {
+  it('an image format GoHire cannot take (WebP) is read by the local pipeline', async () => {
     const res = await upload({ fileName: 'cv.webp', type: 'image/webp', bytes: 'RIFF....WEBP', fields: { localParser: '1' } });
+    expect(res.status).toBe(201);
+    expect(upstream).not.toHaveBeenCalled();
+    expect(documentParsingService.extractText).toHaveBeenCalledTimes(1);
+  });
+
+  it('an image nothing can read is refused honestly: 422 empty_text, nothing saved', async () => {
+    delete process.env.GOHIRE_API_KEY;
+    vi.mocked(documentParsingService.extractText).mockResolvedValue('');
+    const res = await upload({ fileName: 'cv.png', type: 'image/png', bytes: PNG_1X1 });
     expect(res.status).toBe(422);
-    expect(res.body!.code).toBe('image_parse_unavailable');
-    expect(documentParsingService.extractText).not.toHaveBeenCalled();
+    expect(res.body!.code).toBe('empty_text');
+    expect(resumeParseAgent.parse).not.toHaveBeenCalled();
+    expect(mocks.variants).toHaveLength(0);
   });
 });
 

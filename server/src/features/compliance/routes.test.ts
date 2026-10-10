@@ -208,11 +208,14 @@ describe('public legal router (no session)', () => {
     ]);
     // The consent names the one offshore processor with that same region — not "美国东部", and nothing that is switched off.
     expect(cross).toContain('境外处理方：数据库 Neon（美国，us-west-2）。');
-    expect(cross).not.toMatch(/美国东部|Vercel|LiveKit|Deepgram|Cartesia|Resend|deepseek/);
-    // /legal says only mainland AI services are used; the AI consent says the same.
-    expect(legal.llmEndpoints.rule).toBe('mainland_only');
-    expect(ai).toContain('AI 请求只发送到中国大陆境内的 AI 服务。');
-    expect(ai).not.toMatch(/境外/);
+    expect(cross).not.toMatch(/美国东部|Vercel|LiveKit|Deepgram|Cartesia|Resend/);
+    // /legal prints the rule `open` (GoApply's default): requests go to the configured AI services.
+    // Both consents name the same one, with the country /legal shows for it; neither says "mainland only".
+    expect(legal.llmEndpoints.rule).toBe('open');
+    for (const text of [cross, ai]) {
+      expect(text).toContain('AI 请求会发送到这些 AI 服务：deepseek（中国大陆）。');
+      expect(text).not.toContain('只发送到中国大陆境内');
+    }
     for (const item of consents) expect(item.prose, item.type).not.toMatch(/%[A-Z_]+%/);
   });
 

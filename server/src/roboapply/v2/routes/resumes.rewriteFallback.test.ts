@@ -128,7 +128,8 @@ describe('POST /v2/resumes/:id/rewrite: the canned fallback is free', () => {
     m.agentRun.mockRejectedValue(new Error('provider down'));
     const res = await post(BULLET);
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ rewrite: fallbacks.fallbackBulletRewrite('worked on dashboards', 'improve', undefined) });
+    // The standard rewording is free and labelled: `source: 'fallback'`.
+    expect(res.body).toEqual({ rewrite: fallbacks.fallbackBulletRewrite('worked on dashboards', 'improve', undefined), source: 'fallback' });
     expect(m.agentRun).toHaveBeenCalledTimes(1);
     await expectNothingSpent();
   });
@@ -141,7 +142,7 @@ describe('POST /v2/resumes/:id/rewrite: the canned fallback is free', () => {
     const summary = await post({ mode: 'summary', text: 'Data analyst with 4 years in logistics.' });
     expect(summary.body!.options).toHaveLength(3);
     const skills = await post({ mode: 'skills' });
-    expect(skills.body).toEqual({ skills: fallbacks.fallbackSkills(RESUME_MD, undefined) });
+    expect(skills.body).toEqual({ skills: fallbacks.fallbackSkills(RESUME_MD, undefined), source: 'fallback' });
     await expectNothingSpent();
   });
 
@@ -164,7 +165,7 @@ describe('POST /v2/resumes/:id/rewrite: the canned fallback is free', () => {
   it('text the model wrote costs one credit each, in every mode', async () => {
     m.agentRun.mockResolvedValueOnce({ rewrite: 'Built dashboards used by 12 dispatch managers.' });
     const bullet = await post({ mode: 'bullet', action: 'improve', text: 'Worked on dashboards for 12 dispatch managers.' });
-    expect(bullet.body).toEqual({ rewrite: 'Built dashboards used by 12 dispatch managers.' });
+    expect(bullet.body).toEqual({ rewrite: 'Built dashboards used by 12 dispatch managers.', source: 'model' });
     expect(committed()).toHaveLength(1);
 
     m.agentRun.mockResolvedValueOnce({ options: ['Analyst who builds delivery dashboards.', 'Logistics data analyst.', 'Analyst, dashboards and SQL.'] });
@@ -173,7 +174,7 @@ describe('POST /v2/resumes/:id/rewrite: the canned fallback is free', () => {
 
     m.agentRun.mockResolvedValueOnce({ skills: ['SQL', 'Tableau', 'Dashboard design'] });
     const skills = await post({ mode: 'skills' });
-    expect(skills.body).toEqual({ skills: ['SQL', 'Tableau', 'Dashboard design'] });
+    expect(skills.body).toEqual({ skills: ['SQL', 'Tableau', 'Dashboard design'], source: 'model' });
 
     expect(committed()).toHaveLength(3);
     expect((await usage()).used).toBe(3);

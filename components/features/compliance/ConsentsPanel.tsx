@@ -2,8 +2,10 @@
 
 // ConsentsPanel — /settings#consents (GoApply; WP-13). Each consent is shown
 // with its exact text and current state and can be changed on its own
-// (PIPL: separate consents). Withdrawing the CN-0 cross-border consent asks
-// first, because it closes the account and deletes its data.
+// (PIPL: separate consents). Withdrawing the cross-border consent asks first,
+// because it closes the account and deletes its data (the server says when:
+// `onWithdraw: 'close_and_purge_account'`, wherever personal information
+// leaves mainland China on this deployment).
 //
 // The text shown is the one served NOW. When a consent is on but was given to
 // an earlier text (`answeredTextCurrent: false`), the row says so and offers
@@ -159,7 +161,8 @@ export function ConsentsPanel() {
           </div>
         }
       >
-        <p className={styles.cardBody}>{t('consents.closeBody')}</p>
+        {/* Its own key: the earlier one spoke of a beta that runs offshore, which is not why this applies any more. */}
+        <p className={styles.cardBody}>{t('consents.closeBodyCrossBorder')}</p>
       </Modal>
     </div>
   );

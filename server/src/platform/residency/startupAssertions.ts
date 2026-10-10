@@ -1,8 +1,12 @@
 // server/src/platform/residency/startupAssertions.ts
 //
-// Boot-time residency checks (CN_TW_LAUNCH_PLAN.md §3, §5.2; TASK_PLAN.md
-// WP-15). With `DEPLOY_REGION=cn-mainland` the API refuses to start when:
-//   - `CN_ICP_NUMBER` is unset                                  (icp_missing)
+// Boot-time residency checks (owner ruling D5; GOAPPLY_PARITY_PLAN.md §3.6;
+// TASK_PLAN.md WP-15). A mainland deployment boots on the shared stack: a
+// missing China-specific provider is reported, never fatal, unless the
+// operator chose the strict mainland posture (`CN_RESIDENCY_STRICT=true`).
+//
+// With `DEPLOY_REGION=cn-mainland` the API always refuses to start when the
+// TOPOLOGY is wrong:
 //   - the database host is not on the CN allowlist              (db_host_not_allowed / db_url_missing)
 //       defaults below; `CN_ALLOWED_DB_HOST_SUFFIXES` replaces them;
 //       private RFC 1918 and loopback addresses are always allowed.
@@ -13,38 +17,43 @@
 //       instance RegionId (cn-*) or connect over the VPC private address,
 //       which is the normal ACK setup and needs no suffix at all.
 //   - the deployment serves RoboApply (`ALLOWED_BRANDS` / `BRAND_LOCK`) (intl_brand_on_mainland)
+//
+// These are ADVISORIES by default (logged as warnings at boot) and failures
+// only under `CN_RESIDENCY_STRICT=true`:
+//   - `CN_ICP_NUMBER` is unset                                  (icp_missing)
 //   - a configured CN model route resolves outside the domestic allowlist (cn_llm_off_allowlist)
 //       every `CN_LLM_*MODEL` / `CN_RA_MODEL_*` selector is resolved the way
 //       LLMService resolves it (known prefix → that provider; otherwise the
 //       `CN_LLM_PROVIDER`; in direct mode or with none → OpenRouter), and
-//       anything that is not a domestic direct provider fails
-//   - the CN bucket (`CN_S3_*`) is incomplete — "CN-1 not deployable" (cn_storage_missing)
+//       anything that is not a domestic direct provider is reported
+//   - GoApply has no complete bucket of its own (`CN_S3_*`): its files go to
+//     the shared store                                           (cn_storage_missing)
 //   - the CN bucket endpoint is not mainland object storage       (cn_storage_offshore)
-//   - content safety is not Aliyun Green — "CN-1 assertion requires
-//     aliyun_green" (content_safety_not_aliyun_green)
+//   - content safety is not Aliyun Green                         (content_safety_not_aliyun_green)
 //   - Aliyun Green is chosen but not usable (keys, region, endpoint, timeout;
-//     `contentSafetyReadiness().cn1Ready`, WP-76 request) (content_safety_not_ready)
-//   - GoApply email is set to go through Resend (offshore)       (cn_email_offshore)
+//     `contentSafetyReadiness().cn1Ready`, WP-76 request)        (content_safety_not_ready)
+//   - GoApply email goes through Resend (offshore): `CN_EMAIL_TRANSPORT=resend`,
+//     or the default transport with `RESEND_API_KEY` set          (cn_email_offshore)
 // In every region an unknown `DEPLOY_REGION` value is refused
 // (deploy_region_unknown), so a typo never switches these checks off.
 //
-// Offshore (DEPLOY_REGION unset) nothing is asserted: that is the RoboApply
-// stack, which may also host the GoApply CN-0 beta.
+// Offshore (DEPLOY_REGION unset) nothing is asserted: that is the shared
+// stack, which serves GoApply too.
 //
 // Wiring: `assertResidencyAtStartup()` is called once at boot through
 // platform/startup.ts (from server/src/app.ts), before the app listens or is
-// exported, and its `warnings` logged. It throws `ResidencyStartupError`
-// listing every failure.
+// exported; its `advisories` and `warnings` are logged. It throws
+// `ResidencyStartupError` listing every failure.
 
 import { allowedBrands } from '../brand/runtime.js';
 import { getBrand } from '../brand/registry.js';
-import type { EnvSource } from '../brand/brandEnv.js';
+import { brandStack, cnResidencyStrict, type EnvSource } from '../brand/brandEnv.js';
 import { checkLlmRoute, hostOf } from '../llm/brandPolicy.js';
 import { contentSafetyReadiness } from '../llm/contentSafety/config.js';
 import { DIRECT_PROVIDER_PREFIXES, PROVIDER_PREFIX_ALIASES } from '../../services/llm/providerPrefixes.js';
-import { isMainlandStorageHost, isPrivateHost } from './egressPolicy.js';
+import { isPrivateHost } from './egressPolicy.js';
 import { CN_MAINLAND, deployRegion, unknownDeployRegion, type DeployRegion } from './deployRegion.js';
-import { brandStorageConfigured } from './uploadPolicy.js';
+import { cnOwnStorageProblem } from './uploadPolicy.js';
 
 /** Mainland managed-Postgres host suffixes (Aliyun RDS / PolarDB, Tencent CDB). */
 export const DEFAULT_CN_DB_HOST_SUFFIXES = [
@@ -72,9 +81,26 @@ export interface ResidencyFailure {
   message: string;
 }
 
+/** The checks that never depend on the strict switch: a wrong topology always refuses the boot. */
+export const TOPOLOGY_FAILURE_CODES: readonly ResidencyFailureCode[] = [
+  'deploy_region_unknown',
+  'db_url_missing',
+  'db_host_not_allowed',
+  'intl_brand_on_mainland',
+];
+
 export interface ResidencyReport {
   region: DeployRegion;
+  /** `CN_RESIDENCY_STRICT=true`: every check below is a failure. */
+  strict: boolean;
+  /** Refuse the boot. Topology checks always; the provider checks only under the strict switch. */
   failures: ResidencyFailure[];
+  /**
+   * Provider checks that did not pass while the strict switch is off: GoApply
+   * runs on the shared stack for that part. Logged at boot; never block it.
+   * Empty under the strict switch (the same entries are `failures` there).
+   */
+  advisories: ResidencyFailure[];
   /** Facts the code cannot verify and ops must (logged at boot; never block it). */
   warnings: string[];
 }
@@ -186,7 +212,12 @@ export function resolveCnSelectorProvider(value: string, env: EnvSource = proces
   return 'openrouter';
 }
 
-/** Check every CN model route in env against the GoApply allowlist (R-13). Fails closed. */
+/**
+ * Check every CN model route in env against GoApply's domestic allowlist:
+ * one entry per `CN_` model setting that resolves to a provider or host
+ * outside it. GoApply may use such a route by default (D5); the entries are
+ * what an operator who wants mainland-only AI has to fix.
+ */
 export function cnLlmRouteFailures(env: EnvSource = process.env): ResidencyFailure[] {
   const goapply = getBrand('goapply');
   const routes: Array<{ setting: string; provider: string }> = [];
@@ -200,7 +231,11 @@ export function cnLlmRouteFailures(env: EnvSource = process.env): ResidencyFailu
   const failures: ResidencyFailure[] = [];
   for (const { setting, provider } of routes) {
     const baseUrl = (PROVIDER_BASE_URL_ENV[provider] ?? []).map((n) => set(env, n)).find(Boolean) ?? null;
-    const decision = checkLlmRoute({ brand: goapply, provider, baseUrl, carriesUserData: true, env });
+    // The question here is always "is this route on the domestic allowlist?",
+    // whatever the deployment's own setting: the policy is asked with the
+    // domestic-only wall on. Whether a "no" refuses the boot is the caller's
+    // rule (an advisory by default, a failure under CN_RESIDENCY_STRICT).
+    const decision = checkLlmRoute({ brand: goapply, provider, baseUrl, carriesUserData: true, env: { ...env, CN_LLM_DOMESTIC_ONLY: 'true' } });
     if (!decision.allowed) {
       failures.push({
         code: 'cn_llm_off_allowlist',
@@ -211,11 +246,15 @@ export function cnLlmRouteFailures(env: EnvSource = process.env): ResidencyFailu
   return failures;
 }
 
-/** Collect every residency failure for this environment (no side effects). */
+/** Collect every residency failure and advisory for this environment (no side effects). */
 export function checkResidency(env: EnvSource = process.env): ResidencyReport {
   const region = deployRegion(env);
+  const strict = cnResidencyStrict(env);
   const failures: ResidencyFailure[] = [];
+  const advisories: ResidencyFailure[] = [];
   const warnings: string[] = [];
+  /** A provider check: fatal only under the strict switch (P4), otherwise reported. */
+  const provider = (failure: ResidencyFailure) => (strict ? failures : advisories).push(failure);
 
   const unknown = unknownDeployRegion(env);
   if (unknown) {
@@ -224,10 +263,10 @@ export function checkResidency(env: EnvSource = process.env): ResidencyReport {
       message: `DEPLOY_REGION="${unknown}" is not a known value. Use "${CN_MAINLAND}" on the mainland stack, or leave it unset.`,
     });
   }
-  if (region !== CN_MAINLAND) return { region, failures, warnings };
+  if (region !== CN_MAINLAND) return { region, strict, failures, advisories, warnings };
 
   if (!set(env, 'CN_ICP_NUMBER')) {
-    failures.push({ code: 'icp_missing', message: 'CN_ICP_NUMBER is not set.' });
+    provider({ code: 'icp_missing', message: 'CN_ICP_NUMBER is not set. The footer shows no ICP filing line.' });
   }
 
   const dbUrls = ['DATABASE_URL', 'DIRECT_DATABASE_URL'].map((n) => [n, set(env, n)] as const);
@@ -258,52 +297,69 @@ export function checkResidency(env: EnvSource = process.env): ResidencyReport {
     });
   }
 
-  failures.push(...cnLlmRouteFailures(env));
+  for (const failure of cnLlmRouteFailures(env)) provider(failure);
+  if (!strict && brandStack('goapply', 'llm', env) === 'shared') {
+    warnings.push('GoApply has no model provider of its own (CN_LLM_PROVIDER / CN_LLM_MODEL): its AI requests use the shared model stack.');
+  }
 
-  if (!brandStorageConfigured('goapply', env)) {
-    failures.push({
+  const storage = cnOwnStorageProblem(env);
+  if (storage === 'missing') {
+    provider({
       code: 'cn_storage_missing',
-      message: 'CN_S3_ENDPOINT, CN_S3_BUCKET, CN_S3_ACCESS_KEY_ID and CN_S3_SECRET_ACCESS_KEY must all be set.',
+      message: strict
+        ? 'CN_S3_ENDPOINT, CN_S3_BUCKET, CN_S3_ACCESS_KEY_ID and CN_S3_SECRET_ACCESS_KEY must all be set under CN_RESIDENCY_STRICT.'
+        : 'GoApply has no complete bucket of its own (CN_S3_ENDPOINT, CN_S3_BUCKET, CN_S3_ACCESS_KEY_ID, CN_S3_SECRET_ACCESS_KEY): its files are kept on the shared store.',
     });
-  } else {
+  } else if (storage === 'offshore') {
     const cnStorageHost = hostOf(set(env, 'CN_S3_ENDPOINT') ?? '');
     const intlStorageHost = hostOf(set(env, 'S3_ENDPOINT') ?? '');
-    if (cnStorageHost && intlStorageHost && cnStorageHost === intlStorageHost) {
-      failures.push({ code: 'cn_storage_offshore', message: 'CN_S3_ENDPOINT points at the international bucket host (S3_ENDPOINT).' });
-    } else if (!isMainlandStorageHost(cnStorageHost, env)) {
-      failures.push({
-        code: 'cn_storage_offshore',
-        message:
-          `CN_S3_ENDPOINT host ${cnStorageHost ?? '(unreadable)'} is not mainland object storage ` +
-          '(oss-cn-*.aliyuncs.com, cos.ap-<mainland>.myqcloud.com, obs.cn-*.myhuaweicloud.com, a private address, ' +
-          'or CN_ALLOWED_STORAGE_HOST_SUFFIXES).',
-      });
-    }
+    provider({
+      code: 'cn_storage_offshore',
+      message:
+        cnStorageHost && intlStorageHost && cnStorageHost === intlStorageHost
+          ? 'CN_S3_ENDPOINT points at the shared bucket host (S3_ENDPOINT).'
+          : `CN_S3_ENDPOINT host ${cnStorageHost ?? '(unreadable)'} is not mainland object storage ` +
+            '(oss-cn-*.aliyuncs.com, cos.ap-<mainland>.myqcloud.com, obs.cn-*.myhuaweicloud.com, a private address, ' +
+            'or CN_ALLOWED_STORAGE_HOST_SUFFIXES).',
+    });
   }
 
   if ((set(env, 'CN_CONTENT_SAFETY_PROVIDER') ?? '').toLowerCase() !== 'aliyun_green') {
-    failures.push({
+    provider({
       code: 'content_safety_not_aliyun_green',
-      message: 'CN_CONTENT_SAFETY_PROVIDER must be aliyun_green on the mainland stack.',
+      message: strict
+        ? 'CN_CONTENT_SAFETY_PROVIDER must be aliyun_green under CN_RESIDENCY_STRICT.'
+        : 'CN_CONTENT_SAFETY_PROVIDER is not aliyun_green: GoApply AI text is checked by the built-in keyword filter only.',
     });
   } else {
     const safety = contentSafetyReadiness(env);
     if (!safety.cn1Ready) {
-      failures.push({
+      provider({
         code: 'content_safety_not_ready',
         message: `Aliyun Green content safety is not usable: ${safety.problems.join('; ') || 'unknown configuration problem'}.`,
       });
     }
   }
 
-  if ((set(env, 'CN_EMAIL_TRANSPORT') ?? '').toLowerCase() === 'resend') {
-    failures.push({
+  // The same reading as the email service (platform/email `transportNameFor`):
+  // every value other than `aliyun_dm` and `none` sends through Resend, the
+  // shared transport. So unset, and a value that names no transport (`aliyun`,
+  // `smtp`: a typo must not hide the offshore route), are flagged when a key
+  // makes Resend real. An explicit `resend` is always flagged, as before.
+  const transport = (set(env, 'CN_EMAIL_TRANSPORT') ?? '').toLowerCase();
+  const sendsThroughResend = transport !== 'aliyun_dm' && transport !== 'none';
+  if (transport === 'resend' || (sendsThroughResend && set(env, 'RESEND_API_KEY'))) {
+    const unknown = transport && transport !== 'resend' ? ' CN_EMAIL_TRANSPORT names no transport (aliyun_dm, resend or none), so it is read as resend.' : '';
+    provider({
       code: 'cn_email_offshore',
-      message: 'CN_EMAIL_TRANSPORT=resend sends email through an offshore provider; use aliyun_dm (or leave it unset for no email).',
+      message:
+        (strict
+          ? 'GoApply email would go through Resend, an offshore provider. Set CN_EMAIL_TRANSPORT=aliyun_dm (or none for no email).'
+          : 'GoApply email goes through Resend, an offshore provider. Set CN_EMAIL_TRANSPORT=aliyun_dm to send from the mainland.') + unknown,
     });
   }
 
-  return { region, failures, warnings };
+  return { region, strict, failures, advisories, warnings };
 }
 
 /** Throw `ResidencyStartupError` when any check fails; return the report otherwise. */

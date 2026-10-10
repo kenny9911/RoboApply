@@ -7,6 +7,13 @@
 //   validateSignupConsents / initialConsentFormState / recordConsent / listConsents
 //     — signup and onboarding (WP-10, WP-11, WP-31) and /account/consents;
 //   registerExportSection / registerArtifactStorageDeleter — extension points;
+//   loadAiStackSnapshot(env) — AWAIT IT before a synchronous call that builds
+//     a consent text, its hash or the cross-border requirement for the live
+//     process (resolveConsentProse, servedConsentProseByHash,
+//     validateSignupConsents, isConsentRequired, crossBorderConsentApplies):
+//     those read the admin model overrides from the snapshot it loads, and
+//     without it a cold instance answers from the environment alone.
+//     listConsents, recordConsent and the routes here await it themselves;
 //   publishedLegalDocVersion(brand, doc, env) — the version of a PUBLISHED
 //     legal document, null while it is a draft (billing-cn records it with
 //     `cn_pay_terms_ack`; no acceptance is recorded against a draft).
@@ -32,12 +39,15 @@ export {
   CONSENT_CATALOG,
   CONSENT_PROSE_LOCALES,
   CONSENT_PROSE_VERSION,
+  cameraVideoOffered,
   consentDefinitionsFor,
   consentProseHash,
   findConsentDefinition,
   initialConsentFormState,
   isConsentApplicable,
   isConsentRequired,
+  crossBorderApplies,
+  crossBorderConsentApplies,
   isOffshore,
   listConsents,
   recordConsent,
@@ -49,7 +59,7 @@ export type { ConsentContext, ConsentDefinition, ConsentProseLocale, RecordConse
 export { aiPlaceSentence, describeProcessor, offshoreProcessors, offshoreProcessorsSentence, unplacedProcessors } from './processingStatement.js';
 export { addWorkingDays, piRequestDueAt } from './piRequests.js';
 export { RETENTION_RULES, registerArtifactStorageDeleter, retentionCutoff, retentionSchedule } from './retention.js';
-export { buildDisclosures, buildLegalFooter, dataAttributions, llmEndpointFacts, processingFacts } from './disclosures.js';
+export { aiLeavesMainland, buildDisclosures, buildLegalFooter, configuredModels, configuredProcessors, dataAttributions, llmEndpointFacts, llmEndpointRule, loadAiStackSnapshot, processingFacts } from './disclosures.js';
 export { legalDocsVersion, publishedLegalDocVersion } from './legalDocs.js';
 export { registerExportSection } from './dataExport.js';
 

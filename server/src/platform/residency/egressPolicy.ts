@@ -1,45 +1,47 @@
 // server/src/platform/residency/egressPolicy.ts
 //
 // Which outside hosts may receive personal information (PI), per brand
-// (CN_TW_LAUNCH_PLAN.md WP-RESIDENCY "Egress policy", §6.3; TASK_PLAN.md WP-15).
+// (owner ruling D5; GOAPPLY_PARITY_PLAN.md §3.6; TASK_PLAN.md WP-15).
 // Model endpoints have their own, finer rule in `platform/llm/brandPolicy.ts`
 // (WP-14); this module reuses its mainland host list so the two never drift.
 //
-// GoApply — an ALLOWLIST. PI may go only to:
+// GoApply, by default: PI may go wherever the stack it resolves sends it.
+// China-specific providers are optional overrides and the shared stack is the
+// fallback, so OpenRouter, Resend, LiveKit Cloud and the shared bucket are all
+// allowed. What a deployment really sends offshore is disclosed and consented
+// to (features/compliance: processor list, `pipl_cross_border`), not refused
+// here.
+//
+// GoApply under `CN_RESIDENCY_STRICT=true`: an ALLOWLIST, in every region.
+// PI may go only to:
 //   - domestic model hosts (deepseek, DashScope, Moonshot, Zhipu, Volcano Ark,
 //     MiniMax China, plus `CN_LLM_DOMESTIC_HOSTS`);
 //   - the GoHire parse API (`*.gohire.top`);
 //   - mainland object storage only: Aliyun OSS `oss-cn-*`, Tencent COS
 //     mainland regions, Huawei OBS `obs.cn-*`, private addresses, or a host
-//     on `CN_ALLOWED_STORAGE_HOST_SUFFIXES` — never the international bucket
+//     on `CN_ALLOWED_STORAGE_HOST_SUFFIXES`. Never the shared bucket
 //     (`S3_ENDPOINT`). Being named in `CN_S3_ENDPOINT` is NOT enough: an AWS
 //     or other offshore endpoint there is refused (`isMainlandStorageHost`);
 //   - Aliyun SMS / DirectMail / Content Security (mainland regions), Tencent
 //     SMS, WeChat;
 //   - the CN LiveKit host (`CN_LIVEKIT_URL`);
-//   - private / loopback addresses (in-cluster services);
-//   - and, only offshore (CN-0, consent `pipl_cross_border` covers it): the
-//     offshore infrastructure the beta runs on — Neon, Vercel, LiveKit Cloud
-//     and Resend.
+//   - private / loopback addresses (in-cluster services).
+// Under the strict switch the no-PI vendors below are not called at all.
 //
-// RoboApply — a DENYLIST on top of today's vendors. PI never goes to:
+// RoboApply: a DENYLIST on top of today's vendors, unchanged. PI never goes to:
 //   - a mainland model endpoint (same host list);
 //   - the GoHire parse API, unless `GOHIRE_PARSE_BRANDS` includes roboapply
 //     (owner opt-in after the privacy notice discloses it; R-16);
 //   - mainland-only service hosts (Aliyun, Tencent Cloud, WeChat).
 //
-// Both brands: Tavily, Firecrawl and RapidAPI receive NO PI — only company or
-// job queries. On the mainland stack GoApply does not call them at all: the
-// job-search API that fans out to RapidAPI is closed for the cn market
-// (job-search/routes.ts `roboApplyOnly`).
-// `assertNoPiInPayload` is the runtime check callers of those vendors run on
-// the outgoing query.
+// Both brands: Tavily, Firecrawl and RapidAPI receive NO PI, only company or
+// job queries. `assertNoPiInPayload` is the runtime check callers of those
+// vendors run on the outgoing query.
 
 import { getBrand, parseBrandId, type BrandId, type ProductBrand } from '../brand/registry.js';
-import type { EnvSource } from '../brand/brandEnv.js';
+import { cnResidencyStrict, type EnvSource } from '../brand/brandEnv.js';
 import { hostOf, isMainlandLlmHost } from '../llm/brandPolicy.js';
 import { detectPii, knownValuePattern, type PiiKind } from '../pii/redact.js';
-import { isCnMainland } from './deployRegion.js';
 
 /** Vendors that may receive company/job queries only, never PI (both brands). */
 export const NO_PI_HOST_SUFFIXES = ['tavily.com', 'firecrawl.dev', 'rapidapi.com'] as const;
@@ -47,7 +49,7 @@ export const NO_PI_HOST_SUFFIXES = ['tavily.com', 'firecrawl.dev', 'rapidapi.com
 /** The GoHire parse API and its sibling hosts (a mainland server; CN plan L-10). */
 export const GOHIRE_HOST_SUFFIXES = ['gohire.top'] as const;
 
-/** Mainland-only service hosts GoApply may use and RoboApply never sends PI to. */
+/** Mainland-only service hosts: on GoApply's strict allowlist, and never sent PI by RoboApply. */
 const CN_SERVICE_HOST_PATTERNS: readonly RegExp[] = [
   /^dysmsapi\.aliyuncs\.com$/, // Aliyun SMS
   /^dm\.aliyuncs\.com$/, // Aliyun DirectMail (Hangzhou)
@@ -80,9 +82,10 @@ export function allowedCnStorageHostSuffixes(env: EnvSource = process.env): stri
 }
 
 /**
- * Whether GoApply may keep files at this host: a mainland object-storage
- * region, a private/loopback address (in-cluster MinIO), or an operator
- * suffix. Never the international bucket host.
+ * Whether a host is mainland object storage: a mainland region, a
+ * private/loopback address (in-cluster MinIO), or an operator suffix. Never
+ * the shared bucket's host (`S3_ENDPOINT`). Under `CN_RESIDENCY_STRICT` this
+ * is where GoApply may keep files; the disclosures use it to name a country.
  */
 export function isMainlandStorageHost(hostOrUrl: string | null | undefined, env: EnvSource = process.env): boolean {
   const host = hostOf(hostOrUrl ?? null);
@@ -96,9 +99,6 @@ export function isMainlandStorageHost(hostOrUrl: string | null | undefined, env:
 
 /** Hosts RoboApply never sends PI to (mainland-only vendors). */
 const CN_ONLY_VENDOR_SUFFIXES = ['aliyuncs.com', 'tencentcloudapi.com', 'myqcloud.com', 'weixin.qq.com', 'qq.com'] as const;
-
-/** Offshore infrastructure GoApply's CN-0 beta runs on (allowed offshore only). */
-const CN0_OFFSHORE_INFRA_SUFFIXES = ['neon.tech', 'vercel.app', 'vercel.com', 'livekit.cloud', 'resend.com'] as const;
 
 export type EgressPolicyCode =
   | 'invalid_target'
@@ -226,9 +226,12 @@ export function checkEgress(input: EgressCheckInput): EgressDecision {
   const host = hostOf(input.target);
   if (!host) return deny('invalid_target', `Cannot read a host from "${input.target}".`, null);
 
+  // GoApply under the strict mainland posture (an explicit operator choice, P4).
+  const strict = brand.market === 'cn' && cnResidencyStrict(env);
+
   const noPiVendor = isNoPiVendorHost(host);
-  if (brand.market === 'cn' && noPiVendor && isCnMainland(env)) {
-    return deny('vendor_disabled_in_region', `${host} is not used on the mainland stack.`, host);
+  if (strict && noPiVendor) {
+    return deny('vendor_disabled_in_region', `${host} is not used under CN_RESIDENCY_STRICT.`, host);
   }
   if (noPiVendor) {
     return carriesPi
@@ -238,22 +241,26 @@ export function checkEgress(input: EgressCheckInput): EgressDecision {
   if (!carriesPi) return { allowed: true, host };
 
   if (brand.market === 'cn') {
+    // Default (D5): GoApply may send PI wherever the stack it resolves sends
+    // it. The shared stack is its fallback; the cross-border consent and the
+    // processor list state what really leaves the mainland.
+    if (!strict) return { allowed: true, host };
+
     const intlStorage = configuredHost(env, 'S3_ENDPOINT');
     if (intlStorage && host === intlStorage) {
       // Even when CN_S3_ENDPOINT was (mis)set to the same host.
-      return deny('intl_storage_for_cn', `${host} is the international bucket; GoApply data never goes there.`, host);
+      return deny('intl_storage_for_cn', `${host} is the shared bucket; under CN_RESIDENCY_STRICT GoApply data never goes there.`, host);
     }
     if (isPrivateHost(host)) return { allowed: true, host };
     if (isMainlandLlmHost(host, env)) return { allowed: true, host };
     if (anySuffix(host, GOHIRE_HOST_SUFFIXES)) return { allowed: true, host };
-    // Storage: only a mainland region (or operator-listed) host — being named
+    // Storage: only a mainland region (or operator-listed) host. Being named
     // in CN_S3_ENDPOINT is not enough.
     if (isMainlandStorageHost(host, env)) return { allowed: true, host };
     const cnLivekit = configuredHost(env, 'CN_LIVEKIT_URL');
     if (cnLivekit && host === cnLivekit) return { allowed: true, host };
     if (isCnServiceHost(host)) return { allowed: true, host };
-    if (!isCnMainland(env) && anySuffix(host, CN0_OFFSHORE_INFRA_SUFFIXES)) return { allowed: true, host };
-    return deny('host_not_allowlisted_for_cn', `${host} is not on the GoApply list of hosts that may receive personal information.`, host);
+    return deny('host_not_allowlisted_for_cn', `${host} is not on the GoApply list of hosts that may receive personal information under CN_RESIDENCY_STRICT.`, host);
   }
 
   // RoboApply.

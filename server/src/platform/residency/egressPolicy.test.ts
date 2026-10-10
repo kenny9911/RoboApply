@@ -15,6 +15,8 @@ import { deployRegion, isCn0, isCnMainland, residencyStage, unknownDeployRegion 
 
 const MAINLAND = { DEPLOY_REGION: 'cn-mainland' };
 const OFFSHORE = {};
+/** The strict mainland posture is an explicit operator choice (CN_RESIDENCY_STRICT), never implied by the region. */
+const STRICT = { CN_RESIDENCY_STRICT: 'true' };
 
 function code(input: Parameters<typeof checkEgress>[0]) {
   const d = checkEgress(input);
@@ -49,8 +51,10 @@ describe('goHireParseActive (the parse service and the privacy summary share it)
     expect(goHireParseActive('goapply', {})).toBe(false);
     expect(goHireParseActive('goapply', { ...ON, GOHIRE_PARSE_ENABLED: 'false' })).toBe(false);
     expect(goHireParseActive('goapply', { ...ON, GOHIRE_PARSE_BRANDS: 'none' })).toBe(false);
-    // A base URL GoApply may not send PI to.
-    expect(goHireParseActive('goapply', { ...ON, GOHIRE_API_BASE: 'https://parse.example.com' })).toBe(false);
+    // Another base URL: allowed by default (GoApply may send where RoboApply may), refused under the strict allowlist.
+    expect(goHireParseActive('goapply', { ...ON, GOHIRE_API_BASE: 'https://parse.example.com' })).toBe(true);
+    expect(goHireParseActive('goapply', { ...ON, ...STRICT, GOHIRE_API_BASE: 'https://parse.example.com' })).toBe(false);
+    expect(goHireParseActive('goapply', { ...ON, ...STRICT })).toBe(true);
   });
 });
 
@@ -78,17 +82,21 @@ describe('Tavily / Firecrawl / RapidAPI never receive PI (both brands)', () => {
   for (const target of vendors) {
     it(`${target}: PI refused, plain job queries allowed`, () => {
       for (const brand of ['roboapply', 'goapply'] as const) {
-        expect(code({ brand, target, carriesPi: true, env: OFFSHORE })).toBe('no_pi_vendor');
-        expect(code({ brand, target, carriesPi: false, env: OFFSHORE })).toBe('allowed');
+        // The same in both regions: the region no longer changes the answer (D5).
+        for (const env of [OFFSHORE, MAINLAND]) {
+          expect(code({ brand, target, carriesPi: true, env })).toBe('no_pi_vendor');
+          expect(code({ brand, target, carriesPi: false, env })).toBe('allowed');
+        }
       }
     });
   }
 
-  it('are not called at all for GoApply on the mainland stack', () => {
-    expect(code({ brand: 'goapply', target: 'https://api.tavily.com', carriesPi: false, env: MAINLAND })).toBe(
-      'vendor_disabled_in_region',
-    );
-    expect(code({ brand: 'roboapply', target: 'https://api.tavily.com', carriesPi: false, env: MAINLAND })).toBe('allowed');
+  it('are not called at all for GoApply under CN_RESIDENCY_STRICT, in either region', () => {
+    for (const env of [STRICT, { ...STRICT, ...MAINLAND }]) {
+      expect(code({ brand: 'goapply', target: 'https://api.tavily.com', carriesPi: false, env })).toBe('vendor_disabled_in_region');
+      expect(code({ brand: 'goapply', target: 'https://jsearch.p.rapidapi.com/search-v2', carriesPi: false, env })).toBe('vendor_disabled_in_region');
+      expect(code({ brand: 'roboapply', target: 'https://api.tavily.com', carriesPi: false, env })).toBe('allowed');
+    }
   });
 
   it('assertNoPiInPayload refuses a query carrying an email, phone, ID or the user name', () => {
@@ -133,16 +141,44 @@ describe('Tavily / Firecrawl / RapidAPI never receive PI (both brands)', () => {
     expect(() => assertNoPiInPayload({ ...base, payload: 'Passport No: 123456789 visa jobs' })).toThrow(/gov_id/);
   });
 
-  it('assertNoPiInPayload also refuses a vendor disabled in the region', () => {
+  it('assertNoPiInPayload lets a GoApply company query through on the mainland by default and refuses it under the strict switch', () => {
+    expect(assertNoPiInPayload({ brand: 'goapply', target: 'https://api.firecrawl.dev', payload: 'company page', env: MAINLAND })).toBe('api.firecrawl.dev');
     expect(() =>
-      assertNoPiInPayload({ brand: 'goapply', target: 'https://api.firecrawl.dev', payload: 'company page', env: MAINLAND }),
-    ).toThrow(/mainland stack/);
+      assertNoPiInPayload({ brand: 'goapply', target: 'https://api.firecrawl.dev', payload: 'company page', env: { ...MAINLAND, ...STRICT } }),
+    ).toThrow(/CN_RESIDENCY_STRICT/);
   });
 });
 
-describe('GoApply allowlist', () => {
+describe('GoApply default (D5): the shared stack is its fallback, so PI may go where RoboApply may send it', () => {
+  const env = { S3_ENDPOINT: 'https://acct.r2.cloudflarestorage.com' };
+
+  it.each([
+    ['https://openrouter.ai/api/v1'],
+    ['https://api.openai.com'],
+    ['https://api.resend.com/emails'],
+    ['wss://project.livekit.cloud'],
+    ['https://acct.r2.cloudflarestorage.com/goapply/key'],
+    ['ep-cool-1.us-east-2.aws.neon.tech'],
+    ['https://api.deepseek.com/v1/chat/completions'],
+    ['https://api.gohire.top/api/v1/parse-resume'],
+    ['https://oss-cn-shanghai.aliyuncs.com'],
+    ['https://dysmsapi.aliyuncs.com'],
+  ])('allows PI to %s in both regions', (target) => {
+    expect(code({ brand: 'goapply', target, carriesPi: true, env })).toBe('allowed');
+    expect(code({ brand: 'goapply', target, carriesPi: true, env: { ...env, ...MAINLAND } })).toBe('allowed');
+  });
+
+  it('Tavily without PI is allowed in both regions; with PI it is refused like for RoboApply', () => {
+    for (const e of [env, { ...env, ...MAINLAND }]) {
+      expect(code({ brand: 'goapply', target: 'https://api.tavily.com/search', carriesPi: false, env: e })).toBe('allowed');
+      expect(code({ brand: 'goapply', target: 'https://api.tavily.com/search', carriesPi: true, env: e })).toBe('no_pi_vendor');
+    }
+  });
+});
+
+describe('GoApply allowlist (CN_RESIDENCY_STRICT=true only)', () => {
   const env = {
-    ...OFFSHORE,
+    ...STRICT,
     S3_ENDPOINT: 'https://acct.r2.cloudflarestorage.com',
     CN_S3_ENDPOINT: 'https://oss-cn-shanghai.aliyuncs.com',
     CN_LIVEKIT_URL: 'wss://rtc.goapply.example.cn',
@@ -165,7 +201,7 @@ describe('GoApply allowlist', () => {
     expect(code({ brand: 'goapply', target, carriesPi: true, env })).toBe('allowed');
   });
 
-  it('refuses offshore model vendors and the international bucket', () => {
+  it('refuses offshore model vendors and the shared bucket', () => {
     expect(code({ brand: 'goapply', target: 'https://openrouter.ai/api/v1', carriesPi: true, env })).toBe(
       'host_not_allowlisted_for_cn',
     );
@@ -182,7 +218,7 @@ describe('GoApply allowlist', () => {
   });
 
   it('allows storage only on a mainland region host — naming a host in CN_S3_ENDPOINT is not enough', () => {
-    const aws = { ...MAINLAND, CN_S3_ENDPOINT: 'https://s3.us-east-1.amazonaws.com' };
+    const aws = { ...MAINLAND, ...STRICT, CN_S3_ENDPOINT: 'https://s3.us-east-1.amazonaws.com' };
     // Review probe: this used to pass because the host equalled CN_S3_ENDPOINT.
     expect(code({ brand: 'goapply', target: 'https://s3.us-east-1.amazonaws.com/goapply/key', carriesPi: true, env: aws })).toBe(
       'host_not_allowlisted_for_cn',
@@ -207,20 +243,27 @@ describe('GoApply allowlist', () => {
     expect(isMainlandStorageHost(null, MAINLAND)).toBe(false);
   });
 
-  it('allows the offshore beta infrastructure only offshore (CN-0)', () => {
+  it('has no exemption for offshore infrastructure: Neon, Resend and LiveKit Cloud are refused in either region', () => {
     const neon = 'ep-cool-1.us-east-2.aws.neon.tech';
-    expect(code({ brand: 'goapply', target: neon, carriesPi: true, env: OFFSHORE })).toBe('allowed');
-    expect(code({ brand: 'goapply', target: 'https://api.resend.com/emails', carriesPi: true, env: OFFSHORE })).toBe('allowed');
-    expect(code({ brand: 'goapply', target: neon, carriesPi: true, env: MAINLAND })).toBe('host_not_allowlisted_for_cn');
-    expect(code({ brand: 'goapply', target: 'https://api.resend.com/emails', carriesPi: true, env: MAINLAND })).toBe(
-      'host_not_allowlisted_for_cn',
-    );
+    for (const e of [STRICT, { ...STRICT, ...MAINLAND }]) {
+      expect(code({ brand: 'goapply', target: neon, carriesPi: true, env: e })).toBe('host_not_allowlisted_for_cn');
+      expect(code({ brand: 'goapply', target: 'https://api.resend.com/emails', carriesPi: true, env: e })).toBe('host_not_allowlisted_for_cn');
+      expect(code({ brand: 'goapply', target: 'wss://project.livekit.cloud', carriesPi: true, env: e })).toBe('host_not_allowlisted_for_cn');
+    }
+  });
+
+  it('never changes a RoboApply decision', () => {
+    for (const target of ['https://openrouter.ai/api/v1', 'https://api.resend.com/emails', 'https://acct.r2.cloudflarestorage.com']) {
+      expect(code({ brand: 'roboapply', target, carriesPi: true, env })).toBe('allowed');
+    }
+    expect(code({ brand: 'roboapply', target: 'https://api.deepseek.com', carriesPi: true, env })).toBe('mainland_endpoint_for_intl');
   });
 
   it('honours CN_LLM_DOMESTIC_HOSTS for a self-hosted gateway', () => {
     expect(
-      code({ brand: 'goapply', target: 'https://llm.internal.example.cn', carriesPi: true, env: { CN_LLM_DOMESTIC_HOSTS: 'llm.internal.example.cn' } }),
+      code({ brand: 'goapply', target: 'https://llm.internal.example.cn', carriesPi: true, env: { ...STRICT, CN_LLM_DOMESTIC_HOSTS: 'llm.internal.example.cn' } }),
     ).toBe('allowed');
+    expect(code({ brand: 'goapply', target: 'https://llm.internal.example.cn', carriesPi: true, env: STRICT })).toBe('host_not_allowlisted_for_cn');
   });
 });
 
@@ -268,5 +311,6 @@ describe('edges', () => {
 
   it('non-PI calls are allowed for both brands outside the vendor rules', () => {
     expect(code({ brand: 'goapply', target: 'https://openrouter.ai', carriesPi: false, env: {} })).toBe('allowed');
+    expect(code({ brand: 'goapply', target: 'https://openrouter.ai', carriesPi: false, env: STRICT })).toBe('allowed');
   });
 });

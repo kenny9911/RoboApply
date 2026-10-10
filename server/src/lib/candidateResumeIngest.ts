@@ -6,19 +6,26 @@
 // candidate-scoped object storage (a distinct keyspace, so they never
 // co-mingle with recruiter resume originals).
 //
-// Residency (TASK_PLAN.md WP-15, REQ-WP15-03): the brand of the upload decides
-// where the file may be parsed and what may be stored.
+// Brand rules (TASK_PLAN.md WP-15, REQ-WP15-03; D5, GOAPPLY_PARITY_PLAN.md
+// §3.6): the brand of the upload decides which parser is tried first and
+// where the file is kept. The capability is the same on both brands.
+//   - The brand is the explicit one, else the unit of work's, else the stored
+//     brand of the owning user (`resolveOwnerWriteBrand`). A worker with no
+//     brand context therefore still files a GoApply upload as GoApply.
 //   - GoHire's parse service is called only for a brand it is switched on for,
 //     with that brand passed explicitly, and never for a RoboApply upload
 //     when the caller sets `forceLocalParser` (a user without the cross-border
-//     consent). GoApply ignores that flag: GoHire is its in-country parser.
-//   - GoApply images go to GoHire only; when it cannot read one the upload
-//     fails (`image_parse_unavailable`). No local vision OCR for them.
+//     consent). GoApply ignores that flag: GoHire is its preferred parser.
+//   - GoHire is a preference, not a requirement. When it is not configured or
+//     cannot read the file, a GoApply PDF or image is read by the local
+//     pipeline, exactly as on RoboApply.
 //   - After parse and summary, on EVERY path, `applyResumeUploadPolicy(brand, …)`
-//     decides what is handed back for storage: on GoApply offshore (CN-0)
-//     government ID numbers and health details are redacted and photo fields
-//     dropped, and no original file is kept.
-//   - The original goes to the brand's own bucket, or nowhere.
+//     decides what is handed back for storage. By default nothing changes on
+//     either brand; GoApply under `CN_STORAGE_MODE=redact|discard` has
+//     government ID numbers and health details removed first.
+//   - The original goes to the store the brand writes to (GoApply: its own
+//     bucket, else the shared store under `goapply/`), or nowhere when the
+//     brand's rule says so.
 //
 // Lives in `lib/` on purpose: the boundary-locked V2 routes
 // (server/src/roboapply/v2/*) may import `lib/*` but NOT `services/*`
@@ -44,7 +51,7 @@ import {
 import { logger } from '../services/LoggerService.js';
 import { getBrand, type BrandId } from '../platform/brand/registry.js';
 import { applyResumeUploadPolicy, isImageUpload } from '../platform/residency/uploadPolicy.js';
-import { resolveWriteBrand } from '../platform/residency/writeBrand.js';
+import { resolveOwnerWriteBrand } from '../platform/residency/writeBrand.js';
 import type { ParsedResume, SkillsDetailed } from '../types/index.js';
 
 // Candidate resume originals get their OWN keyspace so they are never
@@ -168,19 +175,20 @@ export async function ingestCandidateResume(params: {
    * RoboApply: read the file with the local parser only, with no call to the
    * GoHire parse service. Set for a RoboApply user who has not agreed to
    * `intl_cross_border_cn_parse`, or when the caller asks for the local parser.
-   * Ignored on GoApply: GoHire is the in-country parser there, and the local
-   * pipeline can end in vision OCR on a scanned PDF, which GoApply does not use.
+   * Ignored on GoApply: GoHire is its preferred parser, tried first whenever
+   * it is configured (the local pipeline is the fallback).
    */
   forceLocalParser?: boolean;
 }): Promise<CandidateResumeIngestResult> {
   const { buffer, fileName, mimeType, userId, requestId, textTransform } = params;
 
-  // Residency (TASK_PLAN.md WP-15, REQ-WP15-03). The brand decides where the
-  // file may be parsed and what may be stored. When it cannot be known (no
-  // request context on a deployment that serves both brands) the stricter
-  // GoApply rule applies: nothing goes to GoHire or to a bucket, and the text
-  // is redacted before it is returned.
-  const brandId = resolveWriteBrand(params.brand);
+  // The brand decides which parser is tried first and where the file is kept
+  // (see the header). Explicit brand, else the unit of work, else the owning
+  // user's stored brand. When it still cannot be known (no context, no such
+  // user, a deployment that serves both brands) nothing goes to GoHire or to a
+  // bucket, and GoApply's storage rule applies to the text: it is the one an
+  // operator may have tightened (CN_STORAGE_MODE).
+  const brandId = await resolveOwnerWriteBrand(params.brand, userId);
   const policyBrand: BrandId = brandId ?? 'goapply';
   const cnMarket = getBrand(policyBrand).market === 'cn';
   const imageUpload = isImageUpload(mimeType, fileName);
@@ -198,14 +206,15 @@ export async function ingestCandidateResume(params: {
   // BEFORE parsing, and a remote parse returns text and structure together with
   // no seam to apply it. That path keeps the local pipeline.
   //
-  // GoApply images go to GoHire only (CN plan G-resume): an image is never
-  // handed to local vision OCR. When GoHire cannot read it the upload fails.
+  // GoApply images go to GoHire first (wrapped into a one-page PDF). When
+  // GoHire is not configured or cannot read one, the image is read by the
+  // local pipeline, as a RoboApply image is.
   let rawText: string;
   let parsed: ParsedResume | undefined;
 
   const cnImage = cnMarket && imageUpload;
   // The local-parser flag is a RoboApply privacy choice; it never takes a
-  // GoApply file off the in-country parser.
+  // GoApply file off its preferred parser.
   const forceLocal = params.forceLocalParser === true && !cnMarket;
   const useRemote = cnImage || (!textTransform && !forceLocal);
   const remoteParse = useRemote && brandId
@@ -218,13 +227,6 @@ export async function ingestCandidateResume(params: {
         allowImages: cnImage,
       })
     : null;
-
-  if (cnImage && !remoteParse) {
-    throw new CandidateResumeIngestError(
-      'image_parse_unavailable',
-      'This image could not be read right now. Upload a PDF or Word file instead.',
-    );
-  }
 
   if (remoteParse) {
     rawText = cleanText(normalizeExtractedText(remoteParse.rawText));
@@ -305,9 +307,10 @@ export async function ingestCandidateResume(params: {
   if (!markdown.trim()) markdown = rawText;
 
   // 4. The brand's storage rule, on EVERY path (GoHire, local PDF fallback,
-  // Word/text, LinkedIn text): on GoApply offshore (CN-0) government ID numbers
-  // and health details are redacted and photo fields dropped before anything is
-  // handed back for storage. RoboApply content comes back as parsed.
+  // Word/text, LinkedIn text). By default the content comes back as parsed on
+  // both brands. GoApply under CN_STORAGE_MODE=redact|discard: government ID
+  // numbers and health details are redacted (and under discard photo fields
+  // dropped) before anything is handed back for storage.
   const applied = applyResumeUploadPolicy(policyBrand, { rawText, markdown, parsed, summary, highlight });
   rawText = applied.rawText;
   markdown = applied.markdown ?? markdown;
@@ -318,8 +321,8 @@ export async function ingestCandidateResume(params: {
   const displayName =
     str(parsed.name).trim() || cleanNameFromFilename(fileName) || 'My résumé';
 
-  // 5. Persist original bytes to the brand's own storage (best-effort). Never
-  // when the brand's rule says discard, and never without a known brand.
+  // 5. Persist original bytes to the store the brand writes to (best-effort).
+  // Never when the brand's rule says discard, and never without a known brand.
   const storeOriginal = params.storeOriginal !== false && applied.storeOriginal && Boolean(brandId);
   let original: CandidateResumeOriginalRef | null = null;
   if (storeOriginal && brandId && resumeOriginalFileStorageService.isConfigured(brandId)) {
@@ -481,6 +484,24 @@ function skillsToLines(skills: ParsedResume['skills'], lang: ResumeDocLanguage =
   return out;
 }
 
+/** A year, or a year-and-month, anywhere in the text ("2019", "2019-03", "2019年3月", "Mar 2019"). */
+const DATE_IN_TEXT = /(?:19|20)\d{2}/;
+
+/**
+ * When a role ran, as the resume line shows it. A parser may put a computed
+ * length in `duration` ("4 years 8 months") beside the real `startDate` and
+ * `endDate`; a line with no date on it loses the role's years everywhere the
+ * markdown is read (the editor, Resume check, the keyword report). So the
+ * dates win over a `duration` that holds no date. A `duration` that carries a
+ * date range ("2019.03 - 2023.06") is kept as written.
+ */
+function experienceWhen(e: { duration?: unknown; startDate?: unknown; endDate?: unknown }): string {
+  const duration = str(e.duration).trim();
+  const dates = [e.startDate, e.endDate].map((d) => str(d).trim()).filter(Boolean).join(' – ');
+  if (duration && (DATE_IN_TEXT.test(duration) || !str(e.startDate).trim())) return duration;
+  return dates || duration;
+}
+
 /** True when every role is an internship (a student resume: the section is 实习经历). */
 function allInternships(experience: ParsedResume['experience']): boolean {
   const list = Array.isArray(experience) ? experience : [];
@@ -522,7 +543,7 @@ export function parsedResumeToMarkdown(parsed: ParsedResume, fallbackText?: stri
     lines.push('', `## ${allInternships(parsed.experience) ? H.internship : H.experience}`);
     for (const e of parsed.experience) {
       const header = [e.role, e.company].filter(Boolean).join(' — ');
-      const when = e.duration || [e.startDate, e.endDate].filter(Boolean).join(' – ');
+      const when = experienceWhen(e);
       const meta = [when, e.location].filter(Boolean).join(' · ');
       lines.push('', `**${header || 'Role'}**${meta ? ` · ${meta}` : ''}`);
       const bullets = Array.isArray(e.achievements) && e.achievements.length
