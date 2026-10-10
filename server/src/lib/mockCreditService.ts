@@ -198,45 +198,51 @@ function sameUtcMonth(a: Date | null | undefined, b: Date): boolean {
   return a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth();
 }
 
+const SUBSCRIPTION_SELECT = {
+  id: true,
+  tier: true,
+  mockCredits: true,
+  mockCreditsRenewedAt: true,
+  mockCreditsPeriodAllotment: true,
+  currentPeriodEnd: true,
+  planKey: true,
+  status: true,
+  brand: true,
+  stripeSubscriptionId: true,
+  cancelAtPeriodEnd: true,
+} as const;
+
 /**
  * Resolve (and lazily create) the SeekerSubscription row for a user. Returns
  * null when the user has no SeekerProfile (admins, profile-less accounts).
+ *
+ * A new account's first page load asks for credits and the plan in parallel,
+ * so several requests reach the "no row yet" branch together. The free row is
+ * therefore created with INSERT … ON CONFLICT DO NOTHING
+ * (`createMany({ skipDuplicates })`) and then read: every concurrent request
+ * ends up with the one row, and none fails on the `seekerProfileId` unique
+ * key. (`upsert` is a separate read and insert here, so two of them raced and
+ * the loser threw P2002, which the routes answered as 500.)
  */
 async function resolveSeeker(userId: string): Promise<ResolvedSeeker | null> {
   const profile = await prisma.seekerProfile.findUnique({
     where: { userId },
-    select: { id: true, subscription: { select: { id: true } } },
+    select: { id: true, subscription: { select: SUBSCRIPTION_SELECT } },
   });
   if (!profile) return null;
 
-  let subId = profile.subscription?.id ?? null;
-  if (!subId) {
-    // Create the free subscription row lazily so credits have a home.
-    const created = await prisma.seekerSubscription.upsert({
-      where: { seekerProfileId: profile.id },
-      update: {},
-      create: { seekerProfileId: profile.id, tier: 'free', status: 'active' },
-      select: { id: true },
-    });
-    subId = created.id;
-  }
+  const readSubscription = () =>
+    prisma.seekerSubscription.findUnique({ where: { seekerProfileId: profile.id }, select: SUBSCRIPTION_SELECT });
 
-  const sub = await prisma.seekerSubscription.findUnique({
-    where: { id: subId },
-    select: {
-      id: true,
-      tier: true,
-      mockCredits: true,
-      mockCreditsRenewedAt: true,
-      mockCreditsPeriodAllotment: true,
-      currentPeriodEnd: true,
-      planKey: true,
-      status: true,
-      brand: true,
-      stripeSubscriptionId: true,
-      cancelAtPeriodEnd: true,
-    },
-  });
+  let sub = profile.subscription ?? (await readSubscription());
+  if (!sub) {
+    // Create the free subscription row lazily so credits have a home.
+    await prisma.seekerSubscription.createMany({
+      data: [{ seekerProfileId: profile.id, tier: 'free', status: 'active' }],
+      skipDuplicates: true,
+    });
+    sub = await readSubscription();
+  }
   if (!sub) return null;
   return {
     seekerProfileId: profile.id,

@@ -98,13 +98,34 @@ export class InvalidIdempotencyKeyError extends Error {
   }
 }
 
+/**
+ * The database could not take the credit transaction in time (it could not
+ * start, or it ran out of time and was rolled back). Nothing was reserved or
+ * spent, so the same request can be sent again. Routes answer 503 with
+ * `retryable: true`; the original database error is kept as `cause` and is
+ * logged by the store.
+ */
+export class CreditStoreBusyError extends Error {
+  readonly code = 'credits_busy' as const;
+  readonly status = 503;
+  readonly retryable = true;
+  /** Seconds a client should wait before sending the request again. */
+  readonly retryAfterSec = 5;
+
+  constructor(options: { cause?: unknown } = {}) {
+    super('We could not start this right now. Try again in a moment.', options.cause !== undefined ? { cause: options.cause } : undefined);
+    this.name = 'CreditStoreBusyError';
+  }
+}
+
 export type CreditError =
   | CreditsExhaustedError
   | CreditReplayError
   | ReservationNotFoundError
   | ReservationStateError
   | UnknownBucketError
-  | InvalidIdempotencyKeyError;
+  | InvalidIdempotencyKeyError
+  | CreditStoreBusyError;
 
 export function isCreditError(err: unknown): err is CreditError {
   return (
@@ -113,7 +134,8 @@ export function isCreditError(err: unknown): err is CreditError {
     err instanceof ReservationNotFoundError ||
     err instanceof ReservationStateError ||
     err instanceof UnknownBucketError ||
-    err instanceof InvalidIdempotencyKeyError
+    err instanceof InvalidIdempotencyKeyError ||
+    err instanceof CreditStoreBusyError
   );
 }
 
@@ -121,6 +143,9 @@ export function isCreditError(err: unknown): err is CreditError {
 export function creditErrorToHttp(err: unknown): { status: number; body: Record<string, unknown> } | null {
   if (err instanceof CreditsExhaustedError) return { status: err.status, body: err.toJSON() };
   if (err instanceof CreditReplayError) return { status: err.status, body: { error: err.code } };
+  if (err instanceof CreditStoreBusyError) {
+    return { status: err.status, body: { error: err.code, message: err.message, retryable: true, retryAfterSec: err.retryAfterSec } };
+  }
   if (isCreditError(err)) return { status: err.status, body: { error: err.code } };
   return null;
 }

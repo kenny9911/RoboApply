@@ -184,6 +184,99 @@ describe('GET /credits and /credits/history', () => {
     expect(p2.status).toBe(200);
     expect(p2.body.data).toEqual({ items: [expect.objectContaining({ id: cuid(2), bucket: 'tailor' })], cursor: null });
   });
+
+  it('never lists a grant as use: practice-credit grants (sign-up, verification, referral, pack) stay out', async () => {
+    // What platform/credits/practice.ts writes when it GRANTS a practice credit
+    // (an idempotency claim, committed once the credit was added).
+    await db.rACreditLedger.create({
+      data: { id: 'l_grant', userId: 'u_1', bucket: 'practice', amount: 1, status: 'committed', fromSource: 'mock_credit', refType: 'practice_grant', refId: 'email_verified', idempotencyKey: 'u_1:practice:email-verify', createdAt: NOW, settledAt: NOW },
+    });
+    await db.rACreditLedger.create({
+      data: { id: 'l_pack', userId: 'u_1', bucket: 'practice', amount: 5, status: 'committed', fromSource: 'mock_credit', refType: 'practice_grant', refId: 'pack_purchase', idempotencyKey: 'u_1:practice:order_1', createdAt: NOW, settledAt: NOW },
+    });
+    const fresh = await h.request<any>('GET', '/api/v1/roboapply/credits/history', RA);
+    expect(fresh.status).toBe(200);
+    // A new account has used nothing yet.
+    expect(fresh.body.data).toEqual({ items: [], cursor: null });
+
+    // A use paid from bonus credits is still a use.
+    await db.rACreditLedger.create({
+      data: { id: 'l_use', userId: 'u_1', bucket: 'tailor', amount: 1, status: 'committed', fromSource: 'grant:g_1', sku: 'ra_tailor_v2', idempotencyKey: 'u_1:tailor:k9', createdAt: NOW, settledAt: NOW },
+    });
+    const after = await h.request<any>('GET', '/api/v1/roboapply/credits/history', RA);
+    expect(after.body.data.items.map((i: any) => i.id)).toEqual(['l_use']);
+  });
+
+  /** A MockInterviewCreditLedger row (the practice-credit balance ledger). */
+  const practiceRow = (id: string, over: Record<string, unknown>) => ({
+    id,
+    seekerProfileId: 'sp_1',
+    userId: 'u_1',
+    delta: -1,
+    balanceAfter: 0,
+    reason: 'debit_interview',
+    tier: 'free',
+    relatedSessionId: `sess_${id}`,
+    source: 'system',
+    createdAt: NOW,
+    ...over,
+  });
+
+  it('lists a practice interview as use, with the credits it really took', async () => {
+    // An account whose only use so far is one practice interview (15 of the
+    // 20 minutes a credit covers). Its sign-up credit and a pack that expired
+    // are balance changes, not uses.
+    await db.mockInterviewCreditLedger.create({ data: practiceRow('m_signup', { delta: 1, balanceAfter: 1, reason: 'signup_bonus', relatedSessionId: null, createdAt: new Date(NOW.getTime() - 60_000) }) });
+    await db.mockInterviewCreditLedger.create({ data: practiceRow('m_use', { delta: -0.75, balanceAfter: 0.25, createdAt: new Date(NOW.getTime() - 30_000) }) });
+    await db.mockInterviewCreditLedger.create({ data: practiceRow('m_expire', { delta: -0.25, balanceAfter: 0, reason: 'expire', relatedSessionId: null }) });
+    await db.mockInterviewCreditLedger.create({ data: practiceRow('m_adjust', { delta: 2, balanceAfter: 2, reason: 'admin_adjust', relatedSessionId: null }) });
+    // A session that ended with nothing left to take wrote a zero debit.
+    await db.mockInterviewCreditLedger.create({ data: practiceRow('m_zero', { delta: 0, balanceAfter: 0 }) });
+    await db.mockInterviewCreditLedger.create({ data: practiceRow('m_other', { userId: 'u_go', seekerProfileId: 'sp_go' }) });
+
+    const res = await h.request<any>('GET', '/api/v1/roboapply/credits/history', RA);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({
+      items: [{ id: 'm_use', bucket: 'practice', amount: 0.75, sku: null, fromSource: 'mock_credit', at: new Date(NOW.getTime() - 30_000).toISOString() }],
+      cursor: null,
+    });
+  });
+
+  it('pages practice interviews and metered actions together, newest first, with no row twice or missing', async () => {
+    const at = (secondsAgo: number) => new Date(NOW.getTime() - secondsAgo * 1000);
+    const ledger = (id: string, secondsAgo: number) =>
+      db.rACreditLedger.create({
+        data: { id, userId: 'u_1', bucket: 'tailor', amount: 1, status: 'committed', fromSource: 'window', sku: 'ra_tailor_v2', idempotencyKey: `k_${id}`, createdAt: at(secondsAgo), settledAt: at(secondsAgo) },
+      });
+    const practice = (id: string, secondsAgo: number) => db.mockInterviewCreditLedger.create({ data: practiceRow(id, { createdAt: at(secondsAgo) }) });
+    await ledger('l_a', 0);
+    await practice('m_b', 10);
+    // The same instant in both tables, on either side of a page break. The
+    // ids are chosen so that an order by id alone would put them the other way round.
+    await ledger('a_tie', 20);
+    await practice('z_tie', 20);
+    await practice('m_e', 30);
+    await ledger('l_f', 40);
+    await ledger('l_g', 50);
+
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    for (let page = 0; page < 5; page++) {
+      const res: any = await h.request<any>('GET', `/api/v1/roboapply/credits/history?limit=3${cursor ? `&cursor=${cursor}` : ''}`, RA);
+      expect(res.status).toBe(200);
+      seen.push(...res.body.data.items.map((i: any) => i.id));
+      cursor = res.body.data.cursor;
+      if (!cursor) break;
+      expect(res.body.data.items).toHaveLength(3);
+    }
+    expect(seen).toEqual(['l_a', 'm_b', 'a_tie', 'z_tie', 'm_e', 'l_f', 'l_g']);
+
+    // A page that ends on the practice row of a tie does not show its ledger twin again.
+    const four = await h.request<any>('GET', '/api/v1/roboapply/credits/history?limit=4', RA);
+    expect(four.body.data.items.map((i: any) => i.id)).toEqual(['l_a', 'm_b', 'a_tie', 'z_tie']);
+    const rest = await h.request<any>('GET', `/api/v1/roboapply/credits/history?limit=4&cursor=${four.body.data.cursor}`, RA);
+    expect(rest.body.data).toEqual({ items: [expect.objectContaining({ id: 'm_e' }), expect.objectContaining({ id: 'l_f' }), expect.objectContaining({ id: 'l_g' })], cursor: null });
+  });
 });
 
 describe('POST /credits/cancel (one click)', () => {

@@ -244,6 +244,52 @@ function isTransientDbError(err: unknown): boolean {
 const RETRY_MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 75;
 
+// ──────────────────────────────────────────────────────────────────────────
+// Interactive-transaction limits (client-wide defaults).
+//
+// Prisma's own defaults for `$transaction(async (tx) => …)` are `maxWait`
+// 2 s (time allowed to get a connection and BEGIN) and `timeout` 5 s (time
+// allowed for the whole transaction). Both assume a database on the same
+// network. Ours is remote (Neon): a new pooled connection alone takes about
+// 2 s, a round trip can take hundreds of milliseconds, and the pool is small
+// (10 locally, 1 on Vercel). With several people active the defaults turned
+// ordinary writes into 500s:
+//   P2028 "Unable to start a transaction in the given time"   (maxWait)
+//   P2028 "…timeout for this transaction was 5000 ms, however 5884 ms passed"
+// More than 30 call sites use `$transaction` without options, so the limits
+// are set once here and every call site inherits them. A call site that needs
+// something else still passes its own options.
+//
+// `maxWait` stays below pg.Pool's `connectionTimeoutMillis` (30 s) so Prisma
+// gives up first with P2028, which the credit store maps to a retryable
+// "busy" error. Override with PRISMA_TX_MAX_WAIT_MS / PRISMA_TX_TIMEOUT_MS.
+// ──────────────────────────────────────────────────────────────────────────
+export const DEFAULT_TX_MAX_WAIT_MS = 10_000;
+export const DEFAULT_TX_TIMEOUT_MS = 20_000;
+
+function positiveIntFromEnv(raw: string | undefined): number | null {
+  if (typeof raw !== 'string' || !/^\d+$/.test(raw.trim())) return null;
+  const n = Number.parseInt(raw.trim(), 10);
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
+}
+
+/** `transactionOptions` for every client built here (env overrides, else the defaults above). */
+export function resolveTransactionOptions(env: NodeJS.ProcessEnv = process.env): { maxWait: number; timeout: number } {
+  return {
+    maxWait: positiveIntFromEnv(env.PRISMA_TX_MAX_WAIT_MS) ?? DEFAULT_TX_MAX_WAIT_MS,
+    timeout: positiveIntFromEnv(env.PRISMA_TX_TIMEOUT_MS) ?? DEFAULT_TX_TIMEOUT_MS,
+  };
+}
+
+/**
+ * Connections per pool: 1 on Vercel serverless, 10 on a long-lived process.
+ * PRISMA_POOL_MAX overrides both (an interactive transaction holds one
+ * connection for its whole length, so a busy deployment may need more).
+ */
+export function resolvePoolMax(env: NodeJS.ProcessEnv = process.env): number {
+  return positiveIntFromEnv(env.PRISMA_POOL_MAX) ?? (env.VERCEL ? 1 : 10);
+}
+
 /**
  * Build a fully-extended Prisma client against an ARBITRARY connection string.
  *
@@ -271,7 +317,7 @@ export function createPrismaClientForUrl(
   // 90s idle to survive scale-to-zero, keepAlive on the socket.
   const pool = new Pool({
     connectionString: runtimeUrl,
-    max: process.env.VERCEL ? 1 : 10,
+    max: resolvePoolMax(),
     idleTimeoutMillis: 90_000,
     connectionTimeoutMillis: 30_000,
     keepAlive: true,
@@ -297,6 +343,7 @@ export function createPrismaClientForUrl(
   const isDev = process.env.NODE_ENV === 'development';
   const baseClient = new PrismaClient({
     adapter,
+    transactionOptions: resolveTransactionOptions(),
     log: [
       { level: 'error', emit: 'event' },
       { level: 'warn', emit: 'event' },

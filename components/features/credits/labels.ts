@@ -91,3 +91,47 @@ export function parseDate(iso: string | null | undefined): Date | null {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? null : d;
 }
+
+/** `timeZone` when this runtime knows it, else `fallback` (and `undefined` = the device's zone). */
+export function knownTimeZone(timeZone: string | null | undefined, fallback?: string | null): string | undefined {
+  for (const zone of [timeZone, fallback]) {
+    if (typeof zone !== 'string' || !zone.trim()) continue;
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: zone.trim() });
+      return zone.trim();
+    } catch {
+      // not an IANA zone this runtime knows; try the next one
+    }
+  }
+  return undefined;
+}
+
+/** Calendar days from `now` to `at` as the wall clock in `timeZone` shows them (0 = the same day, 1 = the next day). */
+export function calendarDaysUntil(at: Date, now: Date, timeZone?: string): number {
+  const dayNumber = (d: Date) => {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: 'numeric', day: 'numeric' }).formatToParts(d);
+    const get = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+    return Math.round(Date.UTC(get('year'), get('month') - 1, get('day')) / 86_400_000);
+  };
+  return dayNumber(at) - dayNumber(now);
+}
+
+/**
+ * When a credit window refills, for "Refills {when}" and "Wait until {when}":
+ *
+ *   later the same day   "11:30 PM"                (a bare time means today)
+ *   the next day         "tomorrow 12:00 AM"       (the locale's own word)
+ *   after that           "Mon, Oct 19, 12:00 AM"   (weekday with its date)
+ *
+ * A bare weekday ("Mon 12:00 AM") on a daily row read like a weekly reset.
+ * Pass the zone the server used to place the window (`summary.timezone`), so
+ * a daily refill reads as midnight and "tomorrow" is the account's tomorrow.
+ */
+export function refillLabel(input: { at: Date; now: Date; locale: string; timeZone?: string | null }): string {
+  const timeZone = knownTimeZone(input.timeZone);
+  const time = new Intl.DateTimeFormat(input.locale, { timeZone, hour: 'numeric', minute: '2-digit' }).format(input.at);
+  const days = input.at.getTime() > input.now.getTime() ? calendarDaysUntil(input.at, input.now, timeZone) : -1;
+  if (days === 0) return time;
+  if (days === 1) return `${new Intl.RelativeTimeFormat(input.locale, { numeric: 'auto' }).format(1, 'day')} ${time}`;
+  return new Intl.DateTimeFormat(input.locale, { timeZone, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(input.at);
+}

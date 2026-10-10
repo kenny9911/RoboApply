@@ -12,7 +12,7 @@
 //   1. insert the ledger row (ON CONFLICT on the idempotency key). A replay
 //      returns the existing reservation; a replay of a RELEASED reservation
 //      (the earlier attempt failed) re-arms it so a retry can still be paid.
-//   2. window: create the row if missing, then the conditional UPDATE.
+//   2. window: one conditional statement that creates the row if missing.
 //   3. otherwise a live grant for the bucket or '*'.
 //   4. otherwise roll back and throw CreditsExhaustedError{bucket, resetsAt, upgradable}.
 // Every plan has a cap (fair use for Pro), so there is no "unlimited" path.
@@ -21,6 +21,18 @@
 // only billing). release gives the window units or grant units back.
 // `releaseStale()` is called by the `jobs-maintain` cron (reservations older
 // than 15 minutes).
+//
+// When the database is too busy to take a transaction the store throws
+// CreditStoreBusyError (503, retryable; logged by the store):
+//   reserve  fails fast with it: nothing ran, nothing was reserved.
+//   commit / release  are safe to repeat, so they are tried again briefly:
+//               short transaction limits and a total time budget
+//               (SETTLE_TX_LIMITS, SETTLE_BUDGET_MS), because the action is
+//               already over and someone is waiting for its answer.
+//   withCredit  keeps the result of an action that worked even when the
+//               commit still cannot be written: the person is not shown an
+//               error for work that is done, and is not charged for it (the
+//               reservation is released by `jobs-maintain`).
 
 import { logger } from '../../services/LoggerService.js';
 import { getCurrentRequestId } from '../../lib/requestContext.js';
@@ -29,13 +41,22 @@ import { isWindowBucket, WINDOW_BUCKETS, type WindowBucket } from './catalog.js'
 import { entitlementService as defaultEntitlements, type EntitlementService, type ResolvedEntitlements } from './EntitlementService.js';
 import {
   CreditReplayError,
+  CreditStoreBusyError,
   CreditsExhaustedError,
   InvalidIdempotencyKeyError,
   ReservationNotFoundError,
   ReservationStateError,
   UnknownBucketError,
 } from './errors.js';
-import { createPrismaCreditStore, type CreditStore, type LedgerRow, type LedgerStatus } from './store.js';
+import {
+  SETTLE_BUDGET_MS,
+  SETTLE_TX_LIMITS,
+  createPrismaCreditStore,
+  retryWhenBusy,
+  type CreditStore,
+  type LedgerRow,
+  type LedgerStatus,
+} from './store.js';
 import { currentWindow, resetsAtFor, windowKeyFor, type CreditWindow } from './windows.js';
 
 export const STALE_RESERVATION_MS = 15 * 60_000;
@@ -107,6 +128,12 @@ export interface CreditServiceDeps {
   entitlements?: EntitlementService;
   now?: () => Date;
   writeDeductionLog?: DeductionLogWriter;
+  /** Waits between tries of a commit or release the database was too busy for (default 150 ms, then 500 ms). */
+  settleRetryDelaysMs?: readonly number[];
+  /** Total time a commit or release may spend before it stops trying again (default SETTLE_BUDGET_MS). */
+  settleBudgetMs?: number;
+  /** Millisecond clock for that budget (tests). */
+  clock?: () => number;
 }
 
 export interface BucketUsage {
@@ -166,6 +193,8 @@ export function createCreditService(deps: CreditServiceDeps = {}): CreditService
   const entitlements = deps.entitlements ?? defaultEntitlements;
   const now = deps.now ?? (() => new Date());
   const writeLog = deps.writeDeductionLog ?? defaultDeductionWriter;
+  const settleDelays = deps.settleRetryDelaysMs ?? [150, 500];
+  const settleRetry = { budgetMs: deps.settleBudgetMs ?? SETTLE_BUDGET_MS, ...(deps.clock ? { clock: deps.clock } : {}) };
 
   async function reserve(opts: ReserveOptions): Promise<Reservation> {
     if (!isWindowBucket(opts.bucket)) throw new UnknownBucketError(String(opts.bucket));
@@ -204,19 +233,12 @@ export function createCreditService(deps: CreditServiceDeps = {}): CreditService
         id = existing.id;
       }
 
-      await tx.ensureWindow(opts.userId, opts.bucket, windowKey);
       if (await tx.reserveWindow(opts.userId, opts.bucket, windowKey, units, b.cap)) {
-        await tx.setLedgerSource(id, 'window', windowKey);
-        const row = await tx.findLedgerById(id);
-        return toReservation(row!, false);
+        return toReservation(await tx.setLedgerSource(id, 'window', windowKey), false);
       }
       if (b.grantable) {
         const grantId = await tx.takeGrant(opts.userId, opts.bucket, units, at);
-        if (grantId) {
-          await tx.setLedgerSource(id, `grant:${grantId}`, null);
-          const row = await tx.findLedgerById(id);
-          return toReservation(row!, false);
-        }
+        if (grantId) return toReservation(await tx.setLedgerSource(id, `grant:${grantId}`, null), false);
       }
       throw new CreditsExhaustedError({
         bucket: opts.bucket,
@@ -230,19 +252,25 @@ export function createCreditService(deps: CreditServiceDeps = {}): CreditService
 
   async function commit(reservationId: string, opts: { refId?: string | null } = {}): Promise<Reservation> {
     const at = now();
-    const { row, transitioned } = await store.transaction(async (tx) => {
-      const settled = await tx.settleLedger(reservationId, 'committed', at, opts.refId ?? null);
-      if (!settled) {
-        const cur = await tx.findLedgerById(reservationId);
-        if (!cur) throw new ReservationNotFoundError(reservationId);
-        if (cur.status === 'committed') return { row: cur, transitioned: false };
-        throw new ReservationStateError(reservationId, cur.status, 'commit');
-      }
-      if (settled.fromSource === 'window' && settled.windowKey) {
-        await tx.commitWindow(settled.userId, settled.bucket, settled.windowKey, settled.amount);
-      }
-      return { row: settled, transitioned: true };
-    });
+    // Safe to repeat: a second run finds the row committed and changes nothing.
+    const { row, transitioned } = await retryWhenBusy(
+      () =>
+        store.transaction(async (tx) => {
+          const settled = await tx.settleLedger(reservationId, 'committed', at, opts.refId ?? null);
+          if (!settled) {
+            const cur = await tx.findLedgerById(reservationId);
+            if (!cur) throw new ReservationNotFoundError(reservationId);
+            if (cur.status === 'committed') return { row: cur, transitioned: false };
+            throw new ReservationStateError(reservationId, cur.status, 'commit');
+          }
+          if (settled.fromSource === 'window' && settled.windowKey) {
+            await tx.commitWindow(settled.userId, settled.bucket, settled.windowKey, settled.amount);
+          }
+          return { row: settled, transitioned: true };
+        }, SETTLE_TX_LIMITS),
+      settleDelays,
+      settleRetry,
+    );
     if (transitioned && row.sku) {
       try {
         await writeLog({
@@ -268,21 +296,27 @@ export function createCreditService(deps: CreditServiceDeps = {}): CreditService
 
   async function release(reservationId: string, reason: string): Promise<Reservation> {
     const at = now();
-    const row = await store.transaction(async (tx) => {
-      const settled = await tx.settleLedger(reservationId, 'released', at);
-      if (!settled) {
-        const cur = await tx.findLedgerById(reservationId);
-        if (!cur) throw new ReservationNotFoundError(reservationId);
-        if (cur.status === 'released') return cur;
-        throw new ReservationStateError(reservationId, cur.status, 'release');
-      }
-      if (settled.fromSource === 'window' && settled.windowKey) {
-        await tx.releaseWindow(settled.userId, settled.bucket, settled.windowKey, settled.amount);
-      }
-      const grantId = grantIdOf(settled.fromSource);
-      if (grantId) await tx.restoreGrant(grantId, settled.amount);
-      return settled;
-    });
+    // Safe to repeat: a second run finds the row released and changes nothing.
+    const row = await retryWhenBusy(
+      () =>
+        store.transaction(async (tx) => {
+          const settled = await tx.settleLedger(reservationId, 'released', at);
+          if (!settled) {
+            const cur = await tx.findLedgerById(reservationId);
+            if (!cur) throw new ReservationNotFoundError(reservationId);
+            if (cur.status === 'released') return cur;
+            throw new ReservationStateError(reservationId, cur.status, 'release');
+          }
+          if (settled.fromSource === 'window' && settled.windowKey) {
+            await tx.releaseWindow(settled.userId, settled.bucket, settled.windowKey, settled.amount);
+          }
+          const grantId = grantIdOf(settled.fromSource);
+          if (grantId) await tx.restoreGrant(grantId, settled.amount);
+          return settled;
+        }, SETTLE_TX_LIMITS),
+      settleDelays,
+      settleRetry,
+    );
     logger.info('CREDITS', 'reservation released', { reservationId, bucket: row.bucket, reason });
     return toReservation(row, false);
   }
@@ -306,7 +340,21 @@ export function createCreditService(deps: CreditServiceDeps = {}): CreditService
       }
       throw err;
     }
-    await commit(reservation.id);
+    try {
+      await commit(reservation.id);
+    } catch (err) {
+      // The action worked. A commit the database is too busy to take must not
+      // turn finished work into an error (and a retry with the same key would
+      // read as "still running"). The reservation stays `reserved` and
+      // `jobs-maintain` releases it, so this use is not charged.
+      if (!(err instanceof CreditStoreBusyError)) throw err;
+      logger.error('CREDITS', 'commit failed after the action succeeded; the result is kept and the use is not charged', {
+        reservationId: reservation.id,
+        userId: reservation.userId,
+        bucket: reservation.bucket,
+        error: err.cause instanceof Error ? err.cause.message : err.message,
+      });
+    }
     return result;
   }
 

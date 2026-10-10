@@ -228,6 +228,69 @@ describe('CreditsUsage', () => {
     expect(document.body.textContent?.toLowerCase()).not.toContain('unlimited');
   });
 
+  it('daily rows say which day the refill is: "tomorrow" with the time, in the account\'s time zone', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-11T02:00:00.000Z')); // Sunday 10:00 in Shanghai
+    const base = creditsResponse({ timezone: 'Asia/Shanghai' });
+    const midnight = '2026-10-11T16:00:00.000Z'; // Monday 00:00 in Shanghai
+    for (const b of Object.values(base.summary.buckets)) b.resetsAt = midnight;
+    base.summary.buckets.ready_kits.resetsAt = '2026-10-18T16:00:00.000Z'; // the Monday after
+    api.getCredits.mockResolvedValue(base);
+    renderUi(<CreditsUsage />);
+    const tailor = (await screen.findByText('Tailored resumes')).closest('li')!;
+    expect(tailor).toHaveTextContent('2 a day · Refills tomorrow 12:00 AM');
+    // Never a bare weekday on a daily row (it read like a weekly reset).
+    expect(tailor.textContent).not.toMatch(/Mon/);
+    // A later refill carries its date.
+    expect(document.querySelector('[data-bucket="ready_kits"]')).toHaveTextContent('3 a week · Refills Mon, Oct 19, 12:00 AM');
+  });
+
+  it('GoApply in Chinese: the day reads "明天", not a bare weekday', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-11T02:00:00.000Z'));
+    const base = creditsResponse({ timezone: 'Asia/Shanghai' });
+    for (const b of Object.values(base.summary.buckets)) b.resetsAt = '2026-10-11T16:00:00.000Z';
+    api.getCredits.mockResolvedValue(base);
+    renderUi(<CreditsUsage />, { brand: 'goapply', locale: 'zh' });
+    await waitFor(() => expect(document.querySelector('[data-bucket="tailor"]')).not.toBeNull());
+    const meta = document.querySelector('[data-bucket="tailor"]')!.textContent ?? '';
+    // The test provider carries the English sentences; `{when}` is the locale's
+    // own wording, which the zh bundle wraps as "{when} 重置".
+    expect(meta).toMatch(/明天 0?0:00/);
+    expect(meta).not.toContain('周一');
+  });
+
+  it('recent use lists what the server sends as use, with "N used"', async () => {
+    api.getCreditHistory.mockResolvedValue({ items: [{ id: 'l1', bucket: 'tailor', amount: 1, sku: 'ra_tailor_v2', fromSource: 'window', at: '2026-10-10T09:00:00.000Z' }] });
+    renderUi(<CreditsUsage />);
+    const history = (await screen.findByText('Recent use')).closest('section')!;
+    await waitFor(() => expect(history).toHaveTextContent('Tailored resumes'));
+    expect(history).toHaveTextContent('1 used');
+    expect(history).not.toHaveTextContent('Practice interviews');
+  });
+
+  it('recent use is timed in the account\'s time zone, like the refill times above it', async () => {
+    // A New York account on a site whose default zone is another one: an
+    // action at 11:12 PM on Oct 10 there (03:12 UTC on Oct 11).
+    api.getCredits.mockResolvedValue(creditsResponse({ timezone: 'America/New_York' }));
+    api.getCreditHistory.mockResolvedValue({ items: [{ id: 'l1', bucket: 'tailor', amount: 1, sku: 'ra_tailor_v2', fromSource: 'window', at: '2026-10-11T03:12:00.000Z' }] });
+    renderUi(<CreditsUsage />);
+    const history = (await screen.findByText('Recent use')).closest('section')!;
+    await waitFor(() => expect(history).toHaveTextContent('Tailored resumes'));
+    expect(history).toHaveTextContent('Oct 10, 2026, 11:12 PM');
+    expect(history.textContent).not.toMatch(/Oct 11/);
+  });
+
+  it('a practice interview shows under recent use with the credits it took', async () => {
+    api.getCredits.mockResolvedValue(creditsResponse({}, { balance: 0.25 }));
+    api.getCreditHistory.mockResolvedValue({ items: [{ id: 'm1', bucket: 'practice', amount: 0.75, sku: null, fromSource: 'mock_credit', at: '2026-10-10T09:00:00.000Z' }] });
+    renderUi(<CreditsUsage />);
+    const history = (await screen.findByText('Recent use')).closest('section')!;
+    await waitFor(() => expect(history).toHaveTextContent('Practice interviews'));
+    expect(history).toHaveTextContent('0.75 used');
+    expect(history).not.toHaveTextContent('Nothing used yet.');
+  });
+
   it('practice unknown → "—"; history empty state', async () => {
     api.getCredits.mockResolvedValue(creditsResponse({}, null));
     renderUi(<CreditsUsage />);

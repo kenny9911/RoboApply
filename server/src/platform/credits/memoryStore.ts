@@ -123,6 +123,7 @@ export function createMemoryCreditStore(seed: { grants?: Partial<MemoryGrant>[];
         row.fromSource = fromSource;
         row.windowKey = windowKey;
         undo.push(() => Object.assign(row, before));
+        return { ...row };
       },
       async settleLedger(id, to, now, refId) {
         await tick();
@@ -135,23 +136,25 @@ export function createMemoryCreditStore(seed: { grants?: Partial<MemoryGrant>[];
         undo.push(() => Object.assign(row, before));
         return { ...row };
       },
-      async ensureWindow(userId, bucket, windowKey) {
-        await tick();
-        if (findWindow(userId, bucket, windowKey)) return;
-        const w: MemoryWindow = { userId, bucket, windowKey, used: 0, reserved: 0 };
-        windows.push(w);
-        undo.push(() => {
-          const i = windows.indexOf(w);
-          if (i >= 0 && w.used === 0 && w.reserved === 0) windows.splice(i, 1);
-        });
-      },
       async reserveWindow(userId, bucket, windowKey, units, cap) {
         await tick();
-        const w = findWindow(userId, bucket, windowKey);
-        if (!w || w.used + w.reserved + units > cap) return false;
-        w.reserved += units;
+        const existing = findWindow(userId, bucket, windowKey);
+        if (!existing) {
+          // Like the Postgres statement: the row is created already holding the units, only when they fit.
+          if (units > cap) return false;
+          const created: MemoryWindow = { userId, bucket, windowKey, used: 0, reserved: units };
+          windows.push(created);
+          undo.push(() => {
+            created.reserved -= units;
+            const i = windows.indexOf(created);
+            if (i >= 0 && created.used === 0 && created.reserved === 0) windows.splice(i, 1);
+          });
+          return true;
+        }
+        if (existing.used + existing.reserved + units > cap) return false;
+        existing.reserved += units;
         undo.push(() => {
-          w.reserved -= units;
+          existing.reserved -= units;
         });
         return true;
       },
