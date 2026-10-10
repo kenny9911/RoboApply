@@ -70,6 +70,7 @@ import {
 } from '../billing/sessionCost.js';
 import { getTaskModel } from '../../lib/llm/llmTaskSettings.js';
 import { gateMockInterview } from '../../lib/mockCreditService.js';
+import { getCurrentBrandOrDefault } from '../../platform/brand/brandContext.js';
 import type {
   InterviewMode,
   InterviewSource,
@@ -233,6 +234,22 @@ export interface CreateSessionInput {
   /** 'parley' runs this session on the Parley pilot transport (see
    *  parley/parleyConfig.ts); omitted = LiveKit. Fixed for the session's life. */
   transport?: 'parley';
+  /**
+   * WP-43: practise for one of our jobs. The job is loaded server-side and
+   * must belong to `market` (a job from the other market, or someone else's
+   * private import, answers 404 — PracticeJobNotFoundError). Its title and
+   * posting fill `role` / `jdText` when the caller left them empty.
+   */
+  jobId?: string | null;
+  /** The requesting brand's market; defaults to the current brand context. */
+  market?: PracticeMarket;
+  /**
+   * WP-43 / H8: what the user asked to record for THIS session. Recording is
+   * off unless asked AND backed by a live `interview_recording` consent
+   * (`interview_video` as well for the camera). External API sessions take
+   * the tenant's flag as their attestation. Omitted = no recording.
+   */
+  recording?: { audio?: boolean; video?: boolean };
 }
 
 export interface PrepareSessionParams {
@@ -294,10 +311,17 @@ export class InterviewSessionService {
   // ─── Create ─────────────────────────────────────────────────────────────
 
   async createSession(input: CreateSessionInput): Promise<InterviewSession> {
-    const jdText = (input.jdText ?? '').trim().slice(0, 8000) || undefined;
+    const source: InterviewSource = input.source ?? 'roboapply';
+    // WP-43: a job-based practice loads the job first, so a job from another
+    // market (or another user's private import) is a 404 before any credit
+    // check or write.
+    const jobId = typeof input.jobId === 'string' ? input.jobId.trim() : '';
+    const job = jobId ? await loadPracticeJobOrThrow(input.userId, jobId, input.market) : null;
+
+    const jdText = ((input.jdText ?? '').trim() || job?.jdText || '').slice(0, 8000) || undefined;
     // When the candidate pasted a JD without picking a role, seed the role from
     // the JD so the session/report/recents never show an empty title.
-    const role = (input.role ?? '').trim() || (jdText ? inferRoleFromJd(jdText) : '');
+    const role = (input.role ?? '').trim() || job?.title || (jdText ? inferRoleFromJd(jdText) : '');
     const persona = (input.personaId && findPersona(input.personaId)) || DEFAULT_PERSONA;
     const type = (input.interviewType && findType(input.interviewType)) || DEFAULT_TYPE;
     const mode: InterviewMode = input.mode === 'video' ? 'video' : 'voice';
@@ -309,7 +333,6 @@ export class InterviewSessionService {
     // Runs BEFORE anything is persisted so a credit-less user never gets a
     // session (or blueprint spend). Throws InterviewInsufficientCreditsError →
     // 402 with an upsell payload.
-    const source: InterviewSource = input.source ?? 'roboapply';
     if (source === 'roboapply' && !input.creditExempt) {
       const afford = await gateMockInterview(input.userId, durationMinutes);
       if (!afford.ok) {
@@ -341,6 +364,28 @@ export class InterviewSessionService {
       ...(input.creditExempt ? { creditExempt: true } : {}),
       ...(input.transport === 'parley' ? { transport: 'parley' as const } : {}),
     };
+    // H8: decide recording now, from the consent ledger — never from the env
+    // default alone. getConnection starts egress only when this says so.
+    const recording = await resolvePracticeRecording({
+      userId: input.userId,
+      source,
+      mode,
+      requested: input.recording,
+    });
+    const practice: PracticeMeta | null =
+      job || recording.audio
+        ? {
+            v: 1,
+            jobId: job?.id ?? null,
+            jobTitle: job?.title ?? null,
+            companyName: job?.companyName ?? null,
+            recording,
+          }
+        : null;
+    const liveMetrics: Record<string, unknown> = {
+      ...(Object.keys(control).length > 0 ? { control } : {}),
+      ...(practice ? { practice } : {}),
+    };
 
     // C1: persist immediately as 'preparing'. Blueprint + prompt generation
     // (Tavily + one LLM call, often a minute or more) runs in prepareSession().
@@ -364,8 +409,8 @@ export class InterviewSessionService {
         roomName,
         status: 'preparing',
         expiresAt,
-        ...(Object.keys(control).length > 0
-          ? { liveMetrics: { control } as unknown as object }
+        ...(Object.keys(liveMetrics).length > 0
+          ? { liveMetrics: liveMetrics as unknown as object }
           : {}),
       },
     });
@@ -383,6 +428,8 @@ export class InterviewSessionService {
       callbackOrigin: input.callbackBaseUrl ?? undefined,
       apiKeyId: input.apiKeyId ?? undefined,
       transport: input.transport,
+      jobId: job?.id,
+      recording: recording.audio ? (recording.video ? 'audio+video' : 'audio') : 'off',
       requestId: input.requestId,
     });
     return created;
@@ -678,13 +725,18 @@ export class InterviewSessionService {
       // failed egress start never writes. startRecordingInBackground persists
       // key + mime only once egress actually starts; the egress_ended webhook
       // (handleEgressEnded) stays the completion source of truth.
-      if (isRecordingEnabled() && interviewR2Storage.isConfigured()) {
+      //
+      // H8 (WP-43): the env switch and storage are necessary, never
+      // sufficient. Egress starts only for a session whose create-time
+      // consent check said so; video frames only with the second opt-in.
+      const consented = readPracticeMeta(session.liveMetrics)?.recording ?? NO_RECORDING;
+      if (consented.audio && isRecordingEnabled() && interviewR2Storage.isConfigured()) {
         recording = true;
         void this.startRecordingInBackground(
           session.id,
           session.roomName,
           interviewR2Storage.recordingKey(session.id, 'mp4'),
-          mode,
+          consented.video && mode === 'video' ? 'video' : 'voice',
         );
       }
 
@@ -1137,8 +1189,10 @@ export class InterviewSessionService {
   async handleEgressEnded(params: { egressId?: string; roomName?: string; sizeBytes?: number; durationSec?: number; location?: string }): Promise<void> {
     const where = params.egressId ? { egressId: params.egressId } : params.roomName ? { roomName: params.roomName } : null;
     if (!where) return;
-    const session = await prisma.interviewSession.findFirst({ where, select: { id: true, mode: true, recordingKey: true } });
+    const session = await prisma.interviewSession.findFirst({ where, select: { id: true, mode: true, recordingKey: true, liveMetrics: true } });
     if (!session) return;
+    // A video session recorded without the camera opt-in is audio-only (H8).
+    const recordedMode = session.mode === 'video' && readPracticeMeta(session.liveMetrics)?.recording.video ? 'video' : 'voice';
     // This webhook is the completion source of truth: a non-empty file result
     // means the recording really exists in R2, so backfill recordingKey if the
     // background-start persist was lost (restart between egress start and the
@@ -1150,7 +1204,7 @@ export class InterviewSessionService {
         recordingBytes: typeof params.sizeBytes === 'number' ? params.sizeBytes : undefined,
         recordingDurationSec: typeof params.durationSec === 'number' ? params.durationSec : undefined,
         recordingKey: session.recordingKey ?? (producedFile ? interviewR2Storage.recordingKey(session.id, 'mp4') : undefined),
-        recordingMimeType: session.recordingKey || producedFile ? recordingMimeForMode(session.mode) : undefined,
+        recordingMimeType: session.recordingKey || producedFile ? recordingMimeForMode(recordedMode) : undefined,
       },
     });
     // Meter the recording's egress + storage cost (no-op until a rate is set).
@@ -1357,6 +1411,13 @@ export class InterviewSessionService {
     logger.info('INTERVIEW_ENGINE_SESSION', 'session finalized', {
       sessionId, overall: score.overall, turns: turns.length, durationSec,
     });
+
+    // WP-43: a finished candidate practice ticks "Do a practice interview" on
+    // the getting-started checklist and the job's "Practiced" step. Only the
+    // finalize claim winner reaches this line; the hook is idempotent anyway.
+    if (updated.source === 'roboapply') {
+      void this.markPracticeCompleted(updated).catch(() => undefined);
+    }
 
     // Phase B: LLM enrichment, FIRE-AND-FORGET. The session is already
     // 'completed' with a usable deterministic report; this PATCHes the rich,
@@ -1816,6 +1877,212 @@ export class InterviewSessionService {
     return this.loadOwned(userId, sessionId, apiKeyId);
   }
 
+  // ─── Practice from a job (WP-43) ─────────────────────────────────────────
+
+  /**
+   * A finished candidate practice: tick the getting-started checklist step
+   * `practice` (growth.markChecklistStep, idempotent there) and stamp the
+   * session as completed for its job, which is what the job's "Practiced"
+   * step reads (practicedJobs). Never throws.
+   *
+   * Order: `completedAt` is stamped first (atomic jsonb merge, so concurrent
+   * telemetry writers to liveMetrics never lose their update), then growth is
+   * told, and only after growth succeeded is `checklistMarkedAt` claimed with
+   * a conditional merge. A transient growth failure leaves no claim, so a
+   * later run (another lifecycle event, the reconcile cron) retries it.
+   */
+  async markPracticeCompleted(session: Pick<InterviewSession, 'id' | 'userId' | 'status' | 'source'>): Promise<boolean> {
+    if (session.status !== 'completed' || session.source !== 'roboapply') return false;
+    try {
+      const fresh = await prisma.interviewSession.findUnique({
+        where: { id: session.id },
+        select: { liveMetrics: true, endedAt: true },
+      });
+      if (!fresh) return false;
+      const meta = readPracticeMeta(fresh.liveMetrics);
+      if (meta?.checklistMarkedAt) return false;
+      return await completePractice({
+        target: 'live',
+        sessionId: session.id,
+        userId: session.userId,
+        jobId: meta?.jobId ?? null,
+        completedAt: meta?.completedAt ? null : (fresh.endedAt ?? new Date()).toISOString(),
+      });
+    } catch (err) {
+      logger.warn('INTERVIEW_ENGINE_SESSION', 'practice completion hook failed', {
+        sessionId: session.id, error: err instanceof Error ? err.message : String(err),
+      });
+      return false;
+    }
+  }
+
+  /** What the report needs beyond the session detail: the job it was for and the recording consent. */
+  async getPracticeInfo(params: { sessionId: string; userId: string }): Promise<PracticeSessionInfo> {
+    const session = await this.loadOwned(params.userId, params.sessionId);
+    const meta = readPracticeMeta(session.liveMetrics);
+    return {
+      sessionId: session.id,
+      status: session.status,
+      job: meta?.jobId
+        ? { id: meta.jobId, title: meta.jobTitle, companyName: meta.companyName }
+        : null,
+      recording: {
+        consented: meta?.recording.audio === true,
+        video: meta?.recording.video === true,
+        available: !!session.recordingKey,
+      },
+      completedAt: session.status === 'completed' ? (meta?.completedAt ?? session.endedAt?.toISOString() ?? null) : null,
+    };
+  }
+
+  /**
+   * The job's "Practiced" step: for each of `jobIds`, the end time of the
+   * user's latest completed practice for that job (absent = not practised).
+   * Counts live (voice/video) sessions and written practices (GoApply without
+   * voice). Seam for the job checklist (WP-34) and the tracker (WP-38).
+   */
+  async practicedJobs(userId: string, jobIds: string[]): Promise<Record<string, string>> {
+    const ids = [...new Set(jobIds.map((id) => (typeof id === 'string' ? id.trim() : '')).filter(Boolean))].slice(0, 100);
+    if (ids.length === 0) return {};
+    const [rows, written] = await Promise.all([
+      prisma.interviewSession.findMany({
+        where: {
+          userId,
+          source: 'roboapply',
+          status: 'completed',
+          OR: ids.map((id) => ({ liveMetrics: { path: ['practice', 'jobId'], equals: id } })),
+        },
+        select: { liveMetrics: true, endedAt: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 500,
+      }),
+      practiceDeps.findTextPracticesForJobs(userId, ids).catch(() => [] as TextPracticeRow[]),
+    ]);
+    const out: Record<string, string> = {};
+    const keepLatest = (jobId: string | null, at: string | null | undefined) => {
+      if (!jobId || !at || !ids.includes(jobId)) return;
+      if (!out[jobId] || out[jobId] < at) out[jobId] = at;
+    };
+    for (const row of rows) {
+      const meta = readPracticeMeta(row.liveMetrics);
+      keepLatest(meta?.jobId ?? null, (row.endedAt ?? row.createdAt).toISOString());
+    }
+    for (const row of written) {
+      // A written practice counts once it was answered and scored (completedAt stamp).
+      const meta = readTextPracticeMeta(row.blueprint);
+      keepLatest(meta?.jobId ?? null, meta?.completedAt ?? null);
+    }
+    return out;
+  }
+
+  // ─── Written practice (WP-43; GoApply without `ai.interviewVoice`) ────────
+  //
+  // First-party wrappers over the existing text interview (RAMockService).
+  // The route checks the brand gate (phone, aiAllowed) before any of these
+  // run. What they add over the bare text interview: the job loaded
+  // server-side (market check) seeds the role; the session is metered like a
+  // live practice (gate at start, pro-rated debit when scored; the first free
+  // practice is topped up by the route before the gate); and an answered,
+  // scored practice ticks the checklist and the job's "Practiced" step once.
+
+  async startTextPractice(input: TextPracticeStartInput): Promise<TextPracticeStartResult> {
+    const durationMinutes = clampTextMinutes(input.durationMinutes);
+    if (!input.creditExempt) {
+      const afford = await practiceDeps.gatePractice(input.userId, durationMinutes);
+      if (!afford.ok) {
+        logger.info('INTERVIEW_ENGINE_SESSION', 'written practice blocked — insufficient credits', {
+          userId: input.userId, plannedDurationMinutes: durationMinutes, balance: afford.balance, required: afford.required,
+        });
+        throw new InterviewInsufficientCreditsError(afford);
+      }
+    }
+    const job = input.job;
+    // The job's title (and company) is the role the interviewer plans for.
+    // RAMockService takes no posting text yet (request to WP-66/INT).
+    const role = job
+      ? `${job.title}${job.companyName ? ` (${job.companyName})` : ''}`.slice(0, 200)
+      : (input.role ?? '').trim().slice(0, 200);
+    const started = await practiceDeps.textStart(
+      input.userId,
+      {
+        role,
+        interviewerId: input.interviewerId,
+        typeId: input.typeId,
+        format: 'voice',
+        language: input.language,
+        durationMinutes,
+      },
+      input.locale,
+    );
+    const meta: TextPracticeMeta = {
+      v: 1,
+      kind: 'text',
+      jobId: job?.id ?? null,
+      jobTitle: job?.title ?? null,
+      companyName: job?.companyName ?? null,
+      creditExempt: input.creditExempt === true,
+    };
+    // Tag the row as a first-party practice (the job, the metering rule). A
+    // lost tag only loses the "Practiced" step, so it is best-effort.
+    await practiceDeps.mergePracticeMeta('text', started.sessionId, meta as unknown as Record<string, unknown>).catch((err) => {
+      logger.warn('INTERVIEW_ENGINE_SESSION', 'written practice tag failed', {
+        sessionId: started.sessionId, error: err instanceof Error ? err.message : String(err),
+      });
+      return false;
+    });
+    return { ...started, jobId: meta.jobId };
+  }
+
+  async textPracticeTurn(input: { userId: string; sessionId: string; answer: string; questionIndex: number; locale?: string }) {
+    const row = await practiceDeps.findTextPractice(input.userId, input.sessionId);
+    if (!row || !readTextPracticeMeta(row.blueprint)) throw new InterviewNotFoundError();
+    return practiceDeps.textTurn(
+      input.userId,
+      { sessionId: input.sessionId, answer: input.answer, questionIndex: input.questionIndex },
+      input.locale,
+    );
+  }
+
+  /**
+   * Score a written practice. When at least one question was answered it
+   * counts as a practice: debit the pro-rated credits (idempotent per
+   * session, capped at what the start gate authorised), stamp it completed
+   * for its job and tick the checklist step once.
+   */
+  async scoreTextPractice(input: { userId: string; sessionId: string }): Promise<TextPracticeScoreResult> {
+    const row = await practiceDeps.findTextPractice(input.userId, input.sessionId);
+    const meta = row ? readTextPracticeMeta(row.blueprint) : null;
+    if (!row || !meta) throw new InterviewNotFoundError();
+    const score = await practiceDeps.textScore(input.userId, input.sessionId);
+    const answered = countTextAnswers(row.transcript) > 0;
+    if (answered) {
+      if (!meta.creditExempt) {
+        await practiceDeps
+          .debitPractice({
+            userId: input.userId,
+            sessionId: input.sessionId,
+            durationSec: Math.max(1, Math.round(score.durationMinutes)) * 60,
+            plannedDurationMinutes: row.plannedDurationMinutes,
+          })
+          .catch((err) => {
+            logger.warn('INTERVIEW_ENGINE_SESSION', 'written practice debit failed', {
+              sessionId: input.sessionId, error: err instanceof Error ? err.message : String(err),
+            });
+          });
+      }
+      if (!meta.checklistMarkedAt) {
+        await completePractice({
+          target: 'text',
+          sessionId: input.sessionId,
+          userId: input.userId,
+          jobId: meta.jobId,
+          completedAt: meta.completedAt ? null : new Date().toISOString(),
+        });
+      }
+    }
+    return { ...score, practiceCounted: answered, jobId: meta.jobId };
+  }
+
   // ─── Internals ──────────────────────────────────────────────────────────
 
   /**
@@ -1909,6 +2176,566 @@ function renderTranscriptText(turns: TranscriptTurn[], candidateName: string): s
     .filter((t) => !t.interim)
     .map((t) => `${t.role === 'candidate' ? candidateName : t.role === 'system' ? 'System' : 'Interviewer'}: ${t.text}`)
     .join('\n\n');
+}
+
+// ─── Practice from a job: jobs, resumes, consent, first free practice (WP-43) ──
+//
+// Narrow typed adapters over the rows WP-43 reads. The practice facts live in
+// `liveMetrics.practice` (PracticeMeta) until the schema carries first-class
+// columns (Schema request WP-43-S1: InterviewSession.jobId / recordingConsent).
+
+export type PracticeMarket = 'intl' | 'cn';
+
+export interface PracticeRecordingChoice {
+  audio: boolean;
+  video: boolean;
+}
+
+export const NO_RECORDING: PracticeRecordingChoice = Object.freeze({ audio: false, video: false }) as PracticeRecordingChoice;
+
+/** `liveMetrics.practice` — written at create, stamped at completion. */
+export interface PracticeMeta {
+  v: 1;
+  jobId: string | null;
+  jobTitle: string | null;
+  companyName: string | null;
+  /** The recording the user consented to for this session (H8). */
+  recording: PracticeRecordingChoice;
+  completedAt?: string;
+  checklistMarkedAt?: string;
+}
+
+export interface PracticeSessionInfo {
+  sessionId: string;
+  status: string;
+  job: { id: string; title: string | null; companyName: string | null } | null;
+  /** consented=false renders "Recording off" on the report. */
+  recording: { consented: boolean; video: boolean; available: boolean };
+  completedAt: string | null;
+}
+
+/** Read `liveMetrics.practice`; null when the session has none (= no job, no recording). */
+export function readPracticeMeta(liveMetrics: unknown): PracticeMeta | null {
+  const raw = asLiveMetrics(liveMetrics).practice;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const p = raw as Record<string, unknown>;
+  const rec = p.recording && typeof p.recording === 'object' ? (p.recording as Record<string, unknown>) : {};
+  const audio = rec.audio === true;
+  const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
+  return {
+    v: 1,
+    jobId: str(p.jobId),
+    jobTitle: str(p.jobTitle),
+    companyName: str(p.companyName),
+    recording: { audio, video: audio && rec.video === true },
+    ...(str(p.completedAt) ? { completedAt: str(p.completedAt)! } : {}),
+    ...(str(p.checklistMarkedAt) ? { checklistMarkedAt: str(p.checklistMarkedAt)! } : {}),
+  };
+}
+
+/** A job id that is unknown, from the other market, or someone else's private import. */
+export class PracticeJobNotFoundError extends InterviewNotFoundError {
+  readonly code = 'job_not_found' as const;
+  constructor() {
+    super();
+    this.name = 'PracticeJobNotFoundError';
+  }
+}
+
+export interface PracticeJob {
+  id: string;
+  title: string;
+  companyName: string;
+  location: string | null;
+  /** The posting as plain text (≤ 8000 chars), used as the interview brief. */
+  jdText: string;
+  /** Closed or archived postings still work for practice; the UI says so. */
+  closed: boolean;
+}
+
+export interface PracticeJobRow {
+  id: string;
+  title: string;
+  companyName: string;
+  location: string | null;
+  description: string;
+  descriptionPlain: string;
+  market: string;
+  visibility: string;
+  ownerUserId: string | null;
+  archivedAt: Date | null;
+  closedAt: Date | null;
+}
+
+export type PracticeResumeKind = 'chosen' | 'tailored' | 'primary' | 'latest';
+
+export interface PracticeResumeRow {
+  id: string;
+  name: string;
+  resumeMarkdown: string;
+  kind: PracticeResumeKind;
+}
+
+export interface PracticeUserRow {
+  brand: string;
+  name: string | null;
+  emailVerified: boolean;
+  emailVerifiedAt: Date | null;
+  emailIsPlaceholder: boolean;
+  phoneE164: string | null;
+  phoneVerifiedAt: Date | null;
+}
+
+export type PracticeConsentType = 'interview_recording' | 'interview_video';
+export type FirstPracticeGrantReason = 'email_verified' | 'phone_verified';
+export type FirstPracticeGrantStatus = 'granted' | 'already_granted' | 'in_progress' | 'no_profile' | 'failed';
+
+export interface PracticeDeps {
+  findJob(jobId: string): Promise<PracticeJobRow | null>;
+  findResume(userId: string, opts: { resumeId?: string | null; jobId?: string | null }): Promise<PracticeResumeRow | null>;
+  findUser(userId: string): Promise<PracticeUserRow | null>;
+  hasConsent(userId: string, type: PracticeConsentType): Promise<boolean>;
+  markChecklistStep(userId: string, step: 'practice'): Promise<unknown>;
+  grantPracticeCredit(userId: string, reason: FirstPracticeGrantReason, key: string): Promise<{ status: FirstPracticeGrantStatus }>;
+  currentMarket(): PracticeMarket;
+  /**
+   * Atomic jsonb merge of `patch` into the practice object of a live session
+   * (`InterviewSession.liveMetrics.practice`) or a written one
+   * (`RAMockSession.blueprint.practice`). With `unlessSet`, the merge is a
+   * claim: it applies only while that key is still absent. True = applied.
+   */
+  mergePracticeMeta(
+    target: PracticeTarget,
+    sessionId: string,
+    patch: Record<string, unknown>,
+    unlessSet?: 'checklistMarkedAt',
+  ): Promise<boolean>;
+  /** Practice credits: can the user afford a practice of this length? */
+  gatePractice(userId: string, plannedMinutes: number): Promise<{ ok: boolean; balance: number; required: number; tier: string }>;
+  /** Pro-rated practice debit, idempotent per session id. */
+  debitPractice(input: { userId: string; sessionId: string; durationSec: number; plannedDurationMinutes: number | null }): Promise<unknown>;
+  textStart(userId: string, input: TextStartCall, locale?: string): Promise<{ sessionId: string; questions: TextPracticeQuestion[] }>;
+  textTurn(
+    userId: string,
+    input: { sessionId: string; answer: string; questionIndex: number },
+    locale?: string,
+  ): Promise<{ nextIndex: number | null; turns: Array<{ who: 'them' | 'you'; text: string }>; coachTip: unknown }>;
+  textScore(userId: string, sessionId: string): Promise<TextPracticeScore>;
+  findTextPractice(userId: string, sessionId: string): Promise<TextPracticeRow | null>;
+  findTextPracticesForJobs(userId: string, jobIds: string[]): Promise<TextPracticeRow[]>;
+}
+
+export type PracticeTarget = 'live' | 'text';
+
+export interface TextStartCall {
+  role: string;
+  interviewerId: string;
+  typeId: string;
+  format: 'voice';
+  language?: string;
+  durationMinutes: number;
+}
+
+export interface TextPracticeQuestion {
+  q: string;
+  hint: string;
+  coachTip: { kind: 'good' | 'careful'; text: string } | null;
+}
+
+export interface TextPracticeScore {
+  overall: number;
+  delta: number | null;
+  breakdown: Array<{ key: string; value: number; note: string }>;
+  strengths: string[];
+  gaps: string[];
+  durationMinutes: number;
+}
+
+/** The RAMockSession columns the written practice reads. */
+export interface TextPracticeRow {
+  id: string;
+  blueprint: unknown;
+  transcript: unknown;
+  plannedDurationMinutes: number | null;
+  status: string;
+}
+
+/** `RAMockSession.blueprint.practice` — the first-party tag on a written practice. */
+export interface TextPracticeMeta {
+  v: 1;
+  kind: 'text';
+  jobId: string | null;
+  jobTitle: string | null;
+  companyName: string | null;
+  /** Admin runs are not metered (mirrors the live create). */
+  creditExempt: boolean;
+  completedAt?: string;
+  checklistMarkedAt?: string;
+}
+
+export interface TextPracticeStartInput {
+  userId: string;
+  role?: string;
+  interviewerId: string;
+  typeId: string;
+  language?: string;
+  durationMinutes?: number;
+  /** Loaded server-side and market-checked by the caller (loadPracticeJob). */
+  job: PracticeJob | null;
+  creditExempt?: boolean;
+  locale?: string;
+}
+
+export interface TextPracticeStartResult {
+  sessionId: string;
+  questions: TextPracticeQuestion[];
+  jobId: string | null;
+}
+
+export interface TextPracticeScoreResult extends TextPracticeScore {
+  /** True when the practice was answered: it counts for the checklist and the job. */
+  practiceCounted: boolean;
+  jobId: string | null;
+}
+
+/** Read `RAMockSession.blueprint.practice`; null for a text interview that is not a first-party practice. */
+export function readTextPracticeMeta(blueprint: unknown): TextPracticeMeta | null {
+  if (!blueprint || typeof blueprint !== 'object' || Array.isArray(blueprint)) return null;
+  const raw = (blueprint as Record<string, unknown>).practice;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const p = raw as Record<string, unknown>;
+  if (p.kind !== 'text') return null;
+  const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
+  return {
+    v: 1,
+    kind: 'text',
+    jobId: str(p.jobId),
+    jobTitle: str(p.jobTitle),
+    companyName: str(p.companyName),
+    creditExempt: p.creditExempt === true,
+    ...(str(p.completedAt) ? { completedAt: str(p.completedAt)! } : {}),
+    ...(str(p.checklistMarkedAt) ? { checklistMarkedAt: str(p.checklistMarkedAt)! } : {}),
+  };
+}
+
+const TEXT_MINUTES_DEFAULT = 20;
+
+function clampTextMinutes(value: unknown): number {
+  const n = typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : TEXT_MINUTES_DEFAULT;
+  return Math.min(120, Math.max(5, n));
+}
+
+/** Non-empty candidate answers in a written transcript (a skipped question is an empty answer). */
+function countTextAnswers(transcript: unknown): number {
+  if (!Array.isArray(transcript)) return 0;
+  return transcript.filter(
+    (turn) => !!turn && typeof turn === 'object' && (turn as { who?: unknown }).who === 'you'
+      && typeof (turn as { text?: unknown }).text === 'string' && ((turn as { text: string }).text).trim().length > 0,
+  ).length;
+}
+
+/**
+ * Shared completion for live and written practice: stamp `completedAt` (when
+ * given), tell growth, then claim `checklistMarkedAt`. Growth is idempotent,
+ * so a rare concurrent double call is harmless; the claim keeps later runs
+ * from calling it again. A growth failure leaves no claim (a retry may tick
+ * it). Returns true when this call made the claim.
+ */
+async function completePractice(input: {
+  target: PracticeTarget;
+  sessionId: string;
+  userId: string;
+  jobId: string | null;
+  completedAt: string | null;
+}): Promise<boolean> {
+  try {
+    if (input.completedAt) {
+      await practiceDeps.mergePracticeMeta(input.target, input.sessionId, { completedAt: input.completedAt });
+    }
+    await practiceDeps.markChecklistStep(input.userId, 'practice');
+    const claimed = await practiceDeps.mergePracticeMeta(
+      input.target,
+      input.sessionId,
+      { checklistMarkedAt: new Date().toISOString() },
+      'checklistMarkedAt',
+    );
+    if (claimed) {
+      logger.info('INTERVIEW_ENGINE_SESSION', 'practice completed: checklist step marked', {
+        sessionId: input.sessionId, userId: input.userId, target: input.target, jobId: input.jobId ?? undefined,
+      });
+    }
+    return claimed;
+  } catch (err) {
+    logger.warn('INTERVIEW_ENGINE_SESSION', 'practice completion hook failed', {
+      sessionId: input.sessionId, target: input.target, error: err instanceof Error ? err.message : String(err),
+    });
+    return false;
+  }
+}
+
+const PRACTICE_TABLES: Record<PracticeTarget, { table: string; column: string }> = {
+  live: { table: '"InterviewSession"', column: '"liveMetrics"' },
+  text: { table: '"RAMockSession"', column: '"blueprint"' },
+};
+
+const TEXT_PRACTICE_SELECT = { id: true, blueprint: true, transcript: true, plannedDurationMinutes: true, status: true } as const;
+
+/** Map the text interview's errors onto the engine's (404 / 422 via handleEngineError). */
+async function mapTextErrors<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (err) {
+    const name = err instanceof Error ? err.name : '';
+    if (name === 'MockSessionNotFoundError') throw new InterviewNotFoundError();
+    if (name === 'MockValidationError') throw new InterviewValidationError((err as Error).message);
+    throw err;
+  }
+}
+
+const RESUME_SELECT = { id: true, name: true, resumeMarkdown: true } as const;
+
+const defaultPracticeDeps: PracticeDeps = {
+  async findJob(jobId) {
+    return prisma.rAJob.findUnique({
+      where: { id: jobId },
+      select: {
+        id: true, title: true, companyName: true, location: true, description: true, descriptionPlain: true,
+        market: true, visibility: true, ownerUserId: true, archivedAt: true, closedAt: true,
+      },
+    });
+  },
+  async findResume(userId, { resumeId, jobId }) {
+    const base = { userId, deletedAt: null };
+    if (resumeId) {
+      const chosen = await prisma.rAResumeVariant.findFirst({ where: { ...base, id: resumeId }, select: RESUME_SELECT });
+      if (chosen) return { ...chosen, kind: 'chosen' };
+    }
+    if (jobId) {
+      const tailored = await prisma.rAResumeVariant.findFirst({
+        where: { ...base, targetJobId: jobId },
+        orderBy: { lastEditedAt: 'desc' },
+        select: RESUME_SELECT,
+      });
+      if (tailored) return { ...tailored, kind: 'tailored' };
+    }
+    const primary = await prisma.rAResumeVariant.findFirst({ where: { ...base, isPrimary: true }, select: RESUME_SELECT });
+    if (primary) return { ...primary, kind: 'primary' };
+    const latest = await prisma.rAResumeVariant.findFirst({
+      where: base,
+      orderBy: { lastEditedAt: 'desc' },
+      select: RESUME_SELECT,
+    });
+    return latest ? { ...latest, kind: 'latest' } : null;
+  },
+  async findUser(userId) {
+    return prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        brand: true, name: true, emailVerified: true, emailVerifiedAt: true, emailIsPlaceholder: true,
+        phoneE164: true, phoneVerifiedAt: true,
+      },
+    });
+  },
+  async hasConsent(userId, type) {
+    const { hasLiveConsent } = await import('../../platform/consent/index.js');
+    return hasLiveConsent(userId, type);
+  },
+  async markChecklistStep(userId, step) {
+    const growth = await import('../../features/growth/index.js');
+    return growth.markChecklistStep(userId, step);
+  },
+  async grantPracticeCredit(userId, reason, key) {
+    const credits = await import('../../platform/credits/index.js');
+    return credits.grantPracticeCredit(userId, reason, key);
+  },
+  currentMarket() {
+    return getCurrentBrandOrDefault().market === 'cn' ? 'cn' : 'intl';
+  },
+  async mergePracticeMeta(target, sessionId, patch, unlessSet) {
+    const { table, column } = PRACTICE_TABLES[target];
+    // One statement: concurrent writers to the same column (worker metrics,
+    // client events, lifecycle) keep their keys; the WHERE is the claim.
+    // A missing column, or a JSON null / non-object, starts from {}.
+    const base = `(CASE WHEN jsonb_typeof(${column}) = 'object' THEN ${column} ELSE '{}'::jsonb END)`;
+    const practice = `(CASE WHEN jsonb_typeof(${column} -> 'practice') = 'object' THEN ${column} -> 'practice' ELSE '{}'::jsonb END)`;
+    const claim = unlessSet ? ` AND (${column} -> 'practice' ->> '${unlessSet}') IS NULL` : '';
+    const count = await prisma.$executeRawUnsafe(
+      `UPDATE ${table}
+          SET ${column} = jsonb_set(${base}, '{practice}', ${practice} || $2::jsonb, true)
+        WHERE id = $1${claim}`,
+      sessionId,
+      JSON.stringify(patch),
+    );
+    return count === 1;
+  },
+  async gatePractice(userId, plannedMinutes) {
+    return gateMockInterview(userId, plannedMinutes);
+  },
+  async debitPractice(input) {
+    const credits = await import('../../lib/mockCreditService.js');
+    return credits.debitForFinishedSession({ ...input, metadata: { practice: 'text' } });
+  },
+  async textStart(userId, input, locale) {
+    const { raMockService } = await import('../../roboapply/v2/services/RAMockService.js');
+    return mapTextErrors(() => raMockService.start(userId, input, locale));
+  },
+  async textTurn(userId, input, locale) {
+    const { raMockService } = await import('../../roboapply/v2/services/RAMockService.js');
+    return mapTextErrors(() => raMockService.nextTurn(userId, input, locale));
+  },
+  async textScore(userId, sessionId) {
+    const { raMockService } = await import('../../roboapply/v2/services/RAMockService.js');
+    return mapTextErrors(() => raMockService.score(userId, sessionId));
+  },
+  async findTextPractice(userId, sessionId) {
+    const id = (sessionId ?? '').trim();
+    if (!id) return null;
+    return prisma.rAMockSession.findFirst({ where: { id, userId }, select: TEXT_PRACTICE_SELECT });
+  },
+  async findTextPracticesForJobs(userId, jobIds) {
+    return prisma.rAMockSession.findMany({
+      where: {
+        userId,
+        status: 'complete',
+        OR: jobIds.map((id) => ({ blueprint: { path: ['practice', 'jobId'], equals: id } })),
+      },
+      select: TEXT_PRACTICE_SELECT,
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    });
+  },
+};
+
+let practiceDeps: PracticeDeps = defaultPracticeDeps;
+
+/** Test seam: override some practice dependencies (null restores the defaults). */
+export function setPracticeDeps(overrides: Partial<PracticeDeps> | null): void {
+  practiceDeps = overrides ? { ...defaultPracticeDeps, ...overrides } : defaultPracticeDeps;
+}
+
+/**
+ * The job a practice is for. 404 (PracticeJobNotFoundError) when it does not
+ * exist, belongs to the other market (a GoApply session never loads a
+ * RoboApply job and vice versa) or is another user's private import.
+ */
+export async function loadPracticeJob(userId: string, jobId: string, market?: PracticeMarket): Promise<PracticeJob | null> {
+  const id = jobId.trim();
+  if (!id || id.length > 64) return null;
+  const row = await practiceDeps.findJob(id);
+  if (!row) return null;
+  if (row.market !== (market ?? practiceDeps.currentMarket())) return null;
+  if (row.visibility !== 'public' && row.ownerUserId !== userId) return null;
+  const text = (row.descriptionPlain || row.description || '').trim();
+  return {
+    id: row.id,
+    title: row.title,
+    companyName: row.companyName,
+    location: row.location,
+    jdText: text.slice(0, 8000),
+    closed: !!(row.archivedAt || row.closedAt),
+  };
+}
+
+async function loadPracticeJobOrThrow(userId: string, jobId: string, market?: PracticeMarket): Promise<PracticeJob> {
+  const job = await loadPracticeJob(userId, jobId, market);
+  if (!job) throw new PracticeJobNotFoundError();
+  return job;
+}
+
+/** Résumé context sent to the interview brief: PII stripped, clipped to the blueprint's 2000 chars. */
+export const PRACTICE_RESUME_CONTEXT_CHARS = 2000;
+
+export interface PracticeResume {
+  id: string;
+  name: string;
+  kind: PracticeResumeKind;
+  /** Redacted and clipped; this exact text goes into the interview brief. */
+  context: string;
+}
+
+/** The resume to practise with: `resumeId`, else the job's tailored one, else the primary, else the latest. */
+export async function loadPracticeResume(
+  userId: string,
+  opts: { resumeId?: string | null; jobId?: string | null; knownValues?: string[] },
+): Promise<PracticeResume | null> {
+  const row = await practiceDeps.findResume(userId, { resumeId: opts.resumeId ?? null, jobId: opts.jobId ?? null });
+  if (!row) return null;
+  const { redactPii, LLM_PII_KINDS } = await import('../../platform/pii/index.js');
+  const redacted = redactPii(row.resumeMarkdown ?? '', {
+    kinds: LLM_PII_KINDS,
+    knownValues: (opts.knownValues ?? []).filter((v) => typeof v === 'string' && v.trim().length >= 2),
+  }).text;
+  return { id: row.id, name: row.name, kind: row.kind, context: redacted.trim().slice(0, PRACTICE_RESUME_CONTEXT_CHARS) };
+}
+
+/**
+ * H8: the recording this session may make. Off unless the user asked for it
+ * AND their newest `interview_recording` record is a grant; the camera also
+ * needs `interview_video` and a video session. External API sessions carry
+ * the tenant's own attestation. A failed consent lookup fails closed.
+ */
+export async function resolvePracticeRecording(input: {
+  userId: string;
+  source: InterviewSource;
+  mode: InterviewMode;
+  requested?: { audio?: boolean; video?: boolean } | null;
+}): Promise<PracticeRecordingChoice> {
+  const wantAudio = input.requested?.audio === true;
+  if (!wantAudio) return NO_RECORDING;
+  const wantVideo = input.requested?.video === true && input.mode === 'video';
+  if (input.source === 'external') return { audio: true, video: wantVideo };
+  if (input.source !== 'roboapply') return NO_RECORDING;
+  const live = async (type: PracticeConsentType) => {
+    try {
+      return await practiceDeps.hasConsent(input.userId, type);
+    } catch {
+      return false;
+    }
+  };
+  if (!(await live('interview_recording'))) return NO_RECORDING;
+  return { audio: true, video: wantVideo ? await live('interview_video') : false };
+}
+
+export interface FirstPracticeState {
+  /** How this brand verifies before the first free practice: email (RoboApply) or phone (GoApply). */
+  method: 'email' | 'phone';
+  verified: boolean;
+  /** The grant result when verified (idempotent; null when not verified or unknown). */
+  grant: FirstPracticeGrantStatus | null;
+}
+
+/**
+ * Ruling C42: the first full practice is free after verification — email on
+ * RoboApply (WP-10 grants it when the link is clicked), phone on GoApply. This
+ * tops up the same idempotency key, so it never grants twice; it covers a
+ * GoApply phone verification (no grant at bind time yet) and a failed grant.
+ */
+export async function ensureFirstPracticeGrant(userId: string): Promise<FirstPracticeState> {
+  let user: PracticeUserRow | null = null;
+  try {
+    user = await practiceDeps.findUser(userId);
+  } catch {
+    user = null;
+  }
+  const method: 'email' | 'phone' = user?.brand === 'goapply' ? 'phone' : 'email';
+  if (!user) return { method, verified: false, grant: null };
+  const verified =
+    method === 'phone'
+      ? !!(user.phoneE164 && user.phoneVerifiedAt)
+      // emailVerified defaults to true for grandfathered rows; only an explicit
+      // verification (emailVerifiedAt) earns the free practice here.
+      : !!(user.emailVerified && user.emailVerifiedAt && !user.emailIsPlaceholder);
+  if (!verified) return { method, verified, grant: null };
+  const reason: FirstPracticeGrantReason = method === 'phone' ? 'phone_verified' : 'email_verified';
+  try {
+    const res = await practiceDeps.grantPracticeCredit(userId, reason, reason);
+    return { method, verified, grant: res.status };
+  } catch (err) {
+    logger.warn('INTERVIEW_ENGINE_SESSION', 'first practice grant failed', {
+      userId, error: err instanceof Error ? err.message : String(err),
+    });
+    return { method, verified, grant: 'failed' };
+  }
 }
 
 export const interviewSessionService = new InterviewSessionService();
