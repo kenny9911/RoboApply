@@ -1,6 +1,6 @@
 // roboapply/lib/api/interviewEngine.ts
 //
-// Typed client for the RoboHire Interview Engine — the real-time AI voice
+// Typed client for the Interview Engine — the real-time AI voice
 // interview backend (backend/src/interview-engine/*), mounted at
 // /api/v1/interview-engine. Uses the shared `roboApi` wrapper so it inherits
 // cookie + Bearer auth and the X-Robo-Locale header.
@@ -253,6 +253,8 @@ export interface IEReport {
   transcriptUrl: string | null;
 }
 
+/** The fields a session is created from. Sessions are created through
+ *  `practiceApi.create` (PracticeCreateBody), the one first-party create route. */
 export interface IECreateBody {
   role: string;
   /** Optional pasted job description — rewritten into the interview brief. */
@@ -388,6 +390,27 @@ export interface TextPracticeScore {
   strengths: string[];
   gaps: string[];
   durationMinutes: number;
+  /**
+   * GoApply only: the practice report block (communication / logic / story
+   * answers, STAR, filler words). Read it with `asCnPracticeReport`
+   * (components/features/practice-cn) and render `<CnReportView>`.
+   */
+  cn?: unknown;
+}
+
+/** GoApply AI-interview format: thinking and answer time per question, in question order. */
+export interface TextPracticeCnFormat {
+  formatId: string;
+  minutes: number;
+  questions: Array<{ prepSeconds: number; answerSeconds: number; story: boolean }>;
+}
+
+export interface TextPracticeStartResult {
+  sessionId: string;
+  questions: TextPracticeQuestion[];
+  jobId: string | null;
+  /** Present only when the practice runs the GoApply AI-interview format. */
+  cnFormat?: TextPracticeCnFormat | null;
 }
 
 export interface TextPracticeScoreResult extends TextPracticeScore {
@@ -398,7 +421,7 @@ export interface TextPracticeScoreResult extends TextPracticeScore {
 
 export const textPracticeApi = {
   start: (body: TextPracticeStartBody) =>
-    roboApi.post<{ sessionId: string; questions: TextPracticeQuestion[]; jobId: string | null }>(`${TEXT}/start`, body),
+    roboApi.post<TextPracticeStartResult>(`${TEXT}/start`, body),
   nextTurn: (body: { sessionId: string; answer: string; questionIndex: number }) =>
     roboApi.post<{ nextIndex: number | null; turns: TextPracticeTurn[]; coachTip: TextPracticeQuestion['coachTip'] }>(
       `${TEXT}/next-turn`,
@@ -522,9 +545,9 @@ export const interviewEngineApi = {
   catalog: () => roboApi.get<IECatalog>(`${BASE}/catalog`),
   preview: (body: IEPreviewBody) => roboApi.post<IEPreviewResponse>(`${BASE}/requirements/preview`, body),
   recent: () => roboApi.get<{ sessions: IESessionSummary[] }>(`${BASE}/sessions/recent`),
-  /** @deprecated WP-43: the practice setup creates through `practiceApi.create` (job, resume and
-   *  recording consent are resolved server-side). Kept for older callers; WP-75 removes it. */
-  create: (body: IECreateBody) => roboApi.post<{ session: IESessionDetail }>(`${BASE}/sessions`, body),
+  // Sessions are created through `practiceApi.create` only: the server loads
+  // the job, picks and redacts the resume and checks the recording consent.
+  // The old browser `POST /sessions` could do none of that and was removed.
   get: (id: string) => roboApi.get<{ session: IESessionDetail }>(`${BASE}/sessions/${encodeURIComponent(id)}`),
   connection: (id: string) =>
     roboApi.post<{ connection: IEConnection }>(`${BASE}/sessions/${encodeURIComponent(id)}/connection`, {}),

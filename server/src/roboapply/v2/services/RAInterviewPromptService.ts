@@ -40,6 +40,7 @@ import { raInterviewStrategyAgent } from '../agents/RAInterviewStrategyAgent.js'
 import { raInterviewTacticsAgent } from '../agents/RAInterviewTacticsAgent.js';
 import { RAInterviewQuestionsAgent } from '../agents/RAInterviewQuestionsAgent.js';
 import { getBrand } from '../../../platform/brand/index.js';
+import { assertNoPiInPayload } from '../../../platform/residency/egressPolicy.js';
 import { getCurrentBrandId } from '../../../lib/requestContext.js';
 import {
   CN_FORMAT_FOCUS_AREAS,
@@ -52,6 +53,9 @@ import {
   type CnScript,
   type CnSectionId,
 } from '../../../features/cn/interview/index.js';
+
+/** Where raSearchWeb sends its query (roboapply/v2/lib/raWebSearch.ts). */
+const WEB_SEARCH_URL = 'https://api.tavily.com/search';
 
 function resolvedInterviewModelLabel(): string {
   const taskModel = interviewGenModel();
@@ -381,11 +385,15 @@ export class RAInterviewPromptService {
     if (market !== 'cn') {
       try {
         const query = `${role || type.label} role requirements, key skills, and interview focus`;
+        // The search service takes job and role queries only, never personal
+        // information: a role text that carries an email, a phone number or an
+        // id number is not sent (the practice is then planned without web evidence).
+        assertNoPiInPayload({ brand: getCurrentBrandId() ?? 'roboapply', target: WEB_SEARCH_URL, payload: query.slice(0, 400) });
         const resp = await raSearchWeb(query, { maxResults: 5, requestId, signal });
         webEvidence = formatWebEvidence(resp);
         webSources = (resp?.results ?? []).slice(0, 5).map((r) => ({ title: r.title, url: r.url }));
       } catch {
-        /* raSearchWeb already swallows; belt-and-suspenders */
+        /* a refused query (personal information) or a failed search: no web evidence */
       }
     }
 

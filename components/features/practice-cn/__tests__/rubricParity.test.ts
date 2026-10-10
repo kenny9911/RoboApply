@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 
 import * as client from '../rubric';
+import * as clientFormat from '../format';
 import * as server from '../../../../server/src/features/cn/interview/index';
 import { ZH_BREAKDOWN, ZH_ENGINE_TRANSCRIPT, ZH_TEXT_TRANSCRIPT } from '../../../../server/src/features/cn/interview/__tests__/fixtures';
 
@@ -52,5 +53,45 @@ describe('rubric parity (client mirror = server)', () => {
         server.buildCnPracticeReport({ ...input, turns: server.normalizeCnTurns(rows) }),
       );
     }
+  });
+});
+
+// INT-09 — the format's id and length rule on the client (format.ts) equal the server's.
+describe('format parity (client mirror = server)', () => {
+  it('same id and the same 20–30 minute range, default 25', () => {
+    expect(clientFormat.CN_FORMAT_MIN_MINUTES).toBe(server.CN_FORMAT_MIN_MINUTES);
+    expect(clientFormat.CN_FORMAT_MAX_MINUTES).toBe(server.CN_FORMAT_MAX_MINUTES);
+    expect(clientFormat.CN_FORMAT_DEFAULT_MINUTES).toBe(server.CN_FORMAT_DEFAULT_MINUTES);
+    expect(clientFormat.isCnFormatType(server.CN_AI_INTERVIEW_FORMAT_ID)).toBe(true);
+    expect(clientFormat.isCnFormatType('behavioral')).toBe(false);
+    expect(clientFormat.isCnFormatType(null)).toBe(false);
+  });
+
+  it.each([null, undefined, Number.NaN, 0, 5, 19.4, 20, 22.5, 25, 30, 30.6, 45, 120])('same clamp for %j minutes', (minutes) => {
+    expect(clientFormat.clampCnFormatMinutes(minutes as number)).toBe(server.clampCnMinutes(minutes as number));
+  });
+
+  it('every length the setup offers already fits the format (so the server never re-times it)', () => {
+    for (const minutes of clientFormat.CN_FORMAT_DURATIONS) {
+      expect(server.fitsCnFormatMinutes(minutes)).toBe(true);
+      expect(server.usesCnFormat({ market: 'cn', typeId: server.CN_AI_INTERVIEW_FORMAT_ID, minutes })).toBe(true);
+    }
+    expect(clientFormat.plannedMinutesForType(server.CN_AI_INTERVIEW_FORMAT_ID, 60)).toBe(30);
+    expect(clientFormat.plannedMinutesForType('behavioral', 60)).toBe(60);
+  });
+
+  it('a timing is read only from a plan with one entry per question', () => {
+    const plan = { questions: [{ prepSeconds: 30, answerSeconds: 90 }, { prepSeconds: 60, answerSeconds: 150 }] };
+    expect(clientFormat.cnTimingFor(plan, 1, 2)).toEqual({ prepSeconds: 60, answerSeconds: 150 });
+    expect(clientFormat.cnTimingFor(plan, 0, 3)).toBeNull();
+    expect(clientFormat.cnTimingFor(plan, 5, 2)).toBeNull();
+    expect(clientFormat.cnTimingFor(null, 0, 2)).toBeNull();
+    expect(clientFormat.cnTimingFor({ questions: null }, 0, 0)).toBeNull();
+  });
+
+  it('a stored report block is recognised; anything else is not', () => {
+    const block = server.buildCnPracticeReport({ turns: [], breakdown: null, basis: 'text_checks', language: 'zh', now: '2026-10-10T00:00:00Z' });
+    expect(clientFormat.asCnPracticeReport(block)).toBe(block);
+    for (const bad of [null, undefined, 'x', {}, { version: 2 }, { version: 1, areas: [] }]) expect(clientFormat.asCnPracticeReport(bad)).toBeNull();
   });
 });

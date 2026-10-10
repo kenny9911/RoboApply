@@ -20,9 +20,14 @@
 //   - GoApply without voice offers the written practice with a one-line reason.
 //     It runs through the first-party practice routes: the server checks the
 //     GoApply gate, loads the job, meters credits and ticks the checklist.
-//   - The market-requirements preview (web search + LLM) is offered only
-//     where AI is allowed, and not on GoApply until a domestic search path
-//     exists (WP-63a).
+//   - The market-requirements preview (web search + LLM) is a RoboApply
+//     panel. The server refuses it without the AI gate and never searches the
+//     web for GoApply (no domestic search provider), so a GoApply preview
+//     would only restate the role: it is not offered there.
+//   - GoApply (WP-66): the catalog lists the AI-interview practice format
+//     first, under its own name (practiceCn.format.*); it runs 20–30 minutes,
+//     so only those lengths are offered and priced. Start asks WeChat once for
+//     the "your report is ready" notice (SubscribeOnTap; inside WeChat only).
 //   - The setup may grant the free first practice; the balance is refetched
 //     when it does, so Start is not left disabled.
 
@@ -46,6 +51,8 @@ import {
   setupNotices,
 } from '../../../components/features/practice';
 
+import { isCnFormatType, plannedMinutesForType, useLocalizeType } from '../../../components/features/practice-cn';
+import { SubscribeOnTap } from '../../../components/features/notify-cn';
 import { useMockCatalog } from '../../../hooks/useMockV3';
 import {
   PracticeSetupFlow,
@@ -110,7 +117,8 @@ function deriveRoleLabelFromJd(jd: string): string {
 
 export default function MockSetupPage() {
   const t = useTranslations('practice');
-  const { localizeRole, localizeType } = useMockRoleLabels();
+  const { localizeRole } = useMockRoleLabels();
+  const localizeType = useLocalizeType();
   const router = useRouter();
   const { user } = useAuth();
   const brand = useBrand();
@@ -344,7 +352,9 @@ export default function MockSetupPage() {
     [role, sourceMode, catalog],
   );
 
-  const durationMinutes = durationOverride ?? type?.minutes ?? DEFAULT_DURATION_MINUTES;
+  // GoApply's AI-interview practice runs 20–30 minutes: the length shown, priced
+  // and sent is the one the server will run (it clamps the same way).
+  const durationMinutes = plannedMinutesForType(type?.id, durationOverride ?? type?.minutes ?? DEFAULT_DURATION_MINUTES);
 
   // The effective role comes from EITHER the picked chip (browse) or the pasted
   // JD's working title — a single source of truth for launch + the LaunchBar.
@@ -402,6 +412,9 @@ export default function MockSetupPage() {
       null;
     const nextTypeId =
       recs?.typeIds[0] ??
+      // GoApply: a job post or pasted description starts on the AI-interview
+      // practice format (the catalog lists it only there); a role keeps its recommendation.
+      catalog.types.find((item) => isCnFormatType(item.id))?.id ??
       catalog.types.find((item) => item.id === 'behavioral')?.id ??
       catalog.types[0]?.id ??
       null;
@@ -650,6 +663,8 @@ export default function MockSetupPage() {
         ) : null
       }
       startLabel={textMode ? t('gate.startText') : undefined}
+      // GoApply inside WeChat: Start also asks, once, to be told when the report is ready.
+      wrapStart={(button) => <SubscribeOnTap template="report_ready">{button}</SubscribeOnTap>}
       categories={catalog.roleCategories}
       totalRoles={catalog.totalRoles}
       query={query}

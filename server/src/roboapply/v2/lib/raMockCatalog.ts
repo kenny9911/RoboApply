@@ -6,7 +6,9 @@
 // `roboapply/lib/fixtures/mockCatalog.ts` so `mock.catalog()` round-trips
 // against `MockCatalogResponse` with no change to the contract.
 //
-// `mock.catalog` returns RA_MOCK_CATALOG as-is. RAMockService also reads the
+// `mock.catalog` returns RA_MOCK_CATALOG as-is on RoboApply; GoApply gets the
+// same catalog with its AI-interview practice format listed first
+// (`catalogForMarket('cn')`, WP-66). RAMockService also reads the
 // interviewer + type lists here to:
 //   - validate `start({ interviewerId, typeId })`,
 //   - resolve `interviewerName` / `typeLabel` for recentSessions summaries,
@@ -599,14 +601,58 @@ export const RA_MOCK_CATALOG: RAMockCatalog = {
   types: RA_MOCK_TYPES,
 };
 
+// ─── Market catalogs (WP-66) ───────────────────────────────────────────────
+
+export type RAMockMarket = 'intl' | 'cn';
+
+/**
+ * The GoApply AI-interview practice format, listed first on the cn market
+ * only. A literal twin of the interview engine's market format
+ * (interview-engine/catalog/interviewFormats.ts `formatsAsTypes('cn')[0]`);
+ * this file keeps zero runtime imports, so a parity test holds the two equal.
+ * GoApply's UI shows its own label and description (practiceCn.format.*).
+ */
+export const RA_MOCK_CN_TYPE: RAMockType = {
+  id: 'cn_ai_interview',
+  label: 'AI Interview Practice',
+  sub: 'Timed one-way format: self-introduction, story questions, situational and structured-thinking questions',
+  minutes: 25,
+  suitedRoleCategories: ['All'],
+};
+
+/** Formats listed only on one market, market's own first. */
+const MARKET_TYPES: Record<RAMockMarket, RAMockType[]> = { intl: [], cn: [RA_MOCK_CN_TYPE] };
+
+/** The types a market lists: its own formats first, then the shared list. `intl` is RA_MOCK_TYPES itself. */
+export function typesForMarket(market: RAMockMarket = 'intl'): RAMockType[] {
+  const own = MARKET_TYPES[market] ?? [];
+  return own.length ? [...own, ...RA_MOCK_TYPES] : RA_MOCK_TYPES;
+}
+
+const RA_MOCK_CATALOG_CN: RAMockCatalog = { ...RA_MOCK_CATALOG, types: typesForMarket('cn') };
+
+/** The setup catalog a market sees. `intl` is RA_MOCK_CATALOG itself (unchanged). */
+export function catalogForMarket(market: RAMockMarket = 'intl'): RAMockCatalog {
+  return market === 'cn' ? RA_MOCK_CATALOG_CN : RA_MOCK_CATALOG;
+}
+
 // ─── Lookups ──────────────────────────────────────────────────────────────
 
 export function findInterviewer(id: string): RAMockInterviewer | undefined {
   return RA_MOCK_INTERVIEWERS.find((i) => i.id === id);
 }
 
-export function findType(id: string): RAMockType | undefined {
-  return RA_MOCK_TYPES.find((t) => t.id === id);
+/**
+ * A type by id. Without a market only the shared (intl) list is searched, as
+ * before; with one, the market's own formats are found too (a GoApply start).
+ */
+export function findType(id: string, market?: RAMockMarket): RAMockType | undefined {
+  return (market ? typesForMarket(market) : RA_MOCK_TYPES).find((t) => t.id === id);
+}
+
+/** A type a stored session ran, on whichever market (labels, follow-up turns). */
+export function findAnyType(id: string): RAMockType | undefined {
+  return findType(id) ?? MARKET_TYPES.cn.find((t) => t.id === id);
 }
 
 /** Display name for a session summary; falls back to the raw id. */
@@ -616,5 +662,5 @@ export function interviewerNameFor(id: string): string {
 
 /** Display label for a session summary; falls back to the raw id. */
 export function typeLabelFor(id: string): string {
-  return findType(id)?.label ?? id;
+  return findAnyType(id)?.label ?? id;
 }

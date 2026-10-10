@@ -14,6 +14,12 @@
 // credit balance. The interviewer's text and the result are AI output, so each
 // block carries AiGeneratedBadge (it renders only on GoApply). The score line
 // says what it is: a score of this practice, not a prediction.
+//
+// GoApply AI-interview format (WP-66): when the start returns the format's
+// plan, each question shows its thinking and answer time (CnQuestionTiming,
+// from the plan's numbers), and a score that carries the `cn` report block is
+// followed by the practice report (CnReportView): three areas, the STAR check
+// on story answers and filler-word counts. RoboApply gets neither.
 
 import { useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
 import { QueryClientContext } from '@tanstack/react-query';
@@ -21,8 +27,10 @@ import { useTranslations } from 'next-intl';
 
 import { Btn } from '../../v3/primitives/Btn';
 import { AiGeneratedBadge } from '../market';
+import { CnQuestionTiming, CnReportView, asCnPracticeReport, cnTimingFor } from '../practice-cn';
 import {
   textPracticeApi,
+  type TextPracticeCnFormat,
   type TextPracticeQuestion,
   type TextPracticeScore,
   type TextPracticeTurn,
@@ -67,6 +75,7 @@ export function TextPracticeRoom({
   const [phase, setPhase] = useState<Phase>('starting');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [questions, setQuestions] = useState<TextPracticeQuestion[]>([]);
+  const [cnFormat, setCnFormat] = useState<TextPracticeCnFormat | null>(null);
   const [index, setIndex] = useState(0);
   const [turns, setTurns] = useState<TextPracticeTurn[]>([]);
   const [answer, setAnswer] = useState('');
@@ -90,6 +99,7 @@ export function TextPracticeRoom({
       });
       setSessionId(res.sessionId);
       setQuestions(res.questions ?? []);
+      setCnFormat(res.cnFormat ?? null);
       setIndex(0);
       setTurns([]);
       setFinished((res.questions ?? []).length === 0);
@@ -147,6 +157,10 @@ export function TextPracticeRoom({
   }
 
   const current = questions[index] ?? null;
+  // GoApply AI-interview format: this question's timing, only when the plan matches the questions.
+  const timing = cnTimingFor(cnFormat, index, questions.length);
+  const cnReport = score ? asCnPracticeReport(score.cn) : null;
+  const hasInterviewerTurn = turns.some((turn) => turn.who === 'them');
 
   return (
     <section className={styles.room} aria-labelledby="text-practice-title">
@@ -171,6 +185,8 @@ export function TextPracticeRoom({
 
       {phase === 'answering' || phase === 'scoring' ? (
         <>
+          {/* The interviewer's replies are AI output: one label for the thread (GoApply). */}
+          {hasInterviewerTurn ? <AiGeneratedBadge /> : null}
           {turns.length > 0 ? (
             <ul className={styles.turns} aria-live="polite">
               {turns.map((turn, i) => (
@@ -187,6 +203,7 @@ export function TextPracticeRoom({
               <p className={styles.cardLabel}>{t('question', { n: index + 1, total: questions.length })}</p>
               <p className={styles.question}>{current.q}</p>
               <AiGeneratedBadge />
+              {timing ? <CnQuestionTiming prepSeconds={timing.prepSeconds} answerSeconds={timing.answerSeconds} /> : null}
               {current.hint ? <p className={styles.muted}>{t('hint')}: {current.hint}</p> : null}
               <label className={styles.cardLabel} htmlFor={answerId}>{t('answerLabel')}</label>
               <textarea
@@ -249,6 +266,9 @@ export function TextPracticeRoom({
           </div>
         </div>
       ) : null}
+
+      {/* GoApply: the practice report for this written practice (its blocks carry their own AI labels). */}
+      {phase === 'done' && cnReport ? <CnReportView report={cnReport} /> : null}
     </section>
   );
 }

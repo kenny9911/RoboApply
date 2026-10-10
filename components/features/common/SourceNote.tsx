@@ -51,6 +51,8 @@ export function sourceLabelKey(source: string): string {
     case 'user':
     case 'company_website':
     case 'dol_lca':
+    // Questions (or other facts) our own users shared and staff checked.
+    case 'user_reports':
       return source;
     case 'index':
     case 'aggregate':
@@ -103,7 +105,10 @@ export function SourceNote({ sourced, minSample = MIN_SAMPLE, sampleNoun = 'post
 
   const parts: ReactNode[] = [];
   const estimate = isEstimate(sourced);
-  const labelKey = sourceLabelKey(sourced.source);
+  // A source whose label the loaded bundle does not carry (a bundle older than
+  // the code during a deploy) reads "another source", never a raw key path.
+  const wanted = sourceLabelKey(sourced.source);
+  const labelKey = typeof t.has !== 'function' || t.has(`label.${wanted}`) ? wanted : 'other';
   parts.push(
     <span key="src">
       {t('source', { label: t(`label.${labelKey}`, { sourceName: SOURCE_NAMES[sourced.source] ?? '' }) })}

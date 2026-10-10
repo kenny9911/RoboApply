@@ -25,7 +25,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { getR2Creds, INTERVIEW_R2_PREFIX } from '../config.js';
+import { getR2Creds, INTERVIEW_R2_PREFIX, type R2Creds } from '../config.js';
 import { logger } from '../../services/LoggerService.js';
 
 const DEFAULT_PRESIGN_TTL_SEC = 3600; // 1h — playback links for the report page
@@ -34,9 +34,25 @@ function clampTtl(seconds: number): number {
   return Math.max(60, Math.min(24 * 3600, Math.floor(seconds)));
 }
 
+/**
+ * Cache key of an S3 client: endpoint + bucket + access key id (+ region and
+ * path style, which also change the client). The bucket name alone is not
+ * enough: two brands may each own a bucket of the same name on different
+ * stores (R2 for RoboApply, a mainland store for GoApply), and reusing the
+ * first brand's client would send the second brand's objects to the wrong
+ * store with the wrong credentials. The secret is never part of the key; a
+ * rotated secret under the same access key id rebuilds the client (compared
+ * separately).
+ */
+export function r2ClientCacheKey(creds: R2Creds): string {
+  return [creds.endpoint ?? '', creds.bucket, creds.accessKeyId, creds.region, creds.forcePathStyle ? 'path' : 'vhost'].join('\u0000');
+}
+
+/** One client per store; the two brands at most, plus a rotation or two. */
+const MAX_CACHED_CLIENTS = 8;
+
 export class InterviewR2Storage {
-  private client: S3Client | null = null;
-  private bucket: string | null = null;
+  private readonly clients = new Map<string, { client: S3Client; secret: string }>();
 
   isConfigured(): boolean {
     return getR2Creds() !== null;
@@ -175,19 +191,35 @@ export class InterviewR2Storage {
     return getSignedUrl(client, cmd, { expiresIn: clampTtl(params.expiresInSec ?? DEFAULT_PRESIGN_TTL_SEC) });
   }
 
+  /** The cached client for the current brand's store (test seam: client identity per store). */
+  clientForCurrentBrand(): S3Client {
+    return this.resolve().client;
+  }
+
   private resolve(): { client: S3Client; bucket: string } {
     const creds = getR2Creds();
     if (!creds) throw new Error('Interview Engine R2 storage is not configured (S3_BUCKET / S3 credentials missing)');
-    if (!this.client || this.bucket !== creds.bucket) {
-      this.client = new S3Client({
-        region: creds.region,
-        endpoint: creds.endpoint,
-        forcePathStyle: creds.forcePathStyle,
-        credentials: { accessKeyId: creds.accessKeyId, secretAccessKey: creds.secretAccessKey },
-      });
-      this.bucket = creds.bucket;
+    const key = r2ClientCacheKey(creds);
+    let entry = this.clients.get(key);
+    if (!entry || entry.secret !== creds.secretAccessKey) {
+      entry?.client.destroy();
+      if (!entry && this.clients.size >= MAX_CACHED_CLIENTS) {
+        const oldest = this.clients.keys().next().value as string;
+        this.clients.get(oldest)?.client.destroy();
+        this.clients.delete(oldest);
+      }
+      entry = {
+        client: new S3Client({
+          region: creds.region,
+          endpoint: creds.endpoint,
+          forcePathStyle: creds.forcePathStyle,
+          credentials: { accessKeyId: creds.accessKeyId, secretAccessKey: creds.secretAccessKey },
+        }),
+        secret: creds.secretAccessKey,
+      };
+      this.clients.set(key, entry);
     }
-    return { client: this.client, bucket: this.bucket };
+    return { client: entry.client, bucket: creds.bucket };
   }
 }
 

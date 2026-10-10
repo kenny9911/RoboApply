@@ -2,20 +2,22 @@
 
 // CompanyQuestionsPage — /practice/questions/[company] (F-INT-01; WP-59).
 // ONLY moderated user reports about the company, each with its month, and the
-// count of them (rows we hold, as of today). AI-written and staff-written
+// count of them (rows we hold, as of today) under the shared source line
+// (<SourceNote>, D3). AI-written and staff-written
 // questions never appear here: they are not attributed to any company.
 // `[company]` is the company slug, or the URL-encoded company name when there
 // is no company record (WP-34's job page link). With `?job=<id>` the job's
 // own practice set is shown first.
 
 import { useState } from 'react';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import { Btn } from '../../v3/primitives/Btn';
 import { EmptyState } from '../../v3/primitives/EmptyState';
 import { PageHeader } from '../../v3/primitives/PageHeader';
 import { useBrand } from '../../../lib/brand';
 import { useFlag } from '../../../lib/flags';
+import { SourceNote, isPublishable } from '../common/SourceNote';
 import type { QuestionCategory } from '../../../lib/api/contracts/prep';
 import { useCompanyQuestions } from '../../../hooks/prep/usePrep';
 import { ContributeQuestion } from './ContributeQuestion';
@@ -36,7 +38,6 @@ export interface CompanyQuestionsPageProps {
 export function CompanyQuestionsPage({ company, jobId = null }: CompanyQuestionsPageProps) {
   const t = useTranslations('practiceQuestions.company');
   const tRoot = useTranslations('practiceQuestions');
-  const format = useFormatter();
   const periodLabel = usePeriodLabel();
   const brand = useBrand();
   const enabled = useFlag('interviewBank');
@@ -55,7 +56,6 @@ export function CompanyQuestionsPage({ company, jobId = null }: CompanyQuestions
   // Prefill "Share a question" with the resolved name only: the route segment may be
   // a slug ('acme-inc'), and a contribution stored under it would not match the company.
   const shareCompany = first?.company.name ?? '';
-  const asOf = count ? new Date(count.asOf) : null;
   const groups: readonly QuestionCategory[] = brand.market === 'cn' ? ['hr', ...GROUPS] : GROUPS;
 
   return (
@@ -75,12 +75,14 @@ export function CompanyQuestionsPage({ company, jobId = null }: CompanyQuestions
         <h2 className={styles.h2} id="prep-company-list">
           {t('heading')}
         </h2>
-        {count ? (
-          <p className={styles.muted} data-source-note="sourced">
-            {t('count', { count: count.value })}
-            {latest ? ` · ${t('latest', { period: latest })}` : ''}
-            {asOf && !Number.isNaN(asOf.getTime()) ? ` · ${t('asOf', { date: format.dateTime(asOf, { dateStyle: 'medium' }) })}` : ''}
-          </p>
+        {isPublishable(count) ? (
+          <>
+            <p className={styles.muted} data-testid="prep-company-count">
+              {t('count', { count: count.value })}
+              {latest ? ` · ${t('latest', { period: latest })}` : ''}
+            </p>
+            <SourceNote sourced={count} className={styles.muted} />
+          </>
         ) : null}
         <CategoryChips value={category} onChange={setCategory} groups={groups} />
         {list.isLoading ? (

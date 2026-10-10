@@ -98,13 +98,14 @@ export function cameraPlan({ mode, cameraPublish, market, deviceOk }: CameraPlan
   return { publish: deviceOk, localPreview: false, previewStartsOn: false };
 }
 
-// ─── Copy the practice namespace does not carry yet ──────────────────────────
+// ─── Live-room copy read by key (network check, local-only camera) ──────────
 //
-// The live-room copy for the network check and the GoApply local-only camera
-// note is requested from the `practice` namespace owner (WP-43). Until those
-// keys exist, `t.has` is false and the caller shows existing copy or nothing —
-// never the literal key path (next-intl renders a missing key as its path).
-// Once the keys land, the requested wording shows with no code change.
+// The 12 strings live under `practice.live.cam.*` and `practice.live.network.*`
+// (staged in i18n/staging/practice.en.json). They are read through
+// `pendingLiveCopy`, which checks `t.has` first: a bundle that does not carry
+// a key (an older cached bundle during a deploy) shows the earlier copy or
+// nothing — never the literal key path (next-intl renders a missing key as
+// its path).
 
 export const PENDING_LIVE_COPY = Object.freeze({
   camLocalOnly: 'live.cam.localOnly',
@@ -129,7 +130,7 @@ export interface LiveCopyTranslator {
   has(key: string): boolean;
 }
 
-/** A requested `practice.*` string when it exists, else null. */
+/** A `practice.live.*` string when the bundle carries it, else null. */
 export function pendingLiveCopy(t: LiveCopyTranslator, id: PendingLiveCopy): string | null {
   const key = PENDING_LIVE_COPY[id];
   return t.has(key) ? t(key) : null;

@@ -4,7 +4,12 @@
 // (C42), the "Practiced" checklist step and the written practice (metering,
 // job, checklist once), against an in-memory Prisma double. LiveKit, egress,
 // the prompt pipeline, scoring, billing and the text interview are mocked.
-// Run: npx vitest run components/features/practice/__tests__/server/InterviewSessionService.practice.test.ts
+//
+// INT-09: the GoApply AI-interview format at create (WP-66), the written
+// practice's job and completion on the RAMockSession columns with the JSON
+// fallback (WP-63a-S1 / SCHEMA-3), and the GoApply "report ready" WeChat
+// notice (once per report; never on RoboApply).
+// Run: npx vitest run server/src/interview-engine/sessions/InterviewSessionService.practice.test.ts
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -66,9 +71,10 @@ const h = vi.hoisted(() => {
     },
   };
 
+  const rAMockSession = { findMany: vi.fn(async (_args: Row) => [] as Row[]), findFirst: vi.fn(async (_args: Row) => null as Row | null), updateMany: vi.fn(async (_args: Row) => ({ count: 1 })) };
   return {
     rows,
-    prisma: { interviewSession, $executeRawUnsafe: async () => 0, $queryRawUnsafe: async () => [] },
+    prisma: { interviewSession, rAMockSession, $executeRawUnsafe: async () => 0, $queryRawUnsafe: async () => [] },
     reset() { rows.clear(); },
     gate: vi.fn(),
     generate: vi.fn(),
@@ -78,20 +84,20 @@ const h = vi.hoisted(() => {
   };
 });
 
-vi.mock('../../../../../server/src/lib/prisma.js', () => ({ default: h.prisma }));
-vi.mock('../../../../../server/src/services/LoggerService.js', () => ({
+vi.mock('../../lib/prisma.js', () => ({ default: h.prisma }));
+vi.mock('../../services/LoggerService.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), getRequestSnapshot: vi.fn(() => null) },
   generateRequestId: () => 'req-test',
 }));
-vi.mock('../../../../../server/src/interview-engine/livekit/liveKitClient.js', () => ({
+vi.mock('../livekit/liveKitClient.js', () => ({
   createInterviewRoom: vi.fn(async () => ({ sid: 'RM_1' })),
   dispatchAgent: vi.fn(async () => 'AD_1'),
   mintJoinToken: vi.fn(async () => ({ token: 'jwt', url: 'wss://x', expiresAt: new Date(Date.now() + 3600_000) })),
   deleteInterviewRoom: vi.fn(async () => undefined),
   sendInterviewEndSignal: vi.fn(async () => true),
 }));
-vi.mock('../../../../../server/src/interview-engine/livekit/egress.js', () => ({ startRoomRecording: h.startRecording, stopRecording: vi.fn(async () => {}) }));
-vi.mock('../../../../../server/src/interview-engine/storage/r2Storage.js', () => ({
+vi.mock('../livekit/egress.js', () => ({ startRoomRecording: h.startRecording, stopRecording: vi.fn(async () => {}) }));
+vi.mock('../storage/r2Storage.js', () => ({
   interviewR2Storage: {
     isConfigured: () => h.r2Configured.value,
     recordingKey: (id: string) => `rec/${id}.mp4`,
@@ -101,11 +107,11 @@ vi.mock('../../../../../server/src/interview-engine/storage/r2Storage.js', () =>
     uploadTranscript: vi.fn(async () => null),
   },
 }));
-vi.mock('../../../../../server/src/interview-engine/prompt/interviewPromptService.js', () => ({ interviewPromptService: { generate: h.generate } }));
-vi.mock('../../../../../server/src/interview-engine/prompt/InterviewBlueprintAgent.js', () => ({ inferRoleFromJd: () => 'Inferred Role' }));
-vi.mock('../../../../../server/src/lib/mockCreditService.js', () => ({ gateMockInterview: h.gate }));
-vi.mock('../../../../../server/src/interview-engine/scoring/interviewEvaluationService.js', () => ({ runInterviewEvaluation: h.evaluate }));
-vi.mock('../../../../../server/src/interview-engine/billing/sessionCost.js', () => ({
+vi.mock('../prompt/interviewPromptService.js', () => ({ interviewPromptService: { generate: h.generate } }));
+vi.mock('../prompt/InterviewBlueprintAgent.js', () => ({ inferRoleFromJd: () => 'Inferred Role' }));
+vi.mock('../../lib/mockCreditService.js', () => ({ gateMockInterview: h.gate }));
+vi.mock('../scoring/interviewEvaluationService.js', () => ({ runInterviewEvaluation: h.evaluate }));
+vi.mock('../billing/sessionCost.js', () => ({
   describeSessionModels: () => ({}),
   tokenCostFromSnapshot: () => null,
   recordBlueprintCost: vi.fn(async () => {}),
@@ -126,7 +132,7 @@ const ENV: Record<string, string | undefined> = {
 };
 const saved: Record<string, string | undefined> = {};
 
-const mod = await import('../../../../../server/src/interview-engine/sessions/InterviewSessionService.js');
+const mod = await import('./InterviewSessionService.js');
 const {
   interviewSessionService: svc,
   setPracticeDeps,
@@ -137,7 +143,7 @@ const {
   resolvePracticeRecording,
   PracticeJobNotFoundError,
 } = mod;
-const { handleEngineError } = await import('../../../../../server/src/interview-engine/routes/errors.js');
+const { handleEngineError } = await import('../routes/errors.js');
 
 const JOBS: Record<string, any> = {
   j_intl: {
@@ -176,7 +182,15 @@ async function mergePracticeMeta(target: 'live' | 'text', id: string, patch: Rec
 
 const deps = {
   consents: new Set<string>(),
+  market: 'intl' as 'intl' | 'cn',
   merge: vi.fn(mergePracticeMeta),
+  sendReportNotice: vi.fn(async (_input: Record<string, any>) => ({ delivered: true })),
+  // The SCHEMA-3 column, set once (never overwritten), on the in-memory rows.
+  stampPracticeCompleted: vi.fn(async (target: 'live' | 'text', id: string, at: Date) => {
+    const row = target === 'live' ? h.rows.get(id) : textRows.get(id);
+    if (row && row.practiceCompletedAt == null) row.practiceCompletedAt = at;
+    return { count: row ? 1 : 0 };
+  }),
   gatePractice: vi.fn(async () => ({ ok: true, balance: 3, required: 1, tier: 'free' })),
   debitPractice: vi.fn(async () => ({ debited: 1, balanceAfter: 2 })),
   textStart: vi.fn(async (userId: string, input: Record<string, any>) => {
@@ -184,6 +198,8 @@ const deps = {
     textRows.set(id, {
       id, userId, role: input.role, blueprint: { interviewerBrief: 'b' }, transcript: [],
       plannedDurationMinutes: input.durationMinutes, status: 'in_progress',
+      // The text interview writes the job on the row's own column.
+      jobId: input.jobId ?? null, practiceCompletedAt: null,
     });
     return { sessionId: id, questions: [{ q: 'Q1', hint: '', coachTip: null }] };
   }),
@@ -200,7 +216,8 @@ const deps = {
     return row && row.userId === userId ? structuredClone(row) as any : null;
   }),
   findTextPracticesForJobs: vi.fn(async (userId: string, ids: string[]) =>
-    [...textRows.values()].filter((r) => r.userId === userId && r.status === 'complete' && ids.includes(r.blueprint?.practice?.jobId)) as any[]),
+    [...textRows.values()].filter((r) => r.userId === userId && r.status === 'complete'
+      && (ids.includes(r.jobId) || ids.includes(r.blueprint?.practice?.jobId))) as any[]),
   findJob: vi.fn(async (id: string) => JOBS[id] ?? null),
   hasConsent: vi.fn(async (_u: string, type: string) => deps.consents.has(type)),
   markChecklistStep: vi.fn(async () => ({})),
@@ -252,6 +269,7 @@ beforeEach(() => {
   deps.gatePractice.mockResolvedValue({ ok: true, balance: 3, required: 1, tier: 'free' });
   h.r2Configured.value = true;
   deps.consents = new Set();
+  deps.market = 'intl';
   h.gate.mockResolvedValue({ ok: true, balance: 3, required: 1, tier: 'free' });
   h.generate.mockResolvedValue(genResult());
   h.startRecording.mockImplementation(async ({ filepath }: { filepath: string }) => ({ egressId: 'EG_1', filepath }));
@@ -266,8 +284,10 @@ beforeEach(() => {
     grantPracticeCredit: deps.grantPracticeCredit,
     findUser: deps.findUser,
     findResume: deps.findResume,
-    currentMarket: () => 'intl',
+    currentMarket: () => deps.market,
     mergePracticeMeta: deps.merge,
+    stampPracticeCompleted: deps.stampPracticeCompleted,
+    sendReportNotice: deps.sendReportNotice,
     gatePractice: deps.gatePractice,
     debitPractice: deps.debitPractice,
     textStart: deps.textStart as any,
@@ -516,6 +536,9 @@ describe('written practice (GoApply without voice)', () => {
       expect.objectContaining({ role: '后端工程师 (某公司)', interviewerId: 'maya', typeId: 'behavioral', durationMinutes: 15 }),
       undefined,
     );
+    // WP-66: the posting, the market and the job id reach the text interview.
+    expect(deps.textStart.mock.calls[0]?.[1]).toMatchObject({ jdText: '负责后端', market: 'intl', jobId: 'j_cn' });
+    expect(textRows.get('t1')!.jobId).toBe('j_cn');
     expect(readTextPracticeMeta(textRows.get('t1')!.blueprint)).toMatchObject({ kind: 'text', jobId: 'j_cn', creditExempt: false });
     expect(textRows.get('t1')!.blueprint.interviewerBrief).toBe('b'); // the generator's brief is kept
   });
@@ -650,5 +673,259 @@ describe('resume prefill', () => {
 
   it('returns null when the user has no resume', async () => {
     expect(await loadPracticeResume('u1', {})).toBeNull();
+  });
+});
+
+// ─── INT-09 ────────────────────────────────────────────────────────────────
+
+describe('GoApply AI-interview format at create (WP-66)', () => {
+  const CN = { userId: 'u1', role: '产品经理', market: 'cn' as const };
+
+  it('a general practice of 20–30 minutes is created as cn_ai_interview and prepared with its directive', async () => {
+    for (const interviewType of ['behavioral', 'screening', 'culture']) {
+      const s = await svc.createSession({ ...CN, interviewType, durationMinutes: 25 });
+      expect(s.interviewType).toBe('cn_ai_interview');
+      expect(s.plannedDurationMinutes).toBe(25);
+    }
+    const s = await svc.createSession({ ...CN, interviewType: 'behavioral', durationMinutes: 30 });
+    await svc.prepareSession({ sessionId: s.id, userId: 'u1' });
+    // The stored type resolves (it is not on the international list) and names the format to the generator.
+    expect(h.generate).toHaveBeenCalledWith(expect.objectContaining({ typeId: 'cn_ai_interview', typeLabel: 'AI Interview Practice', durationMinutes: 30 }));
+  });
+
+  it('a general practice of another length keeps its own type and length', async () => {
+    const long = await svc.createSession({ ...CN, interviewType: 'behavioral', durationMinutes: 45 });
+    expect(long).toMatchObject({ interviewType: 'behavioral', plannedDurationMinutes: 45 });
+    const short = await svc.createSession({ ...CN, interviewType: 'screening', durationMinutes: 15 });
+    expect(short).toMatchObject({ interviewType: 'screening', plannedDurationMinutes: 15 });
+    // Behavioural defaults to 40 minutes: no length given means its own format.
+    expect((await svc.createSession({ ...CN, interviewType: 'behavioral' })).interviewType).toBe('behavioral');
+  });
+
+  it('a skill exercise is never re-typed, whatever its length', async () => {
+    const s = await svc.createSession({ ...CN, interviewType: 'technical', durationMinutes: 25 });
+    expect(s.interviewType).toBe('technical');
+  });
+
+  it('the format picked by name runs 20–30 minutes: the length and the credit gate agree', async () => {
+    const byDefault = await svc.createSession({ ...CN, interviewType: 'cn_ai_interview' });
+    expect(byDefault).toMatchObject({ interviewType: 'cn_ai_interview', plannedDurationMinutes: 25 });
+    h.gate.mockClear();
+    const long = await svc.createSession({ ...CN, interviewType: 'cn_ai_interview', durationMinutes: 45 });
+    expect(long).toMatchObject({ interviewType: 'cn_ai_interview', plannedDurationMinutes: 30 });
+    expect(h.gate).toHaveBeenCalledWith('u1', 30);
+    const short = await svc.createSession({ ...CN, interviewType: 'cn_ai_interview', durationMinutes: 10 });
+    expect(short.plannedDurationMinutes).toBe(20);
+  });
+
+  it('the market defaults to the current brand', async () => {
+    deps.market = 'cn';
+    const s = await svc.createSession({ userId: 'u1', role: '产品经理', interviewType: 'screening', durationMinutes: 20 });
+    expect(s.interviewType).toBe('cn_ai_interview');
+  });
+
+  it('RoboApply is unchanged: no re-typing, and the GoApply format is not a type there', async () => {
+    const general = await svc.createSession({ userId: 'u1', role: 'PM', market: 'intl', interviewType: 'behavioral', durationMinutes: 25 });
+    expect(general).toMatchObject({ interviewType: 'behavioral', plannedDurationMinutes: 25 });
+    const named = await svc.createSession({ userId: 'u1', role: 'PM', market: 'intl', interviewType: 'cn_ai_interview', durationMinutes: 25 });
+    expect(named.interviewType).toBe('behavioral'); // unknown id → the default type, as for any unknown id
+  });
+
+  it('recruiter and external API sessions never get a market format, even on the GoApply host', async () => {
+    deps.market = 'cn';
+    const ext = await svc.createSession({ userId: 'u1', role: 'PM', source: 'external', apiKeyId: 'k1', interviewType: 'behavioral', durationMinutes: 25 });
+    expect(ext.interviewType).toBe('behavioral');
+    const rec = await svc.createSession({ userId: 'u1', role: 'PM', source: 'recruiter', interviewType: 'cn_ai_interview', durationMinutes: 25 });
+    expect(rec.interviewType).toBe('behavioral');
+  });
+});
+
+describe('written practice: job and completion on the RAMockSession columns (JSON fallback)', () => {
+  const JOB = { id: 'j_cn', title: '后端工程师', companyName: '某公司', location: null, jdText: '负责后端', closed: false };
+
+  it('textPracticeMetaOf reads the columns first and falls back to blueprint.practice', () => {
+    const tag = { v: 1, kind: 'text', jobId: 'j_json', jobTitle: 'Old title', companyName: 'Old Co', creditExempt: false, completedAt: '2026-09-01T00:00:00.000Z' };
+    // Columns win.
+    expect(mod.textPracticeMetaOf({ blueprint: { practice: tag }, jobId: 'j_col', practiceCompletedAt: new Date('2026-10-02T00:00:00Z') })).toMatchObject({
+      kind: 'text', jobId: 'j_col', completedAt: '2026-10-02T00:00:00.000Z',
+      // The display names were stored for another job: not shown for this one.
+      jobTitle: null, companyName: null,
+    });
+    // A row written before the columns (or read by an older select): the JSON copy.
+    for (const legacy of [{ blueprint: { practice: tag } }, { blueprint: { practice: tag }, jobId: null, practiceCompletedAt: null }]) {
+      expect(mod.textPracticeMetaOf(legacy)).toMatchObject({ jobId: 'j_json', jobTitle: 'Old title', completedAt: '2026-09-01T00:00:00.000Z' });
+    }
+    // Same job in both: the display names stay.
+    expect(mod.textPracticeMetaOf({ blueprint: { practice: tag }, jobId: 'j_json' })).toMatchObject({ jobId: 'j_json', jobTitle: 'Old title', companyName: 'Old Co' });
+    // The tag still decides what is a first-party practice: a column alone is not one.
+    expect(mod.textPracticeMetaOf({ blueprint: null, jobId: 'j_col' })).toBeNull();
+    expect(mod.textPracticeMetaOf({ blueprint: { interviewerBrief: 'b' }, jobId: 'j_col', practiceCompletedAt: new Date() })).toBeNull();
+  });
+
+  it('a new practice has the job on its column; scoring stamps practiceCompletedAt, which the Practiced step reads', async () => {
+    const { sessionId } = await svc.startTextPractice({ userId: 'u1', interviewerId: 'maya', typeId: 'behavioral', durationMinutes: 20, job: JOB });
+    expect(textRows.get(sessionId)!.jobId).toBe('j_cn');
+    await svc.textPracticeTurn({ userId: 'u1', sessionId, answer: '我负责支付接口。', questionIndex: 0 });
+    const scored = await svc.scoreTextPractice({ userId: 'u1', sessionId });
+    expect(scored).toMatchObject({ practiceCounted: true, jobId: 'j_cn' });
+    expect(deps.stampPracticeCompleted).toHaveBeenCalledWith('text', sessionId, expect.any(Date));
+    const stamped = textRows.get(sessionId)!.practiceCompletedAt as Date;
+    expect(stamped).toBeInstanceOf(Date);
+
+    // The columns alone are enough: drop the JSON copies and it still counts.
+    const practice = textRows.get(sessionId)!.blueprint.practice;
+    delete practice.jobId;
+    delete practice.completedAt;
+    expect(await svc.practicedJobs('u1', ['j_cn'])).toEqual({ j_cn: stamped.toISOString() });
+    // …and a repeat score still knows the job.
+    expect((await svc.scoreTextPractice({ userId: 'u1', sessionId })).jobId).toBe('j_cn');
+  });
+
+  it('a legacy row (JSON only, no columns) still counts for its job', async () => {
+    textRows.set('legacy', {
+      id: 'legacy', userId: 'u1', role: '后端工程师', transcript: [{ who: 'you', text: 'x' }], plannedDurationMinutes: 20, status: 'complete',
+      blueprint: { practice: { v: 1, kind: 'text', jobId: 'j_cn', jobTitle: '后端工程师', companyName: '某公司', creditExempt: false, completedAt: '2026-09-01T08:00:00.000Z', checklistMarkedAt: '2026-09-01T08:00:01.000Z' } },
+    });
+    expect(await svc.practicedJobs('u1', ['j_cn'])).toEqual({ j_cn: '2026-09-01T08:00:00.000Z' });
+    const scored = await svc.scoreTextPractice({ userId: 'u1', sessionId: 'legacy' });
+    expect(scored.jobId).toBe('j_cn');
+    // Already completed and ticked: neither is done again.
+    expect(deps.markChecklistStep).not.toHaveBeenCalled();
+  });
+
+  it('the column wins when both are present and disagree', async () => {
+    textRows.set('both', {
+      id: 'both', userId: 'u1', role: 'x', transcript: [], plannedDurationMinutes: 20, status: 'complete',
+      jobId: 'j_intl', practiceCompletedAt: new Date('2026-10-05T10:00:00Z'),
+      blueprint: { practice: { v: 1, kind: 'text', jobId: 'j_cn', creditExempt: false, completedAt: '2026-09-01T08:00:00.000Z' } },
+    });
+    expect(await svc.practicedJobs('u1', ['j_cn', 'j_intl'])).toEqual({ j_intl: '2026-10-05T10:00:00.000Z' });
+  });
+
+  it('the default lookup asks for the column first and keeps the JSON path for older rows', async () => {
+    setPracticeDeps({ currentMarket: () => 'intl' }); // real findTextPractice / findTextPracticesForJobs
+    h.prisma.rAMockSession.findMany.mockResolvedValueOnce([
+      { id: 't9', role: 'x', blueprint: { practice: { v: 1, kind: 'text', creditExempt: false } }, transcript: [], plannedDurationMinutes: 20, status: 'complete', jobId: 'j_intl', practiceCompletedAt: new Date('2026-10-06T00:00:00Z') },
+    ]);
+    expect(await svc.practicedJobs('u1', ['j_intl', 'j_cn'])).toEqual({ j_intl: '2026-10-06T00:00:00.000Z' });
+    const args = h.prisma.rAMockSession.findMany.mock.calls[0]![0];
+    expect(args.where).toMatchObject({ userId: 'u1', status: 'complete' });
+    expect(args.where.OR).toEqual([
+      { jobId: { in: ['j_intl', 'j_cn'] } },
+      { blueprint: { path: ['practice', 'jobId'], equals: 'j_intl' } },
+      { blueprint: { path: ['practice', 'jobId'], equals: 'j_cn' } },
+    ]);
+    expect(args.select).toMatchObject({ jobId: true, practiceCompletedAt: true, blueprint: true });
+  });
+});
+
+describe('GoApply: "your practice report is ready" in WeChat (once per report)', () => {
+  const JOB = { id: 'j_cn', title: '后端工程师', companyName: '某公司', location: null, jdText: '负责后端', closed: false };
+
+  async function completeLive(id: string) {
+    h.rows.get(id)!.transcript = [
+      { role: 'interviewer', text: '请做一个自我介绍。', ts: 1000 },
+      { role: 'candidate', text: '我负责支付接口，延迟降低了四成。', ts: 9000 },
+    ];
+    await svc.workerLifecycle({ sessionId: id, secret: 'cb-secret', event: 'ended' });
+  }
+
+  it('written practice: one notice per scored practice, with the report id as the event', async () => {
+    deps.market = 'cn';
+    const { sessionId } = await svc.startTextPractice({ userId: 'u1', interviewerId: 'maya', typeId: 'behavioral', durationMinutes: 20, job: JOB });
+    await svc.textPracticeTurn({ userId: 'u1', sessionId, answer: '我负责支付接口。', questionIndex: 0 });
+    await svc.scoreTextPractice({ userId: 'u1', sessionId });
+    await vi.waitFor(() => expect(deps.sendReportNotice).toHaveBeenCalledTimes(1));
+    expect(deps.sendReportNotice).toHaveBeenCalledWith({
+      userId: 'u1',
+      template: 'report_ready',
+      params: { title: '后端工程师', completedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) },
+      eventId: sessionId,
+      href: '/practice',
+    });
+    // Scoring again (a double tap, a retry) never sends a second notice for the same report.
+    await svc.scoreTextPractice({ userId: 'u1', sessionId });
+    await svc.scoreTextPractice({ userId: 'u1', sessionId });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(deps.sendReportNotice).toHaveBeenCalledTimes(1);
+    expect(textRows.get(sessionId)!.blueprint.practice.reportNoticeAt).toBeTruthy();
+  });
+
+  it('written practice: an unanswered practice has no report to announce', async () => {
+    deps.market = 'cn';
+    const { sessionId } = await svc.startTextPractice({ userId: 'u1', interviewerId: 'maya', typeId: 'behavioral', job: JOB });
+    await svc.textPracticeTurn({ userId: 'u1', sessionId, answer: '  ', questionIndex: 0 });
+    await svc.scoreTextPractice({ userId: 'u1', sessionId });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(deps.sendReportNotice).not.toHaveBeenCalled();
+  });
+
+  it('RoboApply: nothing is sent and nothing is claimed, written or live', async () => {
+    const { sessionId } = await svc.startTextPractice({ userId: 'u1', role: 'Engineer', interviewerId: 'maya', typeId: 'behavioral', job: null });
+    await svc.textPracticeTurn({ userId: 'u1', sessionId, answer: 'I built the payments API.', questionIndex: 0 });
+    await svc.scoreTextPractice({ userId: 'u1', sessionId });
+    const { id } = await liveSession({ jobId: 'j_intl' });
+    await completeLive(id);
+    expect(h.rows.get(id)!.status).toBe('completed');
+    await vi.waitFor(() => expect(deps.markChecklistStep).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 10));
+    expect(deps.sendReportNotice).not.toHaveBeenCalled();
+    expect(textRows.get(sessionId)!.blueprint.practice.reportNoticeAt).toBeUndefined();
+    expect(readPracticeMeta(h.rows.get(id)!.liveMetrics)).not.toHaveProperty('reportNoticeAt');
+  });
+
+  it('live practice: a GoApply session announces its report once, whichever trigger finalizes it', async () => {
+    const { id } = await liveSession({ role: '后端工程师' });
+    // The session belongs to GoApply (its brand column decides, not the host the callback arrives on).
+    Object.assign(h.rows.get(id)!, { brand: 'goapply', voiceProvider: 'livekit_cloud' });
+    const cnSecret = process.env.CN_LIVEKIT_AGENT_CALLBACK_SECRET;
+    process.env.CN_LIVEKIT_AGENT_CALLBACK_SECRET = 'cn-cb-secret';
+    try {
+      h.rows.get(id)!.transcript = [
+        { role: 'interviewer', text: '请做一个自我介绍。', ts: 1000 },
+        { role: 'candidate', text: '我负责支付接口，延迟降低了四成。', ts: 9000 },
+      ];
+      await svc.workerLifecycle({ sessionId: id, secret: 'cn-cb-secret', event: 'ended' });
+      expect(h.rows.get(id)!.status).toBe('completed');
+      await vi.waitFor(() => expect(deps.sendReportNotice).toHaveBeenCalledTimes(1));
+      expect(deps.sendReportNotice).toHaveBeenCalledWith({
+        userId: 'u1',
+        template: 'report_ready',
+        params: { title: '后端工程师', completedAt: expect.any(String) },
+        eventId: id,
+        href: `/practice/${id}/report`,
+      });
+      // Late triggers never announce it again.
+      await svc.workerLifecycle({ sessionId: id, secret: 'cn-cb-secret', event: 'ended' });
+      await svc.finalize(id);
+      await new Promise((r) => setTimeout(r, 10));
+      expect(deps.sendReportNotice).toHaveBeenCalledTimes(1);
+    } finally {
+      if (cnSecret === undefined) delete process.env.CN_LIVEKIT_AGENT_CALLBACK_SECRET;
+      else process.env.CN_LIVEKIT_AGENT_CALLBACK_SECRET = cnSecret;
+    }
+  });
+
+  it('a failed send never breaks scoring, and is not retried', async () => {
+    deps.market = 'cn';
+    deps.sendReportNotice.mockRejectedValueOnce(new Error('wechat down'));
+    const { sessionId } = await svc.startTextPractice({ userId: 'u1', interviewerId: 'maya', typeId: 'behavioral', job: JOB });
+    await svc.textPracticeTurn({ userId: 'u1', sessionId, answer: '我负责支付接口。', questionIndex: 0 });
+    await expect(svc.scoreTextPractice({ userId: 'u1', sessionId })).resolves.toMatchObject({ practiceCounted: true });
+    await svc.scoreTextPractice({ userId: 'u1', sessionId });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(deps.sendReportNotice).toHaveBeenCalledTimes(1);
+  });
+
+  it('the notice title fits a WeChat template field', async () => {
+    deps.market = 'cn';
+    const { sessionId } = await svc.startTextPractice({
+      userId: 'u1', interviewerId: 'maya', typeId: 'behavioral',
+      job: { ...JOB, title: '高级后端工程师（支付与清结算方向，上海或杭州，可远程）' },
+    });
+    await svc.textPracticeTurn({ userId: 'u1', sessionId, answer: '我负责支付接口。', questionIndex: 0 });
+    await svc.scoreTextPractice({ userId: 'u1', sessionId });
+    await vi.waitFor(() => expect(deps.sendReportNotice).toHaveBeenCalledTimes(1));
+    expect([...deps.sendReportNotice.mock.calls[0]![0].params.title].length).toBeLessThanOrEqual(20);
   });
 });

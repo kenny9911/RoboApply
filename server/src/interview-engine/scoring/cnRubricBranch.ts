@@ -16,6 +16,7 @@
 import type { InterviewSession } from '../../generated/prisma/client.js';
 import { logger } from '../../services/LoggerService.js';
 import { brandOfUser, getBrand } from '../../platform/brand/index.js';
+import { readRowSeam } from '../providers/sessionSeam.js';
 import {
   CN_AI_INTERVIEW_FORMAT_ID,
   CN_FORMAT_EVALUATION_LENS,
@@ -27,7 +28,7 @@ import type { TranscriptTurn } from '../types.js';
 import type { RichInterviewReport } from './reportTypes.js';
 
 type SessionLike = Pick<InterviewSession, 'id' | 'userId' | 'source' | 'interviewType' | 'language'> &
-  Partial<Pick<InterviewSession, 'blueprint'>>;
+  Partial<Pick<InterviewSession, 'blueprint' | 'brand' | 'voiceProvider' | 'liveMetrics'>>;
 
 /**
  * True when the session ran the AI-interview format: created with the cn
@@ -46,14 +47,16 @@ export function ranCnFormat(session: Pick<SessionLike, 'interviewType' | 'bluepr
 /**
  * True when the session is a GoApply practice: in the cn format, or a
  * candidate practice (`source: 'roboapply'`, the first-party flow on both
- * brands) by a user whose brand is on the cn market. External API and
+ * brands) created under a brand on the cn market (`InterviewSession.brand`;
+ * for older rows the JSON seam, else the owner's brand). External API and
  * recruiter sessions are never cn unless they asked for the format.
  */
 export async function isCnPracticeSession(session: SessionLike): Promise<boolean> {
   if (session.interviewType === CN_AI_INTERVIEW_FORMAT_ID) return true;
   if (session.source !== 'roboapply' || !session.userId) return false;
   try {
-    const brand = await brandOfUser(session.userId);
+    // The brand the session was created under (column, else liveMetrics), else the owner's.
+    const brand = readRowSeam(session)?.brand ?? (await brandOfUser(session.userId));
     return brand !== null && getBrand(brand).market === 'cn';
   } catch (err) {
     logger.warn('INTERVIEW_EVAL', 'cn branch: brand lookup failed; treating as intl', {

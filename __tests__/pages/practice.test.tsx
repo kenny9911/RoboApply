@@ -19,7 +19,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { AbstractIntlMessages } from 'next-intl';
 
 import PracticePage from '../../app/(auth)/practice/page';
-import { interviewEngineApi } from '../../lib/api/interviewEngine';
+import { practiceApi } from '../../lib/api/interviewEngine';
 import { renderWithProviders } from '../utils/renderWithProviders';
 import { mockAuthState } from '../utils/mockAuth';
 import enMessages from '../../i18n/messages/en.json';
@@ -57,15 +57,20 @@ const RECENT = [
   },
 ];
 
-vi.mock('../../lib/api/interviewEngine', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/api/interviewEngine')>()),
-  interviewEngineApi: {
-    recent: vi.fn(async () => ({ sessions: RECENT })),
-    remove: vi.fn(async () => ({ ok: true })),
-    create: vi.fn(),
-    preview: vi.fn(),
-  },
-}));
+vi.mock('../../lib/api/interviewEngine', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/api/interviewEngine')>();
+  return {
+    ...actual,
+    interviewEngineApi: {
+      recent: vi.fn(async () => ({ sessions: RECENT })),
+      remove: vi.fn(async () => ({ ok: true })),
+      preview: vi.fn(),
+    },
+    // Sessions are created through the practice route only (the old browser
+    // create is gone); spy on it so "nothing was created" can be asserted.
+    practiceApi: { ...actual.practiceApi, create: vi.fn() },
+  };
+});
 
 vi.mock('../../lib/auth/AuthProvider', () => ({
   AuthProvider: ({ children }: { children: ReactNode }) => children,
@@ -230,6 +235,6 @@ describe('/practice setup', () => {
     );
     expect(screen.getByRole('button', { expanded: false, name: /Maya/ })).toBeTruthy();
     // Restoring a plan must never spend a credit on its own.
-    expect(interviewEngineApi.create).not.toHaveBeenCalled();
+    expect(practiceApi.create).not.toHaveBeenCalled();
   });
 });

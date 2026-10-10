@@ -171,7 +171,72 @@ describe('AI questions from a job post', () => {
     expect(f.calls.set).toHaveLength(1);
   });
 
-  it.todo('SR-59-1: job set survives a cold start (Prisma index)');
+  it('SR-59-1: job set survives a cold start (Prisma index)', async () => {
+    const first = await f.service.generateJobSet(U, 'job_1', 'en');
+    expect(first.status).toBe('ready');
+    const ids = first.aiQuestions.map((q) => q.id);
+    // The link is on the rows, not in the process.
+    expect(f.store.questions.filter((q) => q.sourceKind === 'ai_practice').map((q) => q.jobId)).toEqual(['job_1', 'job_1']);
+    // D3: linked to the post, never attributed to the company.
+    for (const q of f.store.questions.filter((r) => r.sourceKind === 'ai_practice')) {
+      expect(q.companyId).toBeNull();
+      expect(q.companyNameNormalized).toBeNull();
+    }
+
+    // A cold start (or another instance): a new service and a new index over the same rows.
+    const cold = f.coldStart();
+    const read = await cold.jobSet(U, 'job_1', 'en');
+    expect(read.status).toBe('ready');
+    expect(read.aiQuestions.map((q) => q.id)).toEqual(ids);
+    expect(read.generatedAt).toBe(first.generatedAt);
+    // "Write practice questions" again returns the stored set: no model call, no unit of the daily limit.
+    const again = await cold.generateJobSet(U, 'job_1', 'en');
+    expect(again.aiQuestions.map((q) => q.id)).toEqual(ids);
+    expect(f.calls.set).toHaveLength(1);
+    expect(f.calls.budget.filter((b) => b.kind === 'jobSet')).toHaveLength(1);
+    // The Assistant's interview_prep { write: true } finds it too (INT-04).
+    const plan = await cold.planForJob(U, 'job_1', 'en', { write: true });
+    expect(plan.status).toBe('ready');
+    expect(f.calls.set).toHaveLength(1);
+  });
+
+  it('SR-59-1: the index reads only this job, market, language and published AI rows', async () => {
+    await f.service.generateJobSet(U, 'job_1', 'en');
+    const cold = f.coldStart();
+    expect((await cold.jobSet(U, 'job_2', 'en')).status).toBe('not_generated');
+    expect((await cold.jobSet(U, 'job_1', 'zh')).status).toBe('not_generated');
+    f.state.market = 'cn';
+    expect((await f.coldStart().jobSet(U, 'job_1', 'en')).status).toBe('not_generated');
+    f.state.market = 'intl';
+    expect(f.jobSetDb.calls.findMany[0]).toMatchObject({
+      where: { jobId: 'job_1', market: 'intl', locale: 'en', sourceKind: 'ai_practice', status: 'published' },
+    });
+    // A hidden question drops out of the set; the rest stays.
+    const [one] = f.store.questions.filter((q) => q.jobId === 'job_1');
+    one!.status = 'hidden';
+    const left = await f.coldStart().jobSet(U, 'job_1', 'en');
+    expect(left.status).toBe('ready');
+    expect(left.aiQuestions).toHaveLength(1);
+  });
+
+  it('SR-59-1: only the newest generation is returned (rows written together)', async () => {
+    const first = await f.service.generateJobSet(U, 'job_1', 'en');
+    // Staff hid the whole first set; the user writes a new one a day later.
+    for (const q of f.store.questions.filter((r) => r.jobId === 'job_1')) q.status = 'hidden';
+    f.state.now = new Date('2026-10-11T12:00:00Z');
+    const second = await f.service.generateJobSet(U, 'job_1', 'en');
+    expect(f.calls.set).toHaveLength(2);
+    const firstIds = first.aiQuestions.map((q) => q.id);
+    const secondIds = second.aiQuestions.map((q) => q.id);
+    expect(secondIds.some((id) => firstIds.includes(id))).toBe(false);
+    // The old set is restored by staff: it is still not the job's set.
+    for (const q of f.store.questions.filter((r) => firstIds.includes(r.id))) q.status = 'published';
+    const read = await f.coldStart().jobSet(U, 'job_1', 'en');
+    expect(read.aiQuestions.map((q) => q.id)).toEqual(secondIds);
+    expect(read.generatedAt).toBe('2026-10-11T12:00:00.000Z');
+    // put took the link off the older set.
+    expect(f.store.questions.filter((q) => firstIds.includes(q.id)).every((q) => q.jobId === null)).toBe(true);
+  });
 
   it('a job with no company record links the company page by name', async () => {
     const res = await f.service.jobSet(U, 'job_2', 'en');
@@ -370,6 +435,10 @@ describe('contributions and moderation', () => {
     const rejected = await f.service.reject(ADMIN, receipt.id, { reason: 'nda_or_test_content', note: 'Assessment item' });
     expect(rejected.status).toBe('rejected');
     expect(f.store.audits.at(-1)?.payload).toMatchObject({ decision: 'rejected', reason: 'nda_or_test_content' });
+    // SR-59-2: the reason is stored on the contribution itself, not only in the audit row.
+    expect(rejected.rejectReason).toBe('nda_or_test_content');
+    expect(f.store.contributions.find((c) => c.id === receipt.id)).toMatchObject({ status: 'rejected', rejectReason: 'nda_or_test_content' });
+    expect((await f.service.listContributions({ status: 'rejected' })).items[0]).toMatchObject({ id: receipt.id, rejectReason: 'nda_or_test_content' });
     await expectHttp(f.service.approve(ADMIN, receipt.id, { category: 'coding', title: 'LRU', body: text, confirmScreened: true }), 'conflict', PREP_ERROR_CODES.alreadyModerated);
   });
 
@@ -442,6 +511,20 @@ describe('contributions and moderation', () => {
     const receipt = await f.service.contribute(U, { company: 'Acme', question: 'Why do you want this job?', period: '2026-10' });
     await expectHttp(f.service.approve(ADMIN, receipt.id, { category: 'behavioral', title: 'Why', body: 'Why do you want this job?', companyName: '   ' }), 'invalid_request', 'company_required');
     expect(f.store.contributions[0]?.status).toBe('pending');
+  });
+
+  it("SR-59-2: the contributor's category is kept and shown to staff; an approved one has no reject reason", async () => {
+    const withGroup = await f.service.contribute(U, { company: 'Acme', question: 'How would you shard this table?', period: '2026-09', category: 'system_design' });
+    const without = await f.service.contribute(U, { company: 'Acme', question: 'Why do you want this job?', period: '2026-09' });
+    expect(f.store.contributions.find((c) => c.id === withGroup.id)?.category).toBe('system_design');
+    expect(f.store.contributions.find((c) => c.id === without.id)?.category).toBeNull();
+    const pending = (await f.service.listContributions({})).items;
+    expect(pending.find((c) => c.id === withGroup.id)).toMatchObject({ suggestedCategory: 'system_design', rejectReason: null });
+    expect(pending.find((c) => c.id === without.id)).toMatchObject({ suggestedCategory: null, rejectReason: null });
+    // Staff may publish it under another group; the suggestion stays on the contribution.
+    const view = await f.service.approve(ADMIN, withGroup.id, { category: 'coding', title: 'Sharding a table', body: 'How would you shard this table?' });
+    expect(view.category).toBe('coding');
+    expect(f.store.contributions.find((c) => c.id === withGroup.id)).toMatchObject({ status: 'approved', category: 'system_design', rejectReason: null });
   });
 
   it('contributions from another market are 404', async () => {

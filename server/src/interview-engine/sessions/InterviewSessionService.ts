@@ -21,8 +21,10 @@
 //
 // Per brand (WP-63a): every media-plane call goes through the session's
 // VoiceSessionProvider (../providers/), fixed at create from the request's
-// brand (`liveMetrics.voiceSeam`; absent = RoboApply on LiveKit Cloud, i.e.
-// every Wave 0 row). Session work that can arrive from anywhere (webhooks,
+// brand and stored on the row (`InterviewSession.brand` / `voiceProvider`,
+// SCHEMA-4). Readers go through `resolveSessionSeam(row)`: the columns, else
+// `liveMetrics.voiceSeam`, else the owner's `User.brand` — a null column is
+// never read as RoboApply. Session work that can arrive from anywhere (webhooks,
 // callbacks, crons) runs inside the session's brand, so S3, LLM routing and
 // content safety resolve for that brand: GoApply uses CN_LIVEKIT_*, the
 // 'GoApply-Interview' worker, CN_S3_* (audio only) and domestic models.
@@ -52,20 +54,22 @@ import {
   assertBrandSpeech,
   inBrand,
   isDefaultSeam,
-  readVoiceSeam,
   resolveBrandSessionVoice,
   resolveBrandStt,
   resolveBrandVoice,
+  resolveSessionSeam,
   voiceProviderFor,
+  voiceSeamColumns,
   voiceSeamForBrand,
   voiceSeamMetrics,
   type VoiceSeam,
   type VoiceSessionProvider,
 } from '../providers/index.js';
-import type { BrandId } from '../../platform/brand/registry.js';
+import { getBrand, type BrandId } from '../../platform/brand/registry.js';
 import { interviewR2Storage } from '../storage/r2Storage.js';
 import { normalizeLocale } from '../voice/voiceCatalog.js';
-import { findPersona, findType, DEFAULT_PERSONA, DEFAULT_TYPE } from '../catalog/interviewCatalog.js';
+import { findPersona, findSessionType, findType, DEFAULT_PERSONA, DEFAULT_TYPE } from '../catalog/interviewCatalog.js';
+import { CN_AI_INTERVIEW_FORMAT_ID, clampCnMinutes, usesCnFormat, type CnPracticeReport } from '../../features/cn/interview/index.js';
 import { normalizeCharacteristics } from '../prompt/characteristics.js';
 import { interviewPromptService } from '../prompt/interviewPromptService.js';
 import { classifyPrepareError, describePrepareError, type PrepareFailureCode } from '../prompt/llmFailure.js';
@@ -344,10 +348,24 @@ export class InterviewSessionService {
     // the JD so the session/report/recents never show an empty title.
     const role = (input.role ?? '').trim() || job?.title || (jdText ? inferRoleFromJd(jdText) : '');
     const persona = (input.personaId && findPersona(input.personaId)) || DEFAULT_PERSONA;
-    const type = (input.interviewType && findType(input.interviewType)) || DEFAULT_TYPE;
+    // A market's own formats (GoApply's AI-interview practice) are offered to
+    // the first-party flow only; recruiter and external API sessions keep the
+    // international list.
+    const typeMarket: PracticeMarket = source === 'roboapply' ? (input.market ?? practiceDeps.currentMarket()) : 'intl';
+    let type = (input.interviewType && findType(input.interviewType, typeMarket)) || DEFAULT_TYPE;
     const mode: InterviewMode = input.mode === 'video' ? 'video' : 'voice';
     const language = normalizeLocale(input.language);
-    const durationMinutes = clampDuration(input.durationMinutes) ?? type.minutes;
+    let durationMinutes = clampDuration(input.durationMinutes) ?? type.minutes;
+    // WP-66: on GoApply a general practice (screening / behavioral / culture)
+    // of 20–30 minutes runs the AI-interview format, and so does the format
+    // picked by name. The row says so (`interviewType`), which is what the
+    // blueprint directive, the grading lens and the report's `cn` block read.
+    // A general practice of another length keeps its own type and length.
+    if (source === 'roboapply' && usesCnFormat({ market: typeMarket, typeId: type.id, minutes: durationMinutes })) {
+      type = findSessionType(CN_AI_INTERVIEW_FORMAT_ID) ?? type;
+      // The format is 20–30 minutes; the credit gate below sees the same length.
+      if (type.id === CN_AI_INTERVIEW_FORMAT_ID) durationMinutes = clampCnMinutes(durationMinutes);
+    }
 
     // CREDIT GATE (RoboApply candidate flow only). Recruiter + external-API
     // sources bill separately and are exempt; admins are exempt explicitly.
@@ -449,6 +467,10 @@ export class InterviewSessionService {
         // WP-43-S1 columns (SCHEMA-3), written alongside liveMetrics.practice
         // during the transition; readers take the column first.
         jobId: job?.id ?? null,
+        // WP-63a-S1 columns (SCHEMA-4): every new row says which brand and
+        // provider it runs on. liveMetrics.voiceSeam stays for non-default
+        // seams during the transition (see providers/sessionSeam.ts).
+        ...voiceSeamColumns(seam),
         ...(source === 'roboapply' ? { recordingConsent: { audio: recording.audio, video: recording.video } } : {}),
         ...(Object.keys(liveMetrics).length > 0
           ? { liveMetrics: liveMetrics as unknown as object }
@@ -520,20 +542,25 @@ export class InterviewSessionService {
     const inflight = this.inflightPrepares.get(session.id);
     if (inflight) return inflight;
     const prepared = session;
-    const run = inBrand(readVoiceSeam(prepared.liveMetrics).brand, () => this.runPrepare(prepared, params)).finally(() => {
+    const brand = (await resolveSessionSeam(prepared)).brand;
+    // Another call may have started the same prepare while the brand was read.
+    const raced = this.inflightPrepares.get(session.id);
+    if (raced) return raced;
+    const run = inBrand(brand, () => this.runPrepare(prepared, params, brand)).finally(() => {
       this.inflightPrepares.delete(session.id);
     });
     this.inflightPrepares.set(session.id, run);
     return run;
   }
 
-  private async runPrepare(session: InterviewSession, params: PrepareSessionParams): Promise<InterviewSession> {
+  private async runPrepare(session: InterviewSession, params: PrepareSessionParams, brand: BrandId): Promise<InterviewSession> {
     const startedAt = Date.now();
     try {
       const persona = (session.personaId && findPersona(session.personaId)) || DEFAULT_PERSONA;
-      const type = findType(session.interviewType) || DEFAULT_TYPE;
+      // A stored row may be in a market format (GoApply: cn_ai_interview).
+      const type = findSessionType(session.interviewType) || DEFAULT_TYPE;
       const characteristics = normalizeCharacteristics(session.characteristics, persona.difficulty);
-      const routing = getInterviewLlmRouting(readVoiceSeam(session.liveMetrics).brand);
+      const routing = getInterviewLlmRouting(brand);
 
       const gen = await interviewPromptService.generate({
         role: session.role,
@@ -556,7 +583,7 @@ export class InterviewSessionService {
         strictLlm: params.strictLlm !== false,
       });
 
-      const voice = resolveBrandVoice(readVoiceSeam(session.liveMetrics).brand, session.language, persona.voiceGender);
+      const voice = resolveBrandVoice(brand, session.language, persona.voiceGender);
       // Conditional on 'preparing': a concurrent run elsewhere, a delete or an
       // end-by-owner must win over this (late) result.
       const persisted = await prisma.interviewSession.updateMany({
@@ -606,7 +633,7 @@ export class InterviewSessionService {
       // is the only LLM call on the prepare request. Best-effort.
       if (params.requestId) {
         const snap = logger.getRequestSnapshot(params.requestId);
-        void recordBlueprintCost(session.id, tokenCostFromSnapshot(snap, getBlueprintModel(readVoiceSeam(session.liveMetrics).brand)));
+        void recordBlueprintCost(session.id, tokenCostFromSnapshot(snap, getBlueprintModel(brand)));
       }
       return current;
     } catch (err) {
@@ -646,10 +673,11 @@ export class InterviewSessionService {
     requestId?: string;
   }): Promise<ConnectionDetails> {
     const session = await this.loadOwned(params.userId, params.sessionId, params.apiKeyId);
-    return inBrand(readVoiceSeam(session.liveMetrics).brand, () => this.connectLoaded(session, params));
+    const seam = await resolveSessionSeam(session);
+    return inBrand(seam.brand, () => this.connectLoaded(session, params, seam));
   }
 
-  private async connectLoaded(session: InterviewSession, params: { requestId?: string }): Promise<ConnectionDetails> {
+  private async connectLoaded(session: InterviewSession, params: { requestId?: string }, seam: VoiceSeam): Promise<ConnectionDetails> {
 
     // C4: a session that is still preparing, failed or already over can never
     // go (back) live — answer with a typed 409 the client can act on.
@@ -660,7 +688,6 @@ export class InterviewSessionService {
     }
 
     const mode = session.mode as InterviewMode;
-    const seam = readVoiceSeam(session.liveMetrics);
     const voice = resolveBrandSessionVoice(
       seam.brand,
       session.voice as unknown as ResolvedVoice | null,
@@ -681,7 +708,7 @@ export class InterviewSessionService {
     let resolvedMetadataStr: string | undefined;
     const resolveRoomConfig = () => {
       const routing = resolvedRouting ?? getInterviewLlmRouting(seam.brand);
-      const metadata = resolvedMetadata ?? this.buildRoomMetadata(session, voice, routing);
+      const metadata = resolvedMetadata ?? this.buildRoomMetadata(session, voice, routing, seam.brand);
       const metadataStr = resolvedMetadataStr ?? JSON.stringify(metadata);
       resolvedRouting = routing;
       resolvedMetadata = metadata;
@@ -923,8 +950,8 @@ export class InterviewSessionService {
     session: InterviewSession,
     voice: ResolvedVoice,
     llmRouting: InterviewLlmRouting,
+    brand: BrandId,
   ): InterviewRoomMetadata {
-    const brand = readVoiceSeam(session.liveMetrics).brand;
     const stt = resolveBrandStt(brand, session.language);
     // GoApply: every speech model in the worker metadata must be domestic.
     assertBrandSpeech(brand, voice, stt);
@@ -1139,6 +1166,7 @@ export class InterviewSessionService {
       where: { id: sessionId },
       select: {
         status: true, error: true, transcript: true, liveMetrics: true, roomName: true, egressId: true, endedAt: true,
+        userId: true, brand: true, voiceProvider: true,
       },
     });
     if (!row) return;
@@ -1164,7 +1192,7 @@ export class InterviewSessionService {
         logger.error('INTERVIEW_ENGINE_SESSION', 'session failed by worker error before any answer (not charged)', {
           sessionId, reason: code, fromStatus: row.status,
         });
-        const provider = safeProvider(readVoiceSeam(row.liveMetrics));
+        const provider = safeProvider(await resolveSessionSeam(row));
         if (provider) {
           if (row.egressId) void provider.stopRecording(row.egressId).catch(() => { /* best-effort */ });
           void provider.deleteRoom(row.roomName).catch(() => { /* best-effort */ });
@@ -1260,9 +1288,9 @@ export class InterviewSessionService {
   async handleEgressEnded(params: { egressId?: string; roomName?: string; sizeBytes?: number; durationSec?: number; location?: string; signerBrand?: BrandId }): Promise<void> {
     const where = params.egressId ? { egressId: params.egressId } : params.roomName ? { roomName: params.roomName } : null;
     if (!where) return;
-    const session = await prisma.interviewSession.findFirst({ where, select: { id: true, mode: true, recordingKey: true, liveMetrics: true, recordingConsent: true } });
+    const session = await prisma.interviewSession.findFirst({ where, select: { id: true, mode: true, recordingKey: true, liveMetrics: true, recordingConsent: true, userId: true, brand: true, voiceProvider: true } });
     if (!session) return;
-    const seam = readVoiceSeam(session.liveMetrics);
+    const seam = await resolveSessionSeam(session);
     if (!webhookSignerMatches(params.signerBrand, seam, session.id, 'egress_ended')) return;
     // A video session recorded without the camera opt-in is audio-only (H8);
     // GoApply records audio only, always (CN L-11).
@@ -1292,9 +1320,9 @@ export class InterviewSessionService {
 
   /** @param signerBrand see handleEgressEnded. */
   async handleRoomFinished(roomName: string, signerBrand?: BrandId): Promise<void> {
-    const session = await prisma.interviewSession.findFirst({ where: { roomName }, select: { id: true, status: true, liveMetrics: true } });
+    const session = await prisma.interviewSession.findFirst({ where: { roomName }, select: { id: true, status: true, liveMetrics: true, userId: true, brand: true, voiceProvider: true } });
     if (!session) return;
-    if (!webhookSignerMatches(signerBrand, readVoiceSeam(session.liveMetrics), session.id, 'room_finished')) return;
+    if (!webhookSignerMatches(signerBrand, await resolveSessionSeam(session), session.id, 'room_finished')) return;
     if (NON_FINALIZABLE.includes(session.status)) return;
     await this.finalize(session.id).catch((err) => {
       logger.error('INTERVIEW_ENGINE_SESSION', 'finalize from room_finished failed', {
@@ -1311,7 +1339,7 @@ export class InterviewSessionService {
   async finalize(sessionId: string, opts: { workerDrained?: boolean } = {}): Promise<InterviewSession> {
     const session = await prisma.interviewSession.findUnique({ where: { id: sessionId } });
     if (!session) throw new InterviewNotFoundError();
-    return inBrand(readVoiceSeam(session.liveMetrics).brand, () => this.finalizeLoaded(session, opts));
+    return inBrand((await resolveSessionSeam(session)).brand, () => this.finalizeLoaded(session, opts));
   }
 
   private async finalizeLoaded(session: InterviewSession, opts: { workerDrained?: boolean }): Promise<InterviewSession> {
@@ -1354,7 +1382,7 @@ export class InterviewSessionService {
     const parley = isParleySession(session);
 
     if (wentLive && !parley) {
-      const provider = safeProvider(readVoiceSeam(session.liveMetrics));
+      const provider = safeProvider(await resolveSessionSeam(session));
       if (provider) {
         // Stop recording if still active (best-effort).
         if (session.egressId) await provider.stopRecording(session.egressId);
@@ -1503,6 +1531,17 @@ export class InterviewSessionService {
     // finalize claim winner reaches this line; the hook is idempotent anyway.
     if (updated.source === 'roboapply') {
       void this.markPracticeCompleted(updated).catch(() => undefined);
+      // GoApply: the report is ready to read — say so in WeChat when the
+      // person asked for it at practice start (soft; once per report).
+      void notifyPracticeReportReady({
+        target: 'live',
+        sessionId,
+        userId: updated.userId,
+        // The session's own brand (column, else liveMetrics, else the owner's).
+        cn: async () => getBrand((await resolveSessionSeam(updated)).brand).market === 'cn',
+        title: updated.role,
+        completedAt: updated.endedAt ?? new Date(),
+      });
     }
 
     // Phase B: LLM enrichment, FIRE-AND-FORGET. The session is already
@@ -1812,7 +1851,7 @@ export class InterviewSessionService {
    */
   async endByOwner(params: { sessionId: string; userId: string; apiKeyId?: string | null }): Promise<InterviewSession> {
     const session = await this.loadOwned(params.userId, params.sessionId, params.apiKeyId);
-    return inBrand(readVoiceSeam(session.liveMetrics).brand, () => this.endLoaded(session));
+    return inBrand((await resolveSessionSeam(session)).brand, () => this.endLoaded(session));
   }
 
   private async endLoaded(session: InterviewSession): Promise<InterviewSession> {
@@ -1827,7 +1866,7 @@ export class InterviewSessionService {
 
     // Parley: stop the conversation and pull its final transcript directly.
     const parley = isParleySession(session);
-    const endProvider = parley ? null : safeProvider(readVoiceSeam(session.liveMetrics));
+    const endProvider = parley ? null : safeProvider(await resolveSessionSeam(session));
     const signalled = endProvider ? await withTimeout(endProvider.sendEndSignal(session.roomName), 3000, false) : false;
     const drained = parley
       ? await drainParleySession(this, session)
@@ -1871,7 +1910,7 @@ export class InterviewSessionService {
    */
   async deleteByOwner(params: { sessionId: string; userId: string; apiKeyId?: string | null }): Promise<void> {
     const session = await this.loadOwned(params.userId, params.sessionId, params.apiKeyId);
-    return inBrand(readVoiceSeam(session.liveMetrics).brand, () => this.deleteLoaded(session, params));
+    return inBrand((await resolveSessionSeam(session)).brand, () => this.deleteLoaded(session, params));
   }
 
   private async deleteLoaded(
@@ -1883,7 +1922,7 @@ export class InterviewSessionService {
       if (isParleySession(session)) {
         await stopParleySession(session);
       } else {
-        const provider = safeProvider(readVoiceSeam(session.liveMetrics));
+        const provider = safeProvider(await resolveSessionSeam(session));
         if (provider) {
           if (session.egressId) {
             await provider.stopRecording(session.egressId).catch(() => { /* best-effort */ });
@@ -1921,7 +1960,7 @@ export class InterviewSessionService {
   }> {
     const session = await this.loadOwned(params.userId, params.sessionId, params.apiKeyId);
     // Presigned links come from the session's own bucket (CN_S3_* on GoApply).
-    return inBrand(readVoiceSeam(session.liveMetrics).brand, () => this.reportLoaded(session));
+    return inBrand((await resolveSessionSeam(session)).brand, () => this.reportLoaded(session));
   }
 
   private async reportLoaded(session: InterviewSession): Promise<{
@@ -2091,7 +2130,7 @@ export class InterviewSessionService {
     }
     for (const row of written) {
       // A written practice counts once it was answered and scored (completedAt stamp).
-      const meta = readTextPracticeMeta(row.blueprint);
+      const meta = textPracticeMetaOf(row);
       keepLatest(meta?.jobId ?? null, meta?.completedAt ?? null);
     }
     return out;
@@ -2119,8 +2158,8 @@ export class InterviewSessionService {
       }
     }
     const job = input.job;
-    // The job's title (and company) is the role the interviewer plans for.
-    // RAMockService takes no posting text yet (request to WP-66/INT).
+    // The job's title (and company) is the role the interviewer plans for; its
+    // posting is the evidence the questions are written from (WP-66).
     const role = job
       ? `${job.title}${job.companyName ? ` (${job.companyName})` : ''}`.slice(0, 200)
       : (input.role ?? '').trim().slice(0, 200);
@@ -2133,6 +2172,10 @@ export class InterviewSessionService {
         format: 'voice',
         language: input.language,
         durationMinutes,
+        jdText: job?.jdText || undefined,
+        market: practiceDeps.currentMarket(),
+        // SCHEMA-3 column (RAMockSession.jobId), written with the row.
+        jobId: job?.id ?? null,
       },
       input.locale,
     );
@@ -2144,7 +2187,9 @@ export class InterviewSessionService {
       companyName: job?.companyName ?? null,
       creditExempt: input.creditExempt === true,
     };
-    // Tag the row as a first-party practice (the job, the metering rule). A
+    // Tag the row as a first-party practice (the metering rule, the job's
+    // display names). The job id is also on the row's own column; the JSON
+    // copy stays during the transition (an older deploy reads only it). A
     // lost tag only loses the "Practiced" step, so it is best-effort.
     await practiceDeps.mergePracticeMeta('text', started.sessionId, meta as unknown as Record<string, unknown>).catch((err) => {
       logger.warn('INTERVIEW_ENGINE_SESSION', 'written practice tag failed', {
@@ -2157,7 +2202,7 @@ export class InterviewSessionService {
 
   async textPracticeTurn(input: { userId: string; sessionId: string; answer: string; questionIndex: number; locale?: string }) {
     const row = await practiceDeps.findTextPractice(input.userId, input.sessionId);
-    if (!row || !readTextPracticeMeta(row.blueprint)) throw new InterviewNotFoundError();
+    if (!row || !textPracticeMetaOf(row)) throw new InterviewNotFoundError();
     return practiceDeps.textTurn(
       input.userId,
       { sessionId: input.sessionId, answer: input.answer, questionIndex: input.questionIndex },
@@ -2173,9 +2218,9 @@ export class InterviewSessionService {
    */
   async scoreTextPractice(input: { userId: string; sessionId: string }): Promise<TextPracticeScoreResult> {
     const row = await practiceDeps.findTextPractice(input.userId, input.sessionId);
-    const meta = row ? readTextPracticeMeta(row.blueprint) : null;
+    const meta = row ? textPracticeMetaOf(row) : null;
     if (!row || !meta) throw new InterviewNotFoundError();
-    const score = await practiceDeps.textScore(input.userId, input.sessionId);
+    const score = await practiceDeps.textScore(input.userId, input.sessionId, practiceDeps.currentMarket());
     const answered = countTextAnswers(row.transcript) > 0;
     if (answered) {
       if (!meta.creditExempt) {
@@ -2201,6 +2246,15 @@ export class InterviewSessionService {
           completedAt: meta.completedAt ? null : new Date().toISOString(),
         });
       }
+      // GoApply: the results are ready (soft; once per practice, also on a repeated score call).
+      void notifyPracticeReportReady({
+        target: 'text',
+        sessionId: input.sessionId,
+        userId: input.userId,
+        cn: practiceDeps.currentMarket() === 'cn',
+        title: meta.jobTitle ?? row.role ?? '',
+        completedAt: new Date(),
+      });
     }
     return { ...score, practiceCounted: answered, jobId: meta.jobId };
   }
@@ -2228,7 +2282,8 @@ export class InterviewSessionService {
    * of its own brand: the mainland worker's secret can never append to, end or
    * meter a RoboApply session, nor the reverse. A secret no brand configured is
    * refused before any database read; otherwise the session's brand (its
-   * stored seam) picks the one secret that is accepted. Constant-time compares.
+   * stored seam: column, else liveMetrics, else the owner's brand) picks the
+   * one secret that is accepted. Constant-time compares.
    * An unknown session id passes here (there is nothing of another brand to
    * touch) and each callback handles not-found as before.
    */
@@ -2238,9 +2293,9 @@ export class InterviewSessionService {
     if (!secret || !configured.some((e) => secretEquals(secret, e))) throw new InterviewAuthError('Invalid callback secret');
     const id = (sessionId ?? '').trim();
     if (!id) return;
-    const row = await prisma.interviewSession.findUnique({ where: { id }, select: { liveMetrics: true } });
+    const row = await prisma.interviewSession.findUnique({ where: { id }, select: { liveMetrics: true, userId: true, brand: true, voiceProvider: true } });
     if (!row) return;
-    const expected = getAgentCallbackSecret(readVoiceSeam(row.liveMetrics).brand);
+    const expected = getAgentCallbackSecret((await resolveSessionSeam(row)).brand);
     if (!expected || !secretEquals(secret, expected)) throw new InterviewAuthError('Invalid callback secret');
   }
 }
@@ -2492,26 +2547,51 @@ export interface PracticeDeps {
     target: PracticeTarget,
     sessionId: string,
     patch: Record<string, unknown>,
-    unlessSet?: 'checklistMarkedAt',
+    unlessSet?: PracticeClaimKey,
   ): Promise<boolean>;
+  /**
+   * GoApply: mirror "your practice report is ready" to WeChat
+   * (features/notify-cn `sendNotice`, template `report_ready`). Resolves with
+   * the delivery outcome; expected skips (not linked, no accepted prompt,
+   * channel off, template unset) are not errors.
+   */
+  sendReportNotice(input: PracticeReportNotice): Promise<unknown>;
   /** Set `practiceCompletedAt` once (SCHEMA-3 column; never overwritten). */
   stampPracticeCompleted(target: PracticeTarget, sessionId: string, at: Date): Promise<unknown>;
   /** Practice credits: can the user afford a practice of this length? */
   gatePractice(userId: string, plannedMinutes: number): Promise<{ ok: boolean; balance: number; required: number; tier: string }>;
   /** Pro-rated practice debit, idempotent per session id. */
   debitPractice(input: { userId: string; sessionId: string; durationSec: number; plannedDurationMinutes: number | null }): Promise<unknown>;
-  textStart(userId: string, input: TextStartCall, locale?: string): Promise<{ sessionId: string; questions: TextPracticeQuestion[] }>;
+  textStart(
+    userId: string,
+    input: TextStartCall,
+    locale?: string,
+  ): Promise<{ sessionId: string; questions: TextPracticeQuestion[]; cnFormat?: TextPracticeCnFormat | null }>;
   textTurn(
     userId: string,
     input: { sessionId: string; answer: string; questionIndex: number },
     locale?: string,
   ): Promise<{ nextIndex: number | null; turns: Array<{ who: 'them' | 'you'; text: string }>; coachTip: unknown }>;
-  textScore(userId: string, sessionId: string): Promise<TextPracticeScore>;
+  textScore(userId: string, sessionId: string, market?: PracticeMarket): Promise<TextPracticeScore>;
   findTextPractice(userId: string, sessionId: string): Promise<TextPracticeRow | null>;
   findTextPracticesForJobs(userId: string, jobIds: string[]): Promise<TextPracticeRow[]>;
 }
 
 export type PracticeTarget = 'live' | 'text';
+
+/** Keys of the practice object that are claimed once (the merge applies only while the key is absent). */
+export type PracticeClaimKey = 'checklistMarkedAt' | 'reportNoticeAt';
+
+/** What the WeChat "report ready" notice carries (the person's own practice; no numbers). */
+export interface PracticeReportNotice {
+  userId: string;
+  template: 'report_ready';
+  params: { title: string; completedAt: string };
+  /** The report this notice is about (the session id): a prompt accepted for it is spent first. */
+  eventId: string;
+  /** Same-site path the message opens. */
+  href: string;
+}
 
 export interface TextStartCall {
   role: string;
@@ -2520,6 +2600,19 @@ export interface TextStartCall {
   format: 'voice';
   language?: string;
   durationMinutes: number;
+  /** The job post the practice is for: evidence for the question plan (WP-66). */
+  jdText?: string;
+  /** The requesting brand's market (GoApply runs its AI-interview format). */
+  market?: PracticeMarket;
+  /** Written to `RAMockSession.jobId` with the row. */
+  jobId?: string | null;
+}
+
+/** Per-question timing of the GoApply AI-interview format (from `blueprint.cnFormat`). */
+export interface TextPracticeCnFormat {
+  formatId: string;
+  minutes: number;
+  questions: Array<{ prepSeconds: number; answerSeconds: number; story: boolean }>;
 }
 
 export interface TextPracticeQuestion {
@@ -2535,18 +2628,35 @@ export interface TextPracticeScore {
   strengths: string[];
   gaps: string[];
   durationMinutes: number;
+  /** GoApply only: the practice report block (communication / logic / story answers, STAR, filler words). */
+  cn?: CnPracticeReport;
 }
 
 /** The RAMockSession columns the written practice reads. */
 export interface TextPracticeRow {
   id: string;
+  /** The role the practice was planned for (the notice title); absent from an older select. */
+  role?: string | null;
   blueprint: unknown;
   transcript: unknown;
   plannedDurationMinutes: number | null;
   status: string;
+  /** SCHEMA-3 columns; absent from a row read by an older select. */
+  jobId?: string | null;
+  practiceCompletedAt?: Date | null;
 }
 
-/** `RAMockSession.blueprint.practice` — the first-party tag on a written practice. */
+/**
+ * The first-party view of a written practice.
+ *
+ * `jobId` and `completedAt` live on `RAMockSession.jobId` /
+ * `practiceCompletedAt` (SCHEMA-3) and are read from there first
+ * (`textPracticeMetaOf`). `RAMockSession.blueprint.practice` still carries the
+ * tag that makes a text interview a first-party practice (`kind: 'text'`), the
+ * metering rule, the checklist claim and the job's display names, which have
+ * no column, plus a copy of `jobId` / `completedAt` for rows written before
+ * the columns and for a rollback (no backfill DML).
+ */
 export interface TextPracticeMeta {
   v: 1;
   kind: 'text';
@@ -2576,6 +2686,8 @@ export interface TextPracticeStartResult {
   sessionId: string;
   questions: TextPracticeQuestion[];
   jobId: string | null;
+  /** GoApply AI-interview format: thinking and answer time per question; absent otherwise. */
+  cnFormat?: TextPracticeCnFormat | null;
 }
 
 export interface TextPracticeScoreResult extends TextPracticeScore {
@@ -2584,7 +2696,31 @@ export interface TextPracticeScoreResult extends TextPracticeScore {
   jobId: string | null;
 }
 
-/** Read `RAMockSession.blueprint.practice`; null for a text interview that is not a first-party practice. */
+/**
+ * A written practice's meta, columns first: `RAMockSession.jobId` and
+ * `practiceCompletedAt` win over the JSON copies, which serve rows written
+ * before the columns. null for a text interview that is not a first-party
+ * practice (no `blueprint.practice` tag).
+ */
+export function textPracticeMetaOf(row: Pick<TextPracticeRow, 'blueprint' | 'jobId' | 'practiceCompletedAt'>): TextPracticeMeta | null {
+  const meta = readTextPracticeMeta(row.blueprint);
+  if (!meta) return null;
+  const jobId = typeof row.jobId === 'string' && row.jobId ? row.jobId : meta.jobId;
+  const completedAt = row.practiceCompletedAt instanceof Date ? row.practiceCompletedAt.toISOString() : meta.completedAt;
+  return {
+    ...meta,
+    jobId,
+    // The display names belong to the job the JSON tag was written for.
+    ...(jobId === meta.jobId ? {} : { jobTitle: null, companyName: null }),
+    ...(completedAt ? { completedAt } : {}),
+  };
+}
+
+/**
+ * Read `RAMockSession.blueprint.practice` alone; null for a text interview
+ * that is not a first-party practice. Callers holding the row use
+ * `textPracticeMetaOf`, which reads the columns first.
+ */
 export function readTextPracticeMeta(blueprint: unknown): TextPracticeMeta | null {
   if (!blueprint || typeof blueprint !== 'object' || Array.isArray(blueprint)) return null;
   const raw = (blueprint as Record<string, unknown>).practice;
@@ -2665,12 +2801,62 @@ async function completePractice(input: {
   }
 }
 
+/** Longest title a WeChat template field takes (`thing` keywords: 20 characters). */
+const REPORT_NOTICE_TITLE_MAX = 20;
+
+/**
+ * GoApply only: when a practice report is finished, mirror "your report is
+ * ready" to WeChat (features/notify-cn, template `report_ready`). Soft and
+ * once per report:
+ *   - `reportNoticeAt` is claimed first with a conditional merge on the
+ *     practice object, so a repeated score call, a second finalize trigger or
+ *     another instance never sends a second notice for the same report;
+ *   - nothing here throws, and a skipped or failed send is not retried (the
+ *     report itself is on the page; WeChat only mirrors it).
+ * RoboApply (`cn` false) sends nothing and claims nothing.
+ */
+async function notifyPracticeReportReady(input: {
+  target: PracticeTarget;
+  sessionId: string;
+  userId: string;
+  /** Is this a GoApply practice? (A thunk when it has to be looked up; a failed lookup sends nothing.) */
+  cn: boolean | (() => Promise<boolean>);
+  title: string;
+  completedAt: Date;
+}): Promise<boolean> {
+  try {
+    if (!(typeof input.cn === 'function' ? await input.cn() : input.cn)) return false;
+    const completedAt = input.completedAt.toISOString();
+    const claimed = await practiceDeps.mergePracticeMeta(input.target, input.sessionId, { reportNoticeAt: completedAt }, 'reportNoticeAt');
+    if (!claimed) return false;
+    // Whole characters (a title may hold characters outside the BMP).
+    const title = [...(input.title ?? '').trim()].slice(0, REPORT_NOTICE_TITLE_MAX).join('');
+    // The notice needs a title: an untitled practice is not announced.
+    if (!title) return false;
+    await practiceDeps.sendReportNotice({
+      userId: input.userId,
+      template: 'report_ready',
+      params: { title, completedAt },
+      eventId: input.sessionId,
+      href: input.target === 'live' ? `/practice/${input.sessionId}/report` : '/practice',
+    });
+    return true;
+  } catch (err) {
+    logger.warn('INTERVIEW_ENGINE_SESSION', 'practice report notice failed', {
+      sessionId: input.sessionId, target: input.target, error: err instanceof Error ? err.message : String(err),
+    });
+    return false;
+  }
+}
+
 const PRACTICE_TABLES: Record<PracticeTarget, { table: string; column: string }> = {
   live: { table: '"InterviewSession"', column: '"liveMetrics"' },
   text: { table: '"RAMockSession"', column: '"blueprint"' },
 };
 
-const TEXT_PRACTICE_SELECT = { id: true, blueprint: true, transcript: true, plannedDurationMinutes: true, status: true } as const;
+const TEXT_PRACTICE_SELECT = {
+  id: true, role: true, blueprint: true, transcript: true, plannedDurationMinutes: true, status: true, jobId: true, practiceCompletedAt: true,
+} as const;
 
 /** Map the text interview's errors onto the engine's (404 / 422 via handleEngineError). */
 async function mapTextErrors<T>(run: () => Promise<T>): Promise<T> {
@@ -2760,6 +2946,10 @@ const defaultPracticeDeps: PracticeDeps = {
     );
     return count === 1;
   },
+  async sendReportNotice(input) {
+    const { notifyCnService } = await import('../../features/notify-cn/index.js');
+    return notifyCnService().sendNotice(input);
+  },
   async stampPracticeCompleted(target, sessionId, at) {
     const where = { id: sessionId, practiceCompletedAt: null };
     const data = { practiceCompletedAt: at };
@@ -2782,9 +2972,9 @@ const defaultPracticeDeps: PracticeDeps = {
     const { raMockService } = await import('../../roboapply/v2/services/RAMockService.js');
     return mapTextErrors(() => raMockService.nextTurn(userId, input, locale));
   },
-  async textScore(userId, sessionId) {
+  async textScore(userId, sessionId, market) {
     const { raMockService } = await import('../../roboapply/v2/services/RAMockService.js');
-    return mapTextErrors(() => raMockService.score(userId, sessionId));
+    return mapTextErrors(() => raMockService.score(userId, sessionId, { market }));
   },
   async findTextPractice(userId, sessionId) {
     const id = (sessionId ?? '').trim();
@@ -2796,7 +2986,8 @@ const defaultPracticeDeps: PracticeDeps = {
       where: {
         userId,
         status: 'complete',
-        OR: jobIds.map((id) => ({ blueprint: { path: ['practice', 'jobId'], equals: id } })),
+        // The column first; the JSON path finds rows written before it.
+        OR: [{ jobId: { in: jobIds } }, ...jobIds.map((id) => ({ blueprint: { path: ['practice', 'jobId'], equals: id } }))],
       },
       select: TEXT_PRACTICE_SELECT,
       orderBy: { createdAt: 'desc' },

@@ -3,9 +3,9 @@
 // Cookie/JWT-authenticated routes for the first-party UIs (RoboApply candidate
 // app + RoboHire recruiter SPA). Mounted at /api/v1/interview-engine.
 //
-//   GET  /catalog                      — personas + interview types
+//   GET  /catalog                      — personas + interview types (GoApply:
+//                                        its AI-interview practice format first)
 //   GET  /sessions/recent              — the user's recent sessions
-//   POST /sessions                     — create a session (status 'preparing'; fast)
 //   POST /sessions/:id/prepare         — generate blueprint + prompt (long; {retry:true} re-runs a failure)
 //   GET  /sessions/:id                 — session detail
 //   POST /sessions/:id/connection      — go live → LiveKit url + token + room
@@ -14,6 +14,17 @@
 //   POST /sessions/:id/end             — finalize (candidate ended)
 //   GET  /sessions/:id/report          — scored report + presigned media URLs
 //   DELETE /sessions/:id               — delete session + its R2 recording/transcript
+//
+// Sessions are CREATED through the first-party practice route only
+// (POST /v1/practice/sessions, externalRoutes.ts): it checks the brand gate,
+// loads the job and the resume on the server and honours the recording
+// consent. The old browser `POST /sessions` here could do none of that (it
+// could not record and dropped the job), had no caller left, and was removed
+// (INT-09, R7).
+//
+// The two routes here that call a model (prepare, coach) check the brand's AI
+// gate first: a GoApply user who withdrew the AI consent after creating a
+// session gets no model call (503 ai_unavailable; the coach just stays silent).
 
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../../middleware/auth.js';
@@ -25,21 +36,16 @@ import { interviewCoachService } from '../coaching/interviewCoachService.js';
 import type { CoachMode } from '../coaching/InterviewCoachAgent.js';
 import { toSessionSummary, toSessionDetail } from './serialize.js';
 import { handleEngineError } from './errors.js';
-import { resolveSessionCallbackBaseUrl } from '../config.js';
-import { shouldUseParley } from '../parley/parleyConfig.js';
-import type { InterviewSource } from '../types.js';
-
-/** Admins are exempt from mock-interview credits — explicitly, on the
- *  'roboapply' source (never via the recruiter source path). */
-function isAdmin(user: { role?: string | null; roles?: string[] | null } | undefined): boolean {
-  if (!user) return false;
-  return user.role === 'admin' || (Array.isArray(user.roles) && user.roles.includes('admin'));
-}
+import { aiGateOpen, aiGateReason, currentBrand, marketOf } from './practiceGate.js';
 
 const router = Router();
 
-router.get('/catalog', requireAuth, (_req: Request, res: Response) => {
-  return res.json(getCatalog());
+router.get('/catalog', requireAuth, async (req: Request, res: Response) => {
+  try {
+    return res.json(getCatalog(marketOf(await currentBrand())));
+  } catch (err) {
+    return handleEngineError(res, 'catalog', err, { userId: req.user?.id });
+  }
 });
 
 router.get('/sessions/recent', requireAuth, async (req: Request, res: Response) => {
@@ -51,43 +57,12 @@ router.get('/sessions/recent', requireAuth, async (req: Request, res: Response) 
   }
 });
 
-router.post('/sessions', requireAuth, async (req: Request, res: Response) => {
-  try {
-    const b = req.body ?? {};
-    const admin = isAdmin(req.user as { role?: string; roles?: string[] });
-    // Legacy role-'user' (RoboHire-style) accounts stay on the 'recruiter'
-    // source, which was never credit-gated or debited. Moving them onto the
-    // seeker credit gate is a billing change that needs product sign-off.
-    const source: InterviewSource = !admin && req.user!.role === 'user' ? 'recruiter' : 'roboapply';
-    const session = await interviewSessionService.createSession({
-      userId: req.user!.id,
-      source,
-      creditExempt: admin,
-      callbackBaseUrl: resolveSessionCallbackBaseUrl(req.headers),
-      // Parley pilot (INTERVIEW_ENGINE_PARLEY_PILOT): candidate practice only.
-      transport: source === 'roboapply' && shouldUseParley(req.user!) ? 'parley' : undefined,
-      role: typeof b.role === 'string' ? b.role : '',
-      interviewType: typeof b.interviewType === 'string' ? b.interviewType : undefined,
-      personaId: typeof b.personaId === 'string' ? b.personaId : undefined,
-      mode: b.mode === 'video' ? 'video' : b.mode === 'voice' ? 'voice' : undefined,
-      language: typeof b.language === 'string' ? b.language : undefined,
-      durationMinutes: typeof b.durationMinutes === 'number' ? b.durationMinutes : undefined,
-      characteristics: b.characteristics,
-      candidateName: typeof b.candidateName === 'string' ? b.candidateName : req.user!.name ?? undefined,
-      resumeContext: typeof b.resumeContext === 'string' ? b.resumeContext : undefined,
-      jdText: typeof b.jdText === 'string' ? b.jdText : undefined,
-      requestId: getCurrentRequestId() ?? undefined,
-    });
-    return res.json({ session: toSessionDetail(session) });
-  } catch (err) {
-    return handleEngineError(res, 'create', err, { userId: req.user?.id });
-  }
-});
-
 // C2: run (or re-run with {retry:true}) blueprint + prompt generation. A long
 // request — the client also polls GET /sessions/:id as a backup.
 router.post('/sessions/:id/prepare', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
+    // The plan is written by a model: the brand's AI gate comes first.
+    if (!(await aiGateOpen(req, res, await currentBrand()))) return res;
     const session = await interviewSessionService.prepareSession({
       sessionId: req.params.id,
       userId: req.user!.id,
@@ -129,6 +104,8 @@ router.post('/sessions/:id/coach', requireAuth, async (req: Request<{ id: string
   try {
     const b = req.body ?? {};
     const mode: CoachMode = b.mode === 'nudge' ? 'nudge' : 'hint';
+    // No model call for a user the brand's AI gate refuses: the coach stays silent.
+    if (await aiGateReason(req.user!.id, await currentBrand())) return res.json({ coach: null });
     const requestId = getCurrentRequestId() ?? undefined;
     const tip = await interviewCoachService.coach({
       userId: req.user!.id,

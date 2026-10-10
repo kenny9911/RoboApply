@@ -7,6 +7,8 @@
 //        only by default (no model call; status 'not_generated' when no set is
 //        stored). Pass `{ write: true }` only when the user asked for practice
 //        questions: it writes the missing set (AI and the daily limit allowing).
+//        The job → set link is `RAInterviewQuestion.jobId` (SR-59-1), so a set
+//        written once is found again after a cold start and on every instance.
 //        Show it with a "Practice for this job" link (`/practice?job=<jobId>`,
 //        hooks/shared/useLaunchPractice).
 //   getPrepService()                                   the full service (routes, tests)
@@ -18,7 +20,7 @@ import { DAY, consumeRateLimit, rateLimitKey } from '../../platform/ratelimit/in
 import { getCurrentRequestId } from '../../lib/requestContext.js';
 import { getTaskModel } from '../../lib/llm/llmTaskSettings.js';
 import { CONTRIBUTIONS_PER_DAY, GUIDE_GENERATIONS_PER_DAY, JOB_SET_GENERATIONS_PER_DAY, REPORTS_PER_DAY, type JobQuestionSetResponse, type QuestionView } from './contract.js';
-import { createMemoryJobSetIndex } from './jobSetIndex.js';
+import { createPrismaJobSetIndex, type JobSetQuestionDelegate } from './jobSetIndex.js';
 import { PrepService, type BudgetKind, type PrepJob, type PrepServiceDeps } from './service.js';
 import { createPrismaPrepStore } from './store.js';
 
@@ -59,10 +61,15 @@ async function loadJobViaDetail(userId: string, jobId: string): Promise<PrepJob>
 }
 
 export async function defaultPrepDeps(): Promise<PrepServiceDeps> {
-  const [{ normalizeCompanyName }, { cnPostingsWhere }] = await Promise.all([import('../jobs/normalize/index.js'), import('../cn/jobs/index.js')]);
+  const [{ normalizeCompanyName }, { cnPostingsWhere }, { default: prisma }] = await Promise.all([
+    import('../jobs/normalize/index.js'),
+    import('../cn/jobs/index.js'),
+    import('../../lib/prisma.js'),
+  ]);
   return {
     store: await createPrismaPrepStore(),
-    jobSets: createMemoryJobSetIndex(),
+    // SR-59-1: the job → set link lives in the database, not in this process.
+    jobSets: createPrismaJobSetIndex({ rAInterviewQuestion: prisma.rAInterviewQuestion as unknown as JobSetQuestionDelegate }),
     market: () => (getCurrentBrandOrDefault().market === 'cn' ? 'cn' : 'intl'),
     now: () => new Date(),
     aiAvailable: prepAiAvailable,

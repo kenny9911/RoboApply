@@ -7,8 +7,22 @@
 // Contract: NEVER throws. Returns null when TAVILY_API_KEY is missing or the
 // request fails, so prompt generation degrades gracefully to role-title-only
 // synthesis.
+//
+// Per brand (INT-09, R7):
+//   - GoApply (market cn) never searches here. Tavily is an offshore service
+//     and there is no domestic search provider yet, so a GoApply practice is
+//     planned from the role and the saved job post alone: zero requests.
+//   - RoboApply: Tavily is a no-PI vendor. `assertNoPiInPayload` checks the
+//     query before every search: it must not carry an email, a phone number, a
+//     government id or a value that identifies the user (their name). A query
+//     that does is not sent; preparation continues without web evidence.
 
 import { logger } from '../services/LoggerService.js';
+import { getBrand, type BrandId, type ProductBrand } from '../platform/brand/registry.js';
+import { getCurrentBrandOrDefault } from '../platform/brand/brandContext.js';
+import { assertNoPiInPayload } from '../platform/residency/egressPolicy.js';
+
+export const TAVILY_SEARCH_URL = 'https://api.tavily.com/search';
 
 export interface InterviewWebResult {
   title: string;
@@ -34,6 +48,23 @@ export interface SearchJobRequirementsOptions {
   includeDomains?: string[];
   requestId?: string;
   signal?: AbortSignal;
+  /**
+   * The brand the search runs for; default: the brand of the current unit of
+   * work (session work always runs inside the session's brand).
+   */
+  brand?: BrandId | ProductBrand;
+  /** Strings that identify the user (their name); a query containing one is never sent. */
+  knownValues?: ReadonlyArray<string | null | undefined>;
+}
+
+function resolveBrand(brand: BrandId | ProductBrand | undefined): ProductBrand {
+  if (brand && typeof brand === 'object') return brand;
+  return brand ? getBrand(brand) : getCurrentBrandOrDefault();
+}
+
+/** May this brand use the web search at all? GoApply: no (offshore provider, no domestic one yet). */
+export function webSearchAllowedFor(brand?: BrandId | ProductBrand): boolean {
+  return resolveBrand(brand).market !== 'cn';
 }
 
 /** One Tavily call. Throws on a non-OK response so the caller's try/catch can
@@ -43,7 +74,7 @@ async function tavilyFetch(
   query: string,
   opts: SearchJobRequirementsOptions,
 ): Promise<InterviewWebResponse> {
-  const response = await fetch('https://api.tavily.com/search', {
+  const response = await fetch(TAVILY_SEARCH_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -84,6 +115,28 @@ export async function searchJobRequirements(
 ): Promise<InterviewWebResponse | null> {
   const apiKey = process.env.TAVILY_API_KEY?.trim();
   if (!apiKey || !query.trim()) return null;
+  let brand: ProductBrand;
+  try {
+    brand = resolveBrand(options?.brand);
+  } catch {
+    // An unknown brand is never treated as one that may search.
+    return null;
+  }
+  if (brand.market === 'cn') {
+    logger.info('INTERVIEW_ENGINE_WEB', 'web search skipped: not used on this brand', {
+      brand: brand.id, requestId: options?.requestId,
+    });
+    return null;
+  }
+  try {
+    // The same text is sent on the open-web retry below, so one check covers both.
+    assertNoPiInPayload({ brand, target: TAVILY_SEARCH_URL, payload: query.slice(0, 400), knownValues: options?.knownValues });
+  } catch (err) {
+    logger.warn('INTERVIEW_ENGINE_WEB', 'web search not sent: the query failed the no-personal-information check', {
+      brand: brand.id, error: err instanceof Error ? err.message : String(err), requestId: options?.requestId,
+    });
+    return null;
+  }
   const startedAt = Date.now();
   try {
     let resp = await tavilyFetch(apiKey, query, options ?? {});

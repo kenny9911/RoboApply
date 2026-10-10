@@ -33,19 +33,37 @@
 // `nextTurn` falls back to a canned interviewer turn, so every endpoint returns
 // a valid shape with no LLM key.
 //
+// GoApply (WP-66): the cn market lists its AI-interview practice format first
+// (`catalog('cn')`); `start` passes the job post, the market and the session
+// id (the question-selection seed) to the prompt generator, which then runs
+// the format's script and saves its timing plan on `blueprint.cnFormat`; and
+// `score` adds the `cn` report block (communication / logic / story answers,
+// STAR and filler-word checks — text checks only, no model). RoboApply is
+// unchanged: no market format, no `cn` block.
+//
 // Ownership: every session-scoped method loads `{ id, userId }` and 404s
 // otherwise (single-user product — no team scope; see raVisibility.ts).
 
+import { randomUUID } from 'node:crypto';
 import prisma from '../../../lib/prisma.js';
-import { getCurrentRequestId } from '../../../lib/requestContext.js';
+import { getCurrentBrandId, getCurrentRequestId } from '../../../lib/requestContext.js';
+import { getBrand } from '../../../platform/brand/index.js';
+import {
+  CN_AI_INTERVIEW_FORMAT_ID,
+  buildCnPracticeReport,
+  normalizeCnTurns,
+  type CnPracticeReport,
+} from '../../../features/cn/interview/index.js';
 import { logger } from '../../../services/LoggerService.js';
 import {
-  RA_MOCK_CATALOG,
+  catalogForMarket,
+  findAnyType,
   findInterviewer,
   findType,
   interviewerNameFor,
   typeLabelFor,
   type RAMockCatalog,
+  type RAMockMarket,
 } from '../lib/raMockCatalog.js';
 import {
   RAMockInterviewerAgent,
@@ -82,9 +100,18 @@ export interface MockRecentSessionsResult {
   sessions: RAMockSessionSummary[];
 }
 
+/** Per-question timing of the GoApply AI-interview format, in question order. */
+export interface MockCnFormatTiming {
+  formatId: string;
+  minutes: number;
+  questions: Array<{ prepSeconds: number; answerSeconds: number; story: boolean }>;
+}
+
 export interface MockStartResult {
   sessionId: string;
   questions: Array<{ q: string; hint: string; coachTip: RAMockCoachTip }>;
+  /** Only when the session runs the GoApply AI-interview format (one entry per question). */
+  cnFormat?: MockCnFormatTiming | null;
 }
 
 export interface MockNextTurnResult {
@@ -103,6 +130,8 @@ export interface MockScoreResult {
   strengths: string[];
   gaps: string[];
   durationMinutes: number;
+  /** GoApply only: the practice report block (text checks; no model). */
+  cn?: CnPracticeReport;
 }
 
 // ─── Request shapes ───────────────────────────────────────────────────────
@@ -116,6 +145,12 @@ export interface MockStartInput {
   language?: string;
   /** Planned interview length in minutes (defaults to the type's minutes). */
   durationMinutes?: number;
+  /** The job post the practice is for; given to the question plan as evidence. */
+  jdText?: string;
+  /** The brand's market; defaults to the request's brand (intl when none). */
+  market?: RAMockMarket;
+  /** The RAJob the practice was started from (already market-checked by the caller). */
+  jobId?: string | null;
 }
 
 export interface MockNextTurnInput {
@@ -145,6 +180,52 @@ export class MockSessionNotFoundError extends Error {
 // ─── Constants ──────────────────────────────────────────────────────────
 
 const DEFAULT_QUESTION_COUNT = 5;
+
+/** Job post text handed to the generator (the engine's own cap). */
+const JD_TEXT_MAX_CHARS = 8000;
+
+/** The market of the request's brand; intl when there is no brand context. */
+function currentMarket(): RAMockMarket {
+  try {
+    const id = getCurrentBrandId();
+    return id && getBrand(id).market === 'cn' ? 'cn' : 'intl';
+  } catch {
+    return 'intl';
+  }
+}
+
+/**
+ * The timing plan saved by the generator (`blueprint.cnFormat`), when it has
+ * one entry per question. Anything else (no plan, a fallback question set of
+ * another length) is null, so the UI never shows a timing for the wrong question.
+ */
+function cnTimingFrom(blueprint: unknown, questionCount: number): MockCnFormatTiming | null {
+  if (!blueprint || typeof blueprint !== 'object' || Array.isArray(blueprint)) return null;
+  const plan = (blueprint as Record<string, unknown>).cnFormat;
+  if (!plan || typeof plan !== 'object' || Array.isArray(plan)) return null;
+  const p = plan as Record<string, unknown>;
+  if (!Array.isArray(p.questions) || p.questions.length !== questionCount || questionCount === 0) return null;
+  const questions: MockCnFormatTiming['questions'] = [];
+  for (const row of p.questions) {
+    const r = (row ?? {}) as Record<string, unknown>;
+    const prep = Number(r.prepSeconds);
+    const answer = Number(r.answerSeconds);
+    if (!Number.isFinite(prep) || prep < 0 || !Number.isFinite(answer) || answer <= 0) return null;
+    questions.push({ prepSeconds: Math.round(prep), answerSeconds: Math.round(answer), story: r.story === true });
+  }
+  return {
+    formatId: typeof p.formatId === 'string' && p.formatId ? p.formatId : CN_AI_INTERVIEW_FORMAT_ID,
+    minutes: Number.isFinite(Number(p.minutes)) ? Math.round(Number(p.minutes)) : 0,
+    questions,
+  };
+}
+
+/** True when the stored blueprint carries the AI-interview format plan. */
+function hasCnFormatPlan(blueprint: unknown): boolean {
+  if (!blueprint || typeof blueprint !== 'object' || Array.isArray(blueprint)) return false;
+  const plan = (blueprint as Record<string, unknown>).cnFormat;
+  return !!plan && typeof plan === 'object' && !Array.isArray(plan);
+}
 
 /** Clamp a requested interview duration to a sane 5..120 minute window. */
 function clampDurationMinutes(value: unknown): number | undefined {
@@ -625,9 +706,9 @@ function asTranscript(value: unknown): RAMockTurn[] {
 // ─── Service ──────────────────────────────────────────────────────────────
 
 export class RAMockService {
-  /** The STATIC setup catalog. No DB, no LLM. */
-  catalog(): MockCatalogResult {
-    return { catalog: RA_MOCK_CATALOG };
+  /** The STATIC setup catalog. No DB, no LLM. GoApply (`cn`) lists its AI-interview practice format first. */
+  catalog(market: RAMockMarket = currentMarket()): MockCatalogResult {
+    return { catalog: catalogForMarket(market) };
   }
 
   /** The user's COMPLETED sessions → recent-session cards. */
@@ -663,8 +744,10 @@ export class RAMockService {
 
   /** Create a session row + generate the ordered question set. */
   async start(userId: string, body: MockStartInput, locale?: string): Promise<MockStartResult> {
+    const market: RAMockMarket = body?.market === 'cn' || body?.market === 'intl' ? body.market : currentMarket();
     const interviewer = findInterviewer(body?.interviewerId ?? '');
-    const type = findType(body?.typeId ?? '');
+    // A market's own format (GoApply's AI-interview practice) is valid on that market only.
+    const type = findType(body?.typeId ?? '', market);
     if (!interviewer || !type) {
       throw new MockValidationError('Unknown interviewer or interview type');
     }
@@ -687,6 +770,10 @@ export class RAMockService {
     const language = normalizeRaLocale(body.language) ?? normalizeRaLocale(locale) ?? 'en';
     const durationMinutes = clampDurationMinutes(body.durationMinutes) ?? type.minutes;
     const resumeContext = await this.loadResumeContext(userId);
+    const jdText = typeof body.jdText === 'string' ? body.jdText.trim().slice(0, JD_TEXT_MAX_CHARS) : '';
+    // The row's id is chosen up front: it seeds the question selection of the
+    // GoApply format, so one session can be replayed and two sessions differ.
+    const sessionId = randomUUID();
 
     // ── Interview Prompt Generator pipeline (Tavily + 4 agents + composer) ──
     // Never throws — returns heuristic fallbacks for any stage that fails.
@@ -703,6 +790,9 @@ export class RAMockService {
         resumeContext,
         questionCount: DEFAULT_QUESTION_COUNT,
         requestId,
+        jdText: jdText || undefined,
+        market,
+        seed: sessionId,
       });
       interviewPrompt = gen.interviewPrompt;
       // Persist the condensed live brief inside the blueprint so nextTurn can
@@ -736,8 +826,10 @@ export class RAMockService {
       }
     }
 
+    const jobId = typeof body.jobId === 'string' && body.jobId.trim() ? body.jobId.trim().slice(0, 64) : null;
     const created = await prisma.rAMockSession.create({
       data: {
+        id: sessionId,
         userId,
         role,
         interviewerId: interviewer.id,
@@ -751,9 +843,12 @@ export class RAMockService {
         questions: questions as unknown as object,
         transcript: [] as unknown as object,
         status: 'in_progress',
+        // SCHEMA-3 column: the job this practice is for (feeds the job's "Practiced" step).
+        ...(jobId ? { jobId } : {}),
       },
       select: { id: true },
     });
+    const cnFormat = cnTimingFrom(blueprint, questions.length);
 
     logger.info('RA_V2_MOCK', 'session started', {
       userId,
@@ -764,12 +859,16 @@ export class RAMockService {
       durationMinutes,
       questionCount: questions.length,
       generated: !!interviewPrompt,
+      market,
+      jobPost: jdText ? true : undefined,
+      cnFormat: cnFormat ? true : undefined,
       requestId,
     });
 
     return {
       sessionId: created.id,
       questions: questions.map((q) => ({ q: q.q, hint: q.hint, coachTip: q.coachTip })),
+      ...(cnFormat ? { cnFormat } : {}),
     };
   }
 
@@ -812,7 +911,8 @@ export class RAMockService {
 
     // 2) Generate the interviewer's reaction + transition.
     const interviewer = findInterviewer(session.interviewerId);
-    const type = findType(session.typeId);
+    // A stored session may be in a market format (GoApply's AI-interview practice).
+    const type = findAnyType(session.typeId);
     let turns: RAMockTurn[];
     let coachTip: RAMockCoachTip | null;
 
@@ -876,8 +976,12 @@ export class RAMockService {
     return { nextIndex, turns, coachTip };
   }
 
-  /** Mark the session complete + produce the scored report. */
-  async score(userId: string, sessionId: string): Promise<MockScoreResult> {
+  /**
+   * Mark the session complete + produce the scored report. On GoApply
+   * (`market: 'cn'`, default: the request's brand) the result also carries the
+   * `cn` practice report block; RoboApply results never do.
+   */
+  async score(userId: string, sessionId: string, opts: { market?: RAMockMarket } = {}): Promise<MockScoreResult> {
     const id = (sessionId ?? '').trim();
     if (!id) throw new MockValidationError('sessionId is required');
 
@@ -920,6 +1024,27 @@ export class RAMockService {
       },
     });
 
+    // GoApply: the practice report block. The breakdown above comes from text
+    // checks on the transcript (no model), and the block says so (`basis`).
+    // `formatId` names the AI-interview format only when the session ran it.
+    const market = opts.market ?? currentMarket();
+    let cn: CnPracticeReport | undefined;
+    if (market === 'cn') {
+      try {
+        cn = buildCnPracticeReport({
+          turns: normalizeCnTurns(session.transcript),
+          breakdown: report.breakdown,
+          basis: 'text_checks',
+          language: session.language || 'zh',
+          formatId: hasCnFormatPlan(session.blueprint) ? CN_AI_INTERVIEW_FORMAT_ID : session.typeId || 'general',
+        });
+      } catch (err) {
+        logger.warn('RA_V2_MOCK', 'score: cn report block failed; scored without it', {
+          userId, sessionId: id, error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
     logger.info('RA_V2_MOCK', 'session scored', {
       userId,
       sessionId: id,
@@ -927,6 +1052,7 @@ export class RAMockService {
       delta,
       durationMinutes,
       turnCount: transcript.length,
+      cnReport: cn ? true : undefined,
     });
 
     return {
@@ -936,6 +1062,7 @@ export class RAMockService {
       strengths: report.strengths,
       gaps: report.gaps,
       durationMinutes,
+      ...(cn ? { cn } : {}),
     };
   }
 

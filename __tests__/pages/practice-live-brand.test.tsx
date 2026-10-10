@@ -3,12 +3,14 @@
 // /practice/[id] per brand (WP-63a), with LiveKit mocked out:
 //   - GoApply: the camera is a LOCAL preview only — no video track is ever
 //     published, not even when the camera failed the device check and is
-//     started later; the requested "only you can see it" copy is not in the
-//     bundles yet, so no key path is ever shown in its place
+//     started later; the device check and the self-view say "only you can
+//     see it" (practice.live.cam.*), and no key path is ever shown
 //   - a connection the server marks `cameraPublish: false` is honoured on
 //     RoboApply too; RoboApply video otherwise publishes as in Wave 0
-//   - a weak network in the device check offers the written practice, which
-//     ends the unstarted live session and runs the written practice in place
+//   - the device check's connection row reads "Connection: Good / Fair /
+//     Weak" (practice.live.network.*); a weak network explains itself and
+//     offers the written practice, which ends the unstarted live session and
+//     runs the written practice in place
 
 import { Suspense, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -173,6 +175,8 @@ describe('GoApply: the camera is a local preview only', () => {
     await renderLive('goapply');
     await screen.findByRole('button', { name: 'Join the interview' });
     noKeyPaths();
+    // The device check says where the camera picture goes.
+    expect(screen.getByText("Only you can see your camera. It isn't sent to the interviewer or recorded.")).toBeInTheDocument();
     await join();
 
     await waitFor(() => expect(lk.room!.localParticipant.setMicrophoneEnabled).toHaveBeenCalledWith(true));
@@ -180,6 +184,9 @@ describe('GoApply: the camera is a local preview only', () => {
     // The self-view came from a local getUserMedia (video only), not from the room.
     expect(getUserMedia).toHaveBeenLastCalledWith(expect.objectContaining({ audio: false, video: expect.anything() }));
     expect(screen.queryByTestId('video-track')).toBeNull();
+    expect(screen.getByText('Only you see this')).toBeInTheDocument();
+    // GoApply: the interviewer is labelled as an AI voice in the room.
+    expect(document.querySelector('[data-ai-label="audio"]')).not.toBeNull();
     noKeyPaths();
 
     // Toggling the camera only stops/starts the local preview.
@@ -222,9 +229,14 @@ describe('RoboApply', () => {
   it('video publishes the camera as in Wave 0, with no local-only note', async () => {
     api.connection.mockResolvedValue({ connection: connection({ cameraPublish: true }) });
     await renderLive('roboapply');
+    await screen.findByRole('button', { name: 'Join the interview' });
+    expect(screen.queryByText(/Only you can see your camera/)).toBeNull();
     await join();
     await waitFor(() => expect(lk.room!.localParticipant.setCameraEnabled).toHaveBeenCalledWith(true));
     expect(localSelfView()).toBeNull();
+    expect(screen.queryByText('Only you see this')).toBeNull();
+    // RoboApply's room carries no GoApply AI label.
+    expect(document.querySelector('[data-ai-label]')).toBeNull();
   });
 
   it('honours a server that keeps the camera local', async () => {
@@ -239,8 +251,15 @@ describe('RoboApply', () => {
 describe('network pre-check', () => {
   it('a good connection says so and offers nothing else', async () => {
     await renderLive('roboapply');
-    expect(await screen.findByText('Good connection', undefined, { timeout: 3000 })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Start the written practice' })).toBeNull();
+    const row = await waitFor(() => {
+      const el = document.querySelector('[data-network="good"]');
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    }, { timeout: 3000 });
+    expect(row.textContent).toContain('Connection');
+    expect(row.querySelector('[role="status"]')?.textContent).toBe('Good');
+    expect(screen.queryByRole('button', { name: 'Practice in writing instead' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Check again' })).toBeNull();
     noKeyPaths();
   });
 
@@ -254,11 +273,15 @@ describe('network pre-check', () => {
     practice.textStart.mockResolvedValue({ sessionId: 't1', questions: [{ q: 'Tell me about a project.', hint: '', coachTip: null }], jobId: 'job1' });
     await renderLive('goapply');
 
-    expect(await screen.findByText('Poor connection', undefined, { timeout: 4000 })).toBeInTheDocument();
+    expect(await screen.findByText('Weak', undefined, { timeout: 4000 })).toBeInTheDocument();
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Your connection looks weak, so the voice interview may cut out. You can practice in writing instead.',
+    );
+    expect(screen.getByRole('button', { name: 'Check again' })).toBeInTheDocument();
     noKeyPaths();
     // Joining by voice stays possible.
     expect((screen.getByRole('button', { name: 'Join the interview' }) as HTMLButtonElement).disabled).toBe(false);
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Start the written practice' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Practice in writing instead' })); });
 
     expect(api.endKeepalive).toHaveBeenCalledWith('s1');
     expect(await screen.findByText('Tell me about a project.')).toBeInTheDocument();
@@ -275,7 +298,8 @@ describe('network pre-check', () => {
       throw new TypeError('Failed to fetch');
     });
     await renderLive('roboapply');
-    expect(await screen.findByText('Poor connection', undefined, { timeout: 4000 })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Start the written practice' })).toBeNull();
+    expect(await screen.findByText('Weak', undefined, { timeout: 4000 })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Practice in writing instead' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Check again' })).toBeInTheDocument();
   });
 });

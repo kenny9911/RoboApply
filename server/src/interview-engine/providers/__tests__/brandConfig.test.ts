@@ -94,17 +94,32 @@ describe('S3 for recordings and transcripts', () => {
     expect(runWithBrand('goapply', () => getR2Creds()?.bucket)).toBe('cn-bucket');
   });
 
-  it('GoApply storage stays off when CN_S3_BUCKET has the same name as S3_BUCKET (shared client cache)', () => {
+  it('GoApply storage stays off when CN_S3_BUCKET is the same bucket as S3_BUCKET (same name, same endpoint)', () => {
     Object.assign(process.env, {
       S3_BUCKET: 'interviews', S3_ENDPOINT: 'https://r2.example', AWS_ACCESS_KEY_ID: 'ak', AWS_SECRET_ACCESS_KEY: 'sk',
-      CN_S3_BUCKET: 'interviews', CN_S3_ENDPOINT: 'https://oss-cn-shanghai.example', CN_S3_ACCESS_KEY_ID: 'cak', CN_S3_SECRET_ACCESS_KEY: 'csk',
+      CN_S3_BUCKET: 'interviews', CN_S3_ENDPOINT: 'https://R2.example/', CN_S3_ACCESS_KEY_ID: 'cak', CN_S3_SECRET_ACCESS_KEY: 'csk',
     });
     expect(getR2Creds('goapply')).toBeNull();
     expect(isR2Configured('goapply')).toBe(false);
     // RoboApply is unaffected.
     expect(getR2Creds('roboapply')).toMatchObject({ bucket: 'interviews', endpoint: 'https://r2.example' });
     process.env.CN_S3_BUCKET = 'interviews-cn';
-    expect(getR2Creds('goapply')).toMatchObject({ bucket: 'interviews-cn', endpoint: 'https://oss-cn-shanghai.example' });
+    expect(getR2Creds('goapply')).toMatchObject({ bucket: 'interviews-cn', endpoint: 'https://R2.example/' });
+    // No endpoint on either side is the same (default) store too.
+    delete process.env.S3_ENDPOINT;
+    delete process.env.CN_S3_ENDPOINT;
+    process.env.CN_S3_BUCKET = 'interviews';
+    expect(getR2Creds('goapply')).toBeNull();
+  });
+
+  it('the same bucket name on a different endpoint is a different store, so GoApply storage is on (INT-09, R8)', () => {
+    Object.assign(process.env, {
+      S3_BUCKET: 'interviews', S3_ENDPOINT: 'https://r2.example', AWS_ACCESS_KEY_ID: 'ak', AWS_SECRET_ACCESS_KEY: 'sk',
+      CN_S3_BUCKET: 'interviews', CN_S3_ENDPOINT: 'https://oss-cn-shanghai.example', CN_S3_ACCESS_KEY_ID: 'cak', CN_S3_SECRET_ACCESS_KEY: 'csk',
+    });
+    expect(getR2Creds('goapply')).toMatchObject({ bucket: 'interviews', endpoint: 'https://oss-cn-shanghai.example', accessKeyId: 'cak' });
+    expect(isR2Configured('goapply')).toBe(true);
+    expect(getR2Creds('roboapply')).toMatchObject({ bucket: 'interviews', endpoint: 'https://r2.example', accessKeyId: 'ak' });
   });
 });
 

@@ -47,6 +47,7 @@ import {
   type RejectReason,
   QuestionGuideSchema,
   QUESTION_REPORT_REASONS,
+  REJECT_REASONS,
 } from './contract.js';
 import { asCategory, asDifficulty, assertAttribution, claimsCompanyAsked, guessQuestionLocale, isValidPeriod, screenContribution } from './rules.js';
 import type { CompanyKey, CompanyRecord, ContributionRow, NewQuestion, PrepStore, QuestionRow } from './store.js';
@@ -98,6 +99,10 @@ function rateLimited(reason: string, retryAfterSec: number): HttpError {
 interface CompanyInfo {
   slug: string;
   name: string;
+}
+
+function asRejectReason(value: string | null): RejectReason | null {
+  return value && (REJECT_REASONS as readonly string[]).includes(value) ? (value as RejectReason) : null;
 }
 
 export class PrepService {
@@ -302,7 +307,7 @@ export class PrepService {
     return { reported: true, hidden: hide };
   }
 
-  async contribute(userId: string, body: { company: string; role?: string; question: string; period: string }): Promise<ContributionReceipt> {
+  async contribute(userId: string, body: { company: string; role?: string; question: string; period: string; category?: QuestionCategory }): Promise<ContributionReceipt> {
     if (!isValidPeriod(body.period, this.deps.now())) {
       throw new HttpError('invalid_request', 'Pick the month you were asked (not in the future).', { reason: 'invalid_period' });
     }
@@ -316,6 +321,8 @@ export class PrepService {
       role: body.role?.trim() ?? '',
       interviewYm: body.period,
       body: body.question.trim(),
+      // SR-59-2: the group the contributor suggested; staff may change it when publishing.
+      category: body.category ?? null,
     });
     return { id: row.id, status: 'pending' };
   }
@@ -427,9 +434,8 @@ export class PrepService {
    * moderated user reports about the company. Each item keeps its own sourceKind.
    *
    * Read only by default (never calls a model): the Assistant may call this on
-   * every turn, and until SR-59-1 the job → set link is per process, so writing
-   * on each miss would spend a model call and a unit of the daily limit each
-   * time. `write: true` — only when the user asked for practice questions —
+   * every turn, so writing on each miss would spend a model call and a unit of
+   * the daily limit each time. `write: true` — only when the user asked for practice questions —
    * writes the set when it is missing and AI is available; when it cannot be
    * written (AI off, daily limit) the stored state is returned instead.
    */
@@ -460,6 +466,8 @@ export class PrepService {
       status: (['pending', 'approved', 'rejected'].includes(row.status) ? row.status : 'pending') as ContributionStatus,
       createdAt: row.createdAt.toISOString(),
       moderatedAt: row.moderatedAt ? row.moderatedAt.toISOString() : null,
+      suggestedCategory: row.category ? asCategory(row.category) : null,
+      rejectReason: row.status === 'rejected' ? asRejectReason(row.rejectReason) : null,
       flags: screenContribution(row.body, { company: row.companyName, role: row.role }),
       locale: guessQuestionLocale(row.body, this.marketOf(row)),
     };
@@ -544,12 +552,13 @@ export class PrepService {
   async reject(adminId: string, id: string, body: { reason: RejectReason; note?: string }): Promise<ContributionView> {
     const row = await this.pendingContribution(id);
     const moderatedAt = this.deps.now();
-    if (!(await this.deps.store.moderateContribution(row.id, { status: 'rejected', moderatorId: adminId, moderatedAt }))) {
+    // SR-59-2: the reason is stored on the contribution (shown to the contributor);
+    // the audit row keeps the staff note as well.
+    if (!(await this.deps.store.moderateContribution(row.id, { status: 'rejected', moderatorId: adminId, moderatedAt, rejectReason: body.reason }))) {
       throw new HttpError('conflict', 'This was already decided.', { reason: PREP_ERROR_CODES.alreadyModerated });
     }
-    // SR-59-2: no rejectReason column yet; the audit row keeps it.
     await this.audit(row.userId, { contributionId: row.id, decision: 'rejected', reason: body.reason, note: body.note ?? null, moderatorId: adminId });
-    return this.contributionView({ ...row, status: 'rejected', moderatorId: adminId, moderatedAt });
+    return this.contributionView({ ...row, status: 'rejected', moderatorId: adminId, moderatedAt, rejectReason: body.reason });
   }
 
   private async audit(userId: string, payload: Record<string, unknown>): Promise<void> {

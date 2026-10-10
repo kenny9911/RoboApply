@@ -23,8 +23,14 @@ export {
   DEFAULT_VOICE_SEAM,
   VOICE_SEAM_KEY,
   isDefaultSeam,
+  readRowSeam,
+  readStoredVoiceSeam,
   readVoiceSeam,
+  resolveSessionSeam,
+  voiceSeamColumns,
   voiceSeamMetrics,
+  type OwnerBrandLookup,
+  type SessionSeamRow,
   type VoiceSeam,
 } from './sessionSeam.js';
 export { inBrand } from './brandScope.js';

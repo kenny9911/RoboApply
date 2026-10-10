@@ -15,6 +15,10 @@
 // RAMockService (404 on cross-tenant). The three model routes pass the GoApply
 // phone gate and the AI consent gate first (legacyAiGates; Wave 3 gate) —
 // 403 phone_binding_required / 503 ai_unavailable with zero model calls.
+//
+// The brand's market comes from the request (never from the body): GoApply
+// gets its AI-interview practice format in the catalog and the `cn` report
+// block on a score (WP-66). RoboApply responses are unchanged.
 
 import { Router, type Request, type Response } from 'express';
 import { requireAuth } from '../lib/raAuth.js';
@@ -29,10 +33,20 @@ import {
 
 const router = Router();
 
+/** The market of the request's brand (intl when it cannot be read). */
+async function requestMarket(): Promise<'intl' | 'cn'> {
+  try {
+    const { getCurrentBrandOrDefault } = await import('../../../platform/brand/brandContext.js');
+    return getCurrentBrandOrDefault().market === 'cn' ? 'cn' : 'intl';
+  } catch {
+    return 'intl';
+  }
+}
+
 // GET /catalog — static; no DB / LLM.
 router.get('/catalog', requireAuth, async (req: Request, res: Response) => {
   try {
-    return res.json(raMockService.catalog());
+    return res.json(raMockService.catalog(await requestMarket()));
   } catch (err) {
     logger.error('RA_V2_MOCK', 'catalog failed', {
       userId: req.user?.id,
@@ -69,6 +83,7 @@ router.post('/start', requireAuth, ...legacyAiGates(), async (req: Request, res:
       format,
       language: typeof language === 'string' ? language : undefined,
       durationMinutes: typeof durationMinutes === 'number' ? durationMinutes : undefined,
+      market: await requestMarket(),
     }, getRequestLocale(req));
     return res.json(result);
   } catch (err) {
@@ -114,7 +129,7 @@ router.post('/next-turn', requireAuth, ...legacyAiGates(), async (req: Request, 
 router.post('/:sessionId/score', requireAuth, ...legacyAiGates(), async (req: Request<{ sessionId: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
-    const result = await raMockService.score(userId, req.params.sessionId);
+    const result = await raMockService.score(userId, req.params.sessionId, { market: await requestMarket() });
     return res.json(result);
   } catch (err) {
     if (err instanceof MockSessionNotFoundError) {

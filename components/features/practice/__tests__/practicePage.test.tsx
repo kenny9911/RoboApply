@@ -39,7 +39,7 @@ const CREDITS = { balance: 5, periodAllotment: 1, tier: 'free', creditMinutes: 2
 
 vi.mock('../../../../lib/api/interviewEngine', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../../../lib/api/interviewEngine')>()),
-  interviewEngineApi: { recent: vi.fn(async () => ({ sessions: [] })), remove: vi.fn(), create: vi.fn(), preview: vi.fn() },
+  interviewEngineApi: { recent: vi.fn(async () => ({ sessions: [] })), remove: vi.fn(), preview: vi.fn() },
   practiceApi: { setup: m.setup, create: m.create, info: vi.fn(), practicedJobs: vi.fn() },
   textPracticeApi: {
     start: m.textStart,

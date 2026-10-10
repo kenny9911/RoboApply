@@ -5,6 +5,11 @@
 // only into CN_S3_* — even when later calls arrive from a RoboApply context
 // (a webhook on the other host, a cron). RoboApply sessions behave as in
 // Wave 0 (no seam stored, same worker, camera and recording rules).
+//
+// INT-09 (WP-63a-S1): every create writes `InterviewSession.brand` and
+// `voiceProvider`; readers take the column, else `liveMetrics.voiceSeam`, else
+// the owner's `User.brand` — a legacy row with neither still resolves its real
+// brand for LiveKit, storage, the webhook signer and the worker secret.
 // Run: npx vitest run server/src/interview-engine/providers/__tests__/sessionSeam.service.test.ts
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -103,6 +108,15 @@ vi.mock('../../storage/r2Storage.js', async () => {
     interviewR2Storage: {
       isConfigured: () => getR2Creds() !== null,
       recordingKey: (id: string) => `interviews/${id}/recording.mp4`,
+      // What the real client would read from: the bucket of the current brand.
+      headObject: async (key: string) => {
+        h.calls.push({ fn: 'head', brand: undefined, args: [key, getR2Creds()?.bucket] });
+        return { size: 1, contentType: 'audio/mp4', lastModified: new Date() };
+      },
+      presignGet: async (p: { key: string }) => {
+        h.calls.push({ fn: 'presign', brand: undefined, args: [p.key, getR2Creds()?.bucket] });
+        return `https://${getR2Creds()?.bucket}.example/${p.key}`;
+      },
     },
   };
 });
@@ -146,6 +160,7 @@ const saved: Record<string, string | undefined> = {};
 
 const { interviewSessionService: svc, setPracticeDeps } = await import('../../sessions/InterviewSessionService.js');
 const { runWithBrand } = await import('../../../lib/requestContext.js');
+const { setUserBrandLookup } = await import('../../../platform/brand/userBrand.js');
 
 beforeAll(() => {
   for (const k of [...Object.keys(ENV), ...CLEARED]) saved[k] = process.env[k];
@@ -154,13 +169,18 @@ beforeAll(() => {
   setPracticeDeps({ hasConsent: async () => true });
 });
 afterAll(() => {
+  setUserBrandLookup(null);
   for (const [k, v] of Object.entries(saved)) {
     if (v === undefined) delete process.env[k];
     else process.env[k] = v;
   }
 });
+const owners = vi.fn(async (userId: string): Promise<string | null> => (userId.startsWith('cn-') ? 'goapply' : userId.startsWith('gone-') ? null : 'roboapply'));
+
 beforeEach(() => {
   h.reset();
+  owners.mockClear();
+  setUserBrandLookup(owners);
   h.generate.mockResolvedValue({
     systemPrompt: 'p', openingInstruction: 'g', openingLine: 'Hello', masterBrief: 'b',
     blueprint: { requirements: {}, questions: [] }, seedQuestions: [], webSources: [],
@@ -328,5 +348,146 @@ describe('reserved provider', () => {
     } finally {
       delete process.env.CN_VOICE_PROVIDER;
     }
+  });
+});
+
+// ─── INT-09: the brand and provider columns (SCHEMA-4, WP-63a-S1) ──────────
+
+/** A row as it was written before the column writer (and before WP-63a): no column, no JSON seam. */
+function makeLegacy(id: string) {
+  const row = h.rows.get(id)!;
+  row.brand = null;
+  row.voiceProvider = null;
+  if (row.liveMetrics && typeof row.liveMetrics === 'object') delete row.liveMetrics.voiceSeam;
+}
+
+describe('brand and voiceProvider columns', () => {
+  it('a new row has both columns on either brand', async () => {
+    const intl = await runWithBrand('roboapply', () => svc.createSession({ userId: 'u1', role: 'Engineer' }));
+    expect(intl).toMatchObject({ brand: 'roboapply', voiceProvider: 'livekit_cloud' });
+    const cn = await runWithBrand('goapply', () => svc.createSession({ userId: 'cn-u1', role: '工程师' }));
+    expect(cn).toMatchObject({ brand: 'goapply', voiceProvider: 'livekit_cloud' });
+    // The JSON seam stays for non-default seams during the transition.
+    expect(cn.liveMetrics.voiceSeam).toEqual({ v: 1, brand: 'goapply', provider: 'livekit_cloud' });
+    // No owner lookup was needed to create or to read these rows back.
+    await runWithBrand('roboapply', () => svc.prepareSession({ sessionId: cn.id, userId: 'cn-u1' }));
+    expect(owners).not.toHaveBeenCalled();
+  });
+
+  it('stores the provider the brand was configured with at create', async () => {
+    process.env.CN_VOICE_PROVIDER = 'livekit_selfhosted';
+    try {
+      const cn = await runWithBrand('goapply', () => svc.createSession({ userId: 'cn-u1', role: '工程师' }));
+      expect(cn).toMatchObject({ brand: 'goapply', voiceProvider: 'livekit_selfhosted' });
+    } finally {
+      delete process.env.CN_VOICE_PROVIDER;
+    }
+  });
+
+  it('the column wins over a JSON seam that disagrees', async () => {
+    const { id } = await liveSession('goapply', 'voice');
+    h.rows.get(id)!.liveMetrics.voiceSeam = { v: 1, brand: 'roboapply', provider: 'livekit_cloud' };
+    await expect(svc.ingestMetrics({ sessionId: id, secret: 'cn-cb', events: [] })).resolves.toBeTruthy();
+    await expect(svc.ingestMetrics({ sessionId: id, secret: 'intl-cb', events: [] })).rejects.toMatchObject({ name: 'InterviewAuthError' });
+  });
+
+  it('a row with a JSON seam and no column (written before the column writer) still reads its seam, with no owner lookup', async () => {
+    const created = await runWithBrand('goapply', () => svc.createSession({ userId: 'u1', role: 'Engineer', mode: 'voice' }));
+    Object.assign(h.rows.get(created.id)!, { brand: null, voiceProvider: null });
+    await runWithBrand('roboapply', () => svc.prepareSession({ sessionId: created.id, userId: 'u1' }));
+    await runWithBrand('roboapply', () => svc.getConnection({ sessionId: created.id, userId: 'u1' }));
+    expect(call('createRoom')).toMatchObject({ brand: 'goapply' });
+    expect(owners).not.toHaveBeenCalled();
+  });
+});
+
+describe('a legacy row with no column and no JSON seam resolves the owner’s brand', () => {
+  async function legacyGoApply(mode: 'voice' | 'video' = 'voice') {
+    const created = await runWithBrand('goapply', () =>
+      svc.createSession({ userId: 'cn-u1', role: '工程师', mode, recording: { audio: true, video: true } }),
+    );
+    makeLegacy(created.id);
+    return created.id;
+  }
+
+  it('GoApply owner: prepare, LiveKit, the worker and the recording all run on the GoApply plane, from any host', async () => {
+    const id = await legacyGoApply('video');
+    // Requests arrive on the RoboApply host (or with no brand context at all).
+    await runWithBrand('roboapply', () => svc.prepareSession({ sessionId: id, userId: 'cn-u1' }));
+    const conn = await runWithBrand('roboapply', () => svc.getConnection({ sessionId: id, userId: 'cn-u1' }));
+    await vi.waitFor(() => expect(h.calls.some((c) => c.fn === 'record')).toBe(true));
+    for (const fn of ['createRoom', 'dispatch', 'mint']) {
+      expect(call(fn).brand).toBe('goapply');
+      expect(call(fn).args.at(-1)).toBe('cn-key');
+    }
+    expect(call('dispatch').args[0]).toMatchObject({ agentName: 'GoApply-Interview' });
+    expect(conn.cameraPublish).toBe(false);
+    // Storage: the recording goes to CN_S3, never the international bucket.
+    expect(call('record').args).toEqual([expect.objectContaining({ audioOnly: true }), 'cn-bucket']);
+    // The LLM chain is GoApply's.
+    const meta = JSON.parse((call('createRoom').args[0] as { metadata: string }).metadata);
+    expect(meta.llm.model).toBe('deepseek/deepseek-v4-pro');
+    expect(owners).toHaveBeenCalledWith('cn-u1');
+  });
+
+  it('GoApply owner: report links are signed against CN_S3', async () => {
+    const id = await legacyGoApply();
+    Object.assign(h.rows.get(id)!, { status: 'completed', recordingKey: `interviews/${id}/recording.mp4`, recordingMimeType: 'audio/mp4', endedAt: new Date() });
+    const report = await runWithBrand('roboapply', () => svc.getReport({ sessionId: id, userId: 'cn-u1' }));
+    expect(report.recordingUrl).toContain('cn-bucket.example');
+    expect(call('head').args.at(-1)).toBe('cn-bucket');
+    expect(h.calls.some((c) => c.fn === 'presign' && c.args.at(-1) === 'intl-bucket')).toBe(false);
+  });
+
+  it('GoApply owner: webhooks from the RoboApply project are ignored, the GoApply project is accepted', async () => {
+    const id = await legacyGoApply();
+    await runWithBrand('goapply', () => svc.prepareSession({ sessionId: id, userId: 'cn-u1' }));
+    await runWithBrand('goapply', () => svc.getConnection({ sessionId: id, userId: 'cn-u1' }));
+    await vi.waitFor(() => expect(h.calls.some((c) => c.fn === 'record')).toBe(true));
+    makeLegacy(id);
+    const roomName = h.rows.get(id)!.roomName as string;
+    await svc.handleEgressEnded({ egressId: 'EG_1', sizeBytes: 10, durationSec: 5, signerBrand: 'roboapply' });
+    expect(h.rows.get(id)!.recordingBytes ?? null).toBeNull();
+    await svc.handleRoomFinished(roomName, 'roboapply');
+    expect(h.rows.get(id)!.status).toBe('live');
+    await svc.handleEgressEnded({ egressId: 'EG_1', sizeBytes: 10, durationSec: 5, signerBrand: 'goapply' });
+    expect(h.rows.get(id)!.recordingBytes).toBe(10);
+    expect(h.rows.get(id)!.recordingMimeType).toBe('audio/mp4');
+  });
+
+  it('GoApply owner: only the GoApply worker’s callback secret is accepted', async () => {
+    const id = await legacyGoApply();
+    await expect(svc.ingestMetrics({ sessionId: id, secret: 'cn-cb', events: [] })).resolves.toBeTruthy();
+    await expect(svc.ingestMetrics({ sessionId: id, secret: 'intl-cb', events: [] })).rejects.toMatchObject({ name: 'InterviewAuthError' });
+    await expect(svc.workerLifecycle({ sessionId: id, secret: 'intl-cb', event: 'ended' })).rejects.toMatchObject({ name: 'InterviewAuthError' });
+  });
+
+  it('GoApply owner: delete tears the room down on the GoApply plane', async () => {
+    const id = await legacyGoApply();
+    await runWithBrand('goapply', () => svc.prepareSession({ sessionId: id, userId: 'cn-u1' }));
+    await runWithBrand('goapply', () => svc.getConnection({ sessionId: id, userId: 'cn-u1' }));
+    makeLegacy(id);
+    h.calls.length = 0;
+    await runWithBrand('roboapply', () => svc.deleteByOwner({ sessionId: id, userId: 'cn-u1' })).catch(() => undefined);
+    expect(call('deleteRoom')).toMatchObject({ brand: 'goapply' });
+    expect(call('deleteRoom').args.at(-1)).toBe('cn-key');
+  });
+
+  it('RoboApply owner: a Wave 0 row keeps running on the RoboApply plane, even from the GoApply host', async () => {
+    const created = await runWithBrand('roboapply', () => svc.createSession({ userId: 'u1', role: 'Engineer', mode: 'voice' }));
+    makeLegacy(created.id);
+    await runWithBrand('goapply', () => svc.prepareSession({ sessionId: created.id, userId: 'u1' }));
+    await runWithBrand('goapply', () => svc.getConnection({ sessionId: created.id, userId: 'u1' }));
+    expect(call('createRoom')).toMatchObject({ brand: 'roboapply' });
+    expect(call('dispatch').args[0]).toMatchObject({ agentName: 'RoboApply-Interview' });
+    await expect(svc.ingestMetrics({ sessionId: created.id, secret: 'intl-cb', events: [] })).resolves.toBeTruthy();
+    await expect(svc.ingestMetrics({ sessionId: created.id, secret: 'cn-cb', events: [] })).rejects.toMatchObject({ name: 'InterviewAuthError' });
+  });
+
+  it('a failed owner lookup is an error, never a silent RoboApply', async () => {
+    const id = await legacyGoApply();
+    owners.mockRejectedValueOnce(new Error('db down'));
+    await expect(runWithBrand('roboapply', () => svc.getConnection({ sessionId: id, userId: 'cn-u1' }))).rejects.toThrow('db down');
+    expect(h.calls.some((c) => c.fn === 'createRoom')).toBe(false);
   });
 });

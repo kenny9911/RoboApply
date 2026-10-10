@@ -12,10 +12,11 @@
 // the written practice; joining by voice stays possible. No number is shown:
 // the reading is a rough local check, so it is put in words.
 //
-// Copy: the row's own strings (`practice.live.network.*`) are requested from
-// the practice namespace owner. Until they exist the row uses existing
-// practice copy ("Good/Fair/Poor connection", "Checking…", "Start the written
-// practice", "Try again") and leaves out the explanatory lines.
+// Copy: the row's own strings are `practice.live.network.*` ("Connection:
+// Good / Fair / Weak", the two explanatory lines, "Practice in writing
+// instead", "Check again"), read through `pendingLiveCopy`. A bundle without
+// them falls back to the older practice copy ("Good/Fair/Poor connection",
+// "Start the written practice", "Try again") and leaves the lines out.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';

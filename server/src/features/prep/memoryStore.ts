@@ -1,6 +1,7 @@
 // server/src/features/prep/memoryStore.ts — in-process PrepStore (tests and
 // local fixtures; same semantics as the Prisma store, no database).
 
+import type { JobSetQuestionDelegate } from './jobSetIndex.js';
 import type { CompanyGroup, CompanyRecord, ContributionRow, Page, Paged, PrepStore, QuestionQuery, QuestionRow, ReportRow } from './store.js';
 
 export interface MemoryPrepStore extends PrepStore {
@@ -49,7 +50,7 @@ export function createMemoryPrepStore(now: () => Date = () => new Date()): Memor
 
     async createQuestion(row) {
       const t = now();
-      const q: QuestionRow = { ...row, id: id('q'), guide: null, guideModel: null, status: 'published', reportsCount: 0, createdAt: t, updatedAt: t };
+      const q: QuestionRow = { ...row, id: id('q'), guide: null, guideModel: null, status: 'published', reportsCount: 0, createdAt: t, updatedAt: t, jobId: null };
       store.questions.push(q);
       return { ...q };
     },
@@ -133,7 +134,7 @@ export function createMemoryPrepStore(now: () => Date = () => new Date()): Memor
         .map(({ reason, note, createdAt }) => ({ reason, note, createdAt }));
     },
     async createContribution(row) {
-      const c: ContributionRow = { ...row, id: id('c'), status: 'pending', moderatorId: null, moderatedAt: null, createdAt: now() };
+      const c: ContributionRow = { ...row, id: id('c'), status: 'pending', moderatorId: null, moderatedAt: null, createdAt: now(), rejectReason: null };
       store.contributions.push(c);
       return { ...c };
     },
@@ -182,4 +183,37 @@ export function createMemoryPrepStore(now: () => Date = () => new Date()): Memor
     },
   };
   return store;
+}
+
+/**
+ * The fake `prisma.rAInterviewQuestion` the Prisma job-set index runs against
+ * in tests: the same `where` shapes, applied to the in-memory question rows.
+ */
+export function createMemoryJobSetDelegate(store: Pick<MemoryPrepStore, 'questions'>): JobSetQuestionDelegate & { calls: { findMany: unknown[]; updateMany: unknown[] } } {
+  const calls = { findMany: [] as unknown[], updateMany: [] as unknown[] };
+  return {
+    calls,
+    async findMany(args) {
+      calls.findMany.push(args);
+      const w = args.where;
+      return store.questions
+        .filter((q) => q.jobId === w.jobId && q.market === w.market && q.locale === w.locale && q.sourceKind === w.sourceKind && q.status === w.status)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id))
+        .slice(0, args.take)
+        .map((q) => ({ id: q.id, createdAt: q.createdAt }));
+    },
+    async updateMany(args) {
+      calls.updateMany.push(args);
+      const w = args.where;
+      let count = 0;
+      for (const q of store.questions) {
+        if (q.market !== w.market || q.locale !== w.locale || q.sourceKind !== w.sourceKind) continue;
+        const hit = 'jobId' in w ? q.jobId === w.jobId && !w.id.notIn.includes(q.id) : w.id.in.includes(q.id);
+        if (!hit) continue;
+        q.jobId = args.data.jobId;
+        count += 1;
+      }
+      return { count };
+    },
+  };
 }

@@ -37,6 +37,7 @@ import { useTranslations } from 'next-intl';
 import { INTERVIEW_LOCALES } from '../../../lib/localeConfig';
 import { mockCreditsForMinutes } from '../../../lib/mockInterviewCredits';
 import { useMockRoleLabels } from '../../../lib/mockRoleLabels';
+import { CN_FORMAT_DURATIONS, isCnFormatType, useLocalizeType } from '../../features/practice-cn';
 import type { IERequirements } from '../../../lib/api/interviewEngine';
 import type {
   RAMockFormat,
@@ -147,6 +148,12 @@ interface Props {
   dockSlot?: ReactNode;
   /** Replaces the Start label (e.g. the written practice). */
   startLabel?: string;
+  /**
+   * Wraps the Start button (it stays the same button). GoApply inside WeChat
+   * uses it for the one-time "tell me when my report is ready" prompt
+   * (SubscribeOnTap); everywhere else the button renders as is.
+   */
+  wrapStart?: (button: ReactNode) => ReactNode;
 }
 
 /** Roving-tabindex arrow handling shared by every radiogroup on this screen. */
@@ -287,9 +294,12 @@ export function PracticeSetupFlow({
   introAside,
   dockSlot,
   startLabel,
+  wrapStart,
 }: Props) {
   const t = useTranslations('practice');
-  const { localizeCategory, localizeRole, localizeType } = useMockRoleLabels();
+  const { localizeCategory, localizeRole } = useMockRoleLabels();
+  // Type labels, with GoApply's AI-interview practice under its own name (practiceCn.format.*).
+  const localizeType = useLocalizeType();
 
   const [tray, setTray] = useState<TrayKey | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -325,7 +335,11 @@ export function PracticeSetupFlow({
   }, [types, recommendedTypeIds]);
 
   const durationOptions = useMemo(
-    () => Array.from(new Set([...BASE_DURATIONS, ...(selectedType ? [selectedType.minutes] : [])])).sort((a, b) => a - b),
+    () =>
+      // GoApply's AI-interview practice runs 20–30 minutes: only those lengths are offered for it.
+      isCnFormatType(selectedType?.id)
+        ? [...CN_FORMAT_DURATIONS]
+        : Array.from(new Set([...BASE_DURATIONS, ...(selectedType ? [selectedType.minutes] : [])])).sort((a, b) => a - b),
     [selectedType],
   );
 
@@ -849,14 +863,16 @@ export function PracticeSetupFlow({
             )}
           </p>
 
-          <button
-            type="button"
-            className={styles.start}
-            disabled={!canLaunch || !canAfford || starting}
-            onClick={onStart}
-          >
-            {starting ? t('setup.launch.starting') : (startLabel ?? t('setup.launch.start'))}
-          </button>
+          {(wrapStart ?? ((button: ReactNode) => button))(
+            <button
+              type="button"
+              className={styles.start}
+              disabled={!canLaunch || !canAfford || starting}
+              onClick={onStart}
+            >
+              {starting ? t('setup.launch.starting') : (startLabel ?? t('setup.launch.start'))}
+            </button>,
+          )}
         </div>
       </div>
 
