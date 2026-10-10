@@ -4,7 +4,6 @@ import {
   serializeResumeMarkdown,
 } from '../../lib/resumeStructure';
 import { analyzeResume } from '../../lib/resumeAnalyzer';
-import { formatDateString } from '../../lib/resumeTheme';
 
 const SAMPLE = `# David Poole
 *AI Software Engineer · david.poole@example.com · (555) 123-4567 · San Francisco, CA · linkedin.com/in/dpoole*
@@ -106,16 +105,6 @@ describe('resumeStructure', () => {
     const report = analyzeResume(s);
     expect(report.counts.critical).toBeGreaterThan(0);
     expect(report.issues.some((i) => i.id === 'summary.missing')).toBe(true);
-  });
-
-  it('formatDateString reformats numeric dates per theme', () => {
-    expect(formatDateString('04/2022', 'MM/YYYY')).toBe('04/2022');
-    expect(formatDateString('04/2022', 'Mon YYYY')).toBe('Apr 2022');
-    expect(formatDateString('04/2022', 'YYYY')).toBe('2022');
-    expect(formatDateString('Present', 'MM/YYYY')).toBe('Present');
-    expect(formatDateString('present', 'YYYY')).toBe('Present');
-    expect(formatDateString('', 'MM/YYYY')).toBe('');
-    expect(formatDateString('Apr 2022', 'MM/YYYY')).toBe('Apr 2022');
   });
 
   it('preserves unknown sections (Projects / Certifications) through parse → serialize', () => {

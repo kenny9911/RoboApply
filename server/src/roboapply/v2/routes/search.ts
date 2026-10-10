@@ -1,22 +1,21 @@
 // backend/src/roboapply/v2/routes/search.ts
 //
 // @deprecated (WP-32) — `/v2/search/run` is replaced by `POST /api/v1/roboapply/feed/query`
-// (`q` + sorts; `lib/api/feed.ts`), and saved searches by `/search-profiles`
-// (WP-20). WP-75 unmounts this router (hot file routes/index.ts) and deletes it.
+// (`q` + sorts; `lib/api/feed.ts`). The saved-search endpoints (`/saved`) were
+// removed in WP-75 (replaced by `/search-profiles`, WP-20; no client called
+// them). `/run` stays mounted only because `components/v3/shell/CommandPalette.tsx`
+// (a hot shell file WP-75 does not own) and the WP-33 `/job-search` page
+// (`hooks/useJobSearch.ts`) still call `raV2Api.search.run`; INT moves them to
+// `queryFeed({ q })`, then unmounts and deletes this router and RAJobIndexService.
 //
 // Mounted at /api/v1/roboapply/v2/search.
 //
 //   POST   /run         — run the search (filters + paging + facets). Body
 //                         carries the SearchQuery + limit + cursor; chosen
 //                         over GET so we can pass complex preferredLocations
-//                         without URL escaping. Frontend stub calls
-//                         search.run(...).
-//   POST   /saved       — save a search query for the dropdown
-//   GET    /saved       — list the user's saved searches (newest first)
-//   DELETE /saved/:id   — delete a saved search (owner-only; 404 otherwise)
+//                         without URL escaping.
 
 import { Router, type Request, type Response } from 'express';
-import prisma from '../../../lib/prisma.js';
 import { requireAuth } from '../lib/raAuth.js';
 import { logger } from '../../../services/LoggerService.js';
 import { raJobIndexService } from '../services/RAJobIndexService.js';
@@ -44,98 +43,6 @@ router.post('/run', requireAuth, async (req: Request, res: Response) => {
   } catch (err) {
     logger.error('RA_V2_SEARCH', 'run failed', {
       userId: req.user?.id,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return res.status(500).json({ error: 'internal_error' });
-  }
-});
-
-router.post('/saved', requireAuth, async (req: Request, res: Response) => {
-  try {
-    const userId = req.user!.id;
-    const { name, query } = req.body ?? {};
-    if (typeof name !== 'string' || !name.trim()) {
-      return res.status(422).json({ error: 'name_required' });
-    }
-    if (!query || typeof query !== 'object') {
-      return res.status(422).json({ error: 'query_required' });
-    }
-
-    const p = prisma as any;
-    const existing = await p.rASavedSearch.findFirst({
-      where: { userId, name: name.trim() },
-    });
-    if (existing) {
-      return res.status(409).json({ error: 'saved_search_name_taken' });
-    }
-    const row = await p.rASavedSearch.create({
-      data: { userId, name: name.trim(), query },
-    });
-    logger.info('RA_V2_SEARCH', 'saved search created', { userId, savedId: row.id });
-    return res.status(201).json({
-      savedSearch: {
-        id: row.id,
-        userId: row.userId,
-        name: row.name,
-        query: row.query,
-        lastRunAt: row.lastRunAt ? row.lastRunAt.toISOString() : null,
-        createdAt: row.createdAt.toISOString(),
-        updatedAt: row.updatedAt.toISOString(),
-      },
-    });
-  } catch (err) {
-    logger.error('RA_V2_SEARCH', 'save failed', {
-      userId: req.user?.id,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return res.status(500).json({ error: 'internal_error' });
-  }
-});
-
-router.get('/saved', requireAuth, async (req: Request, res: Response) => {
-  try {
-    const userId = req.user!.id;
-    const p = prisma as any;
-    const rows = await p.rASavedSearch.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-    });
-    return res.json({
-      savedSearches: rows.map((r: any) => ({
-        id: r.id,
-        userId: r.userId,
-        name: r.name,
-        query: r.query,
-        lastRunAt: r.lastRunAt ? r.lastRunAt.toISOString() : null,
-        createdAt: r.createdAt.toISOString(),
-        updatedAt: r.updatedAt.toISOString(),
-      })),
-    });
-  } catch (err) {
-    logger.error('RA_V2_SEARCH', 'list saved failed', {
-      userId: req.user?.id,
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return res.status(500).json({ error: 'internal_error' });
-  }
-});
-
-router.delete('/saved/:id', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
-  try {
-    const userId = req.user!.id;
-    const p = prisma as any;
-    const existing = await p.rASavedSearch.findFirst({
-      where: { id: req.params.id, userId },
-    });
-    if (!existing) {
-      return res.status(404).json({ error: 'not_found' });
-    }
-    await p.rASavedSearch.delete({ where: { id: req.params.id } });
-    return res.status(204).send();
-  } catch (err) {
-    logger.error('RA_V2_SEARCH', 'delete saved failed', {
-      userId: req.user?.id,
-      savedId: req.params.id,
       error: err instanceof Error ? err.message : String(err),
     });
     return res.status(500).json({ error: 'internal_error' });

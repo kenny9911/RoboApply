@@ -43,10 +43,6 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
 import roboapplyAuthRouter from './roboapply/routes/auth.js';
-import roboapplyMissionsRouter from './roboapply/routes/missions.js';
-import roboapplyRunsRouter from './roboapply/routes/runs.js';
-import roboapplyDigestRouter from './roboapply/routes/digest.js';
-import roboapplySettingsRouter from './roboapply/routes/settings.js';
 import roboapplyBillingRouter from './roboapply/routes/billing.js';
 import roboapplyAccountRouter from './roboapply/routes/account.js';
 import roboapplyV2Router from './roboapply/v2/routes/index.js';
@@ -137,10 +133,9 @@ app.use('/api/v1/roboapply/stripe/webhook', stripeWebhookRouter);
 app.use('/api/v1/public/brand', brandPublicRouter);
 
 app.use('/api/v1/roboapply/auth', roboapplyAuthRouter);
-app.use('/api/v1/roboapply/missions', roboapplyMissionsRouter);
-app.use('/api/v1/roboapply/runs', roboapplyRunsRouter);
-app.use('/api/v1/roboapply/digest', roboapplyDigestRouter);
-app.use('/api/v1/roboapply/settings', roboapplySettingsRouter);
+// The V1 auto-apply routers (/missions, /runs, /digest, /settings) were
+// removed in WP-75 (ARCH §10.6 step 3): nothing calls them since the V1
+// engine was retired, and /settings duplicated /account's delete route.
 app.use('/api/v1/roboapply/billing', roboapplyBillingRouter);
 app.use('/api/v1/roboapply/account', roboapplyAccountRouter);
 app.use('/api/v1/roboapply/v2', roboapplyV2Router);
@@ -187,7 +182,7 @@ app.use(
 
 // ─── Local / non-Vercel process bootstrap ───────────────────────────────
 if (!process.env.VERCEL) {
-  // In-process node-cron sweeps (matcher/digest/submitter/etc.). On Vercel
+  // In-process node-cron sweeps (billing, purge, interview cleanup, platform). On Vercel
   // these run as Vercel Cron → /api/v1/cron/* instead.
   try {
     startRoboApplyCron();

@@ -1,7 +1,10 @@
 // lib/api/v2/_real.ts
 //
 // Wave-4 wiring: the real `RaV2Api` implementation that hits the Express
-// backend at `/api/v1/roboapply/v2/*`. Selected by `index.ts` when
+// backend at `/api/v1/roboapply/v2/*`. Frozen legacy client (TASK_PLAN §2.1
+// rule 9): WP-75 removed the dead slices (queue, activity, integrations,
+// onboarding, discover, jobs, insights, saved searches, LinkedIn URL config);
+// new calls go through the area wrappers in `lib/api/<area>.ts`. Selected by `index.ts` when
 // `NEXT_PUBLIC_USE_STUB_API !== 'true'` (and not in test mode).
 //
 // Contract: every method MUST return the same shape as `lib/stub/raV2.stub.ts`.
@@ -29,16 +32,6 @@ import type {
   TrackerBulkResponse,
   SearchRunParams,
   SearchRunResponse,
-  SearchQuery,
-  SearchSaveQueryResponse,
-  SearchListSavedResponse,
-  JobGetParams,
-  JobGetResponse,
-  JobApplyBody,
-  JobApplyResponse,
-  JobSaveResponse,
-  JobScoreBody,
-  JobScoreResponse,
   RAResumeKind,
   ResumeListResponse,
   ResumeCreateBody,
@@ -46,11 +39,7 @@ import type {
   ResumeGetResponse,
   ResumePatchBody,
   ResumePatchResponse,
-  LinkedInImportConfigResponse,
   LinkedInImportArgs,
-  InsightsWeeklyParams,
-  InsightsWeeklyResponse,
-  InsightsRefreshResponse,
   // ── V3 surfaces (stub-now, real-later) ──
   ResumeRewriteBody,
   ResumeRewriteResponse,
@@ -59,12 +48,6 @@ import type {
   ResumeTailorApplyBody,
   ResumeTailorApplyResponse,
   ResumeCoachTipsResponse,
-  QueueListResponse,
-  QueueItemResponse,
-  QueueUpdateCoverBody,
-  ActivityFeedParams,
-  ActivityFeedResponse,
-  AgentStatsResponse,
   MockCatalogResponse,
   MockRecentSessionsResponse,
   MockStartBody,
@@ -72,24 +55,9 @@ import type {
   MockNextTurnBody,
   MockNextTurnResponse,
   MockScoreResponse,
-  IntegrationsListResponse,
-  IntegrationResponse,
-  RAIntegrationProvider,
   PreferencesGetResponse,
   PreferencesUpdateBody,
   PreferencesUpdateResponse,
-  // ── First-run setup ──
-  OnboardingBootstrapBody,
-  OnboardingBootstrapResponse,
-  OnboardingSessionResponse,
-  OnboardingConfirmBody,
-  OnboardingConfirmResponse,
-  OnboardingSkipBody,
-  OnboardingSkipResponse,
-  OnboardingSeenBody,
-  OnboardingSeenResponse,
-  DiscoverRunBody,
-  CrossBankDiscoverResponse,
 } from './types';
 
 const BASE = '/api/v1/roboapply/v2';
@@ -185,38 +153,6 @@ export const realApi: RaV2Api = {
     // optional facet args).
     run: (params?: SearchRunParams) =>
       roboApi.post<SearchRunResponse>(`${BASE}/search/run`, params ?? {}),
-    saveQuery: (body: { name: string; query: SearchQuery }) =>
-      roboApi.post<SearchSaveQueryResponse>(`${BASE}/search/saved`, body),
-    listSaved: () =>
-      roboApi.get<SearchListSavedResponse>(`${BASE}/search/saved`),
-    deleteSaved: async (id: string) => {
-      await roboApi.delete<void>(
-        `${BASE}/search/saved/${encodeURIComponent(id)}`,
-      );
-    },
-  },
-
-  // ── Jobs ─────────────────────────────────────────────────────────
-  jobs: {
-    get: (id: string, params?: JobGetParams) =>
-      roboApi.get<JobGetResponse>(
-        `${BASE}/jobs/${encodeURIComponent(id)}${qs(params)}`,
-      ),
-    apply: (id: string, body: JobApplyBody) =>
-      roboApi.post<JobApplyResponse>(
-        `${BASE}/jobs/${encodeURIComponent(id)}/apply`,
-        body,
-      ),
-    save: (id: string, body?: { excitementStars?: number }) =>
-      roboApi.post<JobSaveResponse>(
-        `${BASE}/jobs/${encodeURIComponent(id)}/save`,
-        body ?? {},
-      ),
-    score: (id: string, body: JobScoreBody) =>
-      roboApi.post<JobScoreResponse>(
-        `${BASE}/jobs/${encodeURIComponent(id)}/score`,
-        body,
-      ),
   },
 
   // ── Resumes ──────────────────────────────────────────────────────
@@ -226,8 +162,7 @@ export const realApi: RaV2Api = {
     create: (body: ResumeCreateBody) =>
       roboApi.post<ResumeCreateResponse>(`${BASE}/resumes`, body),
     // Multipart upload — bypass `roboApi` (which doesn't thread the multipart
-    // flag) and call `request` directly with a FormData body, mirroring
-    // lib/api/missions.ts createMission().
+    // flag) and call `request` directly with a FormData body.
     upload: async (file: File, opts?: { name?: string }) => {
       const fd = new FormData();
       // Idempotency key first, so it is parsed off the wire before the file
@@ -243,12 +178,7 @@ export const realApi: RaV2Api = {
         multipart: true,
       });
     },
-    // LinkedIn import — config probe + create. Multipart (PDF mode carries a
-    // file; URL mode sends fields only), so bypass `roboApi` like upload().
-    linkedinConfig: () =>
-      roboApi.get<LinkedInImportConfigResponse>(
-        `${BASE}/resumes/import-linkedin/config`,
-      ),
+    // LinkedIn "Save to PDF" import. Multipart, so bypass `roboApi` like upload().
     importLinkedIn: (args: LinkedInImportArgs) => {
       const fd = new FormData();
       fd.append('mode', args.mode);
@@ -297,42 +227,6 @@ export const realApi: RaV2Api = {
       ),
   },
 
-  // ── Insights ─────────────────────────────────────────────────────
-  insights: {
-    weekly: (params?: InsightsWeeklyParams) =>
-      roboApi.get<InsightsWeeklyResponse>(`${BASE}/insights/weekly${qs(params)}`),
-    refresh: () =>
-      roboApi.post<InsightsRefreshResponse>(`${BASE}/insights/refresh`, {}),
-  },
-
-  // ── Queue — real (BE-Q, shapes the V1 auto-apply engine) ──
-  queue: {
-    list: () => roboApi.get<QueueListResponse>(`${BASE}/queue`),
-    send: (id: string) =>
-      roboApi.post<QueueItemResponse>(
-        `${BASE}/queue/${encodeURIComponent(id)}/send`,
-        {},
-      ),
-    skip: (id: string) =>
-      roboApi.post<QueueItemResponse>(
-        `${BASE}/queue/${encodeURIComponent(id)}/skip`,
-        {},
-      ),
-    updateCover: (id: string, body: QueueUpdateCoverBody) =>
-      roboApi.patch<QueueItemResponse>(
-        `${BASE}/queue/${encodeURIComponent(id)}/cover`,
-        body,
-      ),
-  },
-
-  // ── Activity — real (BE-Q) ──
-  activity: {
-    feed: (params?: ActivityFeedParams) =>
-      roboApi.get<ActivityFeedResponse>(`${BASE}/activity${qs(params)}`),
-    orbStats: () =>
-      roboApi.get<AgentStatsResponse>(`${BASE}/activity/orb-stats`),
-  },
-
   // ── Mock interview — real (BE-MOCK) ──
   mock: {
     catalog: () => roboApi.get<MockCatalogResponse>(`${BASE}/mock/catalog`),
@@ -349,50 +243,10 @@ export const realApi: RaV2Api = {
       ),
   },
 
-  // ── Integrations — real (BE-INT) ──
-  integrations: {
-    list: () => roboApi.get<IntegrationsListResponse>(`${BASE}/integrations`),
-    connect: (provider: RAIntegrationProvider) =>
-      roboApi.post<IntegrationResponse>(
-        `${BASE}/integrations/${encodeURIComponent(provider)}/connect`,
-        {},
-      ),
-    disconnect: (provider: RAIntegrationProvider) =>
-      roboApi.post<IntegrationResponse>(
-        `${BASE}/integrations/${encodeURIComponent(provider)}/disconnect`,
-        {},
-      ),
-  },
-
   // ── Preferences — real (BE-P) ──
   preferences: {
     get: () => roboApi.get<PreferencesGetResponse>(`${BASE}/preferences`),
     update: (body: PreferencesUpdateBody) =>
       roboApi.patch<PreferencesUpdateResponse>(`${BASE}/preferences`, body),
-  },
-
-  // ── First-run setup — plain JSON, all of it. The NDJSON chat stream that
-  //    used to need a raw-fetch bypass here is deleted along with the chat. ──
-  onboarding: {
-    bootstrap: (body: OnboardingBootstrapBody) =>
-      roboApi.post<OnboardingBootstrapResponse>(
-        `${BASE}/onboarding/bootstrap`,
-        body,
-      ),
-    getSession: () =>
-      roboApi.get<OnboardingSessionResponse>(`${BASE}/onboarding/session`),
-    confirm: (body: OnboardingConfirmBody) =>
-      roboApi.post<OnboardingConfirmResponse>(`${BASE}/onboarding/confirm`, body),
-    skip: (body?: OnboardingSkipBody) =>
-      roboApi.post<OnboardingSkipResponse>(
-        `${BASE}/onboarding/skip`,
-        body ?? {},
-      ),
-    seen: (body: OnboardingSeenBody) =>
-      roboApi.post<OnboardingSeenResponse>(`${BASE}/onboarding/seen`, body),
-  },
-  discover: {
-    run: (body?: DiscoverRunBody) =>
-      roboApi.post<CrossBankDiscoverResponse>(`${BASE}/discover/run`, body ?? {}),
   },
 };

@@ -1,5 +1,11 @@
 // backend/src/seeker/agents/SeekerResumeTailorAgent.ts
 //
+// @deprecated Dead V1 code (WP-75). WP-37 ported claimCheck to the feature
+// tailor; nothing in production calls this agent. Its last importer is
+// server/src/roboapply/agents/RoboApplyAuthorAgent.ts (also dead, outside
+// WP-75's owns), so per TASK_PLAN §2.1 rule 8 it is deleted together with that
+// agent by INT/WP-93.
+//
 // Tailor the seeker's master resume for a specific job. Wraps the BaseAgent
 // LLM call with THREE layers of hallucination defense:
 //
