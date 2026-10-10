@@ -1,0 +1,141 @@
+// streamTurn — the Assistant's SSE-over-fetch reader (lib/api/copilot.ts, WP-51).
+// Partial chunks (an event cut anywhere, a multi-byte character cut in half,
+// CRLF line ends), heartbeat comments, the error event, unknown and malformed
+// events, abort (Stop), a dropped stream, and an HTTP error before streaming.
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { streamTurn, toCopilotEvent } from '../../lib/api/copilot';
+import type { CopilotSseEvent } from '../../lib/api/contracts/copilot';
+import { RoboApiError } from '../../lib/api/client';
+import { apiErrorCode } from '../../lib/api/contracts/wire';
+import { fail, installFetch, pieces, sse, streamResponse } from '../../components/features/copilot/__tests__/testkit';
+
+const PATH = '/api/v1/roboapply/copilot/threads/th_1/messages';
+
+const TURN =
+  sse('meta', { threadId: 'th_1', messageId: 'msg_1' }) +
+  ': ping\n\n' +
+  sse('tool', { id: 't1', name: 'search_jobs', phase: 'start' }) +
+  sse('tool', { id: 't1', name: 'search_jobs', phase: 'end', ok: true }) +
+  sse('card', { type: 'job_list', id: 'c1', data: { items: [] } }) +
+  sse('delta', { text: '两份工作 ' }) +
+  ': ping\n\n' +
+  sse('delta', { text: 'fit your search.' }) +
+  sse('done', { messageId: 'msg_1', usage: { inputTokens: 10, outputTokens: 20 }, creditsRemaining: 29 });
+
+async function run(chunks: Array<string | Uint8Array>, signal?: AbortSignal) {
+  installFetch({ [`POST ${PATH}`]: (c) => streamResponse(chunks, { signal: c.signal }) });
+  const events: CopilotSseEvent[] = [];
+  const outcome = await streamTurn('th_1', { text: 'hi' }, { onEvent: (e) => events.push(e), signal });
+  return { events, outcome };
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('streamTurn', () => {
+  it('delivers every event in order and resolves done', async () => {
+    const { events, outcome } = await run([TURN]);
+    expect(events.map((e) => e.event)).toEqual(['meta', 'tool', 'tool', 'card', 'delta', 'delta', 'done']);
+    expect(outcome).toEqual({ status: 'done', messageId: 'msg_1', creditsRemaining: 29 });
+  });
+
+  it.each([1, 2, 3, 7, 13, 64])('survives events cut into %i-character chunks', async (size) => {
+    const { events, outcome } = await run(pieces(TURN, size));
+    expect(events.map((e) => e.event)).toEqual(['meta', 'tool', 'tool', 'card', 'delta', 'delta', 'done']);
+    const text = events.filter((e) => e.event === 'delta').map((e) => (e as { data: { text: string } }).data.text).join('');
+    expect(text).toBe('两份工作 fit your search.');
+    expect(outcome.status).toBe('done');
+  });
+
+  it('survives a multi-byte character split across two network chunks', async () => {
+    const bytes = new TextEncoder().encode(sse('delta', { text: '已为你' }) + sse('done', { messageId: 'm', usage: {}, creditsRemaining: null }));
+    // Cut inside the first CJK character (3 bytes in UTF-8).
+    const cut = new TextEncoder().encode('event: delta\ndata: {"text":"').length + 1;
+    const { events } = await run([bytes.slice(0, cut), bytes.slice(cut)]);
+    expect(events[0]).toEqual({ event: 'delta', data: { text: '已为你' } });
+  });
+
+  it('accepts CRLF line endings', async () => {
+    const crlf = TURN.replace(/\n/g, '\r\n');
+    const { events, outcome } = await run(pieces(crlf, 5));
+    expect(events).toHaveLength(7);
+    expect(outcome.status).toBe('done');
+  });
+
+  it('skips heartbeat comments only streams', async () => {
+    const { events, outcome } = await run([': ping\n\n', ': ping\n\n', sse('done', { messageId: 'm', usage: {}, creditsRemaining: null })]);
+    expect(events.map((e) => e.event)).toEqual(['done']);
+    expect(outcome).toEqual({ status: 'done', messageId: 'm', creditsRemaining: null });
+  });
+
+  it('resolves the server error event and ignores anything after it', async () => {
+    const { events, outcome } = await run([
+      sse('delta', { text: 'Part of' }),
+      sse('error', { code: 'content_blocked', message: 'blocked', retryable: false }),
+      sse('delta', { text: ' more' }),
+    ]);
+    expect(events.map((e) => e.event)).toEqual(['delta', 'error']);
+    expect(outcome).toEqual({ status: 'error', code: 'content_blocked', message: 'blocked', retryable: false });
+  });
+
+  it('drops unknown and malformed events', async () => {
+    const { events } = await run([
+      sse('progress', { pct: 50 }),
+      'event: delta\ndata: not json\n\n',
+      sse('delta', { nope: true }),
+      sse('tool', { id: 't', name: 'x', phase: 'middle' }),
+      sse('card', { id: 'no-type' }),
+      sse('delta', { text: 'ok' }),
+    ]);
+    expect(events).toEqual([{ event: 'delta', data: { text: 'ok' } }]);
+  });
+
+  it('a stream that closes without done or error is incomplete', async () => {
+    const { outcome } = await run([sse('delta', { text: 'half' })]);
+    expect(outcome).toEqual({ status: 'incomplete' });
+  });
+
+  it('Stop (abort) resolves aborted and keeps what arrived', async () => {
+    const controller = new AbortController();
+    installFetch({ [`POST ${PATH}`]: (c) => streamResponse([sse('delta', { text: 'partial' })], { signal: c.signal, hold: true }) });
+    const events: CopilotSseEvent[] = [];
+    const pending = streamTurn('th_1', { text: 'hi' }, { onEvent: (e) => events.push(e), signal: controller.signal });
+    await vi.waitFor(() => expect(events).toHaveLength(1));
+    controller.abort();
+    await expect(pending).resolves.toEqual({ status: 'aborted' });
+    expect(events[0]).toEqual({ event: 'delta', data: { text: 'partial' } });
+  });
+
+  it('rejects with the platform error before streaming (402 credits_exhausted)', async () => {
+    installFetch({ [`POST ${PATH}`]: () => fail(402, 'credits_exhausted', { bucket: 'assistant', resetsAt: '2026-10-11T00:00:00.000Z' }) });
+    const err = await streamTurn('th_1', { text: 'hi' }, { onEvent: () => undefined }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(RoboApiError);
+    expect(apiErrorCode(err)).toBe('credits_exhausted');
+  });
+
+  it('posts the turn body as JSON with Accept: text/event-stream', async () => {
+    const http = installFetch({ [`POST ${PATH}`]: () => streamResponse([sse('done', { messageId: 'm', usage: {}, creditsRemaining: 1 })]) });
+    await streamTurn('th_1', { text: 'Why do I fit?', chip: 'why_fit', contextJobId: 'job_1' }, { onEvent: () => undefined });
+    expect(http.calls[0].body).toEqual({ text: 'Why do I fit?', chip: 'why_fit', contextJobId: 'job_1' });
+    expect(http.calls[0].headers.Accept).toBe('text/event-stream');
+  });
+});
+
+describe('toCopilotEvent', () => {
+  it('fills defaults on error and done', () => {
+    expect(toCopilotEvent({ event: 'error', data: {} })).toEqual({ event: 'error', data: { code: 'stream_error', message: '', retryable: false } });
+    expect(toCopilotEvent({ event: 'done', data: { messageId: 'm' } })).toEqual({
+      event: 'done',
+      data: { messageId: 'm', usage: { inputTokens: 0, outputTokens: 0 }, creditsRemaining: null },
+    });
+  });
+
+  it('rejects non-object data and missing ids', () => {
+    expect(toCopilotEvent({ event: 'delta', data: 'x' })).toBeNull();
+    expect(toCopilotEvent({ event: 'meta', data: { threadId: 't' } })).toBeNull();
+    expect(toCopilotEvent({ event: 'done', data: {} })).toBeNull();
+  });
+});
