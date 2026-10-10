@@ -53,8 +53,8 @@ describe('brand middleware + request context', () => {
     expect([b.body.userId, b.body.brandId]).toEqual(['b', 'goapply']);
   });
 
-  it('refuses a brand the deployment does not serve', async () => {
-    const locked = await startRouteHarness({ env: { NODE_ENV: 'production' }, mounts: [['/t', Router().get('/x', (_q, r) => { r.json({ ok: true }); })]] });
+  it('refuses a brand the deployment does not serve (ALLOWED_BRANDS narrows it)', async () => {
+    const locked = await startRouteHarness({ env: { NODE_ENV: 'production', ALLOWED_BRANDS: 'roboapply' }, mounts: [['/t', Router().get('/x', (_q, r) => { r.json({ ok: true }); })]] });
     try {
       const res = await locked.request<{ code: string }>('GET', '/t/x', { host: 'www.goapply.top' });
       expect(res.status).toBe(404);
@@ -63,6 +63,20 @@ describe('brand middleware + request context', () => {
       expect(ok.status).toBe(200);
     } finally {
       await locked.close();
+    }
+  });
+
+  it('a production deployment with no scope set serves both brands (D5)', async () => {
+    const open = await startRouteHarness({ env: { NODE_ENV: 'production' }, mounts: [['/t', Router().get('/x', (q, r) => { r.json({ brand: (q as unknown as { brand: { id: string } }).brand.id }); })]] });
+    try {
+      const go = await open.request<{ brand: string }>('GET', '/t/x', { host: 'www.goapply.top' });
+      expect(go.status).toBe(200);
+      expect(go.body.brand).toBe('goapply');
+      const robo = await open.request<{ brand: string }>('GET', '/t/x', { host: 'www.roboapply.io' });
+      expect(robo.status).toBe(200);
+      expect(robo.body.brand).toBe('roboapply');
+    } finally {
+      await open.close();
     }
   });
 });

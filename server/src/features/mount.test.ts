@@ -20,9 +20,10 @@ import { mountFeatures } from './index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
+// No CN_PAYMENTS_ENABLED: GoApply payments are on by default (D5); the variable
+// is only the kill switch (`false`). The rail's own merchant set decides.
 const ENV = {
   NODE_ENV: 'development',
-  CN_PAYMENTS_ENABLED: 'true',
   WECHATPAY_MCH_ID: 'm',
   WECHATPAY_APP_ID: 'a',
   WECHATPAY_API_V3_KEY: '0123456789abcdef0123456789abcdef',

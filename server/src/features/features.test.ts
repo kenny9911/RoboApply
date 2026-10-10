@@ -22,7 +22,8 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { FEATURE_MOUNTS, type FeatureMount, type FeatureRouterDeps } from './index.js';
 import { isStubHandler } from '../platform/http.js';
-import { FLAG_KEYS, flagEnvName, setFlagOverrideLoader } from '../platform/flags.js';
+import { FLAG_KEYS, flagEnvName, resolveFlags, setFlagOverrideLoader } from '../platform/flags.js';
+import { BRANDS } from '../platform/brand/registry.js';
 import type { EnvSource } from '../platform/brand/brandEnv.js';
 import { fakeAuth, startRouteHarness, type HarnessResponse, type RouteHarness } from '../test/routeHarness.js';
 
@@ -242,6 +243,12 @@ function urlFor(mount: FeatureMount, r: DiscoveredRoute, sample?: RouteSample): 
 }
 
 // ── Env: every capability on / off ───────────────────────────────────────
+//
+// REQUIREMENTS holds credentials only. It sets NO `CN_` value: GoApply's
+// capabilities are on by default on the shared stack (D5,
+// GOAPPLY_PARITY_PLAN §3.2), so "its capability on" below is the default
+// state for both hosts. The off case is the documented per-key off switch,
+// FLAG_<BRAND>_<KEY>=false.
 
 const REQUIREMENTS: EnvSource = {
   NODE_ENV: 'development',
@@ -258,23 +265,13 @@ const REQUIREMENTS: EnvSource = {
   WECHAT_MINI_APP_ID: 'wx',
   WECHAT_MINI_APP_SECRET: 's',
   RESEND_API_KEY: 're_test',
-  CN_EMAIL_TRANSPORT: 'resend',
-  CN_EMAIL_FROM: 'noreply@example.test',
   STRIPE_SECRET_KEY: 'sk_test_x',
-  CN_PAYMENTS_ENABLED: 'true',
-  ALIPAY_API_URL: 'https://alipay.example.test',
   ALIPAY_CALLBACK_SECRET: 's',
   WECHATPAY_MCH_ID: 'm',
   WECHATPAY_APP_ID: 'a',
   WECHATPAY_API_V3_KEY: 'k',
   WECHATPAY_MCH_CERT_SERIAL: 's',
   WECHATPAY_MCH_PRIVATE_KEY: 'p',
-  CN_LLM_PROVIDER: 'deepseek',
-  DEEPSEEK_API_KEY: 'k',
-  CN_LLM_MODEL: 'deepseek-chat',
-  CN_LLM_VISION_MODEL: 'v',
-  CN_RECRUITMENT_INFO_MODE: 'licensed',
-  CN_CAMPUS_CALENDAR_ENABLED: 'true',
 };
 
 function flagsEnv(on: boolean): EnvSource {
@@ -339,6 +336,17 @@ describe('FEATURE_MOUNTS', () => {
     expect(at('/api/v1/roboapply/jobs/import')).toBeLessThan(at('/api/v1/roboapply/jobs'));
     expect(at('/api/v1/roboapply/auth')).toBeLessThan(at('/api/v1/roboapply/auth/phone'));
     expect(at('/api/v1/roboapply/account')).toBeLessThan(at('/api/v1/roboapply/account/2fa'));
+  });
+
+  it('the "capability on" env sets no CN_ value, and GoApply still resolves every default-on capability (D5)', () => {
+    expect(Object.keys(REQUIREMENTS).filter((name) => name.startsWith('CN_'))).toEqual([]);
+    const go = resolveFlags(BRANDS.goapply, REQUIREMENTS);
+    const robo = resolveFlags(BRANDS.roboapply, REQUIREMENTS);
+    for (const key of ['ai.text', 'ai.vision', 'copilot', 'agent', 'jobs.feed', 'jobs.recommendations', 'jobs.alerts', 'campusCalendar', 'notify.email', 'auth.passwordReset', 'coaching', 'student', 'pay.alipay'] as const) {
+      expect(go[key], key).toBe(true);
+    }
+    const marketOnly = ['h1bHistory', 'eeoAnswers', 'fx.reference', 'pay.stripe', 'auth.google', 'auth.line'];
+    expect(FLAG_KEYS.filter((key) => robo[key] && !go[key] && !marketOnly.includes(key))).toEqual([]);
   });
 
   it('never mounts the public brand route (app.ts owns it)', () => {

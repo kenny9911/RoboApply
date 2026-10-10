@@ -3,8 +3,10 @@
 // lib/flags.ts — capability flags on the client (TASK_PLAN.md R-04).
 //
 // The one resolver lives on the server (server/src/platform/flags.ts):
-//   enabled(key) = requirements met (credentials, env, legal mode)
+//   enabled(key) = requirements met (credentials, operator off switches)
 //                  AND (per-user override ?? FLAG_<BRAND>_<KEY> env ?? registry default)
+// Both brands share the same defaults (owner ruling D5): a capability that is
+// on for RoboApply is on for GoApply unless it belongs to one market.
 // The browser never recomputes that. It reads the result:
 //   - `GET /api/v1/public/brand` (any visitor; cached 5 min), and
 //   - `/auth/me.flags` for a signed-in user (per-user beta overrides), which

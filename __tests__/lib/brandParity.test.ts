@@ -43,6 +43,25 @@ describe('brand registry mirror', () => {
     expect(stripMirrorHeader(`${MIRROR_HEADER}\nexport const x = 1;\n`)).toBe('export const x = 1;\n');
   });
 
+  it('the web mirror carries the D5 defaults (GOAPPLY_PARITY_PLAN §3.2)', () => {
+    const go = web.BRANDS.goapply;
+    const robo = web.BRANDS.roboapply;
+    for (const key of ['coaching', 'interviewVoice', 'webPush', 'student'] as const) {
+      expect(go.flags[key], key).toBe(true);
+    }
+    // Email + password first on both brands; Google and LINE stay RoboApply-only.
+    expect(go.authMethods).toEqual(['email_password', 'phone_otp', 'wechat']);
+    expect(robo.authMethods[0]).toBe('email_password');
+    // Job sources are per market: no JSearch on GoApply, no LinkedIn anywhere.
+    expect(go.jobProviders).toEqual(['bank_gohire', 'user_import']);
+    expect(go.jobProviders).not.toContain('jsearch');
+    expect(robo.jobProviders).toEqual(['activejobs', 'bank_robohire', 'jsearch', 'user_import']);
+    // A product flag on for RoboApply is on for GoApply, except the two of its market.
+    const roboFlags = robo.flags as unknown as Record<string, boolean | string>;
+    const goFlags = go.flags as unknown as Record<string, boolean | string>;
+    expect(Object.keys(roboFlags).filter((key) => roboFlags[key] === true && goFlags[key] !== true).sort()).toEqual(['eeoAnswers', 'h1bHistory']);
+  });
+
   it('exports the same data and behaves the same at runtime', () => {
     expect(web.BRANDS).toEqual(server.BRANDS);
     expect(web.BRAND_IDS).toEqual(server.BRAND_IDS);

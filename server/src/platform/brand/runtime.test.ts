@@ -2,11 +2,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   allowedBrands,
+  allowedBrandsProblem,
   brandLock,
   cookieDomainFor,
   DEFAULT_CORS_PREVIEW_HOSTS,
   corsOrigins,
   corsPreviewPatterns,
+  isBrandAllowed,
   isCorsOriginAllowed,
   parseBrandHostMap,
   resolveBrandFromRequest,
@@ -106,18 +108,96 @@ describe('resolveBrandFromRequest — overrides', () => {
 });
 
 describe('deployment scope', () => {
-  it('defaults to both brands outside production and RoboApply only in production', () => {
-    expect(allowedBrands(DEV)).toEqual(['roboapply', 'goapply']);
-    expect(allowedBrands({ NODE_ENV: 'production' })).toEqual(['roboapply']);
-    expect(resolveBrandFromRequest(req('www.goapply.top'), { NODE_ENV: 'production' })).toMatchObject({
-      brandId: 'goapply',
-      allowed: false,
-    });
+  it('serves both brands in every environment when ALLOWED_BRANDS and BRAND_LOCK are unset (D5)', () => {
+    for (const env of [DEV, { NODE_ENV: 'production' }, { NODE_ENV: 'test' }, {}, { NODE_ENV: 'production', ALLOWED_BRANDS: '  ', BRAND_LOCK: '' }]) {
+      expect(allowedBrands(env), JSON.stringify(env)).toEqual(['roboapply', 'goapply']);
+      expect(brandLock(env), JSON.stringify(env)).toBeNull();
+    }
+    // A production deployment resolves a goapply.top host to GoApply and serves it.
+    for (const host of ['goapply.top', 'www.goapply.top']) {
+      expect(resolveBrandFromRequest(req(host), { NODE_ENV: 'production' })).toMatchObject({ brandId: 'goapply', source: 'host', allowed: true });
+    }
+    expect(resolveBrandFromRequest(req('www.roboapply.io'), { NODE_ENV: 'production' })).toMatchObject({ brandId: 'roboapply', allowed: true });
+    // An unknown host still gets the default brand.
+    expect(resolveBrandFromRequest(req('unknown.example.com'), { NODE_ENV: 'production' })).toMatchObject({ brandId: 'roboapply', source: 'default', allowed: true });
   });
 
-  it('parses ALLOWED_BRANDS with aliases', () => {
+  it('ALLOWED_BRANDS narrows a deployment: roboapply refuses a goapply.top host, goapply refuses RoboApply', () => {
+    const intlOnly = { NODE_ENV: 'production', ALLOWED_BRANDS: 'roboapply' };
+    expect(allowedBrands(intlOnly)).toEqual(['roboapply']);
+    expect(resolveBrandFromRequest(req('www.goapply.top'), intlOnly)).toMatchObject({ brandId: 'goapply', allowed: false });
+    expect(resolveBrandFromRequest(req('www.roboapply.io'), intlOnly)).toMatchObject({ brandId: 'roboapply', allowed: true });
+    // The mainland kit keeps ALLOWED_BRANDS=goapply.
+    const cnOnly = { NODE_ENV: 'production', ALLOWED_BRANDS: 'goapply' };
+    expect(allowedBrands(cnOnly)).toEqual(['goapply']);
+    expect(resolveBrandFromRequest(req('www.goapply.top'), cnOnly)).toMatchObject({ brandId: 'goapply', allowed: true });
+    expect(resolveBrandFromRequest(req('www.roboapply.io'), cnOnly)).toMatchObject({ brandId: 'roboapply', allowed: false });
+    expect(resolveBrandFromRequest(req('gw.internal'), cnOnly)).toMatchObject({ brandId: 'goapply', source: 'lock', allowed: true });
+    // The same in development: narrowing is not a production-only rule.
+    expect(resolveBrandFromRequest(req('goapply.localhost:3621'), { ...DEV, ALLOWED_BRANDS: 'roboapply' })).toMatchObject({ brandId: 'goapply', allowed: false });
+  });
+
+  it('parses ALLOWED_BRANDS with aliases, ignoring empty entries', () => {
     expect(allowedBrands({ ALLOWED_BRANDS: 'intl,cn' })).toEqual(['roboapply', 'goapply']);
-    expect(allowedBrands({ ALLOWED_BRANDS: 'nonsense', NODE_ENV: 'production' })).toEqual(['roboapply']);
+    expect(allowedBrands({ ALLOWED_BRANDS: ' CN , cn ' })).toEqual(['goapply']);
+    expect(allowedBrands({ ALLOWED_BRANDS: 'goapply,' })).toEqual(['goapply']);
+    expect(allowedBrandsProblem({ ALLOWED_BRANDS: 'intl,cn' })).toBeNull();
+    expect(allowedBrandsProblem({ ALLOWED_BRANDS: 'goapply,', BRAND_LOCK: ' ' })).toBeNull();
+    expect(allowedBrandsProblem({})).toBeNull();
+  });
+
+  // Unset means both brands, so a typo must not read as unset: it would open
+  // GoApply (hosts, crons, queue drains) on a deployment meant to stay closed.
+  it.each([
+    ['ALLOWED_BRANDS', 'nonsense'],
+    ['ALLOWED_BRANDS', 'roboaply'],
+    ['ALLOWED_BRANDS', 'robo-apply, go-apply'],
+    ['ALLOWED_BRANDS', ','],
+    ['BRAND_LOCK', 'gopply'],
+  ])('%s=%s names no brand: the deployment fails closed to the default brand in every environment', (variable, value) => {
+    for (const base of [{ NODE_ENV: 'production' }, DEV, {}]) {
+      const env = { ...base, [variable]: value };
+      expect(allowedBrands(env), JSON.stringify(env)).toEqual(['roboapply']);
+      expect(brandLock(env)).toBe('roboapply');
+      expect(isBrandAllowed('goapply', env)).toBe(false);
+      expect(resolveBrandFromRequest(req('www.goapply.top'), env)).toMatchObject({ brandId: 'goapply', allowed: false });
+      const problem = allowedBrandsProblem(env);
+      expect(problem).toMatchObject({ failedClosed: true, serves: ['roboapply'] });
+      expect(problem!.invalid.every((entry) => entry.variable === variable)).toBe(true);
+      expect(problem!.invalid.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('names every token that is not a brand, and narrows a partly wrong list to its valid ids', () => {
+    const partly = { NODE_ENV: 'production', ALLOWED_BRANDS: 'roboapply,gopply' };
+    expect(allowedBrands(partly)).toEqual(['roboapply']);
+    expect(allowedBrandsProblem(partly)).toEqual({
+      invalid: [{ variable: 'ALLOWED_BRANDS', token: 'gopply' }],
+      failedClosed: false,
+      serves: ['roboapply'],
+    });
+    expect(allowedBrandsProblem({ ALLOWED_BRANDS: 'robo-apply, go-apply' })!.invalid).toEqual([
+      { variable: 'ALLOWED_BRANDS', token: 'robo-apply' },
+      { variable: 'ALLOWED_BRANDS', token: 'go-apply' },
+    ]);
+    expect(allowedBrandsProblem({ ALLOWED_BRANDS: ',' })!.invalid).toEqual([{ variable: 'ALLOWED_BRANDS', token: ',' }]);
+  });
+
+  it('a mistyped BRAND_LOCK is reported; a valid ALLOWED_BRANDS beside it still applies', () => {
+    const env = { NODE_ENV: 'production', BRAND_LOCK: 'gopply', ALLOWED_BRANDS: 'goapply' };
+    expect(allowedBrands(env)).toEqual(['goapply']);
+    expect(allowedBrandsProblem(env)).toEqual({
+      invalid: [{ variable: 'BRAND_LOCK', token: 'gopply' }],
+      failedClosed: false,
+      serves: ['goapply'],
+    });
+    // A valid lock decides alone: ALLOWED_BRANDS is not read, so it is not reported.
+    expect(allowedBrandsProblem({ BRAND_LOCK: 'cn', ALLOWED_BRANDS: 'nonsense' })).toBeNull();
+    expect(allowedBrands({ BRAND_LOCK: 'cn', ALLOWED_BRANDS: 'nonsense' })).toEqual(['goapply']);
+  });
+
+  it('on the mainland kit a mistyped scope leaves RoboApply only (the residency check refuses that boot)', () => {
+    expect(allowedBrands({ NODE_ENV: 'production', DEPLOY_REGION: 'cn-mainland', ALLOWED_BRANDS: 'gopply' })).toEqual(['roboapply']);
   });
 
   it('BRAND_LOCK serves one brand: unknown hosts resolve to it, other brands are refused', () => {
@@ -145,8 +225,10 @@ describe('cookieDomainFor', () => {
     expect(cookieDomainFor(BRANDS.roboapply, 'localhost', env)).toBeUndefined();
     expect(cookieDomainFor(BRANDS.goapply, 'goapply.localhost', env)).toBeUndefined();
   });
-  it('never falls back across brands and is host-only when unset', () => {
+  it('never falls back across brands (COOKIE_DOMAIN is a brand-own name) and is host-only when unset', () => {
     expect(cookieDomainFor(BRANDS.goapply, 'www.goapply.top', { COOKIE_DOMAIN: '.roboapply.io' })).toBeUndefined();
+    expect(cookieDomainFor(BRANDS.goapply, 'www.goapply.top', { COOKIE_DOMAIN: '.goapply.top' })).toBeUndefined();
+    expect(cookieDomainFor(BRANDS.roboapply, 'www.roboapply.io', { CN_COOKIE_DOMAIN: '.roboapply.io' })).toBeUndefined();
     expect(cookieDomainFor(BRANDS.roboapply, 'www.roboapply.io', {})).toBeUndefined();
   });
   it('keeps the configured domain when no host is known (legacy callers)', () => {
@@ -267,8 +349,10 @@ describe('corsOrigins', () => {
       expect(isCorsOriginAllowed('https://roboapply-x-kens-projects.vercel.app', { NODE_ENV: 'development' })).toBe(false);
     });
   });
-  it('omits brands this deployment does not serve', () => {
-    expect(corsOrigins({ NODE_ENV: 'production' })).not.toContain('https://www.goapply.top');
+  it('omits brands this deployment does not serve, and serves both by default', () => {
+    expect(corsOrigins({ NODE_ENV: 'production', ALLOWED_BRANDS: 'roboapply' })).not.toContain('https://www.goapply.top');
+    expect(corsOrigins({ NODE_ENV: 'production', BRAND_LOCK: 'goapply' })).not.toContain('https://www.roboapply.io');
+    expect(corsOrigins({ NODE_ENV: 'production' })).toEqual(expect.arrayContaining(['https://www.roboapply.io', 'https://www.goapply.top']));
   });
   it('allows both dev hosts on the dev ports', () => {
     const origins = corsOrigins({ NODE_ENV: 'development' });
