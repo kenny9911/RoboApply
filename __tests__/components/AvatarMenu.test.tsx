@@ -48,7 +48,7 @@ vi.mock('../../hooks/resume/useResumePhoto', () => ({
   clearResumeBuilderDeviceData: (options?: { resumePhotos?: boolean }) => clearDraftsMock(options),
 }));
 
-import { AvatarMenu, monogramFor } from '../../components/v3/shell/AvatarMenu';
+import { AvatarMenu, initialsFor } from '../../components/v3/shell/AvatarMenu';
 import {
   cleanUpDeviceOnSignOut,
   clearDraftsOnSignOut,
@@ -70,13 +70,14 @@ describe('AvatarMenu', () => {
     mockAuthState.value = buildAuthValue();
   });
 
-  it('builds the monogram from a name, then an address, then a fallback', () => {
-    expect(monogramFor('Jane Seeker')).toBe('JS');
-    expect(monogramFor('jane.seeker@example.com')).toBe('JS');
-    expect(monogramFor('jane@example.com')).toBe('JE');
-    expect(monogramFor('jane')).toBe('JA');
-    expect(monogramFor('')).toBe('RA');
-    expect(monogramFor(null)).toBe('RA');
+  it('builds the monogram from a name, then an address; with neither there are no letters', () => {
+    expect(initialsFor('Jane Seeker')).toBe('JS');
+    expect(initialsFor('jane.seeker@example.com')).toBe('JS');
+    expect(initialsFor('jane@example.com')).toBe('JE');
+    expect(initialsFor('jane')).toBe('JA');
+    // FIX-1: no made-up fallback ('RA' was RoboApply's initials on GoApply too); the trigger shows a person icon.
+    expect(initialsFor('')).toBe('');
+    expect(initialsFor(null)).toBe('');
   });
 
   it('renders a closed menu button carrying the user monogram', () => {

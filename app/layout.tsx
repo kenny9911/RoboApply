@@ -20,6 +20,7 @@ import './globals.css';
 
 import { WrongBrandNudge } from '../components/features/brand/WrongBrandNudge';
 import { AnalyticsConsent } from '../components/features/growth/AnalyticsConsent';
+import { ThemeBootScript } from '../components/v3/shell/ThemeBootScript';
 import { publicBrand } from '../lib/brand/client';
 import { buildRootMetadata, buildRootViewport } from '../lib/brand/metadata';
 import { loadMessages } from '../lib/i18n';
@@ -141,16 +142,11 @@ export default async function RootLayout({
         {/* No-flash theme bootstrap — must run render-blocking before paint.
          * Reads the persisted theme (lib/theme.tsx, STORAGE_KEY
          * 'roboapply:theme:v4') and sets data-theme + color-scheme on <html>
-         * so the correct palette is live on the very first frame. Only 'light'
-         * and 'dark' are valid — the 'warm' scope was deleted, and the v4 key
-         * bump drops any persisted 'warm' so it snaps to the light default.
-         * Keep the storage key + 'theme' field in sync with lib/theme.tsx. */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html:
-              "(function(){try{var s=localStorage.getItem('roboapply:theme:v4');var t='light';if(s){var p=JSON.parse(s);if(p&&(p.theme==='light'||p.theme==='dark'))t=p.theme;}var d=document.documentElement;d.setAttribute('data-theme',t);d.style.colorScheme=t;}catch(e){}})();",
-          }}
-        />
+         * so the correct palette is live on the very first frame. A component,
+         * not a bare <script>: a 404 renders this layout in the browser, where
+         * React reports (and never runs) a script it creates — see
+         * components/v3/shell/ThemeBootScript.tsx. */}
+        <ThemeBootScript />
       </head>
       <body className="min-h-screen bg-bg-page text-ink-900">
         <Providers locale={locale} messages={messages} brand={publicBrand(brand)}>

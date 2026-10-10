@@ -14,8 +14,8 @@ import { HttpError } from '../../platform/http.js';
 import { AuthCnError } from './errors.js';
 import { hashInviteCode } from './inviteService.js';
 import { sha256 } from './phoneAuthService.js';
-import { AUTH_CN_CONSENT_PROSE_VERSION } from './contract.js';
-import { BASE_ENV, buildServices, clock, CN0_CONSENTS, fakeDb, recordingSms } from './__tests__/testkit.js';
+import { CONSENT_PROSE_VERSION, listConsents, type ConsentDb } from '../compliance/index.js';
+import { BASE_ENV, buildServices, clock, cn0Consents, CN0_CONSENTS, CN0_CONSENTS_NO_HASH, fakeDb, recordingSms } from './__tests__/testkit.js';
 
 const goapply = getBrand('goapply');
 const PHONE = '+8613812345678';
@@ -64,20 +64,51 @@ describe('verifyAndSignIn — new number', () => {
       ['age_16_plus', true],
       ['pipl_cross_border', true],
     ]);
-    // The client sent proseVersion 'v1'; the record names the server's legal text.
-    expect(fake.$rows('seekerConsentRecord').map((r) => r.proseVersion)).toEqual([
-      AUTH_CN_CONSENT_PROSE_VERSION,
-      AUTH_CN_CONSENT_PROSE_VERSION,
-      AUTH_CN_CONSENT_PROSE_VERSION,
-    ]);
+    // The client sent proseVersion 'v1'; the record names the text the form showed: its catalog version and hash.
+    expect(fake.$rows('seekerConsentRecord').map((r) => r.proseVersion)).toEqual([CONSENT_PROSE_VERSION, CONSENT_PROSE_VERSION, CONSENT_PROSE_VERSION]);
+    expect(fake.$rows('seekerConsentRecord').map((r) => r.proseHash)).toEqual(CN0_CONSENTS.map((c) => c.proseHash));
   });
 
-  it('stores CN_LEGAL_DOCS_VERSION as the prose version when it is set, whatever the client sent', async () => {
-    const { s, send, fake } = setup({ ...BASE_ENV, CN_LEGAL_DOCS_VERSION: 'legal-2026-11' });
+  it('records the version and hash of the shown text, whatever version string the client sent (CN_LEGAL_DOCS_VERSION set or not)', async () => {
+    const env = { ...BASE_ENV, CN_LEGAL_DOCS_VERSION: 'legal-2026-11' };
+    const { s, send, fake } = setup(env);
     await send(PHONE, 'login', '111111');
-    const forged = CN0_CONSENTS.map((c) => ({ ...c, proseVersion: 'x' }));
+    // The form read in English: the record names the English text.
+    const forged = cn0Consents(env, 'en').map((c) => ({ ...c, proseVersion: 'x' }));
     await s.phone.verifyAndSignIn({ brand: goapply, phoneE164: PHONE, code: '111111', consents: forged, ip: '1.1.1.1' });
-    expect(fake.$rows('seekerConsentRecord').map((r) => r.proseVersion)).toEqual(['legal-2026-11', 'legal-2026-11', 'legal-2026-11']);
+    expect(fake.$rows('seekerConsentRecord').map((r) => r.proseVersion)).toEqual([CONSENT_PROSE_VERSION, CONSENT_PROSE_VERSION, CONSENT_PROSE_VERSION]);
+    expect(fake.$rows('seekerConsentRecord').map((r) => r.proseHash)).toEqual(forged.map((c) => c.proseHash));
+  });
+
+  // Wave FIX gate: phone sign-up stored no hash, so G1 and Settings said "you agreed to an earlier
+  // version of this text" a minute after the person agreed to exactly this text.
+  it('a consent given at phone sign-up is known to be for the text served now (the ledger does not ask again)', async () => {
+    const { s, send, fake } = setup();
+    await send(PHONE, 'login', '111111');
+    const r = await s.phone.verifyAndSignIn({ brand: goapply, phoneE164: PHONE, code: '111111', consents: CN0_CONSENTS, ip: '1.1.1.1' });
+    for (const locale of ['zh', 'en']) {
+      const items = await listConsents(r.userId, goapply, { env: BASE_ENV, locale }, { db: fake as unknown as ConsentDb, env: BASE_ENV });
+      for (const type of ['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border']) {
+        expect(items.find((i) => i.type === type), `${type} ${locale}`).toMatchObject({ granted: true, answeredProseVersion: CONSENT_PROSE_VERSION, answeredTextCurrent: true });
+      }
+    }
+  });
+
+  it('refuses a consent that does not name the text shown (no hash, or the hash of a text no longer served) and keeps the code usable', async () => {
+    const { s, send, fake } = setup();
+    await send(PHONE, 'login', '111111');
+    const noHash = await s.phone.verifyAndSignIn({ brand: goapply, phoneE164: PHONE, code: '111111', consents: CN0_CONSENTS_NO_HASH, ip: '1.1.1.1' }).catch((e) => e);
+    expect(noHash).toBeInstanceOf(AuthCnError);
+    expect(noHash).toMatchObject({ code: 'consent_required', status: 422 });
+    expect(noHash.details).toEqual({ outdated: ['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border'], proseVersion: CONSENT_PROSE_VERSION });
+    // The cross-border text was reworded while the form was open: only that one is asked again.
+    const stale = CN0_CONSENTS.map((c) => (c.type === 'pipl_cross_border' ? { ...c, proseHash: 'd'.repeat(64) } : c));
+    const old = await s.phone.verifyAndSignIn({ brand: goapply, phoneE164: PHONE, code: '111111', consents: stale, ip: '1.1.1.1' }).catch((e) => e);
+    expect(old.details).toEqual({ outdated: ['pipl_cross_border'], proseVersion: CONSENT_PROSE_VERSION });
+    expect(fake.$rows('user')).toHaveLength(0);
+    expect(fake.$rows('seekerConsentRecord')).toHaveLength(0);
+    // Same code, with the text now served.
+    await expect(s.phone.verifyAndSignIn({ brand: goapply, phoneE164: PHONE, code: '111111', consents: CN0_CONSENTS, ip: '1.1.1.1' })).resolves.toMatchObject({ isNewUser: true });
   });
 
   it('CN-0: refuses signup without pipl_cross_border (422) and keeps the code usable', async () => {

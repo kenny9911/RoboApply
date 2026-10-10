@@ -192,6 +192,11 @@ describe('GoApply allowlist', () => {
     expect(isMainlandStorageHost('https://bucket.oss-cn-hangzhou-internal.aliyuncs.com', MAINLAND)).toBe(true);
     expect(isMainlandStorageHost('https://b-1250000000.cos.ap-shanghai.myqcloud.com', MAINLAND)).toBe(true);
     expect(isMainlandStorageHost('https://cos.ap-hongkong.myqcloud.com', MAINLAND)).toBe(false);
+    // FIX-8: Aliyun's Hong Kong region carries the `oss-cn-` prefix and is not the mainland.
+    expect(isMainlandStorageHost('https://oss-cn-hongkong.aliyuncs.com', MAINLAND)).toBe(false);
+    expect(isMainlandStorageHost('https://bucket.oss-cn-hongkong-internal.aliyuncs.com', MAINLAND)).toBe(false);
+    expect(isMainlandStorageHost('https://bucket.oss-cn-hongkong.aliyuncs.com', MAINLAND)).toBe(false);
+    expect(isMainlandStorageHost('https://bucket.oss-cn-shenzhen.aliyuncs.com', MAINLAND)).toBe(true);
     expect(isMainlandStorageHost('https://obs.cn-north-4.myhuaweicloud.com', MAINLAND)).toBe(true);
     expect(isMainlandStorageHost('http://192.168.1.20:9000', MAINLAND)).toBe(true);
     expect(isMainlandStorageHost('https://minio.cn.example', { CN_ALLOWED_STORAGE_HOST_SUFFIXES: 'cn.example' })).toBe(true);

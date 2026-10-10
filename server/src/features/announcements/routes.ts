@@ -18,10 +18,17 @@ export interface AnnouncementsRouterDeps extends FeatureRouterDeps {
   service?: AnnouncementsService;
 }
 
-/** The UI language: `?locale=`, else the `x-ra-locale` header, else the NEXT_LOCALE cookie. */
+/**
+ * The UI language: `?locale=`, else the `X-Robo-Locale` header the web client
+ * sends (lib/api/client.ts), else the `robo_locale` cookie. The older
+ * `x-ra-locale` / `NEXT_LOCALE` names are read last; nothing sends them today.
+ */
 export function requestLocale(req: Request, fromQuery?: string): string | null {
-  const v = fromQuery ?? req.get('x-ra-locale') ?? (req.cookies as Record<string, unknown> | undefined)?.NEXT_LOCALE;
-  return typeof v === 'string' && v ? v : null;
+  const cookies = req.cookies as Record<string, unknown> | undefined;
+  for (const v of [fromQuery, req.get('x-robo-locale'), cookies?.robo_locale, req.get('x-ra-locale'), cookies?.NEXT_LOCALE]) {
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  return null;
 }
 
 export function createAnnouncementsRouter(deps: AnnouncementsRouterDeps = {}): Router {

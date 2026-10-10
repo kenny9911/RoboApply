@@ -11,6 +11,8 @@ import type { AuthCnDb } from '../db.js';
 import { createAuthCnServices, type AuthCnServices } from '../services.js';
 import type { AccountHooks } from '../hooks.js';
 import type { SignInGate } from '../accounts.js';
+import { getBrand } from '../../../platform/brand/registry.js';
+import { findConsentDefinition, resolveConsentProse } from '../../compliance/index.js';
 
 /** Hooks that record every call (hooks.ts): invite attribution, invite check, the phone practice credit. */
 export function recordingHooks() {
@@ -119,12 +121,29 @@ export const BASE_ENV: EnvSource = {
   CN_CANONICAL_ORIGIN: 'https://www.goapply.top',
 };
 
-/** CN-0 signup consents (agreement + age + cross-border). */
-export const CN0_CONSENTS = [
-  { type: 'pipl_basic_processing', granted: true, proseVersion: 'v1' },
-  { type: 'age_16_plus', granted: true, proseVersion: 'v1' },
-  { type: 'pipl_cross_border', granted: true, proseVersion: 'v1' },
-];
+const CN0_TYPES = ['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border'] as const;
+
+/**
+ * CN-0 signup consents (agreement + age + cross-border) as the form sends
+ * them: each with the hash of the text GET /auth/phone/policy serves for it
+ * under `env` in `locale` (Chinese is GoApply's default). `proseVersion` is a
+ * client string the server never stores.
+ */
+export function cn0Consents(env: EnvSource = BASE_ENV, locale: string = 'zh') {
+  const brand = getBrand('goapply');
+  return CN0_TYPES.map((type) => ({
+    type: type as string,
+    granted: true,
+    proseVersion: 'v1',
+    proseHash: resolveConsentProse(findConsentDefinition('goapply', type)!, brand, locale, env).hash,
+  }));
+}
+
+/** `cn0Consents()` for BASE_ENV. */
+export const CN0_CONSENTS = cn0Consents();
+
+/** The same consents as a form that sends no hash (an old client): refused as `outdated`. */
+export const CN0_CONSENTS_NO_HASH = CN0_TYPES.map((type) => ({ type: type as string, granted: true, proseVersion: 'v1' }));
 
 export interface FakeWechatUser {
   openid: string;

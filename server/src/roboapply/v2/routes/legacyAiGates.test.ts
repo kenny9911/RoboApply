@@ -5,6 +5,8 @@
 // INT gate: so does POST /v2/discover/run (cross-bank search: the user's resume
 // goes to three agents), which also closes on GoApply while the
 // recruitment-info mode is off and has its own kill switch.
+// Wave FIX gate: so does POST /v2/resumes/:id/rewrite (the editor's inline
+// rewrite, metered since FIX-4), which was mounted with `requireAuth` only.
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextFunction, Request, Response } from 'express';
@@ -17,6 +19,7 @@ const m = vi.hoisted(() => ({
   nextTurn: vi.fn(async () => ({})),
   score: vi.fn(async () => ({})),
   tailorDiff: vi.fn(async () => ({ changes: [] })),
+  rewrite: vi.fn(async () => ({ result: { rewrite: 'x' }, agentSucceeded: true })),
   discoverRun: vi.fn(async () => ({
     recommended: [], explore: [], coverage: null, insight: null, banksSwept: [], scorerCallsUsed: 0, scorerCacheHits: 0, zeroResults: true,
   })),
@@ -54,7 +57,7 @@ vi.mock('../../../lib/prisma.js', async (orig) => {
 });
 vi.mock('../services/RAResumeAIService.js', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
-  raResumeAIService: { tailorDiff: m.tailorDiff },
+  raResumeAIService: { tailorDiff: m.tailorDiff, rewriteWithSource: m.rewrite },
 }));
 
 let h: RouteHarness;
@@ -76,9 +79,10 @@ const MODEL_ROUTES: Array<[string, string]> = [
   ['POST', '/v2/mock/next-turn'],
   ['POST', '/v2/mock/s1/score'],
   ['POST', '/v2/resumes/rv1/tailor-diff'],
+  ['POST', '/v2/resumes/rv1/rewrite'],
   ['POST', '/v2/discover/run'],
 ];
-const MODEL_CALLS = () => [m.start, m.nextTurn, m.score, m.tailorDiff, m.discoverRun];
+const MODEL_CALLS = () => [m.start, m.nextTurn, m.score, m.tailorDiff, m.rewrite, m.discoverRun];
 
 describe('legacy /v2 model routes', () => {
   it.each(MODEL_ROUTES)('%s %s: 503 ai_unavailable without AI consent, zero model calls', async (method, path) => {

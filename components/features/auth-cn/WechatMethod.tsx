@@ -25,11 +25,12 @@ import type { AuthMethodProps } from '../../auth/methods/registry';
 import { InviteCodeField, SignupConsents } from './SignupConsents';
 import {
   agreementSatisfied,
-  consentsFromPolicy,
   currentSignupLinkCodes,
   errorMessage,
+  isConsentOutdated,
   prefillAccessCode,
   safeNextPath,
+  shownConsentsFromPolicy,
   signupInputs,
   useIsWechatBrowser,
   useSignupInputs,
@@ -90,13 +91,19 @@ export function WechatMethod({ mode, next }: AuthMethodProps) {
       const { ref } = currentSignupLinkCodes();
       const { url } = await startWechatSignIn({
         flow: inWechat ? 'mp' : 'web',
-        consents: consentsFromPolicy(policy),
+        // Each required consent with the hash of the text shown beside its box.
+        consents: shownConsentsFromPolicy(policy),
         ...(safe ? { next: safe } : {}),
         ...(invite ? { inviteCode: invite } : {}),
         ...(ref ? { ref } : {}),
       });
       window.location.assign(url);
     } catch (err) {
+      // The consent text changed while the form was open: show the new text and ask again.
+      if (isConsentOutdated(err)) {
+        signupInputs.set({ granted: {} });
+        void policyQuery.refetch();
+      }
       setError(errorMessage(err, t));
       setBusy(false);
     }

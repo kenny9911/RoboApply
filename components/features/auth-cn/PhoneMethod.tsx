@@ -29,9 +29,9 @@ import type { AuthMethodProps } from '../../auth/methods/registry';
 import { InviteCodeField, SignupConsents } from './SignupConsents';
 import {
   agreementSatisfied,
-  consentsFromPolicy,
   currentSignupLinkCodes,
   errorMessage,
+  isConsentOutdated,
   isInviteInvalid,
   isValidCnPhone,
   maskPhoneInput,
@@ -39,6 +39,7 @@ import {
   OTP_RE,
   prefillAccessCode,
   safeNextPath,
+  shownConsentsFromPolicy,
   signupInputs,
   useCountdown,
   useSignupInputs,
@@ -122,7 +123,9 @@ export function PhoneMethod({ mode, next, onSuccess }: AuthMethodProps) {
       const res = await verifyPhoneCode({
         phone: normalizePhoneInput(phone),
         code,
-        consents: consentsFromPolicy(policy),
+        // Each required consent with the hash of the text shown beside its box:
+        // the server records a consent only for a text it serves.
+        consents: shownConsentsFromPolicy(policy),
         ...(inputs.invite.trim() ? { inviteCode: inputs.invite.trim() } : {}),
         ...(safe ? { next: safe } : {}),
         ...(ref ? { ref } : {}),
@@ -137,6 +140,13 @@ export function PhoneMethod({ mode, next, onSuccess }: AuthMethodProps) {
         return;
       }
       if (isInviteInvalid(err)) setShowInvite(true);
+      // The consent text changed while the form was open: show the new text
+      // and ask again (a tick is kept per text, so the boxes come back
+      // unticked). The code is not spent by this refusal.
+      if (isConsentOutdated(err)) {
+        signupInputs.set({ granted: {} });
+        void policyQuery.refetch();
+      }
       setError(errorMessage(err, t));
     } finally {
       setSubmitting(false);

@@ -8,9 +8,9 @@
 //     form, the WeChat button and the email form (rendered together by the
 //     sign-in page) use one set of boxes instead of three. There is one box
 //     per required consent, and the text beside it is the text the sign-up
-//     policy serves (compliance catalog prose), shown verbatim: the email
-//     form sends that text's hash back, so the stored consent record names
-//     exactly what was on screen (INT-01),
+//     policy serves (compliance catalog prose), shown verbatim: every form
+//     sends that text's hash back, so the stored consent record names
+//     exactly what was on screen (INT-01; phone and WeChat since Wave FIX),
 //   - error-code → message mapping,
 //   - the WeChat in-app browser check (`MicroMessenger`),
 //   - the two codes a sign-up link can carry: the invite-friends code
@@ -96,15 +96,12 @@ export function shownConsents(policy: SignupPolicyResponse | undefined): SignupP
   return required.every((c) => c.prose?.text) ? required : [];
 }
 
-/** The consent rows a new phone or WeChat account sends (all required types, granted). */
-export function consentsFromPolicy(policy: SignupPolicyResponse | undefined): Array<{ type: string; granted: boolean; proseVersion: string }> {
-  return (policy?.requiredConsents ?? []).map((c) => ({ type: c.type, granted: true, proseVersion: c.proseVersion }));
-}
-
 /**
- * The consent rows the email form sends: each required consent with the
- * version and hash of the text shown beside its box. The server writes the
- * record only when that hash is the hash of a text it serves.
+ * The consent rows every sign-up form sends (phone, WeChat and email): each
+ * required consent with the version and hash of the text shown beside its
+ * box. The server writes the record only when that hash is the hash of a text
+ * it serves, so the stored consent names exactly what was on screen and the
+ * consent ledger can later tell whether the text has changed since.
  */
 export function shownConsentsFromPolicy(
   policy: SignupPolicyResponse | undefined,

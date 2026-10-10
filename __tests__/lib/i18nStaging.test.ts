@@ -16,7 +16,17 @@ import { LOCALES } from '../../lib/localeConfig';
 
 type Tree = Record<string, unknown>;
 const at = (obj: unknown, path: string) => path.split('.').reduce<unknown>((o, k) => (o as Tree | undefined)?.[k], obj);
-const bundle = (locale: string) => JSON.parse(readFileSync(join(process.cwd(), 'i18n/messages', `${locale}.json`), 'utf8')) as Tree;
+// Parsed once per locale: the staging test below asks for a bundle for every staged string and locale,
+// and re-parsing a ~1 MB file each time put it within half a second of the 5 s timeout (FIX-3 handoff).
+const bundles = new Map<string, Tree>();
+const bundle = (locale: string): Tree => {
+  let parsed = bundles.get(locale);
+  if (!parsed) {
+    parsed = JSON.parse(readFileSync(join(process.cwd(), 'i18n/messages', `${locale}.json`), 'utf8')) as Tree;
+    bundles.set(locale, parsed);
+  }
+  return parsed;
+};
 
 function leafPaths(obj: unknown, prefix = ''): string[] {
   if (!obj || typeof obj !== 'object') return prefix ? [prefix] : [];

@@ -62,6 +62,12 @@ export const ERROR_STATUS = {
   brand_context_missing: 500,
   /** The resource existed and is gone for good, e.g. a closed public job page (WP-56; Wave 4 gate). */
   gone: 410,
+  /**
+   * The database could not take the credit transaction in time (platform/credits
+   * `CreditStoreBusyError`, FIX-9). Nothing was reserved or spent, so the same request can be
+   * sent again: 503 with a `Retry-After` header; details `{ retryAfterSec }`.
+   */
+  credits_busy: 503,
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_STATUS;
@@ -93,6 +99,7 @@ export const DEFAULT_ERROR_MESSAGES: Record<ErrorCode, string> = {
   storage_unavailable: 'File storage is not available right now.',
   brand_context_missing: 'Something went wrong.',
   gone: 'This is no longer available.',
+  credits_busy: 'We could not start this right now. Try again in a moment.',
 };
 
 export class HttpError extends Error {
@@ -168,7 +175,7 @@ export function ok<T>(res: Response, data: T, status = 200): Response {
 export function fail(res: Response, code: ErrorCode, message?: string, details?: unknown): Response {
   const body: ErrorEnvelope = { success: false, code, error: message ?? DEFAULT_ERROR_MESSAGES[code] };
   if (details !== undefined) body.details = details;
-  if (code === 'rate_limited') {
+  if (sendsRetryAfter(code)) {
     const retry = retryAfterFromDetails(details);
     if (retry !== undefined) res.setHeader('Retry-After', String(retry));
   }
@@ -178,6 +185,11 @@ export function fail(res: Response, code: ErrorCode, message?: string, details?:
 /** Stub handler body: `501 not_implemented`. */
 export function notImplemented(res: Response, what?: string): Response {
   return fail(res, 'not_implemented', what ? `${what} is not implemented yet.` : undefined);
+}
+
+/** Codes whose answer carries a `Retry-After` header when `details.retryAfterSec` is known. */
+function sendsRetryAfter(code: ErrorCode): boolean {
+  return code === 'rate_limited' || code === 'credits_busy';
 }
 
 function retryAfterFromDetails(details: unknown): number | undefined {
@@ -247,7 +259,7 @@ export function mapError(err: unknown): MappedError {
     const body: ErrorEnvelope = { success: false, code: err.code, error: err.message };
     if (err.details !== undefined) body.details = err.details;
     const headers: Record<string, string> = { ...(err.headers ?? {}) };
-    if (err.code === 'rate_limited' && !headers['Retry-After']) {
+    if (sendsRetryAfter(err.code) && !headers['Retry-After']) {
       const retry = retryAfterFromDetails(err.details);
       if (retry !== undefined) headers['Retry-After'] = String(retry);
     }
@@ -264,7 +276,7 @@ export function mapError(err: unknown): MappedError {
     };
     if (details !== undefined) body.details = details;
     const headers: Record<string, string> = {};
-    const retry = code === 'rate_limited' ? retryAfterFromDetails(details) : undefined;
+    const retry = sendsRetryAfter(code) ? retryAfterFromDetails(details) : undefined;
     if (retry !== undefined) headers['Retry-After'] = String(retry);
     return { status: ERROR_STATUS[code], body, headers, unexpected: false };
   }

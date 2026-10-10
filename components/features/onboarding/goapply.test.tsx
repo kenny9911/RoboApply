@@ -122,7 +122,9 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('G6 resume on GoApply', () => {
-  it('with AI consent off the step is manual: no upload, no parse or AI call; "fill in by hand" skips the step', async () => {
+  // FIX-8: "Fill in my profile by hand" opens the manual form (onboarding-cn `ManualProfileForm`);
+  // the resume step is saved as skipped when that form is saved or left for later ("Fill in later").
+  it('with AI consent off the step is manual: no upload, no parse or AI call; "fill in by hand" opens the manual form, and leaving it for later skips the step', async () => {
     const net = installFetch({
       [`GET ${P}/state`]: () => ok(state({ stage: 'resume', nextRoute: '/onboarding/resume' })),
       [`PUT ${P}/steps/resume`]: () => ok({ stage: 'matching', nextStage: 'matching', nextRoute: '/onboarding/matching' }),
@@ -136,6 +138,11 @@ describe('G6 resume on GoApply', () => {
     // The optional-field reminder is always shown.
     expect(screen.getByText(/Photo, native place and political status are optional/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Fill in my profile by hand' }));
+    // The form opens; nothing is saved and nobody is sent on yet.
+    expect(await screen.findByRole('heading', { name: 'Fill in your profile by hand' })).toBeInTheDocument();
+    expect(nav.push).not.toHaveBeenCalled();
+    expect(net.to('PUT', `${P}/steps/resume`)).toEqual([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Fill in later' }));
     await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/onboarding/matching'));
     expect(net.to('PUT', `${P}/steps/resume`)[0]!.body).toEqual({ skip: true });
     // Nothing was uploaded, seeded or recorded.
@@ -155,14 +162,17 @@ describe('G6 resume on GoApply', () => {
     const gateBox = (await screen.findByRole('heading', { name: 'Resume reading is off' })).closest('section')!;
     expect(within(gateBox).queryByRole('alert')).toBeNull();
     fireEvent.click(within(gateBox).getByRole('button', { name: 'Fill in my profile by hand' }));
-    // The message is in the gate (the upload screen that normally shows it is not on the page).
-    expect(await within(gateBox).findByRole('alert')).toHaveTextContent('Something went wrong. Your answers are still here; try again.');
+    const manualForm = await screen.findByTestId('cn-manual-profile');
+    expect(within(manualForm).queryByRole('alert')).toBeNull();
+    fireEvent.click(within(manualForm).getByRole('button', { name: 'Fill in later' }));
+    // The message is in the manual form (the upload screen that normally shows it is not on the page).
+    expect(await within(manualForm).findByRole('alert')).toHaveTextContent('Something went wrong. Your answers are still here; try again.');
     expect(nav.push).not.toHaveBeenCalled();
     expect(screen.queryByTestId('resume-file')).toBeNull();
-    // Both buttons work again; a second try goes through and the message is gone.
-    await waitFor(() => expect(within(gateBox).getByRole('button', { name: 'Fill in my profile by hand' })).toBeEnabled());
+    // The buttons work again; a second try goes through.
+    await waitFor(() => expect(within(manualForm).getByRole('button', { name: 'Fill in later' })).toBeEnabled());
     failing = false;
-    fireEvent.click(within(gateBox).getByRole('button', { name: 'Fill in my profile by hand' }));
+    fireEvent.click(within(manualForm).getByRole('button', { name: 'Fill in later' }));
     await waitFor(() => expect(nav.push).toHaveBeenCalledWith('/onboarding/matching'));
     expect(net.to('PUT', `${P}/steps/resume`)).toHaveLength(2);
   });
@@ -174,10 +184,11 @@ describe('G6 resume on GoApply', () => {
       [`PUT ${P}/steps/resume`]: () => new Promise<Response>((resolve) => { release = resolve; }),
     });
     renderGo(<OnboardingStepPage step="resume" />, { api: cnApi({ getMyConsents: vi.fn(async () => [consent('ai_resume_parsing', false)]) }) });
-    const manual = await screen.findByRole('button', { name: 'Fill in my profile by hand' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Fill in my profile by hand' }));
+    const manual = await screen.findByRole('button', { name: 'Fill in later' });
     fireEvent.click(manual);
     await waitFor(() => expect(manual).toBeDisabled());
-    expect(screen.getByRole('button', { name: 'Turn on AI processing' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled();
     fireEvent.click(manual);
     expect(net.to('PUT', `${P}/steps/resume`)).toHaveLength(1);
     release(ok({ stage: 'matching', nextStage: 'matching', nextRoute: '/onboarding/matching' }) as Response);

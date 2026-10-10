@@ -678,14 +678,16 @@ describe('ConsentsPanel (#consents, GoApply)', () => {
         consent({ type: 'pipl_cross_border', required: true, granted: true, answeredAt: '2026-10-10T00:00:00.000Z', answeredProseVersion: 'v0', answeredTextCurrent: false, proseVersion: 'v1', prose: '境外处理方：数据库 Neon。' }),
         consent({ type: 'pipl_basic_processing', required: true, withdrawable: false, granted: true, answeredAt: '2026-10-10T00:00:00.000Z', answeredProseVersion: 'v0', answeredTextCurrent: true, prose: '我已阅读并同意。' }),
         consent({ type: 'marketing_email', granted: true, answeredAt: '2026-10-10T00:00:00.000Z', prose: '营销消息。' }),
+        // A sign-up record with no hash: the catalog cannot compare it with any text (null = unknown, not "changed").
+        consent({ type: 'age_16_plus', required: true, withdrawable: false, granted: true, answeredAt: '2026-10-10T00:00:00.000Z', answeredProseVersion: 'authCn.2026-10-10.v1', answeredTextCurrent: null, prose: '我已年满 16 周岁。' }),
       ],
     });
     api.recordConsent.mockResolvedValue({ type: 'pipl_cross_border', granted: true, proseVersion: 'v1', proseHash: 'h', at: 'x', accountClosing: false });
     renderWithBrand(<ConsentsPanel />, { brand: 'goapply' });
     const cross = (await screen.findByText('境外处理方：数据库 Neon。')).closest('li') as HTMLElement;
     expect(cross).toHaveTextContent('This text has changed since you answered. Your answer was given to the earlier version.');
-    // Same words (version bump only), or a catalog that does not say: no note, no extra button.
-    for (const type of ['pipl_basic_processing', 'marketing_email']) {
+    // Same words (version bump only), a catalog that does not say, or a record that cannot be compared: no note, no extra button.
+    for (const type of ['pipl_basic_processing', 'marketing_email', 'age_16_plus']) {
       const row = document.querySelector(`[data-consent="${type}"]`) as HTMLElement;
       expect(row).not.toHaveTextContent('This text has changed');
       expect(within(row).queryByRole('button', { name: 'Agree to this text' })).toBeNull();

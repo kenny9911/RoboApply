@@ -8,8 +8,6 @@
 //
 // With nothing real to abbreviate the avatar shows a person icon.
 
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -63,13 +61,6 @@ describe('initialsFor', () => {
 });
 
 describe('AvatarMenu trigger', () => {
-  it('is not built on the deprecated helper that still returns made-up letters', () => {
-    // `monogramFor` survives only for an older test; the trigger must not call it.
-    const source = readFileSync(join(process.cwd(), 'components/v3/shell/AvatarMenu.tsx'), 'utf8');
-    expect(source.match(/monogramFor\(/g)).toHaveLength(1); // its own declaration
-  });
-
-
   it('shows a person icon, not letters, while the session is loading', () => {
     renderMenu();
     const trigger = screen.getByRole('button', { name: 'Your account' });

@@ -38,6 +38,7 @@ describe('error codes', () => {
       brand_unavailable: 404,
       storage_unavailable: 503,
       brand_context_missing: 500,
+      credits_busy: 503,
     });
   });
 
@@ -103,6 +104,11 @@ describe('route() and validation over HTTP', () => {
     r.get('/limited', route(async () => {
       throw new HttpError('rate_limited', undefined, { retryAfterSec: 30 });
     }));
+    // FIX-9: what a route answers when a credit reserve finds the database busy.
+    r.post('/reserve-busy', route(async () => {
+      const { CreditStoreBusyError } = await import('./credits/errors.js');
+      throw new CreditStoreBusyError({ cause: new Error('Transaction API error: P2028 on db.internal:5432') });
+    }, { logError }));
     r.get('/stub', (_req, res) => notImplemented(res, 'Feed'));
     r.get('/fail', (_req, res) => fail(res, 'feature_disabled'));
     r.get('/next-error', (_req, _res, next) => next(new HttpError('forbidden')));
@@ -142,6 +148,23 @@ describe('route() and validation over HTTP', () => {
     const res = await h.request('GET', '/t/limited');
     expect(res.status).toBe(429);
     expect(res.headers.get('retry-after')).toBe('30');
+  });
+
+  it('a busy credit store answers 503 credits_busy with Retry-After, never a bare 500 or the database error (FIX-9)', async () => {
+    logError.mockClear();
+    const res = await h.request<{ success: boolean; code: string; error: string; details: { retryAfterSec: number } }>('POST', '/t/reserve-busy');
+    expect(res.status).toBe(503);
+    expect(res.headers.get('retry-after')).toBe('5');
+    expect(res.body).toEqual({
+      success: false,
+      code: 'credits_busy',
+      error: 'We could not start this right now. Try again in a moment.',
+      details: { retryAfterSec: 5 },
+    });
+    expect(res.text).not.toContain('P2028');
+    // An expected, retryable answer: the store logs the cause itself; the route does not log it as a crash.
+    expect(logError).not.toHaveBeenCalled();
+    expect(mapError(new HttpError('credits_busy', undefined, { retryAfterSec: 5 })).headers).toEqual({ 'Retry-After': '5' });
   });
 
   it('stubs answer 501 and fail() writes the envelope; errorHandler maps next(err)', async () => {

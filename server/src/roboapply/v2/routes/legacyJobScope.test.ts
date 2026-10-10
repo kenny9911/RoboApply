@@ -77,7 +77,9 @@ describe('legacyJobVisible', () => {
   });
 
   it('the scope select names every column the check reads', () => {
-    expect(Object.keys(LEGACY_JOB_SCOPE_SELECT).sort()).toEqual(['market', 'ownerUserId', 'provider', 'sourceBoard', 'visibility']);
+    // FIX-4: no `provider` — RAJob has no such column, and selecting it made every resume list answer 500
+    // (the select is now checked against Prisma.RAJobSelect in legacyJobScope.ts).
+    expect(Object.keys(LEGACY_JOB_SCOPE_SELECT).sort()).toEqual(['market', 'ownerUserId', 'sourceBoard', 'visibility']);
   });
 });
 

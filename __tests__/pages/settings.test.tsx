@@ -446,16 +446,20 @@ describe('/settings — each section renders its owner (both brands), and none i
     }
   }, 60_000);
 
-  it('a section whose area renders nothing (its data failed to load) says so instead of staying blank', async () => {
-    // #referrals: the growth section renders nothing until its data arrives, and there is no network here.
+  // FIX-2: #referrals used to be the example of an area that renders nothing
+  // (a slow or failed /invites call left it blank, and the frame's fallback has
+  // no retry). The growth section now reports its own state, so the frame's
+  // "did not load" line is not needed here; the fallback itself is covered in
+  // components/features/settings/SettingsPage.test.tsx.
+  it('#referrals says it is loading, then that it could not load with a retry, instead of staying blank', async () => {
     window.history.replaceState(null, '', '/settings#referrals');
     renderWithBrand(<SettingsPage />, { flags: { invites: true } });
     await waitFor(() => expect(document.querySelector('.pref')).toHaveAttribute('data-settings-section', 'referrals'));
-    expect(screen.queryByTestId('settings-section-empty')).toBeNull(); // not during a normal loading flash
-    expect(await screen.findByTestId('settings-section-empty', {}, { timeout: EMPTY_SECTION_DELAY_MS + 2500 })).toHaveTextContent(
-      'This section did not load. Reload the page to try again.',
-    );
-  });
+    // There is no network here: the invites request fails.
+    expect(await screen.findByTestId('invite-settings-error', {}, { timeout: EMPTY_SECTION_DELAY_MS + 4000 })).toHaveTextContent("We couldn't load your invites.");
+    expect(within(screen.getByTestId('invite-settings-error')).getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(screen.queryByTestId('settings-section-empty')).toBeNull();
+  }, 15_000);
 
   it('#security: two-step sign-in on both brands; the phone number block on GoApply only', async () => {
     window.history.replaceState(null, '', '/settings#security');
@@ -533,7 +537,8 @@ describe('/settings — each section renders its owner (both brands), and none i
     fireEvent.click(await screen.findByRole('button', { name: /Delete account$/ }, { timeout: 4000 }));
     const modal = await screen.findByRole('dialog');
     fireEvent.change(within(modal).getByPlaceholderText('jane@example.com'), { target: { value: 'Jane@Example.com ' } });
-    fireEvent.change(within(modal).getByPlaceholderText('Tell us why you are leaving (required)'), { target: { value: 'Found a job.' } });
+    // FIX-2: no "Reason" box. It was required without saying so and what was typed was never sent.
+    expect(within(modal).queryByText('Reason')).toBeNull();
     return modal;
   };
 
@@ -585,7 +590,6 @@ describe('/settings — each section renders its owner (both brands), and none i
     expect(modal.textContent).not.toContain('goapply.invalid');
     expect(within(modal).getByText('Type DELETE to confirm.')).toBeInTheDocument();
     expect(within(modal).queryByText(/confirmation email/i)).toBeNull();
-    fireEvent.change(within(modal).getByPlaceholderText('Tell us why you are leaving (required)'), { target: { value: 'Done.' } });
     const confirm = within(modal).getByRole('button', { name: 'Delete my account' });
 
     fireEvent.change(within(modal).getByPlaceholderText('DELETE'), { target: { value: 'nope' } });
@@ -650,8 +654,9 @@ describe('/settings — each section renders its owner (both brands), and none i
     window.history.replaceState(null, '', '/settings#account');
     const account = renderWithProviders(<SettingsPage />);
     const name = (await screen.findByLabelText('Full name', {}, { timeout: 4000 })) as HTMLInputElement;
-    // Name and email are shown, not editable here: no input that swallows typing.
-    expect(name).toHaveAttribute('readonly');
+    // FIX-2: the name is editable (and saved with the Save bar); the email is shown,
+    // not editable here. Neither is an input that swallows typing.
+    expect(name).not.toHaveAttribute('readonly');
     expect(screen.getByLabelText('Email')).toHaveAttribute('readonly');
     expect(screen.queryByRole('button', { name: 'Upload a photo' })).toBeNull();
     account.unmount();

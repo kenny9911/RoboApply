@@ -413,11 +413,14 @@ describe('CreditStoreBusyError on the wire', () => {
   });
 
   // Routes answer through platform/http.ts `mapError`, which only honours
-  // codes registered in ERROR_STATUS. That file belongs to another group;
-  // until `credits_busy: 503` is registered there a busy store still answers
-  // 500 internal_error (FIX-9 request). This test starts running the moment
-  // the code is registered and holds the two sides together.
-  it.runIf(isErrorCode('credits_busy'))('mapError answers 503 credits_busy with retryAfterSec and never leaks the database error', () => {
+  // codes registered in ERROR_STATUS. `credits_busy: 503` was registered at the
+  // Wave FIX gate; this test holds the two sides together (the route-level
+  // twin, with the Retry-After header, is in platform/http.test.ts).
+  it('credits_busy is a registered error code', () => {
+    expect(isErrorCode('credits_busy')).toBe(true);
+  });
+
+  it('mapError answers 503 credits_busy with retryAfterSec and never leaks the database error', () => {
     const mapped = mapError(new CreditStoreBusyError({ cause: new Error('Transaction API error: P2028 on db.internal:5432') }));
     expect(mapped.status).toBe(503);
     expect(mapped.unexpected).toBe(false);

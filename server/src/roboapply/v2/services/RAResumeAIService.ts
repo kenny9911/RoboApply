@@ -59,6 +59,12 @@ export interface ResumeRewriteResult {
   skills?: string[];
 }
 
+/** A rewrite and who wrote it: `agentSucceeded` is false when `result` is the service's fixed fallback. */
+export interface ResumeRewriteOutcome {
+  result: ResumeRewriteResult;
+  agentSucceeded: boolean;
+}
+
 export interface ResumeCoachTipsResult {
   tips: RAResumeCoachTip[];
 }
@@ -287,7 +293,18 @@ export class RAResumeAIService {
   }
 
   // ── rewrite ──
+  /** The rewrite result alone (model text, or the fixed fallback when the model wrote nothing). */
   async rewrite(userId: string, id: string, body: RewriteInput, locale?: string): Promise<ResumeRewriteResult> {
+    return (await this.rewriteWithSource(userId, id, body, locale)).result;
+  }
+
+  /**
+   * The rewrite plus who wrote it. This method never throws on a model error,
+   * a rejected made-up number or an empty answer: it returns the fixed fallback
+   * with `agentSucceeded: false`. A caller that charges for the rewrite charges
+   * only when `agentSucceeded` is true (POST /v2/resumes/:id/rewrite).
+   */
+  async rewriteWithSource(userId: string, id: string, body: RewriteInput, locale?: string): Promise<ResumeRewriteOutcome> {
     if (!body || !VALID_MODES.includes(body.mode)) {
       throw new RewriteValidationError('mode must be one of: ' + VALID_MODES.join(', '));
     }
@@ -419,7 +436,7 @@ export class RAResumeAIService {
       mode: body.mode,
       agentSucceeded,
     });
-    return result;
+    return { result, agentSucceeded };
   }
 
   // ── coachTips ──  (FREE — deterministic, no LLM, no debit)

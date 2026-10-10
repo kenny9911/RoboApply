@@ -63,7 +63,7 @@ import { resumeOriginalFileStorageService } from '../../../services/ResumeOrigin
 import { getCurrentBrandOrDefault } from '../../../platform/brand/brandContext.js';
 import { PatchLayoutBodySchema, getLayoutService } from '../../../features/resume/index.js';
 import { HttpError, fail, mapError } from '../../../platform/http.js';
-import { CreditReplayError, CreditsExhaustedError, creditService } from '../../../platform/credits/index.js';
+import { CreditReplayError, CreditStoreBusyError, CreditsExhaustedError, creditService } from '../../../platform/credits/index.js';
 import { AuthCnError } from '../../../features/auth-cn/index.js';
 import {
   BASE_RESUME_LIMIT,
@@ -87,7 +87,6 @@ import {
   raResumeAIService,
   ResumeNotFoundError as ResumeAINotFoundError,
   RewriteValidationError,
-  __test as rewriteFallbacks,
   type ResumeRewriteResult,
   type RewriteInput,
 } from '../services/RAResumeAIService.js';
@@ -662,10 +661,17 @@ router.post('/:id/export', requireAuth, (req: Request<{ id: string }>, res: Resp
 // back. It is released, so the call costs nothing, on any failure (not found,
 // validation, AI off) AND when the answer is the service's canned text: the
 // rewrite service never throws on a model error, a rejected made-up number or
-// an empty answer; it returns a fixed fallback instead (see
-// `isCannedRewrite`). This route used to call the model with no credit at
-// all: only the Resume check fix panel and the builder spent the bucket.
+// an empty answer; it returns a fixed fallback instead and says so
+// (`rewriteWithSource` → `agentSucceeded: false`). This route used to call the
+// model with no credit at all: only the Resume check fix panel and the builder
+// spent the bucket.
 // `Idempotency-Key` is honoured when the client sends one.
+//
+// Gates before any credit is reserved or any model is called (the same two as
+// every other resume AI route: /builder/suggest, /tailor-sessions, the Resume
+// check fix): a GoApply WeChat account with no bound phone gets 403
+// phone_binding_required (WP-11), and a user without the AI consent, or a
+// brand without a text model, gets 503 ai_unavailable.
 
 /** Carries the canned answer out of `withCredit`, which releases the reservation on a throw. */
 class CannedRewrite extends Error {
@@ -674,27 +680,7 @@ class CannedRewrite extends Error {
   }
 }
 
-const sameList = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((v, i) => v === b[i]);
-
-/**
- * Is this result the rewrite service's fixed fallback, i.e. text no model
- * wrote? `RAResumeAIService.rewrite` gives no sign of which path it took, so
- * the route builds the fallback for the same input with the service's own
- * functions and compares. (A model answer identical to the fallback changes
- * nothing for the user and is not charged either.)
- */
-async function isCannedRewrite(userId: string, resumeId: string, body: RewriteInput, locale: string | undefined, result: ResumeRewriteResult): Promise<boolean> {
-  if (body.mode === 'bullet') {
-    return result.rewrite === rewriteFallbacks.fallbackBulletRewrite(body.text, body.action ?? 'improve', locale);
-  }
-  if (body.mode === 'summary') {
-    return sameList((result.options ?? []).map((o) => o.text), rewriteFallbacks.fallbackSummaryOptions(body.text, locale));
-  }
-  const resume = await raResumeService.getById(userId, resumeId);
-  return sameList(result.skills ?? [], rewriteFallbacks.fallbackSkills(resume.resumeMarkdown ?? '', locale));
-}
-
-router.post('/:id/rewrite', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
+router.post('/:id/rewrite', requireAuth, ...legacyAiGates(), async (req: Request<{ id: string }>, res: Response) => {
   try {
     const userId = req.user!.id;
     const body = (req.body ?? {}) as RewriteInput;
@@ -704,9 +690,10 @@ router.post('/:id/rewrite', requireAuth, async (req: Request<{ id: string }>, re
     const result = await creditService.withCredit(
       { userId, bucket: 'rewrite', idempotencyKey, refType: 'resume_inline_rewrite', refId: req.params.id },
       async () => {
-        const out = await raResumeAIService.rewrite(userId, req.params.id, body, locale);
-        if (await isCannedRewrite(userId, req.params.id, body, locale, out)) throw new CannedRewrite(out);
-        return out;
+        const out = await raResumeAIService.rewriteWithSource(userId, req.params.id, body, locale);
+        // No model text (provider error, rejected made-up number, empty answer): the fallback is free.
+        if (!out.agentSucceeded) throw new CannedRewrite(out.result);
+        return out.result;
       },
     );
     return res.json(result);
@@ -726,8 +713,10 @@ router.post('/:id/rewrite', requireAuth, async (req: Request<{ id: string }>, re
       return res.status(422).json({ error: err.message });
     }
     // 402 credits_exhausted { bucket, resetsAt, upgradable } in the platform
-    // envelope the web's credit gate reads; 409 for a replayed key.
-    if (err instanceof CreditsExhaustedError) {
+    // envelope the web's credit gate reads; 409 for a replayed key. A busy
+    // credit store (nothing reserved, the model not called) is 503
+    // credits_busy with `Retry-After`, never the bare 500 below (FIX-9).
+    if (err instanceof CreditsExhaustedError || err instanceof CreditStoreBusyError) {
       const mapped = mapError(err);
       for (const [k, v] of Object.entries(mapped.headers)) res.setHeader(k, v);
       return res.status(mapped.status).json(mapped.body);

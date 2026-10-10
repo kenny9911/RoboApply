@@ -13,8 +13,8 @@ import { AuthCnError } from './errors.js';
 import { assertPhoneBound, hasBoundPhone, phoneBindingRequired } from './phoneBinding.js';
 import { sha256 } from './phoneAuthService.js';
 import { returnLocation } from './wechatAuthService.js';
-import { AUTH_CN_CONSENT_PROSE_VERSION } from './contract.js';
-import { BASE_ENV, buildServices, clock, CN0_CONSENTS, fakeDb, fakeWechatFetch } from './__tests__/testkit.js';
+import { CONSENT_PROSE_VERSION, listConsents, type ConsentDb } from '../compliance/index.js';
+import { BASE_ENV, buildServices, clock, cn0Consents, CN0_CONSENTS, CN0_CONSENTS_NO_HASH, fakeDb, fakeWechatFetch } from './__tests__/testkit.js';
 
 const goapply = getBrand('goapply');
 
@@ -73,9 +73,17 @@ describe('startUrl', () => {
     const { s, fake } = setup();
     await expect(s.wechat.startUrl({ brand: goapply, flow: 'web', consents: CN0_CONSENTS.slice(0, 2) })).rejects.toMatchObject({ code: 'consent_required' });
     expect(fake.$rows('rAAuthToken')).toHaveLength(0);
+    // A consent that does not name the text shown (no hash) is refused before the round trip, too.
+    await expect(s.wechat.startUrl({ brand: goapply, flow: 'web', consents: CN0_CONSENTS_NO_HASH })).rejects.toMatchObject({
+      code: 'consent_required',
+      details: { outdated: ['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border'], proseVersion: CONSENT_PROSE_VERSION },
+    });
+    expect(fake.$rows('rAAuthToken')).toHaveLength(0);
     await s.wechat.startUrl({ brand: goapply, flow: 'web', consents: CN0_CONSENTS.map((c) => ({ ...c, proseVersion: 'x' })) });
-    const payload = fake.$rows('rAAuthToken')[0]!.payload as { consents: Array<{ proseVersion: string }> };
-    expect(payload.consents.map((c) => c.proseVersion)).toEqual([AUTH_CN_CONSENT_PROSE_VERSION, AUTH_CN_CONSENT_PROSE_VERSION, AUTH_CN_CONSENT_PROSE_VERSION]);
+    // The pending sign-in keeps the catalog version and hash of the shown text, never the client's version string.
+    const payload = fake.$rows('rAAuthToken')[0]!.payload as { consents: Array<{ proseVersion: string; proseHash: string }> };
+    expect(payload.consents.map((c) => c.proseVersion)).toEqual([CONSENT_PROSE_VERSION, CONSENT_PROSE_VERSION, CONSENT_PROSE_VERSION]);
+    expect(payload.consents.map((c) => c.proseHash)).toEqual(CN0_CONSENTS.map((c) => c.proseHash));
   });
 
   it('mp: 公众号 OAuth with snsapi_userinfo (returns unionid)', async () => {
@@ -120,11 +128,21 @@ describe('callback', () => {
     await expect(cb(s, { brand: goapply, flow: 'web', code: 'c1', state })).resolves.toMatchObject({ kind: 'session', isNew: true });
   });
 
-  it('records the server prose version (CN_LEGAL_DOCS_VERSION) on the new account', async () => {
-    const { s, fake } = setup({ env: { ...BASE_ENV, CN_LEGAL_DOCS_VERSION: 'legal-2026-11' }, codes: { c1: { openid: 'o_web' } } });
-    const state = await begin(s, { brand: goapply, flow: 'web', consents: CN0_CONSENTS });
-    await cb(s, { brand: goapply, flow: 'web', code: 'c1', state });
-    expect(fake.$rows('seekerConsentRecord').map((r) => r.proseVersion)).toEqual(['legal-2026-11', 'legal-2026-11', 'legal-2026-11']);
+  // Wave FIX gate: WeChat sign-up stored no hash, so G1 and Settings said "you agreed to an earlier
+  // version of this text" right after the person agreed to exactly this text.
+  it('records the version and hash of the shown text on the new account, so the ledger knows the answer is for the text served now', async () => {
+    const env = { ...BASE_ENV, CN_LEGAL_DOCS_VERSION: 'legal-2026-11' };
+    const { s, fake } = setup({ env, codes: { c1: { openid: 'o_web' } } });
+    const sent = cn0Consents(env);
+    const state = await begin(s, { brand: goapply, flow: 'web', consents: sent });
+    const out = await cb(s, { brand: goapply, flow: 'web', code: 'c1', state });
+    expect(fake.$rows('seekerConsentRecord').map((r) => r.proseVersion)).toEqual([CONSENT_PROSE_VERSION, CONSENT_PROSE_VERSION, CONSENT_PROSE_VERSION]);
+    expect(fake.$rows('seekerConsentRecord').map((r) => r.proseHash)).toEqual(sent.map((c) => c.proseHash));
+    if (out.kind !== 'session') throw new Error('expected a session');
+    const items = await listConsents(out.userId, goapply, { env, locale: 'zh' }, { db: fake as unknown as ConsentDb, env });
+    for (const type of ['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border']) {
+      expect(items.find((i) => i.type === type), type).toMatchObject({ granted: true, answeredTextCurrent: true });
+    }
   });
 
   it('refuses a new account when the sign-in did not carry the consents (GET start / crafted link)', async () => {

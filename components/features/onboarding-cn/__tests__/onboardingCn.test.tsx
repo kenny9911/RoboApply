@@ -318,6 +318,12 @@ describe('G1 ConsentStep', () => {
     expect(consentFormFromLedger(ledger)).toMatchObject({ agreement: true, age: true, crossBorder: false });
     // A ledger that does not say which text was answered is read as before.
     expect(consentsGivenToEarlierText(AFTER_SIGNUP).size).toBe(0);
+    // Wave FIX gate: a sign-up record with no hash cannot be compared with any text (`answeredTextCurrent: null`).
+    // Unknown is not "changed": nothing is called "an earlier version", and the consent is not asked a second time.
+    const noHash = AFTER_SIGNUP.map((c) => (c.required ? { ...c, answeredProseVersion: 'authCn.2026-10-10.v1', answeredTextCurrent: null } : c));
+    expect(consentsGivenToEarlierText(noHash).size).toBe(0);
+    expect(consentsAlreadyGiven(noHash).size).toBe(3);
+    expect(consentFormFromLedger(noHash)).toMatchObject({ agreement: true, age: true, crossBorder: true });
   });
 
   it('says nothing of its own about where AI runs or who processes data: that is in the server prose (one statement, shared with /legal)', async () => {

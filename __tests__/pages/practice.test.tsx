@@ -184,15 +184,23 @@ describe('/practice setup', () => {
       creditMinutes: 10,
     };
 
-    renderWithProviders(<PracticePage />, {
-      intlLocale: 'en',
-      intlMessages: enMessages as AbstractIntlMessages,
-    });
+    // The app's English (en.json with the staged strings merged over it).
+    renderWithProviders(<PracticePage />, { intlLocale: 'en' });
 
     fireEvent.click(await screen.findByRole('radio', { name: 'Frontend Engineer' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('This interview needs 5 credits and you have 1.5.');
+    // FIX-6: the plan starts on a length the balance covers. Live coding runs
+    // 50 minutes by default (5 credits at 10 minutes a credit); 1.5 credits
+    // cover 15 minutes, so that is where the brief starts, and Start is on.
     const startButton = screen.getByRole('button', { name: 'Start the interview' }) as HTMLButtonElement;
+    expect(await screen.findByRole('button', { expanded: false, name: /15 min/ })).toBeTruthy();
+    await waitFor(() => expect(startButton.disabled).toBe(false));
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    // Picking the type's own length by hand says what is missing and offers the repair.
+    fireEvent.click(screen.getByRole('button', { expanded: false, name: /15 min/ }));
+    fireEvent.click(await screen.findByRole('radio', { name: /^50 min/ }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('This interview needs 5 credits and you have 1.5.');
     expect(startButton.disabled).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: 'Use 15 min instead' }));

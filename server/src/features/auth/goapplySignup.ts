@@ -38,9 +38,10 @@ import {
   CONSENT_PROSE_VERSION,
   findConsentDefinition,
   isConsentApplicable,
-  resolveConsentProse,
+  servedConsentProseByHash,
   validateSignupConsents as validateAgainstCatalog,
   type ConsentDefinition,
+  type ConsentProseLocale,
 } from '../compliance/index.js';
 import type { ConsentRow, SignupConsentInput } from './signupPolicy.js';
 
@@ -68,24 +69,21 @@ export interface GoApplySignupPlan {
   redeemInvite(tx: InviteTx): Promise<void>;
 }
 
-/** Languages the catalog may hold a consent text in (`ConsentDefinition.prose`). */
-const PROSE_LOCALES = ['zh', 'en'] as const;
-
 /**
  * The served text whose hash is `hash`: the text the form showed. Null when
  * the hash is absent or matches nothing this server serves for the consent.
+ * `env` is the deployment the sign-up policy was served from (the cross-border
+ * text names its processors), so the form's hash and this lookup agree. The
+ * phone and WeChat flows use the same lookup (auth-cn `checkSignupConsents`).
  */
 export function shownConsentProse(
   def: ConsentDefinition,
   brand: ProductBrand,
   hash: string | null | undefined,
-): { version: string; hash: string; locale: 'en' | 'zh' } | null {
-  if (!hash) return null;
-  for (const locale of PROSE_LOCALES) {
-    const prose = resolveConsentProse(def, brand, locale);
-    if (prose.hash === hash) return { version: prose.version, hash: prose.hash, locale: prose.locale };
-  }
-  return null;
+  env: EnvSource = process.env,
+): { version: string; hash: string; locale: ConsentProseLocale } | null {
+  const prose = servedConsentProseByHash(def, brand, hash, env);
+  return prose ? { version: prose.version, hash: prose.hash, locale: prose.locale } : null;
 }
 
 async function defaultInvites(): Promise<GoApplyInviteSeam> {
@@ -146,7 +144,7 @@ export async function planGoApplyEmailSignup(
       if (fromPolicy && isSeekerConsentType(type)) consentRows.push({ consentType: type, granted: true, proseVersion: fromPolicy.proseVersion });
       continue;
     }
-    const shown = shownConsentProse(def, brand, shownHash.get(type));
+    const shown = shownConsentProse(def, brand, shownHash.get(type), env);
     if (!shown) outdated.push(type);
     else consentRows.push({ consentType: def.type, granted: true, proseVersion: shown.version, proseHash: shown.hash });
   }

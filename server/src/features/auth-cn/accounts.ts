@@ -89,7 +89,8 @@ export async function createGoApplyAccount(tx: AuthCnTx, input: NewAccountInput)
   });
   for (const c of input.consents) {
     await tx.seekerConsentRecord.create({
-      data: { seekerProfileId: profile.id, consentType: c.type, granted: c.granted, proseVersion: c.proseVersion },
+      // The hash names the text the sign-up form showed (checkSignupConsents); absent only for a type the catalog has no text for.
+      data: { seekerProfileId: profile.id, consentType: c.type, granted: c.granted, proseVersion: c.proseVersion, ...(c.proseHash ? { proseHash: c.proseHash } : {}) },
     });
   }
   return user.id;

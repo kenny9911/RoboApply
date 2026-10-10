@@ -21,6 +21,8 @@
 
 import { z } from 'zod';
 
+import type { ConsentProseLocale } from '../compliance/contract.js';
+
 const Id = z.string().min(1).max(64);
 
 export const NOTIFICATION_CATEGORIES = ['alert', 'reminder', 'billing', 'system', 'invitation', 'tips', 'announcement'] as const;
@@ -147,7 +149,7 @@ export interface NotificationPreferencesView {
    * The exact consent text the "Tips and reminders" switch shows: the record
    * written when it changes hashes this text (brand, version and locale included).
    */
-  tipsRemindersConsent: { text: string; locale: 'en' | 'zh'; version: string };
+  tipsRemindersConsent: { text: string; locale: ConsentProseLocale; version: string };
   /** Channels this account can receive on this brand (email needs a real address and the `notify.email` capability). */
   availableChannels: NotificationChannel[];
   /**

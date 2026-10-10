@@ -1,7 +1,6 @@
 // The Stop button names the thread to stop (verification finding: "Stopped."
-// on screen, the full answer stored). The API wrapper is looked up by name in
-// lib/api/copilot.ts; without it the call is a no-op (with a development
-// warning), and the tripwire at the end of this file says when that changes.
+// on screen, the full answer stored). The call is the `stopTurn` wrapper in
+// lib/api/copilot.ts; the last test checks the real wrapper's request.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -29,13 +28,19 @@ describe('requestStopTurn', () => {
   });
 });
 
-describe('the wrapper in lib/api/copilot.ts (FIX-5 handoff, Request 1)', () => {
-  // Until `stopTurn` is exported there, Stop does not reach the server. This test is EXPECTED to
-  // fail today (`it.fails`). When it goes red the wrapper has landed: in hooks/copilot/stopTurn.ts
-  // replace the by-name lookup with `import { stopTurn } from '../../lib/api/copilot'`, and delete
-  // this test.
-  it.fails('TRIPWIRE: lib/api/copilot.ts exports stopTurn — import it directly in stopTurn.ts, then delete this test', async () => {
-    const real = await vi.importActual<Record<string, unknown>>('../../lib/api/copilot');
-    expect(typeof real.stopTurn).toBe('function');
+describe('the wrapper in lib/api/copilot.ts', () => {
+  it('POSTs to the thread\'s stop endpoint and returns whether a reply was stopped', async () => {
+    const real = await vi.importActual<typeof import('../../lib/api/copilot')>('../../lib/api/copilot');
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true, data: { stopped: true } }), { status: 200, headers: { 'content-type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      expect(await real.stopTurn('th 1')).toEqual({ stopped: true });
+      const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+      expect(String(url)).toMatch(/\/api\/v1\/roboapply\/copilot\/threads\/th%201\/stop$/);
+      expect(init.method).toBe('POST');
+      expect(real.copilotApi.stopTurn).toBe(real.stopTurn);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

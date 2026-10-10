@@ -11,6 +11,14 @@
 
 import { z } from 'zod';
 
+/**
+ * Languages a consent text may be written in (the product's locales). Declared
+ * in the contract because the language of a served prose is on the wire of
+ * other areas too (notifications `tipsRemindersConsent`, auth-cn signup policy).
+ */
+export const CONSENT_PROSE_LOCALES = ['en', 'zh', 'zh-TW', 'ja', 'ko', 'es', 'fr', 'pt', 'de'] as const;
+export type ConsentProseLocale = (typeof CONSENT_PROSE_LOCALES)[number];
+
 // ── GET /compliance/disclosures (also public: /api/v1/public/legal/disclosures) ──
 
 /** What a processor does for us; the UI translates the code (legal.processors.<purpose>). */
@@ -225,10 +233,12 @@ export interface ConsentCatalogItem {
   answeredProseVersion?: string | null;
   /**
    * Whether the stored answer was given to the text served now (in any
-   * language it is written in): true = the same words, false = the text has
-   * changed since (or the record carries no hash to prove otherwise), null =
-   * never answered. A screen may present `prose` as "what you agreed to" only
-   * when this is not false. Set by the signed-in catalog only.
+   * language it is written in): true = the same words; false = the record's
+   * hash matches no text served now, so the text has changed since; null =
+   * unknown: never answered, or the record carries no hash to compare (a
+   * sign-up form that stored none). A screen says "the text changed" only on
+   * false, and may present `prose` as "what you agreed to" when this is not
+   * false. Set by the signed-in catalog only.
    */
   answeredTextCurrent?: boolean | null;
 }

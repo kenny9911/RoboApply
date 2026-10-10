@@ -7,6 +7,7 @@ import { RecordConsentBodySchema } from './contract.js';
 import { buildDisclosures, configuredProcessors, storageCountry } from './disclosures.js';
 import { describeProcessor, offshoreProcessors, unplacedProcessors } from './processingStatement.js';
 import {
+  answeredCurrentText,
   CONSENT_CATALOG,
   CONSENT_PROSE_LOCALES,
   CONSENT_PROSE_VERSION,
@@ -19,6 +20,7 @@ import {
   listConsents,
   recordConsent,
   resolveConsentProse,
+  servedConsentProseByHash,
   validateSignupConsents,
   type ConsentDb,
 } from './consents.js';
@@ -467,7 +469,7 @@ describe('listConsents', () => {
         // Signed up under v1. The agreement's words did not change in v2; the cross-border text did.
         { id: 'c1', seekerProfileId: 'sp1', consentType: 'pipl_basic_processing', granted: true, createdAt: at, proseVersion: V1, proseHash: consentProseHash({ brand: 'goapply', type: 'pipl_basic_processing', version: V1, locale: 'zh', text: agreement.text }) },
         { id: 'c2', seekerProfileId: 'sp1', consentType: 'pipl_cross_border', granted: true, createdAt: at, proseVersion: V1, proseHash: consentProseHash({ brand: 'goapply', type: 'pipl_cross_border', version: V1, locale: 'zh', text: crossV1 }) },
-        // A record from before hashes were stored: nothing shows it was this text.
+        // A record with no hash (a sign-up form that stored none): it cannot be compared with any text.
         { id: 'c3', seekerProfileId: 'sp1', consentType: 'age_16_plus', granted: true, createdAt: at, proseVersion: null, proseHash: null },
       ],
     });
@@ -478,7 +480,19 @@ describe('listConsents', () => {
     // Reading in another language does not make the agreed text "changed".
     expect(await item('pipl_basic_processing', 'en')).toMatchObject({ granted: true, answeredTextCurrent: true });
     expect(await item('pipl_cross_border')).toMatchObject({ granted: true, answeredProseVersion: V1, answeredTextCurrent: false, proseVersion: CONSENT_PROSE_VERSION });
-    expect(await item('age_16_plus')).toMatchObject({ granted: true, answeredProseVersion: null, answeredTextCurrent: false });
+    // Unknown, not "changed": nothing shows the text is different, so no screen may say it is (Wave FIX gate).
+    expect(await item('age_16_plus')).toMatchObject({ granted: true, answeredProseVersion: null, answeredTextCurrent: null });
+    // The same for a row that has a version but no hash (RoboApply sign-up; GoApply phone and WeChat sign-up before the gate).
+    const ageDef = findConsentDefinition('goapply', 'age_16_plus')!;
+    expect(answeredCurrentText(ageDef, goapply, { proseVersion: 'authCn.2026-10-10.v1', proseHash: null }, QA_ENV)).toBeNull();
+    // A form sends back the hash of the text it showed: found in whichever language it was read in, under this deployment's facts.
+    const cross = findConsentDefinition('goapply', 'pipl_cross_border')!;
+    for (const lang of ['zh', 'en']) {
+      const served = resolveConsentProse(cross, goapply, lang, QA_ENV);
+      expect(servedConsentProseByHash(cross, goapply, served.hash, QA_ENV)).toMatchObject({ locale: lang, version: CONSENT_PROSE_VERSION, hash: served.hash });
+    }
+    expect(servedConsentProseByHash(cross, goapply, consentProseHash({ brand: 'goapply', type: 'pipl_cross_border', version: V1, locale: 'zh', text: crossV1 }), QA_ENV)).toBeNull();
+    expect(servedConsentProseByHash(cross, goapply, undefined, QA_ENV)).toBeNull();
     expect(await item('marketing_email')).toMatchObject({ granted: null, answeredProseVersion: null, answeredTextCurrent: null });
 
     // Agreeing again records today's text; the answer is then current.

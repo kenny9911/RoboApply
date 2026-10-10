@@ -28,7 +28,7 @@ import {
   type NotificationsResponse,
   type UnsubscribePreview,
 } from '../index.js';
-import { decodeCursor, encodeCursor, readCenter } from '../service.js';
+import { decodeCursor, encodeCursor, readCenter, tipsConsentProse } from '../service.js';
 
 const ROBO = getBrand('roboapply');
 const GO = getBrand('goapply');
@@ -593,6 +593,29 @@ describe('routes', () => {
     expect(patch.body.data).toMatchObject({ tipsReminders: false, tipsRemindersSource: 'user', channels: { reminder: ['in_app'] } });
     expect((await h.request('PATCH', `${N}/preferences`, { ...as(), body: { quietHours: { start: '25:00', end: '08:00' } } })).status).toBe(422);
     expect((await h.request('PATCH', `${N}/preferences`, { ...as(), body: { surprise: 1 } })).status).toBe(422);
+  });
+
+  // FIX-8 finding 4: the web client sends `X-Robo-Locale` (from the `robo_locale` cookie). The route read
+  // `x-ra-locale` / `NEXT_LOCALE`, which nothing sends, so the "Tips and reminders" sentence was always the
+  // brand default: English for a RoboApply user reading 日本語 or 繁體中文.
+  it('the "Tips and reminders" sentence follows the language the client sends (X-Robo-Locale, else the robo_locale cookie)', async () => {
+    const tips = async (init: { headers?: Record<string, string>; cookies?: Record<string, string> }) =>
+      (await h.request<{ data: NotificationPreferencesView }>('GET', `${N}/preferences`, { ...init, headers: { 'x-test-user': 'u1', ...(init.headers ?? {}) } })).body.data.tipsRemindersConsent;
+    const ja = tipsConsentProse(ROBO, 'ja');
+    expect(ja.text).toBe('保存した求人や始めた練習に関するヒントとリマインダーを受け取る。');
+    expect(await tips({ headers: { 'X-Robo-Locale': 'ja' } })).toMatchObject({ text: ja.text, locale: 'ja' });
+    expect(await tips({ headers: { 'X-Robo-Locale': 'zh-TW' } })).toMatchObject({ text: tipsConsentProse(ROBO, 'zh-TW').text, locale: 'zh-TW' });
+    expect(await tips({ cookies: { robo_locale: 'zh' } })).toMatchObject({ text: tipsConsentProse(ROBO, 'zh').text, locale: 'zh' });
+    // The header (what the page is rendered in) wins over the cookie; no language at all = the brand default.
+    expect(await tips({ headers: { 'X-Robo-Locale': 'ja' }, cookies: { robo_locale: 'de' } })).toMatchObject({ locale: 'ja' });
+    expect(await tips({})).toMatchObject({ text: 'Send me tips and reminders about jobs I saved and practice I started.', locale: 'en' });
+
+    // Turning it on records the hash of the sentence that was shown — the Japanese one.
+    const patch = await h.request('PATCH', `${N}/preferences`, { headers: { 'x-test-user': 'u1', 'X-Robo-Locale': 'ja' }, body: { tipsReminders: true, tipsRemindersProseVersion: ja.version } });
+    expect(patch.status).toBe(200);
+    const row = db.$rows('seekerConsentRecord').filter((r) => r.consentType === 'tips_reminders').at(-1)!;
+    expect(row).toMatchObject({ granted: true, proseVersion: ja.version, proseHash: ja.hash });
+    expect(ja.hash).toBe(consentProseHash({ brand: 'roboapply', type: 'tips_reminders', version: CONSENT_PROSE_VERSION, locale: 'ja', text: ja.text }));
   });
 
   it('responds to an invitation once (flag on); other messages refuse; the flag off answers feature_disabled', async () => {

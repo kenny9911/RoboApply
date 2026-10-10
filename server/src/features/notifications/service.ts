@@ -46,6 +46,7 @@ import {
   recordConsent,
   resolveConsentProse,
   type ConsentDefinition,
+  type ConsentProseLocale,
 } from '../compliance/index.js';
 import { logger } from '../../services/LoggerService.js';
 import {
@@ -331,7 +332,7 @@ function hasRealEmailOf(user: { email: string | null; emailIsPlaceholder: boolea
  * gets the RoboApply English text with the brand name, so what is shown and
  * what the record hashes are always the same text.
  */
-export function tipsConsentProse(brand: ProductBrand, locale: string | null | undefined): { text: string; locale: 'en' | 'zh'; version: string; hash: string } {
+export function tipsConsentProse(brand: ProductBrand, locale: string | null | undefined): { text: string; locale: ConsentProseLocale; version: string; hash: string } {
   const own = findConsentDefinition(brand.id, 'tips_reminders');
   if (own) return resolveConsentProse(own, brand, locale);
   const fallback = findConsentDefinition('roboapply', 'tips_reminders');

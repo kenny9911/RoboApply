@@ -29,7 +29,9 @@
 //     (`answeredProseVersion`, `answeredTextCurrent`): a screen may call the
 //     text it shows "what you agreed to" only when the record's hash matches
 //     that text. A grant of an earlier text is asked again where it is
-//     required (G1) and can be renewed in Settings.
+//     required (G1) and can be renewed in Settings. A record with no hash
+//     cannot be compared: the answer is null (unknown), and no screen says
+//     the text changed.
 //   - Withdrawing `pipl_cross_border` on GoApply while data is processed
 //     offshore (CN-0) closes and purges the account: a personal-information
 //     request is opened and a `compliance.purge` work item is enqueued.
@@ -51,7 +53,9 @@ import { enqueue, kickDrain } from '../../platform/queue/index.js';
 import { isSeekerConsentType, type SeekerConsentType } from '../../roboapply/engine/lib/seekerConsentTypes.js';
 import {
   COMPLIANCE_ERROR_CODES,
+  CONSENT_PROSE_LOCALES,
   type ConsentCatalogItem,
+  type ConsentProseLocale,
   type RecordConsentResponse,
 } from './contract.js';
 import { piRequestDueAt } from './piRequests.js';
@@ -68,9 +72,9 @@ export { isOffshore } from './deployment.js';
  */
 export const CONSENT_PROSE_VERSION = '2026-10-11.fix8.v2';
 
-/** Languages a consent text may be written in (the product's locales). */
-export const CONSENT_PROSE_LOCALES = ['en', 'zh', 'zh-TW', 'ja', 'ko', 'es', 'fr', 'pt', 'de'] as const;
-export type ConsentProseLocale = (typeof CONSENT_PROSE_LOCALES)[number];
+// Languages a consent text may be written in: declared in the contract (the language of a served
+// prose is on the wire of other areas too), re-exported here for this area's callers.
+export { CONSENT_PROSE_LOCALES, type ConsentProseLocale };
 
 /** Filled per request from configuration (processingStatement.ts); never typed into a prose. */
 export const OFFSHORE_PROCESSORS_TOKEN = '%OFFSHORE_PROCESSORS%';
@@ -539,16 +543,9 @@ export function isConsentRequired(def: ConsentDefinition, ctx: ConsentContext): 
 
 export interface ResolvedProse {
   text: string;
-  /**
-   * The language of `text` (the value hashed). At run time this is any
-   * ConsentProseLocale — the same value as `proseLocale`. The declared type is
-   * still the original 'en' | 'zh' because two callers outside this area
-   * annotate it so (notifications `tipsConsentProse`, auth-cn
-   * `SignupPolicyConsent.prose`); it widens to ConsentProseLocale together
-   * with them. New code reads `proseLocale`.
-   */
-  locale: 'en' | 'zh';
-  /** The language of `text`, truthfully typed: the locale asked for when the entry has that text, else English. */
+  /** The language of `text` (the value hashed): the locale asked for when the entry has that text, else English. */
+  locale: ConsentProseLocale;
+  /** Same value as `locale` (kept for callers written while `locale` was still typed 'en' | 'zh'). */
   proseLocale: ConsentProseLocale;
   version: string;
   hash: string;
@@ -589,16 +586,21 @@ function consentProseText(def: ConsentDefinition, brand: ProductBrand, lang: Con
  * The record's hash covers brand, type, version, locale and text, so it is
  * recomputed with the record's OWN version over today's text in each language
  * the entry is written in: a version bump that left this entry's words alone
- * still matches, a reworded entry (or a changed processor list) does not. A
- * record without a hash or version cannot be shown to match, so it does not.
+ * still matches, a reworded entry (or a changed processor list) does not.
+ *
+ * A record without a hash or version cannot be compared with any text, so the
+ * answer is null (unknown), never false: nothing shows that the text changed,
+ * and a screen must not say it did (D3). Such records come from sign-up forms
+ * that stored no hash (RoboApply sign-up; GoApply phone and WeChat sign-up
+ * before the Wave FIX gate).
  */
 export function answeredCurrentText(
   def: ConsentDefinition,
   brand: ProductBrand,
   record: { proseHash?: string | null; proseVersion?: string | null },
   env: EnvSource = process.env,
-): boolean {
-  if (!record.proseHash || !record.proseVersion) return false;
+): boolean | null {
+  if (!record.proseHash || !record.proseVersion) return null;
   return CONSENT_PROSE_LOCALES.some(
     (lang) =>
       typeof def.prose[lang] === 'string' &&
@@ -616,11 +618,32 @@ export function resolveConsentProse(
   const text = consentProseText(def, brand, lang, env);
   return {
     text,
-    locale: lang as 'en' | 'zh',
+    locale: lang,
     proseLocale: lang,
     version: CONSENT_PROSE_VERSION,
     hash: consentProseHash({ brand: brand.id, type: def.type, version: CONSENT_PROSE_VERSION, locale: lang, text }),
   };
+}
+
+/**
+ * The text this deployment serves for an entry whose hash is `hash`, in
+ * whichever language the entry is written in: the text a form showed when it
+ * sends that hash back. Null when the hash is absent or matches no served
+ * text (the wording, or the processor list in it, changed since).
+ */
+export function servedConsentProseByHash(
+  def: ConsentDefinition,
+  brand: ProductBrand,
+  hash: string | null | undefined,
+  env: EnvSource = process.env,
+): ResolvedProse | null {
+  if (!hash) return null;
+  for (const lang of CONSENT_PROSE_LOCALES) {
+    if (typeof def.prose[lang] !== 'string') continue;
+    const prose = resolveConsentProse(def, brand, lang, env);
+    if (prose.hash === hash) return prose;
+  }
+  return null;
 }
 
 // ── Signup validation (WP-10 / WP-11 / WP-31 call this) ─────────────────────

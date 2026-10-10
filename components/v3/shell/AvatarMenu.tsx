@@ -62,16 +62,6 @@ export function initialsFor(source: string | null | undefined): string {
   return src.slice(0, 2).toUpperCase();
 }
 
-/**
- * @deprecated Use `initialsFor`. Nothing renders this: it is `initialsFor`
- * with the old 'RA' fallback, kept only because
- * __tests__/components/AvatarMenu.test.tsx still pins that fallback. Delete it
- * together with those two assertions.
- */
-export function monogramFor(source: string | null | undefined): string {
-  return initialsFor(source) || 'RA';
-}
-
 const MENU_STYLE: CSSProperties = {
   position: 'absolute',
   top: 'calc(100% + 8px)',

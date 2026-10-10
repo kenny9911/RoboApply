@@ -61,10 +61,12 @@ const CN_SERVICE_HOST_PATTERNS: readonly RegExp[] = [
  * Mainland object-storage endpoints. Only hosts whose name carries a mainland
  * region qualify (Aliyun OSS `oss-cn-*`, Tencent COS `ap-<mainland city>`,
  * Huawei OBS `obs.cn-*`); `oss-ap-southeast-1` or `s3.us-east-1.amazonaws.com`
- * never do.
+ * never do, and neither does a Hong Kong region whatever its prefix
+ * (`oss-cn-hongkong`, `cos.ap-hongkong`).
  */
 export const MAINLAND_STORAGE_HOST_PATTERNS: readonly RegExp[] = [
-  /(?:^|\.)oss-cn-[a-z0-9-]+?(?:-internal)?\.aliyuncs\.com$/,
+  // `oss-cn-hongkong` carries the `cn-` prefix but is the Hong Kong region: outside the mainland.
+  /(?:^|\.)oss-cn-(?!hongkong(?:-internal)?\.)[a-z0-9-]+?(?:-internal)?\.aliyuncs\.com$/,
   /(?:^|\.)cos\.ap-(?:beijing|shanghai|guangzhou|chengdu|chongqing|nanjing|shenzhen)(?:-[a-z0-9]+)*\.myqcloud\.com$/,
   /(?:^|\.)obs\.cn-[a-z0-9-]+\.myhuaweicloud\.com$/,
 ];

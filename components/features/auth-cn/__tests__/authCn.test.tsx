@@ -313,7 +313,7 @@ describe('PhoneMethod (G0)', () => {
     const noText = { ...CN0_POLICY, requiredConsents: CN0_POLICY.requiredConsents.map(({ prose: _prose, ...c }) => c) };
     expect(agreementSatisfied(signupInputs.get(), noText)).toBe(false);
     expect(shownConsentsFromPolicy(noText)).toEqual([]);
-    // What the email form sends: the version and hash of each shown text.
+    // What every form sends (phone, WeChat, email): the version and hash of each shown text.
     expect(shownConsentsFromPolicy(CN0_POLICY)).toEqual([
       { type: 'pipl_basic_processing', granted: true, proseVersion: PROSE_VERSION, proseHash: 'a'.repeat(64) },
       { type: 'age_16_plus', granted: true, proseVersion: PROSE_VERSION, proseHash: 'b'.repeat(64) },
@@ -365,10 +365,11 @@ describe('PhoneMethod (G0)', () => {
     expect(api.verifyPhoneCode).toHaveBeenCalledWith({
       phone: '13812345678',
       code: '123456',
+      // Each consent carries the hash of the text shown beside its box, so the stored record names it.
       consents: [
-        { type: 'pipl_basic_processing', granted: true, proseVersion: 'v1' },
-        { type: 'age_16_plus', granted: true, proseVersion: 'v1' },
-        { type: 'pipl_cross_border', granted: true, proseVersion: 'v1' },
+        { type: 'pipl_basic_processing', granted: true, proseVersion: PROSE_VERSION, proseHash: 'a'.repeat(64) },
+        { type: 'age_16_plus', granted: true, proseVersion: PROSE_VERSION, proseHash: 'b'.repeat(64) },
+        { type: 'pipl_cross_border', granted: true, proseVersion: PROSE_VERSION, proseHash: 'c'.repeat(64) },
       ],
       next: '/jobs/abc',
     });
@@ -399,6 +400,23 @@ describe('PhoneMethod (G0)', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Sign in or create account' }));
     });
     expect(screen.getByRole('alert')).toHaveTextContent('That code is not correct. 2 tries left.');
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it('reloads the consent text and unticks the boxes when the server says the text changed', async () => {
+    api.verifyPhoneCode.mockRejectedValue(apiError(422, 'consent_required', { outdated: ['pipl_cross_border'], proseVersion: 'v2' }));
+    await renderPhone();
+    for (const c of screen.getAllByRole('checkbox')) fireEvent.click(c);
+    fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: '13812345678' } });
+    fireEvent.change(screen.getByLabelText('Verification code'), { target: { value: '123456' } });
+    const loads = api.getSignupPolicy.mock.calls.length;
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Sign in or create account' }));
+    });
+    await waitFor(() => expect(api.getSignupPolicy.mock.calls.length).toBeGreaterThan(loads));
+    expect(signupInputs.get().granted).toEqual({});
+    for (const c of screen.getAllByRole('checkbox')) expect(c).not.toBeChecked();
+    expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(router.replace).not.toHaveBeenCalled();
   });
 
@@ -439,7 +457,8 @@ describe('WechatMethod', () => {
       await act(async () => {
         fireEvent.click(button);
       });
-      expect(api.startWechatSignIn).toHaveBeenLastCalledWith({ flow: 'web', next: '/resume', consents: CN0_POLICY.requiredConsents.map((c) => ({ type: c.type, proseVersion: c.proseVersion, granted: true })) });
+      expect(api.startWechatSignIn).toHaveBeenLastCalledWith({ flow: 'web', next: '/resume', consents: shownConsentsFromPolicy(CN0_POLICY) });
+      expect(shownConsentsFromPolicy(CN0_POLICY).every((c) => /^[0-9a-f]{64}$/.test(c.proseHash))).toBe(true);
       // Nothing about consent ever goes into a URL.
       expect(api.wechatQrUrl).not.toHaveBeenCalled();
       expect(assign).toHaveBeenCalledWith('https://open.weixin.qq.com/connect/qrconnect?state=s');

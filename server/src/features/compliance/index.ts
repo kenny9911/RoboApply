@@ -42,6 +42,7 @@ export {
   listConsents,
   recordConsent,
   resolveConsentProse,
+  servedConsentProseByHash,
   validateSignupConsents,
 } from './consents.js';
 export type { ConsentContext, ConsentDefinition, ConsentProseLocale, RecordConsentInput, ResolvedProse, SignupConsentCheck, SubmittedConsent } from './consents.js';

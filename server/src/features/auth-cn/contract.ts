@@ -15,6 +15,8 @@
 
 import { z } from 'zod';
 
+import type { ConsentProseLocale } from '../compliance/contract.js';
+
 /** +86 mainland mobile numbers only (MVP): `^1[3-9]\d{9}$`, optionally prefixed with +86. */
 export const CN_MOBILE_RE = /^(\+86)?1[3-9]\d{9}$/;
 export const CnPhoneSchema = z.string().trim().regex(CN_MOBILE_RE, '请输入正确的手机号');
@@ -63,12 +65,25 @@ export interface SendCodeResponse {
 }
 
 /**
- * A consent the client reports as given. Only `type` and `granted` count: the
- * stored record always carries the server's prose version (the legal text
- * being served), never the client's `proseVersion`.
+ * A consent the client reports as given, with the hash of the text the form
+ * showed beside its box (`SignupPolicyConsent.prose.hash`, from GET
+ * /auth/phone/policy). `type`, `granted` and `proseHash` count. The stored
+ * record names the served text that hash belongs to (its catalog version and
+ * hash), never the client's `proseVersion`. A required consent sent without a
+ * hash, or with the hash of a text no longer served, is refused with 422
+ * `consent_required` and `details.outdated`; the form reloads the policy and
+ * asks again (the same rule as the email form, features/auth/goapplySignup.ts).
  */
 export const ConsentInputSchema = z
-  .object({ type: z.string().min(1).max(60), granted: z.boolean(), proseVersion: z.string().min(1).max(40) })
+  .object({
+    type: z.string().min(1).max(60),
+    granted: z.boolean(),
+    proseVersion: z.string().min(1).max(40),
+    proseHash: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
+  })
   .strict();
 export type ConsentInput = z.infer<typeof ConsentInputSchema>;
 const ConsentInput = ConsentInputSchema;
@@ -153,7 +168,7 @@ export interface SignupConsentProse {
   /** Shown verbatim beside the checkbox. */
   text: string;
   /** Language of `text` (English when the catalog has no text in the language asked for). */
-  locale: 'en' | 'zh';
+  locale: ConsentProseLocale;
   /** Catalog prose version (`CONSENT_PROSE_VERSION`). */
   version: string;
   /** sha256 over brand, type, version, locale and text (compliance `consentProseHash`). */
@@ -162,7 +177,11 @@ export interface SignupConsentProse {
 
 export interface SignupPolicyConsent {
   type: string;
-  /** The legal-documents version the phone and WeChat rows record. */
+  /**
+   * The legal-documents version (`CN_LEGAL_DOCS_VERSION`, else the area
+   * default). Recorded only for a required type the compliance catalog has no
+   * text for; every other row records `prose.version` and `prose.hash`.
+   */
   proseVersion: string;
   /** Absent only for a type the compliance catalog has no text for. */
   prose?: SignupConsentProse;

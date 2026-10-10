@@ -65,9 +65,18 @@ async function profileOf(req: Request, service: NotificationCenterService): Prom
   return profile;
 }
 
+/**
+ * The language the person reads the site in: the `X-Robo-Locale` header the
+ * web client sends on every call (lib/api/client.ts), else the `robo_locale`
+ * cookie — the same order as auth/routes.ts `uiLocale`. The older
+ * `x-ra-locale` / `NEXT_LOCALE` names are read last; nothing sends them today.
+ */
 function localeOf(req: Request): string | null {
-  const v = req.get('x-ra-locale') ?? req.cookies?.NEXT_LOCALE;
-  return typeof v === 'string' && v ? v : null;
+  const cookies = req.cookies as Record<string, unknown> | undefined;
+  for (const v of [req.get('x-robo-locale'), cookies?.robo_locale, req.get('x-ra-locale'), cookies?.NEXT_LOCALE]) {
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  return null;
 }
 
 let defaultService: NotificationCenterService | null = null;

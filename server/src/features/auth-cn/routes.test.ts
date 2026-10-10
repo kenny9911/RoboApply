@@ -20,7 +20,8 @@ import { SESSION_COOKIE_NAME } from '../../lib/cookieOptions.js';
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import { createAuthCnAdminRouter, createPhoneAuthRouter, createWechatAuthRouter, WECHAT_NONCE_COOKIE } from './routes.js';
 import { BASE_ENV, buildServices, clock, CN0_CONSENTS, fakeDb, fakeWechatFetch, recordingSms } from './__tests__/testkit.js';
-import { CONSENT_PROSE_VERSION, consentProseHash } from '../compliance/consents.js';
+import { CONSENT_PROSE_VERSION, consentProseHash, listConsents, type ConsentDb } from '../compliance/consents.js';
+import { getBrand } from '../../platform/brand/registry.js';
 
 const GO = 'goapply.localhost:3621';
 const RA = 'localhost:3621';
@@ -130,7 +131,10 @@ describe('phone sign-in', () => {
     expect(zh[0]!.prose.text).toContain('《隐私政策》');
     expect(en[0]!.prose.text).toContain('User Agreement');
     expect(en[0]!.prose.text).toContain('Privacy Policy');
-    expect(zh[2]!.prose.text).toContain('美国');
+    // FIX-8: the processors and their regions come from the deployment's configuration (the /legal
+    // disclosures), never from a hard-coded list; this test deployment configures none.
+    expect(zh[2]!.prose.text).toContain('中国大陆境外处理和存储');
+    expect(zh[2]!.prose.text).not.toMatch(/美国东部|%OFFSHORE_PROCESSORS%/);
     // No language, or one GoApply is not read in: the Chinese text.
     expect(await get('')).toEqual(zh);
     expect(await get('?locale=ja')).toEqual(zh);
@@ -190,6 +194,39 @@ describe('phone sign-in', () => {
     expect(ok.headers.get('set-cookie')).toMatch(new RegExp(`^${SESSION_COOKIE_NAME}=tok_`));
     expect(ok.headers.get('set-cookie')).toMatch(/HttpOnly/i);
     expect(fake.$rows('user')[0]).toMatchObject({ brand: 'goapply', phoneE164: '+8613812345678' });
+  });
+
+  // Wave FIX gate: the form sends back the hash of each text the policy served; the stored record
+  // names it, so G1 and Settings do not say "you agreed to an earlier version" about a text that did not change.
+  it('policy → verify with the shown hashes: the consent ledger knows each answer is for the text served now', async () => {
+    const { harness, sms, fake } = await start();
+    type Row = { type: string; proseVersion: string; prose: { version: string; hash: string } };
+    const shown = (await harness.request<Env>('GET', `${PHONE_API}/policy?locale=zh`, { host: GO })).body.data!.requiredConsents as Row[];
+    await harness.request<Env>('POST', `${PHONE_API}/send-code`, { host: GO, body: { phone: '13812345678', purpose: 'login' } });
+
+    // An old client that sends no hash is told to reload the text; the code is not spent.
+    const noHash = await harness.request<Env>('POST', `${PHONE_API}/verify`, {
+      host: GO,
+      body: { phone: '13812345678', code: sms.lastCode(), consents: shown.map((c) => ({ type: c.type, granted: true, proseVersion: c.proseVersion })) },
+    });
+    expect(noHash.status).toBe(422);
+    expect(noHash.body).toMatchObject({ code: 'consent_required', details: { outdated: shown.map((c) => c.type), proseVersion: CONSENT_PROSE_VERSION } });
+    // A malformed hash never reaches the ledger.
+    const malformed = await harness.request<Env>('POST', `${PHONE_API}/verify`, {
+      host: GO,
+      body: { phone: '13812345678', code: sms.lastCode(), consents: shown.map((c) => ({ type: c.type, granted: true, proseVersion: 'v', proseHash: 'not-a-hash' })) },
+    });
+    expect(malformed.status).toBe(422);
+    expect(fake.$rows('user')).toHaveLength(0);
+
+    const ok = await harness.request<Env>('POST', `${PHONE_API}/verify`, {
+      host: GO,
+      body: { phone: '13812345678', code: sms.lastCode(), consents: shown.map((c) => ({ type: c.type, granted: true, proseVersion: c.prose.version, proseHash: c.prose.hash })) },
+    });
+    expect(ok.status).toBe(200);
+    expect(fake.$rows('seekerConsentRecord').map((r) => [r.consentType, r.proseVersion, r.proseHash])).toEqual(shown.map((c) => [c.type, CONSENT_PROSE_VERSION, c.prose.hash]));
+    const items = await listConsents(String(ok.body.data!.userId), getBrand('goapply'), { env: BASE_ENV, locale: 'zh' }, { db: fake as unknown as ConsentDb, env: BASE_ENV });
+    for (const c of shown) expect(items.find((i) => i.type === c.type), c.type).toMatchObject({ granted: true, answeredTextCurrent: true });
   });
 
   it('a wrong code is 422 otp_invalid with attempts left', async () => {

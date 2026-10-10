@@ -10,6 +10,7 @@
 //   GET    /api/v1/roboapply/copilot/threads/:id/messages
 //   POST   /api/v1/roboapply/copilot/threads/:id/messages
 //   DELETE /api/v1/roboapply/copilot/threads/:id
+//   POST   /api/v1/roboapply/copilot/threads/:id/stop
 //   POST   /api/v1/roboapply/copilot/proposals/:id/apply
 //   POST   /api/v1/roboapply/copilot/proposals/:id/dismiss
 //   POST   /api/v1/roboapply/copilot/messages/:id/feedback
@@ -56,6 +57,16 @@ export function sendMessage(id: string, body: In<typeof CP.SendMessageBodySchema
 /** `copilot.archiveThread` — DELETE /api/v1/roboapply/copilot/threads/:id */
 export function archiveThread(id: string, opts?: CallOptions): Promise<void> {
   return call<void>('DELETE', `/api/v1/roboapply/copilot/threads/${seg(id)}`, opts);
+}
+
+/**
+ * `copilot.stopTurn` — POST /api/v1/roboapply/copilot/threads/:id/stop. The
+ * Stop button: aborting the fetch alone can leave the server writing (a proxy
+ * may keep the upstream request open), so the client also names the thread.
+ * Use it through hooks/copilot/stopTurn.ts (`requestStopTurn`, never throws).
+ */
+export function stopTurn(id: string, opts?: CallOptions): Promise<CP.StopTurnResponse> {
+  return call<CP.StopTurnResponse>('POST', `/api/v1/roboapply/copilot/threads/${seg(id)}/stop`, opts);
 }
 
 /** `copilot.applyProposal` — POST /api/v1/roboapply/copilot/proposals/:id/apply */
@@ -211,6 +222,7 @@ export const copilotApi = {
   sendMessage,
   streamTurn,
   archiveThread,
+  stopTurn,
   applyProposal,
   dismissProposal,
   sendMessageFeedback,

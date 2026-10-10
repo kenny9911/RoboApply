@@ -14,7 +14,6 @@ export { isPhoneBindingRequired, isWechatBrowser, useIsWechatBrowser } from './s
 export { InviteCodeField, SignupConsents } from './SignupConsents';
 export {
   agreementSatisfied,
-  consentsFromPolicy,
   currentSignupLinkCodes,
   errorMessage as authCnErrorMessage,
   isConsentOutdated,

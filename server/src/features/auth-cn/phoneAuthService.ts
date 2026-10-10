@@ -132,7 +132,7 @@ export function createPhoneAuthService(deps: PhoneAuthDeps) {
       }
 
       assertSignupOpen(deps.env);
-      const consents = checkSignupConsents(input.consents, deps.env);
+      const consents = await checkSignupConsents(input.consents, brand, deps.env);
       const inviteRequired = cnSignupMode(deps.env) === 'invite';
       if (inviteRequired && !input.inviteCode) throw new AuthCnError('invite_invalid', { missing: true });
       if (inviteRequired && input.inviteCode) await assertInviteRedeemable(db, brand.id, input.inviteCode, deps.now());

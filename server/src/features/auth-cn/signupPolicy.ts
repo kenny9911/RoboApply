@@ -49,23 +49,57 @@ export function requiredSignupConsents(env: EnvSource = process.env): Array<{ ty
 }
 
 /**
- * Validates the consents a NEW account sends: every required type granted;
- * unknown types rejected. Returns the rows to record: the required types
- * only, each with the SERVER's prose version (`CN_LEGAL_DOCS_VERSION`, else
- * the area default). The client's `proseVersion` is never stored — the
- * record must name the legal text the server was serving when the person
- * accepted it, not whatever string a client sent.
+ * Validates the consents a NEW phone or WeChat account sends: every required
+ * type granted; unknown types rejected. Returns the rows to record: the
+ * required types only.
+ *
+ * What is stored is what was shown (the same rule as the email form,
+ * features/auth/goapplySignup.ts). The form shows, beside each box, the
+ * catalog prose GET /auth/phone/policy served and sends that text's hash back
+ * (`proseHash`). A row carries the catalog version and hash of the served text
+ * the hash belongs to, so the consent ledger can later tell whether the text
+ * has changed since (`answeredTextCurrent`). A required consent without a
+ * hash, or with the hash of a text no longer served, is refused with
+ * `consent_required { outdated }`: the form reloads the text and asks again.
+ * The client's `proseVersion` string is never stored.
+ *
+ * A required type the catalog has no text for (the policy served none, so
+ * there is nothing to hash) is recorded with the sign-up policy's version
+ * (`CN_LEGAL_DOCS_VERSION`, else the area default) and no hash.
  */
-export function checkSignupConsents(consents: ConsentInput[] | undefined, env: EnvSource = process.env): ConsentInput[] {
+export async function checkSignupConsents(
+  consents: ConsentInput[] | undefined,
+  brand: ProductBrand,
+  env: EnvSource = process.env,
+): Promise<ConsentInput[]> {
   const granted = new Map<string, boolean>();
+  const shownHash = new Map<string, string>();
   for (const c of consents ?? []) {
     if (!isSeekerConsentType(c.type)) throw new AuthCnError('consent_required', { unknown: [c.type] });
     granted.set(c.type, c.granted);
+    if (typeof c.proseHash === 'string' && c.proseHash) shownHash.set(c.type, c.proseHash);
+    else shownHash.delete(c.type);
   }
   const required = requiredSignupConsents(env);
   const missing = required.filter((r) => granted.get(r.type) !== true).map((r) => r.type);
   if (missing.length) throw new AuthCnError('consent_required', { missing });
-  return required.map((r) => ({ type: r.type, granted: true, proseVersion: r.proseVersion }));
+
+  // Lazy, like the policy below: the compliance area is loaded only when a sign-up needs its text.
+  const { CONSENT_PROSE_VERSION, findConsentDefinition, servedConsentProseByHash } = await import('../compliance/index.js');
+  const rows: ConsentInput[] = [];
+  const outdated: string[] = [];
+  for (const r of required) {
+    const def = findConsentDefinition(brand.id, r.type);
+    if (!def) {
+      rows.push({ type: r.type, granted: true, proseVersion: r.proseVersion });
+      continue;
+    }
+    const shown = servedConsentProseByHash(def, brand, shownHash.get(r.type), env);
+    if (!shown) outdated.push(r.type);
+    else rows.push({ type: r.type, granted: true, proseVersion: shown.version, proseHash: shown.hash });
+  }
+  if (outdated.length) throw new AuthCnError('consent_required', { outdated, proseVersion: CONSENT_PROSE_VERSION });
+  return rows;
 }
 
 /** Throws unless a new GoApply account may be created right now. */
@@ -90,7 +124,8 @@ export async function requiredSignupConsentsWithProse(
   return requiredSignupConsents(env).map((required) => {
     const def = findConsentDefinition(brand.id, required.type);
     if (!def) return required;
-    const { text, locale: proseLocale, version, hash } = resolveConsentProse(def, brand, lang);
+    // `env` too: the cross-border text names this deployment's processors, the same facts /legal renders (FIX-8).
+    const { text, locale: proseLocale, version, hash } = resolveConsentProse(def, brand, lang, env);
     return { ...required, prose: { text, locale: proseLocale, version, hash } };
   });
 }

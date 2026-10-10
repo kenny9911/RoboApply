@@ -46,6 +46,11 @@ vi.mock('../../../features/resume/index.js', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   resumeAiAvailable: async () => true,
 }));
+// The GoApply phone gate in front of the route (covered in resumes.rewriteCredit.test.ts): open here.
+vi.mock('../../../features/auth-cn/index.js', async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  requirePhoneBound: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+}));
 vi.mock('../../../lib/matchBilling.js', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   writeDeductionLog: m.deductionLog,

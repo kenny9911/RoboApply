@@ -46,6 +46,7 @@ import {
 import type { ReferralSignalDelegate } from './referralSignalStore.js';
 import { createPhoneAuthService } from '../auth-cn/phoneAuthService.js';
 import type { AuthCnDb } from '../auth-cn/db.js';
+import { cn0Consents } from '../auth-cn/__tests__/testkit.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import type { GrowthDb } from './service.js';
 import { loadLegalDoc } from '../compliance/legalDocs.js';
@@ -389,10 +390,11 @@ describe('getInvites', () => {
     h.setNow(new Date());
     const growth = createGrowthService({ db: h.fake as unknown as GrowthDb, attachReferral: h.service.attachFromSignup, now: () => new Date() });
     const checks: string[] = [];
+    const env = { NODE_ENV: 'test', CN_SIGNUP_MODE: 'open' };
     const phone = createPhoneAuthService({
       db: h.fake as unknown as AuthCnDb,
       otp: { verifyCode: async () => ({ otpId: 'otp1' }), spend: async () => undefined } as never,
-      env: { NODE_ENV: 'test', CN_SIGNUP_MODE: 'open' },
+      env,
       now: () => new Date(),
       consume: async () => ({ allowed: true, retryAfterSec: 0, remaining: 1, windows: [] }),
       hooks: {
@@ -404,7 +406,8 @@ describe('getInvites', () => {
         grantPhoneCredit: async () => undefined,
       },
     });
-    const consents = ['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border'].map((type) => ({ type, granted: true, proseVersion: 'v1' }));
+    // As the form sends them: each consent with the hash of the text the sign-up policy serves under this env.
+    const consents = cn0Consents(env);
     const signedUp = await phone.verifyAndSignIn({
       brand: getBrand('goapply'),
       phoneE164: '+8613812345678',

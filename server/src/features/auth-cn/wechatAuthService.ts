@@ -102,7 +102,9 @@ function parseConsents(raw: unknown): ConsentInput[] | null {
     if (!c || typeof c !== 'object') return null;
     const r = c as Record<string, unknown>;
     if (typeof r.type !== 'string' || typeof r.granted !== 'boolean' || typeof r.proseVersion !== 'string') return null;
-    out.push({ type: r.type, granted: r.granted, proseVersion: r.proseVersion });
+    // The hash of the text the form showed rides with the pending sign-in, so the row written at the callback names it.
+    const proseHash = typeof r.proseHash === 'string' && /^[0-9a-f]{64}$/.test(r.proseHash) ? r.proseHash : undefined;
+    out.push({ type: r.type, granted: r.granted, proseVersion: r.proseVersion, ...(proseHash ? { proseHash } : {}) });
   }
   return out;
 }
@@ -251,7 +253,7 @@ export function createWechatAuthService(deps: WechatAuthDeps) {
       const app = appFor(input.flow);
       const purpose = input.purpose ?? 'signin';
       if (purpose === 'reverify' && !input.userId) throw new HttpError('unauthorized');
-      const consents = purpose === 'signin' && input.consents !== undefined ? checkSignupConsents(input.consents, deps.env) : null;
+      const consents = purpose === 'signin' && input.consents !== undefined ? await checkSignupConsents(input.consents, input.brand, deps.env) : null;
       const raw = randomToken();
       const nonce = randomToken();
       const payload: StatePayload = {
@@ -351,7 +353,8 @@ export function createWechatAuthService(deps: WechatAuthDeps) {
             brand: input.brand,
             app,
             identity,
-            consents: checkSignupConsents(payload.consents, deps.env),
+            // Checked again: the text may have changed while the person was at WeChat (then `consent_required`, and the form asks again).
+            consents: await checkSignupConsents(payload.consents, input.brand, deps.env),
             invite: payload.invite,
             next: payload.next,
             locale: input.locale,
@@ -409,7 +412,7 @@ export function createWechatAuthService(deps: WechatAuthDeps) {
       }
       if (!userId) {
         assertSignupOpen(deps.env);
-        const consents = checkSignupConsents(input.consents, deps.env);
+        const consents = await checkSignupConsents(input.consents, input.brand, deps.env);
         userId = await createWechatAccount({
           brand: input.brand,
           app,
