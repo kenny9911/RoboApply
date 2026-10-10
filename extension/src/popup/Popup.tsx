@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
+import { intlFormSiteForUrl } from '../adapters/intl/index';
 import { plannedSiteForUrl, type AdapterSet } from '../adapters/registry';
 import { findBoardReader } from '../content/boards/index';
 import { useTranslations } from '../i18n/index';
@@ -28,7 +29,14 @@ export interface PopupDeps {
   market?: 'intl' | 'cn';
 }
 
-type PageKind = { kind: 'form'; site: string } | { kind: 'board'; site: string } | { kind: 'planned'; site: string } | { kind: 'other' } | { kind: 'none' };
+type PageKind =
+  | { kind: 'form'; site: string }
+  | { kind: 'board'; site: string }
+  /** A supported form site, but no form is open yet (e.g. a Workday job description page; WP-70 R7). */
+  | { kind: 'openForm'; site: string }
+  | { kind: 'planned'; site: string }
+  | { kind: 'other' }
+  | { kind: 'none' };
 
 export function Popup({ deps }: { deps: PopupDeps }) {
   const t = useTranslations('extension');
@@ -64,6 +72,11 @@ export function Popup({ deps }: { deps: PopupDeps }) {
     const board = findBoardReader(url);
     if (board) {
       setPage({ kind: 'board', site: board.siteName });
+      return;
+    }
+    const formSite = deps.adapterSet === 'intl' ? intlFormSiteForUrl(url) : null;
+    if (formSite) {
+      setPage({ kind: 'openForm', site: formSite.siteName });
       return;
     }
     const planned = plannedSiteForUrl(url, deps.adapterSet);
@@ -198,6 +211,11 @@ export function Popup({ deps }: { deps: PopupDeps }) {
                 </p>
               ) : null}
               {fit ? <p className="meta muted">{t('fit.note')}</p> : null}
+            </div>
+          ) : null}
+          {page.kind === 'openForm' ? (
+            <div className="card">
+              <p className="meta">{t('popup.openFormSite', { site: page.site })}</p>
             </div>
           ) : null}
           {page.kind === 'planned' || page.kind === 'other' ? (

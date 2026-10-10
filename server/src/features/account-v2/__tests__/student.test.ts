@@ -214,7 +214,7 @@ describe('student-code email', () => {
     const root = join(process.cwd(), 'server/src/i18n/email');
     copyFileSync(join(root, 'en.json'), join(dir, 'en.json'));
     copyFileSync(join(root, 'staging/billing.en.json'), join(dir, 'staging/billing.en.json'));
-    copyFileSync(join(process.cwd(), 'server/src/features/account-v2/i18n/email.accountV2.en.json'), join(dir, 'staging/accountV2.en.json'));
+    copyFileSync(join(process.cwd(), 'server/src/i18n/email/staging/accountV2.en.json'), join(dir, 'staging/accountV2.en.json'));
     setEmailI18nDirForTests(dir);
     resetEmailI18nCache();
   });

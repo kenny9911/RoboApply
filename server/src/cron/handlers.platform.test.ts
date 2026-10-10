@@ -12,6 +12,7 @@ const m = vi.hoisted(() => ({
   fridayNudge: vi.fn(async () => ({})),
   coverLetterDelete: vi.fn(async (_args?: unknown) => ({ count: 4 })),
   accountPurge: vi.fn(async () => ({ scanned: 1, purged: 1 })),
+  pruneReferralSignals: vi.fn(async () => ({ deleted: 5, nextAt: null })),
 }));
 
 // Area cron tasks are replaced by inert skips, so this file tests the cron
@@ -30,6 +31,14 @@ vi.mock('../features/compliance/cron.js', () => ({ runComplianceDaily: skip }));
 vi.mock('../features/interview/cron.js', () => ({ runInterviewRetention: skip }));
 vi.mock('../features/tools/cron.js', () => ({ runToolsPurge: skip }));
 vi.mock('../features/network/cron.js', () => ({ runContactsSync: skip }));
+// Wave 5 gate wiring: admin health email, logged-out alerts, invite-signal prune, winback.
+vi.mock('../features/admin/index.js', () => ({ runAdminHealthEmail: skip }));
+vi.mock('../features/visitor/index.js', () => ({ runAnonAlertDigests: skip }));
+vi.mock('../features/growth/index.js', () => ({ pruneReferralSignals: m.pruneReferralSignals }));
+vi.mock('../platform/billing/index.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../platform/billing/index.js')>()),
+  runWinbackSweep: skip,
+}));
 vi.mock('../platform/credits/index.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../platform/credits/index.js')>()),
   creditService: { releaseStale: m.releaseStale },
@@ -155,12 +164,14 @@ describe('cron routes over HTTP', () => {
   it('jobs-maintain runs the area tasks per brand and the platform housekeeping once', async () => {
     const res = await h.request<{ ok: boolean; results: Record<string, Record<string, unknown>> }>('GET', '/api/v1/cron/jobs-maintain', auth);
     expect(res.status).toBe(200);
-    expect(res.body.results.roboapply).toEqual({ maintain: { skipped: 'not_implemented' }, toolsPurge: { skipped: 'not_implemented' } });
+    expect(res.body.results.roboapply).toEqual({ maintain: { skipped: 'not_implemented' }, toolsPurge: { skipped: 'not_implemented' }, adminHealth: { skipped: 'not_implemented' } });
     expect(res.body.results.platform).toEqual({
       pruneRateCounters: { processed: 7 },
+      pruneReferralSignals: { processed: 5 },
       pruneWorkItems: { processed: 3 },
       releaseStaleCredits: { processed: 2 },
     });
+    expect(m.pruneReferralSignals).toHaveBeenCalledOnce();
     expect(m.pruneRateCounters).toHaveBeenCalledOnce();
     expect(m.pruneWorkItems).toHaveBeenCalledOnce();
     // §4.1.d: stale credit reservations are released once per run (no brand).
@@ -175,11 +186,12 @@ describe('cron routes over HTTP', () => {
     // WP-57's 24 h free-tool purge also runs hourly here (Wave 4 gate), per brand.
     expect(res.body.results.roboapply!.toolsPurge).toEqual({ skipped: 'not_implemented' });
     expect(res.body.results.goapply!.toolsPurge).toEqual({ skipped: 'not_implemented' });
-    expect(Object.keys(res.body.results.roboapply!.reminders.producers ?? {})).toEqual(['tracker', 'agent']);
+    expect(Object.keys(res.body.results.roboapply!.reminders.producers ?? {})).toEqual(['tracker', 'agent', 'winback']);
     expect(res.body.results.goapply!.reminders.producers).toEqual({
       tracker: { skipped: 'not_implemented' },
       agent: { skipped: 'not_implemented' },
       campus: { skipped: 'not_implemented' },
+      winback: { skipped: 'not_implemented' },
     });
   });
 

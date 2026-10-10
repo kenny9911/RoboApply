@@ -16,7 +16,7 @@ import { useTranslations } from 'next-intl';
 import { Btn, Drawer } from '../../v3/primitives';
 import { OfferSection } from '../offers';
 import { useLaunchPractice } from '../../../hooks/shared/useLaunchPractice';
-import { useAddTrackerNote, usePatchTrackerEntry, useTrackerArtifacts, useTrackerEvents } from '../../../hooks/tracker/useTracker';
+import { useAddTrackerNote, usePatchTrackerEntry, useRefreshTrackerEntry, useTrackerArtifacts, useTrackerEvents } from '../../../hooks/tracker/useTracker';
 import type { In } from '../../../lib/api/contracts/wire';
 import type * as TR from '../../../lib/api/contracts/tracker';
 import {
@@ -119,6 +119,7 @@ function DrawerBody({ entry }: { entry: TR.TrackerEntryView }) {
   const { market, columns } = useTrackerColumns();
   const stageLabel = useStageLabel();
   const patch = usePatchTrackerEntry();
+  const refreshEntry = useRefreshTrackerEntry(entry.id);
   const launchPractice = useLaunchPractice();
   const [form, setForm] = useState<FormState>(() => formFrom(entry));
   const [notice, setNotice] = useState<'saved' | 'error' | null>(null);
@@ -235,7 +236,7 @@ function DrawerBody({ entry }: { entry: TR.TrackerEntryView }) {
         </div>
       </form>
 
-      <OfferSection trackerEntryId={entry.id} />
+      <OfferSection trackerEntryId={entry.id} onChange={refreshEntry} />
 
       {entry.jobId ? (
         <div>

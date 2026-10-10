@@ -22,6 +22,8 @@
 //   - the CN bucket endpoint is not mainland object storage       (cn_storage_offshore)
 //   - content safety is not Aliyun Green — "CN-1 assertion requires
 //     aliyun_green" (content_safety_not_aliyun_green)
+//   - Aliyun Green is chosen but not usable (keys, region, endpoint, timeout;
+//     `contentSafetyReadiness().cn1Ready`, WP-76 request) (content_safety_not_ready)
 //   - GoApply email is set to go through Resend (offshore)       (cn_email_offshore)
 // In every region an unknown `DEPLOY_REGION` value is refused
 // (deploy_region_unknown), so a typo never switches these checks off.
@@ -29,16 +31,16 @@
 // Offshore (DEPLOY_REGION unset) nothing is asserted: that is the RoboApply
 // stack, which may also host the GoApply CN-0 beta.
 //
-// Wiring: `assertResidencyAtStartup()` must be called once at boot, before
-// the app listens or is exported, and its `warnings` logged. NOT WIRED YET:
-// server/src/app.ts is outside WP-15's paths (request REQ-WP15-01 to INT).
-// Until then these checks protect nothing at runtime. It throws
-// `ResidencyStartupError` listing every failure.
+// Wiring: `assertResidencyAtStartup()` is called once at boot through
+// platform/startup.ts (from server/src/app.ts), before the app listens or is
+// exported, and its `warnings` logged. It throws `ResidencyStartupError`
+// listing every failure.
 
 import { allowedBrands } from '../brand/runtime.js';
 import { getBrand } from '../brand/registry.js';
 import type { EnvSource } from '../brand/brandEnv.js';
 import { checkLlmRoute, hostOf } from '../llm/brandPolicy.js';
+import { contentSafetyReadiness } from '../llm/contentSafety/config.js';
 import { DIRECT_PROVIDER_PREFIXES, PROVIDER_PREFIX_ALIASES } from '../../services/llm/providerPrefixes.js';
 import { isMainlandStorageHost, isPrivateHost } from './egressPolicy.js';
 import { CN_MAINLAND, deployRegion, unknownDeployRegion, type DeployRegion } from './deployRegion.js';
@@ -62,6 +64,7 @@ export type ResidencyFailureCode =
   | 'cn_storage_missing'
   | 'cn_storage_offshore'
   | 'content_safety_not_aliyun_green'
+  | 'content_safety_not_ready'
   | 'cn_email_offshore';
 
 export interface ResidencyFailure {
@@ -283,6 +286,14 @@ export function checkResidency(env: EnvSource = process.env): ResidencyReport {
       code: 'content_safety_not_aliyun_green',
       message: 'CN_CONTENT_SAFETY_PROVIDER must be aliyun_green on the mainland stack.',
     });
+  } else {
+    const safety = contentSafetyReadiness(env);
+    if (!safety.cn1Ready) {
+      failures.push({
+        code: 'content_safety_not_ready',
+        message: `Aliyun Green content safety is not usable: ${safety.problems.join('; ') || 'unknown configuration problem'}.`,
+      });
+    }
   }
 
   if ((set(env, 'CN_EMAIL_TRANSPORT') ?? '').toLowerCase() === 'resend') {

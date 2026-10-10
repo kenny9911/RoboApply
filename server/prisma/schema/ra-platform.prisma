@@ -55,7 +55,10 @@ model RAAuthToken {
   /// 'password_reset' | 'email_verify' | 'magic_prefs' | 'oauth_state' | 'ext_pair' |
   /// 'email_unsub' | 'anon_alert_confirm' | 'oauth_pending' | 'known_device' (WP-10) |
   /// 'wechat_reverify' (WP-11) | 'billing_cancel' (WP-21a, public /cancel link) |
-  /// 'tool_result' | 'tool_result_alias' (WP-57, anonymous free-tool results, 24 h).
+  /// 'tool_result' | 'tool_result_alias' (WP-57, anonymous free-tool results, 24 h) |
+  /// 'wechat_sub:<templateKey>' (WP-73, SCHEMA-5 SR-73-1: one-time WeChat 公众号
+  /// subscribe grant; payload `{ templateId, scene?, eventId?, source: 'client' |
+  /// 'wechat', paired, dedupeKey? }`, at most 20 per template, 180 days).
   /// 'oauth_state' payload (WP-10/11) holds `nonceHash` (sha256 of the browser-bound
   /// nonce cookie) and, for WeChat sign-up, the server-versioned `consents`.
   kind       String
@@ -150,4 +153,70 @@ model RABrandInvite {
   createdAt DateTime  @default(now())
 
   @@index([brand, createdAt])
+}
+
+/// Seeker two-factor sign-in (TOTP; F-TRUST-07; SCHEMA-5, SR-79-1). One row per
+/// user; `enabledAt` null = enrolment started but not confirmed (the secret is
+/// not trusted yet). Field list: server/src/features/account-v2/store.ts.
+model RATwoFactor {
+  userId                   String    @id
+  user                     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand                    String
+  /// AES-256-GCM sealed base32 secret (features/account-v2/sealing.ts); never clear text.
+  secretSealed             String
+  enabledAt                DateTime?
+  /// Last accepted 30-second step: a code is never accepted twice.
+  lastUsedStep             Int?
+  /// sha256 of each unused recovery code.
+  recoveryCodeHashes       String[]  @default([])
+  recoveryCodesGeneratedAt DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+}
+
+/// School-email verification for student prices (F-ACCT-02; SCHEMA-5, SR-79-2).
+/// The address itself is never stored: only its hash (one school email per
+/// account) and its domain.
+model RAStudentVerification {
+  userId           String    @id
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand            String
+  /// sha256(lowercase school email) of the verified (or first) address.
+  schoolEmailHash  String
+  schoolDomain     String
+  /// The address a code was last sent to; moves into schoolEmailHash /
+  /// schoolDomain only when that code is confirmed, so trying a new address
+  /// never ends a live verification early.
+  pendingEmailHash String?
+  pendingDomain    String?
+  /// sha256 of the pending 6-digit code; null once used.
+  codeHash         String?
+  codeExpiresAt    DateTime?
+  codeAttempts     Int       @default(0)
+  verifiedAt       DateTime?
+  /// Verification lapses (12 months); the student verifies again.
+  expiresAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([schoolEmailHash])
+}
+
+/// Audit trail of admin writes (overrides, moderation, job report decisions;
+/// WP-74; SCHEMA-5, SR-74-1). No foreign keys: rows outlive both the admin and
+/// the subject account. Until WP-93 switches features/admin/audit.ts to this
+/// table, audit rows go to SeekerActivityLog.
+model RAAdminAuditLog {
+  id            String   @id @default(cuid())
+  /// Admin user id (no FK).
+  adminId       String
+  /// The user the action is about, when there is one (no FK).
+  subjectUserId String?
+  /// ADMIN_AUDIT_EVENTS in features/admin/contract.ts.
+  eventType     String
+  payload       Json
+  createdAt     DateTime @default(now())
+
+  @@index([subjectUserId, createdAt])
+  @@index([eventType, createdAt])
 }

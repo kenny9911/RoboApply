@@ -11,8 +11,9 @@
 // it requires:
 //   - DEPLOY_REGION=cn-mainland (otherwise the residency checks assert nothing);
 //   - content safety READY for CN-1: Aliyun Green with credentials and a
-//     mainland endpoint (`contentSafetyReadiness().cn1Ready`, WP-24), not just
-//     the provider name the boot check looks at;
+//     mainland endpoint (`contentSafetyReadiness().cn1Ready`, WP-24). Since the
+//     Wave 5 gate the boot check also asserts this when Aliyun Green is chosen
+//     (`content_safety_not_ready`); the preflight reports it once either way;
 //   - CRON_SECRET (the CronJobs authenticate with it);
 //   - ROBOAPPLY_CRON_DISABLED=true (the CronJobs replace node-cron; both on
 //     would run every sweep twice).
@@ -51,7 +52,8 @@ export function runPreflight({ env, checkResidency, contentSafetyReadiness }) {
   warnings.push(...residency.warnings);
 
   const safety = contentSafetyReadiness(env);
-  if (!safety.cn1Ready) {
+  const reportedByResidency = residency.failures.some((f) => f.code === 'content_safety_not_ready');
+  if (!safety.cn1Ready && !reportedByResidency) {
     const detail = safety.problems.length ? ` Problems: ${safety.problems.join('; ')}.` : '';
     failures.push({
       code: 'content_safety_not_cn1_ready',

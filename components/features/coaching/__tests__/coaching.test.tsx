@@ -123,11 +123,11 @@ describe('/coaching', () => {
     expect(card.getByText(/Lin Chen has not listed prices\. .* pay them directly\./)).toBeInTheDocument();
   });
 
-  it('links the coaching policy only where the site publishes it (GoApply has no mapping yet)', async () => {
+  it('links the coaching policy on GoApply too once the cn mapping exists (Wave 5 gate, WP-72 request)', async () => {
     api.listCoaches.mockResolvedValue({ items: [DANA] });
     renderWithBrand(<CoachingRoute />, { brand: 'goapply', flags: { coaching: true } });
     await screen.findByTestId('coach-card');
-    expect(screen.queryByRole('link', { name: 'Coaching policy' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Coaching policy' })).toHaveAttribute('href', '/legal/coaching');
   });
 
   it('GoApply: the request needs a separate consent to share with the coach', async () => {

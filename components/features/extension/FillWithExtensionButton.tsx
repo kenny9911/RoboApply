@@ -6,9 +6,10 @@
 //
 //   - Shown only where an adapter exists for the job's application form
 //     (`autofill.supported` from job detail, read from the job query the
-//     page already holds, AND the ATS is on this brand's own list: the
-//     GoApply build does not target Greenhouse / Lever / Ashby) and the
-//     brand has a published extension.
+//     page already holds: the brand's market list AND an application URL on
+//     a host the adapter runs on; AND the ATS is on this brand's own list and
+//     is not a page-by-page form — Workday, iCIMS, Taleo, SuccessFactors
+//     wait for R4, WP-93) and the brand has a published extension.
 //   - Extension installed → "Fill this form" opens the employer's application
 //     page in a new tab; the extension fills it there, and the user checks
 //     every field and submits it (D1).

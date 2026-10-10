@@ -222,6 +222,8 @@ model RAJob {
   userStates     RAJobUserState[]
   /// GoApply admin fraud reviews of this job (SCHEMA-3, SR-41-2).
   cnFraudReviews RACnFraudReview[]
+  /// Admin "Reports to review" decisions (SCHEMA-5, SR-74-2).
+  reviews        RAJobReview[]
 
   @@unique([externalId, sourceBoard])
   @@index([workType, archivedAt])
@@ -375,4 +377,27 @@ model RACareerSiteSource {
 
   @@unique([ats, boardToken])
   @@index([market, enabled, lastSyncedAt])
+}
+
+/// Admin decision on a reported or scam-flagged job ("Reports to review",
+/// F-TRUST-04; WP-74; SCHEMA-5, SR-74-2). A dedicated table so decisions are
+/// not swept by job_interactions retention or included in the admin's data
+/// export, and so the feed's three-report close rule and re-enrichment can
+/// respect a restore. Until WP-93 switches features/admin/reports.ts, decisions
+/// are RAJobInteraction rows of kind 'admin_review'.
+model RAJobReview {
+  id           String   @id @default(cuid())
+  jobId        String
+  job          RAJob    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  /// 'close' | 'restore' (features/admin/contract.ts ResolveDecision).
+  decision     String
+  note         String?
+  /// Admin user id (no FK; admin accounts outlive decisions).
+  by           String
+  at           DateTime @default(now())
+  /// International scam rule ids the admin cleared on restore; re-enrichment
+  /// must not bring them back.
+  clearedRules String[] @default([])
+
+  @@index([jobId, at(sort: Desc)])
 }

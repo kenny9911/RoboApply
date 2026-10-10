@@ -17,7 +17,12 @@ model RAReferral {
   inviter       User      @relation("RAReferralInviter", fields: [inviterUserId], references: [id], onDelete: Cascade)
   inviteeUserId String    @unique
   invitee       User      @relation("RAReferralInvitee", fields: [inviteeUserId], references: [id], onDelete: Cascade)
-  /// 'pending' | 'qualified' | 'rewarded' | 'rejected'
+  /// 'pending' | 'held' | 'rewarded' | 'qualified' | 'rejected' (SCHEMA-5, SR-60-2;
+  /// growth/contract.ts REFERRAL_STATUSES). `pending` with `qualifiedAt` set =
+  /// claimed for a reward, credits being written; `held` = the risk check holds
+  /// the rewards for admin review; `qualified` = only the friend's credit was
+  /// granted (inviter over the yearly cap or without a profile); `rejected`
+  /// reasons include `same_person` and `invitee_no_profile`.
   status        String    @default("pending")
   riskScore     Int       @default(0)
   riskReasons   String[]  @default([])
@@ -26,6 +31,8 @@ model RAReferral {
   createdAt     DateTime  @default(now())
 
   @@index([inviterUserId, status])
+  // SCHEMA-5 (SR-60-2): the admin held-rewards review list.
+  @@index([brand, status])
 }
 
 /// First/last touch attribution captured at signup (F-ONB-02).
@@ -54,4 +61,21 @@ model RAGrowthChecklist {
   dismissedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+/// Invite-reward risk signals (F-GROW-01; SCHEMA-5, SR-60-1). Keyed hashes
+/// only (HMAC; never a raw IP or User-Agent); deleted after 30 days by the
+/// growth.referralSignalPrune worker, and with the account.
+model RAReferralSignal {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand      String
+  ipHash     String?
+  uaHash     String?
+  deviceHash String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
 }

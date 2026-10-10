@@ -11,7 +11,7 @@ import type { AdapterSet } from '../adapters/registry';
 import type { AtsAdapter } from '../adapters/types';
 import type { PageJobBody } from '../shared/contract';
 import type { ContentMessage, ContentPingResponse, PageReadResponse } from '../shared/messages';
-import { findBoardReader } from './boards/index';
+import { boardPageJob, findBoardReader } from './boards/index';
 import { detectAdapter } from './detect';
 import { apiPageUrl } from './pageUrl';
 import type { MountedPanel } from './panel/mount';
@@ -99,14 +99,15 @@ export function createContentController(deps: ContentControllerDeps): ContentCon
         case 'panel.open':
           return { ok: ensureMounted(true) };
         case 'page.read': {
-          const url = new URL(deps.href());
-          const a = detect();
-          const job = a?.readJob(deps.doc) ?? findBoardReader(url)?.readJob(deps.doc) ?? null;
-          const body: PageJobBody | null =
-            job?.title && job.company
-              ? { url: apiPageUrl(deps.href()), title: job.title.slice(0, 200), company: job.company.slice(0, 200), location: job.location?.slice(0, 200), descriptionText: (job.descriptionText ?? '').slice(0, 60_000) }
-              : null;
-          return { job: body };
+          // A form page sends its own URL (apiPageUrl). A job board sends only
+          // the fields the user saves, with the board's canonical job URL —
+          // never the search terms or tracking parameters (WP-70 R3).
+          const job = detect()?.readJob(deps.doc) ?? null;
+          if (job?.title && job.company) {
+            const body: PageJobBody = { url: apiPageUrl(deps.href()), title: job.title.slice(0, 200), company: job.company.slice(0, 200), location: job.location?.slice(0, 200), descriptionText: (job.descriptionText ?? '').slice(0, 60_000) };
+            return { job: body };
+          }
+          return { job: boardPageJob(deps.href(), deps.doc) };
         }
         default:
           return undefined;

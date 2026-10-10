@@ -66,6 +66,10 @@ export const MANUAL_SCOPES = Object.freeze({
     where: `"scope" = 'user' AND "scopeId" IN ({{goapply_users}})`,
     reason: 'per-user memories are keyed by scope = user, scopeId = user id (no foreign key).',
   },
+  RAAdminAuditLog: {
+    where: `"subjectUserId" IN ({{goapply_users}}) OR "adminId" IN ({{goapply_users}})`,
+    reason: 'admin audit rows (SCHEMA-5, SR-74-1) have no foreign keys (they outlive both accounts); rows about a GoApply user, or written by a GoApply admin, move with them.',
+  },
   RoboApplyCoverLetterCache: {
     where: `"resumeId" IN (SELECT "id" FROM "Resume" WHERE {{scope:Resume}})`,
     reason: 'generated cover letters keyed by resumeId (no foreign key); a GoApply resume takes its letters along.',

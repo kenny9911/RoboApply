@@ -63,10 +63,10 @@ submitted. It needs a local Chromium: `npx --prefix extension playwright install
 |---|---|
 | `src/background/` | service worker: token storage, pairing, API client, message router |
 | `src/content/` | detection, the fill session (`fill.ts`), the shadow-DOM panel |
-| `src/content/boards/` | job-board readers for "Check fit" / "Save" (WP-70; empty seam) |
+| `src/content/boards/` | job-board readers for "Check fit" / "Save" (WP-70: LinkedIn, Indeed, Glassdoor, ZipRecruiter, Wellfound, 104, Cake); run only after a toolbar click, no host permission |
 | `src/adapters/_kit/` | field model, setters; `interact.ts` is the only file that presses anything, and it refuses submit-like controls |
-| `src/adapters/intl/` | Greenhouse, Lever, Ashby (WP-70 adds the rest) |
-| `src/adapters/cn/` | GoApply portals (WP-71; empty seam) |
+| `src/adapters/intl/` | Greenhouse, Lever, Ashby; Workday (multi-page), SmartRecruiters, iCIMS, Workable, Taleo, SuccessFactors; label-based generic for Jobvite, BambooHR, Recruitee (WP-70) |
+| `src/adapters/cn/` | GoApply portals: Moka, Beisen, Feishu, Dayee, plus a label-based fallback (WP-71) |
 | `src/brands/` | per-brand build values; names and hosts come from the brand registry |
 | `src/mapping/` | label → field key, protected questions, value resolution |
 | `src/i18n/` | strings; English is authored in `i18n/staging/extension.en.json` |

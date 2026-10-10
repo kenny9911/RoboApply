@@ -12,7 +12,7 @@
 //     phone, links Google/LINE/WeChat, or finishes onboarding; it grants the
 //     invite credits at once when they are due (otherwise the
 //     growth.referralRisk worker gets there within its polling schedule).
-//   - createInvitesAdminRouter: held rewards review (mount requested from INT).
+//   - createInvitesAdminRouter: held rewards review (mounted as growth.referrals.admin).
 //
 // Push-model seams (ruling C20):
 //   - markChecklistStep(userId, step): WP-34 ('save_job'), WP-36a ('tailor'),

@@ -29,7 +29,9 @@ model RAJobInteraction {
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   jobId         String
   /// 'view' | 'save' | 'unsave' | 'hide' | 'unhide' | 'report' | 'apply_click' |
-  /// 'applied' | 'unapplied' | 'share' | 'copilot_open'
+  /// 'applied' | 'unapplied' | 'share' | 'copilot_open' |
+  /// 'admin_review' (WP-74 interim job decision, under the admin's userId,
+  /// until features/admin/reports.ts moves to RAJobReview)
   kind          String
   reasonCode    String?
   detail        Json?
@@ -39,6 +41,8 @@ model RAJobInteraction {
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([jobId, kind])
+  // SCHEMA-5 (SR-74-3): the admin reported-jobs read (kind = 'report', newest).
+  @@index([kind, createdAt])
 }
 
 /// A ranked, paginated snapshot of the feed (ARCH §4.8).

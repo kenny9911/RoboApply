@@ -19,9 +19,10 @@ function status(): StatusResponse {
   return { connected: true, needsReconnect: false, brand: 'roboapply', version: '0.1.0', webOrigin: 'https://www.roboapply.io' };
 }
 
-function setup(opts: { fit?: FitChip | null; saveOk?: boolean } = {}) {
-  const doc = parseIntlFixture('boards', 'linkedin-view');
-  const controller = createContentController({ doc, href: () => URL_VIEW, set: 'intl', dev: false, mount: vi.fn() });
+function setup(opts: { fit?: FitChip | null; saveOk?: boolean; url?: string; fixture?: string } = {}) {
+  const href = opts.url ?? URL_VIEW;
+  const doc = parseIntlFixture('boards', opts.fixture ?? 'linkedin-view');
+  const controller = createContentController({ doc, href: () => href, set: 'intl', dev: false, mount: vi.fn() });
   let injected = false;
   const sent: InternalMessage[] = [];
   const tabMessages: ContentMessage[] = [];
@@ -33,7 +34,7 @@ function setup(opts: { fit?: FitChip | null; saveOk?: boolean } = {}) {
       if (msg.type === 'api' && msg.call.op === 'saveJob') return opts.saveOk === false ? { ok: false, code: 'rate_limited', status: 429 } : { ok: true, data: { jobId: 'j1', trackerEntryId: 't1', matched: null } };
       return { ok: true, data: null };
     }),
-    activeTab: async () => ({ id: 3, url: URL_VIEW }),
+    activeTab: async () => ({ id: 3, url: href }),
     // No content script runs on a job board until the popup injects it.
     tabMessage: vi.fn(async (_id: number, msg: ContentMessage) => {
       tabMessages.push(msg);
@@ -107,16 +108,37 @@ describe('Popup on a job board', () => {
     expect(sent.some((m) => m.type === 'api' && m.call.op === 'pageJob')).toBe(false);
   });
 
-  // R3 (INT): until the controller's page.read uses boardPageJob(href, doc),
-  // a search page sends its full URL. Then: setup with href
-  // https://www.linkedin.com/jobs/search/?currentJobId=3912345678&keywords=data%20analyst
-  // and expect body.url === 'https://www.linkedin.com/jobs/view/3912345678/'.
-  it.todo('R3: Check fit on a LinkedIn search page sends the job’s own URL, never the search terms');
+  // R3 (applied at the Wave 5 gate): the controller's page.read uses boardPageJob.
+  it('R3: Check fit on a LinkedIn search page sends the job’s own URL, never the search terms', async () => {
+    const { d, sent } = setup({ url: 'https://www.linkedin.com/jobs/search/?currentJobId=3912345678&keywords=data%20analyst', fixture: 'linkedin-search' });
+    render(<Popup deps={d} />);
+    const button = await screen.findByRole('button', { name: 'Check fit' });
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    await waitFor(() => expect(sent.some((m) => m.type === 'api' && m.call.op === 'pageJob')).toBe(true));
+    const call = sent.find((m) => m.type === 'api' && m.call.op === 'pageJob') as Extract<InternalMessage, { type: 'api' }>;
+    expect((call.call as { body: { url: string } }).body.url).toBe('https://www.linkedin.com/jobs/view/3912345678/');
+    expect(JSON.stringify(call.call)).not.toMatch(/keywords|data%20analyst/);
+  });
 });
 
 describe('Popup on a supported form site with no form open', () => {
-  // R7 (INT): the popup should use intlFormSiteForUrl() so a Workday job
-  // description page (https://acme.wd5.myworkdayjobs.com/en-US/careers/job/123)
-  // says to open the application form, and never offers "Request this site".
-  it.todo('R7: Workday job description page shows the open-the-form state, not Request this site');
+  // R7 (applied at the Wave 5 gate): the popup uses intlFormSiteForUrl().
+  it('R7: Workday job description page shows the open-the-form state, not Request this site', async () => {
+    const url = 'https://acme.wd5.myworkdayjobs.com/en-US/careers/job/123';
+    const d: PopupDeps = {
+      send: vi.fn(async (msg: InternalMessage) => (msg.type === 'status' ? status() : { ok: true, data: null })),
+      activeTab: async () => ({ id: 4, url }),
+      tabMessage: vi.fn(async () => ({ siteName: null })),
+      inject: vi.fn(async () => true),
+      openTab: vi.fn(),
+      close: vi.fn(),
+      adapterSet: 'intl',
+    };
+    render(<Popup deps={d} />);
+    expect(await screen.findByText('On Workday, open the application form, then choose Fill this form.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Request this site' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Check fit' })).toBeNull();
+  });
 });

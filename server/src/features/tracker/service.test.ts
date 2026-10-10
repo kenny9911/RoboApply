@@ -11,6 +11,7 @@ vi.mock('../../services/LoggerService.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+import { Prisma } from '../../generated/prisma/client.js';
 import { createFakePrisma } from '../../test/fakePrisma.js';
 import { createTrackerCore, TrackerDuplicateError, TrackerInvalidInputError, TrackerNotFoundError, type TrackerDb } from './service.js';
 import type { TrackerMarket } from './stages.js';
@@ -412,5 +413,17 @@ describe('follow-ups and summary', () => {
     await core.patch('u1', id, { status: 'first_call' });
     const facts = await core.weeklyFacts('u1', '2026-10-04');
     expect(facts).toMatchObject({ weekStart: '2026-10-04', weekEnd: '2026-10-10', applied: 1, interviews: 1, offers: 0, ended: 0 });
+  });
+});
+
+describe('updateOffer (WP-64 seam)', () => {
+  it('writes Prisma.DbNull, never a literal null, when the offer is cleared (REQ-64-05)', async () => {
+    const entry = await core.create('u1', { jobId: 'job1' });
+    await core.updateOffer('u1', entry.id, { base: 100000, currency: 'USD', period: 'year' });
+    const update = vi.spyOn(fake.rATrackerEntry, 'update');
+    await core.updateOffer('u1', entry.id, null);
+    const data = (update.mock.calls.at(-1)?.[0] as { data: Record<string, unknown> }).data;
+    expect(data.offer).toBe(Prisma.DbNull);
+    expect(events(entry.id).map((e) => [e.kind, e.toValue])).toContainEqual(['offer', 'cleared']);
   });
 });

@@ -118,6 +118,7 @@
       "saved": "Saved to your jobs. Only you can see it.",
       "noFit": "No fit for this job yet. Open it in %BRAND% to see one.",
       "noJobFound": "No job found on this page.",
+      "openFormSite": "On {site}, open the application form, then choose Fill this form.",
       "plannedSite": "Forms on {site} can't be filled yet.",
       "otherSite": "Forms on this site can't be filled yet.",
       "requestSite": "Request this site",

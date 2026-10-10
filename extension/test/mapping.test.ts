@@ -121,6 +121,7 @@ describe('protectedQuestionType', () => {
         'sponsorship',
         'convicted',
         'gender',
+        'date of birth',
         'disability',
         'veteran',
         'current salary',

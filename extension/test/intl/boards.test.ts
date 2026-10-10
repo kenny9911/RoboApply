@@ -257,12 +257,16 @@ describe('board readers run only after a user click', () => {
     spy.mockRestore();
   });
 
-  // R3 (INT): the content controller's page.read still sends apiPageUrl(href)
-  // — the full page URL — for board pages. Once it calls boardPageJob(href,
-  // doc) this becomes a real test: load linkedin-search with href
-  // …/jobs/search/?currentJobId=3912345678&keywords=data%20analyst and expect
-  // the sent body.url to be https://www.linkedin.com/jobs/view/3912345678/.
-  it.todo('R3: page.read on a board search page sends the canonical job URL (controller wiring)');
+  // R3 (applied at the Wave 5 gate): the controller's page.read uses
+  // boardPageJob(href, doc) on boards, so the search terms never leave.
+  it('R3: page.read on a board search page sends the canonical job URL (controller wiring)', () => {
+    const href = 'https://www.linkedin.com/jobs/search/?currentJobId=3912345678&keywords=data%20analyst&geoId=1&trk=public_jobs';
+    const controller = createContentController({ doc: loadIntlFixture('boards', 'linkedin-search'), href: () => href, set: 'intl', dev: false, mount: vi.fn() });
+    controller.init();
+    const res = controller.handle({ type: 'page.read' }) as { job: { url: string } | null };
+    expect(res.job?.url).toBe('https://www.linkedin.com/jobs/view/3912345678/');
+    expect(JSON.stringify(res.job)).not.toMatch(/keywords|data%20analyst|trk=|geoId/);
+  });
 
   it('reader and helper sources send nothing, listen to nothing and score nothing', () => {
     const dir = resolve(__dirname, '../../src/content/boards');

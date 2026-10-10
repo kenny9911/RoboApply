@@ -335,6 +335,29 @@ describe('GET /jobs/:id (service)', () => {
     expect((await off.service.get('u1', 'j1')).people).toEqual({ mode: 'off', searchLinks: [] });
   });
 
+  // Wave 5 gate: the registered check needs the brand's market list, an
+  // application URL the adapter has a host permission for, and no
+  // page-by-page form (R4, WP-93).
+  it('"Fill this form" only where the brand’s extension runs on the application page', async () => {
+    const { EXTENSION_ATS_TYPES_BY_MARKET, extensionOffersFill } = await import('../../extension/contract.js');
+    const deps = { extensionAts: () => new Set<string>([...EXTENSION_ATS_TYPES_BY_MARKET.intl, ...EXTENSION_ATS_TYPES_BY_MARKET.cn]), extensionFillsJob: () => extensionOffersFill };
+    const supported = async (brand: typeof intl, over: Record<string, unknown>) => {
+      const s = setup({ brand, jobs: [job({ market: brand.market, ...over })], deps: brand === cn ? { ...deps, env: { CN_RECRUITMENT_INFO_MODE: 'licensed' } } : deps });
+      const detail = (await s.service.get('u1', 'j1')).autofill.supported;
+      const click = (await s.service.recordApplyClick('u1', 'j1')).extensionSupported;
+      expect(click).toBe(detail);
+      return detail;
+    };
+    expect(await supported(intl, { atsType: 'greenhouse', applyUrl: 'https://boards.greenhouse.io/acme/jobs/1' })).toBe(true);
+    expect(await supported(intl, { atsType: 'smartrecruiters', applyUrl: 'https://careers.smartrecruiters.com/Acme/1' })).toBe(false);
+    expect(await supported(intl, { atsType: 'smartrecruiters', applyUrl: 'https://jobs.smartrecruiters.com/Acme/1' })).toBe(true);
+    expect(await supported(intl, { atsType: 'workday', applyUrl: 'https://acme.wd5.myworkdayjobs.com/External/job/1' })).toBe(false);
+    expect(await supported(intl, { atsType: 'successfactors', applyUrl: 'https://career5.sapsf.eu/career?company=acme' })).toBe(false);
+    expect(await supported(cn, { atsType: 'feishu', applyUrl: 'https://jobs.bytedance.com/campus/position/1' })).toBe(false);
+    expect(await supported(cn, { atsType: 'feishu', applyUrl: 'https://acme.jobs.feishu.cn/index/position/1' })).toBe(true);
+    expect(await supported(cn, { atsType: 'greenhouse', applyUrl: 'https://boards.greenhouse.io/acme/jobs/1' })).toBe(false);
+  });
+
   it('GoApply recruitment-info mode off (R-14, R41-1b): a third-party posting is a 404 everywhere; the user’s own import still opens', async () => {
     const gohire = job({ id: 'gh1', market: 'cn', sourceBoard: 'gohire', sourceName: 'GoHire', fromRecruiterBank: true });
     const own = job({ id: 'own1', market: 'cn', visibility: 'private', ownerUserId: 'u1', sourceBoard: 'user_import' });

@@ -15,6 +15,7 @@ export {
 export { SENSITIVE_FILL_CONSENT, useSensitiveFillConsent } from './useSensitiveFillConsent';
 export {
   EXTENSION_ATS_BY_BRAND,
+  EXTENSION_PER_PAGE_ATS,
   __setExtensionBridge,
   browserSupport,
   compareVersions,

@@ -14,7 +14,7 @@ import { getCurrentBrand } from '../../platform/brand/brandContext.js';
 import type { ProductBrand } from '../../platform/brand/registry.js';
 import { requireFlag } from '../../platform/flags.js';
 import { parseBody, requireUserId, route } from '../../platform/http.js';
-import { rateLimit, MINUTE } from '../../platform/ratelimit/index.js';
+import { rateLimit, rateLimitWindows } from '../../platform/ratelimit/index.js';
 import type { FeatureRouterDeps } from '../index.js';
 import {
   RegenerateRecoveryBodySchema,
@@ -62,7 +62,6 @@ function localeOf(req: Request): string | null {
 }
 
 /** 10 code checks per 15 minutes per user (enrol confirm, disable, new recovery codes). */
-const CODE_CHECK_WINDOWS = [{ limit: 10, windowSec: 15 * MINUTE }] as const;
 
 export function createTwoFactorRouter(deps: AccountV2RouterDeps = {}): Router {
   const router = Router();
@@ -70,7 +69,7 @@ export function createTwoFactorRouter(deps: AccountV2RouterDeps = {}): Router {
   const on = requireFlag('totp', { env: deps.env });
   const svc = () => deps.twoFactor ?? twoFactorServiceInstance();
   const codeLimit: RequestHandler[] =
-    deps.rateLimits === false ? [] : [rateLimit({ name: 'totpCodePerUser', windows: CODE_CHECK_WINDOWS, by: 'user', failMode: 'closed' })];
+    deps.rateLimits === false ? [] : [rateLimit({ name: 'totpCodePerUser', windows: rateLimitWindows('totpCodePerUser'), by: 'user', failMode: 'closed' })];
 
   router.get('/', ...auth, on, route(async (req) => svc().status(requireUserId(req), brandOf(req))));
 
@@ -123,7 +122,6 @@ export function createTwoFactorRouter(deps: AccountV2RouterDeps = {}): Router {
 }
 
 /** 10 confirmations per 15 minutes per user (codes also stop after 5 wrong tries). */
-const CONFIRM_WINDOWS = [{ limit: 10, windowSec: 15 * MINUTE }] as const;
 
 export function createStudentRouter(deps: AccountV2RouterDeps = {}): Router {
   const router = Router();
@@ -131,7 +129,7 @@ export function createStudentRouter(deps: AccountV2RouterDeps = {}): Router {
   const on = requireFlag('student', { env: deps.env });
   const svc = () => deps.student ?? studentServiceInstance();
   const confirmLimit: RequestHandler[] =
-    deps.rateLimits === false ? [] : [rateLimit({ name: 'studentConfirmPerUser', windows: CONFIRM_WINDOWS, by: 'user', failMode: 'closed' })];
+    deps.rateLimits === false ? [] : [rateLimit({ name: 'studentConfirmPerUser', windows: rateLimitWindows('studentConfirmPerUser'), by: 'user', failMode: 'closed' })];
 
   router.get('/', ...auth, on, route(async (req) => svc().status(requireUserId(req))));
 

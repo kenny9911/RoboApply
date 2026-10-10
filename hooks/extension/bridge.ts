@@ -45,13 +45,35 @@ export const EXTENSION_ATS_BY_BRAND: Record<BrandId, ReadonlyArray<{ type: strin
     { type: 'greenhouse', name: 'Greenhouse' },
     { type: 'lever', name: 'Lever' },
     { type: 'ashby', name: 'Ashby' },
+    { type: 'workday', name: 'Workday' },
+    { type: 'smartrecruiters', name: 'SmartRecruiters' },
+    { type: 'icims', name: 'iCIMS' },
+    { type: 'workable', name: 'Workable' },
+    { type: 'taleo', name: 'Taleo' },
+    { type: 'successfactors', name: 'SuccessFactors' },
   ],
-  goapply: [],
+  goapply: [
+    { type: 'moka', name: 'Moka' },
+    { type: 'beisen', name: 'Beisen' },
+    { type: 'feishu', name: 'Feishu' },
+    { type: 'dayee', name: 'Dayee' },
+  ],
 };
 
-/** Whether the brand's extension can fill this ATS type. */
+/**
+ * Forms filled page by page: until one run covers a whole application (R4,
+ * WP-93) every page reserves its own autofill credit, so job pages do not
+ * offer the extension for them. Mirrors the server's
+ * `EXTENSION_PER_PAGE_ATS_TYPES` (a test keeps them equal).
+ */
+export const EXTENSION_PER_PAGE_ATS: readonly string[] = ['workday', 'icims', 'taleo', 'successfactors'];
+
+/**
+ * Whether a job page offers the brand's extension for this ATS type. The
+ * server's `autofill.supported` also checks the application URL's host.
+ */
 export function extensionFillsAts(brand: BrandId, atsType: string | null | undefined): boolean {
-  return !!atsType && (EXTENSION_ATS_BY_BRAND[brand] ?? []).some((a) => a.type === atsType);
+  return !!atsType && !EXTENSION_PER_PAGE_ATS.includes(atsType) && (EXTENSION_ATS_BY_BRAND[brand] ?? []).some((a) => a.type === atsType);
 }
 
 /** What this browser can do with an extension. */

@@ -13,6 +13,8 @@
 //   - jobs.companies: the real CompanyReadService over a fake database holding
 //     one public GoHire posting, read by a signed-in user. Mode-gated since
 //     the Wave 3 gate applied Request R41-1 (the router ANDs cnPostingsWhere);
+//   - offers (WP-64): the benchmark's posted pay over a fake database holding
+//     MIN_SAMPLE public GoHire postings with pay (Wave 5 gate);
 //   - NOT_EXERCISED readers (tracker, match, seeker alerts, saved searches)
 //     need data seeded through their own seams: it.todo with the owner WP.
 
@@ -26,6 +28,10 @@ import { createCompanyReadService, type CompaniesDb } from '../../../jobs/compan
 import { createJobDetailService, type JobDetailDb } from '../../../jobs/detail/service.js';
 import { getCurrentBrandOrDefault } from '../../../../platform/brand/index.js';
 import { createFakePrisma } from '../../../../test/fakePrisma.js';
+import { MIN_SAMPLE } from '../../../../platform/http.js';
+import { createOffersRouter, createOffersService, type OfferBenchmark } from '../../../offers/index.js';
+import { createPrismaPostedPay, type PostedPayDb } from '../../../offers/postedRange.js';
+import type { TrackerEntryView } from '../../../tracker/index.js';
 
 const GA = 'goapply.localhost:3621';
 /** Routers that only ever return third-party postings: gated as a whole. */
@@ -96,6 +102,8 @@ function baseDeps(env: Record<string, string>): FeatureRouterDeps {
  *     limiter and phone gate — the mode-on check only asserts "not
  *     feature_disabled", and without these the default service and limiter
  *     reach for the real database;
+ *   - feed.public (WP-78): a failing publicList, an empty stillPublic and a
+ *     pass-through limiter (Wave 5 gate), for the same reason;
  *   - jobs.detail (WP-34): the real JobDetailService over a fake database
  *     holding the viewer's own import at `test-id` (what `fill` calls every
  *     `:id`) and one public GoHire posting at `job_gh`; MATCH's score handler
@@ -136,6 +144,11 @@ function fakeDetailService(env: Record<string, string>) {
 
 function seamsFor(id: string, env: Record<string, string>): Record<string, unknown> {
   if (id === 'feed') return { service: failingFeedService, limiter: () => passThrough, phoneGate: passThrough };
+  // Wave 5 gate (WP-78 request): without these the mode-on case goes through the
+  // real per-IP limiter (an INSERT into RARateCounter) and reads real RAJob rows.
+  if (id === 'feed.public') {
+    return { publicFeed: { publicList: async () => { throw new Error('fake'); }, stillPublic: async () => new Set<string>(), rateLimiter: passThrough } };
+  }
   if (id === 'jobs.detail') {
     const noScore: RequestHandler = (_req, res) => void res.status(204).end();
     return { service: fakeDetailService(env), scoreHandler: noScore, newsLimiter: passThrough };
@@ -257,9 +270,20 @@ function matches(row: Record<string, unknown>, where: Record<string, unknown> | 
     } else if (v !== null && typeof v === 'object' && !(v instanceof Date)) {
       const op = v as Record<string, unknown>;
       const keys = Object.keys(op);
-      if (keys.some((x) => !['in', 'equals', 'not'].includes(x))) throw new Error(`fake where: unsupported operator on ${k}: ${keys.join(',')}`);
-      if ('in' in op && !(op.in as unknown[]).includes(row[k])) return false;
-      if ('equals' in op && row[k] !== op.equals) return false;
+      if (keys.some((x) => !['in', 'equals', 'not', 'gt', 'gte', 'has', 'contains', 'mode'].includes(x))) throw new Error(`fake where: unsupported operator on ${k}: ${keys.join(',')}`);
+      const cell = row[k];
+      const ci = op.mode === 'insensitive';
+      if ('in' in op && !(op.in as unknown[]).includes(cell)) return false;
+      if ('equals' in op) {
+        const eq = op.equals;
+        // Prisma.DbNull / JsonNull are sentinel objects: they match a null cell.
+        const nullSentinel = eq !== null && typeof eq === 'object' && !Array.isArray(eq) && !(eq instanceof Date);
+        if (nullSentinel ? cell != null : Array.isArray(eq) ? JSON.stringify(cell) !== JSON.stringify(eq) : ci && typeof cell === 'string' ? cell.toLowerCase() !== String(eq).toLowerCase() : cell !== eq) return false;
+      }
+      if ('gt' in op && !(cell != null && (cell as number) > (op.gt as number))) return false;
+      if ('gte' in op && !(cell != null && (cell as number) >= (op.gte as number))) return false;
+      if ('has' in op && !(Array.isArray(cell) && cell.includes(op.has))) return false;
+      if ('contains' in op && !(typeof cell === 'string' && (ci ? cell.toLowerCase().includes(String(op.contains).toLowerCase()) : cell.includes(String(op.contains))))) return false;
       if ('not' in op && row[k] === op.not) return false;
     } else if ((row[k] ?? null) !== v) {
       return false;
@@ -369,6 +393,93 @@ describe('jobs.companies on GoApply (signed-in viewer)', () => {
       expect(jobs.status).toBe(200);
       expect(thirdPartyPostings(jobs.body)).toEqual([]);
       expect(profile.body.data?.openJobs?.value ?? 0).toBe(0);
+    } finally {
+      await h.close();
+    }
+  });
+});
+
+// ── offers: the benchmark's posted pay (Wave 5 gate) ────────────────────────
+
+/** MIN_SAMPLE public GoHire postings for the offer's role, with pay in the offer's currency. */
+const GOHIRE_PAID = Array.from({ length: MIN_SAMPLE }, (_v, i) => ({
+  ...GOHIRE_JOB,
+  id: `job_pay_${i}`,
+  closedAt: null,
+  fraudFlags: null,
+  taxonomyIds: ['product_manager'],
+  primaryTaxonomyId: 'product_manager',
+  locationCountry: null,
+  locationCity: null,
+  salaryMin: 15000 + i * 100,
+  salaryMax: 20000 + i * 100,
+  salaryCurrency: 'CNY',
+  salaryPeriod: 'month',
+}));
+
+function fakePostedPayDb(): PostedPayDb {
+  const jobs = GOHIRE_PAID as Array<Record<string, unknown>>;
+  const pick = (j: Record<string, unknown>, select: Record<string, true>) => Object.fromEntries(Object.keys(select).map((k) => [k, j[k] ?? null]));
+  return {
+    rAJob: {
+      findMany: async ({ where, select, take }) => jobs.filter((j) => matches(j, where as Record<string, unknown>)).slice(0, take).map((j) => pick(j, select)) as never,
+      count: async ({ where }) => jobs.filter((j) => matches(j, where as Record<string, unknown>)).length,
+      findFirst: async () => null,
+    },
+  };
+}
+
+const OFFER_ENTRY = {
+  id: 'te_offer',
+  userId: 'u1',
+  jobId: null,
+  status: 'offer',
+  job: null,
+  externalSnapshot: { title: '产品经理', companyName: '示例科技有限公司' },
+  offer: { base: 18000, currency: 'CNY', period: 'month' },
+  createdAt: '2026-10-01T00:00:00.000Z',
+  updatedAt: '2026-10-01T00:00:00.000Z',
+} as unknown as TrackerEntryView;
+
+async function offersHarness(env: Record<string, string>): Promise<RouteHarness> {
+  const service = createOffersService({
+    tracker: { entries: async () => [OFFER_ENTRY], entry: async () => OFFER_ENTRY, updateOffer: async () => undefined },
+    postedPay: createPrismaPostedPay(async () => fakePostedPayDb(), { env }),
+    market: () => 'cn',
+    now: () => new Date('2026-10-10T00:00:00Z'),
+    aiAvailable: async () => false,
+    write: async () => {
+      throw new Error('no model in this test');
+    },
+  });
+  const router = createOffersRouter(baseDeps(env), { service, phoneGate: passThrough, limiter: () => passThrough });
+  return startRouteHarness({ env, mounts: [[mountOf('offers').path, router]] });
+}
+
+async function readBenchmark(h: RouteHarness) {
+  return h.request<{ data?: OfferBenchmark }>('GET', `${mountOf('offers').path}/te_offer/benchmark`, { host: GA });
+}
+
+describe('offers on GoApply: GET /offers/:id/benchmark', () => {
+  it('control: with postings allowed, the GoHire postings give the posted range (the check below is not vacuous)', async () => {
+    const h = await offersHarness(MODE_ON);
+    try {
+      const res = await readBenchmark(h);
+      expect(res.status).toBe(200);
+      expect(res.body.data?.scope.taxonomyId).toBe('product_manager');
+      expect(res.body.data?.totalCount).toBe(MIN_SAMPLE);
+      expect(res.body.data?.postedRange?.sampleSize).toBe(MIN_SAMPLE);
+    } finally {
+      await h.close();
+    }
+  });
+
+  it('mode off: no third-party posting is counted and no posted range is shown', async () => {
+    const h = await offersHarness(MODE_OFF);
+    try {
+      const res = await readBenchmark(h);
+      expect(res.status).toBe(200);
+      expect(res.body.data).toMatchObject({ totalCount: 0, listedCount: 0, postedRange: null });
     } finally {
       await h.close();
     }

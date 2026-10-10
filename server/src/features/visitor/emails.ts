@@ -9,10 +9,11 @@
 // for a CONFIRMED subscription of this brand (WP-39b's gate). We also check
 // the subscription status ourselves before sending.
 //
-// Strings: `visitor.email.*` in the email bundles. Until INT copies
-// `VISITOR_EMAIL_EN` into server/src/i18n/email/staging/visitor.en.json (a path
-// outside WP-78's ownership; handoff request), the English below is the
-// fallback, formatted with the same ICU formatter and %BRAND% substitution.
+// Strings: `visitor.email.*` in the email bundles
+// (server/src/i18n/email/staging/visitor.en.json, copied from
+// `VISITOR_EMAIL_EN` at the Wave 5 gate; keep the two equal until INT merges
+// staging). The English below stays the fallback, formatted with the same ICU
+// formatter and %BRAND% substitution.
 //
 // Honesty: counts are real counts of matching jobs; pay only as the posting
 // lists it; no fit (there is no profile); never a zero-job email.

@@ -258,16 +258,18 @@ describe('ExtensionPage', () => {
   it('lists the sites this brand’s extension fills', async () => {
     fakeExtension({ installed: false });
     renderWithBrand(<ExtensionPage />, { flags: { extension: true } });
-    expect(await screen.findByText(/Application forms on Greenhouse, Lever,? and Ashby\./)).toBeInTheDocument();
+    // Wave 5 gate: WP-70's adapters joined the RoboApply list.
+    expect(await screen.findByText(/Application forms on Greenhouse, Lever, Ashby, Workday, SmartRecruiters, iCIMS, Workable, Taleo,? and SuccessFactors\./)).toBeInTheDocument();
     expect(screen.getByText(/looks for the application form when the page opens/)).toBeInTheDocument();
   });
 
-  it('GoApply lists no supported sites (its build has no Greenhouse / Lever / Ashby adapter)', async () => {
+  it('GoApply lists its mainland portals only (WP-71), never Greenhouse / Lever / Ashby', async () => {
     vi.stubEnv('NEXT_PUBLIC_CN_EXT_ID', 'cnextensionidcnextensionidcnexten');
     fakeExtension({ installed: false });
     renderWithBrand(<ExtensionPage />, { brand: 'goapply', flags: { extension: true } });
     expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument();
-    expect(screen.queryByText('Supported sites')).toBeNull();
+    expect(screen.getByText(/Moka/)).toBeInTheDocument();
+    expect(screen.getByText(/Dayee/)).toBeInTheDocument();
     expect(screen.queryByText(/Greenhouse/)).toBeNull();
   });
 

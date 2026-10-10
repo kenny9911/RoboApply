@@ -25,6 +25,8 @@ const GOOD = {
   CN_S3_ACCESS_KEY_ID: 'id',
   CN_S3_SECRET_ACCESS_KEY: 'secret',
   CN_CONTENT_SAFETY_PROVIDER: 'aliyun_green',
+  ALIYUN_GREEN_ACCESS_KEY_ID: 'green-id',
+  ALIYUN_GREEN_ACCESS_KEY_SECRET: 'green-secret',
   CN_EMAIL_TRANSPORT: 'aliyun_dm',
 };
 
@@ -153,6 +155,13 @@ describe('DEPLOY_REGION=cn-mainland', () => {
   it('requires Aliyun Green content safety and refuses offshore email', () => {
     expect(codes({ ...GOOD, CN_CONTENT_SAFETY_PROVIDER: 'keyword_only' })).toEqual(['content_safety_not_aliyun_green']);
     expect(codes({ ...GOOD, CN_EMAIL_TRANSPORT: 'resend' })).toEqual(['cn_email_offshore']);
+  });
+
+  it('requires Aliyun Green to be usable, not just chosen (WP-76 request, Wave 5 gate)', () => {
+    const noKeys = { ...GOOD, ALIYUN_GREEN_ACCESS_KEY_ID: undefined, ALIYUN_GREEN_ACCESS_KEY_SECRET: undefined };
+    expect(codes(noKeys)).toEqual(['content_safety_not_ready']);
+    expect(checkResidency(noKeys).failures.find((f) => f.code === 'content_safety_not_ready')?.message).toContain('ALIYUN_GREEN_ACCESS_KEY_ID');
+    expect(codes({ ...GOOD, ALIYUN_GREEN_REGION: 'ap-southeast-1' })).toEqual(['content_safety_not_ready']);
   });
 
   it('lists every failure at once in the thrown error', () => {

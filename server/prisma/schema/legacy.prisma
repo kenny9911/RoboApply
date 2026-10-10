@@ -358,6 +358,11 @@ model User {
   // The retention job deletes an account 24 months after its last sign-in
   // only once this notice was sent at least 30 days earlier (WP-13 retention).
   inactivityNoticeSentAt DateTime?
+  // Session/bearer tokens issued before this instant are refused (SCHEMA-5,
+  // SR-79-3). Set to now by two-step sign-in enable/disable (account-v2
+  // TwoFactorService), read by requireAuth's `2fa-gate:bearer-jwt` check.
+  // Null = no cut-off.
+  tokensValidAfter       DateTime?
 
   // Jobright clone back-relations (one per RA* model that points at User).
   raProfile              RAProfile?
@@ -414,6 +419,9 @@ model User {
   raCnReferralCodes      RACnReferralCode[] // SCHEMA-4 (SR-54-1)
   raCnReferralReports    RACnReferralReport[] // SCHEMA-4 (SR-54-1)
   raPersonalInfoRequests RAPersonalInfoRequest[]
+  raReferralSignals      RAReferralSignal[] // SCHEMA-5 (SR-60-1)
+  raTwoFactor            RATwoFactor? // SCHEMA-5 (SR-79-1)
+  raStudentVerification  RAStudentVerification? // SCHEMA-5 (SR-79-2)
   raJobsOwned            RAJob[]                  @relation("RAJobOwner")
 
   @@unique([brand, phoneE164])

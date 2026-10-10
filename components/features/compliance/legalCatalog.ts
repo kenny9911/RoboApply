@@ -45,6 +45,7 @@ export const LEGAL_DOC_FILES: Record<LegalMarket, Partial<Record<LegalDocSlug, s
     'ai-content-labels': 'ai-content-labels',
     complaints: 'complaints',
     'referral-terms': 'referral-terms',
+    coaching: 'coaching',
   },
 };
 

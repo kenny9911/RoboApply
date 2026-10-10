@@ -52,6 +52,10 @@ import { runComplianceDaily } from '../features/compliance/cron.js';
 import { runInterviewRetention } from '../features/interview/cron.js';
 import { runToolsPurge } from '../features/tools/cron.js';
 import { runContactsSync } from '../features/network/cron.js';
+import { runAdminHealthEmail } from '../features/admin/index.js';
+import { runAnonAlertDigests } from '../features/visitor/index.js';
+import { pruneReferralSignals } from '../features/growth/index.js';
+import { runWinbackSweep } from '../platform/billing/index.js';
 
 const router = Router();
 
@@ -335,6 +339,9 @@ const queueDrainJob: PlatformCronJob = {
 registerReminderProducer({ name: 'tracker', task: produceTrackerReminders });
 registerReminderProducer({ name: 'agent', task: produceAgentReminders });
 registerReminderProducer({ name: 'campus', task: produceCampusReminders, markets: ['cn'] });
+// Wave 5 gate (WP-79 request): the winback email 30 days after a paid Stripe
+// plan ended, marketing consent only (platform/billing/winback.ts).
+registerReminderProducer({ name: 'winback', task: runWinbackSweep });
 
 /** Every platform cron (TASK_PLAN.md §4.1.d). vercel.json must list each with the same schedule. */
 export const PLATFORM_CRON_JOBS: readonly PlatformCronJob[] = [
@@ -348,9 +355,16 @@ export const PLATFORM_CRON_JOBS: readonly PlatformCronJob[] = [
     [
       { name: 'maintain', task: runJobsMaintain },
       { name: 'toolsPurge', task: runToolsPurge },
+      // Wave 5 gate (WP-74 request): the daily admin health email. A brand step,
+      // so it reads yesterday's day counters before pruneRateCounters below
+      // deletes them.
+      { name: 'adminHealth', task: runAdminHealthEmail },
     ],
     [
       { name: 'pruneRateCounters', run: async () => ({ processed: (await pruneRateCounters()).deleted }) },
+      // Wave 5 gate (WP-60, optional backup to the growth.referralSignalPrune
+      // worker): invite risk signals older than 30 days, every brand.
+      { name: 'pruneReferralSignals', run: async () => ({ processed: (await pruneReferralSignals()).deleted }) },
       { name: 'pruneWorkItems', run: async () => ({ processed: (await pruneWorkItems()).deleted }) },
       // §4.1.d: reservations stuck in `reserved` (a request that died between
       // reserve and commit/release) stop counting against the user's window.
@@ -358,7 +372,13 @@ export const PLATFORM_CRON_JOBS: readonly PlatformCronJob[] = [
     ],
   ),
   brandCronJob('score-precompute', '*/15 * * * *', 'WP-18', [{ name: 'precompute', task: runScorePrecompute }]),
-  brandCronJob('job-alerts', '*/15 * * * *', 'WP-39a', [{ name: 'alerts', task: runJobAlerts }]),
+  // visitor-alerts (WP-78, Wave 5 gate): logged-out alert digests and their
+  // purge; runs in the same process as runJobAlerts, which installs the
+  // email preference gate.
+  brandCronJob('job-alerts', '*/15 * * * *', 'WP-39a', [
+    { name: 'alerts', task: runJobAlerts },
+    { name: 'visitor-alerts', task: runAnonAlertDigests },
+  ]),
   // toolsPurge also runs hourly here (WP-57 request, Wave 4 gate) so a free-tool
   // result never outlives its published 24 h by more than an hour.
   brandCronJob('reminders', '0 * * * *', 'WP-39a', [

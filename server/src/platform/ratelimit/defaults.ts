@@ -72,6 +72,17 @@ export const RATE_LIMITS = {
     { limit: 10, windowSec: MINUTE },
     { limit: 60, windowSec: DAY },
   ],
+  /** Two-step sign-in code checks in settings (enrol/disable/regenerate) per user: 10 per 15 min (WP-79; Wave 5 gate). */
+  totpCodePerUser: [{ limit: 10, windowSec: 15 * MINUTE }],
+  /** Two-step sign-in codes at login per user: 10 per 15 min (WP-79; Wave 5 gate). */
+  totpLoginPerUser: [{ limit: 10, windowSec: 15 * MINUTE }],
+  /** Student school-email code sends per user: 3/h, 10/day (WP-79; Wave 5 gate). */
+  studentCodePerUser: [
+    { limit: 3, windowSec: HOUR },
+    { limit: 10, windowSec: DAY },
+  ],
+  /** Student school-email code confirmations per user: 10 per 15 min (WP-79; Wave 5 gate). */
+  studentConfirmPerUser: [{ limit: 10, windowSec: 15 * MINUTE }],
 } as const satisfies Record<string, readonly RateWindow[]>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

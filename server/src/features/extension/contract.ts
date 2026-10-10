@@ -269,15 +269,82 @@ export const UninstallSurveyBodySchema = z
 export const SurveyAnswersSchema = z.object({ reasons: z.array(z.string()), note: z.string().optional() }).strict();
 
 /**
- * ATS types each market's extension build can fill (ARCHITECTURE.md §6.2:
- * the GoApply build's host permissions are Moka / Beisen / Feishu / Dayee,
- * which have no adapter until WP-71). The web mirror is
+ * ATS types each market's extension build can fill (ARCHITECTURE.md §6.2).
+ * intl: WP-55b's three plus WP-70's adapters (extension
+ * `INTL_FILLABLE_ATS_TYPES`); cn: WP-71's mainland portals. The label-based
+ * `generic` adapters are never listed. The web mirror is
  * `hooks/extension/bridge.ts#EXTENSION_ATS_BY_BRAND`; a test keeps them equal.
  */
 export const EXTENSION_ATS_TYPES_BY_MARKET = {
-  intl: ['greenhouse', 'lever', 'ashby'],
-  cn: [],
+  intl: ['greenhouse', 'lever', 'ashby', 'workday', 'smartrecruiters', 'icims', 'workable', 'taleo', 'successfactors'],
+  cn: ['moka', 'beisen', 'feishu', 'dayee'],
 } as const satisfies Record<'intl' | 'cn', readonly string[]>;
+
+/**
+ * Where each adapter runs: its manifest match patterns (extension
+ * `adapters/<market>/<type>.ts#hostPatterns`; extension/test/contractParity
+ * keeps them equal). `jobs/normalize/ats.ts` maps more hosts to some types
+ * (jobs.bytedance.com → feishu, sapsf.* → successfactors, myworkday.com →
+ * workday, any *.smartrecruiters.com / *.workable.com) than the adapter has a
+ * host permission for, so a job page offers the extension only when its
+ * application URL matches one of these (Wave 5 gate).
+ */
+export const EXTENSION_ATS_HOST_PATTERNS = {
+  greenhouse: ['https://boards.greenhouse.io/*', 'https://job-boards.greenhouse.io/*', 'https://job-boards.eu.greenhouse.io/*'],
+  lever: ['https://jobs.lever.co/*', 'https://jobs.eu.lever.co/*'],
+  ashby: ['https://jobs.ashbyhq.com/*'],
+  workday: ['https://*.myworkdayjobs.com/*', 'https://*.myworkdaysite.com/*'],
+  smartrecruiters: ['https://jobs.smartrecruiters.com/*'],
+  icims: ['https://*.icims.com/*'],
+  workable: ['https://apply.workable.com/*'],
+  taleo: ['https://*.taleo.net/careersection/*'],
+  successfactors: ['https://*.successfactors.com/career*', 'https://*.successfactors.eu/career*'],
+  moka: ['https://*.mokahr.com/*'],
+  beisen: ['https://*.zhiye.com/*', 'https://*.beisen.com/*'],
+  feishu: ['https://*.jobs.feishu.cn/*'],
+  dayee: ['https://*.dayee.com/*', 'https://*.hotjob.cn/*'],
+} as const satisfies Record<(typeof EXTENSION_ATS_TYPES_BY_MARKET)[keyof typeof EXTENSION_ATS_TYPES_BY_MARKET][number], readonly string[]>;
+
+/**
+ * Forms the user moves through page by page. Until one run covers every
+ * page of one application (R4, WP-93) each page starts its own run and
+ * reserves its own `autofill` credit, so job pages do not offer the
+ * extension for these (the extension still fills them where the user opens
+ * one). Mirrored in `hooks/extension/bridge.ts#EXTENSION_PER_PAGE_ATS`.
+ */
+export const EXTENSION_PER_PAGE_ATS_TYPES = ['workday', 'icims', 'taleo', 'successfactors'] as const;
+
+/** Chrome match-pattern semantics for the https patterns the adapters declare (extension `matchesHostPattern`). */
+export function matchesExtensionHostPattern(url: string, pattern: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  const m = pattern.match(/^(\*|https?):\/\/(\*\.)?([^/]+)(\/.*)$/);
+  if (!m) return false;
+  const [, scheme, anySub, host, path] = m;
+  if (scheme === '*' ? !/^https?:$/.test(u.protocol) : u.protocol !== `${scheme}:`) return false;
+  const h = u.hostname.toLowerCase();
+  const base = host!.toLowerCase();
+  if (!(h === base || (anySub && h.endsWith(`.${base}`)))) return false;
+  const re = new RegExp(`^${path!.split('*').map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`);
+  return re.test(`${u.pathname}${u.search}`);
+}
+
+/**
+ * Whether a job page should offer "Fill this form": the market's extension
+ * fills this ATS, it is not a page-by-page form (R4), and the application
+ * URL is on a host the adapter can run on.
+ */
+export function extensionOffersFill(market: 'intl' | 'cn', atsType: string | null | undefined, applyUrl: string | null | undefined): boolean {
+  if (!atsType || !applyUrl) return false;
+  if (!(EXTENSION_ATS_TYPES_BY_MARKET[market] as readonly string[]).includes(atsType)) return false;
+  if ((EXTENSION_PER_PAGE_ATS_TYPES as readonly string[]).includes(atsType)) return false;
+  const patterns = (EXTENSION_ATS_HOST_PATTERNS as Record<string, readonly string[]>)[atsType] ?? [];
+  return patterns.some((p) => matchesExtensionHostPattern(applyUrl.trim(), p));
+}
 
 /** Area reasons, sent in `details.reason` under a generic platform code. */
 export const EXTENSION_ERROR_CODES = {

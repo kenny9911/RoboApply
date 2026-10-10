@@ -2,8 +2,8 @@
 //
 // Account V2 emails. Transactional: the student verification code (sent to
 // the school address the user typed). Strings: `accountV2.*` in
-// server/src/i18n/email/staging/accountV2.en.json — proposed in
-// ./i18n/email.accountV2.en.json until INT moves it there (WP-79 handoff).
+// server/src/i18n/email/staging/accountV2.en.json (moved there at the
+// Wave 5 gate).
 
 import { heading, paragraph } from '../../platform/email/templates/_shell.js';
 import { defineEmailTemplate } from '../../platform/email/templates/registry.js';

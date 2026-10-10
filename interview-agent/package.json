@@ -6,7 +6,8 @@
   "description": "RoboApply Interview Engine — LiveKit voice worker (Node/TS). The metadata-driven AI interviewer.",
   "scripts": {
     "build": "tsc",
-    "test": "npm run build && node --test test/*.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test test/*.test.mjs src/backends/__tests__/*.test.mjs src/plugins/dashscope/__tests__/*.test.mjs",
     "dev": "npm run build && node dist/main.js dev",
     "start": "node dist/main.js start",
     "console": "npm run build && node dist/main.js console",

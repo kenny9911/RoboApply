@@ -71,15 +71,25 @@ describe('Popup', () => {
     expect(screen.getByText('Check the form, then submit it yourself.')).toBeTruthy();
   });
 
-  it('on a known but unsupported form host: Request this site sends host and URL only', async () => {
-    const { d, sent } = deps({ url: 'https://acme.wd5.myworkdayjobs.com/en-US/careers/job/123?source=x', siteName: null });
+  // Wave 5 gate (WP-70 R1): Workday ships in WP-70, so the unsupported-host
+  // case moves to an unknown careers host; Workday itself is covered below.
+  it('on an unsupported form host: Request this site sends host and URL only', async () => {
+    const { d, sent } = deps({ url: 'https://careers.example.test/apply?source=x', siteName: null });
     render(<Popup deps={d} />);
-    expect(await screen.findByText('Forms on Workday can’t be filled yet.'.replace('’', "'"))).toBeTruthy();
+    expect(await screen.findByText("Forms on this site can't be filled yet.")).toBeTruthy();
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Request this site' }));
     });
-    expect(sent).toContainEqual({ type: 'api', call: { op: 'siteRequest', body: { host: 'acme.wd5.myworkdayjobs.com', url: 'https://acme.wd5.myworkdayjobs.com/en-US/careers/job/123' } } });
+    expect(sent).toContainEqual({ type: 'api', call: { op: 'siteRequest', body: { host: 'careers.example.test', url: 'https://careers.example.test/apply' } } });
     expect(await screen.findByText('Request sent. Thanks.')).toBeTruthy();
+    expect(d.inject).not.toHaveBeenCalled();
+  });
+
+  it('on a supported form site with no form open (Workday job page): says to open the form, never Request this site (WP-70 R7)', async () => {
+    const { d } = deps({ url: 'https://acme.wd5.myworkdayjobs.com/en-US/careers/job/123', siteName: null });
+    render(<Popup deps={d} />);
+    expect(await screen.findByText('On Workday, open the application form, then choose Fill this form.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Request this site' })).toBeNull();
     expect(d.inject).not.toHaveBeenCalled();
   });
 

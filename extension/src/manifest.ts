@@ -10,6 +10,7 @@
 
 import { adapterHostPatterns } from './adapters/registry';
 import { getExtBrand, type BrandId } from './brands/index';
+import { boardDomains } from './content/boards/index';
 
 export { getExtBrand };
 
@@ -28,6 +29,13 @@ export const PERMISSIONS = ['activeTab', 'scripting', 'storage'] as const;
 
 /** Hosts we must never hold a permission for (job boards are read only via activeTab). */
 export const FORBIDDEN_HOST_RE = /linkedin\.|indeed\.|glassdoor\.|<all_urls>|^\*:\/\/\*\/\*$|^https?:\/\/\*\/\*$/i;
+
+/** FORBIDDEN_HOST_RE, plus every job board a reader supports (boardDomains(); WP-70 R8). */
+export function isForbiddenHostPattern(pattern: string): boolean {
+  if (FORBIDDEN_HOST_RE.test(pattern)) return true;
+  const host = pattern.match(/^[^:]+:\/\/(?:\*\.)?([^/:]+)/)?.[1]?.toLowerCase();
+  return Boolean(host) && boardDomains().some((d) => host === d || host!.endsWith(`.${d}`));
+}
 
 function originPattern(origin: string): string {
   const u = new URL(origin);
@@ -75,9 +83,9 @@ export function manifestViolations(manifest: Record<string, unknown>): string[] 
   for (const p of perms) if (!(PERMISSIONS as readonly string[]).includes(p)) out.push(`permission "${p}" is not allowed`);
   if ('optional_permissions' in manifest) out.push('optional_permissions are not used');
   const hosts = [...((manifest.host_permissions as string[]) ?? []), ...((manifest.optional_host_permissions as string[]) ?? [])];
-  for (const h of hosts) if (FORBIDDEN_HOST_RE.test(h)) out.push(`host permission "${h}" is not allowed`);
+  for (const h of hosts) if (isForbiddenHostPattern(h)) out.push(`host permission "${h}" is not allowed`);
   for (const cs of (manifest.content_scripts as Array<{ matches: string[] }>) ?? []) {
-    for (const m of cs.matches) if (FORBIDDEN_HOST_RE.test(m)) out.push(`content script on "${m}" is not allowed`);
+    for (const m of cs.matches) if (isForbiddenHostPattern(m)) out.push(`content script on "${m}" is not allowed`);
   }
   return out;
 }

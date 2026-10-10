@@ -42,6 +42,7 @@ import {
   type SignalRow,
 } from './index.js';
 import type { ReferralSignalDelegate } from './referralSignalStore.js';
+import { Prisma } from '../../generated/prisma/client.js';
 import type { GrowthDb } from './service.js';
 import { loadLegalDoc } from '../compliance/legalDocs.js';
 import { sanitizeTouch } from './attribution.js';
@@ -277,7 +278,15 @@ describe('signal store', () => {
     expect(resolvePrismaSignalStore({ rAReferralSignal: fakeDb().rAReferralSignal })).not.toBeNull();
   });
 
-  it.todo('SR-60-1: record/forUsers/prune against the real RAReferralSignal table (after SCHEMA-5 generates the model)');
+  // SCHEMA-5 applied SR-60-1: the generated client now has the model, so the
+  // default store resolves to the Prisma delegate with no code change. The
+  // live-table run (todo below) needs the pushed table: WP-94's SQL smoke test.
+  it('SR-60-1: the generated client has the RAReferralSignal model', () => {
+    expect(Prisma.ModelName.RAReferralSignal).toBe('RAReferralSignal');
+    expect(Object.keys(Prisma.RAReferralSignalScalarFieldEnum).sort()).toEqual(['brand', 'createdAt', 'deviceHash', 'id', 'ipHash', 'uaHash', 'userId']);
+  });
+
+  it.todo('SR-60-1: record/forUsers/prune against the real RAReferralSignal table (after the SCHEMA-5 push; WP-94 live smoke)');
 });
 
 // ── The inviter's page ───────────────────────────────────────────────────

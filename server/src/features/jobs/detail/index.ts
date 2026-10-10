@@ -7,8 +7,9 @@
 //   - jobDetailService.undoApplied        "Undo · I didn't apply"
 //   - trackerEntryLockKey(userId, jobId)  advisory-lock key every tracker-entry writer
 //                                         takes before creating an entry (WP-38)
-//   - registerExtensionAtsTypes(types)    WP-55a/WP-70 register the ATS types the
-//                                         extension can fill (`extensionSupported`)
+//   - registerExtensionAtsTypes(types, fillsJob?)  WP-55a/WP-70 register the ATS
+//                                         types the extension can fill and the
+//                                         market/host check (`extensionSupported`)
 
 import type { ApplyClickResponse, JobDetailResponse, UndoAppliedResponse } from './contract.js';
 

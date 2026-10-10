@@ -17,10 +17,17 @@ import type { JobRow } from './view.js';
 
 /** ATS types the extension can fill. Empty until the extension registers its adapters (WP-55a/WP-70). */
 const extensionAtsTypes = new Set<string>();
+type ExtensionFillsJob = (market: 'intl' | 'cn', atsType: string, applyUrl: string | null) => boolean;
+let extensionFillsJob: ExtensionFillsJob | null = null;
 
-/** Extension point: the extension area registers the ATS types it can fill. */
-export function registerExtensionAtsTypes(types: Iterable<string>): void {
+/**
+ * Extension point: the extension area registers the ATS types it can fill
+ * and, optionally, the check that the brand's extension runs on a job's
+ * application page (market, adapter host patterns, page-by-page forms).
+ */
+export function registerExtensionAtsTypes(types: Iterable<string>, fillsJob?: ExtensionFillsJob): void {
   for (const t of types) if (t) extensionAtsTypes.add(t);
+  if (fillsJob) extensionFillsJob = fillsJob;
 }
 
 /** A flag the resolver does not know yet (e.g. `companyNews` before INT adds it) is off. */
@@ -61,6 +68,7 @@ function createDefault(): JobDetailServiceImpl {
     marketMeta: (row: JobRow, brand) => cardMeta({ ...row, market: brand.market }, { brand: brand.id, market: brand.market, stage: 'card' }),
     searchNews: (brand, name) => searchCompanyNews(brand, name),
     extensionAts: () => extensionAtsTypes,
+    extensionFillsJob: () => extensionFillsJob,
     log: (message, meta) => {
       // eslint-disable-next-line no-console
       console.warn(`[jobs.detail] ${message}`, meta);

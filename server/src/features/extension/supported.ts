@@ -1,18 +1,19 @@
 // server/src/features/extension/supported.ts — the ATS types the extension
-// can fill today, per market (WP-55b ships the Greenhouse, Lever and Ashby
-// adapters for RoboApply; the GoApply build targets Moka / Beisen / Feishu /
-// Dayee and has no adapter until WP-71). Job detail answers
+// can fill today, per market (WP-55b: Greenhouse, Lever, Ashby; WP-70:
+// Workday, SmartRecruiters, iCIMS, Workable, Taleo, SuccessFactors; WP-71:
+// Moka, Beisen, Feishu, Dayee on GoApply). Job detail answers
 // `autofill.supported` / `extensionSupported` from WP-34's registry, so a
 // job page offers "Fill this form" only where an adapter exists.
 //
-// WP-34's registry (`registerExtensionAtsTypes`) is one brand-agnostic set,
-// so only the RoboApply list is registered there; GoApply's list is empty,
-// and the web button checks the brand's own list too
-// (`extensionAtsTypesFor` / bridge.ts) until the registry takes a market
-// (request to WP-34 in the WP-55a handoff).
+// WP-34's registry takes one brand-agnostic type set (both markets' lists)
+// plus `extensionOffersFill` (Wave 5 gate): the brand's own market list, the
+// application URL on a host the adapter has a permission for
+// (`EXTENSION_ATS_HOST_PATTERNS`), and no page-by-page form until one run
+// covers a whole application (R4, WP-93). The web button also checks the
+// brand's list (`bridge.ts#extensionFillsAts`).
 
 import { registerExtensionAtsTypes } from '../jobs/detail/index.js';
-import { EXTENSION_ATS_TYPES_BY_MARKET } from './contract.js';
+import { EXTENSION_ATS_TYPES_BY_MARKET, extensionOffersFill } from './contract.js';
 
 /** RoboApply's list (kept for existing importers). */
 export const EXTENSION_ATS_TYPES = EXTENSION_ATS_TYPES_BY_MARKET.intl;
@@ -28,5 +29,5 @@ let registered = false;
 export function registerSupportedAtsTypes(): void {
   if (registered) return;
   registered = true;
-  registerExtensionAtsTypes(EXTENSION_ATS_TYPES_BY_MARKET.intl);
+  registerExtensionAtsTypes([...EXTENSION_ATS_TYPES_BY_MARKET.intl, ...EXTENSION_ATS_TYPES_BY_MARKET.cn], extensionOffersFill);
 }

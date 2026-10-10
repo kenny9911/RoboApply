@@ -169,9 +169,17 @@ function project(row: Row | null, select: Record<string, unknown> | undefined): 
   return out;
 }
 
+/** Prisma.DbNull / Prisma.JsonNull: a database reads them back as null. */
+function isPrismaNullSentinel(v: unknown): boolean {
+  const name = (v as { constructor?: { name?: string } } | null)?.constructor?.name;
+  return typeof v === 'object' && v !== null && (name === 'DbNull' || name === 'JsonNull');
+}
+
 function applyUpdate(row: Row, data: Row): void {
   for (const [k, v] of Object.entries(data)) {
-    if (isPlainObject(v) && ('increment' in v || 'decrement' in v || 'set' in v || 'multiply' in v)) {
+    if (isPrismaNullSentinel(v)) {
+      row[k] = null;
+    } else if (isPlainObject(v) && ('increment' in v || 'decrement' in v || 'set' in v || 'multiply' in v)) {
       const cur = Number(row[k] ?? 0);
       if ('set' in v) row[k] = v.set;
       else if ('increment' in v) row[k] = cur + Number(v.increment);

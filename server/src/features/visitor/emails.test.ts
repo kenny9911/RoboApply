@@ -118,3 +118,12 @@ describe('through EmailService', () => {
     expect((sent[0]!.headers ?? {})['List-Unsubscribe']).toBeUndefined();
   });
 });
+
+describe('email strings in the staging bundle (Wave 5 gate)', () => {
+  it('server/src/i18n/email/staging/visitor.en.json equals VISITOR_EMAIL_EN', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const staged = JSON.parse(readFileSync(join(process.cwd(), 'server/src/i18n/email/staging/visitor.en.json'), 'utf8'));
+    expect(staged).toEqual(VISITOR_EMAIL_EN);
+  });
+});

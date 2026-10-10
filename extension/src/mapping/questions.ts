@@ -16,6 +16,11 @@ const RULES: Array<[ProtectedQuestionType, RegExp]> = [
   ['veteran', /veteran|military service|armed forces|退伍/],
   ['disability', /disabilit|残疾|殘疾|身心障礙/],
   ['eeo', /gender|sex\b|race|ethnic|hispanic|latin[oax]|sexual orientation|transgender|pronoun|民族|性别|性別/],
+  // Personal facts (server 'personal', Wave 5 gate): never drafted; after EEO, as on the server.
+  [
+    'personal',
+    /date of birth|birth ?(date|day|year)|\bdob\b|\bage\b|how old|marital|married|religio|family members?|place of (birth|origin)|national id|id (card )?number|social security|\bssn\b|passport number|health (condition|status)|政治面貌|籍贯|籍貫|出生日期|出生年月|生日|年龄|年齡|婚姻|婚否|已婚|未婚|宗教|家庭成员|家庭成員|身份证|身分證|健康状况|健康狀況|党员|黨員/,
+  ],
   ['salary_history', /current (salary|compensation|pay|ctc|base)|previous (salary|compensation|ctc)|salary history|past (salary|compensation)|当前薪|目前薪|現職薪|当前年薪|目前年薪/],
   [
     'salary_expectation',

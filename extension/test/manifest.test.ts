@@ -74,13 +74,22 @@ describe('buildManifest', () => {
     expect(v).toMatch(/indeed/);
     expect(v).toMatch(/<all_urls>/);
   });
+
+  it('manifestViolations refuses every job board a reader supports, not just the fixed list (WP-70 R8)', () => {
+    const m = buildManifest({ brand: 'roboapply', target: 'chrome', dev: false, version: '1.0.0' });
+    const boards = ['https://www.ziprecruiter.com/*', 'https://wellfound.com/*', 'https://www.104.com.tw/*', 'https://www.cake.me/*'];
+    const v = manifestViolations({ ...m, host_permissions: [...(m.host_permissions as string[]), ...boards] });
+    for (const b of boards) expect(v.join('\n')).toContain(b);
+    expect(manifestViolations(m)).toEqual([]);
+  });
 });
 
 describe('registry', () => {
   it('lists planned sites for "Request this site" without the shipped ones', () => {
-    expect(plannedSitesFor('intl').map((p) => p.id)).toEqual(['workday', 'smartrecruiters', 'icims', 'workable', 'taleo', 'successfactors']);
-    expect(plannedSiteForUrl(new URL('https://acme.wd5.myworkdayjobs.com/en-US/careers/job/1'), 'intl')?.siteName).toBe('Workday');
+    // Wave 5 gate (WP-70 R1, WP-71): every planned intl site and Moka shipped.
+    expect(plannedSitesFor('intl').map((p) => p.id)).toEqual([]);
+    expect(plannedSiteForUrl(new URL('https://acme.wd5.myworkdayjobs.com/en-US/careers/job/1'), 'intl')).toBeNull();
     expect(plannedSiteForUrl(new URL('https://boards.greenhouse.io/x'), 'intl')).toBeNull();
-    expect(plannedSiteForUrl(new URL('https://app.mokahr.com/apply/x'), 'cn')?.siteName).toBe('Moka');
+    expect(plannedSiteForUrl(new URL('https://app.mokahr.com/apply/x'), 'cn')).toBeNull();
   });
 });

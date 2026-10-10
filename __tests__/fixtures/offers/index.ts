@@ -14,4 +14,6 @@ export const offersRequests: RequestFixture[] = [
   { contract: 'offers', schema: 'PutOfferBodySchema', value: offerBody },
   { contract: 'offers', schema: 'PutOfferBodySchema', value: { ...offerBody, currency: 'usd' }, valid: false },
   { contract: 'offers', schema: 'CompareOffersBodySchema', value: { trackerEntryIds: ['a', 'b'] } },
+  // REQ-64-06 (Wave 5 gate): the same offer twice is not a comparison.
+  { contract: 'offers', schema: 'CompareOffersBodySchema', value: { trackerEntryIds: ['a', 'a'] }, valid: false },
 ];

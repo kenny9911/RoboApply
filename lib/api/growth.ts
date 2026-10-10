@@ -10,18 +10,16 @@
 //   POST   /api/v1/public/events
 //   GET    /api/v1/roboapply/growth/checklist
 //   POST   /api/v1/roboapply/growth/checklist/dismiss
-//   GET    /api/v1/roboapply/admin/growth/referrals/held         (admin; mount pending, see below)
-//   POST   /api/v1/roboapply/admin/growth/referrals/:id/review   (admin; mount pending, see below)
+//   GET    /api/v1/roboapply/admin/growth/referrals/held         (admin)
+//   POST   /api/v1/roboapply/admin/growth/referrals/:id/review   (admin)
 //
 // There is no "email my friends" call: people share their invite link
 // themselves (copy, the device share sheet, their own mail app, WeChat), so
 // nothing is sent to someone who never asked for it (WP-60).
 //
-// The admin review router (`createInvitesAdminRouter`) is not in
-// FEATURE_MOUNTS yet (features/index.ts is INT's); WP-60 requested the row
-//   { id: 'growth.referrals.admin', area: 'growth', path: a('/growth/referrals'), kind: 'admin', owner: 'WP-60', build: createInvitesAdminRouter }.
-// Until it lands the two admin calls answer 404. INT: when adding the row,
-// switch their doc comments to the standard "`id` — METHOD /path" form.
+// The admin review router (`createInvitesAdminRouter`) is mounted as
+// `growth.referrals.admin` at /api/v1/roboapply/admin/growth/referrals
+// (Wave 5 gate).
 
 import { API_BASE } from '../config';
 import { devBrandHeader } from './client';
@@ -80,14 +78,14 @@ export function dismissChecklist(opts?: CallOptions): Promise<G.ChecklistView> {
   return call<G.ChecklistView>('POST', `/api/v1/roboapply/growth/checklist/dismiss`, opts);
 }
 
-// Admin review of held invite rewards (mount pending; see the header).
+// Admin review of held invite rewards.
 
-/** growth.referrals.admin.held: GET /api/v1/roboapply/admin/growth/referrals/held (mount pending) */
+/** `growth.referrals.admin.held` — GET /api/v1/roboapply/admin/growth/referrals/held */
 export function listHeldReferrals(opts?: CallOptions): Promise<G.HeldReferralsResponse> {
   return call<G.HeldReferralsResponse>('GET', `/api/v1/roboapply/admin/growth/referrals/held`, opts);
 }
 
-/** growth.referrals.admin.review: POST /api/v1/roboapply/admin/growth/referrals/:id/review (mount pending) */
+/** `growth.referrals.admin.review` — POST /api/v1/roboapply/admin/growth/referrals/:id/review */
 export function reviewReferral(id: string, body: In<typeof G.ReferralReviewBodySchema>, opts?: CallOptions): Promise<G.ReferralReviewResponse> {
   return call<G.ReferralReviewResponse>('POST', `/api/v1/roboapply/admin/growth/referrals/${encodeURIComponent(id)}/review`, { ...opts, body });
 }

@@ -68,8 +68,8 @@ export function loginChallengeDeps(): LoginChallengeDeps {
       return Boolean(user && user.isActive !== false && !user.seekerProfile?.deletedAt);
     },
     userAttemptAllowed: async (userId) => {
-      const { consumeRateLimit, rateLimitKey, MINUTE } = await import('../../platform/ratelimit/index.js');
-      const r = await consumeRateLimit({ key: rateLimitKey('totpLoginPerUser', 'user', userId), windows: [{ limit: 10, windowSec: 15 * MINUTE }] });
+      const { consumeRateLimit, rateLimitKey, rateLimitWindows } = await import('../../platform/ratelimit/index.js');
+      const r = await consumeRateLimit({ key: rateLimitKey('totpLoginPerUser', 'user', userId), windows: rateLimitWindows('totpLoginPerUser') });
       return r.allowed;
     },
   };

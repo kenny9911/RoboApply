@@ -139,7 +139,6 @@ const BASE_ROUTE_SAMPLES: Record<string, RouteSample> = {
     body: { key: 'launch.note', brand: 'roboapply', locales: ['en'], content: { en: { title: 'New', body: 'Something new.' } } },
   },
   // growth
-  'growth.invites POST /email': { body: { emails: ['friend@example.test'] } },
   'growth.events POST /': { body: { events: [{ name: 'page_viewed', at: '2026-10-10T00:00:00.000Z' }] } },
   // prep, coaching
   'prep POST /questions/:id/report': { body: { reason: 'wrong' } },

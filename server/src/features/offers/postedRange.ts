@@ -5,7 +5,10 @@
 // Source: our own index only, over the rows every public aggregate uses
 // (TASK_PLAN §2.2): visibility='public' AND isCanonical AND archivedAt IS NULL
 // AND market = brand.market (users' imported jobs never count), still open,
-// posted in the last 365 days; on GoApply also not fraud-flagged. Pay per
+// posted in the last 365 days; on GoApply also not fraud-flagged and only
+// while CN_RECRUITMENT_INFO_MODE lets the brand show third-party postings
+// (`cnPostingsWhere`; mode off → no rows, so no range and no posted pay in
+// the AI facts — the Assistant's salary_context is gated the same way). Pay per
 // posting is the midpoint of its stated range, in the OFFER'S currency, in one
 // period (the offer's own when it has enough rows, else the largest group).
 // Fewer than MIN_SAMPLE (20) rows → no range (null) and only the counts.
@@ -17,7 +20,9 @@
 
 import type { Prisma } from '../../generated/prisma/client.js';
 import { MIN_SAMPLE, meetsMinSample, type Sourced } from '../../platform/http.js';
+import type { EnvSource } from '../../platform/brand/index.js';
 import type { Market } from '../../platform/brand/registry.js';
+import { cnPostingsWhere } from '../cn/jobs/index.js';
 import { NOT_FRAUD_FLAGGED } from '../onboarding-cn/index.js';
 import { bestTaxonomyMatch, getTaxonomyNode } from '../jobs/taxonomy/index.js';
 import type { PostedRange } from './contract.js';
@@ -95,14 +100,18 @@ export function roleScopeFor(job: JobScopeRow | null, fallbackTitle: string | nu
   };
 }
 
-/** The public-aggregate `where` plus the role and place (no currency: that is the "listed" part). */
-export function postedPayWhere(q: Omit<PostedPayQuery, 'currency'>): Prisma.RAJobWhereInput {
+/**
+ * The public-aggregate `where` plus the role and place (no currency: that is
+ * the "listed" part). On GoApply it also ANDs `cnPostingsWhere(null, env)`:
+ * with CN_RECRUITMENT_INFO_MODE off that matches nothing (Wave 5 gate).
+ */
+export function postedPayWhere(q: Omit<PostedPayQuery, 'currency'>, env: EnvSource = process.env): Prisma.RAJobWhereInput {
   const since = new Date(q.now.getTime() - POSTED_LOOKBACK_DAYS * 86_400_000);
   const and: Prisma.RAJobWhereInput[] = [
     { market: q.market, visibility: 'public', isCanonical: true, archivedAt: null, closedAt: null },
     { postedAt: { gte: since } },
   ];
-  if (q.market === 'cn') and.push(NOT_FRAUD_FLAGGED);
+  if (q.market === 'cn') and.push(NOT_FRAUD_FLAGGED, cnPostingsWhere(null, env) as Prisma.RAJobWhereInput);
   if (q.taxonomyId) and.push({ taxonomyIds: { has: q.taxonomyId } });
   else if (q.title) and.push({ title: { contains: q.title, mode: 'insensitive' } });
   if (q.country) and.push({ locationCountry: q.country });
@@ -174,7 +183,7 @@ export interface PostedPaySource {
   summary(q: PostedPayQuery & { preferredPeriod: string }): Promise<PostedPaySummary>;
 }
 
-export function createPrismaPostedPay(getDb: () => Promise<PostedPayDb>): PostedPaySource {
+export function createPrismaPostedPay(getDb: () => Promise<PostedPayDb>, opts: { env?: EnvSource } = {}): PostedPaySource {
   return {
     async jobScope(jobId) {
       const db = await getDb();
@@ -185,7 +194,7 @@ export function createPrismaPostedPay(getDb: () => Promise<PostedPayDb>): Posted
     },
     async summary(q) {
       const db = await getDb();
-      const where = postedPayWhere(q);
+      const where = postedPayWhere(q, opts.env ?? process.env);
       const listedWhere: Prisma.RAJobWhereInput = {
         AND: [where, { salaryCurrency: q.currency }, { OR: [{ salaryMin: { gt: 0 } }, { salaryMax: { gt: 0 } }] }],
       };

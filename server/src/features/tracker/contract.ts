@@ -107,7 +107,11 @@ export const TrackerExternalSnapshotSchema = z
   .passthrough();
 export type TrackerExternalSnapshot = z.infer<typeof TrackerExternalSnapshotSchema>;
 
-/** `RATrackerEntry.offer` (documented JSON column; user-entered): `{ base, currency, period, bonus?, equity?, deadline?, notes? }` */
+/**
+ * `RATrackerEntry.offer` (documented JSON column; user-entered): `{ base, currency, period, bonus?, equity?, deadline?, notes? }`.
+ * Passthrough: WP-64 (offers) also stores `bonusAmount`, `signingBonus`, `hoursPerWeek`, `location`, `startDate` and the
+ * GoApply `cn{…}` block (月薪·N薪, 年终, 五险一金 base, 公积金 %, 户口, 签字费, 期权); see features/offers/contract.ts.
+ */
 export const TrackerOfferSchema = z
   .object({
     base: z.number().positive(),

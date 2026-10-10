@@ -15,7 +15,7 @@
 //     entry to its terminal status, and leaving a terminal status clears it.
 // D1: nothing here applies anywhere; `applied` is only ever what the user did.
 
-import type { Prisma, RATrackerEntry } from '../../generated/prisma/client.js';
+import { Prisma, type RATrackerEntry } from '../../generated/prisma/client.js';
 import type { ExtendedPrismaClient } from '../../lib/prisma.js';
 import { getCurrentBrandOrDefault } from '../../platform/brand/index.js';
 import {
@@ -384,7 +384,9 @@ export function createTrackerCore(deps: TrackerCoreDeps = {}) {
       const before = JSON.stringify(existing.offer ?? null);
       const after = JSON.stringify(body.offer ?? null);
       if (before !== after) {
-        data.offer = body.offer === null ? (null as unknown as Prisma.InputJsonValue) : (body.offer as Prisma.InputJsonValue);
+        // Clearing a `Json?` column needs Prisma.DbNull: Prisma 7 rejects a
+        // literal null there (WP-64 REQ-64-05, Wave 5 gate).
+        data.offer = body.offer === null ? Prisma.DbNull : (body.offer as Prisma.InputJsonValue);
         events.push({ kind: 'offer', toValue: body.offer === null ? 'cleared' : 'set' });
       }
     }

@@ -4,7 +4,7 @@
 // friends (ARCHITECTURE.md §2.12, §3.9; TASK_PLAN.md WP-23, WP-60). Mounts:
 //   /api/v1/roboapply/invites   (seeker; capability `invites` per route; WP-60)
 //   /api/v1/public/events       (public/session; ≤50 events per batch, 120/min/anonId)
-//   /api/v1/roboapply/growth    (seeker; checklist read + dismiss — mount requested from INT)
+//   /api/v1/roboapply/growth    (seeker; checklist read + dismiss)
 //
 // Events stay in our DB (no third-party pixels). For EEA/UK/CH visitors on
 // RoboApply nothing links to an `anonId` before the analytics consent. The
@@ -189,8 +189,8 @@ export interface InviteSharedResponse {
   ok: true;
 }
 
-// Admin review (createInvitesAdminRouter; mount requested from INT at
-// /api/v1/roboapply/admin/growth/referrals).
+// Admin review (createInvitesAdminRouter; mounted at
+// /api/v1/roboapply/admin/growth/referrals, id growth.referrals.admin).
 
 export interface HeldReferralView {
   id: string;

@@ -43,8 +43,12 @@ const PLACEMENT: Record<string, string> = {
   RAProductEvent: 'ra-platform.prisma',
   RASurveyResponse: 'ra-platform.prisma',
   RABrandInvite: 'ra-platform.prisma',
+  RATwoFactor: 'ra-platform.prisma', // SCHEMA-5 (SR-79-1)
+  RAStudentVerification: 'ra-platform.prisma', // SCHEMA-5 (SR-79-2)
+  RAAdminAuditLog: 'ra-platform.prisma', // SCHEMA-5 (SR-74-1)
   // ra-jobs
   RAJob: 'ra-jobs.prisma',
+  RAJobReview: 'ra-jobs.prisma', // SCHEMA-5 (SR-74-2)
   RACompany: 'ra-jobs.prisma',
   RAIngestQuery: 'ra-jobs.prisma',
   RAProviderUsage: 'ra-jobs.prisma',
@@ -118,6 +122,7 @@ const PLACEMENT: Record<string, string> = {
   RAReferral: 'ra-growth.prisma',
   RAAttribution: 'ra-growth.prisma',
   RAGrowthChecklist: 'ra-growth.prisma', // SCHEMA-2 (SR-23-1)
+  RAReferralSignal: 'ra-growth.prisma', // SCHEMA-5 (SR-60-1)
   // ra-prep
   RAInterviewQuestion: 'ra-prep.prisma',
   RAQuestionContribution: 'ra-prep.prisma',
@@ -186,7 +191,11 @@ const SCOPE: Record<string, Scope> = {
   RAProductEvent: 'brand',
   RASurveyResponse: 'brand',
   RABrandInvite: 'brand',
+  RATwoFactor: 'brand', // SCHEMA-5 (SR-79-1)
+  RAStudentVerification: 'brand', // SCHEMA-5 (SR-79-2)
+  RAAdminAuditLog: 'global', // SCHEMA-5 (SR-74-1): admin trail; the subject user carries the brand
   RAJob: 'brand',
+  RAJobReview: 'global', // SCHEMA-5 (SR-74-2): child of RAJob (brand)
   RACompany: 'brand',
   RAIngestQuery: 'brand',
   RAProviderUsage: 'global', // provider quota is per API key, not per brand
@@ -245,6 +254,7 @@ const SCOPE: Record<string, Scope> = {
   RAReferral: 'brand',
   RAAttribution: 'user',
   RAGrowthChecklist: 'user', // SCHEMA-2 (SR-23-1)
+  RAReferralSignal: 'brand', // SCHEMA-5 (SR-60-1)
   RAInterviewQuestion: 'brand',
   RAQuestionContribution: 'brand',
   RAQuestionReport: 'user',

@@ -93,6 +93,19 @@ export function useCreateTrackerEntry() {
   });
 }
 
+/**
+ * After a change made outside the drawer form (the WP-64 offer section writes
+ * through its own API): re-read the entry and its timeline (Wave 5 gate,
+ * REQ-64-02).
+ */
+export function useRefreshTrackerEntry(id: string) {
+  const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: trackerKeys.entry(id) });
+    void qc.invalidateQueries({ queryKey: trackerKeys.events(id) });
+  };
+}
+
 export function useAddTrackerNote(id: string) {
   const qc = useQueryClient();
   return useMutation({

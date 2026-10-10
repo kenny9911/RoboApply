@@ -259,6 +259,7 @@ export const LEGAL_DOC_FILES: Record<'intl' | 'cn', Partial<Record<LegalDoc, str
     'ai-content-labels': 'ai-content-labels',
     complaints: 'complaints',
     'referral-terms': 'referral-terms',
+    coaching: 'coaching',
   },
 };
 

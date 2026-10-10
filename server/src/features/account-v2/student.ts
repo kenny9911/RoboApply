@@ -117,14 +117,8 @@ export function defaultStudentDeps(): StudentDeps {
       return res.status;
     },
     async sendAllowed(userId) {
-      const { consumeRateLimit, rateLimitKey, HOUR, DAY } = await import('../../platform/ratelimit/index.js');
-      const r = await consumeRateLimit({
-        key: rateLimitKey('studentCodePerUser', 'user', userId),
-        windows: [
-          { limit: 3, windowSec: HOUR },
-          { limit: 10, windowSec: DAY },
-        ],
-      });
+      const { consumeRateLimit, rateLimitKey, rateLimitWindows } = await import('../../platform/ratelimit/index.js');
+      const r = await consumeRateLimit({ key: rateLimitKey('studentCodePerUser', 'user', userId), windows: rateLimitWindows('studentCodePerUser') });
       return r.allowed;
     },
   };

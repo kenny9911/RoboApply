@@ -16,7 +16,7 @@
 //     Nothing here sends a message: the person shares the link themselves
 //     (copy, the device share sheet, their own mail app, WeChat).
 //
-//   createInvitesAdminRouter (WP-60) — held invite rewards (mount requested from INT).
+//   createInvitesAdminRouter (WP-60) — held invite rewards (mounted at /admin/growth/referrals).
 //
 // The public events router lives in publicRoutes.ts.
 

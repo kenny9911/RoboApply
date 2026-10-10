@@ -127,6 +127,12 @@ export interface JobDetailServiceDeps {
   searchNews?: (brand: ProductBrand, companyName: string) => Promise<JobDetailNewsItems | null>;
   /** ATS types the extension can fill (WP-55a/WP-70 register them). */
   extensionAts?: () => ReadonlySet<string>;
+  /**
+   * Whether the brand's extension can run on this job's application page
+   * (market list, adapter host patterns, no page-by-page forms until R4).
+   * Registered by the extension area with the types; absent = types only.
+   */
+  extensionFillsJob?: () => ((market: 'intl' | 'cn', atsType: string, applyUrl: string | null) => boolean) | null;
   log?: (message: string, meta: Record<string, unknown>) => void;
 }
 
@@ -172,6 +178,14 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
       log('job detail: optional part failed', { what, error: err instanceof Error ? err.message : String(err) });
       return fallback;
     }
+  }
+
+  /** "Fill this form" is offered: a registered ATS type and, when registered, a page the brand's extension runs on. */
+  function extensionFills(row: JobRow, market: string): boolean {
+    const atsType = row.atsType ?? null;
+    if (!atsType || !(deps.extensionAts?.().has(atsType) ?? false)) return false;
+    const fills = deps.extensionFillsJob?.() ?? null;
+    return fills ? fills(market === 'cn' ? 'cn' : 'intl', atsType, row.applyUrl?.trim() || null) : true;
   }
 
   async function loadJob(userId: string, jobId: string): Promise<JobRow> {
@@ -386,7 +400,7 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
         tracker: toTrackerState(tracker),
         checklist: toChecklist(tracker, tailored?.id ?? null, letter?.id ?? null, practiced),
         similarIds,
-        autofill: { supported: autofillOn && !!atsType && (deps.extensionAts?.().has(atsType) ?? false), atsType },
+        autofill: { supported: autofillOn && extensionFills(row, brand.market), atsType },
         people,
         marketMeta: deps.marketMeta ? deps.marketMeta(row, brand) : {},
       };
@@ -462,7 +476,7 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
       return {
         applyUrl,
         atsType,
-        extensionSupported: extOn && !!atsType && (deps.extensionAts?.().has(atsType) ?? false),
+        extensionSupported: extOn && extensionFills(row, deps.brand().market),
         trackerEntryId: entry.id,
         alreadyApplied: !changed,
       };

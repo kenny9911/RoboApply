@@ -20,6 +20,8 @@ export const PROTECTED_QUESTION_TYPES = [
   'eeo',
   'disability',
   'veteran',
+  /** Birth date, age, marital status, 政治面貌, 籍贯, ID numbers, health: never in a prompt (server contract). */
+  'personal',
   'salary_history',
   'salary_expectation',
   'years_of_experience',
@@ -154,4 +156,9 @@ export const EXTENSION_ERROR_CODES = {
   deviceRevoked: 'device_revoked',
   pairCodeInvalid: 'pair_code_invalid',
   protectedQuestion: 'protected_question',
+  runNotFound: 'run_not_found',
+  noResume: 'no_resume',
+  fileLinkExpired: 'file_link_expired',
+  /** resume-for-job named a job other than the one the autofill run is linked to. */
+  runJobMismatch: 'run_job_mismatch',
 } as const;

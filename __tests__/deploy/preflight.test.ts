@@ -62,13 +62,13 @@ describe('CN-1 preflight', () => {
   });
 
   it('requires Aliyun Green to be READY, not just named (carry-over from WP-24 / WP-15)', () => {
-    // The boot-time residency check passes on the provider name alone…
+    // Since the Wave 5 gate (WP-76 request) the boot-time residency check
+    // asserts readiness too, and the preflight reports it once.
     const keyless = { ...GOOD, ALIYUN_GREEN_ACCESS_KEY_ID: undefined, ALIYUN_GREEN_ACCESS_KEY_SECRET: undefined };
-    expect(checkResidency(keyless).failures).toEqual([]);
-    // …the preflight does not.
-    expect(codes(keyless)).toEqual(['content_safety_not_cn1_ready']);
+    expect(checkResidency(keyless).failures.map((f) => f.code)).toEqual(['content_safety_not_ready']);
+    expect(codes(keyless)).toEqual(['content_safety_not_ready']);
     expect(run(keyless).failures[0]!.message).toMatch(/ALIYUN_GREEN_ACCESS_KEY_ID/);
-    expect(codes({ ...GOOD, ALIYUN_GREEN_REGION: 'ap-southeast-1' })).toEqual(['content_safety_not_cn1_ready']);
+    expect(codes({ ...GOOD, ALIYUN_GREEN_REGION: 'ap-southeast-1' })).toEqual(['content_safety_not_ready']);
   });
 
   it('refuses keyword-only content safety on the mainland', () => {

@@ -53,7 +53,7 @@ import { createEmailPublicRouter, createNotificationsRouter } from './notificati
 import { createPushRouter } from './push/routes.js';
 import { createAnnouncementsRouter } from './announcements/routes.js';
 import { createAnnouncementsAdminRouter } from './announcements/adminRoutes.js';
-import { createGrowthRouter, createInvitesRouter } from './growth/routes.js';
+import { createGrowthRouter, createInvitesAdminRouter, createInvitesRouter } from './growth/routes.js';
 import { createEventsPublicRouter } from './growth/publicRoutes.js';
 import { createInterviewBankRouter } from './prep/routes.js';
 import { createPrepAdminRouter } from './prep/adminRoutes.js';
@@ -168,6 +168,7 @@ export const FEATURE_MOUNTS: readonly FeatureMount[] = [
   { id: 'announcements', area: 'announcements', path: s('/announcements'), kind: 'seeker', owner: 'WP-61', build: createAnnouncementsRouter },
   { id: 'announcements.admin', area: 'announcements', path: a('/announcements'), kind: 'admin', owner: 'WP-61', build: createAnnouncementsAdminRouter },
   { id: 'growth.invites', area: 'growth', path: s('/invites'), kind: 'seeker', owner: 'WP-60', build: createInvitesRouter },
+  { id: 'growth.referrals.admin', area: 'growth', path: a('/growth/referrals'), kind: 'admin', owner: 'WP-60', build: createInvitesAdminRouter },
   { id: 'growth.events', area: 'growth', path: pub('/events'), kind: 'public', owner: 'WP-23', build: createEventsPublicRouter },
   { id: 'growth', area: 'growth', path: s('/growth'), kind: 'seeker', owner: 'WP-23', build: createGrowthRouter },
   { id: 'prep', area: 'prep', path: s('/interview-bank'), kind: 'seeker', owner: 'WP-59', build: createInterviewBankRouter },
