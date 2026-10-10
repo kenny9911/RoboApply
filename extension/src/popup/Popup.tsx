@@ -6,9 +6,15 @@
 // only). On a job board WP-70 supports: "Check fit" / "Save job" — the page
 // is read only after that click (activeTab). Nothing here presses anything on
 // the page.
+// GoApply (adapter set `cn`): the registered content script runs only on the
+// portals it has a host permission for. On any other page the toolbar click
+// itself (activeTab) lets the popup inject the content script once and ask
+// again, so the label-based fallback adapter can find a 网申 form on a
+// company's own career site. No new permission; job boards are left alone.
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
+import { GENERIC_EXCLUDED_DOMAINS } from '../adapters/cn/generic';
 import { intlFormSiteForUrl } from '../adapters/intl/index';
 import { plannedSiteForUrl, type AdapterSet } from '../adapters/registry';
 import { findBoardReader } from '../content/boards/index';
@@ -27,6 +33,19 @@ export interface PopupDeps {
   adapterSet: AdapterSet;
   /** 'cn' (GoApply): AI-scored fit carries the AI-generated label. Defaults to 'intl'. */
   market?: 'intl' | 'cn';
+}
+
+/**
+ * May the popup inject the content script into this page to look for a form?
+ * Only the GoApply build (its fallback adapter reads any 网申 form), only web
+ * pages, and never a job board.
+ */
+export function mayInjectForFallback(url: URL, adapterSet: AdapterSet): boolean {
+  if (adapterSet !== 'cn') return false;
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return false;
+  if (findBoardReader(url)) return false;
+  const host = url.hostname.toLowerCase();
+  return !GENERIC_EXCLUDED_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`));
 }
 
 type PageKind =
@@ -64,7 +83,12 @@ export function Popup({ deps }: { deps: PopupDeps }) {
       setPage({ kind: 'other' });
       return;
     }
-    const ping = (await deps.tabMessage(active.id, { type: 'content.ping' })) as ContentPingResponse | null;
+    let ping = (await deps.tabMessage(active.id, { type: 'content.ping' })) as ContentPingResponse | null;
+    // No content script answered (not one of the registered portals): this
+    // toolbar click grants activeTab, so inject it and ask once more.
+    if (!ping && mayInjectForFallback(url, deps.adapterSet) && (await deps.inject(active.id))) {
+      ping = (await deps.tabMessage(active.id, { type: 'content.ping' })) as ContentPingResponse | null;
+    }
     if (ping?.siteName && !findBoardReader(url)) {
       setPage({ kind: 'form', site: ping.siteName });
       return;

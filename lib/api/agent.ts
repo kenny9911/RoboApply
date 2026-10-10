@@ -22,9 +22,9 @@
 //   GET    /api/v1/roboapply/agent/answers
 //   PUT    /api/v1/roboapply/agent/answers
 //
-// WP-52 routes added after the FND contract (still typed by the mirror types
-// below; INT swaps them for A.*). Their doc lines were switched to the strict
-// "<stub> — METHOD path" form at the Wave 4 gate, so
+// WP-52 routes added after the FND contract (typed by the contract's own
+// exports since WP-93; no mirror types remain in this file). Their doc lines
+// use the strict "<stub> — METHOD path" form, so
 // __tests__/contracts/fixtures.test.ts checks them against the mount table:
 //   POST   /api/v1/roboapply/agent/setup/step
 //   POST   /api/v1/roboapply/agent/list/generate
@@ -39,13 +39,13 @@ import type * as A from './contracts/agent';
 import type * as F from './contracts/feed';
 
 /** `agent.getSettings` — GET /api/v1/roboapply/agent/settings */
-export function getAgentSettings(opts?: CallOptions): Promise<A.AgentSettings> {
-  return call<A.AgentSettings>('GET', `/api/v1/roboapply/agent/settings`, opts);
+export function getAgentSettings(opts?: CallOptions): Promise<A.AgentSettingsResponse> {
+  return call<A.AgentSettingsResponse>('GET', `/api/v1/roboapply/agent/settings`, opts);
 }
 
 /** `agent.putSettings` — PUT /api/v1/roboapply/agent/settings */
-export function putAgentSettings(body: In<typeof A.PutAgentSettingsBodySchema> = {}, opts?: CallOptions): Promise<A.AgentSettings> {
-  return call<A.AgentSettings>('PUT', `/api/v1/roboapply/agent/settings`, { ...opts, body });
+export function putAgentSettings(body: In<typeof A.PutAgentSettingsBodySchema> = {}, opts?: CallOptions): Promise<A.AgentSettingsResponse> {
+  return call<A.AgentSettingsResponse>('PUT', `/api/v1/roboapply/agent/settings`, { ...opts, body });
 }
 
 /** `agent.setup` — GET /api/v1/roboapply/agent/setup */
@@ -64,8 +64,8 @@ export function getSuggestions(query?: SuggestionsQuery, opts?: CallOptions): Pr
   return call<Items<F.FeedItem>>('GET', withQuery(`/api/v1/roboapply/agent/suggestions`, query), opts);
 }
 
-// WP-52 also sends `weekKey` (this week in the user's time zone) and `counts`
-// (per tab, all weeks); both are optional here until its contract merges.
+// Query: `tab` / `state` / `weekKey`, plus `cursor` (the previous page's
+// `nextCursor`) and `limit` (default and max 200).
 /** `agent.listQueue` — GET /api/v1/roboapply/agent/queue */
 export function listQueue(query?: In<typeof A.QueueListQuerySchema>, opts?: CallOptions): Promise<QueueListResult> {
   return call<QueueListResult>('GET', withQuery(`/api/v1/roboapply/agent/queue`, query), opts);
@@ -121,132 +121,53 @@ export function putAnswerBank(body: In<typeof A.PutAnswersBodySchema>, opts?: Ca
   return call<Items<A.AnswerBankItemView>>('PUT', `/api/v1/roboapply/agent/answers`, { ...opts, body });
 }
 
-// ── WP-52 additions ─────────────────────────────────────────────────────────
+// ── Types of the WP-52 routes ───────────────────────────────────────────────
 //
-// Mirrors of the types WP-52 adds to server/src/features/agent/contract.ts
-// (same names and shapes). They live here only until that contract merges;
-// INT replaces each with the contract's own export.
+// Every name below is the contract's own export (server/src/features/agent/
+// contract.ts through lib/api/contracts/agent.ts): there are no local mirror
+// shapes in this file. The aliases keep the names this area's hooks and
+// components already import.
 
 /** The three tabs of /ready (contract `QUEUE_TABS`). */
-export type QueueTab = 'to_prepare' | 'ready' | 'done';
+export type QueueTab = A.QueueTab;
 
-/** GET /agent/queue (contract `QueueListResponse`; the extras are optional until it merges). */
-export interface QueueListResult extends Items<A.QueueItemView> {
-  /** Items per tab, all weeks. */
-  counts?: Record<QueueTab, number>;
-  /** This week in the user's time zone, e.g. '2026-W41'. */
-  weekKey?: string;
-}
+/** GET /agent/queue (contract `QueueListResponse`): the page, counts per tab, this week's key and the next cursor. */
+export type QueueListResult = A.QueueListResponse;
 
-/** The job a kit is for, as WP-52 stores it (contract `QueueJobSummary`). */
-export interface QueueJobSummary {
-  title: string;
-  companyName: string;
-  location: string | null;
-  hasApplyUrl: boolean;
-  closed: boolean;
-  asksForCoverLetter: boolean;
-}
+/** The job a kit is for (contract `QueueJobSummary`; `fit` only when the server knows it). */
+export type QueueJobSummary = A.QueueJobSummary;
 
 /** GET /agent/badge (contract `ReadyBadgeResponse`). */
-export interface ReadyBadgeResponse {
-  /** Kits prepared and not opened yet. */
-  readyNotOpened: number;
-}
+export type ReadyBadgeResponse = A.ReadyBadgeResponse;
 
-/** Query of GET /agent/suggestions. */
-export interface SuggestionsQuery {
-  limit?: number;
-  exclude?: string;
-}
+/** Query of GET /agent/suggestions (contract `SuggestionsQuerySchema`). */
+export type SuggestionsQuery = In<typeof A.SuggestionsQuerySchema>;
 
 /** One row of a kit's history (contract `KitEventView`, F-AGENT-11). */
-export interface KitEventView {
-  id: string;
-  /** `transition` = a state change; `decision` = the user used or revised a part; `notice` = a reminder. */
-  kind?: 'transition' | 'decision' | 'notice';
-  fromState: A.QueueState | null;
-  toState: A.QueueState;
-  actor: 'user' | 'system' | 'extension';
-  detail: Record<string, unknown> | null;
-  createdAt: string;
-}
+export type KitEventView = A.KitEventView;
 
 /** GET /agent/queue/:id/history */
-export interface KitHistoryResponse {
-  items: KitEventView[];
-}
+export type KitHistoryResponse = A.KitHistoryResponse;
 
-/** GET /agent/queue/:id — the kit review screen (contract `QueueItemDetail`). */
-export interface QueueItemDetail {
-  item: A.QueueItemView;
-  kit: {
-    resume: {
-      /** The resume version to send (the tailored one, or the base resume when nothing was tailored). */
-      variantId: string | null;
-      tailorSessionId: string | null;
-      /** "Verify details" claims still open; the kit cannot be approved while > 0. */
-      pendingClaims: number;
-      tailored: boolean;
-      used: boolean;
-    };
-    letter: { coverLetterId: string | null; needed: boolean; used: boolean };
-    answers: A.AnswerBankItemView[];
-    /** Suggested resume file name (style from settings), without extension. */
-    fileName: string | null;
-    /** AI steps are available for this account (consent and a model for the brand). */
-    aiAvailable: boolean;
-  };
-  history: KitEventView[];
-}
-
-export type SetupWizardStep = 'profile' | 'calibrate' | 'answers' | 'weekly' | 'extension';
+/** GET /agent/queue/:id — the kit review screen (contract `QueueItemDetail`, incl. `kit.revisionCost`). */
+export type QueueItemDetail = A.QueueItemDetail;
 
 /** Body of POST /agent/setup/step (only "Get the extension" can be skipped). */
-export interface SetupStepBody {
-  step: SetupWizardStep;
-  action?: 'complete' | 'skip';
-}
+export type SetupStepBody = In<typeof A.SetupStepBodySchema>;
+export type SetupWizardStep = SetupStepBody['step'];
 
-/** Body of POST /agent/list/generate. */
-export interface GenerateListBody {
-  /** Filter changes made inside Ready to apply (used for this list only; the main search is untouched). */
-  overrides?: Record<string, unknown>;
-  /** Add another `weeklyTarget` jobs even when this week's list is full. */
-  more?: boolean;
-}
-
-export interface GenerateListResponse {
-  weekKey: string;
-  added: number;
-  items: A.QueueItemView[];
-  /** The list used filters that differ from the main search. */
-  filtersDiffer: boolean;
-  /** Why nothing (or less than the target) was added. */
-  reason: 'no_feed' | 'no_matches' | 'queue_full' | 'target_reached' | null;
-}
+/** Body of POST /agent/list/generate (`overrides` are kept for Ready to apply's later lists). */
+export type GenerateListBody = In<typeof A.GenerateListBodySchema>;
+export type GenerateListResponse = A.GenerateListResponse;
 
 /** POST /agent/setup/step answer: the setup state, plus the first weekly list when this call finished setup. */
-export interface SetupStepResponse extends A.AgentSetupResponse {
-  completedAt?: string | null;
-  firstList?: GenerateListResponse | null;
-}
+export type SetupStepResponse = A.SetupStepResponse;
 
 /** GET /agent/answers/questions — one common question of this brand (contract `QuestionKeyView`). */
-export interface QuestionKeyView {
-  key: string;
-  /** i18n key of the label (`ready.questions.<key>`). */
-  labelKey: string;
-  /** Default question text per language. */
-  text: Record<string, string>;
-  optional: boolean;
-  /** Never used by AI; filled only from this answer. */
-  sensitive: boolean;
-  /** An extension protected question type: AI never answers it. */
-  protectedType: string | null;
-  /** Accepts `<key>:<ISO currency>` variants (salary expectation per currency). */
-  perCurrency: boolean;
-}
+export type QuestionKeyView = A.QuestionKeyView;
+
+/** GET / PUT /agent/settings: the weekly choices plus which search the lists come from. */
+export type AgentSettingsResponse = A.AgentSettingsResponse;
 
 /** `agent.completeStep` — POST /api/v1/roboapply/agent/setup/step */
 export function completeSetupStep(body: SetupStepBody, opts?: CallOptions): Promise<SetupStepResponse> {

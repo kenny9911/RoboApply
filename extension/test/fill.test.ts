@@ -6,7 +6,7 @@ import { greenhouseAdapter } from '../src/adapters/intl/greenhouse';
 import { leverAdapter } from '../src/adapters/intl/lever';
 import { AiApprovalRequiredError, FillSession, summarize } from '../src/content/fill';
 import type { ApiCall } from '../src/shared/messages';
-import { fail, fakeApi, field, loadFixture, sampleProfile } from './helpers';
+import { fail, fakeApi, field, loadFixture, ok, sampleProfile } from './helpers';
 
 const GH_URL = 'https://boards.greenhouse.io/exampleco/jobs/1001';
 const WHY = 'job_application_answers_attributes_3_text_value';
@@ -83,11 +83,62 @@ describe('FillSession.start', () => {
     expect(api.ops()).not.toContain('answer');
   });
 
-  it('asks the user to attach the resume when the page has no matched job', async () => {
+  it('an answer saved from the panel for another employer is not filled by itself: the question is left for a draft the user approves', async () => {
+    // "Save this answer" on Globex's form; this form asks the same thing about Example Co (a close match).
+    const saved = { questionKey: 'custom:0123456789abcdef', questionText: 'Why do you want to work at Globex Co?', answer: 'I admire Globex and its rockets.', source: 'ai_confirmed' as const };
+    const api = fakeApi({ answer: () => ok({ answer: saved.answer, source: 'bank', saveable: false }) }, sampleProfile({ answers: [saved] }));
+    const { s } = session({}, api);
+    await s.start();
+    expect(field<HTMLTextAreaElement>(`#${WHY}`).value).toBe('');
+    const why = item(s, 'Why do you want to work at Example Co?');
+    expect(why).toMatchObject({ status: 'needs_you', canDraft: true });
+    expect(why.source).toBeUndefined();
+    // It can still be offered, in the panel, and reaches the form only on "Use this answer".
+    await s.requestDraft(why.id);
+    expect(field<HTMLTextAreaElement>(`#${WHY}`).value).toBe('');
+    expect(item(s, why.label).draft).toMatchObject({ text: saved.answer, source: 'bank' });
+  });
+
+  it('an answer saved from the panel fills the same question by itself; an answer the user typed in the app still fills a close match', async () => {
+    const same = fakeApi({}, sampleProfile({ answers: [{ questionKey: 'custom:aa', questionText: 'Why do you want to work at Example Co?', answer: 'Saved here before.', source: 'ai_confirmed' }] }));
+    const first = session({}, same);
+    await first.s.start();
+    expect(field<HTMLTextAreaElement>(`#${WHY}`).value).toBe('Saved here before.');
+    expect(item(first.s, 'Why do you want to work at Example Co?')).toMatchObject({ status: 'filled', source: 'bank' });
+
+    const typed = fakeApi({}, sampleProfile({ answers: [{ questionKey: 'custom:bb', questionText: 'Why do you want to work at Globex Co?', answer: 'Typed in the app.', source: 'user' }] }));
+    const second = session({}, typed);
+    await second.s.start();
+    expect(field<HTMLTextAreaElement>(`#${WHY}`).value).toBe('Typed in the app.');
+  });
+
+  it('without a matched job the main resume is asked for by run only, and attached', async () => {
     const { s, api } = session({ jobId: null });
     await s.start();
-    expect(item(s, 'Resume/CV')).toMatchObject({ status: 'needs_you', note: 'resume_no_job' });
-    expect(api.ops()).not.toContain('resumeForJob');
+    const call = api.calls.find((c) => c.op === 'resumeForJob') as Extract<ApiCall, { op: 'resumeForJob' }>;
+    expect(call.body).toEqual({ runId: 'run_1' });
+    expect(item(s, 'Resume/CV')).toMatchObject({ status: 'filled', source: 'resume' });
+  });
+
+  it('with a matched job the resume is asked for that job', async () => {
+    const { s, api } = session({ jobId: 'job_1' });
+    await s.start();
+    expect((api.calls.find((c) => c.op === 'resumeForJob') as Extract<ApiCall, { op: 'resumeForJob' }>).body).toEqual({ jobId: 'job_1', runId: 'run_1' });
+  });
+
+  it('the job the server linked to the run is used when the page lookup found none', async () => {
+    const api = fakeApi({ createRun: () => ok({ runId: 'run_1', jobId: 'job_9' }) });
+    const { s } = session({ jobId: null }, api);
+    await s.start();
+    expect(s.getState().jobId).toBe('job_9');
+    expect((api.calls.find((c) => c.op === 'resumeForJob') as Extract<ApiCall, { op: 'resumeForJob' }>).body).toEqual({ jobId: 'job_9', runId: 'run_1' });
+  });
+
+  it('asks the user to attach the resume when the account has none', async () => {
+    const api = fakeApi({ resumeForJob: () => fail('not_found', 404, { reason: 'no_resume' }) });
+    const { s } = session({ jobId: null }, api);
+    await s.start();
+    expect(item(s, 'Resume/CV')).toMatchObject({ status: 'needs_you', note: 'resume_unavailable' });
   });
 
   it('stops before touching the page when no credit is left', async () => {
@@ -108,10 +159,107 @@ describe('FillSession.start', () => {
   });
 
   it('reports outcome "failed" (credit released) when nothing could be filled', async () => {
-    const api = fakeApi({}, { profile: {}, education: [], experience: [], links: {}, workAuth: [], answers: [], sensitive: null });
+    const api = fakeApi({ resumeForJob: () => fail('not_found', 404, { reason: 'no_resume' }) }, { profile: {}, education: [], experience: [], links: {}, workAuth: [], answers: [], sensitive: null });
     const { s } = session({ jobId: null }, api);
     await s.start();
     expect(api.calls.at(-1)).toMatchObject({ op: 'patchRun', body: { fieldsFilled: 0, outcome: 'failed' } });
+  });
+});
+
+describe('one run per application (R4)', () => {
+  it('a second pass reuses the run: one createRun, running totals in every PATCH', async () => {
+    const { s, api } = session();
+    await s.start({ pageKey: 'one' });
+    const first = api.calls.filter((c) => c.op === 'patchRun').at(-1) as Extract<ApiCall, { op: 'patchRun' }>;
+    expect(first.body).toMatchObject({ fieldsFilled: 8, fieldsTotal: 13 });
+
+    // The next page of the same application (here: the same fixture again under another key).
+    await s.start({ pageKey: 'two' });
+    expect(api.ops().filter((o) => o === 'createRun')).toHaveLength(1);
+    const second = api.calls.filter((c) => c.op === 'patchRun').at(-1) as Extract<ApiCall, { op: 'patchRun' }>;
+    expect(second.id).toBe('run_1');
+    expect(second.body).toMatchObject({ fieldsFilled: 16, fieldsTotal: 26 });
+
+    // Filling the same page again replaces that page's counts instead of adding to them.
+    await s.start({ pageKey: 'two' });
+    expect(api.ops().filter((o) => o === 'createRun')).toHaveLength(1);
+    expect((api.calls.filter((c) => c.op === 'patchRun').at(-1) as Extract<ApiCall, { op: 'patchRun' }>).body).toMatchObject({ fieldsFilled: 16, fieldsTotal: 26 });
+
+    await s.markSubmitted(true);
+    expect(api.calls.at(-1)).toMatchObject({ op: 'patchRun', id: 'run_1', body: { fieldsFilled: 16, fieldsTotal: 26, userMarkedSubmitted: true } });
+  });
+
+  it('a page-by-page form adds to the counts of a run the server handed back (reloaded tab)', async () => {
+    const api = fakeApi({ createRun: () => ok({ runId: 'run_7', jobId: 'job_1', reused: true, fieldsFilled: 5, fieldsTotal: 9 }) });
+    const { s } = session({ multiPage: true }, api);
+    await s.start({ pageKey: 'My Experience' });
+    expect((api.calls.filter((c) => c.op === 'patchRun').at(-1) as Extract<ApiCall, { op: 'patchRun' }>).body).toMatchObject({ fieldsFilled: 13, fieldsTotal: 22 });
+  });
+
+  it('a single-page form does not add them (a refill after a reload is the same page)', async () => {
+    const api = fakeApi({ createRun: () => ok({ runId: 'run_7', jobId: 'job_1', reused: true, fieldsFilled: 5, fieldsTotal: 9 }) });
+    const { s } = session({}, api);
+    await s.start();
+    expect((api.calls.filter((c) => c.op === 'patchRun').at(-1) as Extract<ApiCall, { op: 'patchRun' }>).body).toMatchObject({ fieldsFilled: 8, fieldsTotal: 13 });
+  });
+
+  it('Undo covers the latest pass only; a new pass asks "Did you submit?" again unless the answer was yes', async () => {
+    const { s } = session();
+    await s.start({ pageKey: 'one' });
+    await s.markSubmitted(false);
+    expect(s.getState().submitted).toBe('not_yet');
+    await s.start({ pageKey: 'two' });
+    expect(s.getState().submitted).toBe('unknown');
+    expect(s.undo().restored).toBeGreaterThan(0);
+    await s.markSubmitted(true);
+    await s.start({ pageKey: 'three' });
+    expect(s.getState().submitted).toBe('yes');
+  });
+});
+
+describe('"Save this answer" (F-EXT-04)', () => {
+  it('saves the answer the user used, with their edits, only on the click', async () => {
+    const { s, api } = session();
+    await s.start();
+    const why = item(s, 'Why do you want to work at Example Co?');
+    await s.requestDraft(why.id);
+    expect(api.ops()).not.toContain('saveAnswer');
+    await s.useDraft(why.id, 'My own words.');
+    expect(item(s, why.label)).toMatchObject({ status: 'filled', savable: { text: 'My own words.' }, saved: false });
+    expect(api.ops()).not.toContain('saveAnswer');
+
+    expect(await s.saveDraftAnswer(why.id)).toBe(true);
+    expect(api.calls.at(-1)).toEqual({ op: 'saveAnswer', body: { runId: 'run_1', question: 'Why do you want to work at Example Co?', answer: 'My own words.' } });
+    expect(item(s, why.label)).toMatchObject({ saved: true, saving: false });
+    // Once saved there is nothing more to send.
+    expect(await s.saveDraftAnswer(why.id)).toBe(false);
+    expect(api.ops().filter((o) => o === 'saveAnswer')).toHaveLength(1);
+  });
+
+  it('a saved answer the server found (bank) is not offered for saving again', async () => {
+    const api = fakeApi({ answer: () => ok({ answer: 'From my bank.', source: 'bank', saveable: false }) });
+    const { s } = session({}, api);
+    await s.start();
+    const why = item(s, 'Why do you want to work at Example Co?');
+    await s.requestDraft(why.id);
+    await s.useDraft(why.id);
+    expect(item(s, why.label).savable).toBeUndefined();
+    expect(await s.saveDraftAnswer(why.id)).toBe(false);
+  });
+
+  it('a refusal for a protected question says so and removes the button; another failure can be retried', async () => {
+    let n = 0;
+    const api = fakeApi({ saveAnswer: () => (n++ === 0 ? fail('network_error', 0) : fail('invalid_request', 422, { reason: 'protected_question', type: 'grades' })) });
+    const { s } = session({}, api);
+    await s.start();
+    const why = item(s, 'Why do you want to work at Example Co?');
+    await s.requestDraft(why.id);
+    await s.useDraft(why.id);
+    expect(await s.saveDraftAnswer(why.id)).toBe(false);
+    expect(item(s, why.label)).toMatchObject({ saveError: 'failed', savable: { text: 'I like small teams that ship often.' } });
+    expect(await s.saveDraftAnswer(why.id)).toBe(false);
+    expect(item(s, why.label)).toMatchObject({ saveError: 'protected', protectedType: 'grades' });
+    expect(item(s, why.label).savable).toBeUndefined();
   });
 });
 
@@ -185,6 +333,16 @@ describe('AI answers: shown in the panel only, filled only after "Use this answe
     await s.requestDraft(why.id);
     expect(s.getState().items.every((i) => !i.canDraft)).toBe(true);
     expect(item(s, why.label).note).toBe('ai_unavailable');
+  });
+
+  it('the server refuses a protected question as invalid_request with details.reason and details.type', async () => {
+    const api = fakeApi({ answer: () => fail('invalid_request', 422, { reason: 'protected_question', type: 'grades' }) });
+    const { s } = session({}, api);
+    await s.start();
+    const why = item(s, 'Why do you want to work at Example Co?');
+    await s.requestDraft(why.id);
+    expect(item(s, why.label)).toMatchObject({ canDraft: false, drafting: false, note: 'protected', protectedType: 'grades' });
+    expect(item(s, why.label).draft).toBeUndefined();
   });
 
   it('a question the server calls protected loses its draft button and says why', async () => {

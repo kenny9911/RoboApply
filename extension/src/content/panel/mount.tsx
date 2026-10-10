@@ -11,7 +11,7 @@ import { PANEL_CSS, clarityTokens } from './styles';
 
 export const HOST_ID = 'ra-ext-panel-host';
 
-export interface MountOptions extends Omit<PanelProps, 'onCollapse'> {
+export interface MountOptions extends Omit<PanelProps, 'onCollapse' | 'onRegisterRefresh'> {
   brand: 'roboapply' | 'goapply';
   dev: boolean;
   /** Start expanded (toolbar click) instead of as the launcher button. */
@@ -21,6 +21,12 @@ export interface MountOptions extends Omit<PanelProps, 'onCollapse'> {
 export interface MountedPanel {
   host: HTMLElement;
   open(): void;
+  /**
+   * The page changed under the same form (the next page of a page-by-page
+   * form): the panel looks again and offers "Fill this page". No-op before
+   * the panel was first opened.
+   */
+  refresh?(): void;
   unmount(): void;
 }
 
@@ -65,13 +71,16 @@ export function mountPanel(doc: Document, opts: MountOptions): MountedPanel {
   (doc.body ?? doc.documentElement).appendChild(host);
 
   let openFn: () => void = () => {};
-  const { brand: _b, dev: _d, open, ...panel } = opts;
+  let refreshFn: () => void = () => {};
+  const { brand: _b, dev: _d, open, ...rest } = opts;
+  const panel = { ...rest, onRegisterRefresh: (fn: () => void) => (refreshFn = fn) };
   const root: Root = createRoot(container);
   root.render(<App initialOpen={open} panel={panel} register={(fn) => (openFn = fn)} />);
 
   return {
     host,
     open: () => openFn(),
+    refresh: () => refreshFn(),
     unmount: () => {
       root.unmount();
       host.remove();

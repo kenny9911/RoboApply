@@ -98,7 +98,7 @@ export function invalidateReady(qc: QueryClient): Promise<void> {
 // ── Reads ───────────────────────────────────────────────────────────────────
 
 export function useAgentSettings(options: { enabled?: boolean } = {}) {
-  return useQuery<A.AgentSettings>({
+  return useQuery<A.AgentSettingsResponse>({
     queryKey: agentKeys.settings(),
     queryFn: ({ signal }) => getAgentSettings({ signal }),
     enabled: options.enabled ?? true,
@@ -209,7 +209,7 @@ export function useAnswerBank(options: { enabled?: boolean } = {}) {
 
 export function useSaveAgentSettings() {
   const qc = useQueryClient();
-  return useMutation<A.AgentSettings, Error, In<typeof A.PutAgentSettingsBodySchema>>({
+  return useMutation<A.AgentSettingsResponse, Error, In<typeof A.PutAgentSettingsBodySchema>>({
     mutationFn: (body) => putAgentSettings(body),
     onSuccess: (settings) => {
       qc.setQueryData(agentKeys.settings(), settings);
@@ -243,14 +243,20 @@ export function useCompleteSetupStep() {
   });
 }
 
-/** Add jobs from the search now (filter changes made inside Ready to apply go in `overrides`). */
+/**
+ * Add jobs from the search now (filter changes made inside Ready to apply go
+ * in `overrides`). The server keeps `overrides` in the settings
+ * (`listFilters.overrides`), so the settings are read again when they were sent.
+ */
 export function useGenerateList() {
   const qc = useQueryClient();
   return useMutation<GenerateListResponse, Error, GenerateListBody>({
     mutationFn: (body) => generateList(body),
-    onSuccess: () => {
+    onSuccess: async (_data, body) => {
       void qc.invalidateQueries({ queryKey: agentKeys.queue() });
       void qc.invalidateQueries({ queryKey: agentKeys.suggestions() });
+      // Awaited: the caller's `mutateAsync` resolves with the kept filters already on screen.
+      if (body?.overrides) await qc.invalidateQueries({ queryKey: agentKeys.settings() });
     },
   });
 }

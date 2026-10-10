@@ -35,6 +35,12 @@ export interface RunRow {
   jobId: string | null;
   trackerEntryId: string | null;
   host: string;
+  /**
+   * The page the run belongs to (SCHEMA-6): the URL without its query string,
+   * plus `#job=<hash>` when the query named the job (service `runPageKey`).
+   * Null on runs from before the column.
+   */
+  pageUrl: string | null;
   atsType: string;
   fieldsTotal: number;
   fieldsFilled: number;
@@ -42,6 +48,7 @@ export interface RunRow {
   outcome: string;
   userMarkedSubmitted: boolean;
   creditLedgerId: string | null;
+  createdAt: Date;
 }
 
 /** The job fields the extension reads (visibility and market checks, prompts). */
@@ -78,11 +85,18 @@ export interface ExtensionRepo {
   findJobByUrls(input: { market: string; userId: string; urls: string[]; cnWhere?: { OR: Array<Record<string, unknown>> } | null }): Promise<ExtJobRow | null>;
   loadJob(jobId: string): Promise<ExtJobRow | null>;
 
-  createRun(input: Omit<RunRow, 'id' | 'fieldsFilled' | 'aiAnswers' | 'outcome' | 'userMarkedSubmitted'>): Promise<RunRow>;
+  createRun(input: Omit<RunRow, 'id' | 'fieldsFilled' | 'aiAnswers' | 'outcome' | 'userMarkedSubmitted' | 'createdAt'>): Promise<RunRow>;
   getRun(userId: string, id: string): Promise<RunRow | null>;
+  /**
+   * The newest run of the same application (R4): same user, device and host,
+   * started at or after `since`, not marked as submitted, and for the same
+   * job — or, when `jobId` is null, for the same `pageUrl` with no job linked.
+   * Null when neither key is given.
+   */
+  findReusableRun(input: { userId: string; deviceId: string; host: string; jobId: string | null; pageUrl: string | null; since: Date }): Promise<RunRow | null>;
   /** The run an idempotent retry already created for this credit reservation. */
   findRunByLedger(userId: string, creditLedgerId: string): Promise<RunRow | null>;
-  updateRun(id: string, data: Partial<Pick<RunRow, 'fieldsFilled' | 'outcome' | 'userMarkedSubmitted' | 'trackerEntryId' | 'jobId'>>): Promise<RunRow>;
+  updateRun(id: string, data: Partial<Pick<RunRow, 'fieldsFilled' | 'fieldsTotal' | 'outcome' | 'userMarkedSubmitted' | 'trackerEntryId' | 'jobId' | 'creditLedgerId'>>): Promise<RunRow>;
   incrementAiAnswers(id: string): Promise<void>;
 
   trackerEntryFor(userId: string, jobId: string): Promise<string | null>;
@@ -114,6 +128,7 @@ const RUN_SELECT = {
   jobId: true,
   trackerEntryId: true,
   host: true,
+  pageUrl: true,
   atsType: true,
   fieldsTotal: true,
   fieldsFilled: true,
@@ -121,6 +136,7 @@ const RUN_SELECT = {
   outcome: true,
   userMarkedSubmitted: true,
   creditLedgerId: true,
+  createdAt: true,
 } as const;
 
 const JOB_SELECT = {
@@ -194,6 +210,14 @@ export function createPrismaExtensionRepo(db: typeof prisma = prisma): Extension
     },
     async getRun(userId, id) {
       return db.rAAutofillRun.findFirst({ where: { id, userId }, select: RUN_SELECT });
+    },
+    async findReusableRun({ userId, deviceId, host, jobId, pageUrl, since }) {
+      if (!jobId && !pageUrl) return null;
+      return db.rAAutofillRun.findFirst({
+        where: { userId, deviceId, host, userMarkedSubmitted: false, createdAt: { gte: since }, ...(jobId ? { jobId } : { jobId: null, pageUrl }) },
+        orderBy: { createdAt: 'desc' },
+        select: RUN_SELECT,
+      });
     },
     async findRunByLedger(userId, creditLedgerId) {
       return db.rAAutofillRun.findFirst({ where: { userId, creditLedgerId }, select: RUN_SELECT });

@@ -55,7 +55,7 @@ vi.mock('../../../lib/ui/popupGate', async (orig) => {
   };
 });
 
-import { __setExtensionBridge, browserSupport, extensionStoreUrl, type ExtensionBridge } from '../../../hooks/extension';
+import { EXTENSION_PER_PAGE_ATS, __setExtensionBridge, browserSupport, extensionFillsAts, extensionStoreUrl, pingExtension, sendPairToken, type ExtensionBridge } from '../../../hooks/extension';
 import { ExtensionPage, ExtensionSettingsSection, ExtensionStatusCard, FillWithExtensionButton, InstallPrompt, SensitiveFillConsent, UninstallSurvey, setupStage } from './index';
 import { JOB_VIEWS_KEY, PROMPT_DISMISSED_KEY, jobIdFromPath } from './InstallPrompt';
 
@@ -68,13 +68,14 @@ function setUserAgent(ua: string) {
 }
 
 /** A fake installed (or absent) extension. */
-function fakeExtension(state: { installed: boolean; version?: string; paired?: boolean; acceptPair?: boolean }) {
+function fakeExtension(state: { installed: boolean; version?: string; paired?: boolean; acceptPair?: boolean; brand?: 'roboapply' | 'goapply' }) {
   const sent: Array<{ id: string; message: unknown }> = [];
   const bridge: ExtensionBridge = {
     async send<T>(id: string, message: { type: string }) {
       sent.push({ id, message });
       if (!state.installed) return null;
-      if (message.type === 'ping') return { ok: true, version: state.version ?? '1.4.0', paired: state.paired ?? false } as T;
+      // The extension's own reply shape (extension/src/background/router.ts PingResponse).
+      if (message.type === 'ping') return { ok: true, ...(state.brand ? { brand: state.brand } : {}), version: state.version ?? '1.4.0', connected: state.paired ?? false } as T;
       if (message.type === 'pair') {
         if (state.acceptPair === false) return null;
         state.paired = true;
@@ -150,6 +151,40 @@ describe('browser and path helpers', () => {
     expect(browserSupport({ userAgent: FIREFOX_UA })).toBe('other');
     expect(browserSupport({ userAgent: CHROME_UA, userAgentData: { mobile: true } })).toBe('mobile');
   });
+  // WP-93: the web bridge and the extension agree on the two messages.
+  it('ping → { ok, brand, version, connected }; a build from before WP-93 said `paired`; the other brand\'s build is not ours', async () => {
+    const { sent } = fakeExtension({ installed: true, version: '1.5.0', paired: true, brand: 'roboapply' });
+    expect(await pingExtension('ext_id', 'roboapply')).toEqual({ ok: true, brand: 'roboapply', version: '1.5.0', connected: true });
+    expect(sent).toEqual([{ id: 'ext_id', message: { type: 'ping' } }]);
+
+    __setExtensionBridge({ send: async <T,>() => ({ ok: true, version: '1.0.0', paired: true }) as T });
+    expect(await pingExtension('ext_id', 'roboapply')).toEqual({ ok: true, brand: 'roboapply', version: '1.0.0', connected: true });
+    __setExtensionBridge({ send: async <T,>() => ({ ok: true, brand: 'goapply', version: '1.5.0', connected: true }) as T });
+    expect(await pingExtension('ext_id', 'roboapply')).toBeNull();
+    expect((await pingExtension('ext_id', 'goapply'))?.brand).toBe('goapply');
+    // An untrusted page gets `{ ok: false, code: 'untrusted_origin' }`: not installed, as far as this page can tell.
+    __setExtensionBridge({ send: async <T,>() => ({ ok: false, code: 'untrusted_origin' }) as T });
+    expect(await pingExtension('ext_id', 'roboapply')).toBeNull();
+    __setExtensionBridge(null);
+  });
+
+  it('pair sends { type, token, apiOrigin } and is done only on the extension\'s ok', async () => {
+    const { sent } = fakeExtension({ installed: true });
+    expect(await sendPairToken('ext_id', 'rax_' + 'a'.repeat(43), 'https://www.roboapply.io')).toBe(true);
+    expect(sent.at(-1)).toEqual({ id: 'ext_id', message: { type: 'pair', token: 'rax_' + 'a'.repeat(43), apiOrigin: 'https://www.roboapply.io' } });
+    // Refused (another site, another brand's API origin, a malformed token): not paired.
+    __setExtensionBridge({ send: async <T,>() => ({ ok: false, code: 'wrong_brand' }) as T });
+    expect(await sendPairToken('ext_id', 'rax_' + 'a'.repeat(43), 'https://www.goapply.top')).toBe(false);
+    __setExtensionBridge(null);
+  });
+
+  it('Workday is offered on job pages again; the other page-by-page forms are not (R4)', () => {
+    expect(extensionFillsAts('roboapply', 'workday')).toBe(true);
+    for (const type of EXTENSION_PER_PAGE_ATS) expect(extensionFillsAts('roboapply', type)).toBe(false);
+    expect([...EXTENSION_PER_PAGE_ATS]).toEqual(['icims', 'taleo', 'successfactors']);
+    expect(extensionFillsAts('goapply', 'workday')).toBe(false);
+  });
+
   it('recognises job pages only', () => {
     expect(jobIdFromPath('/jobs/cm_1')).toBe('cm_1');
     expect(jobIdFromPath('/jobs/explore')).toBeNull();
@@ -444,6 +479,13 @@ describe('FillWithExtensionButton', () => {
     const r = renderWithBrand(<FillWithExtensionButton jobId="cm1" applyUrl="https://boards.greenhouse.io/acme/jobs/1" />, { brand: 'goapply', flags: { extension: true } });
     await waitFor(() => expect(jobsApi.getJob).toHaveBeenCalled());
     expect(r.container).toBeEmptyDOMElement();
+  });
+
+  it('a Workday job the server marks fillable is offered again (R4: one run covers the application)', async () => {
+    fakeExtension({ installed: true });
+    jobsApi.getJob.mockResolvedValue({ autofill: { supported: true, atsType: 'workday' } });
+    renderWithBrand(<FillWithExtensionButton jobId="cm1" applyUrl="https://acme.wd1.myworkdayjobs.com/External/job/1" />, { flags: { extension: true } });
+    expect(await screen.findByRole('link', { name: /Fill this form/ })).toHaveAttribute('href', 'https://acme.wd1.myworkdayjobs.com/External/job/1');
   });
 
   it('hidden for a form no adapter supports, without an apply link, or for a non-web link', async () => {

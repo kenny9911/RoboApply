@@ -10,8 +10,8 @@
 // Public (the extension popup):        POST /pair-codes/redeem (10/h/IP)
 // Device routes (Bearer rax_…):        GET /me, GET /autofill-profile,
 //   POST /page-job, POST /jobs/save, POST /autofill-runs,
-//   PATCH /autofill-runs/:id, POST /answers, POST /resume-for-job,
-//   GET /files/:signedToken, POST /site-requests
+//   PATCH /autofill-runs/:id, POST /answers, POST /answers/save,
+//   POST /resume-for-job, GET /files/:signedToken, POST /site-requests
 // Order on every route: auth → capability (`extension`, plus `ext.autofill`
 // on the autofill routes) → rate limit → handler.
 
@@ -33,6 +33,7 @@ import {
   RedeemPairCodeBodySchema,
   ResumeForJobBodySchema,
   RunParamsSchema,
+  SaveAnswerBodySchema,
   SaveJobBodySchema,
   SiteRequestBodySchema,
   UninstallSurveyBodySchema,
@@ -49,6 +50,7 @@ export const EXT_RATE_LIMITS = {
   extPageJob: [{ limit: 120, windowSec: DAY }],
   extSaveJob: [{ limit: 100, windowSec: DAY }],
   extSiteRequest: [{ limit: 10, windowSec: DAY }],
+  extSaveAnswer: [{ limit: 100, windowSec: DAY }],
   extUninstallSurveyPerIp: [{ limit: 5, windowSec: DAY }],
   extensionDevice: RATE_LIMITS.extensionDevice,
 } as const satisfies Record<string, readonly RateWindow[]>;
@@ -200,6 +202,16 @@ export function createExtensionRouter(deps: ExtensionRouterDeps = {}): Router {
     autofill,
     deviceLimit,
     route(async (req) => (await svc()).answer(requireUserId(req), parseBody(req, AnswerQuestionBodySchema), idempotencyKey(req))),
+  );
+  // "Save this answer": an answer the user approved goes to their answer bank (F-EXT-04). Free.
+  router.post(
+    '/answers/save',
+    ...device,
+    ext,
+    autofill,
+    deviceLimit,
+    lim('extSaveAnswer'),
+    route(async (req) => (await svc()).saveAnswer(requireUserId(req), parseBody(req, SaveAnswerBodySchema)), { status: 201 }),
   );
   router.post(
     '/resume-for-job',

@@ -1,8 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { formStepKey, isMultiPage } from '../../src/adapters/intl/index';
+import { formPageKey, formStepKey, isMultiPage } from '../../src/adapters/intl/index';
 import { workdayAdapter, workdayStepKey } from '../../src/adapters/intl/workday';
-import { loadIntlFixture, runIntlFixtureCases } from './harness';
+import type { AtsAdapter } from '../../src/adapters/types';
+import { createContentController } from '../../src/content/controller';
+import type { MountedPanel } from '../../src/content/panel/mount';
+import { PAGE_ID, loadIntlFixture, runIntlFixtureCases, showIntlPage } from './harness';
+
+const showWorkdayPage = (name: string) => showIntlPage('workday', name);
 
 const URL_APPLY = 'https://exampleco.wd5.myworkdayjobs.com/en-US/External/job/Austin-TX/Backend-Engineer_R1234/apply/applyManually';
 
@@ -109,10 +114,59 @@ describe('Workday adapter', () => {
     expect(formStepKey(workdayAdapter, loadIntlFixture('workday', 'my-experience'))).toBe('My Experience');
   });
 
-  // R4 (INT controller + WP-71 panel): key detection/mounting by
-  // formPageKey(adapter, doc, pageKey), offer "Fill this page" again when the
-  // step changes, and keep one run (one autofill credit) per application.
-  it.todo('R4: after filling My Information, swapping in My Experience at the same href offers a second fill and creates no second run');
+  // R4 (WP-93): content/controller.ts keys detection and mounting by
+  // formPageKey(adapter, doc, pageKey); the panel keeps its fill session, so
+  // the next page of the same application is a second fill of the same run.
+  // The page-level flow (one createRun, "Fill this page" offered again) is in
+  // test/intl/workdayPages.test.tsx.
+  it('R4: the controller keeps the panel when the form moves to its next page at the same href, and tells it to look again', () => {
+    showWorkdayPage('my-information');
+    let href = URL_APPLY;
+    const panels: Array<{ open: ReturnType<typeof vi.fn>; refresh: ReturnType<typeof vi.fn>; unmount: ReturnType<typeof vi.fn> }> = [];
+    const mount = vi.fn((_adapter: AtsAdapter, _url: string, _open: boolean): MountedPanel => {
+      const panel = { open: vi.fn(), refresh: vi.fn(), unmount: vi.fn() };
+      panels.push(panel);
+      return { host: document.createElement('div'), ...panel };
+    });
+    const controller = createContentController({ doc: document, href: () => href, set: 'intl', dev: false, mount });
+
+    controller.init();
+    expect(mount).toHaveBeenCalledTimes(1);
+    expect(mount.mock.calls[0]![0].id).toBe('workday');
+
+    // Same page: nothing new.
+    expect(controller.handle({ type: 'content.ping' })).toEqual({ siteName: 'Workday' });
+    expect(panels[0]!.refresh).not.toHaveBeenCalled();
+
+    // Workday's own "Save and Continue": the step changes, the URL does not.
+    showWorkdayPage('my-experience');
+    expect(formPageKey(workdayAdapter, document, 'k')).toBe('k#step=My%20Experience');
+    expect(controller.handle({ type: 'content.ping' })).toEqual({ siteName: 'Workday' });
+    expect(mount).toHaveBeenCalledTimes(1);
+    expect(panels[0]!.unmount).not.toHaveBeenCalled();
+    expect(panels[0]!.refresh).toHaveBeenCalledTimes(1);
+
+    // The toolbar's "Fill this form" on the third page opens the same panel.
+    showWorkdayPage('application-questions');
+    expect(controller.handle({ type: 'panel.open' })).toEqual({ ok: true });
+    expect(mount).toHaveBeenCalledTimes(1);
+    expect(panels[0]!.refresh).toHaveBeenCalledTimes(2);
+    expect(panels[0]!.open).toHaveBeenCalledTimes(1);
+
+    // The form is gone but the URL is the same (e.g. the site's own confirmation page):
+    // the panel, with its "Did you submit this application?", stays.
+    document.getElementById(PAGE_ID)!.innerHTML = '<p>Thank you.</p>';
+    controller.handle({ type: 'content.ping' });
+    expect(panels[0]!.unmount).not.toHaveBeenCalled();
+    expect(mount).toHaveBeenCalledTimes(1);
+
+    // Another application (another path) is a different form: a new panel.
+    showWorkdayPage('my-information');
+    href = URL_APPLY.replace('Backend-Engineer_R1234', 'Data-Engineer_R9');
+    controller.handle({ type: 'content.ping' });
+    expect(panels[0]!.unmount).toHaveBeenCalledTimes(1);
+    expect(mount).toHaveBeenCalledTimes(2);
+  });
 
   it('leaves Workday dropdown buttons and multi-select prompts to the user', () => {
     const doc = loadIntlFixture('workday', 'my-information');

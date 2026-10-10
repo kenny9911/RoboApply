@@ -1,9 +1,10 @@
 // Toolbar popup: connect by code, Fill this form, Request this site.
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { Popup, type PopupDeps } from '../src/popup/Popup';
+import { setBuildEnvForTests } from '../src/env';
+import { Popup, mayInjectForFallback, type PopupDeps } from '../src/popup/Popup';
 import type { InternalMessage, StatusResponse } from '../src/shared/messages';
 
 function status(over: Partial<StatusResponse> = {}): StatusResponse {
@@ -46,11 +47,16 @@ describe('Popup', () => {
     expect(await screen.findByText(/That code doesn't work/)).toBeTruthy();
     expect(sent.some((m) => m.type === 'redeem')).toBe(false);
 
-    fireEvent.change(screen.getByLabelText('Or enter the 8-character code from RoboApply'), { target: { value: 'ab12 cd34' } });
+    // Codes never contain 0, O, 1 or I (the server's alphabet): refused before any request.
+    fireEvent.change(screen.getByLabelText('Or enter the 8-character code from RoboApply'), { target: { value: 'ab10 cd34' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Connect with code' }));
+    expect(sent.some((m) => m.type === 'redeem')).toBe(false);
+
+    fireEvent.change(screen.getByLabelText('Or enter the 8-character code from RoboApply'), { target: { value: 'ab23 cd45' } });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Connect with code' }));
     });
-    expect(sent).toContainEqual({ type: 'redeem', code: 'AB12CD34' });
+    expect(sent).toContainEqual({ type: 'redeem', code: 'AB23CD45' });
   });
 
   it('revoked device: asks to reconnect', async () => {
@@ -91,6 +97,104 @@ describe('Popup', () => {
     expect(await screen.findByText('On Workday, open the application form, then choose Fill this form.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Request this site' })).toBeNull();
     expect(d.inject).not.toHaveBeenCalled();
+  });
+
+  // WP-93 (GoApply popup): the registered content script runs only on the four
+  // portals. Elsewhere the toolbar click (activeTab) injects it once and asks
+  // again, so the label-based fallback adapter can find a form on a company's
+  // own career site.
+  it('GoApply, a page with no content script: inject under activeTab, ping again, offer the fill', async () => {
+    const restore = setBuildEnvForTests({ brand: 'goapply' });
+    try {
+      let injected = false;
+      const pings: boolean[] = [];
+      const { d, tabMessages } = deps({
+        adapterSet: 'cn',
+        market: 'cn',
+        st: status({ brand: 'goapply', webOrigin: 'https://www.goapply.top' }),
+        url: 'https://careers.example-games.cn/apply/1?from=home',
+        tabMessage: vi.fn(async (_id: number, msg: unknown) => {
+          const type = (msg as { type: string }).type;
+          if (type === 'content.ping') {
+            pings.push(injected);
+            // The fallback adapter names the form by the page's own host.
+            return injected ? { siteName: 'careers.example-games.cn' } : null;
+          }
+          return { ok: true };
+        }),
+        inject: vi.fn(async () => {
+          injected = true;
+          return true;
+        }),
+      });
+      render(<Popup deps={d} />);
+      const button = await screen.findByRole('button', { name: 'Fill this form' });
+      expect(d.inject).toHaveBeenCalledTimes(1);
+      expect(d.inject).toHaveBeenCalledWith(7);
+      expect(pings).toEqual([false, true]);
+      expect(screen.getByText('Form on careers.example-games.cn')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Request this site' })).toBeNull();
+      await act(async () => {
+        fireEvent.click(button);
+      });
+      expect(d.tabMessage).toHaveBeenLastCalledWith(7, { type: 'panel.open' });
+      void tabMessages;
+    } finally {
+      restore();
+    }
+  });
+
+  it('GoApply: no form found after the injection → Request this site, injected once', async () => {
+    const restore = setBuildEnvForTests({ brand: 'goapply' });
+    try {
+      let injected = false;
+      const { d } = deps({
+        adapterSet: 'cn',
+        url: 'https://www.example-games.cn/about',
+        tabMessage: vi.fn(async () => (injected ? { siteName: null } : null)),
+        inject: vi.fn(async () => {
+          injected = true;
+          return true;
+        }),
+      });
+      render(<Popup deps={d} />);
+      expect(await screen.findByRole('button', { name: 'Request this site' })).toBeTruthy();
+      expect(d.inject).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('button', { name: 'Fill this form' })).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
+  it('GoApply: never injects on a job board, a browser page, or when the script already answered; RoboApply never does', async () => {
+    expect(mayInjectForFallback(new URL('https://careers.example-games.cn/apply/1'), 'cn')).toBe(true);
+    expect(mayInjectForFallback(new URL('https://www.zhipin.com/job_detail/1.html'), 'cn')).toBe(false);
+    expect(mayInjectForFallback(new URL('https://www.linkedin.cn/jobs/view/1'), 'cn')).toBe(false);
+    expect(mayInjectForFallback(new URL('chrome://extensions'), 'cn')).toBe(false);
+    expect(mayInjectForFallback(new URL('https://careers.example.test/apply'), 'intl')).toBe(false);
+
+    const restore = setBuildEnvForTests({ brand: 'goapply' });
+    try {
+      const portal = deps({ adapterSet: 'cn', url: 'https://app.mokahr.com/campus-recruitment/x/1', siteName: 'Moka' });
+      render(<Popup deps={portal.d} />);
+      await screen.findByRole('button', { name: 'Fill this form' });
+      expect(portal.d.inject).not.toHaveBeenCalled();
+      cleanup();
+
+      const board = deps({ adapterSet: 'cn', url: 'https://www.zhipin.com/job_detail/1.html', siteName: null });
+      render(<Popup deps={board.d} />);
+      await screen.findByRole('button', { name: 'Request this site' });
+      expect(board.d.inject).not.toHaveBeenCalled();
+      cleanup();
+
+      // The injection is refused (a browser page, or the store): one ping, no retry.
+      const refused = deps({ adapterSet: 'cn', url: 'https://careers.example-games.cn/apply/1', siteName: null, inject: vi.fn(async () => false) });
+      render(<Popup deps={refused.d} />);
+      await screen.findByRole('button', { name: 'Request this site' });
+      expect(refused.tabMessages).toEqual([{ type: 'content.ping' }]);
+    } finally {
+      restore();
+    }
   });
 
   it('elsewhere: nothing on the page is read', async () => {

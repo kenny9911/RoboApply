@@ -13,6 +13,15 @@ import { getExtBrand, type BrandId } from './brands/index';
 import { boardDomains } from './content/boards/index';
 
 export { getExtBrand };
+// The build script reads the GoApply distribution through this module (scripts/build.mjs).
+export { GOAPPLY_DISTRIBUTION } from './brands/goapply/index';
+
+/** The `_locales` folder of a brand's default locale (Chrome's `default_locale`). */
+const LOCALE_FOLDER: Record<string, string> = { zh: 'zh_CN', 'zh-TW': 'zh_TW' };
+export function defaultLocaleFolder(brand: BrandId): string {
+  const locale = getExtBrand(brand).defaultLocale;
+  return LOCALE_FOLDER[locale] ?? 'en';
+}
 
 export type BuildTarget = 'chrome' | 'edge';
 
@@ -55,7 +64,8 @@ export function buildManifest(opts: ManifestOptions): Record<string, unknown> {
     name: '__MSG_extName__',
     short_name: '__MSG_extShortName__',
     description: '__MSG_extDescription__',
-    default_locale: 'en',
+    // GoApply: zh_CN, so a browser in a language we have no strings for reads Chinese, not English.
+    default_locale: defaultLocaleFolder(opts.brand),
     version: opts.version,
     minimum_chrome_version: '116',
     icons: { '16': 'icons/16.png', '32': 'icons/32.png', '48': 'icons/48.png', '128': 'icons/128.png' },

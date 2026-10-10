@@ -49,7 +49,7 @@ export function startFakeApi(): Promise<{ server: Server; requests: Recorded[] }
       case 'POST /page-job':
         return ok({ jobId: 'job_e2e', fit: { score: 74, tier: 'good', kind: 'pre' } });
       case 'POST /autofill-runs':
-        return ok({ runId: 'run_e2e' });
+        return ok({ runId: 'run_e2e', jobId: 'job_e2e' });
       case 'PATCH /autofill-runs/:id':
         return ok(null);
       case 'GET /autofill-profile':
@@ -68,6 +68,8 @@ export function startFakeApi(): Promise<{ server: Server; requests: Recorded[] }
         return send(res, 200, Buffer.from('%PDF-1.4\n%e2e\n'), 'application/pdf');
       case 'POST /answers':
         return ok({ answer: 'I want to run a platform that small teams rely on.', source: 'ai', saveable: true });
+      case 'POST /answers/save':
+        return send(res, 201, { success: true, data: { saved: true, questionKey: 'custom:0123456789abcdef' } });
       default:
         return send(res, 404, { success: false, code: 'not_found' });
     }

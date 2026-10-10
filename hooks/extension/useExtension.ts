@@ -56,14 +56,14 @@ export function useExtensionPresence(options: { enabled?: boolean } = {}): Exten
     }
     let live = true;
     setResult((r) => ({ ...r, state: 'checking' }));
-    void pingExtension(extensionId).then((reply) => {
+    void pingExtension(extensionId, brand).then((reply) => {
       if (!live) return;
-      setResult(reply ? { state: 'present', version: reply.version, paired: reply.paired === true } : { state: 'absent', version: null, paired: false });
+      setResult(reply ? { state: 'present', version: reply.version, paired: reply.connected } : { state: 'absent', version: null, paired: false });
     });
     return () => {
       live = false;
     };
-  }, [enabled, extensionId, round]);
+  }, [enabled, extensionId, brand, round]);
 
   const recheck = useCallback(() => setRound((n) => n + 1), []);
   return { ...result, extensionId, storeUrl, recheck };

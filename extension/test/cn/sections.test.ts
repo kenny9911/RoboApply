@@ -11,7 +11,7 @@ import { beisenAdapter } from '../../src/adapters/cn/beisen';
 import { dayeeAdapter } from '../../src/adapters/cn/dayee';
 import { genericCnAdapter } from '../../src/adapters/cn/generic';
 import { mokaAdapter } from '../../src/adapters/cn/moka';
-import type { AtsAdapter } from '../../src/adapters/types';
+import type { AtsAdapter, FieldHandle } from '../../src/adapters/types';
 import { FillSession } from '../../src/content/fill';
 import { findSubmitControl } from '../../src/content/panel/submitHint';
 import { fakeApi, field } from '../helpers';
@@ -161,10 +161,37 @@ describe('repeated blocks and scores', () => {
   it('grades and test scores are never offered an AI draft', async () => {
     const beisen = await fill(beisenAdapter, 'beisen', 'cards', BEISEN_URL);
     expect(field('#st0_gpa').value).toBe('');
-    expect(beisen.item('st0_gpa')).toMatchObject({ canDraft: false, note: 'no_value' });
+    // Server protected type `grades` (WP-93): the user's own record, never drafted.
+    expect(beisen.item('st0_gpa')).toMatchObject({ canDraft: false, note: 'protected', protectedType: 'grades' });
     const moka = await fill(mokaAdapter, 'moka', 'header-search', MOKA_URL);
     expect(moka.item('o_cet')).toMatchObject({ canDraft: false });
     expect(moka.api.ops()).not.toContain('answer');
+  });
+});
+
+describe('成绩 / 排名 as work achievements are open questions', () => {
+  const handle = (id: string, label: string): FieldHandle => {
+    const el = document.createElement('textarea');
+    el.id = id;
+    document.body.appendChild(el);
+    return { id, label, kind: 'textarea', required: false, element: el } as FieldHandle;
+  };
+
+  it('a study context (or the bare label) is a grade and is never drafted; an achievement question is left to the open-question path', () => {
+    const fields = [
+      handle('g1', '成绩'),
+      handle('g2', '专业排名'),
+      handle('g3', '大学期间取得的成绩'),
+      handle('g4', '笔试分数'),
+      handle('w1', '请描述你在上一份工作中取得的主要成绩'),
+      handle('w2', '你在团队中的排名贡献是什么'),
+    ];
+    const plan = planCnFields(mokaAdapter, fields);
+    for (const id of ['g1', 'g2', 'g3', 'g4']) expect(plan.get(id), id).toMatchObject({ key: null, noDraft: true });
+    // Not owned by the portal map: the fill pass treats them as ordinary questions (a draft can be offered).
+    expect(plan.has('w1')).toBe(false);
+    expect(plan.has('w2')).toBe(false);
+    for (const f of fields) f.element.remove();
   });
 });
 

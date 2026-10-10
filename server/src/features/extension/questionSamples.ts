@@ -20,6 +20,7 @@ export const PROTECTED_SAMPLES: Record<(typeof PROTECTED_QUESTION_TYPES)[number]
   certification: ['Do you hold a PMP certification?', 'Are you a licensed CPA?', '是否持有教师资格证？'],
   clearance: ['Do you have an active security clearance?', '是否通过政审？'],
   notice_period: ['What is your notice period?', 'When can you start?', '最快到岗时间'],
+  grades: ['What is your GPA?', 'Please list your IELTS or TOEFL score', 'Class rank', 'CET-6 score', '绩点', '专业排名', '在校成绩', '四六级成绩', '雅思成绩'],
 };
 
 /**
@@ -107,8 +108,50 @@ export const ADVERSARIAL_PROTECTED_TYPED: ReadonlyArray<[string, (typeof PROTECT
   ['生年月日', 'personal'],
   ['희망 연봉은 얼마입니까?', 'salary_expectation'],
   ['생년월일을 입력하세요', 'personal'],
+  // Grades and test scores (WP-93)
+  ['Cumulative grade point average (out of 4.0)', 'grades'],
+  ['What were your grades in your final year?', 'grades'],
+  ['What was your GRE score?', 'grades'],
+  ['Academic ranking in your class', 'grades'],
+  ['英语六级分数', 'grades'],
+  ['平均绩点（GPA）', 'grades'],
+  ['年级排名', 'grades'],
+  ['托福成绩', 'grades'],
+  // 成绩 / 排名 with a study context, or as the whole label
+  ['成绩', 'grades'],
+  ['排名：', 'grades'],
+  ['成绩排名（如前10%）', 'grades'],
+  ['排名（前 10%）', 'grades'],
+  ['学习成绩', 'grades'],
+  ['大学期间取得的成绩', 'grades'],
+  ['本科成绩单', 'grades'],
+  ['英语成绩', 'grades'],
+  ['GRE成绩', 'grades'],
+  ['學業成績', 'grades'],
+  ['Academic performance', 'grades'],
+  ['Academic results (GPA or percentage)', 'grades'],
+  ['Exam results', 'grades'],
+  ['Please enter your exam results', 'grades'],
+  ['Test scores', 'grades'],
 ];
 export const ADVERSARIAL_PROTECTED: string[] = ADVERSARIAL_PROTECTED_TYPED.map(([q]) => q);
+
+/**
+ * Open questions that use a grade word in another sense: 成绩 as achievement,
+ * 排名 as a ranking at work, "academic performance" or "test results" inside a
+ * longer question. They are `free_text` (AI may draft them), never `grades`.
+ */
+export const FREE_TEXT_NOT_GRADES: string[] = [
+  '请描述你在上一份工作中取得的主要成绩',
+  '请简述你最有成就感的一段经历及取得的成绩',
+  '工作业绩与成绩',
+  '你在团队中的排名贡献是什么',
+  'Tell us about your academic performance and why it prepared you for this role',
+  '請描述你在上一份工作中取得的主要成績',
+  '请描述你在实习或工作中取得的成绩',
+  'Describe how you report unexpected test results to your team',
+  'How do you make sure the test results of a release can be trusted?',
+];
 
 /**
  * Open questions in a language the classifier does not fully cover. They may

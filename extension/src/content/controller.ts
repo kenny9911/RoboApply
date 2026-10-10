@@ -6,7 +6,13 @@
 // Ashby (Overview → Application tab) and forms rendered after load are found
 // that way, still only after a user click. The panel is (re)mounted for the
 // page it fills; a path change means a different form.
+//
+// Page-by-page forms (Workday; R4): the key is formPageKey() — origin + path
+// plus the step the form shows — so the next page of the same form is noticed
+// although the URL stayed the same. The panel is then kept (its fill session
+// holds the application's one run) and told to offer "Fill this page" again.
 
+import { formPageKey, isMultiPage } from '../adapters/intl/index';
 import type { AdapterSet } from '../adapters/registry';
 import type { AtsAdapter } from '../adapters/types';
 import type { PageJobBody } from '../shared/contract';
@@ -45,22 +51,30 @@ export interface ContentController {
 
 export function createContentController(deps: ContentControllerDeps): ContentController {
   let adapter: AtsAdapter | null = null;
+  /** Origin + path the adapter was detected for. */
+  let detectedBase: string | null = null;
+  /** `detectedBase`, plus the step on a page-by-page form (formPageKey). */
   let detectedFor: string | null = null;
   let mounted: MountedPanel | null = null;
+  let mountedAdapter: AtsAdapter | null = null;
+  let mountedBase: string | null = null;
   let mountedFor: string | null = null;
 
   const detect = (): AtsAdapter | null => {
     const href = deps.href();
-    const key = pageKey(href);
-    if (adapter && detectedFor === key) return adapter;
-    let url: URL;
-    try {
-      url = new URL(href);
-    } catch {
-      return null;
+    const base = pageKey(href);
+    if (!(adapter && detectedBase === base)) {
+      let url: URL;
+      try {
+        url = new URL(href);
+      } catch {
+        return null;
+      }
+      adapter = detectAdapter(url, deps.doc, { set: deps.set, dev: deps.dev });
+      detectedBase = base;
     }
-    adapter = detectAdapter(url, deps.doc, { set: deps.set, dev: deps.dev });
-    detectedFor = key;
+    // Read on every call: a page-by-page form changes its step without changing the URL.
+    detectedFor = formPageKey(adapter, deps.doc, base);
     return adapter;
   };
 
@@ -68,9 +82,11 @@ export function createContentController(deps: ContentControllerDeps): ContentCon
     const a = detect();
     if (!a) {
       // The user left the form (same tab, new path): drop its stale panel.
-      if (mounted && mountedFor !== detectedFor) {
+      if (mounted && mountedBase !== detectedBase) {
         mounted.unmount();
         mounted = null;
+        mountedAdapter = null;
+        mountedBase = null;
         mountedFor = null;
       }
       return false;
@@ -79,8 +95,18 @@ export function createContentController(deps: ContentControllerDeps): ContentCon
       if (open) mounted.open();
       return true;
     }
+    // The next page of the same page-by-page form: keep the panel (and the
+    // application's one run) and let it offer "Fill this page" again.
+    if (mounted && mountedAdapter === a && mountedBase === detectedBase && isMultiPage(a)) {
+      mountedFor = detectedFor;
+      mounted.refresh?.();
+      if (open) mounted.open();
+      return true;
+    }
     mounted?.unmount();
     mounted = deps.mount(a, deps.href(), open);
+    mountedAdapter = a;
+    mountedBase = detectedBase;
     mountedFor = detectedFor;
     return true;
   };

@@ -24,7 +24,7 @@ import { getBrand } from '../../../platform/brand/registry.js';
 import { createBudget, type CronContext } from '../../../platform/queue/index.js';
 import { NOTIFY_TEMPLATES, type NotifyUserInput, type NotifyUserResult } from '../../alerts/index.js';
 import { produceAgentReminders } from '../reminders.js';
-import { runReadyWeeklyTask } from '../weekly.js';
+import { runReadyWeeklyTask, storedListFilters } from '../weekly.js';
 import type { AgentDb } from '../store.js';
 import { feedItem, job, makeDb, makeDeps, seedItem } from './testkit.js';
 
@@ -69,6 +69,15 @@ function weeklyDb() {
   });
 }
 
+describe('queue workers', () => {
+  it('registers agent.prepare and agent.record-files, and refuses a payload it cannot read', async () => {
+    const { workers, recordFilesWorker, AGENT_WORK_KINDS } = await import('../workers.js');
+    expect(workers.map((w) => w.kind)).toEqual(['agent.prepare', 'agent.record-files']);
+    expect(AGENT_WORK_KINDS.agentRecordFiles).toBe('agent.record-files');
+    await expect(recordFilesWorker.handler({ payload: { queueItemId: 'q1' } } as never, {} as never)).rejects.toMatchObject({ name: 'PermanentWorkError' });
+  });
+});
+
 describe('ready-weekly cron', () => {
   it('builds the list at Monday 06:00 in each user\'s own time zone, once a week, for set-up users of this brand', async () => {
     const db = weeklyDb();
@@ -88,6 +97,42 @@ describe('ready-weekly cron', () => {
     // GoApply's run sees only GoApply users.
     await runReadyWeeklyTask(ctx(new Date('2026-10-11T22:05:00Z'), 'goapply'), deps);
     expect(generated).toEqual(['u_sh', 'u_la', 'u_ga']);
+  });
+
+  // SR-52-1: a filter change made inside Ready to apply ("No, only this list")
+  // holds for the weekly list the cron builds, not only for lists built on demand.
+  it('the weekly list uses the Ready-only filter changes kept on the settings row', async () => {
+    const db = makeDb({
+      user: [{ id: 'u1', brand: 'roboapply' }],
+      seekerProfile: [{ id: 'sp1', userId: 'u1', timezone: 'Asia/Shanghai' }],
+      rAAgentSettings: [settings('u1', { filterOverrides: { workModels: ['remote'], salaryMin: 90000 } })],
+    });
+    const previews: unknown[] = [];
+    const { service } = makeDeps(db, 'roboapply', {
+      now: () => new Date('2026-10-11T22:05:00Z'),
+      feedPreview: async (_u, input) => {
+        previews.push(input.filters);
+        return [feedItem('j1', 'great'), feedItem('j2', 'good')];
+      },
+    });
+    const generate = vi.fn((userId: string, o: Parameters<typeof service.generateList>[1]) => service.generateList(userId, o));
+    const r = await runReadyWeeklyTask(ctx(new Date('2026-10-11T22:05:00Z')), { ...seams(db), generate });
+    expect(generate).toHaveBeenCalledWith('u1', { source: 'cron' });
+    expect(previews).toEqual([{ workModels: ['remote'], salaryMin: 90000 }]);
+    expect(r).toMatchObject({ processed: 1, added: 2 });
+    // The cron reads the kept changes; it never rewrites them.
+    expect((await service.getSettings('u1')).listFilters).toEqual({ searchProfileId: null, overrides: { workModels: ['remote'], salaryMin: 90000 } });
+  });
+
+  it('storedListFilters: only a plain, non-empty object narrows a list', () => {
+    expect(storedListFilters(null)).toEqual({ searchProfileId: null, overrides: null });
+    expect(storedListFilters({ filterOverrides: null, searchProfileId: null })).toEqual({ searchProfileId: null, overrides: null });
+    expect(storedListFilters({ filterOverrides: {}, searchProfileId: ' ' })).toEqual({ searchProfileId: null, overrides: null });
+    expect(storedListFilters({ filterOverrides: ['remote'] })).toEqual({ searchProfileId: null, overrides: null });
+    expect(storedListFilters({ filterOverrides: 'remote' })).toEqual({ searchProfileId: null, overrides: null });
+    // The database's JSON null arrives as a sentinel object, not as a filter set.
+    expect(storedListFilters({ filterOverrides: new (class DbNull {})() })).toEqual({ searchProfileId: null, overrides: null });
+    expect(storedListFilters({ filterOverrides: { workModels: ['remote'], q: undefined }, searchProfileId: 'sp_2' })).toEqual({ searchProfileId: 'sp_2', overrides: { workModels: ['remote'] } });
   });
 
   it('skips a user whose list for this week already exists', async () => {

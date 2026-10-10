@@ -46,6 +46,32 @@ export function parseIntlFixture(dir: string, name: string): Document {
   return doc;
 }
 
+export const PAGE_ID = 'ra-test-page';
+
+/**
+ * Put a saved page into one element of the test document, leaving everything
+ * else in the body (a mounted panel) alone: the way a single-page site swaps
+ * the step of a page-by-page form without changing the URL.
+ */
+export function showIntlPage(dir: string, name: string): Document {
+  const parsed = parseIntlFixture(dir, name);
+  let page = document.getElementById(PAGE_ID);
+  if (!page) {
+    document.documentElement.innerHTML = '<head></head><body></body>';
+    page = document.createElement('div');
+    page.id = PAGE_ID;
+    document.body.appendChild(page);
+  }
+  page.innerHTML = parsed.body.innerHTML;
+  attachDeclarativeShadowRoots(page);
+  return document;
+}
+
+/** Forget the element showIntlPage() fills (call between tests that use it). */
+export function resetIntlPage(): void {
+  document.getElementById(PAGE_ID)?.remove();
+}
+
 export interface ExpectedField {
   label: string | RegExp;
   kind: FieldKind;

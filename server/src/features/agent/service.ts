@@ -33,6 +33,7 @@ import {
   READY_NOT_OPENED_STATES,
   TAB_STATES,
   type AgentSettings,
+  type AgentSettingsResponse,
   type AgentSetupResponse,
   type AnswerBankItemView,
   type CalibrationEntry,
@@ -53,8 +54,10 @@ import {
   type SetupStep,
   type SetupStepResponse,
 } from './contract.js';
-import { defaultAgentDeps, type AgentDeps, type PreparePayload } from './deps.js';
-import { isValidQuestionKey, questionDefFor, questionKeysFor } from './questionKeys.js';
+import { defaultAgentDeps, type AgentDeps, type PreparePayload, type RecordFilesPayload } from './deps.js';
+import type { Prisma } from '../../generated/prisma/client.js';
+import { storedListFilters } from './weekly.js';
+import { customQuestionKey, isValidQuestionKey, questionDefFor, questionKeysFor } from './questionKeys.js';
 import {
   effectiveSetupStep,
   kitFileName,
@@ -96,9 +99,18 @@ const SETTINGS_SELECT = {
   setupStep: true,
   calibration: true,
   setupCompletedAt: true,
+  searchProfileId: true,
+  filterOverrides: true,
   createdAt: true,
   updatedAt: true,
 } as const;
+
+const EVENT_SELECT = { id: true, userId: true, queueItemId: true, fromState: true, toState: true, actor: true, kind: true, detail: true, createdAt: true } as const;
+
+/** A JSON column's "no value": the database NULL (Prisma's `DbNull`, loaded lazily so the router stays cheap to import). */
+async function dbNull(): Promise<typeof Prisma.DbNull> {
+  return (await import('../../generated/prisma/client.js')).Prisma.DbNull;
+}
 
 const ANSWER_SELECT = { id: true, questionKey: true, questionText: true, answer: true, source: true, locale: true, lastUsedAt: true, updatedAt: true } as const;
 
@@ -232,7 +244,7 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     return (await db.rAAgentKitEvent.findMany({
       where: { queueItemId: itemId },
       orderBy: { createdAt: 'asc' },
-      select: { id: true, userId: true, queueItemId: true, fromState: true, toState: true, actor: true, detail: true, createdAt: true },
+      select: EVENT_SELECT,
     })) as KitEventRow[];
   }
 
@@ -269,25 +281,33 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
 
   // ── Settings ───────────────────────────────────────────────────────────
 
-  async function getSettings(userId: string): Promise<AgentSettings> {
-    const db = await deps.getDb();
-    return settingsFromRow(await settingsRow(db, userId));
+  /** The settings as the page reads them: the weekly choices plus which search the lists come from. */
+  function settingsView(row: SettingsRow | null): AgentSettingsResponse {
+    return { ...settingsFromRow(row), listFilters: storedListFilters(row) };
   }
 
-  async function putSettings(userId: string, patch: Partial<AgentSettings>): Promise<AgentSettings> {
+  async function getSettings(userId: string): Promise<AgentSettingsResponse> {
+    const db = await deps.getDb();
+    return settingsView(await settingsRow(db, userId));
+  }
+
+  async function putSettings(userId: string, patch: Partial<AgentSettings> & { filterOverrides?: null }): Promise<AgentSettingsResponse> {
     const db = await deps.getDb();
     if (patch.baseVariantId) {
       const owned = await db.rAResumeVariant.findFirst({ where: { id: patch.baseVariantId, userId }, select: { id: true } });
       if (!owned) throw new HttpError('invalid_request', 'That resume was not found.', { reason: 'resume_not_found' });
     }
-    const data = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) as Partial<AgentSettings>;
+    const { filterOverrides, ...settings } = patch;
+    const data = Object.fromEntries(Object.entries(settings).filter(([, v]) => v !== undefined)) as Partial<AgentSettings>;
+    // `filterOverrides: null`: forget the filter changes made inside Ready to apply (lists use the main search again).
+    const clear = filterOverrides === null ? { filterOverrides: await dbNull() } : {};
     const row = (await db.rAAgentSettings.upsert({
       where: { userId },
       create: { userId, ...DEFAULT_AGENT_SETTINGS, ...data },
-      update: data,
+      update: { ...data, ...clear },
       select: SETTINGS_SELECT,
     })) as SettingsRow;
-    return settingsFromRow(row);
+    return settingsView(row);
   }
 
   // ── Setup (F-AGENT-02) ─────────────────────────────────────────────────
@@ -418,7 +438,7 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     try {
       return await db.$transaction(async (tx) => {
         const row = (await tx.rAAgentQueueItem.create({ data: { userId, jobId, weekKey, addedVia, state: 'picked' }, select: QUEUE_SELECT })) as QueueRow;
-        await tx.rAAgentKitEvent.create({ data: { userId, queueItemId: row.id, fromState: null, toState: 'picked', actor, detail: { weekKey, via: addedVia } } });
+        await tx.rAAgentKitEvent.create({ data: { userId, queueItemId: row.id, fromState: null, toState: 'picked', actor, kind: 'transition', detail: { weekKey, via: addedVia } } });
         return row;
       });
     } catch (err) {
@@ -428,9 +448,49 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
   }
 
   /**
-   * Build this week's list from the active saved search: jobs with a real fit
-   * at or above `minTier`, not already in the list or in Applications, up to
-   * the weekly target (a target, never a cap) and the 50 active items limit.
+   * The filters a list is built with, on top of the user's active search
+   * (SR-52-1): the saved search `searchProfileId` names when it is not the
+   * active one, then the filter changes made inside Ready to apply — the ones
+   * this request carries (`explicit`), else the ones kept from last time.
+   * A change with the value `null` removes that filter of the search (the
+   * filter patch convention: removed → null). Kept filters that no longer
+   * parse are left out and never block a list; filters the request itself
+   * carries are refused (422) instead.
+   */
+  async function listFilters(
+    userId: string,
+    row: SettingsRow | null,
+    explicit: Record<string, unknown> | undefined,
+  ): Promise<{ overrides: Record<string, unknown> | undefined; filtersDiffer: boolean }> {
+    const stored = storedListFilters(row);
+    const patch = explicit ?? stored.overrides ?? undefined;
+    // `null` → the key is taken out of the search's filters (an `undefined` value drops it when the set is parsed).
+    const changes = patch ? Object.fromEntries(Object.entries(patch).map(([k, v]) => [k, v === null ? undefined : v])) : undefined;
+    if (!changes && !stored.searchProfileId) return { overrides: undefined, filtersDiffer: false };
+    const market = deps.brand().market;
+    const active = await deps.activeSearch(userId);
+    let overrides = changes;
+    if (stored.searchProfileId && stored.searchProfileId !== active.id) {
+      const other = await deps.searchProfile(userId, stored.searchProfileId).catch(() => null);
+      // Another saved search replaces the active one's filters: its own keys, and none of the active search's.
+      if (other) overrides = { ...Object.fromEntries(Object.keys(active.filters).map((k) => [k, undefined])), ...other.filters, ...(changes ?? {}) };
+    }
+    if (!overrides) return { overrides: undefined, filtersDiffer: false };
+    if (!(await deps.filtersValid(active.filters, overrides, market))) {
+      if (explicit) throw new HttpError('invalid_request', 'The filters are not valid.', { reason: 'invalid_filters' });
+      logger.warn('AGENT', 'kept list filters no longer parse; the list uses the main search', { userId });
+      return { overrides: undefined, filtersDiffer: false };
+    }
+    return { overrides, filtersDiffer: await deps.filtersDiffer(active.filters, overrides, market) };
+  }
+
+  /**
+   * Build this week's list: jobs with a real fit at or above `minTier`, not
+   * already in the list or in Applications, up to the weekly target (a
+   * target, never a cap) and the 50 active items limit. The jobs come from the
+   * active saved search with Ready to apply's own filter changes on top
+   * (`listFilters`); changes a user request carries are kept for the next
+   * lists, the weekly one included.
    */
   async function generateList(userId: string, options: GenerateListOptions): Promise<GenerateListResponse> {
     const db = await deps.getDb();
@@ -443,15 +503,16 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
       filtersDiffer,
       reason,
     });
-    const overrides = options.overrides && Object.keys(options.overrides).length ? options.overrides : undefined;
-    let filtersDiffer = false;
-    if (overrides) {
-      const active = await deps.activeSearch(userId);
-      filtersDiffer = await deps.filtersDiffer(active.filters, overrides, deps.brand().market);
+    const row = await settingsRow(db, userId);
+    const explicit = options.overrides && Object.keys(options.overrides).length ? options.overrides : undefined;
+    const { overrides, filtersDiffer } = await listFilters(userId, row, explicit);
+    // "No, only this list": the change is Ready to apply's own from now on (next week's list too).
+    if (explicit && options.source === 'user') {
+      const kept = JSON.parse(JSON.stringify(explicit)) as Prisma.InputJsonValue;
+      await db.rAAgentSettings.upsert({ where: { userId }, create: { userId, ...DEFAULT_AGENT_SETTINGS, filterOverrides: kept }, update: { filterOverrides: kept }, select: { userId: true } });
     }
     if (!(await deps.flag('jobs.feed', userId))) return empty('no_feed', filtersDiffer);
 
-    const row = await settingsRow(db, userId);
     const settings = settingsFromRow(row);
     const room = MAX_ACTIVE_QUEUE_ITEMS - (await activeCount(db, userId));
     if (room <= 0) return empty('queue_full', filtersDiffer);
@@ -485,10 +546,17 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     };
   }
 
-  /** F-FILT-07: "Use this for your main search too?" → yes. Patches the active saved search. */
+  /**
+   * F-FILT-07: "Use this for your main search too?" → yes. Patches the active
+   * saved search; the changes are the main search's now, so Ready to apply
+   * keeps none of its own.
+   */
   async function saveToMain(userId: string, input: { filters: Record<string, unknown>; version: number }) {
     const active = await deps.activeSearch(userId);
-    return deps.patchSearch(userId, active.id, input.version, input.filters);
+    const saved = await deps.patchSearch(userId, active.id, input.version, input.filters);
+    const db = await deps.getDb();
+    await db.rAAgentSettings.updateMany({ where: { userId }, data: { filterOverrides: await dbNull() } });
+    return saved;
   }
 
   // ── Queue (F-AGENT-04/05/08) ───────────────────────────────────────────
@@ -553,8 +621,10 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
       QUEUE_TABS.map((t) => db.rAAgentQueueItem.count({ where: { userId, state: { in: [...TAB_STATES[t]] } } })),
     );
     const counts = Object.fromEntries(QUEUE_TABS.map((t, i) => [t, counted[i] ?? 0])) as Record<QueueTab, number>;
+    // The same deterministic fit the Jobs list shows; none when it is not known or not shown to this account.
+    const fits = await deps.fitsFor(userId, picked.map((r) => r.jobId)).catch(() => new Map<string, never>());
     return {
-      items: picked.map((r) => toQueueView(r, jobs.get(r.jobId)!)),
+      items: picked.map((r) => toQueueView(r, jobs.get(r.jobId)!, fits.get(r.jobId) ?? null)),
       counts,
       weekKey: weekKeyFor(deps.now(), await timeZoneOf(db, userId)),
       nextCursor: last ? encodeListCursor(last) : null,
@@ -1094,6 +1164,7 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
       }
       throw err;
     }
+    const firstOpen = item.state === 'approved';
     if (item.state === 'approved') {
       item = await transitionItem(db, item, 'opened', {
         actor: 'user',
@@ -1109,6 +1180,14 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
         logger.warn('AGENT', 'letter not attached to the application', { itemId: item.id, error: err instanceof Error ? err.message : String(err) });
       });
     }
+    // The resume the user is about to send is recorded on the application
+    // (its files then show with the application). Queued: the export never
+    // delays opening the form, and a failure never blocks it.
+    if (firstOpen && item.resumeVariantId) {
+      await deps.enqueueRecordFiles({ queueItemId: item.id, userId }, `kit:${item.id}:files:${deps.now().getTime()}`).catch((err) => {
+        logger.warn('AGENT', 'resume file not queued for the application', { itemId: item.id, error: err instanceof Error ? err.message : String(err) });
+      });
+    }
     return {
       applyUrl: click.applyUrl,
       handoff: { jobId: item.jobId, variantId: item.resumeVariantId, coverLetterId: item.coverLetterId },
@@ -1118,6 +1197,30 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
       extensionSupported: click.extensionSupported,
       item: await view(db, userId, item),
     };
+  }
+
+  /**
+   * The `agent.record-files` worker body: export the kit's resume with the
+   * application's tracker entry, so the exact file is recorded
+   * (RAApplicationArtifact, channel `agent`), and note the file on the kit's
+   * move to `opened`. Runs once per open: a kit that was undone since, or
+   * whose open already carries a file, is left alone.
+   */
+  async function recordKitFiles(payload: RecordFilesPayload): Promise<'recorded' | 'stale' | 'already'> {
+    const db = await deps.getDb();
+    const item = (await db.rAAgentQueueItem.findFirst({ where: { id: payload.queueItemId, userId: payload.userId }, select: QUEUE_SELECT })) as QueueRow | null;
+    if (!item || !item.resumeVariantId || !item.trackerEntryId) return 'stale';
+    if (item.state !== 'opened' && item.state !== 'applied') return 'stale';
+    const opened = lastInto(await events(db, item.id), 'opened');
+    if (!opened) return 'stale';
+    const detail = readDetail(opened.detail);
+    if (detail.artifactId) return 'already';
+    const settings = settingsFromRow(await settingsRow(db, payload.userId));
+    const file = await deps.recordResumeFile(payload.userId, { variantId: item.resumeVariantId, trackerEntryId: item.trackerEntryId, nameStyle: settings.fileNameStyle });
+    if (!file.artifactId) return 'stale';
+    const next: KitEventDetail = { ...detail, artifactId: file.artifactId, fileName: file.fileName };
+    await db.rAAgentKitEvent.updateMany({ where: { id: opened.id, queueItemId: item.id }, data: { detail: JSON.parse(JSON.stringify(next)) as Prisma.InputJsonValue } });
+    return 'recorded';
   }
 
   function lastInto(rows: KitEventRow[], state: QueueState): KitEventRow | null {
@@ -1309,6 +1412,33 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     return { items: questionKeysFor(deps.brand().market) };
   }
 
+  /**
+   * Extension "Save this answer" (F-EXT-04): an answer the user approved in the
+   * side panel, saved under the question as the form asked it (`custom:<hash>`,
+   * so saving the same question again replaces the answer). The caller has
+   * already refused protected and sensitive questions.
+   */
+  async function saveApprovedAnswer(userId: string, input: { questionText: string; answer: string; locale?: string }): Promise<{ questionKey: string }> {
+    const questionText = input.questionText.replace(/\s+/g, ' ').trim().slice(0, 500);
+    const answer = input.answer.trim().slice(0, 5000);
+    if (!questionText || !answer) throw new HttpError('invalid_request', 'A question and an answer are needed.');
+    const db = await deps.getDb();
+    const questionKey = customQuestionKey(questionText);
+    const data = { questionText, answer, locale: input.locale || deps.brand().defaultLocale, source: 'ai_confirmed' };
+    const existing = await db.rAAnswerBankItem.findFirst({ where: { userId, questionKey }, select: { id: true } });
+    if (existing) {
+      await db.rAAnswerBankItem.update({ where: { id: existing.id }, data });
+      return { questionKey };
+    }
+    try {
+      await db.rAAnswerBankItem.create({ data: { userId, questionKey, ...data } });
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      await db.rAAnswerBankItem.updateMany({ where: { userId, questionKey }, data });
+    }
+    return { questionKey };
+  }
+
   /** Extension: remember which saved answers were used to fill a form. */
   async function markAnswersUsed(userId: string, keys: string[]): Promise<void> {
     if (!keys.length) return;
@@ -1336,6 +1466,7 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     sweepStalePreparing,
     confirmPart,
     open,
+    recordKitFiles,
     undoApplied,
     markApplied,
     skip,
@@ -1347,6 +1478,7 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     deleteAnswer,
     questions,
     markAnswersUsed,
+    saveApprovedAnswer,
     questionDefFor,
   };
 }

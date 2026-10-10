@@ -17,7 +17,7 @@
       "blankHint": "Leaves fields that already have something in them.",
       "selectionHint": "Select part of the form on the page first.",
       "again": "Fill again, for example on the next step of the form",
-      "cost": "Each fill that puts in at least one answer uses 1 form fill."
+      "cost": "Filling the same page again uses no extra form fill."
     },
     "note": {
       "has_value": "Already filled on the form. Left as it is.",

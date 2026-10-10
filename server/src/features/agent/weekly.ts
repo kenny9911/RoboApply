@@ -18,8 +18,16 @@
 //
 // The "your list is ready" notice is sent by the hourly `reminders` producer
 // (reminders.ts), which also respects quiet hours.
+//
+// Which search the list draws from (SCHEMA-4, SR-52-1): the user's active
+// search, or the saved search `RAAgentSettings.searchProfileId` names, with
+// the filter changes made inside Ready to apply (`filterOverrides`) on top.
+// `storedListFilters()` reads the pair; `generateList` applies it to every
+// list it builds — this cron's and the ones built on demand — so a
+// Ready-only filter change holds from one week to the next.
 
 import type { ProductBrand } from '../../platform/brand/registry.js';
+import type { AgentListFilters } from './contract.js';
 import type { CronContext, CronResult } from '../../platform/queue/index.js';
 import { logger } from '../../services/LoggerService.js';
 import { resolveTimeZone } from '../alerts/index.js';
@@ -28,6 +36,22 @@ import type { AgentDb } from './store.js';
 import type { AgentServiceImpl, GenerateListOptions } from './service.js';
 
 export const WEEKLY_BATCH = 200;
+
+/**
+ * The list filters stored on a settings row. Anything that is not a plain,
+ * non-empty object reads as "no overrides" (a null column, the database's
+ * JSON null, an empty object or a malformed value never narrows a list).
+ */
+export function storedListFilters(row: { searchProfileId?: string | null; filterOverrides?: unknown } | null | undefined): AgentListFilters {
+  const id = typeof row?.searchProfileId === 'string' && row.searchProfileId.trim() ? row.searchProfileId : null;
+  const raw = row?.filterOverrides;
+  let overrides: Record<string, unknown> | null = null;
+  if (raw && typeof raw === 'object' && !Array.isArray(raw) && Object.getPrototypeOf(raw) === Object.prototype) {
+    const entries = Object.entries(raw as Record<string, unknown>).filter(([, v]) => v !== undefined);
+    if (entries.length) overrides = Object.fromEntries(entries);
+  }
+  return { searchProfileId: id, overrides };
+}
 
 export interface WeeklyDeps {
   getDb?: () => Promise<AgentDb>;

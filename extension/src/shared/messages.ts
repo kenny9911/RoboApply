@@ -24,6 +24,8 @@ import type {
   PatchAutofillRunBody,
   ResumeForJobBody,
   ResumeForJobResponse,
+  SaveAnswerBody,
+  SaveAnswerResponse,
   SiteRequestBody,
 } from './contract';
 
@@ -35,6 +37,7 @@ export type ApiCall =
   | { op: 'createRun'; body: CreateAutofillRunBody; idempotencyKey: string }
   | { op: 'patchRun'; id: string; body: PatchAutofillRunBody }
   | { op: 'answer'; body: AnswerQuestionBody; idempotencyKey: string }
+  | { op: 'saveAnswer'; body: SaveAnswerBody }
   | { op: 'resumeForJob'; body: ResumeForJobBody }
   | { op: 'fetchFile'; url: string }
   | { op: 'siteRequest'; body: SiteRequestBody };
@@ -54,6 +57,7 @@ export interface ApiResults {
   createRun: CreateAutofillRunResponse;
   patchRun: unknown;
   answer: AnswerQuestionResponse;
+  saveAnswer: SaveAnswerResponse;
   resumeForJob: ResumeForJobResponse;
   fetchFile: FetchedFile;
   siteRequest: unknown;

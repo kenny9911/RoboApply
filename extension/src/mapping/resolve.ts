@@ -131,6 +131,11 @@ function sameCountries(a: string, b: string): boolean {
  * naming the same countries. `exactOnly` (protected questions: legal, EEO,
  * pay) accepts only the same text or key — "…work in the United Kingdom?"
  * never answers "…work in the United States?".
+ *
+ * An answer saved from the panel (`source: 'ai_confirmed'`) was written for
+ * one employer's form, so it matches only the same question: "…why you want
+ * to work at Acme" never fills "…why you want to work at Globex" by itself.
+ * A similar question can still get it as a draft the user approves.
  */
 export function bankAnswerFor(label: string, answers: readonly BankAnswer[], opts: { exactOnly?: boolean } = {}): BankAnswer | null {
   const n = normalizeText(label);
@@ -142,6 +147,7 @@ export function bankAnswerFor(label: string, answers: readonly BankAnswer[], opt
   if (want.size < 2) return null;
   let best: { a: BankAnswer; score: number } | null = null;
   for (const a of answers) {
+    if (a.source === 'ai_confirmed') continue;
     const have = tokens(a.questionText);
     let shared = 0;
     for (const t of want) if (have.has(t)) shared++;

@@ -3,6 +3,7 @@
 // Seams:
 //   agentService.answerBank(userId)               the extension's autofill (WP-55a): saved answers
 //   agentService.markAnswersUsed(userId, keys)     the extension: answers it used to fill a form
+//   agentService.saveApprovedAnswer(userId, input) the extension's "Save this answer" (F-EXT-04; WP-93)
 //   agentService.markUserSubmitted(userId, jobId)  the extension's "Did you submit?" → yes (D1: the only submit signal)
 //   produceReminders (./cron.ts)                   the `reminders` producer `agent` (kit not opened, list ready)
 //   runReadyWeekly (./cron.ts)                     the `ready-weekly` cron
@@ -34,6 +35,8 @@ export interface AgentService {
   markUserSubmitted(userId: string, jobId: string): Promise<void>;
   /** The extension filled a form with these saved answers (sets `lastUsedAt`). */
   markAnswersUsed(userId: string, questionKeys: string[]): Promise<void>;
+  /** The extension's "Save this answer": an answer the user approved in the panel (source `ai_confirmed`). */
+  saveApprovedAnswer(userId: string, input: { questionText: string; answer: string; locale?: string }): Promise<{ questionKey: string }>;
 }
 
 export const agentService: AgentService = {
@@ -45,5 +48,8 @@ export const agentService: AgentService = {
   },
   async markAnswersUsed(userId, questionKeys) {
     await getAgentService().markAnswersUsed(userId, questionKeys);
+  },
+  async saveApprovedAnswer(userId, input) {
+    return getAgentService().saveApprovedAnswer(userId, input);
   },
 };

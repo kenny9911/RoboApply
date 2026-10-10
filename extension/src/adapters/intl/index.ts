@@ -45,6 +45,16 @@ export const MULTI_PAGE_STEP: Partial<Record<AtsType, (doc: Document) => string 
   successfactors: successFactorsStepKey,
 };
 
+/**
+ * Page-by-page forms where one run (one form-fill credit) is known to cover
+ * the whole application: the pages change in place under one URL, so the
+ * panel keeps its fill session and the server finds the same run by page URL
+ * (R4). Job pages offer the extension for these again; the other page-by-page
+ * forms stay in the server's EXTENSION_PER_PAGE_ATS_TYPES until they are
+ * checked against a live form (test/contractParity keeps the two in step).
+ */
+export const ONE_RUN_MULTI_PAGE: readonly AtsType[] = ['workday'];
+
 export function isMultiPage(adapter: Pick<AtsAdapter, 'id'>): boolean {
   return adapter.id in MULTI_PAGE_STEP;
 }
@@ -55,11 +65,11 @@ export function formStepKey(adapter: Pick<AtsAdapter, 'id'>, doc: Document): str
 }
 
 /**
- * The key the content controller should detect and mount the panel by:
- * `baseKey` (origin + path) plus the step on a multi-page form, so moving to
- * the next Workday page at the same URL counts as a new page to fill. For
- * single-page forms it is `baseKey` unchanged. (R4: the controller and panel
- * adopt this; one run should cover every page of one application.)
+ * The key the content controller detects and mounts the panel by: `baseKey`
+ * (origin + path) plus the step on a multi-page form, so moving to the next
+ * Workday page at the same URL counts as a new page to fill. For single-page
+ * forms it is `baseKey` unchanged. (R4: content/controller.ts keeps the panel
+ * across steps, and the panel's one fill session keeps one run per application.)
  */
 export function formPageKey(adapter: Pick<AtsAdapter, 'id'> | null, doc: Document, baseKey: string): string {
   if (!adapter || !isMultiPage(adapter)) return baseKey;

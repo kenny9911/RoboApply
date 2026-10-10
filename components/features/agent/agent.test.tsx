@@ -494,6 +494,20 @@ describe('KitRow', () => {
     expect(within(row).getByText('Initech')).toBeInTheDocument();
     expect(within(row).getByText('Lisbon')).toBeInTheDocument();
     expect(net.calls.some((c) => c.path.includes('/jobs/jobX'))).toBe(false);
+    // No fit on the summary: none is shown (and none is read).
+    expect(row.querySelector('[data-tier]')).toBeNull();
+  });
+
+  it('shows the fit the list sent with the row, without a job read', async () => {
+    renderWithBrand(
+      <ul>
+        <KitRow item={item({ jobId: 'jobY', job: { title: 'Payments Analyst', companyName: 'Initech', location: null, hasApplyUrl: true, closed: false, asksForCoverLetter: false, fit: { tier: 'good', score: 72 } } })} />
+      </ul>,
+      { flags: ON },
+    );
+    const row = screen.getByTestId('kit-row');
+    expect(within(row).getByText(/Good fit/)).toHaveAttribute('data-tier', 'good');
+    expect(net.calls.some((c) => c.path.includes('/jobs/jobY'))).toBe(false);
   });
 });
 
@@ -830,7 +844,7 @@ describe('/ready/[jobId] kit review', () => {
   it('names exactly what each history row shows', () => {
     const t = ((key: string, v?: Record<string, unknown>) => (v ? `${key} ${JSON.stringify(v)}` : key)) as Parameters<typeof eventLine>[1];
     const row = (detail: Record<string, unknown> | null, toState: ReadyQueueItem['state'] = 'ready_for_review') =>
-      eventLine({ id: 'e', fromState: 'preparing', toState, actor: 'system', detail, createdAt: '2026-10-07T06:00:00.000Z' }, t);
+      eventLine({ id: 'e', kind: 'transition', fromState: 'preparing', toState, actor: 'system', detail, createdAt: '2026-10-07T06:00:00.000Z' }, t);
     expect(row({ tailorSessionId: 'ts1', coverLetterId: 'cl1' })).toBe('review.history.generated.both');
     expect(row({ tailorSessionId: 'ts1' })).toBe('review.history.generated.resume');
     expect(row({ coverLetterId: 'cl1' })).toBe('review.history.generated.letter');
@@ -1191,25 +1205,104 @@ describe('ReadySearchCard — "Use this for your main search too?"', () => {
     expect(await screen.findByText('Saved. Your main search uses these filters, and 3 matching jobs were added to your list.')).toBeInTheDocument();
   });
 
-  it('"No, only this list" adds jobs with the changed filters and leaves the main search alone (no saved search is created)', async () => {
+  it('"No, only Ready to apply" adds jobs with the changed filters, keeps them for later lists and leaves the main search alone (no saved search is created)', async () => {
     api.generateList.mockResolvedValue({ weekKey: '2026-W41', added: 2, items: [], filtersDiffer: true, reason: null });
     renderWithBrand(<ReadySearchCard />, { flags: ON });
     const dialog = await changeRemote();
     const ask = await within(dialog).findByTestId('ready-search-ask');
     await act(async () => {
-      fireEvent.click(within(ask).getByRole('button', { name: 'No, only this list' }));
+      fireEvent.click(within(ask).getByRole('button', { name: 'No, only Ready to apply' }));
     });
+    // A patch over the main search (the server keeps it for the next lists, the weekly one included).
     await waitFor(() => expect(api.generateList).toHaveBeenCalledWith({ overrides: { workModels: ['remote'] }, more: true }));
-    expect(await screen.findByText('2 matching jobs were added to your list. Your main search did not change.')).toBeInTheDocument();
+    expect(await screen.findByText('2 matching jobs were added to your list. Your main search did not change; your next lists here use these filters too.')).toBeInTheDocument();
     expect(net.writes()).toHaveLength(0);
+    expect(api.putAgentSettings).not.toHaveBeenCalled();
+  });
+
+  it('after "No, only Ready to apply" the card shows the kept filters at once, and a second change is sent on top of them', async () => {
+    // The server keeps the overrides when the list is generated; the settings then say so.
+    api.generateList.mockImplementation(async (body: { overrides?: Record<string, unknown> }) => {
+      api.getAgentSettings.mockResolvedValue({ ...SETTINGS, listFilters: { searchProfileId: null, overrides: body.overrides ?? null } });
+      return { weekKey: '2026-W41', added: 2, items: [], filtersDiffer: true, reason: null };
+    });
+    renderWithBrand(<ReadySearchCard />, { flags: ON });
+    await screen.findByText('Also used on Jobs');
+    expect(screen.queryByTestId('ready-search-own')).toBeNull();
+    const dialog = await changeRemote();
+    await act(async () => {
+      fireEvent.click(within(await within(dialog).findByTestId('ready-search-ask')).getByRole('button', { name: 'No, only Ready to apply' }));
+    });
+    // No reload, no wait for the settings to go stale: the card reads them again.
+    const own = await screen.findByTestId('ready-search-own');
+    expect(own).toHaveTextContent('Your lists here use filter changes you kept for Ready to apply only.');
+    expect(within(own).getByRole('button', { name: 'Use my main search only' })).toBeInTheDocument();
+    expect(within(screen.getByRole('list', { name: 'Filters' })).getByText('Remote')).toBeInTheDocument();
+
+    // A second change starts from the filters in use, so the first one is sent again with it.
+    fireEvent.click(screen.getByRole('button', { name: 'Change filters' }));
+    const again = await screen.findByRole('dialog');
+    fireEvent.click(await within(again).findByRole('button', { name: 'Hybrid' }));
+    fireEvent.click(within(again).getByRole('button', { name: 'Save' }));
+    await act(async () => {
+      fireEvent.click(within(await within(again).findByTestId('ready-search-ask')).getByRole('button', { name: 'No, only Ready to apply' }));
+    });
+    await waitFor(() => expect(api.generateList).toHaveBeenCalledTimes(2));
+    expect(api.generateList.mock.calls[1]![0]).toEqual({ overrides: { workModels: ['remote', 'hybrid'] }, more: true });
+  });
+
+  it('says when Ready to apply has filter changes of its own, shows the filters the lists use, and "Use my main search only" removes them', async () => {
+    api.getAgentSettings.mockResolvedValue({ ...SETTINGS, listFilters: { searchProfileId: null, overrides: { workModels: ['remote'] } } });
+    api.putAgentSettings.mockResolvedValue({ ...SETTINGS, listFilters: { searchProfileId: null, overrides: null } });
+    renderWithBrand(<ReadySearchCard />, { flags: ON });
+    const own = await screen.findByTestId('ready-search-own');
+    expect(own).toHaveTextContent('Your lists here use filter changes you kept for Ready to apply only. Jobs still shows your main search.');
+    // The chips are the main search with Ready to apply's changes on top.
+    expect(within(screen.getByRole('list', { name: 'Filters' })).getByText('Remote')).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(within(own).getByRole('button', { name: 'Use my main search only' }));
+    });
+    expect(api.putAgentSettings).toHaveBeenCalledWith({ filterOverrides: null });
+    expect(await screen.findByText('Done. Your lists here use your main search again.')).toBeInTheDocument();
+    expect(net.writes()).toHaveLength(0);
+    expect(api.generateList).not.toHaveBeenCalled();
+  });
+
+  it('editing the filters back to the main search removes Ready to apply\'s own changes without asking', async () => {
+    api.getAgentSettings.mockResolvedValue({ ...SETTINGS, listFilters: { searchProfileId: null, overrides: { workModels: ['remote'] } } });
+    api.putAgentSettings.mockResolvedValue({ ...SETTINGS, listFilters: { searchProfileId: null, overrides: null } });
+    renderWithBrand(<ReadySearchCard />, { flags: ON });
+    await screen.findByTestId('ready-search-own');
+    // The draft starts from the filters in use (Remote on); turning it off is the main search again.
+    await changeRemote();
+    await waitFor(() => expect(api.putAgentSettings).toHaveBeenCalledWith({ filterOverrides: null }));
+    expect(screen.queryByTestId('ready-search-ask')).toBeNull();
+    expect(api.generateList).not.toHaveBeenCalled();
+  });
+
+  it('"Yes" with changes of its own: the main search takes the filters and Ready to apply keeps none', async () => {
+    extraRoutes = { 'PATCH /api/v1/roboapply/search-profiles/sp_main': () => ok(searchProfile({ version: 4, filters: { workModels: ['hybrid'] } })) };
+    vi.unstubAllGlobals();
+    installNet();
+    api.getAgentSettings.mockResolvedValue({ ...SETTINGS, listFilters: { searchProfileId: null, overrides: { postedWithinDays: 7 } } });
+    api.putAgentSettings.mockResolvedValue({ ...SETTINGS, listFilters: { searchProfileId: null, overrides: null } });
+    api.generateList.mockResolvedValue({ weekKey: '2026-W41', added: 1, items: [], filtersDiffer: false, reason: null });
+    renderWithBrand(<ReadySearchCard />, { flags: ON });
+    await screen.findByTestId('ready-search-own');
+    const dialog = await changeRemote();
+    fireEvent.click(within(await within(dialog).findByTestId('ready-search-ask')).getByRole('button', { name: 'Yes, update my main search' }));
+    await waitFor(() => expect(net.to('PATCH', '/api/v1/roboapply/search-profiles/sp_main')).toHaveLength(1));
+    await waitFor(() => expect(api.putAgentSettings).toHaveBeenCalledWith({ filterOverrides: null }));
+    await waitFor(() => expect(api.generateList).toHaveBeenCalledWith({ more: true }));
   });
 
   it('"No" says plainly why nothing was added', async () => {
     api.generateList.mockResolvedValue({ weekKey: '2026-W41', added: 0, items: [], filtersDiffer: true, reason: 'queue_full' });
     renderWithBrand(<ReadySearchCard />, { flags: ON });
     const dialog = await changeRemote();
-    fireEvent.click(within(await within(dialog).findByTestId('ready-search-ask')).getByRole('button', { name: 'No, only this list' }));
-    expect(await screen.findByText('Your list is full. Prepare, skip or remove some jobs first.')).toBeInTheDocument();
+    fireEvent.click(within(await within(dialog).findByTestId('ready-search-ask')).getByRole('button', { name: 'No, only Ready to apply' }));
+    // The filters are kept even though nothing was added, and the message says so.
+    expect(await screen.findByText('Your list is full. Prepare, skip or remove some jobs first. Your main search did not change; your next lists here use these filters.')).toBeInTheDocument();
   });
 
   it('in setup, says the change applies to the main search and saves it without the question', async () => {

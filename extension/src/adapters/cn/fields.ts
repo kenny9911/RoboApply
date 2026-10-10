@@ -21,6 +21,7 @@
 
 import { normalizeText } from '../_kit/options';
 import type { FieldHandle, FieldValue } from '../types';
+import { GRADES_RE } from '../../mapping/questions';
 import { bankAnswerFor, profileValue, type Resolution } from '../../mapping/resolve';
 import type { AutofillProfile } from '../../shared/contract';
 import type { CnAdapter } from './kit';
@@ -183,8 +184,16 @@ const FAMILY_RULES: Array<[RegExp, CnFieldKey]> = [
 const OTHER_PERSON_RE =
   /紧急联系人|緊急聯絡人|紧急联络人|联系人(姓名|电话|手机|关系|方式)|聯絡人(姓名|電話|手機|關係)|推荐人|推薦人|内推人|內推人|证明人|證明人|担保人|擔保人|介绍人|介紹人|导师|導師|辅导员|輔導員|指导老师|指導老師|父亲|父親|母亲|母親|配偶|爱人|愛人/;
 
-/** Grades, ranks and test scores: only the user knows them, so no AI draft is ever offered. */
-const SCORE_RE = /gpa|绩点|績點|排名|成绩|成績|分数|分數|四级|六级|四級|六級|cet|雅思|托福|ielts|toefl|gre|gmat/i;
+/**
+ * Grades, ranks and test scores: only the user knows them, so no AI draft is
+ * ever offered. The shared grades pattern (study context for 成绩 / 排名, so
+ * "请描述你取得的主要成绩" stays an open question) plus the score words portals use.
+ */
+const SCORE_WORDS_RE = /分数|分數|\b(?:gre|gmat|cet)\b/i;
+function isScoreLabel(label: string): boolean {
+  const n = normalizeText(label);
+  return GRADES_RE.test(n) || SCORE_WORDS_RE.test(n);
+}
 
 function compact(label: string): string {
   return normalizeText(label).replace(/\s+/g, '');
@@ -246,7 +255,7 @@ export function planCnFields(adapter: CnAdapter, fields: readonly FieldHandle[])
       continue;
     }
     let key = classifyCnLabel(f.label, section);
-    const score = !key && SCORE_RE.test(label);
+    const score = !key && isScoreLabel(f.label);
     if (!key && !score && !OWNED_SECTIONS.has(section)) continue;
 
     let leave: CnPlanEntry['leave'];

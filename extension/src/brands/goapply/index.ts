@@ -11,10 +11,12 @@
 //   - the manifest strings: `extension-cn.manifest.*` (i18n/staging/extension-cn.{en,zh}.json).
 // Strings never name the product: %BRAND% is substituted from the registry.
 //
-// GOAPPLY_DISTRIBUTION and the `extension-cn.manifest.*` strings are not read
-// by scripts/build.mjs yet (owned by INT): until INT wires them, the GoApply
-// build keeps the registry's store name and English `_locales`. The tests in
-// test/cn/manifest.test.ts check them against buildManifest() meanwhile.
+// scripts/build.mjs reads GOAPPLY_DISTRIBUTION (WP-93): `--store=edge|chrome|crx`
+// builds the target that store receives, `--all` builds one folder per store,
+// and the store name, description and toolbar title come from
+// `manifestStringsKey`, written to `_locales/en` and `_locales/zh_CN`
+// (`default_locale` is zh_CN for this brand). test/build.test.ts and
+// test/cn/manifest.test.ts cover both.
 
 import { CN_PORTAL_ADAPTERS } from '../../adapters/cn/index';
 import type { ExtBrandValues } from '../types';

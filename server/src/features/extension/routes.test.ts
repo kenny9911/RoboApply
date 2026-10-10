@@ -14,6 +14,7 @@ vi.mock('../../services/LoggerService.js', () => ({
 import { Router } from 'express';
 import { fakeAuth, startRouteHarness, type RouteHarness } from '../../test/routeHarness.js';
 import { setFlagOverrideLoader } from '../../platform/flags.js';
+import { HttpError } from '../../platform/http.js';
 import type { RateLimitDb } from '../../platform/ratelimit/index.js';
 import { createRequireExtensionDevice } from './auth.js';
 import { createExtensionPublicRouter, createExtensionRouter, contentDisposition } from './routes.js';
@@ -26,7 +27,7 @@ const PUB = '/api/v1/public/ext';
 const HOST = 'localhost:3621';
 const CN_HOST = 'goapply.localhost:3621';
 
-type Env<T = unknown> = { success: boolean; data: T; code?: string; details?: { reason?: string } };
+type Env<T = unknown> = { success: boolean; data: T; code?: string; details?: { reason?: string; type?: string } };
 
 /** In-memory RARateCounter (`INSERT … ON CONFLICT … RETURNING count`). */
 function memoryRateDb(): RateLimitDb & { counts: Map<string, number> } {
@@ -58,6 +59,7 @@ const svc = {
   createRun: vi.fn(async () => ({ runId: 'run_1', jobId: null })),
   patchRun: vi.fn(async () => ({ runId: 'run_1' })),
   answer: vi.fn(async () => ({ answer: null, source: 'none', saveable: false, questionType: 'free_text', reason: 'ai_off' })),
+  saveAnswer: vi.fn(async () => ({ saved: true, questionKey: 'custom:0123456789abcdef' })),
   resumeForJob: vi.fn(async () => ({ variantId: 'rv', isTailored: false, fileName: 'a.pdf', downloadUrl: 'x', tailoredNeedsReview: false })),
   file: vi.fn(async () => ({ buffer: Buffer.from('%PDF-1.7 bytes'), fileName: '简历 Ada.pdf', contentType: 'application/pdf', artifactId: 'a1' })),
   siteRequest: vi.fn(async () => undefined),
@@ -134,6 +136,7 @@ const DEVICE_ROUTES = [
   ['POST', '/autofill-runs', { host: 'x.example', atsType: 'greenhouse', url: 'https://x.example/1', fieldsTotal: 3 }],
   ['PATCH', '/autofill-runs/run_1', { fieldsFilled: 1, outcome: 'filled' }],
   ['POST', '/answers', { runId: 'run_1', question: 'Why us?', fieldType: 'textarea' }],
+  ['POST', '/answers/save', { runId: 'run_1', question: 'Why us?', answer: 'The mission.' }],
   ['POST', '/resume-for-job', { jobId: 'j1', runId: 'run_1' }],
   ['GET', '/files/' + 'x'.repeat(40), undefined],
   ['POST', '/site-requests', { host: 'x.example', url: 'https://x.example/1' }],
@@ -255,6 +258,16 @@ describe('pair-code redeem (public)', () => {
     expect((await on.request('POST', `${BASE}/pair-codes/redeem`, { host: HOST, body: { code: 'ABCD2345', name: 'Edge' } })).status).toBe(429);
   });
 
+  it('returns { token } and takes the extension\'s name and browser ("Chrome" | "Edge")', async () => {
+    user = null;
+    for (const browser of ['Chrome', 'Edge'] as const) {
+      const r = await on.request<Env<{ token: string }>>('POST', `${BASE}/pair-codes/redeem`, { host: HOST, body: { code: 'ABCD2345', name: browser, browser, extVersion: '0.1.0' } });
+      expect(r.status).toBe(201);
+      expect(r.body.data.token).toMatch(/^rax_[A-Za-z0-9_-]{20,}$/);
+      expect(svc.redeemPairCode).toHaveBeenLastCalledWith({ code: 'ABCD2345', name: browser, browser, extVersion: '0.1.0' });
+    }
+  });
+
   it('422 on a malformed code', async () => {
     expect((await on.request('POST', `${BASE}/pair-codes/redeem`, { host: HOST, body: { code: 'abc', name: 'Edge' } })).status).toBe(422);
   });
@@ -312,6 +325,47 @@ describe('device routes', () => {
     const r = await on.request('POST', `${BASE}/resume-for-job`, { ...h(), body: { jobId: 'j1', runId: 'run_1' } });
     expect(r.status).toBe(200);
     expect(svc.resumeForJob).toHaveBeenCalledWith('u1', { jobId: 'j1', runId: 'run_1' }, expect.stringMatching(/^http:\/\/localhost:3621$/));
+    // Without a matched job the extension sends the run only: the main resume comes back (service.test).
+    expect((await on.request('POST', `${BASE}/resume-for-job`, { ...h(), body: { runId: 'run_1' } })).status).toBe(200);
+    expect(svc.resumeForJob).toHaveBeenLastCalledWith('u1', { runId: 'run_1' }, expect.any(String));
+  });
+
+  it('GET /me passes flags.aiAnswers through to the extension', async () => {
+    (svc.me as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ user: { id: 'u1' }, flags: { extension: true, aiAnswers: false } });
+    const r = await on.request<Env<{ flags: { aiAnswers: boolean } }>>('GET', `${BASE}/me`, h());
+    expect(r.body.data.flags.aiAnswers).toBe(false);
+  });
+
+  it('PATCH takes the running totals of a page-by-page form and stays strict', async () => {
+    const ok = await on.request('PATCH', `${BASE}/autofill-runs/run_1`, { ...h(), body: { fieldsFilled: 9, fieldsTotal: 14, outcome: 'partial' } });
+    expect(ok.status).toBe(200);
+    expect(svc.patchRun).toHaveBeenCalledWith('u1', 'run_1', { fieldsFilled: 9, fieldsTotal: 14, outcome: 'partial' });
+    expect((await on.request('PATCH', `${BASE}/autofill-runs/run_1`, { ...h(), body: { fieldsFilled: 9, outcome: 'partial', submitted: true } })).status).toBe(422);
+  });
+
+  it('a protected question is refused with reason protected_question and details.type', async () => {
+    (svc.answer as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new HttpError('invalid_request', 'This question is about you.', { reason: 'protected_question', type: 'grades' }));
+    const r = await on.request<Env>('POST', `${BASE}/answers`, { ...h(), body: { runId: 'run_1', question: 'What is your GPA?', fieldType: 'text' } });
+    expect(r.status).toBe(422);
+    expect(r.body).toMatchObject({ success: false, code: 'invalid_request', details: { reason: 'protected_question', type: 'grades' } });
+  });
+
+  it('POST /answers/save (F-EXT-04): device auth, ext.autofill, 201, strict body, 100 a day', async () => {
+    const body = { runId: 'run_1', question: 'Why us?', answer: 'The mission.' };
+    const r = await on.request<Env<{ saved: boolean; questionKey: string }>>('POST', `${BASE}/answers/save`, { ...h(), body });
+    expect(r.status).toBe(201);
+    expect(r.body.data).toEqual({ saved: true, questionKey: 'custom:0123456789abcdef' });
+    expect(svc.saveAnswer).toHaveBeenCalledWith('u1', body);
+    // No session cookie can call it, and an unknown field or an empty answer is refused.
+    expect((await on.request('POST', `${BASE}/answers/save`, { host: HOST, body })).status).toBe(401);
+    expect((await on.request('POST', `${BASE}/answers/save`, { ...h(), body: { ...body, answer: '  ' } })).status).toBe(422);
+    expect((await on.request('POST', `${BASE}/answers/save`, { ...h(), body: { ...body, source: 'ai' } })).status).toBe(422);
+    (svc.saveAnswer as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new HttpError('invalid_request', 'This answer is about you.', { reason: 'protected_question', type: 'salary_expectation' }));
+    const refused = await on.request<Env>('POST', `${BASE}/answers/save`, { ...h(), body: { ...body, question: 'Expected salary?' } });
+    expect(refused.body).toMatchObject({ code: 'invalid_request', details: { reason: 'protected_question', type: 'salary_expectation' } });
+    rateDb.counts.clear();
+    for (let i = 0; i < 100; i++) await on.request('POST', `${BASE}/answers/save`, { ...h(), body });
+    expect((await on.request('POST', `${BASE}/answers/save`, { ...h(), body })).status).toBe(429);
   });
 
   it('GET /files/:token sends the bytes as an attachment, not cached', async () => {

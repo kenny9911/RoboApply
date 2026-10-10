@@ -10,7 +10,7 @@
 // 8-character code typed into the popup.
 
 import { isTrustedBrandOrigin, type ExtBrandConfig } from '../brands/index';
-import { EXT_TOKEN_RE, PAIR_CODE_RE } from '../shared/contract';
+import { EXT_TOKEN_RE, PAIR_CODE_RE, type ExtBrowserName } from '../shared/contract';
 import type { ApiResult, ExternalMessage, InternalMessage, PairResponse, PingResponse, StatusResponse } from '../shared/messages';
 import { callApi, isAuthFailure, redeemPairCode, type FetchLike } from './api';
 import { clearAuth, needsReconnect, readAuth, writeAuth, type KeyValueStore } from './storage';
@@ -22,7 +22,7 @@ export interface RouterDeps {
   apiOrigin: string;
   version: string;
   /** "Chrome" | "Edge": the device name shown in the web app's device list. */
-  browserName: string;
+  browserName: ExtBrowserName;
   store: KeyValueStore;
   fetch: FetchLike;
   now?: () => Date;

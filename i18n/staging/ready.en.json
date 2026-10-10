@@ -142,13 +142,13 @@
       "back": "Back to filters",
       "askTitle": "Use this for your main search too?",
       "yes": "Yes, update my main search",
-      "no": "No, only this list",
+      "no": "No, only Ready to apply",
       "savedBoth": "Saved. Your main search and your weekly list use these filters.",
       "conflict": "These filters changed somewhere else. Open them again to see the latest.",
       "failed": "The filters couldn't be saved. Try again.",
-      "askNote": "Either way, jobs that match are added to your list now. \"Only this list\" leaves Jobs and next week's list on your main search.",
+      "askNote": "Either way, jobs that match are added to your list now. \"Only Ready to apply\" leaves Jobs on your main search and keeps these filters for your next lists here.",
       "addedBoth": "Saved. Your main search uses these filters, and {count, plural, one {# matching job was} other {# matching jobs were}} added to your list.",
-      "addedReady": "{count, plural, one {# matching job was} other {# matching jobs were}} added to your list. Your main search did not change.",
+      "addedReady": "{count, plural, one {# matching job was} other {# matching jobs were}} added to your list. Your main search did not change; your next lists here use these filters too.",
       "none": {
         "no_feed": "No jobs can be added right now.",
         "no_matches": "No new jobs match these filters yet.",
@@ -157,7 +157,11 @@
       },
       "listFailed": "Jobs couldn't be added to your list. Try again.",
       "savedMain": "Saved. Your main search and your weekly list use these filters.",
-      "setupNote": "Your weekly list comes from your main search, so saving here also changes the jobs you see on Jobs."
+      "setupNote": "Your weekly list comes from your main search, so saving here also changes the jobs you see on Jobs.",
+      "ownChanges": "Your lists here use filter changes you kept for Ready to apply only. Jobs still shows your main search.",
+      "useMainOnly": "Use my main search only",
+      "ownRemoved": "Done. Your lists here use your main search again.",
+      "keptReady": "Your main search did not change; your next lists here use these filters."
     },
     "setup": {
       "title": "Set up Ready to apply",

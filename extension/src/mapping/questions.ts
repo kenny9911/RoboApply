@@ -9,6 +9,34 @@ const SPONSORSHIP_RE = /sponsor|visa|签证|簽證|担保/;
 const WORK_AUTH_RE =
   /authori[sz]ed to work|work authori[sz]ation|legally (eligible|authori[sz]ed|permitted|able) to work|right to work|eligible to work|work permit|citizenship|citizen|工作许可|工作許可|工作签|身份/;
 
+/**
+ * Grades and test scores: the same pattern as the server's
+ * (server/src/features/extension/questionTypes.ts GRADES_RE;
+ * test/contractParity.test.ts keeps the two equal). 成绩 and 排名 also mean
+ * achievements and rankings at work, and "academic performance" or "test
+ * results" turn up in open questions, so those words count only with a study
+ * context next to them, or as the whole field label.
+ */
+export const GRADES_RE = new RegExp(
+  [
+    // The whole label and nothing else: "成绩", "排名情况", "Academic performance", "Exam results".
+    String.raw`^[\s*:：?？()（）]*(?:成绩|成績|排名|academic\s+(?:performance|results?)|(?:test|exam(?:ination)?)\s+results?)(?:情况|情況)?[\s*:：?？()（）]*$`,
+    String.raw`\bgpa\b|\bgrades\b|grade\s+(?:point|average)|class\s+rank|academic\s+(?:rank(?:ing)?|standing|record)`,
+    String.raw`academic\s+(?:performance|results?)\s*[(:（：-]?\s*(?:gpa|grades?|scores?|marks?|percentage)`,
+    String.raw`(?:test|exam(?:ination)?)\s+scores?|\byour\s+exam(?:ination)?\s+results?`,
+    String.raw`\b(?:sat|act|gre|gmat|lsat|toeic|jlpt|hsk)\s*(?:scores?|results?|level|成绩|成績|分数|分數)`,
+    String.raw`\bielts\b|\btoefl\b|\bcet[-\s]?[46]\b|\btem[-\s]?[48]\b`,
+    '绩点|績點|四六级|四六級|四级|六级|四級|六級|英语等级|英語等級|雅思|托福|专四|专八|專四|專八|平均分|均分|考试分数|考試分數',
+    // 成绩 with a study word in front (在校成绩, 大学期间取得的成绩), right after a subject
+    // or an exam (英语成绩, 笔试成绩), or as 成绩单 / 成绩排名.
+    '(?:学习|學習|在校|学业|學業|学校|學校|学期|學期|本科|硕士|碩士|博士|研究生|大学|大學|高中|高考).{0,8}成[绩績]',
+    '(?:课程|課程|专业课|專業課|各科|考试|考試|笔试|筆試|英语|英語|外语|外語).{0,2}成[绩績]|成[绩績](?:单|單|排名)',
+    // 排名 of a class, year or major, or given as a share ("排名前10%").
+    String.raw`(?:专业|專業|年级|年級|班级|班級|综合|綜合|学业|學業|学习|學習|院系|同届|同屆|成绩|成績)排名|排名.{0,4}(?:前\s*\d|\d+\s*%|百分)`,
+  ].join('|'),
+  'i',
+);
+
 const RULES: Array<[ProtectedQuestionType, RegExp]> = [
   ['sponsorship', SPONSORSHIP_RE],
   ['work_authorization', WORK_AUTH_RE],
@@ -28,6 +56,9 @@ const RULES: Array<[ProtectedQuestionType, RegExp]> = [
   ],
   ['years_of_experience', /years of (professional |relevant |work )?experience|how many years|工作年限|几年经验|幾年經驗/],
   ['clearance', /clearance/],
+  // Grades and test scores (server 'grades', WP-93): the user's own record, never drafted.
+  // Before certification and degree, as on the server ("CET-4 certificate score").
+  ['grades', GRADES_RE],
   ['certification', /certif|licen[cs]e|证书|證照|資格/],
   ['degree', /\bdegree\b|bachelor|master'?s|ph\.?d|doctorate|highest (level of )?education|学历|學歷|学位/],
   [
