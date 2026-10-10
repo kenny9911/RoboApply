@@ -44,7 +44,7 @@ import {
 } from './contract.js';
 import { computeCompleteness } from './completeness.js';
 import { isPlainObject, toCore, toEducationView, toExperienceView, type Market, type ProfileCore } from './model.js';
-import { StaleDiffError, diffProfile, planAccepted, proposeFromResume } from './resumeSync.js';
+import { StaleDiffError, diffProfile, planAccepted, proposeFromResume, type SyncPlan } from './resumeSync.js';
 import { openSensitive, sealSensitive, sensitiveCryptoConfigured, type CryptoEnv } from './sensitiveCrypto.js';
 import { buildSnapshotText, snapshotCacheKey } from './snapshot.js';
 import { createTwFieldsStore, type TwFieldsStore } from './twFieldsStore.js';
@@ -113,6 +113,24 @@ function isEmptyAnswers(a: SensitiveAnswers): boolean {
   const has = (o: Record<string, unknown> | undefined) =>
     !!o && Object.values(o).some((v) => (Array.isArray(v) ? v.length > 0 : typeof v === 'string' ? v.trim() !== '' : v !== undefined && v !== null));
   return !has(a.eeo) && !has(a.cn);
+}
+
+/** A person's name as one line: "First Middle Last"; a Chinese, Japanese or Korean name as family name + given name with no space. Null when there is none. */
+export function displayNameOf(first: string | null | undefined, middle: string | null | undefined, last: string | null | undefined): string | null {
+  const parts = [first, middle, last].map((p) => (p ?? '').trim());
+  if (!parts[0] && !parts[2]) return null;
+  const unspaced = /^[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af]+$/;
+  if (parts[0] && parts[2] && !parts[1] && unspaced.test(parts[0]) && unspaced.test(parts[2])) return `${parts[2]}${parts[0]}`;
+  return parts.filter(Boolean).join(' ');
+}
+
+/** Prefill only: may this `add` go in without a review? Lists and rows only when the profile has none of that kind. */
+function fillsEmpty(core: ProfileCore, path: string): boolean {
+  if (path === 'skills') return core.skills.length === 0;
+  if (path === 'languages') return core.languages.length === 0;
+  if (path.startsWith('education[')) return core.education.length === 0;
+  if (path.startsWith('experience[')) return core.experience.length === 0;
+  return true;
 }
 
 export function createProfileService(deps: ProfileServiceDeps = {}) {
@@ -226,6 +244,43 @@ export function createProfileService(deps: ProfileServiceDeps = {}) {
       warn('sensitive answers could not be decrypted', { userId, keyVersion: row.keyVersion, error: err instanceof Error ? err.message : 'unknown' });
       return { answers: {}, updatedAt, unreadable: true };
     }
+  }
+
+  /** Write a resume-sync plan (rows in one transaction, then the fields with the recomputed completeness). */
+  async function writePlan(db: ProfileDb, userId: string, ctx: ProfileContext, core: ProfileCore, plan: SyncPlan, variantId: string): Promise<ProfileView> {
+    const data: Prisma.RAProfileUncheckedUpdateInput = { ...plan.fields, syncedFromVariantId: variantId };
+    if (plan.links) data.links = dropNulls({ ...core.links, ...plan.links }) as Prisma.InputJsonValue;
+    if (plan.skills) data.skills = plan.skills as Prisma.InputJsonValue;
+    if (plan.languages) data.languages = plan.languages as Prisma.InputJsonValue;
+
+    await db.$transaction(async (tx) => {
+      let eduOrder = await tx.rAProfileEducation.count({ where: { userId } });
+      for (const e of plan.education) {
+        await tx.rAProfileEducation.create({
+          data: { userId, school: e.school, degree: e.degree, major: e.major, gpa: e.gpa, startYm: e.startDate, endYm: e.endDate, current: e.current, sortOrder: eduOrder++ },
+        });
+      }
+      let expOrder = await tx.rAProfileExperience.count({ where: { userId } });
+      for (const x of plan.experience) {
+        await tx.rAProfileExperience.create({
+          data: {
+            userId,
+            company: x.company,
+            title: x.title,
+            location: x.location,
+            startYm: x.startDate,
+            endYm: x.endDate,
+            current: x.current,
+            summary: x.description,
+            bullets: x.bullets,
+            kind: x.kind,
+            employmentType: x.employmentType,
+            sortOrder: expOrder++,
+          },
+        });
+      }
+    });
+    return save(db, userId, ctx, data);
   }
 
   return {
@@ -447,40 +502,38 @@ export function createProfileService(deps: ProfileServiceDeps = {}) {
         }
         throw err;
       }
+      return writePlan(db, userId, ctx, core, plan, variantId);
+    },
 
-      const data: Prisma.RAProfileUncheckedUpdateInput = { ...plan.fields, syncedFromVariantId: variantId };
-      if (plan.links) data.links = dropNulls({ ...core.links, ...plan.links }) as Prisma.InputJsonValue;
-      if (plan.skills) data.skills = plan.skills as Prisma.InputJsonValue;
-      if (plan.languages) data.languages = plan.languages as Prisma.InputJsonValue;
-
-      await db.$transaction(async (tx) => {
-        let eduOrder = await tx.rAProfileEducation.count({ where: { userId } });
-        for (const e of plan.education) {
-          await tx.rAProfileEducation.create({
-            data: { userId, school: e.school, degree: e.degree, major: e.major, gpa: e.gpa, startYm: e.startDate, endYm: e.endDate, current: e.current, sortOrder: eduOrder++ },
-          });
-        }
-        let expOrder = await tx.rAProfileExperience.count({ where: { userId } });
-        for (const x of plan.experience) {
-          await tx.rAProfileExperience.create({
-            data: {
-              userId,
-              company: x.company,
-              title: x.title,
-              location: x.location,
-              startYm: x.startDate,
-              endYm: x.endDate,
-              current: x.current,
-              summary: x.description,
-              bullets: x.bullets,
-              kind: x.kind,
-              employmentType: x.employmentType,
-              sortOrder: expOrder++,
-            },
-          });
-        }
-      });
-      return save(db, userId, ctx, data);
+    /**
+     * Onboarding: fill the EMPTY parts of the profile from the resume the
+     * user just chose, so "Confirm your profile" starts from their own
+     * details instead of 0% (the user still reviews and edits every field).
+     *
+     * Only fills, never changes: a field the profile already has is left
+     * alone (that stays the reviewed `syncPreview` / `syncApply` flow), and
+     * skills, languages, education and work rows are added only when the
+     * profile has none of that kind. Nothing is invented: a phone that cannot
+     * be written in international form without guessing the country, or a
+     * language with no stated level, stays empty. No model is called.
+     * Returns the paths it filled (empty when there was nothing to do) and,
+     * when this call filled the name, the name as one line (`displayName`),
+     * so the caller can offer it where a display name is still missing.
+     */
+    async prefillFromResume(userId: string, variantId: string, ctx: ProfileContext): Promise<{ filled: string[]; displayName: string | null }> {
+      const nothing = { filled: [], displayName: null };
+      const db = await getDb();
+      const variant = await db.rAResumeVariant.findFirst({ where: { id: variantId, userId, deletedAt: null }, select: { id: true, parsedData: true } });
+      if (!variant) return nothing;
+      const { core } = await loadCore(db, userId);
+      const proposal = proposeFromResume(variant.parsedData, { market: ctx.brand.market, country: core.country });
+      if (!proposal) return nothing;
+      const diff = diffProfile(core, proposal, ctx.brand.market);
+      const accept = diff.filter((d) => d.kind === 'add' && fillsEmpty(core, d.path)).map((d) => d.path);
+      if (!accept.length) return nothing;
+      const after = await writePlan(db, userId, ctx, core, planAccepted(core, diff, accept), variantId);
+      const nameFilled = accept.includes('firstName') || accept.includes('lastName');
+      return { filled: accept, displayName: nameFilled ? displayNameOf(after.firstName, after.middleName, after.lastName) : null };
     },
 
     async completeness(userId: string, ctx: ProfileContext) {

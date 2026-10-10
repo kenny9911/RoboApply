@@ -50,6 +50,41 @@ function setup(over: Partial<OnboardingDeps> = {}, seed: Parameters<typeof creat
   return { svc: createOnboardingService(deps), mem, sp, profile, deps, aiSeedRoles, applyCnStep };
 }
 
+// Verification finding: after onboarding with a full resume the profile stayed 0% complete.
+describe('the chosen resume fills the empty profile', () => {
+  it('saving the resume step with a resume prefills the profile from it (RoboApply)', async () => {
+    const prefillFromResume = vi.fn(async () => ({ filled: ['firstName'], displayName: 'Mara Lindqvist' as string | null }));
+    const { svc, profile, mem } = setup({}, { u1: { step: 'resume', path: 'urgent' } });
+    Object.assign(profile, { prefillFromResume });
+    const setAccountNameIfEmpty = vi.fn(async () => true);
+    mem.repo.setAccountNameIfEmpty = setAccountNameIfEmpty;
+    const res = await svc.saveStep('u1', 'resume', { resumeVariantId: 'rv1' }, RA);
+    expect(res.nextStage).toBe('matching');
+    expect(prefillFromResume).toHaveBeenCalledWith('u1', 'rv1', RA.brand);
+    // An account with no name takes the resume's (the repo only writes when the account has none).
+    expect(setAccountNameIfEmpty).toHaveBeenCalledWith('u1', 'Mara Lindqvist');
+
+    // The name was not filled by this resume (the profile already had one): the account is left alone.
+    prefillFromResume.mockResolvedValueOnce({ filled: ['skills'], displayName: null });
+    await svc.saveStep('u1', 'resume', { resumeVariantId: 'rv1' }, RA);
+    expect(setAccountNameIfEmpty).toHaveBeenCalledTimes(1);
+  });
+
+  it('skipping the resume step fills nothing; a failing prefill never blocks the step', async () => {
+    const prefillFromResume = vi.fn(async () => {
+      throw new Error('db down');
+    });
+    const warn = vi.fn();
+    const { svc, profile } = setup({ warn }, { u1: { step: 'resume', path: 'urgent' } });
+    Object.assign(profile, { prefillFromResume });
+    await svc.saveStep('u1', 'resume', { skip: true }, RA);
+    expect(prefillFromResume).not.toHaveBeenCalled();
+    const res = await svc.saveStep('u1', 'resume', { resumeVariantId: 'rv1' }, RA);
+    expect(res.nextStage).toBe('matching');
+    expect(warn).toHaveBeenCalledWith('profile prefill from the onboarding resume failed', expect.objectContaining({ userId: 'u1' }));
+  });
+});
+
 describe('state', () => {
   it('a fresh account starts at situation with a progress count and a header-derived default country', async () => {
     const { svc } = setup();

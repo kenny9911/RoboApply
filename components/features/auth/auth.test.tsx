@@ -128,6 +128,27 @@ describe('signup', () => {
     );
   });
 
+  // Verification finding: "Enter a valid email address." showed under the field and again in the red box.
+  it('a bad email is said once, under the field, and goes away when the address is fixed', async () => {
+    renderWithBrand(<AuthEntryView mode="signup" />, { flags: {} });
+    fill(/^Email$/, 'bad');
+    fill(/^Password$/, 'abcdefg1');
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(screen.getAllByText('Enter a valid email address.')).toHaveLength(1);
+    expect(screen.getByLabelText(/^Email$/)).toHaveAttribute('aria-invalid', 'true');
+    expect(api.signup).not.toHaveBeenCalled();
+    fill(/^Email$/, 'good@example.test');
+    expect(screen.queryByText('Enter a valid email address.')).toBeNull();
+  });
+
+  it('an empty email is said once too when Create account is pressed', () => {
+    renderWithBrand(<AuthEntryView mode="signup" />, { flags: {} });
+    fill(/^Password$/, 'abcdefg1');
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(screen.getAllByText('Enter a valid email address.')).toHaveLength(1);
+    expect(api.signup).not.toHaveBeenCalled();
+  });
+
   it('checks the password rules inline', () => {
     renderWithBrand(<AuthEntryView mode="signup" />, { flags: {} });
     fill(/^Password$/, 'abcdefgh');
@@ -534,6 +555,29 @@ describe('password reset pages', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save new password' }));
     expect(await screen.findByText('This reset link has expired.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Ask for a new link' })).toHaveAttribute('href', '/forgot-password');
+  });
+
+  // Verification finding: /reset-password/bogus-token-123 answered a valid new
+  // password with "Use at least 8 characters…" (422 invalid_request on the token's length).
+  it('reset: a cut-off or mistyped link is "not valid" with a way to ask for a new one, never a password error', async () => {
+    api.resetPassword.mockRejectedValue(
+      wireError(422, 'invalid_request', { where: 'body', issues: [{ path: ['token'], code: 'too_small', message: 'Too small' }] }),
+    );
+    renderWithBrand(<ResetPasswordView token="bogus-token-123" />, { flags: {} });
+    fill(/^New password$/, 'abcdefg1');
+    fireEvent.click(screen.getByRole('button', { name: 'Save new password' }));
+    expect(await screen.findByText('This reset link is not valid or was already used.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ask for a new link' })).toHaveAttribute('href', '/forgot-password');
+    expect(screen.queryByText(/at least one letter and one number/)).toBeNull();
+  });
+
+  it('reset: a 422 that names the password is still a password message', async () => {
+    api.resetPassword.mockRejectedValue(wireError(422, 'invalid_request', { where: 'body', issues: [{ path: ['password'], code: 'too_big', message: 'Too big' }] }));
+    renderWithBrand(<ResetPasswordView token="a-real-looking-token-0001" />, { flags: {} });
+    fill(/^New password$/, 'abcdefg1');
+    fireEvent.click(screen.getByRole('button', { name: 'Save new password' }));
+    expect(await screen.findByText(/at least one letter and one number/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Ask for a new link' })).toBeNull();
   });
 
   it('reset: success signs in and moves on', async () => {

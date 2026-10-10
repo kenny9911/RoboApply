@@ -385,6 +385,99 @@ describe('sync from resume', () => {
   });
 });
 
+// Verification finding: after onboarding with a full resume the profile was
+// still 0% complete (nine details "missing") although the resume had them.
+describe('prefill from the onboarding resume (fills what is empty, never changes)', () => {
+  const RA_BRAND = { id: 'roboapply', market: 'intl' } as never;
+  const parsedData = {
+    name: 'Ada Lovelace',
+    email: 'ada@example.test',
+    phone: '+1 415 555 0142',
+    linkedin: 'linkedin.com/in/ada-lovelace',
+    skills: ['SQL', 'Python'],
+    education: [{ institution: 'Rice University', degree: 'MS', year: '2020' }],
+    experience: [
+      { company: 'Acme', role: 'Analyst', startDate: '2020-06', endDate: 'Present' },
+      { company: 'Initech', role: 'Intern', startDate: '2019-06', endDate: '2019-09' },
+    ],
+  };
+
+  beforeEach(() => {
+    fake.$rows('rAResumeVariant').push(
+      { id: 'v1', userId: 'u1', parsedData, deletedAt: null, isPrimary: true, resumeContentHash: 'h1' },
+      { id: 'v-other', userId: 'u2', parsedData, deletedAt: null },
+      { id: 'v-scratch', userId: 'u1', parsedData: null, deletedAt: null },
+    );
+  });
+
+  it('an empty profile gets the name, contact details, link, skills, education and work from the resume', async () => {
+    const svc = service();
+    const before = await svc.get('u1', { brand: RA_BRAND });
+    expect(before.completeness).toBe(0);
+    const res = await svc.prefillFromResume('u1', 'v1', { brand: RA_BRAND });
+    expect(res.filled).toEqual(expect.arrayContaining(['firstName', 'lastName', 'contactEmail', 'phoneE164', 'links.linkedin', 'skills']));
+    expect(res.displayName).toBe('Ada Lovelace');
+    const after = await svc.get('u1', { brand: RA_BRAND });
+    expect(after).toMatchObject({ firstName: 'Ada', lastName: 'Lovelace', contactEmail: 'ada@example.test', phoneE164: '+14155550142', syncedFromVariantId: 'v1' });
+    expect(after.links.linkedin).toBe('https://linkedin.com/in/ada-lovelace');
+    expect(after.skills.map((s) => s.name)).toEqual(['SQL', 'Python']);
+    expect(after.education.map((e) => e.school)).toEqual(['Rice University']);
+    expect(after.experience.map((x) => x.company).sort()).toEqual(['Acme', 'Initech']);
+    expect(after.completeness).toBeGreaterThan(before.completeness);
+    const missing = after.missing.map((m) => m.key);
+    for (const key of ['firstName', 'lastName']) expect(missing).not.toContain(key);
+  });
+
+  it('never changes what the user already has, and adds no rows next to existing ones', async () => {
+    const svc = service();
+    await svc.patch('u1', { firstName: 'Augusta', contactEmail: 'me@example.test' }, { brand: RA_BRAND });
+    await svc.putSkills('u1', { skills: [{ name: 'Rust', confirmed: true }] }, { brand: RA_BRAND });
+    await svc.addExperience('u1', { company: 'Own Co', title: 'Founder', current: true } as never, { brand: RA_BRAND });
+    const res = await svc.prefillFromResume('u1', 'v1', { brand: RA_BRAND });
+    expect(res.filled).not.toContain('firstName');
+    // Only the family name came from the resume: the line is the profile's name as it now stands.
+    expect(res.displayName).toBe('Augusta Lovelace');
+    expect(res.filled).not.toContain('contactEmail');
+    expect(res.filled).not.toContain('skills');
+    expect(res.filled.some((p) => p.startsWith('experience['))).toBe(false);
+    const after = await svc.get('u1', { brand: RA_BRAND });
+    expect(after).toMatchObject({ firstName: 'Augusta', lastName: 'Lovelace', contactEmail: 'me@example.test' });
+    expect(after.skills.map((s) => s.name)).toEqual(['Rust']);
+    expect(after.experience.map((x) => x.company)).toEqual(['Own Co']);
+    // Education was empty, so the resume's row is filled in.
+    expect(after.education.map((e) => e.school)).toEqual(['Rice University']);
+  });
+
+  it('is idempotent, and does nothing for an unread, missing or foreign resume', async () => {
+    const svc = service();
+    await svc.prefillFromResume('u1', 'v1', { brand: RA_BRAND });
+    expect(await svc.prefillFromResume('u1', 'v1', { brand: RA_BRAND })).toEqual({ filled: [], displayName: null });
+    expect(fake.$rows('rAProfileExperience')).toHaveLength(2);
+    userId = 'u1';
+    const nothing = { filled: [], displayName: null };
+    expect(await svc.prefillFromResume('u1', 'v-scratch', { brand: RA_BRAND })).toEqual(nothing);
+    expect(await svc.prefillFromResume('u1', 'v-other', { brand: RA_BRAND })).toEqual(nothing);
+    expect(await svc.prefillFromResume('u1', 'nope', { brand: RA_BRAND })).toEqual(nothing);
+  });
+
+  it('does not guess: a local phone number with no country stays empty', async () => {
+    fake.$rows('rAResumeVariant').push({ id: 'v-local', userId: 'u1', parsedData: { name: 'Ada Lovelace', phone: '(415) 555-0142' }, deletedAt: null });
+    const svc = service();
+    const res = await svc.prefillFromResume('u1', 'v-local', { brand: RA_BRAND });
+    expect(res.filled).toEqual(['firstName', 'lastName']);
+    expect((await svc.get('u1', { brand: RA_BRAND })).phoneE164).toBeNull();
+  });
+
+  it('displayNameOf: Latin names are spaced, Chinese names are family name first with no space', async () => {
+    const { displayNameOf } = await import('./service.js');
+    expect(displayNameOf('Ada', 'King', 'Lovelace')).toBe('Ada King Lovelace');
+    expect(displayNameOf('Ada', null, null)).toBe('Ada');
+    expect(displayNameOf('小明', null, '王')).toBe('王小明');
+    expect(displayNameOf(null, null, null)).toBeNull();
+    expect(displayNameOf(' ', '', undefined)).toBeNull();
+  });
+});
+
 // ── public surface used by other areas ──────────────────────────────────
 
 describe('profileSnapshotForLlm (service)', () => {

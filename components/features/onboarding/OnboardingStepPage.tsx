@@ -79,13 +79,17 @@ const ROBOAPPLY_SCREENS: Record<string, ComponentType<StepScreenProps>> = {
 
 /**
  * The count "Finding jobs" stored, for the GoApply confirm screen. Only a
- * finished run that compared the jobs with the profile counts: a run still
- * going in the background, or one that did not use the profile (个性化推荐
- * off: `ranked: false`), leaves the screen on its own index counts.
+ * finished run that compared the jobs with the profile AND a resume counts
+ * (that screen words it "at Good fit or better"): a run still going in the
+ * background, one that did not use the profile (个性化推荐 off:
+ * `ranked: false`), or one with no resume to compare (`resumeCompared: false`)
+ * leaves the screen on its own index counts.
  */
 export function matchSummaryOf(state: Pick<OnboardingState, 'answers'>): CnMatchSummary | null {
-  const m = (state.answers as Record<string, unknown>).matching as { jobCount?: unknown; topJobIds?: unknown; continuedInBackground?: unknown; ranked?: unknown } | undefined;
-  if (!m || typeof m.jobCount !== 'number' || m.continuedInBackground === true || m.ranked === false) return null;
+  const m = (state.answers as Record<string, unknown>).matching as
+    | { jobCount?: unknown; topJobIds?: unknown; continuedInBackground?: unknown; ranked?: unknown; resumeCompared?: unknown }
+    | undefined;
+  if (!m || typeof m.jobCount !== 'number' || m.continuedInBackground === true || m.ranked === false || m.resumeCompared === false) return null;
   return { jobCount: m.jobCount, ...(Array.isArray(m.topJobIds) ? { topJobIds: m.topJobIds.filter((x): x is string => typeof x === 'string') } : {}) };
 }
 

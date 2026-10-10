@@ -20,7 +20,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { PrefHeader } from '../controls';
+import { PrefHeader, joinTitleTail } from '../controls';
 import { WipeDataModal } from '../WipeDataModal';
 import { DeleteAccountModal } from '../../account';
 
@@ -68,7 +68,7 @@ export function DangerSection({ accountEmail }: { accountEmail: string }) {
     <>
       <PrefHeader
         eyebrow={t('danger.eyebrow')}
-        title={`${t('danger.title_before')} ${t('danger.title_em')}${t('danger.title_after')}`}
+        title={joinTitleTail(t('danger.title_before'), t('danger.title_em'), t('danger.title_after'))}
         sub={t('danger.sub')}
       />
 

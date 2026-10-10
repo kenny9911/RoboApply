@@ -1,0 +1,24 @@
+{
+  "accountV2": {
+    "prefs": {
+      "identity": {
+        "name_ph": "你的姓名",
+        "name_save_failed": "姓名没有保存成功，请再试一次。",
+        "pronouns_she": "她",
+        "pronouns_he": "他",
+        "pronouns_they": "TA",
+        "years_unset": "未填写",
+        "linkedin_invalid": "请填写你的 LinkedIn 个人主页链接（linkedin.com/in/your-name），或者留空。"
+      },
+      "danger": {
+        "confirmKeyword": "删除",
+        "signedOutNow": "你会立即在所有设备上退出登录。"
+      },
+      "security": {
+        "phoneNote": "你用手机验证码登录，所以没有密码可以修改。",
+        "wechatNote": "你用微信登录，所以没有密码可以修改。",
+        "otherNote": "你的登录方式不用密码，所以没有密码可以修改。"
+      }
+    }
+  }
+}

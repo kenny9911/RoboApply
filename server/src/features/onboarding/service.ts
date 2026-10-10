@@ -106,6 +106,12 @@ export interface OnboardingDeps {
   profile: {
     setLinkedin(userId: string, url: string, brand: ProductBrand): Promise<void>;
     setSponsorship(userId: string, needs: Record<string, 'yes' | 'no' | 'not_sure'>, brand: ProductBrand): Promise<void>;
+    /**
+     * Fill the empty parts of the profile from the resume the user chose in
+     * setup (profile `prefillFromResume`: fills only, never changes, no model).
+     * Absent = the profile is left as it is.
+     */
+    prefillFromResume?(userId: string, resumeVariantId: string, brand: ProductBrand): Promise<{ displayName?: string | null } | void>;
   };
   /** WP-31 validator; `ctx.answers` (stored onboardingAnswers) carries the G2 identity G3/G4 depend on. */
   validateCnStep(step: string, body: unknown, ctx: { answers: Record<string, unknown> | null }): Promise<CnStepValidation>;
@@ -256,6 +262,20 @@ export function createOnboardingService(deps: OnboardingDeps): OnboardingService
   ): Promise<void> {
     // GoApply: WP-31 records the consents (with the prose version shown), merges cnFields and patches the default filters.
     if (cn) await deps.applyCnStep(userId, brand, cn, { locale: locale ?? null });
+    // Either brand: the resume the user chose fills the empty parts of their
+    // profile, so "Confirm your profile" does not start at 0% with the same
+    // details missing that the resume already states. Best effort: a failure
+    // here never blocks the step (the profile can be filled in later).
+    if (step === 'resume' && typeof answers.resumeVariantId === 'string' && deps.profile.prefillFromResume) {
+      try {
+        const filled = await deps.profile.prefillFromResume(userId, answers.resumeVariantId, brand);
+        // An account with no name (email sign-up asks for none) takes the resume's;
+        // a name the user already has is never replaced. Editable in Settings.
+        if (filled && filled.displayName) await repo.setAccountNameIfEmpty?.(userId, filled.displayName);
+      } catch (err) {
+        deps.warn?.('profile prefill from the onboarding resume failed', { userId, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
     if (brand.id !== 'roboapply') return;
     switch (step) {
       case 'situation':

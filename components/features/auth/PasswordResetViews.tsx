@@ -24,6 +24,18 @@ import styles from './auth.module.css';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * Which field a 422 `invalid_request` is about (the API lists the failed
+ * fields in `details.issues[].path`). A cut-off or mistyped link fails on the
+ * token's shape before the token is even looked up, and that is a bad link,
+ * not a weak password.
+ */
+export function invalidRequestFields(err: unknown): string[] {
+  const payload = err instanceof RoboApiError ? (err.payload as { details?: { issues?: unknown } } | undefined) : undefined;
+  const issues = Array.isArray(payload?.details?.issues) ? (payload.details.issues as Array<{ path?: unknown }>) : [];
+  return issues.map((i) => (Array.isArray(i?.path) ? String(i.path[0] ?? '') : typeof i?.path === 'string' ? i.path : '')).filter(Boolean);
+}
+
 export function ForgotPasswordView() {
   const t = useTranslations('auth');
   const params = useSearchParams();
@@ -116,7 +128,13 @@ export function ResetPasswordView({ token }: { token: string }) {
       const code = err instanceof RoboApiError ? ((err.payload as { code?: string } | undefined)?.code ?? err.code) : undefined;
       if (code === 'token_expired') setError({ key: 'reset.expired', requestNew: true });
       else if (code === 'token_invalid') setError({ key: 'reset.invalid', requestNew: true });
-      else if (code === 'invalid_request' || code === 'weak_password') setError({ key: 'signupForm.weakPassword' });
+      else if (code === 'weak_password') setError({ key: 'signupForm.weakPassword' });
+      else if (code === 'invalid_request') {
+        // The password already passed the same rules here, so a refused request is about
+        // the link unless the API names the password.
+        if (invalidRequestFields(err).includes('password')) setError({ key: 'signupForm.weakPassword' });
+        else setError({ key: 'reset.invalid', requestNew: true });
+      }
       else if (code === 'rate_limited') setError({ key: 'errors.rateLimited' });
       else setError({ key: 'errors.network' });
     } finally {

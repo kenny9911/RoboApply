@@ -11,7 +11,7 @@ import { LLM_PII_KINDS, redactPii } from '../../platform/pii/index.js';
 import type { ProductBrand } from '../../platform/brand/registry.js';
 import { logger } from '../../services/LoggerService.js';
 import { seedDraftFromParsedResume } from '../../roboapply/v2/lib/raResumeSeed.js';
-import { searchTaxonomy, taxonomyChildren, taxonomyLabel } from '../jobs/taxonomy/index.js';
+import { searchTaxonomy, taxonomyAncestors, taxonomyChildren, taxonomyLabel } from '../jobs/taxonomy/index.js';
 import { searchProfileService } from '../search/index.js';
 import { createProfileService, type ProfileServiceImpl } from '../profile/index.js';
 import { cnFirstValueContext, onboardingCnService, validateCnStep } from '../onboarding-cn/index.js';
@@ -20,17 +20,36 @@ import { createPrismaOnboardingRepo, type OnboardingRepo, type ResumeVariantRow 
 import { createSnapshotLoader, type SnapshotDb } from './snapshot.js';
 import { createOnboardingService, type OnboardingDeps, type OnboardingServiceImpl } from './service.js';
 import type { MatchPipelineDeps } from './match.js';
+import { foldToSimplified } from './zhFold.js';
 
 /** O5 AI role suggestion: only waits this long (the deterministic seed already answered). */
 export const AI_SEED_TIMEOUT_MS = 8_000;
 
+/** How many titles the typeahead offers. */
+const TITLE_SUGGEST_LIMIT = 10;
+
+/**
+ * O2 typeahead. Labels come from the taxonomy in the asked locale (it has
+ * English and Simplified Chinese; other locales get English there, and the
+ * web localizes categories and role groups from its own bundle through
+ * `contextIds` / the node id). The taxonomy's Chinese phrases are Simplified,
+ * so a query in Traditional characters is also searched in its Simplified
+ * reading (zhFold.ts): "後端" finds the backend roles.
+ */
 export function suggestTitles(q: string, locale: string): TitleSuggestionView[] {
-  return searchTaxonomy(q, { locale, limit: 10 }).map((s) => ({
+  const direct = searchTaxonomy(q, { locale, limit: TITLE_SUGGEST_LIMIT });
+  const folded = foldToSimplified(q);
+  const hits = folded === q ? direct : mergeSuggestions(direct, searchTaxonomy(folded, { locale, limit: TITLE_SUGGEST_LIMIT }));
+  return hits.slice(0, TITLE_SUGGEST_LIMIT).map((s) => ({
     taxonomyId: s.id,
     label: s.label,
     level: s.level,
     tooGeneral: s.level === 1,
     context: s.context,
+    // Nearest first (role group, then category), like `context`.
+    contextIds: taxonomyAncestors(s.id)
+      .slice(1)
+      .map((a) => a.id),
     children:
       s.level === 1
         ? taxonomyChildren(s.id)
@@ -38,6 +57,12 @@ export function suggestTitles(q: string, locale: string): TitleSuggestionView[] 
             .map((c) => ({ taxonomyId: c.id, label: taxonomyLabel(c.id, locale) ?? c.en, level: c.level }))
         : [],
   }));
+}
+
+/** The typed query's matches first, then what only its Simplified reading found. */
+function mergeSuggestions<T extends { id: string }>(first: T[], second: T[]): T[] {
+  const seen = new Set(first.map((s) => s.id));
+  return [...first, ...second.filter((s) => !seen.has(s.id))];
 }
 
 export function seedResume(row: ResumeVariantRow): { roles: string[]; seniority: string | null; years: number | null } {
@@ -84,17 +109,21 @@ const profileEffects: OnboardingDeps['profile'] = {
     const rows = sponsorshipToWorkAuth(needs, view.workAuth);
     if (rows) await profiles().patch(userId, { workAuth: rows as typeof view.workAuth }, { brand });
   },
+  prefillFromResume: (userId, resumeVariantId, brand) => profiles().prefillFromResume(userId, resumeVariantId, { brand }),
 };
+
+/** The user's default saved search (id and version); reads, never writes. */
+async function defaultSearchProfile(userId: string): Promise<{ id: string; version: number }> {
+  const list = await searchProfileService.list(userId);
+  const row = list.profiles.find((p) => p.isDefault) ?? list.profiles[0];
+  return { id: row.id, version: row.version };
+}
 
 export function createDefaultOnboardingDeps(repo: OnboardingRepo = createPrismaOnboardingRepo()): OnboardingDeps {
   return {
     repo,
     searchProfiles: {
-      async getDefault(userId) {
-        const list = await searchProfileService.list(userId);
-        const row = list.profiles.find((p) => p.isDefault) ?? list.profiles[0];
-        return { id: row.id, version: row.version };
-      },
+      getDefault: defaultSearchProfile,
       async update(userId, id, input) {
         const row = await searchProfileService.update(userId, id, input);
         return { id: row.id, version: row.version };
@@ -154,6 +183,16 @@ export function createDefaultMatchDeps(
     repo,
     brand: { id: brand.id, market: brand.market },
     applyAnswers: (userId) => service.applyAnswers(userId, { brand }),
+    // Read only: a queued run uses the search as the user has it now and never writes it.
+    currentProfile: (userId) => defaultSearchProfile(userId),
+    // The saved search's own size: the feed's count for the default search's filters (what /jobs lists for it).
+    async searchCount(userId) {
+      const list = await searchProfileService.list(userId);
+      const row = list.profiles.find((p) => p.isDefault) ?? list.profiles[0];
+      if (!row) return { count: null, capped: false };
+      const { countForFilters } = await import('../feed/index.js');
+      return countForFilters(userId, row.filters);
+    },
     async ingest(searchProfileId, budgetMs) {
       const { ingestForProfile } = await import('../jobs/ingest/index.js');
       return ingestForProfile(searchProfileId, budgetMs);

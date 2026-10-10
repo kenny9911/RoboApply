@@ -131,6 +131,30 @@ function PasswordField({
 // SecurityCard
 // ─────────────────────────────────────────────────────────────────────
 
+type Translate = (key: string, values?: Record<string, string>) => string;
+
+/** Brand names of the sign-in providers that have one (never translated). */
+const PROVIDER_BRAND_NAMES: ReadonlyArray<[needle: string, name: string]> = [
+  ['google', 'Google'],
+  ['linkedin', 'LinkedIn'],
+  ['line', 'LINE'],
+  ['apple', 'Apple'],
+  ['github', 'GitHub'],
+];
+
+/**
+ * "You sign in with …, so there is no password to change." for the stored
+ * provider id (`settings.security.oauthNote` for a named provider; the
+ * accountV2 sentences for phone, WeChat and anything unknown).
+ */
+export function passwordlessNoteOf(provider: string, t: Translate, tp: Translate): string {
+  const id = provider.trim().toLowerCase();
+  if (id.includes('phone') || id === 'sms' || id === 'otp') return tp('phoneNote');
+  if (id.includes('wechat') || id.includes('weixin')) return tp('wechatNote');
+  const brand = PROVIDER_BRAND_NAMES.find(([needle]) => id.includes(needle));
+  return brand ? t('security.oauthNote', { provider: brand[1] }) : tp('otherNote');
+}
+
 interface SecurityCardProps {
   hasPassword: boolean;
   provider: string;
@@ -182,12 +206,12 @@ export function SecurityCard({
   const canSubmit =
     !changing && current.length > 0 && next.length >= 8 && /[A-Za-z]/.test(next) && /\d/.test(next) && next === confirm;
 
-  const providerName =
-    provider.toLowerCase().includes('google')
-      ? 'Google'
-      : provider.toLowerCase().includes('linkedin')
-        ? 'LinkedIn'
-        : provider;
+  // Why there is no password, in words: never the stored provider id
+  // ("You sign in with phone"). Product names are not translated; the phone
+  // and WeChat sign-ins have their own sentence; an id this page does not
+  // know gets the sentence that names no provider.
+  const tp = useTranslations('accountV2.prefs.security');
+  const passwordlessNote = passwordlessNoteOf(provider, t, tp);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -246,7 +270,7 @@ export function SecurityCard({
             </form>
           ) : (
             <p style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-2)', maxWidth: 360 }}>
-              {t('security.oauthNote', { provider: providerName })}
+              {passwordlessNote}
             </p>
           )}
         </div>

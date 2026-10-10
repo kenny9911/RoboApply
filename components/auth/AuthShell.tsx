@@ -16,7 +16,7 @@ import {
 } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ThemeToggle } from '../landing/ThemeToggle';
+import { ThemeToggle } from '../v3/shell/ThemeToggle';
 import { BrandSymbol } from '../chrome/BrandSymbol';
 import { setLocaleCookie } from '../../lib/locale';
 import { useLocale, useTranslations } from 'next-intl';
@@ -24,6 +24,7 @@ import { isLocale, localePath } from '../../lib/localeConfig';
 import { brandSwitcherLocales } from '../features/brand';
 import { cn } from '../../lib/utils';
 import { useBrand } from '../../lib/brand/BrandProvider';
+import { useFlag } from '../../lib/flags';
 import { entryContext } from '../../lib/auth/entry';
 import { useEntryJob } from '../../hooks/auth/useAuthAccount';
 
@@ -83,10 +84,18 @@ export function AuthUtilities() {
           </option>
         ))}
       </select>
-      <ThemeToggle />
+      {/* The app's own toggle, so the icon means the same thing before and after
+          sign-in (it shows the current appearance; the label says what a press
+          switches to). The auth pages used the landing's toggle, whose icon
+          showed the appearance a press would switch to. */}
+      <ThemeToggle className={AUTH_THEME_TOGGLE_CLASS} />
     </div>
   );
 }
+
+/** The round, bordered control the auth header uses (tokens only). */
+const AUTH_THEME_TOGGLE_CLASS =
+  'inline-flex h-9 w-9 items-center justify-center rounded-[var(--r-pill)] border border-[color:var(--rule)] text-[color:var(--text-2)] transition-colors duration-[var(--dur-hover)] hover:border-[color:var(--rule-strong)] hover:text-[color:var(--text)]';
 
 function FeatureCheck() {
   return (
@@ -132,6 +141,10 @@ function ContextLead() {
 export function AuthBrandPanel() {
   const t = useTranslations('auth.brand');
   const brand = useBrand();
+  // "Practice interviews that talk back" is only said where the spoken
+  // interview is on for this brand (`ai.interviewVoice`; off on GoApply,
+  // where practice is written). Fails closed: unknown reads as off.
+  const voice = useFlag('ai.interviewVoice');
   return (
     <aside className="auth-brand">
       <div className="auth-brand__path" aria-hidden="true">
@@ -164,7 +177,7 @@ export function AuthBrandPanel() {
           </li>
           <li className="auth-feature">
             <FeatureCheck />
-            {t('feature_interview')}
+            {voice ? t('feature_interview') : t('feature_interview_written')}
           </li>
           <li className="auth-feature">
             <FeatureCheck />

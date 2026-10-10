@@ -41,6 +41,7 @@ export function WipeDataModal({
   onClose: () => void;
 }) {
   const t = useTranslations('settings');
+  const tk = useTranslations('accountV2.prefs.danger');
   const wipe = useWipeData();
 
   const [confirm, setConfirm] = useState('');
@@ -60,7 +61,8 @@ export function WipeDataModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const keyword = t('danger.delete_data_confirm_keyword');
+  // The word to type, in the user's language; the same key as the delete-account dialog.
+  const keyword = tk('confirmKeyword');
 
   const onConfirm = () => {
     setError(null);

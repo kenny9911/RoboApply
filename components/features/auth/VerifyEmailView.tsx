@@ -5,7 +5,9 @@
 // email, creates the account and signs the user in. When that address
 // already has an account, nothing is created or linked (`account_exists`) and
 // the page says so. Verification never blocks onboarding; this page only
-// reports what the link did.
+// reports what the link did. A link that was cut off or mistyped is reported
+// as a link that is not valid (it used to read as a connection problem), with
+// where to get a new one.
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -60,7 +62,15 @@ export function VerifyEmailView({ token }: { token: string }) {
         const code = err instanceof RoboApiError ? ((err.payload as { code?: string } | undefined)?.code ?? err.code) : undefined;
         setState({
           kind: 'failed',
-          reason: code === 'token_expired' ? 'expired' : code === 'account_other_brand' ? 'other_brand' : code === 'token_invalid' ? 'invalid' : 'network',
+          // `invalid_request`: the link was cut off or mistyped (the token's shape is refused before it is looked up).
+          reason:
+            code === 'token_expired'
+              ? 'expired'
+              : code === 'account_other_brand'
+                ? 'other_brand'
+                : code === 'token_invalid' || code === 'invalid_request'
+                  ? 'invalid'
+                  : 'network',
         });
       });
   }, [token, refresh, router]);
@@ -98,6 +108,12 @@ export function VerifyEmailView({ token }: { token: string }) {
           <p className="auth-subtitle" role="alert">
             {t(state.reason === 'expired' ? 'verify.expired' : state.reason === 'other_brand' ? 'otherBrand.body' : state.reason === 'invalid' ? 'verify.invalid' : 'errors.network')}
           </p>
+          {/* A new link is sent from Settings (signed in); a link that cannot work says where to get one. */}
+          {state.reason === 'invalid' || state.reason === 'expired' ? (
+            <p className={styles.inline}>
+              <Link href="/settings#account">{t('verify.requestNew')}</Link>
+            </p>
+          ) : null}
           <p className="auth-switch">
             <Link href="/login">{t('common.backToSignIn')}</Link>
           </p>

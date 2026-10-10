@@ -1,3 +1,17 @@
 {
-  "onboarding": {}
+  "onboarding": {
+    "confirm": {
+      "titleSearch": "{count, plural, one {We found # job for your search. Check these details.} other {We found # jobs for your search. Check these details.}}",
+      "titleSearchCapped": "We found {count, number}+ jobs for your search. Check these details.",
+      "titleSearchNone": "We didn't find jobs for your search yet. Adjust your search below.",
+      "titleUncounted": "Your search is saved. Check these details.",
+      "searchNote": "These are open jobs that match your search. No resume was compared, so this is not a fit count.",
+      "countNoteCompared": "Counts jobs at Good fit or better, out of the {compared, plural, one {# job} other {# jobs}} we compared with your resume."
+    },
+    "resume": {
+      "errors": {
+        "consentUnanswered": "Answer the question above first. Then choose your PDF again."
+      }
+    }
+  }
 }

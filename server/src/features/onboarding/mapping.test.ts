@@ -15,7 +15,7 @@ import {
   sponsorshipToWorkAuth,
   titlesToTaxonomyIds,
 } from './mapping.js';
-import { computeSnapshot, createSnapshotLoader, payListedWhere, snapshotWhere, type SnapshotDb, type SnapshotRow } from './snapshot.js';
+import { computeSnapshot, createSnapshotLoader, displaySkill, payListedWhere, snapshotWhere, type SnapshotDb, type SnapshotRow } from './snapshot.js';
 
 describe('basics → filters', () => {
   it('maps titles, job types, places, remote and sponsorship (a valid FilterSetPatch)', () => {
@@ -40,6 +40,20 @@ describe('basics → filters', () => {
       needsSponsorship: true,
     });
     expect(FilterSetPatchSchema.safeParse(patch).success).toBe(true);
+  });
+
+  it('"Anywhere in {country}" stores only the country, never a zero-radius location row', () => {
+    // The verification bug: US with no city wrote locations:[{label:'US',country:'US',radiusKm:0}],
+    // which the feed read as "same city" (remote jobs only).
+    const anywhere = basicsToFilters({ jobFunctions: [{ label: 'Software engineer' }], jobTypes: ['full_time'], countries: ['US'] });
+    expect(anywhere.country).toBe('US');
+    expect(anywhere.locations).toBeNull();
+    // With "Remote anywhere" ticked as well it is still one country and no row.
+    expect(basicsToFilters({ jobFunctions: [{ label: 'X' }], jobTypes: ['full_time'], countries: ['US', 'REMOTE'] })).toMatchObject({ country: 'US', locations: null });
+    // A picked city is still a row; a city in another country than the one picked is not turned into a country row.
+    const city = basicsToFilters({ jobFunctions: [{ label: 'X' }], jobTypes: ['full_time'], countries: ['US'], locations: [{ country: 'US', city: 'Austin', label: 'Austin, US' }] });
+    expect(city).toMatchObject({ country: 'US', locations: [{ label: 'Austin, US', city: 'Austin', country: 'US', radiusKm: 40 }] });
+    expect(FilterSetPatchSchema.safeParse(anywhere).success).toBe(true);
   });
 
   it('one country sets `country`; remote-anywhere alone is remote-only; unticking remote excludes it', () => {
@@ -218,6 +232,23 @@ describe('market snapshot', () => {
     const small = computeSnapshot(5, paid(5), NOW);
     expect(small.pay).toBeNull();
     expect(small.topSkills).toEqual([]);
+  });
+
+  // Verification finding: "Most requested skills: python, aws, java, kubernetes, ci/cd, react".
+  it('names the top skills the way they are written (the index stores them lower-cased)', () => {
+    const rows = Array.from({ length: 24 }, () => job({ skills: ['python', 'aws', 'ci/cd', 'project management', 'node.js', 'rest api'] }));
+    const snap = computeSnapshot(rows.length, rows, NOW);
+    expect(snap.topSkills.map((s) => s.value).sort()).toEqual(['AWS', 'CI/CD', 'Node.js', 'Project management', 'Python', 'REST API'].sort());
+    // Only the letter case changes; the counts are the posts that ask for it.
+    expect(snap.topSkills.every((s) => s.count === 24 && s.sampleSize === 24)).toBe(true);
+    expect(displaySkill('python')).toBe('Python');
+    expect(displaySkill('c++')).toBe('C++');
+    expect(displaySkill('kubernetes')).toBe('Kubernetes');
+    expect(displaySkill('machine learning')).toBe('Machine learning');
+    expect(displaySkill('aws lambda')).toBe('AWS lambda');
+    expect(displaySkill('数据分析')).toBe('数据分析');
+    expect(displaySkill('iOS')).toBe('iOS');
+    expect(displaySkill('')).toBe('');
   });
 
   it('shows the middle of the listed ranges at ≥20 rows, never mixing currencies or periods', async () => {

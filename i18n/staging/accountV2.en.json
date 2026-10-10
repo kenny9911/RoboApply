@@ -1,3 +1,24 @@
 {
-  "accountV2": {}
+  "accountV2": {
+    "prefs": {
+      "identity": {
+        "name_ph": "Your name",
+        "name_save_failed": "Your name was not saved. Try again.",
+        "pronouns_she": "she/her",
+        "pronouns_he": "he/him",
+        "pronouns_they": "they/them",
+        "years_unset": "Not set",
+        "linkedin_invalid": "Use your LinkedIn profile link (linkedin.com/in/your-name), or leave it empty."
+      },
+      "danger": {
+        "confirmKeyword": "DELETE",
+        "signedOutNow": "You are signed out everywhere right away."
+      },
+      "security": {
+        "phoneNote": "You sign in with a code sent to your phone, so there is no password to change.",
+        "wechatNote": "You sign in with WeChat, so there is no password to change.",
+        "otherNote": "You sign in without a password, so there is no password to change."
+      }
+    }
+  }
 }

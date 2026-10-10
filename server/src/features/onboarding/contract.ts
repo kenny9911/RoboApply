@@ -553,6 +553,28 @@ export interface OnboardingMatchResult {
    * (read as true).
    */
   ranked?: boolean;
+  /**
+   * Whether a resume was read for the comparison. False (no resume chosen, or
+   * it is gone): `jobCount` came from the answers alone, so the screens never
+   * call it a fit; they show `searchCount`, the size of the saved search (D3).
+   * Absent on older results.
+   */
+  resumeCompared?: boolean;
+  /** True when `compared` reached the candidate cap: there may be more open jobs, so every count of this run is a floor. Absent on older results. */
+  comparedCapped?: boolean;
+  /**
+   * How many open jobs the user's saved search listed when the run finished:
+   * the feed's own count for the default search's filters, i.e. the number
+   * /jobs shows for it. Stored only when no resume was compared (the heading
+   * then says "N jobs for your search"). `compared` is NOT this number: it
+   * comes from the comparison's own query (titles and countries only, at most
+   * the candidate cap, nothing without a title). Absent = not counted (the
+   * feed could not say, the feed is off, or an older result): the screens
+   * then show no number.
+   */
+  searchCount?: number;
+  /** True when `searchCount` stopped at the feed's count cap ("N+"). */
+  searchCountCapped?: boolean;
 }
 
 /** `onboardingAnswers.resumeSuggestions`: what POST /onboarding/resume suggested (O7 chips). */
@@ -599,6 +621,13 @@ export interface OnboardingStateView extends OnboardingStateResponse {
 export interface TitleSuggestionView extends TitleSuggestion {
   /** "Role group · Category" for roles; null for categories. */
   context: string | null;
+  /**
+   * The ids behind `context`, nearest first (role group, then category), so
+   * the web can show them in a locale the taxonomy has no label for (its
+   * bundle has every category and role group in all nine locales). Empty for
+   * a category.
+   */
+  contextIds?: string[];
   /** For a broad (level-1) title: more specific titles to offer as chips. */
   children: Array<{ taxonomyId: string; label: string; level: 1 | 2 | 3 }>;
 }
