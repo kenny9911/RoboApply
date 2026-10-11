@@ -1,9 +1,9 @@
 // server/src/platform/billing/planViews.ts
 //
 // What the plan sheet and /pricing receive (PRODUCT_PLAN.md §6.1, §6.3;
-// F-BILL-02): every plan of the brand with its price (GoApply: the catalog
-// default in fen or its whole-yuan override; RoboApply: the configured
-// Stripe price), whether it is on sale, the "Save N%" computed from our own
+// F-BILL-02): every plan of the brand with its price (the catalog default or
+// its env override: fen on GoApply, USD cents on RoboApply; see
+// planCatalog.ts), whether it is on sale, the "Save N%" computed from our own
 // monthly price (rounded down), the weekly plan's monthly equivalent ("about
 // $43 a month"), and the preselected plan (never weekly, never the 7-day
 // pass). Student plans appear only for a caller who may buy them
@@ -12,9 +12,11 @@
 // 学生月卡 / 学生季卡, one-time passes).
 //
 // V2 (WP-79):
-//   - `localPrice`: the real Taiwan price (Stripe TWD) when the buyer's country
-//     is TW and the owner configured it; its savings and weekly equivalent are
-//     computed in TWD. Without it Taiwan keeps the USD price + reference line.
+//   - `localPrice`: the real Taiwan price (TWD) when the buyer's country is TW
+//     and the owner configured an amount (PRICE_<PLANKEY>_TWD_CENTS); its
+//     savings and weekly equivalent are computed in TWD. Its Stripe price is
+//     a pin or is resolved at checkout, so the view carries no price id rule.
+//     Without it Taiwan keeps the USD price + reference line.
 //   - `studentDiscountPercent`: computed from the two configured prices, in
 //     the currency shown (`localPrice.studentDiscountPercent` for TWD).
 //   - `promotionCodes`: the payment page accepts a promotion code

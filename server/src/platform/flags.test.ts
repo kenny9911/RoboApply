@@ -31,6 +31,7 @@ import { fakeAuth, startRouteHarness } from '../test/routeHarness.js';
 import { IMPLEMENTED_VOICE_PROVIDERS, voiceAvailable } from '../interview-engine/providers/index.js';
 import { VOICE_PROVIDER_IDS } from '../interview-engine/config.js';
 import { wechatPayReadiness } from './billing/rails/wechatpay.js';
+import { STRIPE_WEBHOOK_TRIES_EVERY_SECRET } from './billing/stripeEnv.js';
 
 const robo = BRANDS.roboapply;
 const go = BRANDS.goapply;
@@ -201,11 +202,28 @@ describe('requirements (credentials, off switches) cannot be overridden', () => 
   });
 
   it('payment rails are brand-locked; Alipay opens with its callback secret; CN_PAYMENTS_ENABLED=false is the kill switch (D6)', () => {
-    expect(isEnabledForBrand('pay.stripe', robo, { STRIPE_SECRET_KEY: 'sk_test_x' })).toBe(true);
+    // Stripe needs the key AND a webhook secret (ST-0): a key alone would take money and never fulfil.
+    const STRIPE = { STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_WEBHOOK_SECRET: 'whsec_test' };
+    expect(isEnabledForBrand('pay.stripe', robo, STRIPE)).toBe(true);
+    expect(isEnabledForBrand('pay.stripe', robo, { STRIPE_SECRET_KEY: 'sk_test_x', ROBOAPPLY_STRIPE_WEBHOOK_SECRET: 'whsec_test' })).toBe(true);
+    expect(isEnabledForBrand('pay.stripe', robo, { STRIPE_SECRET_KEY: 'sk_test_x' })).toBe(false);
+    expect(isEnabledForBrand('pay.stripe', robo, { STRIPE_WEBHOOK_SECRET: 'whsec_test' })).toBe(false);
+    // A list of secrets is not usable until the webhook route tries each one (stripeEnv.ts), and a key
+    // that is not a test key counts as live outside production.
+    expect(isEnabledForBrand('pay.stripe', robo, { STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_WEBHOOK_SECRET: 'whsec_a,whsec_b' })).toBe(STRIPE_WEBHOOK_TRIES_EVERY_SECRET);
+    expect(isEnabledForBrand('pay.stripe', robo, { STRIPE_SECRET_KEY: 'sk_org_live_abc', STRIPE_WEBHOOK_SECRET: 'whsec_test' })).toBe(false);
     expect(isEnabledForBrand('pay.stripe', robo, EMPTY)).toBe(false);
+    // A live key outside production is refused; production or the explicit override allows it.
+    const LIVE = { ...STRIPE, STRIPE_SECRET_KEY: 'sk_live_example' };
+    expect(isEnabledForBrand('pay.stripe', robo, LIVE)).toBe(false);
+    expect(isEnabledForBrand('pay.stripe', robo, { ...LIVE, VERCEL_ENV: 'preview' })).toBe(false);
+    expect(isEnabledForBrand('pay.stripe', robo, { ...LIVE, VERCEL_ENV: 'production' })).toBe(true);
+    expect(isEnabledForBrand('pay.stripe', robo, { ...LIVE, STRIPE_ALLOW_LIVE_KEY_OUTSIDE_PRODUCTION: 'true' })).toBe(true);
+    // No override turns the requirement off.
+    expect(isEnabledForBrand('pay.stripe', robo, { STRIPE_SECRET_KEY: 'sk_test_x', FLAG_ROBOAPPLY_PAY_STRIPE: 'true' }, { 'pay.stripe': true })).toBe(false);
     // Stripe never serves GoApply.
-    expect(isEnabledForBrand('pay.stripe', go, { STRIPE_SECRET_KEY: 'sk_test_x' })).toBe(false);
-    expect(isEnabledForBrand('pay.stripe', go, { STRIPE_SECRET_KEY: 'sk_test_x', FLAG_GOAPPLY_PAY_STRIPE: 'true' }, { 'pay.stripe': true })).toBe(false);
+    expect(isEnabledForBrand('pay.stripe', go, STRIPE)).toBe(false);
+    expect(isEnabledForBrand('pay.stripe', go, { ...STRIPE, FLAG_GOAPPLY_PAY_STRIPE: 'true' }, { 'pay.stripe': true })).toBe(false);
 
     const SECRET = { ALIPAY_CALLBACK_SECRET: 'y' };
     // The secret alone: no CN_PAYMENTS_ENABLED and no ALIPAY_API_URL (the rail defaults the worker URL).
@@ -404,6 +422,7 @@ describe('brand parity matrix (D5)', () => {
     VAPID_SUBJECT: 'mailto:push@example.com',
     ALIPAY_CALLBACK_SECRET: 'secret',
     STRIPE_SECRET_KEY: 'sk_test_x',
+    STRIPE_WEBHOOK_SECRET: 'whsec_test',
   };
   /** On for RoboApply only: they follow from the market, not from a missing GoApply credential. */
   const ROBOAPPLY_ONLY: readonly FlagKey[] = ['h1bHistory', 'eeoAnswers', 'fx.reference', 'pay.stripe', 'auth.google', 'auth.line'];

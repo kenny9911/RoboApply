@@ -1,5 +1,5 @@
-import Stripe from 'stripe';
 import prisma from '../../../lib/prisma.js';
+import { getStripe } from '../../../platform/billing/stripeClient.js';
 import { formatDateKey, sqlLocalTime } from '../../../lib/timeBuckets.js';
 import { featureForSku, SHARED_COST_USER_ID } from '../lib/raFeatureCatalog.js';
 import type { Range } from './RAAdminAnalyticsService.js';
@@ -57,6 +57,9 @@ export function summarizePayments(rows: PaymentRow[]) {
   return [...currencies.values()].sort((a, b) => a.currency === 'CNY' ? -1 : b.currency === 'CNY' ? 1 : a.currency.localeCompare(b.currency));
 }
 
+/** Per-request options of the invoice scan: a short timeout and no retry, so the scan budget holds. */
+const STRIPE_SCAN_REQUEST_OPTIONS = { timeout: 6000, maxNetworkRetries: 0 } as const;
+
 /** A short in-flight cache avoids duplicate Stripe scans for summary + history. */
 const paymentCache = new Map<string, { expires: number; data: Promise<{ rows: PaymentRow[]; coverage: { stripe: StripeCoverage; refundsIncluded: false } }> }>();
 
@@ -86,15 +89,22 @@ async function loadPaymentRows(opts: OperationsQuery) {
       createdAt: order.createdAt.toISOString(), paidAt: iso(order.completedAt) };
   });
   let stripeCoverage: StripeCoverage = stripeUsers.size === 0 ? 'complete' : 'not_configured';
-  if (stripeUsers.size > 0 && process.env.STRIPE_SECRET_KEY) {
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { timeout: 6000, maxNetworkRetries: 0 });
+  // The shared client factory decides whether Stripe may be called at all (no
+  // key, or a live key outside production: null, and coverage stays
+  // 'not_configured'). This scan keeps its own short timeout and no retries
+  // per request, so ten pages fit the 20-second budget.
+  const stripe = stripeUsers.size > 0 ? getStripe() : null;
+  if (stripe) {
     stripeCoverage = 'partial';
     try {
       let after: string | undefined;
       const deadline = Date.now() + 20_000;
       // Scan older invoices too: an old invoice can be paid in the selected period.
       for (let page = 0; page < 10 && Date.now() < deadline; page++) {
-        const invoices = await stripe.invoices.list({ limit: 100, created: { lt: Math.ceil(opts.range.to.getTime() / 1000) }, ...(after ? { starting_after: after } : {}) });
+        const invoices = await stripe.invoices.list(
+          { limit: 100, created: { lt: Math.ceil(opts.range.to.getTime() / 1000) }, ...(after ? { starting_after: after } : {}) },
+          STRIPE_SCAN_REQUEST_OPTIONS,
+        );
         for (const invoice of invoices.data) {
           const customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id;
           const user = customerId ? stripeUsers.get(customerId) : undefined;

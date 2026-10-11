@@ -32,6 +32,9 @@ import { getPlan } from './planCatalog.js';
 const NOW = new Date('2026-10-10T08:00:00.000Z');
 
 const PRICES = {
+  // The Stripe rail is ready (ST-0: a key and a webhook secret), so RoboApply plans are on sale.
+  STRIPE_SECRET_KEY: 'sk_test_x',
+  STRIPE_WEBHOOK_SECRET: 'whsec_test',
   STRIPE_PRICE_PRO_WEEKLY: 'price_w',
   STRIPE_PRICE_PRO_WEEKLY_CENTS: '999',
   STRIPE_PRICE_PRO_MONTHLY: 'price_m',
@@ -152,11 +155,56 @@ describe('plan views (F-BILL-02 honesty)', () => {
     expect(plans.some((p) => p.key.startsWith('student_'))).toBe(false);
   });
 
-  it('never preselects weekly or the pass, even when only they are priced', () => {
-    const { defaultSelection } = buildPlanViews('roboapply', {
-      env: { STRIPE_PRICE_PRO_WEEKLY: 'price_w', STRIPE_PRICE_PRO_WEEKLY_CENTS: '999', STRIPE_PRICE_PRO_WEEK_PASS: 'p', STRIPE_PRICE_PRO_WEEK_PASS_CENTS: '699' },
+  it('never preselects weekly or the pass, and preselects nothing while payments are closed', () => {
+    const ready = { STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_WEBHOOK_SECRET: 'whsec_test' };
+    const open = buildPlanViews('roboapply', { env: ready, studentEnabled: true });
+    expect(open.defaultSelection).toBe('pro_monthly');
+    expect(open.plans.filter((p) => p.isDefaultSelection).map((p) => p.key)).toEqual(['pro_monthly']);
+    // No rail (no key, or a key without a webhook secret): every amount is still listed, nothing is preselected.
+    for (const env of [{}, { STRIPE_SECRET_KEY: 'sk_test_x' }]) {
+      const closed = buildPlanViews('roboapply', { env });
+      expect(closed.defaultSelection).toBeNull();
+      expect(closed.plans.filter((p) => p.kind !== 'free').every((p) => !p.sellable && p.unsellableReason === 'payments_disabled' && p.amountMinor !== null)).toBe(true);
+    }
+  });
+
+  it('RoboApply with no price variable: the catalog amounts, "Save 26%", "about $43 a month" and the student 30%', () => {
+    const { plans } = buildPlanViews('roboapply', { env: { STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_WEBHOOK_SECRET: 'whsec_test' }, studentEnabled: true });
+    expect(plans.filter((p) => p.kind !== 'free').map((p) => [p.key, p.amountMinor, p.sellable, p.stripePriceId])).toEqual([
+      ['pro_weekly', 999, true, null],
+      ['pro_monthly', 2499, true, null],
+      ['pro_quarterly', 5499, true, null],
+      ['pro_week_pass', 999, true, null],
+      ['practice_pack_5', 999, true, null],
+      ['practice_pack_15', 2499, true, null],
+      ['student_monthly', 1749, true, null],
+      ['student_quarterly', 3799, true, null],
+    ]);
+    expect(plans.find((p) => p.key === 'pro_quarterly')!.savingsPercent).toBe(26);
+    expect(plans.find((p) => p.key === 'pro_weekly')!.monthlyEquivalentMinor).toBe(4329);
+    expect(plans.filter((p) => p.key.startsWith('student_')).map((p) => p.studentDiscountPercent)).toEqual([30, 30]);
+  });
+
+  it('a Taiwan buyer sees the TWD price from the amount alone: the plan view needs no Stripe price id', () => {
+    const env = {
+      STRIPE_SECRET_KEY: 'sk_test_x',
+      STRIPE_WEBHOOK_SECRET: 'whsec_test',
+      PRICE_PRO_WEEKLY_TWD_CENTS: '29900',
+      PRICE_PRO_MONTHLY_TWD_CENTS: '74900',
+      PRICE_PRO_QUARTERLY_TWD_CENTS: '165000',
+    };
+    const tw = buildPlanViews('roboapply', { env, country: 'tw' }).plans;
+    expect(tw.find((p) => p.key === 'pro_monthly')).toMatchObject({
+      amountMinor: 2499,
+      twdPrice: { currency: 'TWD', amountMinor: 74900, stripePriceId: null },
+      localPrice: { currency: 'TWD', amountMinor: 74900, savingsPercent: null, monthlyEquivalentMinor: null, studentDiscountPercent: null },
     });
-    expect(defaultSelection).toBeNull();
+    // NT$1,650 vs 3 × NT$749 = NT$2,247 → 26.5 % → 26, the same label as USD.
+    expect(tw.find((p) => p.key === 'pro_quarterly')!.localPrice).toMatchObject({ amountMinor: 165000, savingsPercent: 26 });
+    expect(tw.find((p) => p.key === 'pro_weekly')!.localPrice).toMatchObject({ amountMinor: 29900, monthlyEquivalentMinor: Math.round((29900 * 52) / 12) });
+    // A plan with no TWD amount keeps the USD price for the same buyer; other countries always do.
+    expect(tw.find((p) => p.key === 'pro_week_pass')!.localPrice).toBeNull();
+    expect(buildPlanViews('roboapply', { env, country: 'US' }).plans.every((p) => p.localPrice === null)).toBe(true);
   });
 
   it('GoApply: passes only, on sale at the catalog prices with an empty env, 省 15 % on the quarter pass', () => {

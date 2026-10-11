@@ -59,6 +59,16 @@ export interface CheckoutOrder {
    * `studentService.isVerified(userId)` (features/account-v2).
    */
   studentVerified?: boolean;
+  /**
+   * One checkout attempt (ST-2): the `Idempotency-Key` header the web sends,
+   * a UUID made each time the plan sheet opens. The Stripe rail builds its
+   * idempotency key from it, so a double click opens one session and a later
+   * attempt opens a new one. Absent or malformed → the rail falls back to a
+   * 60-second bucket. Other rails ignore it.
+   */
+  attemptKey?: string | null;
+  /** The buyer's app locale (`X-Robo-Locale`); the Stripe rail maps it to a Checkout locale. */
+  locale?: string | null;
 }
 
 export type CheckoutResult =

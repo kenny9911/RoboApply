@@ -50,6 +50,7 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { getCurrentBrandOrDefault } from './brand/brandContext.js';
 import { envSet, parseBoolEnv, brandEnv, type EnvSource } from './brand/brandEnv.js';
 import type { BrandFlags, BrandId, HiringContactsMode, ProductBrand } from './brand/registry.js';
+import { stripeRailReady } from './billing/stripeEnv.js';
 import { contentSafetyReadiness } from './llm/contentSafety/config.js';
 
 /** Product flags held in the registry (booleans only; hiringContacts is a mode). */
@@ -359,7 +360,7 @@ export function requirementsMet(key: FlagKey, brand: ProductBrand, env: EnvSourc
       return brand.authMethods.includes('email_password') && emailConfigured(brand, env);
     // ── payments (brand-locked rails; D6) ───────────────────────────────
     case 'pay.stripe':
-      return brand.paymentRails.includes('stripe') && envSet(env, 'STRIPE_SECRET_KEY');
+      return brand.paymentRails.includes('stripe') && stripeRailReady(env);
     case 'pay.alipay':
       // The rail's own credential is the callback secret, the equal of
       // STRIPE_SECRET_KEY (it is what refuses a forged notify). The worker URL

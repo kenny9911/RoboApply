@@ -86,12 +86,54 @@ export const CancelSurveyBodySchema = z
  */
 export type CheckoutResponse = CheckoutResult & { rail: PaymentRail };
 
-/** GET /billing/plans (public; signed-in users also get `current`). */
+/**
+ * The numbers of the published refund rules (platform/billing/refunds.ts),
+ * so /pricing prints them from the API and never from copy: first purchase
+ * within `firstPurchaseDays` days (weekly plan and 7-day pass:
+ * `shortPlanHours` hours) if fewer than `paidOnlyCreditLimit` paid-only
+ * credits were used; a renewal charged by mistake within
+ * `accidentalRenewalDays` days; statutory withdrawal within `withdrawalDays`
+ * days; practice packs stay valid `packValidMonths` months.
+ */
+export interface PlansRefundPolicy {
+  firstPurchaseDays: number;
+  shortPlanHours: number;
+  paidOnlyCreditLimit: number;
+  accidentalRenewalDays: number;
+  withdrawalDays: number;
+  packValidMonths: number;
+  /**
+   * The public label of this brand's policy version: the rule set's name
+   * without any internal review note (the full value stays with stored refund
+   * decisions). Never contains "pending".
+   */
+  version: string;
+}
+
+/** One line of the published student rule. Amounts are in the brand's currency. */
+export interface PlansStudentOffer {
+  key: 'student_monthly' | 'student_quarterly';
+  amountMinor: number;
+  /** % below the regular plan, computed from the two catalog amounts (rounded down); null when there is no saving. */
+  studentDiscountPercent: number | null;
+}
+
+/**
+ * GET /billing/plans (public; signed-in users also get `current`).
+ *
+ * `checkout.collectingEntity`, `refundPolicy` and `studentOffer` were added
+ * in the market wave. This server always sends them (`PlansResponseSent`);
+ * they are optional here so a client reads each with a safe default and keeps
+ * working against a response that predates them.
+ */
 export interface PlansResponse {
   /**
    * The brand's plans with their prices; `sellable` false → shown, not
-   * purchasable. A GoApply plan always carries an amount and is sellable
-   * unless the kill switch is thrown (`unsellableReason: 'payments_disabled'`).
+   * purchasable. Every paid plan of either brand carries an amount (a catalog
+   * default or its override). A GoApply plan is sellable unless the kill
+   * switch is thrown; a RoboApply plan is sellable while the Stripe rail is
+   * ready (a usable key and a webhook secret). Otherwise
+   * `unsellableReason: 'payments_disabled'`, with the amount still listed.
    * Student plans (`requiresFlag: 'student'`) are in the list only for a
    * signed-in, verified student while the `student` capability is on; a
    * visitor and an unverified user never receive them.
@@ -113,7 +155,8 @@ export interface PlansResponse {
      * Rails that can take a payment now, in the order to offer them: the
      * first is the default. GoApply: `alipay` first (with
      * ALIPAY_CALLBACK_SECRET), then `wechatpay` when its merchant is set up;
-     * RoboApply: `stripe`. Empty when no rail can charge.
+     * RoboApply: `stripe` (with a usable key and a webhook secret). Empty
+     * when no rail can charge.
      */
     rails: Array<'stripe' | 'alipay' | 'wechatpay'>;
     /** Show the EU/UK/TW withdrawal-waiver box (edge country of this request). */
@@ -121,7 +164,25 @@ export interface PlansResponse {
     country: string | null;
     /** Stored with each acknowledgement record. */
     acknowledgementVersion: string;
+    /**
+     * GoApply only: the entity that collects the money
+     * (`CN_PAYMENT_COLLECTING_ENTITY`), printed on /pricing next to the rules.
+     * Null on RoboApply and whenever none is configured: the page then prints
+     * no entity line (never a made-up name).
+     */
+    collectingEntity?: string | null;
   };
+  /** The numbers of the published refund rules; /pricing hides the section while this is absent. */
+  refundPolicy?: PlansRefundPolicy;
+  /**
+   * The published student rule: the brand's student prices with the computed
+   * percentage below the regular plan, for a caller who is NOT sent the
+   * student plans themselves (on GoApply the buyable student rows in `plans`
+   * reach a signed-in, verified student only), while the `student` capability
+   * is on. Null when the student plans are in `plans` already, or the
+   * capability is off. A price list only: nothing here can be bought with.
+   */
+  studentOffer?: PlansStudentOffer[] | null;
   /** TWD reference line (R-25): only when an admin rate ≤45 days old exists; null otherwise. */
   fxReference: {
     currency: 'TWD';
@@ -134,6 +195,13 @@ export interface PlansResponse {
   /** Always empty at launch (no offers, H23). */
   offers: never[];
 }
+
+/** What this server answers on GET /billing/plans: every additive field present. */
+export type PlansResponseSent = PlansResponse & {
+  checkout: PlansResponse['checkout'] & { collectingEntity: string | null };
+  refundPolicy: PlansRefundPolicy;
+  studentOffer: PlansStudentOffer[] | null;
+};
 
 /** Public cancel flow: POST /api/v1/public/cancel {email} → 204 always; emails a single-use 30-min link. */
 export const PublicCancelRequestBodySchema = z.object({ email: z.string().trim().toLowerCase().email().max(254) }).strict();

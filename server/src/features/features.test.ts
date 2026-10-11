@@ -266,6 +266,7 @@ const REQUIREMENTS: EnvSource = {
   WECHAT_MINI_APP_SECRET: 's',
   RESEND_API_KEY: 're_test',
   STRIPE_SECRET_KEY: 'sk_test_x',
+  STRIPE_WEBHOOK_SECRET: 'whsec_test',
   ALIPAY_CALLBACK_SECRET: 's',
   WECHATPAY_MCH_ID: 'm',
   WECHATPAY_APP_ID: 'a',

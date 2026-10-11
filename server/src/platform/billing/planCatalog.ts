@@ -4,12 +4,12 @@
 // ARCHITECTURE.md §7.1 "Plans"). One list of plan keys per brand; the brand
 // decides currency and rail.
 //
-// Where a price comes from (owner rulings D5 and D6, 2026-10-11; they
-// supersede R-15 "GoApply payments off until a switch is set"; amounts per
-// docs/jobright-clone/market/MARKET_STRATEGY.md §4):
-//   - GoApply (CNY; Alipay, optionally WeChat Pay): every paid plan has a
-//     catalog default in fen (`GOAPPLY_DEFAULT_PRICE_FEN`, whole yuan), so a
-//     GoApply plan is never "price not set" and is on sale by default.
+// Where a price comes from (owner rulings D5 and D6, 2026-10-11; amounts per
+// docs/jobright-clone/market/MARKET_STRATEGY.md §4). Prices are CATALOG
+// DEFAULTS written in this file, one table per brand; an env value is an
+// override. No paid plan of either brand is ever "price not set".
+//   - GoApply (CNY; Alipay, optionally WeChat Pay): `GOAPPLY_DEFAULT_PRICE_FEN`
+//     (whole yuan, in fen).
 //       CN_PRICE_<PLANKEY>_FEN   optional override; used only when it is a
 //                                positive multiple of 100 (the payment worker
 //                                bills whole yuan). Anything else is ignored
@@ -17,21 +17,38 @@
 //       CN_PAYMENTS_ENABLED      the kill switch: a false value ('false', '0',
 //                                'off', 'no') marks every plan unsellable
 //                                ('payments_disabled'). Unset means on.
-//   - RoboApply (USD, Stripe): unchanged in the parity wave.
-//       STRIPE_PRICE_<PLANKEY>        the Stripe price id
-//       STRIPE_PRICE_<PLANKEY>_CENTS  the display amount (must equal the Stripe price)
-//     A RoboApply plan whose price is unset is listed but not sellable. (USD
-//     catalog defaults and the Stripe catalog sync are the market wave's.)
-// "Sellable" is about the price and the kill switch only. Whether a payment
-// can open right now also needs a rail that is configured
-// (`availableRails`, e.g. ALIPAY_CALLBACK_SECRET): `GET /billing/plans` puts
-// the two together as `paymentsOpen`.
+//   - RoboApply (USD; Stripe): `ROBOAPPLY_DEFAULT_PRICE_USD_CENTS`.
+//       PRICE_<PLANKEY>_USD_CENTS     optional override, a positive integer of cents
+//       STRIPE_PRICE_<PLANKEY>_CENTS  the older name, read as an alias of the line above
+//       STRIPE_PRICE_<PLANKEY>        optional PIN of a Stripe price id. The pinned price
+//                                     is what the buyer is charged, so it is honoured only
+//                                     when the amount we show is the amount it was set
+//                                     with: next to one amount variable, or next to both
+//                                     when they agree. A pin alone (we cannot know that it
+//                                     equals the default) or a pin next to two amounts
+//                                     that differ is ignored and logged.
+//     Without a pin the Stripe price is found or created at checkout by the
+//     catalog sync (stripeCatalog.ts, lookup key
+//     `ra_<planKey>_<currency>_<amountMinor>_incl`), so a RoboApply plan needs
+//     no price variable at all. It is sellable when the Stripe rail is ready
+//     (stripeEnv.ts `stripeRailReady`: a usable key AND a webhook secret the
+//     webhook can verify with);
+//     otherwise it is listed with its amount and 'payments_disabled'.
+// "Sellable" is the amount plus the brand's switch (the GoApply kill switch;
+// the Stripe rail's readiness). Whether a payment can open right now also
+// needs a rail that is configured (`availableRails`, e.g.
+// ALIPAY_CALLBACK_SECRET): `GET /billing/plans` puts the two together as
+// `paymentsOpen`. This module never calls Stripe and stays synchronous.
 //
 // V2 additions (WP-79; PRODUCT_PLAN.md §6.3, TW-06, R-25):
-//   - Taiwan prices: STRIPE_PRICE_<PLANKEY>_TWD (a Stripe TWD price id) and
-//     STRIPE_PRICE_<PLANKEY>_TWD_CENTS (its amount in TWD minor units, e.g.
-//     NT$749 = 74900). Both set → `twdPrice`; otherwise Taiwan keeps the USD
-//     price with the reference line. Hidden until configured.
+//   - Taiwan prices (off until set): PRICE_<PLANKEY>_TWD_CENTS, the amount in
+//     TWD minor units (NT$749 = 74900), with STRIPE_PRICE_<PLANKEY>_TWD_CENTS
+//     read as an alias. NT$ prices are whole dollars: a value that is not a
+//     multiple of 100 is ignored and logged. A valid amount → `twdPrice`;
+//     otherwise Taiwan keeps the USD price with the reference line.
+//     STRIPE_PRICE_<PLANKEY>_TWD is the optional pin of the Stripe TWD price
+//     id (same rule as the USD pin); without it the catalog sync resolves the
+//     price at checkout.
 //   - Student plans (`student_monthly`, `student_quarterly`) are priced like
 //     any plan; their discount is computed from the two catalog prices
 //     (`studentDiscountPercent`, rounded down), never from copy. On GoApply
@@ -53,6 +70,7 @@ import { logger } from '../../services/LoggerService.js';
 import { BRANDS, type BrandId, type ProductBrand } from '../brand/registry.js';
 import type { EnvSource } from '../brand/brandEnv.js';
 import { cnPaymentsKilled } from '../flags.js';
+import { stripeRailBlocker } from './stripeEnv.js';
 
 export const PLAN_KEYS = [
   'free',
@@ -110,9 +128,13 @@ export interface PlanDefinition {
 }
 
 /**
- * Why a plan cannot be bought. `price_unset`: RoboApply only (no Stripe price
- * configured). `payments_disabled`: GoApply only, and only under the kill
- * switch (`CN_PAYMENTS_ENABLED` set to a false value).
+ * Why a plan cannot be bought. `payments_disabled`: the brand's payments are
+ * closed (GoApply: the kill switch `CN_PAYMENTS_ENABLED` set to a false value;
+ * RoboApply: the Stripe rail is not ready, i.e. no usable key or no webhook
+ * secret). `price_unset` is no longer answered for any plan of the
+ * MARKET_STRATEGY §4.3 matrix (every one has a catalog default); it stays in
+ * the union as the guard for a plan added without a default, and because the
+ * web still names it.
  */
 export type UnsellableReason = 'free' | 'price_unset' | 'payments_disabled';
 
@@ -121,16 +143,22 @@ export interface LocalPrice {
   currency: 'TWD';
   /** Minor units (NT$749 = 74900). */
   amountMinor: number;
-  stripePriceId: string;
+  /** The optional pin `STRIPE_PRICE_<PLANKEY>_TWD`, where it may stand (`readOverrideWithPin`); null → the catalog sync resolves the price at checkout. */
+  stripePriceId: string | null;
 }
 
 export interface CatalogPlan extends PlanDefinition {
   currency: ProductBrand['currency'];
-  /** Display amount in minor units (cents / fen); null when not configured (RoboApply only: GoApply always has one). */
+  /** Amount in minor units (cents / fen): the catalog default or its override. Null only for a plan added without a default. */
   amountMinor: number | null;
-  /** Stripe price id (RoboApply); null on GoApply (amount-priced passes) and when unset. */
+  /**
+   * A PINNED Stripe price id (RoboApply, `STRIPE_PRICE_<PLANKEY>` next to
+   * the amount it was set with; see `readOverrideWithPin`); null otherwise:
+   * the catalog sync resolves the price at checkout. Always null on GoApply
+   * (amount-priced passes).
+   */
   stripePriceId: string | null;
-  /** Taiwan price (Stripe TWD), only when both env values are set and the plan is sellable. */
+  /** Taiwan price (TWD), whenever a valid TWD amount is configured. */
   twdPrice: LocalPrice | null;
   sellable: boolean;
   unsellableReason: UnsellableReason | null;
@@ -182,6 +210,22 @@ export const GOAPPLY_DEFAULT_PRICE_FEN: Readonly<Partial<Record<PlanKey, number>
   student_quarterly: 6900,
 };
 
+/**
+ * RoboApply catalog default prices in USD cents (MARKET_STRATEGY.md §4.1,
+ * tax-inclusive). Every paid RoboApply plan has one, so none is ever "price
+ * not set". `PRICE_<PLANKEY>_USD_CENTS` overrides a row.
+ */
+export const ROBOAPPLY_DEFAULT_PRICE_USD_CENTS: Readonly<Partial<Record<PlanKey, number>>> = {
+  pro_weekly: 999,
+  pro_monthly: 2499,
+  pro_quarterly: 5499,
+  pro_week_pass: 999,
+  practice_pack_5: 999,
+  practice_pack_15: 2499,
+  student_monthly: 1749,
+  student_quarterly: 3799,
+};
+
 /** Static plan definitions per brand (no env). */
 export const PLAN_DEFINITIONS: Record<BrandId, readonly PlanDefinition[]> = {
   roboapply: ROBOAPPLY_PLANS.map((d) => ({ ...d, brand: 'roboapply' as const, labelKey: `billing.plans.${d.key}.name` })),
@@ -205,52 +249,115 @@ function envKeySegment(key: PlanKey): string {
 
 /**
  * The env variables that price a plan on a brand (for docs, admin and
- * errors). GoApply: the optional override of the catalog default.
- * `CN_PAYMENTS_ENABLED` is not a price variable: it is the kill switch.
+ * errors), the name to use first. GoApply: the optional override of the
+ * catalog default. RoboApply: the override, its older alias, then the
+ * optional price-id pin. `CN_PAYMENTS_ENABLED` is not a price variable: it is
+ * the kill switch.
  */
 export function priceEnvNames(brand: BrandId, key: PlanKey): string[] {
   const seg = envKeySegment(key);
-  return brand === 'goapply' ? [`CN_PRICE_${seg}_FEN`] : [`STRIPE_PRICE_${seg}`, `STRIPE_PRICE_${seg}_CENTS`];
+  return brand === 'goapply' ? [`CN_PRICE_${seg}_FEN`] : [`PRICE_${seg}_USD_CENTS`, `STRIPE_PRICE_${seg}_CENTS`, `STRIPE_PRICE_${seg}`];
 }
 
-/** The optional Taiwan price variables of a RoboApply plan. */
-export function twdPriceEnvNames(key: PlanKey): [string, string] {
+/** The optional Taiwan price variables of a RoboApply plan: the amount, its older alias, then the optional pin. */
+export function twdPriceEnvNames(key: PlanKey): [amount: string, amountAlias: string, pin: string] {
   const seg = envKeySegment(key);
-  return [`STRIPE_PRICE_${seg}_TWD`, `STRIPE_PRICE_${seg}_TWD_CENTS`];
+  return [`PRICE_${seg}_TWD_CENTS`, `STRIPE_PRICE_${seg}_TWD_CENTS`, `STRIPE_PRICE_${seg}_TWD`];
 }
 
-function readMinor(env: EnvSource, name: string): number | null {
-  const raw = env[name]?.trim();
-  if (!raw || !/^\d+$/.test(raw)) return null;
-  const n = Number(raw);
-  return Number.isSafeInteger(n) && n > 0 ? n : null;
-}
-
-/** Ignored overrides already reported, so a bad value is logged once, not on every catalog read. */
+/** Ignored settings already reported, so a bad value is logged once, not on every catalog read. */
 const reportedBadOverrides = new Set<string>();
 
+/** Tests only: forget what was reported, so "logged once" can be asserted from a clean state. */
+export function resetPlanCatalogReportsForTests(): void {
+  reportedBadOverrides.clear();
+}
+
+function reportOnce(seen: string, message: string, meta: Record<string, unknown>): void {
+  if (reportedBadOverrides.has(seen)) return;
+  reportedBadOverrides.add(seen);
+  logger.warn('RA_BILLING', message, meta);
+}
+
 /**
- * A GoApply price override in fen: a positive multiple of 100 (the payment
- * worker bills whole yuan, and ¥x.9 prices are not ours). Unset or blank →
- * null without a word. Any other value is ignored and logged once; the
- * catalog default stands.
+ * A price override in minor units: a positive integer that is a multiple of
+ * `step`. Unset or blank → null without a word. Any other value is ignored
+ * and logged once (variable name and the first 20 characters of the value);
+ * the next source stands.
  */
-function readFenOverride(env: EnvSource, name: string): number | null {
+function readAmountOverride(env: EnvSource, name: string, step: number, why: string): number | null {
   const raw = env[name]?.trim();
   if (!raw) return null;
   const n = /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
-  if (Number.isSafeInteger(n) && n > 0 && n % 100 === 0) return n;
-  const seen = `${name}=${raw}`;
-  if (!reportedBadOverrides.has(seen)) {
-    reportedBadOverrides.add(seen);
-    logger.warn('RA_BILLING', 'ignored price override: not a whole-yuan amount in fen; the catalog default is used', { variable: name, value: raw.slice(0, 20) });
-  }
+  if (Number.isSafeInteger(n) && n > 0 && n % step === 0) return n;
+  reportOnce(`${name}=${raw}`, `ignored price override: ${why}`, { variable: name, value: raw.slice(0, 20) });
   return null;
+}
+
+/**
+ * A GoApply price override in fen: a positive multiple of 100 (the payment
+ * worker bills whole yuan, and ¥x.9 prices are not ours).
+ */
+function readFenOverride(env: EnvSource, name: string): number | null {
+  return readAmountOverride(env, name, 100, 'not a whole-yuan amount in fen; the catalog default is used');
+}
+
+/** A RoboApply USD override in cents: any positive integer. */
+function readCentsOverride(env: EnvSource, name: string): number | null {
+  return readAmountOverride(env, name, 1, 'not a positive whole number of cents; the next source is used');
+}
+
+/** A Taiwan price in TWD minor units: NT$ prices are whole dollars, so a multiple of 100. */
+function readTwdOverride(env: EnvSource, name: string): number | null {
+  return readAmountOverride(env, name, 100, 'not a whole NT$ amount in TWD minor units; Taiwan keeps the USD price');
 }
 
 function readString(env: EnvSource, name: string): string | null {
   const raw = env[name]?.trim();
   return raw ? raw : null;
+}
+
+/**
+ * A plan's amount override and the Stripe price id pinned next to it: the
+ * amount variable, else its older alias, plus the optional pin.
+ *
+ * A pin names an EXISTING Stripe price, and that price is what the buyer is
+ * charged, whatever amount we show and record in the acknowledgement. So a
+ * pin is honoured only when the amount in force is the amount it was set with:
+ *   - no valid amount variable: ignored (we cannot know the pinned price
+ *     equals the catalog default);
+ *   - both amount variables valid and different: ignored. The pin was set
+ *     next to one of them (the older pair is the pin plus the alias) and the
+ *     amount in force is the other, so honouring it would show one price and
+ *     charge another.
+ * An ignored pin is logged once (variable names only, never the price id);
+ * the price for the amount in force is then found or created by the catalog
+ * sync. One rule for the USD and the Taiwan variables.
+ */
+function readOverrideWithPin(
+  env: EnvSource,
+  names: readonly [amount: string, amountAlias: string, pin: string],
+  read: (env: EnvSource, name: string) => number | null,
+): { amountMinor: number | null; pin: string | null } {
+  const [amountName, aliasName, pinName] = names;
+  const primary = read(env, amountName);
+  const alias = read(env, aliasName);
+  const amountMinor = primary ?? alias;
+  const pin = readString(env, pinName);
+  if (!pin) return { amountMinor, pin: null };
+  if (amountMinor === null) {
+    reportOnce(`pin:${pinName}`, 'ignored Stripe price pin: it needs the amount variable next to it', { variable: pinName, needs: amountName });
+    return { amountMinor, pin: null };
+  }
+  if (primary !== null && alias !== null && primary !== alias) {
+    reportOnce(
+      `pin-conflict:${pinName}`,
+      'ignored Stripe price pin: the two amount variables next to it differ, so the pinned price may not be the amount shown; the catalog sync resolves the price for the amount in force',
+      { variable: pinName, amount: amountName, alias: aliasName },
+    );
+    return { amountMinor, pin: null };
+  }
+  return { amountMinor, pin };
 }
 
 function priceFor(
@@ -271,20 +378,49 @@ function priceFor(
     }
     return { amountMinor, stripePriceId: null, twdPrice: null, sellable: true, unsellableReason: null };
   }
-  const stripePriceId = readString(env, `STRIPE_PRICE_${seg}`);
-  const amountMinor = readMinor(env, `STRIPE_PRICE_${seg}_CENTS`);
-  if (!stripePriceId || amountMinor === null) {
-    return { amountMinor, stripePriceId, twdPrice: null, sellable: false, unsellableReason: 'price_unset' };
-  }
-  return { amountMinor, stripePriceId, twdPrice: twdPriceFor(def.key, env), sellable: true, unsellableReason: null };
+  // RoboApply: the override, else its older alias, else the catalog default;
+  // the pin only where `readOverrideWithPin` lets it stand.
+  const { amountMinor: explicit, pin: stripePriceId } = readOverrideWithPin(env, priceEnvNames('roboapply', def.key) as [string, string, string], readCentsOverride);
+  const amountMinor = explicit ?? ROBOAPPLY_DEFAULT_PRICE_USD_CENTS[def.key] ?? null;
+  // Guard for a plan added without a default (the matrix test holds that none is).
+  if (amountMinor === null) return { amountMinor: null, stripePriceId: null, twdPrice: null, sellable: false, unsellableReason: 'price_unset' };
+  const twdPrice = twdPriceFor(def.key, env);
+  // Sellable while the Stripe rail can charge AND fulfil (ST-0).
+  if (!stripeRailOpen(env)) return { amountMinor, stripePriceId, twdPrice, sellable: false, unsellableReason: 'payments_disabled' };
+  return { amountMinor, stripePriceId, twdPrice, sellable: true, unsellableReason: null };
 }
 
-/** The Taiwan price of a plan, or null unless both variables are set (never derived from the USD price). */
+/**
+ * The Stripe rail is ready (stripeEnv.ts). When a usable key is set and the
+ * webhook secret is what keeps the rail closed, say so once: the operator
+ * meant to sell, and the plan list alone ('payments_disabled') does not say
+ * why. No key, or a refused live key, is not reported here (no key is the
+ * normal state of a machine that does not sell; `getStripe` reports the
+ * refused key). Variable names only, never a value.
+ */
+function stripeRailOpen(env: EnvSource): boolean {
+  const blocker = stripeRailBlocker(env);
+  if (blocker === 'webhook_secret_missing') {
+    reportOnce('rail:webhook_secret_missing', 'Stripe payments are closed: a Stripe key is set without a webhook secret, so a payment could not be fulfilled', {
+      needs: 'STRIPE_WEBHOOK_SECRET',
+    });
+  } else if (blocker === 'webhook_secret_unverifiable') {
+    reportOnce('rail:webhook_secret_unverifiable', 'Stripe payments are closed: the webhook verifies with one secret, and the variable it reads holds a list or is blank; set a single secret', {
+      variables: ['ROBOAPPLY_STRIPE_WEBHOOK_SECRET', 'STRIPE_WEBHOOK_SECRET'],
+    });
+  }
+  return blocker === null;
+}
+
+/**
+ * The Taiwan price of a plan, or null unless a valid TWD amount is set (never
+ * derived from the USD price). The price id is the optional pin, under the
+ * rule of `readOverrideWithPin`; null means the catalog sync resolves it at
+ * checkout.
+ */
 export function twdPriceFor(key: PlanKey, env: EnvSource = process.env): LocalPrice | null {
-  const [idName, centsName] = twdPriceEnvNames(key);
-  const stripePriceId = readString(env, idName);
-  const amountMinor = readMinor(env, centsName);
-  return stripePriceId && amountMinor !== null ? { currency: 'TWD', amountMinor, stripePriceId } : null;
+  const { amountMinor, pin } = readOverrideWithPin(env, twdPriceEnvNames(key), readTwdOverride);
+  return amountMinor !== null ? { currency: 'TWD', amountMinor, stripePriceId: pin } : null;
 }
 
 /**
@@ -319,7 +455,11 @@ export function hasSellableProPlan(brand: BrandId, env: EnvSource = process.env)
   return getPlanCatalog(brand, env).some((p) => p.sellable && p.entitlementProfile === 'pro' && p.phase === 'mvp');
 }
 
-/** Find the plan a Stripe price id belongs to (webhook reconciliation); Taiwan price ids count too. */
+/**
+ * Find the plan a PINNED Stripe price id belongs to (Taiwan pins count too).
+ * Pins only: a price the catalog sync created is recognised by
+ * `planKeyForPrice` (stripeCatalog.ts), which falls back to this.
+ */
 export function planKeyForStripePrice(priceId: string | null | undefined, env: EnvSource = process.env): PlanKey | null {
   if (!priceId) return null;
   return getPlanCatalog('roboapply', env).find((p) => p.stripePriceId === priceId || p.twdPrice?.stripePriceId === priceId)?.key ?? null;

@@ -7,7 +7,7 @@ import { startRouteHarness, type RouteHarness } from '../../test/routeHarness.js
 
 describe('GET /api/v1/public/brand', () => {
   let h: RouteHarness;
-  const env = { NODE_ENV: 'development', STRIPE_SECRET_KEY: 'sk_test_x', GOOGLE_OAUTH_CLIENT_ID: 'id', GOOGLE_OAUTH_CLIENT_SECRET: 's' };
+  const env = { NODE_ENV: 'development', STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_WEBHOOK_SECRET: 'whsec_test', GOOGLE_OAUTH_CLIENT_ID: 'id', GOOGLE_OAUTH_CLIENT_SECRET: 's' };
   beforeAll(async () => {
     h = await startRouteHarness({ env, mounts: [['/api/v1/public/brand', createBrandPublicRouter({ env })]] });
   });
@@ -59,6 +59,24 @@ describe('GET /api/v1/public/brand', () => {
     }
   });
 
+  it('reports pay.stripe false until both the key and a webhook secret are set, and for a live key outside production (ST-0)', () => {
+    const stripeOf = (e: Record<string, string>) => {
+      const d = buildPublicBrand(BRANDS.roboapply, e);
+      return [d.flags['pay.stripe'], d.paymentRails];
+    };
+    expect(stripeOf({})).toEqual([false, []]);
+    expect(stripeOf({ STRIPE_SECRET_KEY: 'sk_test_x' })).toEqual([false, []]);
+    expect(stripeOf({ STRIPE_WEBHOOK_SECRET: 'whsec_test' })).toEqual([false, []]);
+    expect(stripeOf({ STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_WEBHOOK_SECRET: 'whsec_test' })).toEqual([true, ['stripe']]);
+    expect(stripeOf({ STRIPE_SECRET_KEY: 'sk_test_x', ROBOAPPLY_STRIPE_WEBHOOK_SECRET: 'whsec_test' })).toEqual([true, ['stripe']]);
+    const live = { STRIPE_SECRET_KEY: 'sk_live_example', STRIPE_WEBHOOK_SECRET: 'whsec_test' };
+    expect(stripeOf(live)).toEqual([false, []]);
+    expect(stripeOf({ ...live, VERCEL_ENV: 'production' })).toEqual([true, ['stripe']]);
+    expect(stripeOf({ ...live, STRIPE_ALLOW_LIVE_KEY_OUTSIDE_PRODUCTION: 'true' })).toEqual([true, ['stripe']]);
+    // Never for GoApply.
+    expect(buildPublicBrand(BRANDS.goapply, { ...live, VERCEL_ENV: 'production' }).flags['pay.stripe']).toBe(false);
+  });
+
   it('buildPublicBrand validates for both brands', () => {
     for (const brand of [BRANDS.roboapply, BRANDS.goapply]) {
       expect(PublicBrandSchema.safeParse(buildPublicBrand(brand, {})).success).toBe(true);
@@ -83,6 +101,7 @@ describe('GET /api/v1/public/brand: the two hosts compared (shared-only env)', (
     VAPID_SUBJECT: 'mailto:push@example.com',
     ALIPAY_CALLBACK_SECRET: 'secret',
     STRIPE_SECRET_KEY: 'sk_test_x',
+    STRIPE_WEBHOOK_SECRET: 'whsec_test',
   };
   const ROBOAPPLY_ONLY = ['h1bHistory', 'eeoAnswers', 'fx.reference', 'pay.stripe', 'auth.google', 'auth.line'];
 

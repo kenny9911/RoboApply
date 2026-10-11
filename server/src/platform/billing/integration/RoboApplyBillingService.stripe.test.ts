@@ -4,6 +4,10 @@
 // quote, and webhook idempotency (TASK_PLAN.md WP-21a acceptance); Account V2
 // wiring (WP-79): student plans need the capability and a live verification,
 // Taiwan buyers are charged the configured TWD price and the webhook stores it.
+// Market wave (ST-1, ST-2): checkout resolves the price through the catalog
+// sync, one checkout attempt is one Stripe idempotency key, a synced price is
+// recognised by the webhook without metadata or pins, and event types the
+// service does not handle are offered to the handler registry.
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -27,8 +31,16 @@ vi.mock('../../../middleware/auth.js', () => ({
 
 import { startRouteHarness, type RouteHarness } from '../../../test/routeHarness.js';
 import billingRouter from '../../../roboapply/routes/billing.js';
+import { createStripeWebhookRouter } from '../../../roboapply/routes/stripeWebhook.js';
 import { handleRoboApplyStripeEvent, invoiceSubscriptionId, setBillingServiceDepsForTests } from '../../../roboapply/services/RoboApplyBillingService.js';
-import { autoRenewAckSentence, proseHash, setStripeClientForTests } from '../index.js';
+import {
+  autoRenewAckSentence,
+  proseHash,
+  registerStripeEventHandler,
+  resetStripeCatalogCacheForTests,
+  setStripeClientForTests,
+  unregisterStripeEventHandlerForTests,
+} from '../index.js';
 
 const NOW = new Date('2026-10-10T08:00:00.000Z');
 const NOW_S = Math.floor(NOW.getTime() / 1000);
@@ -36,6 +48,7 @@ const PERIOD_END_S = NOW_S + 30 * 86400;
 
 const PRICES = {
   STRIPE_SECRET_KEY: 'sk_test_x',
+  STRIPE_WEBHOOK_SECRET: 'whsec_test',
   STRIPE_PRICE_PRO_WEEKLY: 'price_w',
   STRIPE_PRICE_PRO_WEEKLY_CENTS: '999',
   STRIPE_PRICE_PRO_MONTHLY: 'price_m',
@@ -66,9 +79,21 @@ async function defaultRetrieve(id: string) {
   return stripeSub(id, 'price_m', { metadata: { planKey: 'pro_monthly' } });
 }
 
+/** The prices the fake Stripe account holds under a lookup key (what the catalog sync finds or creates). */
+const synced = { prices: [] as Array<Record<string, any>>, seq: 0 };
+
 const stripe = {
   customers: { create: vi.fn(async () => ({ id: 'cus_new' })) },
   checkout: { sessions: { create: vi.fn(async () => ({ id: 'cs_new', url: 'https://checkout.stripe.test/cs_new' })) } },
+  products: { create: vi.fn(async (p: { id: string }) => ({ id: p.id })) },
+  prices: {
+    list: vi.fn(async (p: { lookup_keys: string[] }) => ({ data: synced.prices.filter((x) => p.lookup_keys.includes(x.lookup_key)) })),
+    create: vi.fn(async (p: Record<string, any>) => {
+      const price = { ...p, id: `price_synced_${++synced.seq}`, active: true, recurring: p.recurring ?? null };
+      synced.prices.push(price);
+      return price;
+    }),
+  },
   subscriptions: { retrieve: vi.fn(defaultRetrieve), update: vi.fn(async () => ({})) },
   invoices: {
     createPreview: vi.fn(async () => ({ currency: 'usd', amount_due: 1500, lines: { data: [] } })),
@@ -107,6 +132,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   credits.renewedAt = null;
   credits.grants = 0;
+  synced.prices = [];
+  synced.seq = 0;
+  resetStripeCatalogCacheForTests();
   stripe.subscriptions.retrieve.mockImplementation(defaultRetrieve);
   for (const [k, v] of Object.entries(PRICES)) vi.stubEnv(k, v);
   setStripeClientForTests(stripe as never);
@@ -189,10 +217,150 @@ describe('checkout acknowledgements', () => {
     }
   });
 
-  it('weekly is sold only when asked for, never as a default; unknown and unpriced plans are refused', async () => {
+  it('an unknown plan is refused; a plan is refused while the rail is not ready (a key without a webhook secret)', async () => {
     expect((await h.request<any>('POST', '/api/v1/roboapply/billing/checkout', { ...AS_USER, body: { planKey: 'nope' } })).body.code).toBe('plan_not_sellable');
+    vi.stubEnv('STRIPE_WEBHOOK_SECRET', '');
+    const res = await h.request<any>('POST', '/api/v1/roboapply/billing/checkout', { ...AS_USER, body: { planKey: 'pro_quarterly', autoRenewAck: true } });
+    expect([res.status, res.body.code]).toEqual([409, 'plan_not_sellable']);
+    expect(res.body.details).toMatchObject({ reason: 'payments_disabled' });
+    expect(await fake.db.seekerConsentRecord.findMany({})).toEqual([]);
+    expect(stripe.checkout.sessions.create).not.toHaveBeenCalled();
+    expect(stripe.prices.list).not.toHaveBeenCalled();
+  });
+});
+
+describe('checkout through the catalog (ST-1, ST-2)', () => {
+  const checkout = (body: Record<string, unknown>, headers: Record<string, string> = {}) =>
+    h.request<any>('POST', '/api/v1/roboapply/billing/checkout', { host: AS_USER.host, headers: { ...AS_USER.headers, ...headers }, body });
+  const sessionCall = (i = -1) => stripe.checkout.sessions.create.mock.calls.at(i)! as unknown as [Record<string, any>, { idempotencyKey: string }];
+  /** No price variable at all: only the key and the webhook secret. */
+  const noPriceVariables = () => {
+    for (const k of Object.keys(PRICES)) if (k.startsWith('STRIPE_PRICE_')) vi.stubEnv(k, '');
+  };
+
+  it('with no price variable a monthly checkout opens on the price created under ra_pro_monthly_usd_2499_incl', async () => {
+    noPriceVariables();
+    const res = await checkout({ planKey: 'pro_monthly', autoRenewAck: true });
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({ kind: 'redirect', url: 'https://checkout.stripe.test/cs_new', orderId: 'cs_new', rail: 'stripe' });
+    expect(synced.prices).toHaveLength(1);
+    expect(synced.prices[0]).toMatchObject({ lookup_key: 'ra_pro_monthly_usd_2499_incl', unit_amount: 2499, currency: 'usd', product: 'ra_pro', recurring: { interval: 'month', interval_count: 1 }, tax_behavior: 'inclusive' });
+    expect(sessionCall()[0].line_items).toEqual([{ price: synced.prices[0]!.id, quantity: 1 }]);
+    // A second buyer of the same plan asks Stripe for no price.
+    await checkout({ planKey: 'pro_monthly', autoRenewAck: true });
+    expect(stripe.prices.list).toHaveBeenCalledTimes(1);
+    expect(stripe.prices.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('every MVP plan can be bought with no price variable, each on its own synced price at the catalog amount', async () => {
+    noPriceVariables();
+    const bought: Array<[string, string, number, string]> = [];
+    for (const planKey of ['pro_weekly', 'pro_monthly', 'pro_quarterly', 'pro_week_pass', 'practice_pack_5', 'practice_pack_15']) {
+      const res = await checkout({ planKey, autoRenewAck: true });
+      expect(res.status, planKey).toBe(200);
+      const price = synced.prices.find((p) => p.id === sessionCall()[0].line_items[0].price)!;
+      bought.push([planKey, price.lookup_key, price.unit_amount, sessionCall()[0].mode]);
+    }
+    expect(bought).toEqual([
+      ['pro_weekly', 'ra_pro_weekly_usd_999_incl', 999, 'subscription'],
+      ['pro_monthly', 'ra_pro_monthly_usd_2499_incl', 2499, 'subscription'],
+      ['pro_quarterly', 'ra_pro_quarterly_usd_5499_incl', 5499, 'subscription'],
+      ['pro_week_pass', 'ra_pro_week_pass_usd_999_incl', 999, 'payment'],
+      ['practice_pack_5', 'ra_practice_pack_5_usd_999_incl', 999, 'payment'],
+      ['practice_pack_15', 'ra_practice_pack_15_usd_2499_incl', 2499, 'payment'],
+    ]);
+  });
+
+  it('a pinned plan is charged on its pin; a plan whose pin was removed is sold on its synced price', async () => {
+    await checkout({ planKey: 'pro_monthly', autoRenewAck: true });
+    expect(sessionCall()[0].line_items).toEqual([{ price: 'price_m', quantity: 1 }]);
+    expect(stripe.prices.list).not.toHaveBeenCalled();
+    // The amount variable stays (5999): the synced price carries that amount in its lookup key.
     vi.stubEnv('STRIPE_PRICE_PRO_QUARTERLY', '');
-    expect((await h.request<any>('POST', '/api/v1/roboapply/billing/checkout', { ...AS_USER, body: { planKey: 'pro_quarterly', autoRenewAck: true } })).status).toBe(409);
+    const res = await checkout({ planKey: 'pro_quarterly', autoRenewAck: true });
+    expect(res.status).toBe(200);
+    expect(synced.prices[0]).toMatchObject({ lookup_key: 'ra_pro_quarterly_usd_5999_incl', unit_amount: 5999, recurring: { interval: 'month', interval_count: 3 } });
+    expect(sessionCall()[0].line_items[0].price).toBe(synced.prices[0]!.id);
+  });
+
+  it('the Idempotency-Key header is the checkout attempt: the same header twice gives the same Stripe key, a different header a different one', async () => {
+    const a = '3f0c1b0a-8a3e-4c57-9d0e-2b6f5f3a9c11';
+    const b = '7d9e5a12-1111-4222-8333-944455556666';
+    await checkout({ planKey: 'practice_pack_5' }, { 'Idempotency-Key': a });
+    await checkout({ planKey: 'practice_pack_5' }, { 'Idempotency-Key': ` ${a} ` });
+    await checkout({ planKey: 'practice_pack_5' }, { 'Idempotency-Key': b });
+    const keys = stripe.checkout.sessions.create.mock.calls.map((c) => (c as unknown as [unknown, { idempotencyKey: string }])[1].idempotencyKey);
+    expect(keys).toEqual([`checkout:u_1:practice_pack_5:usd:${a}`, `checkout:u_1:practice_pack_5:usd:${a}`, `checkout:u_1:practice_pack_5:usd:${b}`]);
+  });
+
+  it('without the header, or with a malformed one, the server falls back to its 60-second bucket', async () => {
+    await checkout({ planKey: 'practice_pack_5' });
+    await checkout({ planKey: 'practice_pack_5' }, { 'Idempotency-Key': 'short' });
+    await checkout({ planKey: 'practice_pack_5' }, { 'Idempotency-Key': 'not a valid key!' });
+    for (const call of stripe.checkout.sessions.create.mock.calls) {
+      expect((call as unknown as [unknown, { idempotencyKey: string }])[1].idempotencyKey).toMatch(/^checkout:u_1:practice_pack_5:usd:b\d+$/);
+    }
+  });
+
+  it('the customer is created under customer:<seekerProfileId>', async () => {
+    await checkout({ planKey: 'practice_pack_5' });
+    expect(stripe.customers.create).toHaveBeenCalledWith(expect.objectContaining({ email: 'u_1@example.test' }), { idempotencyKey: 'customer:sp_1' });
+  });
+
+  it('X-Robo-Locale picks the payment page language; the session has Adaptive Pricing off, customer_update and the line above the pay button', async () => {
+    await checkout({ planKey: 'pro_monthly', autoRenewAck: true }, { 'X-Robo-Locale': 'ja' });
+    const params = sessionCall()[0];
+    expect(params.locale).toBe('ja');
+    expect(params.adaptive_pricing).toEqual({ enabled: false });
+    expect(params.customer_update).toEqual({ address: 'auto', name: 'auto' });
+    expect(params.custom_text.submit.message).toMatch(/^Renews every month at \$24\.99 until you cancel\. Cancel any time in Settings or at https?:\/\/.+\/cancel\.$/);
+    expect(params.subscription_data.description).toBe('RoboApply Pro Monthly');
+    await checkout({ planKey: 'pro_week_pass' }, { 'X-Robo-Locale': 'pt' });
+    expect(sessionCall()[0].locale).toBe('pt-BR');
+    expect(sessionCall()[0].custom_text.submit.message).toBe('One payment of $6.99. It does not renew.');
+    await checkout({ planKey: 'pro_week_pass' });
+    expect(sessionCall()[0].locale).toBe('auto');
+  });
+
+  it('a Stripe idempotency conflict answers 502 payment_provider_error with details.reason idempotency_conflict', async () => {
+    stripe.checkout.sessions.create.mockRejectedValueOnce(Object.assign(new Error('Keys for idempotent requests can only be used with the same parameters they were first used with.'), { type: 'StripeIdempotencyError' }));
+    const res = await checkout({ planKey: 'practice_pack_5' }, { 'Idempotency-Key': 'attempt-0001' });
+    expect([res.status, res.body.code]).toEqual([502, 'payment_provider_error']);
+    expect(res.body.details).toMatchObject({ provider: 'stripe', reason: 'idempotency_conflict' });
+  });
+
+  it('a Stripe failure in the catalog sync makes checkout answer 502 while the plan list still answers', async () => {
+    noPriceVariables();
+    stripe.prices.list.mockRejectedValueOnce(new Error('stripe is down'));
+    const res = await checkout({ planKey: 'pro_monthly', autoRenewAck: true });
+    expect([res.status, res.body.code]).toEqual([502, 'payment_provider_error']);
+    expect(stripe.checkout.sessions.create).not.toHaveBeenCalled();
+    expect(stripe.customers.create).not.toHaveBeenCalled();
+    const plan = await h.request<any>('GET', '/api/v1/roboapply/billing/plan', AS_USER);
+    expect(plan.status).toBe(200);
+    expect(plan.body.data.catalog.find((p: any) => p.key === 'pro_monthly')).toMatchObject({ amountMinor: 2499, sellable: true, stripePriceId: null });
+    // The failure was not remembered: the next attempt goes through.
+    expect((await checkout({ planKey: 'pro_monthly', autoRenewAck: true })).status).toBe(200);
+  });
+
+  it('a GoApply request never reaches Stripe: the fake Stripe records zero calls of any kind', async () => {
+    const AS_GO = { host: 'goapply.localhost:3621', headers: { 'x-test-user': 'u_1' } };
+    const go = (body: Record<string, unknown>, headers: Record<string, string> = {}) =>
+      h.request<any>('POST', '/api/v1/roboapply/billing/checkout', { host: AS_GO.host, headers: { ...AS_GO.headers, ...headers }, body });
+    // Asking for Stripe by name.
+    const named = await go({ planKey: 'pro_monthly', rail: 'stripe' }, { 'Idempotency-Key': 'attempt-0001' });
+    expect([named.status, named.body.code]).toEqual([409, 'rail_not_allowed']);
+    // Naming no rail: GoApply's own rails are the only candidates (none is set up in this env).
+    const unnamed = await go({ planKey: 'pro_monthly' });
+    expect(unnamed.status).toBe(503);
+    expect(unnamed.body.code).toBe('rail_not_configured');
+    // The renewing weekly plan does not exist on GoApply.
+    const weekly = await go({ planKey: 'pro_weekly', autoRenewAck: true, rail: 'stripe' });
+    expect([weekly.status, weekly.body.code]).toEqual([409, 'plan_not_sellable']);
+    for (const fn of [stripe.customers.create, stripe.products.create, stripe.prices.list, stripe.prices.create, stripe.checkout.sessions.create, stripe.subscriptions.retrieve, stripe.subscriptions.update]) {
+      expect(fn).not.toHaveBeenCalled();
+    }
+    expect(synced.prices).toEqual([]);
   });
 });
 
@@ -253,10 +421,19 @@ describe('Account V2: student plans (capability on + a live school-email verific
     expect(stripe.checkout.sessions.create).not.toHaveBeenCalled();
   });
 
-  it('an unpriced student plan is not on sale', async () => {
+  it('a student plan with no pin is sold on its synced price, on the student product', async () => {
     student.verified = true;
     vi.stubEnv('STRIPE_PRICE_STUDENT_QUARTERLY', '');
-    expect((await buy('student_quarterly')).body.code).toBe('plan_not_sellable');
+    const res = await buy('student_quarterly');
+    expect(res.status).toBe(200);
+    expect(synced.prices).toHaveLength(1);
+    expect(synced.prices[0]).toMatchObject({ lookup_key: 'ra_student_quarterly_usd_3599_incl', product: 'ra_pro_student', unit_amount: 3599, recurring: { interval: 'month', interval_count: 3 } });
+    expect((stripe.checkout.sessions.create.mock.calls[0]![0] as any).line_items).toEqual([{ price: synced.prices[0]!.id, quantity: 1 }]);
+    // Unverified: refused before any price is looked for.
+    student.verified = false;
+    stripe.prices.list.mockClear();
+    expect((await buy('student_monthly')).body.code).toBe('student_verification_required');
+    expect(stripe.prices.list).not.toHaveBeenCalled();
   });
 
   it('regular plans never ask about student status', async () => {
@@ -639,5 +816,164 @@ describe('Stripe webhook idempotency', () => {
     expect(invoiceSubscriptionId({ subscription: 'sub_a' } as never)).toBe('sub_a');
     expect(invoiceSubscriptionId({ parent: { subscription_details: { subscription: 'sub_b' } } } as never)).toBe('sub_b');
     expect(invoiceSubscriptionId({} as never)).toBeNull();
+  });
+});
+
+// ST-1 consequence: a price the catalog sync created has no env pin to compare
+// with. The webhook recognises it by the plan key stamped on the price, or by
+// its lookup key, even when the subscription carries no metadata.
+describe('webhook: a synced price is recognised without metadata or pins', () => {
+  const NEXT_END_S = PERIOD_END_S + 90 * 86400;
+  const noPins = () => {
+    for (const k of Object.keys(PRICES)) if (k.startsWith('STRIPE_PRICE_')) vi.stubEnv(k, '');
+  };
+  const subOn = (price: Record<string, unknown>, over: Record<string, unknown> = {}) => ({
+    id: 'sub_1',
+    status: 'active',
+    customer: 'cus_1',
+    cancel_at_period_end: false,
+    start_date: NOW_S,
+    metadata: {},
+    items: { data: [{ id: 'si_1', price, current_period_start: NOW_S, current_period_end: NEXT_END_S }] },
+    ...over,
+  });
+
+  beforeEach(async () => {
+    noPins();
+    await fake.db.seekerSubscription.create({
+      data: { id: 'row_1', seekerProfileId: 'sp_1', tier: 'pro', status: 'active', planKey: 'pro_monthly', interval: 'month', stripeSubscriptionId: 'sub_1', stripeCustomerId: 'cus_1', currentPeriodEnd: new Date(PERIOD_END_S * 1000) },
+    });
+  });
+
+  it('subscription.updated with empty metadata records the plan key, interval and price from the price the sync created', async () => {
+    const price = { id: 'price_synced_q', lookup_key: 'ra_pro_quarterly_usd_5499_incl', currency: 'usd', unit_amount: 5499, metadata: { product: 'roboapply', planKey: 'pro_quarterly' } };
+    const event = { id: 'evt_q', type: 'customer.subscription.updated', data: { object: subOn(price) } };
+    expect(await handleRoboApplyStripeEvent(event as never, stripe as never)).toEqual({ handled: true });
+    expect(await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).toMatchObject({
+      tier: 'pro',
+      planKey: 'pro_quarterly',
+      interval: 'quarter',
+      currency: 'USD',
+      amountMinor: 5499,
+      stripePriceId: 'price_synced_q',
+    });
+    // State only: credits wait for the paid invoice.
+    expect(grantIfNewPeriod).not.toHaveBeenCalled();
+  });
+
+  it('the paid invoice then grants that plan\'s allowance (3 credits for quarterly, 1 for weekly), found by the lookup key alone', async () => {
+    const paid = { id: 'evt_paid', type: 'invoice.paid', data: { object: { id: 'in_1', billing_reason: 'subscription_cycle', parent: { subscription_details: { subscription: 'sub_1' } } } } };
+    // Metadata edited away on the price: the lookup key still names the plan.
+    stripe.subscriptions.retrieve.mockImplementation(async () => subOn({ id: 'price_synced_q', lookup_key: 'ra_pro_quarterly_usd_5499_incl', currency: 'usd', unit_amount: 5499, metadata: {} }) as never);
+    expect(await handleRoboApplyStripeEvent(paid as never, stripe as never)).toEqual({ handled: true });
+    expect(grantIfNewPeriod).toHaveBeenLastCalledWith(expect.objectContaining({ tier: 'pro', credits: 3, metadata: { planKey: 'pro_quarterly', stripeSubscriptionId: 'sub_1' } }));
+    expect((await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).interval).toBe('quarter');
+
+    stripe.subscriptions.retrieve.mockImplementation(async () => subOn({ id: 'price_synced_w', lookup_key: 'ra_pro_weekly_usd_999_incl', currency: 'usd', unit_amount: 999 }) as never);
+    await handleRoboApplyStripeEvent({ ...paid, id: 'evt_paid_2', data: { object: { ...paid.data.object, id: 'in_2' } } } as never, stripe as never);
+    expect(grantIfNewPeriod).toHaveBeenLastCalledWith(expect.objectContaining({ credits: 1, metadata: { planKey: 'pro_weekly', stripeSubscriptionId: 'sub_1' } }));
+    expect(await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).toMatchObject({ planKey: 'pro_weekly', interval: 'week', amountMinor: 999 });
+  });
+
+  it('a synced TWD price is stored as TWD at its amount, from the price fields or, on a thin event, from the lookup key', async () => {
+    vi.stubEnv('PRICE_PRO_MONTHLY_TWD_CENTS', '74900');
+    const full = { id: 'price_synced_tw', lookup_key: 'ra_pro_monthly_twd_74900_incl', currency: 'twd', unit_amount: 74900, metadata: { product: 'roboapply', planKey: 'pro_monthly' } };
+    await handleRoboApplyStripeEvent({ id: 'evt_tw1', type: 'customer.subscription.updated', data: { object: subOn(full) } } as never, stripe as never);
+    expect(await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).toMatchObject({ planKey: 'pro_monthly', currency: 'TWD', amountMinor: 74900, stripePriceId: 'price_synced_tw' });
+
+    await fake.db.seekerSubscription.update({ where: { id: 'row_1' }, data: { currency: null, amountMinor: null } });
+    const thin = { id: 'price_synced_tw', lookup_key: 'ra_pro_monthly_twd_74900_incl' };
+    await handleRoboApplyStripeEvent({ id: 'evt_tw2', type: 'customer.subscription.updated', data: { object: subOn(thin) } } as never, stripe as never);
+    expect(await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).toMatchObject({ planKey: 'pro_monthly', currency: 'TWD', amountMinor: 74900 });
+
+    // The same for a thin USD event: the lookup key carries currency and amount.
+    await fake.db.seekerSubscription.update({ where: { id: 'row_1' }, data: { currency: null, amountMinor: null } });
+    await handleRoboApplyStripeEvent({ id: 'evt_us', type: 'customer.subscription.updated', data: { object: subOn({ id: 'price_synced_q', lookup_key: 'ra_pro_quarterly_usd_5499_incl' }) } } as never, stripe as never);
+    expect(await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).toMatchObject({ planKey: 'pro_quarterly', interval: 'quarter', currency: 'USD', amountMinor: 5499 });
+  });
+
+  it('subscription metadata still wins over the price (price-first is a later requirement), and a pinned id still resolves', async () => {
+    const price = { id: 'price_synced_q', lookup_key: 'ra_pro_quarterly_usd_5499_incl', currency: 'usd', unit_amount: 5499, metadata: { product: 'roboapply', planKey: 'pro_quarterly' } };
+    await handleRoboApplyStripeEvent({ id: 'evt_m', type: 'customer.subscription.updated', data: { object: subOn(price, { metadata: { planKey: 'pro_monthly' } }) } } as never, stripe as never);
+    expect((await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).planKey).toBe('pro_monthly');
+
+    vi.stubEnv('STRIPE_PRICE_PRO_WEEKLY', 'price_w');
+    vi.stubEnv('STRIPE_PRICE_PRO_WEEKLY_CENTS', '999');
+    await handleRoboApplyStripeEvent({ id: 'evt_p', type: 'customer.subscription.updated', data: { object: subOn({ id: 'price_w', currency: 'usd', unit_amount: 999 }) } } as never, stripe as never);
+    expect(await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).toMatchObject({ planKey: 'pro_weekly', interval: 'week' });
+  });
+
+  it('a price of another product on the same Stripe account is not read as one of our plans', async () => {
+    const foreign = { id: 'price_other', lookup_key: 'rh_team_usd_9900', currency: 'usd', unit_amount: 9900, metadata: { product: 'robohire', planKey: 'pro_quarterly' } };
+    await handleRoboApplyStripeEvent({ id: 'evt_f', type: 'customer.subscription.updated', data: { object: subOn(foreign) } } as never, stripe as never);
+    // Falls to the legacy practice-plan mapping, exactly as an unknown price did before.
+    expect((await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).planKey).not.toBe('pro_quarterly');
+  });
+});
+
+describe('Stripe event handler registry (the seam for refunds, disputes and the later lifecycle events)', () => {
+  const TYPE = 'charge.refunded';
+  const event = { id: 'evt_r1', type: TYPE, data: { object: { id: 'ch_1', customer: 'cus_1', amount: 2499, amount_refunded: 2499 } } };
+  afterEach(() => {
+    unregisterStripeEventHandlerForTests(TYPE);
+    unregisterStripeEventHandlerForTests('invoice.paid');
+  });
+
+  it('an event type with a registered handler is dispatched to it, with the service\'s Stripe client, database and clock, and its result is returned', async () => {
+    const handler = vi.fn(async () => ({ handled: true, duplicate: true }));
+    registerStripeEventHandler(TYPE, handler);
+    expect(await handleRoboApplyStripeEvent(event as never, stripe as never)).toEqual({ handled: true, duplicate: true });
+    expect(handler).toHaveBeenCalledTimes(1);
+    const [got, ctx] = handler.mock.calls[0] as unknown as [typeof event, { stripe: unknown; db: unknown; now: () => Date }];
+    expect(got).toBe(event);
+    expect(ctx.stripe).toBe(stripe);
+    expect(ctx.db).toBe(fake.db);
+    expect(ctx.now()).toEqual(NOW);
+  });
+
+  it('an unregistered type still answers { handled: false }', async () => {
+    expect(await handleRoboApplyStripeEvent(event as never, stripe as never)).toEqual({ handled: false });
+    expect(await handleRoboApplyStripeEvent({ id: 'evt_x', type: 'customer.created', data: { object: {} } } as never, stripe as never)).toEqual({ handled: false });
+  });
+
+  it('a handler that throws is a failed event, so the webhook answers 500 and Stripe retries', async () => {
+    registerStripeEventHandler(TYPE, async () => {
+      throw new Error('ledger unavailable');
+    });
+    expect(await handleRoboApplyStripeEvent(event as never, stripe as never)).toEqual({ handled: false, failed: true });
+  });
+
+  it('a type the service handles itself never reaches a registered handler', async () => {
+    const handler = vi.fn(async () => ({ handled: true }));
+    registerStripeEventHandler('invoice.paid', handler);
+    const paid = { id: 'evt_p', type: 'invoice.paid', data: { object: { id: 'in_9', billing_reason: 'subscription_cycle' } } };
+    expect(await handleRoboApplyStripeEvent(paid as never, stripe as never)).toEqual({ handled: false });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('over HTTP: 200 handled false for an unregistered type, the handler\'s answer for a registered one, 500 when it throws', async () => {
+    let next: Record<string, unknown> = event;
+    const verifying = { ...stripe, webhooks: { constructEvent: vi.fn(() => next) } };
+    const wh = await startRouteHarness({ mounts: [['/wh', createStripeWebhookRouter({ getStripe: () => verifying as never, secret: () => 'whsec_test' })]] });
+    try {
+      const post = () => wh.request<any>('POST', '/wh', { headers: { 'stripe-signature': 't=1,v1=x' }, body: {} });
+      const none = await post();
+      expect([none.status, none.body]).toEqual([200, { received: true, handled: false }]);
+
+      registerStripeEventHandler(TYPE, async () => ({ handled: true }));
+      const handled = await post();
+      expect([handled.status, handled.body]).toEqual([200, { received: true, handled: true }]);
+
+      registerStripeEventHandler(TYPE, async () => {
+        throw new Error('ledger unavailable');
+      });
+      const failed = await post();
+      expect([failed.status, failed.body]).toEqual([500, { received: true, handled: false }]);
+
+      next = { id: 'evt_other', type: 'payout.paid', data: { object: {} } };
+      expect((await post()).status).toBe(200);
+    } finally {
+      await wh.close();
+    }
   });
 });

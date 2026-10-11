@@ -22,14 +22,22 @@ import { FLAG_KEYS, isEnabled, requirementsMet } from '../../platform/flags.js';
 import { allocatePackRemaining } from '../../lib/mockCreditService.js';
 import { HttpError } from '../../platform/http.js';
 import {
+  ACCIDENTAL_RENEWAL_DAYS,
   BILLING_ERROR_STATUS,
   BillingError,
   CHECKOUT_ACK_PROSE_VERSION,
+  FIRST_PURCHASE_DAYS,
+  PACK_VALID_MONTHS,
+  PAID_ONLY_CREDIT_LIMIT,
+  REFUND_POLICY_VERSION,
+  SHORT_PLAN_HOURS,
+  WITHDRAWAL_DAYS,
   getStripe as platformGetStripe,
   activeOffers,
   appOrigin,
   availableRails,
   buildPlanViews,
+  collectingEntity,
   computeRefund,
   computeTwRevenue,
   describePlan,
@@ -74,6 +82,8 @@ import {
   type CreditsResponse,
   type FxReferenceAdminView,
   type PlansResponse,
+  type PlansResponseSent,
+  type PlansStudentOffer,
   type RefundQuoteResponse,
   type TwRevenueResponse,
 } from './contract.js';
@@ -338,6 +348,17 @@ function historyCursorWhere(c: { at: Date; id: string; practice: boolean } | nul
 }
 
 /** Practice credits are pro-rated to hundredths (mockInterviewPlans.roundCreditsUp); show what was taken, not a rounded-up 1. */
+/**
+ * The refund policy label that may be published. The stored version of a
+ * brand can carry an internal review note after the rule set's own name
+ * (GoApply: `...-pending-counsel`); `GET /billing/plans` is public and the
+ * pricing page writes this value into its HTML, so the note is cut off here.
+ * Refund decisions keep the full value (`computeRefund`, platform/billing/refunds.ts).
+ */
+export function publicRefundPolicyVersion(version: string): string {
+  return version.replace(/-pending\b.*$/i, '');
+}
+
 function practiceCreditsUsed(delta: number): number {
   return Math.round(Math.abs(delta) * 100) / 100;
 }
@@ -469,7 +490,7 @@ export class CreditsAreaService {
 
   // ── Public: plans ───────────────────────────────────────────────────────
 
-  async plans(brand: ProductBrand, input: { userId: string | null; country: string | null }): Promise<PlansResponse> {
+  async plans(brand: ProductBrand, input: { userId: string | null; country: string | null }): Promise<PlansResponseSent> {
     const env = this.d.env();
     const now = this.d.now();
     let currentPlanKey: string | null = null;
@@ -490,16 +511,32 @@ export class CreditsAreaService {
     // the list); buying one still needs the verification
     // (`studentVerifiedForPlan` at checkout, `assertStudentOrder` in the rail).
     // One rule for both brands is an owner decision, not a default (P7).
+    const studentCapability = await isEnabled('student', { userId: input.userId, brand, env }).catch(() => false);
     const studentEnabled =
       brand.market === 'cn'
         ? await studentPlansListedFor(input.userId, brand, {
             studentEnabled: (userId, b) => isEnabled('student', { userId, brand: b, env }),
             isStudentVerified: this.d.isStudentVerified,
           })
-        : await isEnabled('student', { userId: input.userId, brand, env }).catch(() => false);
+        : studentCapability;
     // The buyer's country picks the Taiwan price where one is configured
     // (`localPrice`); checkout applies the same rule to the same header.
     const { plans, defaultSelection } = buildPlanViews(brand.id, { env, currentPlanKey, studentEnabled, country: input.country });
+    // The published student rule (MARKET_STRATEGY §4.2: one public price for
+    // every buyer plus a published student rule; carry-over of the parity
+    // wave). Where the caller is NOT sent the student plans themselves (on
+    // GoApply they reach a verified student only), this is the price list
+    // they may still read: amounts and the computed percentage, while the
+    // `student` capability is on. Null when the plans are in the list above
+    // (nothing to add) or the capability is off. Nothing here can be bought with.
+    const studentOffer: PlansStudentOffer[] | null =
+      studentCapability && !studentEnabled
+        ? buildPlanViews(brand.id, { env, studentEnabled: true, country: input.country }).plans.flatMap((p) =>
+            (p.key === 'student_monthly' || p.key === 'student_quarterly') && p.amountMinor !== null
+              ? [{ key: p.key, amountMinor: p.amountMinor, studentDiscountPercent: p.studentDiscountPercent }]
+              : [],
+          )
+        : null;
     const rails = availableRails(brand, env);
     let fx: PlansResponse['fxReference'] = null;
     if (brand.currency === 'USD' && requirementsMet('fx.reference', brand, env)) {
@@ -520,7 +557,21 @@ export class CreditsAreaService {
         showWithdrawalWaiver: showsWithdrawalWaiver(input.country),
         country: input.country,
         acknowledgementVersion: CHECKOUT_ACK_PROSE_VERSION,
+        // GoApply only, and only when one is configured: never a made-up name (D3).
+        collectingEntity: brand.market === 'cn' ? (collectingEntity(brand, env)?.trim() || null) : null,
       },
+      // The numbers /pricing prints, from the constants the refund rules use.
+      refundPolicy: {
+        firstPurchaseDays: FIRST_PURCHASE_DAYS,
+        shortPlanHours: SHORT_PLAN_HOURS,
+        paidOnlyCreditLimit: PAID_ONLY_CREDIT_LIMIT,
+        accidentalRenewalDays: ACCIDENTAL_RENEWAL_DAYS,
+        withdrawalDays: WITHDRAWAL_DAYS,
+        packValidMonths: PACK_VALID_MONTHS,
+        // The public label: never the internal review note of a brand's version.
+        version: publicRefundPolicyVersion(REFUND_POLICY_VERSION[brand.id]),
+      },
+      studentOffer,
       fxReference: fx,
       offers: activeOffers({ brand: brand.id, userId: input.userId, signedUpAt: null, now }) as never[],
     };
