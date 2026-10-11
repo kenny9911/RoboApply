@@ -1,0 +1,28 @@
+market,term,mentions,kind
+intl,PostgreSQL,120,hard
+intl,postgres,40,hard
+intl,Postgressql,2,hard
+intl,Node.js,90,hard
+intl,nodejs,30,hard
+intl,NodeJS,5,hard
+intl,typescript/node.js,12,hard
+intl,TypeScript,80,hard
+intl,machine learning,60,hard
+intl,advanced machine learning techniques,3,hard
+intl,Terraformm,1,hard
+intl,Terraform,25,hard
+intl,NestJS,9,hard
+intl,Next.js,14,hard
+intl,Supabase,7,hard
+intl,supabase,2,
+intl,communication,50,soft
+intl,"data pipelines, batch",4,hard
+intl,http2,3,hard
+intl,http3,2,hard
+intl,Experience working across many teams in a large organisation with shifting priorities,1,soft
+cn,机器学习,35,hard
+cn,機器學習,4,hard
+cn,PostgreSQL,10,hard
+cn,前端开发工程,6,hard
+cn,后端开发工程,5,hard
+cn,沟通能力,22,soft
