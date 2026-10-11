@@ -1,0 +1,36 @@
+{
+  "_synthetic": true,
+  "_note": "Hand-written hard negatives for the evaluation fixtures (MKT-1D): postings whose title shares a head noun with a different discipline, and one posting with a pay line that cannot be pay. otherDiscipline true means the posting is not relevant (grade 0) for every persona outside its own role group, whatever category the role tree files it under. Written for this file; nothing is copied from a job board.",
+  "intl": [
+    { "key": "landscape_architect", "lang": "en", "roleId": "architect", "groupId": "spatial_design", "categoryId": "design", "title": "Landscape Architect", "level": "mid", "country": "US", "otherDiscipline": true,
+      "skills": ["AutoCAD", "Planting design", "Site planning", "Construction documentation"], "work": ["public park and streetscape projects", "planting plans"] },
+    { "key": "interior_designer", "lang": "en", "roleId": "interior_designer", "groupId": "spatial_design", "categoryId": "design", "title": "Interior Designer", "level": "mid", "country": "GB", "otherDiscipline": true,
+      "skills": ["AutoCAD", "Space planning", "Material selection", "SketchUp"], "work": ["retail and office interiors", "material boards"] },
+    { "key": "sales_engineer", "lang": "en", "roleId": "sales_engineer", "groupId": "sales_roles", "categoryId": "sales", "title": "Sales Engineer", "level": "mid", "country": "US", "otherDiscipline": true,
+      "skills": ["Product demonstrations", "Solution design", "RFP responses", "Salesforce"], "work": ["technical demonstrations for prospects", "proof-of-concept projects"] },
+    { "key": "java_backend_architect", "lang": "en", "roleId": "software_architect", "groupId": "swe_leadership", "categoryId": "software_engineering", "title": "Java Backend Architect", "level": "lead_staff", "country": "US", "otherDiscipline": false,
+      "skills": ["Java", "Microservices", "System design", "Kubernetes"], "work": ["the architecture of the order platform", "technical reviews"] },
+    { "key": "data_architect", "lang": "en", "roleId": "data_architect", "groupId": "data_engineering", "categoryId": "data_ai", "title": "Data Architect", "level": "senior", "country": "DE", "otherDiscipline": false,
+      "skills": ["Data modeling", "Snowflake", "SQL", "Data governance"], "work": ["the company data model", "data governance reviews"] },
+    { "key": "implausible_pay", "lang": "en", "roleId": "backend_engineer", "groupId": "swe_backend", "categoryId": "software_engineering", "title": "Backend Engineer", "level": "mid", "country": "US", "otherDiscipline": false, "skillsFromGroup": "swe_backend",
+      "pay": { "min": 60000000, "max": 60000000, "currency": "USD", "period": "hour", "text": "$60,000,000 an hour" } },
+    { "key": "architect_tw", "lang": "zh-TW", "roleId": "architect", "groupId": "spatial_design", "categoryId": "design", "title": "建築師", "level": "mid", "country": "TW", "otherDiscipline": true,
+      "skills": ["AutoCAD", "建築設計", "施工圖繪製", "Revit"], "work": ["住宅與商辦大樓的建築設計", "施工圖審查"] },
+    { "key": "java_backend_architect_tw", "lang": "zh-TW", "roleId": "software_architect", "groupId": "swe_leadership", "categoryId": "software_engineering", "title": "Java 後端架構師", "level": "lead_staff", "country": "TW", "otherDiscipline": false,
+      "skills": ["Java", "微服務", "系統設計", "Kubernetes"], "work": ["訂單平台的架構設計", "技術審查"] }
+  ],
+  "cn": [
+    { "key": "architect", "lang": "zh-CN", "roleId": "architect", "groupId": "spatial_design", "categoryId": "design", "title": "建筑师", "level": "mid", "otherDiscipline": true,
+      "skills": ["AutoCAD", "方案设计", "施工图绘制", "Revit"], "work": ["住宅与商业综合体的方案设计", "施工图审核"] },
+    { "key": "interior_designer", "lang": "zh-CN", "roleId": "interior_designer", "groupId": "spatial_design", "categoryId": "design", "title": "室内设计师", "level": "mid", "otherDiscipline": true,
+      "skills": ["AutoCAD", "空间规划", "材料选型", "SketchUp"], "work": ["零售与办公空间的室内设计", "材料样板"] },
+    { "key": "sales_engineer", "lang": "zh-CN", "roleId": "sales_engineer", "groupId": "sales_roles", "categoryId": "sales", "title": "销售工程师", "level": "mid", "otherDiscipline": true,
+      "skills": ["产品演示", "方案设计", "标书撰写", "Salesforce"], "work": ["面向客户的技术演示", "概念验证项目"] },
+    { "key": "java_backend_architect", "lang": "zh-CN", "roleId": "software_architect", "groupId": "swe_leadership", "categoryId": "software_engineering", "title": "Java后端架构师", "level": "lead_staff", "otherDiscipline": false,
+      "skills": ["Java", "微服务", "系统设计", "Kubernetes"], "work": ["订单平台的架构设计", "技术评审"] },
+    { "key": "data_architect", "lang": "zh-CN", "roleId": "data_architect", "groupId": "data_engineering", "categoryId": "data_ai", "title": "数据架构师", "level": "senior", "otherDiscipline": false,
+      "skills": ["数据建模", "数据仓库", "SQL", "数据治理"], "work": ["公司数据模型", "数据治理评审"] },
+    { "key": "implausible_pay", "lang": "zh-CN", "roleId": "backend_engineer", "groupId": "swe_backend", "categoryId": "software_engineering", "title": "后端开发工程师", "level": "mid", "otherDiscipline": false, "skillsFromGroup": "swe_backend",
+      "pay": { "min": 60000000, "max": 60000000, "currency": "CNY", "period": "hour", "text": "6000万元/小时" } }
+  ]
+}
