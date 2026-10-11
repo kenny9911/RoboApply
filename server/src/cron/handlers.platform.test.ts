@@ -19,6 +19,9 @@ const m = vi.hoisted(() => ({
 // owning WPs fill their cron.ts files (they test those themselves).
 const skip = vi.hoisted(() => async () => ({ skipped: 'not_implemented' as const }));
 vi.mock('../features/jobs/ingest/cron.js', () => ({ runJobsPlan: skip, runJobsIngest: skip, runJobsMaintain: skip }));
+// The board sync (MKT-3D) is a platform step: it gets the cron's budget, not a brand.
+const boards = vi.hoisted(() => ({ run: vi.fn(async (_budget: unknown): Promise<Record<string, unknown>> => ({ skipped: 'no_work' })) }));
+vi.mock('../features/jobs/ingest/boards.js', () => ({ runJobsBoards: boards.run }));
 vi.mock('../features/match/cron.js', () => ({ runScorePrecompute: skip }));
 vi.mock('../features/alerts/cron.js', () => ({ runJobAlerts: skip }));
 vi.mock('../features/lifecycle/cron.js', () => ({ runLifecycleEmails: skip }));
@@ -80,6 +83,7 @@ const REMOVED = ['daily-matcher', 'digest', 'submitter', 'catchup', 'cache-clean
 const PLANNED = [
   ['jobs-plan', '0 2 * * *'],
   ['jobs-ingest', '*/10 * * * *'],
+  ['jobs-boards', '*/5 * * * *'],
   ['queue-drain', '*/5 * * * *'],
   ['jobs-maintain', '30 3 * * *'],
   ['score-precompute', '*/15 * * * *'],
@@ -136,7 +140,7 @@ describe('cron routes over HTTP', () => {
   });
 
   // `reminders` goes through the WP-39a runner, which reports no_work (its own test below).
-  it.each(PLANNED.filter(([n]) => n !== 'queue-drain' && n !== 'jobs-maintain' && n !== 'reminders').map(([n]) => n))(
+  it.each(PLANNED.filter(([n]) => n !== 'queue-drain' && n !== 'jobs-maintain' && n !== 'reminders' && n !== 'jobs-boards').map(([n]) => n))(
     '%s answers 200 {skipped: not_implemented} in under 2 s',
     async (name) => {
       const started = Date.now();
@@ -147,6 +151,36 @@ describe('cron routes over HTTP', () => {
       expect(Object.keys(res.body.results).sort()).toEqual(['goapply', 'roboapply']);
     },
   );
+
+  it('jobs-boards (MKT-3D): the board sync runs once per call as a platform step, not once per brand, and gets the budget', async () => {
+    boards.run.mockClear();
+    boards.run.mockResolvedValueOnce({ processed: 3, boards: 3, inserted: 12 });
+    const res = await h.request<{ ok: boolean; job: string; skipped?: string; results: Record<string, Record<string, unknown>> }>('GET', '/api/v1/cron/jobs-boards', auth);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, job: 'jobs-boards' });
+    expect(res.body.skipped).toBeUndefined();
+    // One board feeds both brands: no brand step, one platform step.
+    expect(res.body.results).toEqual({ roboapply: {}, goapply: {}, platform: { boards: { processed: 3, boards: 3, inserted: 12 } } });
+    expect(boards.run).toHaveBeenCalledOnce();
+    const budget = boards.run.mock.calls[0]![0] as { remainingMs(): number; exhausted(reserve?: number): boolean };
+    expect(budget.remainingMs()).toBeGreaterThan(200_000);
+    expect(budget.exhausted(20_000)).toBe(false);
+  });
+
+  it('jobs-boards reports skipped with the kill switch on, and no_work when nothing is due', async () => {
+    boards.run.mockResolvedValueOnce({ skipped: 'kill_switch' });
+    const off = await h.request<{ ok: boolean; skipped?: string }>('GET', '/api/v1/cron/jobs-boards', auth);
+    expect(off.body).toMatchObject({ ok: true, skipped: 'kill_switch' });
+    const idle = await h.request<{ ok: boolean; skipped?: string }>('GET', '/api/v1/cron/jobs-boards', auth);
+    expect(idle.body).toMatchObject({ ok: true, skipped: 'no_work' });
+  });
+
+  it('jobs-boards answers 500 and says so when the sync throws (a database failure)', async () => {
+    boards.run.mockRejectedValueOnce(new Error('db down'));
+    const res = await h.request<{ ok: boolean; results: Record<string, Record<string, { error?: string }>> }>('GET', '/api/v1/cron/jobs-boards', auth);
+    expect(res.status).toBe(500);
+    expect(res.body.results.platform!.boards).toMatchObject({ error: 'step_failed' });
+  });
 
   it('queue-drain returns at once with no workers registered', async () => {
     const res = await h.request<{ ok: boolean; skipped: string; results: { platform: { drain: { stoppedBy: string } } } }>(

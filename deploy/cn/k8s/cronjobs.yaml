@@ -313,6 +313,67 @@ spec:
 apiVersion: batch/v1
 kind: CronJob
 metadata:
+  name: cron-jobs-boards
+  labels:
+    app.kubernetes.io/name: goapply-cron
+    app.kubernetes.io/part-of: goapply
+    goapply.top/cron: jobs-boards
+  annotations:
+    goapply.top/vercel-path: "/api/v1/cron/jobs-boards"
+spec:
+  schedule: "*/5 * * * *"
+  # Vercel Cron schedules are UTC; pin it so a cluster in Asia/Shanghai does not shift them.
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # Vercel does not retry a failed cron call; neither do we (sweeps are idempotent per tick).
+      backoffLimit: 0
+      activeDeadlineSeconds: 330
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: goapply-cron
+            app.kubernetes.io/part-of: goapply
+            goapply.top/cron: jobs-boards
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          imagePullSecrets:
+            - name: acr-pull
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+          containers:
+            - name: caller
+              # The API image ships deploy/cn/cron-call.mjs; kustomize rewrites the name to the ACR image.
+              image: goapply-api
+              command: ["node", "deploy/cn/cron-call.mjs", "/api/v1/cron/jobs-boards"]
+              env:
+                - name: CRON_API_URL
+                  value: "http://api:4607"
+                - name: CRON_TIMEOUT_MS
+                  value: "300000"
+                - name: CRON_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: goapply-api-env
+                      key: CRON_SECRET
+              resources:
+                requests: { cpu: 10m, memory: 64Mi }
+                limits: { memory: 128Mi }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
   name: cron-queue-drain
   labels:
     app.kubernetes.io/name: goapply-cron

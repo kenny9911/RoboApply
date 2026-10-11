@@ -20,6 +20,7 @@ const api = vi.hoisted(() => ({
   adminUpdateCareerSource: vi.fn(),
   adminDeleteCareerSource: vi.fn(),
   adminRunCareerSource: vi.fn(),
+  adminImportCareerSources: vi.fn(),
 }));
 vi.mock('../../../../../lib/api/careerSources', () => api);
 
@@ -135,11 +136,19 @@ describe('CareerSourcesPanel', () => {
     api.adminListCareerSources.mockResolvedValue({ items: [ROW], cursor: null });
     renderWithBrand(<CareerSourcesPanel />);
     const row = await screen.findByRole('row', { name: /Formosa Robotics/ });
-    expect(api.adminListCareerSources).toHaveBeenCalledWith({ market: 'intl' });
+    // No market asked for: the server lists the boards that feed the site the admin is on.
+    expect(api.adminListCareerSources).toHaveBeenCalledWith(undefined);
     expect(within(row).getByText('Greenhouse')).toBeInTheDocument();
     expect(within(row).getByText('Not checked yet')).toBeInTheDocument();
     expect(within(row).getByText('The board was not found. Check the board id.')).toBeInTheDocument();
     expect(within(row).getByText('On')).toBeInTheDocument();
+  });
+
+  it('given a market, lists the boards that feed it', async () => {
+    api.adminListCareerSources.mockResolvedValue({ items: [ROW], cursor: null });
+    renderWithBrand(<CareerSourcesPanel market="cn" />);
+    await screen.findByRole('row', { name: /Formosa Robotics/ });
+    expect(api.adminListCareerSources).toHaveBeenCalledWith({ market: 'cn' });
   });
 
   it('adds a board and shows the URL it will read', async () => {
@@ -169,12 +178,12 @@ describe('CareerSourcesPanel', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('This board is already in the list.');
   });
 
-  // PAR gate (PAR-7 request): the 14 boards seeded for the mainland site cannot be added here,
-  // and they are not in this list, so the duplicate sentence would be untrue.
-  it('says so when the other site already reads the board (409 with reason board_on_other_site)', async () => {
+  // One board feeds both sites (MKT-3D): a board read for other countries is one shared row that this
+  // site's list does not show, so the plain duplicate sentence would send the admin looking for nothing.
+  it('says so when the board is in the list but read for other countries (409 with reason board_read_for_other_countries)', async () => {
     api.adminListCareerSources.mockResolvedValue({ items: [], cursor: null });
     api.adminCreateCareerSource.mockRejectedValue(
-      new RoboApiError('x', { status: 409, code: 'conflict', payload: { success: false, code: 'conflict', error: 'x', details: { field: 'boardToken', reason: 'board_on_other_site' } } }),
+      new RoboApiError('x', { status: 409, code: 'conflict', payload: { success: false, code: 'conflict', error: 'x', details: { field: 'boardToken', reason: 'board_read_for_other_countries' } } }),
     );
     renderWithBrand(<CareerSourcesPanel />);
     await screen.findByText('No company job boards yet.');
@@ -182,8 +191,9 @@ describe('CareerSourcesPanel', () => {
     fireEvent.change(screen.getByLabelText('Company name'), { target: { value: 'Bosch' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add board' }));
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('This board is already read for the other site, so it cannot be added here.');
-    expect(alert).not.toHaveTextContent('already in the list');
+    expect(alert).toHaveTextContent('This board is already in the list, but it is read for other countries, so it does not show here.');
+    // An answer without the row's id (an earlier server) offers no action it could not carry out.
+    expect(screen.queryByRole('button', { name: 'Read it for this site too' })).not.toBeInTheDocument();
   });
 
   it('check now reports what the board lists; turn off and remove (after confirming)', async () => {
@@ -195,7 +205,7 @@ describe('CareerSourcesPanel', () => {
     const row = await screen.findByRole('row', { name: /Formosa Robotics/ });
 
     fireEvent.click(within(row).getByRole('button', { name: 'Check now' }));
-    expect(await screen.findByText('Formosa Robotics: the board lists 2 jobs. They are being added to the job list now.')).toBeInTheDocument();
+    expect(await screen.findByText('Formosa Robotics: the board lists 2 jobs. They will be added within a few minutes.')).toBeInTheDocument();
 
     fireEvent.click(within(row).getByRole('button', { name: 'Turn off' }));
     await waitFor(() => expect(api.adminUpdateCareerSource).toHaveBeenCalledWith('cs1', { enabled: false }));
@@ -234,6 +244,15 @@ describe('CareerSourcesPanel', () => {
       'unsupported_job_board',
       'redirect',
       'response_too_large',
+    ]);
+    // A candidate's first check: 'validation:<verdict or read error>'.
+    expect(['validation:name_mismatch', 'validation:empty_board', 'validation:name_unconfirmed', 'validation:board_not_found', 'validation:http_503', 'sources_off'].map(problemKey)).toEqual([
+      'name_mismatch',
+      'empty_board',
+      'name_unconfirmed',
+      'board_not_found',
+      'server_error',
+      'sources_off',
     ]);
     expect(['http_429', 'http_500', 'http_403', 'network', 'network:x', 'unexpected:boom', 'host_not_allowed:x'].map(problemKey)).toEqual([
       'rate_limited',

@@ -1,0 +1,21 @@
+{
+  "about": "The international backbone: the two boards the research note read end to end on 2026-10-11 (docs/jobright-clone/market/JOB_SOURCES_INTL.md 3.2). Only these two: every other board joins through bulk import or discovery and is validated against its live board before it is read.",
+  "boards": [
+    {
+      "ats": "greenhouse",
+      "boardToken": "stripe",
+      "companyName": "Stripe",
+      "countries": [],
+      "note": "docs/jobright-clone/market/JOB_SOURCES_INTL.md 3.2 probe 6: 200, 728 jobs in one response with full text",
+      "confirmedOn": "2026-10-11"
+    },
+    {
+      "ats": "ashby",
+      "boardToken": "ramp",
+      "companyName": "ramp",
+      "countries": [],
+      "note": "docs/jobright-clone/market/JOB_SOURCES_INTL.md 3.2 probe 7: 200, 165 jobs, compensation summary on 96%; the system states no company name, so the board id stands in",
+      "confirmedOn": "2026-10-11"
+    }
+  ]
+}
