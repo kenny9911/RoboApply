@@ -357,17 +357,167 @@ describe('mainland pay as posted (PAR-7; MARKET_STRATEGY §1.5)', () => {
     expect(parseSalaryText('15-25K', { market: 'intl', country: 'US' })).toMatchObject({ period: null });
   });
 
-  it('a bare number with no unit is not filterable: it is never stored as pay we can compare', () => {
-    expect(parseSalaryText('15000-25000', { market: 'cn', country: 'CN' })).toBeNull();
-    expect(normalizeSalary({ text: '15000-25000', market: 'cn', country: 'CN' })).toMatchObject({ salaryMin: null, salaryAnnualMin: null, salaryAnnualMax: null, salaryDisclosed: false });
-    // Bare provider figures (an ATS field with no currency or period) keep the numbers as stated but no annual figure.
-    expect(normalizeSalary({ min: 15000, max: 25000, market: 'cn', country: 'CN' })).toMatchObject({ salaryMin: 15000, salaryMax: 25000, salaryCurrency: null, salaryPeriod: null, salaryAnnualMin: null, salaryAnnualMax: null });
+  // MKT-3C (JC-7; MARKET_STRATEGY §1.5 "bare ATS numbers are ambiguous and not filterable"; JOB_SOURCES_CN §7.6):
+  // "35-57" on one job-board system is thousands a month, "35000-60000" on another is yuan. PAR-7 kept such
+  // provider figures as disclosed amounts with no unit; they are now the posting's words and nothing else.
+  const AS_POSTED_ONLY = { salaryMin: null, salaryMax: null, salaryCurrency: null, salaryPeriod: null, salarySource: null, salaryAnnualMin: null, salaryAnnualMax: null, salaryMonths: null, salaryDisclosed: false };
+
+  it.each([
+    ['35-57', '35-57'],
+    ['35000-60000', '35000-60000'],
+    ['15000-25000', '15000-25000'],
+    ['35 ~ 57', '35 ~ 57'],
+    ['8,000', '8,000'],
+    ['３５－５７', '35-57'], // full-width digits read the same (NFKC)
+    // The same pair with Chinese words around it names no unit either.
+    ['35至57', '35至57'],
+    ['35到57', '35到57'],
+    ['薪资 35-57', '薪资 35-57'],
+    ['薪资：35-57', '薪资:35-57'],
+    ['待遇35000-60000', '待遇35000-60000'],
+  ])("a bare pair in the pay field (%s) is kept as posted, not disclosed and never comparable", (text, kept) => {
+    // No figure comes out of the parser: nothing at all, or the words marked as carrying no unit.
+    const parsed = parseSalaryText(text, { market: 'cn', country: 'CN' });
+    if (parsed) expect(parsed).toEqual({ min: null, max: null, currency: null, period: null, months: null, negotiable: false, ambiguous: true, text: kept });
+    for (const ctx of [{ market: 'cn' as const, country: 'CN' }, { market: 'cn' as const }, { market: 'intl' as const, country: 'CN' }, { market: 'cn' as const, country: 'cn' }]) {
+      expect(normalizeSalary({ text, ...ctx })).toEqual({ ...AS_POSTED_ONLY, salaryText: kept });
+    }
+  });
+
+  it("an ATS's bare numeric pair with no unit (35 and 57) is kept as '35-57', not disclosed and never comparable", () => {
+    expect(normalizeSalary({ min: 35, max: 57, market: 'cn', country: 'CN' })).toEqual({ ...AS_POSTED_ONLY, salaryText: '35-57' });
+    expect(normalizeSalary({ min: 35000, max: 60000, market: 'cn' })).toEqual({ ...AS_POSTED_ONLY, salaryText: '35000-60000' });
+    expect(normalizeSalary({ min: 15000, max: 25000, market: 'cn', country: 'CN' })).toEqual({ ...AS_POSTED_ONLY, salaryText: '15000-25000' });
+    // One bound, or the same number twice.
+    expect(normalizeSalary({ min: 35, market: 'cn' })).toEqual({ ...AS_POSTED_ONLY, salaryText: '35' });
+    expect(normalizeSalary({ min: 35, max: 35, market: 'cn' })).toEqual({ ...AS_POSTED_ONLY, salaryText: '35' });
+    // The source's own pay text is the words to keep when it sent one.
+    expect(normalizeSalary({ min: 35, max: 57, text: '35-57', market: 'cn' })).toEqual({ ...AS_POSTED_ONLY, salaryText: '35-57' });
+    expect(normalizeSalary({ min: 35, max: 57, text: '薪资 35-57', market: 'cn' }).salaryDisclosed).toBe(false);
+  });
+
+  it('any unit makes the figures comparable again: a currency, a period, N薪 or K / 千 / 万', () => {
+    expect(normalizeSalary({ min: 15000, max: 25000, currency: 'CNY', market: 'cn' })).toMatchObject({ salaryMin: 15000, salaryMax: 25000, salaryCurrency: 'CNY', salaryDisclosed: true });
+    expect(normalizeSalary({ min: 15000, max: 25000, period: 'month', market: 'cn' })).toMatchObject({ salaryMin: 15000, salaryMax: 25000, salaryPeriod: 'month', salaryAnnualMin: 180000, salaryDisclosed: true });
+    expect(normalizeSalary({ min: 15000, max: 25000, months: 14, market: 'cn' })).toMatchObject({ salaryMin: 15000, salaryDisclosed: true });
+    expect(normalizeSalary({ min: 15000, max: 25000, text: '15-25K', market: 'cn' })).toMatchObject({ salaryMin: 15000, salaryMax: 25000, salaryCurrency: 'CNY', salaryPeriod: 'month', salaryDisclosed: true });
+    expect(normalizeSalary({ text: '35-45K', market: 'cn' })).toMatchObject({ salaryMin: 35000, salaryMax: 45000, salaryCurrency: 'CNY', salaryPeriod: 'month', salaryDisclosed: true, salaryText: '35-45K' });
+    // A top of 50,000 or more with no period keeps none (PAR-7's rule above), and is still stated pay.
+    expect(normalizeSalary({ text: '35-57K', market: 'cn' })).toMatchObject({ salaryMin: 35000, salaryMax: 57000, salaryCurrency: 'CNY', salaryPeriod: null, salaryDisclosed: true, salaryText: '35-57K' });
+    expect(normalizeSalary({ text: '35000-60000元/月', market: 'cn' })).toMatchObject({ salaryMin: 35000, salaryMax: 60000, salaryCurrency: 'CNY', salaryPeriod: 'month', salaryDisclosed: true });
+    // The posting's own pay line states the same figures with their unit: the pay is the posting's.
+    expect(normalizeSalary({ text: '35-57', description: '薪资：35-57K·14薪', market: 'cn', country: 'CN' })).toMatchObject({ salaryMin: 35000, salaryMax: 57000, salaryMonths: 14, salaryDisclosed: true, salaryText: '35-57K·14薪' });
+  });
+
+  // Review finding 6: "/天" and "/日" are a unit the posting states. The pattern ended in \b, which never holds
+  // between a CJK character and the end of the text, so the pair fell under the bare-number rule and was hidden.
+  it.each([
+    ['200-300/天', 'day', 200, 300],
+    ['200-300/日', 'day', 200, 300],
+    ['200-300 / 天', 'day', 200, 300],
+    ['200-300/天，包午餐', 'day', 200, 300],
+    ['每日200-300', 'day', 200, 300],
+    ['每天200-300', 'day', 200, 300],
+    ['300元/天', 'day', 300, 300],
+    ['150/小时', 'hour', 150, 150],
+  ])("a mainland rate with its unit (%s) is a %s rate in yuan, disclosed", (text, period, min, max) => {
+    expect(periodFromText(text)).toBe(period);
+    expect(normalizeSalary({ text, market: 'cn', country: 'CN' })).toMatchObject({ salaryMin: min, salaryMax: max, salaryCurrency: 'CNY', salaryPeriod: period, salaryDisclosed: true, salaryText: text.normalize('NFKC') });
+  });
+
+  it('a slash before 日本 or 日期 is not a day rate; the bare pair stays as posted', () => {
+    expect(periodFromText('200-300/日本')).toBeNull();
+    expect(periodFromText('200-300/日期')).toBeNull();
+    expect(normalizeSalary({ text: '200-300/日本', market: 'cn', country: 'CN' })).toMatchObject({ salaryMin: null, salaryDisclosed: false });
+  });
+
+  it('the bare-number rule is the mainland\'s: elsewhere the same input is what it was', () => {
+    // Text: a bare pair was never pay text outside the mainland and still is not.
+    expect(normalizeSalary({ text: '35-57', market: 'intl', country: 'US' })).toMatchObject({ salaryDisclosed: false, salaryMin: null, salaryText: null });
+    expect(normalizeSalary({ text: '35-57' })).toMatchObject({ salaryDisclosed: false, salaryText: null });
+    // Provider fields with no unit keep their numbers and state no annual figure.
+    expect(normalizeSalary({ min: 15000, max: 25000, market: 'intl', country: 'US' })).toMatchObject({ salaryMin: 15000, salaryMax: 25000, salaryCurrency: null, salaryPeriod: null, salaryAnnualMin: null, salaryAnnualMax: null, salaryDisclosed: true });
+    expect(normalizeSalary({ min: 120000, currency: 'US Dollars' })).toMatchObject({ salaryMin: 120000, salaryDisclosed: true });
+  });
+
+  it('a zero, or words that are not numbers, in the pay field are not kept as a bare pair', () => {
+    for (const text of ['0', '0-0', '0.0', '-', '不限', 'N/A', '详见职位描述']) {
+      expect(normalizeSalary({ text, market: 'cn', country: 'CN' })).toEqual({ ...AS_POSTED_ONLY, salaryText: null });
+    }
+  });
+
+  it('a description line with a unit-less pair gives no pay; a pay field without a unit does not hide a real pay line', () => {
+    expect(payFromDescription('岗位职责：开发\n薪资：35-57', { market: 'cn', country: 'CN' })).toBeNull();
+    expect(normalizeSalary({ description: '岗位职责：开发\n薪资：35-57', market: 'cn', country: 'CN' })).toEqual({ ...AS_POSTED_ONLY, salaryText: null });
+    expect(normalizeSalary({ text: '薪资 35-57', description: '任职要求：本科\n薪资：35-57K·14薪', market: 'cn', country: 'CN' })).toMatchObject({ salaryMin: 35000, salaryMax: 57000, salaryMonths: 14, salaryDisclosed: true });
+    // A pay field without a unit next to a description that only says 面议: the field's own words are kept.
+    expect(normalizeSalary({ text: '薪资 35-57', description: '薪资：面议', market: 'cn', country: 'CN' })).toEqual({ ...AS_POSTED_ONLY, salaryText: '薪资 35-57' });
+    // The Taiwan reading of the same words is unchanged (not a mainland row).
+    expect(parseSalaryText('薪資 40000-50000', { market: 'intl', country: 'TW' })).toMatchObject({ min: 40000, max: 50000, currency: 'TWD' });
+  });
+
+  it("'15-25K·14薪' keeps its months and is shown as posted (text only)", () => {
+    expect(normalizeSalary({ text: '15-25K·14薪', market: 'cn', country: 'CN' })).toEqual({
+      salaryMin: 15000,
+      salaryMax: 25000,
+      salaryCurrency: 'CNY',
+      salaryPeriod: 'month',
+      salarySource: 'posting_text',
+      salaryAnnualMin: 210000,
+      salaryAnnualMax: 350000,
+      salaryMonths: 14,
+      salaryDisclosed: true,
+      salaryText: '15-25K·14薪',
+    });
   });
 
   it('no pay text means salary null: never 面议 unless the posting says it', () => {
     const none = normalizeSalary({ description: '负责后端服务开发。', market: 'cn', country: 'CN' });
     expect(none).toMatchObject({ salaryMin: null, salaryMax: null, salaryDisclosed: false, salaryText: null });
     expect(normalizeSalary({ text: '面议', market: 'cn' })).toMatchObject({ salaryDisclosed: false, salaryText: '面议', salaryMin: null });
+    // MKT-3C: nothing at all, a blank field, a posting that talks about anything but pay: every pay field is null.
+    for (const input of [{}, { text: '' }, { text: '   ' }, { text: null, description: null }, { description: '岗位职责：负责后端开发。\n任职要求：本科及以上学历，3年以上经验。' }]) {
+      expect(normalizeSalary({ ...input, market: 'cn', country: 'CN' })).toEqual({ ...AS_POSTED_ONLY, salaryText: null });
+    }
+    // 面议 is the posting's word, kept as posted, and only then.
+    for (const text of ['面议', '薪资面议', '薪酬面议']) expect(normalizeSalary({ text, market: 'cn', country: 'CN' })).toEqual({ ...AS_POSTED_ONLY, salaryText: text });
+    expect(normalizeSalary({ description: '薪资：面议', market: 'cn', country: 'CN' })).toMatchObject({ salaryDisclosed: false, salaryMin: null });
+  });
+});
+
+describe('MKT-3C: a one-letter dollar prefix is read only when no letter stands before it (M1 carry-over)', () => {
+  it.each([
+    ['US$90,000 - US$110,000 a year', 'USD'],
+    ['US$ 90,000', 'USD'],
+    ['CA$90,000 a year', 'CAD'],
+    ['C$90,000 a year', 'CAD'],
+    ['AU$90,000', 'AUD'],
+    ['A$90,000', 'AUD'],
+    ['S$6,000 a month', 'SGD'],
+    ['Salary: S$6,000', 'SGD'],
+    ['(S$6,000)', 'SGD'],
+    ['NZ$80,000', 'NZD'],
+    ['R$ 8.000', 'BRL'],
+    ['HK$30,000', 'HKD'],
+    ['NT$50,000', 'TWD'],
+    ['MX$20,000', 'MXN'],
+    ['SGD 6,000', 'SGD'],
+    ['90,000 AUD', 'AUD'],
+  ])('%s is %s', (text, currency) => {
+    expect(currencyFromText(text, null)).toBe(currency);
+    // The country of the job does not change a currency the text names.
+    for (const country of ['SG', 'AU', 'US', 'BR', null]) expect(currencyFromText(text, country)).toBe(currency);
+  });
+
+  it('the stored pay of a row whose pay comes from text carries the right currency', () => {
+    expect(normalizeSalary({ text: 'US$90,000 - US$110,000 a year', country: 'US' })).toMatchObject({ salaryMin: 90000, salaryMax: 110000, salaryCurrency: 'USD', salaryPeriod: 'year', salaryAnnualMin: 90000 });
+    expect(normalizeSalary({ description: 'Salary: CA$90,000 - CA$110,000 a year', country: 'CA' })).toMatchObject({ salaryCurrency: 'CAD', salaryAnnualMax: 110000 });
+    expect(parseSalaryText('US$90,000 - US$110,000 a year', { country: 'SG' })).toMatchObject({ currency: 'USD' });
+    expect(parseSalaryText('CA$90,000 a year', { country: 'AU' })).toMatchObject({ currency: 'CAD' });
+    // A bare "$" still follows the job's country, as before.
+    expect(currencyFromText('$90,000', 'SG')).toBe('SGD');
+    expect(currencyFromText('$90,000', 'AU')).toBe('AUD');
+    expect(currencyFromText('$90,000', null)).toBeNull();
   });
 });
 

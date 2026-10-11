@@ -11,9 +11,9 @@ import type { MarketHookJob } from '../marketHooks.js';
 import { bestTaxonomyMatch, getTaxonomyNode, taxonomyAncestors } from '../taxonomy/index.js';
 import { parseLocation, resolveCountry, type ParsedLocation } from '../geo/index.js';
 import { resolveIsAgency } from './agency.js';
-import { atsTypeFromUrls } from './ats.js';
-import { buildCompanyUpsert } from './company.js';
-import { buildSearchText, dedupeKey, resolveExpiresAt, resolvePostedAt, toDate } from './identity.js';
+import { atsPostingKeyFromBoardRow, atsPostingKeyFromUrls, atsTypeFromUrls, isJobBoardHost, isLinkedInHost, pickEmployerLink } from './ats.js';
+import { buildCompanyUpsert, employerDomain } from './company.js';
+import { buildSearchText, dedupeKey, naiveOffsetMinutesFor, resolveExpiresAt, resolvePostedAt, toDate } from './identity.js';
 import {
   educationFromLabel,
   educationFromText,
@@ -27,13 +27,37 @@ import {
   yearsFromText,
 } from './level.js';
 import { normalizeSalary } from './salary.js';
-import { applicantCountAllowed, isLinkedInAssetHost, isLinkedInBranded, isLinkedInHost, PROVIDER_META, sourceFields } from './source.js';
+import { applicantCountAllowed, isLinkedInAssetHost, isLinkedInBranded, PROVIDER_META, sourceFields } from './source.js';
 import { asWritten, cleanOrNull, cleanText, hostOf, htmlToPlain, normalizeCompanyName, normalizeJobTitle, safeUrl, truncate } from './text.js';
-import type { NormalizedJob, NormalizedLocation, NormalizeContext, NormalizeProvider, ProviderJobInput, Seniority } from './types.js';
+import { WORK_SHIFTS, type NormalizedJob, type NormalizedLocation, type NormalizeContext, type NormalizeProvider, type ProviderJobInput, type Seniority, type WorkShift } from './types.js';
 import { resolveWorkModel } from './workModel.js';
 import { foldTwToCn } from './zhVariants.js';
 
 export const MAX_SKILLS = 25;
+/** Longest district kept (`RAJob.locationDistrict`, as posted). */
+export const MAX_DISTRICT_CHARS = 40;
+
+/**
+ * Aggregators whose rows are link lists to other sites (MARKET_STRATEGY M-3,
+ * JI-6): the candidate is sent to the employer's or ATS's page when the row
+ * has one, else to a job board, and a row whose ONLY links are LinkedIn's or
+ * Indeed's is not ingested (`applyUrl` null, note 'linkedin_only_link' /
+ * 'indeed_only_link'; the ingest pipeline never writes a row without an apply
+ * URL). One table, so the rule is extended per provider, never per caller.
+ */
+const LINK_LIST_PROVIDERS: ReadonlySet<NormalizeProvider> = new Set<NormalizeProvider>(['jsearch']);
+
+/** The district as posted: trimmed, at most 40 characters; null when the source states none. */
+function districtOf(value: string | null | undefined): string | null {
+  const text = cleanOrNull(value);
+  return text ? truncate(text, MAX_DISTRICT_CHARS) : null;
+}
+
+/** One of `WORK_SHIFTS`, exactly; anything else (free text, another language, an unknown code) is dropped. */
+function workShiftOf(value: string | null | undefined): WorkShift | null {
+  const v = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return (WORK_SHIFTS as readonly string[]).includes(v) ? (v as WorkShift) : null;
+}
 
 /** Lower-case, de-duplicated skills (max 25, each ≤ 60 chars). */
 export function normalizeSkills(skills: readonly string[] | null | undefined): string[] {
@@ -305,9 +329,17 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
   if (raw.salaryCurrencyInferred && salary.salarySource === 'provider' && salary.salaryCurrency) notes.push('salary_currency_from_search_country');
 
   // ── Source line, ATS, agency ──
-  const applyUrl = safeUrl(raw.applyUrl ?? null) ?? safeUrl(raw.sourceUrl ?? null);
+  let applyUrl: string | null;
+  if (LINK_LIST_PROVIDERS.has(provider)) {
+    // The employer's or ATS's page first, then a job board; never LinkedIn or Indeed (see LINK_LIST_PROVIDERS).
+    const link = pickEmployerLink([raw.applyUrl, raw.sourceUrl]);
+    applyUrl = link.url;
+    if (!applyUrl && link.only) notes.push(`${link.only}_only_link`);
+  } else {
+    applyUrl = safeUrl(raw.applyUrl ?? null) ?? safeUrl(raw.sourceUrl ?? null);
+  }
   if (!applyUrl) notes.push('no_apply_url');
-  // Kept (it may be the only way to apply); flagged so the ingest / job page can decide whether to show it.
+  // Other providers: kept (it may be the only way to apply); flagged so the ingest / job page can decide whether to show it.
   else if (isLinkedInHost(hostOf(applyUrl))) notes.push('apply_url_linkedin_host');
   // H9: no LinkedIn-hosted logo (media.licdn.com hotlinks) on the card.
   const logoUrl = safeUrl(raw.companyLogoUrl ?? null);
@@ -316,6 +348,9 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
   const source = sourceFields({ provider, sourceBoard: raw.sourceBoard, sourcePublisher: raw.sourcePublisher, sourceUrl: raw.sourceUrl, applyUrl });
   if (isLinkedInBranded(raw.sourcePublisher)) notes.push('linkedin_publisher_dropped');
   const atsType = atsTypeFromUrls(applyUrl, raw.sourceUrl);
+  // K2 (JI-5): an employer-board row is keyed by its own board and id; every other row by what its links name.
+  const atsPostingKey =
+    provider === 'ats_public' ? (atsPostingKeyFromBoardRow(source.sourceBoard, raw.externalId) ?? atsPostingKeyFromUrls(applyUrl, raw.sourceUrl)) : atsPostingKeyFromUrls(applyUrl, raw.sourceUrl);
   // The company record: our staffing-firm list, the name, or the provider's own flag.
   const companyIsAgency = resolveIsAgency(companyName, raw.isAgency);
   // The job: also an agency posting when a recruiter placed it for a named employer (代招).
@@ -337,9 +372,10 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
     }
   }
 
-  // ── Dates ──
-  const posted = resolvePostedAt(raw.postedAt ?? null, { estimated: raw.postedAtEstimated, fetchedAt: raw.fetchedAt, firstSeenAt: ctx.firstSeenAt, now });
-  const expiresAt = resolveExpiresAt(provider, raw.expiresAt ?? null, posted.postedAt);
+  // ── Dates (a zone-less time of a UTC+8 source is local time there) ──
+  const naiveOffsetMinutes = naiveOffsetMinutesFor(provider, market);
+  const posted = resolvePostedAt(raw.postedAt ?? null, { estimated: raw.postedAtEstimated, fetchedAt: raw.fetchedAt, firstSeenAt: ctx.firstSeenAt, now, naiveOffsetMinutes });
+  const expiresAt = resolveExpiresAt(provider, raw.expiresAt ?? null, posted.postedAt, { boardLink: isJobBoardHost(hostOf(applyUrl)), naiveOffsetMinutes });
 
   // ── Visibility and display ──
   const isBank = meta.fromRecruiterBank;
@@ -347,6 +383,10 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
   const publicDisplay = provider === 'user_import' ? false : isBank ? raw.syndicationConsent === true : (ctx.publicDisplayProviders ?? []).includes(provider);
 
   const place = { cityId: primaryLoc?.cityId ?? null, city: primary?.city?.name ?? primary?.cityName ?? null, remoteScope, country: primaryLoc?.country ?? null };
+  // K3: the employer's own domain replaces the name when one is known for the row (the source states
+  // it, or the page / the company record knows it for this name); otherwise the name key, as always.
+  const companyDomain =
+    employerDomain(raw.companyFacts?.domain) ?? employerDomain(raw.companyFacts?.website) ?? employerDomain(ctx.companyDomains?.get(companyNameNormalized));
 
   const coverage = {
     taxonomy: !!tax.primary,
@@ -376,6 +416,7 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
     originalSourceName: source.originalSourceName,
     originalHost: source.originalHost,
     atsType,
+    atsPostingKey,
     isAgency,
     fromRecruiterBank: source.fromRecruiterBank,
     employerVerified: isBank && raw.employerVerified === true,
@@ -385,6 +426,7 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
     locationCity: primaryLoc?.city ?? null,
     locationRegion: primaryLoc?.region ?? null,
     locationCountry: primaryLoc?.country ?? null,
+    locationDistrict: districtOf(raw.locationDistrict),
     locations,
     geoLat: primaryLoc?.lat ?? null,
     geoLng: primaryLoc?.lng ?? null,
@@ -395,6 +437,8 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
     educationLevel,
     educationEvidence,
     headcount: typeof raw.headcount === 'number' && Number.isInteger(raw.headcount) && raw.headcount > 0 ? raw.headcount : null,
+    workShift: workShiftOf(raw.workShift),
+    sponsorshipProvider: raw.sponsorshipProvider === 'offered' || raw.sponsorshipProvider === 'not_offered' ? raw.sponsorshipProvider : null,
     ...salary,
 
     taxonomyIds: tax.ids,
@@ -417,7 +461,7 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
     applicantCountSource,
     applicantCountAt,
 
-    dedupeKey: dedupeKey(companyNameNormalized, titleNormalized, place),
+    dedupeKey: dedupeKey(companyNameNormalized, titleNormalized, place, companyDomain),
     searchText: buildSearchText(titleNormalized, companyNameNormalized, skills),
 
     company: buildCompanyUpsert({

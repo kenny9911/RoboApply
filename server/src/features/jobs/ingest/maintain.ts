@@ -1,19 +1,51 @@
 // server/src/features/jobs/ingest/maintain.ts — `jobs-maintain` steps (ARCH §4.6; WP-16b).
 //
-//   1. Expire: a public posting past its provider expiry — or, with none,
-//      posted more than 45 days ago — is archived (closeReason 'expired').
-//      Bank jobs and public ATS boards never expire by date: the bank sync
-//      or the board sync closes them (an employer's board lists a role for
-//      as long as it is open).
+//   1. Expire (MARKET_STRATEGY M-22, §1.5 "Closure"; JI-10): a public posting
+//      past the deadline its source states is archived, whatever the source
+//      (closeReason 'expired'). A posting with NO stated deadline is archived
+//      by age (posted more than 45 days ago) only when it is an aggregator's
+//      row (`AGE_EXPIRY_BOARDS`: activejobs, linkedin, jsearch). Employer
+//      boards, the recruiter banks, the open-data and government sources are
+//      never archived by age: they close by listing diff, tombstone, sweep
+//      absence or their stated deadline (an employer's board lists a role for
+//      as long as it is open, often for months).
 //   2. Missed refreshes: a job of a metered search provider that two later
 //      counted runs of the query that last returned it did not return — while
 //      it is still inside that query's datePosted window — is archived as
 //      'source_removed' (tracking.ts). This needs Schema request SR-16b-1;
 //      until its columns exist (`perQueryTracking` false) the step is skipped
 //      and nothing is archived as 'source_removed'.
-//   3. Dedupe repair: canonical flags are recomputed for every key touched in
-//      the last two days (archived canonicals hand over to the next row).
-//   4. Enrichment catch-up (WP-17 → WP-16b), at most ENRICH_REQUEUE_PER_RUN
+//   3. Dedupe priorities (JI-5, JC-7): live rows of a provider whose priority
+//      changed (employer boards 10 → 5, GoHire bank 15 → 3) take the number
+//      `PROVIDER_META` holds (`alignSourcePriority`; a second run writes
+//      nothing). The rows it changes count as touched, so step 5 re-ranks
+//      their groups in the same run.
+//   4. Bank rows with no page a candidate can open (PAR carry-over 7b; the
+//      rule the bank sync applies to the rows it reads, here for the rows it
+//      does not reach):
+//        a. the bank has NO posting-page template: every open row of it is
+//           archived as 'no_apply_target', whether or not its sync runs. The
+//           lists hold such rows already, but dedupe does not know that rule:
+//           a held GoHire row (priority 3) would stay the canonical row of
+//           its group and hide the employer-board twin, which is the only row
+//           of the posting a candidate could open. Archived, it hands the
+//           group over in step 5 of the same run;
+//        b. the bank HAS a template and its sync is not running: an open row
+//           whose stored apply link is not its page under the template (a row
+//           stored before the template, still pointing at the missing
+//           /jobs/<id> route) is archived the same way. A row whose link IS
+//           the bank's page stays listed.
+//      Whenever the step archives rows of a bank, the stored cursor of that
+//      bank's sync is cleared, so its next run reads the bank from the
+//      beginning and the upsert reopens every row the bank still lists
+//      ('no_apply_target' is a reason it revives). Without that, a sync whose
+//      cursor already carries the current template's mark would continue
+//      where it stopped and the archived rows would stay closed until each
+//      changed at the bank.
+//   5. Dedupe repair: exact twins (one `atsPostingKey`) are aligned on one
+//      dedupe key, then canonical flags are recomputed for every key touched
+//      in the last two days (archived canonicals hand over to the next row).
+//   6. Enrichment catch-up (WP-17 → WP-16b), at most ENRICH_REQUEUE_PER_RUN
 //      jobs a run, oldest enrichment first:
 //        a. rows enriched at an older ENRICH_VERSION are queued again (one
 //           `job.enrich` item per job per version: a second run queues nothing);
@@ -36,20 +68,31 @@ import { createHash } from 'node:crypto';
 import { Prisma } from '../../../generated/prisma/client.js';
 import type { EnvSource, Market, ProductBrand } from '../../../platform/brand/index.js';
 import type { EnqueueManyItem } from '../../../platform/queue/index.js';
-import type { JobSourceAdapter } from '../sources/index.js';
+import { bankPublicJobUrl, bankPublicJobUrlTemplate } from '../../../roboapply/v2/lib/raCrossBankMatch.js';
+import { AGE_EXPIRY_BOARDS, PROVIDER_META, safeUrl } from '../normalize/index.js';
+import { adapterEnabledFor, type JobSourceAdapter } from '../sources/index.js';
 import { PUBLIC_ATS } from '../sources/atsPublic/contract.js';
 import { MAX_AGE_DAYS } from './config.js';
 import type { IngestDb } from './db.js';
 import type { EnqueueManyFn } from './pipeline.js';
 import { buildMissedSql } from './tracking.js';
-import { applyDedupe } from './upsert.js';
+import { applyDedupe, archiveClosedBankJobs, archiveUnlistedJobs } from './upsert.js';
 
-/** Bank boards never expire by date. */
+/** `sourceBoard` of the two recruiter banks (the bank id). */
 export const BANK_BOARDS = ['robohire', 'gohire'] as const;
+type BankBoard = (typeof BANK_BOARDS)[number];
+/** The market each bank's rows are written to (the rule of raCrossBankMatch `bankMarket`; a test holds them equal). */
+const BANK_MARKET: Readonly<Record<BankBoard, Market>> = { robohire: 'intl', gohire: 'cn' };
+/** The provider id of each bank's sync, which is its `RAIngestQuery.provider` (a test holds them equal to `PROVIDER_META`). */
+export const BANK_SYNC_PROVIDER: Readonly<Record<BankBoard, 'bank_robohire' | 'bank_gohire'>> = { robohire: 'bank_robohire', gohire: 'bank_gohire' };
+
 /**
- * `sourceBoard` values the date-expiry step never archives: the recruiter
- * banks and the public ATS boards (`ats_public`: greenhouse, lever, ashby,
- * smartrecruiters). Their own sync closes a posting the source stopped listing.
+ * The recruiter banks and the public ATS boards (`ats_public`: greenhouse,
+ * lever, ashby, smartrecruiters): boards whose own sync closes a posting.
+ * The expiry step no longer reads this list (it names the boards that DO
+ * expire by age, `AGE_EXPIRY_BOARDS`, so a new source is safe by default). It
+ * is kept because the feed's age floor is held equal to it by a test
+ * (feed/sourceLine.ts `NO_AGE_FLOOR_BOARDS`).
  */
 export const NO_DATE_EXPIRY_BOARDS: readonly string[] = [...BANK_BOARDS, ...PUBLIC_ATS];
 
@@ -57,12 +100,110 @@ export const NO_DATE_EXPIRY_BOARDS: readonly string[] = [...BANK_BOARDS, ...PUBL
 export const ENRICH_REQUEUE_PER_RUN = 500;
 const ENRICH_KIND = 'job.enrich';
 
+/**
+ * Step 1. A stated deadline that has passed archives a row of ANY source; with
+ * no deadline, only an aggregator's row is archived by its posting age.
+ */
 export function buildExpireSql(market: Market): Prisma.Sql {
   return Prisma.sql`
     UPDATE "RAJob" SET "archivedAt" = now(), "closedAt" = COALESCE("closedAt", now()), "closeReason" = 'expired', "updatedAt" = now()
     WHERE "market" = ${market} AND "visibility" = 'public' AND "archivedAt" IS NULL
-      AND "sourceBoard" <> ALL(${[...NO_DATE_EXPIRY_BOARDS]}::text[])
-      AND ("expiresAt" < now() OR ("expiresAt" IS NULL AND "postedAt" < now() - make_interval(days => ${MAX_AGE_DAYS}::int)))`;
+      AND ("expiresAt" < now()
+        OR ("expiresAt" IS NULL AND "sourceBoard" = ANY(${[...AGE_EXPIRY_BOARDS]}::text[]) AND "postedAt" < now() - make_interval(days => ${MAX_AGE_DAYS}::int)))`;
+}
+
+// ── Step 3: dedupe priorities follow PROVIDER_META ────────────────────────
+
+/** The providers whose dedupe priority changed (JI-5), with the boards their rows are stored under. */
+export function priorityTargets(): Array<{ boards: string[]; priority: number }> {
+  return [
+    { boards: [...PUBLIC_ATS], priority: PROVIDER_META.ats_public.sourcePriority },
+    { boards: [PROVIDER_META.bank_gohire.sourceBoard], priority: PROVIDER_META.bank_gohire.sourcePriority },
+  ];
+}
+
+/** Live rows of `boards` in `market` that carry another number take `priority`. Rows already right are not written. */
+export function buildAlignPrioritySql(market: Market, boards: readonly string[], priority: number): Prisma.Sql {
+  return Prisma.sql`
+    UPDATE "RAJob" SET "sourcePriority" = ${priority}::int, "updatedAt" = now()
+    WHERE "market" = ${market} AND "archivedAt" IS NULL AND "sourceBoard" = ANY(${[...boards]}::text[]) AND "sourcePriority" <> ${priority}::int`;
+}
+
+/**
+ * Sets `sourcePriority` to the `PROVIDER_META` value on live rows that still
+ * carry an older number (employer boards 10 → 5, GoHire bank 15 → 3). One
+ * idempotent UPDATE per provider; returns the rows changed (0 on a second
+ * run). The ingest upsert writes the right number on every row it touches;
+ * this reaches the rows no source has listed again yet.
+ */
+export async function alignSourcePriority(db: IngestDb, market: Market): Promise<number> {
+  let changed = 0;
+  for (const target of priorityTargets()) changed += await db.$executeRaw(buildAlignPrioritySql(market, target.boards, target.priority));
+  return changed;
+}
+
+// ── Step 4: a bank row whose link is not the bank's posting page ──────────
+
+/** Most open rows of one bank the dead-link check reads per run. */
+export const DEAD_BANK_LINK_SCAN_LIMIT = 20_000;
+
+export interface DeadBankLinkOptions {
+  env?: EnvSource;
+  now?: Date;
+  /** The bank's page for one job (default: raCrossBankMatch `bankPublicJobUrl`). */
+  publicJobUrl?: (bank: BankBoard, jobId: string) => string | null;
+  /** Whether the bank has a usable template (default: raCrossBankMatch `bankPublicJobUrlTemplate`). */
+  hasTemplate?: (bank: BankBoard) => boolean;
+}
+
+/**
+ * Clears the stored cursor of a bank's sync in `market`, so its next run
+ * reads the bank from the beginning (a query with no cursor is a full sync,
+ * for every transport). Nothing else of the query is touched: not its
+ * schedule, and not `updatedAt`, which is the planner's "last demanded" stamp.
+ */
+export function buildRestartBankSyncSql(market: Market, provider: string): Prisma.Sql {
+  return Prisma.sql`
+    UPDATE "RAIngestQuery" SET "params" = "params" - 'cursor'
+    WHERE "market" = ${market} AND "provider" = ${provider} AND ("params" -> 'cursor') IS NOT NULL`;
+}
+
+/**
+ * Step 4 (the header has the rule). For each bank of `market`:
+ *   - no template: archives every open public row as 'no_apply_target';
+ *   - a template, and the bank's adapter absent from `adapters` or not
+ *     enabled: archives the open public rows whose `applyUrl` is not the
+ *     bank's page for that job. With a template and a running sync nothing is
+ *     done (its first pass with the template rewrites every link).
+ * A bank it archived rows of has its sync cursor cleared.
+ */
+export async function archiveDeadBankLinks(db: IngestDb, market: Market, adapters: readonly JobSourceAdapter[], options: DeadBankLinkOptions = {}): Promise<number> {
+  const env = options.env ?? process.env;
+  const now = options.now ?? new Date();
+  const pageOf = options.publicJobUrl ?? ((bank: BankBoard, id: string) => bankPublicJobUrl(bank, id, env));
+  const hasTemplate = options.hasTemplate ?? ((bank: BankBoard) => bankPublicJobUrlTemplate(bank, env) !== null);
+  let archived = 0;
+  for (const bank of BANK_BOARDS) {
+    if (BANK_MARKET[bank] !== market) continue;
+    let closed = 0;
+    if (!hasTemplate(bank)) {
+      // An empty listing: every open public row of the bank in this market is closed.
+      closed = await archiveUnlistedJobs(db, market, bank, [], now, 'no_apply_target');
+    } else {
+      const adapter = adapters.find((a) => a.sourceBoards.includes(bank));
+      if (adapter && adapterEnabledFor(adapter, market)) continue;
+      const open = await db.rAJob.findMany({
+        where: { market, sourceBoard: bank, archivedAt: null, visibility: 'public' },
+        select: { externalId: true, applyUrl: true },
+        take: DEAD_BANK_LINK_SCAN_LIMIT,
+      });
+      const dead = open.filter((r) => safeUrl(pageOf(bank, r.externalId)) !== safeUrl(r.applyUrl)).map((r) => r.externalId);
+      closed = await archiveClosedBankJobs(db, bank, dead, now, 'no_apply_target');
+    }
+    if (closed > 0) await db.$executeRaw(buildRestartBankSyncSql(market, BANK_SYNC_PROVIDER[bank]));
+    archived += closed;
+  }
+  return archived;
 }
 
 /** Live rows enriched at an older version (never-enriched rows are queued by ingest and import). */
@@ -139,7 +280,7 @@ export interface EnrichCatchUpResult {
 }
 
 /**
- * Step 4. Queues at most `limit` jobs: stale versions first, the rest of the
+ * Step 6. Queues at most `limit` jobs: stale versions first, the rest of the
  * cap for rules-only jobs (only with a usable model and a budget above 0).
  * The counts are items actually created (an item already queued for the same
  * job and version is left alone).
@@ -175,6 +316,10 @@ export async function runEnrichCatchUp(db: IngestDb, market: Market, options: En
 export interface MaintainResult {
   expired: number;
   missed: number;
+  /** Live rows whose dedupe priority was brought to the `PROVIDER_META` value (0 once every row is right). */
+  priorityAligned: number;
+  /** Open bank rows archived as 'no_apply_target': their bank has no posting page, or their link is not that page (step 4). */
+  deadBankLinks: number;
   dedupeRepaired: number;
   /** False while Schema request SR-16b-1 is pending: the missed-refresh step did not run. */
   missedRule: boolean;
@@ -186,7 +331,7 @@ export async function runMaintenance(
   db: IngestDb,
   market: Market,
   adapters: readonly JobSourceAdapter[],
-  options: { perQueryTracking: boolean; enrich?: EnrichCatchUpOptions },
+  options: { perQueryTracking: boolean; enrich?: EnrichCatchUpOptions; deadBankLinks?: DeadBankLinkOptions },
 ): Promise<MaintainResult> {
   const expired = await db.$executeRaw(buildExpireSql(market));
   let missed = 0;
@@ -197,11 +342,14 @@ export async function runMaintenance(
       missed += await db.$executeRaw(buildMissedSql(market, a.provider, a.sourceBoards));
     }
   }
+  // Before the dedupe repair: both steps change which row of a group is the one to show.
+  const priorityAligned = await alignSourcePriority(db, market);
+  const deadBankLinks = await archiveDeadBankLinks(db, market, adapters, { env: options.enrich?.env, ...options.deadBankLinks });
   const dedupeRepaired = await applyDedupe(db, market, null);
   let enrichQueued = 0;
   if (options.enrich) {
     const caught = await runEnrichCatchUp(db, market, options.enrich);
     enrichQueued = caught.staleQueued + caught.rulesQueued;
   }
-  return { expired, missed, dedupeRepaired, missedRule: options.perQueryTracking, enrichQueued };
+  return { expired, missed, priorityAligned, deadBankLinks, dedupeRepaired, missedRule: options.perQueryTracking, enrichQueued };
 }

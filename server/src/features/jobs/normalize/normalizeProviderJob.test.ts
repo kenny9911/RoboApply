@@ -3,6 +3,7 @@
 // zh-TW) plus the WP-16a acceptance rules: no applicant counts from
 // linkedin / jsearch, work model null unless stated, no LinkedIn branding on
 // source fields, no estimated pay, deterministic output.
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import bank from './__fixtures__/bank.json' with { type: 'json' };
 import fantastic from './__fixtures__/fantastic.json' with { type: 'json' };
@@ -10,14 +11,19 @@ import jsearch from './__fixtures__/jsearch.json' with { type: 'json' };
 import { afterNormalize, type MarketHookSet } from '../marketHooks.js';
 import { providerOfBoard } from '../ingest/verifyFeed.js';
 import { getTaxonomyNode, taxonomyAncestors } from '../taxonomy/index.js';
+import { externalIdFor } from '../sources/atsPublic/shared.js';
 import {
   asMarketHookJob,
+  atsPostingKeyFromUrl,
   inputFromBankJob,
   inputFromExternalJob,
   inputFromFantasticJob,
   inputFromJSearchJob,
   isLinkedInBranded,
+  isLinkedInHost,
+  hostOf,
   marketOfPosting,
+  MAX_DISTRICT_CHARS,
   normalizeProviderJob,
   normalizeSkills,
   PROVIDER_META,
@@ -758,13 +764,10 @@ describe('MKT-1C: a role the source states (ProviderJobInput.taxonomyId)', () =>
     expect(none.fieldSources.taxonomy).toBeUndefined();
   });
 
-  it('the other new input fields are carried on the input only: nothing reads them yet', () => {
+  it('MKT-3C: without the other optional inputs the row is what it always was (they are all optional)', () => {
     const plain = normalizeProviderJob(base, 'tw_open_data', { now });
-    const extra = normalizeProviderJob({ ...base, sponsorshipProvider: 'offered', locationDistrict: '中山區', workShift: '日班' }, 'tw_open_data', {
-      now,
-      companyDomains: new Map([[plain.companyNameNormalized, 'example.com']]),
-    });
-    expect(extra).toEqual(plain);
+    expect(normalizeProviderJob({ ...base, sponsorshipProvider: null, locationDistrict: null, workShift: null }, 'tw_open_data', { now, companyDomains: new Map() })).toEqual(plain);
+    expect(plain).toMatchObject({ sponsorshipProvider: null, locationDistrict: null, workShift: null, atsPostingKey: null });
   });
 });
 
@@ -821,12 +824,13 @@ describe('MKT-1C: the four new providers', () => {
     expect(new Set(boards).size).toBe(boards.length);
   });
 
-  it('existing providers keep their priority, board and source name', () => {
+  it('existing providers keep their board and source name; only the two JI-5 priorities changed', () => {
     expect(Object.fromEntries(Object.entries(PROVIDER_META).map(([p, m]) => [p, [m.sourcePriority, m.sourceBoard, m.aggregatorName, m.applicantCountAllowed, m.fromRecruiterBank]]))).toMatchObject({
       activejobs: [10, 'activejobs', 'Active Jobs DB', true, false],
-      ats_public: [10, 'ats_public', null, true, false],
+      // MKT-3C (JI-5, JC-7): the employer's own board 10 → 5, the GoHire bank 15 → 3; nothing else moved.
+      ats_public: [5, 'ats_public', null, true, false],
       bank_robohire: [15, 'robohire', 'RoboHire', true, true],
-      bank_gohire: [15, 'gohire', 'GoHire', true, true],
+      bank_gohire: [3, 'gohire', 'GoHire', true, true],
       linkedin: [20, 'linkedin', 'Fantastic Jobs', false, false],
       jsearch: [30, 'jsearch', 'JSearch', false, false],
       user_import: [90, 'user_import', null, false, false],
@@ -923,5 +927,427 @@ describe('MKT-1C: the four new providers', () => {
       );
       expect(job, market).toMatchObject({ salaryDisclosed: false, salaryMin: null, salaryMax: null, salaryText: null, salarySource: null });
     }
+  });
+});
+
+// ───────────────────────────── MKT-3C ─────────────────────────────
+// Every row below is SYNTHETIC: made-up employers (acme, Formosa Example Co, Summit …), ids and URLs.
+// "stripe" appears only as the board token of the acceptance line of JI-5; no real posting is used.
+
+const DAY_MS = 86_400_000;
+const UUID = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
+const ALL_PROVIDERS = Object.keys(PROVIDER_META) as NormalizeProvider[];
+const sha1 = (text: string) => createHash('sha1').update(text).digest('hex');
+
+describe('MKT-3C JI-5: atsPostingKey, the exact posting key', () => {
+  const base: ProviderJobInput = { externalId: 'x:1', title: 'Backend Engineer', company: 'Acme', location: 'Austin, TX, United States' };
+
+  it.each(ALL_PROVIDERS)('%s: the key is parsed from the apply link, else from the posting page, else null', (provider) => {
+    const fromApply = normalizeProviderJob({ ...base, applyUrl: 'https://boards.greenhouse.io/acme/jobs/4012345' }, provider, { now });
+    expect(fromApply.atsPostingKey).toBe('greenhouse:acme:4012345');
+    if (provider !== 'ats_public') {
+      // The row applies on a job board and its posting page is the ATS page.
+      const fromSource = normalizeProviderJob({ ...base, applyUrl: 'https://www.totaljobs.com/job/9', sourceUrl: `https://jobs.lever.co/acme/${UUID}` }, provider, { now });
+      expect(fromSource.atsPostingKey).toBe(`lever:acme:${UUID}`);
+    }
+    // An employer's own page, a job board, a careers page that only carries ?gh_jid=: no key, never a guess.
+    for (const applyUrl of ['https://careers.acme.example/jobs/1', 'https://www.totaljobs.com/job/9', 'https://acme.example/jobs/search?gh_jid=4012345']) {
+      expect(normalizeProviderJob({ ...base, applyUrl }, provider, { now }).atsPostingKey, applyUrl).toBeNull();
+    }
+    expect(normalizeProviderJob(base, provider, { now }).atsPostingKey).toBeNull();
+  });
+
+  it("ACCEPT: a JSearch row linking to boards.greenhouse.io/stripe/jobs/123 and the board row 'stripe:123' carry the same key", () => {
+    const jsearchRow = normalizeProviderJob(
+      inputFromJSearchJob(
+        { job_id: 'SYNTHETIC-K2', job_title: 'Backend Engineer, Payments', employer_name: 'Stripe', job_apply_link: 'https://boards.greenhouse.io/stripe/jobs/123', job_city: 'Austin', job_state: 'TX', job_country: 'US' },
+        { country: 'us', fetchedAt: now },
+      )!,
+      'jsearch',
+      { now },
+    );
+    // The board sends its postings to the employer's own page (?gh_jid=), which names no tenant: the row's own board and id decide.
+    const boardRow = normalizeProviderJob(
+      { externalId: externalIdFor('stripe', 123), sourceBoard: 'greenhouse', title: 'Software Engineer (Backend), Payments', company: 'Stripe', location: 'Austin, TX', applyUrl: 'https://stripe.example/jobs/search?gh_jid=123', sourceUrl: 'https://stripe.example/jobs/search?gh_jid=123' },
+      'ats_public',
+      { now },
+    );
+    expect(jsearchRow.atsPostingKey).toBe('greenhouse:stripe:123');
+    expect(boardRow.atsPostingKey).toBe('greenhouse:stripe:123');
+    // Their titles differ in wording, so the fuzzy key cannot join them: the exact key does (ingest/upsert.ts step 1).
+    expect(jsearchRow.dedupeKey).not.toBe(boardRow.dedupeKey);
+    // And the board row is the one to show.
+    expect(boardRow.sourcePriority).toBeLessThan(jsearchRow.sourcePriority);
+  });
+
+  it.each([
+    ['greenhouse', 'acme', '4012345', 'https://boards.greenhouse.io/acme/jobs/4012345'],
+    ['lever', 'acme', UUID, `https://jobs.lever.co/acme/${UUID}`],
+    ['ashby', 'acme', UUID, `https://jobs.ashbyhq.com/acme/${UUID}`],
+    ['smartrecruiters', 'AcmeGroup', '744000012345678', 'https://jobs.smartrecruiters.com/AcmeGroup/744000012345678-backend-engineer'],
+  ])('%s connector: the key built from the externalId equals the key its posting URL gives', (board, token, postingId, url) => {
+    const job = normalizeProviderJob({ ...base, externalId: externalIdFor(token, postingId), sourceBoard: board, applyUrl: url, sourceUrl: url }, 'ats_public', { now });
+    expect(job.sourceBoard).toBe(board);
+    expect(job.atsPostingKey).toBe(`${board}:${token.toLowerCase()}:${postingId}`);
+    expect(job.atsPostingKey).toBe(atsPostingKeyFromUrl(url));
+    // The mainland copy of a posting located in both markets is the same posting.
+    expect(normalizeProviderJob({ ...base, externalId: `${externalIdFor(token, postingId)}#cn`, sourceBoard: board, applyUrl: url }, 'ats_public', { now }).atsPostingKey).toBe(job.atsPostingKey);
+  });
+
+  it('an employer-board row of a system with no key rule yet falls back to what its links name', () => {
+    const job = normalizeProviderJob({ ...base, externalId: 'acme:1A2B3C4D5E', sourceBoard: 'workable', applyUrl: 'https://apply.workable.com/acme/j/1A2B3C4D5E' }, 'ats_public', { now });
+    expect(job.atsPostingKey).toBe('workable:acme:1a2b3c4d5e');
+    expect(normalizeProviderJob({ ...base, externalId: 'acme:1', sourceBoard: 'workable', applyUrl: 'https://careers.acme.example/1' }, 'ats_public', { now }).atsPostingKey).toBeNull();
+  });
+});
+
+describe('MKT-3C JI-5: the new dedupe priorities reach the row', () => {
+  const base: ProviderJobInput = { externalId: 'x:1', title: 'Backend Engineer', company: 'Acme', applyUrl: 'https://careers.acme.example/1' };
+
+  it.each([
+    ['bank_gohire', 3],
+    ['ats_public', 5],
+    ['usajobs', 8],
+    ['activejobs', 10],
+    ['activejobs_feed', 10],
+    ['tw_open_data', 12],
+    ['tw_gov_jobs', 12],
+    ['bank_robohire', 15],
+    ['linkedin', 20],
+    ['jsearch', 30],
+    ['user_import', 90],
+  ] as Array<[NormalizeProvider, number]>)('%s is written with sourcePriority %i', (provider, priority) => {
+    expect(normalizeProviderJob(base, provider, { now }).sourcePriority).toBe(priority);
+  });
+
+  it('the mainland order holds on real rows: GoHire bank, then the employer board, then an aggregator', () => {
+    const row = { ...base, location: '上海', locationCountry: 'CN' };
+    const bankRow = normalizeProviderJob(row, 'bank_gohire', { now, market: 'cn' });
+    const boardRow = normalizeProviderJob({ ...row, sourceBoard: 'greenhouse' }, 'ats_public', { now });
+    const feedRow = normalizeProviderJob(row, 'activejobs_feed', { now, market: 'cn' });
+    expect([bankRow.market, boardRow.market, feedRow.market]).toEqual(['cn', 'cn', 'cn']);
+    expect(bankRow.sourcePriority).toBeLessThan(boardRow.sourcePriority);
+    expect(boardRow.sourcePriority).toBeLessThan(feedRow.sourcePriority);
+    // Same company, title and city: one fuzzy key, so the bank row is the canonical one.
+    expect(new Set([bankRow.dedupeKey, boardRow.dedupeKey, feedRow.dedupeKey]).size).toBe(1);
+  });
+});
+
+describe('MKT-3C JI-5: the employer domain in the fuzzy key (K3)', () => {
+  const row = (company: string, over: Partial<ProviderJobInput> = {}): ProviderJobInput => ({ externalId: `k3:${company}`, title: 'Backend Engineer', company, location: 'Austin, TX, United States', applyUrl: 'https://www.totaljobs.com/job/9', ...over });
+  const site = (website: string) => ({ companyFacts: { source: 'provider:activejobs', website, fetchedAt: now } });
+  /** The key as it has always been built, computed here without the code under test. */
+  const nameKey = (job: NormalizedJob) => sha1(`${job.companyNameNormalized}|${job.titleNormalized}|${job.locations[0]!.cityId}`);
+
+  it('neither a stated domain nor a map entry: the key is byte-identical to the name key', () => {
+    for (const provider of ALL_PROVIDERS) {
+      const job = normalizeProviderJob(row('Stripe, Inc.'), provider, { now });
+      expect(job.locations[0]!.cityId, provider).toBeTruthy();
+      expect(job.dedupeKey, provider).toBe(nameKey(job));
+      // An empty map, an entry for another company, an entry that is no employer host: still the name key.
+      expect(normalizeProviderJob(row('Stripe, Inc.'), provider, { now, companyDomains: new Map() }).dedupeKey, provider).toBe(job.dedupeKey);
+      expect(normalizeProviderJob(row('Stripe, Inc.'), provider, { now, companyDomains: new Map([['another company', 'another.example']]) }).dedupeKey, provider).toBe(job.dedupeKey);
+      for (const notEmployer of ['boards.greenhouse.io', 'https://jobs.lever.co/stripe', 'www.linkedin.com', 'uk.indeed.com', 'stripe.github.io', '10.0.0.1', '']) {
+        const withMap = normalizeProviderJob(row('Stripe, Inc.'), provider, { now, companyDomains: new Map([[job.companyNameNormalized, notEmployer]]) });
+        expect(withMap.dedupeKey, `${provider} ${notEmployer}`).toBe(job.dedupeKey);
+      }
+    }
+  });
+
+  it("ACCEPT: 'Stripe' with a stated website and 'Stripe, Inc.' known through ctx.companyDomains get the same key", () => {
+    const stated = normalizeProviderJob(row('Stripe', site('https://stripe.com/jobs')), 'activejobs', { now });
+    const inc = row('Stripe, Inc.');
+    const incName = normalizeProviderJob(inc, 'jsearch', { now });
+    // The map carries raw hosts (MKT-3A): the key logic reduces each to the registrable domain.
+    const viaMap = normalizeProviderJob(inc, 'jsearch', { now, companyDomains: new Map([[incName.companyNameNormalized, 'careers.stripe.com']]) });
+    expect(viaMap.dedupeKey).toBe(stated.dedupeKey);
+    expect(stated.dedupeKey).toBe(sha1(`d:stripe.com|${stated.titleNormalized}|${stated.locations[0]!.cityId}`));
+    expect(stated.dedupeKey).not.toBe(nameKey(stated));
+    // Every other field of the row is what it was: only the key moved.
+    expect({ ...viaMap, dedupeKey: incName.dedupeKey }).toEqual(incName);
+  });
+
+  it('a stated domain may be the bare domain field or the website; both reduce to the registrable domain', () => {
+    const byWebsite = normalizeProviderJob(row('Stripe', site('https://www.stripe.com/')), 'activejobs', { now });
+    const byDomain = normalizeProviderJob(row('Stripe', { companyFacts: { source: 'provider:activejobs_feed', domain: 'Careers.Stripe.com', fetchedAt: now } }), 'activejobs_feed', { now });
+    expect(byDomain.dedupeKey).toBe(byWebsite.dedupeKey);
+    // What the source states for THIS row wins over the page's map.
+    const both = normalizeProviderJob(row('Stripe', site('https://stripe.com')), 'activejobs', { now, companyDomains: new Map([[byWebsite.companyNameNormalized, 'other.example']]) });
+    expect(both.dedupeKey).toBe(byWebsite.dedupeKey);
+  });
+
+  it("ACCEPT: two companies called 'Summit' with different stated domains get different keys", () => {
+    const a = normalizeProviderJob(row('Summit', site('https://www.summit-health.example')), 'activejobs', { now });
+    const b = normalizeProviderJob(row('Summit', site('https://summit-partners.example/careers')), 'activejobs', { now });
+    expect(a.companyNameNormalized).toBe(b.companyNameNormalized);
+    expect(a.dedupeKey).not.toBe(b.dedupeKey);
+    // With no domain anywhere they still collide on the name, as before (the known limit of K3).
+    expect(normalizeProviderJob(row('Summit'), 'jsearch', { now }).dedupeKey).toBe(normalizeProviderJob({ ...row('Summit'), externalId: 'k3:other' }, 'jsearch', { now }).dedupeKey);
+  });
+
+  it('review finding 1: two employers under one country-code category suffix (nhs.uk, ac.uk, edu.tw) never share a key', () => {
+    const pairs: Array<[string, string, string, string, Partial<ProviderJobInput>]> = [
+      ['Northgate NHS Foundation Trust', 'https://www.northgate.nhs.uk/', 'Riverside Health NHS Trust', 'https://www.riversidehealth.nhs.uk/careers', { title: 'Staff Nurse', location: 'London, United Kingdom' }],
+      ['Northgate University', 'https://www.northgate.ac.uk', 'Riverside College London', 'https://jobs.riverside.ac.uk/', { title: 'Research Assistant', location: 'London, United Kingdom' }],
+      ['國立範例大學', 'https://www.example-a.edu.tw', '國立示範大學', 'https://hr.example-b.edu.tw', { title: '研究助理', location: '台北市', locationCountry: 'TW' }],
+      ['Northgate Council', 'https://www.northgate.gov.uk', 'Riverside Council', 'https://riverside.gov.uk/jobs', { title: 'Planning Officer', location: 'Leeds, United Kingdom' }],
+      ['Norte SA', 'https://norte.com.mx', 'Rio SA', 'https://www.rio.com.mx', { title: 'Contador', location: 'Monterrey, Mexico' }],
+    ];
+    for (const [nameA, siteA, nameB, siteB, over] of pairs) {
+      for (const provider of ['jsearch', 'activejobs'] as const) {
+        const a = normalizeProviderJob(row(nameA, { ...over, ...site(siteA) }), provider, { now });
+        const b = normalizeProviderJob(row(nameB, { ...over, ...site(siteB) }), provider, { now });
+        expect(a.titleNormalized, nameA).toBe(b.titleNormalized);
+        expect(a.dedupeKey, `${provider} ${siteA} / ${siteB}`).not.toBe(b.dedupeKey);
+        // Each key is the employer's own three-label domain, never the suffix.
+        expect(a.dedupeKey, siteA).not.toBe(nameKey(a));
+      }
+    }
+    // A website that is only the suffix, or the sector's shared portal, names nobody: the name key, so the two still differ.
+    for (const shared of ['https://www.nhs.uk/', 'https://www.jobs.nhs.uk/candidate/jobadvert/1', 'https://www.gov.uk/', 'https://jobs.ac.uk/job/1']) {
+      const a = normalizeProviderJob(row('Northgate NHS Foundation Trust', { title: 'Staff Nurse', location: 'London, United Kingdom', ...site(shared) }), 'jsearch', { now });
+      const b = normalizeProviderJob(row('Riverside Health NHS Trust', { title: 'Staff Nurse', location: 'London, United Kingdom', ...site(shared) }), 'jsearch', { now });
+      expect(a.dedupeKey, shared).toBe(nameKey(a));
+      expect(a.dedupeKey, shared).not.toBe(b.dedupeKey);
+    }
+  });
+
+  it('a website on a job board, an ATS or a shared host is not the employer\'s domain: the name key is used', () => {
+    for (const website of ['https://boards.greenhouse.io/acme', 'https://www.linkedin.com/company/acme', 'https://acme.wixsite.com/home', 'https://acme.recruitee.com', 'not a url']) {
+      const job = normalizeProviderJob(row('Acme', site(website)), 'activejobs', { now });
+      expect(job.dedupeKey, website).toBe(nameKey(job));
+    }
+  });
+});
+
+describe('MKT-3C JI-6: JSearch rows are link lists', () => {
+  const posted = '2026-10-01T00:00:00.000Z';
+  const raw = (links: { main: string | null; options?: Array<{ link: string; direct?: boolean }> }, over: Record<string, unknown> = {}) => ({
+    job_id: 'SYNTHETIC-LINKS',
+    job_title: 'Data Analyst',
+    employer_name: 'Acme Analytics',
+    job_publisher: 'Some Board',
+    job_apply_link: links.main,
+    apply_options: (links.options ?? []).map((o) => ({ publisher: 'x', apply_link: o.link, is_direct: o.direct ?? false })),
+    job_city: 'Austin',
+    job_state: 'TX',
+    job_country: 'US',
+    job_posted_at_datetime_utc: posted,
+    ...over,
+  });
+  const through = (r: Record<string, unknown>) => {
+    const input = inputFromJSearchJob(r, { country: 'us', fetchedAt: now })!;
+    return { input, job: normalizeProviderJob(input, 'jsearch', { now }) };
+  };
+  const linkedin = 'https://www.linkedin.com/jobs/view/4100000001';
+  const indeed = 'https://www.indeed.com/viewjob?jk=abc123';
+  const totaljobs = 'https://www.totaljobs.com/job/data-analyst/acme-job1';
+  const lever = `https://jobs.lever.co/acme/${UUID}`;
+
+  it('ACCEPT: a row whose only link is on linkedin.com is not ingested and is counted as linkedin_only_link', () => {
+    for (const r of [raw({ main: linkedin }), raw({ main: linkedin, options: [{ link: linkedin }, { link: 'https://lnkd.in/abc' }] })]) {
+      const { job } = through(r);
+      expect(job.applyUrl).toBeNull();
+      // The pipeline skips a row without an apply URL and counts every note of it (ingest/pipeline.ts).
+      expect(job.notes).toEqual(expect.arrayContaining(['linkedin_only_link', 'no_apply_url']));
+      expect(job.notes).not.toContain('apply_url_linkedin_host');
+      expect(job.notes).not.toContain('indeed_only_link');
+      for (const field of [job.sourceUrl, job.originalHost, job.sourceName, job.originalSourceName]) expect(isLinkedInBranded(field)).toBe(false);
+    }
+  });
+
+  it('ACCEPT: the same for a row whose only link is on indeed.com (any country domain)', () => {
+    for (const link of [indeed, 'https://uk.indeed.com/viewjob?jk=1', 'https://tw.indeed.com/viewjob?jk=1']) {
+      const { job } = through(raw({ main: link }));
+      expect(job.applyUrl, link).toBeNull();
+      expect(job.notes, link).toEqual(expect.arrayContaining(['indeed_only_link', 'no_apply_url']));
+      expect(job.notes, link).not.toContain('linkedin_only_link');
+    }
+    // LinkedIn and Indeed together are still "no page of the employer's or another board's".
+    const both = through(raw({ main: indeed, options: [{ link: linkedin }] })).job;
+    expect(both.applyUrl).toBeNull();
+    expect(both.notes).toContain('indeed_only_link');
+  });
+
+  it('ACCEPT: a row linking to totaljobs.com is kept and lives 21 days from its posting date', () => {
+    const { input, job } = through(raw({ main: totaljobs }));
+    expect(input.applyIsDirect).toBe(false);
+    expect(job.applyUrl).toBe(totaljobs);
+    expect(job.atsType).toBeNull();
+    expect(job.originalHost).toBe('totaljobs.com');
+    expect(job.postedAt?.toISOString()).toBe(posted);
+    expect(job.expiresAt?.getTime()).toBe(new Date(posted).getTime() + 21 * DAY_MS);
+    expect(job.notes).not.toContain('no_apply_url');
+    // A deadline the row states still wins over the 21 days.
+    const dated = through(raw({ main: totaljobs }, { job_offer_expiration_datetime_utc: '2026-10-08T00:00:00.000Z' })).job;
+    expect(dated.expiresAt?.toISOString()).toBe('2026-10-08T00:00:00.000Z');
+  });
+
+  it('ACCEPT: a row linking to jobs.lever.co keeps 45 days and is marked direct, with its posting key', () => {
+    const { input, job } = through(raw({ main: lever }));
+    expect(input.applyIsDirect).toBe(true);
+    expect(job.applyUrl).toBe(lever);
+    expect(job.atsType).toBe('lever');
+    expect(job.atsPostingKey).toBe(`lever:acme:${UUID}`);
+    expect(job.expiresAt?.getTime()).toBe(new Date(posted).getTime() + 45 * DAY_MS);
+    // An unknown employer host is direct too, by its host: `is_direct` was false on every probed row.
+    const own = through(raw({ main: 'https://careers.acme.example/jobs/1' }));
+    expect(own.input.applyIsDirect).toBe(true);
+    expect(own.job.expiresAt?.getTime()).toBe(new Date(posted).getTime() + 45 * DAY_MS);
+  });
+
+  it('an employer or ATS link next to a LinkedIn link wins, wherever it stands in the list; no LinkedIn URL reaches a stored field', () => {
+    for (const r of [
+      raw({ main: linkedin, options: [{ link: linkedin }, { link: lever }] }),
+      raw({ main: lever, options: [{ link: linkedin }] }),
+      raw({ main: linkedin, options: [{ link: indeed }, { link: totaljobs }, { link: lever }] }),
+    ]) {
+      const { input, job } = through(r);
+      expect(input.applyIsDirect).toBe(true);
+      expect(job.applyUrl).toBe(lever);
+      for (const url of [job.applyUrl, job.sourceUrl]) expect(isLinkedInHost(hostOf(url))).toBe(false);
+      expect(isLinkedInHost(job.originalHost)).toBe(false);
+      expect(job.originalHost).toBe('jobs.lever.co');
+      expect(job.notes).not.toContain('apply_url_linkedin_host');
+      expect(job.notes).not.toContain('linkedin_only_link');
+    }
+    // A job board that is neither LinkedIn nor Indeed is chosen over both when no employer link exists.
+    const board = through(raw({ main: linkedin, options: [{ link: indeed }, { link: totaljobs }] }));
+    expect(board.job.applyUrl).toBe(totaljobs);
+    expect(board.input.applyIsDirect).toBe(false);
+    expect(isLinkedInHost(hostOf(board.job.sourceUrl))).toBe(false);
+  });
+
+  it('a provider\'s explicit flag on the chosen link is still honoured; `is_direct` on another link is not', () => {
+    expect(through(raw({ main: totaljobs, options: [{ link: totaljobs, direct: true }] })).input.applyIsDirect).toBe(true);
+    expect(through(raw({ main: totaljobs }, { job_apply_is_direct: true })).input.applyIsDirect).toBe(true);
+    expect(through(raw({ main: totaljobs, options: [{ link: linkedin, direct: true }] })).input.applyIsDirect).toBe(false);
+  });
+
+  it('the client path agrees: a ProviderJobInput whose apply and posting links are both LinkedIn is refused the same way', () => {
+    const viaClient: ProviderJobInput = { externalId: 'jsearch:SYNTHETIC-CLIENT', sourceBoard: 'jsearch', title: 'Data Analyst', company: 'Acme Analytics', applyUrl: linkedin, sourceUrl: linkedin, postedAt: posted };
+    const refused = normalizeProviderJob(viaClient, 'jsearch', { now });
+    expect(refused.applyUrl).toBeNull();
+    expect(refused.notes).toEqual(expect.arrayContaining(['linkedin_only_link', 'no_apply_url']));
+    // The client put a LinkedIn link first and kept the employer page as provenance (or the reverse): the employer page is the apply link.
+    for (const links of [{ applyUrl: linkedin, sourceUrl: lever }, { applyUrl: lever, sourceUrl: linkedin }]) {
+      const kept = normalizeProviderJob({ ...viaClient, ...links }, 'jsearch', { now });
+      expect(kept.applyUrl).toBe(lever);
+      expect(isLinkedInHost(hostOf(kept.sourceUrl))).toBe(false);
+    }
+    // A row with no link at all is 'no_apply_url' only.
+    const none = normalizeProviderJob({ ...viaClient, applyUrl: null, sourceUrl: null }, 'jsearch', { now });
+    expect(none.applyUrl).toBeNull();
+    expect(none.notes).toContain('no_apply_url');
+    expect(none.notes.some((n) => n.endsWith('_only_link'))).toBe(false);
+  });
+
+  it('the rule is JSearch\'s: other providers keep their link as before', () => {
+    const viaOther: ProviderJobInput = { externalId: 'o:1', title: 'Data Analyst', company: 'Acme Analytics', applyUrl: linkedin, postedAt: posted };
+    const li = normalizeProviderJob(viaOther, 'linkedin', { now });
+    expect(li.applyUrl).toBe(linkedin);
+    expect(li.notes).toContain('apply_url_linkedin_host');
+    const feed = normalizeProviderJob({ ...viaOther, applyUrl: indeed }, 'activejobs', { now });
+    expect(feed.applyUrl).toBe(indeed);
+    // A board link gives no other aggregator the 21-day life.
+    expect(feed.expiresAt?.getTime()).toBe(new Date(posted).getTime() + 45 * DAY_MS);
+  });
+});
+
+describe('MKT-3C JI-10: a stated deadline for every source, a life by age for aggregators only', () => {
+  const old = new Date(now.getTime() - 300 * DAY_MS).toISOString();
+  const base: ProviderJobInput = { externalId: 'acme:1', title: 'Backend Engineer', company: 'Acme', location: 'Austin, TX', applyUrl: 'https://boards.greenhouse.io/acme/jobs/1', postedAt: old };
+
+  it('ACCEPT: an employer-board posting from 300 days ago with no deadline has no expiry; with a deadline it has that one', () => {
+    const open = normalizeProviderJob({ ...base, sourceBoard: 'greenhouse' }, 'ats_public', { now });
+    expect(open.postedAt?.toISOString()).toBe(old);
+    expect(open.postedAtEstimated).toBe(false);
+    expect(open.expiresAt).toBeNull();
+    // Greenhouse application_deadline: an instant.
+    const dated = normalizeProviderJob({ ...base, sourceBoard: 'greenhouse', expiresAt: '2026-10-17T23:59:00-04:00' }, 'ats_public', { now });
+    expect(dated.expiresAt?.toISOString()).toBe('2026-10-18T03:59:00.000Z');
+  });
+
+  it.each(['bank_robohire', 'bank_gohire', 'tw_open_data', 'tw_gov_jobs', 'usajobs'] as NormalizeProvider[])('%s: never by age, always by the deadline it states', (provider) => {
+    expect(normalizeProviderJob(base, provider, { now }).expiresAt).toBeNull();
+    expect(normalizeProviderJob({ ...base, expiresAt: '2026-10-17T12:00:00Z' }, provider, { now }).expiresAt?.toISOString()).toBe('2026-10-17T12:00:00.000Z');
+  });
+
+  it('ACCEPT: a 台灣就業通 row with STOP_DATE is open through that day in Taiwan and expires as the next day starts there', () => {
+    const job = normalizeProviderJob({ ...base, location: '台北市中山區', locationCountry: 'TW', expiresAt: '2026-10-20' }, 'tw_open_data', { now });
+    // 2026-10-20 23:59:59.999 in UTC+8.
+    expect(job.expiresAt?.toISOString()).toBe('2026-10-20T15:59:59.999Z');
+    expect(job.expiresAt!.getTime() + 1).toBe(Date.parse('2026-10-21T00:00:00+08:00'));
+    // A USAJOBS close date with its own offset is that instant.
+    expect(normalizeProviderJob({ ...base, expiresAt: '2026-10-20T23:59:59.997-04:00' }, 'usajobs', { now }).expiresAt?.toISOString()).toBe('2026-10-21T03:59:59.997Z');
+  });
+
+  it('ACCEPT: an aggregator row without a deadline expires by age; an employer-board row never does', () => {
+    const recent = new Date(now.getTime() - 10 * DAY_MS).toISOString();
+    for (const provider of ['activejobs', 'activejobs_feed', 'linkedin', 'jsearch'] as NormalizeProvider[]) {
+      const job = normalizeProviderJob({ ...base, postedAt: recent }, provider, { now });
+      expect(job.expiresAt?.getTime(), provider).toBe(new Date(recent).getTime() + 45 * DAY_MS);
+    }
+    expect(normalizeProviderJob({ ...base, sourceBoard: 'greenhouse', postedAt: recent }, 'ats_public', { now }).expiresAt).toBeNull();
+    expect(normalizeProviderJob({ ...base, postedAt: recent, expiresAt: '2030-01-01' }, 'user_import', { now, ownerUserId: 'u1' }).expiresAt).toBeNull();
+  });
+
+  it('ACCEPT: a zone-less time from a mainland source is stored 8 hours earlier in UTC; a time with a zone is not moved', () => {
+    const cn = { ...base, location: '上海', locationCountry: 'CN', applyUrl: 'https://example.com/p/1' };
+    const naive = normalizeProviderJob({ ...cn, postedAt: '2026-10-09T09:00:00', expiresAt: '2026-11-30 18:00:00' }, 'bank_gohire', { now, market: 'cn' });
+    expect(naive.market).toBe('cn');
+    expect(naive.postedAt?.toISOString()).toBe('2026-10-09T01:00:00.000Z');
+    expect(naive.postedAtEstimated).toBe(false);
+    expect(naive.expiresAt?.toISOString()).toBe('2026-11-30T10:00:00.000Z');
+    const zoned = normalizeProviderJob({ ...cn, postedAt: '2026-10-09T09:00:00Z', expiresAt: '2026-11-30T18:00:00+08:00' }, 'bank_gohire', { now, market: 'cn' });
+    expect(zoned.postedAt?.toISOString()).toBe('2026-10-09T09:00:00.000Z');
+    expect(zoned.expiresAt?.toISOString()).toBe('2026-11-30T10:00:00.000Z');
+    // A Date (the bank's database transport) is an instant.
+    expect(normalizeProviderJob({ ...cn, postedAt: new Date('2026-10-09T09:00:00Z') }, 'bank_gohire', { now, market: 'cn' }).postedAt?.toISOString()).toBe('2026-10-09T09:00:00.000Z');
+    // The mainland "no date" placeholder: an estimate, never a date in year 1; and no expiry from it.
+    const placeholder = normalizeProviderJob({ ...cn, postedAt: '0001-01-01T00:00:00', expiresAt: '0001-01-01T00:00:00', fetchedAt: now }, 'bank_gohire', { now, market: 'cn' });
+    expect(placeholder).toMatchObject({ postedAt: now, postedAtEstimated: true, expiresAt: null });
+    // An employer-board posting in mainland China and a mainland row of the licensed feed are read the same way.
+    expect(normalizeProviderJob({ ...cn, sourceBoard: 'greenhouse', postedAt: '2026-10-09 09:00:00' }, 'ats_public', { now }).postedAt?.toISOString()).toBe('2026-10-09T01:00:00.000Z');
+    expect(normalizeProviderJob({ ...cn, postedAt: '2026-10-09T09:00:00' }, 'activejobs_feed', { now, market: 'cn' }).postedAt?.toISOString()).toBe('2026-10-09T01:00:00.000Z');
+    // The same string on an international row is UTC, as it always was.
+    expect(normalizeProviderJob({ ...base, postedAt: '2026-10-09T09:00:00' }, 'activejobs', { now }).postedAt?.toISOString()).toBe('2026-10-09T09:00:00.000Z');
+  });
+});
+
+describe('MKT-3C JI-7 / JT-7: provider sponsorship reading, district and shift reach the row', () => {
+  const base: ProviderJobInput = { externalId: 'c:1', title: '門市人員', company: 'Formosa Example Co', location: '新竹縣竹北市', locationCountry: 'TW', applyUrl: 'https://example.com/jobs/1' };
+
+  it('ACCEPT: district and shift round-trip; the provider reading is carried as a reading', () => {
+    const job = normalizeProviderJob({ ...base, sponsorshipProvider: 'offered', locationDistrict: ' 竹北市 ', workShift: 'rotating' }, 'tw_open_data', { now });
+    expect(job).toMatchObject({ sponsorshipProvider: 'offered', locationDistrict: '竹北市', workShift: 'rotating' });
+    expect(normalizeProviderJob({ ...base, sponsorshipProvider: 'not_offered' }, 'activejobs_feed', { now }).sponsorshipProvider).toBe('not_offered');
+    // Carrying them changes nothing else on the row.
+    const plain = normalizeProviderJob(base, 'tw_open_data', { now });
+    expect({ ...job, sponsorshipProvider: null, locationDistrict: null, workShift: null }).toEqual(plain);
+  });
+
+  it.each(['day', 'evening', 'night', 'rotating', 'part_time'])('shift %s is kept', (shift) => {
+    expect(normalizeProviderJob({ ...base, workShift: shift }, 'tw_open_data', { now }).workShift).toBe(shift);
+    expect(normalizeProviderJob({ ...base, workShift: ` ${shift.toUpperCase()} ` }, 'tw_open_data', { now }).workShift).toBe(shift);
+  });
+
+  it.each(['日班', '夜班', '輪班', 'flexible', 'shift', 'day shift', 'part-time', '', '   ', null, undefined, 3 as unknown as string])('ACCEPT: an unknown shift value (%s) is dropped, never read out of free text', (shift) => {
+    expect(normalizeProviderJob({ ...base, workShift: shift }, 'tw_open_data', { now }).workShift).toBeNull();
+  });
+
+  it('the district is stored as posted, trimmed and at most 40 characters; a blank is not a district', () => {
+    expect(MAX_DISTRICT_CHARS).toBe(40);
+    const long = '區'.repeat(60);
+    const kept = normalizeProviderJob({ ...base, locationDistrict: long }, 'tw_open_data', { now }).locationDistrict!;
+    expect([...kept].length).toBeLessThanOrEqual(40);
+    expect(long.startsWith(kept.replace(/…$/, ''))).toBe(true);
+    for (const blank of ['', '   ', null, undefined]) expect(normalizeProviderJob({ ...base, locationDistrict: blank }, 'tw_open_data', { now }).locationDistrict).toBeNull();
+    // Never derived from the location text: only the source's own field.
+    expect(normalizeProviderJob(base, 'tw_open_data', { now }).locationDistrict).toBeNull();
+  });
+
+  it.each(['yes', 'true', 'sponsored', 'OFFERED', '', null, undefined, true as unknown as string])('a sponsorship value that is not a reading (%s) is no reading', (value) => {
+    expect(normalizeProviderJob({ ...base, sponsorshipProvider: value as ProviderJobInput['sponsorshipProvider'] }, 'activejobs_feed', { now }).sponsorshipProvider).toBeNull();
   });
 });
