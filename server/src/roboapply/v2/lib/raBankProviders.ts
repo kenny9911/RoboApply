@@ -8,12 +8,18 @@
 // client with no live DB (spec §3.4). `buildBankJobWhere` is a separately
 // unit-tested pure function.
 //
-// A bank that is read over HTTPS has no database client (GoHire while its
-// database endpoint cannot satisfy the TLS rule; raBankClients.bankTransport
-// 'api'). The live search then reads OUR synced mirror of the bank instead:
-// the open public RAJob rows the ingest adapter wrote for it (`searchBankMirror`).
-// The mirror holds only rows that are listable (published, named employer, a
-// real posting page), so it can never surface a job the feed would not show.
+// A bank that is read over HTTPS (raBankClients.bankTransport 'syndication' or
+// 'api': GoHire through the syndication endpoint, or through the interim list
+// endpoint) is searched in OUR synced mirror of the bank instead: the open,
+// public, canonical RAJob rows the ingest adapter wrote for it
+// (`searchBankMirror`). The TRANSPORT decides (`bankReadsMirror`), before any
+// database client is asked for: while the sync runs over HTTPS a search never
+// opens the bank's database, whatever database URL is configured (MARKET_STRATEGY
+// §1.4, JC-2). The mirror holds only rows that are listable (published, named
+// employer, a real posting page, inside their stated validity), so it can never
+// surface a job the feed would not show. How fresh the mirror is goes into the
+// search telemetry (`bankMirrorSyncAge`), so a mirror that has stopped moving
+// is visible instead of looking like a quiet bank.
 
 import { logger } from '../../../services/LoggerService.js';
 import type { ExtendedPrismaClient } from '../../../lib/prisma.js';
@@ -188,8 +194,13 @@ export const BANK_PROVIDERS: Record<BankId, BankJobProvider> = {
 
 // ─── The synced mirror (a bank with no database client) ────────────────────
 
-/** WHERE over our RAJob mirror of a bank: open, public, in the bank's market, fresh, and an OR of the same signals. */
-export function buildMirrorJobWhere(bank: BankId, intent: BankSearchIntent): Record<string, unknown> {
+/**
+ * WHERE over our RAJob mirror of a bank: the bank's rows in its own market
+ * that are open, public and canonical, inside their stated validity, as fresh
+ * as the live bank search asks (the same bound on the posting date), and an OR
+ * of the same title / description / skills signals.
+ */
+export function buildMirrorJobWhere(bank: BankId, intent: BankSearchIntent, now: Date = new Date()): Record<string, unknown> {
   const titles = dedupeStrings(intent.titles).slice(0, 14);
   const keywords = dedupeStrings(intent.mustKeywords).slice(0, 15);
   const or: Record<string, unknown>[] = [];
@@ -202,7 +213,10 @@ export function buildMirrorJobWhere(bank: BankId, intent: BankSearchIntent): Rec
     market: bankMarket(bank),
     visibility: 'public',
     archivedAt: null,
+    isCanonical: true,
     postedAt: { not: null, gte: intent.freshnessCutoff },
+    // A validity the bank stated and that has passed: the feed hides such a row at once, maintenance archives it later.
+    AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }],
     ...(or.length > 0 ? { OR: or } : {}),
   };
 }
@@ -288,19 +302,68 @@ export async function searchBankMirror(
   }
 }
 
+/** How fresh our mirror of a bank is (search telemetry; counts and times only). */
+export interface BankMirrorSyncAge {
+  /** The newest `lastSeenAt` among the bank's mirrored rows: the last time the sync wrote one. Null: the mirror is empty. */
+  newestSeenAt: string | null;
+  /** Milliseconds since `newestSeenAt`; null for an empty mirror. */
+  ageMs: number | null;
+  /**
+   * The last time the bank's standing sync query ran, whether or not it had
+   * anything to write. A cursor sync writes a row only when the bank changed
+   * it or when it reads the bank again from the beginning (every 7 days by
+   * default), so on a quiet bank `newestSeenAt` can be days old while the sync
+   * is healthy: read the two together. Null: no sync query has run.
+   */
+  lastSyncAt: string | null;
+  /** True when that last run ended in an error. */
+  lastSyncFailed: boolean;
+}
+
 /**
- * Convenience: resolve the client and run the provider. A bank with no
- * database client that is read over HTTPS is searched in our synced mirror;
- * null when the bank has neither.
+ * The sync age of our mirror of a bank. Two small reads on the client that
+ * holds RAJob; never throws (null when either read fails: telemetry must not
+ * cost a search its results).
+ */
+export async function bankMirrorSyncAge(bank: BankId, now: Date = new Date(), client: ExtendedPrismaClient = getMirrorClient()): Promise<BankMirrorSyncAge | null> {
+  try {
+    const market = bankMarket(bank);
+    const [newest, sync] = await Promise.all([
+      client.rAJob.findFirst({ where: { sourceBoard: bank, market }, orderBy: { lastSeenAt: 'desc' }, select: { lastSeenAt: true } }),
+      client.rAIngestQuery.findFirst({
+        where: { provider: bank === 'gohire' ? 'bank_gohire' : 'bank_robohire', market, origin: 'bank_sync' },
+        orderBy: { lastRunAt: { sort: 'desc', nulls: 'last' } },
+        select: { lastRunAt: true, lastError: true },
+      }),
+    ]);
+    const seen: Date | null = newest?.lastSeenAt instanceof Date ? newest.lastSeenAt : null;
+    const ran: Date | null = sync?.lastRunAt instanceof Date ? sync.lastRunAt : null;
+    return {
+      newestSeenAt: seen ? seen.toISOString() : null,
+      ageMs: seen ? Math.max(0, now.getTime() - seen.getTime()) : null,
+      lastSyncAt: ran ? ran.toISOString() : null,
+      lastSyncFailed: typeof sync?.lastError === 'string' && sync.lastError !== '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Convenience: pick the read by the bank's transport and run it. A bank whose
+ * transport is HTTPS ('syndication' or 'api') is searched in our synced
+ * mirror and no database client is asked for; a bank on the database
+ * transport is searched in its database, as before; null when the bank has
+ * neither.
  */
 export async function searchBank(
   bank: BankId,
   intent: BankSearchIntent,
   ctx?: { requestId?: string; signal?: AbortSignal },
 ): Promise<BankJobRow[] | null> {
+  if (bankReadsMirror(bank)) return searchBankMirror(bank, intent, ctx);
   const client = getBankClient(bank);
   if (client) return BANK_PROVIDERS[bank].search(client, intent, ctx);
-  if (bankReadsMirror(bank)) return searchBankMirror(bank, intent, ctx);
   return null;
 }
 

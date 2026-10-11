@@ -7,9 +7,12 @@
 //
 // Reads candidate context + writes ALL rows via the active-brand `prisma`
 // singleton; reads recruiter Job/Company via the two read-only bank clients.
-// A bank read over HTTPS has no client: its jobs are read from the RAJob
+// A bank whose transport is HTTPS (the GoHire syndication endpoint, or the
+// interim list endpoint) has no client: its jobs are read from the RAJob
 // mirror the ingest sync wrote (raBankProviders.searchBank), and they are
-// already materialised, so step 6 only looks their ids up.
+// already materialised, so step 6 only looks their ids up. The run's closing
+// log line carries each mirror's sync age (`mirrorSyncAge`), so a mirror that
+// stopped moving is visible in the search telemetry.
 // A candidate is materialised and shown only when its bank has a
 // candidate-facing posting page (raCrossBankMatch.synthesizeApplyUrl); a job
 // with no apply link is skipped, never shown with a dead one (D3).
@@ -29,7 +32,7 @@ import { raCrossBankExplorerAgent } from '../agents/RACrossBankExplorerAgent.js'
 import { raCrossBankInsightAgent } from '../agents/RACrossBankInsightAgent.js';
 import { evaluateCachedScore } from './RAOnboardingRecommendService.js';
 import { bankReadsMirror, listEnabledBanks } from '../lib/raBankClients.js';
-import { searchBank } from '../lib/raBankProviders.js';
+import { bankMirrorSyncAge, searchBank, type BankMirrorSyncAge } from '../lib/raBankProviders.js';
 import { RA_DEFAULT_LOCALE } from '../lib/raLocale.js';
 import {
   deriveCandidateSignals,
@@ -115,6 +118,8 @@ export class RACrossBankSearchService {
     const banksDegraded: BankId[] = [];
     let scorerCallsUsed = 0;
     let scorerCacheHits = 0;
+    // Search telemetry: how fresh the mirror of each bank read from our own index is.
+    const mirrorSyncAge: Partial<Record<BankId, BankMirrorSyncAge>> = {};
 
     try {
       // STEP 0 — gate, and the banks of the request brand's market.
@@ -167,14 +172,27 @@ export class RACrossBankSearchService {
         freshnessCutoff: cutoff,
         take: 60,
       };
-      const pools = await Promise.all(
-        banks.map((b) =>
-          searchBank(b, intent, { requestId: input.requestId, signal: input.signal }).then(
-            (rows) => ({ b, rows }),
-            () => ({ b, rows: null as null }),
+      const [pools] = await Promise.all([
+        Promise.all(
+          banks.map((b) =>
+            searchBank(b, intent, { requestId: input.requestId, signal: input.signal }).then(
+              (rows) => ({ b, rows }),
+              () => ({ b, rows: null as null }),
+            ),
           ),
         ),
-      );
+        // Beside the sweep, never after it: two small reads that run while the sweep runs and cannot fail it.
+        ...banks
+          .filter((b) => bankReadsMirror(b))
+          .map((b) =>
+            bankMirrorSyncAge(b).then(
+              (age) => {
+                if (age) mirrorSyncAge[b] = age;
+              },
+              () => undefined,
+            ),
+          ),
+      ]);
       const perBankRetrieved: Record<string, number> = {};
       const rows = pools.flatMap((pool) => {
         if (pool.rows == null) {
@@ -452,6 +470,7 @@ export class RACrossBankSearchService {
         banksDegraded,
         scorerCalls: scorerCallsUsed,
         cacheHits: scorerCacheHits,
+        ...(Object.keys(mirrorSyncAge).length > 0 ? { mirrorSyncAge } : {}),
         durationMs: Date.now() - started,
       }, input.requestId);
     }

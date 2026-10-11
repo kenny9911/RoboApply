@@ -33,11 +33,12 @@ vi.mock('../../../lib/prisma.js', () => ({
 }));
 
 const listEnabledBanks = vi.fn(() => ['robohire', 'gohire'] as const);
-/** Banks that are read over HTTPS (no database client): the search reads our synced mirror of them. */
+/** Banks whose transport is HTTPS (the syndication endpoint, or the list endpoint): the search reads our synced mirror of them. */
 const mirrorBanks = new Set<string>();
+const getBankClient = vi.fn((_bank: string) => ({}));
 vi.mock('../lib/raBankClients.js', () => ({
   listEnabledBanks: () => listEnabledBanks(),
-  getBankClient: () => ({}),
+  getBankClient: (b: string) => getBankClient(b),
   isBankEnabled: () => true,
   bankReadsMirror: (b: string) => mirrorBanks.has(b),
 }));
@@ -61,7 +62,9 @@ const searchBank = vi.fn(async (bank: 'robohire' | 'gohire') => {
   if (bank === 'robohire') return [mkJob('rh1', 'Senior Backend Engineer', 'robohire', 70), mkJob('rh2', 'Data Analyst', 'robohire', null)];
   return [mkJob('gh1', 'Backend Engineer', 'gohire', 65)];
 });
-vi.mock('../lib/raBankProviders.js', () => ({ searchBank: (...a: any[]) => searchBank(...a) }));
+/** The mirror's sync age, read beside the sweep for a bank that is searched in our own index. */
+const bankMirrorSyncAge = vi.fn(async (_bank: string): Promise<Record<string, unknown> | null> => null);
+vi.mock('../lib/raBankProviders.js', () => ({ searchBank: (...a: any[]) => searchBank(...a), bankMirrorSyncAge: (b: string) => bankMirrorSyncAge(b) }));
 
 const explorerRun = vi.fn(async () => ({
   primaryTitles: ['Backend Engineer', 'Senior Backend Engineer'], adjacentTitles: ['Platform Engineer'],
@@ -97,6 +100,7 @@ vi.mock('../../../lib/deductionCost.js', () => ({ costPatchFromTally: () => ({ p
 // Import AFTER mocks are registered.
 const { RACrossBankSearchService } = await import('./RACrossBankSearchService.js');
 const { runWithBrand } = await import('../../../lib/requestContext.js');
+const { logger } = await import('../../../services/LoggerService.js');
 
 const INPUT = { userId: 'u1', resumeVariantId: null, locale: 'en' } as const;
 /** A run on GoApply's host. A run with no brand context is RoboApply's (the default brand). */
@@ -110,6 +114,7 @@ describe('RACrossBankSearchService.run (integration)', () => {
     vi.stubEnv('ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE', 'https://jobs.example.test/r/{id}');
     vi.stubEnv('GOHIRE_PUBLIC_JOB_URL_TEMPLATE', 'https://example.test/p/{id}');
     findManyRAJob.mockResolvedValue([]);
+    bankMirrorSyncAge.mockResolvedValue(null);
     listEnabledBanks.mockReturnValue(['robohire', 'gohire'] as any);
     findManyScore.mockResolvedValue([]);
     findManyTracker.mockResolvedValue([]);
@@ -230,6 +235,49 @@ describe('RACrossBankSearchService.run (integration)', () => {
     findManyRAJob.mockResolvedValue([]);
     const gone = await runOnGoApply();
     expect([...gone.recommended, ...gone.explore].some((c) => c.source === 'gohire')).toBe(false);
+  });
+
+  it('search telemetry: a run that read a mirror says how fresh it is; a run on the database transport says nothing about a mirror (MKT-5E)', async () => {
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => undefined);
+    const completion = () => info.mock.calls.filter((c) => c[1] === 'cross-bank round complete').at(-1)?.[2] as Record<string, any>;
+    try {
+      // GoHire through the syndication endpoint: its jobs come from the mirror and the closing line carries the mirror's age.
+      mirrorBanks.add('gohire');
+      const age = { newestSeenAt: '2026-10-10T05:30:00.000Z', ageMs: 9_000_000, lastSyncAt: '2026-10-10T07:50:00.000Z', lastSyncFailed: false };
+      bankMirrorSyncAge.mockResolvedValue(age);
+      findManyRAJob.mockImplementation(async (args: any) => args.where.externalId.in.map((externalId: string) => ({ id: `mirror_${externalId}`, externalId })));
+      const cn = await runOnGoApply();
+      expect(bankMirrorSyncAge.mock.calls).toEqual([['gohire']]);
+      expect(completion()).toMatchObject({ banksSwept: ['gohire'], mirrorSyncAge: { gohire: age } });
+      // The cards carry the recruiter job id through the same keys as the database transport: the posting page and the RAJob row.
+      expect([...cn.recommended, ...cn.explore].map((c) => [c.id, c.applyUrl])).toEqual([['mirror_gh1', 'https://example.test/p/gh1']]);
+      // No database client of the bank is asked for by a run, and nothing is written to RAJob for a mirrored bank.
+      expect(getBankClient).not.toHaveBeenCalled();
+      expect(upsertRAJob).not.toHaveBeenCalled();
+
+      // An empty mirror: an empty result, not a degraded bank, and its age is still reported.
+      searchBank.mockImplementation(async () => []);
+      bankMirrorSyncAge.mockResolvedValue({ newestSeenAt: null, ageMs: null, lastSyncAt: null, lastSyncFailed: false });
+      const empty = await runOnGoApply();
+      expect(empty).toMatchObject({ zeroResults: true, banksSwept: ['gohire'], banksDegraded: [] });
+      expect(completion().mirrorSyncAge).toEqual({ gohire: { newestSeenAt: null, ageMs: null, lastSyncAt: null, lastSyncFailed: false } });
+
+      // The age read can fail or answer nothing: the search is unaffected and the line simply has no age.
+      searchBank.mockImplementation(async () => [mkJob('gh1', 'Backend Engineer', 'gohire', 65)]);
+      bankMirrorSyncAge.mockRejectedValue(new Error('db down'));
+      const still = await runOnGoApply();
+      expect([...still.recommended, ...still.explore]).toHaveLength(1);
+      expect(completion()).not.toHaveProperty('mirrorSyncAge');
+
+      // RoboHire on its database: no mirror is read, so no age is asked for or logged.
+      bankMirrorSyncAge.mockClear();
+      await new RACrossBankSearchService().run({ ...INPUT });
+      expect(bankMirrorSyncAge).not.toHaveBeenCalled();
+      expect(completion()).toMatchObject({ banksSwept: ['robohire'] });
+      expect(completion()).not.toHaveProperty('mirrorSyncAge');
+    } finally {
+      info.mockRestore();
+    }
   });
 
   it('recomputes a hash-current cache row produced by an old scorer model', async () => {
