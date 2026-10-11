@@ -20,6 +20,28 @@ export type FitTierKey = 'great' | 'good' | 'possible' | 'unlikely';
 export type MatchTiers = { great: number; good: number; possible: number };
 export type MatchWeights = Record<MatchDimensionKey, number>;
 
+/**
+ * What a component the quick estimate cannot compare contributes, at its full
+ * weight (MARKET_STRATEGY 2.4): the long-run mean of that component over AI
+ * scores. The four figures come from 202 stored scorer-v3 rows; logistics has
+ * no measured figure yet and starts neutral. Config MATCH_PRIORS /
+ * CN_MATCH_PRIORS; re-estimated per market from real pairs (calibration.ts).
+ */
+export const DEFAULT_MATCH_PRIORS = { title_level: 44, skills: 39, industry: 24, logistics: 50, career_path: 45 } as const;
+export type MatchPriors = Record<MatchDimensionKey, number>;
+
+/** How much of the rubric a fit rests on (estimate v2; MARKET_STRATEGY 2.4). */
+export type FitConfidence = 'high' | 'medium' | 'low';
+/** The first reason that applies when the confidence is low; null otherwise. */
+export const CONFIDENCE_REASONS = ['no_skills_listed', 'no_level_stated', 'no_role_evidence', 'no_resume', 'few_details'] as const;
+export type ConfidenceReason = (typeof CONFIDENCE_REASONS)[number];
+/** Coverage at or above `high` is high confidence, from `medium` up to it medium, below it low. */
+export const CONFIDENCE_THRESHOLDS = { high: 0.75, medium: 0.5 } as const;
+/** A posting that states less than this share of the rubric is never Great and has low confidence (invariant I4). */
+export const POSTING_COVERAGE_MIN = 0.6;
+/** A stored tier changes on a recomputed total only this many points past the edge it crosses (invariant I5). */
+export const TIER_HYSTERESIS_POINTS = 3;
+
 /** The five components, in the order the UI lists them ("What we compared"). */
 export const MATCH_DIMENSION_KEYS: readonly MatchDimensionKey[] = ['title_level', 'skills', 'industry', 'logistics', 'career_path'];
 
@@ -39,9 +61,14 @@ export const MatchJobParamsSchema = z.object({ id: Id });
 /**
  * `RAJobMatchScore.dimensions`. Evidence `ref` names what a deterministic
  * evidence line is (`title`, `seniority`, `skill_have`, `skill_missing`,
- * `education_required`, `class_year`, `industry`, `location`, `pay`, `visa`);
- * AI evidence has no `ref` and is always a verbatim substring of the resume
- * or the posting (CitationGuard).
+ * `education_required`, `class_year`, `industry`, `location_met`,
+ * `location_not_met`, `pay_met`, `pay_not_met`, `visa_offered`,
+ * `visa_not_offered`, and `logistics_by_your_filters`: every stated location
+ * and pay check is met only because the person's own saved search filters on
+ * it, so the estimate does not compare the part: it is `not_stated` and counts
+ * at its prior, and this line quotes the place and pay words); AI evidence has no
+ * `ref` and is always a verbatim substring of the resume or the posting
+ * (CitationGuard).
  */
 export const MatchDimensionsSchema = z.array(
   z
@@ -85,6 +112,47 @@ export const FitReportBodySchema = z.record(z.string(), z.unknown());
 /** The prompt/schema version every v3 row carries (`RAJobMatchScore.promptVersion`). */
 export const SCORER_PROMPT_VERSION = 'scorer_v3' as const;
 
+/**
+ * The fit rubrics and the scorer prompts that write them
+ * (`RAJobMatchScore.rubricVersion` / `.promptVersion`). A stored row is read
+ * as a fit only when its prompt is one of these: the legacy v2 scorer writes
+ * rows without components into the same table, and those are never a fit.
+ */
+export const FIT_RUBRIC_BY_PROMPT = { scorer_v3: 'fit_v3', scorer_v4: 'fit_v4' } as const;
+export type FitPromptVersion = keyof typeof FIT_RUBRIC_BY_PROMPT;
+export type FitRubric = (typeof FIT_RUBRIC_BY_PROMPT)[FitPromptVersion];
+/** The estimate's version (`Fit.version.estimator`). */
+export const ESTIMATOR_VERSION = 'est_v2' as const;
+
+/** The rubric a scorer prompt writes, or null when the prompt is not a fit scorer's. */
+export function rubricOfPrompt(promptVersion: string | null | undefined): FitRubric | null {
+  return promptVersion && Object.hasOwn(FIT_RUBRIC_BY_PROMPT, promptVersion) ? FIT_RUBRIC_BY_PROMPT[promptVersion as FitPromptVersion] : null;
+}
+
+// ── Requirement checklist (scorer v4; MARKET_TASK_PLAN 3.3) ───────────────
+
+/**
+ * One requirement a posting states, extracted once per posting
+ * (`RAJob.requirements = { v: 1, contentHash, model, extractedAt, items }`).
+ * `text` is the posting's own words.
+ */
+export const JobRequirementSchema = z
+  .object({
+    id: z.string().min(1).max(64),
+    kind: z.enum(['skill', 'experience', 'education', 'domain', 'scope']),
+    text: z.string().min(1).max(600),
+    importance: z.enum(['must', 'preferred']),
+  })
+  .strict();
+export type JobRequirement = z.infer<typeof JobRequirementSchema>;
+
+/** A requirement checked against the resume: the status and the resume's own words behind it ('' when none). */
+export const RequirementCheckSchema = JobRequirementSchema.extend({
+  status: z.enum(['met', 'partly', 'not_shown', 'not_applicable']),
+  evidence: z.string().max(600),
+}).strict();
+export type RequirementCheck = z.infer<typeof RequirementCheckSchema>;
+
 /** Why a score is a deterministic "Quick estimate" instead of the AI score. */
 export type EstimateReason =
   | 'ai_off' // GoApply without the "Use AI" consent (aiAllowed=false)
@@ -126,7 +194,13 @@ export interface MatchFitView {
    * shows and the ones it does not (same rule as the keyword check).
    * `listed` is how many skills the posting lists (0: nothing to compare).
    */
-  skills: { aligned: string[]; missing: string[]; listed: number };
+  skills: {
+    aligned: string[];
+    missing: string[];
+    listed: number;
+    /** Soft skills the posting names ("communication"): shown, never compared and never part of the number. */
+    softSkills?: string[];
+  };
   /** One overlap and one gap for cards (real data only; null when none). */
   topOverlap: string | null;
   topGap: string | null;
@@ -137,6 +211,21 @@ export interface MatchFitView {
   summaryLocaleStale: boolean;
   /** True when served from the cache without a model call. */
   cached: boolean;
+  /**
+   * Share of the rubric weight backed by stated evidence on both sides, 0–1,
+   * and what follows from it. Sent with every fit since estimate v2; a reader
+   * treats a missing value as unknown (no reason line).
+   */
+  coverage?: number;
+  confidence?: FitConfidence;
+  /** One reason when `confidence` is low; null otherwise. */
+  confidenceReason?: ConfidenceReason | null;
+  /** The requirement checklist (scorer v4). Empty until that scorer writes it. */
+  requirements?: RequirementCheck[];
+  /** The stored AI score was written by an earlier model or prompt and is waiting for its planned re-score. */
+  stale?: boolean;
+  /** The estimate was mapped onto the AI scale by the market's calibration map. */
+  calibrated?: boolean;
 }
 
 /**
@@ -155,6 +244,29 @@ export interface PreScoreResult {
   dimensions: MatchDimension[];
   topOverlap: string | null;
   topGap: string | null;
+  /** Share of the rubric weight backed by stated evidence on both sides, 0–1 (estimate v2). */
+  coverage?: number;
+  confidence?: FitConfidence;
+  /** One reason when `confidence` is low; null otherwise. */
+  confidenceReason?: ConfidenceReason | null;
+}
+
+/**
+ * The quick estimate as `preScore()` answers it: a `PreScoreResult` whose
+ * coverage and confidence are always present, with what the ranking and the
+ * calibration need next to it.
+ */
+export interface EstimateResult extends PreScoreResult {
+  kind: 'pre';
+  coverage: number;
+  confidence: FitConfidence;
+  confidenceReason: ConfidenceReason | null;
+  /** Share of the rubric weight the POSTING states, 0–1 (role and level, skills, industry, location or pay). */
+  postingCoverage: number;
+  /** Soft skills the posting names: shown, never part of the number. */
+  softSkills: string[];
+  /** The most this estimate may claim (the honesty limits of preScore.ts); null when it has no score at all. */
+  limit: number | null;
 }
 
 // ── POST /jobs/:id/score (job-detail mount; platform-paid, 80/day/user) ──

@@ -1,20 +1,24 @@
 // @vitest-environment node
 //
-// WP-32 acceptance: ranking formula (fit = ai ?? pre − 5; freshness decay 72 h;
-// 0.55/0.20/0.15/0.10), no recruiter-bank boost, the goal-adjustment table per
-// goal option, ≤2 per company per 20, sorts and the fit-tier view filter.
+// WP-32 acceptance: ranking formula (the fit input on one scale for scored and
+// unscored rows, SM-4; freshness decay 72 h; 0.55/0.20/0.15/0.10), no
+// recruiter-bank boost, the goal-adjustment table per goal option, ≤2 per
+// company per 20, sorts and the fit-tier view filter.
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { CAREER_GOALS } from '../onboarding/contract.js';
-import { DEFAULT_MATCH_TIERS, type PreScoreResult } from '../match/index.js';
+import { DEFAULT_MATCH_PRIORS, DEFAULT_MATCH_TIERS, DEFAULT_MATCH_WEIGHTS, applyMap, assembleFit, currentScorerPin, type Fit } from '../match/index.js';
+import { jobRecord, matchUser } from '../match/testkit.js';
 import { EMPTY_AFFINITY } from './affinity.js';
 import { GOAL_ADJUSTMENTS, ORDERING_RULES, RANKING_FACTORS } from './contract.js';
 import {
+  RANK_BLEND_AI_SHARE,
   fitBadge,
-  fitOf,
+  fitForRank,
+  rankFitOf,
   annualPay,
   freshness,
   goalAdjustment,
@@ -26,6 +30,7 @@ import {
   sortCandidates,
   sourceQuality,
   sponsorshipFirst,
+  tierOf,
   type Candidate,
   type RankContext,
 } from './ranking.js';
@@ -46,11 +51,70 @@ describe('formula', () => {
     expect(RANKING_FACTORS.reduce((a, f) => a + f.weight, 0)).toBeCloseTo(1);
   });
 
-  it('fit = ai ?? pre − 5 (floored at 0); null when neither', () => {
-    expect(fitOf(72, 90)).toBe(72);
-    expect(fitOf(null, 90)).toBe(85);
-    expect(fitOf(undefined, 3)).toBe(0);
-    expect(fitOf(null, null)).toBeNull();
+  it('fit input without a calibration map: the estimate, plus half of (AI − estimate) for a scored row', () => {
+    expect(RANK_BLEND_AI_SHARE).toBe(0.5);
+    // An AI score of 70 next to an estimate of 60 ranks on 65.
+    expect(fitForRank({ ai: 70, estimate: 60 })).toBe(65);
+    expect(fitForRank({ ai: 50, estimate: 80 })).toBe(65);
+    // An unscored row ranks on its estimate, with no discount for not being scored.
+    expect(fitForRank({ ai: null, estimate: 60 })).toBe(60);
+    expect(fitForRank({ estimate: 60 })).toBe(60);
+    // An AI score with nothing to estimate from: the AI score. Neither: nothing.
+    expect(fitForRank({ ai: 72, estimate: null })).toBe(72);
+    expect(fitForRank({ ai: null, estimate: null })).toBeNull();
+    expect(fitForRank({})).toBeNull();
+    // Always within 0–100.
+    expect(fitForRank({ ai: 100, estimate: 100 })).toBe(100);
+    expect(fitForRank({ ai: 0, estimate: 0 })).toBe(0);
+    expect(fitForRank({ ai: Number.NaN, estimate: 60 })).toBe(60);
+  });
+
+  it('fit input with the market\'s calibration map: the AI score when there is one, else map(estimate)', () => {
+    const knots = { knots: [[0, 0], [100, 60]] as Array<[number, number]> };
+    const map = (estimate: number) => applyMap(knots, estimate);
+    expect(fitForRank({ ai: 70, estimate: 60, map })).toBe(70);
+    expect(fitForRank({ ai: null, estimate: 80, map })).toBe(48);
+    expect(fitForRank({ ai: null, estimate: null, map })).toBeNull();
+    expect(fitForRank({ ai: 70, estimate: null, map })).toBe(70);
+    // A map that leaves the range is clamped.
+    expect(fitForRank({ estimate: 50, map: () => 140 })).toBe(100);
+  });
+
+  it('pairwise (invariant 8): of two jobs of equal quality, the scored one never ranks below the other for being scored', () => {
+    const row = feedRow({ id: 'same', postedAt: hoursAgo(10) });
+    for (const quality of [30, 55, 64, 65, 79, 80, 92]) {
+      // Equal quality: the AI score of the scored job equals the estimate both jobs have.
+      const scored = fitForRank({ ai: quality, estimate: quality });
+      const unscored = fitForRank({ ai: null, estimate: quality });
+      expect(scored, String(quality)).toBe(unscored);
+      expect(recommendedRank(row, scored, rc()), String(quality)).toBe(recommendedRank(row, unscored, rc()));
+      const cands: Candidate[] = [
+        { row: feedRow({ id: 'unscored', postedAt: hoursAgo(10) }), badge: null, fit: unscored, rank: recommendedRank(row, unscored, rc()) },
+        { row: feedRow({ id: 'scored', postedAt: hoursAgo(10) }), badge: null, fit: scored, rank: recommendedRank(row, scored, rc()) },
+      ];
+      // Tied on rank and date: the order is the id tie-break, in both sorts, not "scored last".
+      expect(sortCandidates([...cands], 'recommended').map((c) => c.row.id)).toEqual(sortCandidates([...cands].reverse(), 'recommended').map((c) => c.row.id));
+      expect(sortCandidates([...cands], 'best_fit').map((c) => c.row.id)).toEqual(sortCandidates([...cands].reverse(), 'best_fit').map((c) => c.row.id));
+    }
+    // And with a map both are on the AI scale: the scored job at its AI score, the other at the mapped estimate.
+    const knots = { knots: [[0, 0], [100, 100]] as Array<[number, number]> };
+    expect(fitForRank({ ai: 70, estimate: 70, map: (x) => applyMap(knots, x) })).toBe(fitForRank({ estimate: 70, map: (x) => applyMap(knots, x) }));
+    // The old rule (ai ?? estimate − 5) is gone: an unscored job is not 5 points down.
+    expect(fitForRank({ estimate: 90 })).toBe(90);
+  });
+
+  it('the ranking input of a Fit: its AI score blended with its own estimate, or the estimate', () => {
+    const base = { job: jobRecord(), user: matchUser(), resume: { id: 'v1', resumeContentHash: 'hash-1' }, config: { weights: { ...DEFAULT_MATCH_WEIGHTS }, tiers: { ...DEFAULT_MATCH_TIERS }, priors: { ...DEFAULT_MATCH_PRIORS } }, pin: currentScorerPin('roboapply', 'm'), now: NOW };
+    const estimate = assembleFit(base);
+    expect(estimate.kind).toBe('estimate');
+    expect(rankFitOf(estimate)).toBe(estimate.score);
+    const stored = { resumeVariantId: 'v1', score: 60, tier: 'possible', dimensions: [{ key: 'title_level' as const, weight: 35, score: 60, status: 'scored' as const, evidence: [] }], generatedAt: NOW, modelUsed: 'm', promptVersion: 'scorer_v3', jobContentHash: null, rubricVersion: 'fit_v3', searchProfileVersion: 1, resumeContentHashAtScore: 'hash-1' };
+    const ai = assembleFit({ ...base, stored });
+    expect(ai).toMatchObject({ kind: 'ai', score: 60, estimateScore: estimate.score });
+    expect(rankFitOf(ai)).toBe(estimate.score! + 0.5 * (60 - estimate.score!));
+    expect(rankFitOf(ai, (x) => x / 2)).toBe(60);
+    expect(rankFitOf(estimate, (x) => x / 2)).toBe(estimate.score! / 2);
+    expect(rankFitOf(null)).toBeNull();
   });
 
   it('freshness = 100·e^(−h/72): 100 now, 1/e after 72 h; undated jobs count from first seen', () => {
@@ -207,22 +271,72 @@ describe('sorts and the tier view', () => {
     expect(out.map((x) => x.row.id)).toEqual(['soon', 'later', 'past', 'unquoted', 'estimated']);
   });
 
-  it('fit-tier view: great ≥80, good ≥65; unscored jobs pass', () => {
+  it('fit-tier view: great ≥80, good ≥65; a job with no fit passes', () => {
     const t = DEFAULT_MATCH_TIERS;
-    const b = (score: number) => ({ tier: 'good' as const, score, kind: 'pre' as const, topGap: null, topOverlap: null });
+    // An AI badge whose tier is the tier of its number (a new model result takes its own tier).
+    const b = (score: number) => ({ tier: tierOf(score, t), score, kind: 'ai' as const, topGap: null, topOverlap: null });
     expect(passesTier(b(79), 'great', t)).toBe(false);
     expect(passesTier(b(80), 'great', t)).toBe(true);
     expect(passesTier(b(64), 'good', t)).toBe(false);
     expect(passesTier(b(65), 'good', t)).toBe(true);
     expect(passesTier(null, 'great', t)).toBe(true);
     expect(passesTier(b(10), 'all', t)).toBe(true);
+    expect(passesTier(b(10), undefined, t)).toBe(true);
   });
 
-  it('the card shows the AI score when cached, else the quick estimate (with the pre-score gap/overlap)', () => {
-    const pre: PreScoreResult = { jobId: 'j', score: 70, tier: 'good', kind: 'pre', dimensions: [], topOverlap: 'Python', topGap: 'Kubernetes' };
-    expect(fitBadge(pre, { score: 88, tier: 'great' }, DEFAULT_MATCH_TIERS)).toEqual({ tier: 'great', score: 88, kind: 'ai', topGap: 'Kubernetes', topOverlap: 'Python' });
-    expect(fitBadge(pre, null, DEFAULT_MATCH_TIERS)).toEqual({ tier: 'good', score: 70, kind: 'pre', topGap: 'Kubernetes', topOverlap: 'Python' });
-    expect(fitBadge({ ...pre, score: null, tier: null }, null, DEFAULT_MATCH_TIERS)).toBeNull();
+  it('fit-tier view: an AI score is judged by the tier its card shows, so the card and the view agree (hysteresis)', () => {
+    const t = DEFAULT_MATCH_TIERS;
+    const ai = (tier: 'unlikely' | 'possible' | 'good' | 'great', score: number) => ({ tier, score, kind: 'ai' as const, topGap: null, topOverlap: null });
+    // Stored tier Good, recomputed total 81 (1 point over the Great edge keeps Good): the card says Good, so it is
+    // listed under "Good or better" and not under "Great".
+    expect(passesTier(ai('good', 81), 'great', t)).toBe(false);
+    expect(passesTier(ai('good', 81), 'good', t)).toBe(true);
+    // Stored tier Great, recomputed total 79: the card says Great, so the Great view lists it.
+    expect(passesTier(ai('great', 79), 'great', t)).toBe(true);
+    expect(passesTier(ai('great', 79), 'good', t)).toBe(true);
+    // The same at the Good edge.
+    expect(passesTier(ai('possible', 66), 'good', t)).toBe(false);
+    expect(passesTier(ai('good', 64), 'good', t)).toBe(true);
+    expect(passesTier(ai('good', 64), 'great', t)).toBe(false);
+  });
+
+  it('fit-tier view: a quick estimate passes only at the threshold AND with confidence that is not low', () => {
+    const t = DEFAULT_MATCH_TIERS;
+    const pre = (score: number, confidence: 'high' | 'medium' | 'low' | undefined) => ({ tier: 'great' as const, score, kind: 'pre' as const, topGap: null, topOverlap: null, ...(confidence ? { confidence } : {}) });
+    // A low-confidence estimate of 82 is not shown as Great, nor as Good or better.
+    expect(passesTier(pre(82, 'low'), 'great', t)).toBe(false);
+    expect(passesTier(pre(82, 'low'), 'good', t)).toBe(false);
+    expect(passesTier(pre(82, 'medium'), 'great', t)).toBe(true);
+    expect(passesTier(pre(82, 'high'), 'great', t)).toBe(true);
+    expect(passesTier(pre(70, 'medium'), 'good', t)).toBe(true);
+    expect(passesTier(pre(70, 'medium'), 'great', t)).toBe(false);
+    // Reaching the threshold is still required.
+    expect(passesTier(pre(64, 'high'), 'good', t)).toBe(false);
+    // The "all" view shows everything.
+    expect(passesTier(pre(82, 'low'), 'all', t)).toBe(true);
+    // An AI-scored row passes on the tier its card shows, whatever the confidence says.
+    expect(passesTier({ ...pre(82, 'low'), kind: 'ai' as const }, 'great', t)).toBe(true);
+    // A badge with no confidence (written before estimate v2) is not treated as low.
+    expect(passesTier(pre(82, undefined), 'great', t)).toBe(true);
+  });
+
+  it('the card shows the fit every surface reads: the AI score when it can be shown, else the quick estimate, with its confidence', () => {
+    const fit = (over: Partial<Fit>): Fit =>
+      ({
+        jobId: 'j', score: 70, tier: 'good', kind: 'estimate', coverage: 0.65, confidence: 'medium', confidenceReason: null, dimensions: [], requirements: [], topOverlap: 'Python', topGap: 'Kubernetes',
+        basis: { resumeVariantId: 'v1', resumeContentHash: 'h', jobContentHash: 'j', searchProfileVersion: 1 }, version: { rubric: 'fit_v3', estimator: 'est_v2', model: null, prompt: null },
+        scoredAt: NOW.toISOString(), stale: false, calibrated: false, estimateScore: 70, estimateReason: null, skills: { aligned: ['Python'], missing: ['Kubernetes'], softSkills: [], listed: 2 }, prose: null, cached: false,
+        ...over,
+      }) as Fit;
+    expect(fitBadge(fit({ kind: 'ai', score: 88, tier: 'great', confidence: 'high' }))).toEqual({ tier: 'great', score: 88, kind: 'ai', topGap: 'Kubernetes', topOverlap: 'Python', confidence: 'high', confidenceReason: null });
+    // An estimate keeps the wire kind `pre`.
+    expect(fitBadge(fit({}))).toEqual({ tier: 'good', score: 70, kind: 'pre', topGap: 'Kubernetes', topOverlap: 'Python', confidence: 'medium', confidenceReason: null });
+    expect(fitBadge(fit({ confidence: 'low', confidenceReason: 'no_skills_listed' }))).toMatchObject({ kind: 'pre', confidence: 'low', confidenceReason: 'no_skills_listed' });
+    // The stored tier of an AI fit is shown as it is (it moves only 3 points past an edge).
+    expect(fitBadge(fit({ kind: 'ai', score: 81, tier: 'good' }))).toMatchObject({ score: 81, tier: 'good' });
+    // Nothing comparable: no badge.
+    expect(fitBadge(fit({ score: null, tier: null }))).toBeNull();
+    expect(fitBadge(null)).toBeNull();
   });
 });
 

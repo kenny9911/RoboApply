@@ -9,7 +9,7 @@ import type { ReportInventory } from './reportInventory.js';
 import type { MatchJobRecord, UserMatchInputs } from './context.js';
 import type { KeywordInput } from './keywordRows.js';
 import type { MatchJob, MatchUser } from './preScore.js';
-import type { MatchRepo, ResumeRecord, ScoreRecord, ScoreWrite } from './repo.js';
+import { jobHashCurrent, toCalibrationPair, type CalibrationPair, type MatchRepo, type ResumeRecord, type ScoreRecord, type ScoreWrite, type StoredFitRow } from './repo.js';
 
 export function jobRecord(overrides: Partial<MatchJobRecord> = {}): MatchJobRecord {
   return {
@@ -62,6 +62,8 @@ export function matchUser(overrides: Partial<MatchUser> = {}): MatchUser {
     targetTaxonomyIds: ['backend_engineer'],
     targetTitles: [],
     targetSeniority: ['senior'],
+    // The role this person's record shows (their experience titles): the estimate's only role input.
+    evidenceRoleIds: ['backend_engineer'],
     skills: ['TypeScript', 'Go'],
     employerIndustries: ['fintech'],
     locations: [{ label: 'Berlin', city: 'Berlin', country: 'DE', radiusKm: 40, lat: 52.52, lng: 13.405 }],
@@ -134,6 +136,10 @@ export interface MemoryRepoState {
   users: Record<string, Omit<UserMatchInputs, 'resumeParsed' | 'userId' | 'market'>>;
   active: Array<{ id: string; brand: string; lastActiveAt: Date }>;
   cachedScores: Record<string, number>;
+  /** AppConfig values by key (the calibration document). */
+  config: Record<string, string>;
+  /** Variant ids that are NOT a primary resume (calibration reads primary resumes only). Default: every variant is primary. */
+  nonPrimary: string[];
 }
 
 export function defaultUserInputs(): MemoryRepoState['users'][string] {
@@ -163,6 +169,8 @@ export function createMemoryRepo(seed: Partial<MemoryRepoState> = {}): MatchRepo
     users: seed.users ?? { u1: defaultUserInputs() },
     active: seed.active ?? [],
     cachedScores: {},
+    config: seed.config ?? {},
+    nonPrimary: seed.nonPrimary ?? [],
   };
   const calls: Record<string, number> = {};
   const hit = (name: string) => {
@@ -177,6 +185,11 @@ export function createMemoryRepo(seed: Partial<MemoryRepoState> = {}): MatchRepo
     },
     async getJobs(ids) {
       return state.jobs.filter((j) => ids.includes(j.id));
+    },
+    async getFitJobs(ids) {
+      hit('getFitJobs');
+      // The list projection: no long text at all.
+      return state.jobs.filter((j) => ids.includes(j.id)).map((j) => ({ ...j, description: '', descriptionPlain: '', responsibilities: null, benefits: null }));
     },
     async getUserInputs(userId: string, market: Market) {
       const u = state.users[userId] ?? { profile: null, education: [], experience: [], searchProfile: null, employerIndustries: [] };
@@ -212,16 +225,17 @@ export function createMemoryRepo(seed: Partial<MemoryRepoState> = {}): MatchRepo
         .slice(0, limit)
         .map((u) => u.id);
     },
-    async listAiScores({ userId, jobIds, resumeVariantId, resumeContentHash, promptVersion }) {
-      const out = new Map<string, Pick<ScoreRecord, 'score' | 'tier' | 'dimensions'>>();
+    async listAiScores({ userId, jobIds, resumeVariantId, resumeContentHash }) {
+      hit('listAiScores');
+      const out = new Map<string, StoredFitRow>();
       for (const s of state.scores) {
         if (s.userId !== userId || !jobIds.includes(s.jobId) || s.resumeVariantId !== resumeVariantId) continue;
-        if (s.scoreKind !== 'ai' || s.promptVersion !== promptVersion || s.resumeContentHashAtScore !== resumeContentHash) continue;
-        out.set(s.jobId, { score: s.score, tier: s.tier, dimensions: s.dimensions });
+        if (s.scoreKind !== 'ai' || s.resumeContentHashAtScore !== resumeContentHash) continue;
+        out.set(s.jobId, s);
       }
       return out;
     },
-    async freshAiScoredJobIds({ userId, jobIds, resumeVariantId, resumeContentHash, modelUsed, promptVersion }) {
+    async freshAiScoredJobIds({ userId, jobIds, resumeVariantId, resumeContentHash, modelUsed, promptVersion, jobContentHashes }) {
       return new Set(
         state.scores
           .filter(
@@ -231,10 +245,35 @@ export function createMemoryRepo(seed: Partial<MemoryRepoState> = {}): MatchRepo
               s.resumeVariantId === resumeVariantId &&
               s.resumeContentHashAtScore === resumeContentHash &&
               s.modelUsed === modelUsed &&
-              s.promptVersion === promptVersion,
+              s.promptVersion === promptVersion &&
+              jobHashCurrent(s.jobContentHash, jobContentHashes?.get(s.jobId)),
           )
           .map((s) => s.jobId),
       );
+    },
+    async listCalibrationPairs({ market, since, limit }) {
+      hit('listCalibrationPairs');
+      const marketOf = new Map(state.jobs.map((j) => [j.id, j.market]));
+      return state.scores
+        .filter((s) => s.scoreKind === 'ai' && s.generatedAt >= since && marketOf.get(s.jobId) === market && !state.nonPrimary.includes(s.resumeVariantId))
+        .sort((a, b) => b.generatedAt.getTime() - a.generatedAt.getTime())
+        .map((s) =>
+          toCalibrationPair({
+            ai: s.score,
+            estimateAtScore: s.explanation && typeof s.explanation === 'object' ? (s.explanation as { estimateAtScore?: unknown }).estimateAtScore : null,
+            dimensions: s.dimensions,
+          }),
+        )
+        .filter((x): x is CalibrationPair => !!x)
+        .slice(0, limit);
+    },
+    async getConfigValue(key) {
+      hit('getConfigValue');
+      return state.config[key] ?? null;
+    },
+    async setConfigValue(key, value) {
+      hit('setConfigValue');
+      state.config[key] = value;
     },
   };
 }

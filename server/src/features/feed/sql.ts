@@ -404,7 +404,12 @@ export function ageFloorSql(floor: Date): Prisma.Sql {
   return Prisma.sql`(j."postedAt" >= ${floor}::timestamp(3) OR (j."postedAt" IS NOT NULL AND (j."sourceBoard" = ANY(${[...NO_AGE_FLOOR_BOARDS]}::text[]) OR j."fromRecruiterBank" = true)))`;
 }
 
-/** Columns the feed reads (pre-score inputs + card fields), with the company join. */
+/**
+ * Columns the feed reads (pre-score inputs + card fields), with the company
+ * join. The last four RAJob columns are the market wave's (MKT-0): carried by
+ * the projection now, read by later phases. Listed by name, never `j.*`:
+ * RAJob.searchTsv is a tsvector the driver cannot return bare.
+ */
 export const FEED_COLUMNS = Prisma.sql`j."id", j."market", j."visibility", j."ownerUserId", j."title", j."titleNormalized", j."companyName",
   j."companyNameNormalized", j."companyId", j."companyLogoUrl", j."taxonomyIds", j."primaryTaxonomyId", j."seniority", j."roleType",
   j."minYears", j."maxYears", j."educationLevel", j."skills", j."skillsDetail", j."workModel", j."remoteScope", j."location",
@@ -415,7 +420,8 @@ export const FEED_COLUMNS = Prisma.sql`j."id", j."market", j."visibility", j."ow
   j."sourceName", j."originalSourceName", j."applyUrl", j."sourceUrl", j."atsType", j."isAgency", j."fromRecruiterBank", j."employerVerified",
   j."sourcePriority", j."archivedAt", (j."benefits" IS NOT NULL AND length(j."benefits") > 0) AS "hasBenefits",
   length(j."descriptionPlain")::int AS "descriptionLength", c."industries" AS "companyIndustries", c."sizeBand" AS "companySizeBand",
-  c."facts" AS "companyFacts", c."displayName" AS "companyDisplayName", c."logoUrl" AS "companyLogo"`;
+  c."facts" AS "companyFacts", c."displayName" AS "companyDisplayName", c."logoUrl" AS "companyLogo",
+  j."skillIds", j."contentHash", j."lang", j."titleMatchScore"`;
 
 const FROM = Prisma.sql`FROM "RAJob" j LEFT JOIN "RACompany" c ON c."id" = j."companyId"`;
 

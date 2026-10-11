@@ -23,14 +23,14 @@ import { setConsentLookup, type ConsentRecordLike } from '../../platform/consent
 import { setFlagOverrideLoader } from '../../platform/flags.js';
 import { fakeAuth, startRouteHarness, type RouteHarness } from '../../test/routeHarness.js';
 import { explainMatch } from '../compliance/explainMatch.js';
-import { DEFAULT_MATCH_TIERS, DEFAULT_MATCH_WEIGHTS, buildMatchUser } from '../match/index.js';
+import { buildMatchUser } from '../match/index.js';
 import type { SearchProfileWire } from '../search/index.js';
 import type { FeedItem, FeedOrder } from './contract.js';
 import { defaultPersonalized } from './defaultService.js';
 import { createFeedQueryService } from './FeedQueryService.js';
 import { isFeedPersonalized } from './index.js';
 import { createFeedRouter } from './routes.js';
-import { FakeFeedRepo, feedRow } from './testkit.js';
+import { FakeFeedRepo, fakeFeedMatch, feedRow } from './testkit.js';
 
 const NOW = new Date('2026-10-10T12:00:00.000Z');
 const P = '/api/v1/roboapply/feed';
@@ -63,8 +63,11 @@ const profile = (): SearchProfileWire => ({
 
 const service = createFeedQueryService({
   repo,
-  match: {
-    async userContext(userId) {
+  // The real fit assembly (match/fit.ts) over the fake repo's rows; `repo.ai` holds the person's stored AI scores.
+  match: fakeFeedMatch({
+    repo,
+    now: () => NOW,
+    context(userId) {
       userContextCalls += 1;
       const user = buildMatchUser(
         {
@@ -72,7 +75,8 @@ const service = createFeedQueryService({
           market: 'cn',
           profile: { firstName: null, lastName: null, country: 'CN', skills: [{ name: 'Python' }], workAuth: [], cnFields: null },
           education: [],
-          experience: [],
+          // The role comes from the person's record (their experience), never from the saved search.
+          experience: [{ title: '后端开发工程师', company: '某公司', startYm: '2022-01', endYm: null, current: true, kind: 'work' }],
           resumeParsed: null,
           searchProfile: { filters: { taxonomyIds: ['backend_engineer'] }, version: 1 },
           employerIndustries: [],
@@ -81,8 +85,7 @@ const service = createFeedQueryService({
       );
       return { user, resume: { id: 'rv1', resumeMarkdown: '', resumeContentHash: 'h', parsedData: null, targetJobId: null } };
     },
-    config: () => ({ weights: { ...DEFAULT_MATCH_WEIGHTS }, tiers: { ...DEFAULT_MATCH_TIERS } }),
-  },
+  }),
   search: { getActive: async () => profile(), get: async () => profile() } as never,
   // The production rule, not a stub: this is what the test is about.
   personalized: defaultPersonalized,

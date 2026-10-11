@@ -1,51 +1,73 @@
 // server/src/features/match/preScore.ts
 //
-// The deterministic pre-score (ARCHITECTURE.md §4.7; TASK_PLAN.md WP-18). Pure
-// functions, no I/O, about 0.1 ms per job; the feed pre-scores every
-// retrieved candidate with it, and it is the "Quick estimate" whenever the AI
-// score is not available (GoApply without AI consent, the daily cap, no
-// resume, a failed model call).
+// The quick estimate, version 2 (MARKET_STRATEGY 2.2, 2.4; SM-3). Pure
+// functions, no I/O, about 0.1 ms per job. It is what every surface shows when
+// no AI score exists for the job (fit.ts assembles the fit), and it answers the
+// same question as the AI score with less information, saying how sure it is.
 //
-//   title_level  taxonomy overlap × seniority factor × stated eligibility
-//                (same role or inside the user's target group = 1.0, same
-//                group 0.6, same category 0.3; seniority 0 levels apart = 1,
-//                1 = 0.7, 2 = 0.3, else 0, unknown 0.8). The seniority is
-//                the RESUME's (most recent title, else years of experience),
-//                never the Level chips of the search: the same resume and
-//                job give the same score whatever the user is filtering by.
+//   title_level  role overlap × level factor × stated eligibility. The role is
+//                the one the person's own record shows (`evidenceRoleIds`: the
+//                two most recent titles and a headline that names a role),
+//                graded same role 1.0, same group 0.6, same category 0.3. The
+//                level is the resume's (most recent title, else years of
+//                experience), 0 levels apart = 1, 1 = 0.7, 2 = 0.3, else 0,
+//                unknown 0.8. Neither is ever read from the saved search:
+//                editing the Role or Level chips moves no fit (invariant I3).
 //                A stated degree requirement (and, on GoApply, a stated 届别)
-//                the user does not meet halves it. School tier is NEVER an
-//                input (C15).
-//   skills       |job ∩ user| / min(|job|, 10)
-//   industry     the employer's industries ∩ the user's past employers' industries
-//   logistics    location / pay / visa, each met | not met | not stated;
-//                deterministic and also used by the AI score (never a constant)
-//   career_path  not stated in the pre-score (the AI score judges it)
+//                the person does not meet halves it. School tier is NEVER an
+//                input (C15); an age limit in a posting is never read.
+//   skills       hard skills only: Σ weight shown / Σ weight listed over the
+//                first 10 (required 1, preferred 0.5). Soft skills are shown
+//                and never counted.
+//   industry     the employer's industries ∩ the person's past employers' industries
+//   logistics    location / pay / visa, each met | not met | not stated. A
+//                location or pay check that is met only because the saved
+//                search filters on it says nothing new: when every stated
+//                check is like that the part is not compared (it counts at
+//                its prior like any part that cannot be compared), and its
+//                evidence line says so. An offered sponsorship is always a
+//                fact of the posting: "I need sponsorship" only removes
+//                postings that say no.
+//   career_path  never stated in the estimate (the AI score judges it)
 //
-// A `not_stated` component drops out and the remaining weights renormalize.
-// With nothing to compare at all the score is null ("—"), never 0.
+// Priors, not renormalisation. A component that cannot be compared contributes
+// its PRIOR (the long-run mean of that component over AI scores) at its full
+// weight, so a posting that says little cannot score high by saying little:
+// total = Σ weight × (score or prior) / Σ weight. A posting with no skills, a
+// perfect title and logistics really met gives 64.8.
 //
-// Honesty limits on the total (FIX-3; D3). Renormalizing alone let one small
-// component speak for the whole job: a post that states no skills and whose
-// role we could not place scored 100 "Great fit" from "the location matches".
+// Honesty limits stay as a second guard (FIX-3; D3):
 //   · Neither the role nor the skills could be compared → no score at all
 //     (null, "—"): location, pay and industry say nothing about the work.
-//   · Only one of the two could be compared → never Great (capped just under
-//     the Great threshold).
+//   · Only one of the two could be compared → never Great.
 //   · Under half of the comparable weight was compared → Possible at most.
 //   · The job is two or more levels away from the resume's level (an
 //     internship for a senior engineer) → Possible at most.
+//   · The posting states under 60% of the rubric → never Great, and the
+//     confidence is low (invariant I4).
+//
+// Coverage and confidence. `coverage` is the share of the rubric weight backed
+// by stated evidence on both sides (career_path never counts; a logistics part
+// met only through the person's own filters is not compared). High from 0.75,
+// medium from 0.5, low below; low also when the posting states under 60% of
+// the rubric or the level is only an onboarding answer.
 
-import { seniorityFromTitle } from '../jobs/normalize/index.js';
-import { bestTaxonomyMatch, taxonomyAncestors, getTaxonomyNode } from '../jobs/taxonomy/index.js';
+import { seniorityFromTitle, taxonomyIdsForTitle } from '../jobs/normalize/index.js';
+import { taxonomyAncestors, getTaxonomyNode } from '../jobs/taxonomy/index.js';
 import { SENIORITY_LEVELS, type FilterLocation, type SalaryMin } from '../search/index.js';
 import {
+  CONFIDENCE_THRESHOLDS,
+  DEFAULT_MATCH_PRIORS,
+  POSTING_COVERAGE_MIN,
+  type ConfidenceReason,
+  type EstimateResult,
+  type FitConfidence,
   type MatchDimension,
   type MatchDimensionKey,
   type MatchEvidence,
+  type MatchPriors,
   type MatchTiers,
   type MatchWeights,
-  type PreScoreResult,
 } from './contract.js';
 import { tierFor } from './config.js';
 import { dedupeTerms, displayTerm, isEverydayWord, showingTerms, termKey, termParts, titleShows } from './terms.js';
@@ -101,15 +123,42 @@ export interface MatchJob {
 export interface MatchUser {
   userId: string;
   market: string;
+  /**
+   * The Role, Title and Level chips of the saved search: what the person says
+   * they are looking for. Passed to the AI scorer as the stated target and
+   * shown by the keyword check; NOT inputs of the estimate (invariant I3).
+   */
   targetTaxonomyIds: string[];
   targetTitles: string[];
-  /** The Level chips of the search. Passed to the AI scorer as the user's stated target; NOT an input of the pre-score. */
   targetSeniority: string[];
+  /**
+   * The roles the person's own record shows, as taxonomy ids: their two most
+   * recent experience titles and a headline that names a role (context.ts).
+   * The only role input of the estimate. Absent (a hand-built user): derived
+   * here from `recentTitle`.
+   */
+  evidenceRoleIds?: string[];
   /**
    * The level the resume shows (context.ts). When absent it is derived here
    * from `recentTitle` and `yearsExperience` (`resumeSeniority`).
    */
   resumeSeniority?: string | null;
+  /**
+   * Where that level comes from: the person's record, or (no resume and no
+   * experience on file) the onboarding answer, which makes the confidence low.
+   */
+  levelSource?: 'record' | 'onboarding' | null;
+  /** False when the person has no resume on file (MatchService sets it). */
+  hasResume?: boolean;
+  /**
+   * Which logistics answers the saved search filters on (context.ts). A check
+   * met only through such a filter adds no information. Absent (a hand-built
+   * user): location when `locations`, `workModels` or `country` is set, pay
+   * when `salaryMin` is set. There is no visa entry: the sponsorship filter
+   * only removes postings that say no, so "this posting offers sponsorship"
+   * is never guaranteed by it.
+   */
+  hardFilters?: { location: boolean; pay: boolean };
   /** Profile skills ∪ the primary resume's parsed skills (display form). */
   skills: string[];
   /**
@@ -140,6 +189,8 @@ export interface MatchUser {
 export interface PreScoreConfig {
   weights: MatchWeights;
   tiers: MatchTiers;
+  /** What a not-stated component contributes (config `getMatchPriors`; the starting priors when absent). */
+  priors?: MatchPriors;
 }
 
 // ── Small helpers ─────────────────────────────────────────────────────────
@@ -260,7 +311,29 @@ function dim(key: MatchDimensionKey, weights: MatchWeights, score: number | null
   };
 }
 
-/** Weighted sum over the scored components; weights renormalize; null when none is scored. */
+/**
+ * The estimate's total: every component at its FULL weight, a not-stated one
+ * at its prior. total = Σ weight × (score or prior) / Σ weight, rounded. Null
+ * only when every weight is 0.
+ */
+export function combineWithPriors(dimensions: MatchDimension[], priors: MatchPriors = DEFAULT_MATCH_PRIORS): number | null {
+  let sum = 0;
+  let weight = 0;
+  for (const d of dimensions) {
+    if (d.weight <= 0) continue;
+    const value = d.status === 'scored' && d.score !== null ? d.score : priors[d.key];
+    sum += d.weight * value;
+    weight += d.weight;
+  }
+  if (weight === 0) return null;
+  return Math.round(sum / weight);
+}
+
+/**
+ * The AI score's total: the weighted sum over the scored components, weights
+ * renormalised; null when none is scored. (The estimate uses
+ * `combineWithPriors`; scorer v4 replaces this arithmetic.)
+ */
 export function combineDimensions(dimensions: MatchDimension[]): number | null {
   let sum = 0;
   let weight = 0;
@@ -300,16 +373,31 @@ function jobNodes(job: MatchJob): string[] {
   if (job.primaryTaxonomyId && getTaxonomyNode(job.primaryTaxonomyId)) return [job.primaryTaxonomyId];
   const fromIds = deepestNodes(job.taxonomyIds);
   if (fromIds.length) return fromIds;
-  const m = job.title ? bestTaxonomyMatch(job.title) : null;
-  return m ? [m.id] : [];
+  const fromTitle = roleIdOfTitle(job.title);
+  return fromTitle ? [fromTitle] : [];
 }
 
-function userTargets(user: MatchUser): string[] {
-  const ids = user.targetTaxonomyIds.filter((id) => !!getTaxonomyNode(id));
-  if (ids.length) return ids;
-  const fromTitles = user.targetTitles.map((t) => bestTaxonomyMatch(t)?.id).filter((x): x is string => !!x);
-  if (fromTitles.length) return [...new Set(fromTitles)];
-  const recent = user.recentTitle ? bestTaxonomyMatch(user.recentTitle)?.id : null;
+/**
+ * The taxonomy role a title names, or null ("Teacher" → school_teacher). The
+ * same rule that places a posting's title at ingest (`taxonomyIdsForTitle`),
+ * so a person's title and a posting's title land on the same node: a Taiwan
+ * title (資深後端工程師, 資料分析師) is folded to the vocabulary the role tree
+ * carries, for the match only.
+ */
+export function roleIdOfTitle(title: string | null | undefined): string | null {
+  const t = typeof title === 'string' ? title.trim() : '';
+  return t ? taxonomyIdsForTitle(t).primary : null;
+}
+
+/**
+ * The roles the person's record shows: `evidenceRoleIds` when context.ts built
+ * the user, else the role their most recent title names. Never the saved
+ * search (targetTaxonomyIds, targetTitles): a job inside the Role filter is
+ * not a fit because it passed the filter.
+ */
+export function evidenceRoles(user: Pick<MatchUser, 'evidenceRoleIds' | 'recentTitle'>): string[] {
+  if (user.evidenceRoleIds !== undefined) return [...new Set(user.evidenceRoleIds.filter((id) => !!getTaxonomyNode(id)))];
+  const recent = roleIdOfTitle(user.recentTitle);
   return recent ? [recent] : [];
 }
 
@@ -353,13 +441,17 @@ export function levelGap(user: Pick<MatchUser, 'resumeSeniority' | 'recentTitle'
   return u < 0 || j < 0 ? null : Math.abs(u - j);
 }
 
-/** Best overlap between the user's targets and the job's role (null when either side is unknown). */
-export function titleOverlap(user: MatchUser, job: MatchJob): number | null {
-  const targets = userTargets(user);
+/**
+ * Best overlap between the roles the person's record shows and the job's role
+ * (same role 1.0, same group 0.6, same category 0.3, else 0); null when either
+ * side is unknown. The saved search is not read.
+ */
+export function titleOverlap(user: Pick<MatchUser, 'evidenceRoleIds' | 'recentTitle'>, job: MatchJob): number | null {
+  const roles = evidenceRoles(user);
   const nodes = jobNodes(job);
-  if (!targets.length || !nodes.length) return null;
+  if (!roles.length || !nodes.length) return null;
   let best = 0;
-  for (const t of targets) for (const n of nodes) best = Math.max(best, taxonomyOverlap(t, n));
+  for (const t of roles) for (const n of nodes) best = Math.max(best, taxonomyOverlap(t, n));
   return best;
 }
 
@@ -391,44 +483,83 @@ export function titleLevelDimension(user: MatchUser, job: MatchJob, weights: Mat
 
 // ── skills ────────────────────────────────────────────────────────────────
 
+export interface JobSkill {
+  skill: string;
+  required: boolean;
+  /** `soft` only when enrichment marked it so (`skillsDetail.kind`); a skill with no detail entry counts as hard. */
+  kind: 'hard' | 'soft';
+}
+
 /**
  * The posting's skills, required ones first, one entry per thing and in the
  * spelling a reader expects (terms.ts: "typescript/node.js" is dropped next
  * to "TypeScript" and "Node.js"; "go" is written "Go").
  */
-export function jobSkillList(job: MatchJob): Array<{ skill: string; required: boolean }> {
+export function jobSkillList(job: MatchJob): JobSkill[] {
   const detail = (job.skillsDetail ?? []).filter((s) => s && typeof s.skill === 'string' && s.skill.trim());
-  const fromDetail = detail.map((s) => ({ skill: s.skill.trim(), required: s.required === true }));
-  const fromList = job.skills.filter((s) => typeof s === 'string' && s.trim()).map((s) => ({ skill: s.trim(), required: false }));
+  const kindOf = new Map<string, JobSkill['kind']>();
+  for (const s of detail) {
+    const key = skillKey(s.skill);
+    if (!kindOf.has(key)) kindOf.set(key, s.kind === 'soft' ? 'soft' : 'hard');
+  }
+  const kind = (skill: string): JobSkill['kind'] => kindOf.get(skillKey(skill)) ?? 'hard';
+  const fromDetail = detail.map((s) => ({ skill: s.skill.trim(), required: s.required === true, kind: kind(s.skill) }));
+  const fromList = job.skills.filter((s) => typeof s === 'string' && s.trim()).map((s) => ({ skill: s.trim(), required: false, kind: kind(s) }));
   const merged = uniqueBy([...fromDetail.filter((s) => s.required), ...fromDetail, ...fromList], (s) => skillKey(s.skill));
-  return dedupeTerms(merged, (s) => s.skill).map((s) => ({ skill: displayTerm(s.skill), required: s.required }));
+  return dedupeTerms(merged, (s) => s.skill).map((s) => ({ skill: displayTerm(s.skill), required: s.required, kind: s.kind }));
 }
 
-export function splitSkills(user: MatchUser, job: MatchJob): { aligned: string[]; missing: string[]; missingRequired: string[] } {
+/** The skills that are compared and counted: everything the posting lists that is not a soft skill. */
+export function hardSkillList(job: MatchJob): JobSkill[] {
+  return jobSkillList(job).filter((s) => s.kind !== 'soft');
+}
+
+/** Hard skills counted by the number: the first this many, required ones first. */
+export const SKILLS_COUNTED_MAX = 10;
+const skillWeight = (s: Pick<JobSkill, 'required'>): number => (s.required ? 1 : 0.5);
+
+/**
+ * The posting's hard skills the person shows and the ones they do not, plus
+ * the soft skills it names (`softSkills`: shown on the card, never compared
+ * and never part of the number).
+ */
+export function splitSkills(user: MatchUser, job: MatchJob): { aligned: string[]; missing: string[]; missingRequired: string[]; softSkills: string[] } {
   const have = new Set(user.skills.map(skillKey));
   const aligned: string[] = [];
   const missing: string[] = [];
   const missingRequired: string[] = [];
+  const softSkills: string[] = [];
   for (const s of jobSkillList(job)) {
-    if (userShows(user, s.skill, have)) aligned.push(s.skill);
+    if (s.kind === 'soft') softSkills.push(s.skill);
+    else if (userShows(user, s.skill, have)) aligned.push(s.skill);
     else {
       missing.push(s.skill);
       if (s.required) missingRequired.push(s.skill);
     }
   }
-  return { aligned, missing, missingRequired };
+  return { aligned, missing, missingRequired, softSkills };
 }
 
+/**
+ * 100 × Σ weight shown / Σ weight listed, over the first 10 hard skills
+ * (required 1, preferred 0.5). Not stated when the posting lists no hard skill.
+ */
 export function skillsDimension(user: MatchUser, job: MatchJob, weights: MatchWeights): MatchDimension {
-  const total = jobSkillList(job).length;
-  if (total === 0) return dim('skills', weights, null);
+  const counted = hardSkillList(job).slice(0, SKILLS_COUNTED_MAX);
+  if (!counted.length) return dim('skills', weights, null);
+  const have = new Set(user.skills.map(skillKey));
+  let shown = 0;
+  let listed = 0;
+  for (const s of counted) {
+    listed += skillWeight(s);
+    if (userShows(user, s.skill, have)) shown += skillWeight(s);
+  }
   const { aligned, missing, missingRequired } = splitSkills(user, job);
-  const score = Math.min(1, aligned.length / Math.min(total, 10)) * 100;
   const evidence = [
     ...aligned.slice(0, 2).map((s) => ev(s, 'resume', 'skill_have')),
     ...(missingRequired.length ? missingRequired : missing).slice(0, 1).map((s) => ev(s, 'posting', 'skill_missing')),
   ];
-  return dim('skills', weights, score, evidence);
+  return dim('skills', weights, (100 * shown) / listed, evidence);
 }
 
 // ── industry ──────────────────────────────────────────────────────────────
@@ -543,11 +674,7 @@ function payText(job: MatchJob): string {
   return `${cur} ${range}`.trim();
 }
 
-export function logisticsDimension(user: MatchUser, job: MatchJob, weights: MatchWeights): MatchDimension {
-  const c = logisticsChecks(user, job);
-  const stated = [c.location, c.pay, c.visa].filter((x): x is 'met' | 'not_met' => x === 'met' || x === 'not_met');
-  if (!stated.length) return dim('logistics', weights, null);
-  const met = stated.filter((x) => x === 'met').length;
+function logisticsEvidence(c: LogisticsChecks, job: MatchJob): MatchEvidence[] {
   const evidence: MatchEvidence[] = [];
   const where = job.workModel === 'remote' ? (job.location ?? 'remote') : job.location ?? [job.locationCity, job.locationCountry].filter(Boolean).join(', ');
   if (c.location !== 'not_stated' && where) evidence.push(ev(where, 'posting', c.location === 'met' ? 'location_met' : 'location_not_met'));
@@ -557,18 +684,86 @@ export function logisticsDimension(user: MatchUser, job: MatchJob, weights: Matc
     // (the `sponsorship` enum is a schema value, never shown as a quote).
     evidence.push(ev(job.sponsorshipEvidence?.trim() ?? '', 'posting', c.visa === 'met' ? 'visa_offered' : 'visa_not_offered'));
   }
-  return dim('logistics', weights, (100 * met) / stated.length, evidence);
+  return evidence;
 }
 
-// ── The pre-score ─────────────────────────────────────────────────────────
+/**
+ * Location, pay and visa as facts: 100 × met / stated. The form the AI score
+ * uses (its total keeps today's arithmetic). The estimate reads
+ * `logisticsForEstimate`.
+ */
+export function logisticsDimension(user: MatchUser, job: MatchJob, weights: MatchWeights): MatchDimension {
+  const c = logisticsChecks(user, job);
+  const stated = [c.location, c.pay, c.visa].filter((x): x is 'met' | 'not_met' => x === 'met' || x === 'not_met');
+  if (!stated.length) return dim('logistics', weights, null);
+  const met = stated.filter((x) => x === 'met').length;
+  return dim('logistics', weights, (100 * met) / stated.length, logisticsEvidence(c, job));
+}
 
-/** The five components of the pre-score (career_path is never stated here). */
+/** Evidence ref of a logistics part that is not compared because the person's own filters guarantee every stated check. */
+export const LOGISTICS_BY_FILTERS_REF = 'logistics_by_your_filters';
+
+/** Is this the logistics part of an estimate that only repeats the person's own filters (no information of its own)? */
+export function isByFilters(dimension: Pick<MatchDimension, 'key' | 'evidence'>): boolean {
+  return dimension.key === 'logistics' && dimension.evidence.some((e) => e.ref === LOGISTICS_BY_FILTERS_REF);
+}
+
+/** Which logistics answers the person's saved search filters on (see `MatchUser.hardFilters`). */
+export function hardFiltersOf(user: MatchUser): { location: boolean; pay: boolean } {
+  if (user.hardFilters) return { location: user.hardFilters.location, pay: user.hardFilters.pay };
+  return {
+    location: user.locations.length > 0 || user.workModels.length > 0 || !!user.country,
+    pay: !!user.salaryMin,
+  };
+}
+
+/**
+ * Logistics for the estimate. A `not_met` check is a real penalty, as in
+ * `logisticsDimension`. A location or pay check that is met only because the
+ * saved search makes that field a hard filter carries no information: when
+ * every stated check is met and each is filter-guaranteed, the part is NOT
+ * COMPARED (`byFilters`). It is returned as not stated, so the total counts it
+ * at the logistics prior like any part that cannot be compared, coverage and
+ * the honesty limits leave it out, and no surface shows a number nobody
+ * measured. Its one evidence line (ref `logistics_by_your_filters`) quotes the
+ * posting's place and pay words the filters already guaranteed.
+ *
+ * The visa check is never filter-guaranteed: the "I need sponsorship" filter
+ * (feed/sql.ts) removes only postings that say they do not sponsor, so a
+ * posting that says it does is a fact of the posting.
+ *
+ * The rule reads the person and the job only, never the surface the job was
+ * opened from, so every surface gets the same number.
+ */
+export function logisticsForEstimate(user: MatchUser, job: MatchJob, weights: MatchWeights): { dimension: MatchDimension; byFilters: boolean } {
+  const c = logisticsChecks(user, job);
+  const hard = hardFiltersOf(user);
+  const checks: Array<{ result: CheckResult | null; guaranteed: boolean }> = [
+    { result: c.location, guaranteed: hard.location },
+    { result: c.pay, guaranteed: hard.pay },
+    { result: c.visa, guaranteed: false },
+  ];
+  const stated = checks.filter((x) => x.result === 'met' || x.result === 'not_met');
+  if (!stated.length) return { dimension: dim('logistics', weights, null), byFilters: false };
+  const met = stated.filter((x) => x.result === 'met').length;
+  const evidence = logisticsEvidence(c, job);
+  if (met === stated.length && stated.every((x) => x.guaranteed)) {
+    // The posting's own place and pay words; with none to quote the part is a plain not-stated one (never an empty line).
+    const words = evidence.map((e) => e.text.trim()).filter(Boolean).join(' · ');
+    return { dimension: dim('logistics', weights, null, words ? [ev(words, 'posting', LOGISTICS_BY_FILTERS_REF)] : []), byFilters: true };
+  }
+  return { dimension: dim('logistics', weights, (100 * met) / stated.length, evidence), byFilters: false };
+}
+
+// ── The estimate ──────────────────────────────────────────────────────────
+
+/** The five components of the estimate (career_path is never stated here). */
 export function preScoreDimensions(user: MatchUser, job: MatchJob, weights: MatchWeights): MatchDimension[] {
   return [
     titleLevelDimension(user, job, weights),
     skillsDimension(user, job, weights),
     industryDimension(user, job, weights),
-    logisticsDimension(user, job, weights),
+    logisticsForEstimate(user, job, weights).dimension,
     dim('career_path', weights, null),
   ];
 }
@@ -581,29 +776,122 @@ export function overlapAndGap(user: MatchUser, job: MatchJob): { topOverlap: str
 
 /**
  * The most a quick estimate may claim for what was actually compared (see the
- * header): null = no score at all, else an upper limit for the total.
+ * header): null = no score at all, else an upper limit for the total. A part
+ * that is not stated was not compared (a logistics part met only through the
+ * person's filters is one).
  */
 export function preScoreLimit(dimensions: MatchDimension[], gap: number | null, tiers: MatchTiers): number | null {
-  const scored = (key: MatchDimensionKey) => dimensions.some((d) => d.key === key && d.status === 'scored' && d.score !== null && d.weight > 0);
+  const backed = (d: MatchDimension) => d.status === 'scored' && d.score !== null && d.weight > 0;
+  const scored = (key: MatchDimensionKey) => dimensions.some((d) => d.key === key && backed(d));
   const role = scored('title_level');
   const skills = scored('skills');
   // Location, pay and industry alone say nothing about the work itself.
   if (!role && !skills) return null;
   let limit = 100;
   if (!role || !skills) limit = Math.min(limit, tiers.great - 1);
-  // career_path is never stated in the pre-score, so it is not part of what could have been compared.
+  // career_path is never stated in the estimate, so it is not part of what could have been compared.
   const comparable = dimensions.filter((d) => d.key !== 'career_path' && d.weight > 0);
   const total = comparable.reduce((sum, d) => sum + d.weight, 0);
-  const compared = comparable.filter((d) => d.status === 'scored' && d.score !== null).reduce((sum, d) => sum + d.weight, 0);
+  const compared = comparable.filter(backed).reduce((sum, d) => sum + d.weight, 0);
   if (total > 0 && compared / total < 0.5) limit = Math.min(limit, tiers.good - 1);
   if (gap !== null && gap >= 2) limit = Math.min(limit, tiers.good - 1);
   return Math.max(0, limit);
 }
 
-export function preScore(user: MatchUser, job: MatchJob, config: PreScoreConfig): PreScoreResult {
+const EPS = 1e-9;
+
+/**
+ * Share of the rubric weight backed by stated evidence on BOTH sides, 0–1:
+ * the weights of the scored parts over all weights. career_path never counts
+ * for an estimate; a logistics part met only through the person's own filters
+ * is not scored, so it does not count either.
+ */
+export function coverageOf(dimensions: MatchDimension[]): number {
+  const total = dimensions.reduce((sum, d) => sum + Math.max(0, d.weight), 0);
+  if (total <= 0) return 0;
+  const backed = dimensions
+    .filter((d) => d.key !== 'career_path' && d.status === 'scored' && d.score !== null && d.weight > 0)
+    .reduce((sum, d) => sum + d.weight, 0);
+  return backed / total;
+}
+
+/** What the posting itself states, part by part. */
+export function postingStates(job: MatchJob): { role: boolean; level: boolean; skills: boolean; industry: boolean; logistics: boolean } {
+  const paid = job.salaryAnnualMin !== null || job.salaryAnnualMax !== null || !!job.payAsPosted?.trim();
+  const placed = !!job.locationCity || !!job.locationCountry || job.geoLat !== null || !!job.workModel;
+  return {
+    role: jobNodes(job).length > 0,
+    level: !!job.seniority && SENIORITY_ORDER.includes(job.seniority),
+    skills: hardSkillList(job).length > 0,
+    industry: job.companyIndustries.some((i) => i.trim()),
+    logistics: placed || paid,
+  };
+}
+
+/**
+ * Share of the rubric weight the POSTING states, 0–1: its role and level
+ * (title_level; half of it when a role is placed but no level is stated, none
+ * without a role), its hard skills, the employer's industry, and a location or
+ * pay. career_path is the person's side and is left out of the denominator.
+ * A job with no skills and no level therefore states under 60% whatever else
+ * it says (invariant I4).
+ */
+export function postingCoverageOf(job: MatchJob, weights: MatchWeights): number {
+  const total = weights.title_level + weights.skills + weights.industry + weights.logistics;
+  if (total <= 0) return 0;
+  const st = postingStates(job);
+  const stated =
+    weights.title_level * (st.role ? (st.level ? 1 : 0.5) : 0) +
+    (st.skills ? weights.skills : 0) +
+    (st.industry ? weights.industry : 0) +
+    (st.logistics ? weights.logistics : 0);
+  return stated / total;
+}
+
+/** High from 0.75, medium from 0.5, low below; always low when `forcedLow` (a thin posting, an onboarding-only level). */
+export function confidenceFor(coverage: number, forcedLow = false): FitConfidence {
+  if (forcedLow || coverage < CONFIDENCE_THRESHOLDS.medium - EPS) return 'low';
+  return coverage >= CONFIDENCE_THRESHOLDS.high - EPS ? 'high' : 'medium';
+}
+
+/** The first reason that applies to a low-confidence estimate, in the published order. */
+export function confidenceReasonFor(user: Pick<MatchUser, 'evidenceRoleIds' | 'recentTitle' | 'hasResume'>, job: MatchJob): ConfidenceReason {
+  const st = postingStates(job);
+  if (!st.skills) return 'no_skills_listed';
+  if (!st.level) return 'no_level_stated';
+  if (!evidenceRoles(user).length) return 'no_role_evidence';
+  if (user.hasResume === false) return 'no_resume';
+  return 'few_details';
+}
+
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
+export function preScore(user: MatchUser, job: MatchJob, config: PreScoreConfig): EstimateResult {
+  const priors = config.priors ?? DEFAULT_MATCH_PRIORS;
   const dimensions = preScoreDimensions(user, job, config.weights);
-  const combined = combineDimensions(dimensions);
-  const limit = preScoreLimit(dimensions, levelGap(user, job.seniority), config.tiers);
+  const combined = combineWithPriors(dimensions, priors);
+  const coverage = coverageOf(dimensions);
+  const postingCoverage = postingCoverageOf(job, config.weights);
+  const thin = postingCoverage < POSTING_COVERAGE_MIN - EPS;
+  let limit = preScoreLimit(dimensions, levelGap(user, job.seniority), config.tiers);
+  // I4: a posting that states under 60% of the rubric is never Great.
+  if (limit !== null && thin) limit = Math.min(limit, config.tiers.great - 1);
   const score = combined === null || limit === null ? null : Math.min(combined, limit);
-  return { jobId: job.id, score, tier: tierFor(score, config.tiers), kind: 'pre', dimensions, ...overlapAndGap(user, job) };
+  const confidence = confidenceFor(coverage, thin || user.levelSource === 'onboarding');
+  const split = splitSkills(user, job);
+  return {
+    jobId: job.id,
+    score,
+    tier: tierFor(score, config.tiers),
+    kind: 'pre',
+    dimensions,
+    topOverlap: split.aligned[0] ?? null,
+    topGap: split.missingRequired[0] ?? split.missing[0] ?? null,
+    coverage: round3(coverage),
+    confidence,
+    confidenceReason: confidence === 'low' ? confidenceReasonFor(user, job) : null,
+    postingCoverage: round3(postingCoverage),
+    softSkills: split.softSkills,
+    limit,
+  };
 }

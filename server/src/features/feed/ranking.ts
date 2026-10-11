@@ -1,6 +1,13 @@
 // server/src/features/feed/ranking.ts — in-process ranking (WP-32; ARCH §4.8, PRODUCT F-FEED-02/14).
 //
-//   fit        = ai ?? (pre − 5)                       verified scores are preferred
+//   fit        = one scale for every row (`fitForRank`; MARKET_STRATEGY 2.4):
+//                · the market has a calibration map → the AI score when there
+//                  is one, else the estimate mapped onto the AI scale;
+//                · until then → the v2 estimate, plus half of (AI − estimate)
+//                  for a row that has an AI score.
+//                A scored and an unscored row of equal quality therefore get
+//                the same input: scoring a job never pushes it below jobs
+//                nobody has read.
 //   freshness  = 100 · e^(−ageHours / 72)
 //   affinity   = 0–100 from the user's own actions (affinity.ts), 50 neutral
 //   sourceQuality = 0–100: pay listed, known application system, real posting date, detailed description
@@ -9,12 +16,16 @@
 //   Sponsorship first: with "I need visa sponsorship", jobs whose posting
 //   mentions sponsorship lead under every sort (ORDERING_RULES).
 //
+// The card's fit and the ranking input come from the same `Fit` (match/fit.ts
+// `getFits`), so the number on the card, the session ranks and "Why this job"
+// agree.
+//
 // No boost for recruiter-bank jobs: `fromRecruiterBank` is a filter only and
 // appears nowhere below (a test pins this). Company scatter: at most 2 per
 // company in any 20 consecutive items (Recommended and Best fit). Every
 // factor is listed on /help/ranking (contract RANKING_FACTORS).
 
-import type { FitTierKey, MatchTiers, PreScoreResult } from '../match/index.js';
+import { toWireKind, type Fit, type MatchTiers } from '../match/index.js';
 import { normalizeSkills, payPlausible } from '../jobs/normalize/index.js';
 import { SENIORITY_LEVELS, type FilterSet } from '../search/index.js';
 import { affinityKeys, affinityScore, type AffinityState } from './affinity.js';
@@ -26,42 +37,67 @@ const SKILLS_BOOST_POINTS = ORDERING_RULES.find((r) => r.key === 'skills_boost')
 
 const W = Object.fromEntries(RANKING_FACTORS.map((f) => [f.key, f.weight])) as Record<(typeof RANKING_FACTORS)[number]['key'], number>;
 
-/** A cached AI score for (user, job, current resume). */
-export interface AiScore {
-  score: number;
-  tier: FitTierKey | null;
-}
-
 export interface Candidate {
   row: FeedJobRow;
   /** What the card shows (null = nothing comparable, or personalisation off). */
   badge: FitBadge | null;
-  /** Ranking fit: ai ?? pre − 5 (null when neither). */
+  /** The ranking input, on one scale for scored and unscored rows (`fitForRank`); null when nothing is comparable. */
   fit: number | null;
   rank: number;
 }
 
-/** fit = ai ?? (pre − 5), floored at 0. */
-export function fitOf(ai: number | null | undefined, pre: number | null | undefined): number | null {
-  if (typeof ai === 'number') return ai;
-  if (typeof pre === 'number') return Math.max(0, pre - 5);
-  return null;
+/** Before a market has a calibration map, a scored row moves this share of the way from its estimate to its AI score. */
+export const RANK_BLEND_AI_SHARE = 0.5;
+
+const clampScore = (n: number) => Math.max(0, Math.min(100, n));
+const num = (v: number | null | undefined): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+/**
+ * The fit a row is ranked on, 0–100 (null when it has neither number).
+ *   · With the market's calibration map: the AI score when there is one,
+ *     else `map(estimate)`.
+ *   · Without one: the v2 estimate, plus half of (AI − estimate) for a row
+ *     that has an AI score.
+ * `estimate` is the v2 estimate on its own scale for the same person and job,
+ * also for a row that has an AI score.
+ */
+export function fitForRank(input: { ai?: number | null; estimate?: number | null; map?: ((estimate: number) => number) | null }): number | null {
+  const ai = num(input.ai);
+  const estimate = num(input.estimate);
+  if (input.map) {
+    if (ai !== null) return clampScore(ai);
+    return estimate === null ? null : clampScore(input.map(estimate));
+  }
+  if (estimate === null) return ai === null ? null : clampScore(ai);
+  if (ai === null) return clampScore(estimate);
+  return clampScore(estimate + RANK_BLEND_AI_SHARE * (ai - estimate));
 }
 
-export function tierOf(score: number, tiers: MatchTiers): FitTierKey {
+/** The ranking input of a fit (see `fitForRank`). */
+export function rankFitOf(fit: Fit | null | undefined, map?: ((estimate: number) => number) | null): number | null {
+  if (!fit) return null;
+  return fitForRank({ ai: fit.kind === 'ai' ? fit.score : null, estimate: fit.estimateScore, map });
+}
+
+export function tierOf(score: number, tiers: MatchTiers): FitBadge['tier'] {
   if (score >= tiers.great) return 'great';
   if (score >= tiers.good) return 'good';
   if (score >= tiers.possible) return 'possible';
   return 'unlikely';
 }
 
-/** The card's fit: the AI score when cached, else the deterministic quick estimate. */
-export function fitBadge(pre: PreScoreResult | null, ai: AiScore | null, tiers: MatchTiers): FitBadge | null {
-  const topGap = pre?.topGap ?? null;
-  const topOverlap = pre?.topOverlap ?? null;
-  if (ai) return { tier: ai.tier ?? tierOf(ai.score, tiers), score: ai.score, kind: 'ai', topGap, topOverlap };
-  if (pre && typeof pre.score === 'number') return { tier: pre.tier ?? tierOf(pre.score, tiers), score: pre.score, kind: 'pre', topGap, topOverlap };
-  return null;
+/** The card's fit, from the one `Fit` every surface reads; null when nothing could be compared. */
+export function fitBadge(fit: Fit | null | undefined): FitBadge | null {
+  if (!fit || fit.score === null || fit.tier === null) return null;
+  return {
+    tier: fit.tier,
+    score: fit.score,
+    kind: toWireKind(fit.kind),
+    topGap: fit.topGap,
+    topOverlap: fit.topOverlap,
+    confidence: fit.confidence,
+    confidenceReason: fit.confidenceReason,
+  };
 }
 
 /** 100 · e^(−ageHours/72); a job with no date counts from when we first saw it. */
@@ -245,10 +281,26 @@ export function scatterByCompany<T>(items: T[], keyOf: (t: T) => string, opts: {
   return placed;
 }
 
-/** Fit-tier view filter: keep jobs at or above the tier; unscored jobs pass (F-FILT-05). */
+const TIER_RANK: Record<FitBadge['tier'], number> = { unlikely: 0, possible: 1, good: 2, great: 3 };
+
+/**
+ * Fit-tier view filter ("Good or better", "Great"): keep jobs at or above the
+ * tier.
+ *   · A job with an AI score is judged by the TIER ITS CARD SHOWS. That tier
+ *     moves only 3 points past an edge (hysteresis, match/fit.ts), so it can
+ *     differ from the tier of the number; the view follows the card, never the
+ *     other way round: a card that says Good is not listed under Great, and a
+ *     card that says Great is.
+ *   · A job with only the quick estimate passes when the estimate reaches the
+ *     threshold AND its confidence is not low: an estimate we are not sure
+ *     about is left out of the Good and Great views (MARKET_STRATEGY 2.4).
+ *   · A job with no fit at all passes (F-FILT-05).
+ */
 export function passesTier(badge: FitBadge | null, view: 'all' | 'good' | 'great' | undefined, tiers: MatchTiers): boolean {
   if (!view || view === 'all' || !badge) return true;
-  return badge.score >= (view === 'great' ? tiers.great : tiers.good);
+  if (badge.kind === 'ai') return TIER_RANK[badge.tier] >= TIER_RANK[view];
+  if (badge.score < (view === 'great' ? tiers.great : tiers.good)) return false;
+  return badge.confidence !== 'low';
 }
 
 /** Company key for scatter (normalized name, else the display name). */

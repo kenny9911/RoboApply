@@ -1,27 +1,39 @@
 // server/src/features/match/MatchService.ts
 //
-// Fit scoring (ARCHITECTURE.md §4.7; TASK_PLAN.md WP-18):
+// Fit scoring (ARCHITECTURE.md §4.7; TASK_PLAN.md WP-18; MARKET_STRATEGY 2.2).
+// The reads, the caps and the one model call behind the fit contract (fit.ts):
 //
-//   preScoreMany                 the score lists show: stored AI score, else the "Quick estimate"; no LLM
-//   preScoreJobs                 deterministic "Quick estimate" only (precompute, extension); no LLM
-//   scoreJob                     scorer v3 behind the cache; platform-paid, 80/day/user and a
-//                                brand budget, beyond either the pre-score with its reason
+//   fits.getFit / getFits / getVariantFit   the fit contract (fit.ts): one job, a list, another resume version
+//   scoreJob                     `getFit` as a `MatchFitView` (job detail); scorer v3 behind the cache,
+//                                platform-paid, 80/day/user and a brand budget, beyond either the
+//                                estimate with its reason
+//   preScoreMany                 `getFits` as a list of `PreScoreResult` (kept for callers not yet on getFits)
+//   preScoreJobs                 the estimate only, over rows the caller loaded (precompute ranking, extension pages)
 //   fitAnalysis                  the structured card; spends a `fit_analysis` credit only
 //                                when a model call is actually needed
 //   keywordCheck                 requirement rows (title, years, education, skills, keywords)
 //
 // Rules this file enforces:
 //   - The server computes the total: the model judges four components; the
-//     fifth (location, pay and visa) is deterministic; weights renormalize
-//     over the components that are stated.
+//     fifth (location, pay and visa) is deterministic; for an AI score the
+//     weights renormalize over the components that are stated.
 //   - Evidence that is not a verbatim substring of the resume or the posting
 //     is dropped (CitationGuard).
-//   - `aiAllowed(user)` is checked before any model call. When false (GoApply
-//     without the "Use AI" consent) nothing is sent to a model: the answer is
-//     the pre-score labelled "Quick estimate".
-//   - Cache key (user, job, resume variant) + resume content hash + model +
-//     prompt version. A change in logistics (the user's location/pay/visa
-//     answers) recomputes the total without a model call.
+//   - `aiAllowed(user)` is checked before any model call and before a stored
+//     AI score is shown. When false (GoApply without the "Use AI" consent)
+//     nothing is sent to a model: the answer is the estimate, on every surface.
+//   - A stored row is the fit when it was written for this resume content by
+//     a fit scorer. A row of an earlier model or prompt, or one written for an
+//     earlier version of the posting (job content hash), keeps serving, flagged
+//     stale, until precompute or an on-demand call re-scores it (I7). A change
+//     in logistics or weights recomputes the total without a model call; the
+//     tier then moves only 3 points past the edge it crosses (I5).
+//   - A list of fits (`getFits`) reads no description, ever: rows the caller
+//     already loaded are not read again, and the posting's hash is taken from
+//     the stored `RAJob.contentHash` only. Whether the posting changed since a
+//     score was written is therefore known on a list once that column is
+//     filled; the single-job read and the precompute cron hold the full row
+//     and always know.
 //   - The resume reaches the model PII-stripped, with no sensitive fields;
 //     school tier is never an input.
 
@@ -37,16 +49,17 @@ import type {
   RAJobMatchScorerV3Input,
   RAJobMatchScorerV3Output,
 } from '../../roboapply/v2/agents/RAJobMatchScorerAgent.js';
+import { calibrationFor, withCalibratedPriors, type ActiveCalibration, type CalibrationMap } from './calibration.js';
 import {
   MATCH_ERROR_CODES,
-  MatchDimensionsSchema,
   SCORER_PROMPT_VERSION,
   type EstimateReason,
+  type EstimateResult,
   type FitAnalysisCard,
-  type FitTierKey,
   type KeywordCheckResponse,
   type MatchDimension,
   type MatchFitView,
+  type MatchPriors,
   type MatchTiers,
   type MatchWeights,
   type PreScoreResult,
@@ -54,34 +67,37 @@ import {
 import {
   ON_DEMAND_SCORE_CAP_PER_DAY,
   SCORE_WINDOW_SEC,
+  currentScorerPin,
+  getMatchPriors,
   getMatchTiers,
   getMatchWeights,
   scoreCounterKeys,
   scoreDailyBudget,
   tierFor,
+  type ScorerPin,
 } from './config.js';
 import { buildMatchUser, postingText, toMatchJob, userNames, type MatchJobRecord } from './context.js';
 import { guardEvidence } from './evidence.js';
+import { assembleFit, fitToListResult, fitToView, storedFitStatus, type Fit, type FitFunctions, type FitProse, type GetFitOptions, type GetFitsOptions } from './fit.js';
+import { currentJobHash, storedJobHash } from './jobHash.js';
 import { buildKeywordRows } from './keywordRows.js';
 import { stripResumeForScoring } from './pii.js';
+import { runMatchPreparers } from './prepare.js';
 import { defaultScorerRouteAllowed } from './scorerRoute.js';
 import {
   combineDimensions,
   degreeMeets,
   logisticsChecks,
-  jobSkillList,
   logisticsDimension,
   mentions,
   normalizeText,
   userShows,
   type ShownSource,
-  overlapAndGap,
   preScore,
-  splitSkills,
   type MatchJob,
   type MatchUser,
 } from './preScore.js';
-import { createPrismaMatchRepo, type MatchRepo, type ResumeRecord, type ScoreRecord } from './repo.js';
+import { createPrismaMatchRepo, type MatchRepo, type ResumeRecord, type ScoreRecord, type StoredFitRow } from './repo.js';
 import { dedupeTerms, displayTerm, termKey } from './terms.js';
 
 // ── Dependencies (all injectable; defaults are lazy so importing is cheap) ──
@@ -113,6 +129,8 @@ export interface MatchServiceDeps {
   brand?: () => ProductBrand;
   env?: EnvSource;
   now?: () => Date;
+  /** The market's calibration (map and data-derived priors). Default: the stored document, read through the repo (calibration.ts). */
+  calibration?: (market: ProductBrand['market']) => Promise<ActiveCalibration>;
 }
 
 /**
@@ -125,6 +143,7 @@ export interface MatchServiceDeps {
 export type ScoreMode = 'on_demand' | 'paid' | 'precompute' | 'cache_only';
 
 export interface ScoreOptions {
+  /** Another resume version than the primary one (the tailoring path; the canonical fit is always the primary resume). */
   resumeVariantId?: string | null;
   force?: boolean;
   regenerateExplanation?: boolean;
@@ -319,19 +338,40 @@ function logisticsLines(user: MatchUser, job: MatchJob): string[] {
 // ── Service ───────────────────────────────────────────────────────────────
 
 export interface MatchService {
+  /**
+   * The fit contract on this service's dependencies (fit.ts): `getFit` (one
+   * job, the PRIMARY resume), `getFits` (a list, never a model call) and
+   * `getVariantFit` (another resume version; tailoring only). Production code
+   * reads them through the functions of the same names exported by fit.ts.
+   */
+  readonly fits: FitFunctions;
+  /** `getFit` (or, with `resumeVariantId`, `getVariantFit`) as the wire view of job detail. */
   scoreJob(userId: string, jobId: string, options?: ScoreOptions): Promise<MatchFitView>;
-  /** The score lists show: the stored AI score where there is one (`kind: 'ai'`), else the quick estimate. No model call. */
+  /** `getFits` as a list: the stored AI score where one can be shown (`kind: 'ai'`), else the quick estimate. No model call. */
   preScoreMany(userId: string, jobIds: string[]): Promise<PreScoreResult[]>;
   /** The deterministic quick estimate only, over rows the caller loaded (precompute ranking, extension pages). */
-  preScoreJobs(userId: string, jobs: MatchJobRecord[]): Promise<PreScoreResult[]>;
+  preScoreJobs(userId: string, jobs: MatchJobRecord[]): Promise<EstimateResult[]>;
   fitAnalysis(userId: string, jobId: string, idempotencyKey: string, options?: { resumeVariantId?: string | null; locale?: string }): Promise<FitAnalysisCard>;
   keywordCheck(userId: string, jobId: string, options?: { resumeVariantId?: string | null }): Promise<KeywordCheckResponse>;
   /** The user's side of the pre-score (precompute, extension). */
   userContext(userId: string): Promise<{ user: MatchUser; resume: ResumeRecord | null }>;
-  config(): { weights: MatchWeights; tiers: MatchTiers };
+  /** Weights, tiers and the configured starting priors (the market's data-derived priors are applied inside the fit). */
+  config(): { weights: MatchWeights; tiers: MatchTiers; priors: MatchPriors };
+  /** The market's calibration map, when it may use one (feed ranking reads it next to the fits). */
+  calibrationMap(): Promise<CalibrationMap | null>;
 }
 
-const LIST_TIERS: readonly FitTierKey[] = ['great', 'good', 'possible', 'unlikely'];
+/** The most ids one `getFits` call reads. */
+export const FITS_MAX_IDS = 500;
+
+interface FitCallOptions {
+  variantId?: string | null;
+  mode: ScoreMode;
+  locale: string;
+  force?: boolean;
+  regenerateExplanation?: boolean;
+  onAiFailure?: 'fallback' | 'throw';
+}
 
 export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
   const repo = deps.repo ?? createPrismaMatchRepo();
@@ -355,14 +395,40 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
   const costLog = deps.costLog ?? defaultCostLog;
   const brandOf = deps.brand ?? getCurrentBrandOrDefault;
   const now = deps.now ?? (() => new Date());
-  const config = () => ({ weights: getMatchWeights(deps.env), tiers: getMatchTiers(deps.env) });
+  const config = () => ({ weights: getMatchWeights(deps.env), tiers: getMatchTiers(deps.env), priors: getMatchPriors(brandOf(), deps.env) });
+  const calibration = deps.calibration ?? ((market: ProductBrand['market']) => calibrationFor(repo, { env: deps.env }).forMarket(market));
+
+  /** What every estimate and every fit of this request is computed with: the config, the market's priors and its map. */
+  async function fitConfig(): Promise<{ weights: MatchWeights; tiers: MatchTiers; priors: MatchPriors; map: CalibrationMap | null }> {
+    const base = config();
+    let cal: ActiveCalibration = { map: null, priors: null };
+    try {
+      cal = await calibration(brandOf().market);
+    } catch (err) {
+      logger.warn('MATCH', 'calibration unavailable; using the starting priors and no map', { error: err instanceof Error ? err.message : String(err) });
+    }
+    return { ...base, priors: withCalibratedPriors(base.priors, cal.priors), map: cal.map };
+  }
+
+  /** The pinned scorer version (the configured model, whether or not this brand may call it now). */
+  async function scorerPin(brand: ProductBrand): Promise<ScorerPin> {
+    return currentScorerPin(brand, await resolveModelRaw());
+  }
 
   async function userContext(userId: string, variantId?: string | null): Promise<{ user: MatchUser; resume: ResumeRecord | null; names: string[] }> {
+    // Anything the synchronous estimate needs loaded first (prepare.ts); nothing is registered in this phase.
+    // A loader that fails must not take every list and every job page down with it: the read goes on with what is
+    // loaded, and the next read runs the loader again.
+    try {
+      await runMatchPreparers();
+    } catch (err) {
+      logger.warn('MATCH', 'a match preparer failed; continuing without it (retried on the next read)', { error: err instanceof Error ? err.message : String(err) });
+    }
     const market = brandOf().market;
     const [inputs, resume] = await Promise.all([repo.getUserInputs(userId, market), repo.getResume(userId, variantId)]);
     if (variantId && !resume) throw new HttpError('not_found', 'Resume not found.', { reason: MATCH_ERROR_CODES.variantNotFound });
     const full = { ...inputs, resumeParsed: resume?.parsedData ?? null };
-    const user: MatchUser = { ...buildMatchUser(full, now()), resumeTextNorm: resume ? normalizeText(resume.resumeMarkdown) : null };
+    const user: MatchUser = { ...buildMatchUser(full, now()), resumeTextNorm: resume ? normalizeText(resume.resumeMarkdown) : null, hasResume: !!resume };
     return { user, resume, names: userNames(full) };
   }
 
@@ -374,64 +440,17 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
     return job;
   }
 
-  function skillsView(user: MatchUser, job: MatchJob): MatchFitView['skills'] {
-    const { aligned, missing } = splitSkills(user, job);
-    return { aligned, missing, listed: jobSkillList(job).length };
-  }
-
-  function preView(pre: PreScoreResult, reason: EstimateReason | null, resumeVariantId: string | null, user: MatchUser, job: MatchJob): MatchFitView {
-    return {
-      jobId: pre.jobId,
-      score: pre.score,
-      tier: pre.tier,
-      kind: 'pre',
-      dimensions: pre.dimensions,
-      summary: null,
-      strengths: [],
-      gaps: [],
-      keywordsMatched: [],
-      keywordsMissing: [],
-      skills: skillsView(user, job),
-      topOverlap: pre.topOverlap,
-      topGap: pre.topGap,
-      scoredAt: now().toISOString(),
-      resumeVariantId,
-      estimateReason: reason,
-      summaryLocaleStale: false,
-      cached: false,
-    };
-  }
-
-  /** Re-apply current weights and the current deterministic logistics to stored AI components. */
-  function refreshDimensions(stored: MatchDimension[], user: MatchUser, job: MatchJob, weights: MatchWeights): MatchDimension[] {
-    const logistics = logisticsDimension(user, job, weights);
-    return stored.map((d) => (d.key === 'logistics' ? logistics : { ...d, weight: weights[d.key] }));
-  }
-
-  function aiView(row: ScoreRecord, dims: MatchDimension[], score: number | null, user: MatchUser, job: MatchJob, locale: string, cached: boolean): MatchFitView {
+  /** The stored row's prose as it is shown now (keywords re-sorted by the current rule, nothing the skill lists carry). */
+  function proseOf(row: Pick<ScoreRecord, 'explanation' | 'locale'>, user: MatchUser, skills: Fit['skills']): FitProse {
     const exp = readExplanation(row.explanation);
-    const { topOverlap, topGap } = overlapAndGap(user, job);
-    const skills = skillsView(user, job);
     const keywords = shownKeywords(exp, user, skills);
     return {
-      jobId: row.jobId,
-      score,
-      tier: tierFor(score, config().tiers),
-      kind: 'ai',
-      dimensions: dims,
       summary: exp.rationale || null,
       strengths: exp.strengths,
       gaps: exp.gaps,
       keywordsMatched: keywords.keywordsMatched,
       keywordsMissing: keywords.keywordsMissing,
-      skills,
-      topOverlap: topOverlap ?? exp.strengths[0] ?? null,
-      topGap: topGap ?? exp.gaps[0] ?? null,
-      scoredAt: row.generatedAt.toISOString(),
-      resumeVariantId: row.resumeVariantId,
-      estimateReason: null,
-      summaryLocaleStale: (row.locale ?? exp.responseLanguage ?? 'en') !== locale,
-      cached,
+      locale: row.locale ?? exp.responseLanguage ?? 'en',
     };
   }
 
@@ -461,66 +480,77 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
     }
   }
 
-  async function scoreJob(userId: string, jobId: string, options: ScoreOptions = {}): Promise<MatchFitView> {
-    const mode = options.mode ?? 'on_demand';
-    const locale = options.locale ?? 'en';
+  /**
+   * The fit of one job: the one implementation behind `getFit`,
+   * `getVariantFit` and `scoreJob`. `mode: 'cache_only'` never calls a model.
+   */
+  async function fitOne(userId: string, jobId: string, o: FitCallOptions): Promise<Fit> {
     const brand = brandOf();
-    const { weights, tiers } = config();
     const jobRow = await loadVisibleJob(userId, jobId);
-    const { user, resume, names } = await userContext(userId, options.resumeVariantId);
+    const { user, resume, names } = await userContext(userId, o.variantId);
+    const cfg = await fitConfig();
+    const pin = await scorerPin(brand);
     const job = toMatchJob(jobRow);
-    const pre = preScore(user, job, { weights, tiers });
+    const jobContentHash = currentJobHash(jobRow);
+    const base = { job: jobRow, jobContentHash, user, resume, config: cfg, pin, map: cfg.map, now: now() };
+    const estimate = (reason: EstimateReason | null): Fit => assembleFit({ ...base, stored: null, estimateReason: reason });
+    /** The fit a stored row gives (its prose included). */
+    const fromRow = (row: ScoreRecord, cached: boolean): Fit => {
+      const bare = assembleFit({ ...base, stored: row, cached });
+      return bare.kind === 'ai' ? { ...bare, prose: proseOf(row, user, bare.skills) } : bare;
+    };
 
-    if (!resume) return preView(pre, 'no_resume', null, user, job);
-    // GoApply "Use AI" consent (and any future per-user AI gate): no model call at all.
-    if (!(await isAiAllowed(userId))) return preView(pre, 'ai_off', resume.id, user, job);
-    const model = await resolveModel(brand);
-    if (!model) return preView(pre, 'ai_unavailable', resume.id, user, job);
+    if (!resume) return estimate('no_resume');
+    // GoApply "Use AI" consent (and any future per-user AI gate): no model call, and no stored AI score either.
+    if (!(await isAiAllowed(userId))) return estimate('ai_off');
 
     const existing = await repo.getScore(userId, jobId, resume.id);
-    const parsedDims = existing ? MatchDimensionsSchema.safeParse(existing.dimensions) : null;
-    const fresh =
-      !!existing &&
-      existing.promptVersion === SCORER_PROMPT_VERSION &&
-      existing.resumeContentHashAtScore === resume.resumeContentHash &&
-      existing.modelUsed === model &&
-      !!parsedDims?.success;
+    const status = storedFitStatus(existing, { resumeContentHash: resume.resumeContentHash, jobContentHash, pin });
+    const mayCall = o.mode !== 'cache_only';
 
     // A rewrite of the written parts in another language ("Rewrite them in this
     // language"): the stored score and its components are kept; only the
     // summary, strengths and gaps are written again. Set when that is what was asked.
-    let rewrite: { row: ScoreRecord; dims: MatchDimension[]; total: number | null } | null = null;
-    if (fresh && existing && parsedDims?.success) {
-      const dims = refreshDimensions(parsedDims.data, user, job, weights);
-      const total = combineDimensions(dims);
+    let rewrite: ScoreRecord | null = null;
+    if (status.usable && existing) {
       const exp = readExplanation(existing.explanation);
-      const localeOk = (existing.locale ?? exp.responseLanguage ?? 'en') === locale;
-      const wantsProse = !localeOk && options.regenerateExplanation === true;
-      if (wantsProse && !options.force) rewrite = { row: existing, dims, total };
-      if (mode === 'cache_only' || (!options.force && !wantsProse)) {
-        let row = existing;
-        // Logistics or weights changed since the score: recompute the total, no model call.
-        if (total !== null && (total !== existing.score || existing.searchProfileVersion !== user.searchProfileVersion)) {
-          row = await repo.saveScore({
+      const localeOk = (existing.locale ?? exp.responseLanguage ?? 'en') === o.locale;
+      const wantsProse = !localeOk && o.regenerateExplanation === true;
+      // A row of an earlier model or prompt, or of an earlier version of the posting, is re-scored by precompute or by
+      // an on-demand call, never by a list.
+      const rescore = mayCall && (o.force === true || status.stale);
+      if (wantsProse && !rescore) rewrite = existing;
+      if (!mayCall || (!rescore && !wantsProse)) {
+        const fit = fromRow(existing, true);
+        // Logistics or weights changed since the score: store the recomputed total (and its tier), no model call.
+        if (fit.kind === 'ai' && fit.score !== null && (fit.score !== existing.score || fit.tier !== existing.tier || existing.searchProfileVersion !== user.searchProfileVersion)) {
+          await repo.saveScore({
             ...existing,
-            score: total,
-            tier: tierFor(total, tiers),
-            dimensions: dims,
+            score: fit.score,
+            tier: fit.tier,
+            dimensions: fit.dimensions,
             searchProfileVersion: user.searchProfileVersion,
             generatedAt: existing.generatedAt,
           });
         }
-        return aiView(row, dims, total, user, job, locale, true);
+        return fit;
       }
     }
-    if (mode === 'cache_only') return preView(pre, null, resume.id, user, job);
+    if (!mayCall) return estimate(null);
 
-    const capped = await underCaps(userId, mode, brand);
-    // A rewrite that may not run leaves the stored AI fit as it is (still
-    // flagged as written in another language), never a quick estimate in its place.
-    if (capped) return rewrite ? aiView(rewrite.row, rewrite.dims, rewrite.total, user, job, locale, true) : preView(pre, capped, resume.id, user, job);
+    /** What answers when the model may not run or fails: the stored fit when there is one to keep, else the estimate. */
+    const keep = status.usable && existing && (rewrite || status.stale) ? existing : null;
+
+    const model = await resolveModel(brand);
+    if (!model) return keep ? fromRow(keep, true) : estimate('ai_unavailable');
+
+    const capped = await underCaps(userId, o.mode, brand);
+    // A rewrite or a planned re-score that may not run leaves the stored AI fit as it is, never a quick estimate in
+    // its place. The queued precompute item gets the reason instead, so the worker can defer it.
+    if (capped) return keep && o.mode !== 'precompute' ? fromRow(keep, true) : estimate(capped);
 
     // ── Model call ──
+    const pre = preScore(user, job, cfg);
     const posting = postingText(jobRow);
     const resumeForModel = stripResumeForScoring(resume.resumeMarkdown, { names });
     let out: RAJobMatchScorerV3Output;
@@ -540,51 +570,53 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
             qualifications: jobRow.qualifications,
             responsibilities: jobRow.responsibilities,
           },
-          logistics: { score: pre.dimensions.find((d) => d.key === 'logistics')?.score ?? null, lines: logisticsLines(user, job) },
+          // The facts, as the AI score counts them (met / stated), not the estimate's prior.
+          logistics: { score: logisticsDimension(user, job, cfg.weights).score, lines: logisticsLines(user, job) },
+          // What the person says they are looking for (the saved search): context for the model, never an input of the estimate.
           targets: { titles: user.targetTitles, seniority: user.targetSeniority },
         },
-        { locale, model },
+        { locale: o.locale, model },
       );
     } catch (err) {
       logger.warn('MATCH', 'scorer v3 failed', { userId, jobId, error: err instanceof Error ? err.message : String(err) });
-      if (options.onAiFailure === 'throw') throw new ScorerFailedError(err);
-      if (rewrite) return aiView(rewrite.row, rewrite.dims, rewrite.total, user, job, locale, true);
-      return preView(pre, 'ai_failed', resume.id, user, job);
+      if (o.onAiFailure === 'throw') throw new ScorerFailedError(err);
+      return keep ? fromRow(keep, true) : estimate('ai_failed');
     }
 
     if (rewrite) {
       // Same score, same components, same keywords; new words only.
-      const stored = rewrite.row.explanation && typeof rewrite.row.explanation === 'object' && !Array.isArray(rewrite.row.explanation) ? (rewrite.row.explanation as Record<string, unknown>) : {};
+      const kept = fromRow(rewrite, true);
+      const stored = rewrite.explanation && typeof rewrite.explanation === 'object' && !Array.isArray(rewrite.explanation) ? (rewrite.explanation as Record<string, unknown>) : {};
       const saved = await repo.saveScore({
-        ...rewrite.row,
-        ...(rewrite.total !== null ? { score: rewrite.total, tier: tierFor(rewrite.total, tiers) } : {}),
-        dimensions: rewrite.dims,
-        explanation: { ...stored, strengths: out.strengths, gaps: out.gaps, rationale: out.summary ?? '', responseLanguage: locale },
-        locale,
+        ...rewrite,
+        ...(kept.kind === 'ai' && kept.score !== null ? { score: kept.score, tier: kept.tier } : {}),
+        dimensions: kept.dimensions,
+        explanation: { ...stored, strengths: out.strengths, gaps: out.gaps, rationale: out.summary ?? '', responseLanguage: o.locale },
+        locale: o.locale,
         searchProfileVersion: user.searchProfileVersion,
-        generatedAt: rewrite.row.generatedAt,
+        generatedAt: rewrite.generatedAt,
       });
-      await costLog({ userId, jobId, resumeVariantId: resume.id, reason: 'locale_regen', mode });
-      return aiView(saved, rewrite.dims, rewrite.total, user, job, locale, false);
+      await costLog({ userId, jobId, resumeVariantId: resume.id, reason: 'locale_regen', mode: o.mode });
+      return fromRow(saved, false);
     }
 
     // CitationGuard against the text the model actually saw.
     const sources = { resume: resumeForModel, posting };
-    const logistics = logisticsDimension(user, job, weights);
+    const logistics = logisticsDimension(user, job, cfg.weights);
     const dims: MatchDimension[] = (['title_level', 'skills', 'industry', 'logistics', 'career_path'] as const).map((key) => {
       if (key === 'logistics') return logistics;
       const d = out.dimensions[key];
       const score = d.score;
       return {
         key,
-        weight: weights[key],
+        weight: cfg.weights[key],
         score,
         status: score === null ? 'not_stated' : 'scored',
         evidence: guardEvidence(d.evidence, sources),
       } satisfies MatchDimension;
     });
     const total = combineDimensions(dims);
-    if (total === null) return preView(pre, 'ai_failed', resume.id, user, job);
+    if (total === null) return keep ? fromRow(keep, true) : estimate('ai_failed');
 
     const reason = !existing
       ? 'first_score'
@@ -594,9 +626,11 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
           ? 'resume_changed'
           : existing.modelUsed !== model
             ? 'model_changed'
-            : options.force
-              ? 'forced'
-              : 'locale_regen';
+            : existing.jobContentHash && existing.jobContentHash !== jobContentHash
+              ? 'posting_changed'
+              : o.force
+                ? 'forced'
+                : 'locale_regen';
     const saved = await repo.saveScore({
       userId,
       jobId,
@@ -609,74 +643,143 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
         // Model-picked terms, kept only when the server can confirm them.
         ...verifyKeywords(out.keywordsMatched, out.keywordsMissing, posting, user),
         // Same keys RACrossBankSearchService / RAOnboardingRecommendService read.
-        responseLanguage: locale,
+        responseLanguage: o.locale,
         promptVersion: SCORER_PROMPT_VERSION,
+        // The v2 estimate this score was written next to: the (estimate, AI) pair calibration.ts learns from.
+        estimateAtScore: { score: pre.score, coverage: pre.coverage },
       },
       resumeContentHashAtScore: resume.resumeContentHash,
       modelUsed: model,
       scoreKind: 'ai',
-      tier: tierFor(total, tiers),
+      // A new model result takes its own tier.
+      tier: tierFor(total, cfg.tiers),
       dimensions: dims,
       promptVersion: SCORER_PROMPT_VERSION,
-      locale,
+      locale: o.locale,
       searchProfileVersion: user.searchProfileVersion,
+      jobContentHash,
+      rubricVersion: currentScorerPin(brand, model).rubric,
       generatedAt: now(),
     });
     if (resume.targetJobId === jobId) {
       await repo.updateVariantCachedScore(resume.id, total).catch(() => undefined);
     }
-    await costLog({ userId, jobId, resumeVariantId: resume.id, reason, mode });
-    return aiView(saved, dims, total, user, job, locale, false);
+    await costLog({ userId, jobId, resumeVariantId: resume.id, reason, mode: o.mode });
+    return fromRow(saved, false);
   }
 
-  async function preScoreJobs(userId: string, jobs: MatchJobRecord[]): Promise<PreScoreResult[]> {
+  /**
+   * The fits of a list: the one implementation behind `getFits` and
+   * `preScoreMany`. Never a model call and never a write. A job that is gone
+   * or that the person may not see has no entry; a job whose fit fails to
+   * assemble is logged and left out, never thrown.
+   *
+   * What it reads, so a feed window stays cheap: the rows the caller did not
+   * hand over (list projection, no description) and the stored AI scores of
+   * the window (one query). No posting text is read, for any row. The
+   * posting's hash is the stored `RAJob.contentHash` when the row has one
+   * (then a score written for an earlier version of the posting is flagged
+   * stale); a row without one is served as current here, and the single-job
+   * read or the precompute cron, which hold the full row, flag and re-score
+   * it. Either way the score, tier and kind are the ones `getFit` answers: a
+   * stale score keeps serving, so the two forms never disagree on what is shown.
+   */
+  async function fitMany(userId: string, jobIds: string[], opts: GetFitsOptions = {}): Promise<Map<string, Fit>> {
+    const out = new Map<string, Fit>();
+    const ids = [...new Set(jobIds)].slice(0, FITS_MAX_IDS);
+    if (!ids.length) return out;
+    const brand = brandOf();
+    const byId = new Map((opts.rows ?? []).map((r) => [r.id, r]));
+    const unread = ids.filter((id) => !byId.has(id));
+    if (unread.length) for (const r of await repo.getFitJobs(unread)) byId.set(r.id, r);
+    const visible = ids.map((id) => byId.get(id)).filter((r): r is MatchJobRecord => !!r && visibleTo(r, userId, brand.market, deps.env));
+    if (!visible.length) return out;
+    const { user, resume } = opts.context ?? (await userContext(userId));
+    const cfg = await fitConfig();
+    const pin = await scorerPin(brand);
+
+    let stored = new Map<string, StoredFitRow>();
+    if (resume) {
+      try {
+        stored = await repo.listAiScores({ userId, jobIds: visible.map((j) => j.id), resumeVariantId: resume.id, resumeContentHash: resume.resumeContentHash });
+      } catch (err) {
+        // The quick estimate still answers; a list never fails over the stored scores.
+        logger.warn('MATCH', 'stored AI scores unavailable for a list; answering the quick estimate', { error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    // The same gate `getFit` applies: with AI off for this person a stored AI score is not shown (asked only when there is one).
+    let aiOk = true;
+    if (stored.size) {
+      try {
+        aiOk = await isAiAllowed(userId);
+      } catch {
+        aiOk = false;
+      }
+    }
+    const reason: EstimateReason | null = !resume ? 'no_resume' : !aiOk ? 'ai_off' : null;
+    const at = now();
+    for (const row of visible) {
+      try {
+        out.set(
+          row.id,
+          assembleFit({
+            job: row,
+            // Never computed here: that would need the description of every row.
+            jobContentHash: storedJobHash(row),
+            user,
+            resume,
+            stored: stored.get(row.id) ?? null,
+            config: cfg,
+            pin,
+            map: cfg.map,
+            aiAllowed: aiOk,
+            estimateReason: reason,
+            now: at,
+          }),
+        );
+      } catch (err) {
+        logger.warn('MATCH', 'fit failed for a job in a list', { jobId: row.id, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    return out;
+  }
+
+  const callOptions = (opts: GetFitOptions | undefined, variantId: string | null): FitCallOptions => ({
+    variantId,
+    mode: opts?.allowModelCall === true ? (opts.mode ?? 'on_demand') : 'cache_only',
+    locale: opts?.locale ?? 'en',
+  });
+
+  async function scoreJob(userId: string, jobId: string, options: ScoreOptions = {}): Promise<MatchFitView> {
+    const locale = options.locale ?? 'en';
+    const fit = await fitOne(userId, jobId, {
+      variantId: options.resumeVariantId ?? null,
+      mode: options.mode ?? 'on_demand',
+      locale,
+      force: options.force,
+      regenerateExplanation: options.regenerateExplanation,
+      onAiFailure: options.onAiFailure,
+    });
+    return fitToView(fit, { locale });
+  }
+
+  async function preScoreJobs(userId: string, jobs: MatchJobRecord[]): Promise<EstimateResult[]> {
     const market = brandOf().market;
     const visible = jobs.filter((j) => visibleTo(j, userId, market, deps.env));
     if (!visible.length) return [];
     const { user } = await userContext(userId);
-    const cfg = config();
+    const cfg = await fitConfig();
     return visible.map((j) => preScore(user, toMatchJob(j), cfg));
   }
 
   /**
-   * The score every list shows for these jobs (Similar jobs, alerts, the
-   * Assistant, Ready to apply): the stored AI score where the user has one for
-   * their resume as it is now — the same rows, by the same rule, the feed's
-   * cards read — else the quick estimate. Never a model call. One user and
-   * one job therefore carry one number on every surface.
+   * `getFits` in the list shape older callers read (Similar jobs, alerts, the
+   * Assistant, Ready to apply), in the order the ids were given. One person
+   * and one job carry one number on every surface.
    */
   async function preScoreMany(userId: string, jobIds: string[]): Promise<PreScoreResult[]> {
-    const ids = [...new Set(jobIds)].slice(0, 500);
-    if (!ids.length) return [];
-    const rows = await repo.getJobs(ids);
-    const byId = new Map(rows.map((r) => [r.id, r]));
-    const market = brandOf().market;
-    const visible = ids.map((id) => byId.get(id)).filter((r): r is MatchJobRecord => !!r && visibleTo(r, userId, market, deps.env));
-    if (!visible.length) return [];
-    const { user, resume } = await userContext(userId);
-    const cfg = config();
-    const pre = visible.map((j) => preScore(user, toMatchJob(j), cfg));
-    if (!resume) return pre;
-    let stored = new Map<string, Pick<ScoreRecord, 'score' | 'tier' | 'dimensions'>>();
-    try {
-      stored = await repo.listAiScores({
-        userId,
-        jobIds: pre.map((p) => p.jobId),
-        resumeVariantId: resume.id,
-        resumeContentHash: resume.resumeContentHash,
-        promptVersion: SCORER_PROMPT_VERSION,
-      });
-    } catch (err) {
-      // The quick estimate still answers; a list never fails over the stored scores.
-      logger.warn('MATCH', 'stored AI scores unavailable for a list; answering the quick estimate', { error: err instanceof Error ? err.message : String(err) });
-    }
-    return pre.map((p) => {
-      const ai = stored.get(p.jobId);
-      if (!ai || typeof ai.score !== 'number' || !Number.isFinite(ai.score)) return p;
-      const dims = MatchDimensionsSchema.safeParse(ai.dimensions);
-      const tier = LIST_TIERS.includes(ai.tier as FitTierKey) ? (ai.tier as FitTierKey) : tierFor(ai.score, cfg.tiers);
-      return { ...p, score: ai.score, tier, kind: 'ai' as const, dimensions: dims.success ? dims.data : p.dimensions };
-    });
+    const fits = await fitMany(userId, jobIds);
+    return [...new Set(jobIds)].map((id) => fits.get(id)).filter((f): f is Fit => !!f).map(fitToListResult);
   }
 
   function toCard(view: MatchFitView, user: MatchUser, job: MatchJob, charged: boolean): FitAnalysisCard {
@@ -687,7 +790,7 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
       tier: view.tier,
       kind: view.kind,
       dimensions: view.dimensions,
-      skills: skillsView(user, job),
+      skills: view.skills,
       education: {
         required: job.educationLevel && job.educationLevel !== 'none' ? job.educationLevel : null,
         yours: user.highestDegreeLabel ?? user.highestDegree,
@@ -747,6 +850,11 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
   }
 
   return {
+    fits: {
+      getFit: (userId, jobId, opts) => fitOne(userId, jobId, callOptions(opts, null)),
+      getFits: fitMany,
+      getVariantFit: (userId, jobId, variantId, opts) => fitOne(userId, jobId, callOptions(opts, variantId)),
+    },
     scoreJob,
     preScoreMany,
     preScoreJobs,
@@ -757,5 +865,8 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
       return { user, resume };
     },
     config,
+    async calibrationMap() {
+      return (await fitConfig()).map;
+    },
   };
 }

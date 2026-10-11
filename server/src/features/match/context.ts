@@ -4,6 +4,12 @@
 // profile, the primary resume's parsed data and the active search profile;
 // the job's side from an RAJob row.
 //
+// What the saved search contributes (invariant I3): the logistics answers only
+// (location, work model, country, pay floor, sponsorship). Its Role, Title and
+// Level chips are carried as `target*` for the AI scorer's prompt and are NOT
+// inputs of the estimate: the role and the level come from the person's own
+// record (experience titles, headline, years), so editing a chip moves no fit.
+//
 // What is deliberately NOT read (TASK_PLAN.md §2.2, ruling C15): school name
 // or school tier (GoApply `cnFields.schoolTags`, FilterSet `schoolTiers`),
 // sensitive answers, EEO, photo, 籍贯, 政治面貌, gender, birth date, family.
@@ -12,7 +18,7 @@
 import { statesAmount, withoutPayLabel } from '../jobs/normalize/index.js';
 import { coerceFilterSet } from '../search/index.js';
 import type { Market } from '../../platform/brand/registry.js';
-import { isDegreeLevel, resumeSeniority, type DegreeLevel, type MatchJob, type MatchUser } from './preScore.js';
+import { isDegreeLevel, resumeSeniority, roleIdOfTitle, type DegreeLevel, type MatchJob, type MatchUser } from './preScore.js';
 
 // ── User side ─────────────────────────────────────────────────────────────
 
@@ -26,6 +32,10 @@ export interface UserMatchInputs {
     skills: unknown;
     workAuth: unknown;
     cnFields: unknown;
+    /** RAProfile.headline ("Senior Data Analyst"): role evidence when it names a role. */
+    headline?: string | null;
+    /** RAProfile.seekerType (onboarding): the level when there is no resume and no experience on file. */
+    seekerType?: string | null;
   } | null;
   education: Array<{ degree: string | null; major?: string | null; endYm: string | null }>;
   experience: Array<{ title: string; company: string; startYm: string | null; endYm: string | null; current: boolean; kind?: string | null }>;
@@ -149,6 +159,42 @@ function classYearOf(cnFields: unknown): number | null {
   return Number.isInteger(n) && n >= 1990 && n <= 2100 ? n : null;
 }
 
+/** How many of the most recent experience titles count as role evidence. */
+export const ROLE_EVIDENCE_TITLES = 2;
+
+/** A role a headline names: the whole line, else its first parts ("Data Analyst | SQL, Python"). */
+function roleOfHeadline(headline: string | null): string | null {
+  if (!headline) return null;
+  const whole = roleIdOfTitle(headline);
+  if (whole) return whole;
+  for (const part of headline.split(/\s*[|·•,;/@–—]\s*|\s+-\s+|\s+at\s+/i).slice(0, 3)) {
+    const id = roleIdOfTitle(part);
+    if (id) return id;
+  }
+  return null;
+}
+
+/**
+ * The roles the person's record shows: the taxonomy match of their two most
+ * recent experience titles (the profile's, else the parsed resume's) and of a
+ * headline that names a role. Never the saved search.
+ */
+export function evidenceRoleIdsOf(inputs: Pick<UserMatchInputs, 'profile' | 'experience' | 'resumeParsed'>): string[] {
+  const fromProfile = [...inputs.experience.filter((e) => e.current), ...inputs.experience.filter((e) => !e.current)].map((e) => e.title);
+  const titles = fromProfile.length ? fromProfile : parsedExperience(inputs.resumeParsed).map((e) => e.title);
+  const ids = titles
+    .filter((t): t is string => typeof t === 'string' && !!t.trim())
+    .slice(0, ROLE_EVIDENCE_TITLES)
+    .map((t) => roleIdOfTitle(t));
+  ids.push(roleOfHeadline(str(inputs.profile?.headline)));
+  return [...new Set(ids.filter((id): id is string => !!id))];
+}
+
+/** The onboarding answer as a level: students and recent graduates only; the other answers name no level. */
+export function levelFromSeekerType(seekerType: string | null | undefined): string | null {
+  return seekerType === 'student' || seekerType === 'recent_graduate' ? 'intern_newgrad' : null;
+}
+
 /** Build the user's side of the pre-score. Never reads school name, school tier or sensitive fields. */
 export function buildMatchUser(inputs: UserMatchInputs, now: Date = new Date()): MatchUser {
   const filters = inputs.searchProfile ? coerceFilterSet(inputs.searchProfile.filters, { market: inputs.market }).value : {};
@@ -166,12 +212,18 @@ export function buildMatchUser(inputs: UserMatchInputs, now: Date = new Date()):
     yearsFromRanges(profileRanges, now) ??
     yearsFromRanges(parsedExp.filter((e) => !e.internship).map((e) => ({ start: e.start, end: e.end })), now);
   const recentTitle = inputs.experience.find((e) => e.current)?.title ?? inputs.experience[0]?.title ?? parsedExp[0]?.title ?? null;
+  // The level the record shows; with no resume and no experience on file, the onboarding answer (low confidence).
+  const recordLevel = resumeSeniority(recentTitle, years);
+  const noRecord = recordLevel === null && !isRecord(parsed) && inputs.experience.length === 0;
+  const onboardingLevel = noRecord ? levelFromSeekerType(str(inputs.profile?.seekerType)) : null;
   return {
     userId: inputs.userId,
     market: inputs.market,
+    // What the person says they are looking for: told to the AI scorer, never read by the estimate.
     targetTaxonomyIds: filters.taxonomyIds ?? [],
     targetTitles: filters.titles ?? [],
     targetSeniority: filters.seniority ?? [],
+    evidenceRoleIds: evidenceRoleIdsOf({ ...inputs, resumeParsed: parsed }),
     skills: [...new Map(skills.map((s) => [s.toLowerCase(), s])).values()],
     employerIndustries: inputs.employerIndustries,
     locations: filters.locations ?? [],
@@ -185,7 +237,13 @@ export function buildMatchUser(inputs: UserMatchInputs, now: Date = new Date()):
     classYear: inputs.market === 'cn' ? classYearOf(inputs.profile?.cnFields) : null,
     recentTitle: recentTitle ?? null,
     yearsExperience: years,
-    resumeSeniority: resumeSeniority(recentTitle, years),
+    resumeSeniority: recordLevel ?? onboardingLevel,
+    levelSource: recordLevel ? 'record' : onboardingLevel ? 'onboarding' : null,
+    // No visa entry: the sponsorship filter only removes postings that say no (preScore.ts logisticsForEstimate).
+    hardFilters: {
+      location: !!(filters.locations?.length || filters.workModels?.length || filters.country),
+      pay: !!filters.salaryMin,
+    },
     searchProfileVersion: inputs.searchProfile?.version ?? null,
   };
 }
@@ -244,6 +302,17 @@ export interface MatchJobRecord {
   marketTags: unknown;
   archivedAt: Date | null;
   companyIndustries: string[];
+  // ── Market wave columns (MKT-0), carried by every projection so later phases need not edit them. ──
+  /** RASkill ids of the posting's skills (canonical vocabulary). Unused until the skill vocabulary reads it. */
+  skillIds?: string[];
+  /** RAJob.contentHash: `jobContentHash(row)` as stored with the search document; null until it is written. */
+  contentHash?: string | null;
+  /** The posting's language tag ('en', 'zh-CN', 'zh-TW', …). */
+  lang?: string | null;
+  /** RAJob.requirements `{ v, contentHash, model, extractedAt, items }` (scorer v4). */
+  requirements?: unknown;
+  /** The deterministic taxonomy match score of the title (0–1). */
+  titleMatchScore?: number | null;
 }
 
 /**

@@ -6,11 +6,16 @@
 //   - WP-74: distinctReporters counts only reports newer than the job's latest
 //     admin decision (RAJobReview, else the legacy `admin_review` interaction);
 //   - WP-78: publicPageIds applies the SEO pages' public predicate;
-//   - WP-35: the "Added by you" count.
+//   - WP-35: the "Added by you" count;
+//   - SM-4: the feed has no AI-score read of its own (fits come from match `getFits`).
 
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { FeedSessionRanksSchema } from './contract.js';
+import { FeedSessionRanksSchema, RANKING_FACTORS } from './contract.js';
 import { createPrismaFeedRepo, latestDecisionAt, sessionFromRow, unpackRanks } from './repo.js';
+import { FakeFeedRepo } from './testkit.js';
 
 const entries = [{ jobId: 'j1', fit: 70, kind: 'pre' as const, rank: 61.2 }];
 
@@ -239,5 +244,25 @@ describe('importedCount ("Added by you")', () => {
     };
     expect(await createPrismaFeedRepo(async () => db as never).importedCount('u1', 'intl')).toBe(2);
     expect(seen).toEqual({ ownerUserId: 'u1', sourceBoard: 'user_import', market: 'intl', archivedAt: null });
+  });
+});
+
+describe('the feed reads no AI score of its own (SM-4)', () => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const source = (file: string) => readFileSync(path.join(here, file), 'utf8');
+
+  it('FeedRepo has no aiScores: the Prisma repo and the fake expose none, and the repo never touches RAJobMatchScore', () => {
+    const repo = createPrismaFeedRepo(async () => ({}) as never);
+    expect(repo).not.toHaveProperty('aiScores');
+    expect(new FakeFeedRepo()).not.toHaveProperty('aiScores');
+    expect(source('repo.ts')).not.toMatch(/rAJobMatchScore|aiScores/);
+    expect(source('FeedQueryService.ts')).not.toMatch(/aiScores|preScore\(|SCORER_PROMPT_VERSION/);
+  });
+
+  it('the old rule "AI score, else the estimate minus 5" is gone from the feed', () => {
+    for (const file of ['ranking.ts', 'FeedQueryService.ts', 'contract.ts', 'items.ts', 'testkit.ts']) {
+      expect(source(file), file).not.toMatch(/pre\s*[-−]\s*5|\bfitOf\b|minus 5/);
+    }
+    expect(RANKING_FACTORS.find((f) => f.key === 'fit')!.what).toBe('Fit score: the AI score when one exists, otherwise the quick estimate. Both are on the same scale.');
   });
 });

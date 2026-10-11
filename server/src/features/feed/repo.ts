@@ -27,7 +27,6 @@ type Db = Pick<
   | 'rAUserUiState'
   | 'rATrackerEntry'
   | 'rAProfile'
-  | 'rAJobMatchScore'
   | 'seekerProfile'
 >;
 
@@ -112,13 +111,6 @@ export interface FeedRepo {
   querySources(sql: Prisma.Sql): Promise<{ gohire: boolean; employerBoards: number; listed: number }>;
   /** Run the Explore count statement. */
   queryCategoryCounts(sql: Prisma.Sql): Promise<Array<{ taxonomyId: string; count: number }>>;
-  /** Cached v3 AI scores for this user's current resume (content hash + prompt version must match). */
-  aiScores(
-    userId: string,
-    jobIds: string[],
-    resume: { id: string; resumeContentHash: string } | null,
-    promptVersion: string,
-  ): Promise<Map<string, { score: number; tier: string | null; dimensions?: unknown }>>;
   trackerStates(userId: string, jobIds: string[]): Promise<Map<string, string>>;
   createSession(data: FeedSessionWrite): Promise<FeedSessionRecord>;
   getSession(id: string, userId: string): Promise<FeedSessionRecord | null>;
@@ -238,25 +230,6 @@ export function createPrismaFeedRepo(getDb: () => Promise<Db> = db): FeedRepo {
       const p = await getDb();
       const rows = await p.$queryRaw<Array<{ taxonomyId: string; count: number | bigint }>>(sql);
       return rows.map((r) => ({ taxonomyId: r.taxonomyId, count: Number(r.count) }));
-    },
-
-    async aiScores(userId, jobIds, resume, promptVersion) {
-      const out = new Map<string, { score: number; tier: string | null; dimensions?: unknown }>();
-      if (!resume || !jobIds.length) return out;
-      const p = await getDb();
-      const rows = await p.rAJobMatchScore.findMany({
-        where: {
-          userId,
-          resumeVariantId: resume.id,
-          jobId: { in: jobIds },
-          scoreKind: 'ai',
-          promptVersion,
-          resumeContentHashAtScore: resume.resumeContentHash,
-        },
-        select: { jobId: true, score: true, tier: true, dimensions: true },
-      });
-      for (const r of rows) out.set(r.jobId, { score: r.score, tier: r.tier, dimensions: r.dimensions });
-      return out;
     },
 
     async trackerStates(userId, jobIds) {

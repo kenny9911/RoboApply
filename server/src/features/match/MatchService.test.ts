@@ -113,9 +113,9 @@ describe('scoreJob — scorer v3', () => {
     // FIX-3: the view does not repeat a term the skill chips already list (they are the same three things).
     expect(fit.keywordsMatched).toEqual([]);
     expect(fit.keywordsMissing).toEqual([]);
-    expect(fit.skills).toEqual({ aligned: ['TypeScript', 'Go'], missing: ['Kubernetes'], listed: 3 });
+    expect(fit.skills).toEqual({ aligned: ['TypeScript', 'Go'], missing: ['Kubernetes'], softSkills: [], listed: 3 });
     const pre = await setup({ aiAllowed: async () => false }).service.scoreJob('u1', 'job1');
-    expect(pre).toMatchObject({ kind: 'pre', keywordsMatched: [], keywordsMissing: [], skills: { aligned: ['TypeScript', 'Go'], missing: ['Kubernetes'], listed: 3 } });
+    expect(pre).toMatchObject({ kind: 'pre', keywordsMatched: [], keywordsMissing: [], skills: { aligned: ['TypeScript', 'Go'], missing: ['Kubernetes'], softSkills: [], listed: 3 } });
   });
 
   it('FIX-3: stored model terms are shown by the current rule: no repeats, usual spelling, and a broader term a listed technology shows is not "missing"', async () => {
@@ -132,7 +132,7 @@ describe('scoreJob — scorer v3', () => {
     repo.state.users.u1!.profile!.skills = [];
     const { service } = setup({ repo });
     const fit = await service.scoreJob('u1', 'job1');
-    expect(fit.skills).toEqual({ aligned: ['TypeScript', 'Kubernetes', 'Go'], missing: [], listed: 3 });
+    expect(fit.skills).toEqual({ aligned: ['TypeScript', 'Kubernetes', 'Go'], missing: [], softSkills: [], listed: 3 });
     expect(fit.dimensions.find((d) => d.key === 'logistics')).toBeDefined();
   });
 
@@ -172,7 +172,7 @@ describe('scoreJob — scorer v3', () => {
     expect(repo.state.scores[0]).toMatchObject({ score: moved.score, searchProfileVersion: 2 });
   });
 
-  it('re-scores when the resume, the model or the prompt version changes', async () => {
+  it('re-scores when the resume, the prompt version, the model or the posting changes, and says which', async () => {
     const { service, repo, scorer, costLog } = setup();
     await service.scoreJob('u1', 'job1');
     repo.state.resumes[0]!.resumeContentHash = 'hash-2';
@@ -182,6 +182,60 @@ describe('scoreJob — scorer v3', () => {
     await service.scoreJob('u1', 'job1');
     expect(costLog).toHaveBeenLastCalledWith(expect.objectContaining({ reason: 'prompt_changed' }));
     expect(scorer.run).toHaveBeenCalledTimes(3);
+    // The posting's requirements change: the stored score was for other content.
+    repo.state.jobs[0] = { ...repo.state.jobs[0]!, qualifications: '8+ years of backend experience. Rust required.' };
+    await service.scoreJob('u1', 'job1');
+    expect(costLog).toHaveBeenLastCalledWith(expect.objectContaining({ reason: 'posting_changed' }));
+    // The pinned model changes: an on-demand call re-scores with it.
+    const next = setup({ repo, resolveModel: () => 'test/model-b' });
+    await next.service.scoreJob('u1', 'job1');
+    expect(next.costLog).toHaveBeenLastCalledWith(expect.objectContaining({ reason: 'model_changed' }));
+    expect(repo.state.scores).toHaveLength(1);
+    expect(repo.state.scores[0]).toMatchObject({ modelUsed: 'test/model-b', rubricVersion: 'fit_v3' });
+  });
+
+  it('freshness: a row is the fit for the same resume content and the posting as it is now; the model and prompt version only make it stale', async () => {
+    const { service, repo, scorer } = setup();
+    const first = await service.scoreJob('u1', 'job1');
+    expect(first).toMatchObject({ kind: 'ai', stale: false, cached: false });
+    // Stored with the posting's content hash and the rubric.
+    expect(repo.state.scores[0]!.jobContentHash).toMatch(/^[0-9a-f]{40}$/);
+    expect(repo.state.scores[0]!.rubricVersion).toBe('fit_v3');
+
+    // Another model is pinned: cache-only readers keep the stored AI fit, flagged stale; nothing is re-scored for them.
+    const b = setup({ repo, resolveModel: () => 'test/model-b' });
+    expect(await b.service.scoreJob('u1', 'job1', { mode: 'cache_only' })).toMatchObject({ kind: 'ai', score: first.score, tier: first.tier, stale: true, cached: true });
+    expect((await b.service.preScoreMany('u1', ['job1']))[0]).toMatchObject({ kind: 'ai', score: first.score });
+    expect(b.scorer.run).not.toHaveBeenCalled();
+    // No model configured at all: the stored fit still answers (reading it needs no model).
+    const none = setup({ repo, resolveModel: () => null });
+    expect(await none.service.scoreJob('u1', 'job1')).toMatchObject({ kind: 'ai', score: first.score, cached: true, stale: false });
+
+    // A row older than the hash column counts for the posting as it is.
+    repo.state.scores[0] = { ...repo.state.scores[0]!, jobContentHash: null };
+    expect(await service.scoreJob('u1', 'job1', { mode: 'cache_only' })).toMatchObject({ kind: 'ai', cached: true });
+    expect(scorer.run).toHaveBeenCalledTimes(1);
+  });
+
+  it('hysteresis: a recomputed total keeps the stored tier until it is 3 points past the edge it crosses', async () => {
+    // Location met, pay floor above the posting; the job offers sponsorship.
+    const repo = createMemoryRepo({ jobs: [jobRecord({ sponsorship: 'offered', sponsorshipEvidence: 'We sponsor visas.' })] });
+    const filters = (change: Record<string, unknown>, version: number) => {
+      repo.state.users.u1!.searchProfile = { version, filters: { ...(repo.state.users.u1!.searchProfile!.filters as object), ...change } };
+    };
+    filters({ salaryMin: { amount: 120000, currency: 'EUR', period: 'year' } }, 1);
+    const scorer = { run: vi.fn(async () => scorerOutput({ dimensions: { title_level: { score: 95, evidence: [] }, skills: { score: 70, evidence: [] }, industry: { score: 80, evidence: [] }, career_path: { score: null, evidence: [] } } })) };
+    const { service } = setup({ repo, scorer });
+    expect(await service.scoreJob('u1', 'job1')).toMatchObject({ score: 79, tier: 'good' });
+    // Needs sponsorship, which the job offers: total 81, one point over the Great edge. The tier stays.
+    filters({ needsSponsorship: true }, 2);
+    expect(await service.scoreJob('u1', 'job1')).toMatchObject({ score: 81, tier: 'good', cached: true });
+    expect(repo.state.scores[0]).toMatchObject({ score: 81, tier: 'good', searchProfileVersion: 2 });
+    // Pay floor lowered: total 85, three or more over. The tier changes.
+    filters({ salaryMin: { amount: 60000, currency: 'EUR', period: 'year' } }, 3);
+    expect(await service.scoreJob('u1', 'job1')).toMatchObject({ score: 85, tier: 'great', cached: true });
+    expect(repo.state.scores[0]).toMatchObject({ score: 85, tier: 'great', searchProfileVersion: 3 });
+    expect(scorer.run).toHaveBeenCalledTimes(1);
   });
 
   it('a language switch serves the cached prose flagged stale; regenerating it is explicit', async () => {
@@ -439,6 +493,39 @@ describe('scoreJob — scorer v3', () => {
     const { service } = setup({ repo });
     const fit = await service.scoreJob('u1', 'job1');
     expect(repo.state.cachedScores.v1).toBe(fit.score);
+  });
+});
+
+describe('one implementation behind every reader', () => {
+  it('scoreJob is getFit as a view, preScoreMany is getFits as a list: the same score, tier and kind', async () => {
+    const repo = createMemoryRepo({ jobs: [jobRecord(), jobRecord({ id: 'job2', skills: [], skillsDetail: null })] });
+    const { service, scorer } = setup({ repo });
+    await service.scoreJob('u1', 'job1');
+    scorer.run.mockClear();
+    const fits = await service.fits.getFits('u1', ['job1', 'job2']);
+    const list = await service.preScoreMany('u1', ['job1', 'job2']);
+    for (const [i, id] of ['job1', 'job2'].entries()) {
+      const fit = fits.get(id)!;
+      const view = await service.scoreJob('u1', id, { mode: 'cache_only' });
+      const one = await service.fits.getFit('u1', id);
+      const wire = fit.kind === 'ai' ? 'ai' : 'pre';
+      expect([view.score, view.tier, view.kind], id).toEqual([fit.score, fit.tier, wire]);
+      expect([list[i]!.score, list[i]!.tier, list[i]!.kind], id).toEqual([fit.score, fit.tier, wire]);
+      expect([one.score, one.tier, one.kind], id).toEqual([fit.score, fit.tier, fit.kind]);
+      expect(view).toMatchObject({ coverage: fit.coverage, confidence: fit.confidence, confidenceReason: fit.confidenceReason, requirements: [] });
+    }
+    expect(fits.get('job1')!.kind).toBe('ai');
+    expect(fits.get('job2')).toMatchObject({ kind: 'estimate', confidence: 'medium' });
+    expect(scorer.run).not.toHaveBeenCalled();
+  });
+
+  it('the scorer is told the facts of location and pay (met / stated) and the saved search as the stated target, never as the fit', async () => {
+    const { service, scorer } = setup();
+    await service.scoreJob('u1', 'job1');
+    const input = scorer.run.mock.calls[0]![0] as { logistics: { score: number | null }; targets: { titles: string[]; seniority: string[] } };
+    // Both checks are met through the person's own filters: the estimate counts that part at its prior, the AI score at 100.
+    expect(input.logistics.score).toBe(100);
+    expect(input.targets).toEqual({ titles: [], seniority: ['senior'] });
   });
 });
 

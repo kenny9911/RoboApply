@@ -17,10 +17,10 @@ vi.mock('../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), war
 import { cnJobCapabilities } from '../cn/jobs/index.js';
 import { explainMatch } from '../compliance/explainMatch.js';
 import { cardMeta } from '../jobs/marketHooks.js';
-import { DEFAULT_MATCH_TIERS, DEFAULT_MATCH_WEIGHTS, buildMatchUser } from '../match/index.js';
+import { buildMatchUser } from '../match/index.js';
 import type { FilterSet, SearchProfileWire } from '../search/index.js';
 import { createFeedQueryService, type FeedServiceDeps } from './FeedQueryService.js';
-import { BANK_PAGES_ENV, FakeFeedRepo, feedRow } from './testkit.js';
+import { BANK_PAGES_ENV, FakeFeedRepo, fakeFeedMatch, feedRow } from './testkit.js';
 import type { FeedCtx } from './types.js';
 
 const NOW = new Date('2026-10-10T12:00:00.000Z');
@@ -54,8 +54,11 @@ function profile(): SearchProfileWire {
 function service(over: Partial<FeedServiceDeps> = {}) {
   return createFeedQueryService({
     repo,
-    match: {
-      async userContext(userId) {
+    // The real fit assembly (match/fit.ts) over the fake repo's rows; `repo.ai` holds the person's stored AI scores.
+    match: fakeFeedMatch({
+      repo,
+      now: () => NOW,
+      context(userId) {
         userContextCalls += 1;
         const user = buildMatchUser(
           {
@@ -63,7 +66,8 @@ function service(over: Partial<FeedServiceDeps> = {}) {
             market: 'intl',
             profile: { firstName: null, lastName: null, country: 'US', skills: [{ name: 'Python' }, { name: 'SQL' }], workAuth: [], cnFields: null },
             education: [],
-            experience: [],
+            // The role and the level come from the person's record, never from the saved search.
+            experience: [{ title: 'Backend Engineer', company: 'Acme', startYm: '2022-01', endYm: null, current: true, kind: 'work' }],
             resumeParsed: null,
             searchProfile: { filters: { taxonomyIds: ['backend_engineer'], seniority: ['mid'] }, version: 1 },
             employerIndustries: [],
@@ -72,8 +76,7 @@ function service(over: Partial<FeedServiceDeps> = {}) {
         );
         return { user, resume: { id: 'rv1', resumeMarkdown: '', resumeContentHash: 'h', parsedData: null, targetJobId: null } };
       },
-      config: () => ({ weights: { ...DEFAULT_MATCH_WEIGHTS }, tiers: { ...DEFAULT_MATCH_TIERS } }),
-    },
+    }),
     search: {
       getActive: async () => {
         profileReads += 1;
@@ -407,11 +410,11 @@ describe('cardMeta and explanation on FeedItem', () => {
     repo.ai.set('j000', {
       score: 91,
       tier: 'great',
-      dimensions: [{ key: 'skills', weight: 0.4, score: 95, status: 'scored', evidence: [{ text: 'Built payment APIs in Python', source: 'resume' }] }],
+      dimensions: [{ key: 'skills', weight: 30, score: 91, status: 'scored', evidence: [{ text: 'Built payment APIs in Python', source: 'resume' }] }],
     });
     const res = await service(deps).query(ctx(), { sort: 'recommended' });
     const ex = res.items[0]!.explanation!;
-    expect(res.items[0]!.fit).toMatchObject({ kind: 'ai', score: 91 });
+    expect(res.items[0]!.fit).toMatchObject({ kind: 'ai', score: 91, tier: 'great' });
     expect(ex.reasons[0]).toEqual({ key: 'legal.explain.reason.skills', params: { evidence: 'Built payment APIs in Python', source: 'resume' } });
     expect(ex.notices.map((n) => n.key)).not.toContain('legal.explain.notice.quickEstimate');
   });

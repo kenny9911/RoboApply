@@ -1,8 +1,9 @@
 // @vitest-environment node
 //
 // WP-32 service tests over an in-memory repo (no database, no network, no model):
-// sessions + cursor stability + older-window refill, refresh limit, ranking with
-// cached AI scores, fit-tier hiding counts, company scatter, GoApply non-personalised
+// sessions + cursor stability + older-window refill, refresh limit, ranking on the
+// fits of match `getFits` (one call per window, never the scorer), fit-tier hiding
+// counts with the low-confidence rule, company scatter, GoApply non-personalised
 // order, hide/unhide with filter diffs, report thresholds, impressions, daily
 // rating, Explore cache, NL query (aiAllowed), new-count, skills-check, counts.
 
@@ -11,12 +12,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
 
 import { HttpError } from '../../platform/http.js';
-import { DEFAULT_MATCH_TIERS, DEFAULT_MATCH_WEIGHTS, buildMatchUser } from '../match/index.js';
+import { DEFAULT_MATCH_PRIORS, DEFAULT_MATCH_TIERS, DEFAULT_MATCH_WEIGHTS, buildMatchUser } from '../match/index.js';
+import { EMPTY_AFFINITY } from './affinity.js';
 import type { FilterSet, SearchProfileWire } from '../search/index.js';
 import { SearchProfileNotFoundError } from '../search/index.js';
 import { createFeedQueryService, type FeedServiceDeps } from './FeedQueryService.js';
 import type { PlannerPlan } from './filterDiff.js';
-import { BANK_PAGES_ENV, FakeFeedRepo, feedRow } from './testkit.js';
+import { recommendedRank } from './ranking.js';
+import { BANK_PAGES_ENV, FakeFeedRepo, fakeFeedMatch, feedRow, type FakeFeedMatch, type FakeFeedMatchOptions } from './testkit.js';
 import type { FeedCtx } from './types.js';
 
 const NOW = new Date('2026-10-10T12:00:00.000Z');
@@ -30,6 +33,10 @@ let personalized: boolean;
 let refreshAllowed: boolean;
 let aiOk: boolean;
 let userContextCalls: number;
+let match: FakeFeedMatch;
+/** Who the feed is for (default: `person`) and how the fake match is set up, per test. */
+let personOf: (userId: string) => ReturnType<typeof person>;
+let matchOptions: Partial<FakeFeedMatchOptions>;
 let plannerCalls: string[];
 let plannerImpl: (text: string) => Promise<PlannerPlan>;
 
@@ -49,29 +56,50 @@ function profile(): SearchProfileWire {
   };
 }
 
+/** The person: a mid-level backend engineer (their record says so) with Python and SQL, in the US. */
+function person(userId: string) {
+  userContextCalls += 1;
+  const user = buildMatchUser(
+    {
+      userId,
+      market: 'intl',
+      profile: { firstName: null, lastName: null, country: 'US', skills: [{ name: 'Python' }, { name: 'SQL' }], workAuth: [], cnFields: null },
+      education: [],
+      experience: [{ title: 'Backend Engineer', company: 'Acme', startYm: '2022-01', endYm: null, current: true, kind: 'work' }],
+      resumeParsed: null,
+      searchProfile: { filters: { taxonomyIds: ['backend_engineer'], seniority: ['mid'] }, version: 1 },
+      employerIndustries: [],
+    },
+    NOW,
+  );
+  return { user, resume: { id: 'rv1', resumeMarkdown: '', resumeContentHash: 'h', parsedData: null, targetJobId: null } };
+}
+
+/** A student with no experience and no parsed resume: role from the headline, level from the onboarding answer only. */
+function studentWithNoRecord(userId: string): ReturnType<typeof person> {
+  userContextCalls += 1;
+  const user = buildMatchUser(
+    {
+      userId,
+      market: 'intl',
+      profile: { firstName: null, lastName: null, country: 'US', skills: [{ name: 'Python' }, { name: 'SQL' }], workAuth: [], cnFields: null, headline: 'Backend Engineer', seekerType: 'student' },
+      education: [],
+      experience: [],
+      resumeParsed: null,
+      searchProfile: { filters: { taxonomyIds: ['backend_engineer'] }, version: 1 },
+      employerIndustries: [],
+    },
+    NOW,
+  );
+  return { user, resume: { id: 'rv1', resumeMarkdown: '', resumeContentHash: 'h', parsedData: null, targetJobId: null } };
+}
+
 function service(over: Partial<FeedServiceDeps> = {}) {
+  // The real fit assembly (match/fit.ts) over the fake repo's rows; `repo.ai` holds the person's stored AI scores.
+  match = fakeFeedMatch({ repo, context: (userId) => personOf(userId), now: () => NOW, ...matchOptions });
   return createFeedQueryService({
     repo,
-    match: {
-      async userContext(userId) {
-        userContextCalls += 1;
-        const user = buildMatchUser(
-          {
-            userId,
-            market: 'intl',
-            profile: { firstName: null, lastName: null, country: 'US', skills: [{ name: 'Python' }, { name: 'SQL' }], workAuth: [], cnFields: null },
-            education: [],
-            experience: [],
-            resumeParsed: null,
-            searchProfile: { filters: { taxonomyIds: ['backend_engineer'], seniority: ['mid'] }, version: 1 },
-            employerIndustries: [],
-          },
-          NOW,
-        );
-        return { user, resume: { id: 'rv1', resumeMarkdown: '', resumeContentHash: 'h', parsedData: null, targetJobId: null } };
-      },
-      config: () => ({ weights: { ...DEFAULT_MATCH_WEIGHTS }, tiers: { ...DEFAULT_MATCH_TIERS } }),
-    },
+    match,
     search: {
       getActive: async () => profile(),
       get: async (_u, id) => {
@@ -126,6 +154,8 @@ beforeEach(() => {
   refreshAllowed = true;
   aiOk = true;
   userContextCalls = 0;
+  personOf = person;
+  matchOptions = {};
   plannerCalls = [];
   plannerImpl = async () => ({ queries: ['Data Analyst'], remote: true, unverifiedPreferences: [] });
 });
@@ -247,6 +277,164 @@ describe('ranking in the feed', () => {
     repo.ai.set('j009', { score: 97, tier: 'great' });
     const res = await service().query(ctx(), { sort: 'best_fit' });
     expect(res.items[0]).toMatchObject({ jobId: 'j009', fit: { kind: 'ai', score: 97, tier: 'great' } });
+  });
+
+  it('the fits of a window come from one getFits call (never the scorer), and the card carries the fit with its confidence', async () => {
+    seed(30);
+    repo.ai.set('j003', { score: 91, tier: 'great' });
+    const s = service();
+    const res = await s.query(ctx(), { sort: 'recommended' });
+    // One call for the window of 30 rows; the page of 20 is cut from it without a second read.
+    expect(match.calls.getFits).toHaveLength(1);
+    expect(match.calls.getFits[0]!.slice().sort()).toEqual(repo.rows.map((r) => r.id).sort());
+    expect(match.calls.userContext).toBe(1);
+    // The window's own rows travel with the call, so the fit read loads no job row and no description again.
+    expect(match.calls.rowsHanded).toEqual([30]);
+    const fits = await match.getFits('u1', repo.rows.map((r) => r.id));
+    for (const item of res.items) {
+      const fit = fits.get(item.jobId)!;
+      // The same score, tier and kind the fit contract answers for this person and job (wire kind `pre` for an estimate).
+      expect(item.fit, item.jobId).toEqual({ tier: fit.tier, score: fit.score, kind: fit.kind === 'ai' ? 'ai' : 'pre', topGap: fit.topGap, topOverlap: fit.topOverlap, confidence: fit.confidence, confidenceReason: fit.confidenceReason });
+    }
+    expect(res.items.find((i) => i.jobId === 'j003')!.fit).toMatchObject({ kind: 'ai', score: 91, tier: 'great' });
+    expect(res.items.find((i) => i.jobId === 'j000')!.fit).toMatchObject({ kind: 'pre', score: 83, tier: 'great', confidence: 'high', confidenceReason: null });
+    // The second page reads no fit again: the session and its cache answer.
+    match.calls.getFits.length = 0;
+    await s.query(ctx(), { sort: 'recommended', cursor: res.cursor! });
+    expect(match.calls.getFits.flat().filter((id) => res.items.some((i) => i.jobId === id))).toEqual([]);
+  });
+
+  it('the card, the session ranks and "Why this job" all come from the same fit', async () => {
+    seed(6);
+    repo.ai.set('j002', { score: 72, tier: 'good', dimensions: [{ key: 'title_level', weight: 35, score: 72, status: 'scored', evidence: [] }, { key: 'skills', weight: 30, score: 72, status: 'scored', evidence: [] }] });
+    const explained: Array<Record<string, unknown>> = [];
+    const s = service({
+      explain: (input) => {
+        explained.push(input as unknown as Record<string, unknown>);
+        return { mode: 'personalized', headline: { key: 'h' }, reasons: [], gaps: [], notices: [] };
+      },
+    });
+    const res = await s.query(ctx(), { sort: 'recommended' });
+    const fits = await match.getFits('u1', repo.rows.map((r) => r.id));
+    const ranks = repo.sessions.get(res.sessionId)!.ranks as Array<{ jobId: string; fit: number | null; kind: string; rank: number }>;
+    expect(explained).toHaveLength(6);
+    for (const [i, item] of res.items.entries()) {
+      const fit = fits.get(item.jobId)!;
+      const wire = fit.kind === 'ai' ? 'ai' : 'pre';
+      // The card.
+      expect([item.fit!.score, item.fit!.tier, item.fit!.kind], item.jobId).toEqual([fit.score, fit.tier, wire]);
+      // The session ranks.
+      expect(ranks.find((r) => r.jobId === item.jobId), item.jobId).toMatchObject({ fit: fit.score, kind: wire });
+      // "Why this job": the components and the skill split of that fit (the AI's for the AI score, the estimate's otherwise).
+      expect(explained[i], item.jobId).toMatchObject({ personalized: true, score: fit.score, kind: wire, dimensions: fit.dimensions, skills: { aligned: fit.skills.aligned, missing: fit.skills.missing } });
+    }
+    expect(fits.get('j002')!.dimensions.map((d) => d.score)).toEqual([72, 72]);
+  });
+
+  it('"Why this job" leaves out a logistics part that only repeats the person\'s own filters (neither a reason nor a gap)', async () => {
+    seed(2);
+    // The saved search filters on remote work: every listed job meets it, so the check says nothing about the job.
+    profileFilters = { taxonomyIds: ['backend_engineer'], workModels: ['remote'] };
+    personOf = (userId) => {
+      const base = person(userId);
+      return { ...base, user: { ...base.user, workModels: ['remote'], hardFilters: { location: true, pay: false } } };
+    };
+    const explained: Array<{ dimensions?: Array<{ key: string }> }> = [];
+    const s = service({
+      explain: (input) => {
+        explained.push(input);
+        return { mode: 'personalized', headline: { key: 'h' }, reasons: [], gaps: [], notices: [] };
+      },
+    });
+    await s.query(ctx(), { sort: 'recommended' });
+    const fit = (await match.getFits('u1', ['j000'])).get('j000')!;
+    const logistics = fit.dimensions.find((d) => d.key === 'logistics')!;
+    // Not compared (it counts at its prior in the total), with the one line that says why.
+    expect(logistics).toMatchObject({ status: 'not_stated', score: null });
+    expect(logistics.evidence.map((e) => e.ref)).toEqual(['logistics_by_your_filters']);
+    expect(logistics.evidence[0]!.text.trim()).not.toBe('');
+    expect(explained[0]!.dimensions!.map((d) => d.key)).toEqual(['title_level', 'skills', 'industry', 'career_path']);
+  });
+
+  it('the ranking input is on one scale: a scored job equal to its estimate ranks with its unscored twin; an AI score moves it half way', async () => {
+    seed(3);
+    // The three rows are twins (same posting facts, same date), so only the fit input differs.
+    const at = new Date(NOW.getTime() - 3_600_000);
+    for (const r of repo.rows) Object.assign(r, { postedAt: at, firstSeenAt: at });
+    repo.ai.set('j001', { score: 83, tier: 'great' }); // the AI agrees with the estimate (83)
+    repo.ai.set('j002', { score: 63, tier: 'possible' }); // the AI says 20 less
+    const res = await service().query(ctx(), { sort: 'recommended' });
+    const ranks = Object.fromEntries((repo.sessions.get(res.sessionId)!.ranks as Array<{ jobId: string; rank: number }>).map((r) => [r.jobId, r.rank]));
+    const rc = { now: NOW, affinity: EMPTY_AFFINITY, preferredCompanyKeys: new Set<string>(), goal: { goal: null, filters: {} } };
+    const row = repo.rows[0]!;
+    // Unscored, estimate 83 → ranked on 83. Scored 83 with estimate 83 → 83: not a point lower for being scored.
+    expect(ranks.j000).toBe(recommendedRank(row, 83, rc));
+    expect(ranks.j001).toBe(ranks.j000);
+    // Scored 63 next to an estimate of 83 → 83 + 0.5 × (63 − 83) = 73.
+    expect(ranks.j002).toBe(recommendedRank(row, 73, rc));
+    expect(res.items.at(-1)!.jobId).toBe('j002');
+    // With the market's calibration map the scored job ranks on its AI score and the others on the mapped estimate.
+    matchOptions = { map: () => ({ knots: [[0, 0], [100, 50]] }) };
+    const mapped = await service().query(ctx(), { sort: 'recommended' });
+    const mappedRanks = Object.fromEntries((repo.sessions.get(mapped.sessionId)!.ranks as Array<{ jobId: string; rank: number }>).map((r) => [r.jobId, r.rank]));
+    expect(mappedRanks.j000).toBe(recommendedRank(row, 41.5, rc));
+    expect(mappedRanks.j001).toBe(recommendedRank(row, 83, rc));
+    expect(mappedRanks.j002).toBe(recommendedRank(row, 63, rc));
+    // The card of an unscored job shows the mapped estimate.
+    expect(mapped.items.find((i) => i.jobId === 'j000')!.fit).toMatchObject({ kind: 'pre', score: 42 });
+  });
+
+  it('an unscored low-confidence job with an estimate of 82 is hidden by the Great view and counted in hiddenByTier', async () => {
+    seed(4);
+    for (const r of repo.rows) r.seniority = 'intern_newgrad';
+    // A student with no resume and no experience on file: the level is only their onboarding answer, so every estimate is low confidence.
+    personOf = studentWithNoRecord;
+    matchOptions = { config: () => ({ weights: { ...DEFAULT_MATCH_WEIGHTS }, tiers: { ...DEFAULT_MATCH_TIERS }, priors: { ...DEFAULT_MATCH_PRIORS, industry: 17 } }) };
+    // One of the four has an AI score: it is judged on that score, whatever the estimate's confidence.
+    repo.ai.set('j003', { score: 84, tier: 'great' });
+
+    const all = await service().query(ctx(), { sort: 'recommended' });
+    expect(all.items.find((i) => i.jobId === 'j000')!.fit).toMatchObject({ kind: 'pre', score: 82, tier: 'great', confidence: 'low' });
+    expect(all.hiddenByTier).toBe(0);
+
+    const great = await service().query(ctx(), { sort: 'recommended', fitTier: 'great' });
+    expect(great.items.map((i) => i.jobId)).toEqual(['j003']);
+    expect(great.hiddenByTier).toBe(3);
+    const good = await service().query(ctx(), { sort: 'recommended', fitTier: 'good' });
+    expect(good.items.map((i) => i.jobId)).toEqual(['j003']);
+    expect(good.hiddenByTier).toBe(3);
+  });
+
+  it('an AI score is listed by the tier its card shows: Good at 81 is not under Great, Great at 79 is', async () => {
+    seed(3);
+    // Stored tiers that the recomputed totals have not moved 3 points past (hysteresis): the card keeps the stored tier.
+    repo.ai.set('j001', { score: 81, tier: 'good' });
+    repo.ai.set('j002', { score: 79, tier: 'great' });
+    const all = await service().query(ctx(), { sort: 'best_fit' });
+    expect(all.items.find((i) => i.jobId === 'j001')!.fit).toMatchObject({ kind: 'ai', score: 81, tier: 'good' });
+    expect(all.items.find((i) => i.jobId === 'j002')!.fit).toMatchObject({ kind: 'ai', score: 79, tier: 'great' });
+
+    const great = await service().query(ctx(), { sort: 'best_fit', fitTier: 'great' });
+    // Every card in the Great view says Great; the Good card at 81 is not among them.
+    expect(great.items.every((i) => i.fit!.tier === 'great')).toBe(true);
+    expect(great.items.map((i) => i.jobId)).toContain('j002');
+    expect(great.items.map((i) => i.jobId)).not.toContain('j001');
+    const good = await service().query(ctx(), { sort: 'best_fit', fitTier: 'good' });
+    expect(good.items.map((i) => i.jobId)).toEqual(expect.arrayContaining(['j001', 'j002']));
+  });
+
+  it('fits that cannot be read never drop a row: the window is listed without a fit', async () => {
+    seed(5);
+    const s = service();
+    match.getFits = async () => {
+      throw new Error('match store down');
+    };
+    const res = await s.query(ctx(), { sort: 'recommended' });
+    expect(res.items).toHaveLength(5);
+    expect(res.items.every((i) => i.fit === null)).toBe(true);
+    // With no fit the tier view hides nothing it cannot judge.
+    const great = await s.query(ctx(), { sort: 'recommended', fitTier: 'great' });
+    expect(great.items).toHaveLength(5);
   });
 
   it('fit-tier view hides weaker fits and says how many', async () => {
@@ -486,6 +674,24 @@ describe('new-count and skills-check', () => {
     expect(repo.visits.get('u1')).not.toEqual(NOW);
     await s.newCount(ctx(), { since: daysAgo(1).toISOString(), markVisited: true });
     expect(repo.visits.get('u1')).toEqual(NOW);
+  });
+
+  it('the badge counts by the rule of the "Good or better" view: a low-confidence quick estimate does not count', async () => {
+    seed(4);
+    repo.visits.set('u1', new Date(NOW.getTime() - 5.5 * 3_600_000));
+    for (const r of repo.rows) r.seniority = 'intern_newgrad';
+    // A student with no resume and no experience on file: every estimate is low confidence, however high.
+    personOf = studentWithNoRecord;
+    // One job has an AI score at Good: it counts on that score.
+    repo.ai.set('j002', { score: 70, tier: 'good' });
+    const res = await service().newCount(ctx(), {});
+    const fits = await match.getFits('u1', repo.rows.map((r) => r.id));
+    expect(['j000', 'j001', 'j003'].map((id) => [fits.get(id)!.confidence, fits.get(id)!.score! >= 65])).toEqual([['low', true], ['low', true], ['low', true]]);
+    expect(res.count).toBe(1);
+    // The same rows for a person whose record backs the estimate: all four count.
+    personOf = person;
+    for (const r of repo.rows) r.seniority = 'mid';
+    expect((await service().newCount(ctx(), {})).count).toBe(4);
   });
 
   it('a polling badge is cached for 2 minutes per user and visit; markVisited drops the cache', async () => {
