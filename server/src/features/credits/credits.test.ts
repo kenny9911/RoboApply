@@ -1,7 +1,7 @@
 // @vitest-environment node
 //
 // Credits area routes (WP-21a): /credits, /credits/history, /credits/cancel,
-// /credits/cancel/survey, /billing/plans, public /cancel, and the admin caps /
+// /credits/cancel/survey, /credits/resume, /billing/plans, public /cancel, and the admin caps /
 // overrides (audited) / FX / TW revenue / refund-quote routes. Fake Prisma,
 // fake Stripe, fake email.
 
@@ -23,6 +23,8 @@ import {
   REFUND_POLICY_VERSION,
   SHORT_PLAN_HOURS,
   WITHDRAWAL_DAYS,
+  autoRenewAckSentence,
+  proseHash,
   registerRail,
   unregisterRail,
 } from '../../platform/billing/index.js';
@@ -68,6 +70,10 @@ const cancel = vi.fn();
 const offered = new Set<string>();
 let limited = false;
 const stripe = {
+  subscriptions: {
+    update: vi.fn(async (_id: string, _params: Record<string, any>, _opts?: Record<string, any>): Promise<Record<string, any>> => ({})),
+    retrieve: vi.fn(async (id: string): Promise<Record<string, any>> => ({ id, items: { data: [] } })),
+  },
   charges: { list: vi.fn(async () => ({ data: [{ id: 'ch_1', amount: 100_000, amount_refunded: 0, currency: 'usd', status: 'succeeded', paid: true, created: 1, payment_method_details: { card: { country: 'TW' } } }], has_more: false })) },
   invoices: { list: vi.fn(async () => ({ data: [] as unknown[] })) },
 };
@@ -115,6 +121,8 @@ function service(): CreditsAreaService {
 
 let h: RouteHarness;
 const seeker = { id: 'u_1', email: 'u@example.test', role: 'seeker' };
+/** A GoApply account (it never has anything at Stripe). */
+const goSeeker = { id: 'u_go', email: 'go@example.test', role: 'seeker' };
 const admin = { id: 'admin_1', email: 'a@example.test', role: 'admin' };
 
 beforeAll(async () => {
@@ -133,6 +141,7 @@ beforeAll(async () => {
       ['/api/v1/public/cancel', createPublicCancelRouter(deps)],
       ['/api/v1/roboapply/admin/credits', createCreditsAdminRouter(deps)],
       ['/anon/plans', createBillingPlansRouter({ ...deps, optionalAuth: [(_q, _s, n) => n()] })],
+      ['/go/credits', createCreditsRouter({ ...deps, seekerAuth: [fakeAuth(goSeeker)] })],
     ],
   });
 });
@@ -332,6 +341,158 @@ describe('POST /credits/cancel (one click)', () => {
     const res = await h.request<any>('POST', '/api/v1/roboapply/credits/cancel', { ...RA, body: {} });
     expect(res.body.data).toEqual({ status: 'already_cancelled', accessUntil: LATER.toISOString(), alternative: null });
     expect(offered.size).toBe(0);
+  });
+});
+
+// ST-6 (MARKET_STRATEGY §5.1 "Cancel and resume", §4.4 "Cancel"): "Keep my plan".
+describe('POST /credits/resume ("Keep my plan")', () => {
+  const PATH = '/api/v1/roboapply/credits/resume';
+  const consents = () => db.seekerConsentRecord.findMany({ where: {} }) as Promise<Array<Record<string, any>>>;
+  const subRow = async () => (await db.seekerSubscription.findUnique({ where: { id: 'row_1' } })) as Record<string, any>;
+  /** The seeded monthly plan after "Cancel": still running, renewal off, charged $24.99. */
+  const cancelPlan = (over: Record<string, unknown> = {}) =>
+    db.seekerSubscription.update({ where: { id: 'row_1' }, data: { cancelAtPeriodEnd: true, brand: 'roboapply', rail: 'stripe', currency: 'USD', amountMinor: 2499, ...over } });
+
+  it('200: turns renewal back on, records the acknowledgement before Stripe is asked, and invalidates the entitlement cache', async () => {
+    await cancelPlan();
+    const version = (await subRow()).updatedAt as Date;
+    let consentsAtStripeCall = -1;
+    stripe.subscriptions.update.mockImplementationOnce(async () => {
+      consentsAtStripeCall = (await consents()).length;
+      return {};
+    });
+    const res = await h.request<any>('POST', PATH, { ...RA, body: { autoRenewAck: true }, headers: { 'user-agent': 'resume-test/1.0' } });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, data: { status: 'resumed', planKey: 'pro_monthly', renewsAt: LATER.toISOString() } });
+
+    // The consent record: an auto_renew_ack with the hash of the sentence that names the period and the charged price.
+    const rows = await consents();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      seekerProfileId: 'sp_1',
+      consentType: 'auto_renew_ack',
+      granted: true,
+      proseHash: proseHash('I agree this renews automatically every month at $24.99 until I cancel'),
+      userAgent: 'resume-test/1.0',
+    });
+    expect(rows[0]!.proseHash).toBe(proseHash(autoRenewAckSentence({ interval: 'month', amountMinor: 2499, currency: 'USD' })));
+    expect(typeof rows[0]!.proseVersion).toBe('string');
+    expect(typeof rows[0]!.ipAddress).toBe('string');
+    // It was already written when Stripe was asked.
+    expect(consentsAtStripeCall).toBe(1);
+
+    expect(stripe.subscriptions.update).toHaveBeenCalledTimes(1);
+    expect(stripe.subscriptions.update).toHaveBeenCalledWith(
+      'sub_1',
+      { cancel_at_period_end: false, metadata: { cancelSource: '' } },
+      { idempotencyKey: `resume:sub_1:${Math.floor(LATER.getTime() / 1000)}:v${version.getTime()}:b${Math.floor(NOW.getTime() / 60_000)}` },
+    );
+    expect((await subRow()).cancelAtPeriodEnd).toBe(false);
+    expect(invalidated).toEqual(['u_1']);
+    // "Keep my plan" does not send mail and does not touch the cancel path.
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it('the acknowledgement names the price that is charged, not the catalog price', async () => {
+    // An older subscriber on $19.99 while the catalog says $24.99.
+    await cancelPlan({ amountMinor: 1999 });
+    expect((await h.request<any>('POST', PATH, { ...RA, body: { autoRenewAck: true } })).status).toBe(200);
+    expect((await consents())[0]!.proseHash).toBe(proseHash('I agree this renews automatically every month at $19.99 until I cancel'));
+  });
+
+  it('409 nothing_to_resume: a plan that still renews, a period that ended, a pass', async () => {
+    const refused = async () => {
+      const res = await h.request<any>('POST', PATH, { ...RA, body: { autoRenewAck: true } });
+      expect(res.status).toBe(409);
+      expect(res.body).toMatchObject({ success: false, code: 'nothing_to_resume' });
+    };
+    // The seeded plan still renews.
+    await refused();
+    // Cancelled, and the period is over.
+    await cancelPlan({ currentPeriodEnd: new Date(NOW.getTime() - 1000) });
+    await refused();
+    // The 7-day pass never renews.
+    await cancelPlan({ currentPeriodEnd: LATER, planKey: 'pro_week_pass', interval: 'pass', stripeSubscriptionId: null });
+    await refused();
+    expect(await consents()).toEqual([]);
+    expect(stripe.subscriptions.update).not.toHaveBeenCalled();
+    expect(invalidated).toEqual([]);
+  });
+
+  it('422 auto_renew_ack_required without the ticked box; other bad bodies are invalid_request', async () => {
+    await cancelPlan();
+    for (const body of [{}, { autoRenewAck: false }, { autoRenewAck: 'true' }, { autoRenewAck: null }]) {
+      const res = await h.request<any>('POST', PATH, { ...RA, body });
+      expect(res.status).toBe(422);
+      expect(res.body).toMatchObject({ success: false, code: 'auto_renew_ack_required' });
+    }
+    for (const body of [{ autoRenewAck: true, force: true }, { force: true }]) {
+      const res = await h.request<any>('POST', PATH, { ...RA, body });
+      expect(res.status).toBe(422);
+      expect(res.body.code).toBe('invalid_request');
+    }
+    expect(await consents()).toEqual([]);
+    expect(stripe.subscriptions.update).not.toHaveBeenCalled();
+    expect((await subRow()).cancelAtPeriodEnd).toBe(true);
+  });
+
+  it('502 payment_provider_error: a failed Stripe call leaves the plan cancelled', async () => {
+    await cancelPlan();
+    stripe.subscriptions.update.mockRejectedValueOnce(new Error('stripe is down'));
+    const res = await h.request<any>('POST', PATH, { ...RA, body: { autoRenewAck: true } });
+    expect(res.status).toBe(502);
+    expect(res.body).toMatchObject({ success: false, code: 'payment_provider_error' });
+    expect((await subRow()).cancelAtPeriodEnd).toBe(true);
+    // Nothing changed, so nothing is invalidated; the acknowledgement that was given is kept.
+    expect(invalidated).toEqual([]);
+    expect(await consents()).toHaveLength(1);
+  });
+
+  it('503 rail_not_configured when card payments are not set up; nothing is recorded', async () => {
+    await cancelPlan();
+    stripeOn = false;
+    const res = await h.request<any>('POST', PATH, { ...RA, body: { autoRenewAck: true } });
+    expect(res.status).toBe(503);
+    expect(res.body).toMatchObject({ success: false, code: 'rail_not_configured' });
+    expect(await consents()).toEqual([]);
+    expect((await subRow()).cancelAtPeriodEnd).toBe(true);
+  });
+
+  it('resuming twice sends one request to Stripe: the second call answers nothing_to_resume', async () => {
+    await cancelPlan();
+    expect((await h.request<any>('POST', PATH, { ...RA, body: { autoRenewAck: true } })).status).toBe(200);
+    const second = await h.request<any>('POST', PATH, { ...RA, body: { autoRenewAck: true } });
+    expect(second.status).toBe(409);
+    expect(second.body.code).toBe('nothing_to_resume');
+    expect(stripe.subscriptions.update).toHaveBeenCalledTimes(1);
+    expect(await consents()).toHaveLength(1);
+  });
+
+  it('a GoApply account gets nothing_to_resume and Stripe is never asked', async () => {
+    // A GoApply pass (one-time, never renews), even with the cancel flag set.
+    await db.seekerSubscription.create({
+      data: { id: 'row_go', seekerProfileId: 'sp_go', tier: 'pro', status: 'active', planKey: 'pro_monthly', interval: 'pass', brand: 'goapply', rail: 'alipay', currency: 'CNY', amountMinor: 3900, currentPeriodEnd: LATER, cancelAtPeriodEnd: true },
+    });
+    const pass = await h.request<any>('POST', '/go/credits/resume', { ...GO, body: { autoRenewAck: true } });
+    expect(pass.status).toBe(409);
+    expect(pass.body).toMatchObject({ success: false, code: 'nothing_to_resume' });
+    // Not even a row that looks like a cancelled Stripe subscription.
+    await db.seekerSubscription.update({ where: { id: 'row_go' }, data: { planKey: 'pro_weekly', interval: 'week', rail: 'stripe', stripeSubscriptionId: 'sub_go' } });
+    expect((await h.request<any>('POST', '/go/credits/resume', { ...GO, body: { autoRenewAck: true } })).body.code).toBe('nothing_to_resume');
+    expect(stripe.subscriptions.update).not.toHaveBeenCalled();
+    expect(stripe.subscriptions.retrieve).not.toHaveBeenCalled();
+    expect(await consents()).toEqual([]);
+  });
+
+  it('a plan of the other site is not resumed from this one', async () => {
+    await cancelPlan();
+    // The RoboApply account, asked on GoApply's host.
+    const res = await h.request<any>('POST', PATH, { ...GO, body: { autoRenewAck: true } });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('nothing_to_resume');
+    expect(stripe.subscriptions.update).not.toHaveBeenCalled();
+    expect((await subRow()).cancelAtPeriodEnd).toBe(true);
   });
 });
 

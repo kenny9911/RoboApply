@@ -29,9 +29,14 @@
 // launch. V2 (WP-79): a Taiwan buyer is charged the plan's TWD price when the
 // owner configured one (`order.country === 'TW'`), and student plans need
 // `order.studentVerified === true`.
+// Tax (ST-8; MARKET_STRATEGY §5.1 "Tax"): off by default. With
+// `STRIPE_TAX_ENABLED=true` the session asks Stripe Tax to compute tax,
+// collects a tax id and requires the billing address (`stripeTaxEnabled`).
+// Prices are tax-inclusive (stripeCatalog.ts), so the price shown stays the
+// price charged. It needs Stripe Tax and the registrations in the Dashboard.
 
 import type Stripe from 'stripe';
-import type { EnvSource } from '../../brand/brandEnv.js';
+import { parseBoolEnv, type EnvSource } from '../../brand/brandEnv.js';
 import type { ExtendedPrismaClient } from '../../../lib/prisma.js';
 import { BillingError } from '../errors.js';
 import { appOrigin, withQueryParam } from '../origins.js';
@@ -68,6 +73,28 @@ export function stripeCheckoutMetadata(order: CheckoutOrder): Record<string, str
     ackVersion: CHECKOUT_ACK_PROSE_VERSION,
     currency: usesTwdPrice(order.plan, order.country) ? 'twd' : order.plan.currency.toLowerCase(),
   };
+}
+
+// ── Tax switch ───────────────────────────────────────────────────────────
+
+/** The one switch for Stripe Tax (default unset = off). */
+export const STRIPE_TAX_ENV = 'STRIPE_TAX_ENABLED';
+
+/**
+ * Stripe Tax is on for this deployment. The one rule for Checkout (automatic
+ * tax, tax id collection, required billing address) and for switch quotes
+ * (subscriptions.ts `quoteSwitch`).
+ */
+export function stripeTaxEnabled(env: EnvSource): boolean {
+  return parseBoolEnv(env[STRIPE_TAX_ENV]);
+}
+
+/** What `STRIPE_TAX_ENABLED` adds to a Checkout Session; with the switch off, only today's address rule. */
+export function checkoutTaxParams(env: EnvSource): Pick<Stripe.Checkout.SessionCreateParams, 'automatic_tax' | 'tax_id_collection' | 'billing_address_collection'> {
+  if (!stripeTaxEnabled(env)) return { billing_address_collection: 'auto' };
+  // `customer_update: { address: 'auto', name: 'auto' }` is always sent below:
+  // Stripe requires both for automatic tax and tax ids on an existing customer.
+  return { automatic_tax: { enabled: true }, tax_id_collection: { enabled: true }, billing_address_collection: 'required' };
 }
 
 // ── Checkout attempt → Stripe idempotency key ────────────────────────────
@@ -150,7 +177,7 @@ export function checkoutSubmitMessage(plan: Pick<CatalogPlan, 'kind' | 'interval
 }
 
 /** Stripe refused a repeated idempotency key because the parameters differ. */
-function isIdempotencyConflict(err: unknown): boolean {
+export function isStripeIdempotencyConflict(err: unknown): boolean {
   const e = err as { type?: unknown; rawType?: unknown } | null;
   return e?.type === 'StripeIdempotencyError' || e?.rawType === 'idempotency_error';
 }
@@ -159,7 +186,7 @@ function providerError(message: string, err: unknown): BillingError {
   if (err instanceof BillingError) return err;
   return new BillingError('payment_provider_error', message, {
     provider: 'stripe',
-    ...(isIdempotencyConflict(err) ? { reason: 'idempotency_conflict' } : {}),
+    ...(isStripeIdempotencyConflict(err) ? { reason: 'idempotency_conflict' } : {}),
     message: err instanceof Error ? err.message.slice(0, 200) : String(err),
   });
 }
@@ -240,8 +267,9 @@ export function createStripeRail(deps: StripeRailDeps = {}): PaymentRailImpl {
             ...(subscription
               ? { subscription_data: { metadata, description: `${order.brand.name} ${plan.defaultLabel}`.slice(0, 500) } }
               : { payment_intent_data: { metadata }, invoice_creation: { enabled: true, invoice_data: { metadata } } }),
-            billing_address_collection: 'auto',
-            // Keep what the buyer types at checkout on the customer (invoices, tax later).
+            // ST-8: tax fields only with STRIPE_TAX_ENABLED; otherwise the address stays optional.
+            ...checkoutTaxParams(env),
+            // Keep what the buyer types at checkout on the customer (invoices, tax).
             customer_update: { address: 'auto', name: 'auto' },
             // The buyer pays the currency and amount our plan sheet showed.
             adaptive_pricing: { enabled: false },

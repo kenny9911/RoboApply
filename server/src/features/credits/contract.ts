@@ -2,7 +2,7 @@
 //
 // Credits, plans, cancellation and admin caps (ARCHITECTURE.md §3.9, §7;
 // TASK_PLAN.md R-07, R-08, R-25, WP-21a/21b). Mounts:
-//   /api/v1/roboapply/credits        (seeker)
+//   /api/v1/roboapply/credits        (seeker; incl. POST /cancel and POST /resume)
 //   /api/v1/roboapply/billing/plans  (S/P; new path — legacy /billing routes untouched)
 //   /api/v1/public/cancel            (public one-click cancel flow, §312k BGB)
 //   /api/v1/roboapply/admin/credits  (admin)
@@ -58,6 +58,30 @@ export interface CancelResponse {
   accessUntil: string | null;
   /** One-time, non-blocking alternative ("Switch to the 7-day pass instead?"). */
   alternative: { planKey: 'pro_week_pass' } | null;
+}
+
+/**
+ * POST /credits/resume: "Keep my plan". Turns auto-renewal back on for a plan
+ * that was cancelled and is still running (MARKET_STRATEGY §5.1 "Cancel and
+ * resume"). The box "I agree this renews automatically every {period} at
+ * {price} until I cancel" must be ticked: it is stored as an `auto_renew_ack`
+ * consent record for the price that is charged, before Stripe is asked.
+ *
+ * Errors (the envelope's top-level `code`):
+ *   422 `auto_renew_ack_required`  the box is missing or not `true`;
+ *   409 `nothing_to_resume`        no live plan, a pass, a plan that still
+ *                                  renews, a period that ended, or GoApply
+ *                                  (its plans are one-time and never renew);
+ *   503 `rail_not_configured`      card payments are not set up here;
+ *   502 `payment_provider_error`   Stripe failed; the plan stays cancelled.
+ */
+export const ResumeSubscriptionBodySchema = z.object({ autoRenewAck: z.literal(true) }).strict();
+export type ResumeSubscriptionBody = z.infer<typeof ResumeSubscriptionBodySchema>;
+export interface ResumeResponse {
+  status: 'resumed';
+  planKey: string;
+  /** The next renewal (the end of the running period); null when unknown. */
+  renewsAt: string | null;
 }
 
 /**
@@ -331,6 +355,10 @@ export interface RefundQuoteResponse {
  */
 export const CREDITS_ERROR_CODES = {
   noSubscription: 'no_subscription',
+  /** 409: POST /credits/resume found no cancelled plan that is still running. */
+  nothingToResume: 'nothing_to_resume',
+  /** 422: POST /credits/resume without the ticked auto-renewal box. */
+  autoRenewAckRequired: 'auto_renew_ack_required',
   /** 410: the public cancel link is unknown, already used, for the other brand or older than 30 minutes. */
   cancelTokenInvalid: 'cancel_token_invalid',
   /** 503: the cancel-survey table is not in this database yet. */

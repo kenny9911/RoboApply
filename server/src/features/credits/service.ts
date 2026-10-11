@@ -2,7 +2,8 @@
 //
 // The credits HTTP area (TASK_PLAN.md WP-21a; ARCHITECTURE.md §3.9, §7):
 //   seeker   GET /credits, GET /credits/history, POST /credits/cancel,
-//            POST /credits/cancel/survey (stores the optional answer only)
+//            POST /credits/cancel/survey (stores the optional answer only),
+//            POST /credits/resume ("Keep my plan": renewal back on)
 //   public   GET /billing/plans, POST /api/v1/public/cancel(+/confirm)
 //   admin    caps editor (AppConfig credits.catalog.v1), entitlement
 //            overrides (each create and delete on /admin/credits/overrides
@@ -50,6 +51,7 @@ import {
   planDefinitionFor,
   publicFxReference,
   readFxReference,
+  recordCheckoutAcknowledgements,
   saveFxReference,
   showsWithdrawalWaiver,
   studentPlansListedFor,
@@ -58,6 +60,8 @@ import {
   type CancelOutcome,
   type FxReference,
 } from '../../platform/billing/index.js';
+// By file path: the billing index has another owner in this phase (MARKET_TASK_PLAN §2).
+import { resumeSubscription } from '../../platform/billing/subscriptions.js';
 import {
   CREDIT_CATALOG_CONFIG_KEY,
   CreditCatalogOverrideSchema,
@@ -85,6 +89,7 @@ import {
   type PlansResponseSent,
   type PlansStudentOffer,
   type RefundQuoteResponse,
+  type ResumeResponse,
   type TwRevenueResponse,
 } from './contract.js';
 
@@ -445,6 +450,47 @@ export class CreditsAreaService {
       }
     }
     return { status: outcome.status, accessUntil: outcome.accessUntil?.toISOString() ?? null, alternative };
+  }
+
+  /**
+   * "Keep my plan": turns auto-renewal back on for a cancelled plan that is
+   * still running (platform/billing `resumeSubscription` holds the rules).
+   * The acknowledgement is stored as an `auto_renew_ack` consent record for
+   * the plan at the price that is charged, before Stripe is asked; a failed
+   * Stripe call leaves the plan cancelled (the record stays and proves what
+   * was agreed to, like an abandoned checkout).
+   */
+  async resume(
+    userId: string,
+    brand: ProductBrand,
+    body: { autoRenewAck: boolean },
+    meta: { ip?: string | null; userAgent?: string | null } = {},
+  ): Promise<ResumeResponse> {
+    const db = await this.d.db();
+    const account = await loadBillingAccount(db, userId);
+    const seekerProfileId = account?.seekerProfileId ?? null;
+    // No account, no profile, or a plan of the other site: nothing here to resume.
+    if (!account || !seekerProfileId || account.brand !== brand.id) {
+      throw new BillingError('nothing_to_resume', 'There is no cancelled plan to keep');
+    }
+    const outcome = await resumeSubscription(
+      account,
+      { getStripe: this.d.getStripe, db, now: this.d.now, env: this.d.env() },
+      {
+        autoRenewAck: body.autoRenewAck === true,
+        record: (charged) =>
+          recordCheckoutAcknowledgements(db, {
+            seekerProfileId,
+            plan: { requiresAutoRenewAck: true, interval: charged.interval, amountMinor: charged.amountMinor, currency: charged.currency },
+            autoRenewAck: true,
+            withdrawalWaiver: false,
+            ip: meta.ip ?? null,
+            userAgent: meta.userAgent ?? null,
+          }),
+      },
+    );
+    this.d.invalidateEntitlements(userId);
+    return { status: 'resumed', planKey: outcome.planKey, renewsAt: outcome.renewsAt?.toISOString() ?? null };
   }
 
   /**

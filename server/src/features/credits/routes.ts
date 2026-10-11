@@ -7,6 +7,7 @@
 //                         practice interviews (grants are not uses)
 //     POST /cancel      → CancelResponse   one click; survey optional; confirmation email
 //     POST /cancel/survey {reason?, note?} → 204   stores the answer only (no cancel, email or event)
+//     POST /resume      {autoRenewAck: true} → ResumeResponse   "Keep my plan": renewal back on while the period is live
 //   createBillingPlansRouter() at /api/v1/roboapply/billing/plans (after the legacy
 //                              /billing router, which has no /plans path)
 //     GET  /            → PlansResponse    public; signed-in users also get `current`
@@ -32,6 +33,8 @@ import {
   CreditHistoryQuerySchema,
   PublicCancelConfirmBodySchema,
   PublicCancelRequestBodySchema,
+  ResumeSubscriptionBodySchema,
+  type ResumeSubscriptionBody,
 } from './contract.js';
 import { CreditsAreaService, creditsAreaService } from './service.js';
 
@@ -52,6 +55,21 @@ export function billingRoute<T>(fn: (req: Request, res: Response) => Promise<T>,
       throw err;
     }
   }, options);
+}
+
+/**
+ * The body of POST /credits/resume. A missing or unticked box is not a
+ * malformed request: it answers the billing code the page shows next to the
+ * box (422 `auto_renew_ack_required`). Anything else wrong with the body is
+ * the usual 422 `invalid_request`.
+ */
+export function parseResumeBody(req: Request): ResumeSubscriptionBody {
+  const body: unknown = req.body ?? {};
+  const isObject = typeof body === 'object' && body !== null && !Array.isArray(body);
+  if (isObject && Object.keys(body).every((k) => k === 'autoRenewAck') && (body as { autoRenewAck?: unknown }).autoRenewAck !== true) {
+    throw new BillingError('auto_renew_ack_required', 'Tick the box to agree that this plan renews automatically');
+  }
+  return parseBody(req, ResumeSubscriptionBodySchema);
 }
 
 export function serviceFor(deps: FeatureRouterDeps & { service?: CreditsAreaService }): CreditsAreaService {
@@ -86,6 +104,13 @@ export function createCreditsRouter(deps: FeatureRouterDeps & { service?: Credit
       await service.recordCancelSurvey(requireUserId(req), brandOf(req), parseBody(req, CancelSurveyBodySchema));
       res.status(204).end();
     }),
+  );
+  router.post(
+    '/resume',
+    ...auth,
+    billingRoute(async (req) =>
+      service.resume(requireUserId(req), brandOf(req), parseResumeBody(req), { ip: clientIp(req), userAgent: req.get('user-agent') ?? null }),
+    ),
   );
   return router;
 }
