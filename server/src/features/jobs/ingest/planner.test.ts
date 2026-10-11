@@ -4,7 +4,15 @@
 //   - intervals, windows and back-off (a window always covers its interval);
 //   - demand tuples from default profiles, SEO seeds;
 //   - which sources a tuple is planned on: on for the market, quota open, no
-//     seed on a source billed per request;
+//     seed on a source billed per request, and (MKT-5A; M-2, JI-7, JC-6) no
+//     seed on a metered search source while the licensed feed that writes its
+//     board is on; the mainland is planned on Active Jobs DB only while its
+//     plan gate is open, with a taxonomy role's label and never a typed title;
+//     a source of both markets is asked for mainland China by the mainland
+//     only (one posting, one market);
+//   - a source behind a plan whose gate is closed when the plan runs is still
+//     a source of the brand: its standing query and its demand are left as
+//     they are, never switched off for a day;
 //   - which texts: a typed title as typed, a role in the market's languages
 //     (Taiwan: Traditional Chinese and English, both over a month);
 //   - a query's identity (the window and the label text are not part of it);
@@ -22,6 +30,8 @@ vi.mock('../../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), 
 
 import { getBrand } from '../../../platform/brand/index.js';
 import { createFakePrisma } from '../../../test/fakePrisma.js';
+import { knownIngestProvidersForBrand, planAdaptersOnNow } from './providers.js';
+import { resetProviderQuotaForTests } from './quota.js';
 import type { RecordedSql } from '../../../test/sqlSnapshot.js';
 import { adapterCostModel, adapterDateWindow } from '../sources/index.js';
 import type { JobSourceAdapter } from '../sources/index.js';
@@ -35,6 +45,7 @@ import {
   collectDemand,
   datePostedFor,
   ensureBankSyncQueries,
+  feedCoversBoard,
   mergeTuples,
   nextRunDelayMs,
   paramsForTuple,
@@ -390,11 +401,15 @@ describe('a query\'s identity (queryHash)', () => {
     expect(paramsHash('intl', planned.params).startsWith(QUERY_HASH_PREFIX)).toBe(false);
   });
 
-  it('keeps the market in a query\'s identity, so two brands can plan the same search', () => {
-    const js = adapter('jsearch', { markets: ['intl', 'cn'] });
+  it('keeps the market in a query\'s identity: the same search planned for two brands is two rows', () => {
     const typed = { taxonomyId: null, q: 'Data analyst', country: 'CN', origin: 'demand' as const, users: 1 };
-    const [intl] = plan([{ ...typed, market: 'intl' }], [js]);
-    const [cn] = plan([{ ...typed, market: 'cn' }], [js]);
+    expect(queryHash({ ...typed, market: 'intl' }, null)).not.toBe(queryHash({ ...typed, market: 'cn' }, null));
+    // Two sources, one per market, plan it with the same params and two identities.
+    const [intl] = plan([{ ...typed, market: 'intl' }], [adapter('jsearch')]);
+    // A search source that is not a metered provider (a typed title never goes to a metered one on the mainland).
+    const mainland = adapter('usajobs', { markets: ['cn'] });
+    expect(adapterCostModel(mainland)).toBe('free');
+    const [cn] = plan([{ ...typed, market: 'cn' }], [mainland]);
     expect(intl!.params).toEqual(cn!.params);
     expect(intl!.paramsHash).not.toBe(cn!.paramsHash);
   });
@@ -435,6 +450,62 @@ describe('which sources a tuple is planned on (JI-2)', () => {
     expect(planned.filter((p) => p.provider === 'jsearch')).toEqual([]);
     expect(planned.filter((p) => p.provider === 'activejobs')).toHaveLength(seeds.length);
     expect(new Set(planned.map((p) => p.paramsHash)).size).toBe(seeds.length);
+  });
+
+  describe('no seeds on a metered search source while a feed that writes its board is on (M-2, JI-7)', () => {
+    const seed = tuple({ city: 'Austin', origin: 'seo_seed', users: 0 });
+    const demand = tuple({ city: 'Austin', users: 2 });
+    const feed = (over: Partial<JobSourceAdapter> = {}) => adapter('activejobs_feed', { kind: 'cursor', markets: ['intl', 'cn'], sourceBoards: ['activejobs'], dailyCallLimit: () => null, ...over });
+
+    it('the feed on: the Active Jobs DB search adapter plans no seed and keeps a user\'s own demand', () => {
+      expect(plan([seed], [perJob, feed()])).toEqual([]);
+      // The same tuple as a seed and as demand: the free source had the seed and now has the demand; the metered one gets the demand only.
+      expect(brief(plan([seed, demand], [perJob, feed(), free])).sort()).toEqual([
+        ['activejobs', 'Backend engineer', 'week', 'demand'],
+        ['usajobs', 'Backend engineer', 'week', 'demand'],
+      ]);
+      expect(brief(plan([seed], [perJob, feed(), free]))).toEqual([['usajobs', 'Backend engineer', 'week', 'seo_seed']]);
+      // The default 900 seeds: none on the search adapter while the feed covers the breadth.
+      expect(planQueries(seedTuples(robo, {}), [perJob, feed()])).toEqual([]);
+    });
+
+    it('the feed off (the gate closed, today\'s free plan): the seeds are planned as before', () => {
+      const closed = feed({ isEnabled: () => false });
+      expect(brief(plan([seed], [perJob, closed]))).toEqual([['activejobs', 'Backend engineer', 'week', 'seo_seed']]);
+      // Off for this market only.
+      const cnOnly = feed({ isEnabled: () => true, isEnabledFor: (m) => m === 'cn' });
+      expect(plan([seed], [perJob, cnOnly]).map((p) => p.provider)).toEqual(['activejobs']);
+      // A feed that throws while answering is off.
+      const boom = feed({
+        isEnabled: () => {
+          throw new Error('gate not readable');
+        },
+      });
+      expect(plan([seed], [perJob, boom]).map((p) => p.provider)).toEqual(['activejobs']);
+      // Without a feed in the list nothing changes.
+      expect(plan([seed], [perJob]).map((p) => p.provider)).toEqual(['activejobs']);
+    });
+
+    it('only a feed of the SAME board covers a search source; banks, boards and a free source are not affected', () => {
+      const bank = adapter('bank_robohire', { kind: 'cursor', sourceBoards: ['robohire'], dailyCallLimit: () => null });
+      const boards = adapter('ats_public', { kind: 'cursor', markets: ['intl', 'cn'], sourceBoards: ['greenhouse', 'lever'], dailyCallLimit: () => null });
+      expect(plan([seed], [perJob, bank, boards]).map((p) => p.provider)).toEqual(['activejobs']);
+      expect(feedCoversBoard(perJob, [perJob, bank, boards], 'intl')).toBe(false);
+      expect(feedCoversBoard(perJob, [perJob, feed()], 'intl')).toBe(true);
+      // A feed of another market does not cover this one.
+      expect(feedCoversBoard(perJob, [perJob, feed({ markets: ['cn'] })], 'intl')).toBe(false);
+      // A search adapter is never its own feed, and a second search adapter of the board is not a feed.
+      expect(feedCoversBoard(perJob, [perJob, adapter('activejobs_feed', { sourceBoards: ['activejobs'] })], 'intl')).toBe(false);
+      // A source that costs nothing keeps its seeds whatever feed is on.
+      const freeSameBoard = adapter('usajobs', { sourceBoards: ['activejobs'] });
+      expect(plan([seed], [freeSameBoard, feed()]).map((p) => p.provider)).toEqual(['usajobs']);
+    });
+
+    it('asks the feed whether it is on once per market, not once per seed', () => {
+      const isEnabled = vi.fn(() => true);
+      planQueries(seedTuples(robo, { INGEST_SEED_ROLES: '20', INGEST_SEED_CITIES_PER_COUNTRY: '2' }), [perJob, feed({ isEnabled })]);
+      expect(isEnabled).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('a source that is off gets no query: disabled, throwing, or off for this market only', () => {
@@ -489,12 +560,62 @@ describe('which sources a tuple is planned on (JI-2)', () => {
   });
 
   it('market cn plans a search for country CN only', () => {
-    const cnAdapter = adapter('jsearch', { markets: ['intl', 'cn'] });
-    const base = { market: 'cn' as const, taxonomyId: null, q: 'Data analyst', origin: 'demand' as const, users: 1 };
+    const cnAdapter = adapter('activejobs', { markets: ['intl', 'cn'], queryLanguages: ['en', 'zh-CN'] });
+    const base = tuple({ market: 'cn', users: 1 });
     expect(plan([{ ...base, country: 'US' }], [cnAdapter])).toEqual([]);
     expect(plan([{ ...base, country: 'CN' }], [cnAdapter])).toHaveLength(1);
-    // The RoboApply search adapters serve market intl only: nothing is planned for GoApply on them.
+    // A search adapter that serves market intl only: nothing is planned for GoApply on it.
     expect(plan([{ ...base, country: 'CN' }], [adapter('jsearch'), adapter('activejobs')])).toEqual([]);
+  });
+
+  it('one posting, one market: a source that serves both markets is asked for mainland China by the mainland only', () => {
+    const both = adapter('activejobs', { markets: ['intl', 'cn'], queryLanguages: ['en', 'zh-CN'] });
+    const intlOnly = adapter('jsearch');
+    const china = tuple({ country: 'CN', city: 'Shanghai', users: 3 });
+    // RoboApply's search for Shanghai: not on Active Jobs DB (its mainland rows are GoApply's, each would be billed and
+    // dropped); still on JSearch, whose rows are RoboApply's alone.
+    expect(plan([china], [both, intlOnly]).map((p) => [p.provider, p.market, p.params.country])).toEqual([['jsearch', 'intl', 'CN']]);
+    expect(plan([tuple({ country: 'CN', users: 3 })], [both])).toEqual([]);
+    // A typed title and a seed are no exception.
+    expect(plan([tuple({ taxonomyId: null, q: 'Chief of staff', country: 'CN', users: 1 }), tuple({ country: 'CN', origin: 'seo_seed', users: 0 })], [both])).toEqual([]);
+    // Every other country is planned on it as before, Hong Kong and Taiwan included (they are the international market's).
+    for (const country of ['US', 'HK', 'TW', 'SG']) expect(plan([tuple({ country, users: 3 })], [both]).map((p) => p.params.country), country).toEqual([country]);
+    // The mainland's own search for the same place is planned on it.
+    expect(plan([tuple({ market: 'cn', country: 'CN', city: 'Shanghai', users: 3 })], [both]).map((p) => [p.provider, p.market])).toEqual([['activejobs', 'cn']]);
+    // The rule is the source's two markets, not its id: the same adapter serving RoboApply only is asked for China.
+    expect(plan([china], [adapter('activejobs')]).map((p) => p.provider)).toEqual(['activejobs']);
+  });
+
+  it('market cn: a title a person typed is never planned on a metered provider, only a taxonomy role\'s label is (JC-6: role text only)', () => {
+    const metered = adapter('activejobs', { markets: ['intl', 'cn'], queryLanguages: ['en', 'zh-CN'] });
+    const perRequestCn = adapter('jsearch', { markets: ['intl', 'cn'], queryLanguages: ['en', 'zh-CN'] });
+    const unmetered = adapter('usajobs', { markets: ['intl', 'cn'] });
+    const typed = tuple({ market: 'cn', taxonomyId: null, q: '我想找上海的前端工作 13800000000', country: 'CN', users: 1 });
+    expect(plan([typed], [metered, perRequestCn])).toEqual([]);
+    // A source that costs nothing per call (our own index of a public source) still gets it as typed.
+    expect(plan([typed], [metered, unmetered]).map((p) => [p.provider, p.params.q])).toEqual([['usajobs', typed.q]]);
+    // The role of the taxonomy is planned on the metered source, as its Simplified Chinese label.
+    expect(plan([tuple({ market: 'cn', country: 'CN', users: 1 })], [metered]).map((p) => [p.provider, p.params.q, p.params.taxonomyId, p.language])).toEqual([
+      ['activejobs', '后端工程师', 'backend_engineer', 'zh-CN'],
+    ]);
+    // The international market is unchanged: a typed title goes to every source as typed.
+    expect(plan([tuple({ taxonomyId: null, q: 'Chief of staff', users: 1 })], [metered, adapter('jsearch')]).map((p) => p.provider)).toEqual(['activejobs', 'jsearch']);
+  });
+
+  it('market cn is planned on Active Jobs DB only while its plan gate is open for the mainland (JC-6)', () => {
+    let open = false;
+    const activejobs = adapter('activejobs', { markets: ['intl', 'cn'], queryLanguages: ['en', 'zh-CN'], isEnabled: () => true, isEnabledFor: (m) => m === 'intl' || open });
+    const cn = tuple({ market: 'cn', country: 'CN', city: 'Shanghai', users: 3 });
+    // Today's free plan: nothing is planned for the mainland.
+    expect(plan([cn], [activejobs])).toEqual([]);
+    // RoboApply is planned as before.
+    expect(plan([tuple({ users: 3 })], [activejobs]).map((p) => [p.provider, p.market])).toEqual([['activejobs', 'intl']]);
+    open = true;
+    expect(plan([cn], [activejobs]).map((p) => [p.provider, p.market, p.params.q, p.params.country, p.params.city, p.params.datePosted])).toEqual([
+      ['activejobs', 'cn', '后端工程师', 'CN', 'Shanghai', 'week'],
+    ]);
+    // GoApply has no SEO seeds, gate open or not.
+    expect(seedTuples(go, {})).toEqual([]);
   });
 
   it('two tuples that are one search make one query, with the larger demand', () => {
@@ -909,6 +1030,9 @@ describe('database steps', () => {
     // A brand with no source at all keeps no query due.
     await retireUnrunProviders(db as unknown as IngestDb, 'cn', [adapter('jsearch')]);
     expect(db.$sql.last()!.values).toEqual(['cn', []]);
+    // A source of the brand that is not in the list because its plan gate is closed right now is kept too (named once).
+    await retireUnrunProviders(db as unknown as IngestDb, 'intl', adapters, ['activejobs_feed', 'jsearch']);
+    expect(db.$sql.last()!.values).toEqual(['intl', ['jsearch', 'activejobs', 'bank_robohire', 'activejobs_feed']]);
 
     // The standing bank / board query of a provider that is back is enabled and made due.
     const fresh = createFakePrisma({ sql: { defaultResult: 1 } });
@@ -1078,6 +1202,9 @@ function plannerDb(options: { queries?: QueryRow[]; seed?: Record<string, Record
 const activeUser = (id: string) => ({ id, brand: 'roboapply', lastActiveAt: new Date(NOW.getTime() - HOUR) });
 const profile = (userId: string, filters: Record<string, unknown>) => ({ id: `p-${userId}`, userId, isDefault: true, filters });
 const SEED_ENV = { INGEST_SEED_ROLES: '2', INGEST_SEED_CITIES_PER_COUNTRY: '1' };
+
+/** Every ingest source RoboApply has, on or off (providers.ts `knownIngestProvidersForBrand` with the boards registered). */
+const KNOWN_ROBO: readonly string[] = ['activejobs', 'activejobs_feed', 'bank_robohire', 'jsearch', 'ats_public'];
 
 /** The RoboApply adapter list of the parity wave, every source on. */
 const roboAdapters = (over: Partial<Record<string, Partial<JobSourceAdapter>>> = {}): JobSourceAdapter[] => [
@@ -1345,6 +1472,161 @@ describe('a plan run (runPlanner)', () => {
     ]);
     // Active Jobs DB is asked its own seven days: the row says so (the missed-refresh rule reads it).
     expect(rows().filter((r) => r.provider === 'activejobs').map((r) => [r.params.q, r.params.datePosted])).toEqual([['Backend engineer', 'week']]);
+  });
+
+  it('the licensed feed on (a paid plan): the feed gets its standing query, the search adapter loses its seeds and keeps demand (JI-7)', async () => {
+    const feed = (on: boolean) => adapter('activejobs_feed', { kind: 'cursor', markets: ['intl', 'cn'], sourceBoards: ['activejobs'], dailyCallLimit: () => null, isEnabled: () => on });
+    const seed = { user: [activeUser('u1')], rASearchProfile: [profile('u1', { taxonomyIds: ['backend_engineer'], country: 'US' })] };
+    const { db, rows, enabled } = plannerDb({ seed });
+    // Day 1, the free plan: the feed is not one of the brand's ingest adapters at all (providers.ts) and the seeds are planned.
+    const day1 = await runPlanner(db, robo, roboAdapters(), { now: NOW, env: SEED_ENV, queryLabels: labels });
+    expect(day1.seedTuples).toBe(2);
+    expect(enabled('activejobs').map((r) => r.origin).sort()).toEqual(['demand', 'seo_seed', 'seo_seed']);
+    expect(rows().some((r) => r.provider === 'activejobs_feed')).toBe(false);
+    // Day 2, the plan was bought: the gate is open and the feed is in the list.
+    const withFeed = [...roboAdapters(), feed(true)];
+    const day2 = await runPlanner(db, robo, withFeed, { now: new Date(NOW.getTime() + DAY), env: SEED_ENV, queryLabels: labels });
+    expect(enabled('activejobs').map((r) => r.origin)).toEqual(['demand']);
+    expect(day2.superseded).toBe(2);
+    expect(rows().filter((r) => r.provider === 'activejobs_feed').map((r) => [r.market, r.origin, r.enabled, r.params])).toEqual([['intl', 'bank_sync', true, BANK_SYNC_PARAMS]]);
+    expect(day2.skippedProviders).toEqual([]);
+    // Day 3, the gate is closed when the plan runs (the feed's own switch, a month's quota spent, a process that had
+    // not loaded the stored reading): the feed is not in the run's list (providers.ts) but it is still a source of the
+    // brand. Its standing query stays switched on with its cursor, so the first tick that finds the gate open goes on
+    // reading; while the feed is off the seeds are planned again.
+    rows().find((r) => r.provider === 'activejobs_feed')!.params = { ...BANK_SYNC_PARAMS, cursor: '{"v":1}' };
+    const day3 = await runPlanner(db, robo, roboAdapters(), { now: new Date(NOW.getTime() + 2 * DAY), env: SEED_ENV, queryLabels: labels, knownProviders: KNOWN_ROBO });
+    expect(day3.retired).toBe(0);
+    expect(day3.skippedProviders).toEqual([]);
+    expect(rows().find((r) => r.provider === 'activejobs_feed')).toMatchObject({ enabled: true, params: { cursor: '{"v":1}' } });
+    expect(enabled('activejobs').map((r) => r.origin).sort()).toEqual(['demand', 'seo_seed', 'seo_seed']);
+    // Day 4, open again: the same row with the cursor it had, and the seeds go.
+    await runPlanner(db, robo, withFeed, { now: new Date(NOW.getTime() + 3 * DAY), env: SEED_ENV, queryLabels: labels, knownProviders: KNOWN_ROBO });
+    expect(rows().filter((r) => r.provider === 'activejobs_feed')).toHaveLength(1);
+    expect(rows().find((r) => r.provider === 'activejobs_feed')).toMatchObject({ enabled: true, params: { cursor: '{"v":1}' } });
+    expect(enabled('activejobs').map((r) => r.origin)).toEqual(['demand']);
+    // Day 5, the operator narrows the feed away (JOB_PROVIDERS_ROBOAPPLY): it is no source of the brand any more, and
+    // only now is its query switched off (cursor kept); named again, the plan switches it on.
+    const narrowed = KNOWN_ROBO.filter((p) => p !== 'activejobs_feed');
+    const day5 = await runPlanner(db, robo, roboAdapters(), { now: new Date(NOW.getTime() + 4 * DAY), env: SEED_ENV, queryLabels: labels, knownProviders: narrowed });
+    expect(day5.retired).toBe(1);
+    expect(rows().find((r) => r.provider === 'activejobs_feed')).toMatchObject({ enabled: false, params: { cursor: '{"v":1}' } });
+    await runPlanner(db, robo, withFeed, { now: new Date(NOW.getTime() + 5 * DAY), env: SEED_ENV, queryLabels: labels, knownProviders: KNOWN_ROBO });
+    expect(rows().find((r) => r.provider === 'activejobs_feed')).toMatchObject({ enabled: true, params: { cursor: '{"v":1}' } });
+    for (const a of withFeed) expect(a.fetch).not.toHaveBeenCalled();
+  });
+
+  it('a gate that is closed when the plan runs switches nothing off: the feed\'s standing query, and the mainland\'s Active Jobs DB demand with its score', async () => {
+    const seed = { user: [{ id: 'g1', brand: 'goapply', lastActiveAt: NOW }, { id: 'g2', brand: 'goapply', lastActiveAt: NOW }], rASearchProfile: [profile('g1', { taxonomyIds: ['backend_engineer'], country: 'CN' }), profile('g2', { taxonomyIds: ['backend_engineer'], country: 'CN' })] };
+    const base = [adapter('bank_gohire', { kind: 'cursor', markets: ['cn'], dailyCallLimit: () => null })];
+    const search = adapter('activejobs', { markets: ['intl', 'cn'], queryLanguages: ['en', 'zh-CN'] });
+    const feed = adapter('activejobs_feed', { kind: 'cursor', markets: ['intl', 'cn'], sourceBoards: ['activejobs'], dailyCallLimit: () => null });
+    const known = ['bank_gohire', 'activejobs', 'activejobs_feed'];
+    const { db, rows } = plannerDb({ seed });
+    // 02:00 on a day the gate is open.
+    await runPlanner(db, go, [...base, search, feed], { now: NOW, env: {}, queryLabels: labels, knownProviders: known });
+    const demand = () => rows().find((r) => r.provider === 'activejobs' && r.origin === 'demand')!;
+    const standing = () => rows().find((r) => r.provider === 'activejobs_feed')!;
+    expect(demand()).toMatchObject({ market: 'cn', enabled: true, demandScore: 2, priority: 50 });
+    standing().params = { ...BANK_SYNC_PARAMS, cursor: '{"v":1,"phase":"hourly"}' };
+    // 02:00 the next day: the gate is closed at this hour, so providers.ts hands the run neither Active Jobs DB source.
+    const closed = await runPlanner(db, go, base, { now: new Date(NOW.getTime() + DAY), env: {}, queryLabels: labels, knownProviders: known });
+    expect(closed).toMatchObject({ planned: 0, retired: 0, zeroed: 0, skippedProviders: [] });
+    // Neither is switched off, the demand keeps the score of the users behind it, the cursor is where it was.
+    expect(demand()).toMatchObject({ enabled: true, demandScore: 2, priority: 50 });
+    expect(standing()).toMatchObject({ enabled: true, params: { cursor: '{"v":1,"phase":"hourly"}' } });
+    // The statements name them: kept by the retirement of unrun providers, left alone by the unused-demand rule.
+    const sql = (db as unknown as { $sql: { calls: RecordedSql[] } }).$sql.calls;
+    const unrun = sql.filter((c) => c.text.includes('"enabled" = true AND NOT ("provider" = ANY(')).at(-1)!;
+    expect(unrun.values).toEqual(['cn', ['bank_gohire', 'activejobs', 'activejobs_feed']]);
+    const zero = sql.filter((c) => c.text.startsWith('UPDATE "RAIngestQuery" SET "demandScore" = 0')).at(-1)!;
+    expect(zero.values.at(-1)).toEqual(['activejobs', 'activejobs_feed']);
+    // A provider that is no source of the brand is still switched off (a JSearch row left from the old mainland switch).
+    rows().push(storedQuery({ id: 'old-js', provider: 'jsearch', market: 'cn' }));
+    const again = await runPlanner(db, go, base, { now: new Date(NOW.getTime() + 2 * DAY), env: {}, queryLabels: labels, knownProviders: known });
+    expect(again.retired).toBe(1);
+    expect(rows().find((r) => r.id === 'old-js')!.enabled).toBe(false);
+    expect([demand().enabled, standing().enabled]).toEqual([true, true]);
+  });
+
+  it('by default the brand\'s sources are the job source registry\'s: a source behind a plan is known while its gate is closed', async () => {
+    // What cron hands the run on the free plan: the brand's own list. The registry also describes the feed.
+    expect(knownIngestProvidersForBrand(robo, {})).toEqual(['activejobs', 'activejobs_feed', 'bank_robohire', 'jsearch']);
+    expect(knownIngestProvidersForBrand(go, {})).toEqual(['bank_gohire', 'activejobs', 'activejobs_feed']);
+    // Narrowed away: no source of the brand. JSearch and LinkedIn are never a mainland source.
+    expect(knownIngestProvidersForBrand(robo, { JOB_PROVIDERS_ROBOAPPLY: 'activejobs,jsearch' })).toEqual(['activejobs', 'jsearch']);
+    expect(knownIngestProvidersForBrand(go, { JOB_PROVIDERS_GOAPPLY: 'bank_gohire,jsearch,linkedin' })).toEqual(['bank_gohire']);
+    const feedQuery = () => storedQuery({ id: 'feed', provider: 'activejobs_feed', origin: 'bank_sync', paramsHash: paramsHash('intl', BANK_SYNC_PARAMS), params: { ...BANK_SYNC_PARAMS, cursor: '{"v":1}' }, priority: 5 });
+    const kept = plannerDb({ queries: [feedQuery(), storedQuery({ id: 'li', provider: 'linkedin' })] });
+    const result = await runPlanner(kept.db, robo, roboAdapters(), { now: NOW, env: SEED_ENV, queryLabels: labels });
+    // LinkedIn is retired as before; the feed's query waits for its gate.
+    expect(result.retired).toBe(1);
+    expect(kept.rows().find((r) => r.id === 'feed')).toMatchObject({ enabled: true, params: { cursor: '{"v":1}' } });
+    expect(kept.rows().find((r) => r.id === 'li')!.enabled).toBe(false);
+    // With the feed narrowed away by the operator it is retired like any provider the brand does not have.
+    const gone = plannerDb({ queries: [feedQuery()] });
+    await runPlanner(gone.db, robo, roboAdapters(), { now: NOW, env: { ...SEED_ENV, JOB_PROVIDERS_ROBOAPPLY: 'activejobs,bank_robohire,jsearch' }, queryLabels: labels });
+    expect(gone.rows().find((r) => r.id === 'feed')!.enabled).toBe(false);
+  });
+
+  it('a list made before the stored quota reading was loaded lacks the feed although it is on: the run asks again, plans no seeds and creates the standing query', async () => {
+    // The real registry and the real gate, open: a key and a paid plan's size.
+    vi.stubEnv('RAPID_API_KEY', 'synthetic-rapidapi-key-0007');
+    vi.stubEnv('FANTASTIC_MONTHLY_JOBS', '100000');
+    for (const name of ['FANTASTIC_FEED_DISABLED', 'FANTASTIC_TRANSPORT', 'RA_ONBOARDING_EXTERNAL_JOBS_DISABLED', 'RA_ONBOARDING_ACTIVEJOBS_DISABLED', 'JOB_PROVIDERS_ROBOAPPLY']) vi.stubEnv(name, '');
+    resetProviderQuotaForTests();
+    try {
+      expect(planAdaptersOnNow(robo, SEED_ENV).map((a) => a.provider)).toEqual(['activejobs_feed']);
+      // What cron handed the run: RoboApply's own sources, listed while this process still knew no plan size.
+      const stale = roboAdapters();
+      const { db, rows, enabled } = plannerDb();
+      const result = await runPlanner(db, robo, stale, { now: NOW, env: SEED_ENV, queryLabels: labels });
+      // 2 seed tuples, none planned: the feed covers the board. Without this the day would buy seed searches per posting.
+      expect(result).toMatchObject({ seedTuples: 2, planned: 0, retired: 0 });
+      expect(enabled('activejobs')).toEqual([]);
+      expect(rows().filter((r) => r.provider === 'activejobs_feed').map((r) => [r.market, r.origin, r.enabled])).toEqual([['intl', 'bank_sync', true]]);
+      // A list that already holds the feed is taken as it is (the caller's adapter, once).
+      const feed = adapter('activejobs_feed', { kind: 'cursor', markets: ['intl', 'cn'], sourceBoards: ['activejobs'], dailyCallLimit: () => null });
+      const fresh = plannerDb();
+      await runPlanner(fresh.db, robo, [...roboAdapters(), feed], { now: NOW, env: SEED_ENV, queryLabels: labels });
+      expect(fresh.rows().filter((r) => r.provider === 'activejobs_feed')).toHaveLength(1);
+      // The gate closed (the feed's own switch): nothing joins, and the seeds are planned as on any day without a feed.
+      vi.stubEnv('FANTASTIC_FEED_DISABLED', 'true');
+      expect(planAdaptersOnNow(robo, SEED_ENV)).toEqual([]);
+      const off = plannerDb();
+      expect(await runPlanner(off.db, robo, roboAdapters(), { now: NOW, env: SEED_ENV, queryLabels: labels })).toMatchObject({ seedTuples: 2, planned: 2 });
+      // Narrowed away by the operator: not asked at all.
+      vi.stubEnv('FANTASTIC_FEED_DISABLED', '');
+      expect(planAdaptersOnNow(robo, { ...SEED_ENV, JOB_PROVIDERS_ROBOAPPLY: 'activejobs,jsearch' })).toEqual([]);
+      // GoApply: both Active Jobs DB sources stand behind the plan.
+      expect(planAdaptersOnNow(go, {}).map((a) => a.provider)).toEqual(['activejobs', 'activejobs_feed']);
+    } finally {
+      vi.unstubAllEnvs();
+      resetProviderQuotaForTests();
+    }
+  });
+
+  it('GoApply with the plan gate open: the feed\'s mainland standing query and the role\'s Simplified Chinese search on Active Jobs DB; closed: neither (JC-6)', async () => {
+    const seed = { user: [{ id: 'g1', brand: 'goapply', lastActiveAt: NOW }], rASearchProfile: [profile('g1', { taxonomyIds: ['backend_engineer'], country: 'CN' })] };
+    const base = [adapter('bank_gohire', { kind: 'cursor', markets: ['cn'], dailyCallLimit: () => null }), adapter('ats_public', { kind: 'cursor', markets: ['intl', 'cn'], ownRun: true, dailyCallLimit: () => null })];
+    const search = adapter('activejobs', { markets: ['intl', 'cn'], queryLanguages: ['en', 'zh-CN'] });
+    const feed = adapter('activejobs_feed', { kind: 'cursor', markets: ['intl', 'cn'], sourceBoards: ['activejobs'], dailyCallLimit: () => null });
+    // Closed (today's free plan): providers.ts leaves both out of GoApply's list.
+    const closed = plannerDb({ seed });
+    const before = await runPlanner(closed.db, go, base, { now: NOW, env: {}, queryLabels: labels });
+    expect(before).toMatchObject({ demandTuples: 1, planned: 0, seedTuples: 0 });
+    expect(closed.rows().map((r) => r.provider)).toEqual(['bank_gohire']);
+    // Open: both are in the list.
+    const open = plannerDb({ seed });
+    const after = await runPlanner(open.db, go, [...base, search, feed], { now: NOW, env: {}, queryLabels: labels });
+    expect(after).toMatchObject({ demandTuples: 1, planned: 1, seedTuples: 0, skippedProviders: [] });
+    expect(open.rows().map((r) => [r.provider, r.market, r.origin, r.params.q]).sort()).toEqual([
+      ['activejobs', 'cn', 'demand', '后端工程师'],
+      ['activejobs_feed', 'cn', 'bank_sync', ''],
+      ['bank_gohire', 'cn', 'bank_sync', ''],
+    ]);
+    // No JSearch row, ever.
+    expect(open.rows().some((r) => r.provider === 'jsearch')).toBe(false);
   });
 
   it('GoApply: no seed, no search query, the standing syncs of the sources that are on', async () => {
