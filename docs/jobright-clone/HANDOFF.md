@@ -118,7 +118,10 @@ Never build in the worktree the dev server runs from (they fight over `.next`). 
 git worktree add --detach /Users/kenny/code/RoboApply/.claude/worktrees/jobright-build feat/jobright-clone
 # a later rebuild in the same worktree: move it to the branch's newest commit
 git -C /Users/kenny/code/RoboApply/.claude/worktrees/jobright-build checkout --detach feat/jobright-clone
-# link node_modules and copy .env / .env.local as docs/jobright-clone/orch/wave-setup.sh does, then:
+# node_modules must be a REAL directory here: the bundler refuses a symlink that leaves the project
+# ("Symlink node_modules could not be resolved"). On macOS an APFS clone is instant and takes no space:
+#   cp -cR ../jobright-clone/node_modules node_modules        (or: npm ci)
+# copy .env and .env.local from the clone worktree, then:
 npm run build
 ```
 
