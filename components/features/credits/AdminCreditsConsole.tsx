@@ -10,6 +10,14 @@
 //                     reference line hides itself after 45 days
 //   Taiwan revenue    year-to-date Taiwan-card revenue vs the NT$600,000 VAT
 //                     registration level, warning at 70 %
+//   Refunds           one user's refund quote, the refund through Stripe, the
+//                     refunds, withdrawals and disputes on record, and the
+//                     manual refund record of a mainland order (ST-4, AL-7)
+//   Practice cost     average platform cost of the latest practice sessions
+//                     per brand, with the owner's rule (PC-5)
+//   Stripe            key mode, guard, webhook secrets, missing endpoint
+//                     events (ST-3); the international brand only
+// The last three live in AdminBillingPanels.tsx.
 //
 // Admin only (the API enforces it too). Every number shown comes from the API.
 
@@ -20,6 +28,7 @@ import { Btn } from '../../v3/primitives/Btn';
 import { EmptyState } from '../../v3/primitives/EmptyState';
 import { PageHeader } from '../../v3/primitives/PageHeader';
 import { useAuth } from '../../../lib/auth/useAuth';
+import { useBrand } from '../../../lib/brand/BrandProvider';
 import { BRAND_IDS, getBrand, type BrandId } from '../../../lib/brand/registry.generated';
 import { FX_REFERENCE_MAX_AGE_DAYS, isFxReferenceFresh } from '../../../lib/pricing';
 import {
@@ -42,12 +51,14 @@ import {
   revenueShare,
   type CapDraft,
 } from './adminCatalog';
+import { PracticeCostPanel, RefundsPanel, StripePanel } from './AdminBillingPanels';
 import { bucketLabelKey, parseDate } from './labels';
 import styles from './credits.module.css';
 
 export function AdminCreditsConsole() {
   const t = useTranslations('credits.admin');
   const tAdmin = useTranslations('admin');
+  const brand = useBrand();
   const { user, status } = useAuth();
   if (status === 'loading') return <p className={styles.muted} aria-busy="true">{t('loading')}</p>;
   if (user?.role !== 'admin') {
@@ -60,6 +71,10 @@ export function AdminCreditsConsole() {
       <OverridesPanel />
       <FxPanel />
       <TwRevenuePanel />
+      <RefundsPanel />
+      <PracticeCostPanel />
+      {/* Stripe is the international brand's rail; it never serves the mainland brand. */}
+      {brand.market === 'intl' ? <StripePanel /> : null}
     </div>
   );
 }

@@ -28,7 +28,7 @@ import { Sheet } from '../../v3/primitives/Sheet';
 import { useBrand } from '../../../lib/brand/BrandProvider';
 import type { CatalogPlan } from '../../../lib/api/credits';
 import { useConfirmSwitch, usePaymentPortal, useSwitchQuote } from '../../../hooks/credits/useBillingActions';
-import { money, parseDate, planNameKey, pricePeriod } from './labels';
+import { chargedMoney, parseDate, planNameKey, pricePeriod } from './labels';
 import styles from './credits.module.css';
 
 export interface SwitchQuoteSheetProps {
@@ -71,6 +71,8 @@ export function SwitchQuoteSheet({ plan, withdrawalWaiver, onClose, navigate = d
   const needsBank = answer?.status === 'requires_action' ? answer : null;
   const doneDate = parseDate(done?.nextRenewalAt);
   const period = pricePeriod(plan);
+  // Every amount of the quote is a charge in the quote's own currency: one in another currency than the brand's names it.
+  const money = (locale: string, amountMinor: number | null | undefined, currency: string) => chargedMoney(locale, amountMinor, currency, brand.currency);
 
   return (
     <Sheet open onClose={onClose} title={t('title', { plan: name })}>

@@ -213,7 +213,29 @@
             "unauthorized": "{provider}: the provider rejected the key.",
             "low": "{provider}: {value} left of the monthly quota (alert level {level})."
           }
+        },
+        "payments": {
+          "title": "Payments",
+          "sub": "Whether card payments can be taken here.",
+          "loading": "Loading…",
+          "ready": "Card payments are ready.",
+          "notReady": "Card payments are not ready.",
+          "reason": {
+            "missing": "No Stripe key is set.",
+            "live_key_outside_production": "A live Stripe key is refused outside production.",
+            "no_secret": "No webhook signing secret is set."
+          },
+          "eventsAll": "The webhook endpoint sends every event the site acts on.",
+          "missingEvents": "{count, plural, one {# event the site acts on is not sent by the webhook endpoint.} other {# events the site acts on are not sent by the webhook endpoint.}}",
+          "noEndpoint": "No webhook endpoint in Stripe points at this site.",
+          "notChecked": "The webhook endpoint could not be checked.",
+          "failed": "Card payments could not be checked.",
+          "link": "See the full Stripe readout in Credits and plans"
         }
+      },
+      "refund": {
+        "sub": "What the published refund rules say about this person's latest charge. This is a check only.",
+        "issueElsewhere": "To refund, open Credits and plans, then Refunds. A card charge is refunded there. A mainland order is recorded there after the money was returned in the merchant console."
       }
     }
   }

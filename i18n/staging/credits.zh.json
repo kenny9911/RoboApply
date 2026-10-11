@@ -31,6 +31,23 @@
         "row": "{name}：{price}。",
         "how": "学生价面向在“设置”中验证学校邮箱的学生。邮箱验证后，学生套餐会显示在那里。"
       }
+    },
+    "history": {
+      "more": "显示更多",
+      "loadingMore": "加载中…",
+      "moreError": "未能加载更多，请重试。",
+      "channel": {
+        "alipay": "支付宝",
+        "wechatpay": "微信支付"
+      },
+      "refunded": {
+        "full": "已退款",
+        "partial": "部分退款"
+      },
+      "status": {
+        "uncollectible": "未支付",
+        "unknown": "状态未知"
+      }
     }
   }
 }

@@ -9,6 +9,10 @@
 // running (`ResumeSubscription`: the renewal sentence behind an unticked box,
 // then the card reads "Renews on {date}" from the server again),
 // "Buy another pass" for passes, the plan sheet, and the invoice history link.
+// Under the plan card, as its own section: "Withdraw from contract"
+// (`WithdrawContract`, ST-9), shown only while the server says a purchase of
+// the last 14 days can still be withdrawn. It is never part of the cancel
+// control and never shown on the mainland brand.
 // GoApply: a pass that is still running gets 续费 (`CnRenewButton`, the
 // WeChat Pay sheet) only when WeChat Pay is the rail a purchase gets by
 // default, i.e. the first rail the server lists (Alipay cannot charge).
@@ -33,6 +37,7 @@ import { PaymentFailedBanner } from './PaymentFailedBanner';
 import { PlanPicker, offeredRails } from './PlanPicker';
 import { QuarterlySuggestion } from './QuarterlySuggestion';
 import { ResumeSubscription } from './ResumeSubscription';
+import { WithdrawContract } from './WithdrawContract';
 import { StudentVerification } from '../account-v2';
 import { CnRenewButton, sellableCnPlan, useWechatPayAvailable } from '../billing-cn';
 import { parseDate, planNameKey } from './labels';
@@ -51,6 +56,7 @@ export function BillingView({ visitorCountry, requestedPlan, navigate }: Billing
     <div className={styles.stack} data-testid="billing-view">
       <PaymentFailedBanner navigate={navigate} />
       <CurrentPlanCard sub={sub} navigate={navigate} />
+      <WithdrawContract visitorCountry={visitorCountry} />
       <QuarterlySuggestion />
       <StudentVerification />
       <section className={styles.card} aria-labelledby="billing-plans">

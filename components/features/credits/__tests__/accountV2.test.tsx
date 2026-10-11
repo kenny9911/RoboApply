@@ -13,7 +13,18 @@ import { RoboApiError } from '../../../../lib/api/client';
 import { QUARTERLY_SUGGESTION_KEYS, displayPrice, quarterlySuggestion } from '../../../../lib/pricing';
 
 const api = vi.hoisted(() => ({ getCredits: vi.fn(), getPlans: vi.fn(), getCreditHistory: vi.fn(), cancelSubscription: vi.fn(), sendCancelSurvey: vi.fn() }));
-const account = vi.hoisted(() => ({ plan: vi.fn(), checkoutPlan: vi.fn(), alipayCheckoutPlan: vi.fn(), switchQuote: vi.fn(), switchConfirm: vi.fn(), portal: vi.fn(), reconcileCheckout: vi.fn(), resumeSubscription: vi.fn() }));
+const account = vi.hoisted(() => ({
+  plan: vi.fn(),
+  checkoutPlan: vi.fn(),
+  alipayCheckoutPlan: vi.fn(),
+  switchQuote: vi.fn(),
+  switchConfirm: vi.fn(),
+  portal: vi.fn(),
+  reconcileCheckout: vi.fn(),
+  resumeSubscription: vi.fn(),
+  withdrawal: vi.fn(),
+  withdraw: vi.fn(),
+}));
 const v2 = vi.hoisted(() => ({ getStudentStatus: vi.fn(), getUiState: vi.fn(), patchUiState: vi.fn() }));
 const countryAction = vi.hoisted(() => ({ visitorCountryAction: vi.fn() }));
 vi.mock('../../../../lib/api/credits', async (orig) => ({ ...(await orig<Record<string, unknown>>()), ...api }));
@@ -70,6 +81,7 @@ beforeEach(() => {
   api.getCredits.mockResolvedValue(creditsResponse());
   api.getPlans.mockResolvedValue(plansView('roboapply', V2_ENV));
   account.plan.mockResolvedValue(legacyPlan());
+  account.withdrawal.mockResolvedValue({ available: false, options: [] });
   v2.getStudentStatus.mockResolvedValue(studentStatus(false));
   v2.getUiState.mockResolvedValue(uiState());
   v2.patchUiState.mockImplementation(async () => uiState());
@@ -135,6 +147,18 @@ describe('PlanPicker V2', () => {
     expect(option('pro_monthly')!.textContent).toMatch(/NT\$749|\$749/);
     expect(option('pro_monthly')!.textContent).toContain('Charged in New Taiwan dollars.');
     expect(option('pro_quarterly')!.textContent).not.toContain('New Taiwan dollars');
+  });
+
+  it('the renewal sentence names the currency of a TWD price; a US dollar price reads as before', async () => {
+    const { plans, defaultSelection } = buildPlanViews('roboapply', { env: V2_ENV, country: 'TW' });
+    api.getPlans.mockResolvedValue({ ...plansView('roboapply', V2_ENV), plans, defaultSelection, checkout: checkoutOf(['stripe'], { showWithdrawalWaiver: true, country: 'TW' }) });
+    renderUi(<PlanPicker navigate={vi.fn()} />);
+    await waitFor(() => expect(option('pro_monthly')).not.toBeNull());
+    fireEvent.click(option('pro_monthly')!.querySelector('input[type="radio"]')!);
+    // The sentence stands alone under the options: "NT$749", never a bare "$749" on a page whose other prices are US dollars.
+    expect(await screen.findByRole('checkbox', { name: 'I agree this renews automatically every month at NT$749 until I cancel.' })).not.toBeChecked();
+    fireEvent.click(option('pro_quarterly')!.querySelector('input[type="radio"]')!);
+    expect(await screen.findByRole('checkbox', { name: /^I agree this renews automatically every 3 months at \$\d+(\.\d\d)? until I cancel\.$/ })).toBeInTheDocument();
   });
 
   it('shows a Taiwan student the discount computed from the TWD prices', async () => {

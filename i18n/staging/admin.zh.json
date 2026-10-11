@@ -213,7 +213,29 @@
             "unauthorized": "{provider}：服务商拒绝了这个密钥。",
             "low": "{provider}：本月额度还剩 {value}（告警线 {level}）。"
           }
+        },
+        "payments": {
+          "title": "支付",
+          "sub": "此处能否收取银行卡付款。",
+          "loading": "加载中…",
+          "ready": "银行卡支付已就绪。",
+          "notReady": "银行卡支付未就绪。",
+          "reason": {
+            "missing": "未设置 Stripe 密钥。",
+            "live_key_outside_production": "正式环境之外不接受正式的 Stripe 密钥。",
+            "no_secret": "未设置 Webhook 签名密钥。"
+          },
+          "eventsAll": "Webhook 端点会发送本站处理的全部事件。",
+          "missingEvents": "{count, plural, other {# 个本站处理的事件未由 Webhook 端点发送。}}",
+          "noEndpoint": "Stripe 中没有指向本站的 Webhook 端点。",
+          "notChecked": "无法检查 Webhook 端点。",
+          "failed": "无法检查银行卡支付的状态。",
+          "link": "在“额度与套餐”中查看完整的 Stripe 状态"
         }
+      },
+      "refund": {
+        "sub": "按已公布的退款规则，检查这位用户最近一笔付款能否退款。这里只做检查。",
+        "issueElsewhere": "如需退款，请打开“额度与套餐”中的“退款”。银行卡付款在那里退款；内地订单在商户后台退回款项后，在那里登记。"
       }
     }
   }

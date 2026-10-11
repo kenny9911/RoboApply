@@ -20,12 +20,17 @@
 //                            subscription whose paid period is still running
 //   usePaymentPortal()       POST /billing/portal, optionally straight on the
 //                            payment-method step (`{ flow: 'payment_method_update' }`)
+//   useWithdrawalQuote()     GET /credits/withdrawal — which purchases of the last
+//                            14 days can still be withdrawn (ST-9); a read, made
+//                            again when the tab comes back into view
+//   useWithdraw()            POST /credits/withdrawal {purchaseId, confirm} — sent
+//                            only from the confirmation step
 //
 // Every success invalidates the credit summary and the legacy plan so the
 // page shows the server's new state (never an optimistic plan change).
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type UseMutationResult, type UseQueryResult } from '@tanstack/react-query';
 
 import {
   accountApi,
@@ -37,22 +42,40 @@ import {
   type SwitchConfirmResponse,
   type SwitchQuote,
   type SwitchQuoteBody,
+  type WithdrawResponse,
+  type WithdrawalOverview,
 } from '../../lib/api/account';
 import { cancelSubscription, sendCancelSurvey } from '../../lib/api/credits';
 import { apiErrorCode } from '../../lib/api/contracts/wire';
 import type { CancelResponse, CancelSurveyReason } from '../../lib/api/contracts/credits';
-import { CREDITS_QUERY_KEY } from '../shared/useCredits';
+import { CREDITS_QUERY_KEY, shouldRetryCredits } from '../shared/useCredits';
 import { PLANS_QUERY_KEY } from './usePlans';
+
+/** The withdrawal quote (`GET /credits/withdrawal`). */
+export const WITHDRAWAL_QUERY_KEY = ['credits', 'withdrawal'] as const;
+/**
+ * How long a quote counts as current. It changes with a purchase or a refund
+ * (the page re-reads it after every billing action) and with time: its last
+ * day passes, and a pro-rata refund gets one day smaller every day. So a
+ * quote older than this is read again before the buyer is shown an amount to
+ * confirm (`WithdrawContract`), and when the tab comes back into view.
+ */
+export const WITHDRAWAL_STALE_MS = 60 * 1000;
+/** While a confirmation step is open on a visible tab the quote is read again this often, so its amount is never a day old. */
+export const WITHDRAWAL_OPEN_STEP_REFRESH_MS = 5 * 60 * 1000;
 
 /**
  * Read the billing state again: the summary, the plans, the billing plan and
  * the profile. Resolves when the queries on screen have answered (a failed
- * read resolves too: the page then keeps what it had).
+ * read resolves too: the page then keeps what it had). The withdrawal quote
+ * is read again as well, but nothing waits for it: it asks the payment
+ * provider, and no answer on the page depends on it.
  */
-function useRereadBilling(): () => Promise<void> {
+export function useRereadBilling(): () => Promise<void> {
   const qc = useQueryClient();
-  return () =>
-    Promise.all([
+  return () => {
+    void qc.invalidateQueries({ queryKey: WITHDRAWAL_QUERY_KEY });
+    return Promise.all([
       qc.invalidateQueries({ queryKey: CREDITS_QUERY_KEY }),
       qc.invalidateQueries({ queryKey: PLANS_QUERY_KEY }),
       qc.invalidateQueries({ queryKey: ['account', 'plan'] }),
@@ -61,6 +84,7 @@ function useRereadBilling(): () => Promise<void> {
       () => undefined,
       () => undefined,
     );
+  };
 }
 
 /** The same, without waiting: a call's answer is shown at once and the page catches up. */
@@ -246,5 +270,49 @@ export type PaymentPortalVars = PortalBody | void;
 export function usePaymentPortal(): UseMutationResult<{ url: string }, Error, PaymentPortalVars> {
   return useMutation({
     mutationFn: (vars: PaymentPortalVars) => (vars && vars.flow ? accountApi.portal({ flow: vars.flow }) : accountApi.portal()),
+  });
+}
+
+/**
+ * "Withdraw from contract" (ST-9): the purchases of the last 14 days that can
+ * still be withdrawn, each with what it returns and its last day. A read; the
+ * server answers `available: false` for a buyer outside the EU, the EEA, the
+ * UK and Taiwan, after the 14 days and on the mainland brand (which never
+ * asks: pass `enabled: false`).
+ */
+export function useWithdrawalQuote(options: { enabled?: boolean; refreshEveryMs?: number | null } = {}): UseQueryResult<WithdrawalOverview> {
+  return useQuery<WithdrawalOverview>({
+    queryKey: WITHDRAWAL_QUERY_KEY,
+    queryFn: () => accountApi.withdrawal(),
+    staleTime: WITHDRAWAL_STALE_MS,
+    retry: shouldRetryCredits,
+    enabled: options.enabled ?? true,
+    // The amount depends on the day: a page left open is read again when its tab is looked at again (only when the
+    // quote is older than `WITHDRAWAL_STALE_MS`), and on a timer while the caller asks for one. Never in a hidden tab.
+    refetchOnWindowFocus: true,
+    refetchInterval: options.refreshEveryMs && options.refreshEveryMs > 0 ? options.refreshEveryMs : false,
+  });
+}
+
+/** The server's code for "this purchase can no longer be withdrawn" (409): too late, already withdrawn or refunded. */
+export const WITHDRAWAL_UNAVAILABLE_CODE = 'withdrawal_not_available';
+
+export interface WithdrawVars {
+  /** `purchase.id` of the quote the buyer confirmed. */
+  purchaseId: string;
+}
+
+/**
+ * Withdraw from one purchase. Called only from the confirmation step: nothing
+ * is sent before the buyer confirms. Whatever the answer, the plan and the
+ * quote are read again: after a withdrawal the plan has ended, and a refusal
+ * means the page was behind the server.
+ */
+export function useWithdraw(): UseMutationResult<WithdrawResponse, Error, WithdrawVars> {
+  const invalidate = useInvalidateBilling();
+  return useMutation({
+    mutationFn: (v: WithdrawVars) => accountApi.withdraw(v.purchaseId),
+    onSuccess: invalidate,
+    onError: invalidate,
   });
 }

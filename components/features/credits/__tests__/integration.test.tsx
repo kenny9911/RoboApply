@@ -42,6 +42,10 @@ const account = vi.hoisted(() => ({
   portal: vi.fn(),
   reconcileCheckout: vi.fn(),
   resumeSubscription: vi.fn(),
+  withdrawal: vi.fn(),
+  withdraw: vi.fn(),
+  previewPublicCancel: vi.fn(),
+  confirmPublicCancel: vi.fn(),
 }));
 const cn = vi.hoisted(() => ({ createWechatPayOrder: vi.fn(), getWechatPayOrder: vi.fn() }));
 const compliance = vi.hoisted(() => ({ getLegalDoc: vi.fn() }));
@@ -144,6 +148,9 @@ beforeEach(() => {
   api.getPlans.mockResolvedValue(plansView());
   api.getCreditHistory.mockResolvedValue({ items: [] });
   account.plan.mockResolvedValue(legacyPlan());
+  // No purchase can be withdrawn, and a cancel link can only cancel, unless a test says otherwise.
+  account.withdrawal.mockResolvedValue({ available: false, options: [] });
+  account.previewPublicCancel.mockResolvedValue({ planKey: 'pro_monthly', accessUntil: null, withdrawal: null });
   compliance.getLegalDoc.mockResolvedValue({ doc: 'terms', locale: 'zh', version: 'cn-terms-2026-10', draft: false, markdown: '', updatedAt: null });
   cn.getWechatPayOrder.mockResolvedValue(orderStatus());
   try {
@@ -193,13 +200,22 @@ describe('cancel survey (POST /credits/cancel/survey)', () => {
 
 describe('public cancel: where the error code is read', () => {
   it('reads cancel_token_invalid from the envelope code (where the server puts it)', async () => {
-    api.confirmPublicCancel.mockRejectedValue(apiError({ code: 'cancel_token_invalid', error: 'This link has expired or was already used. Ask for a new one.' }, 410));
+    account.confirmPublicCancel.mockRejectedValue(apiError({ code: 'cancel_token_invalid', error: 'This link has expired or was already used. Ask for a new one.' }, 410));
     renderUi(<PublicCancelFlow token="tok_abcdefghijklmnop" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel now' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel now' }));
     expect(await screen.findByText(/expired or was already used/)).toBeInTheDocument();
     // The link is spent: the button is gone and a new link can be requested.
     expect(screen.queryByRole('button', { name: 'Cancel now' })).toBeNull();
     expect(screen.getByLabelText('Email')).toBeInTheDocument();
+  });
+
+  it('the same code on the question the page asks first (a bad link never shows a button)', async () => {
+    account.previewPublicCancel.mockRejectedValue(apiError({ code: 'cancel_token_invalid' }, 410));
+    renderUi(<PublicCancelFlow token="tok_abcdefghijklmnop" />);
+    expect(await screen.findByText(/expired or was already used/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel now' })).toBeNull();
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(account.confirmPublicCancel).not.toHaveBeenCalled();
   });
 
   it('also when an area reason carries it in details.reason', () => {
@@ -210,9 +226,9 @@ describe('public cancel: where the error code is read', () => {
   });
 
   it('any other failure keeps the link usable: a plain error and the same button', async () => {
-    api.confirmPublicCancel.mockRejectedValue(apiError({ code: 'payment_provider_error' }, 502));
+    account.confirmPublicCancel.mockRejectedValue(apiError({ code: 'payment_provider_error' }, 502));
     renderUi(<PublicCancelFlow token="tok_abcdefghijklmnop" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel now' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel now' }));
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     expect(screen.queryByText(/expired or was already used/)).toBeNull();
     expect(screen.getByRole('button', { name: 'Cancel now' })).toBeEnabled();

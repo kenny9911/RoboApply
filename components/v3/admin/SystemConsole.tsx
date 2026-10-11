@@ -8,6 +8,9 @@
 //             brand's job sources (what each did in its last check); then the
 //             job providers: plan, quota left, days to reset and today's
 //             calls, so a provider that stopped answering is visible that day;
+//             then payments (the international brand): whether card payments
+//             are ready and how many events the Stripe webhook endpoint does
+//             not send, with a link to the full readout in /admin/credits;
 //   costs     cost by SKU × brand × day, with a CSV download;
 //   feedback  Assistant thumbs up/down with a redacted excerpt and guard hits;
 //   safety    GoApply content-safety readiness and recent events;
@@ -34,7 +37,10 @@ import {
   useSystemStatus,
   useWorkItems,
 } from '../../../hooks/useAdmin';
+import { useStripeHealth } from '../../../hooks/credits/useAdminCredits';
 import { costsCsvUrl, type AlertHit, type BrandHealth, type ProviderState, type ProviderUsageRow, type SystemStatusResponse } from '../../../lib/api/admin';
+import { stripeEndpointState, type StripeHealth } from '../../../lib/api/adminBilling';
+import { useBrand } from '../../../lib/brand/BrandProvider';
 import { AiGeneratedBadge } from '../../features/market';
 import { AdminGate } from './AdminGate';
 import { AdminNav } from './AdminNav';
@@ -120,6 +126,7 @@ function HealthView() {
       {d.brands.map((b) => <JobSourcesPanel key={`sources-${b.brand}`} health={b} showBrand />)}
       <QueuePanel status={d} />
       <ProvidersPanel status={d} />
+      <PaymentsPanel />
     </div>
   );
 }
@@ -387,6 +394,73 @@ function ProviderRow({ row: p, locale, t }: { row: ProviderUsageRow; locale: str
       <td className={styles.num}>{fmtCount(p.jobsNew, locale)}</td>
       <td className={styles.num}>{fmtCount(p.errors, locale)}</td>
     </tr>
+  );
+}
+
+// ── Payments (Stripe endpoint health; MARKET_STRATEGY §5.1, ST-3) ────────
+
+/** Where the full Stripe readout lives: the Stripe panel of the credits console. */
+export const STRIPE_READOUT_HREF = '/admin/credits#admin-stripe';
+
+/**
+ * Why card payments are not ready, when the readout says why: the key is
+ * missing or refused, or a usable key has no webhook signing secret. Null
+ * when the readout gives no reason (the line then says only "not ready").
+ */
+export function paymentsNotReadyReason(h: Pick<StripeHealth, 'railReady' | 'usable' | 'refusedReason' | 'webhookSecrets'>): 'missing' | 'live_key_outside_production' | 'no_secret' | null {
+  if (h.railReady) return null;
+  if (h.refusedReason) return h.refusedReason;
+  return h.usable && h.webhookSecrets === 0 ? 'no_secret' : null;
+}
+
+/**
+ * One status line and one count, read from the same route as the Stripe panel
+ * of the credits console, which holds the list. A read that fails says "could
+ * not be checked" and never breaks the page. Stripe is the international
+ * brand's rail and never serves the mainland brand, so its console shows no
+ * such panel (and asks nothing).
+ */
+function PaymentsPanel() {
+  const t = useTranslations('admin.console.system');
+  const brand = useBrand();
+  const stripeIsRail = brand.market === 'intl';
+  const q = useStripeHealth({ enabled: stripeIsRail });
+  if (!stripeIsRail) return null;
+  const h = q.data;
+  const reason = h ? paymentsNotReadyReason(h) : null;
+  // The same reading of the endpoint as the Stripe panel: "no endpoint at all" is not "some events are missing".
+  const endpoint = h ? stripeEndpointState(h) : null;
+  return (
+    <section className={styles.panel} aria-labelledby="payments-title" data-testid="payments-panel">
+      <div className={styles.panelHead}>
+        <div>
+          <h2 id="payments-title">{t('payments.title')}</h2>
+          <p>{t('payments.sub')}</p>
+        </div>
+        <Link className={styles.link} href={STRIPE_READOUT_HREF}>{t('payments.link')}</Link>
+      </div>
+      {h ? (
+        <>
+          <p className={h.railReady ? styles.okBox : styles.alertBox} role="status" data-testid="payments-status">
+            {t(h.railReady ? 'payments.ready' : 'payments.notReady')}
+            {reason ? <> {t(`payments.reason.${reason}`)}</> : null}
+          </p>
+          <p className={styles.muted} data-testid="payments-events">
+            {endpoint === 'no_endpoint'
+              ? t('payments.noEndpoint')
+              : endpoint === 'unchecked'
+                ? t('payments.notChecked')
+                : endpoint === 'complete'
+                  ? t('payments.eventsAll')
+                  : t('payments.missingEvents', { count: h.endpoint.missingEvents.length })}
+          </p>
+        </>
+      ) : q.isError ? (
+        <p className={styles.muted} role="status" data-testid="payments-status">{t('payments.failed')}</p>
+      ) : (
+        <p className={styles.muted} aria-busy="true">{t('payments.loading')}</p>
+      )}
+    </section>
   );
 }
 
