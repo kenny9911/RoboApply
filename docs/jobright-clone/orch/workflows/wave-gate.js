@@ -27,8 +27,19 @@ i18n: do not edit i18n/messages/*.json (the orchestrator merges i18n/staging and
 ${A.context ? 'WAVE CONTEXT\n' + A.context + '\n' : ''}
 GATES (run from ${CLONE}; all must be green at the end): 'npx prisma validate', 'npm run db:generate', 'npm run gen:brand' (must leave no diff), 'npm run typecheck:server', 'npx next typegen && npm run typecheck:web', 'npx vitest run --exclude ".claude/**"', 'npm run check', 'npm --prefix extension run typecheck', 'npm --prefix extension test', and 'npm --prefix interview-agent test' when interview-agent/ changed in this wave.`
 
+const INTERRUPTED = `\n\nINTERRUPTED RUN: an earlier session on this gate step was cut off (network outage) before it finished. The working tree holds its partial, UNCOMMITTED work. Start with 'git status --porcelain' and 'git diff --stat', read what was already changed, keep what is right and finish; do not start over and do not revert correct work.`
+// agent() resolves to null when the subagent dies on a terminal API error (a network outage does this): try again.
+async function tryAgent(makePrompt, opts, attempts) {
+  for (let n = 1; n <= attempts; n++) {
+    const r = await agent(makePrompt(n), n === 1 ? opts : { ...opts, label: `${opts.label}#${n}` })
+    if (r) return r
+    log(`${opts.label}: no result on attempt ${n}${n < attempts ? ', retrying' : ', giving up'}`)
+  }
+  return null
+}
+
 phase('Integrate')
-const integ = await agent(`${COMMON}
+const integ = await tryAgent((n) => `${COMMON}
 
 TASK: integrate wave ${A.wave}.
 1) Read EVERY handoff in ${A.handoffDir}/ in full. Build one table of every Request, Red test for another bundle, Schema request and Known gap: source bundle, target (another bundle of this wave / orchestrator / owner / a later wave), what, and what you did.
@@ -37,19 +48,20 @@ TASK: integrate wave ${A.wave}.
 4) Verify the cross-bundle contracts named in the plan documents field by field: producer and consumer agree on paths, request and response shapes, error codes, capability and flag keys, env variable names and defaults; the consumer is wired to the real producer, not to a default or a stub.
 5) What belongs to a LATER wave or bundle: do not build it; write it to ${PLAN}/requests/wave${A.wave}-carryover.md grouped by target, with enough detail to act on. What only the owner can decide or supply goes under "Owner" there.
 6) Run all GATES until green.
-Return: the table, every fix with its reason, env variables that are new or redefined after this wave (name, meaning, default), the i18n staging state (namespaces with new keys), and the final gate results with counts.`, { label: `integrate-${A.wave}`, phase: 'Integrate', effort: 'high' })
+Return: the table, every fix with its reason, env variables that are new or redefined after this wave (name, meaning, default), the i18n staging state (namespaces with new keys), and the final gate results with counts.${n > 1 ? INTERRUPTED : ''}`, { label: `integrate-${A.wave}`, phase: 'Integrate', effort: 'high' }, 3)
+if (!integ) return { integ: null, findings: 0, low: 0, fix: null, failed: 'integrate' }
 
 const REVIEW_SCHEMA = { type: 'object', properties: { findings: { type: 'array', items: { type: 'object', properties: { severity: { type: 'string', enum: ['critical', 'high', 'medium', 'low'] }, file: { type: 'string' }, title: { type: 'string' }, detail: { type: 'string' }, fix: { type: 'string' } }, required: ['severity', 'title', 'detail', 'fix'] } }, checked: { type: 'array', items: { type: 'string' } } }, required: ['findings'] }
 
 phase('Cross-review')
-const reviews = await parallel((A.lenses || []).map((l) => () => agent(`${COMMON}
+const reviews = await parallel((A.lenses || []).map((l) => () => tryAgent(() => `${COMMON}
 
 ROLE: READ-ONLY reviewer of the merged wave. Do not edit, create or delete any file; you may run tests, typechecks and read-only curl requests against the running dev stack (API http://localhost:4621, RoboApply web http://localhost:3621, GoApply web http://goapply.localhost:3621; send 'Host: goapply.localhost:3621' to the API for GoApply). Never sign up real people, never start a payment, never call a third-party provider.
 LENS (${l.key}): ${l.prompt}
 The integrator reported:
 ${integ}
 
-Report only real, specific defects (file and line, what happens, why it is wrong under the plan documents or the rulings) each with a concrete fix. List under "checked" what you verified and found correct.`, { label: `xreview-${A.wave}-${l.key}`, phase: 'Cross-review', schema: REVIEW_SCHEMA, effort: 'high' }).then((r) => (r ? { key: l.key, ...r } : null))))
+Report only real, specific defects (file and line, what happens, why it is wrong under the plan documents or the rulings) each with a concrete fix. List under "checked" what you verified and found correct.`, { label: `xreview-${A.wave}-${l.key}`, phase: 'Cross-review', schema: REVIEW_SCHEMA, effort: 'high' }, 3).then((r) => (r ? { key: l.key, ...r } : null))))
 const findings = reviews.filter(Boolean).flatMap((r) => r.findings.map((f) => ({ lens: r.key, ...f }))).filter((f) => f.severity !== 'low')
 const low = reviews.filter(Boolean).flatMap((r) => r.findings.map((f) => ({ lens: r.key, ...f }))).filter((f) => f.severity === 'low')
 log(`cross-review findings: ${findings.length} to fix, ${low.length} low`)
@@ -57,7 +69,7 @@ log(`cross-review findings: ${findings.length} to fix, ${low.length} low`)
 phase('Fix')
 let fix = 'no findings'
 if (findings.length || low.length) {
-  fix = await agent(`${COMMON}
+  fix = await tryAgent((n) => `${COMMON}
 
 TASK: resolve the cross-review findings below. Verify each against the code first; fix the real ones at the root (with a test that fails before and passes after, where a test can express it); reject a wrong one with evidence. Low findings: fix when it is a few lines, otherwise carry over. A larger gap that belongs to a later wave goes to ${PLAN}/requests/wave${A.wave}-carryover.md. Re-run all GATES until green.
 Return: finding → fixed (root cause, fix, test) / rejected (why) / carried over (where), then the final gate results with counts.
@@ -66,6 +78,7 @@ FINDINGS TO FIX:
 ${JSON.stringify(findings, null, 2)}
 
 LOW FINDINGS:
-${JSON.stringify(low, null, 2)}`, { label: `fix-${A.wave}`, phase: 'Fix', effort: 'high' })
+${JSON.stringify(low, null, 2)}${n > 1 ? INTERRUPTED : ''}`, { label: `fix-${A.wave}`, phase: 'Fix', effort: 'high' }, 3)
 }
-return { integ, findings: findings.length, low: low.length, fix }
+const lensesRun = reviews.filter(Boolean).map((r) => r.key)
+return { integ, findings: findings.length, low: low.length, fix, lensesRun, failed: fix ? null : 'fix' }

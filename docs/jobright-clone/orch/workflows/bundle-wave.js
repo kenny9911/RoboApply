@@ -13,7 +13,7 @@ export const meta = {
 //   docs: [repo-relative plan documents every engineer reads],
 //   handoffDir: absolute directory for the handoff files,
 //   context: extra wave-specific instructions (string, may be empty),
-//   items: [{ id, worktree }]
+//   items: [{ id, worktree, note? }]   note = extra instructions for that bundle's engineer (e.g. an interrupted run)
 // }
 const CLONE = '/Users/kenny/code/RoboApply/.claude/worktrees/jobright-clone'
 const A = args
@@ -67,9 +67,23 @@ const REVIEW_SCHEMA = {
   required: ['items', 'findings', 'unownedEdits'],
 }
 
-async function runBundle(id, wt) {
-  const impl = await agent(`${common(id, wt)}\n\nTASK: implement every item of bundle ${id}.`, { label: `impl:${id}`, phase: 'Implement', effort: 'high' })
-  const review = await agent(`You are an independent senior reviewer for bundle ${id} (wave ${A.wave}) of the Jobright clone of RoboApply (two brands by Host: RoboApply international incl. Taiwan; GoApply mainland China). READ-ONLY: do not edit, create or delete any file.
+const INTERRUPTED = (wt) => `\n\nINTERRUPTED RUN: an earlier session on this bundle was cut off (network outage) before it finished. The worktree ${wt} holds its partial, UNCOMMITTED and UNVERIFIED work. Start with 'git status --porcelain -uall' and 'git diff' there, read what exists against the items, keep what is right, fix or redo what is not, then finish everything. Do not start over from scratch and do not discard work that is correct.`
+
+// agent() resolves to null when the subagent dies on a terminal API error (a network outage does this).
+// Try again a few times: the worktree keeps the partial work, and the retry is told so.
+async function tryAgent(makePrompt, opts, attempts) {
+  for (let n = 1; n <= attempts; n++) {
+    const r = await agent(makePrompt(n), n === 1 ? opts : { ...opts, label: `${opts.label}#${n}` })
+    if (r) return r
+    log(`${opts.label}: no result on attempt ${n}${n < attempts ? ', retrying' : ', giving up'}`)
+  }
+  return null
+}
+
+async function runBundle(id, wt, note) {
+  const impl = await tryAgent((n) => `${common(id, wt)}\n\nTASK: implement every item of bundle ${id}.${note ? '\n\n' + note : ''}${n > 1 ? INTERRUPTED(wt) : ''}`, { label: `impl:${id}`, phase: 'Implement', effort: 'high' }, 3)
+  if (!impl) return { id, worktree: wt, review: null, handoffChars: 0, failed: 'implement' }
+  const review = await tryAgent(() => `You are an independent senior reviewer for bundle ${id} (wave ${A.wave}) of the Jobright clone of RoboApply (two brands by Host: RoboApply international incl. Taiwan; GoApply mainland China). READ-ONLY: do not edit, create or delete any file.
 Worktree: ${wt} (branch wp/${id}). Inspect the uncommitted work: 'git -C ${wt} status --porcelain -uall', 'git -C ${wt} diff', and read the untracked files.
 Read ${wt}/${A.bundlesFile} (bundle "${id}": items, owns, namespace; top-level notes) and the plan documents:
 ${docsList(wt)}
@@ -79,15 +93,17 @@ For EACH item decide whether every ACCEPT line is really met: trace the code pat
 Report only real, specific defects, each with a concrete fix.
 
 ENGINEER HANDOFF:
-${impl || '(none returned; read ' + A.handoffDir + '/' + id + '.md if it exists)'}`, { label: `review:${id}`, phase: 'Review', schema: REVIEW_SCHEMA, effort: 'high' })
+${impl || '(none returned; read ' + A.handoffDir + '/' + id + '.md if it exists)'}`, { label: `review:${id}`, phase: 'Review', schema: REVIEW_SCHEMA, effort: 'high' }, 3)
   const blocking = review ? review.findings.filter((f) => f.severity !== 'low') : []
   const undone = review ? review.items.filter((a) => !a.done) : []
   let final = impl
   if (review && (blocking.length || undone.length || review.unownedEdits.length)) {
-    final = await agent(`${common(id, wt)}\n\nTASK: finish bundle ${id} after an independent review. Your work is already in the worktree (uncommitted). Resolve every real review finding and every item the reviewer judged not done (verify each first; reject a wrong one with a reason and evidence). Revert unowned edits (those paths only, with 'git checkout -- <path>' for tracked files or by deleting the new file) and move the need into Requests. Re-run all gates. Rewrite ${A.handoffDir}/${id}.md as the COMPLETE updated handoff plus a "Review resolution" list, and return it as your final message.\n\nREVIEW:\n${JSON.stringify({ undone, findings: review.findings, unownedEdits: review.unownedEdits }, null, 2)}\n\nPREVIOUS HANDOFF:\n${impl || '(none)'}`, { label: `refix:${id}`, phase: 'Refix', effort: 'high' })
+    const refix = await tryAgent((n) => `${common(id, wt)}\n\nTASK: finish bundle ${id} after an independent review. Your work is already in the worktree (uncommitted). Resolve every real review finding and every item the reviewer judged not done (verify each first; reject a wrong one with a reason and evidence). Revert unowned edits (those paths only, with 'git checkout -- <path>' for tracked files or by deleting the new file) and move the need into Requests. Re-run all gates. Rewrite ${A.handoffDir}/${id}.md as the COMPLETE updated handoff plus a "Review resolution" list, and return it as your final message.\n\nREVIEW:\n${JSON.stringify({ undone, findings: review.findings, unownedEdits: review.unownedEdits }, null, 2)}\n\nPREVIOUS HANDOFF:\n${impl || '(none)'}${n > 1 ? INTERRUPTED(wt) : ''}`, { label: `refix:${id}`, phase: 'Refix', effort: 'high' }, 3)
+    if (!refix) return { id, worktree: wt, review: { undone: undone.length, findings: review.findings.length, blocking: blocking.length, unowned: review.unownedEdits }, handoffChars: (impl || '').length, failed: 'refix' }
+    final = refix
   }
-  return { id, worktree: wt, review: review ? { undone: undone.length, findings: review.findings.length, blocking: blocking.length, unowned: review.unownedEdits } : null, handoffChars: (final || '').length }
+  return { id, worktree: wt, review: review ? { undone: undone.length, findings: review.findings.length, blocking: blocking.length, unowned: review.unownedEdits } : null, handoffChars: (final || '').length, failed: review ? null : 'review' }
 }
 
-const results = await pipeline(A.items, (item) => runBundle(item.id, item.worktree))
+const results = await pipeline(A.items, (item) => runBundle(item.id, item.worktree, item.note))
 return results.filter(Boolean)
