@@ -19,9 +19,19 @@
 //                                   CSRF, no capability flag in front of it; it reads query and JSON body and its
 //                                   answer codes are a contract with the worker (MARKET_STRATEGY §5.2 rules A1, A2;
 //                                   pinned by routes/billing.test.ts). Do not gate it, e.g. on the payments kill switch.
-//   POST /portal                    Stripe Billing Portal url
+//   POST /checkout/reconcile        { sessionId } → { status: 'fulfilled' | 'already_fulfilled' | 'pending', mode, planKey }.
+//                                   The return page calls it when the buyer comes back from Stripe: it looks the
+//                                   caller's own Checkout Session up and runs the same claimed fulfilment as the
+//                                   webhook, so a pass or pack whose one webhook event was lost is still delivered.
+//                                   403 forbidden (not the caller's session; no detail), 404 not_found, 422
+//                                   invalid_request, 429 rate_limited (10 a minute), 503 stripe_not_configured,
+//                                   502 payment_provider_error. Never returns Stripe's session object.
+//   POST /portal                    { flow?: 'payment_method_update' } → Stripe customer portal url, on our own portal
+//                                   configuration (plan changes off). 409 no_customer, 503, 502.
 //   POST /cancel                    turn auto-renewal off (one click; confirmation email)
-//   POST /switch                    { planKey } → quote; { planKey, confirm: true, prorationDate, autoRenewAck } → switched
+//   POST /switch                    { planKey } → quote; { planKey, confirm: true, prorationDate, autoRenewAck } →
+//                                   { switched: true, planKey }, or { switched: false, requiresAction: true,
+//                                   hostedInvoiceUrl, planKey } when the payment for the switch still needs the buyer
 //   GET  /history                   unified invoice list (Stripe + CN orders)
 //   GET  /invoices/:id/download     Stripe PDF redirect / brand-aware CN receipt
 //
@@ -37,6 +47,7 @@ import {
   createCheckout,
   handleAlipayCallback,
   createPortalSession,
+  reconcileCheckoutSession,
   cancelAtPeriodEnd,
   switchPlan,
   getBillingHistory,
@@ -110,6 +121,13 @@ export const SwitchBodySchema = z
     withdrawalWaiver: z.boolean().optional(),
   })
   .strict();
+
+/** A Stripe Checkout Session id (`cs_test_…` / `cs_live_…`), as `success_url` carries it back. */
+export const CHECKOUT_SESSION_ID_PATTERN = /^cs_[A-Za-z0-9_]{8,200}$/;
+
+export const ReconcileBodySchema = z.object({ sessionId: z.string().regex(CHECKOUT_SESSION_ID_PATTERN) }).strict();
+
+export const PortalBodySchema = z.object({ flow: z.enum(['payment_method_update']).optional() }).strict();
 
 function legacyTierRefusal(res: Response) {
   return res.status(409).json({
@@ -215,9 +233,25 @@ async function alipayCallback(req: Request, res: Response) {
 router.get('/alipay/callback', alipayCallback);
 router.post('/alipay/callback', alipayCallback);
 
-router.post('/portal', requireAuth, async (req: Request, res: Response) => {
+// Lost-event recovery: the return page hands back the session id Stripe put
+// in `success_url`. The service decides whose session it is and fulfils it
+// under the webhook's own claim.
+router.post('/checkout/reconcile', requireAuth, async (req: Request, res: Response) => {
+  const parsed = ReconcileBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) return invalid(res, parsed.error);
   try {
-    const data = await createPortalSession(req.user!.id, brandOf(req));
+    const data = await reconcileCheckoutSession(req.user!.id, brandOf(req), parsed.data.sessionId);
+    return res.json({ success: true, data });
+  } catch (err) {
+    return handleErr(err, req, res, 'reconcile_failed');
+  }
+});
+
+router.post('/portal', requireAuth, async (req: Request, res: Response) => {
+  const parsed = PortalBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) return invalid(res, parsed.error);
+  try {
+    const data = await createPortalSession(req.user!.id, brandOf(req), { flow: parsed.data.flow });
     return res.json({ success: true, data });
   } catch (err) {
     return handleErr(err, req, res, 'portal_failed');

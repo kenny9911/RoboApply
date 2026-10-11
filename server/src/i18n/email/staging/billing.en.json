@@ -1,3 +1,15 @@
 {
-  "billing": {}
+  "billing": {
+    "renewalReminder": {
+      "goapplyLine": "In mainland China? You can pay in RMB with Alipay on %OTHER_BRAND%.",
+      "ctaGoapply": "See %OTHER_BRAND% prices"
+    },
+    "paymentActionRequired": {
+      "subject": "Confirm your %BRAND% payment",
+      "heading": "Your bank needs you to confirm this payment",
+      "body": "The payment of {price} for {plan} is waiting for your confirmation. Open the payment page to finish it. Nothing is charged until you confirm.",
+      "bodyNoPlan": "A payment of {price} is waiting for your confirmation. Open the payment page to finish it. Nothing is charged until you confirm.",
+      "cta": "Confirm payment"
+    }
+  }
 }
