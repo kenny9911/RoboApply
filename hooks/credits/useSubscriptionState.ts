@@ -8,7 +8,8 @@
 //     plan key, Pro/Free column, interval, period end, legacy flag and
 //     whether the plan was cancelled (`cancelAtPeriodEnd`);
 //   - the legacy billing plan (`/billing/plan`): payment status (past due),
-//     Stripe customer (portal), manual renewal.
+//     Stripe customer (portal), manual renewal, and what the subscription
+//     is charged at each renewal (amount and currency).
 // Unknown stays null (rendered "—"), never 0 or "Free".
 //
 // Cancel-at-period-end comes from the summary only. The legacy plan is not a
@@ -44,6 +45,14 @@ export interface SubscriptionState {
   practiceBalance: number | null;
   /** A sellable Pro plan exists on this brand. */
   upgradable: boolean;
+  /**
+   * What the plan is charged at each renewal, in minor units of
+   * `chargedCurrency`, as the billing plan states it (`current.amountMinor`).
+   * Null when the server does not say; never taken from the catalog here.
+   */
+  chargedAmountMinor: number | null;
+  /** Upper-case ISO currency of `chargedAmountMinor`, or null. */
+  chargedCurrency: string | null;
 }
 
 const RENEWING = new Set(['week', 'month', 'quarter']);
@@ -74,6 +83,10 @@ export function deriveSubscriptionState(input: {
   const status: SubscriptionStatus = s ? 'ready' : input.summaryError ? 'error' : 'loading';
   const autoRenews = intervalRenews || legacyRenews;
   const cancelAtPeriodEnd = summaryCancelAtPeriodEnd(s) === true;
+  // Both or neither: an amount without its currency cannot be printed.
+  const amount = cur?.amountMinor;
+  const currency = typeof cur?.currency === 'string' ? cur.currency.trim().toUpperCase() : '';
+  const charged = typeof amount === 'number' && Number.isInteger(amount) && amount > 0 && /^[A-Z]{3}$/.test(currency);
   return {
     status,
     planKey: s?.planKey ?? null,
@@ -89,6 +102,8 @@ export function deriveSubscriptionState(input: {
     hasPortal: cur?.hasStripeCustomer === true,
     practiceBalance: input.practice ? input.practice.balance : (input.legacyPlan?.credits.balance ?? null),
     upgradable: s?.upgradable === true,
+    chargedAmountMinor: charged ? (amount as number) : null,
+    chargedCurrency: charged ? currency : null,
   };
 }
 

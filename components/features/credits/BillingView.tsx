@@ -3,7 +3,11 @@
 // BillingView — /settings#billing and /settings/billing (PRODUCT_PLAN.md
 // F-BILL-03, §6.5; TASK_PLAN.md WP-21b): payment-failed banner, the current
 // plan (renewal or end date, practice interviews left), Manage payment
-// (Stripe portal), one-click Cancel with the once-only 7-day-pass link,
+// (Stripe portal: payment method, invoices, billing details; plan changes
+// are made on the plan sheet below), one-click Cancel with the once-only
+// 7-day-pass link, "Keep my plan" for a cancelled subscription that is still
+// running (`ResumeSubscription`: the renewal sentence behind an unticked box,
+// then the card reads "Renews on {date}" from the server again),
 // "Buy another pass" for passes, the plan sheet, and the invoice history link.
 // GoApply: a pass that is still running gets 续费 (`CnRenewButton`, the
 // WeChat Pay sheet) only when WeChat Pay is the rail a purchase gets by
@@ -28,6 +32,7 @@ import { CancelSubscription } from './CancelSubscription';
 import { PaymentFailedBanner } from './PaymentFailedBanner';
 import { PlanPicker, offeredRails } from './PlanPicker';
 import { QuarterlySuggestion } from './QuarterlySuggestion';
+import { ResumeSubscription } from './ResumeSubscription';
 import { StudentVerification } from '../account-v2';
 import { CnRenewButton, sellableCnPlan, useWechatPayAvailable } from '../billing-cn';
 import { parseDate, planNameKey } from './labels';
@@ -76,6 +81,9 @@ function CurrentPlanCard({ sub, navigate = (url) => window.location.assign(url) 
   // link and the optional survey stay on screen after the plan refetch
   // reports the cancellation (which hides the Cancel button itself).
   const [cancelledHere, setCancelledHere] = useState(false);
+  // Bumped when the user keeps the plan after all: the cancel block starts
+  // over with its button instead of the "cancelled" confirmation.
+  const [cancelRound, setCancelRound] = useState(0);
 
   if (sub.status === 'error') {
     return (
@@ -125,6 +133,13 @@ function CurrentPlanCard({ sub, navigate = (url) => window.location.assign(url) 
       </h2>
       <span className={styles.planName}>{nameKey ? t(nameKey) : '—'}</span>
       {line ? <p className={styles.body}>{line}</p> : null}
+      <ResumeSubscription
+        sub={sub}
+        onResumed={() => {
+          setCancelledHere(false);
+          setCancelRound((n) => n + 1);
+        }}
+      />
       {sub.legacy ? <p className={styles.muted}>{t('current.legacyNote')}</p> : null}
       <p className={styles.muted}>
         {sub.practiceBalance === null ? t('current.practiceUnknown') : t('current.practice', { n: sub.practiceBalance })}
@@ -149,7 +164,7 @@ function CurrentPlanCard({ sub, navigate = (url) => window.location.assign(url) 
           </Btn>
         ) : null}
       </div>
-      {canCancel || cancelledHere ? <CancelSubscription periodEnd={sub.periodEnd} onCancelled={() => setCancelledHere(true)} /> : null}
+      {canCancel || cancelledHere ? <CancelSubscription key={cancelRound} periodEnd={sub.periodEnd} onCancelled={() => setCancelledHere(true)} /> : null}
     </section>
   );
 }

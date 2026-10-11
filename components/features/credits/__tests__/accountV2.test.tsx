@@ -13,7 +13,7 @@ import { RoboApiError } from '../../../../lib/api/client';
 import { QUARTERLY_SUGGESTION_KEYS, displayPrice, quarterlySuggestion } from '../../../../lib/pricing';
 
 const api = vi.hoisted(() => ({ getCredits: vi.fn(), getPlans: vi.fn(), getCreditHistory: vi.fn(), cancelSubscription: vi.fn(), sendCancelSurvey: vi.fn() }));
-const account = vi.hoisted(() => ({ plan: vi.fn(), checkoutPlan: vi.fn(), alipayCheckoutPlan: vi.fn(), switchQuote: vi.fn(), switchConfirm: vi.fn(), portal: vi.fn() }));
+const account = vi.hoisted(() => ({ plan: vi.fn(), checkoutPlan: vi.fn(), alipayCheckoutPlan: vi.fn(), switchQuote: vi.fn(), switchConfirm: vi.fn(), portal: vi.fn(), reconcileCheckout: vi.fn(), resumeSubscription: vi.fn() }));
 const v2 = vi.hoisted(() => ({ getStudentStatus: vi.fn(), getUiState: vi.fn(), patchUiState: vi.fn() }));
 const countryAction = vi.hoisted(() => ({ visitorCountryAction: vi.fn() }));
 vi.mock('../../../../lib/api/credits', async (orig) => ({ ...(await orig<Record<string, unknown>>()), ...api }));
@@ -196,7 +196,10 @@ describe('PlanPicker V2', () => {
     account.plan.mockResolvedValue(legacyPlan({ hasStripeCustomer: true, cancelAtPeriodEnd: false }));
     renderUi(<PlanPicker requestedPlan="pro_quarterly" navigate={vi.fn()} />);
     await waitFor(() => expect(radio('pro_quarterly')).toBeChecked());
-    expect(option('pro_weekly')).toBeNull();
+    // Every other subscription is a switch now (ST-5); the link only decides which one is selected.
+    expect(option('pro_weekly')).not.toBeNull();
+    expect(radio('pro_weekly')!.checked).toBe(false);
+    expect(option('pro_monthly')!.textContent).toContain('Your plan');
     expect(screen.getByRole('button', { name: /see what switching costs/i })).toBeInTheDocument();
   });
 });

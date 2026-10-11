@@ -13,9 +13,14 @@ import {
 import { plansExtras } from '../../../../lib/api/credits';
 import { initialSelection, monthlyPlan, visiblePlans } from '../../../../hooks/credits/usePlans';
 import { deriveSubscriptionState, summaryCancelAtPeriodEnd } from '../../../../hooks/credits/useSubscriptionState';
-import { checkoutReturnPath, offeredRails } from '../PlanPicker';
+import { CN_VISITOR_COUNTRY, checkoutReturnPath, cnVisitorPricingUrl, offeredProPlans, offeredRails } from '../PlanPicker';
 import { buildPlanViews } from '../../../../server/src/platform/billing/planViews';
-import { isPackKey } from '../CheckoutReturn';
+import { RETURN_POLL_ATTEMPTS, RETURN_POLL_MS, RETURN_RECONCILE_EVERY, isPackKey, reconcileRefusalIsFinal } from '../CheckoutReturn';
+import { canResumeSubscription, renewalPeriod, resumeTerms, subscriptionIsOver } from '../ResumeSubscription';
+import { RoboApiError } from '../../../../lib/api/client';
+import { clientBrandFor } from '../../../../lib/brand/client';
+import stagedCredits from '../../../../i18n/staging/credits.en.json';
+import stagedCreditsZh from '../../../../i18n/staging/credits.zh.json';
 import { checkoutRedirectUrl } from '../../../../hooks/credits/useBillingActions';
 import { applyDraft, draftFromOverride, invalidCells, parseOverrideValue, revenueShare } from '../adminCatalog';
 import { bucketLabelKey, calendarDaysUntil, knownTimeZone, planMonths, planNameKey, pricePeriod, refillLabel } from '../labels';
@@ -277,6 +282,194 @@ describe('deriveSubscriptionState', () => {
     expect(summaryCancelAtPeriodEnd(older as typeof summary)).toBeUndefined();
     expect(summaryCancelAtPeriodEnd(null)).toBeUndefined();
     expect(deriveSubscriptionState({ summary: older as typeof summary, legacyPlan: legacyPlan('active', { cancelAtPeriodEnd: true }) }).cancelAtPeriodEnd).toBe(false);
+  });
+});
+
+describe('deriveSubscriptionState: what the subscription is charged', () => {
+  const billing = (amountMinor: number | null, currency: string | null): BillingPlanResponse =>
+    ({
+      region: { market: 'other', currency: 'USD', method: 'stripe', source: 'brand' },
+      current: { tier: 'free', status: 'active', amountMinor, currency, currentPeriodEnd: null, cancelAtPeriodEnd: false, hasStripeCustomer: true, manualRenewal: false },
+      credits: { balance: 0, periodAllotment: null, tier: 'free' },
+      plans: [],
+      stripeConfigured: true,
+      alipayConfigured: false,
+    }) as BillingPlanResponse;
+  const summary = creditsResponse({ planKey: 'pro_monthly', planProfile: 'pro', interval: 'month' }).summary;
+  const charged = (amountMinor: number | null, currency: string | null) => {
+    const s = deriveSubscriptionState({ summary, legacyPlan: billing(amountMinor, currency) });
+    return [s.chargedAmountMinor, s.chargedCurrency];
+  };
+
+  it('the billing plan\'s amount and currency, in upper case; both or neither', () => {
+    expect(charged(2499, 'usd')).toEqual([2499, 'USD']);
+    expect(charged(74900, 'TWD')).toEqual([74900, 'TWD']);
+    expect(charged(2499, null)).toEqual([null, null]);
+    expect(charged(null, 'USD')).toEqual([null, null]);
+    expect(charged(0, 'USD')).toEqual([null, null]);
+    expect(charged(24.99, 'USD')).toEqual([null, null]);
+    expect(charged(2499, 'dollars')).toEqual([null, null]);
+  });
+
+  it('unknown while the billing plan has not arrived', () => {
+    const s = deriveSubscriptionState({ summary });
+    expect([s.chargedAmountMinor, s.chargedCurrency]).toEqual([null, null]);
+  });
+});
+
+describe('"Keep my plan": when it is offered and what the box says (ST-6)', () => {
+  const NOW = new Date('2026-10-11T12:00:00Z');
+  const base = { status: 'ready' as const, profile: 'pro' as const, autoRenews: true, cancelAtPeriodEnd: true, periodEnd: '2026-10-25T00:00:00Z', isPass: false, legacy: false };
+
+  it('only a renewing plan that was cancelled and whose period still runs, on a brand whose plans renew', () => {
+    expect(canResumeSubscription(base, 'intl', NOW)).toBe(true);
+    expect(canResumeSubscription({ ...base, cancelAtPeriodEnd: false }, 'intl', NOW)).toBe(false);
+    expect(canResumeSubscription({ ...base, autoRenews: false }, 'intl', NOW)).toBe(false);
+    expect(canResumeSubscription({ ...base, isPass: true }, 'intl', NOW)).toBe(false);
+    expect(canResumeSubscription({ ...base, periodEnd: '2026-10-11T11:59:59Z' }, 'intl', NOW)).toBe(false);
+    expect(canResumeSubscription({ ...base, periodEnd: '2026-10-11T12:00:00Z' }, 'intl', NOW)).toBe(false);
+    expect(canResumeSubscription({ ...base, periodEnd: null }, 'intl', NOW)).toBe(false);
+    expect(canResumeSubscription({ ...base, periodEnd: 'not a date' }, 'intl', NOW)).toBe(false);
+    expect(canResumeSubscription({ ...base, status: 'loading' }, 'intl', NOW)).toBe(false);
+    expect(canResumeSubscription(base, 'cn', NOW)).toBe(false);
+  });
+
+  it('never a grandfathered practice plan: the server keeps no renewal terms for one and refuses the call', () => {
+    expect(canResumeSubscription({ ...base, legacy: true }, 'intl', NOW)).toBe(false);
+    // As the page derives it: a cancelled legacy Stripe plan renews by itself, has a month interval and a charged amount.
+    const legacy = deriveSubscriptionState({
+      summary: { ...creditsResponse({ planKey: 'starter', legacyPlan: true, interval: 'month', periodEnd: '2026-10-25T00:00:00Z' }).summary, cancelAtPeriodEnd: true },
+      legacyPlan: {
+        region: { market: 'other', currency: 'USD', method: 'stripe', source: 'brand' },
+        current: { tier: 'starter', status: 'active', amountMinor: 900, currency: 'usd', currentPeriodEnd: '2026-10-25T00:00:00Z', cancelAtPeriodEnd: true, hasStripeCustomer: true, manualRenewal: false },
+        credits: { balance: 3, periodAllotment: null, tier: 'starter' },
+        plans: [],
+        stripeConfigured: true,
+        alipayConfigured: false,
+      },
+    });
+    expect([legacy.legacy, legacy.autoRenews, legacy.cancelAtPeriodEnd, legacy.chargedAmountMinor]).toEqual([true, true, true, 900]);
+    expect(canResumeSubscription(legacy, 'intl', NOW)).toBe(false);
+    expect(canResumeSubscription({ ...legacy, legacy: false }, 'intl', NOW)).toBe(true);
+  });
+
+  it('the period is the plan\'s; a pass or an unknown interval has none', () => {
+    expect([renewalPeriod('week'), renewalPeriod('month'), renewalPeriod('quarter')]).toEqual(['week', 'month', 'quarter']);
+    expect([renewalPeriod('pass'), renewalPeriod(null), renewalPeriod('year'), renewalPeriod(undefined)]).toEqual([null, null, null, null]);
+  });
+
+  it('the price is what billing says is charged, and nothing else: no charged price, no sentence (the catalog is never asked)', () => {
+    const sub = { interval: 'month' as string | null, chargedAmountMinor: 1999 as number | null, chargedCurrency: 'USD' as string | null };
+    expect(resumeTerms(sub)).toEqual({ period: 'month', amountMinor: 1999, currency: 'USD' });
+    expect(resumeTerms({ interval: 'quarter', chargedAmountMinor: 164900, chargedCurrency: 'TWD' })).toEqual({ period: 'quarter', amountMinor: 164900, currency: 'TWD' });
+    // The billing plan has not answered, failed, or states no amount: all read as "no charged price".
+    expect(resumeTerms({ ...sub, chargedAmountMinor: null, chargedCurrency: null })).toBeNull();
+    expect(resumeTerms({ ...sub, chargedCurrency: null })).toBeNull();
+    // A pass or no period: no sentence.
+    expect(resumeTerms({ ...sub, interval: 'pass' })).toBeNull();
+    expect(resumeTerms({ ...sub, interval: null })).toBeNull();
+    // The function takes no catalog at all.
+    expect(resumeTerms.length).toBe(1);
+  });
+
+  it('after a refusal, "already ended" is claimed only for a plan that is over: free, a pass, or past its period end', () => {
+    const free = { ...base, profile: 'free' as const, autoRenews: false, cancelAtPeriodEnd: false, periodEnd: null };
+    expect(subscriptionIsOver(free, NOW)).toBe(true);
+    expect(subscriptionIsOver({ ...base, isPass: true, autoRenews: false, cancelAtPeriodEnd: false }, NOW)).toBe(true);
+    expect(subscriptionIsOver({ ...base, periodEnd: '2026-10-11T11:59:59Z' }, NOW)).toBe(true);
+    expect(subscriptionIsOver({ ...base, periodEnd: '2026-10-11T12:00:00Z' }, NOW)).toBe(true);
+    // It renews again (kept in another tab): not over.
+    expect(subscriptionIsOver({ ...base, cancelAtPeriodEnd: false }, NOW)).toBe(false);
+    // Still cancelled and running: not over.
+    expect(subscriptionIsOver(base, NOW)).toBe(false);
+    // Not known: no claim.
+    expect(subscriptionIsOver({ ...free, status: 'loading' }, NOW)).toBe(false);
+    expect(subscriptionIsOver({ ...free, status: 'error' }, NOW)).toBe(false);
+    expect(subscriptionIsOver({ ...base, periodEnd: null }, NOW)).toBe(false);
+    expect(subscriptionIsOver({ ...base, periodEnd: 'not a date' }, NOW)).toBe(false);
+    // A paid plan with a period the page does not know is not called ended.
+    expect(subscriptionIsOver({ ...base, autoRenews: false, cancelAtPeriodEnd: false }, NOW)).toBe(false);
+  });
+});
+
+describe('the plan sheet for a subscriber (ST-5) and for a mainland visitor (AL-6)', () => {
+  const plans = visiblePlans(plansView().plans);
+  const keys = (list: ReturnType<typeof offeredProPlans>) => list.map((p) => p.key);
+  const state = (over: Partial<Parameters<typeof offeredProPlans>[1]> = {}) => ({ onProSubscription: false, cancelAtPeriodEnd: false, currentKey: null, ...over });
+
+  it('no renewing Pro subscription: every subscription and pass', () => {
+    expect(keys(offeredProPlans(plans, state(), null))).toEqual(['pro_weekly', 'pro_monthly', 'pro_quarterly', 'pro_week_pass']);
+  });
+
+  it('a Pro subscription that renews: every subscription (theirs and the switches); a pass only by link', () => {
+    const on = state({ onProSubscription: true, currentKey: 'pro_monthly' });
+    expect(keys(offeredProPlans(plans, on, null))).toEqual(['pro_weekly', 'pro_monthly', 'pro_quarterly']);
+    expect(keys(offeredProPlans(plans, on, 'pro_week_pass'))).toEqual(['pro_weekly', 'pro_monthly', 'pro_quarterly', 'pro_week_pass']);
+  });
+
+  it('a cancelled Pro subscription that still runs: the passes only', () => {
+    const cancelled = state({ onProSubscription: true, cancelAtPeriodEnd: true, currentKey: 'pro_monthly' });
+    expect(keys(offeredProPlans(plans, cancelled, null))).toEqual(['pro_week_pass']);
+    expect(keys(offeredProPlans(plans, cancelled, 'pro_quarterly'))).toEqual(['pro_week_pass']);
+  });
+
+  it('packs are never part of the Pro options', () => {
+    expect(offeredProPlans(plans, state(), null).some((p) => p.kind === 'pack')).toBe(false);
+  });
+
+  it('the mainland line: only country CN on the international brand, to the other brand\'s own origin', () => {
+    const ra = clientBrandFor('roboapply');
+    const ga = clientBrandFor('goapply');
+    expect(CN_VISITOR_COUNTRY).toBe('CN');
+    expect(cnVisitorPricingUrl(ra, 'CN')).toBe(`${ra.otherBrand.canonicalOrigin}/pricing`);
+    expect(cnVisitorPricingUrl(ra, 'CN')).toBe('https://www.goapply.top/pricing');
+    for (const country of ['TW', 'HK', 'MO', 'US', 'cn', 'CHN', '', null, undefined]) expect(cnVisitorPricingUrl(ra, country), String(country)).toBeNull();
+    expect(cnVisitorPricingUrl(ga, 'CN')).toBeNull();
+    // The address comes from the brand payload: another origin gives another link, a broken one gives none.
+    expect(cnVisitorPricingUrl({ market: 'intl', otherBrand: { canonicalOrigin: 'https://cn.example.test/' } }, 'CN')).toBe('https://cn.example.test/pricing');
+    for (const origin of ['', 'javascript:alert(1)', 'http://www.goapply.top', 'https://www.goapply.top/path', '//www.goapply.top']) {
+      expect(cnVisitorPricingUrl({ market: 'intl', otherBrand: { canonicalOrigin: origin } }, 'CN'), origin).toBeNull();
+    }
+  });
+
+  it('the staged line names the other brand by token, in English and in Chinese, with one link', () => {
+    const enLine = stagedCredits.credits.planSheet.cnVisitor;
+    const zhLine = stagedCreditsZh.credits.planSheet.cnVisitor;
+    expect(enLine).toBe('In mainland China? <link>You can pay in RMB with Alipay on %OTHER_BRAND%.</link>');
+    expect(zhLine).toBe('在中国大陆？<link>可在 %OTHER_BRAND% 用支付宝以人民币付款。</link>');
+    for (const line of [enLine, zhLine]) {
+      expect(line).not.toMatch(/GoApply|RoboApply|goapply\.top|roboapply\.io|https?:/i);
+      expect(line.match(/<link>/g)).toHaveLength(1);
+    }
+  });
+
+  it('the new lifecycle copy states no amount, date or plan name (they come from the API)', () => {
+    const { planSheet, quote, resume } = stagedCredits.credits;
+    for (const text of [planSheet.portalScope, planSheet.cnVisitor, ...Object.values(quote), ...Object.values(resume)]) {
+      expect(text).not.toMatch(/[0-9$¥€£]/);
+      expect(text).not.toMatch(/—|Weekly|Monthly|Quarterly/);
+    }
+  });
+});
+
+describe('return-page reconcile: which refusals end the calls (ST-3)', () => {
+  const err = (code: string, status: number) => new RoboApiError('failed', { code, status, payload: { success: false, code } });
+
+  it('the page re-reads every 3 s, 10 times, and hands the session over again on every third', () => {
+    expect([RETURN_POLL_MS, RETURN_POLL_ATTEMPTS, RETURN_RECONCILE_EVERY]).toEqual([3000, 10, 3]);
+  });
+
+  it('an answer asking again cannot change is final; a passing one is not', () => {
+    for (const [code, status] of [['forbidden', 403], ['not_found', 404], ['invalid_request', 422], ['stripe_not_configured', 503]] as const) {
+      expect(reconcileRefusalIsFinal(err(code, status)), code).toBe(true);
+    }
+    for (const [code, status] of [['rate_limited', 429], ['payment_provider_error', 502], ['server_error', 500]] as const) {
+      expect(reconcileRefusalIsFinal(err(code, status)), code).toBe(false);
+    }
+    // A route that is not there yet (the server half not deployed) answers 404 with any code, or none.
+    expect(reconcileRefusalIsFinal(new RoboApiError('nope', { status: 404 }))).toBe(true);
+    expect(reconcileRefusalIsFinal(new Error('network'))).toBe(false);
+    expect(reconcileRefusalIsFinal(null)).toBe(false);
   });
 });
 

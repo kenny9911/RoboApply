@@ -35,19 +35,39 @@
 //     button stays disabled until it is ticked.
 //   - EU/UK/TW buyers also see the optional withdrawal waiver ("Start now…");
 //     left unticked they keep the full 14-day refund.
-//   - A legacy practice-plan subscriber choosing a Pro subscription gets the
-//     quote sheet (amount today, renewal price, next renewal date) before
-//     anything is charged.
+//   - Every change of subscription is made here, never in the payment
+//     portal (M-16): a legacy practice-plan subscriber choosing a Pro
+//     subscription, and a Pro subscriber whose plan renews choosing another
+//     subscription of the brand (weekly, monthly, quarterly; the student
+//     plans for a verified student). "Continue" then opens the quote sheet
+//     (amount today, renewal price, next renewal date), which carries the
+//     unticked acknowledgement of the NEW terms; nothing is charged before
+//     Confirm there. The plan they are on stays listed as "Your plan" and
+//     cannot be chosen. Nothing is preselected for a subscriber unless they
+//     asked for a plan by link: a switch is their own choice.
 //   - Taiwan visitors see the TWD reference line under USD prices.
 //   - The 7-day pass says "same price as weekly billing" only while the two
 //     amounts the API sent are equal (`samePriceAsWeeklyBilling`).
 //   - GoApply passes carry the mainland line 一次性付款 · 到期不自动续费 with
 //     the pass's own day count (`billingCn.pricing.passNote`).
-//   - Only what is shown can be bought: the selection is resolved from the
-//     rendered options, so a hidden plan can never enable "Continue".
-//   - A Pro subscriber manages renewal in the payment portal; once they have
-//     cancelled (or asked for one by link) the one-time passes are offered.
-//     A pass they hold can be bought again; only a subscription is "Your plan".
+//   - Only what is shown can be bought: the selection (the buyer's own
+//     pick, else the plan asked for by link, else the server's default) is
+//     resolved from the rendered options that can be chosen, so a hidden plan
+//     can never enable "Continue" and a link to a plan this buyer is not
+//     offered falls back to the default instead of a dead button.
+//   - The payment portal is for the payment method, invoices and billing
+//     details; the sheet says so to a subscriber. Once they have cancelled
+//     (or asked for one by link) the one-time passes are offered; other
+//     subscriptions are not, while the cancelled one still runs ("Keep my
+//     plan" on the card above brings it back). A pass they hold can be
+//     bought again; only a subscription is "Your plan".
+//   - A visitor in mainland China on the international brand gets one line
+//     with a link to the other brand's pricing page, where RMB and Alipay
+//     are (M-18; MARKET_STRATEGY §5.3 G12). A plain link the visitor opens:
+//     no redirect, no second rail here, and the plans below stay usable.
+//     Only the edge country `CN` shows it; Taiwan, Hong Kong, Macau and an
+//     unknown country never do. The address is the other brand's canonical
+//     origin from the brand payload, never a host written here.
 //   - WeChat Pay chosen: "Continue" opens the WeChat Pay sheet for the pass
 //     or pack — that sheet owns the agreement box, the code and the result. A
 //     payment code is only ever drawn there, as a QR code: a `weixin://` link
@@ -67,7 +87,7 @@ import { Btn } from '../../v3/primitives/Btn';
 import { PriceReference, PriceReferenceCountry } from '../market/PriceReference';
 import { useBrand } from '../../../lib/brand/BrandProvider';
 import { useFlag } from '../../../lib/flags';
-import { QUARTERLY_SWITCH, displayPrice, requiresWithdrawalWaiver, samePriceAsWeeklyBilling } from '../../../lib/pricing';
+import { displayPrice, requiresWithdrawalWaiver, samePriceAsWeeklyBilling } from '../../../lib/pricing';
 import { apiErrorCode } from '../../../lib/api/contracts/wire';
 import { useStudentStatus } from '../account-v2';
 import { WechatPaySheet, sellableCnPlan, useWechatPayAvailable } from '../billing-cn';
@@ -139,6 +159,48 @@ export function checkoutReturnPath(plan: Pick<CatalogPlan, 'key' | 'kind'>, prac
   return `${CHECKOUT_RETURN_PATH}?${q.toString()}`;
 }
 
+/** The edge country that gets the line pointing to the other brand's RMB / Alipay prices. Exactly this one. */
+export const CN_VISITOR_COUNTRY = 'CN';
+
+/**
+ * The other brand's pricing page for a mainland visitor of the international
+ * brand, or null when the line must not show: another market, another
+ * country (Taiwan, Hong Kong and Macau are not the mainland), an unknown
+ * country, or an origin that is not a web address.
+ */
+export function cnVisitorPricingUrl(brand: { market: string; otherBrand: { canonicalOrigin: string } }, country: string | null | undefined): string | null {
+  if (brand.market !== 'intl' || country !== CN_VISITOR_COUNTRY) return null;
+  const origin = brand.otherBrand?.canonicalOrigin;
+  if (typeof origin !== 'string' || !/^https:\/\/[^/\s]+$/i.test(origin.replace(/\/+$/, ''))) return null;
+  return `${origin.replace(/\/+$/, '')}/pricing`;
+}
+
+/** What a subscriber's plan state means for the sheet. */
+export interface OfferState {
+  /** On a Pro subscription that renews by itself (cancelled or not). */
+  onProSubscription: boolean;
+  cancelAtPeriodEnd: boolean;
+  /** The subscription they are on ("Your plan"), or null. */
+  currentKey: string | null;
+}
+
+/**
+ * The Pro options (subscriptions and passes) the sheet lists for this buyer.
+ *   - No renewing Pro subscription: every subscription and pass.
+ *   - A Pro subscription that will renew: every subscription (the one they
+ *     are on is listed as "Your plan"; the others are switches), and a pass
+ *     only when asked for by link.
+ *   - A cancelled Pro subscription still running: the passes only.
+ */
+export function offeredProPlans(plans: readonly CatalogPlan[], state: OfferState, requestedPlan: string | null | undefined): CatalogPlan[] {
+  return plans.filter((p) => {
+    if (p.kind !== 'subscription' && p.kind !== 'pass') return false;
+    if (!state.onProSubscription) return true;
+    if (p.kind === 'pass') return state.cancelAtPeriodEnd || p.key === requestedPlan;
+    return !state.cancelAtPeriodEnd;
+  });
+}
+
 export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNavigate }: PlanPickerProps) {
   const t = useTranslations('credits');
   const tv = useTranslations('accountV2');
@@ -166,8 +228,8 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
   // Unknown country → no box: left out, the buyer keeps the full 14-day refund.
   const showWaiver = brand.market === 'intl' && requiresWithdrawalWaiver(country);
 
-  const [selected, setSelected] = useState<string | null>(null);
-  const [initialised, setInitialised] = useState(false);
+  /** The plan the buyer picked on this sheet; null until they pick one. */
+  const [picked, setPicked] = useState<string | null>(null);
   const [autoRenewAck, setAutoRenewAck] = useState(false);
   const [waiver, setWaiver] = useState(false);
   const [quoteFor, setQuoteFor] = useState<CatalogPlan | null>(null);
@@ -191,11 +253,24 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
     void refetchPlans();
   }, [studentEnabled, havePlans, listsStudentPlans, refetchPlans]);
 
-  useEffect(() => {
-    if (initialised || !plansQ.data) return;
-    setSelected(initialSelection(plansQ.data, requestedPlan));
-    setInitialised(true);
-  }, [initialised, plansQ.data, requestedPlan]);
+  // A Pro subscriber whose plan renews changes it here, as a switch with a
+  // quote. One-time passes are offered once the subscription is cancelled,
+  // or when asked for by link (the cancel-time "7-day pass instead?").
+  const onProSubscription = sub.autoRenews && !sub.legacy && sub.profile === 'pro';
+  const currentKey = sub.profile === 'pro' && !sub.legacy ? sub.planKey : null;
+  // Passes and packs can be bought again; only a running subscription is "Your plan".
+  const isCurrent = (p: CatalogPlan) => p.kind === 'subscription' && p.key === currentKey;
+  const proPlans = offeredProPlans(plans, { onProSubscription, cancelAtPeriodEnd: sub.cancelAtPeriodEnd, currentKey }, requestedPlan);
+  const packs = plans.filter((p) => p.kind === 'pack');
+  const offered = [...proPlans, ...packs];
+
+  // The selection is always one of the rendered options that can be chosen:
+  // the buyer's own pick, else the plan asked for by link, else the server's
+  // default. A subscriber gets no default: switching is their own choice.
+  const choosable = offered.filter((p) => !isCurrent(p));
+  const serverDefault = onProSubscription ? null : (plansQ.data?.defaultSelection ?? null);
+  const suggested = plansQ.data ? initialSelection({ plans: choosable, defaultSelection: serverDefault }, requestedPlan) : null;
+  const selected = picked !== null && choosable.some((p) => p.key === picked) ? picked : suggested;
 
   // A new choice starts with both boxes unticked again.
   useEffect(() => {
@@ -221,21 +296,6 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
     );
   }
 
-  // A Pro subscriber changes how often Pro renews in the payment portal, so
-  // other subscriptions stay off this sheet for them. One-time passes are
-  // offered once the subscription is cancelled, or when asked for by link
-  // (the cancel-time "7-day pass instead?").
-  const onProSubscription = sub.autoRenews && !sub.legacy && sub.profile === 'pro';
-  const proPlans = plans.filter((p) => {
-    if (p.kind !== 'subscription' && p.kind !== 'pass') return false;
-    if (!onProSubscription) return true;
-    if (p.kind === 'pass') return sub.cancelAtPeriodEnd || p.key === requestedPlan;
-    // Only the quarterly plan asked for by the one quarterly suggestion is
-    // offered, as a switch; every other change goes through the payment portal.
-    return !sub.cancelAtPeriodEnd && p.key === requestedPlan && !!sub.planKey && QUARTERLY_SWITCH[sub.planKey] === p.key;
-  });
-  const packs = plans.filter((p) => p.kind === 'pack');
-  const offered = [...proPlans, ...packs];
   if (offered.length === 0) {
     return <p className={styles.body}>{t('planSheet.empty')}</p>;
   }
@@ -246,12 +306,13 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
   // No rail that can charge, or the server says payments are closed: prices stay, nothing is bought.
   const paymentsOpen = rails.length > 0 && plansQ.data.paymentsOpen !== false;
 
-  // Only a rendered option can be the plan being bought.
-  const plan = offered.find((p) => p.key === selected) ?? null;
-  // Passes and packs can be bought again; only a running subscription is "Your plan".
-  const isCurrent = (p: CatalogPlan) => p.kind === 'subscription' && sub.profile === 'pro' && !sub.legacy && sub.planKey === p.key;
-  const legacySwitch = !!plan && plan.kind === 'subscription' && (sub.legacy || onProSubscription);
-  const needsAck = !!plan && plan.requiresAutoRenewAck;
+  // Only a rendered option that can be chosen can be the plan being bought.
+  const plan = choosable.find((p) => p.key === selected) ?? null;
+  // A subscriber choosing a subscription changes plans: the quote sheet, never a second checkout.
+  const isSwitch = !!plan && plan.kind === 'subscription' && (sub.legacy || onProSubscription);
+  // The renewal box of a switch is on the quote sheet, with the quote's own price.
+  const needsAck = !!plan && plan.requiresAutoRenewAck && !isSwitch;
+  const cnVisitorUrl = cnVisitorPricingUrl(brand, country);
   const period = plan ? pricePeriod(plan) : 'once';
   const shown = plan ? displayPrice(plan, monthly) : null;
   const price = shown ? money(locale, shown.amountMinor, shown.currency) : '—';
@@ -264,14 +325,15 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
     paymentsOpen &&
     rail !== null &&
     wechatCanSell &&
-    !isCurrent(plan) &&
+    // Whether "Continue" is a checkout or a plan change depends on the plan the buyer is on: wait until it is known.
+    sub.status !== 'loading' &&
     (!needsAck || autoRenewAck) &&
     (brand.market !== 'intl' || countryResolved) &&
     !checkout.isPending;
 
   function onContinue() {
     if (!plan || !canContinue || rail === null) return;
-    if (legacySwitch) {
+    if (isSwitch) {
       setQuoteFor(plan);
       return;
     }
@@ -324,7 +386,7 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
           value={p.key}
           checked={selected === p.key}
           disabled={disabled}
-          onChange={() => setSelected(p.key)}
+          onChange={() => setPicked(p.key)}
         />
         <span className={styles.optionBody}>
           <span className={styles.h3}>{name ? t(name) : p.defaultLabel}</span>
@@ -360,13 +422,28 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
   return (
     <PriceReferenceCountry country={country}>
       <div className={styles.stack} id="plans" data-testid="plan-picker">
+        {cnVisitorUrl ? (
+          <p className={styles.muted} data-testid="cn-visitor-note">
+            {t.rich('planSheet.cnVisitor', {
+              link: (chunks) => (
+                <a href={cnVisitorUrl} rel="noopener" className={styles.link}>
+                  {chunks}
+                </a>
+              ),
+            })}
+          </p>
+        ) : null}
         {proPlans.length > 0 ? (
           <fieldset className={styles.fieldset}>
             <legend className={styles.legend}>{t('planSheet.proGroup')}</legend>
             <div className={styles.options}>{proPlans.map(renderOption)}</div>
           </fieldset>
         ) : null}
-        {onProSubscription && !sub.cancelAtPeriodEnd ? <p className={styles.muted}>{t('planSheet.manageInPortal')}</p> : null}
+        {onProSubscription && !sub.cancelAtPeriodEnd ? (
+          <p className={styles.muted} data-testid="portal-scope">
+            {t('planSheet.portalScope')}
+          </p>
+        ) : null}
         {packs.length > 0 ? (
           <fieldset className={styles.fieldset}>
             <legend className={styles.legend}>{t('planSheet.packGroup')}</legend>
@@ -430,10 +507,10 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
             {t('planSheet.error')}
           </p>
         ) : null}
-        {plan?.promotionCodes && !legacySwitch ? <p className={styles.muted}>{tv('plans.promotionCode')}</p> : null}
+        {plan?.promotionCodes && !isSwitch ? <p className={styles.muted}>{tv('plans.promotionCode')}</p> : null}
         <div className={styles.actions}>
           <Btn variant="primary" disabled={!canContinue} onClick={onContinue} aria-busy={checkout.isPending || undefined}>
-            {checkout.isPending ? t('planSheet.continuing') : legacySwitch ? t('planSheet.switchContinue') : t('planSheet.continue')}
+            {checkout.isPending ? t('planSheet.continuing') : isSwitch ? t('planSheet.switchContinue') : t('planSheet.continue')}
           </Btn>
         </div>
 
@@ -454,9 +531,9 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
         {quoteFor ? (
           <SwitchQuoteSheet
             plan={quoteFor}
-            autoRenewAck={autoRenewAck}
             withdrawalWaiver={showWaiver ? waiver : undefined}
             onClose={() => setQuoteFor(null)}
+            navigate={navigate}
           />
         ) : null}
       </div>

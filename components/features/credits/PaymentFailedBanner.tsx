@@ -5,7 +5,11 @@
 // drops to Free after the last retry, granted credits are kept). Rendered at
 // the top of /settings#billing; INT may also mount it in the app layout.
 // Status comes from `/billing/plan` (Stripe past_due / unpaid / incomplete);
-// renders nothing otherwise.
+// renders nothing otherwise, and goes away through the normal refetch once
+// the status is good again. Its button opens the payment portal straight on
+// "update payment method" (`flow: 'payment_method_update'`; ST-7,
+// MARKET_STRATEGY §5.1 "Dunning and SCA"); "Manage payment" on the billing
+// view opens the portal's home page instead.
 
 import { useTranslations } from 'next-intl';
 
@@ -31,7 +35,7 @@ export function PaymentFailedBanner({ navigate = (url) => window.location.assign
         {portal.isError ? <p className={styles.error}>{t('portalError')}</p> : null}
       </div>
       {sub.hasPortal ? (
-        <Btn variant="primary" disabled={portal.isPending} onClick={() => portal.mutate(undefined, { onSuccess: (r) => navigate(r.url) })}>
+        <Btn variant="primary" disabled={portal.isPending} onClick={() => portal.mutate({ flow: 'payment_method_update' }, { onSuccess: (r) => navigate(r.url) })}>
           {t('action')}
         </Btn>
       ) : null}

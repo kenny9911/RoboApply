@@ -20,19 +20,54 @@
 //     (billing-cn `WechatPayReturn`). The heading follows the order: "checking"
 //     only while it is pending, then paid / not completed / a neutral title
 //     when the body points to support, a refund, or a failed status check.
+//
+// Reconcile (ST-3; MARKET_STRATEGY §5.1 "Lost-event recovery"). A one-time
+// card payment has a single notification from the payment provider; if it is
+// lost, nothing else would ever add the pass or the pack. So, back from the
+// card payment page with its Checkout Session id (`?session_id=cs_…`), this
+// page asks the server to settle that session: once when it opens, and again
+// on every third re-read while it is still waiting. The server runs the same
+// claimed fulfilment as the notification, so whichever arrives second changes
+// nothing. Rules:
+//   - only on success, with a session id, on the international brand (the
+//     card rail is its rail; a mainland page never calls it);
+//   - the answer is never shown as "done": after any answer the credit
+//     summary is read again, and only the summary (or the practice balance
+//     for a pack) turns the page to done;
+//   - `pending` keeps the page waiting and asking;
+//   - an answer that asking again cannot change (403 not this buyer's
+//     session, 404, 422, 503 cards not set up) ends the calls and leaves the
+//     ordinary waiting / "taking longer" copy.
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { useBrand } from '../../../lib/brand/BrandProvider';
+import { accountApi, checkoutSessionId } from '../../../lib/api/account';
+import { RoboApiError } from '../../../lib/api/client';
+import { apiErrorCode } from '../../../lib/api/contracts/wire';
 import { useCredits, useInvalidateCredits } from '../../../hooks/shared/useCredits';
 import { WechatPayReturn, isOrderNumber, useWechatPayAvailable, type WechatPayReturnState } from '../billing-cn';
 import styles from './credits.module.css';
 
 export const RETURN_POLL_MS = 3000;
 export const RETURN_POLL_ATTEMPTS = 10;
+/** The session is handed to the server again on every Nth re-read of the summary. */
+export const RETURN_RECONCILE_EVERY = 3;
+
+/** Reconcile refusals that asking again cannot change (the contract's error codes). */
+const RECONCILE_FINAL_STATUS = new Set([403, 404, 422]);
+const RECONCILE_FINAL_CODES = new Set(['forbidden', 'not_found', 'invalid_request', 'stripe_not_configured', 'feature_disabled', 'not_implemented']);
+
+/** True when a failed reconcile call should not be repeated. A timeout, a 429 or a provider error may pass, so those are asked again. */
+export function reconcileRefusalIsFinal(err: unknown): boolean {
+  if (!(err instanceof RoboApiError)) return false;
+  if (typeof err.status === 'number' && RECONCILE_FINAL_STATUS.has(err.status)) return true;
+  const code = apiErrorCode(err);
+  return !!code && RECONCILE_FINAL_CODES.has(code);
+}
 
 export interface CheckoutReturnProps {
   outcome: 'success' | 'cancel' | null;
@@ -45,6 +80,12 @@ export interface CheckoutReturnProps {
    * Omitted, it is read from the address; `null` means there is none.
    */
   orderId?: string | null;
+  /**
+   * The card payment page's Checkout Session (`?session_id=`), already
+   * checked by the route. With it the page asks the server to settle the
+   * purchase instead of only waiting for it.
+   */
+  sessionId?: string | null;
   pollMs?: number;
 }
 
@@ -76,7 +117,7 @@ function CnOrderReturn({ orderId, onPaid }: { orderId: string; onPaid: () => voi
   );
 }
 
-export function CheckoutReturn({ outcome, planKey = null, practiceBefore = null, orderId, pollMs = RETURN_POLL_MS }: CheckoutReturnProps) {
+export function CheckoutReturn({ outcome, planKey = null, practiceBefore = null, orderId, sessionId = null, pollMs = RETURN_POLL_MS }: CheckoutReturnProps) {
   const t = useTranslations('credits.return');
   const brand = useBrand();
   const params = useSearchParams();
@@ -84,10 +125,54 @@ export function CheckoutReturn({ outcome, planKey = null, practiceBefore = null,
   const { data } = useCredits();
   const invalidate = useInvalidateCredits();
   const [attempts, setAttempts] = useState(0);
+  // The last reconcile answer said "not settled yet": the page keeps waiting.
+  const [reconcilePending, setReconcilePending] = useState(false);
 
   const order = orderId === undefined ? (params?.get('order') ?? null) : orderId;
   // Only GoApply has orders to look up, and only while WeChat Pay is live.
   const cnOrder = brand.market === 'cn' && wechatPay.available && isOrderNumber(order) ? order : null;
+
+  // The card rail is the international brand's; a mainland page never reconciles.
+  const session = outcome === 'success' && brand.market === 'intl' ? checkoutSessionId(sessionId) : null;
+  // 'open': may be asked (again) · 'asking': a call is in flight · 'closed': no further call.
+  const reconcileState = useRef<'open' | 'asking' | 'closed'>('open');
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  const reconcile = useCallback(() => {
+    if (!session || reconcileState.current !== 'open') return;
+    reconcileState.current = 'asking';
+    accountApi
+      .reconcileCheckout(session)
+      .then(
+        (res) => {
+          // Settled (now, or earlier by the notification): nothing more to ask.
+          reconcileState.current = res.status === 'pending' ? 'open' : 'closed';
+          if (mounted.current) setReconcilePending(res.status === 'pending');
+        },
+        (err: unknown) => {
+          reconcileState.current = reconcileRefusalIsFinal(err) ? 'closed' : 'open';
+          if (mounted.current) setReconcilePending(false);
+        },
+      )
+      // Whatever the answer, the summary is what the page believes: read it again.
+      .finally(() => {
+        if (mounted.current) void invalidate();
+      });
+  }, [session, invalidate]);
+
+  // Once when the page opens (also when the summary already reads Pro: a second pass may still be missing).
+  const askedOnOpen = useRef(false);
+  useEffect(() => {
+    if (!session || askedOnOpen.current) return;
+    askedOnOpen.current = true;
+    reconcile();
+  }, [session, reconcile]);
 
   const pack = isPackKey(planKey);
   const balance = data?.practice?.balance ?? null;
@@ -95,16 +180,19 @@ export function CheckoutReturn({ outcome, planKey = null, practiceBefore = null,
   const active = pack
     ? practiceBefore !== null && balance !== null && balance > practiceBefore
     : data?.summary.planProfile === 'pro';
-  const waiting = outcome === 'success' && canTell && !active && attempts < RETURN_POLL_ATTEMPTS;
+  // A pack with no balance to compare against is only waited for while the server says the payment is not settled yet.
+  const waiting = outcome === 'success' && (canTell || reconcilePending) && !active && attempts < RETURN_POLL_ATTEMPTS;
 
   useEffect(() => {
     if (!waiting) return;
     const id = window.setTimeout(() => {
-      setAttempts((n) => n + 1);
+      const next = attempts + 1;
+      setAttempts(next);
       void invalidate();
+      if (next % RETURN_RECONCILE_EVERY === 0) reconcile();
     }, pollMs);
     return () => window.clearTimeout(id);
-  }, [waiting, attempts, invalidate, pollMs]);
+  }, [waiting, attempts, invalidate, pollMs, reconcile]);
 
   let title: string;
   let body: string;

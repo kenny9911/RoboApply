@@ -12,6 +12,10 @@
 //   - An optional "why?" survey AFTER cancelling. It goes to its own
 //     endpoint (POST /credits/cancel/survey), which only stores the answer.
 //   - If the in-app call fails, the public /cancel page is offered.
+//   - Changing one's mind is `ResumeSubscription` ("Keep my plan") on the
+//     same card, not this component: the card remounts this one (a new
+//     `key`) when the plan is kept, so it shows its button again and never a
+//     stale "cancelled" confirmation.
 
 import Link from 'next/link';
 import { useState } from 'react';

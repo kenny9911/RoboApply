@@ -8,6 +8,7 @@ export { CreditCostLine, BILLING_PLANS_HREF, type CreditCostLineProps } from './
 export { PlanPicker, CHECKOUT_RETURN_PATH, type PlanPickerProps } from './PlanPicker';
 export { SwitchQuoteSheet, type SwitchQuoteSheetProps } from './SwitchQuoteSheet';
 export { CancelSubscription, type CancelSubscriptionProps } from './CancelSubscription';
+export { ResumeSubscription, type ResumeSubscriptionProps } from './ResumeSubscription';
 export { PaymentFailedBanner, type PaymentFailedBannerProps } from './PaymentFailedBanner';
 export { CreditsUsage, type CreditsUsageProps } from './CreditsUsage';
 export { BillingView, type BillingViewProps } from './BillingView';
