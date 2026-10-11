@@ -205,6 +205,9 @@ function seamsFor(id: string, env: Record<string, string>): Record<string, unkno
     const noScore: RequestHandler = (_req, res) => void res.status(204).end();
     return { service: fakeDetailService(env), scoreHandler: noScore, newsLimiter: passThrough };
   }
+  // MKT-3G: without an `audience` the links route reads the user's identity to
+  // order the links; the default reader is two Prisma queries.
+  if (id === 'cn.jobs') return { cnIdentity: async () => null };
   return {};
 }
 

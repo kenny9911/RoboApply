@@ -8,10 +8,11 @@
 // shown under the list when the result set is thin (`variant="thin"`), so a
 // search with few results always leads somewhere (MARKET_STRATEGY §1.4). The user
 // types what they are looking for; we show links that open that search on
-// BOSS直聘 / 智联招聘 / 猎聘 in a new tab (ExternalSearchLinks; the links are
-// built server-side and carry only the query). We never fetch, sign in, fill
-// or message on those sites, and nothing found there is shown here: the user
-// adds the jobs they like themselves.
+// mainland job sites in a new tab (ExternalSearchLinks; the links are built
+// server-side and carry only the query; the server chooses the sites and puts
+// the ones for the user's audience first, MARKET_STRATEGY JC-5). We never
+// fetch, sign in, fill or message on those sites, and nothing found there is
+// shown here: the user adds the jobs they like themselves.
 
 import { useId, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';

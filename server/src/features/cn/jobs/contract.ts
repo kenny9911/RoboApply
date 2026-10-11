@@ -23,15 +23,43 @@ import { z } from 'zod';
 // read it through the contract.
 export { cnSalary, formatCnSalary } from './salary.js';
 
-export const CN_EXTERNAL_BOARDS = ['boss', 'zhaopin', 'liepin'] as const;
+/**
+ * The mainland boards a search link may open (JC-5). Naming a board here does
+ * not offer it: a link is built only for a board whose search URL pattern has
+ * been confirmed (deeplinks.ts `verifiedOn`).
+ */
+export const CN_EXTERNAL_BOARDS = ['boss', 'zhaopin', 'liepin', 'job51', 'lagou', 'shixiseng', 'nowcoder', 'iguopin', 'ncss'] as const;
 export type CnExternalBoard = (typeof CN_EXTERNAL_BOARDS)[number];
+/** Whose boards come first in the list: 校招 (students and new graduates) or everyone else. */
+export const CN_LINK_AUDIENCES = ['campus', 'experienced'] as const;
+export type CnLinkAudience = (typeof CN_LINK_AUDIENCES)[number];
+/** Who a board is mainly for. `both` sorts with either audience. */
+export type CnBoardAudience = CnLinkAudience | 'both';
 export const CN_MARKET_TAGS = ['hukou', 'soe', 'bianzhi', 'foreign'] as const;
 export type CnMarketTag = (typeof CN_MARKET_TAGS)[number];
 
-/** GET /cn/jobs/external-links?q&city — deep links built from the user's own query only. */
-export const ExternalLinksQuerySchema = z.object({ q: z.string().trim().min(1).max(80), city: z.string().trim().max(40).optional() });
+/**
+ * GET /cn/jobs/external-links?q&city&audience — deep links built from the
+ * user's own query only. `audience` chooses whose boards come first; without
+ * it the server uses the signed-in user's identity answer (在校生 / 应届 →
+ * campus; anything else, or no answer → experienced).
+ */
+export const ExternalLinksQuerySchema = z.object({
+  q: z.string().trim().min(1).max(80),
+  city: z.string().trim().max(40).optional(),
+  audience: z.enum(CN_LINK_AUDIENCES).optional(),
+});
+export interface ExternalLink {
+  board: CnExternalBoard;
+  /** The site's own name, shown as is. */
+  label: string;
+  url: string;
+  /** Who the board is mainly for. A reader that finds no value treats the link as `experienced`. */
+  audience: CnBoardAudience;
+}
+/** The links in display order: the boards of the request's audience first, then the others. */
 export interface ExternalLinksResponse {
-  links: Array<{ board: CnExternalBoard; label: string; url: string }>;
+  links: ExternalLink[];
 }
 
 /**
