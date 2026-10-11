@@ -4,9 +4,14 @@
 //   - `getFit` / `getFits` / `getVariantFit`  THE fit contract (fit.ts; MARKET_STRATEGY 2.2): one fit per
 //                                  person and job against the primary resume, the same on every surface.
 //                                  `getFits` never calls a model; `getVariantFit` is for tailoring only.
+//   - `estimateForPosting`         the same estimate for a posting that is not a stored job (the extension's
+//                                  page): never stored, never a model call
+//   - `fitSnapshot`                the copy of a fit that may be stored or mailed (kind, versions, scoredAt; I6)
 //   - `matchService.scoreJob`      job detail's POST /jobs/:id/score (mount `createScoreJobHandler()`): `getFit` as a view
-//   - `matchService.preScoreMany`  `getFits` in the older list shape, for callers not yet moved to it
-//     `matchService.preScoreJobs`  the estimate only, over rows the caller already loaded
+//   - `matchService.preScoreMany`  DEPRECATED: `getFits` in the older list shape. No caller outside this area
+//     `matchService.preScoreJobs`  DEPRECATED: the estimate only, over rows the caller already loaded. No caller
+//                                  outside this area (the precompute cron ranks its own queue with it). Both stay
+//                                  exported so no other domain breaks; new code reads `getFits` / `estimateForPosting`.
 //   - `matchService.fitAnalysis`   the Assistant's fit tool (spends `fit_analysis` when a model runs)
 //   - `matchService.keywordCheck`  / `keywordRows()` resume check keyword report (WP-22), tailoring (WP-36a)
 //   - `preScore`, `buildMatchUser`, `toMatchJob`  pure pre-score pieces (feed ranking)
@@ -34,8 +39,8 @@ export { buildKeywordRows } from './keywordRows.js';
 export { getMatchPriors, getMatchTiers, getMatchWeights, currentScorerPin, ON_DEMAND_SCORE_CAP_PER_DAY, scoreCounterKeys, scoreDailyBudget } from './config.js';
 export type { ScorerPin } from './config.js';
 // The fit contract (fit.ts): the only place a fit is assembled.
-export { getFit, getFits, getVariantFit, assembleFit, createFitService, fitFunctions, fitToListResult, fitToView, hysteresisTier, setFitServiceForTests, storedFitStatus, toWireKind } from './fit.js';
-export type { Fit, FitConfig, FitFunctions, FitInputs, FitProse, FitSource, GetFitOptions, GetFitsOptions, StoredFitStatus } from './fit.js';
+export { getFit, getFits, getVariantFit, estimateForPosting, fitSnapshot, assembleFit, createFitService, fitFunctions, fitToListResult, fitToView, hysteresisTier, setFitServiceForTests, storedFitStatus, toWireKind, ADHOC_POSTING_ID } from './fit.js';
+export type { AdhocPosting, Fit, FitConfig, FitFunctions, FitInputs, FitProse, FitSource, GetFitOptions, GetFitsOptions, StoredFitStatus } from './fit.js';
 export { jobContentHash, currentJobHash } from './jobHash.js';
 export type { JobHashInput } from './jobHash.js';
 export { registerMatchPreparer, runMatchPreparers } from './prepare.js';

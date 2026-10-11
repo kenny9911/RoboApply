@@ -3,9 +3,13 @@
 // search_jobs · top_fit_jobs · added_jobs · get_job · analyze_fit ·
 // company_insights · salary_context · competitiveness. All read-only. Lists
 // come from the feed seam (`feedService.preview`, no session), jobs from job
-// detail (market and GoApply mode checks happen there), fit from MATCH's free
-// on-demand score (the paid `fit_analysis` card lives on the job page),
-// company facts only with their provenance.
+// detail (market and GoApply mode checks happen there), fit from THE fit
+// (match/fit.ts through `areas.scoreJob` / `areas.storedFit`: the person's
+// primary resume, so the Assistant and the job page say one number whatever
+// resume is attached to the thread; the paid `fit_analysis` card lives on the
+// job page), company facts only with their provenance. Only an explicit
+// question about a resume version adds the second, separately named measure
+// "With this version" to analyze_fit.
 //
 // The card is the list. A `job_list` card shows every job the tool returned,
 // so whatever narrows a list is done HERE, by the tool, never by the model in
@@ -25,6 +29,7 @@ import { parseFilterSetPatch, type FilterSet } from '../../search/index.js';
 import type { CardSource, CompetitivenessCardData } from '../contract.js';
 import type { FeedItem, SalaryStatsResult } from '../../feed/index.js';
 import type { AddedJobItem } from '../../jobs/import/index.js';
+import type { MatchFitView } from '../../match/contract.js';
 import { logger } from '../../../services/LoggerService.js';
 import type { CopilotTool, ToolContext, ToolOutput } from '../types.js';
 import { card, clip, indexCount, isNotFound, JobId, jobForModel, notAvailable, requireUser } from './util.js';
@@ -71,7 +76,7 @@ async function addedRows(ctx: ToolContext, userId: string, jobs: readonly AddedJ
   for (const j of jobs) {
     let fit: AddedRow['fit'] = null;
     try {
-      const view = await ctx.areas.storedFit(userId, j.jobId, { resumeVariantId: ctx.resumeId, locale: ctx.locale });
+      const view = await ctx.areas.storedFit(userId, j.jobId, { locale: ctx.locale });
       if (view.tier || view.score !== null) fit = { tier: view.tier, score: view.score, kind: view.kind, topGap: view.topGap, topOverlap: view.topOverlap };
     } catch (err) {
       logger.debug('COPILOT', 'no stored fit for an added job', { jobId: j.jobId, error: err instanceof Error ? err.message : String(err) });
@@ -281,28 +286,77 @@ export const getJob: CopilotTool<z.infer<typeof JobArgs>> = {
   },
 };
 
-export const analyzeFit: CopilotTool<z.infer<typeof JobArgs>> = {
+const ESTIMATE_KIND = 'quick estimate (no AI read)';
+export const YOUR_FIT_LABEL = 'Your fit';
+export const WITH_THIS_VERSION_LABEL = 'With this version';
+
+/** What the model is told about one measure: the number, how it was made and how much it rests on. */
+function measureForModel(view: MatchFitView): Record<string, unknown> {
+  const estimate = view.kind === 'pre';
+  return {
+    score: view.score,
+    tier: view.tier,
+    kind: estimate ? ESTIMATE_KIND : 'ai',
+    confidence: view.confidence ?? null,
+    // Why this is a quick estimate and, when it rests on little, what is missing.
+    ...(estimate ? { reason: view.estimateReason ?? null, confidenceReason: view.confidenceReason ?? null } : {}),
+  };
+}
+
+const AnalyzeFitArgs = z
+  .object({
+    jobId: JobId,
+    resumeVariantId: z
+      .string()
+      .min(1)
+      .max(64)
+      .optional()
+      .describe(
+        'Only when the user asks how ONE SPECIFIC resume version fits (for example "how does my tailored resume fit"): the id of that version. Leave it out otherwise; the answer is then the fit for their main resume, the number the job page shows.',
+      ),
+  })
+  .strict();
+
+export const analyzeFit: CopilotTool<z.infer<typeof AnalyzeFitArgs>> = {
   name: 'analyze_fit',
-  description: 'How the user fits one job: the fit tier, skills the resume shows and misses, and gaps. Use for "why do I fit" and "what am I missing".',
-  schema: JobArgs,
+  description:
+    'How the user fits one job: the fit tier, skills the resume shows and misses, and gaps. Use for "why do I fit" and "what am I missing". The fit is for their main resume and is the number the job page shows. With resumeVariantId the answer also carries a second, separately named measure, "With this version".',
+  schema: AnalyzeFitArgs,
   async run(args, ctx) {
     const userId = requireUser(ctx);
     try {
-      const view = await ctx.areas.scoreJob(userId, args.jobId, { resumeVariantId: ctx.resumeId, locale: ctx.locale });
+      // The canonical fit: never the resume attached to the thread.
+      const view = await ctx.areas.scoreJob(userId, args.jobId, { locale: ctx.locale });
+      let withThisVersion: Record<string, unknown> | undefined;
+      if (args.resumeVariantId) {
+        try {
+          const variant = await ctx.areas.scoreJob(userId, args.jobId, { resumeVariantId: args.resumeVariantId, locale: ctx.locale });
+          withThisVersion = { variant: true, label: WITH_THIS_VERSION_LABEL, resumeVariantId: variant.resumeVariantId ?? args.resumeVariantId, ...measureForModel(variant) };
+        } catch (err) {
+          if (!isNotFound(err)) throw err;
+          withThisVersion = { variant: true, label: WITH_THIS_VERSION_LABEL, available: false, reason: 'resume_version_not_found' };
+        }
+      }
       return {
         data: {
           jobId: view.jobId,
-          score: view.score,
-          tier: view.tier,
-          kind: view.kind === 'pre' ? 'quick estimate (no AI read)' : 'ai',
+          label: YOUR_FIT_LABEL,
+          ...measureForModel(view),
           summary: view.summary,
           strengths: view.strengths,
           gaps: view.gaps,
           skillsShown: view.skills.aligned,
           skillsMissing: view.skills.missing,
           skillsListed: view.skills.listed,
+          ...(withThisVersion
+            ? {
+                withThisVersion,
+                measuresNote: `Two different measures. "${YOUR_FIT_LABEL}" is for the main resume and is the number the job page shows. "${WITH_THIS_VERSION_LABEL}" is for the one version asked about. Name each when you quote it; never call the second one the fit.`,
+              }
+            : {}),
           fitNote: FIT_LINE,
         },
+        // The card is the canonical fit only.
         cards: [card(ctx, 'fit_analysis', { ...view, aiWritten: view.kind === 'ai' })],
         jobIds: [view.jobId],
       };

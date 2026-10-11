@@ -1,7 +1,9 @@
 'use client';
 
 // JobFit — the fit block for job detail (WP-34 places it): score with its
-// honesty line, why you fit / what you're missing, and "What we compared".
+// honesty line (and, for a quick estimate that rests on little, the one
+// reason: `FitScore` reads `confidence` and `confidenceReason` from the fit it
+// is handed whole), why you fit / what you're missing, and "What we compared".
 // Loads through hooks/match `useJobFit` (platform-paid; never a user credit).
 
 import { useTranslations } from 'next-intl';
@@ -73,10 +75,11 @@ export function JobFitView({ fit, rewrite }: JobFitViewProps) {
   );
 }
 
-export function JobFit({ jobId, resumeVariantId }: { jobId: string; resumeVariantId?: string | null }) {
+/** The job's one fit (the person's main resume). It takes no resume version: only tailoring shows another measure. */
+export function JobFit({ jobId }: { jobId: string }) {
   const t = useTranslations('fit');
-  const q = useJobFit(jobId, { resumeVariantId });
-  const rewrite = useRewriteFitText(jobId, { resumeVariantId });
+  const q = useJobFit(jobId);
+  const rewrite = useRewriteFitText(jobId);
   if (q.isPending) {
     return (
       <section className={styles.section} aria-busy="true">

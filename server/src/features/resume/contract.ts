@@ -242,8 +242,11 @@ export interface SourcedNumber {
 }
 export interface KeywordReportResponse {
   /**
-   * The 0–100 fit score of this resume for this job when one was computed
-   * (MATCH row; PRODUCT F-RES-08: no second scale). Null when none exists.
+   * The job's fit (0–100; PRODUCT F-RES-08: no second scale), read through the
+   * fit contract: the person's MAIN resume, a real AI fit only. Null when
+   * there is none, and always null on the report of another resume version:
+   * a version's own number is the separately named measure "With this
+   * version", which only tailoring shows (strategy 2.2).
    */
   fit: SourcedNumber | null;
   /** 'great' | 'good' | 'possible' | 'unlikely', when `fit` is set. */
@@ -365,14 +368,27 @@ export interface TailorChange {
 
 export type TailorSessionStatus = 'generating' | 'review' | 'finalized' | 'failed';
 
+/** One fit measure of a tailoring session, with what produced it and when (strategy 2.2 I6). */
+export interface TailorFitMeasure {
+  /** 0–100. */
+  value: number;
+  /** Always a real AI fit here. */
+  kind: 'ai';
+  tier: 'great' | 'good' | 'possible' | 'unlikely' | null;
+  /** When the fit was scored (ISO). */
+  scoredAt: string;
+  /** The rubric, estimator and model behind it; null for a session written before snapshots were stored. */
+  version: { rubric: string; estimator: string; model: string | null } | null;
+}
+
 export interface TailorSessionView {
   id: string;
   status: TailorSessionStatus;
   baseVariantId: string;
   jobId: string | null;
-  /** 0–100 fit score of the base resume for this job (AI fit score), or null ("—"). */
+  /** Alias of `fit.canonical.value` ("Your fit"), kept for one release; null ("—"). */
   scoreBefore: number | null;
-  /** 0–100 fit score of the tailored version, or null ("—"). */
+  /** Alias of `fit.variant.value` ("With this version"), kept for one release; null ("—"). */
   scoreAfter: number | null;
   changes: TailorChange[];
   claims: TailorClaim[];
@@ -387,8 +403,27 @@ export interface TailorSessionView {
   target: { title: string | null; company: string | null };
   /** Claims still waiting for "Verify details"; export and finalize need 0. */
   pendingClaims: number;
-  /** The two scores as sourced values (D3); null when not computed. */
-  fit: { before: SourcedNumber | null; after: SourcedNumber | null };
+  /**
+   * The two measures of a tailoring session (strategy 2.2). They answer
+   * different questions and are never one "before / after" pair of the same
+   * thing:
+   *   - `canonical` "Your fit": THE fit of the job, for the person's main
+   *     resume. It is the number the job page and every list show.
+   *   - `variant` "With this version": the fit of the tailored version, set
+   *     once the session is finalized (every claim decided).
+   * A measure is present only when it is a real AI fit (D3: never a quick
+   * estimate in this comparison); null renders "—".
+   * `before` / `after` are the same two values in the older shape, kept for
+   * one release so a web build from before this change keeps rendering.
+   */
+  fit: {
+    /** Sent with every session since this shape; a reader treats a missing value as "use `before`". */
+    canonical?: TailorFitMeasure | null;
+    /** Sent with every session since this shape; a reader treats a missing value as "use `after`". */
+    variant?: TailorFitMeasure | null;
+    before: SourcedNumber | null;
+    after: SourcedNumber | null;
+  };
   /** The tailored text is AI output (AiGeneratedBadge on GoApply). */
   aiWritten: true;
   /** Why the session failed: the AI step failed, or the request stopped. */

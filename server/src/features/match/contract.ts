@@ -226,6 +226,57 @@ export interface MatchFitView {
   stale?: boolean;
   /** The estimate was mapped onto the AI scale by the market's calibration map. */
   calibrated?: boolean;
+  /**
+   * Set when a rewrite of the written parts was asked for and could not run:
+   * the reason (`daily_cap`, `budget`, …). The stored fit is answered as it
+   * was. Optional and additive; the service that sets it is MatchService
+   * (owned by a later phase), so a reader treats a missing value as "not known".
+   */
+  rewriteBlocked?: EstimateReason | null;
+}
+
+// ── A stored copy of a fit (strategy 2.2, invariant I6) ──────────────────
+
+/**
+ * What is stored when a fit leaves the live read: an alert mail or
+ * notification card, a lifecycle mail, a tailoring session's "before" and
+ * "after". A number alone goes stale without saying so; a snapshot says which
+ * kind of fit it was, which rubric, estimator and model produced it, and when.
+ *
+ * Rule for every in-app list and page: the number on screen comes from
+ * `getFit` / `getFits` at render time. A snapshot is shown only in a message
+ * that left the app (mail, push, WeChat notice) and in history views, with
+ * its date.
+ */
+export const FitSnapshotSchema = z
+  .object({
+    score: z.number().min(0).max(100).nullable(),
+    tier: z.enum(['great', 'good', 'possible', 'unlikely']).nullable(),
+    /** `ai`: a stored scorer result. `estimate`: the quick estimate. */
+    kind: z.enum(['ai', 'estimate']),
+    rubric: z.enum(['fit_v3', 'fit_v4']),
+    estimator: z.string().min(1).max(40),
+    /** The model that wrote an AI fit; null for an estimate. */
+    model: z.string().max(200).nullable(),
+    /** ISO time the fit was scored (an AI fit) or computed (an estimate). */
+    scoredAt: z.string().min(1).max(40),
+  })
+  .strict();
+export type FitSnapshot = z.infer<typeof FitSnapshotSchema>;
+
+/**
+ * The wire value of a fit kind: an estimate stays `pre`, so the published
+ * extension and the web keep working. (Here, in the contract, so another area
+ * can map a kind without loading the match service.)
+ */
+export function toWireKind(kind: 'ai' | 'estimate'): 'pre' | 'ai' {
+  return kind === 'ai' ? 'ai' : 'pre';
+}
+
+/** A stored snapshot read back; null when the value is not one (a row written before snapshots existed). */
+export function readFitSnapshot(value: unknown): FitSnapshot | null {
+  const parsed = FitSnapshotSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 
 /**
@@ -271,9 +322,13 @@ export interface EstimateResult extends PreScoreResult {
 
 // ── POST /jobs/:id/score (job-detail mount; platform-paid, 80/day/user) ──
 
+// The canonical fit is always for the PRIMARY resume (strategy 2.2), so this
+// body takes no resume version: a request that still sends `resumeVariantId`
+// is refused as an unknown field (422 invalid_request). A fit for another
+// version is a separately named measure ("With this version") that only
+// tailoring shows (`getVariantFit`).
 export const ScoreJobBodySchema = z
   .object({
-    resumeVariantId: Id.optional(),
     force: z.boolean().optional(),
     /** Pay one model call only to rewrite the prose in this request's language. */
     regenerateExplanation: z.boolean().optional(),
@@ -282,7 +337,8 @@ export const ScoreJobBodySchema = z
 
 // ── POST /match/jobs/:id/fit-analysis (credit `fit_analysis`, Idempotency-Key) ──
 
-export const FitAnalysisBodySchema = z.object({ resumeVariantId: Id.optional() }).strict();
+/** No resume version either: the fit-analysis card answers the canonical fit (see `ScoreJobBodySchema`). */
+export const FitAnalysisBodySchema = z.object({}).strict();
 export interface FitAnalysisCard {
   jobId: string;
   /** 0–100, or null when nothing could be compared (renders "—", never 0). */
@@ -311,6 +367,8 @@ export interface FitAnalysisCard {
 
 // ── GET /match/jobs/:id/keyword-check (free, deterministic; F-RES-08) ─────
 
+// The keyword check keeps its version parameter: tailoring reads the keyword
+// report per resume version, and the response names the version it read.
 export const KeywordCheckQuerySchema = z.object({ resumeVariantId: Id.optional() }).strict();
 
 export type KeywordRowKey = 'title' | 'years' | 'education' | 'skills' | 'keywords';

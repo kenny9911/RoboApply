@@ -20,7 +20,7 @@ import { ONBOARDING_RESUME_UPLOADS_PER_DAY, type TitleSuggestionView } from './c
 import { createPrismaOnboardingRepo, type OnboardingRepo, type ResumeVariantRow } from './repo.js';
 import { createSnapshotLoader, type SnapshotDb } from './snapshot.js';
 import { createOnboardingService, type OnboardingDeps, type OnboardingServiceImpl } from './service.js';
-import type { MatchPipelineDeps } from './match.js';
+import { fitsForRanking, type MatchPipelineDeps } from './match.js';
 import { foldToSimplified } from './zhFold.js';
 
 /** O5 AI role suggestion: only waits this long (the deterministic seed already answered). */
@@ -204,9 +204,10 @@ export function createDefaultMatchDeps(
       const { ingestForProfile } = await import('../jobs/ingest/index.js');
       return ingestForProfile(searchProfileId, budgetMs);
     },
-    async preScore(userId, jobIds) {
-      const { matchService } = await import('../match/index.js');
-      return matchService.preScoreMany(userId, jobIds);
+    // THE fit of each candidate (match/fit.ts `getFits`: the stored AI score, else the quick estimate; never a model call).
+    async fits(userId, jobIds) {
+      const { getFits } = await import('../match/index.js');
+      return fitsForRanking(await getFits(userId, jobIds));
     },
     aiAllowed: (userId) => aiAllowed(userId),
     // GoApply with the job feed off (R-14) searches nothing and counts nothing.

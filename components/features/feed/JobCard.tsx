@@ -30,6 +30,7 @@ import { Btn, FitTierLabel, HonestyLine, toast } from '../../v3/primitives';
 import { normalizeScore, type FitTierKey } from '../common';
 import { MarketJobMeta, cnApplyCopy, marketMetaCoversBasics, withListing, withOwnImport } from '../market';
 import { listingApply, listingSource } from '../../../lib/api/feed';
+import { lowConfidenceReason } from '../match/FitScore';
 import { TailorButton } from '../tailor';
 import { WhyThisJob } from '../compliance';
 import { useJobActions } from '../../../hooks/shared/useJobActions';
@@ -108,6 +109,7 @@ function BadgeView({ badge, locale }: { badge: CardBadge; locale: string }) {
 export function JobCard({ item, position, market, active = false, onOpen, onHidden, observe }: JobCardProps) {
   const t = useTranslations('jobs.card');
   const tScore = useTranslations('jobs.score');
+  const tFit = useTranslations('fit');
   const tOpt = useTranslations('filters.options');
   const locale = useLocale();
   const tCn = useTranslations('jobsCn');
@@ -129,6 +131,8 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
 
   const score = normalizeScore(item.fit?.score);
   const tier = (item.fit?.tier ?? null) as FitTierKey | null;
+  // Read with a default: a server from before estimate v2 sends no confidence, and the card then shows the tag alone.
+  const lowReason = lowConfidenceReason(item.fit);
   const badges = cardBadges(item);
   const source = sourceLine(item);
   const extras = itemExtras(item);
@@ -297,14 +301,28 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
             ) : null}
           </div>
           <div className={styles.corner}>
-            <FitTierLabel tier={tier} score={score} />
+            {/* No tier word without a number: an unknown score is "—", never a tier chip. */}
+            <FitTierLabel tier={score === null ? null : tier} score={score} />
             <span className={styles.scoreNum}>{score === null ? '—' : tScore('unit', { score })}</span>
-            {item.fit.kind === 'pre' ? <span className={styles.estimate}>{t('quickEstimate')}</span> : null}
+            {item.fit.kind === 'pre' ? (
+              <span className={styles.estimate} data-testid="job-card-estimate">
+                {t('quickEstimate')}
+              </span>
+            ) : null}
           </div>
         </div>
       ) : null}
       {item.fit ? <HonestyLine kind="fit" className={styles.honesty} /> : null}
-      {item.fit ? <p className={styles.workLine}>{item.fit.kind === 'ai' ? t('workAi') : t('workPre')}</p> : null}
+      {item.fit ? (
+        lowReason ? (
+          // A quick estimate that rests on little says why, in one plain line, in place of the "what we compared" line.
+          <p className={styles.workLine} data-testid="job-card-estimate-reason">
+            {lowReason === 'no_resume' ? tFit('quickEstimateWhy.no_resume') : tFit(`confidence.reason.${lowReason}`)}
+          </p>
+        ) : (
+          <p className={styles.workLine}>{item.fit.kind === 'ai' ? t('workAi') : t('workPre')}</p>
+        )
+      ) : null}
 
       <div className={styles.identity}>
         {item.company.logoUrl ? (

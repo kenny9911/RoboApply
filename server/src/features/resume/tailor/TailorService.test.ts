@@ -15,7 +15,7 @@ vi.mock('../../../lib/prisma.js', () => ({ default: {} }));
 import { createCreditTestKit, type CreditTestKit } from '../../../platform/credits/testkit.js';
 import { HttpError } from '../../../platform/http.js';
 import type { RAResumeTailorInput, RAResumeTailorOutput } from '../../../roboapply/v2/agents/RAResumeTailorAgent.js';
-import { TailorService, UnverifiedClaimsError, GENERATING_STALE_MS, type FitScoreResult, type TailorServiceDeps } from './TailorService.js';
+import { TailorService, UnverifiedClaimsError, GENERATING_STALE_MS, readFitSnapshots, type TailorFit, type TailorServiceDeps } from './TailorService.js';
 import { createMemoryTailorStore, memoryTailorJob, memoryTailorVariant, type MemoryTailorStore } from './memoryStore.js';
 import type { CreateTailorBody } from './TailorService.js';
 
@@ -50,7 +50,23 @@ let kit: CreditTestKit;
 let ai: boolean;
 let market: 'intl' | 'cn';
 let tailor: ReturnType<typeof vi.fn<(input: RAResumeTailorInput, options: { locale?: string; signal?: AbortSignal }) => Promise<RAResumeTailorOutput>>>;
-let score: ReturnType<typeof vi.fn<(userId: string, jobId: string, variantId: string) => Promise<FitScoreResult | null>>>;
+/** "Your fit": THE fit of the job for the main resume (match `getFit`). */
+let canonicalFit: ReturnType<typeof vi.fn<TailorServiceDeps['canonicalFit']>>;
+/** "With this version": the fit of one resume version (match `getVariantFit`). */
+let variantFit: ReturnType<typeof vi.fn<TailorServiceDeps['variantFit']>>;
+const SCORED_AT = '2026-10-09T09:30:00.000Z';
+/** A fit as MATCH answers it (`fitSnapshot`). */
+const snap = (score: number | null, kind: TailorFit['kind'] = 'ai', scoredAt = SCORED_AT): TailorFit => ({
+  score,
+  tier: score === null ? null : score >= 80 ? 'great' : score >= 65 ? 'good' : score >= 45 ? 'possible' : 'unlikely',
+  kind,
+  rubric: 'fit_v3',
+  estimator: 'est_v2',
+  model: kind === 'ai' ? 'test/model' : null,
+  scoredAt,
+});
+/** The reads that may call a model (session create); the view's live reads never do. */
+const modelReads = () => canonicalFit.mock.calls.filter((c) => c[2].allowModelCall === true);
 let markChecklist: ReturnType<typeof vi.fn<(userId: string) => Promise<void>>>;
 let logAiLabel: ReturnType<typeof vi.fn<TailorServiceDeps['logAiLabel']>>;
 let profileContext: ReturnType<typeof vi.fn<(userId: string) => Promise<string | null>>>;
@@ -68,7 +84,8 @@ function service(over: Partial<TailorServiceDeps> = {}) {
     market: () => market,
     tailor,
     profileContext,
-    score,
+    canonicalFit,
+    variantFit,
     markChecklist,
     logAiLabel,
     now: () => now,
@@ -85,7 +102,8 @@ beforeEach(() => {
   store.variants.set('rv_base', memoryTailorVariant(USER, 'rv_base', BASE, 'Analyst resume'));
   store.jobs.set('job_1', memoryTailorJob('job_1', { title: 'Data Analyst', companyName: 'Acme Analytics', descriptionPlain: 'Build dashboards in Tableau.', skills: ['tableau'] }));
   tailor = vi.fn(async () => ok());
-  score = vi.fn(async (_u, _j, variantId) => ({ score: variantId === 'rv_base' ? 61 : 74, kind: 'ai' as const, scoredAt: now.toISOString() }));
+  canonicalFit = vi.fn(async () => snap(61));
+  variantFit = vi.fn(async () => snap(74, 'ai', '2026-10-10T12:00:05.000Z'));
   markChecklist = vi.fn(async () => undefined);
   logAiLabel = vi.fn(async () => undefined);
   profileContext = vi.fn(async () => 'Target: data analyst roles.');
@@ -100,7 +118,8 @@ describe('TailorService.create', () => {
     ai = false;
     await expect(service().create(USER, BODY, { idempotencyKey: 'k0' })).rejects.toMatchObject({ code: 'ai_unavailable' });
     expect(tailor).not.toHaveBeenCalled();
-    expect(score).not.toHaveBeenCalled();
+    expect(canonicalFit).not.toHaveBeenCalled();
+    expect(variantFit).not.toHaveBeenCalled();
     expect(profileContext).not.toHaveBeenCalled();
     expect(kit.store.ledger).toHaveLength(0);
   });
@@ -118,7 +137,7 @@ describe('TailorService.create', () => {
     expect(assertPhoneBound).toHaveBeenCalledTimes(1);
   });
 
-  it('writes a tailored version in review with pending claims, spends one credit, scores only the base', async () => {
+  it('writes a tailored version in review with pending claims, spends one credit, reads only "Your fit" (the canonical fit)', async () => {
     const view = await service().create(USER, BODY, { idempotencyKey: 'k1', locale: 'en' });
     expect(view.status).toBe('review');
     expect(view.resultVariantId).toBeTruthy();
@@ -132,8 +151,10 @@ describe('TailorService.create', () => {
     expect(store.sessions.get(view.id)!.sections).toEqual(['experience', 'skills', 'work_full']);
     expect(view.fit.before).toMatchObject({ value: 61, source: 'ai', method: 'fit_score' });
     expect(view.fit.after).toBeNull();
-    expect(score).toHaveBeenCalledTimes(1);
-    expect(score).toHaveBeenCalledWith(USER, 'job_1', 'rv_base', 'en');
+    // "Your fit" is THE fit of the job: asked for the job, never for the session's base version.
+    expect(modelReads()).toHaveLength(1);
+    expect(modelReads()[0]).toEqual([USER, 'job_1', { allowModelCall: true, locale: 'en' }]);
+    expect(variantFit).not.toHaveBeenCalled();
     expect(used()).toBe(1);
 
     const result = store.variants.get(view.resultVariantId!)!;
@@ -199,9 +220,11 @@ describe('TailorService.create', () => {
   });
 
   it('a quick estimate is never shown as a fit score', async () => {
-    score.mockImplementation(async () => ({ score: 50, kind: 'pre' as const, scoredAt: now.toISOString() }));
+    canonicalFit.mockImplementation(async () => snap(50, 'estimate'));
     const view = await service().create(USER, BODY, { idempotencyKey: 'k6' });
-    expect(view).toMatchObject({ scoreBefore: null, scoreAfter: null, fit: { before: null, after: null } });
+    expect(view).toMatchObject({ scoreBefore: null, scoreAfter: null, fit: { canonical: null, variant: null, before: null, after: null } });
+    // Nothing is stored for it either: no number, no snapshot.
+    expect(store.sessions.get(view.id)).toMatchObject({ scoreBefore: null, scoreAfter: null, fitSnapshot: null });
   });
 
   it('a pasted posting tailors without a job (no score)', async () => {
@@ -211,7 +234,8 @@ describe('TailorService.create', () => {
       { idempotencyKey: 'k7' },
     );
     expect(view).toMatchObject({ jobId: null, target: { title: 'Analyst', company: 'Beta' }, scoreBefore: null, mode: 'fast', experienceDepth: null });
-    expect(score).not.toHaveBeenCalled();
+    expect(canonicalFit).not.toHaveBeenCalled();
+    expect(variantFit).not.toHaveBeenCalled();
     expect(store.variants.get(view.resultVariantId!)!.targetJobId).toBeNull();
   });
 
@@ -283,10 +307,10 @@ describe('Verify details and finalize', () => {
     expect(one.fit.before).toMatchObject({ value: 61 });
   });
 
-  it('finalize after every claim is checked: status finalized, checklist step once, score of the final text', async () => {
+  it('finalize after every claim is checked: status finalized, checklist step once, "With this version" from the final text', async () => {
     const { svc, view } = await started();
     for (const c of view.claims) await svc.updateClaim(USER, view.id, c.id, { status: 'kept' });
-    score.mockClear();
+    canonicalFit.mockClear();
     const done = await svc.finalize(USER, view.id);
     expect(done.status).toBe('finalized');
     expect(done.pendingClaims).toBe(0);
@@ -294,7 +318,10 @@ describe('Verify details and finalize', () => {
     expect(done.fit.after).toMatchObject({ value: 74, source: 'ai', method: 'fit_score' });
     expect(markChecklist).toHaveBeenCalledTimes(1);
     expect(markChecklist).toHaveBeenCalledWith(USER);
-    expect(score).toHaveBeenCalledWith(USER, 'job_1', view.resultVariantId, undefined);
+    // The version's own fit is asked for the result version, once; finalize makes no model-capable read of "Your fit".
+    expect(variantFit).toHaveBeenCalledTimes(1);
+    expect(variantFit).toHaveBeenCalledWith(USER, 'job_1', view.resultVariantId, undefined);
+    expect(modelReads()).toHaveLength(0);
     expect(await svc.unverifiedClaimsCount(view.resultVariantId!)).toBe(0);
 
     const again = await svc.finalize(USER, view.id);
@@ -306,9 +333,10 @@ describe('Verify details and finalize', () => {
   it('an after score that is not a real AI fit score shows "—" next to the real before score', async () => {
     const { svc, view } = await started();
     for (const c of view.claims) await svc.updateClaim(USER, view.id, c.id, { status: 'kept' });
-    score.mockImplementation(async () => ({ score: 90, kind: 'pre' as const, scoredAt: now.toISOString() }));
+    variantFit.mockImplementation(async () => snap(90, 'estimate'));
     const done = await svc.finalize(USER, view.id);
-    expect(done).toMatchObject({ scoreBefore: 61, scoreAfter: null, fit: { after: null } });
+    expect(done).toMatchObject({ scoreBefore: 61, scoreAfter: null, fit: { variant: null, after: null } });
+    expect(readFitSnapshots(store.sessions.get(view.id)!.fitSnapshot)).toEqual({ before: snap(61), after: null });
   });
 
   it('removing a line the AI wrote twice removes every copy', async () => {
@@ -391,8 +419,119 @@ describe('pasted posting (jd) sessions — the editor\'s target step (INT-10)', 
     // The model got the pasted text; no fit score is invented for a posting with no job record.
     expect(tailor.mock.calls[0]![0]).toMatchObject({ jobTitle: 'Sales Analyst', companyName: 'Globex' });
     expect(tailor.mock.calls[0]![0].jobDescription).toContain('Tableau dashboards');
-    expect(score).not.toHaveBeenCalled();
-    expect(view.fit).toEqual({ before: null, after: null });
+    expect(canonicalFit).not.toHaveBeenCalled();
+    expect(variantFit).not.toHaveBeenCalled();
+    expect(view.fit).toEqual({ canonical: null, variant: null, before: null, after: null });
     expect(store.variants.get(view.resultVariantId!)!.unverifiedClaims).toBe(view.pendingClaims);
+  });
+});
+
+// ── MKT-2F: "Your fit" (canonical) and "With this version" (variant); snapshots (strategy 2.2 I1, I6) ──
+
+describe('MKT-2F: the two fit measures of a tailoring session', () => {
+  async function finalized(svc = service()) {
+    const view = await svc.create(USER, BODY, { idempotencyKey: `m-${Math.random()}`, locale: 'en' });
+    for (const c of view.claims) await svc.updateClaim(USER, view.id, c.id, { status: 'kept' });
+    return { svc, view, done: await svc.finalize(USER, view.id) };
+  }
+
+  it('"Your fit" is the canonical fit: the job page\'s number and its scoredAt, with kind and versions', async () => {
+    const view = await service().create(USER, BODY, { idempotencyKey: 'm1', locale: 'en' });
+    expect(view.fit.canonical).toEqual({ value: 61, kind: 'ai', tier: 'possible', scoredAt: SCORED_AT, version: { rubric: 'fit_v3', estimator: 'est_v2', model: 'test/model' } });
+    expect(view.fit.variant).toBeNull();
+    // The older shape holds the same value (one release of overlap).
+    expect(view.scoreBefore).toBe(61);
+    expect(view.fit.before).toEqual({ value: 61, source: 'ai', asOf: SCORED_AT, method: 'fit_score' });
+  });
+
+  it('after finalize the session holds two separately named measures; the canonical one did not move', async () => {
+    const { done } = await finalized();
+    expect(done.fit.canonical).toMatchObject({ value: 61, kind: 'ai', scoredAt: SCORED_AT });
+    expect(done.fit.variant).toEqual({ value: 74, kind: 'ai', tier: 'good', scoredAt: '2026-10-10T12:00:05.000Z', version: { rubric: 'fit_v3', estimator: 'est_v2', model: 'test/model' } });
+    expect(done).toMatchObject({ scoreBefore: 61, scoreAfter: 74 });
+    expect(done.fit.after).toEqual({ value: 74, source: 'ai', asOf: '2026-10-10T12:00:05.000Z', method: 'fit_score' });
+  });
+
+  it('every stored number has its snapshot beside it, written in the same update', async () => {
+    const updates: Array<Record<string, unknown>> = [];
+    const update = store.updateSession.bind(store);
+    store.updateSession = async (id, data) => {
+      updates.push({ ...data });
+      return update(id, data);
+    };
+    const { view } = await finalized();
+    const scoreWrites = updates.filter((u) => 'scoreBefore' in u || 'scoreAfter' in u);
+    expect(scoreWrites).toEqual([
+      { scoreBefore: 61, scoreAfter: null, fitSnapshot: { before: snap(61), after: null } },
+      { scoreAfter: 74, fitSnapshot: { before: snap(61), after: snap(74, 'ai', '2026-10-10T12:00:05.000Z') } },
+    ]);
+    const row = store.sessions.get(view.id)!;
+    expect(row).toMatchObject({ scoreBefore: 61, scoreAfter: 74 });
+    expect(readFitSnapshots(row.fitSnapshot)).toEqual({ before: snap(61), after: snap(74, 'ai', '2026-10-10T12:00:05.000Z') });
+    // JSON-safe (the column is Json).
+    expect(JSON.parse(JSON.stringify(row.fitSnapshot))).toEqual(row.fitSnapshot);
+  });
+
+  it('the view reads "Your fit" live, without a model call: a re-scored job page and the kit show the same number', async () => {
+    const svc = service();
+    const view = await svc.create(USER, BODY, { idempotencyKey: 'm4', locale: 'en' });
+    // The job was scored again since (a new model result on the job page).
+    canonicalFit.mockImplementation(async (_u, _j, o) => (o.allowModelCall ? snap(61) : snap(66, 'ai', '2026-10-12T08:00:00.000Z')));
+    canonicalFit.mockClear();
+    const later = await svc.get(USER, view.id);
+    expect(later.fit.canonical).toMatchObject({ value: 66, scoredAt: '2026-10-12T08:00:00.000Z' });
+    expect(later.scoreBefore).toBe(66);
+    // A read of the page: never a model call, and nothing is written.
+    expect(canonicalFit.mock.calls.every((c) => c[2].allowModelCall === false)).toBe(true);
+    expect(store.sessions.get(view.id)!.scoreBefore).toBe(61);
+    // `yourFit` is that same read (what the every-seam contract test calls).
+    expect(await svc.yourFit(USER, 'job_1')).toEqual(snap(66, 'ai', '2026-10-12T08:00:00.000Z'));
+  });
+
+  it('when the live fit is only a quick estimate (or cannot be read) the stored AI fit answers, with its own date; an estimate is never shown', async () => {
+    const svc = service();
+    const view = await svc.create(USER, BODY, { idempotencyKey: 'm5' });
+    canonicalFit.mockImplementation(async () => snap(88, 'estimate', '2026-10-12T08:00:00.000Z'));
+    expect((await svc.get(USER, view.id)).fit.canonical).toMatchObject({ value: 61, kind: 'ai', scoredAt: SCORED_AT });
+    canonicalFit.mockImplementation(async () => {
+      throw new Error('match is down');
+    });
+    expect((await svc.get(USER, view.id)).fit.canonical).toMatchObject({ value: 61, scoredAt: SCORED_AT });
+    canonicalFit.mockImplementation(async () => null);
+    expect((await svc.get(USER, view.id)).fit.canonical).toMatchObject({ value: 61 });
+    // The estimate itself is what `yourFit` reads (the contract test compares it with getFit); the view just never shows it.
+    canonicalFit.mockImplementation(async () => snap(88, 'estimate'));
+    expect(await svc.yourFit(USER, 'job_1')).toMatchObject({ score: 88, kind: 'estimate' });
+  });
+
+  it('a session written before snapshots were stored reports an AI fit as of its last write, version not recorded', async () => {
+    const { svc, view } = await finalized();
+    const row = store.sessions.get(view.id)!;
+    row.fitSnapshot = null; // as a row from before the column
+    canonicalFit.mockImplementation(async () => null);
+    const old = await svc.get(USER, view.id);
+    const asOf = row.updatedAt.toISOString();
+    expect(old.fit.canonical).toEqual({ value: 61, kind: 'ai', tier: null, scoredAt: asOf, version: null });
+    expect(old.fit.variant).toEqual({ value: 74, kind: 'ai', tier: null, scoredAt: asOf, version: null });
+    expect(old.fit.before).toEqual({ value: 61, source: 'ai', asOf, method: 'fit_score' });
+    expect(old.fit.after).toEqual({ value: 74, source: 'ai', asOf, method: 'fit_score' });
+  });
+
+  it('a service wired without the fit reads (an older caller) still tailors: both measures are "—", nothing throws', async () => {
+    const svc = service({ canonicalFit: undefined as never, variantFit: undefined as never });
+    const view = await svc.create(USER, BODY, { idempotencyKey: 'm7' });
+    expect(view.status).toBe('review');
+    expect(view.fit).toEqual({ canonical: null, variant: null, before: null, after: null });
+    expect(await svc.yourFit(USER, 'job_1')).toBeNull();
+  });
+
+  it('no live read while the session is still generating or has failed', async () => {
+    const svc = service();
+    const view = await svc.create(USER, BODY, { idempotencyKey: 'm8' });
+    store.sessions.get(view.id)!.status = 'failed';
+    canonicalFit.mockClear();
+    const failed = await svc.get(USER, view.id);
+    expect(failed.status).toBe('failed');
+    expect(canonicalFit).not.toHaveBeenCalled();
   });
 });

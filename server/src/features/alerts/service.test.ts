@@ -12,8 +12,11 @@ import { deliverMessage, type DeliverDeps, type InAppRow } from './deliver.js';
 import { deliveryChannels, registerDeliveryChannel, resetDeliveryChannelsForTests, type DeliveryChannel, type DeliveryMessage } from './index.js';
 import type { PreferenceFacts } from './preferences.js';
 import type { AlertProfileRow, AlertsRepo, JobCardRow, Recipient } from './repo.js';
+import type { FitSnapshot } from '../match/contract.js';
+import { fitSnapshot } from '../match/fit.js';
+import { FIT_FIXTURE_AT, fitFixture, fitsFixture } from '../agent/__tests__/fitFixture.js';
 import type { ScoredJob } from './selection.js';
-import { createJobAlertsTask, type JobAlertsDeps } from './service.js';
+import { createJobAlertsTask, scoredFromFits, type AlertCard, type JobAlertsDeps } from './service.js';
 
 // ── In-memory world ──────────────────────────────────────────────────────
 
@@ -173,7 +176,7 @@ interface Harness {
   deps: JobAlertsDeps;
   inApp: InAppRow[];
   emails: SendEmailInput[];
-  preScore: ReturnType<typeof vi.fn>;
+  fits: ReturnType<typeof vi.fn>;
 }
 
 function harness(
@@ -191,18 +194,18 @@ function harness(
     emailEnabled: () => opts.emailEnabled ?? true,
     now: () => w.clock.now,
   };
-  const preScore = vi.fn(async (_userId: string, ids: string[]) => ids.flatMap((id) => (w.scores.has(id) ? [w.scores.get(id)!] : [])));
+  const fits = vi.fn(async (_userId: string, ids: string[]) => ids.flatMap((id) => (w.scores.has(id) ? [w.scores.get(id)!] : [])));
   const deps: JobAlertsDeps = {
     repo: makeRepo(w),
     // The one candidate seam; reads `deps.repo` at call time so a test can swap the repo.
     candidates: (q) => deps.repo.candidateJobIds(q),
     prefs: { load: async () => prefsFor(opts.prefs) },
-    preScore,
+    fits,
     planInstantMax: async () => opts.planMax ?? 100,
     deliver: (msg) => deliverMessage(msg, deliverDeps),
     alertsEnabled: () => opts.alertsEnabled ?? true,
   };
-  return { inApp, emails, preScore, deps };
+  return { inApp, emails, fits, deps };
 }
 
 function ctx(w: World, brandId: BrandId = 'roboapply'): CronContext {
@@ -230,8 +233,8 @@ describe('job-alerts: instant', () => {
     expect(params.jobs.map((j) => j.id)).toEqual(['j1', 'j2']);
     expect(params.jobs[0]!.href).toBe(`/jobs/j1?from=alert&imp=${w.deliveries[0]!.id}`);
     expect(params.jobs[1]).toMatchObject({ remote: true, pay: null, tier: 'good' });
-    // the pre-score never sees excluded jobs
-    expect(h.preScore.mock.calls[0]![1]).not.toContain('j3');
+    // the fit read never sees excluded jobs
+    expect(h.fits.mock.calls[0]![1]).not.toContain('j3');
     expect(w.profiles[0]!.alertLastInstantAt).toEqual(w.clock.now);
   });
 
@@ -352,7 +355,7 @@ describe('job-alerts: instant', () => {
     const w = makeWorld();
     const h = harness(w, { alertsEnabled: false });
     expect(await createJobAlertsTask(() => h.deps)(ctx(w, 'goapply'))).toEqual({ skipped: 'disabled' });
-    expect(h.preScore).not.toHaveBeenCalled();
+    expect(h.fits).not.toHaveBeenCalled();
   });
 
   it('answers no_work at once when no saved search has alerts on', async () => {
@@ -491,5 +494,72 @@ describe('registerDeliveryChannel (WP-61 web push, WP-73 WeChat)', () => {
     await createJobAlertsTask(() => h.deps)(ctx(w));
     expect(push.deliver).not.toHaveBeenCalled();
     expect(h.emails).toHaveLength(1);
+  });
+});
+
+// ── MKT-2F: the alert reads THE fit and carries a snapshot of it (strategy 2.2 I1, I2, I6) ──
+
+describe('job-alerts: the fit every surface shows, with a snapshot on each card', () => {
+  const AT = '2026-10-10T08:00:00.000Z';
+  const snap = (kind: 'ai' | 'estimate', score: number, tier: 'great' | 'good' | 'possible'): FitSnapshot => ({
+    score,
+    tier,
+    kind,
+    rubric: 'fit_v3',
+    estimator: 'est_v2',
+    model: kind === 'ai' ? 'test/model' : null,
+    scoredAt: AT,
+  });
+
+  it('scoredFromFits keeps score, tier and kind of each Fit and adds its snapshot (one mapping for production and the harness)', () => {
+    const fits = fitsFixture([
+      fitFixture({ jobId: 'j1', score: 63, tier: 'possible', kind: 'ai', topGap: 'Go' }),
+      fitFixture({ jobId: 'j2', score: 88, tier: 'great', kind: 'estimate', confidence: 'low', confidenceReason: 'no_skills_listed' }),
+    ]);
+    const scored = scoredFromFits(fits, fitSnapshot);
+    expect(scored).toEqual([
+      { jobId: 'j1', score: 63, tier: 'possible', topGap: 'Go', kind: 'ai', confidence: 'high', snapshot: { score: 63, tier: 'possible', kind: 'ai', rubric: 'fit_v3', estimator: 'est_v2', model: 'test/model', scoredAt: FIT_FIXTURE_AT } },
+      { jobId: 'j2', score: 88, tier: 'great', topGap: null, kind: 'estimate', confidence: 'low', snapshot: { score: 88, tier: 'great', kind: 'estimate', rubric: 'fit_v3', estimator: 'est_v2', model: null, scoredAt: FIT_FIXTURE_AT } },
+    ]);
+  });
+
+  it('an estimated job says so in the mail and in-app params; an AI fit is carried as one; a thin estimate is listed last with the tier every surface shows (I1)', async () => {
+    const w = makeWorld();
+    w.scores = new Map<string, ScoredJob>([
+      // The stored AI fit of j1 (the number the job page shows), not a second estimate.
+      ['j1', { jobId: 'j1', score: 63, tier: 'possible', topGap: 'Go', kind: 'ai', confidence: 'high', snapshot: snap('ai', 63, 'possible') }],
+      ['j2', { jobId: 'j2', score: 71, tier: 'good', topGap: null, kind: 'estimate', confidence: 'medium', snapshot: snap('estimate', 71, 'good') }],
+      // 90 "great" from a post that lists nothing to compare.
+      ['j3', { jobId: 'j3', score: 90, tier: 'great', topGap: null, kind: 'estimate', confidence: 'low', snapshot: snap('estimate', 90, 'great') }],
+    ]);
+    const h = harness(w);
+    await createJobAlertsTask(() => h.deps)(ctx(w));
+    const jobs = (h.emails[0]!.params as { jobs: AlertCard[] }).jobs;
+    expect(jobs.map((j) => [j.id, j.tier, j.kind])).toEqual([
+      ['j2', 'good', 'estimate'],
+      ['j1', 'possible', 'ai'],
+      // Counted as Possible for the order (after the fit that earned Possible), shown as what the feed card shows.
+      ['j3', 'great', 'estimate'],
+    ]);
+    // One card holds one tier: the tier shown is the tier of the snapshot beside it.
+    for (const j of jobs) expect(j.tier).toBe(j.fit!.tier);
+    expect(jobs.find((j) => j.id === 'j1')!.fit).toEqual(snap('ai', 63, 'possible'));
+    expect(jobs.find((j) => j.id === 'j2')!.fit).toEqual(snap('estimate', 71, 'good'));
+    expect(jobs.find((j) => j.id === 'j3')!.fit).toEqual(snap('estimate', 90, 'great'));
+    // The ordering flag is the selection's own: it is not stored on the card.
+    for (const j of jobs) expect(j).not.toHaveProperty('lowered');
+    // The in-app row (SeekerNotification.params) stores the same cards: every stored fit value has kind, version and time beside it.
+    expect((h.inApp[0]!.params as { jobs: AlertCard[] }).jobs).toEqual(jobs);
+    for (const j of jobs) expect(j.fit).toMatchObject({ kind: j.kind, rubric: 'fit_v3', estimator: 'est_v2', scoredAt: AT });
+    // JSON-safe: the cards travel through the queue and are stored as JSON.
+    expect(JSON.parse(JSON.stringify(jobs))).toEqual(jobs);
+  });
+
+  it('the alert makes no model call: its only fit read is the list read (deps.fits), once per selection', async () => {
+    const w = makeWorld();
+    const h = harness(w);
+    await createJobAlertsTask(() => h.deps)(ctx(w));
+    expect(h.fits).toHaveBeenCalledTimes(1);
+    expect(h.fits.mock.calls[0]![0]).toBe('u1');
   });
 });

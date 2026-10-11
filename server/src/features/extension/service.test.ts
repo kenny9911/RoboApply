@@ -459,6 +459,18 @@ describe('page-job fit (user click only)', () => {
     expect(t.deps.match.cached).not.toHaveBeenCalled();
   });
 
+  it('MKT-2F: the chip carries the fit as the wiring answers it, confidence and reason included (the service adds and drops nothing)', async () => {
+    const t = setup();
+    const known = { score: 63, tier: 'possible', kind: 'ai' as const, topOverlap: null, topGap: 'Go', confidence: 'high' as const, confidenceReason: null };
+    const page = { score: 58, tier: 'possible', kind: 'pre' as const, topOverlap: null, topGap: null, confidence: 'low' as const, confidenceReason: 'no_skills_listed' };
+    t.deps.match.cached.mockResolvedValueOnce(known);
+    t.deps.match.page.mockResolvedValueOnce(page);
+    expect((await t.svc.pageJob('u1', { url: 'https://boards.greenhouse.io/acme/jobs/1', title: 'Engineer', company: 'Acme', descriptionText: 'Build.' })).fit).toEqual(known);
+    expect(await t.svc.pageJob('u1', { url: 'https://other.example/2', title: 'Engineer', company: 'Other', descriptionText: 'x' })).toEqual({ jobId: null, fit: page });
+    // The page's own text is what is estimated, with nothing of ours attached.
+    expect(t.deps.match.page).toHaveBeenLastCalledWith('u1', { url: 'https://other.example/2', title: 'Engineer', company: 'Other', location: null, descriptionText: 'x' });
+  });
+
   it('GoApply in mode off: a third-party posting is not matched', async () => {
     const t = setup({ cnPostingVisible: (job) => job.visibility === 'private' }, 'goapply');
     const out = await t.svc.pageJob('u1', { url: 'https://boards.greenhouse.io/acme/jobs/1', title: 'Engineer', company: 'Acme', descriptionText: 'x' });

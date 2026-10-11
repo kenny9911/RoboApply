@@ -261,13 +261,55 @@ describe('TailorFlow', () => {
 });
 
 describe('TailorResult', () => {
-  it('finalized: shows before → after as numbers and meters with sources', () => {
+  it('finalized: shows the two measures as numbers and meters with sources, each named for what it is', () => {
     renderWithProviders(<TailorResult session={sessionView({ status: 'finalized', claims: [], pendingClaims: 0 })} />);
-    expect(screen.getByText('Before')).toBeInTheDocument();
-    expect(screen.getByText('After')).toBeInTheDocument();
+    // MKT-2F: two measures, not one number that moved. No "Before" / "After" pair.
+    expect(screen.getByText('Your fit')).toBeInTheDocument();
+    expect(screen.getByText('With this version')).toBeInTheDocument();
+    expect(screen.queryByText('Before')).toBeNull();
+    expect(screen.queryByText('After')).toBeNull();
     expect(screen.getByTestId('tailor-score-before')).toHaveTextContent('61 / 100');
     expect(screen.getByTestId('tailor-score-after')).toHaveTextContent('74 / 100');
     expect(screen.getAllByRole('meter')).toHaveLength(2);
+    expect(screen.getByTestId('tailor-fit-note')).toHaveTextContent('Your fit on the job page stays the one for your main resume until you make this version your main resume.');
+    // The honesty line stays with the numbers.
+    expect(screen.getAllByText('This is not your chance of getting hired.').length).toBeGreaterThan(0);
+  });
+
+  it('MKT-2F: the measures the server names (canonical, variant) are what is shown, each with its own date', () => {
+    const canonical = { value: 63, kind: 'ai' as const, tier: 'possible' as const, scoredAt: '2026-10-08T09:00:00.000Z', version: { rubric: 'fit_v3', estimator: 'est_v2', model: 'm' } };
+    const variant = { value: 79, kind: 'ai' as const, tier: 'good' as const, scoredAt: '2026-10-10T10:00:00.000Z', version: { rubric: 'fit_v3', estimator: 'est_v2', model: 'm' } };
+    renderWithProviders(
+      <TailorResult
+        session={sessionView({
+          status: 'finalized',
+          claims: [],
+          pendingClaims: 0,
+          scoreBefore: 63,
+          scoreAfter: 79,
+          // The aliases of an older shape are ignored once the named measures are there.
+          fit: { canonical, variant, before: { value: 1, source: 'ai', asOf: NOW, method: 'fit_score' }, after: { value: 2, source: 'ai', asOf: NOW, method: 'fit_score' } },
+        })}
+      />,
+    );
+    expect(screen.getByTestId('tailor-score-before')).toHaveTextContent('63 / 100');
+    expect(screen.getByTestId('tailor-score-after')).toHaveTextContent('79 / 100');
+    expect(screen.getByText('Your fit').parentElement).toContainElement(screen.getByTestId('tailor-score-before'));
+    expect(screen.getByText('With this version').parentElement).toContainElement(screen.getByTestId('tailor-score-after'));
+  });
+
+  it('MKT-2F: "With this version" waits until the copy is finalized; a version with no AI fit shows "—", never an estimate', () => {
+    const canonical = { value: 63, kind: 'ai' as const, tier: 'possible' as const, scoredAt: '2026-10-08T09:00:00.000Z', version: null };
+    const { unmount } = renderWithProviders(<TailorResult session={sessionView({ scoreAfter: null, fit: { canonical, variant: null, before: null, after: null } })} />);
+    expect(screen.getByText('Your fit')).toBeInTheDocument();
+    expect(screen.getByText('With this version')).toBeInTheDocument();
+    expect(screen.getByTestId('tailor-score-before')).toHaveTextContent('63 / 100');
+    expect(screen.queryByTestId('tailor-score-after')).toBeNull();
+    expect(screen.getByTestId('tailor-score-after-pending')).toHaveTextContent("You'll see this after you check every detail");
+    unmount();
+    renderWithProviders(<TailorResult session={sessionView({ status: 'finalized', claims: [], pendingClaims: 0, scoreAfter: null, fit: { canonical, variant: null, before: null, after: null } })} />);
+    expect(screen.getByTestId('tailor-score-after-pending')).toHaveTextContent('Fit score not available for this version.');
+    expect(screen.getAllByRole('meter')).toHaveLength(1);
   });
 
   it('in review: the before score shows; the after score waits until every detail is checked', () => {

@@ -1,10 +1,16 @@
 'use client';
 
 // TailorResult — the tailored version (WP-36a; F-RES-10, F-RES-15):
-//   - fit score before → after, as numbers and meters (real AI fit scores with
+//   - two fit measures, each named for what it is (real AI fit scores with
 //     their source line, or "—"; never an estimate; "This is not your chance
-//     of getting hired."). The after score appears only once every detail is
-//     checked and the copy is finalized, so it never rests on unchecked claims;
+//     of getting hired."):
+//       "Your fit"           the job's one fit, for the main resume: the number
+//                            the job page shows;
+//       "With this version"  the fit of the tailored version. It appears only
+//                            once every detail is checked and the copy is
+//                            finalized, so it never rests on unchecked claims.
+//     A line under them says the job page keeps showing "Your fit" until this
+//     version is made the main resume;
 //   - change cards and a side-by-side compare;
 //   - Verify details: every line that says something the resume did not say
 //     before must be kept, removed or rewritten by the user;
@@ -18,7 +24,7 @@ import { Btn, FitMeter, HonestyLine, Markdown, SourceNote, Tabs, tabPanelProps }
 import { AiGeneratedBadge } from '../market';
 import { useResume } from '../../../hooks/useResumes';
 import { useFinalizeTailor, useTailorClaim } from '../../../hooks/tailor';
-import type { TailorChange, TailorSessionView } from '../../../lib/api/contracts/resume';
+import type { SourcedNumber, TailorChange, TailorFitMeasure, TailorSessionView } from '../../../lib/api/contracts/resume';
 import { KeywordReport } from '../resume/KeywordReport';
 import { ClaimCard } from './ClaimCard';
 import { plainInline, sectionLabel } from './text';
@@ -36,9 +42,28 @@ export interface TailorResultProps {
 
 type Tab = 'changes' | 'compare';
 
+/** One measure as the card shows it: the number and its source line. */
+interface ShownMeasure {
+  value: number;
+  sourced: SourcedNumber;
+}
+
+/**
+ * A measure of the session. The server sends `canonical` / `variant`; a
+ * session answered by a server from before that shape carries only `before` /
+ * `after`, which hold the same two values.
+ */
+function shown(measure: TailorFitMeasure | null | undefined, legacy: SourcedNumber | null): ShownMeasure | null {
+  if (measure) return { value: measure.value, sourced: { value: measure.value, source: 'ai', asOf: measure.scoredAt, method: 'fit_score' } };
+  return legacy ? { value: legacy.value, sourced: legacy } : null;
+}
+
 export function TailorResult({ session, onFinalized, onOpenResume, onClose }: TailorResultProps) {
   const t = useTranslations('tailor.result');
+  const tf = useTranslations('tailor.fit');
   const tv = useTranslations('tailor.verify');
+  const yours = shown(session.fit.canonical, session.fit.before);
+  const withVersion = shown(session.fit.variant, session.fit.after);
   const [tab, setTab] = useState<Tab>('changes');
   const claim = useTailorClaim(session.id);
   const finalize = useFinalizeTailor(session.id);
@@ -56,39 +81,45 @@ export function TailorResult({ session, onFinalized, onOpenResume, onClose }: Ta
       <HonestyLine kind="ai_written" />
 
       <section className={styles.card} aria-label={t('scoreHeading')}>
-        {session.fit.before ? (
-          <div className={styles.scores}>
-            <div className={styles.score}>
-              <p className={styles.label}>{t('scoreBefore')}</p>
-              <p className={styles.scoreValue} data-testid="tailor-score-before">
-                {t('scoreValue', { score: session.fit.before.value })}
-              </p>
-              <FitMeter score={session.fit.before.value} compact />
-              <SourceNote sourced={session.fit.before} />
+        {yours ? (
+          <>
+            <div className={styles.scores}>
+              <div className={styles.score}>
+                <p className={styles.label}>{tf('yours')}</p>
+                <p className={styles.scoreValue} data-testid="tailor-score-before">
+                  {t('scoreValue', { score: yours.value })}
+                </p>
+                <FitMeter score={yours.value} compact />
+                <SourceNote sourced={yours.sourced} />
+              </div>
+              <div className={styles.score}>
+                <p className={styles.label}>{tf('withVersion')}</p>
+                {withVersion ? (
+                  <>
+                    <p className={styles.scoreValue} data-testid="tailor-score-after">
+                      {t('scoreValue', { score: withVersion.value })}
+                    </p>
+                    <FitMeter score={withVersion.value} compact />
+                    <SourceNote sourced={withVersion.sourced} />
+                  </>
+                ) : (
+                  <>
+                    <p className={styles.scoreValue} aria-hidden="true">
+                      —
+                    </p>
+                    {/* The tailored text is scored only once every detail is checked (no score rests on unchecked claims). */}
+                    <p className={styles.sub} data-testid="tailor-score-after-pending">
+                      {finalized ? t('scoreNone') : t('scoreAfterPending')}
+                    </p>
+                  </>
+                )}
+              </div>
             </div>
-            <div className={styles.score}>
-              <p className={styles.label}>{t('scoreAfter')}</p>
-              {session.fit.after ? (
-                <>
-                  <p className={styles.scoreValue} data-testid="tailor-score-after">
-                    {t('scoreValue', { score: session.fit.after.value })}
-                  </p>
-                  <FitMeter score={session.fit.after.value} compact />
-                  <SourceNote sourced={session.fit.after} />
-                </>
-              ) : (
-                <>
-                  <p className={styles.scoreValue} aria-hidden="true">
-                    —
-                  </p>
-                  {/* The tailored text is scored only once every detail is checked (no score rests on unchecked claims). */}
-                  <p className={styles.sub} data-testid="tailor-score-after-pending">
-                    {finalized ? t('scoreNone') : t('scoreAfterPending')}
-                  </p>
-                </>
-              )}
-            </div>
-          </div>
+            {/* Two measures, not one number that moved: the job page keeps showing "Your fit". */}
+            <p className={styles.sub} data-testid="tailor-fit-note">
+              {tf('note')}
+            </p>
+          </>
         ) : (
           <div className={styles.score}>
             <p className={styles.label}>{t('scoreHeading')}</p>

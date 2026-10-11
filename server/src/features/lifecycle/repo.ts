@@ -8,6 +8,8 @@
 import type prismaClient from '../../lib/prisma.js';
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { BrandId, Market } from '../../platform/brand/registry.js';
+import type { FitSnapshot } from '../match/contract.js';
+import type { Fit } from '../match/index.js';
 import { LIFECYCLE_TEMPLATE_KEYS, type LifecycleFacts, type SentRecord } from './rules.js';
 
 export interface LifecyclePerson extends LifecycleFacts {
@@ -16,6 +18,20 @@ export interface LifecyclePerson extends LifecycleFacts {
   /** GoApply identity (应届 / 在校 / 社招) for the first-value route. */
   cnIdentity: 'yingjie' | 'zaixiao' | 'shezhao' | null;
 }
+
+/** The job a lifecycle message may name, with what its fit was when the message was built. */
+export interface TopFitJob {
+  id: string;
+  title: string;
+  company: string;
+  fit?: FitSnapshot;
+}
+
+/** The fields of a `Fit` (match/fit.ts) the tip reads. */
+type TipFit = Pick<Fit, 'score' | 'tier' | 'kind' | 'version' | 'scoredAt'>;
+
+/** How many different jobs with a stored score the tip looks at (their live fit decides). */
+export const TOP_FIT_CANDIDATES = 20;
 
 export interface LifecycleRepo {
   /**
@@ -29,8 +45,12 @@ export interface LifecycleRepo {
    * suppressed, push only): once-only rows and the one-a-day budget read it back.
    */
   recordSent(userId: string, templateKey: string, at: Date): Promise<void>;
-  /** Highest Great/Good fit open public job (not hidden) for the tailoring tip. */
-  topFitJob(userId: string, market: Market): Promise<{ id: string; title: string; company: string } | null>;
+  /**
+   * The open public job (not hidden) whose fit is an AI fit at Good or better
+   * right now, best first, for the tailoring tip. `fit` is the snapshot that
+   * travels with the message (kind, versions, scoredAt; strategy 2.2 I6).
+   */
+  topFitJob(userId: string, market: Market): Promise<TopFitJob | null>;
   /** The active (else default) saved search. */
   activeSearch(userId: string): Promise<{ id: string; name: string; filters: unknown } | null>;
 }
@@ -54,6 +74,22 @@ export interface PrismaLifecycleRepoOptions {
   getDb?: () => Promise<LifecycleDb>;
   /** Where the GoApply recruitment-info mode is read from (default `process.env`). */
   env?: EnvSource;
+  /**
+   * THE fit of each candidate (match/fit.ts `getFits`; never a model call).
+   * Default: the production functions, loaded on first use. Runs in the brand
+   * of the cron run.
+   */
+  fits?: (userId: string, jobIds: string[]) => Promise<ReadonlyMap<string, TipFit>>;
+  /** `fitSnapshot` of match/fit.ts (default: the production function). */
+  snapshot?: (fit: TipFit) => FitSnapshot;
+}
+
+async function defaultFits(userId: string, jobIds: string[]): Promise<ReadonlyMap<string, TipFit>> {
+  return (await import('../match/index.js')).getFits(userId, jobIds);
+}
+
+async function defaultSnapshot(fit: TipFit): Promise<FitSnapshot> {
+  return (await import('../match/index.js')).fitSnapshot(fit);
 }
 
 async function defaultDb(): Promise<LifecycleDb> {
@@ -258,6 +294,13 @@ export function createPrismaLifecycleRepo(options: PrismaLifecycleRepoOptions = 
         if (!cnJobCapabilities(env).postings) return null;
       }
       const p = await db();
+      // Candidate ids only. A stored row may be for another resume version, of
+      // any age, or written for a resume the person has since replaced, so the
+      // row decides nothing: THE fit of each candidate does (below).
+      // `distinct` before `take`: a job has one row per resume version, and
+      // tailored versions hold the highest rows, so without it a handful of
+      // jobs could fill every place and crowd out the job that has an AI fit
+      // for the main resume. The candidates are TOP_FIT_CANDIDATES different jobs.
       const rows = await p.rAJobMatchScore.findMany({
         where: {
           userId,
@@ -266,16 +309,33 @@ export function createPrismaLifecycleRepo(options: PrismaLifecycleRepoOptions = 
         },
         select: { jobId: true, score: true, job: { select: { title: true, companyName: true } } },
         orderBy: { score: 'desc' },
-        take: 10,
+        distinct: ['jobId'],
+        take: TOP_FIT_CANDIDATES,
       });
       if (!rows.length) return null;
+      const byId = new Map<string, (typeof rows)[number]>();
+      for (const r of rows) if (!byId.has(r.jobId)) byId.set(r.jobId, r);
+      const ids = [...byId.keys()];
       const hidden = await p.rAJobUserState.findMany({
-        where: { userId, jobId: { in: rows.map((r) => r.jobId) }, hiddenAt: { not: null } },
+        where: { userId, jobId: { in: ids }, hiddenAt: { not: null } },
         select: { jobId: true },
       });
       const hiddenSet = new Set(hidden.map((h) => h.jobId));
-      const top = rows.find((r) => !hiddenSet.has(r.jobId));
-      return top ? { id: top.jobId, title: top.job.title, company: top.job.companyName } : null;
+      const open = ids.filter((id) => !hiddenSet.has(id));
+      if (!open.length) return null;
+      // The mail names a job only by the fit every surface shows now: an AI fit
+      // of the primary resume at Good or better. A stale or version-specific
+      // stored row, or a job that only has a quick estimate, is not named.
+      const fits = await (options.fits ?? defaultFits)(userId, open);
+      const named = open
+        .map((id) => ({ id, fit: fits.get(id) }))
+        .filter((c): c is { id: string; fit: TipFit } => !!c.fit && c.fit.kind === 'ai' && c.fit.score !== null && (c.fit.tier === 'great' || c.fit.tier === 'good'))
+        .sort((a, b) => (b.fit.score ?? 0) - (a.fit.score ?? 0) || open.indexOf(a.id) - open.indexOf(b.id));
+      const top = named[0];
+      if (!top) return null;
+      const row = byId.get(top.id)!;
+      const fit = options.snapshot ? options.snapshot(top.fit) : await defaultSnapshot(top.fit);
+      return { id: top.id, title: row.job.title, company: row.job.companyName, fit };
     },
 
     async activeSearch(userId) {

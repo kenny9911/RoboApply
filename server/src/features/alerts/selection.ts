@@ -4,29 +4,54 @@
 // WP-39a acceptance):
 //   - only new canonical jobs (the candidate query), never hidden, Not
 //     interested, already tracked or already sent for this search;
-//   - fit at Possible or better on the deterministic pre-score (an unknown
-//     score is not a fit);
+//   - fit at Possible or better on THE fit (match/fit.ts `getFits`: the stored
+//     AI score when there is one, else the quick estimate; an unknown score is
+//     not a fit). A quick estimate with low confidence never counts above
+//     Possible: it still alerts, but it is ORDERED with the Possible fits and
+//     never ahead of a fit that earned its tier. The card keeps the fit's own
+//     score, tier and kind (strategy 2.2 I1: an alert shows what the feed card
+//     and the job page show for the same person and job), and its kind is what
+//     tells the reader it is a quick estimate;
 //   - never a zero-job send;
 //   - instant alerts: the saved search's own frequency, capped by the plan
 //     (`instant_alerts` entitlement: Free 1 a day), at least 3 h apart.
 
+import type { FitSnapshot } from '../match/contract.js';
 import { ALERT_POLICY } from './contract.js';
 import { startOfLocalDay } from './time.js';
 
 export type AlertTier = 'great' | 'good' | 'possible';
+export type AlertFitKind = 'ai' | 'estimate';
 
+/** One job's fit as the alert selection reads it (`scoredFromFits` in service.ts builds it from a `Fit`). */
 export interface ScoredJob {
   jobId: string;
   score: number | null;
   tier: 'great' | 'good' | 'possible' | 'unlikely' | null;
   topGap: string | null;
+  /** `ai`: a stored AI fit. `estimate` (also when absent): the quick estimate. */
+  kind?: AlertFitKind;
+  /** How much the fit rests on. Absent: not known, read as not low. */
+  confidence?: 'high' | 'medium' | 'low';
+  /** The copy that travels with the message (I6). */
+  snapshot?: FitSnapshot | null;
 }
 
 export interface PickedJob {
   jobId: string;
   score: number;
+  /** The fit's own tier: what the alert shows, the same as every other surface (I1). */
   tier: AlertTier;
+  /**
+   * True for a quick estimate with low confidence whose tier is above Possible:
+   * it is ordered as a Possible fit (`alertTierOf`). Ordering only: the card
+   * still shows `tier`.
+   */
+  lowered: boolean;
   gap: string | null;
+  kind: AlertFitKind;
+  /** What the fit was when the alert was built: kind, versions and time. Null only for a caller that sent none. */
+  fit: FitSnapshot | null;
 }
 
 export interface SelectionResult {
@@ -39,10 +64,25 @@ export function isAlertTier(tier: ScoredJob['tier']): tier is AlertTier {
   return tier === 'great' || tier === 'good' || tier === 'possible';
 }
 
+const TIER_RANK: Record<AlertTier, number> = { great: 3, good: 2, possible: 1 };
+
+/**
+ * The tier this fit COUNTS AS when an alert chooses and orders its jobs: a
+ * quick estimate with low confidence is never above Possible. Null: not a fit
+ * to alert on. It is not what the card shows (that is the fit's own tier).
+ */
+export function alertTierOf(s: Pick<ScoredJob, 'tier' | 'kind' | 'confidence'>): AlertTier | null {
+  if (!isAlertTier(s.tier)) return null;
+  return s.kind !== 'ai' && s.confidence === 'low' ? 'possible' : s.tier;
+}
+
 /**
  * Pick up to `limit` jobs: candidates (newest first) minus `excluded`, with a
- * known pre-score at Possible or better, best score first (ties keep the
- * newest-first order).
+ * known fit at Possible or better. Order: the tier the fit counts as
+ * (`alertTierOf`) first; inside it a thin estimate that was counted lower
+ * after the fits that earned the tier; then the score; then an AI fit before
+ * an estimate; then the newest-first order. Each picked job carries the fit's
+ * own score, tier and kind.
  */
 export function selectAlertJobs(input: {
   candidateIds: readonly string[];
@@ -54,14 +94,28 @@ export function selectAlertJobs(input: {
   const order = new Map(input.candidateIds.map((id, i) => [id, i]));
   const seen = new Set<string>();
   const qualifying: PickedJob[] = [];
+  /** The tier each job is ordered by (below the fit's own for a low-confidence estimate). */
+  const countsAs = new Map<string, AlertTier>();
   for (const id of input.candidateIds) {
     if (seen.has(id) || input.excluded.has(id)) continue;
     seen.add(id);
     const s = byId.get(id);
     if (!s || s.score === null || !Number.isFinite(s.score) || !isAlertTier(s.tier)) continue;
-    qualifying.push({ jobId: id, score: s.score, tier: s.tier, gap: s.topGap });
+    const counted = alertTierOf(s);
+    if (!counted) continue;
+    countsAs.set(id, counted);
+    qualifying.push({ jobId: id, score: s.score, tier: s.tier, lowered: counted !== s.tier, gap: s.topGap, kind: s.kind === 'ai' ? 'ai' : 'estimate', fit: s.snapshot ?? null });
   }
-  qualifying.sort((a, b) => b.score - a.score || (order.get(a.jobId)! - order.get(b.jobId)!));
+  const aiFirst = (p: PickedJob) => (p.kind === 'ai' ? 0 : 1);
+  const rank = (p: PickedJob) => TIER_RANK[countsAs.get(p.jobId)!];
+  qualifying.sort(
+    (a, b) =>
+      rank(b) - rank(a) ||
+      Number(a.lowered) - Number(b.lowered) ||
+      b.score - a.score ||
+      aiFirst(a) - aiFirst(b) ||
+      order.get(a.jobId)! - order.get(b.jobId)!,
+  );
   return { picked: qualifying.slice(0, Math.max(0, input.limit)), qualifying: qualifying.length };
 }
 

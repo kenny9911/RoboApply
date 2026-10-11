@@ -14,13 +14,19 @@
 // GoApply sends alerts only when `jobs.alerts` is on (R-14: recruitment-info
 // mode ≠ off); the candidate seam (`deps.candidates`, candidates.ts) and the
 // card reader apply the mode again, so no posting leaks if the flag and the
-// mode ever disagree. No LLM call is made here: fit is the deterministic pre-score.
+// mode ever disagree. No LLM call is made here: the fit is THE fit every other
+// surface shows (match/fit.ts `getFits`: the stored AI score when there is one,
+// else the quick estimate; never a model call). Each card carries a snapshot of
+// it (kind, versions, scoredAt; strategy 2.2 I6), because a mail is read later:
+// the job opened from the mail shows the live fit, which may be the AI fit by then.
 
 import type { ProductBrand } from '../../platform/brand/registry.js';
 import type { CronResult, CronTask } from '../../platform/queue/index.js';
 import { logger } from '../../services/LoggerService.js';
 import type { AlertJobCard, AlertJobPay } from '../../platform/email/templates/notify/index.js';
 import { NOTIFY_TEMPLATES } from '../../platform/email/templates/notify/index.js';
+import type { FitSnapshot } from '../match/contract.js';
+import type { Fit } from '../match/index.js';
 import type { AlertCandidateSource } from './candidates.js';
 import type { DeliverOutcome, NotifyMessage } from './deliver.js';
 import type { PreferenceFacts, PreferencesRepo } from './preferences.js';
@@ -33,6 +39,7 @@ import {
   instantAllowance,
   instantSince,
   selectAlertJobs,
+  type AlertFitKind,
   type PickedJob,
   type ScoredJob,
 } from './selection.js';
@@ -47,8 +54,12 @@ export interface JobAlertsDeps {
    */
   candidates: AlertCandidateSource;
   prefs: PreferencesRepo;
-  /** Deterministic pre-score (`matchService.preScoreMany`); runs inside the brand context. */
-  preScore(userId: string, jobIds: string[]): Promise<ScoredJob[]>;
+  /**
+   * The fit of each candidate (`getFits` through `scoredFromFits`): the stored
+   * AI score when there is one, else the quick estimate. Never a model call.
+   * Runs inside the brand context.
+   */
+  fits(userId: string, jobIds: string[]): Promise<ScoredJob[]>;
   /** `instant_alerts` entitlement (Free 1, Pro 100). */
   planInstantMax(userId: string, brand: ProductBrand): Promise<number>;
   deliver(msg: NotifyMessage): Promise<DeliverOutcome>;
@@ -74,7 +85,19 @@ export interface AlertRunStats {
   errors: number;
 }
 
-export function jobCard(row: JobCardRow, pick: PickedJob, deliveryId: string): AlertJobCard {
+/**
+ * A job card of an alert as it is stored (`SeekerNotification.params`) and
+ * mailed: the template's card plus what the fit was when the alert was built.
+ * `kind: 'estimate'` is what the mail's "Quick estimate" line reads.
+ */
+export type AlertCard = AlertJobCard & { kind: AlertFitKind; fit: FitSnapshot | null };
+
+/** `getFits` in the shape the selection reads, each with its snapshot. One mapping for production and the harness. */
+export function scoredFromFits(fits: ReadonlyMap<string, Fit>, snapshot: (fit: Fit) => FitSnapshot): ScoredJob[] {
+  return [...fits.values()].map((f) => ({ jobId: f.jobId, score: f.score, tier: f.tier, topGap: f.topGap, kind: f.kind, confidence: f.confidence, snapshot: snapshot(f) }));
+}
+
+export function jobCard(row: JobCardRow, pick: PickedJob, deliveryId: string): AlertCard {
   const pay: AlertJobPay | null = row.salaryDisclosed
     ? { min: row.salaryMin, max: row.salaryMax, currency: row.salaryCurrency, period: row.salaryPeriod, text: row.salaryText }
     : row.salaryText
@@ -90,6 +113,8 @@ export function jobCard(row: JobCardRow, pick: PickedJob, deliveryId: string): A
     tier: pick.tier,
     gap: pick.gap,
     href: `/jobs/${encodeURIComponent(row.id)}?from=alert&imp=${encodeURIComponent(deliveryId)}`,
+    kind: pick.kind,
+    fit: pick.fit,
   };
 }
 
@@ -159,7 +184,7 @@ export function createJobAlertsTask(getDeps: () => JobAlertsDeps | Promise<JobAl
       const excluded = await deps.repo.excludedJobIds({ userId: row.userId, searchProfileId: row.id, jobIds: ids });
       const remaining = ids.filter((id) => !excluded.has(id));
       if (!remaining.length) return { picked: [] as PickedJob[], qualifying: 0 };
-      const scores = await deps.preScore(row.userId, remaining);
+      const scores = await deps.fits(row.userId, remaining);
       return selectAlertJobs({ candidateIds: remaining, excluded, scores, limit });
     }
 
@@ -302,7 +327,7 @@ export function createJobAlertsTask(getDeps: () => JobAlertsDeps | Promise<JobAl
 
 /** Production wiring (lazy so importing the cron module opens no pool). */
 export async function defaultJobAlertsDeps(): Promise<JobAlertsDeps> {
-  const [{ createPrismaAlertsRepo }, { modeGatedCandidates }, { createPrismaPreferencesRepo }, { matchService }, { entitlementService }, { isEnabledForBrand }, deliverMod, idx] =
+  const [{ createPrismaAlertsRepo }, { modeGatedCandidates }, { createPrismaPreferencesRepo }, { getFits, fitSnapshot }, { entitlementService }, { isEnabledForBrand }, deliverMod, idx] =
     await Promise.all([
       import('./repo.js'),
       import('./candidates.js'),
@@ -326,8 +351,7 @@ export async function defaultJobAlertsDeps(): Promise<JobAlertsDeps> {
       return feedService.alertCandidates(q.searchProfileId, { since: q.since, limit: q.limit, postedSince: q.postedSince });
     }),
     prefs: createPrismaPreferencesRepo(),
-    preScore: async (userId, jobIds) =>
-      (await matchService.preScoreMany(userId, jobIds)).map((r) => ({ jobId: r.jobId, score: r.score, tier: r.tier, topGap: r.topGap })),
+    fits: async (userId, jobIds) => scoredFromFits(await getFits(userId, jobIds), fitSnapshot),
     planInstantMax: async (userId, b) => (await entitlementService.resolve(userId, { brand: b.id })).entitlements.instant_alerts,
     deliver: (msg) => deliverMod.deliverMessage(msg, deliverDeps),
     alertsEnabled: (b) => isEnabledForBrand('jobs.alerts', b),

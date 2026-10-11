@@ -21,6 +21,7 @@ import { ResumeCheckService, type ResumeCheckDeps } from './ResumeCheckService.j
 import { createPrismaResumeCheckStore } from './store.js';
 import { TailorService, type TailorServiceDeps } from './tailor/TailorService.js';
 import { createPrismaTailorStore } from './tailor/store.js';
+import { tailorFitDeps } from './tailor/fitDeps.js';
 import { BuilderService, type BuilderServiceDeps } from './builder/BuilderService.js';
 import { LayoutService, type LayoutServiceDeps } from './layout/LayoutService.js';
 import { createPrismaLayoutStore } from './layout/store.js';
@@ -35,7 +36,7 @@ export type { ResumeCheckDeps } from './ResumeCheckService.js';
 export type { ResumeCheckStore } from './store.js';
 export { resumeForLlm, isSensitiveLine } from './check/resumeText.js';
 export { TailorService, UnverifiedClaimsError, GENERATING_STALE_MS } from './tailor/TailorService.js';
-export type { TailorServiceDeps, FitScoreResult, CreateTailorBody } from './tailor/TailorService.js';
+export type { TailorServiceDeps, TailorFit, CreateTailorBody } from './tailor/TailorService.js';
 export type { TailorStore } from './tailor/store.js';
 export { extractClaims, applyClaimDecision, pendingCount } from './tailor/claims.js';
 export { mergeTailored, diffChanges } from './tailor/blocks.js';
@@ -120,11 +121,8 @@ export function defaultTailorDeps(): TailorServiceDeps {
       const snap = await profileSnapshotForLlm(userId);
       return snap.text?.trim() ? snap.text : null;
     },
-    score: async (userId, jobId, variantId, locale) => {
-      const { matchService } = await import('../match/index.js');
-      const fit = await matchService.scoreJob(userId, jobId, { resumeVariantId: variantId, mode: 'on_demand', locale });
-      return { score: fit.score, kind: fit.kind, scoredAt: fit.scoredAt };
-    },
+    // "Your fit" (match `getFit`, the main resume: the job page's number) and "With this version" (`getVariantFit`).
+    ...tailorFitDeps(),
     markChecklist: async (userId) => {
       const { markChecklistStep } = await import('../growth/index.js');
       await markChecklistStep(userId, 'tailor');

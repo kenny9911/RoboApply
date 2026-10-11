@@ -11,7 +11,8 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../lib/prisma.js', () => ({ default: {} }));
 
 import type { OnboardingMatchEvent } from './contract.js';
-import { ONBOARDING_MATCH_CANDIDATES, candidateQueryFor, rankPreScores, runOnboardingMatch, type MatchPipelineDeps } from './match.js';
+import { fitFixture } from '../agent/__tests__/fitFixture.js';
+import { ONBOARDING_MATCH_CANDIDATES, candidateQueryFor, rankFits, rankPreScores, runOnboardingMatch, type MatchPipelineDeps } from './match.js';
 import { createOnboardingMatchHandler, parseOnboardingMatchPayload } from './workers.js';
 import { SAMPLE_BASICS, createMemoryRepo, preScoreFixture } from './testkit.js';
 
@@ -35,7 +36,8 @@ function setup(seed: Record<string, unknown> = {}) {
     now: () => clock,
     applyAnswers: vi.fn(async () => ({ id: 'sp1', version: 2 })),
     ingest: vi.fn(async () => ({})),
-    preScore: vi.fn(async () => [preScoreFixture('j1', 50, 'possible'), preScoreFixture('j2', 85, 'great'), preScoreFixture('j3', 70, 'good'), preScoreFixture('j4', null, null)]),
+    // THE fit of each candidate, as `getFits` answers it (match/fit.ts): the dependency the run ranks by.
+    fits: vi.fn(async () => [preScoreFixture('j1', 50, 'possible'), preScoreFixture('j2', 85, 'great'), preScoreFixture('j3', 70, 'good'), preScoreFixture('j4', null, null)]),
     aiAllowed: vi.fn(async () => true),
     enqueue: vi.fn(async (kind, payload, options) => {
       enqueued.push({ kind, payload, options });
@@ -54,7 +56,7 @@ describe('phases are emitted only after their work', () => {
     await tick();
     await tick();
     expect(events.map((e) => (e.event === 'phase' ? e.data.phase : e.event))).toEqual(['reading', 'saving']);
-    expect(deps.preScore).not.toHaveBeenCalled();
+    expect(deps.fits).not.toHaveBeenCalled();
     ingest.resolve();
     await run;
     expect(events.map((e) => (e.event === 'phase' ? e.data.phase : e.event))).toEqual(['reading', 'saving', 'searching', 'comparing', 'ranking', 'done']);
@@ -63,7 +65,7 @@ describe('phases are emitted only after their work', () => {
   it('waits on the pre-score before saying "comparing"', async () => {
     const { deps } = setup();
     const scores = deferred<ReturnType<typeof preScoreFixture>[]>();
-    deps.preScore = vi.fn(() => scores.promise);
+    deps.fits = vi.fn(() => scores.promise);
     const events: string[] = [];
     const run = runOnboardingMatch(deps, 'u1', { emit: (e) => events.push(e.event === 'phase' ? e.data.phase : e.event) });
     for (let i = 0; i < 6; i++) await tick();
@@ -229,7 +231,7 @@ describe('the 120 s cap', () => {
     const result = await runOnboardingMatch(deps, 'u1', { emit: (e) => events.push(e) });
     expect(result?.continuedInBackground).toBe(true);
     expect(enqueued).toContainEqual({ kind: 'onboarding.match', payload: { userId: 'u1', fromPhase: 'comparing' }, options: { userId: 'u1', dedupeKey: 'onboarding.match:u1' } });
-    expect(deps.preScore).not.toHaveBeenCalled();
+    expect(deps.fits).not.toHaveBeenCalled();
     expect(events.at(-1)).toEqual({ event: 'done', data: { jobCount: 0, topJobIds: [], continuedInBackground: true } });
     expect(mem.rows.get('u1')!.step).toBe('confirm');
   });
@@ -251,7 +253,7 @@ describe('the 120 s cap', () => {
     const { deps, mem } = setup({ step: 'confirm' });
     const handler = createOnboardingMatchHandler(() => deps);
     await handler({ id: 'w1', kind: 'onboarding.match', brand: 'roboapply', userId: 'u1', payload: { userId: 'u1', fromPhase: 'comparing' }, attempts: 1, maxAttempts: 5, dedupeKey: null, priority: 100 });
-    expect(deps.preScore).toHaveBeenCalledTimes(1);
+    expect(deps.fits).toHaveBeenCalledTimes(1);
     expect(deps.ingest).not.toHaveBeenCalled();
     expect(mem.rows.get('u1')).toMatchObject({ step: 'confirm', answers: { matching: { jobCount: 2, continuedInBackground: false } } });
   });
@@ -341,7 +343,7 @@ describe('GoApply O6', () => {
     const events: OnboardingMatchEvent[] = [];
     const result = await runOnboardingMatch(deps, 'u1', { emit: (e) => events.push(e) });
     expect(result).toMatchObject({ jobCount: 4, compared: 4, topJobIds: [], ranked: false, continuedInBackground: false });
-    expect(deps.preScore).not.toHaveBeenCalled();
+    expect(deps.fits).not.toHaveBeenCalled();
     expect(deps.aiAllowed).not.toHaveBeenCalled();
     expect(enqueued.filter((e) => e.kind === 'job.score')).toEqual([]);
     // The two lines that did not happen are reported as skipped, never as done.
@@ -380,11 +382,51 @@ describe('GoApply O6', () => {
     expect(result).toMatchObject({ jobCount: 0, compared: 0, topJobIds: [], ranked: false });
     expect(deps.ingest).not.toHaveBeenCalled();
     expect(mem.candidateQueries).toEqual([]);
-    expect(deps.preScore).not.toHaveBeenCalled();
+    expect(deps.fits).not.toHaveBeenCalled();
     expect(enqueued).toEqual([]);
     expect(result).not.toHaveProperty('searchCount');
     expect(events.filter((e) => e.event === 'phase' && e.data.skipped === true).map((e) => (e.event === 'phase' ? e.data.phase : ''))).toEqual(['reading', 'searching', 'comparing', 'ranking']);
     // Setup still moves on.
     expect(mem.rows.get('u1')!.step).toBe('confirm');
+  });
+});
+
+// ── MKT-2F: the run ranks by THE fit (match/fit.ts `getFits`), never by a scorer of its own ──
+
+describe('MKT-2F: onboarding results read the fit contract', () => {
+  it('ranks and counts by the Fit of getFits: an AI fit and an estimate are read alike, a job with no fit is last and never counted', async () => {
+    const { deps, mem } = setup();
+    deps.fits = vi.fn(async () => [
+      // j1 has a stored AI fit below its old estimate: the run uses the AI number, as every other surface does.
+      fitFixture({ jobId: 'j1', score: 59, tier: 'possible', kind: 'ai' }),
+      fitFixture({ jobId: 'j2', score: 85, tier: 'great', kind: 'estimate' }),
+      fitFixture({ jobId: 'j3', score: 70, tier: 'good', kind: 'estimate', confidence: 'low', confidenceReason: 'no_skills_listed' }),
+      fitFixture({ jobId: 'j4', score: null, tier: null, kind: 'estimate' }),
+    ]);
+    const result = await runOnboardingMatch(deps, 'u1');
+    expect(deps.fits).toHaveBeenCalledTimes(1);
+    expect(deps.fits).toHaveBeenCalledWith('u1', ['j1', 'j2', 'j3', 'j4']);
+    expect(result).toMatchObject({ jobCount: 2, compared: 4, topJobIds: ['j2', 'j3', 'j1'], ranked: true });
+    expect(((await mem.repo.read('u1'))!.answers as { matching?: unknown }).matching).toMatchObject({ jobCount: 2, topJobIds: ['j2', 'j3', 'j1'] });
+  });
+
+  it('`fits` wins over the older `preScore` name; a caller that still passes only `preScore` keeps working', async () => {
+    const both = setup();
+    both.deps.preScore = vi.fn(async () => [preScoreFixture('j1', 99, 'great')]);
+    await runOnboardingMatch(both.deps, 'u1');
+    expect(both.deps.fits).toHaveBeenCalledTimes(1);
+    expect(both.deps.preScore).not.toHaveBeenCalled();
+
+    const older = setup();
+    older.deps.preScore = vi.fn(async () => [preScoreFixture('j1', 66, 'good')]);
+    delete older.deps.fits;
+    expect(await runOnboardingMatch(older.deps, 'u1')).toMatchObject({ jobCount: 1, topJobIds: ['j1'] });
+    expect(older.deps.preScore).toHaveBeenCalledTimes(1);
+  });
+
+  it('rankFits orders a list of Fits like the older rankPreScores (one function)', () => {
+    const fits = [fitFixture({ jobId: 'b', score: null, tier: null }), fitFixture({ jobId: 'c', score: 70, tier: 'good' }), fitFixture({ jobId: 'a', score: 70, tier: 'great' })];
+    expect(rankFits(fits).map((f) => f.jobId)).toEqual(['a', 'c', 'b']);
+    expect(rankPreScores).toBe(rankFits);
   });
 });

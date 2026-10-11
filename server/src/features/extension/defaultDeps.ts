@@ -12,11 +12,86 @@ import { logger } from '../../services/LoggerService.js';
 import { cnPostingVisible, cnPostingsWhere } from '../cn/jobs/index.js';
 import { draftAnswer } from './answers.js';
 import { createPrismaExtensionRepo } from './repository.js';
-import type { ExtProfileView, ExtensionDeps, FitChip } from './service.js';
+import type { AdhocPosting, Fit, FitFunctions } from '../match/index.js';
+import type { ExtProfileView, ExtensionDeps, FitChip, PageForFit } from './service.js';
 
-function chip(fit: { score: number | null; tier: string | null; kind: 'pre' | 'ai'; topOverlap: string | null; topGap: string | null } | null | undefined): FitChip | null {
+/** The fields of a `Fit` (match/fit.ts) the chip shows. */
+type ChipFit = Pick<Fit, 'score' | 'tier' | 'kind' | 'topOverlap' | 'topGap' | 'confidence' | 'confidenceReason'>;
+
+/**
+ * THE fit as the extension's chip: the same score, tier and kind the job page
+ * shows (an estimate is `pre` on the wire, which the published extension
+ * reads), with its confidence and, when that is low, the one reason.
+ */
+export function chip(fit: ChipFit | null | undefined): FitChip | null {
   if (!fit) return null;
-  return { score: fit.score, tier: fit.tier, kind: fit.kind, topOverlap: fit.topOverlap, topGap: fit.topGap };
+  return {
+    score: fit.score,
+    tier: fit.tier,
+    kind: fit.kind === 'ai' ? 'ai' : 'pre',
+    topOverlap: fit.topOverlap,
+    topGap: fit.topGap,
+    confidence: fit.confidence,
+    confidenceReason: fit.confidenceReason,
+  };
+}
+
+/** The page the person has open, as a posting the matcher can read. Nothing here is a stored job. */
+export function pagePosting(market: AdhocPosting['market'], page: PageForFit): AdhocPosting {
+  return {
+    market,
+    title: page.title,
+    companyName: page.company,
+    description: page.descriptionText,
+    descriptionPlain: page.descriptionText,
+    qualifications: null,
+    responsibilities: null,
+    benefits: null,
+    taxonomyIds: [],
+    primaryTaxonomyId: null,
+    seniority: null,
+    minYears: null,
+    maxYears: null,
+    educationLevel: null,
+    skills: [],
+    skillsDetail: null,
+    workModel: null,
+    remoteScope: null,
+    location: page.location,
+    locationCity: null,
+    locationCountry: null,
+    geoLat: null,
+    geoLng: null,
+    salaryAnnualMin: null,
+    salaryAnnualMax: null,
+    salaryCurrency: null,
+    sponsorship: null,
+    sponsorshipEvidence: null,
+    marketTags: null,
+    archivedAt: null,
+    companyIndustries: [],
+  };
+}
+
+/**
+ * The chip's two reads on the fit contract (match/fit.ts). One wiring for
+ * production (the default: the module's own functions, loaded on first use)
+ * and for the every-seam contract test, which passes the functions of an
+ * in-memory world.
+ */
+export function extensionMatchDeps(fits?: Pick<FitFunctions, 'getFit' | 'getFits'>): ExtensionDeps['match'] {
+  return {
+    // THE fit of one of our jobs, with no model call: the number the job page and the feed card show.
+    async cached(userId, jobId) {
+      const read = fits ?? (await import('../match/index.js'));
+      return chip(await read.getFit(userId, jobId));
+    },
+    // A page that is not one of our jobs: the same estimate, for a posting that is never stored and never sent to a model.
+    async page(userId, page) {
+      const { estimateForPosting } = await import('../match/index.js');
+      return chip(await estimateForPosting(userId, pagePosting(getCurrentBrandOrDefault().market, page), fits));
+    },
+  };
 }
 
 /**
@@ -87,55 +162,7 @@ export function defaultExtensionDeps(): ExtensionDeps {
     },
     entitlements: (userId) => summarizeEntitlementsForMe(userId, { brand: getCurrentBrandOrDefault().id }),
     flags: async (userId) => (await resolveFlagsForUser(userId, { brand: getCurrentBrandOrDefault() })) as unknown as Record<string, unknown>,
-    match: {
-      async cached(userId, jobId) {
-        const { matchService } = await import('../match/index.js');
-        return chip(await matchService.scoreJob(userId, jobId, { mode: 'cache_only' }));
-      },
-      async page(userId, page) {
-        const { matchService } = await import('../match/index.js');
-        const brand = getCurrentBrandOrDefault();
-        const [fit] = await matchService.preScoreJobs(userId, [
-          {
-            id: 'ext-page',
-            market: brand.market,
-            visibility: 'private',
-            ownerUserId: userId,
-            title: page.title,
-            companyName: page.company,
-            description: page.descriptionText,
-            descriptionPlain: page.descriptionText,
-            qualifications: null,
-            responsibilities: null,
-            benefits: null,
-            taxonomyIds: [],
-            primaryTaxonomyId: null,
-            seniority: null,
-            minYears: null,
-            maxYears: null,
-            educationLevel: null,
-            skills: [],
-            skillsDetail: null,
-            workModel: null,
-            remoteScope: null,
-            location: page.location,
-            locationCity: null,
-            locationCountry: null,
-            geoLat: null,
-            geoLng: null,
-            salaryAnnualMin: null,
-            salaryAnnualMax: null,
-            salaryCurrency: null,
-            sponsorship: null,
-            sponsorshipEvidence: null,
-            marketTags: null,
-            archivedAt: null,
-            companyIndustries: [],
-          },
-        ]);
-        return chip(fit);
-      },
-    },
+    match: extensionMatchDeps(),
     async saveImportedJob(userId, fields, options) {
       const { jobImportService } = await import('../jobs/import/index.js');
       const out = await jobImportService.saveJob(userId, fields, { source: 'extension', idempotencyKey: options.idempotencyKey });

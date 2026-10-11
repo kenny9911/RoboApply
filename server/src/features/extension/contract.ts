@@ -160,8 +160,10 @@ export const PageJobBodySchema = z.object(PageJob).strict();
 /**
  * The fit chip. `jobId` is the matching job in the user's listings (public
  * in this market, or the user's own import), or null when the page is not
- * one of them; `fit` is the same scorer the app uses: a cached AI score when
- * there is one, otherwise the deterministic "Quick estimate" (`kind: 'pre'`).
+ * one of them; `fit` is THE fit the app shows for the job (match/fit.ts): the
+ * stored AI score when there is one, otherwise the "Quick estimate"
+ * (`kind: 'pre'`). A page that is not one of our jobs gets the same estimate,
+ * computed for the page's text; it is not stored and no model reads it.
  * Never a chance of being hired.
  */
 export interface PageJobResponse {
@@ -172,6 +174,14 @@ export interface PageJobResponse {
     kind: 'pre' | 'ai';
     topOverlap: string | null;
     topGap: string | null;
+    /**
+     * How much the fit rests on, and one reason when that is low
+     * (`no_skills_listed`, `no_level_stated`, `no_role_evidence`, `no_resume`,
+     * `few_details`). Sent with every fit; an extension that does not read
+     * them shows the chip as before.
+     */
+    confidence?: 'high' | 'medium' | 'low';
+    confidenceReason?: string | null;
   } | null;
 }
 

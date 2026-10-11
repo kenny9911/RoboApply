@@ -136,8 +136,91 @@ function gradeData(data: GradeUpdate) {
   };
 }
 
-export function createPrismaResumeCheckStore(): ResumeCheckStore {
+/** The fields of a `Fit` (match/fit.ts) the keyword report reads. */
+export interface ReportFit {
+  score: number | null;
+  tier: string | null;
+  kind: 'ai' | 'estimate';
+  scoredAt: string;
+  basis: { resumeVariantId: string | null; resumeContentHash: string | null };
+}
+
+export interface ResumeCheckStoreOptions {
+  /**
+   * THE fit of a job (match/fit.ts `getFit`: the person's main resume, no
+   * model call). Default: the module's own function, loaded on first use.
+   */
+  fit?: (userId: string, jobId: string) => Promise<ReportFit>;
+  /**
+   * The id of the person's main resume (the one THE fit is read for), or null
+   * when they have none. Default: `primaryVariantId` (primaryVariant.ts: the
+   * one marked primary, else the most recently edited), the same rule the
+   * match repository's `getResume` applies.
+   */
+  mainResumeId?: (userId: string) => Promise<string | null>;
+}
+
+async function defaultFit(userId: string, jobId: string): Promise<ReportFit> {
+  return (await import('../match/index.js')).getFit(userId, jobId);
+}
+
+async function defaultMainResumeId(userId: string): Promise<string | null> {
+  return (await import('./primaryVariant.js')).primaryVariantId(userId);
+}
+
+/**
+ * The fit score the keyword report may show for a resume version and a job,
+ * or null. Read through the fit contract, never from the score table:
+ *   - It is THE fit of the job, so it is shown only on the report of the
+ *     person's MAIN resume. A number for another version is a different,
+ *     separately named measure ("With this version") that only tailoring
+ *     shows (strategy 2.2); this report shows none for such a version.
+ *   - Only a real AI fit (D3: never a quick estimate here), computed as every
+ *     other surface computes it: today's weights and tier rule, no row of the
+ *     old scorer or of a replaced resume text, and on GoApply nothing AI-made
+ *     without the "Use AI" consent.
+ * Any failure answers null: the report's rows do not depend on the fit.
+ */
+export async function fitRowFromContract(variantId: string, read: () => Promise<ReportFit>): Promise<FitRow | null> {
+  // The caller (`fitRowForVersion`) has already ruled out a version that is not the main resume without
+  // reading a fit; the check on `basis.resumeVariantId` below stays as the authority on which resume was read.
+  try {
+    const fit = await read();
+    if (fit.basis.resumeVariantId !== variantId) return null;
+    if (fit.kind !== 'ai' || fit.score === null || !fit.basis.resumeContentHash) return null;
+    return { score: Math.round(fit.score), tier: fit.tier, generatedAt: new Date(fit.scoredAt), resumeContentHashAtScore: fit.basis.resumeContentHash };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * `fitRowFromContract` for one resume version, without paying for a fit that
+ * would be thrown away: THE fit is the main resume's, so for any other
+ * version (the report of a tailored resume, which the tailoring result page
+ * opens on every view) the answer is null after one id lookup, and the fit
+ * (the job, the person's inputs, the resume, the stored score) is never read.
+ */
+export async function fitRowForVersion(
+  userId: string,
+  jobId: string,
+  variantId: string,
+  reads: { mainResumeId: (userId: string) => Promise<string | null>; fit: (userId: string, jobId: string) => Promise<ReportFit> },
+): Promise<FitRow | null> {
+  let main: string | null;
+  try {
+    main = await reads.mainResumeId(userId);
+  } catch {
+    return null;
+  }
+  if (main !== variantId) return null;
+  return fitRowFromContract(variantId, () => reads.fit(userId, jobId));
+}
+
+export function createPrismaResumeCheckStore(options: ResumeCheckStoreOptions = {}): ResumeCheckStore {
   const db = async () => (await import('../../lib/prisma.js')).default;
+  const readFit = options.fit ?? defaultFit;
+  const mainResumeId = options.mainResumeId ?? defaultMainResumeId;
   return {
     async findVariant(userId, variantId) {
       const p = await db();
@@ -211,13 +294,7 @@ export function createPrismaResumeCheckStore(): ResumeCheckStore {
       const p = await db();
       return p.rAKeywordExtraction.findUnique({ where: { jobId }, select: { keywords: true } });
     },
-    async findFitRow(userId, jobId, variantId) {
-      const p = await db();
-      return p.rAJobMatchScore.findFirst({
-        where: { userId, jobId, resumeVariantId: variantId, scoreKind: 'ai' },
-        select: { score: true, tier: true, generatedAt: true, resumeContentHashAtScore: true },
-      });
-    },
+    findFitRow: (userId, jobId, variantId) => fitRowForVersion(userId, jobId, variantId, { mainResumeId, fit: readFit }),
     async saveMarkdown(userId, variantId, markdown, opts) {
       const p = await db();
       const resumeContentHash = resumeContentHashOf(markdown);

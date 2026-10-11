@@ -12,7 +12,7 @@ const api = vi.hoisted(() => ({ scoreJob: vi.fn() }));
 vi.mock('../../lib/api/jobs', () => ({ scoreJob: api.scoreJob }));
 
 import type { MatchFitView } from '../../lib/api/contracts/match';
-import { FitRewriteNotDoneError, isRewrittenFit, jobFitKey, useRewriteFitText } from './useJobFit';
+import { FitRewriteNotDoneError, isRewrittenFit, jobFitKey, useJobFit, useRewriteFitText } from './useJobFit';
 
 function fit(over: Partial<MatchFitView> = {}): MatchFitView {
   return {
@@ -79,5 +79,41 @@ describe('useRewriteFitText', () => {
     expect(isRewrittenFit(fit({ summaryLocaleStale: true }))).toBe(false);
     expect(isRewrittenFit(fit({ kind: 'pre' }))).toBe(false);
     expect(isRewrittenFit(null)).toBe(false);
+  });
+});
+
+// MKT-2F: one fit per job. The canonical routes take no resume version, so the
+// hooks send none and the cache has one key per job.
+describe('MKT-2F: the job fit is one per job', () => {
+  it('jobFitKey is one key per job', () => {
+    expect(jobFitKey('job1')).toEqual(['match', 'fit', 'job1']);
+    expect(jobFitKey('job1')).not.toEqual(jobFitKey('job2'));
+    expect(jobFitKey.length).toBe(1);
+  });
+
+  it('useJobFit asks for the fit with no resume version and caches it under the job', async () => {
+    const answer = fit();
+    api.scoreJob.mockResolvedValue({ fit: answer });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const { result } = renderHook(() => useJobFit('job1'), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(api.scoreJob).toHaveBeenCalledTimes(1);
+    expect(api.scoreJob.mock.calls[0]![0]).toBe('job1');
+    expect(api.scoreJob.mock.calls[0]![1]).toEqual({});
+    expect(client.getQueryData(jobFitKey('job1'))).toEqual(answer);
+    // A second reader of the same job (the job page and the card panel) shares that one entry.
+    const second = renderHook(() => useJobFit('job1'), { wrapper });
+    await waitFor(() => expect(second.result.current.data).toEqual(answer));
+    expect(api.scoreJob).toHaveBeenCalledTimes(1);
+  });
+
+  it('the rewrite sends no resume version either', async () => {
+    api.scoreJob.mockResolvedValue({ fit: fit() });
+    const h = harness(fit({ summaryLocaleStale: true }));
+    const { result } = renderHook(() => useRewriteFitText('job1'), { wrapper: h.wrapper });
+    act(() => result.current.mutate());
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(api.scoreJob).toHaveBeenCalledWith('job1', { regenerateExplanation: true });
   });
 });

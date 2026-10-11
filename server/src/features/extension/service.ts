@@ -149,9 +149,9 @@ export interface ExtensionDeps {
   entitlements(userId: string): Promise<unknown>;
   flags(userId: string): Promise<Record<string, unknown>>;
   match: {
-    /** A cached AI score, otherwise the deterministic estimate (never calls a model). */
+    /** THE fit of one of our jobs (`getFit`, no model call): the stored AI score, otherwise the quick estimate. */
     cached(userId: string, jobId: string): Promise<FitChip | null>;
-    /** The deterministic estimate for a page that is not one of our jobs. */
+    /** The same estimate for a page that is not one of our jobs (`estimateForPosting`): never stored, never a model call. */
     page(userId: string, page: PageForFit): Promise<FitChip | null>;
   };
   saveImportedJob(

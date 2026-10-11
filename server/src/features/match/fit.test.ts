@@ -1,6 +1,9 @@
 // @vitest-environment node
 // The fit contract (MARKET_STRATEGY 2.2; SM-5): getFit, getFits and getVariantFit over the in-memory repo with a
 // counting fake scorer. No network, no database, no model.
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
@@ -9,8 +12,26 @@ import { getBrand } from '../../platform/brand/registry.js';
 import type { RateLimitResult } from '../../platform/ratelimit/index.js';
 import type { RAJobMatchScorerV3Output } from '../../roboapply/v2/agents/RAJobMatchScorerAgent.js';
 import { currentScorerPin } from './config.js';
-import { DEFAULT_MATCH_PRIORS, DEFAULT_MATCH_TIERS, DEFAULT_MATCH_WEIGHTS, type MatchDimension } from './contract.js';
-import { assembleFit, createFitService, fitFunctions, fitToListResult, fitToView, getFit, getFits, getVariantFit, hysteresisTier, setFitServiceForTests, storedFitStatus, toWireKind, type Fit } from './fit.js';
+import { DEFAULT_MATCH_PRIORS, DEFAULT_MATCH_TIERS, DEFAULT_MATCH_WEIGHTS, FitSnapshotSchema, readFitSnapshot, type MatchDimension } from './contract.js';
+import {
+  ADHOC_POSTING_ID,
+  assembleFit,
+  createFitService,
+  estimateForPosting,
+  fitFunctions,
+  fitSnapshot,
+  fitToListResult,
+  fitToView,
+  getFit,
+  getFits,
+  getVariantFit,
+  hysteresisTier,
+  setFitServiceForTests,
+  storedFitStatus,
+  toWireKind,
+  type AdhocPosting,
+  type Fit,
+} from './fit.js';
 import { toMatchJob } from './context.js';
 import { currentJobHash, jobContentHash } from './jobHash.js';
 import { FITS_MAX_IDS, createMatchService, type MatchServiceDeps, type ScorerLike } from './MatchService.js';
@@ -709,5 +730,180 @@ describe('components of a stored row follow today\'s weights and logistics', () 
     expect(fit.score).not.toBe(first.score);
     expect(fit.dimensions.map((d: MatchDimension) => d.weight)).toEqual([10, 60, 10, 10, 10]);
     expect(reweighted.scorer.run).not.toHaveBeenCalled();
+  });
+});
+
+// ── MKT-2F: snapshots (I6), an ad-hoc posting, and "every consumer reads the contract" ──
+
+describe('MKT-2F: fitSnapshot is what may be stored or mailed (strategy 2.2 I6)', () => {
+  it('an estimate: score, tier and kind with the rubric and estimator, no model, and when it was computed', async () => {
+    const { fits } = setup();
+    const fit = await fits.getFit('u1', 'job1');
+    expect(fit.kind).toBe('estimate');
+    expect(fitSnapshot(fit)).toEqual({ score: fit.score, tier: fit.tier, kind: 'estimate', rubric: 'fit_v3', estimator: 'est_v2', model: null, scoredAt: NOW.toISOString() });
+  });
+
+  it('an AI fit: the model that wrote it and when it was scored (its own time, not the read time)', async () => {
+    const t = setup();
+    const scored = await t.fits.getFit('u1', 'job1', { allowModelCall: true });
+    const later = setup({ repo: t.repo, now: () => new Date(NOW.getTime() + 3 * 86_400_000) });
+    const read = await later.fits.getFit('u1', 'job1');
+    const snap = fitSnapshot(read);
+    expect(snap).toEqual({ score: scored.score, tier: scored.tier, kind: 'ai', rubric: 'fit_v3', estimator: 'est_v2', model: MODEL_A, scoredAt: NOW.toISOString() });
+    // The list read gives the same snapshot (what an alert stores is what the job page shows).
+    expect(fitSnapshot((await later.fits.getFits('u1', ['job1'])).get('job1')!)).toEqual(snap);
+  });
+
+  it('a snapshot parses back from stored JSON; anything else reads as "none" (a row written before snapshots)', async () => {
+    const { fits } = setup();
+    const snap = fitSnapshot(await fits.getFit('u1', 'job1'));
+    expect(readFitSnapshot(JSON.parse(JSON.stringify(snap)))).toEqual(snap);
+    expect(FitSnapshotSchema.safeParse(snap).success).toBe(true);
+    for (const bad of [null, undefined, 72, 'good', {}, { score: 72 }, { ...snap, kind: 'pre' }, { ...snap, extra: 1 }, { ...snap, score: 140 }]) {
+      expect(readFitSnapshot(bad)).toBeNull();
+    }
+    // No score is a valid snapshot of "nothing to compare" (never 0).
+    expect(readFitSnapshot({ ...snap, score: null, tier: null })).toEqual({ ...snap, score: null, tier: null });
+  });
+});
+
+describe('MKT-2F: estimateForPosting, the estimate of a posting that is not a stored job', () => {
+  const posting = (over: Partial<AdhocPosting> = {}): AdhocPosting => {
+    const { id: _id, visibility: _v, ownerUserId: _o, ...rest } = jobRecord();
+    return { ...rest, ...over };
+  };
+
+  it('is the same fit a stored job with the same content gets before any AI read (one estimator, one assembly)', async () => {
+    const { fits } = setup();
+    const stored = await fits.getFit('u1', 'job1');
+    const adhoc = await estimateForPosting('u1', posting(), fits);
+    expect(adhoc).not.toBeNull();
+    expect(shown(adhoc!)).toEqual(shown(stored));
+    expect(adhoc).toMatchObject({ jobId: ADHOC_POSTING_ID, kind: 'estimate', coverage: stored.coverage, confidence: stored.confidence, dimensions: stored.dimensions, estimateReason: null });
+  });
+
+  it('never a model call, never a write, and no job row is read: the posting is handed over as a row', async () => {
+    const { fits, repo, scorer } = setup();
+    const before = { ...repo.calls };
+    await estimateForPosting('u1', posting({ title: 'Staff Platform Engineer' }), fits);
+    expect(scorer.run).not.toHaveBeenCalled();
+    expect(repo.state.scores).toHaveLength(0);
+    expect(repo.calls.saveScore ?? 0).toBe(0);
+    expect(repo.calls.getJob ?? 0).toBe(before.getJob ?? 0);
+    expect(repo.calls.getFitJobs ?? 0).toBe(before.getFitJobs ?? 0);
+  });
+
+  it('is an estimate even when the person has stored AI fits, and even for a row saved under the ad-hoc id by mistake', async () => {
+    const t = setup();
+    await t.fits.getFit('u1', 'job1', { allowModelCall: true });
+    expect((await estimateForPosting('u1', posting(), t.fits))?.kind).toBe('estimate');
+    // A stored row under the ad-hoc id (it cannot exist: no job has that id) is still never shown as the page's fit.
+    t.repo.state.scores.push({ ...(t.repo.state.scores[0] as ScoreRecord), jobId: ADHOC_POSTING_ID });
+    const fit = await estimateForPosting('u1', posting(), t.fits);
+    expect(fit === null || fit.kind === 'estimate').toBe(true);
+    expect(t.scorer.run).toHaveBeenCalledTimes(1);
+  });
+
+  it('with no resume it says so; with AI off it is the same estimate (no model either way)', async () => {
+    const noResume = setup({ repo: createMemoryRepo({ resumes: [] }) });
+    expect(await estimateForPosting('u1', posting(), noResume.fits)).toMatchObject({ kind: 'estimate', estimateReason: 'no_resume' });
+    const off = setup({ aiAllowed: async () => false });
+    expect((await estimateForPosting('u1', posting(), off.fits))?.kind).toBe('estimate');
+    expect(off.scorer.run).not.toHaveBeenCalled();
+  });
+
+  it('a posting of another market than the request\'s brand has no fit (markets never mix)', async () => {
+    const { fits } = setup();
+    expect(await estimateForPosting('u1', posting({ market: 'cn' }), fits)).toBeNull();
+    const cn = setup({ brand: () => getBrand('goapply'), repo: createMemoryRepo({ jobs: [jobRecord({ market: 'cn' })] }) });
+    expect((await estimateForPosting('u1', posting({ market: 'cn' }), cn.fits))?.kind).toBe('estimate');
+  });
+
+  it('the module-level function reads the production binding (here: the test service)', async () => {
+    const { service, scorer } = setup();
+    setFitServiceForTests(service);
+    const fit = await estimateForPosting('u1', posting());
+    expect(fit).toMatchObject({ jobId: ADHOC_POSTING_ID, kind: 'estimate' });
+    expect(scorer.run).not.toHaveBeenCalled();
+  });
+});
+
+describe('MKT-2F: every consumer reads the fit contract (SM-5)', () => {
+  /** Every production source file under server/src/features, as [repository path, text]. */
+  function featureSources(): Array<[string, string]> {
+    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+    const out: Array<[string, string]> = [];
+    const walk = (dir: string) => {
+      for (const name of readdirSync(dir)) {
+        const full = path.join(dir, name);
+        if (statSync(full).isDirectory()) {
+          if (name !== '__tests__' && name !== 'node_modules') walk(full);
+        } else if (name.endsWith('.ts') && !name.endsWith('.test.ts') && !name.endsWith('.d.ts')) {
+          out.push([path.relative(root, full).split(path.sep).join('/'), readFileSync(full, 'utf8')]);
+        }
+      }
+    };
+    walk(root);
+    return out;
+  }
+
+  /** The code of a file without its comments (block comments keep their line count). */
+  const codeOf = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, '')).replace(/\/\/.*$/gm, '');
+
+  /**
+   * The item's own acceptance pattern, read literally: `preScoreMany`,
+   * `preScoreJobs` or `scoreJob(` anywhere under features/ outside match/ and
+   * resume/tailor/. One name is still left, and only where it is listed here:
+   * the Assistant's adapter method `CopilotAreas.scoreJob` (declared in
+   * copilot/types.ts, which no M2 bundle owns). It calls getFit /
+   * getVariantFit, not the match scorer. When the method is renamed (handoff
+   * MKT-2F, Request 2) these entries match nothing and can be deleted.
+   */
+  const ASSISTANT_ADAPTER: Record<string, RegExp> = {
+    'copilot/types.ts': /^\s*scoreJob\(userId: string, jobId: string, options: /,
+    'copilot/areas.ts': /^\s*async scoreJob\(userId, jobId, opts\) \{/,
+    'copilot/tools/jobs.ts': /\bctx\.areas\.scoreJob\(/,
+  };
+
+  it('no code under features/ outside match/ and resume/tailor/ names preScoreMany, preScoreJobs or scoreJob( (the literal acceptance grep)', () => {
+    const sources = featureSources().filter(([file]) => !file.startsWith('match/') && !file.startsWith('resume/tailor/'));
+    expect(sources.length).toBeGreaterThan(200);
+    const offenders: string[] = [];
+    const adapterLines: string[] = [];
+    for (const [file, text] of sources) {
+      codeOf(text)
+        .split('\n')
+        .forEach((line, i) => {
+          if (!/preScoreMany|preScoreJobs|scoreJob\(/.test(line)) return;
+          const adapter = ASSISTANT_ADAPTER[file];
+          if (adapter && adapter.test(line) && !/preScoreMany|preScoreJobs|matchService/.test(line)) adapterLines.push(file);
+          else offenders.push(`${file}:${i + 1}: ${line.trim()}`);
+        });
+    }
+    expect(offenders).toEqual([]);
+    // The exception is exactly the adapter: its declaration, its implementation and analyze_fit's two calls, or nothing once it is renamed.
+    expect([[], ['copilot/areas.ts', 'copilot/tools/jobs.ts', 'copilot/tools/jobs.ts', 'copilot/types.ts']]).toContainEqual([...adapterLines].sort());
+  });
+
+  it('the Assistant\'s adapter reads the fit contract and never the match scorer', () => {
+    const areas = codeOf(featureSources().find(([file]) => file === 'copilot/areas.ts')![1]);
+    expect(areas).toMatch(/\bgetFit\(/);
+    expect(areas).toMatch(/\bgetVariantFit\(/);
+    expect(areas).not.toMatch(/\bmatchService\b/);
+    expect(areas).not.toMatch(/\bpreScore/);
+  });
+
+  it('a resume version reaches the match area only through getVariantFit (tailoring, and the Assistant\'s explicit version question) and the keyword check', () => {
+    const allowed = new Set(['resume/tailor/fitDeps.ts', 'copilot/areas.ts']);
+    const offenders = featureSources()
+      .filter(([file, text]) => !file.startsWith('match/') && /\bgetVariantFit\b/.test(codeOf(text)) && !allowed.has(file))
+      .map(([file]) => file);
+    expect(offenders).toEqual([]);
+  });
+
+  it('the deprecated list wrappers still answer getFits in the older shape, so no other domain breaks', async () => {
+    const { service } = setup();
+    const fit = (await service.fits.getFits('u1', ['job1'])).get('job1')!;
+    expect(await service.preScoreMany('u1', ['job1'])).toEqual([fitToListResult(fit)]);
   });
 });

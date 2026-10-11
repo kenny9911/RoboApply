@@ -12,6 +12,7 @@ import { getBrand } from '../../platform/brand/registry.js';
 import { CreditsExhaustedError } from '../../platform/credits/errors.js';
 import { fakeAuth, startRouteHarness, type RouteHarness } from '../../test/routeHarness.js';
 import { createCompetitivenessService, type CompetitivenessService } from './CompetitivenessService.js';
+import { FitAnalysisBodySchema, KeywordCheckQuerySchema, ScoreJobBodySchema } from './contract.js';
 import { createMatchService, type MatchService } from './MatchService.js';
 import { createMemoryFitReportStore } from './reportStore.js';
 import { createMatchRouter, createScoreJobHandler } from './routes.js';
@@ -123,6 +124,50 @@ describe('POST /match/jobs/:id/fit-analysis', () => {
     const missing = await h.request<{ code: string }>('POST', '/api/v1/roboapply/match/jobs/nope/fit-analysis', { body: {}, headers: { ...U, 'Idempotency-Key': 'key-12345670' } });
     expect(missing.status).toBe(404);
     expect(missing.body.code).toBe('not_found');
+  });
+});
+
+describe('MKT-2F: the canonical routes take no resume version (strategy 2.2: the fit is always the main resume)', () => {
+  it('POST /jobs/:id/score with a resumeVariantId is refused; no model runs and nothing is stored for a version', async () => {
+    scorerRun.mockClear();
+    const res = await h.request<{ code: string }>('POST', '/api/v1/roboapply/jobs/job1/score', { body: { resumeVariantId: 'v1' }, headers: U });
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('invalid_request');
+    // Refused together with fields the route does take.
+    expect((await h.request('POST', '/api/v1/roboapply/jobs/job1/score', { body: { force: true, resumeVariantId: 'v1' }, headers: U })).status).toBe(422);
+    expect(scorerRun).not.toHaveBeenCalled();
+    expect(ScoreJobBodySchema.safeParse({ resumeVariantId: 'v1' }).success).toBe(false);
+    expect(ScoreJobBodySchema.safeParse({ force: true, regenerateExplanation: true }).success).toBe(true);
+  });
+
+  it('POST /match/jobs/:id/fit-analysis with a resumeVariantId is refused before any credit or model call', async () => {
+    scorerRun.mockClear();
+    const res = await h.request<{ code: string }>('POST', '/api/v1/roboapply/match/jobs/job1/fit-analysis', {
+      body: { resumeVariantId: 'v1' },
+      headers: { ...U, 'Idempotency-Key': 'key-variant-01' },
+    });
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('invalid_request');
+    expect(scorerRun).not.toHaveBeenCalled();
+    expect(FitAnalysisBodySchema.safeParse({ resumeVariantId: 'v1' }).success).toBe(false);
+    expect(FitAnalysisBodySchema.safeParse({}).success).toBe(true);
+  });
+
+  it('the answer of both routes is for the main resume', async () => {
+    const score = await h.request<{ data: { fit: { resumeVariantId: string } } }>('POST', '/api/v1/roboapply/jobs/job1/score', { body: {}, headers: U });
+    expect(score.status).toBe(200);
+    expect(score.body.data.fit.resumeVariantId).toBe('v1');
+  });
+
+  it('the keyword check keeps its version parameter (tailoring reads the report per version) and names the version it read', async () => {
+    const primary = await h.request<{ data: { resumeVariantId: string } }>('GET', '/api/v1/roboapply/match/jobs/job1/keyword-check', { headers: U });
+    expect(primary.body.data.resumeVariantId).toBe('v1');
+    const named = await h.request<{ data: { resumeVariantId: string } }>('GET', '/api/v1/roboapply/match/jobs/job1/keyword-check?resumeVariantId=v1', { headers: U });
+    expect(named.status).toBe(200);
+    expect(named.body.data.resumeVariantId).toBe('v1');
+    // A version that is not the person's: not found, as before.
+    expect((await h.request('GET', '/api/v1/roboapply/match/jobs/job1/keyword-check?resumeVariantId=nope', { headers: U })).status).toBe(404);
+    expect(KeywordCheckQuerySchema.safeParse({ resumeVariantId: 'v1' }).success).toBe(true);
   });
 });
 

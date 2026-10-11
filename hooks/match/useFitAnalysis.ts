@@ -7,6 +7,9 @@
 // retry never charges twice), the out-of-credits sheet on `402`, and the
 // credit summary refetched afterwards. The server spends a credit only when a
 // model call is needed (`card.charged`); a cached AI score is rebuilt free.
+//
+// The card is the job's one fit (the person's main resume): the request
+// carries no resume version.
 
 import { useCallback, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -26,18 +29,21 @@ export interface UseFitAnalysis {
   run: () => Promise<void>;
 }
 
-export function useFitAnalysis(jobId: string, options: { resumeVariantId?: string | null } = {}): UseFitAnalysis {
+/**
+ * @param _unused Kept so a caller that still passes `{ resumeVariantId }` compiles. It is not read: the fit analysis
+ *   is always for the main resume, and the server refuses a request that names a version.
+ */
+export function useFitAnalysis(jobId: string, _unused?: { resumeVariantId?: string | null }): UseFitAnalysis {
   const gate = useCreditGate('fit_analysis');
   const client = useQueryClient();
   const [card, setCard] = useState<FitAnalysisCard | null>(null);
   const [status, setStatus] = useState<FitAnalysisStatus>('idle');
-  const { resumeVariantId } = options;
 
   const run = useCallback(async () => {
     setStatus('running');
     try {
       const result = await gate.run((idempotencyKey) =>
-        getFitAnalysis(jobId, resumeVariantId ? { resumeVariantId } : {}, { idempotencyKey }),
+        getFitAnalysis(jobId, {}, { idempotencyKey }),
       );
       if (!result.ok) {
         setStatus('out_of_credits');
@@ -46,11 +52,11 @@ export function useFitAnalysis(jobId: string, options: { resumeVariantId?: strin
       setCard(result.value);
       setStatus('done');
       // The analysis may have produced the AI score: refresh the job's fit.
-      void client.invalidateQueries({ queryKey: jobFitKey(jobId, resumeVariantId) });
+      void client.invalidateQueries({ queryKey: jobFitKey(jobId) });
     } catch (err) {
       setStatus(apiErrorCode(err) === 'ai_unavailable' ? 'unavailable' : 'error');
     }
-  }, [client, gate, jobId, resumeVariantId]);
+  }, [client, gate, jobId]);
 
   return { card, status, gate, run };
 }
