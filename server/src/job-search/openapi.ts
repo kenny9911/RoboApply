@@ -6,7 +6,14 @@ const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` });
 const json = (schema: object) => ({ 'application/json': { schema } });
 const failure = (description: string) => ({ description, content: json(ref('Error')) });
 
-const AGENT_DESCRIPTION = 'Plans up to two focused queries through the configured language model, then searches authorized sources. Explicit filters override extracted values; omit filters to use the request. Every query consumes a shared quota reservation, including one before planning. Unsupported preferences are disclosed as unverified. A search cannot be restricted to LinkedIn postings: LinkedIn is not a source, and no result names it or links to it. The agent never invents jobs or submits applications.';
+const AGENT_DESCRIPTION = 'Plans up to two focused queries through the configured language model, then searches authorized sources. Explicit filters override extracted values; omit filters to use the request. Every query consumes a shared quota reservation, including one before planning. Unsupported preferences are disclosed as unverified. Topics of the request that are not filters (an industry, a technology) can only order results, and only a source that orders by text applies them; the response says in agent.rankedBy whether that happened. A search cannot be restricted to LinkedIn postings: LinkedIn is not a source, and no result names it or links to it. The agent never invents jobs or submits applications.';
+
+/**
+ * What `agent.rankedBy` means on every brand. Ranking terms are one input to
+ * an order, never a checked fact, and the list names them only for a search
+ * whose sources said they used them (never from what a source could do).
+ */
+const RANKED_BY = 'Topics of the request (an industry, a product area, a technology) that were used to order the results of each planned query. They are one input to the order, beside others such as how recent a posting is, so a result need not mention them. Ranking terms are not verified facts about a job: no result was checked against them, so read the original posting. Empty when the request names no such topic, when nothing was found, and whenever a source that returned results did not order by the topics; the topics are then listed in unverifiedPreferences.';
 
 /** What the contract says differently per brand: the name, the default country, the sources and the examples. */
 interface BrandContract {
@@ -17,6 +24,8 @@ interface BrandContract {
   query: string;
   request: string;
   agentDescription: string;
+  /** How this brand's sources treat the ranking topics (appended to the `rankedBy` description). */
+  rankedBy: string;
   linkedinOnly: string;
   /** The country used in the filter examples (not the default). */
   exampleCountry: string;
@@ -32,7 +41,8 @@ function brandContract(brand: Pick<ProductBrand, 'name' | 'market' | 'defaultCou
     description: 'Search this service’s own index of job postings through one normalized API. The index holds postings located in mainland China that were read from employers’ public careers boards and, when they are listed, from the recruiter bank; it is a bounded snapshot, not the whole market. Every result names its publisher and links to the original posting. Integration keys are created in the signed-in developer workspace and work only on this site. A key can read the index only after the site operator has turned key access on; until then /providers lists the source with reason not_licensed and /search and /agent/search answer 503 providers_unavailable.',
     country, location: '上海', query: '数据分析师',
     request: '找上海的数据分析师职位，最近一周发布，最好是校招。',
-    agentDescription: 'Plans up to two focused queries through the configured language model, then searches the index. Three things are checked for the key’s owner before any usage is reserved or any text is sent to a model: an account that signed in with WeChat must have a verified phone number (403 phone_binding_required), the owner must have turned on AI features in their settings (403 ai_off), and AI features must be available on this site (503 ai_unavailable). Keyword search needs none of them and stays available. Explicit filters override extracted values; omit filters to use the request. Every query consumes a shared quota reservation, including one before planning. Unsupported preferences are disclosed as unverified.',
+    agentDescription: 'Plans up to two focused queries through the configured language model, then searches the index. Three things are checked for the key’s owner before any usage is reserved or any text is sent to a model: an account that signed in with WeChat must have a verified phone number (403 phone_binding_required), the owner must have turned on AI features in their settings (403 ai_off), and AI features must be available on this site (503 ai_unavailable). Keyword search needs none of them and stays available. Explicit filters override extracted values; omit filters to use the request. Every query consumes a shared quota reservation, including one before planning. Unsupported preferences are disclosed as unverified. Topics of the request that are not filters (an industry, a technology) can only order results. agent.rankedBy names them for a search in which the index used them for its order; otherwise they are listed in agent.unverifiedPreferences. They are never checked facts about a job.',
+    rankedBy: 'The index reads them through the same retrieval as a search of the same words in the app, and this list names them only for a search in which that retrieval used them.',
     linkedinOnly: 'Not offered on this site: the index has no LinkedIn source. true is answered with 400 invalid_request. A request that asks for LinkedIn postings in words is searched on the index, and that wish is listed in unverifiedPreferences.',
     exampleCountry: country, locales: ['zh', 'en'], aiConsent: true,
   };
@@ -42,6 +52,7 @@ function brandContract(brand: Pick<ProductBrand, 'name' | 'market' | 'defaultCou
     country, location: 'Taipei', query: 'software engineer',
     request: 'Find remote backend engineering jobs in Taiwan posted this week. Visa sponsorship is important.',
     agentDescription: AGENT_DESCRIPTION,
+    rankedBy: 'The sources of this API return their own order, so this list is empty unless a source that orders by text answered.',
     linkedinOnly: 'Not offered: LinkedIn is not a source of this API. true is answered with 400 invalid_request. A request that asks for LinkedIn postings in words is searched on the available sources, and that wish is listed in unverifiedPreferences.',
     exampleCountry: 'tw', locales: ['en', 'zh-TW'], aiConsent: false,
   };
@@ -62,7 +73,7 @@ function buildOpenApi(c: BrandContract) {
   const filterProperties = filtersFor(c);
   return {
   openapi: '3.1.0',
-  info: { title: c.title, version: '1.2.0', description: c.description },
+  info: { title: c.title, version: '1.3.0', description: c.description },
   servers: [{ url: '/api/v1/job-search' }],
   security: [{ JobSearchKey: [] }],
   paths: {
@@ -149,14 +160,15 @@ function buildOpenApi(c: BrandContract) {
       } },
       AgentSearchResult: { allOf: [ref('SearchResult'), {
         type: 'object', required: ['agent', 'searches'], properties: {
-          agent: { type: 'object', required: ['queries', 'mode', 'criteria', 'unverifiedPreferences', 'linkedinOnly'], properties: {
+          agent: { type: 'object', required: ['queries', 'mode', 'criteria', 'unverifiedPreferences', 'linkedinOnly', 'rankedBy'], properties: {
             queries: { type: 'array', minItems: 1, maxItems: 2, items: { type: 'string', minLength: 2, maxLength: 80 } },
-            mode: { type: 'string', enum: ['planned'] }, linkedinOnly: { type: 'boolean' },
+            mode: { type: 'string', enum: ['planned'] }, linkedinOnly: { type: 'boolean', description: 'Always false: a search is never restricted to LinkedIn postings.' },
+            rankedBy: { type: 'array', maxItems: 5, items: { type: 'string', minLength: 2, maxLength: 60 }, description: `${RANKED_BY} ${c.rankedBy}` },
             criteria: { type: 'object', required: ['country'], properties: {
               country: filterProperties.country, location: filterProperties.location, remote: filterProperties.remote,
               datePosted: filterProperties.datePosted, employmentTypes: filterProperties.employmentTypes,
             } },
-            unverifiedPreferences: { type: 'array', items: { type: 'string' }, description: 'Requested conditions not established by filtering; verify in the original posting.' },
+            unverifiedPreferences: { type: 'array', items: { type: 'string' }, description: 'Requested conditions not established by filtering, and topics the results were not ordered by; verify in the original posting.' },
           } },
           searches: { type: 'array', minItems: 1, maxItems: 2, items: { type: 'object', required: ['query', 'providers'], properties: {
             query: { type: 'string' }, providers: { type: 'array', items: ref('ProviderStatus') },

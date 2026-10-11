@@ -18,7 +18,8 @@
           "hybrid": "Hybrid",
           "onsite": "On-site"
         },
-        "addedByYou": "Added by you"
+        "addedByYou": "Added by you",
+        "payAsStated": "Pay as stated: {text}"
       }
     },
     "cheatsheet": {
@@ -27,7 +28,12 @@
       "needsJobHere": "These questions are about one job. This chat is not about the job on this page."
     },
     "tools": {
-      "added_jobs": "Looking at the jobs you added…"
+      "added_jobs": "Looking at the jobs you added…",
+      "similar_jobs": "Looking for similar jobs…",
+      "show_jobs": "Putting the list together…"
+    },
+    "jobList": {
+      "title": "Jobs mentioned in this answer"
     },
     "context": {
       "noJob": "This chat is not about the job on this page.",

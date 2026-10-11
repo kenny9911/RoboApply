@@ -18,13 +18,37 @@ export interface SearchOptions {
   brand?: ProductBrand;
   /** The session user or the key's owner: the reader for a provider that reads our own index. */
   userId?: string;
+  /**
+   * Topics to ORDER the results by (the planner's relevance terms): never a
+   * filter. Only a source that declares `readsRelevance` is handed them, and
+   * the result names them (`meta.rankedBy`) only when every source that
+   * answered SAID it used them for its order.
+   */
+  rankBy?: readonly string[];
+}
+/**
+ * What a source that reads `opts.relevance` answers: its rows, and whether the
+ * text took part in their order in THIS search. A source says so itself; a
+ * capability is never taken for an applied order (D3).
+ */
+export interface OrderedProviderJobs {
+  jobs: ProviderJob[];
+  rankedByRelevance: boolean;
 }
 export interface SearchProvider {
   id: string;
   /** True when results depend on the reader, so a cached result is never shared between users. */
   perUser?: boolean;
+  /**
+   * True for a source that can order its rows by closeness to `opts.relevance`
+   * (our own index, through the feed's retrieval). Such a source is handed the
+   * text and answers `OrderedProviderJobs`. A source without it returns its
+   * own order and is never handed the text.
+   */
+  readsRelevance?: boolean;
   isEnabled(): boolean;
-  search(params: ExternalSearchParams, opts?: { requestId?: string; signal?: AbortSignal; userId?: string; input?: SearchInput }): Promise<ProviderJob[] | null>;
+  /** A plain array is "rows in the source's own order": it never claims an order by `relevance`. */
+  search(params: ExternalSearchParams, opts?: { requestId?: string; signal?: AbortSignal; userId?: string; input?: SearchInput; relevance?: string }): Promise<ProviderJob[] | OrderedProviderJobs | null>;
 }
 
 const INFO: Record<string, Omit<ProviderInfo, 'id' | 'enabled' | 'reason'>> = {
@@ -139,16 +163,18 @@ export function createJobSearchService(deps: {
     };
   }
 
-  async function execute(input: SearchInput, selected: ProviderInfo[], controller: AbortController, run: { requestId?: string; userId?: string; adapters: readonly SearchProvider[] }): Promise<SearchResult> {
+  async function execute(input: SearchInput, selected: ProviderInfo[], controller: AbortController, run: { requestId?: string; userId?: string; adapters: readonly SearchProvider[]; rankBy: readonly string[] | null }): Promise<SearchResult> {
     const config = env();
-    const { requestId, userId, adapters } = run;
+    const { requestId, userId, adapters, rankBy } = run;
     const timeoutMs = boundedNumber(config.JOB_SEARCH_TIMEOUT_MS, 20_000, 50, 25_000);
     const params = providerParams(input);
     const searchedAt = new Date(now()).toISOString();
     const outcomes = await Promise.all(selected.map(async (info) => {
       const status: ProviderStatus = { id: info.id, name: info.name, status: 'unavailable', resultCount: 0 };
-      if (!info.enabled) return { jobs: [], status: { ...status, reason: info.reason } };
+      if (!info.enabled) return { jobs: [], ranked: false, status: { ...status, reason: info.reason } };
       const adapter = adapters.find((item) => item.id === info.id)!;
+      // The topics as one text, for a source that can order by it. The order the source returns is kept as it is below.
+      const relevance = rankBy && adapter.readsRelevance ? rankBy.join(' ') : undefined;
       const timerController = new AbortController();
       const signal = AbortSignal.any([controller.signal, timerController.signal]);
       let timer: ReturnType<typeof setTimeout> | undefined;
@@ -160,14 +186,18 @@ export function createJobSearchService(deps: {
           signal.addEventListener('abort', onAbort, { once: true });
           timer = setTimeout(() => timerController.abort(), timeoutMs);
         });
-        const raw = await Promise.race([adapter.search(params, { signal, requestId, userId, input }), stopped]);
+        const answer = await Promise.race([adapter.search(params, { signal, requestId, userId, input, ...(relevance !== undefined ? { relevance } : {}) }), stopped]);
         if (signal.aborted) throw abortError();
-        if (!raw) return { jobs: [], status: { ...status, status: 'error' as const, reason: 'failed' as const } };
+        if (!answer) return { jobs: [], ranked: false, status: { ...status, status: 'error' as const, reason: 'failed' as const } };
+        const raw = Array.isArray(answer) ? answer : answer.jobs;
+        // An order is the source's own statement about this search: it was handed the text, answered, and said the
+        // text took part in the order of these rows. Rows alone (a plain array) say nothing about their order.
+        const ranked = relevance !== undefined && !Array.isArray(answer) && answer.rankedByRelevance === true;
         const jobs = raw.slice(0, 100).map((job) => normalizeJob(job, searchedAt))
           .filter((job): job is SearchJob => job !== null && matchesFilters(job, input, now()));
-        return { jobs, status: { ...status, status: jobs.length ? 'ok' as const : 'empty' as const, resultCount: jobs.length } };
+        return { jobs, ranked, status: { ...status, status: jobs.length ? 'ok' as const : 'empty' as const, resultCount: jobs.length } };
       } catch {
-        return { jobs: [], status: { ...status, status: timerController.signal.aborted ? 'timeout' as const : 'error' as const,
+        return { jobs: [], ranked: false, status: { ...status, status: timerController.signal.aborted ? 'timeout' as const : 'error' as const,
           reason: timerController.signal.aborted ? 'deadline' as const : 'failed' as const } };
       } finally {
         if (timer) clearTimeout(timer);
@@ -176,10 +206,16 @@ export function createJobSearchService(deps: {
     }));
     const merged = deduplicateJobs(outcomes.flatMap((outcome) => outcome.jobs));
     const jobs = merged.jobs.slice(0, input.limit ?? 20);
+    // The order is reported only when it is true of the whole result: every source that returned rows said it
+    // applied it. A source with no rows has nothing whose order could differ, and a result with no rows at all
+    // was ordered by nothing.
+    const withRows = outcomes.filter((outcome) => outcome.jobs.length > 0);
+    const orderedBy = rankBy && withRows.length > 0 && withRows.every((outcome) => outcome.ranked) ? [...rankBy] : null;
     return { jobs, meta: {
       totalReturned: jobs.length, deduplicated: merged.deduplicated,
       partial: outcomes.length === 0 || outcomes.some(({ status }) => !['ok', 'empty'].includes(status.status)),
       providers: outcomes.map(({ status }) => status), searchedAt, cache: 'miss',
+      ...(orderedBy ? { rankedBy: orderedBy } : {}),
     } };
   }
 
@@ -220,7 +256,11 @@ export function createJobSearchService(deps: {
     const credentialVersion = createHash('sha256').update(env().RAPID_API_KEY ?? '').digest('hex').slice(0, 12);
     // A source that reads as the user (our own index) is cached per reader.
     const reader = selected.some((info) => adapters.find((adapter) => adapter.id === info.id)?.perUser) ? opts.userId ?? '' : null;
-    const key = JSON.stringify([input, audience, selected.map(({ id, enabled, reason }) => [id, enabled, reason]), credentialVersion, brand.id, reader]);
+    // The topics count (for the sources and for the cache) only when a selected source can order by them:
+    // otherwise two planned searches of one query stay one cached provider call, as before.
+    const topics = (opts.rankBy ?? []).map((term) => term.trim()).filter(Boolean);
+    const rankBy = topics.length && selected.some((info) => info.enabled && adapters.find((adapter) => adapter.id === info.id)?.readsRelevance) ? topics : null;
+    const key = JSON.stringify([input, audience, selected.map(({ id, enabled, reason }) => [id, enabled, reason]), credentialVersion, brand.id, reader, ...(rankBy ? [rankBy] : [])]);
     const ttl = boundedNumber(env().JOB_SEARCH_CACHE_TTL_MS, 300_000, 0, 21_600_000);
     if (!ttl) cache.clear();
     const cached = ttl ? cache.get(key) : undefined;
@@ -239,7 +279,7 @@ export function createJobSearchService(deps: {
       if (flights.size >= 100) throw new JobSearchCapacityError();
       const controller = new AbortController();
       const created: Flight = { controller, consumers: 0, promise: Promise.resolve(null as unknown as SearchResult) };
-      created.promise = execute(input, selected, controller, { requestId: opts.requestId, userId: opts.userId, adapters }).then((result) => {
+      created.promise = execute(input, selected, controller, { requestId: opts.requestId, userId: opts.userId, adapters, rankBy }).then((result) => {
         if (ttl && !controller.signal.aborted && !result.meta.partial) {
           cache.set(key, { expires: now() + ttl, result: structuredClone(result) });
           while (cache.size > 200) cache.delete(cache.keys().next().value!);

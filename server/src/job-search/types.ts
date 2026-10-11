@@ -82,6 +82,15 @@ export interface SearchResult {
     providers: ProviderStatus[];
     searchedAt: string;
     cache: 'hit' | 'miss' | 'coalesced';
+    /**
+     * The topics that took part in the order of this search's results. Present
+     * only when the caller asked for an order (the planned search does; a
+     * keyword search never does) AND every source that returned rows said it
+     * used them (a result with no rows was ordered by nothing). Absent means
+     * "each source's own order". One input to an order, never a filter and
+     * never a checked fact about a job.
+     */
+    rankedBy?: string[];
   };
 }
 
@@ -105,7 +114,18 @@ export interface AgentSearchResult extends SearchResult {
     mode: 'planned';
     criteria: { country: string; location?: string; remote?: boolean; datePosted?: DatePosted; employmentTypes?: EmploymentType[] };
     unverifiedPreferences: string[];
+    /** Always false: no site can restrict a search to LinkedIn. Kept for clients that read it. */
     linkedinOnly: boolean;
+    /**
+     * Topics of the request (an industry, a technology) that the sources used
+     * when they ordered each query's results: one input to the order, beside
+     * others such as how recent a posting is, so a result need not mention
+     * them. They are not verified facts about a job: nothing was checked
+     * against them. Empty when the request names no such topic, when nothing
+     * was found, and whenever a source that returned results did not say it
+     * ordered by them (the topics are then listed in `unverifiedPreferences`).
+     */
+    rankedBy: string[];
   };
   searches: Array<{
     query: string;

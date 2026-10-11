@@ -11,6 +11,8 @@ import { JobSearchAiOffError, JobSearchAiUnavailableError, JobSearchPhoneBinding
 import { SearchQuotaError } from './quota.js';
 import { JobSearchValidationError } from './validation.js';
 import { getBrand } from '../platform/brand/registry.js';
+import { jobSearchOpenApiFor } from './openapi.js';
+import type { AgentSearchResult, SearchResult } from './types.js';
 
 const emptyResult = {
   jobs: [], meta: { totalReturned: 0, deduplicated: 0, partial: false, searchedAt: '2026-09-12T00:00:00Z', cache: 'miss', providers: [{ id: 'jsearch', name: 'JSearch', status: 'empty', resultCount: 0 }] },
@@ -325,5 +327,141 @@ describe('job-search API on GoApply (D5: the same API, GoApply sources)', () => 
     expect((await post('/website/search', { query: 'engineer' }, session)).status).toBe(200);
     env = { CN_RECRUITMENT_INFO_MODE: 'partner_deeplink' };
     expect((await get('/api/openapi.json', GO)).status).toBe(200);
+  });
+});
+
+describe('MKT-4H: rankedBy on the planned search; the keyword search is what it was', () => {
+  const auth = { Authorization: 'Bearer fixture-key' };
+  const agentBody = { request: 'Find engineering jobs in Taiwan with visa sponsorship.', locale: 'en' };
+
+  it('POST /search: no new field for an existing client, and the route asks for no order', async () => {
+    const res = await post('/api/search', { query: 'engineer', country: 'tw' }, auth);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Object.keys(body).sort()).toEqual(['jobs', 'meta']);
+    expect(Object.keys(body.meta).sort()).toEqual(['cache', 'deduplicated', 'partial', 'providers', 'searchedAt', 'totalReturned']);
+    expect(service.search.mock.calls[0][1]).not.toHaveProperty('rankBy');
+    // The request contract did not grow either: topics are the planner's, not a keyword-search field.
+    expect((await post('/api/search', { query: 'engineer', rankBy: ['Rust'] }, auth)).status).toBe(400);
+    expect((await post('/api/search', { query: 'engineer', relevance: 'Rust' }, auth)).status).toBe(400);
+  });
+
+  it('POST /agent/search: the response carries agent.rankedBy beside agent.unverifiedPreferences, on the 200 and on the 503 that returns the plan', async () => {
+    const planned = await agent.search();
+    planned.agent.rankedBy = ['climate startups', 'Rust'];
+    agent.search.mockResolvedValue(planned);
+    const ok = await (await post('/api/agent/search', agentBody, auth)).json();
+    expect(ok.agent).toEqual({ queries: ['engineer'], mode: 'planned', criteria: { country: 'tw' }, unverifiedPreferences: ['Visa sponsorship'], linkedinOnly: false, rankedBy: ['climate startups', 'Rust'] });
+    expect(Object.keys(ok).sort()).toEqual(['agent', 'jobs', 'meta', 'searches']);
+    const failed = structuredClone(planned);
+    failed.meta.providers[0].status = 'timeout';
+    agent.search.mockResolvedValue(failed);
+    const res = await post('/api/agent/search', agentBody, auth);
+    expect(res.status).toBe(503);
+    expect((await res.json()).data.agent.rankedBy).toEqual(['climate startups', 'Rust']);
+  });
+
+  it('the contract documents rankedBy on both brands, with the sentence that ranking terms are not verified facts about a job', async () => {
+    for (const brand of ['roboapply', 'goapply'] as const) {
+      const doc = await (await fetch(`${base}/api/openapi.json`, { headers: brand === 'goapply' ? { 'x-test-brand': 'goapply' } : {} })).json();
+      const agentSchema = doc.components.schemas.AgentSearchResult.allOf[1].properties.agent;
+      expect(agentSchema.required, brand).toEqual(['queries', 'mode', 'criteria', 'unverifiedPreferences', 'linkedinOnly', 'rankedBy']);
+      expect(agentSchema.properties.rankedBy, brand).toMatchObject({ type: 'array', maxItems: 5, items: { type: 'string', minLength: 2, maxLength: 60 } });
+      expect(agentSchema.properties.rankedBy.description, brand).toContain('Ranking terms are not verified facts about a job');
+      expect(agentSchema.properties.rankedBy.description, brand).toContain('unverifiedPreferences');
+      expect(agentSchema.properties.unverifiedPreferences.description, brand).toContain('verify in the original posting');
+      expect(doc.paths['/agent/search'].post.description, brand).toContain('agent.rankedBy');
+      // The keyword search result did not change.
+      expect(Object.keys(doc.components.schemas.SearchResult.properties.meta.properties).sort(), brand).toEqual(['cache', 'deduplicated', 'partial', 'providers', 'requestId', 'searchedAt', 'totalReturned']);
+      expect(doc.info.version, brand).toBe('1.3.0');
+    }
+    const cn = JSON.stringify(jobSearchOpenApiFor(getBrand('goapply')));
+    expect(cn).toContain('this list names them only for a search in which that retrieval used them');
+    expect(cn).not.toMatch(/RoboApply|Taipei|Taiwan/);
+    expect(JSON.stringify(jobSearchOpenApiFor(getBrand('roboapply')))).toContain('The sources of this API return their own order');
+  });
+
+  it('the contract never promises an order a search may not have had: rankedBy is what was used, on both brands (D3)', () => {
+    for (const brand of ['roboapply', 'goapply'] as const) {
+      const doc = jobSearchOpenApiFor(getBrand(brand));
+      const text = JSON.stringify(doc);
+      const rankedBy = doc.components.schemas.AgentSearchResult.allOf[1]!.properties!.agent.properties.rankedBy.description;
+      expect(rankedBy, brand).toContain('were used to order the results');
+      expect(rankedBy, brand).toContain('whenever a source that returned results did not order by the topics');
+      // No "closest first", and no sentence that says the index always orders by the topics.
+      expect(text, brand).not.toMatch(/closest postings first|The index orders by them|order each query’s results and are returned/);
+    }
+    // GoApply's operation text says both outcomes.
+    const cn = jobSearchOpenApiFor(getBrand('goapply')).paths['/agent/search'].post.description;
+    expect(cn).toContain('agent.rankedBy names them for a search in which the index used them for its order; otherwise they are listed in agent.unverifiedPreferences');
+  });
+
+  it('the OpenAPI document validates: every $ref resolves, every required name is a declared property, every operation answers 200, and a real response fits it', () => {
+    type Schema = { $ref?: string; type?: string | string[]; required?: string[]; properties?: Record<string, Schema>; items?: Schema; allOf?: Schema[]; enum?: unknown[]; minItems?: number; maxItems?: number; minLength?: number; maxLength?: number };
+    for (const brand of [getBrand('roboapply'), getBrand('goapply')]) {
+      const doc = jobSearchOpenApiFor(brand) as unknown as { openapi: string; info: { title: string; version: string }; paths: Record<string, Record<string, { operationId: string; responses: Record<string, unknown> }>>; components: { schemas: Record<string, Schema>; securitySchemes: Record<string, unknown> } };
+      expect(doc.openapi).toBe('3.1.0');
+      expect(doc.info.title && doc.info.version).toBeTruthy();
+      const schemas = doc.components.schemas;
+      const resolve = (schema: Schema): Schema => {
+        if (!schema.$ref) return schema;
+        const name = schema.$ref.replace('#/components/schemas/', '');
+        expect(schema.$ref.startsWith('#/components/schemas/') && name in schemas, schema.$ref).toBe(true);
+        return schemas[name]!;
+      };
+      // Structure: walk the whole document.
+      const refs: string[] = [];
+      const walk = (node: unknown, trail: string): void => {
+        if (Array.isArray(node)) return node.forEach((child, i) => walk(child, `${trail}[${i}]`));
+        if (!node || typeof node !== 'object') return;
+        const obj = node as Record<string, unknown>;
+        if (typeof obj.$ref === 'string') refs.push(obj.$ref);
+        // A schema object (its `properties` is a map of schemas): every required name is declared.
+        if (Array.isArray(obj.required) && obj.properties && typeof obj.properties === 'object') {
+          for (const name of obj.required as string[]) expect(name in (obj.properties as object), `${trail}.required: ${name}`).toBe(true);
+        }
+        for (const [key, child] of Object.entries(obj)) walk(child, `${trail}.${key}`);
+      };
+      walk(doc, brand.id);
+      expect(refs.length).toBeGreaterThan(10);
+      for (const ref of refs) expect(ref.replace('#/components/schemas/', '') in schemas, ref).toBe(true);
+      const operations = Object.values(doc.paths).flatMap((methods) => Object.values(methods));
+      expect(new Set(operations.map((op) => op.operationId)).size).toBe(operations.length);
+      for (const op of operations) expect(Object.keys(op.responses), op.operationId).toContain('200');
+
+      // Conformance: a response of the real result type fits its schema (types, required names, enums, array and string bounds).
+      const fits = (value: unknown, raw: Schema, trail: string): void => {
+        const schema = resolve(raw);
+        for (const part of schema.allOf ?? []) fits(value, part, trail);
+        const types = schema.type === undefined ? [] : Array.isArray(schema.type) ? schema.type : [schema.type];
+        const actual = value === null ? 'null' : Array.isArray(value) ? 'array' : Number.isInteger(value) ? 'integer' : typeof value;
+        if (types.length) expect(types.includes(actual) || (actual === 'integer' && types.includes('number')), `${trail}: ${actual} is not ${types.join('|')}`).toBe(true);
+        if (schema.enum) expect(schema.enum, trail).toContain(value);
+        if (typeof value === 'string') {
+          if (schema.minLength !== undefined) expect(value.length, trail).toBeGreaterThanOrEqual(schema.minLength);
+          if (schema.maxLength !== undefined) expect(value.length, trail).toBeLessThanOrEqual(schema.maxLength);
+        }
+        if (Array.isArray(value)) {
+          if (schema.minItems !== undefined) expect(value.length, trail).toBeGreaterThanOrEqual(schema.minItems);
+          if (schema.maxItems !== undefined) expect(value.length, trail).toBeLessThanOrEqual(schema.maxItems);
+          if (schema.items) value.forEach((entry, i) => fits(entry, schema.items!, `${trail}[${i}]`));
+        }
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          for (const name of schema.required ?? []) expect(name in value, `${trail}: missing ${name}`).toBe(true);
+          for (const [name, child] of Object.entries(schema.properties ?? {})) if (name in value) fits((value as Record<string, unknown>)[name], child, `${trail}.${name}`);
+        }
+      };
+      const job = { id: 'job_1', title: 'Backend Engineer', company: 'Fixture', companyLogoUrl: null, location: 'Remote', country: null, description: '', applyUrl: 'https://careers.example.com/jobs/1', sourceUrl: null, applyIsDirect: true, provider: 'index', sources: [{ provider: 'index', id: 'index:1', applyUrl: 'https://careers.example.com/jobs/1', publisher: 'Fixture', sourceUrl: null }], postedAt: null, fetchedAt: '2026-10-11T00:00:00.000Z', remote: true, employmentType: null, salary: null };
+      const status = { id: 'index', name: 'Job index', status: 'ok' as const, resultCount: 1 };
+      const result: SearchResult = { jobs: [job], meta: { requestId: 'r1', totalReturned: 1, deduplicated: 0, partial: false, providers: [status], searchedAt: '2026-10-11T00:00:00.000Z', cache: 'miss' } };
+      const planned: AgentSearchResult = { ...result, agent: { queries: ['backend engineer'], mode: 'planned', criteria: { country: 'us', remote: true }, unverifiedPreferences: ['paying over 150k'], linkedinOnly: false, rankedBy: ['climate startups', 'Rust'] }, searches: [{ query: 'backend engineer', providers: [status] }] };
+      fits(result, schemas.SearchResult!, 'SearchResult');
+      fits(planned, schemas.AgentSearchResult!, 'AgentSearchResult');
+      // The checker itself refuses a response that does not fit (so a green run above means something).
+      const missing = structuredClone(planned) as { agent: Record<string, unknown> };
+      delete missing.agent.rankedBy;
+      expect(() => fits(missing, schemas.AgentSearchResult!, 'AgentSearchResult')).toThrow(/missing rankedBy/);
+      expect(() => fits({ ...planned, agent: { ...planned.agent, rankedBy: ['a', 'b', 'c', 'd', 'e', 'f'] } }, schemas.AgentSearchResult!, 'AgentSearchResult')).toThrow();
+    }
   });
 });

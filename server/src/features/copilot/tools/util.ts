@@ -6,7 +6,7 @@ import type { FeedItem, PublicFeedItem } from '../../feed/index.js';
 import type { CardType, CopilotCard, CountView } from '../contract.js';
 import type { ToolContext, ToolOutput } from '../types.js';
 
-export const JobId = z.string().min(1).max(64).describe('A job id returned by a tool (search_jobs, top_fit_jobs, added_jobs) or the job in context.');
+export const JobId = z.string().min(1).max(64).describe('A job id returned by a tool (search_jobs, top_fit_jobs, added_jobs, similar_jobs) or the job in context.');
 
 /** A seam that is still a stub, or a feature that is off, answers this (the model says it is not available). */
 export function notAvailable(reason: string, extra: Record<string, unknown> = {}): ToolOutput {
@@ -26,16 +26,41 @@ export function card<T>(ctx: ToolContext, type: CardType, data: T, sources?: Cop
   return { type, id: ctx.newCardId(), data, ...(sources && sources.length ? { sources } : {}) };
 }
 
+/**
+ * A list row as the model reads it: a feed item, a visitor's public item, or
+ * a similar-jobs item (the feed item whose pay keeps every period the post
+ * states, with pay stated in words only as `payText`). `salary` is the
+ * contract's own statement about pay: `null` there means the post states none
+ * (on GoApply also a line that only says 面议), whatever words came with it.
+ */
+type ModelJob = Pick<PublicFeedItem, 'jobId' | 'title' | 'company' | 'location' | 'workModel' | 'postedAt' | 'badges'> & {
+  pay: { min: number | null; max: number | null; currency: string; period: string; text: string | null } | null;
+  payText?: string | null;
+  salary?: unknown;
+  fit?: FeedItem['fit'];
+};
+
+/**
+ * Pay as the model reads it for a list row: the figures, else the post's own
+ * words, else "not listed". One rule with the job-list card (cards/model.ts
+ * `parseJobList`), so the answer and the card under it never disagree on
+ * whether a post states pay.
+ */
+function payForModel(item: Pick<ModelJob, 'pay' | 'payText' | 'salary'>): unknown {
+  if (item.pay) return { min: item.pay.min, max: item.pay.max, currency: item.pay.currency, period: item.pay.period, text: item.pay.text };
+  return item.payText && item.salary !== null ? { text: item.payText } : 'not listed';
+}
+
 /** The compact job line the model reads (cards carry the full item). */
-export function jobForModel(item: FeedItem | PublicFeedItem): Record<string, unknown> {
-  const fit = 'fit' in item ? item.fit : null;
+export function jobForModel(item: ModelJob): Record<string, unknown> {
+  const fit = item.fit ?? null;
   return {
     jobId: item.jobId,
     title: item.title,
     company: item.company.name,
     location: item.location,
     workModel: item.workModel,
-    pay: item.pay ? { min: item.pay.min, max: item.pay.max, currency: item.pay.currency, period: item.pay.period, text: item.pay.text } : 'not listed',
+    pay: payForModel(item),
     postedAt: item.postedAt,
     fit: fit ? { tier: fit.tier, score: fit.score, kind: fit.kind === 'pre' ? 'quick estimate' : 'ai', topGap: fit.topGap, topOverlap: fit.topOverlap } : null,
     badges: item.badges.map((b) => b.kind),

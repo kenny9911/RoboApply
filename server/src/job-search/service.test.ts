@@ -2,6 +2,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createJobSearchService, parseSearchInput, JobSearchValidationError, type SearchProvider } from './service.js';
 import { canonicalApplyUrl, deduplicateJobs, normalizeJob, safeJobUrl, type ProviderJob } from './normalization.js';
+import { createIndexProvider, type IndexFeedItem } from './index-provider.js';
+import { getBrand } from '../platform/brand/registry.js';
+import { FILTER_FIELDS } from '../features/search/contract.js';
 
 const NOW = Date.parse('2026-09-12T12:00:00Z');
 const INPUT = { query: 'engineer', country: 'us' };
@@ -216,5 +219,160 @@ describe('provider orchestration', () => {
     await expect(service.search({ query: '?' })).rejects.toBeInstanceOf(JobSearchValidationError);
     await expect(service.search(INPUT, { signal: AbortSignal.abort() })).rejects.toMatchObject({ name: 'AbortError' });
     expect(adapter.search).not.toHaveBeenCalled();
+  });
+});
+
+describe('MKT-4H: ranking topics (`rankBy`) go to the one retrieval pipeline, never to a ranking of our own', () => {
+  const GO = getBrand('goapply');
+  const RA = getBrand('roboapply');
+  const item = (jobId: string, title: string): IndexFeedItem => ({
+    jobId, title, company: { name: '示例科技' }, location: '上海', workModel: 'onsite', employmentType: 'full_time', pay: null,
+    postedAt: '2026-09-11T00:00:00Z', lastSeenAt: '2026-09-12T02:00:00Z', fromRecruiterBank: false,
+    source: { name: 'Greenhouse', kind: 'ats_public', original: '示例科技', url: `https://boards.example.cn/${jobId}`, lastVerifiedAt: '2026-09-12T02:00:00Z', via: 'ats' },
+    apply: { url: `https://careers.example.cn/jobs/${jobId}`, target: 'employer' },
+  });
+  // Two equally recent rows.
+  const plain = item('plain', '数据分析师');
+  const topical = item('topical', '数据分析师（新能源，SQL）');
+  /**
+   * What the fake of the feed's read function says about its order:
+   *   'applied'   the feed used the text for the order and says so (the row that mentions it comes first)
+   *   'unapplied' the feed took the text and says it did not order by it (its own order)
+   *   'silent'    the feed answers rows only (a feed without the report): nothing is known about the order
+   */
+  type Report = 'applied' | 'unapplied' | 'silent';
+  /** The index over a fake of the feed's read function, beside a RapidAPI provider that must stay untouched on GoApply. */
+  function indexSetup(report: Report = 'applied', extra: Record<string, string> = {}) {
+    const preview = vi.fn(async (_userId: string, input: { q?: string; relevance?: string }) => {
+      if (!input.relevance) return [plain, topical];
+      if (report === 'applied') return { items: [topical, plain], relevanceApplied: true };
+      if (report === 'unapplied') return { items: [plain, topical], relevanceApplied: false };
+      return [plain, topical];
+    });
+    const rapid = provider('jsearch');
+    const env = { RAPID_API_KEY: 'fixture-key-not-a-secret', JOB_SEARCH_PROVIDERS: 'jsearch', ...extra };
+    const service = createJobSearchService({ providers: [rapid], brandProviders: { goapply: [createIndexProvider({ preview, filterFields: async () => FILTER_FIELDS })] }, env: () => env, now: () => NOW });
+    return { service, preview, rapid, env };
+  }
+
+  it('the index is read with the request\'s query as q and the topics as relevance; the rows keep the feed\'s order; the order is named because the feed said it applied it; no outside provider is fetched', async () => {
+    const { service, preview, rapid } = indexSetup('applied');
+    const result = await service.search({ query: '数据分析师' }, { brand: GO, userId: 'u1', rankBy: ['新能源', 'SQL'] });
+    expect(preview).toHaveBeenCalledTimes(1);
+    expect(preview).toHaveBeenCalledWith('u1', expect.objectContaining({ q: '数据分析师', relevance: '新能源 SQL', limit: 50 }));
+    // The row that mentions the topics precedes the equally recent one that does not: the feed's order, untouched here.
+    expect(result.jobs.map((job) => job.title)).toEqual(['数据分析师（新能源，SQL）', '数据分析师']);
+    expect(result.meta.rankedBy).toEqual(['新能源', 'SQL']);
+    expect(result.meta.providers).toEqual([{ id: 'index', name: 'Job index', status: 'ok', resultCount: 2 }]);
+    expect(rapid.search).not.toHaveBeenCalled();
+  });
+
+  it.each(['unapplied', 'silent'] as const)('a feed that did not say it ordered by the topics (%s): the text is still sent, the rows keep the feed\'s order, and NO order is named (D3)', async (report) => {
+    const { service, preview, rapid } = indexSetup(report);
+    const result = await service.search({ query: '数据分析师' }, { brand: GO, userId: 'u1', rankBy: ['新能源', 'SQL'] });
+    expect(preview).toHaveBeenCalledWith('u1', expect.objectContaining({ q: '数据分析师', relevance: '新能源 SQL' }));
+    expect(result.jobs.map((job) => job.title)).toEqual(['数据分析师', '数据分析师（新能源，SQL）']);
+    expect(result.meta).not.toHaveProperty('rankedBy');
+    expect(result.meta.providers).toEqual([{ id: 'index', name: 'Job index', status: 'ok', resultCount: 2 }]);
+    expect(rapid.search).not.toHaveBeenCalled();
+  });
+
+  it('the report is the feed\'s own word, read strictly: only `relevanceApplied: true` names an order', async () => {
+    for (const said of [undefined, null, 'true', 1, {}]) {
+      const preview = vi.fn(async () => ({ items: [topical, plain], relevanceApplied: said as never }));
+      const service = createJobSearchService({ brandProviders: { goapply: [createIndexProvider({ preview, filterFields: async () => FILTER_FIELDS })] }, env: () => ({}), now: () => NOW });
+      const result = await service.search({ query: '数据分析师' }, { brand: GO, userId: 'u1', rankBy: ['SQL'] });
+      expect(result.meta, String(said)).not.toHaveProperty('rankedBy');
+      expect(result.jobs, String(said)).toHaveLength(2);
+    }
+  });
+
+  it('a keyword search asks for no order: no relevance is sent and the result carries no rankedBy (its shape is what it was), whatever the feed would report', async () => {
+    const { service, preview } = indexSetup('applied');
+    const result = await service.search({ query: '数据分析师' }, { brand: GO, userId: 'u1' });
+    expect((preview.mock.calls[0] as unknown[])[1]).toEqual({ q: '数据分析师', filters: expect.any(Object), limit: 50 });
+    expect(result.jobs.map((job) => job.title)).toEqual(['数据分析师', '数据分析师（新能源，SQL）']);
+    expect(Object.keys(result.meta).sort()).toEqual(['cache', 'deduplicated', 'partial', 'providers', 'requestId', 'searchedAt', 'totalReturned']);
+    // Empty or blank topics are "none".
+    const blank = await service.search({ query: '数据分析师', limit: 5 }, { brand: GO, userId: 'u1', rankBy: ['', '  '] });
+    expect(blank.meta).not.toHaveProperty('rankedBy');
+    expect((preview.mock.calls[1] as unknown[])[1]).not.toHaveProperty('relevance');
+    // A feed that reports an applied order for a read that carried no text is not believed either.
+    const eager = vi.fn(async () => ({ items: [plain], relevanceApplied: true }));
+    const other = createJobSearchService({ brandProviders: { goapply: [createIndexProvider({ preview: eager, filterFields: async () => FILTER_FIELDS })] }, env: () => ({}), now: () => NOW });
+    expect((await other.search({ query: '数据分析师' }, { brand: GO, userId: 'u1' })).meta).not.toHaveProperty('rankedBy');
+  });
+
+  it('the cache keeps two orders of one query apart on the index, and a cached answer still says what it was ordered by', async () => {
+    const { service, preview } = indexSetup('applied');
+    const first = await service.search({ query: '数据分析师' }, { brand: GO, userId: 'u1', rankBy: ['新能源'] });
+    const plainSearch = await service.search({ query: '数据分析师' }, { brand: GO, userId: 'u1' });
+    const other = await service.search({ query: '数据分析师' }, { brand: GO, userId: 'u1', rankBy: ['SQL'] });
+    expect(preview).toHaveBeenCalledTimes(3);
+    expect([first.meta.cache, plainSearch.meta.cache, other.meta.cache]).toEqual(['miss', 'miss', 'miss']);
+    const again = await service.search({ query: '数据分析师' }, { brand: GO, userId: 'u1', rankBy: ['新能源'] });
+    expect(again.meta).toMatchObject({ cache: 'hit', rankedBy: ['新能源'] });
+    expect(again.jobs.map((job) => job.title)).toEqual(first.jobs.map((job) => job.title));
+    expect(preview).toHaveBeenCalledTimes(3);
+  });
+
+  it('the index failed: nothing was ordered, so the result claims no order', async () => {
+    const { service, preview } = indexSetup('applied');
+    preview.mockRejectedValueOnce(new Error('index offline'));
+    const result = await service.search({ query: '数据分析师' }, { brand: GO, userId: 'u1', rankBy: ['新能源'] });
+    expect(result.meta.providers[0]).toMatchObject({ status: 'error', reason: 'failed' });
+    expect(result.meta).not.toHaveProperty('rankedBy');
+  });
+
+  it('RoboApply: a RapidAPI provider is never handed the topics, its rows stay in provider order, no order is claimed, and the cache is not split by topics', async () => {
+    const rows = [row({ externalId: 'a1', title: 'Backend Engineer, Payments', applyUrl: 'https://careers.example.com/jobs/1' }), row({ externalId: 'a2', title: 'Backend Engineer (Rust), climate startup', applyUrl: 'https://careers.example.com/jobs/2' })];
+    const adapter = provider('activejobs', rows);
+    const { service } = setup([adapter]);
+    const result = await service.search(INPUT, { brand: RA, rankBy: ['climate startups', 'Rust'] });
+    expect((adapter.search as ReturnType<typeof vi.fn>).mock.calls[0][1]).not.toHaveProperty('relevance');
+    expect(result.jobs.map((job) => job.title)).toEqual(['Backend Engineer, Payments', 'Backend Engineer (Rust), climate startup']);
+    expect(result.meta).not.toHaveProperty('rankedBy');
+    // The same query with other topics, or none, is one paid provider call.
+    expect((await service.search(INPUT, { brand: RA, rankBy: ['fintech'] })).meta.cache).toBe('hit');
+    expect((await service.search(INPUT, { brand: RA })).meta.cache).toBe('hit');
+    expect(adapter.search).toHaveBeenCalledTimes(1);
+  });
+
+  it('a source that can read the topics but answers rows alone claims nothing: a capability is never an applied order', async () => {
+    const capable: SearchProvider = { id: 'activejobs', readsRelevance: true, isEnabled: () => true, search: vi.fn(async () => [row()]) };
+    const { service } = setup([capable]);
+    const result = await service.search(INPUT, { rankBy: ['Rust'] });
+    expect((capable.search as ReturnType<typeof vi.fn>).mock.calls[0][1]).toMatchObject({ relevance: 'Rust' });
+    expect(result.jobs).toHaveLength(1);
+    expect(result.meta).not.toHaveProperty('rankedBy');
+  });
+
+  it('a result with no rows was ordered by nothing: no order is named even when the source says it applied one', async () => {
+    const preview = vi.fn(async () => ({ items: [], relevanceApplied: true }));
+    const service = createJobSearchService({ brandProviders: { goapply: [createIndexProvider({ preview, filterFields: async () => FILTER_FIELDS })] }, env: () => ({}), now: () => NOW });
+    const result = await service.search({ query: '数据分析师' }, { brand: GO, userId: 'u1', rankBy: ['SQL'] });
+    expect(result.jobs).toEqual([]);
+    expect(result.meta.providers[0]).toMatchObject({ status: 'empty' });
+    expect(result.meta).not.toHaveProperty('rankedBy');
+    // Rows that the shared normaliser drops (no apply link) are not rows of the result either.
+    const dropped = vi.fn(async () => ({ items: [{ ...topical, apply: { url: null } }], relevanceApplied: true }));
+    const other = createJobSearchService({ brandProviders: { goapply: [createIndexProvider({ preview: dropped, filterFields: async () => FILTER_FIELDS })] }, env: () => ({}), now: () => NOW });
+    expect((await other.search({ query: '数据分析师' }, { brand: GO, userId: 'u1', rankBy: ['SQL'] })).meta).not.toHaveProperty('rankedBy');
+  });
+
+  it('a mixed source list claims an order only when every source that returned rows said it applied it', async () => {
+    const ordering = (): SearchProvider => ({ id: 'activejobs', readsRelevance: true, isEnabled: () => true, search: vi.fn(async () => ({ jobs: [row()], rankedByRelevance: true })) });
+    const other = provider('jsearch', [row({ externalId: 'j9', sourceBoard: 'jsearch', title: 'Data Engineer', applyUrl: 'https://careers.example.com/jobs/9' })]);
+    const first = ordering();
+    const mixed = setup([first, other]);
+    const both = await mixed.service.search(INPUT, { rankBy: ['Rust'] });
+    expect((first.search as ReturnType<typeof vi.fn>).mock.calls[0][1]).toMatchObject({ relevance: 'Rust' });
+    expect((other.search as ReturnType<typeof vi.fn>).mock.calls[0][1]).not.toHaveProperty('relevance');
+    expect(both.meta).not.toHaveProperty('rankedBy');
+    // The other source did not answer, or answered with no rows: what came back is all ordered.
+    const alone = setup([ordering(), provider('jsearch', null)]);
+    expect((await alone.service.search(INPUT, { rankBy: ['Rust'] })).meta.rankedBy).toEqual(['Rust']);
+    const empty = setup([ordering(), provider('jsearch', [])]);
+    expect((await empty.service.search(INPUT, { rankBy: ['Rust'] })).meta.rankedBy).toEqual(['Rust']);
   });
 });

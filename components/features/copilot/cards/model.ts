@@ -102,6 +102,21 @@ export function parseSources(v: unknown): SourcedWire[] {
 export type WorkModelKey = 'remote' | 'hybrid' | 'onsite';
 const WORK_MODELS: readonly WorkModelKey[] = ['remote', 'hybrid', 'onsite'];
 
+/**
+ * The licence credit line an open-data row owes wherever it is shown (台灣就業通,
+ * 政府資料開放授權條款 第1版): the server's own sentence from
+ * `cardMeta.tw_sources.attribution` (server/src/features/jobs/sources/twHooks.ts),
+ * and the licence text it links to (null when the value is not a safe link).
+ */
+export interface JobListAttribution {
+  text: string;
+  url: string | null;
+}
+/** Longest credit line a row prints (the sentences the server knows are under 80 characters). */
+const ATTRIBUTION_MAX_CHARS = 300;
+/** Longest note of a cited list (server contract `JOB_LIST_NOTE_MAX`). */
+export const JOB_LIST_NOTE_MAX = 160;
+
 export interface JobListRow {
   jobId: string;
   title: string;
@@ -110,17 +125,39 @@ export interface JobListRow {
   /** How the post says the work is done; shown on the row so "remote" can be seen (a location alone reads as on-site). */
   workModel: WorkModelKey | null;
   pay: FeedItem['pay'];
+  /**
+   * Pay the post states in words only ("Competitive", "NT$40,000 以上"): a
+   * similar-jobs row carries it beside `pay: null` (job-detail contract
+   * `SimilarJobItem.payText`). Null when the row has none, and when the row
+   * says outright that the post states no pay (`salary: null`). The card prints
+   * it by the market's rule and never "Pay not listed" for such a post (D3).
+   */
+  payText: string | null;
   /** False for a job whose pay was not read (the user's own added jobs): no pay line, never "Pay not listed". */
   payKnown: boolean;
-  /** One of the user's own added jobs. */
+  /** One of the user's own added jobs (an added-jobs row, or a feed row whose source is the user's import). */
   addedByUser: boolean;
   tier: FitTierKey | null;
   score: number | null;
   /** The fit is a quick estimate (`kind: 'pre'`): the row says so, as the feed card does. */
   estimate: boolean;
+  /** How much the fit rests on, and why when that is little: the feed card's own two fields (null when the server sent none). */
+  confidence: 'high' | 'medium' | 'low' | null;
+  confidenceReason: string | null;
+  /** The credit line this row owes; null for every row that owes none. */
+  attribution: JobListAttribution | null;
 }
 export interface JobListData {
   items: JobListRow[];
+  /**
+   * True for the list an answer talks about (`show_jobs`): exactly the jobs
+   * the answer cites, in its order. Never a complete search result. False for
+   * a whole list a tool returned (an answer that cited nothing, a visitor's
+   * search, a card stored before citing existed).
+   */
+  cited: boolean;
+  /** One short line above a cited list; null when there is none. */
+  note: string | null;
 }
 
 /**
@@ -143,6 +180,17 @@ export function payOf(v: unknown): FeedItem['pay'] {
   };
 }
 
+function attributionOf(cardMeta: unknown): JobListAttribution | null {
+  const tw = isObj(cardMeta) ? cardMeta.tw_sources : null;
+  const raw = isObj(tw) ? tw.attribution : null;
+  if (!isObj(raw)) return null;
+  const text = str(raw.text);
+  if (!text || text.length > ATTRIBUTION_MAX_CHARS) return null;
+  return { text, url: safeExternalUrl(raw.url) };
+}
+
+const CONFIDENCE = ['high', 'medium', 'low'] as const;
+
 export function parseJobList(d: unknown): JobListData | null {
   if (!isObj(d)) return null;
   const raw = Array.isArray(d.items) ? d.items : Array.isArray(d.jobs) ? d.jobs : null;
@@ -163,14 +211,21 @@ export function parseJobList(d: unknown): JobListData | null {
       location: str(r.location),
       workModel,
       pay: payOf(r.pay),
+      payText: r.salary === null ? null : str(r.payText),
       payKnown: r.payKnown !== false,
-      addedByUser: r.addedByUser === true,
+      addedByUser: r.addedByUser === true || (isObj(r.source) && r.source.kind === 'user_import'),
       tier: tierOf(fit.tier),
       score: num(fit.score),
       estimate: fit.kind === 'pre',
+      confidence: (CONFIDENCE as readonly string[]).includes(fit.confidence as string) ? (fit.confidence as JobListRow['confidence']) : null,
+      confidenceReason: str(fit.confidenceReason),
+      attribution: attributionOf(r.cardMeta),
     });
   }
-  return { items };
+  const cited = d.cited === true;
+  // A note belongs to a cited list only, and is one short line: anything else is not shown.
+  const note = cited ? str(d.note) : null;
+  return { items, cited, note: note && note.length <= JOB_LIST_NOTE_MAX ? note : null };
 }
 
 // ── filters / filter_diff / action ───────────────────────────────────────
