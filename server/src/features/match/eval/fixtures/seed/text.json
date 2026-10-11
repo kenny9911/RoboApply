@@ -1,0 +1,151 @@
+{
+  "_synthetic": true,
+  "_note": "Sentence templates for the evaluation fixtures (MKT-1D): the resume line bank and the posting line bank in English, Simplified Chinese, Traditional Chinese and Japanese. Written for this file; nothing is copied from a resume, a job board, a provider response or a database row.",
+  "levels": {
+    "en": { "intern_newgrad": "{t} Intern", "entry": "Junior {t}", "mid": "{t}", "senior": "Senior {t}", "lead_staff": "Lead {t}", "director_exec": "Director, {t}" },
+    "zh-CN": { "intern_newgrad": "{t}实习生", "entry": "初级{t}", "mid": "{t}", "senior": "高级{t}", "lead_staff": "资深{t}", "director_exec": "{t}总监" },
+    "zh-TW": { "intern_newgrad": "{t}實習生", "entry": "初階{t}", "mid": "{t}", "senior": "資深{t}", "lead_staff": "首席{t}", "director_exec": "{t}總監" },
+    "ja": { "intern_newgrad": "{t}（インターン）", "entry": "ジュニア{t}", "mid": "{t}", "senior": "シニア{t}", "lead_staff": "リード{t}", "director_exec": "{t}部長" }
+  },
+  "listJoin": { "en": ", ", "zh-CN": "、", "zh-TW": "、", "ja": "、" },
+  "softSkills": {
+    "en": ["Communication", "Teamwork"],
+    "zh-CN": ["沟通能力", "团队协作"],
+    "zh-TW": ["溝通能力", "團隊合作"],
+    "ja": ["コミュニケーション能力", "チームワーク"]
+  },
+  "degrees": {
+    "en": { "bachelor": "BSc", "master": "MSc" },
+    "zh-CN": { "bachelor": "本科", "master": "硕士" },
+    "zh-TW": { "bachelor": "學士", "master": "碩士" },
+    "ja": { "bachelor": "学士", "master": "修士" }
+  },
+  "resume": {
+    "en": {
+      "heading": "# Persona {code} (synthetic)",
+      "sections": { "summary": "Summary", "experience": "Experience", "education": "Education", "skills": "Skills" },
+      "present": "present",
+      "summary": {
+        "standard": "{title} with {years} years of experience.",
+        "new_graduate": "Recent graduate looking for a first role as {roleArticle} {roleTitle}.",
+        "career_changer": "{title} with {years} years of experience, moving into work as {targetArticle} {targetTitle}."
+      },
+      "jobLine": "{title}, {company} ({start} to {end})",
+      "bullets": ["Responsible for {work0}, working with {s0} and {s1}.", "Led improvements to {work1} using {s2}.", "Supported {work0} with {s3}."],
+      "changerBullet": "Completed a part-time course and two personal projects using {t0}, {t1} and {t2}.",
+      "internBullet": "Helped the team with {work0} using {s0} during a six-month internship.",
+      "educationLine": "{degree} {field} ({year})"
+    },
+    "zh-CN": {
+      "heading": "# 测试画像 {code}（虚构）",
+      "sections": { "summary": "个人简介", "experience": "工作经历", "education": "教育背景", "skills": "专业技能" },
+      "present": "今",
+      "summary": {
+        "standard": "{years} 年经验的{title}。",
+        "new_graduate": "应届毕业生，希望从事{roleTitle}相关工作。",
+        "career_changer": "{years} 年经验的{title}，正在转向{targetTitle}方向。"
+      },
+      "jobLine": "{title}，{company}（{start} 至 {end}）",
+      "bullets": ["负责{work0}，使用 {s0} 和 {s1}。", "主导{work1}的改进，使用 {s2}。", "协助{work0}，使用 {s3}。"],
+      "changerBullet": "利用业余时间完成一门课程和两个个人项目，使用 {t0}、{t1} 和 {t2}。",
+      "internBullet": "在六个月的实习中协助团队完成{work0}，使用 {s0}。",
+      "educationLine": "{degree}，{field}（{year}）"
+    },
+    "zh-TW": {
+      "heading": "# 測試人物 {code}（虛構）",
+      "sections": { "summary": "個人簡介", "experience": "工作經歷", "education": "學歷", "skills": "專業技能" },
+      "present": "今",
+      "summary": {
+        "standard": "{years} 年經驗的{title}。",
+        "new_graduate": "應屆畢業生，希望從事{roleTitle}相關工作。",
+        "career_changer": "{years} 年經驗的{title}，正在轉往{targetTitle}領域。"
+      },
+      "jobLine": "{title}，{company}（{start} 至 {end}）",
+      "bullets": ["負責{work0}，使用 {s0} 與 {s1}。", "主導{work1}的改善，使用 {s2}。", "協助{work0}，使用 {s3}。"],
+      "changerBullet": "利用下班時間完成一門課程與兩個個人專案，使用 {t0}、{t1} 與 {t2}。",
+      "internBullet": "在六個月的實習期間協助團隊完成{work0}，使用 {s0}。",
+      "educationLine": "{degree}，{field}（{year}）"
+    },
+    "ja": {
+      "heading": "# テストペルソナ {code}（架空）",
+      "sections": { "summary": "概要", "experience": "職務経歴", "education": "学歴", "skills": "スキル" },
+      "present": "現在",
+      "summary": {
+        "standard": "{title}として{years}年の経験があります。",
+        "new_graduate": "新卒で、{roleTitle}としての最初の仕事を探しています。",
+        "career_changer": "{title}として{years}年の経験があり、{targetTitle}への転向を目指しています。"
+      },
+      "jobLine": "{title}、{company}（{start} 〜 {end}）",
+      "bullets": ["{work0}を担当し、{s0}と{s1}を使用しました。", "{s2}を使って{work1}の改善を主導しました。", "{s3}で{work0}を支援しました。"],
+      "changerBullet": "業務外で講座を一つ修了し、{t0}、{t1}、{t2}を使った個人プロジェクトを二つ完成させました。",
+      "internBullet": "6か月のインターンシップで、{s0}を使って{work0}を手伝いました。",
+      "educationLine": "{degree}（{field}、{year}年）"
+    }
+  },
+  "posting": {
+    "en": {
+      "intro": "{company} is hiring {article} {title}.",
+      "duties": "You will be responsible for {work0}. You will also help with {work1}.",
+      "thin": "More details are shared during the interview.",
+      "required": "Required: {list}.",
+      "preferred": "Nice to have: {list}.",
+      "soft": "You communicate clearly and work well with others.",
+      "years": "{n}+ years of relevant experience.",
+      "internship": "This is a six-month paid internship.",
+      "campus": "Open to the class of {year}.",
+      "sponsorOffered": "We sponsor work visas for this role.",
+      "sponsorNot": "Visa sponsorship is not available for this role.",
+      "pay": "{cur} {min} to {max} a year",
+      "master": "A master's degree is required.",
+      "remote": "This role is remote within {country}."
+    },
+    "zh-CN": {
+      "intro": "{company}招聘{title}。",
+      "duties": "你将负责{work0}，并参与{work1}。",
+      "thin": "更多信息将在面试中说明。",
+      "required": "任职要求：{list}。",
+      "preferred": "加分项：{list}。",
+      "soft": "沟通清晰，善于团队协作。",
+      "years": "{n} 年以上相关经验。",
+      "internship": "实习期六个月，提供实习补贴。",
+      "campus": "面向 {year} 届毕业生。",
+      "sponsorOffered": "",
+      "sponsorNot": "",
+      "pay": "月薪 {min}-{max} 元",
+      "master": "要求硕士及以上学历。",
+      "remote": "本岗位可在{country}境内远程办公。"
+    },
+    "zh-TW": {
+      "intro": "{company}誠徵{title}。",
+      "duties": "你將負責{work0}，並協助{work1}。",
+      "thin": "更多資訊將於面試時說明。",
+      "required": "必備條件：{list}。",
+      "preferred": "加分條件：{list}。",
+      "soft": "溝通清楚，樂於團隊合作。",
+      "years": "{n} 年以上相關經驗。",
+      "internship": "實習期六個月，提供實習津貼。",
+      "campus": "歡迎 {year} 年應屆畢業生。",
+      "sponsorOffered": "本職缺可協助申請工作簽證。",
+      "sponsorNot": "本職缺不提供工作簽證協助。",
+      "pay": "年薪 {cur} {min} 至 {max}",
+      "master": "需具備碩士以上學歷。",
+      "remote": "本職缺可於{country}境內遠端工作。"
+    },
+    "ja": {
+      "intro": "{company}では{title}を募集しています。",
+      "duties": "{work0}を担当し、{work1}にも関わります。",
+      "thin": "詳細は面接でお伝えします。",
+      "required": "必須スキル：{list}。",
+      "preferred": "歓迎スキル：{list}。",
+      "soft": "円滑なコミュニケーションとチームワークを大切にします。",
+      "years": "実務経験{n}年以上。",
+      "internship": "6か月の有給インターンシップです。",
+      "campus": "{year}年卒業予定の方が対象です。",
+      "sponsorOffered": "就労ビザの取得を支援します。",
+      "sponsorNot": "就労ビザの支援はありません。",
+      "pay": "年収 {min}〜{max}円",
+      "master": "修士号以上が必要です。",
+      "remote": "{country}国内でのリモート勤務です。"
+    }
+  }
+}
