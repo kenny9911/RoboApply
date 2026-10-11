@@ -1,0 +1,149 @@
+# Handoff: finishing the Jobright clone (branch `feat/jobright-clone`)
+
+Written 2026-10-12 for whoever continues this work (a person, Codex, or another agent session) with no memory of the earlier sessions. Keep the "State" section current: update it when a step below is finished.
+
+## 1. What this branch is
+
+One codebase, two brands, resolved per request from the Host header:
+
+- **RoboApply** (roboapply.io): international market, Taiwan included. Market `intl`. Pays with Stripe, prices in USD.
+- **GoApply** (goapply.top): mainland China. Market `cn`. Pays with Alipay (the existing implementation), prices in CNY.
+
+Owner rulings that bind every change (full text in `docs/jobright-clone/README.md`):
+
+- **D1**: the product never submits a job application. It prepares everything; the user clicks Submit.
+- **D3**: never fabricate data, sources, licences, prices or counts.
+- **D5**: both brands have the same functionality. China-specific providers (`CN_*` variables) are optional overrides that fall back to the shared stack. Only job boards, job sources, job-search APIs and what follows from the market differ.
+- **D6**: sources, prices and payment rails are per market. Alipay must keep working exactly as it does; Stripe serves the international brand only.
+
+## 2. Where to work
+
+- Worktree: `/Users/kenny/code/RoboApply/.claude/worktrees/jobright-clone`, branch `feat/jobright-clone`, pushed to `origin`. Nothing from this work is on `main`. Do not merge to `main` or deploy without the owner's confirmation.
+- Its `.env` points at the Neon **branch** database `jobright-clone` (endpoint `ep-quiet-king-a6psbfbe`), never production (`ep-empty-snow-a6mdqwbe`). Check with `grep -E '^(DATABASE_URL|DIRECT_DATABASE_URL)=' .env | sed -E 's#://[^@]*@#://<redacted>@#'` before any database command.
+- Dev stack: `scripts/dev-clone.sh` (API 4621, web 3621). RoboApply at `http://localhost:3621`, GoApply at `http://goapply.localhost:3621`.
+- Never print or commit secrets. The `.env` holds a **live** Stripe key; the code refuses to use it outside production, and no command or test may call Stripe or any other paid provider.
+
+## 3. State (2026-10-12)
+
+Merged, gated and pushed, in order:
+
+| Step | Commit | What |
+|---|---|---|
+| Waves 1–5, final wiring, translations, browser-verification fix pass | `606365f` | The Jobright feature set on both brands |
+| Parity wave PAR-1…PAR-11 | `d50446b` | GoApply on the shared stack with every capability on by default (`GOAPPLY_PARITY_PLAN.md`) |
+| Schema SCHEMA-7, SCHEMA-8 | `da93156`, `54fa08d` | pgvector, embeddings, skills, billing records, `RAJob.headcount`; applied to the Neon branch |
+| Market phase M1 | `0dbe2ef` | Stripe live-key guard, catalog sync, USD and CNY price defaults, fit contract, evaluation harness |
+| Market phase M2 | `48a5e56` | Stripe webhook lifecycle, switch, resume, refunds; Alipay wire parity (additive); skills; embeddings |
+| Market phase M3 | `55e7177` | Job sources per market: quota, planner, posting identity, employer boards, Taiwan open data, deep links |
+| Market phase M4 | `df4aaf2` | Hybrid retrieval, scorer v4, withdrawal and admin billing, validated board seeds (505 intl / 41 TW / 52 CN) |
+
+Last full gate run (M4): 758 test files / 19,637 tests, both typechecks, `npm run check`, extension 710 tests, `npm run eval:match -- --enforce M4`.
+
+**In flight when this was written: market phase M5** (bundles MKT-5A … MKT-5H). All eight were implemented and reviewed; the fix pass after review was finishing. Their work is **uncommitted** in the worktrees `/Users/kenny/code/RoboApply/.claude/worktrees/wp-MKT-5A` … `wp-MKT-5H` (branches `wp/MKT-5A` …, cut from tag `jobright-m5-base`). Handoffs: `docs/jobright-clone/orch/handoffs-mkt/MKT-5*.md`. If a later line of this file says M5 is merged, skip step 1 below.
+
+## 4. What remains, in order
+
+### Step 1. Merge market phase M5
+
+```bash
+cd /Users/kenny/code/RoboApply/.claude/worktrees/jobright-clone
+# a) each worktree must have a finished handoff and green tests in its own files
+for b in 5A 5B 5C 5D 5E 5F 5G 5H; do git -C ../wp-MKT-$b status --porcelain | wc -l; done
+# b) ownership check (prints UNOWNED paths; colocated test files of owned files are fine)
+python3 docs/jobright-clone/orch/wave_commit.py --items docs/jobright-clone/orch/market-bundles.json --dry-run MKT-5A MKT-5B MKT-5C MKT-5D MKT-5E MKT-5F MKT-5G MKT-5H
+# c) commit the handoffs, then commit each bundle on its branch and merge (add --allow ID:path for each accepted unowned test file)
+git add docs/jobright-clone/orch/handoffs-mkt && git commit -m "docs(orch): market phase M5 handoffs"
+python3 docs/jobright-clone/orch/wave_commit.py --items docs/jobright-clone/orch/market-bundles.json MKT-5A MKT-5B MKT-5C MKT-5D MKT-5E MKT-5F MKT-5G MKT-5H
+# d) remove the worktrees ONLY with the safe script (it refuses a dirty or unmerged one)
+WAVE_BASE=jobright-m5-base bash docs/jobright-clone/orch/wave-cleanup.sh MKT-5A MKT-5B MKT-5C MKT-5D MKT-5E MKT-5F MKT-5G MKT-5H
+```
+
+Delete any `.vitest/` directory in a worktree before committing. **Never** remove a worktree by hand: an earlier cleanup deleted nine worktrees of uncommitted work because "branch is an ancestor of HEAD" is also true for a branch with no commits.
+
+### Step 2. Gate M5 (make the merged tree green)
+
+Run all gates; fix what is red at the seams between bundles (decide from `market/MARKET_STRATEGY.md` which side is right):
+
+```bash
+npx prisma validate && npm run db:generate && npm run gen:brand   # gen:brand must leave no diff
+npm run typecheck:server
+npx next typegen && npm run typecheck:web
+npx vitest run --exclude ".claude/**"
+npm run check
+npm --prefix extension run typecheck && npm --prefix extension test
+npm run eval:match -- --enforce M4          # exit 0; never edit the ranking baseline by hand
+```
+
+Then read the "Requests" sections of `orch/handoffs-mkt/MKT-5*.md` and apply those addressed to the orchestrator; write what stays open to `requests/waveM5-carryover.md`. Commit, push.
+
+### Step 3. Merge and translate the staged strings (one pass)
+
+New strings since the parity wave live in `i18n/staging/*.json` (1,117 new and 29 changed keys before M5; GoApply Chinese is staged too).
+
+```bash
+node scripts/i18n-merge-staging.mjs --dry-run     # read the plan
+node scripts/i18n-merge-staging.mjs               # merges into en.json / zh.json, resets staging
+npm run check                                      # now reports missing keys in the other locales
+```
+
+- `i18n/staging/_pending-translation.json` is cumulative and stale. Compute the real gap per locale instead: keys of `i18n/messages/en.json` missing from `i18n/messages/<locale>.json` (also `server/src/i18n/email/` and `extension/src/i18n/`).
+- Locales: `zh`, `zh-TW`, `ja`, `ko`, `es`, `fr`, `pt`, `de`. Keys under `authCn`, `billingCn`, `jobsCn`, `onboardingCn`, `practiceCn`, `notifyCn`, `campus`, `landing.cnHome` are required only in `en` and `zh`.
+- Translate into a scratch folder, then apply with `node docs/jobright-clone/orch/apply-translations.mjs "$PWD" <chunksDir>` (layout and rules in the file header: same key structure, same ICU arguments, same `%BRAND%` count, no literal brand names).
+- Register per locale, Taiwan vocabulary rules and banned words: `scripts/check-copy.mjs`, `scripts/check-zh-variants.mjs`, `CN_TW_LAUNCH_PLAN.md` §9. The product never applies for the user; no translation may say it does.
+- Key removals and special cases collected by the gates: `requests/wavePAR-carryover.md` ("i18n merge and translate") and the `i18n` entries in `requests/waveM1…M4-carryover.md`.
+- Done when `npm run check` and the full test suite are green. Commit, push.
+
+### Step 4. Production build
+
+Never build in the worktree the dev server runs from (they fight over `.next`). Use a separate worktree:
+
+```bash
+git worktree add /Users/kenny/code/RoboApply/.claude/worktrees/jobright-build feat/jobright-clone   # or reuse and fast-forward
+# link node_modules and copy .env / .env.local as docs/jobright-clone/orch/wave-setup.sh does, then:
+npm run build
+```
+
+Also confirm the `/legal` pages can read their files in the serverless bundle: the route's `.nft.json` trace under `.next/server/app/legal/` must list `content/legal/**`.
+
+### Step 5. Browser verification of both brands
+
+Start with `docs/jobright-clone/orch/parity-verify.md` (exact commands and expected results). Cover on both hosts: signed-out pages, sign-up with email and password, resume upload, feed and job detail, natural-language job search, the Assistant, tailoring, practice (text; voice if the worker is running), pricing and the plan sheet, settings. For the job feed first trigger the crons on the dev stack (`/api/v1/cron/jobs-plan`, `jobs-boards`, `jobs-ingest`, `queue-drain`, `score-precompute`, with `Authorization: Bearer $CRON_SECRET` on port 4621) so the seeded boards are read. Do not start a real payment. Fix what is broken; note what could not be checked.
+
+### Step 6. Clean up and open the PR
+
+- Delete throwaway `claude-verify-*` test users on the Neon branch; archive `market = 'cn'` rows whose `sourceBoard` is a RapidAPI aggregator.
+- Open a PR for `feat/jobright-clone` into `main`. Do not merge it. The description should list the owner items of section 6.
+
+## 5. Rules that have already cost time
+
+- **Alipay is frozen.** Tests named `A<n> …` are never edited, skipped or weakened; a red one means the change is wrong. `server/src/platform/billing/fulfilPass.ts`, the Alipay callback route and `handleAlipayCallback` are not edited. A GoApply plan never reaches Stripe.
+- **Schema is additive only.** New models, nullable or defaulted columns, indexes. Review the SQL first (`npx prisma migrate diff --from-config-datasource --to-schema server/prisma/schema --script`, then `node scripts/check-schema-additive.mjs --sql <file>`), apply the reviewed SQL with `npx prisma db execute --file`, and confirm a second diff is empty apart from the pair in `schema-diffs/KNOWN_DRIFT.md`. Never `--accept-data-loss`. Only the Neon branch; production only with the owner.
+- **Tests never reach a real database or the network.** `vitest.config.mts` pins the database URL to a closed port.
+- **Stage explicit paths** when committing in a checkout other sessions share; check `git status` for files you did not write.
+- **i18n**: components read keys from the bundles; a new English string goes to `i18n/staging/<namespace>.en.json` until the merge of step 3. Copy is brand-neutral (`%BRAND%`), plain language.
+- **Standalone `tsx` scripts that import the server's Prisma client hang.** Use `pg` directly or the HTTP API.
+
+## 6. What only the owner can do
+
+- `ALLOWED_BRANDS=roboapply` on Vercel (Production and Preview) before this branch reaches production, unless GoApply is to go live at the same moment: a deployment with no value serves both brands.
+- Run `server/prisma/sql/001_vector.sql` and the additive schema push on the production database before the deploy (`server/prisma/sql/README.md`).
+- Stripe: a `sk_test_` key and a `stripe listen` webhook secret for local checkout tests; the live webhook endpoint and its secret for production (`market/STRIPE_TEST_RECIPE.md`).
+- Alipay: `ALIPAY_CALLBACK_SECRET` in the GoApply environment; one supervised ¥12 order (`market/ALIPAY_CUTOVER.md`).
+- Recruiter-bank jobs (RoboHire, GoHire) are synced but not listed until the bank has a candidate-facing posting page: set `ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE` / `GOHIRE_PUBLIC_JOB_URL_TEMPLATE` when it exists (work in the RoboHire repository).
+- Rotate `OPENROUTER_API_KEY` (dead) and top up the Anthropic account; host the interview worker; a paid Active Jobs DB plan if the licensed feed is wanted.
+- The decisions each gate left open, numbered, are under "Owner" in `requests/wavePAR-carryover.md` and `requests/waveM1…M4-carryover.md`.
+
+## 7. Map of the documents
+
+| File | Use |
+|---|---|
+| `docs/jobright-clone/README.md` | Rulings D1–D6 and owner decisions |
+| `docs/jobright-clone/GOAPPLY_PARITY_PLAN.md` | D5: how GoApply gets every capability |
+| `docs/jobright-clone/market/MARKET_STRATEGY.md` | D6: sources, matching, prices, payments (decisive) |
+| `docs/jobright-clone/market/MARKET_TASK_PLAN.md` | Phases, contracts between bundles, what was built |
+| `docs/jobright-clone/market/BOARD_SEEDS.md` | How the employer-board seed lists were validated |
+| `docs/jobright-clone/orch/market-bundles.json` | The 41 work bundles (owns, items); `parity-bundles.json` for the parity wave |
+| `docs/jobright-clone/orch/handoffs-*/` | What each bundle did, asked for and left open |
+| `docs/jobright-clone/requests/orchestrator-queue.md` | Work owed at the next gate |
+| `docs/jobright-clone/requests/wave*-carryover.md` | Open items per later bundle, per owner |
+| `docs/jobright-clone/orch/*.sh, *.py, *.mjs` | Worktree setup, ownership-checked commit, safe cleanup, bundle check, translation apply |

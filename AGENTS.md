@@ -55,6 +55,10 @@ npm run db:generate         # Regenerate Prisma client after schema changes
 Use Node 24.x and the committed `package-lock.json`; install dependencies with
 `npm install` unless the task explicitly requires a lockfile refresh.
 
+## Work in progress on this branch
+
+`feat/jobright-clone` carries the Jobright clone (dual brand: RoboApply and GoApply). Before doing anything on it, read `docs/jobright-clone/HANDOFF.md`: the current state, the remaining steps with their commands, and the rules that are easy to break (Alipay tests are frozen, schema changes are additive only, the local Stripe key is live).
+
 ## Verification
 
 - Run the smallest relevant test first, then the full affected suite.
