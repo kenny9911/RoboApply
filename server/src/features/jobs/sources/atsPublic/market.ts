@@ -41,6 +41,16 @@ import { normalizeCountries } from './shared.js';
 /** Appended to the externalId of the mainland copy of a posting located in both markets. */
 export const CN_COPY_SUFFIX = '#cn';
 
+/** The posting a stored row belongs to: the row's externalId without the mainland copy's suffix. */
+export function postingIdOf(externalId: string): string {
+  return externalId.endsWith(CN_COPY_SUFFIX) ? externalId.slice(0, -CN_COPY_SUFFIX.length) : externalId;
+}
+
+/** The externalIds a posting can be stored under: its own, and `<id>#cn` for its mainland copy. */
+export function copyIdsOf(postingExternalId: string): [string, string] {
+  return [postingExternalId, `${postingExternalId}${CN_COPY_SUFFIX}`];
+}
+
 /** One copy of a posting, in the market it is written to. */
 export interface RoutedPosting {
   market: Market;
@@ -182,11 +192,12 @@ export function copySelected(copy: Pick<RoutedPosting, 'countries' | 'remoteAnyw
   return copy.remoteAnywhere || copy.countries.some((c) => wanted.includes(c));
 }
 
-/** The copies of a posting the source keeps, and how many it leaves out. */
-export function selectedCopies(input: ProviderJobInput, countries: readonly string[] | null | undefined): { kept: RoutedPosting[]; countryNotSelected: number } {
+/** The copies of a posting the source keeps, and how many it leaves out (`left`: the markets of those). */
+export function selectedCopies(input: ProviderJobInput, countries: readonly string[] | null | undefined): { kept: RoutedPosting[]; countryNotSelected: number; left: Market[] } {
   const copies = routePosting(input);
   const kept = copies.filter((c) => copySelected(c, countries));
-  return { kept, countryNotSelected: copies.length - kept.length };
+  const left = copies.filter((c) => !kept.includes(c)).map((c) => c.market);
+  return { kept, countryNotSelected: left.length, left };
 }
 
 export interface RoutedBoard {
@@ -196,6 +207,8 @@ export interface RoutedBoard {
   listedIds: string[];
   /** Copies left out because their country is not one the board is read for. */
   countryNotSelected: number;
+  /** The same count by the market each left-out copy belonged to. */
+  countryNotSelectedByMarket: Record<Market, number>;
 }
 
 /**
@@ -206,13 +219,15 @@ export function routeBoardRead(read: { listing: readonly ProviderJobInput[]; inp
   const listed = new Set<string>();
   for (const posting of read.listing) for (const copy of selectedCopies(posting, countries).kept) listed.add(copy.input.externalId);
   const byMarket: Record<Market, ProviderJobInput[]> = { intl: [], cn: [] };
+  const countryNotSelectedByMarket: Record<Market, number> = { intl: 0, cn: 0 };
   let countryNotSelected = 0;
   for (const posting of read.inputs) {
-    const { kept, countryNotSelected: left } = selectedCopies(posting, countries);
-    countryNotSelected += left;
+    const { kept, left } = selectedCopies(posting, countries);
+    countryNotSelected += left.length;
+    for (const market of left) countryNotSelectedByMarket[market] += 1;
     for (const copy of kept) byMarket[copy.market].push(copy.input);
   }
-  return { byMarket, listedIds: [...listed], countryNotSelected };
+  return { byMarket, listedIds: [...listed], countryNotSelected, countryNotSelectedByMarket };
 }
 
 /** The externalIds a listed posting is stored under, given the markets this deployment writes. */

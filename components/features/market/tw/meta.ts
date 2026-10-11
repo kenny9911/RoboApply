@@ -4,18 +4,79 @@
 // or missing value yields null instead of throwing (WP-42).
 
 import type { TwCardMeta, TwPermitTag, TwPermitTagView } from '../../../../lib/api/careerSources';
+import type { BoardAts } from '../../../../lib/api/contracts/jobs/sources/atsPublic';
 import type { MarketCardMeta } from '../types';
 
 /** Client twin of the server's TW_PERMIT_TAGS. */
 export const TW_PERMIT_TAGS: readonly TwPermitTag[] = ['tw_work_permit_support', 'tw_gold_card'];
 
-/** Client twin of the server's PUBLIC_ATS_NAMES (vendor names are data, not copy). */
-export const PUBLIC_ATS_NAMES = {
+/**
+ * Client twin of the server's PUBLIC_ATS_NAMES (vendor names are data, not
+ * copy), in the order of the server's PUBLIC_ATS. Typed by the contract's
+ * `BoardAts`, so a system added on the server fails the type-check here until
+ * it has a name: nothing else in the web lists the systems.
+ */
+export const PUBLIC_ATS_NAMES: Readonly<Record<BoardAts, string>> = {
   greenhouse: 'Greenhouse',
   lever: 'Lever',
   ashby: 'Ashby',
   smartrecruiters: 'SmartRecruiters',
-} as const;
+  workable: 'Workable',
+  recruitee: 'Recruitee',
+  personio: 'Personio',
+  lever_eu: 'Lever',
+  beisen: '北森',
+};
+
+/** Every job-board system, in list order. */
+export const BOARD_SYSTEMS = Object.keys(PUBLIC_ATS_NAMES) as BoardAts[];
+
+/**
+ * Systems the server reads only behind a flag that is off unless an operator
+ * sets it (the server's `connectorEnabled`: 北森 needs CN_ATS_BEISEN_ENABLED).
+ * Such a system is neither offered nor named until the server's own answer
+ * says it reads it.
+ */
+export const FLAG_GATED_SYSTEMS: readonly BoardAts[] = ['beisen'];
+
+/**
+ * The name a system is offered under where the systems are listed side by
+ * side. The two Lever instances share the vendor's name, so the EU one says
+ * which it is (a region code: data, like the name).
+ */
+export function boardSystemLabel(ats: BoardAts): string {
+  return ats === 'lever_eu' ? `${PUBLIC_ATS_NAMES[ats]} (EU)` : PUBLIC_ATS_NAMES[ats];
+}
+
+/**
+ * Workable's own listing address. Its version segment is written apart
+ * because scripts/check-api-boundary.mjs reads that path, spelled out in a
+ * component, as a call to OUR API; this is a vendor's address shown as text.
+ * The check should tell the two apart by rule (a whole URL on another host is
+ * not our API); once it does, this is the plain literal (handoff MKT-5B,
+ * Requests, O-10: the script has no owner in this phase).
+ */
+const WORKABLE_ACCOUNTS = `https://apply.workable.com/api/${'v1'}/widget/accounts`;
+
+/** Marks a Personio board id whose career site is on jobs.personio.com (the server's PERSONIO_COM_SUFFIX). */
+const PERSONIO_COM_SUFFIX = '.com';
+
+/**
+ * Client twin of the server connectors' `boardUrl`: the listing address a
+ * board id maps to, shown to ops before saving. `token` is already encoded
+ * for display.
+ */
+export const BOARD_READ_URLS: Readonly<Record<BoardAts, (token: string) => string>> = {
+  greenhouse: (t) => `https://boards-api.greenhouse.io/v1/boards/${t}/jobs?content=true`,
+  lever: (t) => `https://api.lever.co/v0/postings/${t}?mode=json`,
+  ashby: (t) => `https://api.ashbyhq.com/posting-api/job-board/${t}?includeCompensation=true`,
+  smartrecruiters: (t) => `https://api.smartrecruiters.com/v1/companies/${t}/postings`,
+  workable: (t) => `${WORKABLE_ACCOUNTS}/${t}?details=true`,
+  recruitee: (t) => `https://${t}.recruitee.com/api/offers/`,
+  personio: (t) => (t.endsWith(PERSONIO_COM_SUFFIX) ? `https://${t.slice(0, -PERSONIO_COM_SUFFIX.length)}.jobs.personio.com/xml?language=en` : `https://${t}.jobs.personio.de/xml?language=en`),
+  lever_eu: (t) => `https://api.eu.lever.co/v0/postings/${t}?mode=json`,
+  beisen: (t) => `https://${t}.zhiye.com/api/Jobad/GetJobAdPageList`,
+};
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
 

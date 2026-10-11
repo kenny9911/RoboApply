@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SYNTHETIC feed in the documented shape of Personio's /xml (developer.personio.de, read 2026-10-12). Fictional company and text. -->
+<workzag-jobs>
+
+<position>
+    <id>1834171</id>
+    <subcompany>Alpenwerk Software GmbH &amp; Co. KG</subcompany>
+    <office>Munich</office>
+    <additionalOffices>
+        <office>Berlin</office>
+        <office>Vienna</office>
+    </additionalOffices>
+    <department>Product and Tech</department>
+    <recruitingCategory>Engineering</recruitingCategory>
+    <name>Senior Backend Engineer (m/f/d)</name>
+    <jobDescriptions>
+        <jobDescription>
+            <name>The Role: How you&#039;ll make an impact</name>
+            <value><![CDATA[<p>SYNTHETIC role text with <strong>markup</strong> &amp; an entity kept as written.</p>]]></value>
+        </jobDescription>
+        <jobDescription>
+            <name>Requirements</name>
+            <value><![CDATA[<ul><li>SYNTHETIC requirement: 5 < years < 10</li></ul>]]></value>
+        </jobDescription>
+        <jobDescription>
+            <name>Empty section</name>
+            <value><![CDATA[]]></value>
+        </jobDescription>
+    </jobDescriptions>
+    <employmentType>permanent</employmentType>
+    <seniority>experienced</seniority>
+    <schedule>full-time</schedule>
+    <yearsOfExperience>7-10</yearsOfExperience>
+    <keywords>backend,go</keywords>
+    <occupation>software_and_web_development</occupation>
+    <occupationCategory>it_software</occupationCategory>
+    <createdAt>2026-09-13T14:10:41+0200</createdAt>
+</position>
+
+<position>
+    <id>1834172</id>
+    <office>Hamburg</office>
+    <department>People</department>
+    <recruitingCategory>Students</recruitingCategory>
+    <name>Working Student People &amp; Culture</name>
+    <jobDescriptions>
+        <jobDescription>
+            <name>Tasks</name>
+            <value>&lt;p&gt;SYNTHETIC text sent escaped instead of in CDATA.&lt;/p&gt;</value>
+        </jobDescription>
+    </jobDescriptions>
+    <employmentType>permanent</employmentType>
+    <seniority>student</seniority>
+    <schedule>part-time</schedule>
+    <createdAt>2026-10-01T09:00:00+00:00</createdAt>
+</position>
+
+<position>
+    <id>1834173</id>
+    <office>Zurich</office>
+    <name>Design Intern</name>
+    <jobDescriptions/>
+    <employmentType>intern</employmentType>
+    <seniority>entry-level</seniority>
+    <schedule>full-time</schedule>
+</position>
+
+<position>
+    <office>Nowhere</office>
+    <name>Broken row without an id</name>
+</position>
+
+</workzag-jobs>

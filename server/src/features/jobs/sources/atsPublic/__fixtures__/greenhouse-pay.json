@@ -1,0 +1,62 @@
+{
+  "jobs": [
+    {
+      "absolute_url": "https://job-boards.greenhouse.io/harborlabs/jobs/5100001",
+      "internal_job_id": 4100001,
+      "location": { "name": "New York, NY" },
+      "metadata": null,
+      "id": 5100001,
+      "updated_at": "2026-10-05T09:00:00-04:00",
+      "requisition_id": "ENG-7",
+      "title": "Staff Software Engineer",
+      "company_name": "Harbor Labs",
+      "first_published": "2026-09-28T09:00:00-04:00",
+      "pay_input_ranges": [
+        { "min_cents": 12000000, "max_cents": 15000000, "currency_type": "USD", "title": "NYC Salary Range", "blurb": "SYNTHETIC blurb: prose about the range, never read as pay." },
+        { "min_cents": 10000000, "max_cents": 13000000, "currency_type": "USD", "title": "Remote Salary Range", "blurb": "SYNTHETIC second range: only the first range with numeric bounds is mapped." }
+      ],
+      "application_deadline": null,
+      "language": "en",
+      "content": "&lt;p&gt;SYNTHETIC posting text for the pay range case.&lt;/p&gt;",
+      "departments": [{ "id": 31, "name": "Engineering", "child_ids": [], "parent_id": null }],
+      "offices": [{ "id": 41, "name": "New York", "location": "New York, NY, United States", "child_ids": [], "parent_id": null }]
+    },
+    {
+      "absolute_url": "https://job-boards.greenhouse.io/harborlabs/jobs/5100002",
+      "internal_job_id": 4100002,
+      "location": { "name": "London, United Kingdom" },
+      "metadata": null,
+      "id": 5100002,
+      "updated_at": "2026-10-06T09:00:00-04:00",
+      "requisition_id": "OPS-3",
+      "title": "Operations Analyst",
+      "company_name": "Harbor Labs",
+      "first_published": "2026-10-01T09:00:00-04:00",
+      "pay_input_ranges": [],
+      "application_deadline": "2026-10-20T20:00:00Z",
+      "language": "en",
+      "content": "&lt;p&gt;SYNTHETIC posting text for the application deadline case.&lt;/p&gt;",
+      "departments": [],
+      "offices": []
+    },
+    {
+      "absolute_url": "https://job-boards.greenhouse.io/harborlabs/jobs/5100003",
+      "internal_job_id": 4100003,
+      "location": { "name": "Toronto, Canada" },
+      "metadata": null,
+      "id": 5100003,
+      "updated_at": "2026-10-06T10:00:00-04:00",
+      "requisition_id": "DES-1",
+      "title": "Product Designer",
+      "company_name": "Harbor Labs",
+      "first_published": "2026-10-02T09:00:00-04:00",
+      "pay_input_ranges": [{ "min_cents": null, "max_cents": null, "currency_type": "CAD", "title": "Range without bounds", "blurb": "SYNTHETIC: a range with no numeric bound gives no pay." }],
+      "application_deadline": null,
+      "language": "en",
+      "content": "&lt;p&gt;SYNTHETIC posting text for a posting with neither a usable range nor a deadline.&lt;/p&gt;",
+      "departments": [],
+      "offices": []
+    }
+  ],
+  "meta": { "total": 3 }
+}

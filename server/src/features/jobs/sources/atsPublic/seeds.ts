@@ -78,16 +78,28 @@
 import { createHash } from 'node:crypto';
 import type prisma from '../../../../lib/prisma.js';
 import { allowedBrands, getBrand, type EnvSource, type Market } from '../../../../platform/brand/index.js';
-import { PUBLIC_ATS, type PublicAts } from './contract.js';
+import { isBoardTokenFor } from './contract.js';
 import { hasPlaceholderName } from './connectors.js';
 import { readRemovedBoards, removedBoardKey } from './removed.js';
-import { isBoardToken, isPublicAts, mergeCountries, normalizeCountries } from './shared.js';
+import { mergeCountries, normalizeCountries } from './shared.js';
 import seedsCn from './seeds.cn.json' with { type: 'json' };
 import seedsIntl from './seeds.intl.json' with { type: 'json' };
 import seedsTw from './seeds.tw.json' with { type: 'json' };
 
+/**
+ * The systems a seed entry may name: the ones scripts/board-seeds validates
+ * against the live board API (seeds.test.ts holds this list equal to the
+ * builder's). A system that gains a connector (contract.ts PUBLIC_ATS) is not
+ * seedable for that alone: its boards enter a seed file only once the
+ * validator reads them and the report says so. A 北森 tenant is never seeded.
+ */
+export const SEEDABLE_ATS = ['greenhouse', 'lever', 'ashby', 'smartrecruiters'] as const;
+export type SeedableAts = (typeof SEEDABLE_ATS)[number];
+
+const isSeedableAts = (value: unknown): value is SeedableAts => typeof value === 'string' && (SEEDABLE_ATS as readonly string[]).includes(value);
+
 export interface SeedBoard {
-  ats: PublicAts;
+  ats: SeedableAts;
   boardToken: string;
   companyName: string;
   /** ISO codes the board is read for; empty = every country. */
@@ -153,8 +165,8 @@ export function parseSeedFile(raw: unknown, name = 'seed file'): SeedFile {
   const boards = f.boards.map((b, i): SeedBoard => {
     const board = (b ?? {}) as Partial<Record<keyof SeedBoard, unknown>>;
     const at = `${name}: board ${i}`;
-    if (!isPublicAts(board.ats)) throw new Error(`${at} has an unknown job-board system (allowed: ${PUBLIC_ATS.join(', ')})`);
-    if (!isBoardToken(board.boardToken)) throw new Error(`${at} has an invalid board id`);
+    if (!isSeedableAts(board.ats)) throw new Error(`${at} has an unknown job-board system (allowed: ${SEEDABLE_ATS.join(', ')})`);
+    if (!isBoardTokenFor(board.ats, board.boardToken)) throw new Error(`${at} has an invalid board id`);
     if (typeof board.companyName !== 'string' || !board.companyName.trim() || board.companyName.trim().length > 200) throw new Error(`${at} has no company name`);
     if (!Array.isArray(board.countries) || board.countries.some((c) => typeof c !== 'string' || !/^[A-Z]{2}$/.test(c))) {
       throw new Error(`${at} must list its countries as ISO alpha-2 codes (an empty list means every country)`);

@@ -27,7 +27,8 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock('../../../../../lib/api/careerSources', () => api);
 
-import { CareerSourcesPanel, countriesToAlsoFeed, importBody, parseCountries, stateKey } from '../CareerSourcesPanel';
+import { CareerSourcesPanel, IMPORT_REASON_FALLBACK, PROBLEM_FALLBACK, boardReadUrl, countriesToAlsoFeed, importBody, offeredSystems, parseCountries, problemKey, stateKey } from '../CareerSourcesPanel';
+import { BOARD_READ_URLS, BOARD_SYSTEMS, FLAG_GATED_SYSTEMS, PUBLIC_ATS_NAMES, boardSystemLabel } from '../meta';
 
 function view(over: Partial<CareerSourceView> = {}): CareerSourceView {
   return {
@@ -318,5 +319,162 @@ describe('the page at a glance', () => {
     await row(/Formosa Robotics/);
     expect(api.adminListCareerSources).toHaveBeenCalledWith({ market: 'cn' });
     expect(screen.getByRole('heading', { name: 'Add many boards' })).toBeInTheDocument();
+  });
+});
+
+// ── MKT-5B (JI-8, JC-8): more job-board systems ──────────────────────────
+
+describe('MKT-5B: the systems offered when adding a board come from the contract mirror', () => {
+  const options = () => within(screen.getByLabelText('Job board system')).getAllByRole('option').map((o) => [(o as HTMLOptionElement).value, o.textContent]);
+
+  it('a server that does not say which systems it reads gets every system offered, the new ones included', async () => {
+    api.adminListCareerSources.mockResolvedValue({ items: [], cursor: null });
+    renderWithBrand(<CareerSourcesPanel />);
+    await screen.findByText('No company job boards yet.');
+    expect(options()).toEqual([
+      ['greenhouse', 'Greenhouse'],
+      ['lever', 'Lever'],
+      ['ashby', 'Ashby'],
+      ['smartrecruiters', 'SmartRecruiters'],
+      ['workable', 'Workable'],
+      ['recruitee', 'Recruitee'],
+      ['personio', 'Personio'],
+      ['lever_eu', 'Lever (EU)'],
+      ['beisen', '北森'],
+    ]);
+    // The list is the mirror's: nothing in the panel names a system.
+    expect(options().map(([value]) => value)).toEqual(BOARD_SYSTEMS);
+    expect(Object.keys(PUBLIC_ATS_NAMES)).toEqual(BOARD_SYSTEMS);
+    expect(Object.keys(BOARD_READ_URLS)).toEqual(BOARD_SYSTEMS);
+  });
+
+  it('a server that names the systems it can read gets only those offered: 北森 is not offered while its connector is off', async () => {
+    api.adminListCareerSources.mockResolvedValue({ items: [], cursor: null, systems: ['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workable', 'recruitee', 'personio', 'lever_eu'] });
+    renderWithBrand(<CareerSourcesPanel />);
+    await screen.findByText('No company job boards yet.');
+    await waitFor(() => expect(options().map(([value]) => value)).toEqual(['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workable', 'recruitee', 'personio', 'lever_eu']));
+    // The sentence that says where boards can come from names the offered systems, each vendor once.
+    expect(screen.getByText('Boards can come from: Greenhouse, Lever, Ashby, SmartRecruiters, Workable, Recruitee, Personio.')).toBeInTheDocument();
+    expect(screen.queryByText(/北森/)).not.toBeInTheDocument();
+    expect(offeredSystems({ systems: ['workable', 'greenhouse', 'unknown'] })).toEqual(['greenhouse', 'workable']);
+    // An answer without the field (a server that does not say): every system.
+    expect(offeredSystems({ items: [] })).toEqual(BOARD_SYSTEMS);
+    // An answer that names none we know is treated as not saying.
+    expect(offeredSystems({ systems: [] })).toEqual(BOARD_SYSTEMS);
+  });
+
+  it('before the list answer is there, and when the request failed, a system read only behind a flag is neither offered nor named (review finding)', async () => {
+    const withoutFlagged = ['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workable', 'recruitee', 'personio', 'lever_eu'];
+    expect(FLAG_GATED_SYSTEMS).toEqual(['beisen']);
+    expect(offeredSystems(undefined)).toEqual(withoutFlagged);
+    expect(offeredSystems(null)).toEqual(withoutFlagged);
+    // Still loading: the request never answers.
+    api.adminListCareerSources.mockReturnValue(new Promise(() => undefined));
+    const loading = renderWithBrand(<CareerSourcesPanel />);
+    expect(await screen.findByLabelText('Job board system')).toBeInTheDocument();
+    expect(options().map(([value]) => value)).toEqual(withoutFlagged);
+    expect(screen.getByText('Boards can come from: Greenhouse, Lever, Ashby, SmartRecruiters, Workable, Recruitee, Personio.')).toBeInTheDocument();
+    expect(screen.queryByText(/北森/)).not.toBeInTheDocument();
+    loading.unmount();
+    // The request failed.
+    api.adminListCareerSources.mockRejectedValue(new Error('offline'));
+    renderWithBrand(<CareerSourcesPanel />);
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(options().map(([value]) => value)).toEqual(withoutFlagged);
+    expect(screen.queryByText(/北森/)).not.toBeInTheDocument();
+  });
+
+  it('once the server says it reads 北森 (its flag is on), the system is offered', async () => {
+    api.adminListCareerSources.mockResolvedValue({ items: [], cursor: null, systems: [...BOARD_SYSTEMS] });
+    renderWithBrand(<CareerSourcesPanel />);
+    await screen.findByText('No company job boards yet.');
+    await waitFor(() => expect(options().map(([value]) => value)).toEqual(BOARD_SYSTEMS));
+    expect(options().at(-1)).toEqual(['beisen', '北森']);
+  });
+
+  it('adds a board of a new system with the id it reads from, and shows the address before saving', async () => {
+    api.adminListCareerSources.mockResolvedValue({ items: [], cursor: null });
+    api.adminCreateCareerSource.mockResolvedValue(view({ id: 'p1', ats: 'personio' as never, boardToken: 'alpenwerk', companyName: 'Alpenwerk' }));
+    renderWithBrand(<CareerSourcesPanel />);
+    await screen.findByText('No company job boards yet.');
+    fireEvent.change(screen.getByLabelText('Job board system'), { target: { value: 'personio' } });
+    fireEvent.change(screen.getByLabelText('Board id'), { target: { value: 'alpenwerk' } });
+    expect(screen.getByText(/Reads https:\/\/alpenwerk\.jobs\.personio\.de\/xml\?language=en/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Company name'), { target: { value: 'Alpenwerk' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add board' }));
+    await waitFor(() => expect(api.adminCreateCareerSource).toHaveBeenCalledWith({ ats: 'personio', boardToken: 'alpenwerk', companyName: 'Alpenwerk' }));
+  });
+
+  it('boardReadUrl mirrors the server connectors for every system', () => {
+    expect(boardReadUrl('workable', 'tidewater')).toBe('https://apply.workable.com/api/v1/widget/accounts/tidewater?details=true');
+    expect(boardReadUrl('recruitee', 'poldermobility')).toBe('https://poldermobility.recruitee.com/api/offers/');
+    expect(boardReadUrl('personio', 'alpenwerk')).toBe('https://alpenwerk.jobs.personio.de/xml?language=en');
+    expect(boardReadUrl('personio', 'alpenwerk.com')).toBe('https://alpenwerk.jobs.personio.com/xml?language=en');
+    expect(boardReadUrl('lever_eu', 'nordwind')).toBe('https://api.eu.lever.co/v0/postings/nordwind?mode=json');
+    expect(boardReadUrl('beisen', 'shili')).toBe('https://shili.zhiye.com/api/Jobad/GetJobAdPageList');
+    // The four older systems are unchanged.
+    expect(boardReadUrl('greenhouse', 'acme')).toBe('https://boards-api.greenhouse.io/v1/boards/acme/jobs?content=true');
+    expect(boardReadUrl('lever', 'acme')).toBe('https://api.lever.co/v0/postings/acme?mode=json');
+    expect(boardSystemLabel('lever_eu')).toBe('Lever (EU)');
+    expect(boardSystemLabel('lever')).toBe('Lever');
+  });
+
+  it('a row of a new system shows its name; a row of a system this build does not know shows the id as stored', async () => {
+    api.adminListCareerSources.mockResolvedValue({
+      items: [
+        view({ id: 'w', companyName: 'Tidewater', ats: 'workable' as never, boardToken: 'tidewater' }),
+        view({ id: 'e', companyName: 'Nordwind', ats: 'lever_eu' as never, boardToken: 'nordwind' }),
+        view({ id: 'x', companyName: 'Unknown Co', ats: 'futureats' as never, boardToken: 'x' }),
+      ],
+      cursor: null,
+    });
+    renderWithBrand(<CareerSourcesPanel />);
+    expect(within(await row(/Tidewater/)).getByText('Workable')).toBeInTheDocument();
+    expect(within(await row(/Nordwind/)).getByText('Lever (EU)')).toBeInTheDocument();
+    expect(within(await row(/Unknown Co/)).getByText('futureats')).toBeInTheDocument();
+  });
+});
+
+describe('MKT-5B: a system whose connector is switched off', () => {
+  const switchedOff = () =>
+    new RoboApiError('x', { status: 422, code: 'invalid_request', payload: { success: false, code: 'invalid_request', error: 'x', details: { field: 'ats', reason: 'connector_disabled' } } });
+
+  it('adding a board of it says that this system cannot be read, not that the fields are wrong', async () => {
+    api.adminListCareerSources.mockResolvedValue({ items: [], cursor: null });
+    api.adminCreateCareerSource.mockRejectedValue(switchedOff());
+    renderWithBrand(<CareerSourcesPanel />);
+    await screen.findByText('No company job boards yet.');
+    fireEvent.change(screen.getByLabelText('Job board system'), { target: { value: 'workable' } });
+    fireEvent.change(screen.getByLabelText('Board id'), { target: { value: 'tidewater' } });
+    fireEvent.change(screen.getByLabelText('Company name'), { target: { value: 'Tidewater' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add board' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('This job board system is not supported.');
+    expect(screen.queryByText('Check the fields and try again.')).not.toBeInTheDocument();
+  });
+
+  it('a board that is passed over reads as a sentence, never as a code; an import row of a switched-off system gives its reason', async () => {
+    api.adminListCareerSources.mockResolvedValue({
+      items: [view({ id: 'w', companyName: 'Tidewater', ats: 'workable' as never, boardToken: 'tidewater', lastError: 'connector_disabled' }), view({ id: 'p', companyName: 'Alpenwerk', ats: 'personio' as never, boardToken: 'alpenwerk', lastError: 'not_xml' })],
+      cursor: null,
+    });
+    api.adminImportCareerSources.mockResolvedValue({ total: 2, created: 1, merged: 0, invalid: [{ line: 1, reason: 'connector_disabled' }], invalidCount: 1 });
+    renderWithBrand(<CareerSourcesPanel />);
+    expect(within(await row(/Tidewater/)).getByText('This job board system is not supported.')).toBeInTheDocument();
+    expect(within(await row(/Alpenwerk/)).getByText('The board sent something other than job data.')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('List of boards'), { target: { value: '[{"ats":"beisen","boardToken":"shili"},{"ats":"recruitee","boardToken":"polder"}]' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+    expect(await screen.findByText('Row 1: this job board system is not supported')).toBeInTheDocument();
+    expect(screen.queryByText(/connector_disabled|not_xml|import\.reason|problem\./)).toBeNull();
+  });
+
+  it('every new code has a key, and a key without a sentence of its own yet falls back to one that exists', () => {
+    expect(problemKey('connector_disabled')).toBe('connector_disabled');
+    expect(problemKey('tenant_denied')).toBe('tenant_denied');
+    expect(problemKey('tenant_floor')).toBe('tenant_floor');
+    expect(problemKey('not_xml')).toBe('not_json');
+    expect(problemKey('invalid_board_id')).toBe('board_not_found');
+    expect(problemKey('validation:connector_disabled')).toBe('connector_disabled');
+    expect(PROBLEM_FALLBACK).toEqual({ connector_disabled: 'unsupported_job_board', tenant_denied: 'unsupported_job_board', tenant_floor: 'rate_limited' });
+    expect(IMPORT_REASON_FALLBACK).toEqual({ connector_disabled: 'unknown_job_board' });
   });
 });

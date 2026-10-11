@@ -28,6 +28,22 @@
 // marked due and the next board sync (cron `jobs-boards`, every 5 minutes)
 // reads and saves its postings. This file writes no job and queues no work.
 //
+// A system whose connector is switched off (./connectors.ts `connectorEnabled`:
+// Workable under ATS_WORKABLE_DISABLED, 北森 without CN_ATS_BEISEN_ENABLED)
+// cannot be added: a create answers 400 with `details.reason
+// 'connector_disabled'` and an import refuses the row with that reason. A
+// source that exists already stays in the list and is passed over by the board
+// sync; "Check now" on it reports 'connector_disabled' and makes no request.
+// The id of a board on a tenant's own host (Recruitee, Personio, 北森) is the
+// lower-case sub-domain label and nothing else (contract.ts `isBoardTokenFor`).
+// A 北森 tenant is asked at most once in 30 minutes, "Check now" included, and
+// always as the mainland brand: "Check now" refuses ('tenant_floor', no
+// request) a tenant that was asked under 30 minutes ago, writes the time to
+// the source BEFORE its own request, and makes no request to a tenant on the
+// denylist ('tenant_denied'). Switching on a tenant that was only ever asked
+// as a candidate keeps the time before which it must not be asked again
+// (schedule.ts).
+//
 // Bulk import (CSV or JSON, at most IMPORT_MAX_ROWS rows) is the entry point
 // for board lists built outside the repository. A new row gets origin
 // 'import'. Imported with `enable: false` it is a candidate: the board sync
@@ -44,10 +60,14 @@ import type { EnvSource, Market } from '../../../../platform/brand/index.js';
 import { httpError } from '../../../../platform/http.js';
 import { atsPublicEnabled } from './adapter.js';
 import {
+  CONNECTOR_DISABLED,
   IMPORT_CSV_COLUMNS,
   IMPORT_MAX_INVALID_REPORTED,
   IMPORT_MAX_ROWS,
+  isBoardTokenFor,
+  type BoardAts,
   type CareerSourceBodySchema,
+  type CareerSourceListResult,
   type CareerSourceRunResult,
   type CareerSourceView,
   type ImportCareerSourcesBodySchema,
@@ -57,10 +77,11 @@ import {
   type PatchCareerSourceBodySchema,
   type PublicAts,
 } from './contract.js';
-import { connectorFor } from './connectors.js';
+import { connectorEnabled, connectorFor, enabledAts } from './connectors.js';
 import { BoardFetchError, type FetchLike } from './http.js';
 import { forgetRemovedBoards, rememberRemovedBoard, type RemovedBoardsDb } from './removed.js';
-import { careerSourceState, externalIdPrefix, isBoardToken, isPublicAts, mergeCountries, normalizeCountries, sourceFeedsMarket } from './shared.js';
+import { firstReadAfterSwitchOn, TENANT_DENIED, TENANT_FLOOR, tenantAskedRecently } from './schedule.js';
+import { careerSourceState, externalIdPrefix, isMainlandOnlyAts, isPublicAts, mergeCountries, normalizeCountries, sourceFeedsMarket, tenantDenied } from './shared.js';
 import { asBoardSource, toCareerSourceRow, type CareerSourceDb, type CareerSourceRow } from './sync.js';
 
 export type CareerSourceBody = z.output<typeof CareerSourceBodySchema>;
@@ -146,7 +167,7 @@ export function jsonImportRow(value: unknown, line: number): ImportRow {
 
 interface ValidImportRow {
   line: number;
-  ats: PublicAts;
+  ats: BoardAts;
   boardToken: string;
   /** Null when the file gives none: the board id stands in until a sync learns the board's stated name. */
   companyName: string | null;
@@ -182,13 +203,19 @@ export function readImportCsv(csv: string): ImportRow[] {
   }));
 }
 
-/** One row checked: the board it names, or why it is refused. */
-export function checkImportRow(row: ImportRow): ValidImportRow | ImportInvalidReason {
+/**
+ * One row checked: the board it names, or why it is refused. `enabled` says
+ * whether a system's connector is switched on (default: every system); a row
+ * that names one that is off is refused as 'connector_disabled'.
+ */
+export function checkImportRow(row: ImportRow, enabled: (ats: BoardAts) => boolean = () => true): ValidImportRow | ImportInvalidReason {
   if (row.unreadable) return 'unreadable_row';
   const ats = typeof row.ats === 'string' ? row.ats.trim().toLowerCase() : '';
   if (!isPublicAts(ats)) return 'unknown_job_board';
+  if (!enabled(ats)) return CONNECTOR_DISABLED;
   const boardToken = typeof row.boardToken === 'string' ? row.boardToken.trim() : '';
-  if (!isBoardToken(boardToken)) return 'invalid_board_id';
+  // A board on a tenant's own host: the lower-case sub-domain label only (it becomes a host name).
+  if (!isBoardTokenFor(ats, boardToken)) return 'invalid_board_id';
   // A name that is not text (a number, a list) is a row we cannot read, not a row without a name.
   if (row.companyName !== null && row.companyName !== undefined && typeof row.companyName !== 'string') return 'unreadable_row';
   const name = typeof row.companyName === 'string' ? row.companyName.trim() : '';
@@ -226,7 +253,7 @@ export function createCareerSourcesService(deps: CareerSourcesServiceDeps) {
 
   return {
     /** The boards that feed `query.market` (default: the market of the brand the admin is on). */
-    async list(query: ListCareerSourcesQuery, market: Market): Promise<{ items: CareerSourceView[]; cursor: null }> {
+    async list(query: ListCareerSourcesQuery, market: Market): Promise<CareerSourceListResult & { systems: BoardAts[] }> {
       const feeds = query.market ?? market;
       const rows = await (await db()).rACareerSiteSource.findMany({
         where: {
@@ -240,10 +267,15 @@ export function createCareerSourcesService(deps: CareerSourcesServiceDeps) {
         .map((r) => toView(r as unknown as Record<string, unknown>))
         .filter((v) => sourceFeedsMarket(v, feeds) && (!query.state || v.state === query.state))
         .slice(0, LIST_LIMIT);
-      return { items, cursor: null };
+      // The systems a board can be added for here: those whose connector is switched on.
+      return { items, cursor: null, systems: enabledAts(env()) };
     },
 
     async create(body: CareerSourceBody, adminId: string | null, market: Market): Promise<CareerSourceView> {
+      // A system whose connector is switched off cannot be added (see the header).
+      if (!connectorEnabled(body.ats, env())) {
+        throw httpError('invalid_request', 'This job board system is switched off.', { field: 'ats', reason: CONNECTOR_DISABLED, issues: [{ path: 'ats', message: CONNECTOR_DISABLED }] });
+      }
       const store = await db();
       try {
         const row = await store.rACareerSiteSource.create({
@@ -300,10 +332,10 @@ export function createCareerSourcesService(deps: CareerSourcesServiceDeps) {
       if (patch.enabled !== undefined) {
         data.enabled = patch.enabled;
         if (patch.enabled && !before.enabled) {
-          // Back on: a clean slate, due at the next board sync.
+          // Back on: a clean slate, due at the next board sync (a 北森 tenant never before its 30 minutes are over).
           data.failCount = 0;
           data.disabledAt = null;
-          data.nextSyncAt = null;
+          data.nextSyncAt = firstReadAfterSwitchOn(before, now());
           data.lastError = null;
         }
         // Off by an admin: stamped, so it is never mistaken for a candidate. Its open jobs are archived
@@ -339,14 +371,27 @@ export function createCareerSourcesService(deps: CareerSourcesServiceDeps) {
       const base: CareerSourceRunResult = { sourceId: id, status: 'scheduled', listed: 0, queued: false, error: null };
       // The kill switch stops every public job-board read, this one included.
       if (!atsPublicEnabled(env())) return { ...base, status: 'error', error: SOURCES_OFF };
+      const tenantBoard = isMainlandOnlyAts(row.ats);
+      const at = now();
+      // A 北森 tenant is asked at most once in 30 minutes, whoever asks: no request inside that time.
+      if (tenantAskedRecently(row, at)) return { ...base, status: 'error', error: TENANT_FLOOR };
       let listed: number;
       const limit = new AbortController();
       const timer = setTimeout(() => limit.abort(), deps.runNowTimeoutMs ?? RUN_NOW_TIMEOUT_MS);
       try {
         const board = asBoardSource(row);
         if (!board) throw new BoardFetchError('unsupported_job_board');
+        // A connector that is switched off is never asked ('connector_disabled'), and neither is a denylisted tenant.
+        const connector = connectorFor(board.ats, env());
+        if (tenantBoard) {
+          if (tenantDenied(row, env())) throw new BoardFetchError(TENANT_DENIED);
+          // Asked from here on: the time is written before the request, so the 30 minutes count from it whatever
+          // becomes of this request (it fails, it is cut off by the time limit, the process dies).
+          await store.rACareerSiteSource.update({ where: { id }, data: { lastSyncedAt: at } });
+        }
         // Listing only, and of a paged listing its first page: the board sync reads the rest and the posting texts.
-        const read = await connectorFor(board.ats).read(board, { now: now(), fetch: deps.fetch, signal: limit.signal, env: env(), market }, { listOnly: true, firstPage: true });
+        // A tenant board of the mainland is asked as the mainland brand, whichever site the admin is on.
+        const read = await connector.read(board, { now: at, fetch: deps.fetch, signal: limit.signal, env: env(), market: tenantBoard ? 'cn' : market }, { listOnly: true, firstPage: true });
         listed = read.listedCount;
       } catch (err) {
         const error = err instanceof BoardFetchError ? err.message : 'unexpected';
@@ -355,7 +400,7 @@ export function createCareerSourcesService(deps: CareerSourcesServiceDeps) {
       } finally {
         clearTimeout(timer);
       }
-      // Due now: the board sync leases boards with no `nextSyncAt` first.
+      // Due now: the board sync leases boards with no `nextSyncAt` first (a 北森 tenant once its 30 minutes have passed).
       await store.rACareerSiteSource.update({ where: { id }, data: { nextSyncAt: null, lastError: null, lastJobCount: listed } });
       return { ...base, listed, queued: true };
     },
@@ -370,8 +415,9 @@ export function createCareerSourcesService(deps: CareerSourcesServiceDeps) {
         if (invalid.length < IMPORT_MAX_INVALID_REPORTED) invalid.push({ line, reason });
       };
       const valid = new Map<string, ValidImportRow>();
+      const enabled = (ats: BoardAts): boolean => connectorEnabled(ats, env());
       for (const row of raw) {
-        const checked = checkImportRow(row);
+        const checked = checkImportRow(row, enabled);
         if (typeof checked === 'string') refuse(row.line, checked);
         else if (valid.has(boardKey(checked))) refuse(row.line, 'duplicate_in_file');
         else valid.set(boardKey(checked), checked);

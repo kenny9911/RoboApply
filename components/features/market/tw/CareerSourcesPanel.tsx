@@ -16,6 +16,16 @@
 // waiting for its first check, not confirmed, off, or off after failed reads.
 // Counts shown are what the board itself listed.
 //
+// The systems offered are the contract's own list (./meta.ts, typed by the
+// server's `BoardAts`): nothing here names a system. Of those the panel
+// offers the ones the server says it can read on this deployment (`systems`
+// in the list answer: a connector may be switched off). Until that answer is
+// there (the list is still loading, or the request failed) a system that is
+// read only behind a flag is neither offered nor named. A server that answers
+// without the field gets every system offered; adding a board of one that is
+// switched off is then refused, and the panel says that this system cannot be
+// read instead of blaming the fields.
+//
 // A board that is already in the list but read only for the other site's
 // countries is not in this list, so "already in the list" alone would send
 // the admin looking for nothing. The panel says so and offers the one action
@@ -36,33 +46,41 @@ import {
   type CareerSourceRunResult,
   type CareerSourceView,
   type ImportCareerSourcesResult,
-  type PublicAts,
 } from '../../../../lib/api/careerSources';
+import type { BoardAts } from '../../../../lib/api/contracts/jobs/sources/atsPublic';
 import { apiErrorCode, apiErrorDetails, apiErrorReason } from '../../../../lib/api/contracts/wire';
 import { useAuth } from '../../../../lib/auth/AuthProvider';
 import { Btn } from '../../../v3/primitives/Btn';
 import { EmptyState } from '../../../v3/primitives/EmptyState';
 import { PageHeader } from '../../../v3/primitives/PageHeader';
-import { PUBLIC_ATS_NAMES } from './meta';
+import { BOARD_READ_URLS, BOARD_SYSTEMS, FLAG_GATED_SYSTEMS, PUBLIC_ATS_NAMES, boardSystemLabel } from './meta';
 import styles from './tw.module.css';
 
-const SYSTEMS = Object.keys(PUBLIC_ATS_NAMES) as PublicAts[];
 const LIST_KEY = ['admin', 'careerSources'] as const;
 
-/** The listing URL a board id maps to (mirrors the server connectors; shown to ops before saving). */
-export function boardReadUrl(ats: PublicAts, token: string): string {
-  const t = encodeURIComponent(token.trim() || '…');
-  switch (ats) {
-    case 'greenhouse':
-      return `https://boards-api.greenhouse.io/v1/boards/${t}/jobs?content=true`;
-    case 'lever':
-      return `https://api.lever.co/v0/postings/${t}?mode=json`;
-    case 'ashby':
-      return `https://api.ashbyhq.com/posting-api/job-board/${t}?includeCompensation=true`;
-    case 'smartrecruiters':
-      return `https://api.smartrecruiters.com/v1/companies/${t}/postings`;
-  }
+/**
+ * The systems to offer: every system of the contract, less the ones the
+ * server's list answer leaves out of `systems` (connectors switched off on
+ * this deployment). No answer yet (`undefined` or `null`: the list is
+ * loading, or the request failed): every system that needs no flag, so a
+ * flag-gated one is never shown before the server says it reads it. An answer
+ * without the field: every system.
+ */
+export function offeredSystems(listAnswer: unknown): BoardAts[] {
+  if (listAnswer === undefined || listAnswer === null) return BOARD_SYSTEMS.filter((s) => !FLAG_GATED_SYSTEMS.includes(s));
+  const systems = (listAnswer as { systems?: unknown }).systems;
+  if (!Array.isArray(systems)) return BOARD_SYSTEMS;
+  const offered = BOARD_SYSTEMS.filter((s) => systems.includes(s));
+  return offered.length > 0 ? offered : BOARD_SYSTEMS;
 }
+
+/** The listing URL a board id maps to (mirrors the server connectors; shown to ops before saving). */
+export function boardReadUrl(ats: BoardAts, token: string): string {
+  return BOARD_READ_URLS[ats](encodeURIComponent(token.trim() || '…'));
+}
+
+/** The server's reason when a system's connector is switched off: a refused create (`details.reason`), a refused import row, a board's last problem. */
+const CONNECTOR_DISABLED = 'connector_disabled';
 
 type Notice = { kind: 'ok' | 'error'; text: string } | null;
 
@@ -73,6 +91,11 @@ const VALIDATION_PREFIX = 'validation:';
 export function problemKey(raw: string): string {
   const code = raw.startsWith(VALIDATION_PREFIX) ? raw.slice(VALIDATION_PREFIX.length) : raw;
   if (code === 'board_not_found' || code === 'timeout' || code === 'not_json' || code === 'unexpected_shape' || code === 'unsupported_job_board') return code;
+  // Not read on purpose (no request was made): a switched-off connector, a denylisted tenant, a tenant asked again too soon.
+  if (code === CONNECTOR_DISABLED || code === 'tenant_denied' || code === 'tenant_floor') return code;
+  // A feed that is not the XML we know reads like one that is not JSON.
+  if (code === 'not_xml') return 'not_json';
+  if (code === 'invalid_board_id') return 'board_not_found';
   if (code === 'redirect' || code === 'response_too_large' || code === 'sources_off') return code;
   if (code === 'empty_board' || code === 'name_mismatch' || code === 'name_unconfirmed') return code;
   if (code === 'http_429') return 'rate_limited';
@@ -81,6 +104,21 @@ export function problemKey(raw: string): string {
   if (code.startsWith('network')) return 'network';
   return 'other';
 }
+
+/**
+ * The sentence shown for a problem key that has none of its own yet. The three
+ * keys below were added by MKT-5B, whose bundle owns no copy; until the
+ * sentences exist (handoff MKT-5B, Requests) each reads as the closest one
+ * that does. Every other key has its sentence.
+ */
+export const PROBLEM_FALLBACK: Readonly<Record<string, string>> = {
+  [CONNECTOR_DISABLED]: 'unsupported_job_board',
+  tenant_denied: 'unsupported_job_board',
+  tenant_floor: 'rate_limited',
+};
+
+/** The reason of a refused import row that has no sentence of its own yet (same rule as PROBLEM_FALLBACK). */
+export const IMPORT_REASON_FALLBACK: Readonly<Record<string, string>> = { [CONNECTOR_DISABLED]: 'unknown_job_board' };
 
 /** The key of a row's state: on, waiting for its first check, not confirmed, off, or off after failed reads. */
 export function stateKey(row: Pick<CareerSourceView, 'state' | 'lastError' | 'lastSyncedAt' | 'failCount' | 'enabled'>): 'on' | 'waiting' | 'notConfirmed' | 'off' | 'offAfterFailures' {
@@ -169,7 +207,7 @@ export function CareerSourcesPanel({ market }: CareerSourcesPanelProps = {}) {
   const qc = useQueryClient();
   const isAdmin = user?.role === 'admin';
 
-  const [ats, setAts] = useState<PublicAts>('greenhouse');
+  const [chosenAts, setAts] = useState<BoardAts>('greenhouse');
   const [boardToken, setBoardToken] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [countryCode, setCountryCode] = useState('');
@@ -186,11 +224,22 @@ export function CareerSourcesPanel({ market }: CareerSourcesPanelProps = {}) {
   const listKey = [...LIST_KEY, market ?? 'site'] as const;
   const list = useQuery({ queryKey: listKey, queryFn: () => adminListCareerSources(market ? { market } : undefined), enabled: isAdmin });
   const refresh = () => qc.invalidateQueries({ queryKey: LIST_KEY });
+  // Only systems this deployment can read are offered; a choice that is no longer offered falls back to the first.
+  const SYSTEMS = offeredSystems(list.data);
+  const ats: BoardAts = SYSTEMS.includes(chosenAts) ? chosenAts : SYSTEMS[0]!;
+  // A sentence under `base`, by its own key when the bundle has it, else by the closest key that exists.
+  const has = (key: string): boolean => typeof t.has !== 'function' || t.has(key as never);
+  const sentence = (base: 'problem' | 'import.reason', key: string, fallback: Readonly<Record<string, string>>, last: string): string =>
+    t(`${base}.${has(`${base}.${key}`) ? key : (fallback[key] ?? last)}` as never);
+  const problemText = (raw: string): string => sentence('problem', problemKey(raw), PROBLEM_FALLBACK, 'other');
+  const importReasonText = (reason: string): string => sentence('import.reason', reason, IMPORT_REASON_FALLBACK, 'unreadable_row');
   const errorText = (err: unknown) => {
     const code = apiErrorCode(err);
     // 409 with `details.reason: board_read_for_other_countries`: the board is one shared row that this
     // site's list does not show (it is read for other countries), so "already in the list" would mislead.
     if (code === 'conflict') return apiErrorReason(err) === OTHER_COUNTRIES ? t('errors.otherCountries') : t('errors.duplicate');
+    // 400 with `details.reason: connector_disabled`: nothing is wrong with the fields, this system is switched off here.
+    if (code === 'invalid_request' && apiErrorReason(err) === CONNECTOR_DISABLED) return problemText(CONNECTOR_DISABLED);
     return code === 'invalid_request' ? t('errors.invalid') : t('errors.generic');
   };
   const countryList = parseCountries(countries);
@@ -269,7 +318,7 @@ export function CareerSourcesPanel({ market }: CareerSourcesPanelProps = {}) {
       setNotice(
         res.status === 'scheduled'
           ? { kind: 'ok', text: t(res.queued ? 'run.queued' : 'run.waiting', { company: row.companyName, listed: res.listed }) }
-          : { kind: 'error', text: t('run.error', { company: row.companyName, problem: t(`problem.${problemKey(res.error ?? '')}`) }) },
+          : { kind: 'error', text: t('run.error', { company: row.companyName, problem: problemText(res.error ?? '') }) },
       );
       await refresh();
     },
@@ -333,7 +382,7 @@ export function CareerSourcesPanel({ market }: CareerSourcesPanelProps = {}) {
         <h2 id="career-sources-add" className={styles.sectionTitle}>
           {t('add.title')}
         </h2>
-        <p className={styles.hint}>{t('systems', { names: SYSTEMS.map((s) => PUBLIC_ATS_NAMES[s]).join(', ') })}</p>
+        <p className={styles.hint}>{t('systems', { names: [...new Set(SYSTEMS.map((s) => PUBLIC_ATS_NAMES[s]))].join(', ') })}</p>
         <form className={styles.form} onSubmit={onSubmit} noValidate>
           <div className={styles.grid}>
             <label className={styles.field}>
@@ -342,13 +391,13 @@ export function CareerSourcesPanel({ market }: CareerSourcesPanelProps = {}) {
                 className={styles.select}
                 value={ats}
                 onChange={(e) => {
-                  setAts(e.target.value as PublicAts);
+                  setAts(e.target.value as BoardAts);
                   setOtherBoard(null);
                 }}
               >
                 {SYSTEMS.map((s) => (
                   <option key={s} value={s}>
-                    {PUBLIC_ATS_NAMES[s]}
+                    {boardSystemLabel(s)}
                   </option>
                 ))}
               </select>
@@ -496,7 +545,7 @@ export function CareerSourcesPanel({ market }: CareerSourcesPanelProps = {}) {
                 <p className={styles.label}>{t('import.invalidTitle')}</p>
                 <ul className={styles.hint}>
                   {importResult.invalid.map((row) => (
-                    <li key={`${row.line}:${row.reason}`}>{t('import.invalidRow', { line: row.line, reason: t(`import.reason.${row.reason}`) })}</li>
+                    <li key={`${row.line}:${row.reason}`}>{t('import.invalidRow', { line: row.line, reason: importReasonText(row.reason) })}</li>
                   ))}
                 </ul>
                 {importResult.invalidCount > importResult.invalid.length ? (
@@ -553,7 +602,7 @@ export function CareerSourcesPanel({ market }: CareerSourcesPanelProps = {}) {
                   return (
                     <tr key={row.id} className={row.enabled ? undefined : styles.off}>
                       <th scope="row">{row.companyName}</th>
-                      <td>{PUBLIC_ATS_NAMES[row.ats] ?? row.ats}</td>
+                      <td>{row.ats in PUBLIC_ATS_NAMES ? boardSystemLabel(row.ats) : row.ats}</td>
                       <td className={styles.token}>{row.boardToken}</td>
                       <td>{t(`origin.${row.origin ?? 'admin'}`)}</td>
                       <td className={styles.token}>{row.countries && row.countries.length > 0 ? row.countries.join(', ') : t('list.all')}</td>
@@ -562,7 +611,7 @@ export function CareerSourcesPanel({ market }: CareerSourcesPanelProps = {}) {
                       <td>{fmt(row.lastSyncedAt)}</td>
                       <td>{row.lastJobCount ?? t('list.none')}</td>
                       <td className={row.lastError ? styles.problem : undefined}>
-                        {row.lastError ? t(`problem.${problemKey(row.lastError)}`) : t('list.none')}
+                        {row.lastError ? problemText(row.lastError) : t('list.none')}
                       </td>
                       <td>
                         <div className={styles.actions}>

@@ -1,14 +1,19 @@
 // server/src/features/jobs/sources/atsPublic/connectors.ts — public ATS job-board
-// connectors (TASK_PLAN.md WP-42; CN_TW_LAUNCH_PLAN.md WP-TW-JOBS).
+// connectors (TASK_PLAN.md WP-42; CN_TW_LAUNCH_PLAN.md WP-TW-JOBS; MKT-5B).
 //
 // Each connector reads the endpoint the ATS publishes for embedding a job
 // board and maps every posting to the normalizer's input (provider
 // 'ats_public', sourceBoard = the ATS name):
 //
-//   greenhouse       GET boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true
+//   greenhouse       GET boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true&pay_transparency=true
 //   lever            GET api.lever.co/v0/postings/{site}?mode=json&skip&limit
+//   lever_eu         the same on api.eu.lever.co (Lever's EU instance; rows keep the board name 'lever_eu')
 //   ashby            GET api.ashbyhq.com/posting-api/job-board/{org}?includeCompensation=true
 //   smartrecruiters  GET api.smartrecruiters.com/v1/companies/{id}/postings (+ /postings/{id} for the text)
+//   workable         ./connectors/workable.ts   (kill switch ATS_WORKABLE_DISABLED)
+//   recruitee        ./connectors/recruitee.ts
+//   personio         ./connectors/personio.ts
+//   beisen           ./connectors/beisen.ts     (exists only while CN_ATS_BEISEN_ENABLED is true)
 //
 // Workday is not supported: it publishes no public postings API, and its
 // career sites are not read (no scraping, ever — L-5).
@@ -40,6 +45,49 @@
 //     externalIds this deployment stores a posting (none = not wanted here:
 //     its text is never requested).
 //
+// Greenhouse, read in two steps (requests/waveM4-carryover.md, MKT-5B.7). A
+// board's answer with its texts is large (megabytes), and most reads find
+// nothing new. So when we already hold postings of the board, the listing is
+// first asked WITHOUT the texts (`…/jobs`). That answer is a list of posting
+// ids and little else: id, title, `location.name`, `updated_at`,
+// `first_published`, `application_deadline`. It carries NO `offices`, no
+// `departments` and no `content` (seen on a live board on 2026-10-12, and what
+// the documentation says `content=true` adds), so it cannot say where a
+// posting is and is never routed to a market. It is compared with our rows by
+// posting id only (a posting is stored as `<board>:<id>`, and as
+// `<board>:<id>#cn` for its mainland copy):
+//   - a listed posting we hold no open row of, under either id, needs the
+//     texts (unless its stated deadline has passed: it is not kept open);
+//   - so does one whose `updated_at` is later than our oldest copy of it,
+//     less a 30-minute margin for the time between a read and its write (an
+//     edit is also how a posting gains or loses a location);
+//   - when no posting needs them, nothing is downloaded and nothing is
+//     rewritten: the read is `unchangedById`, and the board sync marks the
+//     rows of the listed postings as seen and closes the rows of postings the
+//     board no longer lists (./sync.ts).
+// Any posting that needs its text makes the second request, the whole read,
+// which is routed and written like every other board's. The first step is
+// taken only where "listed, and we hold no row of it" means "new": the source
+// is read for every country and this deployment writes both markets
+// (`storesEveryPosting`). A board read for some countries only, and every
+// board on a deployment that writes one market, is read whole as before.
+// Once a week, at a time that depends on the board id (so the boards do not
+// all fall on one hour), the first read is a whole read whatever the listing
+// says: a change in how we read a posting, or an edit that did not move
+// `updated_at`, then reaches every stored row within seven days. A board we
+// hold nothing of, and a source still without its company name, are read
+// whole at once.
+//
+// Greenhouse pay and deadline (JI-8). The list call is asked with
+// `pay_transparency=true`: a posting that carries `pay_input_ranges` gives its
+// first range with numeric bounds as pay (the API states cents), and a stated
+// `application_deadline` is passed on as the posting's expiry (binding for a
+// board row: normalize/identity.ts `resolveExpiresAt`). A board that sends
+// neither is mapped exactly as before, and no request is ever made per
+// posting. (The key was seen on the list call of two live boards on
+// 2026-10-12, empty on every posting; a populated range has the shape of the
+// documented sample.)
+//
 // `listOnly` (admin "Check now", candidate validation) reads the listing and
 // nothing else. With `firstPage` it asks SmartRecruiters for ONE page per
 // country pass and takes the number of postings from the board's own total:
@@ -48,91 +96,42 @@
 // 200 requests. `boardCompany` also asks the board for the company name it
 // states (Greenhouse: one more documented request; SmartRecruiters: already in
 // the listing; Lever and Ashby state none).
+//
+// Which connectors exist (`connectorEnabled`, `connectorFor`). A system whose
+// connector is switched off cannot be read by any caller: `connectorFor`
+// throws 'connector_disabled' before a URL is built. Workable is on unless
+// ATS_WORKABLE_DISABLED is true; 北森 is off unless CN_ATS_BEISEN_ENABLED is
+// true (and then ./http.ts also knows its host).
 
-import { resolveCountry } from '../../geo/index.js';
+import type { EnvSource } from '../../../../platform/brand/index.js';
 import type { ProviderJobInput } from '../../normalize/index.js';
-import type { PublicAts } from './contract.js';
-import { BoardFetchError, getJson, type HttpDeps } from './http.js';
-import { arr, atsSourceName, decodeEntities, externalIdFor, LEVER_MAX_PAGES, normalizeCountries, num, obj, SMARTRECRUITERS_MAX_PAGES, str } from './shared.js';
+import { CONNECTOR_DISABLED, PUBLIC_ATS, type BoardAts } from './contract.js';
+import { createBeisenConnector } from './connectors/beisen.js';
+import {
+  base,
+  byExternalId,
+  countryFields,
+  dateFromMs,
+  enc,
+  hasPlaceholderName,
+  isoCountry,
+  named,
+  uniqueStrings,
+  wholeBoard,
+  type AtsConnector,
+  type BoardRead,
+  type BoardSource,
+  type ConnectorDeps,
+} from './connectors/common.js';
+import { personio } from './connectors/personio.js';
+import { recruitee } from './connectors/recruitee.js';
+import { workable } from './connectors/workable.js';
+import { BoardFetchError, getJson } from './http.js';
+import { copyIdsOf } from './market.js';
+import { arr, beisenEnabled, beisenMaxPostingsPerRun, decodeEntities, LEVER_MAX_PAGES, normalizeCountries, num, obj, SMARTRECRUITERS_MAX_PAGES, str, tenantDenylist, workableEnabled } from './shared.js';
 
-/** What a connector needs to know about one career source. */
-export interface BoardSource {
-  ats: PublicAts;
-  boardToken: string;
-  companyName: string;
-  /** Ops tag: the country the board mainly hires in (weak hint only, never a filter). */
-  countryCode: string | null;
-  /** ISO codes the board is read for; empty or absent = every country. */
-  countries?: readonly string[] | null;
-}
-
-export interface BoardRead {
-  /** Postings whose text was read this run, in the normalizer's input shape (not yet routed to a market). */
-  inputs: ProviderJobInput[];
-  /** EVERY posting the board lists, mapped from the listing alone (enough to place it; no text for SmartRecruiters). */
-  listing: ProviderJobInput[];
-  /** externalIds of `listing`. */
-  listedIds: string[];
-  /** How many postings the board lists: `listing.length`, or the board's own total when only the first page was read. */
-  listedCount: number;
-  /** False when the listing was cut short (a paging safety stop): closures are then skipped. */
-  complete: boolean;
-  /** HTTP requests made. */
-  calls: number;
-  /** Listed postings we have not stored yet whose text this run did not ask for (the per-run budget was used up, or the run ran out of time). */
-  pendingDetails: number;
-  /** Listed postings we have not stored yet whose text this run asked for and could not read. */
-  failedDetails: number;
-  /** The company name the board itself states, when it states one and was asked or already carries it. */
-  boardCompanyName: string | null;
-}
-
-export interface ConnectorDeps extends HttpDeps {
-  now: Date;
-}
-
-export interface ReadOptions {
-  /** Read the listing only: no posting texts, no inputs. */
-  listOnly?: boolean;
-  /**
-   * With `listOnly`: one request per country pass where the listing is paged
-   * without its texts (SmartRecruiters). `listedCount` is then the board's own
-   * total and the read is `complete` only when that page was the whole listing.
-   */
-  firstPage?: boolean;
-  /**
-   * Our open rows of this board: externalId -> when ingest last saved the
-   * posting (RAJob.lastSeenAt). Decides which posting texts SmartRecruiters reads.
-   */
-  known?: ReadonlyMap<string, Date | null>;
-  /**
-   * The externalIds a listed posting is stored under by this deployment
-   * (./market.ts `storedIdsOf`). Empty = the posting is not written here, so
-   * its text is never requested. Default: the posting's own externalId.
-   */
-  storedIds?: (listed: ProviderJobInput) => string[];
-  /** SmartRecruiters posting texts read this run (default SR_MAX_DETAILS). */
-  detailsBudget?: number;
-  /** Also report the company name the board states (see the header). */
-  boardCompany?: boolean;
-}
-
-/** A source registered without a company name carries its board id as the name until the board's own name is read. */
-export function hasPlaceholderName(source: Pick<BoardSource, 'companyName' | 'boardToken'>): boolean {
-  return source.companyName.trim() === source.boardToken;
-}
-
-/** The source as the postings are mapped: with the board's stated name in place of a placeholder. */
-function named(source: BoardSource, stated: string | null): BoardSource {
-  return stated && hasPlaceholderName(source) ? { ...source, companyName: stated } : source;
-}
-
-export interface AtsConnector {
-  ats: PublicAts;
-  /** The listing URL (shown to ops in the admin panel; the first request). */
-  boardUrl(boardToken: string): string;
-  read(source: BoardSource, deps: ConnectorDeps, opts?: ReadOptions): Promise<BoardRead>;
-}
+export { hasPlaceholderName } from './connectors/common.js';
+export type { AtsConnector, BoardRead, BoardSource, ConnectorDeps, ReadOptions } from './connectors/common.js';
 
 /**
  * The first `limit` of `items`: postings not in `known` first (listing order),
@@ -153,55 +152,26 @@ export function prioritise<T>(items: readonly T[], idOf: (item: T) => string, kn
   return [...fresh, ...seen.map((x) => x.item)].slice(0, Math.max(0, limit));
 }
 
-const byExternalId = (i: ProviderJobInput) => i.externalId;
+// ── Greenhouse ────────────────────────────────────────────────────────────
 
-const enc = encodeURIComponent;
-
-function base(source: BoardSource, postingId: string | number, now: Date): Pick<
-  ProviderJobInput,
-  'externalId' | 'sourceBoard' | 'company' | 'sourcePublisher' | 'applyIsDirect' | 'fetchedAt'
-> {
-  return {
-    externalId: externalIdFor(source.boardToken, postingId),
-    sourceBoard: source.ats,
-    company: source.companyName,
-    sourcePublisher: atsSourceName(source.companyName, source.ats),
-    applyIsDirect: true,
-    fetchedAt: now.toISOString(),
-  };
-}
-
-/** ISO alpha-2 from a code or a country name ("tw", "Taiwan", "臺灣"), else null. */
-function isoCountry(value: unknown): string | null {
-  const s = str(value);
-  if (!s) return null;
-  return resolveCountry(s)?.code ?? null;
-}
-
-/** The posting's own country when it states one, else the board tag as a weak (estimated) hint. */
-function countryFields(stated: string | null, source: BoardSource): Pick<ProviderJobInput, 'locationCountry' | 'locationCountryEstimated'> {
-  if (stated) return { locationCountry: stated, locationCountryEstimated: false };
-  if (source.countryCode) return { locationCountry: source.countryCode, locationCountryEstimated: true };
+/** One entry of Greenhouse's `pay_input_ranges` (docs.greenhouse.io/job-board.html, "Retrieve a job": min_cents, max_cents, currency_type, title, blurb). */
+function greenhousePay(raw: unknown): Pick<ProviderJobInput, 'salaryMin' | 'salaryMax' | 'salaryCurrency' | 'salaryText'> {
+  for (const entry of arr(raw)) {
+    const range = obj(entry);
+    const min = range ? num(range.min_cents) : null;
+    const max = range ? num(range.max_cents) : null;
+    // The first range with a numeric bound; a bound of 0 or less is no figure.
+    if (!range || ((min === null || min <= 0) && (max === null || max <= 0))) continue;
+    return {
+      salaryMin: min !== null && min > 0 ? min / 100 : null,
+      salaryMax: max !== null && max > 0 ? max / 100 : null,
+      salaryCurrency: str(range.currency_type),
+      // The range's own title ("NYC Salary Range") is the pay text; the blurb is prose and stays out.
+      salaryText: str(range.title),
+    };
+  }
   return {};
 }
-
-function dateFromMs(v: unknown): string | null {
-  const n = num(v);
-  if (n === null || n <= 0) return null;
-  const d = new Date(n);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
-
-function uniqueStrings(values: unknown[]): string[] {
-  const out: string[] = [];
-  for (const v of values) {
-    const s = str(v);
-    if (s && !out.includes(s)) out.push(s);
-  }
-  return out;
-}
-
-// ── Greenhouse ────────────────────────────────────────────────────────────
 
 export function mapGreenhouseJob(raw: unknown, source: BoardSource, now: Date): ProviderJobInput | null {
   const j = obj(raw);
@@ -212,6 +182,7 @@ export function mapGreenhouseJob(raw: unknown, source: BoardSource, now: Date): 
   const location = str(obj(j.location)?.name);
   const offices = arr(j.offices).map((o) => obj(o)?.location ?? obj(o)?.name);
   const content = str(j.content);
+  const deadline = str(j.application_deadline);
   return {
     ...base(source, id, now),
     title,
@@ -224,6 +195,10 @@ export function mapGreenhouseJob(raw: unknown, source: BoardSource, now: Date): 
     // first_published is the posting date; updated_at is not (any edit moves it).
     postedAt: str(j.first_published),
     postedAtEstimated: !str(j.first_published),
+    // Pay only when the board sends a range (the description is still read for a pay line otherwise).
+    ...greenhousePay(j.pay_input_ranges),
+    // A stated application deadline is the posting's expiry; none stated adds nothing.
+    ...(deadline ? { expiresAt: deadline } : {}),
   };
 }
 
@@ -236,15 +211,86 @@ async function greenhouseBoardName(boardToken: string, deps: ConnectorDeps): Pro
   }
 }
 
+/** The listing with the posting texts and, where the board states them, the pay ranges (see the header). */
+export function greenhouseReadUrl(boardToken: string): string {
+  return `${greenhouse.boardUrl(boardToken)}&pay_transparency=true`;
+}
+
+/** The listing without the posting texts (a check by hand, a candidate, and the first step of a read). */
+export function greenhouseListUrl(boardToken: string): string {
+  return `https://boards-api.greenhouse.io/v1/boards/${enc(boardToken)}/jobs`;
+}
+
+/** A posting edited this long before we last saved it is read again: the time between a read and its write is inside it. */
+export const GREENHOUSE_CHANGE_MARGIN_MS = 30 * 60 * 1000;
+/** Every board is read whole at least this often, whatever its listing says (see the header). */
+export const GREENHOUSE_FULL_READ_EVERY_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** A stable number from a board id, used to spread the boards' weekly whole reads over the week. */
+function tokenOffsetMs(boardToken: string): number {
+  let h = 0;
+  for (let i = 0; i < boardToken.length; i += 1) h = (h * 31 + boardToken.charCodeAt(i)) >>> 0;
+  return h % GREENHOUSE_FULL_READ_EVERY_MS;
+}
+
+/**
+ * Is this the board's first read of its week? `known` holds when each stored
+ * posting was last saved or marked as seen; the latest of those is when the
+ * board was last read. The week starts at an hour of its own for every board.
+ */
+export function greenhouseFullReadDue(boardToken: string, now: Date, known: ReadonlyMap<string, Date | null>): boolean {
+  let last = Number.NEGATIVE_INFINITY;
+  for (const at of known.values()) if (at && at.getTime() > last) last = at.getTime();
+  if (!Number.isFinite(last)) return true;
+  const week = (ms: number): number => Math.floor((ms - tokenOffsetMs(boardToken)) / GREENHOUSE_FULL_READ_EVERY_MS);
+  return week(now.getTime()) !== week(last);
+}
+
+/**
+ * Does a listed posting need its text read? Decided from the listing without
+ * texts and our open rows alone, by posting id (see the header): we hold no
+ * row of it, or it was edited since our oldest copy. Never from where the
+ * posting is: that listing does not say.
+ */
+export function greenhouseNeedsText(raw: unknown, listed: Pick<ProviderJobInput, 'externalId' | 'expiresAt'>, now: Date, known: ReadonlyMap<string, Date | null>): boolean {
+  const held = copyIdsOf(listed.externalId).filter((id) => known.has(id));
+  if (held.length === 0) {
+    // A posting whose stated deadline has passed is not kept open, so it is never "new" again.
+    const deadline = typeof listed.expiresAt === 'string' ? Date.parse(listed.expiresAt) : Number.NaN;
+    return !(Number.isFinite(deadline) && deadline < now.getTime());
+  }
+  const edited = Date.parse(str(obj(raw)?.updated_at) ?? '');
+  const saved = Math.min(...held.map((id) => known.get(id)?.getTime() ?? Number.NEGATIVE_INFINITY));
+  // An edit time or a save time we cannot read is a posting we cannot vouch for.
+  if (!Number.isFinite(edited) || !Number.isFinite(saved)) return true;
+  return edited > saved - GREENHOUSE_CHANGE_MARGIN_MS;
+}
+
 export const greenhouse: AtsConnector = {
   ats: 'greenhouse',
   boardUrl: (token) => `https://boards-api.greenhouse.io/v1/boards/${enc(token)}/jobs?content=true`,
   async read(source, deps, opts = {}) {
+    let calls = 0;
+    // Step 1 (see the header): we hold postings of this board and keep every one of them, so ask which
+    // postings it lists, and when each was edited, before asking for the texts.
+    if (!opts.listOnly && opts.storesEveryPosting === true && opts.known && opts.known.size > 0 && !hasPlaceholderName(source) && !greenhouseFullReadDue(source.boardToken, deps.now, opts.known)) {
+      const light = obj(await getJson(greenhouseListUrl(source.boardToken), deps));
+      if (!light || !Array.isArray(light.jobs)) throw new BoardFetchError('unexpected_shape');
+      calls += 1;
+      const known = opts.known;
+      const entries = light.jobs
+        .map((raw) => ({ raw, listed: mapGreenhouseJob(raw, source, deps.now) }))
+        .filter((e): e is { raw: unknown; listed: ProviderJobInput } => !!e.listed);
+      if (!entries.some((e) => greenhouseNeedsText(e.raw, e.listed, deps.now, known))) {
+        // Nothing to read. This listing names the postings and does not place them: it is handed on as ids only.
+        return { ...wholeBoard(entries.map((e) => e.listed), { listOnly: true }, calls, null), unchangedById: true };
+      }
+    }
     // listOnly: the same listing without the posting texts.
-    const url = opts.listOnly ? `https://boards-api.greenhouse.io/v1/boards/${enc(source.boardToken)}/jobs` : this.boardUrl(source.boardToken);
+    const url = opts.listOnly ? greenhouseListUrl(source.boardToken) : greenhouseReadUrl(source.boardToken);
     const body = obj(await getJson(url, deps));
     if (!body || !Array.isArray(body.jobs)) throw new BoardFetchError('unexpected_shape');
-    let calls = 1;
+    calls += 1;
     let boardCompanyName: string | null = null;
     if (opts.boardCompany || hasPlaceholderName(source)) {
       boardCompanyName = await greenhouseBoardName(source.boardToken, deps);
@@ -253,7 +299,7 @@ export const greenhouse: AtsConnector = {
     const as = named(source, boardCompanyName);
     // The whole board comes in one answer: every listed posting is handed on.
     const listing = body.jobs.map((raw) => mapGreenhouseJob(raw, as, deps.now)).filter((x): x is ProviderJobInput => !!x);
-    return { inputs: opts.listOnly ? [] : listing, listing, listedIds: listing.map(byExternalId), listedCount: listing.length, complete: true, calls, pendingDetails: 0, failedDetails: 0, boardCompanyName };
+    return wholeBoard(listing, opts, calls, boardCompanyName);
   },
 };
 
@@ -301,31 +347,43 @@ export function mapLeverPosting(raw: unknown, source: BoardSource, now: Date): P
   };
 }
 
-export const lever: AtsConnector = {
-  ats: 'lever',
-  boardUrl: (token) => `https://api.lever.co/v0/postings/${enc(token)}?mode=json`,
-  async read(source, deps, opts = {}) {
-    const listing: ProviderJobInput[] = [];
-    let calls = 0;
-    let complete = false;
-    // Page to the end; the safety stop marks the listing incomplete (closures are then skipped).
-    for (let page = 0; page < LEVER_MAX_PAGES; page += 1) {
-      const body = await getJson(`${this.boardUrl(source.boardToken)}&skip=${page * LEVER_PAGE}&limit=${LEVER_PAGE}`, deps);
-      calls += 1;
-      if (!Array.isArray(body)) throw new BoardFetchError('unexpected_shape');
-      for (const raw of body) {
-        const input = mapLeverPosting(raw, source, deps.now);
-        if (input) listing.push(input);
+/**
+ * A Lever connector for one of Lever's two instances. They are separate
+ * systems with the same API: a site name and a posting id on one say nothing
+ * about the other, so the EU instance has its own system id (`lever_eu`) and
+ * its rows their own board name. The posting links are the API's own
+ * (`hostedUrl`, `applyUrl`: jobs.lever.co / jobs.eu.lever.co).
+ */
+export function createLeverConnector(ats: 'lever' | 'lever_eu', apiHost: 'api.lever.co' | 'api.eu.lever.co'): AtsConnector {
+  return {
+    ats,
+    boardUrl: (token) => `https://${apiHost}/v0/postings/${enc(token)}?mode=json`,
+    async read(source, deps, opts = {}) {
+      const listing: ProviderJobInput[] = [];
+      let calls = 0;
+      let complete = false;
+      // Page to the end; the safety stop marks the listing incomplete (closures are then skipped).
+      for (let page = 0; page < LEVER_MAX_PAGES; page += 1) {
+        const body = await getJson(`${this.boardUrl(source.boardToken)}&skip=${page * LEVER_PAGE}&limit=${LEVER_PAGE}`, deps);
+        calls += 1;
+        if (!Array.isArray(body)) throw new BoardFetchError('unexpected_shape');
+        for (const raw of body) {
+          const input = mapLeverPosting(raw, source, deps.now);
+          if (input) listing.push(input);
+        }
+        if (body.length < LEVER_PAGE) {
+          complete = true;
+          break;
+        }
       }
-      if (body.length < LEVER_PAGE) {
-        complete = true;
-        break;
-      }
-    }
-    // Lever states no company name for a board.
-    return { inputs: opts.listOnly ? [] : listing, listing, listedIds: listing.map(byExternalId), listedCount: listing.length, complete, calls, pendingDetails: 0, failedDetails: 0, boardCompanyName: null };
-  },
-};
+      // Lever states no company name for a board.
+      return { ...wholeBoard(listing, opts, calls, null), complete };
+    },
+  };
+}
+
+export const lever: AtsConnector = createLeverConnector('lever', 'api.lever.co');
+export const leverEu: AtsConnector = createLeverConnector('lever_eu', 'api.eu.lever.co');
 
 // ── Ashby ─────────────────────────────────────────────────────────────────
 
@@ -592,8 +650,44 @@ export const smartrecruiters: AtsConnector = {
   },
 };
 
-export const CONNECTORS: Readonly<Record<PublicAts, AtsConnector>> = { greenhouse, lever, ashby, smartrecruiters };
+// ── The registry ──────────────────────────────────────────────────────────
 
-export function connectorFor(ats: PublicAts): AtsConnector {
+/**
+ * The connectors that exist whatever the environment says. 北森 is not among
+ * them: its connector is built only while CN_ATS_BEISEN_ENABLED is true
+ * (`connectorFor`), so with the flag off no code path holds an object that
+ * could build a request to a tenant board.
+ */
+export const CONNECTORS: Readonly<Record<Exclude<BoardAts, 'beisen'>, AtsConnector>> = {
+  greenhouse,
+  lever,
+  ashby,
+  smartrecruiters,
+  workable,
+  recruitee,
+  personio,
+  lever_eu: leverEu,
+};
+
+/** Is the system's connector switched on in this environment? (Workable: unless its kill switch is set; 北森: only with its flag.) */
+export function connectorEnabled(ats: BoardAts, env: EnvSource = process.env): boolean {
+  if (ats === 'workable') return workableEnabled(env);
+  if (ats === 'beisen') return beisenEnabled(env);
+  return true;
+}
+
+/** The systems whose connector is switched on, in the order of PUBLIC_ATS. */
+export function enabledAts(env: EnvSource = process.env): BoardAts[] {
+  return PUBLIC_ATS.filter((ats) => connectorEnabled(ats, env));
+}
+
+/**
+ * The connector of a system. Throws BoardFetchError('connector_disabled')
+ * when it is switched off in `env`: the caller skips the source and leaves its
+ * postings as they are.
+ */
+export function connectorFor(ats: BoardAts, env: EnvSource = process.env): AtsConnector {
+  if (!connectorEnabled(ats, env)) throw new BoardFetchError(CONNECTOR_DISABLED);
+  if (ats === 'beisen') return createBeisenConnector({ maxPostings: beisenMaxPostingsPerRun(env), denylist: tenantDenylist(env) });
   return CONNECTORS[ats];
 }
