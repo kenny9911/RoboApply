@@ -66,7 +66,8 @@ export function createScoreJobHandler(getService: () => Promise<MatchService> = 
     const { id } = parseParams(req, MatchJobParamsSchema);
     const body = parseBody(req, ScoreJobBodySchema);
     const service = await getService();
-    const fit = await service.scoreJob(userId, id, { ...body, locale: await requestLocale(req), mode: 'on_demand' });
+    // The canonical fit (primary resume): `ScoreJobBodySchema` takes no resume version, so none can reach the service here.
+    const fit = await service.scoreJob(userId, id, { force: body.force, regenerateExplanation: body.regenerateExplanation, locale: await requestLocale(req), mode: 'on_demand' });
     return { fit };
   });
 }
@@ -86,10 +87,11 @@ export function createMatchRouter(
     route(async (req): Promise<FitAnalysisCard> => {
       const userId = requireUserId(req);
       const { id } = parseParams(req, MatchJobParamsSchema);
-      const body = parseBody(req, FitAnalysisBodySchema);
+      // Validated for unknown fields only: the body carries no resume version, so the card is the canonical fit (contract.ts).
+      parseBody(req, FitAnalysisBodySchema);
       const key = idempotencyKey(req);
       const service = await getService();
-      return service.fitAnalysis(userId, id, key, { resumeVariantId: body.resumeVariantId, locale: await requestLocale(req) });
+      return service.fitAnalysis(userId, id, key, { locale: await requestLocale(req) });
     }),
   );
 

@@ -107,6 +107,7 @@ export function createMemoryTailorStore(options: { now?: () => Date } = {}): Mem
         keywordsSelected: [...input.keywordsSelected],
         scoreBefore: null,
         scoreAfter: null,
+        fitSnapshot: null,
         claims: [],
         status: 'generating',
         creditLedgerId: input.creditLedgerId,

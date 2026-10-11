@@ -31,6 +31,9 @@ const store = createMemoryTailorStore();
 const kit = createCreditTestKit();
 const tailor = vi.fn(async () => ({ tailoredResumeMarkdown: TAILORED, changeSummary: '', citationsByLine: {}, citationGuardPassed: true, citationGuardViolations: [] }));
 const markChecklist = vi.fn(async () => undefined);
+const fitAt = (score: number, scoredAt: string) => ({ score, tier: 'good' as const, kind: 'ai' as const, rubric: 'fit_v3' as const, estimator: 'est_v2', model: 'test/model', scoredAt });
+/** What MATCH answers; null (the default) is "cannot run", as in the other route tests. */
+const fits: { canonical: ReturnType<typeof fitAt> | null; variant: ReturnType<typeof fitAt> | null } = { canonical: null, variant: null };
 const serviceDeps = {
   store,
   credits: kit.credits,
@@ -38,7 +41,9 @@ const serviceDeps = {
   market: () => 'intl',
   tailor,
   profileContext: async () => null,
-  score: async () => null,
+  // "Your fit" (the canonical fit of the job) and "With this version" (the tailored version's own fit).
+  canonicalFit: async () => fits.canonical,
+  variantFit: async () => fits.variant,
   markChecklist,
   logAiLabel: async () => undefined,
   assertPhoneBound: async () => undefined,
@@ -184,6 +189,32 @@ describe('tailor session routes', () => {
     expect(done.status).toBe(200);
     expect(done.body.data.status).toBe('finalized');
     expect(markChecklist).toHaveBeenCalledTimes(1);
+  });
+
+  it('MKT-2F: the session view carries the two named measures, and the older before / after aliases with the same values', async () => {
+    fits.canonical = fitAt(66, '2026-10-09T09:30:00.000Z');
+    fits.variant = fitAt(78, '2026-10-10T10:00:00.000Z');
+    try {
+      const created = await h.request<Env<TailorSessionView>>('POST', `${BASE_PATH}/tailor-sessions`, { body: BODY, headers: { 'Idempotency-Key': 'r-fit' } });
+      const view = created.body.data;
+      // "Your fit" is there from the start; "With this version" only once every detail is checked.
+      expect(view.fit.canonical).toEqual({ value: 66, kind: 'ai', tier: 'good', scoredAt: '2026-10-09T09:30:00.000Z', version: { rubric: 'fit_v3', estimator: 'est_v2', model: 'test/model' } });
+      expect(view.fit.variant).toBeNull();
+      expect(view).toMatchObject({ scoreBefore: 66, scoreAfter: null, fit: { before: { value: 66, source: 'ai' }, after: null } });
+      for (const c of view.claims) await h.request('PATCH', `${BASE_PATH}/tailor-sessions/${view.id}/claims/${c.id}`, { body: { status: 'kept' } });
+      const done = (await h.request<Env<TailorSessionView>>('POST', `${BASE_PATH}/tailor-sessions/${view.id}/finalize`)).body.data;
+      expect(done.fit.canonical).toMatchObject({ value: 66, scoredAt: '2026-10-09T09:30:00.000Z' });
+      expect(done.fit.variant).toMatchObject({ value: 78, kind: 'ai', scoredAt: '2026-10-10T10:00:00.000Z' });
+      expect(done).toMatchObject({ scoreBefore: 66, scoreAfter: 78, fit: { before: { value: 66 }, after: { value: 78, asOf: '2026-10-10T10:00:00.000Z' } } });
+      const got = (await h.request<Env<TailorSessionView>>('GET', `${BASE_PATH}/tailor-sessions/${view.id}`)).body.data;
+      expect(got.fit).toEqual(done.fit);
+    } finally {
+      fits.canonical = null;
+      fits.variant = null;
+      // Give the tailor credit back to the tests that follow (the kit holds one day's allowance).
+      kit.store.ledger.length = 0;
+      kit.store.windows.length = 0;
+    }
   });
 
   it('404 for an unknown session or another user session', async () => {

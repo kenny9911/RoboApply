@@ -6,6 +6,7 @@
 // to the user.
 
 import type { Prisma } from '../../../generated/prisma/client.js';
+import type { FitSnapshot } from '../../match/contract.js';
 import { resumeContentHashOf } from '../store.js';
 
 export interface TailorVariantRow {
@@ -40,11 +41,24 @@ export interface TailorSessionRow {
   keywordsSelected: string[];
   scoreBefore: number | null;
   scoreAfter: number | null;
+  /**
+   * `{ before, after }`, each a `FitSnapshot` (match/contract.ts) or null:
+   * what the two numbers were, with kind, versions and time (strategy 2.2 I6).
+   * Written in the same update as the numbers. Null on a session written
+   * before the column existed.
+   */
+  fitSnapshot?: unknown;
   claims: unknown;
   status: string;
   creditLedgerId: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** The stored value of `RATailorSession.fitSnapshot`. */
+export interface TailorFitSnapshots {
+  before: FitSnapshot | null;
+  after: FitSnapshot | null;
 }
 
 export interface NewTailorSession {
@@ -85,8 +99,11 @@ export interface TailorStore {
   /** The session a credit reservation paid for (idempotent replays). */
   findSessionByLedger(userId: string, ledgerId: string): Promise<TailorSessionRow | null>;
   createSession(input: NewTailorSession): Promise<TailorSessionRow>;
-  /** Status / score writes. */
-  updateSession(sessionId: string, data: { status?: string; scoreBefore?: number | null; scoreAfter?: number | null }): Promise<TailorSessionRow>;
+  /** Status / score writes. A score is written together with its snapshot (`fitSnapshot`), never alone. */
+  updateSession(
+    sessionId: string,
+    data: { status?: string; scoreBefore?: number | null; scoreAfter?: number | null; fitSnapshot?: TailorFitSnapshots },
+  ): Promise<TailorSessionRow>;
   /**
    * generating → review in one transaction: create the tailored version
    * (kind 'tailored_for_jd', sourceKind 'tailored', `unverifiedClaims`) and
@@ -125,6 +142,7 @@ const SESSION_SELECT = {
   keywordsSelected: true,
   scoreBefore: true,
   scoreAfter: true,
+  fitSnapshot: true,
   claims: true,
   status: true,
   creditLedgerId: true,
@@ -185,7 +203,12 @@ export function createPrismaTailorStore(): TailorStore {
     },
     async updateSession(sessionId, data) {
       const p = await db();
-      return p.rATailorSession.update({ where: { id: sessionId }, data, select: SESSION_SELECT });
+      const { fitSnapshot, ...rest } = data;
+      return p.rATailorSession.update({
+        where: { id: sessionId },
+        data: { ...rest, ...(fitSnapshot !== undefined ? { fitSnapshot: json(fitSnapshot) } : {}) },
+        select: SESSION_SELECT,
+      });
     },
     async completeGeneration(sessionId, result) {
       const p = await db();

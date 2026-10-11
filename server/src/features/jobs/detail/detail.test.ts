@@ -14,13 +14,17 @@ import { getBrand } from '../../../platform/brand/registry.js';
 import { createFakePrisma } from '../../../test/fakePrisma.js';
 import { fakeAuth, startRouteHarness, type RouteHarness } from '../../../test/routeHarness.js';
 import type { CompanyProfile } from '../companies/contract.js';
-import type { MatchFitView, PreScoreResult } from '../../match/contract.js';
+import type { MatchFitView } from '../../match/contract.js';
+import { fitToView, type Fit } from '../../match/fit.js';
+import { fitFixture, fitsFixture } from '../../agent/__tests__/fitFixture.js';
+import { LOGISTICS_BY_FILTERS_REF } from '../../match/preScore.js';
+import { fitBadge } from '../../feed/ranking.js';
 import { REQUIREMENT_TAGS } from '../enrich/reconcile.js';
 import { cardMeta } from '../marketHooks.js';
 import { JOB_REQUIREMENT_TAGS, type JobDetailResponse } from './contract.js';
 import { createJobDetailRouter } from './routes.js';
-import { practicedForJobFrom } from './defaultService.js';
-import { createJobDetailService, trackerEntryLockKey, type JobDetailDb, type JobDetailServiceDeps } from './service.js';
+import { explainNow, practicedForJobFrom, similarFromFeed } from './defaultService.js';
+import { SIMILAR_LIMIT, SIMILAR_SOURCE_LIMIT, createJobDetailService, trackerEntryLockKey, type JobDetailDb, type JobDetailServiceDeps } from './service.js';
 import { NEWS_CACHE_MAX, clearNewsCache, newsCacheSize, searchCompanyNews, toNewsItems } from './newsSearch.js';
 import {
   classYearsOf,
@@ -34,6 +38,7 @@ import {
   toRequirements,
   toJobDetail,
   toSections,
+  toFitBadge,
   toSponsorship,
   type JobRow,
 } from './view.js';
@@ -132,6 +137,25 @@ function fitView(over: Partial<MatchFitView> = {}): MatchFitView {
   };
 }
 
+/** THE fit of the job page in these tests: a quick estimate (82, Great) with one skills line. */
+function pageFit(over: Partial<Fit> = {}): Fit {
+  return fitFixture({
+    jobId: 'j1',
+    score: 82,
+    tier: 'great',
+    kind: 'estimate',
+    dimensions: [{ key: 'skills', weight: 30, score: 90, status: 'scored', evidence: [{ text: 'Go', source: 'resume', ref: 'skill_have' }] }],
+    skills: { aligned: ['Go'], missing: [], softSkills: [], listed: 1 },
+    topOverlap: 'Go',
+    estimateReason: 'ai_off',
+    ...over,
+  });
+}
+
+/** `getFits` for the Similar list of the older tests: 50, 60, 70 … in list order, and no fit for j4. */
+const listFits = async (_u: string, ids: string[]) =>
+  fitsFixture(ids.filter((id) => id !== 'j4').map((id) => fitFixture({ jobId: id, score: 50 + ids.indexOf(id) * 10, tier: 'possible', kind: 'estimate' })));
+
 function setup(opts: { jobs?: Record<string, unknown>[]; seed?: Record<string, Record<string, unknown>[]>; deps?: Partial<JobDetailServiceDeps>; brand?: typeof intl } = {}) {
   const db = createFakePrisma({
     seed: {
@@ -153,8 +177,8 @@ function setup(opts: { jobs?: Record<string, unknown>[]; seed?: Record<string, R
     brand: () => opts.brand ?? intl,
     now: () => NOW,
     companyProfile: async () => PROFILE,
-    cachedFit: async () => fitView(),
-    preScore: async (_u, ids) => ids.map((id, i): PreScoreResult => ({ jobId: id, score: id === 'j4' ? null : 50 + i * 10, tier: 'possible', kind: 'pre', dimensions: [], topOverlap: null, topGap: null })),
+    fit: async () => pageFit(),
+    fits: listFits,
     explain: ({ personalized }) => ({ mode: personalized ? 'personalized' : 'non_personalized', headline: { key: 'legal.explain.headline.personalized' }, reasons: [], gaps: [], notices: [] }),
     personalized: async () => true,
     peopleContext: async () => ({ pastCompanies: ['Globex', 'Acme'], schools: ['State University'] }),
@@ -461,7 +485,7 @@ describe('GET /jobs/:id (service)', () => {
   it('no score: fit and explanation are null; optional parts failing never break the page', async () => {
     const { service } = setup({
       deps: {
-        cachedFit: async () => null,
+        fit: async () => null,
         companyProfile: async () => {
           throw new Error('db down');
         },
@@ -863,9 +887,9 @@ describe('save, share, similar, company news', () => {
   });
 
   it('FIX-3: a similar job with a stored AI score shows that score and its kind (the number the feed card shows), not a second estimate', async () => {
-    const preScore = async (_u: string, ids: string[]): Promise<PreScoreResult[]> =>
-      ids.map((id) => ({ jobId: id, score: id === 'j2' ? 59 : 87, tier: id === 'j2' ? 'possible' : 'great', kind: id === 'j2' ? 'ai' : 'pre', dimensions: [], topOverlap: null, topGap: null }));
-    const { service } = setup({ jobs: [job(), job({ id: 'j2' }), job({ id: 'j3' })], deps: { preScore } });
+    const fits = async (_u: string, ids: string[]) =>
+      fitsFixture(ids.map((id) => fitFixture({ jobId: id, score: id === 'j2' ? 59 : 87, tier: id === 'j2' ? 'possible' : 'great', kind: id === 'j2' ? 'ai' : 'estimate' })));
+    const { service } = setup({ jobs: [job(), job({ id: 'j2' }), job({ id: 'j3' })], deps: { fits } });
     const items = (await service.similar('u1', 'j1')).items;
     expect(items.map((i) => [i.jobId, i.fit?.score, i.fit?.kind])).toEqual([
       ['j3', 87, 'pre'],
@@ -906,22 +930,25 @@ describe('save, share, similar, company news', () => {
   });
 
   it('GET /:id lists similar ids without scoring them; GET /:id/similar ranks', async () => {
-    const preScore = vi.fn(async (_u: string, ids: string[]): Promise<PreScoreResult[]> => ids.map((id) => ({ jobId: id, score: 60, tier: 'good', kind: 'pre', dimensions: [], topOverlap: null, topGap: null })));
-    const { service } = setup({ jobs: [job(), job({ id: 'j2' }), job({ id: 'j3', fraudFlags: [{ rule: 'x' }] })], deps: { preScore } });
+    const fits = vi.fn(async (_u: string, ids: string[]) => fitsFixture(ids.map((id) => fitFixture({ jobId: id, score: 60, tier: 'good' }))));
+    const { service } = setup({ jobs: [job(), job({ id: 'j2' }), job({ id: 'j3', fraudFlags: [{ rule: 'x' }] })], deps: { fits } });
     expect((await service.get('u1', 'j1')).similarIds).toEqual(['j2']);
-    expect(preScore).not.toHaveBeenCalled();
+    expect(fits).not.toHaveBeenCalled();
     await service.similar('u1', 'j1');
-    expect(preScore).toHaveBeenCalledTimes(1);
+    expect(fits).toHaveBeenCalledTimes(1);
   });
 
   it('GoApply with jobs.recommendations off (CN_RECRUITMENT_INFO_MODE=off): no similar jobs anywhere', async () => {
     const cnJob = (over: Record<string, unknown> = {}) => job({ market: 'cn', locationCountry: 'CN', ...over });
-    const preScore = vi.fn(async () => [] as PreScoreResult[]);
-    const s = setup({ brand: cn, jobs: [cnJob(), cnJob({ id: 'j2' })], deps: { preScore } });
+    const fits = vi.fn(async () => new Map<string, Fit>());
+    const similarSource = vi.fn(async () => ['j2']);
+    const s = setup({ brand: cn, jobs: [cnJob(), cnJob({ id: 'j2' })], deps: { fits, similarSource } });
     s.flags.delete('jobs.recommendations');
     expect(await s.service.similar('u1', 'j1')).toEqual({ items: [] });
     expect((await s.service.get('u1', 'j1')).similarIds).toEqual([]);
-    expect(preScore).not.toHaveBeenCalled();
+    expect(fits).not.toHaveBeenCalled();
+    // The vector source is not asked either: nothing is recommended in this mode.
+    expect(similarSource).not.toHaveBeenCalled();
     s.flags.add('jobs.recommendations');
     expect((await s.service.similar('u1', 'j1')).items.map((i) => i.jobId)).toEqual(['j2']);
   });
@@ -988,6 +1015,234 @@ describe('save, share, similar, company news', () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+});
+
+// ── MKT-2F: the job page and Similar jobs read THE fit; Similar jobs takes a vector source ──
+
+describe('MKT-2F: one fit on the job page and on Similar jobs (strategy 2.2 I1, I2)', () => {
+  it('the job page answers getFit as the fit card reads it: same score, tier and kind, with confidence and the reason', async () => {
+    const estimate = pageFit({ score: 61, tier: 'possible', confidence: 'low', confidenceReason: 'no_skills_listed' });
+    const fit = vi.fn(async () => estimate);
+    const { service } = setup({ deps: { fit } });
+    const res = await service.get('u1', 'j1');
+    expect(res.fit).toEqual(fitToView(estimate));
+    expect(res.fit).toMatchObject({ score: 61, tier: 'possible', kind: 'pre', confidence: 'low', confidenceReason: 'no_skills_listed' });
+    expect(fit).toHaveBeenCalledWith('u1', 'j1');
+  });
+
+  it('a stored AI fit is what the page shows (never an estimate next to it), with its prose', async () => {
+    const ai = pageFit({ score: 63, tier: 'possible', kind: 'ai', cached: true, prose: { summary: 'Your Go work fits.', strengths: ['Go services'], gaps: [], keywordsMatched: [], keywordsMissing: [], locale: 'en' } });
+    const { service } = setup({ deps: { fit: async () => ai } });
+    const res = await service.get('u1', 'j1');
+    expect(res.fit).toMatchObject({ score: 63, tier: 'possible', kind: 'ai', summary: 'Your Go work fits.', strengths: ['Go services'], cached: true });
+  });
+
+  it('a Similar card carries the same badge the feed builds from the same Fit (toFitBadge = feed fitBadge)', () => {
+    for (const fit of [
+      fitFixture({ jobId: 'a', score: 87, tier: 'great', kind: 'ai', topGap: 'Kubernetes', topOverlap: 'Go' }),
+      fitFixture({ jobId: 'b', score: 58, tier: 'possible', kind: 'estimate', confidence: 'low', confidenceReason: 'no_level_stated' }),
+      fitFixture({ jobId: 'c', score: null, tier: null, kind: 'estimate' }),
+    ]) {
+      expect(toFitBadge(fit)).toEqual(fitBadge(fit));
+    }
+    expect(toFitBadge(undefined)).toBeNull();
+    expect(toFitBadge(fitFixture({ score: null, tier: null }))).toBeNull();
+    expect(toFitBadge(fitFixture({ score: 58, tier: 'possible', kind: 'estimate', confidence: 'low', confidenceReason: 'no_level_stated' }))).toEqual({
+      tier: 'possible',
+      score: 58,
+      kind: 'pre',
+      topGap: null,
+      topOverlap: null,
+      confidence: 'low',
+      confidenceReason: 'no_level_stated',
+    });
+  });
+
+  it('"Why this job" on the job page leaves out a logistics part that only repeats the filters, and names the tier the card shows', () => {
+    const view = fitToView(
+      pageFit({
+        score: 66,
+        // The card keeps Possible by hysteresis although 66 alone would read Good.
+        tier: 'possible',
+        dimensions: [
+          { key: 'skills', weight: 30, score: 90, status: 'scored', evidence: [{ text: 'Go', source: 'resume', ref: 'skill_have' }] },
+          { key: 'logistics', weight: 10, score: null, status: 'not_stated', evidence: [{ text: 'Austin, TX', source: 'posting', ref: LOGISTICS_BY_FILTERS_REF }] },
+        ],
+      }),
+    );
+    const out = explainNow({ market: 'intl', personalized: true, fit: view });
+    const lines = JSON.stringify(out);
+    expect(lines).not.toContain('logistics');
+    expect(lines).toContain('skills');
+    expect(JSON.stringify(out.headline)).toContain('possible');
+    // A logistics part with facts of its own stays.
+    const withFacts = explainNow({
+      market: 'intl',
+      personalized: true,
+      fit: { ...view, dimensions: [{ key: 'logistics', weight: 10, score: null, status: 'not_stated', evidence: [] }] },
+    });
+    expect(JSON.stringify(withFacts)).toContain('logistics');
+  });
+});
+
+describe('MKT-2F: Similar jobs by job vector, re-ordered by the one fit (strategy 2.3 step 6)', () => {
+  /** A "Java Backend Architect" the taxonomy stored under the building architects. */
+  const anchor = () => job({ id: 'j1', title: 'Java Backend Architect', titleNormalized: 'java backend architect', primaryTaxonomyId: 'architect' });
+  const building = (id: string, postedHoursAgo: number) =>
+    job({ id, title: 'Landscape Architect', titleNormalized: 'landscape architect', primaryTaxonomyId: 'architect', postedAt: new Date(NOW.getTime() - postedHoursAgo * 3_600_000) });
+  const backend = (id: string, over: Record<string, unknown> = {}) =>
+    job({ id, title: 'Backend Software Architect', titleNormalized: 'backend software architect', primaryTaxonomyId: 'backend_engineer', ...over });
+  const world = () => [anchor(), building('la1', 1), building('la2', 2), backend('be1'), backend('be2'), backend('be3')];
+  const noFits = async () => new Map<string, Fit>();
+
+  it('with a vector source the list is the source’s postings, not the same-role ones the taxonomy error would give', async () => {
+    const similarSource = vi.fn(async () => ['be2', 'be1', 'be3']);
+    const { service } = setup({ jobs: world(), deps: { similarSource, fits: noFits } });
+    const items = (await service.similar('u1', 'j1')).items;
+    // Source order (vector distance) when no fit is known.
+    expect(items.map((i) => i.jobId)).toEqual(['be2', 'be1', 'be3']);
+    expect(items.map((i) => i.title)).not.toContain('Landscape Architect');
+    // The source is told the job, its market and country, and asked for the nearest 50.
+    expect(similarSource).toHaveBeenCalledWith({ id: 'j1', market: 'intl', locationCountry: 'US', visibility: 'public', ownerUserId: null }, SIMILAR_SOURCE_LIMIT);
+    expect(SIMILAR_SOURCE_LIMIT).toBe(50);
+    // GET /:id lists the same ids without scoring.
+    const fits = vi.fn(noFits);
+    const page = setup({ jobs: world(), deps: { similarSource, fits } });
+    expect((await page.service.get('u1', 'j1')).similarIds).toEqual(['be2', 'be1', 'be3']);
+    expect(fits).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['no source', undefined],
+    ['a null answer', async () => null],
+    ['an empty list', async () => [] as string[]],
+    [
+      'a source that throws',
+      async () => {
+        throw new Error('vector read failed');
+      },
+    ],
+    ['a source that answers something that is not a list', async () => 'be1' as unknown as string[]],
+  ])('%s: the list is the same-role list, as before, and nothing is thrown', async (_name, similarSource) => {
+    const { service } = setup({ jobs: world(), deps: { similarSource, fits: noFits } });
+    expect((await service.similar('u1', 'j1')).items.map((i) => i.jobId)).toEqual(['la1', 'la2']);
+    expect((await service.get('u1', 'j1')).similarIds).toEqual(['la1', 'la2']);
+  });
+
+  it('every id is checked again here: another market or country, a closed, private, non-canonical, flagged or hidden posting and the job itself never show', async () => {
+    const jobs = [
+      ...world(),
+      backend('cn1', { market: 'cn', locationCountry: 'CN' }),
+      backend('ca1', { locationCountry: 'CA' }),
+      backend('closed', { closedAt: NOW }),
+      backend('archived', { archivedAt: NOW }),
+      backend('private', { visibility: 'private', ownerUserId: 'someone' }),
+      backend('dup', { isCanonical: false }),
+      backend('flagged', { fraudFlags: [{ rule: 'upfront_fee' }] }),
+      backend('hidden'),
+    ];
+    const similarSource = async () => ['cn1', 'ca1', 'closed', 'archived', 'private', 'dup', 'flagged', 'hidden', 'j1', 'gone', 'be1', 'be1', 'be3'];
+    const { service } = setup({ jobs, seed: { rAJobUserState: [{ userId: 'u1', jobId: 'hidden', hiddenAt: NOW }] }, deps: { similarSource, fits: noFits } });
+    expect((await service.similar('u1', 'j1')).items.map((i) => i.jobId)).toEqual(['be1', 'be3']);
+    expect((await service.get('u1', 'j1')).similarIds).toEqual(['be1', 'be3']);
+  });
+
+  it('a source whose ids all fail the checks falls back to the same-role list (never an empty list by accident)', async () => {
+    const jobs = [...world(), backend('cn1', { market: 'cn', locationCountry: 'CN' })];
+    const { service } = setup({ jobs, deps: { similarSource: async () => ['cn1', 'gone'], fits: noFits } });
+    expect((await service.similar('u1', 'j1')).items.map((i) => i.jobId)).toEqual(['la1', 'la2']);
+  });
+
+  it('order: best fit first, unknown fit last, then the source order; each card shows the Fit the feed shows', async () => {
+    const byId: Record<string, Fit> = {
+      be1: fitFixture({ jobId: 'be1', score: 70, tier: 'good', kind: 'estimate' }),
+      be2: fitFixture({ jobId: 'be2', score: 84, tier: 'great', kind: 'ai' }),
+      // be3 and be4: the same score, so the source order decides. be5: no fit.
+      be3: fitFixture({ jobId: 'be3', score: 55, tier: 'possible', kind: 'estimate', confidence: 'low', confidenceReason: 'no_skills_listed' }),
+      be4: fitFixture({ jobId: 'be4', score: 55, tier: 'possible', kind: 'estimate' }),
+    };
+    const fits = vi.fn(async (_u: string, ids: string[]) => fitsFixture(ids.flatMap((id) => (byId[id] ? [byId[id]!] : []))));
+    const jobs = [...world(), backend('be4'), backend('be5')];
+    const { service } = setup({ jobs, deps: { similarSource: async () => ['be5', 'be4', 'be3', 'be1', 'be2'], fits } });
+    const items = (await service.similar('u1', 'j1')).items;
+    expect(items.map((i) => i.jobId)).toEqual(['be2', 'be1', 'be4', 'be3', 'be5']);
+    expect(items.map((i) => i.fit)).toEqual([fitBadge(byId.be2), fitBadge(byId.be1), fitBadge(byId.be4), fitBadge(byId.be3), null]);
+    expect(items[0]!.fit).toMatchObject({ score: 84, kind: 'ai' });
+    expect(items[3]!.fit).toMatchObject({ kind: 'pre', confidence: 'low', confidenceReason: 'no_skills_listed' });
+    // One list read for the candidates; no single-job (model-capable) read.
+    expect(fits).toHaveBeenCalledTimes(1);
+    expect(fits.mock.calls[0]![1]).toEqual(['be5', 'be4', 'be3', 'be1', 'be2']);
+  });
+
+  it('at most six cards, the best six of the candidates', async () => {
+    const ids = Array.from({ length: 9 }, (_, i) => `n${i}`);
+    const jobs = [anchor(), ...ids.map((id) => backend(id))];
+    const fits = async (_u: string, asked: string[]) => fitsFixture(asked.map((id) => fitFixture({ jobId: id, score: 50 + Number(id.slice(1)), tier: 'possible' })));
+    const { service } = setup({ jobs, deps: { similarSource: async () => ids, fits } });
+    const items = (await service.similar('u1', 'j1')).items;
+    expect(items).toHaveLength(SIMILAR_LIMIT);
+    expect(items.map((i) => i.jobId)).toEqual(['n8', 'n7', 'n6', 'n5', 'n4', 'n3']);
+    expect((await service.get('u1', 'j1')).similarIds).toEqual(ids.slice(0, SIMILAR_LIMIT));
+  });
+
+  it('a failing fit read lists the postings in source order with no fit (the list never fails over it)', async () => {
+    const fits = async () => {
+      throw new Error('scores down');
+    };
+    const { service } = setup({ jobs: world(), deps: { similarSource: async () => ['be3', 'be1'], fits } });
+    const items = (await service.similar('u1', 'j1')).items;
+    expect(items.map((i) => [i.jobId, i.fit])).toEqual([
+      ['be3', null],
+      ['be1', null],
+    ]);
+  });
+
+  it('GoApply: no fit is read without the 个性化推荐 grant (the postings are listed in source order, with none); with the grant the fits are read', async () => {
+    const cnJob = (id: string, over: Record<string, unknown> = {}) => backend(id, { market: 'cn', locationCountry: 'CN', applyUrl: `https://careers.example.cn/jobs/${id}`, ...over });
+    const jobs = [job({ id: 'j1', market: 'cn', locationCountry: 'CN', primaryTaxonomyId: 'architect' }), cnJob('c1'), cnJob('c2')];
+    const fits = vi.fn(async (_u: string, ids: string[]) => fitsFixture(ids.map((id) => fitFixture({ jobId: id, score: id === 'c2' ? 80 : 60, tier: id === 'c2' ? 'great' : 'possible' }))));
+    const similarSource = async () => ['c1', 'c2'];
+    const without = setup({ brand: cn, jobs, deps: { similarSource, fits, personalized: async () => false } });
+    expect((await without.service.similar('u1', 'j1')).items.map((i) => [i.jobId, i.fit])).toEqual([
+      ['c1', null],
+      ['c2', null],
+    ]);
+    expect(fits).not.toHaveBeenCalled();
+    const granted = setup({ brand: cn, jobs, deps: { similarSource, fits, personalized: async () => true } });
+    expect((await granted.service.similar('u1', 'j1')).items.map((i) => [i.jobId, i.fit?.score])).toEqual([
+      ['c2', 80],
+      ['c1', 60],
+    ]);
+    // A grant check that fails is read as "no grant" (fails closed).
+    const broken = setup({
+      brand: cn,
+      jobs,
+      deps: {
+        similarSource,
+        fits: vi.fn(async () => new Map<string, Fit>()),
+        personalized: async () => {
+          throw new Error('consent store down');
+        },
+      },
+    });
+    expect((await broken.service.similar('u1', 'j1')).items.map((i) => i.fit)).toEqual([null, null]);
+    expect(broken.deps.fits).not.toHaveBeenCalled();
+  });
+
+  it('defaultService: the feed seam is read without a static type, so a feed module without the export answers null', async () => {
+    const row = { id: 'j1', market: 'intl', locationCountry: 'US', visibility: 'public', ownerUserId: null };
+    // Before the retrieval bundle merges: no such export.
+    expect(await similarFromFeed(row, 50, async () => ({ feedService: {} }))).toBeNull();
+    expect(await similarFromFeed(row, 50, async () => ({ similarJobIds: 'not a function' }))).toBeNull();
+    expect(await similarFromFeed(row, 50, async () => null)).toBeNull();
+    // After it: the export is called with the row and the limit, and its answer is passed on as it is.
+    const similarJobIds = vi.fn(async () => ['be1', 'be2']);
+    expect(await similarFromFeed(row, 50, async () => ({ similarJobIds }))).toEqual(['be1', 'be2']);
+    expect(similarJobIds).toHaveBeenCalledWith(row, 50);
+    expect(await similarFromFeed(row, 50, async () => ({ similarJobIds: async () => null }))).toBeNull();
+    // A feed module that fails to load is the service's "throws" case: it lists the same-role jobs.
+    await expect(similarFromFeed(row, 50, async () => Promise.reject(new Error('feed failed to load')))).rejects.toThrow('feed failed to load');
   });
 });
 

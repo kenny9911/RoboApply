@@ -26,6 +26,7 @@ import type { FitAnalysisCard as Card, KeywordRow, MatchDimension, MatchFitView 
 import { renderWithProviders } from '../../../__tests__/utils/renderWithProviders';
 import { renderWithBrand } from '../../../__tests__/shell/helpers';
 import { DimensionList, FitAnalysisCard, FitAnalysisView, FitScore, JobFit, JobFitView, KeywordCheck, WhatYoureMissing, WhyYouFit } from './index';
+import { lowConfidenceReason } from './FitScore';
 import { uniq } from './JobFit';
 import { plainQuote } from './labels';
 
@@ -123,6 +124,132 @@ describe('FitScore', () => {
     expect(screen.getByText('—')).toBeInTheDocument();
     expect(screen.getByText(LINE)).toBeInTheDocument();
     expect(screen.queryByText(/0 \/ 100/)).not.toBeInTheDocument();
+  });
+});
+
+// ── MKT-2F: a quick estimate that rests on little says why (strategy 2.4; MATCH 4.4 point 6) ──
+
+describe('MKT-2F: FitScore shows confidence as one plain reason', () => {
+  const estimate = (over: Partial<MatchFitView> = {}) => fit({ kind: 'pre', summary: null, estimateReason: null, confidence: 'low', ...over });
+
+  it.each([
+    ['no_skills_listed', 'This post lists no skills'],
+    ['no_level_stated', 'This post states no level'],
+    ['no_role_evidence', 'Your resume shows no role to compare'],
+    ['few_details', 'This post says too little to compare'],
+  ] as const)('a low-confidence estimate (%s): the tag and one reason', (confidenceReason, sentence) => {
+    renderWithProviders(<FitScore fit={estimate({ confidenceReason })} />);
+    expect(screen.getByText('Quick estimate')).toBeInTheDocument();
+    expect(screen.getByTestId('fit-low-confidence')).toHaveTextContent(sentence);
+    expect(screen.getAllByTestId('fit-low-confidence')).toHaveLength(1);
+    expect(screen.getByText(LINE)).toBeInTheDocument();
+  });
+
+  it('no_resume uses the existing no-resume line, and says it once', () => {
+    const noResume = 'Add a resume for a full comparison. This estimate uses your profile and preferences.';
+    // The usual case: that is also why this is an estimate, so the "why" line already says it.
+    const first = renderWithProviders(<FitScore fit={estimate({ confidenceReason: 'no_resume', estimateReason: 'no_resume' })} />);
+    expect(screen.getAllByText(noResume)).toHaveLength(1);
+    expect(screen.queryByTestId('fit-low-confidence')).toBeNull();
+    first.unmount();
+    // On a compact card the "why" line is not shown: the reason line carries it.
+    const compact = renderWithProviders(<FitScore compact fit={estimate({ confidenceReason: 'no_resume', estimateReason: 'no_resume' })} />);
+    expect(screen.getByTestId('fit-low-confidence')).toHaveTextContent(noResume);
+    compact.unmount();
+    // Another reason for the estimate: both lines, each once.
+    renderWithProviders(<FitScore fit={estimate({ confidenceReason: 'no_resume', estimateReason: 'ai_off' })} />);
+    expect(screen.getByText(/AI is turned off for your account/)).toBeInTheDocument();
+    expect(screen.getByTestId('fit-low-confidence')).toHaveTextContent(noResume);
+  });
+
+  it('a high- or medium-confidence estimate shows the tag only; an AI fit shows neither the tag nor a reason', () => {
+    for (const confidence of ['high', 'medium'] as const) {
+      const r = renderWithProviders(<FitScore fit={estimate({ confidence, confidenceReason: null })} />);
+      expect(screen.getByText('Quick estimate')).toBeInTheDocument();
+      expect(screen.queryByTestId('fit-low-confidence')).toBeNull();
+      r.unmount();
+    }
+    // An AI fit of a thin posting has low confidence too; it is not an estimate and says nothing here.
+    renderWithProviders(<FitScore fit={fit({ kind: 'ai', confidence: 'low', confidenceReason: 'no_skills_listed' })} />);
+    expect(screen.queryByText('Quick estimate')).toBeNull();
+    expect(screen.queryByTestId('fit-low-confidence')).toBeNull();
+  });
+
+  it('a fit from a server that sends no confidence, or a reason we have no words for, shows the tag only (never a guessed reason)', () => {
+    const older = renderWithProviders(<FitScore fit={fit({ kind: 'pre', summary: null })} />);
+    expect(screen.getByText('Quick estimate')).toBeInTheDocument();
+    expect(screen.queryByTestId('fit-low-confidence')).toBeNull();
+    older.unmount();
+    renderWithProviders(<FitScore fit={estimate({ confidenceReason: 'something_new' as never })} />);
+    expect(screen.queryByTestId('fit-low-confidence')).toBeNull();
+    expect(lowConfidenceReason({ kind: 'pre', confidence: 'low', confidenceReason: null })).toBeNull();
+    expect(lowConfidenceReason({ kind: 'pre', confidence: 'low', confidenceReason: 'no_level_stated' })).toBe('no_level_stated');
+    expect(lowConfidenceReason({ kind: 'ai', confidence: 'low', confidenceReason: 'no_level_stated' })).toBeNull();
+    expect(lowConfidenceReason(null)).toBeNull();
+  });
+
+  it('the job page passes confidence through: JobFitView shows the reason of the fit it is handed', async () => {
+    renderWithProviders(<JobFitView fit={estimate({ confidenceReason: 'no_skills_listed', strengths: [], gaps: [] })} />);
+    expect(within(screen.getByTestId('job-fit')).getByTestId('fit-low-confidence')).toHaveTextContent('This post lists no skills');
+    // …and through the connected component, with no resume version in the request (one fit per job).
+    api.scoreJob.mockResolvedValue({ fit: estimate({ confidenceReason: 'no_level_stated', strengths: [], gaps: [] }) });
+    renderWithProviders(<JobFit jobId="job2" />);
+    await waitFor(() => expect(screen.getAllByTestId('job-fit')).toHaveLength(2));
+    expect(screen.getByText('This post states no level')).toBeInTheDocument();
+    expect(api.scoreJob).toHaveBeenLastCalledWith('job2', {}, expect.anything());
+  });
+});
+
+describe('MKT-2F: GoApply fit card wording (strategy 2.5: no visa wording; pay as posted)', () => {
+  /** A mainland fit as the server sends it: no visa check, pay evidence in the posting's own words. */
+  const cnDims: MatchDimension[] = [
+    { key: 'title_level', weight: 35, score: 80, status: 'scored', evidence: [{ text: '后端开发工程师', source: 'posting', ref: 'title' }] },
+    { key: 'skills', weight: 30, score: 67, status: 'scored', evidence: [{ text: 'Go', source: 'resume', ref: 'skill_have' }] },
+    { key: 'industry', weight: 15, score: null, status: 'not_stated', evidence: [] },
+    { key: 'logistics', weight: 10, score: 100, status: 'scored', evidence: [{ text: '上海', source: 'posting', ref: 'location_met' }, { text: '18-28K·15薪', source: 'posting', ref: 'pay_met' }] },
+    { key: 'career_path', weight: 10, score: null, status: 'not_stated', evidence: [] },
+  ];
+
+  it('a pay line shows the posting\'s words and no annualised figure', () => {
+    renderWithBrand(<JobFitView fit={fit({ kind: 'pre', summary: null, strengths: [], gaps: [], dimensions: cnDims, estimateReason: null })} />, { brand: 'goapply' });
+    const card = screen.getByTestId('job-fit');
+    expect(within(card).getByText(/18-28K·15薪/)).toBeInTheDocument();
+    const text = card.textContent ?? '';
+    // 18-28K × 15 months would be 270,000 to 420,000 a year: none of that is printed.
+    expect(text).not.toMatch(/270[,.]?000|420[,.]?000|27万|42万/);
+    expect(text).not.toMatch(/a year|per year|annual|\/yr|年薪/i);
+    expect(text).not.toMatch(/[¥$€£]\s?\d/);
+  });
+
+  it('no string rendered from the fit namespace on GoApply contains visa wording', () => {
+    const VISA = /visa|sponsor|签证|簽證|work permit/i;
+    const variants: Array<Partial<MatchFitView>> = [
+      { kind: 'ai', dimensions: cnDims },
+      { kind: 'ai', dimensions: cnDims, summaryLocaleStale: true },
+      { kind: 'pre', summary: null, strengths: [], gaps: [], dimensions: cnDims, estimateReason: 'ai_off' },
+      ...(['no_skills_listed', 'no_level_stated', 'no_role_evidence', 'no_resume', 'few_details'] as const).map((confidenceReason) => ({
+        kind: 'pre' as const,
+        summary: null,
+        strengths: [],
+        gaps: [],
+        dimensions: cnDims,
+        confidence: 'low' as const,
+        confidenceReason,
+      })),
+      ...(['no_resume', 'daily_cap', 'budget', 'ai_unavailable', 'ai_failed'] as const).map((estimateReason) => ({ kind: 'pre' as const, summary: null, strengths: [], gaps: [], dimensions: cnDims, estimateReason })),
+      // A logistics part that only repeats the person's filters, and one with nothing to compare.
+      { kind: 'pre', summary: null, dimensions: cnDims.map((d) => (d.key === 'logistics' ? { ...d, score: null, status: 'not_stated' as const, evidence: [{ text: '上海 · 18-28K·15薪', source: 'posting' as const, ref: 'logistics_by_your_filters' }] } : d)) },
+      { kind: 'pre', summary: null, dimensions: cnDims.map((d) => (d.key === 'logistics' ? { ...d, score: null, status: 'not_stated' as const, evidence: [] } : d)) },
+      { kind: 'pre', summary: null, score: null, tier: null, dimensions: [] },
+    ];
+    for (const over of variants) {
+      const r = renderWithBrand(<JobFitView fit={fit(over)} rewrite={{ run: () => undefined, pending: false, failed: true }} />, { brand: 'goapply' });
+      expect(r.container.textContent ?? '', JSON.stringify(over).slice(0, 120)).not.toMatch(VISA);
+      r.unmount();
+    }
+    // The same fit on RoboApply does name the visa part (the wording differs by market, not by accident).
+    const robo = renderWithProviders(<JobFitView fit={fit({ kind: 'ai', dimensions: cnDims })} />);
+    expect(robo.container.textContent ?? '').toMatch(/visa/i);
   });
 });
 

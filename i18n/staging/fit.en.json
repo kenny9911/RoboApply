@@ -16,6 +16,14 @@
       "evidence": {
         "logistics_by_your_filters": "These already match the filters you set, so they do not change the score: {text}"
       }
+    },
+    "confidence": {
+      "reason": {
+        "no_skills_listed": "This post lists no skills",
+        "no_level_stated": "This post states no level",
+        "no_role_evidence": "Your resume shows no role to compare",
+        "few_details": "This post says too little to compare"
+      }
     }
   }
 }

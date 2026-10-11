@@ -18,7 +18,8 @@
 import type { ProductBrand } from '../../../platform/brand/registry.js';
 import { cnSalary } from '../../cn/jobs/contract.js';
 import { applyLinkOf, bankListable, hasPayFigure, salaryLineOf, sourceFactsOf, sourceKindOf, type FeedItem, type FitBadge, type SalaryLine } from '../../feed/contract.js';
-import type { PreScoreResult } from '../../match/contract.js';
+import { toWireKind } from '../../match/contract.js';
+import type { Fit } from '../../match/index.js';
 import { payPlausible, statesAmount } from '../normalize/index.js';
 import { bestTaxonomyMatch, taxonomyLabel } from '../taxonomy/index.js';
 import { findCity, resolveCountry } from '../geo/index.js';
@@ -362,13 +363,23 @@ export function toCompanySummary(row: Pick<JobRow, 'companyId' | 'companyName' |
 }
 
 /**
- * Feed fit badge from a list score (null score → no badge, never 0). The kind
- * is kept: a stored AI score is the same number the feed card shows and is
- * not labelled "Quick estimate".
+ * The feed card's fit badge from THE fit (null score → no badge, never 0):
+ * the same fields the feed builds from the same `Fit` (feed/ranking.ts
+ * `fitBadge`; a test keeps the two equal). The kind is kept: a stored AI score
+ * is the number the feed card shows and is not labelled "Quick estimate"; an
+ * estimate carries its confidence and, when that is low, the reason.
  */
-export function toFitBadge(pre: PreScoreResult | undefined): FitBadge | null {
-  if (!pre || pre.score == null || !pre.tier) return null;
-  return { tier: pre.tier, score: pre.score, kind: pre.kind, topGap: pre.topGap, topOverlap: pre.topOverlap };
+export function toFitBadge(fit: Fit | null | undefined): FitBadge | null {
+  if (!fit || fit.score === null || fit.tier === null) return null;
+  return {
+    tier: fit.tier,
+    score: fit.score,
+    kind: toWireKind(fit.kind),
+    topGap: fit.topGap,
+    topOverlap: fit.topOverlap,
+    confidence: fit.confidence,
+    confidenceReason: fit.confidenceReason,
+  };
 }
 
 /** A similar job as a feed card; pay keeps the posting's own period (weekly too) and its words-only text. */

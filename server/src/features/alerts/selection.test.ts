@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { digestSince, instantAllowance, instantSince, selectAlertJobs, type ScoredJob } from './selection.js';
+import type { FitSnapshot } from '../match/contract.js';
+import { alertTierOf, digestSince, instantAllowance, instantSince, selectAlertJobs, type ScoredJob } from './selection.js';
 import { digestDue, inQuietHours, localTime, msUntilQuietEnds, normalizeQuietHours, resolveTimeZone, startOfLocalDay } from './time.js';
 
 const s = (jobId: string, score: number | null, tier: ScoredJob['tier'], topGap: string | null = null): ScoredJob => ({ jobId, score, tier, topGap });
@@ -15,7 +16,58 @@ describe('selectAlertJobs', () => {
     });
     expect(r.picked.map((p) => p.jobId)).toEqual(['e', 'a', 'g']);
     expect(r.qualifying).toBe(3);
-    expect(r.picked[1]).toEqual({ jobId: 'a', score: 70, tier: 'good', gap: 'SQL' });
+    // A caller that says nothing about the kind is read as a quick estimate with no snapshot.
+    expect(r.picked[1]).toEqual({ jobId: 'a', score: 70, tier: 'good', lowered: false, gap: 'SQL', kind: 'estimate', fit: null });
+  });
+
+  it('MKT-2F: a quick estimate with low confidence never counts above Possible: it still alerts, ordered after every fit that earned its tier, and the card keeps the fit\'s own tier (I1)', () => {
+    const snap = (kind: FitSnapshot['kind'], score: number, tier: FitSnapshot['tier']): FitSnapshot => ({ score, tier, kind, rubric: 'fit_v3', estimator: 'est_v2', model: kind === 'ai' ? 'm' : null, scoredAt: '2026-10-10T08:00:00.000Z' });
+    const scores: ScoredJob[] = [
+      // 88 "great" on a post that says almost nothing.
+      { jobId: 'thin', score: 88, tier: 'great', topGap: null, kind: 'estimate', confidence: 'low', snapshot: snap('estimate', 88, 'great') },
+      { jobId: 'ai', score: 70, tier: 'good', topGap: null, kind: 'ai', confidence: 'high', snapshot: snap('ai', 70, 'good') },
+      { jobId: 'est', score: 81, tier: 'great', topGap: null, kind: 'estimate', confidence: 'medium', snapshot: snap('estimate', 81, 'great') },
+      // An AI fit keeps its own tier whatever its coverage.
+      { jobId: 'aiLow', score: 83, tier: 'great', topGap: null, kind: 'ai', confidence: 'low', snapshot: snap('ai', 83, 'great') },
+      // A fit that earned Possible is listed before the thin estimate that only counts as one.
+      { jobId: 'poss', score: 50, tier: 'possible', topGap: null, kind: 'estimate', confidence: 'high', snapshot: snap('estimate', 50, 'possible') },
+    ];
+    const r = selectAlertJobs({ candidateIds: ['thin', 'ai', 'est', 'aiLow', 'poss'], excluded: new Set(), scores, limit: 5 });
+    expect(r.picked.map((p) => [p.jobId, p.tier, p.kind, p.lowered])).toEqual([
+      ['aiLow', 'great', 'ai', false],
+      ['est', 'great', 'estimate', false],
+      ['ai', 'good', 'ai', false],
+      ['poss', 'possible', 'estimate', false],
+      // Last, yet with the tier and score every other surface shows for it.
+      ['thin', 'great', 'estimate', true],
+    ]);
+    // One card, one tier: the tier shown is the tier of the snapshot that travels with it.
+    for (const p of r.picked) expect(p.tier).toBe(p.fit!.tier);
+    expect(r.picked[4]!.fit).toEqual(snap('estimate', 88, 'great'));
+    // What a fit counts as when the alert orders its jobs.
+    expect(alertTierOf({ tier: 'great', kind: 'estimate', confidence: 'low' })).toBe('possible');
+    expect(alertTierOf({ tier: 'possible', kind: 'estimate', confidence: 'low' })).toBe('possible');
+    expect(alertTierOf({ tier: 'unlikely', kind: 'estimate', confidence: 'low' })).toBeNull();
+    expect(alertTierOf({ tier: 'great', kind: 'estimate', confidence: 'medium' })).toBe('great');
+    expect(alertTierOf({ tier: 'great', kind: 'ai', confidence: 'low' })).toBe('great');
+  });
+
+  it('MKT-2F: a thin Good estimate is ordered after a fit that earned Possible, takes the next place, and shows Good', () => {
+    const low = (id: string, score: number): ScoredJob => ({ jobId: id, score, tier: 'good', topGap: null, kind: 'estimate', confidence: 'low' });
+    const r = selectAlertJobs({ candidateIds: ['l1', 'l2', 'p1'], excluded: new Set(), scores: [low('l1', 66), low('l2', 74), s('p1', 47, 'possible')], limit: 2 });
+    expect(r.qualifying).toBe(3);
+    expect(r.picked.map((p) => [p.jobId, p.tier, p.lowered])).toEqual([
+      ['p1', 'possible', false],
+      ['l2', 'good', true],
+    ]);
+  });
+
+  it('MKT-2F: at the same tier and score an AI fit is listed before a quick estimate', () => {
+    const scores: ScoredJob[] = [
+      { jobId: 'e', score: 70, tier: 'good', topGap: null, kind: 'estimate', confidence: 'high' },
+      { jobId: 'a', score: 70, tier: 'good', topGap: null, kind: 'ai', confidence: 'high' },
+    ];
+    expect(selectAlertJobs({ candidateIds: ['e', 'a'], excluded: new Set(), scores, limit: 5 }).picked.map((p) => p.jobId)).toEqual(['a', 'e']);
   });
 
   it('returns nothing (so nothing is sent) when no candidate qualifies', () => {

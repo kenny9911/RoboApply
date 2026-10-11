@@ -48,11 +48,13 @@ import {
   TIER_HYSTERESIS_POINTS,
   rubricOfPrompt,
   tierForScore,
+  toWireKind,
   type ConfidenceReason,
   type EstimateReason,
   type EstimateResult,
   type FitConfidence,
   type FitRubric,
+  type FitSnapshot,
   type FitTierKey,
   type MatchDimension,
   type MatchFitView,
@@ -145,10 +147,8 @@ export interface Fit {
   cached: boolean;
 }
 
-/** The wire value of a fit kind: an estimate stays `pre`, so the published extension and the web keep working. */
-export function toWireKind(kind: Fit['kind']): 'pre' | 'ai' {
-  return kind === 'ai' ? 'ai' : 'pre';
-}
+// The wire value of a fit kind (`toWireKind`: an estimate stays `pre`) is a contract rule; re-exported for callers of this module.
+export { toWireKind };
 
 // ── Tier hysteresis (I5) ──────────────────────────────────────────────────
 
@@ -396,6 +396,26 @@ export function fitToListResult(fit: Fit): PreScoreResult {
   };
 }
 
+// ── Snapshots (I6) ────────────────────────────────────────────────────────
+
+/**
+ * The copy of a fit that may be stored or sent out of the app (an alert or
+ * lifecycle mail, a notification card, a tailoring session's "before" and
+ * "after"): the number with its kind, the versions that produced it and when.
+ * In-app lists and pages never show a snapshot; they read `getFit` / `getFits`.
+ */
+export function fitSnapshot(fit: Pick<Fit, 'score' | 'tier' | 'kind' | 'version' | 'scoredAt'>): FitSnapshot {
+  return {
+    score: fit.score,
+    tier: fit.tier,
+    kind: fit.kind,
+    rubric: fit.version.rubric,
+    estimator: fit.version.estimator,
+    model: fit.version.model,
+    scoredAt: fit.scoredAt,
+  };
+}
+
 // ── The three functions ───────────────────────────────────────────────────
 
 export interface GetFitOptions {
@@ -478,3 +498,34 @@ export async function getFits(userId: string, jobIds: string[], opts?: GetFitsOp
 export async function getVariantFit(userId: string, jobId: string, variantId: string, opts?: GetFitOptions): Promise<Fit> {
   return (await production()).getVariantFit(userId, jobId, variantId, opts);
 }
+
+// ── A posting that is not a stored job ────────────────────────────────────
+
+/**
+ * The id an ad-hoc posting is estimated under. It is not the id of any stored
+ * job (job ids carry no colon), so no stored score can ever belong to it.
+ */
+export const ADHOC_POSTING_ID = 'adhoc:posting';
+
+/** What `estimateForPosting` reads: a posting in the shape the matcher reads, without the fields that say whose it is. */
+export type AdhocPosting = Omit<MatchJobRecord, 'id' | 'visibility' | 'ownerUserId'>;
+
+/**
+ * The v2 estimate for a posting that is not one of our jobs (the page the
+ * person has open in the browser extension). It is the same fit a stored job
+ * would get before any AI read: assembled by `assembleFit` with the person's
+ * primary resume, the market's priors and its calibration map.
+ *
+ * Always `kind: 'estimate'`. Nothing is stored and no model is called: the
+ * posting is handed to `getFits` as a row the caller already holds, under an
+ * id no stored score can carry. Null when the posting is of another market
+ * than the request's brand, or when nothing could be assembled.
+ */
+export async function estimateForPosting(userId: string, posting: AdhocPosting, fits?: Pick<FitFunctions, 'getFits'>): Promise<Fit | null> {
+  const row: MatchJobRecord = { ...posting, id: ADHOC_POSTING_ID, visibility: 'private', ownerUserId: userId };
+  const read = fits ?? (await production());
+  const fit = (await read.getFits(userId, [row.id], { rows: [row] })).get(row.id) ?? null;
+  // An estimate by construction; the check keeps the promise if the id rule above is ever broken.
+  return fit && fit.kind === 'estimate' ? fit : null;
+}
+

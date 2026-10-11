@@ -365,10 +365,15 @@ describe('queue', () => {
     const db = makeDb();
     await seedItem(db, { jobId: 'j1', state: 'picked' });
     await seedItem(db, { jobId: 'j2', state: 'picked' });
-    const fitsFor = vi.fn(async (_u: string, ids: string[]) => new Map(ids.filter((id) => id === 'j1').map((id) => [id, { tier: 'good' as const, score: 72 }])));
+    // What the seam answers is the live fit (kind included), read on every list request: no fit is stored on a queue row.
+    const fitsFor = vi.fn(async (_u: string, ids: string[]) => new Map(ids.filter((id) => id === 'j1').map((id) => [id, { tier: 'good' as const, score: 72, kind: 'ai' as const, confidence: 'high' as const }])));
     const { service } = makeDeps(db, 'roboapply', { fitsFor });
     const list = await service.listQueue('u1', {});
-    expect(list.items.find((i) => i.jobId === 'j1')!.job).toMatchObject({ title: 'Role j1', fit: { tier: 'good', score: 72 } });
+    expect(list.items.find((i) => i.jobId === 'j1')!.job).toMatchObject({ title: 'Role j1', fit: { tier: 'good', score: 72, kind: 'ai', confidence: 'high' } });
+    // Read again on the next request (the row shows the fit as it is then, e.g. an AI fit that arrived since).
+    fitsFor.mockResolvedValueOnce(new Map([['j1', { tier: 'possible' as const, score: 61, kind: 'pre' as const }]]));
+    expect((await service.listQueue('u1', {})).items.find((i) => i.jobId === 'j1')!.job!.fit).toEqual({ tier: 'possible', score: 61, kind: 'pre' });
+    expect(fitsFor).toHaveBeenCalledTimes(2);
     expect(list.items.find((i) => i.jobId === 'j2')!.job).not.toHaveProperty('fit');
     expect(fitsFor).toHaveBeenCalledWith('u1', expect.arrayContaining(['j1', 'j2']));
     // GoApply without 个性化推荐 (the seam answers nothing), or a failing read: the list still loads.

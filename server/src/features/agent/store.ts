@@ -180,6 +180,30 @@ export function isJobClosed(job: Pick<JobRow, 'closedAt' | 'archivedAt'>): boole
 
 export type QueueFit = NonNullable<QueueJobSummary['fit']>;
 
+/** The fields of a `Fit` (match/fit.ts) a Ready to apply row shows. */
+export interface QueueFitSource {
+  jobId: string;
+  score: number | null;
+  tier: QueueFit['tier'] | null;
+  kind: 'ai' | 'estimate';
+  confidence?: QueueFit['confidence'];
+}
+
+/**
+ * `getFits` as the rows show it: the same score, tier and kind as the feed
+ * card and the job page (an estimate is `pre` on the wire). A job with no
+ * comparable fit has no entry (the row shows none, never 0). The list reads
+ * this live on every request; no fit is stored on a queue row.
+ */
+export function queueFits(fits: ReadonlyMap<string, QueueFitSource>): Map<string, QueueFit> {
+  const out = new Map<string, QueueFit>();
+  for (const [jobId, f] of fits) {
+    if (!f.tier || typeof f.score !== 'number' || !Number.isFinite(f.score)) continue;
+    out.set(jobId, { tier: f.tier, score: f.score, kind: f.kind === 'ai' ? 'ai' : 'pre', ...(f.confidence ? { confidence: f.confidence } : {}) });
+  }
+  return out;
+}
+
 export function jobSummary(job: JobRow | null | undefined, fit?: QueueFit | null): QueueJobSummary | null {
   if (!job) return null;
   return {

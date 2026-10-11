@@ -10,7 +10,9 @@ import { NOTIFY_TEMPLATES } from '../../platform/email/templates/notify/index.js
 import type { NotifyMessage } from '../alerts/deliver.js';
 import type { PreferenceFacts } from '../alerts/preferences.js';
 import type { Recipient } from '../alerts/repo.js';
-import { createPrismaLifecycleRepo, resumeCheckViewSignalSince, type LifecyclePerson, type LifecycleRepo, type PrismaLifecycleRepoOptions } from './repo.js';
+import { fitSnapshot, type Fit } from '../match/fit.js';
+import { fitFixture, fitsFixture } from '../agent/__tests__/fitFixture.js';
+import { TOP_FIT_CANDIDATES, createPrismaLifecycleRepo, resumeCheckViewSignalSince, type LifecyclePerson, type LifecycleRepo, type PrismaLifecycleRepoOptions, type TopFitJob } from './repo.js';
 import { LIFECYCLE_STEPS, TIPS_STEPS, dayBudgetUsed, eligibleSteps, stepForTemplate, type SentRecord } from './rules.js';
 import { FEED_LIMITS } from '../feed/contract.js';
 import { CANDIDATE_PAGE, RE_ENGAGEMENT_COUNT_LIMIT, canSendWith, countNewJobsWith, createLifecycleTask, runForPerson, type LifecycleDeps } from './service.js';
@@ -141,7 +143,7 @@ const recipient = (brand: BrandId = 'roboapply'): Recipient => ({ userId: 'u1', 
 
 function makeDeps(
   p: LifecyclePerson,
-  opts: { prefs?: PreferenceFacts; count?: number | null; credits?: number | null; free?: boolean; claim?: boolean; topJob?: { id: string; title: string; company: string } | null } = {},
+  opts: { prefs?: PreferenceFacts; count?: number | null; credits?: number | null; free?: boolean; claim?: boolean; topJob?: TopFitJob | null } = {},
 ) {
   const sentMsgs: NotifyMessage[] = [];
   const recorded: Array<{ userId: string; templateKey: string; at: Date }> = [];
@@ -473,14 +475,122 @@ describe('lifecycle repo: resume check view signal (SR-39a-1)', () => {
     const scores = vi.fn(async () => [{ jobId: 'job_gh', score: 90, job: { title: '产品经理', companyName: '示例科技' } }]);
     const db = { rAJobMatchScore: { findMany: scores }, rAJobUserState: { findMany: async () => [] } };
     const getDb = (async () => db) as unknown as NonNullable<PrismaLifecycleRepoOptions['getDb']>;
-    const off = createPrismaLifecycleRepo({ getDb, env: { CN_RECRUITMENT_INFO_MODE: 'off' } });
+    // THE fit of the candidate (match/fit.ts `getFits`): an AI fit at Great right now.
+    const fits = vi.fn(async (_u: string, ids: string[]) => fitsFixture(ids.map((id) => fitFixture({ jobId: id, score: 88, tier: 'great', kind: 'ai' }))));
+    const named = { id: 'job_gh', title: '产品经理', company: '示例科技', fit: fitSnapshot(fitFixture({ score: 88, tier: 'great', kind: 'ai' })) };
+    const off = createPrismaLifecycleRepo({ getDb, fits, snapshot: fitSnapshot, env: { CN_RECRUITMENT_INFO_MODE: 'off' } });
     expect(await off.topFitJob('u1', 'cn')).toBeNull();
     expect(scores).not.toHaveBeenCalled();
-    const on = createPrismaLifecycleRepo({ getDb, env: { CN_RECRUITMENT_INFO_MODE: 'partner_deeplink' } });
-    expect(await on.topFitJob('u1', 'cn')).toEqual({ id: 'job_gh', title: '产品经理', company: '示例科技' });
-    const byDefault = createPrismaLifecycleRepo({ getDb, env: {} });
-    expect(await byDefault.topFitJob('u1', 'cn')).toEqual({ id: 'job_gh', title: '产品经理', company: '示例科技' });
+    expect(fits).not.toHaveBeenCalled();
+    const on = createPrismaLifecycleRepo({ getDb, fits, snapshot: fitSnapshot, env: { CN_RECRUITMENT_INFO_MODE: 'partner_deeplink' } });
+    expect(await on.topFitJob('u1', 'cn')).toEqual(named);
+    const byDefault = createPrismaLifecycleRepo({ getDb, fits, snapshot: fitSnapshot, env: {} });
+    expect(await byDefault.topFitJob('u1', 'cn')).toEqual(named);
     // RoboApply is not affected by the GoApply mode.
-    expect(await off.topFitJob('u1', 'intl')).toEqual({ id: 'job_gh', title: '产品经理', company: '示例科技' });
+    expect(await off.topFitJob('u1', 'intl')).toEqual(named);
+  });
+});
+
+// ── MKT-2F: the tip names a job only by the fit every surface shows now (strategy 2.2 I1, I6) ──
+
+describe('lifecycle repo: the tailoring tip reads THE fit', () => {
+  /** Stored rows as the table holds them: any resume version, any age. Highest stored score first. */
+  const stored = [
+    // A row written for a tailored version: 95 there, 52 for the main resume.
+    { jobId: 'variant_only', score: 95, job: { title: 'Staff Engineer', companyName: 'Acme' } },
+    // A row from a resume the person has since replaced: the live fit is a quick estimate now.
+    { jobId: 'stale_resume', score: 91, job: { title: 'Principal Engineer', companyName: 'Globex' } },
+    { jobId: 'hidden', score: 90, job: { title: 'Engineer', companyName: 'Hidden Co' } },
+    { jobId: 'real_good', score: 72, job: { title: 'Backend Engineer', companyName: 'Initech' } },
+    { jobId: 'real_great', score: 70, job: { title: 'Data Engineer', companyName: 'Umbrella' } },
+    // Two stored rows of one job (two resume versions) are one candidate.
+    { jobId: 'real_good', score: 68, job: { title: 'Backend Engineer', companyName: 'Initech' } },
+  ];
+  const live: Record<string, Fit> = {
+    variant_only: fitFixture({ jobId: 'variant_only', score: 52, tier: 'possible', kind: 'ai' }),
+    stale_resume: fitFixture({ jobId: 'stale_resume', score: 86, tier: 'great', kind: 'estimate' }),
+    hidden: fitFixture({ jobId: 'hidden', score: 99, tier: 'great', kind: 'ai' }),
+    real_good: fitFixture({ jobId: 'real_good', score: 71, tier: 'good', kind: 'ai', scoredAt: '2026-10-09T09:00:00.000Z' }),
+    real_great: fitFixture({ jobId: 'real_great', score: 83, tier: 'great', kind: 'ai', scoredAt: '2026-10-08T09:00:00.000Z' }),
+  };
+  type StoredRow = (typeof stored)[number];
+  /** The candidate query as the database answers it: highest stored score first, one row per job when asked for distinct jobs, then the limit. */
+  function answer(rows: StoredRow[], args: { distinct?: string[]; take?: number }): StoredRow[] {
+    const ordered = [...rows].sort((a, b) => b.score - a.score);
+    const seen = new Set<string>();
+    const kept = args.distinct?.includes('jobId') ? ordered.filter((r) => !seen.has(r.jobId) && !!seen.add(r.jobId)) : ordered;
+    return kept.slice(0, args.take ?? kept.length);
+  }
+  function repoWith(rows: StoredRow[] = stored, fitsById: Record<string, Fit> = live) {
+    const findScores = vi.fn(async (args: { distinct?: string[]; take?: number }) => answer(rows, args));
+    const db = { rAJobMatchScore: { findMany: findScores }, rAJobUserState: { findMany: async () => [{ jobId: 'hidden' }] } };
+    const getDb = (async () => db) as unknown as NonNullable<PrismaLifecycleRepoOptions['getDb']>;
+    const fits = vi.fn(async (_u: string, ids: string[]) => fitsFixture(ids.flatMap((id) => (fitsById[id] ? [fitsById[id]!] : []))));
+    return { repo: createPrismaLifecycleRepo({ getDb, fits, snapshot: fitSnapshot, env: {} }), fits, findScores };
+  }
+
+  it('names the job whose live fit is an AI fit at Good or better, best first: never by a stale or version-specific stored row', async () => {
+    const { repo, fits, findScores } = repoWith();
+    const top = await repo.topFitJob('u1', 'intl');
+    expect(top).toEqual({
+      id: 'real_great',
+      title: 'Data Engineer',
+      company: 'Umbrella',
+      // The snapshot that travels with the mail: kind, versions and when it was scored (I6).
+      fit: { score: 83, tier: 'great', kind: 'ai', rubric: 'fit_v3', estimator: 'est_v2', model: 'test/model', scoredAt: '2026-10-08T09:00:00.000Z' },
+    });
+    // One list read (never a model call) for the open candidates, each once; the hidden job is not even asked about.
+    expect(fits).toHaveBeenCalledTimes(1);
+    expect(fits).toHaveBeenCalledWith('u1', ['variant_only', 'stale_resume', 'real_good', 'real_great']);
+    expect(findScores.mock.calls[0]![0]).toMatchObject({
+      take: TOP_FIT_CANDIDATES,
+      distinct: ['jobId'],
+      orderBy: { score: 'desc' },
+      where: { userId: 'u1', job: { market: 'intl', visibility: 'public', isCanonical: true, archivedAt: null, closedAt: null } },
+    });
+  });
+
+  it('the candidates are different jobs: rows of tailored versions cannot crowd out the job that has an AI fit for the main resume', async () => {
+    // Five jobs, four tailored versions each: 20 stored rows, every one above the row of the job that counts.
+    const crowd = ['c1', 'c2', 'c3', 'c4', 'c5'];
+    const variantRows: StoredRow[] = crowd.flatMap((jobId, j) => [0, 1, 2, 3].map((v) => ({ jobId, score: 99 - j * 4 - v, job: { title: `Role ${jobId}`, companyName: 'Crowd Co' } })));
+    expect(variantRows).toHaveLength(TOP_FIT_CANDIDATES);
+    const rows: StoredRow[] = [...variantRows, { jobId: 'main_ai', score: 68, job: { title: 'Platform Engineer', companyName: 'Initech' } }];
+    const fitsById: Record<string, Fit> = {
+      // For the main resume each crowded job only has a quick estimate (never scored for it, or the resume changed since).
+      ...Object.fromEntries(crowd.map((id) => [id, fitFixture({ jobId: id, score: 74, tier: 'good', kind: 'estimate' })])),
+      main_ai: fitFixture({ jobId: 'main_ai', score: 69, tier: 'good', kind: 'ai' }),
+    };
+    const { repo, fits } = repoWith(rows, fitsById);
+    expect(await repo.topFitJob('u1', 'intl')).toMatchObject({ id: 'main_ai', title: 'Platform Engineer', company: 'Initech', fit: { score: 69, tier: 'good', kind: 'ai' } });
+    // Six different jobs were asked about, each once.
+    expect(fits).toHaveBeenCalledWith('u1', [...crowd, 'main_ai']);
+  });
+
+  it('no job is named when no candidate has a live AI fit at Good or better (a quick estimate alone never names one)', async () => {
+    const onlyStale = repoWith(stored.slice(0, 3));
+    expect(await onlyStale.repo.topFitJob('u1', 'intl')).toBeNull();
+    // A job the person can no longer see has no fit at all: not named.
+    const gone = repoWith([{ jobId: 'gone', score: 90, job: { title: 'Engineer', companyName: 'Gone Co' } }], {});
+    expect(await gone.repo.topFitJob('u1', 'intl')).toBeNull();
+    // No stored rows: nothing is read from the fit contract.
+    const empty = repoWith([]);
+    expect(await empty.repo.topFitJob('u1', 'intl')).toBeNull();
+    expect(empty.fits).not.toHaveBeenCalled();
+  });
+
+  it('the tip message carries the snapshot beside the job (service params)', async () => {
+    const { repo } = repoWith();
+    const job = await repo.topFitJob('u1', 'intl');
+    const p = person({ createdAt: new Date(NOW.getTime() - 5 * DAY - HOUR), onboardingStep: 'done', history: [sent('welcome', new Date(NOW.getTime() - 5 * DAY))] });
+    const { deps, sentMsgs } = makeDeps(p, { topJob: job });
+    expect(await runForPerson(p, recipient(), prefs({ tipsGranted: true }), getBrand('roboapply'), deps, NOW)).toEqual({ sent: 'tips_first_tailor' });
+    expect(sentMsgs[0]).toMatchObject({
+      templateKey: NOTIFY_TEMPLATES.tipsFirstTailor,
+      href: '/jobs/real_great?from=tips',
+      params: { job: { id: 'real_great', title: 'Data Engineer', company: 'Umbrella', fit: { kind: 'ai', score: 83, tier: 'great', rubric: 'fit_v3', estimator: 'est_v2', scoredAt: '2026-10-08T09:00:00.000Z' } } },
+    });
+    // JSON-safe: the params are stored with the notification and travel through the queue.
+    expect(JSON.parse(JSON.stringify(sentMsgs[0]!.params))).toEqual(sentMsgs[0]!.params);
   });
 });

@@ -113,7 +113,24 @@ export function fitView(jobId = 'job_1'): MatchFitView {
     topOverlap: 'SQL',
     topGap: 'GraphQL',
     scoredAt: NOW.toISOString(),
+    // The canonical fit: the person's main resume, whatever resume is attached to the thread.
+    resumeVariantId: 'res_primary',
+    estimateReason: null,
+    summaryLocaleStale: false,
+    cached: false,
+    coverage: 0.8,
+    confidence: 'high',
+    confidenceReason: null,
   } as unknown as MatchFitView;
+}
+
+/**
+ * The fit of one named resume version ("With this version"): what
+ * `areas.scoreJob` answers when it is asked with a `resumeVariantId`. A
+ * different number than the canonical fit, on purpose.
+ */
+export function variantFitView(jobId = 'job_1', resumeVariantId = 'res_tailored'): MatchFitView {
+  return { ...fitView(jobId), score: 81, tier: 'great', kind: 'ai', resumeVariantId, cached: true } as MatchFitView;
 }
 
 export type FakeAreas = { [K in keyof CopilotAreas]: ReturnType<typeof vi.fn> & CopilotAreas[K] };
@@ -130,7 +147,11 @@ export function fakeAreas(over: Partial<CopilotAreas> = {}): FakeAreas {
       if (jobId.startsWith('missing')) throw Object.assign(new Error('nf'), { code: 'not_found', status: 404 });
       return jobDetail(jobId);
     },
-    scoreJob: async (_u, jobId) => fitView(jobId),
+    // Like the real area: the canonical fit unless a resume version is named.
+    scoreJob: async (_u, jobId, options) => {
+      if (options?.resumeVariantId === 'res_gone') throw Object.assign(new Error('Resume not found.'), { code: 'not_found', status: 404 });
+      return options?.resumeVariantId ? variantFitView(jobId, options.resumeVariantId) : fitView(jobId);
+    },
     storedFit: async (_u, jobId) => fitView(jobId),
     addedJobs: async () => [],
     companyProfile: async () => ({

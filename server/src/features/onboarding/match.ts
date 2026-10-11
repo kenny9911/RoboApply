@@ -7,7 +7,8 @@
 //   searching  a targeted ingest for the profile's titles × places
 //              (`jobs.ingestForProfile`, WP-16b)
 //   comparing  candidate jobs (public, canonical, live, this market) are
-//              pre-scored deterministically (`match.preScoreMany`, WP-18)
+//              compared through the fit contract (`match.getFits`: the stored
+//              AI score when there is one, else the quick estimate; no model call)
 //   ranking    sorted; the top 20 get an AI fit analysis queued (`job.score`)
 //              when AI is allowed; the result is stored for O7
 //
@@ -43,6 +44,16 @@
 // while their unfiltered search listed the whole index.
 
 import type { PreScoreResult } from '../match/index.js';
+
+/**
+ * One job's fit as the run ranks it: the fields of a `Fit` (match/fit.ts) it
+ * reads. A `Fit` and the older `PreScoreResult` both satisfy it.
+ */
+export interface RankedFit {
+  jobId: string;
+  score: number | null;
+  tier: PreScoreResult['tier'];
+}
 import {
   ONBOARDING_MATCH_AI_TOP_N,
   ONBOARDING_MATCH_HARD_CAP_MS,
@@ -79,7 +90,14 @@ export interface MatchPipelineDeps {
    */
   currentProfile?(userId: string): Promise<SearchProfileRef>;
   ingest(searchProfileId: string, budgetMs: number): Promise<unknown>;
-  preScore(userId: string, jobIds: string[]): Promise<PreScoreResult[]>;
+  /**
+   * THE fit of each candidate (`getFits`): the same score and tier the feed
+   * card and the job page show, never a model call. At most 500 ids a call
+   * (the run compares 200).
+   */
+  fits?(userId: string, jobIds: string[]): Promise<RankedFit[]>;
+  /** @deprecated The name `fits` had before the fit contract. Read only when `fits` is absent; remove with its last caller. */
+  preScore?(userId: string, jobIds: string[]): Promise<RankedFit[]>;
   aiAllowed(userId: string): Promise<boolean>;
   /**
    * May this user's jobs be ordered and scored with their profile? (feed
@@ -176,10 +194,21 @@ const WRITE_STAGES: readonly string[] = ['matching', 'confirm'];
 
 const TIER_RANK: Record<string, number> = { great: 3, good: 2, possible: 1, unlikely: 0 };
 
-/** Sort pre-scores best first (unknown scores last; stable on job id). */
-export function rankPreScores(results: PreScoreResult[]): PreScoreResult[] {
+/**
+ * `getFits` (a map by job id) as the list the run ranks. One mapping for the
+ * production wiring (defaults.ts) and the every-seam contract test.
+ */
+export function fitsForRanking<T extends RankedFit>(fits: ReadonlyMap<string, T>): T[] {
+  return [...fits.values()];
+}
+
+/** Sort fits best first (unknown scores last; stable on job id). */
+export function rankFits<T extends RankedFit>(results: readonly T[]): T[] {
   return [...results].sort((a, b) => (b.score ?? -1) - (a.score ?? -1) || (TIER_RANK[b.tier ?? ''] ?? -1) - (TIER_RANK[a.tier ?? ''] ?? -1) || a.jobId.localeCompare(b.jobId));
 }
+
+/** @deprecated Use `rankFits`. */
+export const rankPreScores = rankFits;
 
 /** Run O6. Resolves with the stored result (or the partial one when the rest was queued). */
 export async function runOnboardingMatch(deps: MatchPipelineDeps, userId: string, opts: MatchRunOptions = {}): Promise<OnboardingMatchResult | null> {
@@ -196,7 +225,8 @@ export async function runOnboardingMatch(deps: MatchPipelineDeps, userId: string
   if (!rec) throw Object.assign(new Error('seeker profile not found'), { code: 'not_found' });
   const answers = rec.answers;
 
-  let ranked: PreScoreResult[] = [];
+  let ranked: RankedFit[] = [];
+  const readFits = deps.fits ?? deps.preScore;
   let compared = 0;
   let comparedCapped = false;
   let profile: SearchProfileRef | null = null;
@@ -300,7 +330,7 @@ export async function runOnboardingMatch(deps: MatchPipelineDeps, userId: string
         // At the cap there may be more open jobs than were looked at: every count from this run is a floor.
         comparedCapped = ids.length >= query.limit;
         // Without the user's say-so the profile is not used: the jobs are found, not compared.
-        ranked = ids.length && (await mayRank()) ? rankPreScores(await deps.preScore(userId, ids)) : [];
+        ranked = ids.length && readFits && (await mayRank()) ? rankFits(await readFits(userId, ids)) : [];
         emit({ event: 'phase', data: (await mayRank()) ? { phase } : { phase, skipped: true } });
         break;
       }

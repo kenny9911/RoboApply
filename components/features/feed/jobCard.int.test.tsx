@@ -181,6 +181,84 @@ describe('feed card — RoboApply (intl) is unchanged', () => {
   });
 });
 
+// ── MKT-2F: the card says when a quick estimate rests on little (strategy 2.4; MATCH 4.4 point 6) ──
+
+describe('MKT-2F: feed card fit, kind and confidence', () => {
+  const withFit = (fit: FeedItem['fit']) => card({ ...feedItem(1), fit } as FeedItem, 'intl');
+  const base = { topGap: null, topOverlap: null };
+
+  const WORK_PRE = 'Compared the title, skills and location with your resume.';
+
+  it.each([
+    ['no_skills_listed', 'This post lists no skills'],
+    ['no_level_stated', 'This post states no level'],
+    ['no_role_evidence', 'Your resume shows no role to compare'],
+    ['no_resume', 'Add a resume for a full comparison. This estimate uses your profile and preferences.'],
+    ['few_details', 'This post says too little to compare'],
+  ])('a low-confidence estimate (%s) shows the tag and one plain reason', (confidenceReason, text) => {
+    installFetch({});
+    renderFeed(withFit({ ...base, tier: 'good', score: 68, kind: 'pre', confidence: 'low', confidenceReason }));
+    const el = screen.getByTestId('job-card');
+    expect(within(el).getAllByTestId('job-card-estimate')).toHaveLength(1);
+    expect(within(el).getByTestId('job-card-estimate')).toHaveTextContent(/^Quick estimate$/);
+    expect(within(el).getAllByTestId('job-card-estimate-reason')).toHaveLength(1);
+    expect(within(el).getByTestId('job-card-estimate-reason')).toHaveTextContent(text);
+    // The reason takes the place of "what we compared": a post that lists no skills was not compared on skills.
+    expect(within(el).queryByText(WORK_PRE)).toBeNull();
+    // The number and its honesty line are unchanged.
+    expect(within(el).getByText('Good fit')).toBeInTheDocument();
+    expect(within(el).getByText('This is not your chance of getting hired.')).toBeInTheDocument();
+  });
+
+  it('a high- or medium-confidence estimate shows "Quick estimate" only', () => {
+    installFetch({});
+    for (const confidence of ['high', 'medium'] as const) {
+      const r = renderFeed(withFit({ ...base, tier: 'good', score: 72, kind: 'pre', confidence, confidenceReason: null }));
+      expect(screen.getByTestId('job-card-estimate')).toHaveTextContent(/^Quick estimate$/);
+      expect(screen.queryByTestId('job-card-estimate-reason')).toBeNull();
+      expect(screen.getByText(WORK_PRE)).toBeInTheDocument();
+      r.unmount();
+    }
+    // A server from before estimate v2 sends no confidence: the tag alone, as before.
+    const older = renderFeed(withFit({ ...base, tier: 'good', score: 72, kind: 'pre' }));
+    expect(screen.getByTestId('job-card-estimate')).toHaveTextContent(/^Quick estimate$/);
+    expect(screen.queryByTestId('job-card-estimate-reason')).toBeNull();
+    older.unmount();
+    // Low confidence with a reason we have no words for: the tag alone, never a guessed reason.
+    renderFeed(withFit({ ...base, tier: 'good', score: 72, kind: 'pre', confidence: 'low', confidenceReason: 'something_new' }));
+    expect(screen.queryByTestId('job-card-estimate-reason')).toBeNull();
+    expect(screen.getByText(WORK_PRE)).toBeInTheDocument();
+  });
+
+  it('a card with an AI fit shows neither the tag nor a reason, even for a thin posting', () => {
+    installFetch({});
+    renderFeed(withFit({ ...base, tier: 'possible', score: 63, kind: 'ai', confidence: 'low', confidenceReason: 'no_skills_listed' }));
+    const el = screen.getByTestId('job-card');
+    expect(within(el).queryByTestId('job-card-estimate')).toBeNull();
+    expect(within(el).queryByTestId('job-card-estimate-reason')).toBeNull();
+    expect(within(el).queryByText(/Quick estimate/)).toBeNull();
+    expect(within(el).getByText('Read the full post and compared it with your resume.')).toBeInTheDocument();
+    expect(within(el).getByText('Possible')).toBeInTheDocument();
+  });
+
+  it('never a tier chip for a null score: a fit without a number shows "—" and no tier word', () => {
+    installFetch({});
+    // A shape the server does not send (its badge is null without a score); the card must still never label it.
+    renderFeed(withFit({ ...base, tier: 'great', score: null as unknown as number, kind: 'pre', confidence: 'low', confidenceReason: 'few_details' }));
+    const el = screen.getByTestId('job-card');
+    expect(within(el).queryByText('Great fit')).toBeNull();
+    expect(within(el).queryByText(/fit$/)).toBeNull();
+    expect(within(el).getAllByText('—').length).toBeGreaterThan(0);
+  });
+
+  it('GoApply: the same tag and reason, in the same words (one rule for both brands)', () => {
+    installFetch({});
+    renderFeed(card({ ...cnItem(), fit: { ...base, tier: 'good', score: 68, kind: 'pre', confidence: 'low', confidenceReason: 'no_skills_listed' } } as FeedItem, 'cn'), { brand: 'goapply' });
+    expect(screen.getByTestId('job-card-estimate')).toHaveTextContent(/^Quick estimate$/);
+    expect(screen.getByTestId('job-card-estimate-reason')).toHaveTextContent('This post lists no skills');
+  });
+});
+
 describe('feed card — Tailor resume', () => {
   it('shows when AI tailoring is available and opens the tailor flow for this job', async () => {
     installFetch(resumeRoutes(true));

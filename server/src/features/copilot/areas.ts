@@ -17,6 +17,7 @@
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { Market } from '../../platform/brand/registry.js';
 import { cnRecruitmentInfoMode } from '../../platform/flags.js';
+import type { FitFunctions } from '../match/index.js';
 import type { CopilotAreas } from './types.js';
 import type { SalaryStatsInput, SalaryStatsResult } from '../feed/index.js';
 import type { NudgeSignals } from './nudges.js';
@@ -58,6 +59,8 @@ export interface DefaultAreasOptions {
   env?: EnvSource;
   /** Test and join seam: replace a cross-area read (default: `CROSS_AREA_DEFAULTS`). */
   reads?: Partial<Pick<CrossAreaReads, 'salaryStats' | 'primaryResumeId'>>;
+  /** Test seam: the fit contract on other dependencies (default: match/fit.ts `getFit` / `getVariantFit`). */
+  fits?: Pick<FitFunctions, 'getFit' | 'getVariantFit'>;
 }
 
 export function createDefaultAreas(options: DefaultAreasOptions): CopilotAreas {
@@ -93,15 +96,22 @@ export function createDefaultAreas(options: DefaultAreasOptions): CopilotAreas {
       const { jobDetailService } = await import('../jobs/detail/index.js');
       return jobDetailService.get(userId, jobId);
     },
+    // THE fit (match/fit.ts), so the Assistant and the job page say one number. Both reads are for the person's
+    // PRIMARY resume whatever resume is attached to the chat thread. `resumeVariantId` is set only by analyze_fit's
+    // explicit version question ("how does my tailored resume fit"): that answer is the separately named measure
+    // "With this version" (`getVariantFit`), never the fit.
     async scoreJob(userId, jobId, opts) {
-      const { matchService } = await import('../match/index.js');
+      const match = await import('../match/index.js');
+      const fits = options.fits ?? match;
       // Free, platform-paid score (80/day/user, then the quick estimate); never a credit.
-      return matchService.scoreJob(userId, jobId, { resumeVariantId: opts.resumeVariantId ?? undefined, locale: opts.locale, mode: 'on_demand' });
+      const call = { allowModelCall: true, mode: 'on_demand', locale: opts.locale } as const;
+      const fit = opts.resumeVariantId ? await fits.getVariantFit(userId, jobId, opts.resumeVariantId, call) : await fits.getFit(userId, jobId, call);
+      return match.fitToView(fit, { locale: opts.locale });
     },
     async storedFit(userId, jobId, opts) {
-      const { matchService } = await import('../match/index.js');
-      // The same stored score the job page and the lists show; `cache_only` never calls a model.
-      return matchService.scoreJob(userId, jobId, { resumeVariantId: opts.resumeVariantId ?? undefined, locale: opts.locale, mode: 'cache_only' });
+      const match = await import('../match/index.js');
+      // The stored score the job page and the lists show, else the quick estimate. Never a model call, never a version.
+      return match.fitToView(await (options.fits ?? match).getFit(userId, jobId, { locale: opts.locale }), { locale: opts.locale });
     },
     async addedJobs(userId, opts) {
       const { jobImportService } = await import('../jobs/import/index.js');

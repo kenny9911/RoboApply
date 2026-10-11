@@ -206,11 +206,14 @@ export interface QueueJobSummary {
   /** The post's own text asks for a cover letter (a literal phrase match, never a guess). */
   asksForCoverLetter: boolean;
   /**
-   * The same deterministic fit the Jobs list shows before a job is scored
-   * ("Quick estimate"), on GET /agent/queue only. Absent or null when it is
-   * not known (or fit is not shown to this account): the row then shows none.
+   * The fit the Jobs list and the job page show for this job, read live on
+   * GET /agent/queue only (never a stored copy): the stored AI score when
+   * there is one (`kind: 'ai'`), else the quick estimate (`kind: 'pre'`).
+   * Absent or null when it is not known (or fit is not shown to this
+   * account): the row then shows none. `kind` and `confidence` are sent with
+   * every fit; a reader treats a missing `kind` as a quick estimate.
    */
-  fit?: { tier: 'great' | 'good' | 'possible' | 'unlikely'; score: number } | null;
+  fit?: { tier: 'great' | 'good' | 'possible' | 'unlikely'; score: number; kind?: 'pre' | 'ai'; confidence?: 'high' | 'medium' | 'low' } | null;
 }
 
 export interface QueueItemView {

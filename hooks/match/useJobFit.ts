@@ -8,6 +8,11 @@
 //
 // The job-detail route (WP-34) mounts the MATCH handler, which answers the
 // MATCH `MatchFitView` (a superset of jobs/detail `FitView`).
+//
+// One fit per job: the answer is always for the person's main resume, so the
+// request carries no resume version and the cache has one key per job. A fit
+// for another version is a different, separately named measure that only
+// tailoring shows ("With this version").
 
 import { useMutation, useQuery, useQueryClient, type UseMutationResult, type UseQueryResult } from '@tanstack/react-query';
 
@@ -15,7 +20,8 @@ import { scoreJob } from '../../lib/api/jobs';
 import { apiErrorCode } from '../../lib/api/contracts/wire';
 import type { MatchFitView } from '../../lib/api/contracts/match';
 
-export const jobFitKey = (jobId: string, resumeVariantId?: string | null) => ['match', 'fit', jobId, resumeVariantId ?? 'primary'] as const;
+/** The cache key of a job's fit: one per job. */
+export const jobFitKey = (jobId: string) => ['match', 'fit', jobId] as const;
 
 /** Errors no retry can fix. */
 const FINAL = new Set(['unauthorized', 'not_found', 'not_implemented', 'feature_disabled', 'invalid_request', 'auth_other_brand']);
@@ -26,14 +32,11 @@ export function shouldRetryMatch(failureCount: number, error: unknown): boolean 
   return failureCount < 1;
 }
 
-export function useJobFit(
-  jobId: string | null | undefined,
-  options: { resumeVariantId?: string | null; enabled?: boolean } = {},
-): UseQueryResult<MatchFitView> {
+export function useJobFit(jobId: string | null | undefined, options: { enabled?: boolean } = {}): UseQueryResult<MatchFitView> {
   return useQuery<MatchFitView>({
-    queryKey: jobFitKey(jobId ?? '', options.resumeVariantId),
+    queryKey: jobFitKey(jobId ?? ''),
     queryFn: async ({ signal }) => {
-      const res = await scoreJob(jobId!, options.resumeVariantId ? { resumeVariantId: options.resumeVariantId } : {}, { signal });
+      const res = await scoreJob(jobId!, {}, { signal });
       return res.fit as unknown as MatchFitView;
     },
     enabled: !!jobId && (options.enabled ?? true),
@@ -66,15 +69,15 @@ export function isRewrittenFit(fit: MatchFitView | null | undefined): fit is Mat
  * estimate. Neither replaces the fit on screen; the mutation fails instead, so
  * the reader is told and the AI fit stays as it was.
  */
-export function useRewriteFitText(jobId: string | null | undefined, options: { resumeVariantId?: string | null } = {}): UseMutationResult<MatchFitView, unknown, void> {
+export function useRewriteFitText(jobId: string | null | undefined): UseMutationResult<MatchFitView, unknown, void> {
   const qc = useQueryClient();
   return useMutation<MatchFitView, unknown, void>({
     mutationFn: async () => {
-      const res = await scoreJob(jobId!, { regenerateExplanation: true, ...(options.resumeVariantId ? { resumeVariantId: options.resumeVariantId } : {}) });
+      const res = await scoreJob(jobId!, { regenerateExplanation: true });
       const fit = res.fit as unknown as MatchFitView;
       if (!isRewrittenFit(fit)) throw new FitRewriteNotDoneError();
       return fit;
     },
-    onSuccess: (fit) => qc.setQueryData(jobFitKey(jobId ?? '', options.resumeVariantId), fit),
+    onSuccess: (fit) => qc.setQueryData(jobFitKey(jobId ?? ''), fit),
   });
 }

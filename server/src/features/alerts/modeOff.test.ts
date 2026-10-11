@@ -225,7 +225,7 @@ function taskHarness(env: Record<string, string>, brandId: BrandId = 'goapply') 
     repo,
     candidates: modeGatedCandidates((q) => repo.candidateJobIds(q), defaultPostingsAllowed(env)),
     prefs: { load: async () => prefs },
-    preScore: async (_userId, ids) => ids.map((jobId) => ({ jobId, score: 88, tier: 'great' as const, topGap: null })),
+    fits: async (_userId, ids) => ids.map((jobId) => ({ jobId, score: 88, tier: 'great' as const, topGap: null })),
     planInstantMax: async () => 100,
     deliver: (msg) => deliverMessage(msg, deliverDeps),
     // Forced on: in production `jobs.alerts` follows the mode; here only the mode guards the posting.

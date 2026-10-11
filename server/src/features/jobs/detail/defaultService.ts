@@ -12,7 +12,8 @@ import { cardMeta } from '../marketHooks.js';
 import { explainMatch } from '../../compliance/index.js';
 import type { MatchFitView } from '../../match/contract.js';
 import { searchCompanyNews } from './newsSearch.js';
-import { createJobDetailService, type DetailFlag, type JobDetailServiceImpl } from './service.js';
+import { isByFilters } from '../../match/index.js';
+import { createJobDetailService, type DetailFlag, type JobDetailServiceImpl, type SimilarSourceRow } from './service.js';
 import type { JobRow } from './view.js';
 
 /** ATS types the extension can fill. Empty until the extension registers its adapters (WP-55a/WP-70). */
@@ -70,8 +71,10 @@ function createDefault(): JobDetailServiceImpl {
     db: prisma,
     brand: getCurrentBrandOrDefault,
     companyProfile: async (companyId) => (await import('../companies/index.js')).companyService.profile(companyId, { publicOnly: false }),
-    cachedFit: async (userId, jobId) => (await import('../../match/index.js')).matchService.scoreJob(userId, jobId, { mode: 'cache_only' }),
-    preScore: async (userId, jobIds) => (await import('../../match/index.js')).matchService.preScoreMany(userId, jobIds),
+    // THE fit (match/fit.ts): one job with no model call, and a list. The same functions every other surface reads.
+    fit: async (userId, jobId) => (await import('../../match/index.js')).getFit(userId, jobId),
+    fits: async (userId, jobIds) => (await import('../../match/index.js')).getFits(userId, jobIds),
+    similarSource: (row, limit) => similarFromFeed(row, limit),
     explain: ({ market, personalized: p, fit }) => explainNow({ market, personalized: p, fit }),
     personalized,
     peopleContext: async (userId) => {
@@ -95,16 +98,43 @@ function createDefault(): JobDetailServiceImpl {
   });
 }
 
-function explainNow(input: { market: 'intl' | 'cn'; personalized: boolean; fit: MatchFitView }) {
+/**
+ * "Why this job" for the job page, from the same fit the page shows. A
+ * logistics part that only repeats the person's own filters carries no
+ * information of its own, so it is left out, as on the feed card
+ * (`isByFilters`): otherwise the page would say "Not enough to compare the
+ * location, pay or work setup" about a job whose place is the one they asked for.
+ */
+export function explainNow(input: { market: 'intl' | 'cn'; personalized: boolean; fit: MatchFitView }) {
   return explainMatch({
     market: input.market,
     personalized: input.personalized,
     score: input.fit.score,
     tier: input.fit.tier,
     kind: input.fit.kind,
-    dimensions: input.fit.dimensions,
+    dimensions: input.fit.dimensions.filter((d) => !isByFilters(d)),
     skills: { aligned: input.fit.skills.aligned, missing: input.fit.skills.missing },
   });
+}
+
+/** The vector read as the feed area may export it: `similarJobIds(row, limit)` (MARKET_TASK_PLAN 3.3, "Feed pre-wiring"). */
+type SimilarJobIds = (row: SimilarSourceRow, limit: number) => Promise<string[] | null>;
+
+/**
+ * Similar jobs by job vector, through the feed area's seam. The export is
+ * built in the same phase by another bundle, so it is read without a static
+ * type: a feed module without it (or one that fails to load) answers null and
+ * the service lists the same-role jobs, as before. Once both are merged the
+ * cast can become a typed import.
+ */
+export async function similarFromFeed(
+  row: SimilarSourceRow,
+  limit: number,
+  loadFeed: () => Promise<unknown> = () => import('../../feed/index.js'),
+): Promise<string[] | null> {
+  const feed = (await loadFeed()) as { similarJobIds?: SimilarJobIds } | null | undefined;
+  const fn = feed?.similarJobIds;
+  return typeof fn === 'function' ? fn(row, limit) : null;
 }
 
 let instance: JobDetailServiceImpl | null = null;

@@ -1,3 +1,9 @@
 {
-  "tailor": {}
+  "tailor": {
+    "fit": {
+      "yours": "Your fit",
+      "withVersion": "With this version",
+      "note": "Your fit on the job page stays the one for your main resume until you make this version your main resume."
+    }
+  }
 }

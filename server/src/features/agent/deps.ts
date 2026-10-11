@@ -19,7 +19,7 @@ import type { NotifyUserInput, NotifyUserResult } from '../alerts/index.js';
 import { logger } from '../../services/LoggerService.js';
 import type { FileNameStyle } from './contract.js';
 import { AGENT_WORK_KINDS } from './kinds.js';
-import type { AgentDb, QueueFit } from './store.js';
+import { queueFits, type AgentDb, type QueueFit, type QueueFitSource } from './store.js';
 
 export interface PreparePayload {
   queueItemId: string;
@@ -147,6 +147,37 @@ function usageLine(u: BucketUsage | undefined): CreditUsageLine | undefined {
   return { remaining: u.remaining + u.grantRemaining, window: u.window, resetsAt: u.resetsAt, cap: u.cap };
 }
 
+/** What `readyListFits` reads; the defaults are the feed's personalisation rule and the fit contract. */
+export interface ReadyListFitReads {
+  /** May this person's fit be used and shown? (feed `isFeedPersonalized`: GoApply needs a live 个性化推荐 grant.) */
+  personalized(userId: string, market: ProductBrand['market']): Promise<boolean>;
+  /** match/fit.ts `getFits`: never a model call. */
+  getFits(userId: string, jobIds: string[]): Promise<ReadonlyMap<string, QueueFitSource>>;
+}
+
+/**
+ * The fit of each Ready to apply row: THE fit (the stored AI score, else the
+ * quick estimate), read live on every list request and never stored on a row.
+ * No fit on GoApply without the grant; a failing read answers none (the list
+ * still loads). One function for production and the every-seam contract test.
+ */
+export async function readyListFits(userId: string, jobIds: readonly string[], reads?: Partial<ReadyListFitReads>): Promise<Map<string, QueueFit>> {
+  const out = new Map<string, QueueFit>();
+  if (!jobIds.length) return out;
+  try {
+    const brand = getCurrentBrandOrDefault();
+    const personalized = reads?.personalized ?? (await import('../feed/index.js')).isFeedPersonalized;
+    // GoApply: no fit is used or shown without a live 个性化推荐 grant (the feed's own rule).
+    if (!(await personalized(userId, brand.market))) return out;
+    const getFits = reads?.getFits ?? (await import('../match/index.js')).getFits;
+    for (const [jobId, fit] of queueFits(await getFits(userId, [...new Set(jobIds)]))) out.set(jobId, fit);
+  } catch (err) {
+    logger.warn('AGENT', 'fit not read for the list (rows show none)', { error: err instanceof Error ? err.message : String(err) });
+    out.clear();
+  }
+  return out;
+}
+
 export function defaultAgentDeps(): AgentDeps {
   return {
     getDb: db,
@@ -216,23 +247,7 @@ export function defaultAgentDeps(): AgentDeps {
         return null;
       }
     },
-    async fitsFor(userId, jobIds) {
-      const out = new Map<string, QueueFit>();
-      if (!jobIds.length) return out;
-      try {
-        const brand = getCurrentBrandOrDefault();
-        const [{ isFeedPersonalized }, { matchService }] = await Promise.all([import('../feed/index.js'), import('../match/index.js')]);
-        // GoApply: no fit is used or shown without a live 个性化推荐 grant (the feed's own rule).
-        if (!(await isFeedPersonalized(userId, brand.market))) return out;
-        for (const r of await matchService.preScoreMany(userId, [...new Set(jobIds)])) {
-          if (r.tier && typeof r.score === 'number' && Number.isFinite(r.score)) out.set(r.jobId, { tier: r.tier, score: r.score });
-        }
-      } catch (err) {
-        logger.warn('AGENT', 'fit not read for the list (rows show none)', { error: err instanceof Error ? err.message : String(err) });
-        out.clear();
-      }
-      return out;
-    },
+    fitsFor: (userId, jobIds) => readyListFits(userId, jobIds),
     async recordApplyClick(userId, jobId) {
       const { jobDetailService } = await import('../jobs/detail/index.js');
       return jobDetailService.recordApplyClick(userId, jobId);

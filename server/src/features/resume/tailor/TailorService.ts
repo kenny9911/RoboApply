@@ -20,9 +20,18 @@
 // Honesty: the prompt carries `resumeForLlm(base)` and the profile snapshot
 // only; the header and sensitive lines are put back after the model ran; only
 // the picked sections change; every keyword, number, statement or posting
-// phrase the base does not show becomes a pending claim; the two fit scores
-// are real AI fit scores of the two versions (or "—"), never an estimate, and
-// the "after" score is computed only at finalize, once no claim is pending.
+// phrase the base does not show becomes a pending claim.
+//
+// The two numbers (strategy 2.2; they are two measures, not a before / after
+// pair of one thing):
+//   "Your fit"           THE fit of the job (match/fit.ts `getFit`): the
+//                        person's MAIN resume, whatever base the session was
+//                        started from. The same number the job page shows.
+//   "With this version"  the fit of the tailored version (`getVariantFit`),
+//                        computed only at finalize, once no claim is pending.
+// Each is shown only when it is a real AI fit (or "—"), never an estimate.
+// Every number is stored with its snapshot (kind, versions, scoredAt; I6);
+// the view reads "Your fit" live and falls back to the stored one.
 
 import crypto from 'node:crypto';
 import { logger } from '../../../services/LoggerService.js';
@@ -39,6 +48,7 @@ import {
   type ExperienceDepth,
   type SourcedNumber,
   type TailorClaim,
+  type TailorFitMeasure,
   type TailorSection,
   type TailorSessionView,
 } from '../contract.js';
@@ -46,7 +56,8 @@ import type { z } from 'zod';
 import { diffChanges, MAX_CHANGES, mergeTailored } from './blocks.js';
 import { applyClaimDecision, ClaimDecisionError, extractClaims, pendingCount } from './claims.js';
 import { plausibleSkill } from '../keywords/keywordReport.js';
-import type { TailorJobRow, TailorSessionRow, TailorStore } from './store.js';
+import { readFitSnapshot, type FitSnapshot } from '../../match/contract.js';
+import type { TailorFitSnapshots, TailorJobRow, TailorSessionRow, TailorStore } from './store.js';
 
 export type CreateTailorBody = z.output<typeof CreateTailorSessionBodySchema>;
 
@@ -55,11 +66,8 @@ export const GENERATING_STALE_MS = 5 * 60_000;
 export const TAILOR_TIMEOUT_MS = 90_000;
 export const SCORE_TIMEOUT_MS = 20_000;
 
-export interface FitScoreResult {
-  score: number | null;
-  kind: 'pre' | 'ai';
-  scoredAt: string;
-}
+/** What MATCH answers for one read: the fit as a snapshot (match/fit.ts `fitSnapshot`). */
+export type TailorFit = FitSnapshot;
 
 export interface TailorServiceDeps {
   store: TailorStore;
@@ -77,8 +85,15 @@ export interface TailorServiceDeps {
   tailor: (input: RAResumeTailorInput, options: { locale?: string; signal?: AbortSignal }) => Promise<RAResumeTailorOutput>;
   /** `profileSnapshotForLlm(userId).text` — the only profile context a prompt may carry. */
   profileContext: (userId: string) => Promise<string | null>;
-  /** MATCH `scoreJob` for one resume version (null when it cannot run). */
-  score: (userId: string, jobId: string, variantId: string, locale?: string) => Promise<FitScoreResult | null>;
+  /**
+   * MATCH `getFit`: THE fit of the job for the person's main resume ("Your
+   * fit"). `allowModelCall: true` when the session is created (the free,
+   * platform-paid score); false for the live read of the view, which never
+   * calls a model. Null when it cannot run.
+   */
+  canonicalFit: (userId: string, jobId: string, options: { allowModelCall: boolean; locale?: string }) => Promise<TailorFit | null>;
+  /** MATCH `getVariantFit`: the fit of one resume version ("With this version"). Null when it cannot run. */
+  variantFit: (userId: string, jobId: string, variantId: string, locale?: string) => Promise<TailorFit | null>;
   /** growth.markChecklistStep(userId, 'tailor'). */
   markChecklist: (userId: string) => Promise<void>;
   /** GoApply AI-content label log (WP-13); failures are logged, never thrown. */
@@ -140,8 +155,30 @@ export function readSections(stored: readonly string[]): { sections: TailorSecti
   return { sections, experienceDepth: sections.includes('experience') ? depth : null };
 }
 
-function fitOf(value: number | null, asOf: Date): SourcedNumber | null {
-  return value === null ? null : { value, source: 'ai', asOf: asOf.toISOString(), method: 'fit_score' };
+/** A session's stored snapshots (`RATailorSession.fitSnapshot`); both null when the column is empty or does not parse. */
+export function readFitSnapshots(value: unknown): TailorFitSnapshots {
+  const o = value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  return { before: readFitSnapshot(o.before), after: readFitSnapshot(o.after) };
+}
+
+/** A snapshot that may be shown in this comparison: a real AI fit with a number (D3: never an estimate). */
+function shownAi(fit: TailorFit | null | undefined): (TailorFit & { score: number }) | null {
+  return fit && fit.kind === 'ai' && fit.score !== null ? { ...fit, score: Math.round(fit.score) } : null;
+}
+
+function measureOf(fit: (TailorFit & { score: number }) | null): TailorFitMeasure | null {
+  if (!fit) return null;
+  return { value: fit.score, kind: 'ai', tier: fit.tier, scoredAt: fit.scoredAt, version: { rubric: fit.rubric, estimator: fit.estimator, model: fit.model } };
+}
+
+/** A number stored before snapshots existed: an AI fit as of the session's last write, version not recorded. */
+function legacyMeasure(value: number | null, asOf: Date): TailorFitMeasure | null {
+  return value === null ? null : { value, kind: 'ai', tier: null, scoredAt: asOf.toISOString(), version: null };
+}
+
+/** The measure in the older `before` / `after` shape (kept for one release). */
+function sourcedOf(m: TailorFitMeasure | null): SourcedNumber | null {
+  return m ? { value: m.value, source: 'ai', asOf: m.scoredAt, method: 'fit_score' } : null;
 }
 
 export class TailorService {
@@ -169,10 +206,19 @@ export class TailorService {
     ]);
     const jd = JdSnapshotSchema.safeParse(session.jdSnapshot);
     const changes = base && result ? diffChanges(base.resumeMarkdown, result.resumeMarkdown, '', MAX_CHANGES) : [];
-    // "Before" is the base's AI fit score. "After" exists only once the session
-    // is finalized (every claim decided) and both are real AI fit scores.
-    const before = session.scoreBefore;
-    const after = status === 'finalized' && before !== null ? session.scoreAfter : null;
+    // "Your fit": read live, like every in-app page (I6), so it is the number
+    // the job page shows now. When the live fit is not an AI fit (or cannot be
+    // read) the session's stored one answers, with its own date.
+    // "With this version" exists only once the session is finalized (every
+    // claim decided) and "Your fit" is a real AI fit too.
+    const stored = readFitSnapshots(session.fitSnapshot);
+    const storedCanonical = measureOf(shownAi(stored.before)) ?? legacyMeasure(session.scoreBefore, session.updatedAt);
+    const live = session.jobId && (status === 'review' || status === 'finalized') ? measureOf(shownAi(await this.yourFit(session.userId, session.jobId))) : null;
+    const canonical = live ?? storedCanonical;
+    const variant =
+      status === 'finalized' && canonical !== null ? (measureOf(shownAi(stored.after)) ?? legacyMeasure(session.scoreAfter, session.updatedAt)) : null;
+    const before = canonical?.value ?? null;
+    const after = variant?.value ?? null;
     return {
       id: session.id,
       status,
@@ -190,10 +236,7 @@ export class TailorService {
         company: job?.companyName ?? (jd.success ? jd.data.company || null : null),
       },
       pendingClaims: pendingCount(claims),
-      fit: {
-        before: fitOf(before, session.updatedAt),
-        after: fitOf(after, session.updatedAt),
-      },
+      fit: { canonical, variant, before: sourcedOf(canonical), after: sourcedOf(variant) },
       aiWritten: true,
       failure: status === 'failed' ? (stale ? 'stopped' : 'ai_failed') : null,
       createdAt: session.createdAt.toISOString(),
@@ -208,19 +251,23 @@ export class TailorService {
 
   // ── scores ──
 
-  private async safeScore(userId: string, jobId: string, variantId: string, locale?: string): Promise<FitScoreResult | null> {
+  /** A fit read that never breaks tailoring: a failure, a timeout or a missing dependency answers null. */
+  private async safeFit(read: () => Promise<TailorFit | null>): Promise<TailorFit | null> {
     try {
-      return await withTimeout(this.scoreTimeoutMs, () => this.deps.score(userId, jobId, variantId, locale));
+      return await withTimeout(this.scoreTimeoutMs, read);
     } catch (err) {
-      logger.debug('RESUME_TAILOR', 'fit score unavailable', { error: err instanceof Error ? err.message : String(err) });
+      logger.debug('RESUME_TAILOR', 'fit unavailable', { error: err instanceof Error ? err.message : String(err) });
       return null;
     }
   }
 
-  /** A real AI fit score rounded to 0–100, or null (never a pre-score or an estimate, D3). */
-  private async aiScore(userId: string, jobId: string, variantId: string, locale?: string): Promise<number | null> {
-    const r = await this.safeScore(userId, jobId, variantId, locale);
-    return r?.kind === 'ai' && r.score !== null ? Math.round(r.score) : null;
+  /**
+   * "Your fit" as it is now: THE fit of the job for the person's main resume,
+   * read without a model call (the same read the job page makes). It may be a
+   * quick estimate; the session view shows it only when it is an AI fit.
+   */
+  async yourFit(userId: string, jobId: string, options: { locale?: string } = {}): Promise<TailorFit | null> {
+    return this.safeFit(() => this.deps.canonicalFit(userId, jobId, { allowModelCall: false, locale: options.locale }));
   }
 
   // ── create ──
@@ -348,12 +395,15 @@ export class TailorService {
       }
     }
 
-    // Only the base is scored now. The tailored version still holds unchecked
-    // claims, so its score is computed at finalize, once every claim is decided.
+    // "Your fit" is read now: THE fit of the job (the main resume), with a
+    // model call allowed. The tailored version still holds unchecked claims,
+    // so its own fit is computed at finalize, once every claim is decided.
     if (job) {
-      const before = await this.aiScore(userId, job.id, base.id, options.locale);
-      if (before !== null) {
-        completed = await store.updateSession(session.id, { scoreBefore: before, scoreAfter: null }).catch(() => completed!);
+      const before = shownAi(await this.safeFit(() => this.deps.canonicalFit(userId, job!.id, { allowModelCall: true, locale: options.locale })));
+      if (before) {
+        completed = await store
+          .updateSession(session.id, { scoreBefore: before.score, scoreAfter: null, fitSnapshot: { before, after: null } })
+          .catch(() => completed!);
       }
     }
     return this.view(completed);
@@ -451,8 +501,11 @@ export class TailorService {
     // Every claim is decided now: score the final, checked text. Never earlier,
     // so the "after" number never rests on unchecked claims.
     if (row.jobId && row.resultVariantId && row.scoreBefore !== null) {
-      const value = await this.aiScore(userId, row.jobId, row.resultVariantId, options.locale);
-      row = await store.updateSession(sessionId, { scoreAfter: value }).catch(() => row);
+      const { jobId, resultVariantId } = row;
+      const after = shownAi(await this.safeFit(() => this.deps.variantFit(userId, jobId, resultVariantId, options.locale)));
+      // The number and its snapshot in one write; the "before" snapshot is kept as it was stored.
+      const snapshots: TailorFitSnapshots = { before: readFitSnapshots(row.fitSnapshot).before, after };
+      row = await store.updateSession(sessionId, { scoreAfter: after?.score ?? null, fitSnapshot: snapshots }).catch(() => row);
     }
     return this.view({ ...row, status: 'finalized' });
   }

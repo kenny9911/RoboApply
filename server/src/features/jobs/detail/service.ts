@@ -4,7 +4,11 @@
 //                 the cached fit (no model call), "Why this job", tracker and
 //                 checklist state, similar ids, autofill, People links,
 //                 market card meta
-//   similar       GET /jobs/:id/similar
+//   similar       GET /jobs/:id/similar: the nearest postings by job vector
+//                 when a vector source is wired and answers (strategy 2.3 step
+//                 6), else the same role in the same country; either way
+//                 re-checked against the visibility rules here and re-ordered
+//                 by THE fit (`getFits`, the number the feed card shows)
 //   save/unsave   tracker `bookmarked` upsert / soft delete; save calls
 //                 growth.markChecklistStep('save_job') every time (C20)
 //   recordApplyClick / markApplied / undoApplied
@@ -39,7 +43,8 @@ import type { ProductBrand } from '../../../platform/brand/registry.js';
 import type { HiringContactsMode } from '../../../platform/brand/registry.js';
 import type { EnvSource } from '../../../platform/brand/brandEnv.js';
 import type { CompanyProfile } from '../companies/contract.js';
-import type { MatchFitView, PreScoreResult } from '../../match/contract.js';
+import type { MatchFitView } from '../../match/contract.js';
+import type { Fit } from '../../match/index.js';
 import type { MatchExplanation } from '../../compliance/contract.js';
 import { cnPostingVisible } from '../../cn/jobs/index.js';
 import { bankListable, bankListableWhere, cnListableWhere } from '../../feed/contract.js';
@@ -125,9 +130,22 @@ export interface JobDetailServiceDeps {
   now?: () => Date;
   /** Company profile for a signed-in viewer (public rows counted); throws 404 when missing. */
   companyProfile?: (companyId: string) => Promise<CompanyProfile>;
-  /** Cached fit or quick estimate; never a model call. */
-  cachedFit?: (userId: string, jobId: string) => Promise<MatchFitView | null>;
-  preScore?: (userId: string, jobIds: string[]) => Promise<PreScoreResult[]>;
+  /**
+   * THE fit of one job (`getFit` with no model call): the stored AI score or
+   * the quick estimate. A single-job fit carries the stored prose.
+   */
+  fit?: (userId: string, jobId: string) => Promise<Fit | null>;
+  /** THE fit of each listed job (`getFits`; never a model call). Similar jobs are ordered and badged by it. */
+  fits?: (userId: string, jobIds: string[]) => Promise<Map<string, Fit>>;
+  /**
+   * Postings like this one, nearest first (the job-vector read, built by the
+   * retrieval area). Ids only: this service loads the rows itself and applies
+   * every visibility rule again, so an id of another market, another country,
+   * a closed, hidden or flagged posting never shows. Null or an empty list
+   * (no vector for the job, no embedding key, the dense leg off) and a throw
+   * all mean "use the same-role list"; no error is shown.
+   */
+  similarSource?: (row: SimilarSourceRow, limit: number) => Promise<string[] | null>;
   explain?: (input: { market: 'intl' | 'cn'; personalized: boolean; fit: MatchFitView }) => MatchExplanation;
   /** GoApply: a live `personalized_recommendation` grant; RoboApply: always true. */
   personalized?: (userId: string, brand: ProductBrand) => Promise<boolean>;
@@ -161,6 +179,11 @@ type JobDetailNewsItems = CompanyNewsResponse['items'];
 
 export const SIMILAR_LIMIT = 6;
 export const SIMILAR_CANDIDATES = 40;
+/** Ids asked of the vector source (strategy 2.3: the nearest 50 by job vector). */
+export const SIMILAR_SOURCE_LIMIT = 50;
+
+/** What the vector source is told about the anchor job. */
+export type SimilarSourceRow = Pick<JobRow, 'id' | 'market' | 'locationCountry' | 'visibility' | 'ownerUserId'>;
 
 export interface JobDetailServiceImpl {
   get(userId: string, jobId: string): Promise<JobDetailResponse>;
@@ -184,6 +207,17 @@ function outcomeOfStatus(status: string): string | null {
 
 function notFound(): HttpError {
   return new HttpError('not_found', 'Job not found.', { code: JOB_DETAIL_ERROR_CODES.notFound });
+}
+
+/**
+ * The job page's fit as it goes over the wire: `getFit` as the view the fit
+ * card reads (a single-job fit carries its prose). The match area is loaded
+ * here, on first use, so mounting this service pulls it in for no other route.
+ */
+async function viewOf(fit: Fit | null): Promise<MatchFitView | null> {
+  if (!fit) return null;
+  const { fitToView } = await import('../../match/index.js');
+  return fitToView(fit);
 }
 
 export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailServiceImpl {
@@ -284,21 +318,46 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
     return toCampusInfo(open[0] ?? events[0] ?? null, now());
   }
 
-  function similarWhere(row: JobRow) {
+  /**
+   * What every similar job must be, whichever list it came from: the same
+   * market, public, canonical, open, not the job itself, and in the same
+   * country when the job has one.
+   */
+  function similarScope(row: JobRow) {
     // A recruiter-bank row whose bank has no posting page is never recommended (the feed's own rule, both markets).
     const bank = bankListableWhere((deps.env ?? process.env) as Record<string, string | undefined>);
-    const base = {
+    return {
       market: row.market,
       visibility: 'public',
       isCanonical: true,
       archivedAt: null,
       closedAt: null,
-      id: { not: row.id },
       ...(row.locationCountry ? { locationCountry: row.locationCountry } : {}),
       // Mainland: a posting with no usable apply link is never recommended (the feed's own rule).
       ...(row.market === 'cn' || bank ? { AND: [...(row.market === 'cn' ? [cnListableWhere()] : []), ...(bank ? [bank] : [])] } : {}),
     };
+  }
+
+  /** The same-role list: the scope plus the same role (or, for an unplaced job, the same normalised title). */
+  function similarWhere(row: JobRow) {
+    const base = { ...similarScope(row), id: { not: row.id } };
     return row.primaryTaxonomyId ? { ...base, primaryTaxonomyId: row.primaryTaxonomyId } : { ...base, titleNormalized: row.titleNormalized };
+  }
+
+  /** The vector source's ids for this job, nearest first; null when there is nothing to use (see `similarSource`). */
+  async function sourceIds(row: JobRow): Promise<string[] | null> {
+    if (!deps.similarSource) return null;
+    const anchor: SimilarSourceRow = { id: row.id, market: row.market, locationCountry: row.locationCountry, visibility: row.visibility, ownerUserId: row.ownerUserId };
+    const ids = await soft('similarSource', () => deps.similarSource!(anchor, SIMILAR_SOURCE_LIMIT), null);
+    if (!Array.isArray(ids)) return null;
+    const unique = [...new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0 && id !== row.id))].slice(0, SIMILAR_SOURCE_LIMIT);
+    return unique.length ? unique : null;
+  }
+
+  /** Rows in the order of `ids` (the source's order, which is vector distance). */
+  function inSourceOrder<T extends { id: string }>(rows: T[], ids: readonly string[]): T[] {
+    const at = new Map(ids.map((id, i) => [id, i]));
+    return [...rows].sort((a, b) => (at.get(a.id) ?? Infinity) - (at.get(b.id) ?? Infinity));
   }
 
   /** Drop fraud-flagged jobs and the ones this user hid. */
@@ -313,7 +372,19 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
     return clean.filter((c) => !hiddenIds.has(c.id));
   }
 
+  /**
+   * The candidates of Similar jobs, in list order: the vector source's
+   * postings (nearest first) when it answers any that pass the scope, else the
+   * same-role postings (newest first). Hidden and flagged postings are dropped
+   * from both.
+   */
   async function similarRows(userId: string, row: JobRow): Promise<JobRow[]> {
+    const ids = await sourceIds(row);
+    if (ids) {
+      const found = (await db.rAJob.findMany({ where: { ...similarScope(row), id: { in: ids } }, select: JOB_ROW_SELECT })) as JobRow[];
+      const near = await visibleCandidates(userId, inSourceOrder(found, ids));
+      if (near.length) return near;
+    }
     const candidates = (await db.rAJob.findMany({
       where: similarWhere(row),
       orderBy: [{ postedAt: 'desc' }, { id: 'desc' }],
@@ -323,8 +394,14 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
     return visibleCandidates(userId, candidates);
   }
 
-  /** `similarIds` for GET /:id: an id-only query, newest first, no scoring (GET /:id/similar ranks by fit). */
+  /** `similarIds` for GET /:id: ids only, in list order (the source's, else newest first), no scoring (GET /:id/similar ranks by fit). */
   async function similarIdsOf(userId: string, row: JobRow): Promise<string[]> {
+    const ids = await sourceIds(row);
+    if (ids) {
+      const found = await db.rAJob.findMany({ where: { ...similarScope(row), id: { in: ids } }, select: { id: true, fraudFlags: true } });
+      const near = await visibleCandidates(userId, inSourceOrder(found, ids));
+      if (near.length) return near.slice(0, SIMILAR_LIMIT).map((c) => c.id);
+    }
     const candidates = await db.rAJob.findMany({
       where: similarWhere(row),
       orderBy: [{ postedAt: 'desc' }, { id: 'desc' }],
@@ -334,16 +411,22 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
     return (await visibleCandidates(userId, candidates)).slice(0, SIMILAR_LIMIT).map((c) => c.id);
   }
 
-  async function rankSimilar(userId: string, row: JobRow): Promise<{ rows: JobRow[]; pre: Map<string, PreScoreResult> }> {
+  /** May this person's fit be read for a list here? GoApply: only with a live 个性化推荐 grant (the feed's own rule); RoboApply: always. */
+  async function mayReadFits(userId: string): Promise<boolean> {
+    if (!deps.personalized) return true;
+    return soft('personalized', () => deps.personalized!(userId, deps.brand()), false);
+  }
+
+  async function rankSimilar(userId: string, row: JobRow): Promise<{ rows: JobRow[]; fits: Map<string, Fit> }> {
     const rows = await similarRows(userId, row);
-    const pre = new Map<string, PreScoreResult>();
-    if (rows.length && deps.preScore) {
-      for (const p of await soft('preScore', () => deps.preScore!(userId, rows.map((r) => r.id)), [] as PreScoreResult[])) pre.set(p.jobId, p);
+    let fits = new Map<string, Fit>();
+    if (rows.length && deps.fits && (await mayReadFits(userId))) {
+      fits = await soft('fits', () => deps.fits!(userId, rows.map((r) => r.id)), fits);
     }
-    // Best fit first (unknown fit last), then newest.
-    const order = rows.map((r, i) => ({ r, i, s: pre.get(r.id)?.score ?? null }));
+    // Best fit first (unknown fit last), then the list order: vector distance, or newest for the same-role list.
+    const order = rows.map((r, i) => ({ r, i, s: fits.get(r.id)?.score ?? null }));
     order.sort((a, b) => (a.s === null ? (b.s === null ? a.i - b.i : 1) : b.s === null ? -1 : b.s - a.s || a.i - b.i));
-    return { rows: order.slice(0, SIMILAR_LIMIT).map((o) => o.r), pre };
+    return { rows: order.slice(0, SIMILAR_LIMIT).map((o) => o.r), fits };
   }
 
   async function writeStatus(
@@ -405,7 +488,7 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
         db.rACoverLetter.findFirst({ where: { userId, jobId, deletedAt: null }, orderBy: { updatedAt: 'desc' }, select: { id: true } }),
         soft('practiced', () => (deps.practicedForJob ? deps.practicedForJob(userId, jobId) : Promise.resolve(null)), null),
         row.companyId && deps.companyProfile ? soft('company', () => deps.companyProfile!(row.companyId!), null) : Promise.resolve(null),
-        deps.cachedFit ? soft('fit', () => deps.cachedFit!(userId, jobId), null) : Promise.resolve(null),
+        deps.fit ? soft('fit', async () => viewOf(await deps.fit!(userId, jobId)), null) : Promise.resolve(null),
         soft('campus', () => campusFor(userId, row), null),
         soft('similar', async () => ((await flag('jobs.recommendations', userId)) ? similarIdsOf(userId, row) : []), [] as string[]),
         soft(
@@ -442,14 +525,14 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
     async similar(userId, jobId) {
       const row = await loadJob(userId, jobId);
       if (!(await flag('jobs.recommendations', userId))) return { items: [] };
-      const { rows, pre } = await rankSimilar(userId, row);
+      const { rows, fits } = await rankSimilar(userId, row);
       if (!rows.length) return { items: [] };
       const trackers = await db.rATrackerEntry.findMany({
         where: { userId, jobId: { in: rows.map((r) => r.id) }, deletedAt: null },
         select: { jobId: true, status: true },
       });
       const byJob = new Map(trackers.map((t) => [t.jobId, { status: t.status }]));
-      return { items: rows.map((r) => toSimilarItem(r, now(), toFitBadge(pre.get(r.id)), byJob.get(r.id) ?? null)) };
+      return { items: rows.map((r) => toSimilarItem(r, now(), toFitBadge(fits.get(r.id)), byJob.get(r.id) ?? null)) };
     },
 
     async save(userId, jobId) {

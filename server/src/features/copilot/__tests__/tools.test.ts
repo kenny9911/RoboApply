@@ -17,6 +17,9 @@ import { NOW, USER, fakeAreas, feedItem, fitView, makeService, newThread, runTur
 import { createCreditTestKit } from '../../../platform/credits/testkit.js';
 import { createNetworkFixture, jobRow } from '../../network/testkit.js';
 import { CROSS_AREA_DEFAULTS, createDefaultAreas } from '../areas.js';
+import { createMatchService } from '../../match/MatchService.js';
+import { RESUME_MD, createMemoryRepo, resumeRecord } from '../../match/testkit.js';
+import { EVAL_SCORER_MODEL, freshAiRow } from '../../match/eval/world.js';
 import * as copilotIndex from '../index.js';
 
 const WRITES = ['patchFilters', 'createTailorSession', 'createCoverLetter', 'createOutreachDraft', 'importJob', 'saveImportedJob', 'fixResumeIssue'] as const;
@@ -218,9 +221,75 @@ describe('job tools (read only)', () => {
   it('analyze_fit uses the free score (never a credit) and labels a quick estimate', async () => {
     const s = ctxFor();
     const r = await run('analyze_fit', { jobId: 'job_1' }, s);
-    expect(s.areas.scoreJob).toHaveBeenCalledWith(USER, 'job_1', { resumeVariantId: null, locale: 'en' });
+    // The canonical fit: no resume version is passed.
+    expect(s.areas.scoreJob).toHaveBeenCalledTimes(1);
+    expect(s.areas.scoreJob).toHaveBeenCalledWith(USER, 'job_1', { locale: 'en' });
     expect(r.output.data).toMatchObject({ kind: 'quick estimate (no AI read)', skillsMissing: ['GraphQL'] });
     expect(r.output.cards?.[0]).toMatchObject({ type: 'fit_analysis', data: { aiWritten: false } });
+  });
+
+  it('MKT-2F: analyze_fit answers the canonical fit whatever resume is attached to the thread (the number the job page shows)', async () => {
+    // A thread with a tailored resume attached: before this change the tool scored THAT version.
+    const attached = ctxFor({ resumeId: 'res_tailored' });
+    const none = ctxFor({ resumeId: null });
+    const a = await run('analyze_fit', { jobId: 'job_1' }, attached);
+    const b = await run('analyze_fit', { jobId: 'job_1' }, none);
+    expect(attached.areas.scoreJob).toHaveBeenCalledTimes(1);
+    expect(attached.areas.scoreJob).toHaveBeenCalledWith(USER, 'job_1', { locale: 'en' });
+    expect(a.output.data).toEqual(b.output.data);
+    // The same score, tier and kind as the stored-fit read (the read the job page and the lists make).
+    const page = await attached.areas.storedFit(USER, 'job_1', { locale: 'en' });
+    expect(a.output.data).toMatchObject({ score: page.score, tier: page.tier, kind: page.kind === 'pre' ? 'quick estimate (no AI read)' : 'ai' });
+    // One measure only, named; no second number.
+    expect(a.output.data).toMatchObject({ label: 'Your fit', score: 72, tier: 'good', confidence: 'high' });
+    expect(a.output.data).not.toHaveProperty('withThisVersion');
+    expect(a.output.data).not.toHaveProperty('measuresNote');
+  });
+
+  it('MKT-2F: analyze_fit carries confidence and, for a quick estimate, why it is one', async () => {
+    const estimate = ctxFor({
+      areasOver: { scoreJob: async (_u, jobId) => ({ ...fitView(jobId), kind: 'pre', score: 58, tier: 'possible', estimateReason: 'daily_cap', confidence: 'low', confidenceReason: 'no_skills_listed' }) },
+    });
+    const r = await run('analyze_fit', { jobId: 'job_1' }, estimate);
+    expect(r.output.data).toMatchObject({ kind: 'quick estimate (no AI read)', confidence: 'low', reason: 'daily_cap', confidenceReason: 'no_skills_listed' });
+    const ai = ctxFor({ areasOver: { scoreJob: async (_u, jobId) => ({ ...fitView(jobId), kind: 'ai', confidence: 'high' }) } });
+    const out = (await run('analyze_fit', { jobId: 'job_1' }, ai)).output.data as Record<string, unknown>;
+    expect(out).toMatchObject({ kind: 'ai', confidence: 'high' });
+    // An AI fit has no "why it is an estimate".
+    expect(out).not.toHaveProperty('reason');
+    expect(out).not.toHaveProperty('confidenceReason');
+  });
+
+  it('MKT-2F: asked about one resume version, analyze_fit holds two clearly named measures: "Your fit" and "With this version"', async () => {
+    const s = ctxFor({ resumeId: 'res_other' });
+    const r = await run('analyze_fit', { jobId: 'job_1', resumeVariantId: 'res_tailored' }, s);
+    // Two reads: the canonical fit, then the named version (never the thread's own resume).
+    expect(s.areas.scoreJob.mock.calls.map((c) => c[2])).toEqual([{ locale: 'en' }, { resumeVariantId: 'res_tailored', locale: 'en' }]);
+    const data = r.output.data as Record<string, unknown>;
+    expect(data).toMatchObject({ label: 'Your fit', score: 72, tier: 'good', kind: 'quick estimate (no AI read)' });
+    expect(data.withThisVersion).toEqual({ variant: true, label: 'With this version', resumeVariantId: 'res_tailored', score: 81, tier: 'great', kind: 'ai', confidence: 'high' });
+    expect(String(data.measuresNote)).toContain('Your fit');
+    expect(String(data.measuresNote)).toContain('With this version');
+    // The card stays the canonical fit: 72, not the version's 81.
+    expect(r.output.cards).toHaveLength(1);
+    expect(r.output.cards?.[0]).toMatchObject({ type: 'fit_analysis', data: { score: 72, tier: 'good', resumeVariantId: 'res_primary' } });
+  });
+
+  it('MKT-2F: a version that is not the user’s is said to be missing; the canonical fit is still answered', async () => {
+    const s = ctxFor();
+    const r = await run('analyze_fit', { jobId: 'job_1', resumeVariantId: 'res_gone' }, s);
+    expect(r.output.data).toMatchObject({ label: 'Your fit', score: 72, withThisVersion: { variant: true, label: 'With this version', available: false, reason: 'resume_version_not_found' } });
+    // An unknown argument is still refused (strict schema).
+    const bad = await run('analyze_fit', { jobId: 'job_1', resume: 'x' }, ctxFor());
+    expect(JSON.stringify(bad.output.data)).toMatch(/invalid|error/i);
+  });
+
+  it('MKT-2F: the added-jobs rows read the stored canonical fit, never the thread’s resume', async () => {
+    const added = [{ jobId: 'mine_1', title: 'Analyst', companyName: 'Acme', location: null, workModel: null, addedAt: NOW.toISOString(), trackerStatus: null }];
+    const s = ctxFor({ resumeId: 'res_tailored', areasOver: { addedJobs: async () => added as never } });
+    await run('added_jobs', {}, s, []);
+    expect(s.areas.storedFit).toHaveBeenCalledWith(USER, 'mine_1', { locale: 'en' });
+    expect(s.areas.scoreJob).not.toHaveBeenCalled();
   });
 
   it('company_insights returns only sourced facts and the computed open-job count', async () => {
@@ -497,6 +566,99 @@ describe('draft_outreach (a credit proposal over NET networkService.createOutrea
     await expect(runTurn(h, t, 'write a note', { contextJobId: 'job_1' })).rejects.toMatchObject({ code: 'ai_unavailable' });
     expect(h.llm.streamChatWithTools).not.toHaveBeenCalled();
     expect(h.areas.createOutreachDraft).not.toHaveBeenCalled();
+  });
+});
+
+// ── MKT-2F: the production areas read the fit contract (match/fit.ts) ────────
+
+describe('MKT-2F: areas.scoreJob and areas.storedFit read THE fit', () => {
+  const AT = new Date('2026-10-10T08:00:00Z');
+  function world(scores: Array<Record<string, unknown>> = []) {
+    const repo = createMemoryRepo({
+      scores: scores as never,
+      // A second resume version of the same person: the one attached to the chat thread.
+      resumes: [
+        { ...resumeRecord(), userId: 'u1' },
+        { ...resumeRecord({ id: 'v_tailored', resumeMarkdown: `${RESUME_MD}\n- Kubernetes operator work`, resumeContentHash: 'hash-tailored' }), userId: 'u1' },
+      ],
+    });
+    const scorer = {
+      run: vi.fn(async () => ({
+        dimensions: { title_level: { score: 80, evidence: [] }, skills: { score: 70, evidence: [] }, industry: { score: null, evidence: [] }, career_path: { score: 60, evidence: [] } },
+        strengths: [],
+        gaps: [],
+        keywordsMatched: [],
+        keywordsMissing: [],
+        summary: null,
+      })),
+    };
+    const service = createMatchService({
+      repo,
+      scorer,
+      resolveModel: () => EVAL_SCORER_MODEL,
+      routeAllowed: () => true,
+      aiAllowed: async () => true,
+      consume: async () => ({ allowed: true, retryAfterSec: 0, remaining: 100, windows: [] }),
+      costLog: async () => undefined,
+      profileSnapshot: async () => null,
+      brand: () => getBrand('roboapply'),
+      env: {},
+      now: () => AT,
+    });
+    const areas = createDefaultAreas({ store: {} as never, fits: service.fits });
+    return { repo, scorer, service, areas };
+  }
+
+  it('storedFit is getFit with no model call: the estimate when nothing is stored, the AI fit when one is', async () => {
+    const empty = world();
+    const fit = await empty.service.fits.getFit('u1', 'job1');
+    const view = await empty.areas.storedFit('u1', 'job1', { locale: 'en' });
+    expect(view).toMatchObject({ score: fit.score, tier: fit.tier, kind: 'pre' });
+    expect(empty.scorer.run).not.toHaveBeenCalled();
+    expect(empty.repo.state.scores).toHaveLength(0);
+
+    const stored = world([freshAiRow()]);
+    const ai = await stored.service.fits.getFit('u1', 'job1');
+    expect(await stored.areas.storedFit('u1', 'job1', { locale: 'en' })).toMatchObject({ score: ai.score, tier: ai.tier, kind: 'ai', resumeVariantId: 'v1' });
+    expect(stored.scorer.run).not.toHaveBeenCalled();
+  });
+
+  it('storedFit ignores a resume version: the canonical fit is always the main resume', async () => {
+    const w = world([freshAiRow()]);
+    const canonical = await w.areas.storedFit('u1', 'job1', { locale: 'en' });
+    const withVersion = await w.areas.storedFit('u1', 'job1', { resumeVariantId: 'v_tailored', locale: 'en' });
+    expect(withVersion).toEqual(canonical);
+    expect(withVersion.resumeVariantId).toBe('v1');
+    expect(w.scorer.run).not.toHaveBeenCalled();
+  });
+
+  it('scoreJob without a version is the canonical fit (a model call is allowed: the free on-demand score); with one it is that version', async () => {
+    const w = world();
+    const canonical = await w.areas.scoreJob('u1', 'job1', { locale: 'en' });
+    expect(canonical).toMatchObject({ kind: 'ai', resumeVariantId: 'v1' });
+    expect(w.scorer.run).toHaveBeenCalledTimes(1);
+    // The page read now answers that same stored fit.
+    const page = await w.service.fits.getFit('u1', 'job1');
+    expect({ score: canonical.score, tier: canonical.tier }).toEqual({ score: page.score, tier: page.tier });
+    // The named version is another row, another measure.
+    const variant = await w.areas.scoreJob('u1', 'job1', { resumeVariantId: 'v_tailored', locale: 'en' });
+    expect(variant).toMatchObject({ kind: 'ai', resumeVariantId: 'v_tailored' });
+    expect(w.scorer.run).toHaveBeenCalledTimes(2);
+    // …and it did not move the canonical fit.
+    expect(await w.areas.storedFit('u1', 'job1', { locale: 'en' })).toMatchObject({ score: canonical.score, tier: canonical.tier, kind: 'ai', resumeVariantId: 'v1' });
+    // A version that is not the person's: not found, nothing scored.
+    await expect(w.areas.scoreJob('u1', 'job1', { resumeVariantId: 'nope', locale: 'en' })).rejects.toMatchObject({ code: 'not_found' });
+    expect(w.scorer.run).toHaveBeenCalledTimes(2);
+  });
+
+  it('the area reads the fit contract only: no scoreJob / preScoreMany call of the match service', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    for (const file of ['areas.ts', path.join('tools', 'jobs.ts')]) {
+      const source = fs.readFileSync(path.resolve(__dirname, '..', file), 'utf8');
+      expect(source, file).not.toMatch(/matchService\.(scoreJob|preScoreMany|preScoreJobs)/);
+      expect(source, file).not.toMatch(/resumeVariantId:\s*ctx\.resumeId/);
+    }
   });
 });
 
