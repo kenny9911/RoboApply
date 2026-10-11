@@ -15,17 +15,24 @@ import { toRecordedSql } from '../../../test/sqlSnapshot.js';
 import { normalizeCompanyName, type ProviderJobInput } from '../normalize/index.js';
 import { SR_HOST_CONCURRENCY, createHostGate } from '../sources/atsPublic/connectors.js';
 import { BoardFetchError, type FetchLike } from '../sources/atsPublic/http.js';
-import { careerSeedBoards } from '../sources/atsPublic/index.js';
+import { BEISEN_TENANTS_IN_FLIGHT, BEISEN_TENANT_FLOOR_MS, LARGE_BOARD_POSTINGS, MAINLAND_ONLY_ATS, careerSeedBoards, seedFile } from '../sources/atsPublic/index.js';
 import { sourceUserAgent as userAgent } from '../sources/index.js';
 import {
   BOARD_LEASE_MINUTES,
   BOARD_SYNC_RESERVE_MS,
+  TENANT_FLOOR_MINUTES,
+  archiveDeniedTenants,
   archiveDisabledSources,
   buildBoardLeaseSql,
+  buildMarkSeenSql,
+  isLargeBoard,
   leaseDueBoards,
+  passOverReason,
+  readGateFor,
   runBoardSync,
   runJobsBoards,
   signingMarket,
+  stampTenantAsked,
   validateCandidates,
   writingBrands,
   type BoardSyncDeps,
@@ -80,6 +87,8 @@ interface Harness {
   written: JobUpsertRow[];
   /** Every lease statement: its limit and the ids it excluded. */
   leases: Array<{ limit: number; exclude: string[]; leased: string[] }>;
+  /** Every "mark as seen" statement: the board and the externalIds it named. */
+  marked: Array<{ board: string; ids: string[] }>;
   sources: () => Row[];
   source: (id: string) => Row;
   jobs: () => Row[];
@@ -87,11 +96,12 @@ interface Harness {
 
 const time = (v: unknown): number => (v instanceof Date ? v.getTime() : Number.NEGATIVE_INFINITY);
 
-/** A fake database that leases the way the statement does: due boards, never-scheduled first, each handed out once per 15 minutes. */
+/** A fake database that leases the way the statement does: due boards, never-scheduled first, each handed out once per 15 minutes (a 北森 tenant: 30, while its floor is part of the statement). */
 function harness(seed: { sources?: Row[]; jobs?: Row[]; companies?: Row[]; config?: Row[] } = {}, start = T0): Harness {
   const clock = { now: start };
   const written: JobUpsertRow[] = [];
   const leases: Harness['leases'] = [];
+  const marked: Harness['marked'] = [];
   const holder: { fake?: ReturnType<typeof createFakePrisma> } = {};
   const fake = createFakePrisma({
     seed: { rACareerSiteSource: seed.sources ?? [], rAJob: seed.jobs ?? [], rACompany: seed.companies ?? [], appConfig: seed.config ?? [] },
@@ -99,17 +109,32 @@ function harness(seed: { sources?: Row[]; jobs?: Row[]; companies?: Row[]; confi
     sql: {
       respond(call) {
         const t = call.text;
-        if (t.startsWith('UPDATE "RACareerSiteSource" SET "nextSyncAt" = now() + interval')) {
+        if (t.startsWith('UPDATE "RACareerSiteSource" SET "nextSyncAt" = now() + ')) {
           const limit = Number(call.values.find((v) => typeof v === 'number'));
           const exclude = (call.values.find((v) => Array.isArray(v)) as string[] | undefined) ?? [];
+          // The 北森 floor is part of the statement only while that connector is on (boards.ts `tenantFloor`):
+          // a tenant asked under 30 minutes ago is left out, and a leased tenant is held for 30 minutes.
+          const floor = t.includes(`"ats" = 'beisen' AND "lastSyncedAt" IS NOT NULL AND "lastSyncedAt" > now() - interval '30 minutes'`);
+          const holdTenant = t.includes(`CASE WHEN "ats" = 'beisen' THEN interval '30 minutes' ELSE interval '15 minutes' END`);
+          expect(holdTenant).toBe(floor);
           const due = holder
             .fake!.$rows('rACareerSiteSource')
             .filter((r) => r.enabled === true && (r.nextSyncAt == null || time(r.nextSyncAt) <= clock.now) && !exclude.includes(String(r.id)))
+            .filter((r) => !(floor && r.ats === 'beisen' && r.lastSyncedAt != null && time(r.lastSyncedAt) > clock.now - 30 * MIN))
             .sort((a, b) => time(a.nextSyncAt) - time(b.nextSyncAt) || time(a.lastSyncedAt) - time(b.lastSyncedAt))
             .slice(0, limit);
-          for (const r of due) r.nextSyncAt = new Date(clock.now + BOARD_LEASE_MINUTES * MIN);
+          for (const r of due) r.nextSyncAt = new Date(clock.now + (holdTenant && r.ats === 'beisen' ? TENANT_FLOOR_MINUTES : BOARD_LEASE_MINUTES) * MIN);
           leases.push({ limit, exclude, leased: due.map((r) => String(r.id)) });
           return due.map((r) => ({ ...r }));
+        }
+        // Marking rows as seen (boards.ts `buildMarkSeenSql`): `lastSeenAt` only, on open public rows of the board.
+        if (t.startsWith('UPDATE "RAJob" SET "lastSeenAt" = now()')) {
+          const board = call.values.find((v) => typeof v === 'string');
+          const ids = (call.values.find((v) => Array.isArray(v)) as string[] | undefined) ?? [];
+          const hit = holder.fake!.$rows('rAJob').filter((r) => r.sourceBoard === board && ids.includes(String(r.externalId)) && r.archivedAt == null && r.visibility === 'public');
+          for (const r of hit) r.lastSeenAt = new Date(clock.now);
+          marked.push({ board: String(board), ids });
+          return hit.length;
         }
         // The parts of Postgres the real pipeline relies on (see ./testkit.ts).
         if (t.startsWith('SELECT "id", "externalId", "sourceBoard", "firstSeenAt"')) return [];
@@ -124,7 +149,7 @@ function harness(seed: { sources?: Row[]; jobs?: Row[]; companies?: Row[]; confi
   });
   holder.fake = fake;
   const sources = () => fake.$rows('rACareerSiteSource');
-  return { fake, db: fake as unknown as IngestDb, clock, written, leases, sources, source: (id) => sources().find((r) => r.id === id)!, jobs: () => fake.$rows('rAJob') };
+  return { fake, db: fake as unknown as IngestDb, clock, written, leases, marked, sources, source: (id) => sources().find((r) => r.id === id)!, jobs: () => fake.$rows('rAJob') };
 }
 
 const ghJob = (token: string, id: number, location: string | string[], title = 'Software Engineer') => {
@@ -139,6 +164,17 @@ const ghJob = (token: string, id: number, location: string | string[], title = '
     first_published: '2026-10-01T00:00:00Z',
   };
 };
+
+/**
+ * What Greenhouse answers for the listing WITHOUT texts (`…/jobs`): the same postings with no `content`, no
+ * `offices` and no `departments` (seen on a live board, 2026-10-12). So that answer never says where a posting
+ * is beyond its `location.name`.
+ */
+const withoutTexts = (jobs: unknown[]): unknown[] =>
+  jobs.map((job) => {
+    const { content: _content, offices: _offices, departments: _departments, ...rest } = job as Record<string, unknown>;
+    return rest;
+  });
 
 const ok = (body: unknown) => ({ ok: true, status: 200, text: async () => JSON.stringify(body) });
 const notFound = { ok: false, status: 404, text: async () => '' };
@@ -163,6 +199,12 @@ function world(boards: {
   lever?: Record<string, unknown[]>;
   ashby?: Record<string, unknown[]>;
   sr?: Record<string, { company?: string; postings: Array<{ id: string; country: string; city: string }>; status?: number | ((call: number) => number | undefined); textStatus?: (id: string) => number | undefined }>;
+  /** `workable[slug]`: the account's name and its jobs (MKT-5B). */
+  workable?: Record<string, { name?: string; jobs: unknown[] }>;
+  /** `leverEu[site]`: its postings, on Lever's EU instance. */
+  leverEu?: Record<string, unknown[]>;
+  /** `beisen[tenant]`: how many SYNTHETIC postings the tenant board lists (asked with POST, 50 a page), or the place names of each one (default: 上海). */
+  beisen?: Record<string, number | string[][]>;
   onRequest?: (url: string) => void | Promise<void>;
 }): BoardWorld {
   const urls: string[] = [];
@@ -183,7 +225,8 @@ function world(boards: {
       const answer = typeof spec === 'function' ? spec(n) : spec;
       if (answer instanceof Error) throw answer;
       if (typeof answer === 'number') return { ok: false, status: answer, text: async () => '' };
-      return answer ? ok({ jobs: answer }) : notFound;
+      if (!answer) return notFound;
+      return ok({ jobs: u.searchParams.get('content') === 'true' ? answer : withoutTexts(answer) });
     }
     const lv = /^\/v0\/postings\/([^/]+)$/.exec(u.pathname);
     if (u.hostname === 'api.lever.co' && lv) {
@@ -215,6 +258,31 @@ function world(boards: {
       const rows = board.postings.filter((p) => !country || p.country === country);
       const content = rows.slice(offset, offset + 100).map((p) => ({ id: p.id, name: `Role ${p.id}`, company: { name: board.company ?? 'Harbor Group' }, location: { city: p.city, country: p.country }, releasedDate: '2026-10-01T00:00:00.000Z' }));
       return ok({ totalFound: rows.length, content });
+    }
+    const wk = /^\/api\/v1\/widget\/accounts\/([^/]+)$/.exec(u.pathname);
+    if (u.hostname === 'apply.workable.com' && wk) {
+      listings.set(wk[1]!, (listings.get(wk[1]!) ?? 0) + 1);
+      const account = boards.workable?.[wk[1]!];
+      return account ? ok({ name: account.name ?? wk[1], jobs: account.jobs }) : notFound;
+    }
+    if (u.hostname === 'api.eu.lever.co' && lv) {
+      listings.set(lv[1]!, (listings.get(lv[1]!) ?? 0) + 1);
+      const all = boards.leverEu?.[lv[1]!];
+      if (!all) return notFound;
+      const skip = Number(u.searchParams.get('skip'));
+      return ok(all.slice(skip, skip + Number(u.searchParams.get('limit'))));
+    }
+    const bs = /^([a-z0-9-]+)\.zhiye\.com$/.exec(u.hostname);
+    if (bs && u.pathname === '/api/Jobad/GetJobAdPageList') {
+      const spec = boards.beisen?.[bs[1]!];
+      if (spec === undefined) return notFound;
+      const total = typeof spec === 'number' ? spec : spec.length;
+      const places = (i: number): string[] => (typeof spec === 'number' ? ['上海'] : spec[i]!);
+      listings.set(bs[1]!, (listings.get(bs[1]!) ?? 0) + 1);
+      const body = JSON.parse(init.body ?? '{}') as { PageIndex: number; PageSize: number };
+      const start = body.PageIndex * body.PageSize;
+      const Data = Array.from({ length: Math.max(0, Math.min(body.PageSize, total - start)) }, (_, i) => ({ Id: `00000000-0000-4000-8000-${String(start + i).padStart(12, '0')}`, JobAdName: `合成岗位 ${start + i}`, LocNames: places(start + i), Duty: '<p>合成示例。</p>', Require: '', Salary: '面议', PostDateInt: 0, PostDate: '2026-10-01T09:00:00' }));
+      return ok({ Count: total, Data });
     }
     return notFound;
   };
@@ -307,7 +375,8 @@ describe('reading: several boards in flight, one write at a time', () => {
   it('never has more listings in flight than the setting (default 6, clamped to 4-8) and leases twice that per round', async () => {
     for (const [setting, expected] of [[undefined, 6], ['4', 4], ['2', 4], ['8', 8], ['40', 8]] as const) {
       const tokens = Array.from({ length: 30 }, (_, i) => `co${i}`);
-      const h = harness({ sources: tokens.map((t, i) => sourceRow({ id: `s${i}`, boardToken: t })) });
+      // Boards that were read before and are known to be small (a board never read has the single slot of a large board, see below).
+      const h = harness({ sources: tokens.map((t, i) => sourceRow({ id: `s${i}`, boardToken: t, lastJobCount: 1, lastSyncedAt: new Date(T0 - 30 * H) })) });
       let inFlight = 0;
       let peak = 0;
       const w = world({
@@ -392,7 +461,8 @@ describe('reading: several boards in flight, one write at a time', () => {
     const w = world({ greenhouse: { globalco: jobs } });
     const rec = recorder(() => 0);
     const tally = await run(h, w, { process: rec.process });
-    expect(w.urls).toEqual(['https://boards-api.greenhouse.io/v1/boards/globalco/jobs?content=true']);
+    // One request: the listing with its texts (and, since JI-8, the pay ranges where the board states them).
+    expect(w.urls).toEqual(['https://boards-api.greenhouse.io/v1/boards/globalco/jobs?content=true&pay_transparency=true']);
     expect(rec.calls).toHaveLength(1);
     expect(rec.calls[0]!.ids).toHaveLength(728);
     expect(new Set(rec.calls[0]!.ids).size).toBe(728);
@@ -942,7 +1012,8 @@ describe('a board with posting texts still unread is due again at once', () => {
 describe('the run stays inside its budget', () => {
   it('stops leasing with under 20 s left; a board read but not written has its lease freed, so the next run takes it first', async () => {
     const tokens = Array.from({ length: 30 }, (_, i) => `co${i}`);
-    const h = harness({ sources: tokens.map((t, i) => sourceRow({ id: `s${String(i).padStart(2, '0')}`, boardToken: t, createdAt: new Date(T0 - (100 - i) * H) })) });
+    const READ_BEFORE = new Date(T0 - 30 * H);
+    const h = harness({ sources: tokens.map((t, i) => sourceRow({ id: `s${String(i).padStart(2, '0')}`, boardToken: t, lastJobCount: 1, lastSyncedAt: READ_BEFORE, createdAt: new Date(T0 - (100 - i) * H) })) });
     let spent = 0;
     // Each listing costs 10 s of the run's 240 s.
     const w = world({ greenhouse: Object.fromEntries(tokens.map((t) => [t, [ghJob(t, 1, 'Singapore')]])), onRequest: () => void (spent += 10_000) });
@@ -953,10 +1024,41 @@ describe('the run stays inside its budget', () => {
     expect(tally).toMatchObject({ boards: 12, stoppedBy: 'budget' });
     expect(rec.calls).toHaveLength(12);
     expect(h.leases).toHaveLength(2);
-    const written = h.sources().filter((r) => r.lastSyncedAt !== null);
-    const freed = h.sources().filter((r) => r.lastSyncedAt === null && time(r.nextSyncAt) === T0);
-    const untouched = h.sources().filter((r) => r.lastSyncedAt === null && r.nextSyncAt === null);
+    const written = h.sources().filter((r) => time(r.lastSyncedAt) === T0);
+    const freed = h.sources().filter((r) => time(r.lastSyncedAt) === READ_BEFORE.getTime() && time(r.nextSyncAt) === T0);
+    const untouched = h.sources().filter((r) => time(r.lastSyncedAt) === READ_BEFORE.getTime() && r.nextSyncAt === null);
     expect([written.length, freed.length, untouched.length]).toEqual([12, 12, 6]);
+  });
+
+  it('a board never read is written as soon as it is read, inside its own slot; one read too late for its write has its lease freed', async () => {
+    // Boards never read: their size is not known, so each is read AND written in the single slot of a large board.
+    const tokens = Array.from({ length: 30 }, (_, i) => `co${i}`);
+    const h = harness({ sources: tokens.map((t, i) => sourceRow({ id: `s${String(i).padStart(2, '0')}`, boardToken: t, createdAt: new Date(T0 - (100 - i) * H) })) });
+    let spent = 0;
+    const order: string[] = [];
+    const w = world({
+      greenhouse: Object.fromEntries(tokens.map((t) => [t, [ghJob(t, 1, 'Singapore')]])),
+      onRequest: (url) => {
+        spent += 10_000;
+        order.push(`read ${/boards\/(co\d+)\//.exec(url)![1]!}`);
+      },
+    });
+    const rec = recorder((call) => {
+      order.push(`write ${call.ids[0]!.split(':')[0]!}`);
+      return call.ids.length;
+    });
+    const tally = await run(h, w, { budget: createBudget(240_000, () => spent), process: rec.process });
+    // Each board's write follows its own read, before the next board is asked.
+    expect(order.slice(0, 6)).toEqual(['read co0', 'write co0', 'read co1', 'write co1', 'read co2', 'write co2']);
+    // 240 s, 10 s a listing: 22 boards are read and written; the last two of the second round came back with
+    // under 10 s left, too late to be written.
+    expect(w.urls).toHaveLength(24);
+    expect(tally).toMatchObject({ boards: 22, stoppedBy: 'budget' });
+    expect(rec.calls).toHaveLength(22);
+    expect(h.sources().filter((r) => time(r.lastSyncedAt) === T0)).toHaveLength(22);
+    // Read and not written, and leased and not read any more: their leases are freed for the next run.
+    expect(h.sources().filter((r) => r.lastSyncedAt === null && time(r.nextSyncAt) === T0)).toHaveLength(2);
+    expect(h.sources().filter((r) => r.lastSyncedAt === null && r.nextSyncAt === null)).toHaveLength(6);
   });
 
   it('with no time at all it leases nothing', async () => {
@@ -1228,25 +1330,28 @@ describe('validateCandidates: one list-only read, switched on only when the boar
     expect(h.source('c1')).toMatchObject({ enabled: false, lastError: null, lastSyncedAt: null, failCount: 0, nextSyncAt: null });
   });
 
-  it('checks at most the per-run limit, oldest first; leaves alone a system without a connector, an admin\'s own source and anything already switched on or off', async () => {
+  it('checks at most the per-run limit, oldest first; leaves alone a system without a connector or with its connector switched off, an admin\'s own source and anything already switched on or off', async () => {
     const many = Array.from({ length: 30 }, (_, i) => candidate(`c${String(i).padStart(2, '0')}`, { boardToken: `co${i}`, companyName: `co${i}`, updatedAt: new Date(T0 - (100 - i) * H) }));
     const h = harness({
       sources: [
         ...many,
+        // A system nothing reads, and two whose connector is switched off in this environment (MKT-5B).
+        candidate('workday', { ats: 'workday', boardToken: 'adminx', updatedAt: new Date(T0 - 500 * H) }),
         candidate('workable', { ats: 'workable', boardToken: 'northwind', updatedAt: new Date(T0 - 500 * H) }),
-        candidate('lever-eu', { ats: 'lever_eu', boardToken: 'eurofirm', updatedAt: new Date(T0 - 500 * H) }),
+        candidate('beisen', { ats: 'beisen', boardToken: 'eurofirm', updatedAt: new Date(T0 - 500 * H) }),
         sourceRow({ id: 'admin-off', boardToken: 'adminoff', enabled: false, origin: 'admin', updatedAt: new Date(T0 - 500 * H) }),
         candidate('switched-off', { boardToken: 'switchedoff', disabledAt: new Date(T0 - H), updatedAt: new Date(T0 - 500 * H) }),
         sourceRow({ id: 'import-on', boardToken: 'importon', enabled: true, origin: 'import', updatedAt: new Date(T0 - 500 * H) }),
       ],
     });
     const w = world({ greenhouse: Object.fromEntries(many.map((m) => [String(m.boardToken), [ghJob(String(m.boardToken), 1, 'Singapore')]])), names: Object.fromEntries(many.map((m) => [String(m.boardToken), String(m.boardToken)])) });
-    const res = await validateCandidates(h.db, 20, { now: at, env: {}, fetch: w.fetch });
+    const env = { ATS_WORKABLE_DISABLED: 'true' };
+    const res = await validateCandidates(h.db, 20, { now: at, env, fetch: w.fetch });
     expect(res).toMatchObject({ checked: 20, enabled: 20 });
     expect(h.sources().filter((r) => r.enabled === true && r.origin === 'discovered').map((r) => r.id).sort()).toEqual(many.slice(0, 20).map((m) => m.id));
-    for (const id of ['workable', 'lever-eu', 'admin-off', 'switched-off']) expect(h.source(id), id).toMatchObject({ enabled: false, lastError: null, lastSyncedAt: null });
-    expect(w.urls.some((u) => /northwind|eurofirm|adminoff|switchedoff|importon/.test(u))).toBe(false);
-    expect(await validateCandidates(h.db, 0, { now: at, env: {}, fetch: w.fetch })).toMatchObject({ checked: 0 });
+    for (const id of ['workday', 'workable', 'beisen', 'admin-off', 'switched-off']) expect(h.source(id), id).toMatchObject({ enabled: false, lastError: null, lastSyncedAt: null });
+    expect(w.urls.some((u) => /adminx|northwind|eurofirm|adminoff|switchedoff|importon/.test(u))).toBe(false);
+    expect(await validateCandidates(h.db, 0, { now: at, env, fetch: w.fetch })).toMatchObject({ checked: 0 });
   });
 
   it('the board sync validates up to ATS_DISCOVERY_VALIDATIONS_PER_RUN candidates before its loop, and reads the ones it switched on', async () => {
@@ -1321,4 +1426,739 @@ describe('1,000 boards at 60 boards per 5-minute run', () => {
     expect(quietReads).toBeLessThanOrEqual(4);
     expect(reads.get('b0')!.length).toBeGreaterThanOrEqual(12);
   }, 60_000);
+});
+
+// ═════════════════════════════════════════════════════════════════════════
+// MKT-5B (JI-8, JC-8 and the carry-over of M3 and M4): sources that are
+// passed over, 北森 tenant boards, Greenhouse boards that did not change,
+// large boards. SYNTHETIC boards; the clock is the test's.
+// ═════════════════════════════════════════════════════════════════════════
+
+const wkJob = (code: string, city = 'Paris', country = 'France', countryCode = 'FR') => ({
+  title: 'Analyst',
+  shortcode: code,
+  employment_type: 'Full-time',
+  telecommuting: false,
+  url: `https://apply.workable.com/j/${code}`,
+  application_url: `https://apply.workable.com/j/${code}/apply`,
+  published_on: '2026-10-01',
+  country,
+  city,
+  state: '',
+  locations: [{ country, countryCode, city, region: '', hidden: false }],
+  description: '<p>SYNTHETIC posting text.</p>',
+});
+const BEISEN_ON = { CN_ATS_BEISEN_ENABLED: 'true' };
+/** The id of the first posting every SYNTHETIC tenant board of `world()` lists. */
+const FIRST_TENANT_POSTING = '00000000-0000-4000-8000-000000000000';
+const tenantRow = (id: string, token: string, over: Row = {}) => sourceRow({ id, market: 'cn', ats: 'beisen', boardToken: token, companyName: `合成公司 ${token}`, ...over });
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+describe('MKT-5B: a source whose connector is switched off is passed over', () => {
+  it('with ATS_WORKABLE_DISABLED=true a Workable source is skipped with lastError connector_disabled: no request, its rows left as they are, no failure counted', async () => {
+    const h = harness({
+      sources: [sourceRow({ id: 'wk', ats: 'workable', boardToken: 'tidewater', companyName: 'Tidewater', lastSyncedAt: new Date(T0 - 5 * H), lastJobCount: 2, failCount: 2 }), sourceRow()],
+      jobs: [openJob('workable', 'tidewater:A1'), openJob('workable', 'tidewater:GONE')],
+    });
+    const w = world({ workable: { tidewater: { jobs: [wkJob('A1')] } }, greenhouse: { globalco: [ghJob('globalco', 1, 'Singapore')] } });
+    const rec = recorder();
+    const tally = await run(h, w, { env: { ATS_WORKABLE_DISABLED: 'true' }, process: rec.process });
+    expect(w.urls.some((u) => u.includes('workable'))).toBe(false);
+    // The other board of the run is read as usual.
+    expect(tally).toMatchObject({ boards: 1, passedOver: 1, boardErrors: 0, disabled: 0, closed: 0, takenDown: 0 });
+    expect(rec.calls.map((c) => c.ids)).toEqual([['globalco:1']]);
+    // Passed over: the reason, looked at again in 24 hours; not a read and not a failure.
+    expect(h.source('wk')).toMatchObject({ lastError: 'connector_disabled', enabled: true, failCount: 2, lastJobCount: 2, lastSyncedAt: new Date(T0 - 5 * H), nextSyncAt: new Date(T0 + 24 * H), disabledAt: null });
+    expect(h.jobs().filter((r) => r.sourceBoard === 'workable').every((r) => r.archivedAt === null)).toBe(true);
+    // The status of the run does not count it as a failed board.
+    const status = parseStatusDoc(String(h.fake.$rows('appConfig').find((r) => r.key === sourceStatusKey('intl', 'ats_public'))!.value))!.last;
+    expect(status).toMatchObject({ ok: true, error: null, notes: { boards_read: 1 } });
+    // Not leased again in the next runs of the day.
+    h.clock.now = T0 + 2 * H;
+    expect(await run(h, w, { env: { ATS_WORKABLE_DISABLED: 'true' }, process: rec.process })).toMatchObject({ boards: 0, passedOver: 0 });
+  });
+
+  it('without the switch the same source is read: its postings are written under the board name workable and the one that left the board is closed', async () => {
+    const h = harness({
+      sources: [sourceRow({ id: 'wk', ats: 'workable', boardToken: 'tidewater', companyName: 'Tidewater', lastSyncedAt: new Date(T0 - 30 * H), lastJobCount: 2 })],
+      jobs: [openJob('workable', 'tidewater:A1B2C3D4E5'), openJob('workable', 'tidewater:GONE')],
+    });
+    const w = world({ workable: { tidewater: { name: 'Tidewater Analytics', jobs: [wkJob('A1B2C3D4E5'), wkJob('F6G7H8J9K0', 'Taipei', 'Taiwan', 'TW')] } } });
+    // The real pipeline; only the queue is a stand-in.
+    const tally = await run(h, w, { enqueueMany: async (items: unknown[]) => ({ inserted: items.length }) });
+    expect(w.urls).toEqual(['https://apply.workable.com/api/v1/widget/accounts/tidewater?details=true']);
+    expect(tally).toMatchObject({ boards: 1, received: 2, written: 2, closed: 1, boardErrors: 0, passedOver: 0 });
+    // The posting key is the one a link to the posting's page gives (`workable:<slug>:<shortcode>`), so twins from other sources collapse onto the board row.
+    expect(h.written.map((r) => [r.externalId, r.sourceBoard, r.market, r.applyUrl, r.sourceName, r.atsPostingKey])).toEqual([
+      ['tidewater:A1B2C3D4E5', 'workable', 'intl', 'https://apply.workable.com/j/A1B2C3D4E5/apply', 'Tidewater · Workable', 'workable:tidewater:a1b2c3d4e5'],
+      ['tidewater:F6G7H8J9K0', 'workable', 'intl', 'https://apply.workable.com/j/F6G7H8J9K0/apply', 'Tidewater · Workable', 'workable:tidewater:f6g7h8j9k0'],
+    ]);
+    expect(h.jobs().find((r) => r.externalId === 'tidewater:GONE')).toMatchObject({ closeReason: 'source_removed' });
+    expect(h.jobs().find((r) => r.externalId === 'tidewater:A1B2C3D4E5')!.archivedAt).toBeNull();
+    expect(h.source('wk')).toMatchObject({ lastJobCount: 2, lastError: null, failCount: 0 });
+  });
+
+  it('passOverReason: the denylist first, then a switched-off connector, then a 北森 board where no mainland posting is written', () => {
+    const both = writingBrands(BOTH, {});
+    expect(passOverReason({ ats: 'greenhouse', boardToken: 'acme' }, {}, both)).toBeNull();
+    expect(passOverReason({ ats: 'workable', boardToken: 'acme' }, {}, both)).toBeNull();
+    expect(passOverReason({ ats: 'workable', boardToken: 'acme' }, { ATS_WORKABLE_DISABLED: 'true' }, both)).toBe('connector_disabled');
+    expect(passOverReason({ ats: 'beisen', boardToken: 'acme' }, {}, both)).toBe('connector_disabled');
+    expect(passOverReason({ ats: 'beisen', boardToken: 'acme' }, BEISEN_ON, both)).toBeNull();
+    expect(passOverReason({ ats: 'beisen', boardToken: 'acme' }, BEISEN_ON, writingBrands(['roboapply'], {}))).toBe('connector_disabled');
+    // A takedown holds whether or not the connector is switched on.
+    expect(passOverReason({ ats: 'beisen', boardToken: 'acme' }, { CN_ATS_TENANT_DENYLIST: 'acme' }, both)).toBe('tenant_denied');
+    expect(passOverReason({ ats: 'beisen', boardToken: 'acme' }, { ...BEISEN_ON, CN_ATS_TENANT_DENYLIST: 'acme' }, both)).toBe('tenant_denied');
+    // A system nothing reads is reported by the read itself.
+    expect(passOverReason({ ats: 'workday', boardToken: 'acme' }, {}, both)).toBeNull();
+  });
+
+  it('candidates that discovery recorded for Workable and Lever EU before their connectors existed are validated by the same step', async () => {
+    const candidate = (id: string, over: Row) => sourceRow({ id, enabled: false, origin: 'discovered', discoveredFrom: 'jsearch:abc', ...over });
+    const h = harness({
+      sources: [
+        candidate('wk', { ats: 'workable', boardToken: 'tidewater', companyName: 'Tidewater Analytics' }),
+        candidate('wk-other', { ats: 'workable', boardToken: 'othername', companyName: 'Somebody Else' }),
+        candidate('eu', { ats: 'lever_eu', boardToken: 'nordwind', companyName: 'Nordwind' }),
+      ],
+    });
+    const w = world({
+      workable: { tidewater: { name: 'Tidewater Analytics', jobs: [wkJob('A1')] }, othername: { name: 'Other Name Ltd', jobs: [wkJob('Z9')] } },
+      leverEu: { nordwind: [{ id: '7a2b3c4d-0000-4e4e-8c8c-333333333333', text: 'Data Engineer', categories: { location: 'Berlin' }, hostedUrl: 'https://jobs.eu.lever.co/nordwind/7a2b3c4d-0000-4e4e-8c8c-333333333333' }] },
+    });
+    const res = await validateCandidates(h.db, 20, { now: () => new Date(T0), env: {}, fetch: w.fetch });
+    expect(res).toMatchObject({ checked: 3, enabled: 2 });
+    // Workable states the account's name: it must be the candidate's company.
+    expect(h.source('wk')).toMatchObject({ enabled: true, lastError: null, nextSyncAt: null });
+    expect(h.source('wk-other')).toMatchObject({ enabled: false, lastError: 'validation:name_mismatch' });
+    // Lever states none: the site name must be the company as one word.
+    expect(h.source('eu')).toMatchObject({ enabled: true, lastError: null });
+    expect(w.urls.sort()).toEqual([
+      'https://api.eu.lever.co/v0/postings/nordwind?mode=json&skip=0&limit=100',
+      'https://apply.workable.com/api/v1/widget/accounts/othername?details=true',
+      'https://apply.workable.com/api/v1/widget/accounts/tidewater?details=true',
+    ]);
+  });
+});
+
+describe('MKT-5B: 北森 tenant boards', () => {
+  it('off by default: a 北森 source is leased, not asked, and left as it is', async () => {
+    const h = harness({ sources: [tenantRow('t1', 'shili')], jobs: [openJob('beisen', 'shili:old', 'cn')] });
+    const w = world({ beisen: { shili: 3 } });
+    const tally = await run(h, w);
+    expect(w.urls).toEqual([]);
+    expect(tally).toMatchObject({ boards: 0, passedOver: 1, takenDown: 0, calls: 0 });
+    expect(h.source('t1')).toMatchObject({ lastError: 'connector_disabled', lastSyncedAt: null, enabled: true, failCount: 0, nextSyncAt: new Date(T0 + 24 * H) });
+    expect(h.jobs()[0]!.archivedAt).toBeNull();
+    // The statement every deployment has always run: no 北森 clause while the connector is off.
+    expect(h.leases).toHaveLength(2);
+  });
+
+  it('with the flag on: asked as GoApply, written by GoApply into market cn only, with a source line that names the employer and 北森', async () => {
+    const env = { ...BEISEN_ON, JOB_SOURCES_CONTACT: 'mailto:jobs@example.com', CN_JOB_SOURCES_CONTACT: 'mailto:zhaopin@example.cn' };
+    const h = harness({ sources: [tenantRow('t1', 'shili', { companyName: '示例科技' })] });
+    const w = world({ beisen: { shili: 3 } });
+    // The real pipeline; only the queue is a stand-in.
+    const tally = await run(h, w, { env, enqueueMany: async (items: unknown[]) => ({ inserted: items.length }) });
+    expect(w.urls).toEqual(['https://shili.zhiye.com/api/Jobad/GetJobAdPageList']);
+    // Both brands are served, and the tenant board is still asked as the mainland brand.
+    expect([...w.agents]).toEqual(['GoApplyJobs/1.0 (+mailto:zhaopin@example.cn)']);
+    expect(tally).toMatchObject({ boards: 1, received: 3, written: 3, droppedIntl: 0, droppedCn: 0, boardErrors: 0, calls: 1 });
+    expect(h.written).toHaveLength(3);
+    for (const row of h.written) {
+      expect(row).toMatchObject({ market: 'cn', sourceBoard: 'beisen', sourceName: '示例科技 · 北森' });
+      expect(row.applyUrl).toMatch(/^https:\/\/shili\.zhiye\.com\/social\/detail\?jobAdId=/);
+    }
+    // Next read: never under 30 minutes away (here: the cold interval of a board's first read).
+    expect(time(h.source('t1').nextSyncAt)).toBeGreaterThanOrEqual(T0 + BEISEN_TENANT_FLOOR_MS);
+    expect(h.source('t1')).toMatchObject({ lastSyncedAt: new Date(T0), lastJobCount: 3, lastError: null });
+  });
+
+  it('every row is market cn: a posting with places on both sides keeps its mainland places, one located elsewhere is dropped, and nothing is ever written to the international market', async () => {
+    const h = harness({ sources: [tenantRow('t1', 'shili', { companyName: '示例科技' })] });
+    // SYNTHETIC postings, by their place names.
+    const w = world({ beisen: { shili: [['上海', '香港'], ['新加坡', '深圳'], ['新加坡'], ['香港', '台北'], ['昆山'], ['全国'], [], ['海外']] } });
+    const tally = await run(h, w, { env: BEISEN_ON, enqueueMany: async (items: unknown[]) => ({ inserted: items.length }) });
+    // Five postings are in mainland China; three are not and are dropped by the connector, counted.
+    expect(tally).toMatchObject({ boards: 1, received: 5, written: 5, droppedByConnector: 3, droppedIntl: 0, droppedCn: 0, boardErrors: 0 });
+    expect(h.written).toHaveLength(5);
+    expect(h.written.every((r) => r.market === 'cn' && r.sourceBoard === 'beisen' && r.locationCountry === 'CN')).toBe(true);
+    // One row per posting, under its plain id: never a second copy for the other market.
+    expect(h.written.map((r) => r.externalId).sort()).toEqual([0, 1, 4, 5, 6].map((i) => `shili:00000000-0000-4000-8000-${String(i).padStart(12, '0')}`));
+    expect(h.written.some((r) => String(r.externalId).endsWith('#cn'))).toBe(false);
+    // The places outside the mainland are not in the stored rows.
+    const stored = JSON.stringify(h.written.map((r) => [r.location, r.locationCity, r.locationRegion, r.locations]));
+    for (const elsewhere of ['香港', '新加坡', '台北', 'Hong Kong', 'Singapore', 'Taipei']) expect(stored, elsewhere).not.toContain(elsewhere);
+    // The status of the mainland market counts the board; the international one has no status from this run.
+    expect(h.fake.$rows('appConfig').some((r) => r.key === sourceStatusKey('intl', 'ats_public'))).toBe(false);
+    expect(parseStatusDoc(String(h.fake.$rows('appConfig').find((r) => r.key === sourceStatusKey('cn', 'ats_public'))!.value))!.last).toMatchObject({ ok: true, written: 5 });
+  });
+
+  it('a deployment that writes no mainland posting never asks a tenant board', async () => {
+    const h = harness({ sources: [tenantRow('t1', 'shili')] });
+    const w = world({ beisen: { shili: 3 } });
+    const tally = await run(h, w, { env: BEISEN_ON, brands: ['roboapply'] });
+    expect(w.urls).toEqual([]);
+    expect(tally).toMatchObject({ boards: 0, passedOver: 1 });
+    expect(h.source('t1')).toMatchObject({ lastError: 'connector_disabled', lastSyncedAt: null });
+  });
+
+  it('the 30-minute floor: a second read of the same tenant within 30 minutes is refused by the lease, whatever marked it due', async () => {
+    expect(TENANT_FLOOR_MINUTES * MIN).toBe(BEISEN_TENANT_FLOOR_MS);
+    const h = harness({ sources: [tenantRow('t1', 'shili'), sourceRow()] });
+    const w = world({ beisen: { shili: 3 }, greenhouse: { globalco: [ghJob('globalco', 1, 'Singapore')] } });
+    const rec = recorder();
+    await run(h, w, { env: BEISEN_ON, process: rec.process });
+    expect(w.listings.get('shili')).toBe(1);
+    // An admin's "Check now" (or anything else) marks the tenant due at once, ten minutes later.
+    h.clock.now = T0 + 10 * MIN;
+    h.source('t1').nextSyncAt = null;
+    h.source('cs1').nextSyncAt = null;
+    const second = await run(h, w, { env: BEISEN_ON, process: rec.process });
+    // The other board is read; the tenant is not even leased.
+    expect(second).toMatchObject({ boards: 1, passedOver: 0 });
+    expect(w.listings.get('shili')).toBe(1);
+    expect(h.leases.flatMap((l) => l.leased)).not.toContain('t1-second');
+    expect(h.source('t1').nextSyncAt).toBeNull();
+    // 29 minutes after the read: still not. 31 minutes after: read.
+    h.clock.now = T0 + 29 * MIN;
+    await run(h, w, { env: BEISEN_ON, process: rec.process });
+    expect(w.listings.get('shili')).toBe(1);
+    h.clock.now = T0 + 31 * MIN;
+    await run(h, w, { env: BEISEN_ON, process: rec.process });
+    expect(w.listings.get('shili')).toBe(2);
+    // The statement: the clause is there only while the connector is on, and it is the same 30 minutes. A leased
+    // tenant is also held for those 30 minutes, not the 15 of the other boards.
+    const sql = toRecordedSql('$queryRaw', buildBoardLeaseSql(12, [], { tenantFloor: true }), []);
+    expect(sql.text).toContain(`AND NOT ("ats" = 'beisen' AND "lastSyncedAt" IS NOT NULL AND "lastSyncedAt" > now() - interval '${TENANT_FLOOR_MINUTES} minutes') ORDER BY`);
+    expect(sql.text).toContain(`SET "nextSyncAt" = now() + CASE WHEN "ats" = 'beisen' THEN interval '${TENANT_FLOOR_MINUTES} minutes' ELSE interval '${BOARD_LEASE_MINUTES} minutes' END WHERE`);
+    expect(sql.values).toEqual([12]);
+    expect(toRecordedSql('$queryRaw', buildBoardLeaseSql(12), []).text).not.toContain('beisen');
+    // One list names the mainland tenant systems; the statement spells the one it holds.
+    expect(MAINLAND_ONLY_ATS).toEqual(['beisen']);
+  });
+
+  it('the floor holds when a tenant was asked and the run never stamped it: out of time before the write', async () => {
+    const h = harness({ sources: [tenantRow('t1', 'shili'), sourceRow({ lastJobCount: 1, lastSyncedAt: new Date(T0 - 30 * H) })] });
+    let spent = 0;
+    // The tenant's listing uses up the run's time: both boards are read, neither can be written.
+    const w = world({ beisen: { shili: 3 }, greenhouse: { globalco: [ghJob('globalco', 1, 'Singapore')] }, onRequest: (url) => void (spent += url.includes('zhiye.com') ? 235_000 : 0) });
+    const rec = recorder();
+    const first = await run(h, w, { env: BEISEN_ON, budget: createBudget(240_000, () => spent), process: rec.process });
+    expect(first).toMatchObject({ boards: 0, stoppedBy: 'budget' });
+    expect(rec.calls).toEqual([]);
+    expect(w.listings.get('shili')).toBe(1);
+    // The other board's lease is freed for the next run. The tenant's is not: it was asked, and the time of
+    // that request was written before it left.
+    expect(h.source('cs1')).toMatchObject({ nextSyncAt: new Date(T0) });
+    expect(h.source('t1')).toMatchObject({ lastSyncedAt: new Date(T0), nextSyncAt: new Date(T0 + BEISEN_TENANT_FLOOR_MS), lastJobCount: null, lastError: null });
+    // The next runs, 5, 15 and 29 minutes later: the other board is read, the tenant is not asked.
+    for (const minutes of [5, 15, 29]) {
+      h.clock.now = T0 + minutes * MIN;
+      spent = 0;
+      await run(h, w, { env: BEISEN_ON, budget: createBudget(240_000, () => 0), process: rec.process });
+      expect(w.listings.get('shili'), String(minutes)).toBe(1);
+    }
+    expect(w.listings.get('globalco')).toBe(2);
+    // Once the 30 minutes are over it is read, and written.
+    h.clock.now = T0 + 31 * MIN;
+    expect(await run(h, w, { env: BEISEN_ON, process: rec.process })).toMatchObject({ boards: 1, received: 3 });
+    expect(w.listings.get('shili')).toBe(2);
+    expect(h.source('t1')).toMatchObject({ lastSyncedAt: new Date(T0 + 31 * MIN), lastJobCount: 3 });
+  });
+
+  it('the floor holds when a read is cut off between two pages: the pages already asked for count', async () => {
+    const h = harness({ sources: [tenantRow('t1', 'shili')] });
+    // Three pages of 50; every request takes 25 ms and the run's reads are cut off after 30 ms (20 s before its end).
+    const w = world({ beisen: { shili: 120 }, onRequest: () => sleep(25) });
+    const rec = recorder();
+    const cut = await run(h, w, { env: BEISEN_ON, budget: createBudget(BOARD_SYNC_RESERVE_MS + 30, () => 0), process: rec.process });
+    expect(cut).toMatchObject({ boards: 0, stoppedBy: 'budget' });
+    expect(rec.calls).toEqual([]);
+    const asked = w.listings.get('shili')!;
+    expect(asked).toBeGreaterThanOrEqual(1);
+    expect(asked).toBeLessThan(3);
+    // Not a failure of the board, and not freed: asked at T0, held until T0 + 30 minutes.
+    expect(h.source('t1')).toMatchObject({ lastSyncedAt: new Date(T0), nextSyncAt: new Date(T0 + BEISEN_TENANT_FLOOR_MS), lastError: null, failCount: 0 });
+    h.clock.now = T0 + 5 * MIN;
+    expect(await run(h, w, { env: BEISEN_ON, process: rec.process })).toMatchObject({ boards: 0 });
+    expect(w.listings.get('shili')).toBe(asked);
+    h.clock.now = T0 + 31 * MIN;
+    expect(await run(h, w, { env: BEISEN_ON, process: rec.process })).toMatchObject({ boards: 1, received: 120 });
+  });
+
+  it('the floor holds when the run dies after leasing a tenant: the lease is 30 minutes, and a request that left has its time on the row', async () => {
+    const h = harness({ sources: [tenantRow('t1', 'shili')] });
+    // A run that leased the tenant and died before anything else: only the lease statement ran.
+    expect((await leaseDueBoards(h.db, 12, [], { tenantFloor: true })).map((s) => s.id)).toEqual(['t1']);
+    expect(h.source('t1')).toMatchObject({ nextSyncAt: new Date(T0 + BEISEN_TENANT_FLOOR_MS), lastSyncedAt: null });
+    const w = world({ beisen: { shili: 3 } });
+    for (const minutes of [5, 16, 29]) {
+      h.clock.now = T0 + minutes * MIN;
+      await run(h, w, { env: BEISEN_ON, process: recorder().process });
+      expect(w.urls, String(minutes)).toEqual([]);
+    }
+    // The time of a request is written before the request, on a tenant board only; the row in hand keeps the earlier time.
+    const row = { id: 't1', ats: 'beisen' };
+    await stampTenantAsked(h.db, row, new Date(T0 + 29 * MIN));
+    expect(h.source('t1').lastSyncedAt).toEqual(new Date(T0 + 29 * MIN));
+    await stampTenantAsked(h.db, { id: 'cs-other', ats: 'greenhouse' }, new Date(T0));
+    expect(h.sources()).toHaveLength(1);
+  });
+
+  it('a tenant whose request time cannot be written is not asked', async () => {
+    const h = harness({ sources: [tenantRow('t1', 'shili')] });
+    const w = world({ beisen: { shili: 3 } });
+    // The database refuses the write that records the time of the request (and only that one).
+    const sources = (h.db as unknown as { rACareerSiteSource: { update: (args: { where: { id: string }; data: Record<string, unknown> }) => Promise<unknown> } }).rACareerSiteSource;
+    const update = sources.update.bind(sources);
+    const guarded: typeof sources.update = async (args) => {
+      if (Object.keys(args.data).join() === 'lastSyncedAt') throw new Error('connection lost');
+      return update(args);
+    };
+    const db = { ...(h.db as unknown as Record<string, unknown>), rACareerSiteSource: new Proxy(sources, { get: (target, key, receiver) => (key === 'update' ? guarded : Reflect.get(target, key, receiver)) }), $queryRaw: h.db.$queryRaw.bind(h.db), $executeRaw: h.db.$executeRaw.bind(h.db) } as unknown as IngestDb;
+    const tally = await run(h, w, { db, env: BEISEN_ON, process: recorder().process });
+    expect(w.urls).toEqual([]);
+    // Reported as a read that failed in passing; tried again later, never under 30 minutes.
+    expect(tally).toMatchObject({ boards: 1, boardErrors: 1, calls: 0 });
+    expect(String(h.source('t1').lastError)).toMatch(/^unexpected:connection lost/);
+    expect(time(h.source('t1').nextSyncAt)).toBeGreaterThanOrEqual(T0 + BEISEN_TENANT_FLOOR_MS);
+  });
+
+  it('never more than two tenants are read at once, whatever ATS_BOARDS_CONCURRENCY allows the other boards', async () => {
+    expect(BEISEN_TENANTS_IN_FLIGHT).toBe(2);
+    const tenants = Array.from({ length: 7 }, (_, i) => `tenant${i}`);
+    const h = harness({ sources: [...tenants.map((t, i) => tenantRow(`t${i}`, t)), ...Array.from({ length: 6 }, (_, i) => sourceRow({ id: `g${i}`, boardToken: `gh${i}`, companyName: `GH ${i}`, lastJobCount: 1, lastSyncedAt: new Date(T0 - 30 * H) }))] });
+    let tenantsInFlight = 0;
+    let tenantPeak = 0;
+    let othersInFlight = 0;
+    let otherPeak = 0;
+    const inner = world({ beisen: Object.fromEntries(tenants.map((t) => [t, 120])), greenhouse: Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`gh${i}`, [ghJob(`gh${i}`, 1, 'Singapore')]])) });
+    // A counting fetch: how many requests are open on tenant boards, and on the other boards, at the same time.
+    const fetch: FetchLike = async (url, init) => {
+      const tenantBoard = new URL(url).hostname.endsWith('.zhiye.com');
+      if (tenantBoard) tenantPeak = Math.max(tenantPeak, (tenantsInFlight += 1));
+      else otherPeak = Math.max(otherPeak, (othersInFlight += 1));
+      try {
+        await sleep(4);
+        return await inner.fetch(url, init);
+      } finally {
+        if (tenantBoard) tenantsInFlight -= 1;
+        else othersInFlight -= 1;
+      }
+    };
+    const tally = await run(h, { fetch }, { env: { ...BEISEN_ON, ATS_BOARDS_CONCURRENCY: '8' }, process: recorder().process });
+    expect(tally).toMatchObject({ boards: 13, boardErrors: 0 });
+    // Three pages each (120 postings), seven tenants: 21 requests, never more than two tenants open.
+    expect(inner.urls.filter((u) => u.includes('.zhiye.com'))).toHaveLength(21);
+    expect(tenantPeak).toBe(2);
+    // The gate is the tenants' own: the other boards still ran side by side.
+    expect(otherPeak).toBeGreaterThan(2);
+    expect(readGateFor({ ats: 'beisen', lastJobCount: null })).toBe(readGateFor({ ats: 'beisen', lastJobCount: 5 }));
+    expect(readGateFor({ ats: 'beisen', lastJobCount: null })).not.toBe(readGateFor({ ats: 'greenhouse', lastJobCount: 5 }));
+  });
+
+  it('a listing longer than the cap is marked incomplete and closes nothing; a tenant under the cap closes what left its board', async () => {
+    const h = harness({
+      sources: [tenantRow('big', 'bigco', { lastJobCount: 500 }), tenantRow('small', 'smallco', { lastJobCount: 4 })],
+      jobs: [openJob('beisen', 'bigco:left-the-board', 'cn'), openJob('beisen', 'smallco:left-the-board', 'cn')],
+    });
+    const w = world({ beisen: { bigco: 500, smallco: 3 } });
+    const rec = recorder();
+    const tally = await run(h, w, { env: { ...BEISEN_ON, CN_ATS_BEISEN_MAX_POSTINGS_PER_RUN: '100' }, process: rec.process });
+    // Two pages for the capped tenant, one for the small one.
+    expect(w.listings.get('bigco')).toBe(2);
+    expect(w.listings.get('smallco')).toBe(1);
+    expect(rec.calls.find((c) => c.ids[0]!.startsWith('bigco:'))!.ids).toHaveLength(100);
+    expect(tally).toMatchObject({ boards: 2, closed: 1 });
+    expect(h.jobs().find((r) => r.externalId === 'bigco:left-the-board')!.archivedAt).toBeNull();
+    expect(h.jobs().find((r) => r.externalId === 'smallco:left-the-board')).toMatchObject({ closeReason: 'source_removed' });
+  });
+
+  it('a tenant on CN_ATS_TENANT_DENYLIST is never read and its open postings are archived at once, with the connector on or off', async () => {
+    for (const env of [{ ...BEISEN_ON, CN_ATS_TENANT_DENYLIST: 'shili' }, { CN_ATS_TENANT_DENYLIST: 'shili' }]) {
+      const h = harness({
+        sources: [tenantRow('t1', 'shili', { lastSyncedAt: new Date(T0 - 5 * H), lastJobCount: 2 }), tenantRow('t2', 'freeco')],
+        jobs: [openJob('beisen', 'shili:a', 'cn'), openJob('beisen', 'shili:b', 'cn'), openJob('beisen', `freeco:${FIRST_TENANT_POSTING}`, 'cn'), openJob('greenhouse', 'shili:a', 'intl')],
+      });
+      const w = world({ beisen: { shili: 2, freeco: 1 } });
+      const tally = await run(h, w, { env, process: recorder(() => 0).process });
+      expect(w.urls.some((u) => u.includes('shili'))).toBe(false);
+      expect(tally).toMatchObject({ takenDown: 2, boardErrors: 0, disabled: 0 });
+      expect(tally.passedOver).toBe('CN_ATS_BEISEN_ENABLED' in env ? 1 : 2);
+      expect(h.jobs().filter((r) => r.sourceBoard === 'beisen' && String(r.externalId).startsWith('shili:')).every((r) => r.closeReason === 'source_removed' && r.archivedAt !== null)).toBe(true);
+      // Another tenant's rows, and a board of another system that shares the id, are left alone.
+      expect(h.jobs().find((r) => r.externalId === `freeco:${FIRST_TENANT_POSTING}`)!.archivedAt).toBeNull();
+      expect(h.jobs().find((r) => r.sourceBoard === 'greenhouse')!.archivedAt).toBeNull();
+      expect(h.source('t1')).toMatchObject({ lastError: 'tenant_denied', enabled: true, failCount: 0, lastSyncedAt: new Date(T0 - 5 * H), nextSyncAt: new Date(T0 + 24 * H) });
+    }
+  });
+
+  it('the takedown takes effect at the NEXT run, whatever state the tenant\'s source is in: not due for hours, switched off, or not in the list at all', async () => {
+    const env = { ...BEISEN_ON, CN_ATS_TENANT_DENYLIST: 'notdue,offco,nosource' };
+    const h = harness({
+      sources: [
+        // Read an hour ago, next read in 23 hours.
+        tenantRow('t-notdue', 'notdue', { lastSyncedAt: new Date(T0 - H), lastJobCount: 2, nextSyncAt: new Date(T0 + 23 * H) }),
+        // Switched off by an admin some time ago (its rows below were written since by nobody; they are simply still open).
+        tenantRow('t-off', 'offco', { enabled: false, disabledAt: new Date(T0 - 100 * H) }),
+        tenantRow('t-free', 'freeco', { lastSyncedAt: new Date(T0 - H), lastJobCount: 1, nextSyncAt: new Date(T0 + 23 * H) }),
+      ],
+      jobs: [
+        openJob('beisen', 'notdue:a', 'cn'),
+        openJob('beisen', 'notdue:b', 'cn'),
+        openJob('beisen', 'offco:a', 'cn'),
+        openJob('beisen', 'nosource:a', 'cn'),
+        // A row that somehow sits in the other market is taken down too.
+        openJob('beisen', 'nosource:b', 'intl'),
+        openJob('beisen', 'freeco:a', 'cn'),
+        // Another tenant whose id starts with a listed one, a private row, and a board of another system.
+        openJob('beisen', 'notdue2:a', 'cn'),
+        { ...openJob('beisen', 'notdue:private', 'cn'), visibility: 'private' },
+        openJob('greenhouse', 'notdue:a', 'intl'),
+      ],
+    });
+    const w = world({ beisen: { notdue: 2, offco: 1, nosource: 2, freeco: 1 } });
+    const tally = await run(h, w, { env, process: recorder(() => 0).process });
+    // Nothing was due, so nothing was leased and no request was made: the postings are gone all the same.
+    expect(w.urls).toEqual([]);
+    expect(tally).toMatchObject({ takenDown: 5, boards: 0, passedOver: 0 });
+    const state = (externalId: string, board = 'beisen') => h.jobs().find((r) => r.externalId === externalId && r.sourceBoard === board)!;
+    for (const id of ['notdue:a', 'notdue:b', 'offco:a', 'nosource:a', 'nosource:b']) expect(state(id), id).toMatchObject({ closeReason: 'source_removed', archivedAt: new Date(T0), closedAt: new Date(T0) });
+    for (const id of ['freeco:a', 'notdue2:a', 'notdue:private']) expect(state(id).archivedAt, id).toBeNull();
+    expect(state('notdue:a', 'greenhouse').archivedAt).toBeNull();
+    // The sources are as they were: the stamp of a pass-over is written when the source is next leased.
+    expect(h.source('t-notdue')).toMatchObject({ nextSyncAt: new Date(T0 + 23 * H), lastError: null });
+    expect(h.source('t-off')).toMatchObject({ enabled: false });
+    // The cron step reports the work, and a second run finds nothing left to take down.
+    expect(await runJobsBoards(createBudget(240_000, () => 0), { db: h.db, now: () => new Date(h.clock.now), env, fetch: w.fetch, brands: BOTH, loadSeeds: async () => null, kick: () => undefined })).toEqual({ skipped: 'no_work' });
+    // By the function itself: per market, and nothing without a list.
+    const again = harness({ jobs: [openJob('beisen', 'shili:a', 'cn'), openJob('beisen', 'shili:b', 'intl'), openJob('beisen', 'other:a', 'cn')] });
+    expect(await archiveDeniedTenants(again.db, { CN_ATS_TENANT_DENYLIST: 'shili' }, new Date(T0))).toEqual({ intl: 1, cn: 1 });
+    expect(await archiveDeniedTenants(again.db, { CN_ATS_TENANT_DENYLIST: 'shili' }, new Date(T0))).toEqual({ intl: 0, cn: 0 });
+    expect(await archiveDeniedTenants(again.db, {}, new Date(T0))).toEqual({ intl: 0, cn: 0 });
+    expect(again.jobs().find((r) => r.externalId === 'other:a')!.archivedAt).toBeNull();
+  });
+
+  it('the takedown also runs where no brand writes board postings, and its closures are in the run status of the market they were in', async () => {
+    // The mainland stack with recruitment-info mode off: nothing is read, the denylist still holds.
+    const off = harness({ sources: [tenantRow('t1', 'shili')], jobs: [openJob('beisen', 'shili:a', 'cn')] });
+    const none = world({ beisen: { shili: 1 } });
+    const tally = await run(off, none, { brands: ['goapply'], env: { CN_RECRUITMENT_INFO_MODE: 'off', CN_ATS_TENANT_DENYLIST: 'shili' } });
+    expect(none.urls).toEqual([]);
+    expect(tally).toMatchObject({ takenDown: 1, boards: 0 });
+    expect(off.jobs()[0]).toMatchObject({ closeReason: 'source_removed' });
+    expect(off.leases).toEqual([]);
+    // A run that also reads a board for the mainland market: the status counts the taken-down postings as closed.
+    const h = harness({ sources: [tenantRow('t1', 'shili', { nextSyncAt: new Date(T0 + 23 * H) }), tenantRow('t2', 'freeco')], jobs: [openJob('beisen', 'shili:a', 'cn'), openJob('beisen', 'shili:b', 'cn')] });
+    const w = world({ beisen: { shili: 2, freeco: 1 } });
+    expect(await run(h, w, { env: { ...BEISEN_ON, CN_ATS_TENANT_DENYLIST: 'shili' }, process: recorder().process })).toMatchObject({ takenDown: 2, boards: 1, closed: 0 });
+    expect(parseStatusDoc(String(h.fake.$rows('appConfig').find((r) => r.key === sourceStatusKey('cn', 'ats_public'))!.value))!.last).toMatchObject({ ok: true, closed: 2 });
+  });
+
+  it('a 北森 candidate passes the same gate and floor: one page, and when it is switched on its first read is 30 minutes after the check', async () => {
+    const h = harness({ sources: [tenantRow('c1', 'shili', { enabled: false, origin: 'import', companyName: 'shili' }), tenantRow('c2', 'denied', { enabled: false, origin: 'import', companyName: 'denied' })] });
+    const w = world({ beisen: { shili: 500, denied: 5 } });
+    const env = { ...BEISEN_ON, CN_ATS_TENANT_DENYLIST: 'denied' };
+    const res = await validateCandidates(h.db, 20, { now: () => new Date(T0), env, fetch: w.fetch, brands: BOTH });
+    // The board states no company and the candidate has no name of its own: not confirmed, never switched on by itself.
+    expect(res).toMatchObject({ checked: 1, enabled: 0 });
+    expect(w.urls).toEqual(['https://shili.zhiye.com/api/Jobad/GetJobAdPageList']);
+    expect(h.source('c1')).toMatchObject({ enabled: false, lastError: 'validation:name_unconfirmed' });
+    // The denylisted candidate was not asked and is left as it was.
+    expect(h.source('c2')).toMatchObject({ enabled: false, lastError: null, lastSyncedAt: null });
+    // A candidate whose id is its company written as one word is confirmed: first read 30 minutes later, not at once.
+    const named = harness({ sources: [tenantRow('c3', 'shili', { enabled: false, origin: 'import', companyName: 'Shi Li' })] });
+    expect(await validateCandidates(named.db, 20, { now: () => new Date(T0), env: BEISEN_ON, fetch: w.fetch, brands: BOTH })).toMatchObject({ checked: 1, enabled: 1 });
+    // The check is the tenant's last request: its time is kept where the lease and "Check now" read it.
+    expect(named.source('c3')).toMatchObject({ enabled: true, nextSyncAt: new Date(T0 + BEISEN_TENANT_FLOOR_MS), lastSyncedAt: new Date(T0) });
+    // Marked due by anything ten minutes later, it is still not leased before its 30 minutes are over.
+    named.clock.now = T0 + 10 * MIN;
+    named.source('c3').nextSyncAt = null;
+    const asked = w.urls.length;
+    expect(await run(named, w, { env: BEISEN_ON, process: recorder().process })).toMatchObject({ boards: 0 });
+    expect(w.urls).toHaveLength(asked);
+    named.clock.now = T0 + 31 * MIN;
+    expect(await run(named, w, { env: BEISEN_ON, process: recorder().process })).toMatchObject({ boards: 1 });
+    // Without a brand that writes the mainland market nothing is asked.
+    const none = harness({ sources: [tenantRow('c4', 'shili', { enabled: false, origin: 'import', companyName: 'Shi Li' })] });
+    const before = w.urls.length;
+    expect(await validateCandidates(none.db, 20, { now: () => new Date(T0), env: BEISEN_ON, fetch: w.fetch, brands: ['roboapply'] })).toMatchObject({ checked: 0 });
+    expect(w.urls).toHaveLength(before);
+  });
+});
+
+describe('MKT-5B: a 北森 candidate that was asked is not asked again within 30 minutes, whatever became of its check', () => {
+  const candidate = (id: string, token: string) => tenantRow(id, token, { enabled: false, origin: 'import', companyName: 'Shi Li' });
+
+  it('the time of its next possible request is written before the check leaves; a check cut off mid-request leaves it behind', async () => {
+    const h = harness({ sources: [candidate('c1', 'shili')] });
+    const stop = new AbortController();
+    const seenAtRequest: unknown[] = [];
+    // The run's time ends while the tenant is being asked.
+    const fetch: FetchLike = async () => {
+      seenAtRequest.push(h.source('c1').nextSyncAt);
+      stop.abort();
+      throw new Error('aborted');
+    };
+    expect(await validateCandidates(h.db, 20, { now: () => new Date(h.clock.now), env: BEISEN_ON, fetch, signal: stop.signal, brands: BOTH })).toMatchObject({ checked: 1, enabled: 0, outcomes: {} });
+    expect(seenAtRequest).toEqual([new Date(T0 + BEISEN_TENANT_FLOOR_MS)]);
+    // Still a candidate with no verdict, and not to be asked before T0 + 30 minutes.
+    expect(h.source('c1')).toMatchObject({ enabled: false, lastError: null, lastSyncedAt: null, failCount: 0, nextSyncAt: new Date(T0 + BEISEN_TENANT_FLOOR_MS) });
+    const w = world({ beisen: { shili: 3 } });
+    for (const minutes of [5, 29]) {
+      h.clock.now = T0 + minutes * MIN;
+      expect(await validateCandidates(h.db, 20, { now: () => new Date(h.clock.now), env: BEISEN_ON, fetch: w.fetch, brands: BOTH }), String(minutes)).toMatchObject({ checked: 0 });
+    }
+    expect(w.urls).toEqual([]);
+    // After the 30 minutes the check is made, once.
+    h.clock.now = T0 + 31 * MIN;
+    expect(await validateCandidates(h.db, 20, { now: () => new Date(h.clock.now), env: BEISEN_ON, fetch: w.fetch, brands: BOTH })).toMatchObject({ checked: 1, enabled: 1 });
+    expect(w.urls).toHaveLength(1);
+    expect(h.source('c1')).toMatchObject({ enabled: true, lastSyncedAt: new Date(T0 + 31 * MIN), nextSyncAt: new Date(T0 + 31 * MIN + BEISEN_TENANT_FLOOR_MS) });
+  });
+
+  it('a candidate of another system is not held: its check may be made again at the next run', async () => {
+    const h = harness({ sources: [sourceRow({ id: 'g1', boardToken: 'acme', companyName: 'Acme', enabled: false, origin: 'discovered' })] });
+    const stop = new AbortController();
+    const fetch: FetchLike = async () => {
+      stop.abort();
+      throw new Error('aborted');
+    };
+    await validateCandidates(h.db, 20, { now: () => new Date(T0), env: BEISEN_ON, fetch, signal: stop.signal, brands: BOTH });
+    expect(h.source('g1')).toMatchObject({ enabled: false, nextSyncAt: null, lastSyncedAt: null });
+  });
+});
+
+describe('MKT-5B (carry-over M4.7): a Greenhouse board that did not change costs one small request and no rewrite', () => {
+  const SAVED = new Date(T0 - 2 * H);
+  const seen = (externalId: string, market = 'intl') => ({ ...openJob('greenhouse', externalId, market), lastSeenAt: SAVED });
+  const quiet = (token: string, id: number, location: string | string[]) => ({ ...ghJob(token, id, location), updated_at: new Date(T0 - 30 * H).toISOString() });
+
+  it('nothing new, nothing edited: the listing without texts only, nothing handed to the normalizer, the stored rows marked as seen', async () => {
+    const h = harness({ sources: [sourceRow({ lastSyncedAt: SAVED, lastJobCount: 3, lastChangeAt: new Date(T0 - 5 * H) })], jobs: [seen('globalco:1'), seen('globalco:2'), seen('globalco:9')] });
+    const w = world({ greenhouse: { globalco: [quiet('globalco', 1, 'Singapore'), quiet('globalco', 2, 'Dublin, Ireland')] } });
+    const rec = recorder();
+    const tally = await run(h, w, { process: rec.process });
+    expect(w.urls).toEqual(['https://boards-api.greenhouse.io/v1/boards/globalco/jobs']);
+    expect(rec.calls).toEqual([]);
+    expect(h.written).toEqual([]);
+    expect(tally).toMatchObject({ boards: 1, calls: 1, received: 0, written: 0, seenUnchanged: 2, closed: 1, boardErrors: 0 });
+    // "Last checked" moves on for the rows the board still lists; the one it dropped is closed, not marked.
+    expect(h.marked).toEqual([{ board: 'greenhouse', ids: ['globalco:1', 'globalco:2'] }]);
+    expect(h.jobs().find((r) => r.externalId === 'globalco:1')!.lastSeenAt).toEqual(new Date(T0));
+    expect(h.jobs().find((r) => r.externalId === 'globalco:9')).toMatchObject({ closeReason: 'source_removed', lastSeenAt: SAVED });
+    expect(h.source('cs1')).toMatchObject({ lastSyncedAt: new Date(T0), lastJobCount: 2, lastError: null, failCount: 0 });
+    // The statement: one column, the board's open public rows, by id; never the row's other columns.
+    const sql = toRecordedSql('$executeRaw', buildMarkSeenSql('greenhouse', ['a:1', 'a:2']), []);
+    expect(sql.text).toBe('UPDATE "RAJob" SET "lastSeenAt" = now() WHERE "sourceBoard" = $1 AND "externalId" = ANY($2::text[]) AND "archivedAt" IS NULL AND "visibility" = \'public\'');
+    expect(sql.values).toEqual(['greenhouse', ['a:1', 'a:2']]);
+  });
+
+  it('a new posting makes the second request and the whole board is written; a quiet board is not a change, so it stays on its interval', async () => {
+    const h = harness({ sources: [sourceRow({ lastSyncedAt: SAVED, lastJobCount: 1 })], jobs: [seen('globalco:1')] });
+    const w = world({ greenhouse: { globalco: [quiet('globalco', 1, 'Singapore'), quiet('globalco', 2, 'Dublin, Ireland')] } });
+    const rec = recorder((call) => (call.ids.includes('globalco:2') ? 1 : 0));
+    const tally = await run(h, w, { process: rec.process });
+    expect(w.urls).toEqual(['https://boards-api.greenhouse.io/v1/boards/globalco/jobs', 'https://boards-api.greenhouse.io/v1/boards/globalco/jobs?content=true&pay_transparency=true']);
+    expect(rec.calls.map((c) => c.ids)).toEqual([['globalco:1', 'globalco:2']]);
+    expect(tally).toMatchObject({ boards: 1, calls: 2, received: 2, inserted: 1, seenUnchanged: 0 });
+    expect(h.marked).toEqual([]);
+    // A posting opened: read again in 2 hours.
+    expect(h.source('cs1')).toMatchObject({ lastChangeAt: new Date(T0), nextSyncAt: new Date(T0 + 2 * H) });
+    // The unchanged read of the first test left the board where it was (no change): its interval by its last change.
+    const still = harness({ sources: [sourceRow({ lastSyncedAt: SAVED, lastJobCount: 1, lastChangeAt: null })], jobs: [seen('globalco:1')] });
+    await run(still, world({ greenhouse: { globalco: [quiet('globalco', 1, 'Singapore')] } }), { process: recorder().process });
+    expect(still.source('cs1')).toMatchObject({ lastChangeAt: null, nextSyncAt: new Date(T0 + 24 * H) });
+  });
+
+  it('a posting stored in both markets keeps both rows: the listing without texts shows no offices, and nothing is archived for it (review finding)', async () => {
+    // Offices: Shanghai and Singapore, so the whole read stored two rows. `…/jobs` answers with "Shanghai, China" alone.
+    const both = quiet('globalco', 7, ['Shanghai, China', 'Singapore']);
+    const h = harness({ sources: [sourceRow({ lastSyncedAt: SAVED, lastJobCount: 1 })], jobs: [seen('globalco:7'), seen('globalco:7#cn', 'cn')] });
+    const w = world({ greenhouse: { globalco: [both] } });
+    for (const minutes of [0, 24 * 60, 48 * 60]) {
+      h.clock.now = T0 + minutes * MIN;
+      const tally = await run(h, w, { process: recorder().process });
+      expect(tally, String(minutes)).toMatchObject({ boards: 1, seenUnchanged: 2, received: 0, closed: 0 });
+    }
+    // Three reads, three small requests; both rows open and marked as seen each time; the board never became "changed".
+    expect(w.urls).toEqual(Array.from({ length: 3 }, () => 'https://boards-api.greenhouse.io/v1/boards/globalco/jobs'));
+    expect(h.marked).toEqual(Array.from({ length: 3 }, () => ({ board: 'greenhouse', ids: ['globalco:7', 'globalco:7#cn'] })));
+    expect(h.jobs().map((r) => [r.externalId, r.archivedAt, r.closeReason])).toEqual([['globalco:7', null, null], ['globalco:7#cn', null, null]]);
+    expect(h.source('cs1')).toMatchObject({ lastChangeAt: null, lastJobCount: 1, lastError: null });
+  });
+
+  it('a board read for some countries only, and any board where one market is written, is read whole: its rows follow the offices (review finding)', async () => {
+    // Read for Taiwan only: the posting's location text is "APAC", its offices say Taipei.
+    const tw = harness({ sources: [sourceRow({ countries: ['TW'], lastSyncedAt: SAVED, lastJobCount: 1 })], jobs: [seen('globalco:8')] });
+    const twWorld = world({ greenhouse: { globalco: [quiet('globalco', 8, ['APAC', 'Taipei, Taiwan'])] } });
+    const twRec = recorder(() => 0);
+    expect(await run(tw, twWorld, { process: twRec.process })).toMatchObject({ boards: 1, closed: 0, received: 1, seenUnchanged: 0 });
+    expect(twWorld.urls).toEqual(['https://boards-api.greenhouse.io/v1/boards/globalco/jobs?content=true&pay_transparency=true']);
+    expect(twRec.calls.map((c) => [c.market, c.ids])).toEqual([['intl', ['globalco:8']]]);
+    expect(tw.jobs()[0]!.archivedAt).toBeNull();
+    // Read for mainland China only: the location text is "Singapore", the offices add Shanghai, which is the row we hold.
+    const cn = harness({ sources: [sourceRow({ countries: ['CN'], lastSyncedAt: SAVED, lastJobCount: 1 })], jobs: [seen('globalco:10#cn', 'cn')] });
+    const cnWorld = world({ greenhouse: { globalco: [quiet('globalco', 10, ['Singapore', 'Shanghai, China'])] } });
+    const cnRec = recorder(() => 0);
+    expect(await run(cn, cnWorld, { process: cnRec.process })).toMatchObject({ boards: 1, closed: 0, received: 1 });
+    expect(cnWorld.urls).toEqual(['https://boards-api.greenhouse.io/v1/boards/globalco/jobs?content=true&pay_transparency=true']);
+    expect(cnRec.calls.map((c) => [c.market, c.ids])).toEqual([['cn', ['globalco:10#cn']]]);
+    expect(cn.jobs()[0]!.archivedAt).toBeNull();
+    // A deployment that serves RoboApply alone holds no row of a mainland-only posting: the whole read, and nothing closed.
+    const one = harness({ sources: [sourceRow({ lastSyncedAt: SAVED, lastJobCount: 2 })], jobs: [seen('globalco:1')] });
+    const oneWorld = world({ greenhouse: { globalco: [quiet('globalco', 1, 'Singapore'), quiet('globalco', 2, '上海')] } });
+    expect(await run(one, oneWorld, { brands: ['roboapply'], process: recorder(() => 0).process })).toMatchObject({ boards: 1, closed: 0, received: 1, droppedCn: 1 });
+    expect(oneWorld.urls).toEqual(['https://boards-api.greenhouse.io/v1/boards/globalco/jobs?content=true&pay_transparency=true']);
+  });
+
+  it('a posting the board stopped listing has every row of it archived, the mainland copy included', async () => {
+    const h = harness({ sources: [sourceRow({ lastSyncedAt: SAVED, lastJobCount: 2 })], jobs: [seen('globalco:1'), seen('globalco:7'), seen('globalco:7#cn', 'cn')] });
+    const w = world({ greenhouse: { globalco: [quiet('globalco', 1, 'Singapore')] } });
+    const tally = await run(h, w, { process: recorder().process });
+    expect(w.urls).toEqual(['https://boards-api.greenhouse.io/v1/boards/globalco/jobs']);
+    expect(tally).toMatchObject({ boards: 1, seenUnchanged: 1, closed: 2, received: 0 });
+    expect(h.jobs().filter((r) => r.closeReason === 'source_removed').map((r) => r.externalId)).toEqual(['globalco:7', 'globalco:7#cn']);
+    // A closure is a change: the board is read again in 2 hours, and the status counts each closure in its market.
+    expect(h.source('cs1')).toMatchObject({ lastChangeAt: new Date(T0), nextSyncAt: new Date(T0 + 2 * H), lastJobCount: 1 });
+    const closed = (market: 'intl' | 'cn') => parseStatusDoc(String(h.fake.$rows('appConfig').find((r) => r.key === sourceStatusKey(market, 'ats_public'))!.value))!.last!.closed;
+    expect([closed('intl'), closed('cn')]).toEqual([1, 1]);
+  });
+});
+
+describe('MKT-5B (carry-over M4.1): large one-answer boards are read and written one at a time', () => {
+  /** A fetch that counts how many answers of the boards matching `big` are in flight together, and how many of all boards. */
+  const counting = (inner: BoardWorld, big: RegExp) => {
+    const peaks = { big: 0, all: 0 };
+    let bigInFlight = 0;
+    let allInFlight = 0;
+    const fetch: FetchLike = async (url, init) => {
+      const isBig = big.test(url);
+      if (isBig) peaks.big = Math.max(peaks.big, (bigInFlight += 1));
+      peaks.all = Math.max(peaks.all, (allInFlight += 1));
+      try {
+        await sleep(4);
+        return await inner.fetch(url, init);
+      } finally {
+        if (isBig) bigInFlight -= 1;
+        allInFlight -= 1;
+      }
+    };
+    return { fetch, peaks };
+  };
+  const readBefore = (id: string, lastJobCount: number) => sourceRow({ id, boardToken: id, companyName: `Co ${id}`, lastJobCount, lastSyncedAt: new Date(T0 - 30 * H) });
+
+  it('two boards whose last listing held 600 postings or more never have their answers in flight together; smaller boards are not held back', async () => {
+    const big = Array.from({ length: 3 }, (_, i) => readBefore(`big${i}`, LARGE_BOARD_POSTINGS + i));
+    const small = Array.from({ length: 5 }, (_, i) => readBefore(`small${i}`, 10));
+    const h = harness({ sources: [...big, ...small] });
+    const inner = world({ greenhouse: Object.fromEntries([...big, ...small].map((s) => [String(s.boardToken), [ghJob(String(s.boardToken), 1, 'Singapore')]])) });
+    const { fetch, peaks } = counting(inner, /\/boards\/big\d\//);
+    const tally = await run(h, { fetch }, { process: recorder().process });
+    expect(tally).toMatchObject({ boards: 8, boardErrors: 0 });
+    expect(peaks.big).toBe(1);
+    expect(peaks.all).toBeGreaterThan(2);
+  });
+
+  it('a board that was never read is large until its first read says otherwise: the boards the answer limit was raised for arrive as new seeds, all due at once', async () => {
+    // Three new seeds (never read) next to five boards known to be small.
+    const fresh = Array.from({ length: 3 }, (_, i) => sourceRow({ id: `new${i}`, boardToken: `new${i}`, companyName: `New ${i}` }));
+    const small = Array.from({ length: 5 }, (_, i) => readBefore(`small${i}`, 10));
+    const h = harness({ sources: [...fresh, ...small] });
+    const inner = world({ greenhouse: Object.fromEntries([...fresh, ...small].map((s) => [String(s.boardToken), [ghJob(String(s.boardToken), 1, 'Singapore')]])) });
+    const { fetch, peaks } = counting(inner, /\/boards\/new\d\//);
+    const tally = await run(h, { fetch }, { process: recorder().process });
+    expect(tally).toMatchObject({ boards: 8, boardErrors: 0 });
+    expect(peaks.big).toBe(1);
+    expect(peaks.all).toBeGreaterThan(2);
+    // After its first read the board's size is known: a small one is no longer held back.
+    expect(h.source('new0')).toMatchObject({ lastJobCount: 1 });
+    expect(isLargeBoard({ ats: 'greenhouse', lastJobCount: 1 })).toBe(false);
+  });
+
+  it('a large board is written inside its slot: the next large answer is asked for only after the previous one was written and let go', async () => {
+    const big = Array.from({ length: 3 }, (_, i) => readBefore(`big${i}`, LARGE_BOARD_POSTINGS));
+    const small = [readBefore('small0', 10), readBefore('small1', 10)];
+    const h = harness({ sources: [...big, ...small] });
+    const order: string[] = [];
+    const inner = world({ greenhouse: Object.fromEntries([...big, ...small].map((s) => [String(s.boardToken), [ghJob(String(s.boardToken), 1, 'Singapore'), ghJob(String(s.boardToken), 2, '上海')]])) });
+    const fetch: FetchLike = async (url, init) => {
+      const token = /\/boards\/([a-z0-9]+)\//.exec(url)![1]!;
+      if (token.startsWith('big')) order.push(`read ${token}`);
+      return inner.fetch(url, init);
+    };
+    // What the write step was handed, and what is left of the read afterwards.
+    const held: ProviderJobInput[][] = [];
+    const process = (async (_ctx: PipelineContext, _a: unknown, inputs: ProviderJobInput[]): Promise<ProcessResult> => {
+      const token = inputs[0]!.externalId.split(':')[0]!;
+      if (token.startsWith('big')) order.push(`write ${token}`);
+      held.push(inputs);
+      await sleep(2);
+      return { received: inputs.length, written: inputs.length, inserted: 0, updated: inputs.length, skipped: 0, enrichQueued: 0, jobIds: [], notes: {} };
+    }) as unknown as NonNullable<BoardSyncDeps['process']>;
+    const tally = await run(h, { fetch }, { process });
+    expect(tally).toMatchObject({ boards: 5, received: 10, written: 10, boardErrors: 0 });
+    // Each large board: its read, then its writes (one per market), then the next large board's read.
+    expect(order).toEqual(['read big0', 'write big0', 'write big0', 'read big1', 'write big1', 'write big1', 'read big2', 'write big2', 'write big2']);
+    // Every posting was handed to the write step once.
+    expect(held.flat().map((i) => i.externalId).sort()).toEqual([...big, ...small].flatMap((s) => [`${String(s.boardToken)}:1`, `${String(s.boardToken)}:2`]).sort());
+    for (const s of [...big, ...small]) expect(h.source(String(s.id))).toMatchObject({ lastSyncedAt: new Date(T0), lastJobCount: 2, lastError: null });
+  });
+
+  it('a write that fails inside the slot fails the run, and the large boards still waiting are not asked', async () => {
+    const big = Array.from({ length: 3 }, (_, i) => readBefore(`big${i}`, LARGE_BOARD_POSTINGS));
+    const h = harness({ sources: big });
+    const w = world({ greenhouse: Object.fromEntries(big.map((s) => [String(s.boardToken), [ghJob(String(s.boardToken), 1, 'Singapore')]])) });
+    const process = (async () => {
+      throw new Error('database down');
+    }) as unknown as NonNullable<BoardSyncDeps['process']>;
+    await expect(run(h, w, { process })).rejects.toThrow('database down');
+    // The other two were waiting for the slot: their reads are cut off before a request is made.
+    await sleep(10);
+    expect(w.urls).toEqual(['https://boards-api.greenhouse.io/v1/boards/big0/jobs?content=true&pay_transparency=true']);
+  });
+
+  it('which boards are large: a one-answer system, never read or last listed at 600 or more; a paged system never', () => {
+    const none = readGateFor({ ats: 'smartrecruiters', lastJobCount: 5000 });
+    const large = readGateFor({ ats: 'greenhouse', lastJobCount: LARGE_BOARD_POSTINGS });
+    expect(large).not.toBe(none);
+    expect(readGateFor({ ats: 'greenhouse', lastJobCount: 10 })).toBe(none);
+    expect(readGateFor({ ats: 'greenhouse', lastJobCount: LARGE_BOARD_POSTINGS - 1 })).toBe(none);
+    expect(readGateFor({ ats: 'lever', lastJobCount: 5000 })).toBe(none);
+    expect(readGateFor({ ats: 'lever_eu', lastJobCount: null })).toBe(none);
+    expect(readGateFor({ ats: 'smartrecruiters', lastJobCount: null })).toBe(none);
+    // A board never read: one slot, whichever one-answer system it is on.
+    for (const ats of ['greenhouse', 'ashby', 'workable', 'recruitee', 'personio']) {
+      expect(readGateFor({ ats, lastJobCount: null }), ats).toBe(large);
+      expect(readGateFor({ ats, lastJobCount: LARGE_BOARD_POSTINGS }), ats).toBe(large);
+      expect(isLargeBoard({ ats, lastJobCount: null }), ats).toBe(true);
+    }
+    // A 北森 tenant has its own gate (two tenants), large or not.
+    expect(readGateFor({ ats: 'beisen', lastJobCount: null })).not.toBe(large);
+    expect(isLargeBoard({ ats: 'beisen', lastJobCount: null })).toBe(false);
+  });
+});
+
+describe('MKT-5B (carry-over M4.4, M3.3): one reading of the deployment\'s brands; countries not selected', () => {
+  it('the seed files offered are those of the markets of the brands the run serves, not of the process environment', async () => {
+    // A run for GoApply alone on a process whose environment allows both brands: the mainland file and no other.
+    const h = harness();
+    const tally = await runBoardSync({ db: h.db, budget: createBudget(240_000, () => 239_000), now: () => new Date(h.clock.now), env: {}, fetch: world({}).fetch, brands: ['goapply'], kick: () => undefined });
+    expect('skipped' in tally).toBe(false);
+    const mainland = seedFile('cn').boards;
+    expect((tally as BoardSyncTally).seedBoardsAdded).toBe(mainland.length);
+    expect(h.sources().map((r) => `${String(r.ats)}:${String(r.boardToken)}`).sort()).toEqual(mainland.map((b) => `${b.ats}:${b.boardToken}`).sort());
+    expect(careerSeedBoards(['intl', 'cn']).length).toBeGreaterThan(mainland.length);
+  });
+
+  it('copies left out because of the source\'s countries are counted by the run; the reason reaches the status once ingest/status.ts lists it', async () => {
+    const h = harness({ sources: [sourceRow({ countries: ['TW'] })] });
+    const w = world({ greenhouse: { globalco: [ghJob('globalco', 1, 'Taipei, Taiwan'), ghJob('globalco', 2, 'Dublin, Ireland'), ghJob('globalco', 3, '上海')] } });
+    const tally = await run(h, w, { process: recorder().process });
+    expect(tally).toMatchObject({ received: 1, countryNotSelected: 2 });
+    const status = parseStatusDoc(String(h.fake.$rows('appConfig').find((r) => r.key === sourceStatusKey('intl', 'ats_public'))!.value))!.last;
+    // Not a listed reason yet (handoff MKT-5B, Requests): nothing unknown is ever written into the status.
+    expect(Object.keys(status!.notes)).not.toContain('country_not_selected');
+  });
 });

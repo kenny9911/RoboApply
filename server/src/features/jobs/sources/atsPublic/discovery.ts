@@ -45,17 +45,22 @@ import { parseBoolEnv } from '../../../../platform/brand/index.js';
 import type { MarketHookContext, MarketHookJob } from '../../marketHooks.js';
 import { atsPostingKeyOf, atsPostingRefFromUrl, normalizeCompanyName } from '../../normalize/index.js';
 import { hasPlaceholderName } from './connectors.js';
-import { PUBLIC_ATS } from './contract.js';
+import type { BoardAts } from './contract.js';
 import { readRemovedBoards, removedBoardKey, type RemovedBoardsDb } from './removed.js';
 import { isBoardToken } from './shared.js';
 import type { CareerSourceDb } from './sync.js';
 
 /**
- * Job-board systems a candidate is recorded for: the ones we read today, plus
- * the ones whose connector is planned (their candidates wait, untouched, until
- * it exists).
+ * Job-board systems a candidate is recorded for: the ones we read whose
+ * posting links name the board and the posting (normalize/ats.ts
+ * `atsPostingRefFromUrl`). The candidates recorded for 'workable' and
+ * 'lever_eu' before their connectors existed (MKT-5B) are validated by the
+ * same step as every other candidate. Recruitee and Personio links carry no
+ * posting key, so they name no candidate; 北森 never does: a tenant board is
+ * added by hand only (docs/job-search/ATS_BOARDS.md). A candidate of a system
+ * whose connector is switched off waits, untouched.
  */
-export const DISCOVERY_ATS = [...PUBLIC_ATS, 'workable', 'lever_eu'] as const;
+export const DISCOVERY_ATS: readonly BoardAts[] = ['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workable', 'lever_eu'];
 
 /** Boards remembered per process. */
 export const DISCOVERY_MEMORY = 5000;

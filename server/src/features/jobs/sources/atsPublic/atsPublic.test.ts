@@ -24,16 +24,54 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getBrand } from '../../../../platform/brand/index.js';
 import { createFakePrisma } from '../../../../test/fakePrisma.js';
 import { MARKET_HOOK_SETS, afterEnrich as marketAfterEnrich, afterNormalize, cardMeta, type MarketHookJob } from '../../marketHooks.js';
-import { normalizeProviderJob, asMarketHookJob, marketOfPosting, type ProviderJobInput } from '../../normalize/index.js';
+import { atsPostingKeyFromUrl, normalizeProviderJob, asMarketHookJob, marketOfPosting, type ProviderJobInput } from '../../normalize/index.js';
 import { createRapidApiAdapter, rapidApiSearchParams } from '../../ingest/adapters/rapidApi.js';
 import { planQueries, tuplesFromFilters } from '../../ingest/planner.js';
 import { adaptersForBrand } from '../../ingest/providers.js';
 import { adapterCostModel, getSourceAdapter, sourceUserAgent } from '../index.js';
-import { CareerSourceBodySchema, ImportCareerSourcesBodySchema, ListCareerSourcesQuerySchema, PatchCareerSourceBodySchema, PUBLIC_ATS_NAMES, type TwCardMeta } from './contract.js';
-import { ashby, CONNECTORS, greenhouse, hasPlaceholderName, lever, prioritise, smartrecruiters, smartRecruitersListUrl, SR_MAX_DETAILS, type BoardSource } from './connectors.js';
+import {
+  CareerSourceBodySchema,
+  CONNECTOR_DISABLED,
+  ImportCareerSourcesBodySchema,
+  isBoardTokenFor,
+  ListCareerSourcesQuerySchema,
+  PatchCareerSourceBodySchema,
+  PUBLIC_ATS,
+  PUBLIC_ATS_NAMES,
+  tenantLabelOf,
+  type TwCardMeta,
+} from './contract.js';
+import {
+  ashby,
+  connectorEnabled,
+  connectorFor,
+  CONNECTORS,
+  enabledAts,
+  greenhouse,
+  GREENHOUSE_CHANGE_MARGIN_MS,
+  GREENHOUSE_FULL_READ_EVERY_MS,
+  greenhouseFullReadDue,
+  greenhouseListUrl,
+  greenhouseNeedsText,
+  greenhouseReadUrl,
+  hasPlaceholderName,
+  lever,
+  leverEu,
+  mapGreenhouseJob,
+  prioritise,
+  smartrecruiters,
+  smartRecruitersListUrl,
+  SR_MAX_DETAILS,
+  type BoardSource,
+} from './connectors.js';
+import { BEISEN_DISPLAY_FIELDS, BEISEN_PAGE_SIZE, BEISEN_PASSES, BEISEN_READ_KEYS, beisenRequestBody, createBeisenConnector, isOutsideMainland, type ContactStrip } from './connectors/beisen.js';
+import { personioHost, personioTime } from './connectors/personio.js';
+import { recruiteeTime } from './connectors/recruitee.js';
+import { mapWorkableJob, workablePostingUrl } from './connectors/workable.js';
 import { createAtsPublicAdapter } from './adapter.js';
 import { companyNamesMatch, createBoardDiscovery, DISCOVERY_ATS, DISCOVERY_MEMORY, DISCOVERY_PAUSE_MS, judgeCandidate, oneWord, parsePostingKey } from './discovery.js';
-import { API_HOSTS, assertApiHost, boardRequestHeaders, BoardFetchError, getJson, type FetchLike } from './http.js';
+import { API_HOSTS, assertApiHost, BEISEN_HOST_PATTERN, boardRequestHeaders, BoardFetchError, getJson, getXml, postJson, TENANT_HOST_RULES, type FetchLike } from './http.js';
+import { childNamed, childrenNamed, childText, elementMarkup, MAX_XML_DEPTH, parseXml } from './xml.js';
 import {
   createAtsPublicHooks,
   isTaiwanJob,
@@ -44,30 +82,56 @@ import {
   withAtsSourceName,
 } from './hooks.js';
 import { normalizeSalary, parseSalaryText } from '../../normalize/salary.js';
-import { CN_COPY_SUFFIX, copySelected, routeBoardRead, routePosting, selectedCopies, splitPostingByMarket, storedIdsOf } from './market.js';
+import { CN_COPY_SUFFIX, copyIdsOf, copySelected, postingIdOf, routeBoardRead, routePosting, selectedCopies, splitPostingByMarket, storedIdsOf } from './market.js';
 import { extractPermitTags, MAX_QUOTE_CHARS, quoteInPosting } from './permitTags.js';
 import { REMOVED_BOARDS_CONFIG_KEY, REMOVED_BOARDS_MAX, forgetRemovedBoards, readRemovedBoards, rememberRemovedBoard, removedBoardKey } from './removed.js';
-import { CANDIDATE_MAX_ATTEMPTS, candidateRetry, classifyBoardError, failureStamp, nextReadDelayMs, successStamp, syncIntervalMs, transientAttempt } from './schedule.js';
+import {
+  CANDIDATE_MAX_ATTEMPTS,
+  candidateRetry,
+  classifyBoardError,
+  failureStamp,
+  firstReadAfterSwitchOn,
+  isSkippedBoardError,
+  nextReadDelayMs,
+  skippedStamp,
+  successStamp,
+  syncIntervalMs,
+  TENANT_DENIED,
+  tenantAskedRecently,
+  transientAttempt,
+  withTenantFloor,
+} from './schedule.js';
 import { checkImportRow, jsonImportRow, readImportCsv, toView } from './service.js';
 import {
   atsSourceName,
+  BEISEN_TENANT_FLOOR_MS,
+  beisenEnabled,
+  beisenMaxPostingsPerRun,
   boardsConcurrency,
   careerSourceState,
   decodeEntities,
   discoveryValidationsPerRun,
   externalIdFor,
+  isMainlandOnlyAts,
+  LARGE_BOARD_POSTINGS,
   LEVER_MAX_PAGES,
+  MAINLAND_ONLY_ATS,
+  MAX_RESPONSE_BYTES,
   mergeCountries,
   normalizeCountries,
   smartRecruitersDetailsPerRun,
   sourceCoversCountry,
   sourceFeedsMarket,
+  tenantDenied,
+  tenantDenylist,
+  workableEnabled,
 } from './shared.js';
-import { CAREER_SOURCE_COLUMNS, closedExternalIds, readBoard, toCareerSourceRow, type CareerSourceDb, type CareerSourceRow } from './sync.js';
+import { CAREER_SOURCE_COLUMNS, closedExternalIds, diffByPostingId, readBoard, storesEveryPosting, toCareerSourceRow, withoutInternationalCopies, type CareerSourceDb, type CareerSourceRow } from './sync.js';
 import { atsPublicAdapter } from './register.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const fixture = (name: string): unknown => JSON.parse(readFileSync(join(HERE, '__fixtures__', name), 'utf8'));
+const fixtureText = (name: string): string => readFileSync(join(HERE, '__fixtures__', name), 'utf8');
+const fixture = (name: string): unknown => JSON.parse(fixtureText(name));
 const NOW = new Date('2026-10-10T00:00:00.000Z');
 
 /** A fetch that answers from a URL → body table; anything else is a 404. */
@@ -95,7 +159,8 @@ describe('connector contract: Greenhouse', () => {
   it('reads boards-api …/jobs?content=true and maps every posting', async () => {
     const calls: string[] = [];
     const read = await greenhouse.read(GH, { now: NOW, fetch: fakeFetch({ 'https://boards-api.greenhouse.io/v1/boards/formosarobotics/jobs': fixture('greenhouse.json') }, calls) });
-    expect(calls).toEqual(['https://boards-api.greenhouse.io/v1/boards/formosarobotics/jobs?content=true']);
+    // JI-8: the list call also asks for the pay ranges (`pay_transparency=true`); still ONE request.
+    expect(calls).toEqual(['https://boards-api.greenhouse.io/v1/boards/formosarobotics/jobs?content=true&pay_transparency=true']);
     expect(read.calls).toBe(1);
     expect(read.complete).toBe(true);
     expect(read.listedIds).toEqual(['formosarobotics:4012345', 'formosarobotics:4012399']);
@@ -373,8 +438,8 @@ describe('connector contract: recorded responses', () => {
 });
 
 describe('outbound HTTP rules (no scraping)', () => {
-  it('only the four documented API hosts over https', () => {
-    expect([...API_HOSTS]).toEqual(['boards-api.greenhouse.io', 'api.lever.co', 'api.ashbyhq.com', 'api.smartrecruiters.com']);
+  it('only the vendors\' own API hosts over https (MKT-5B adds Workable\'s and Lever\'s EU instance)', () => {
+    expect([...API_HOSTS]).toEqual(['boards-api.greenhouse.io', 'api.lever.co', 'api.ashbyhq.com', 'api.smartrecruiters.com', 'apply.workable.com', 'api.eu.lever.co']);
     for (const url of [
       'https://www.104.com.tw/jobs/search/',
       'https://www.1111.com.tw/',
@@ -463,7 +528,9 @@ describe('every board request says who is asking', () => {
       requests += 1;
       agents.add(init.headers?.['User-Agent']);
       const u = new URL(url);
-      if (u.hostname === 'api.lever.co') return { ok: true, status: 200, text: async () => '[]' };
+      if (u.hostname === 'api.lever.co' || u.hostname === 'api.eu.lever.co') return { ok: true, status: 200, text: async () => '[]' };
+      if (u.hostname.endsWith('.recruitee.com')) return { ok: true, status: 200, text: async () => '{"offers":[]}' };
+      if (u.hostname.endsWith('.jobs.personio.de')) return { ok: true, status: 200, text: async () => '<workzag-jobs/>' };
       if (u.hostname === 'api.smartrecruiters.com') {
         const body = /\/postings\/p1$/.test(u.pathname) ? { id: 'p1', jobAd: { sections: { jobDescription: { text: '<p>x</p>' } } } } : { totalFound: 1, content: [{ id: 'p1', name: 'Role', location: { city: 'Taipei', country: 'tw' } }] };
         return { ok: true, status: 200, text: async () => JSON.stringify(body) };
@@ -471,7 +538,9 @@ describe('every board request says who is asking', () => {
       return { ok: true, status: 200, text: async () => JSON.stringify({ name: 'Co', jobs: [] }) };
     };
     for (const c of Object.values(CONNECTORS)) await c.read({ ats: c.ats, boardToken: 'co', companyName: 'co', countryCode: null }, { now: NOW, fetch, env: {} });
-    expect(requests).toBeGreaterThanOrEqual(6);
+    // Every connector that exists without a flag: the four of WP-42 and the four of MKT-5B.
+    expect(Object.keys(CONNECTORS)).toEqual(['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workable', 'recruitee', 'personio', 'lever_eu']);
+    expect(requests).toBeGreaterThanOrEqual(10);
     expect([...agents]).toEqual([sourceUserAgent('intl', {})]);
   });
 });
@@ -483,7 +552,9 @@ describe('ats_public adapter', () => {
     expect(getSourceAdapter('ats_public')).toBe(atsPublicAdapter);
     expect(atsPublicAdapter).toMatchObject({ provider: 'ats_public', kind: 'cursor', markets: ['intl', 'cn'], costModel: 'free' });
     expect(adapterCostModel(atsPublicAdapter)).toBe('free');
-    expect([...atsPublicAdapter.sourceBoards]).toEqual(['greenhouse', 'lever', 'ashby', 'smartrecruiters']);
+    // Every system a connector writes rows for (the rows' `sourceBoard`), the ones added by MKT-5B included.
+    expect([...atsPublicAdapter.sourceBoards]).toEqual(['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workable', 'recruitee', 'personio', 'lever_eu', 'beisen']);
+    expect([...atsPublicAdapter.sourceBoards]).toEqual([...PUBLIC_ATS]);
     expect(atsPublicAdapter.dailyCallLimit()).toBeNull();
     expect(atsPublicAdapter.supportsCountry('TW')).toBe(false);
     expect(adaptersForBrand(getBrand('roboapply'), {}).map((a) => a.provider)).toContain('ats_public');
@@ -771,7 +842,7 @@ describe('readBoard: one read, both markets, exact closures', () => {
     const calls: string[] = [];
     const fake = boardDb(jobs.map((j) => openRow('greenhouse', `globalco:${j.id}`)));
     const res = await readBoard(asDb(fake), sourceRow(), { now: NOW, fetch: fakeFetch({ [GH_LIST]: { jobs } }, calls) }, BOTH);
-    expect(calls).toEqual([`${GH_LIST}?content=true`]);
+    expect(calls).toEqual([`${GH_LIST}?content=true&pay_transparency=true`]);
     expect(res.error).toBeNull();
     expect(res.read).toMatchObject({ complete: true, calls: 1, pendingDetails: 0 });
     expect(res.read!.inputs).toHaveLength(728);
@@ -832,7 +903,7 @@ describe('readBoard: one read, both markets, exact closures', () => {
     const routes = { [GH_LIST]: { jobs: [ghJob(1, 'Singapore')] }, 'https://boards-api.greenhouse.io/v1/boards/globalco': { name: 'Global Co Ltd' } };
     // `fakeFetch` matches a prefix followed by ? or &; the board-name request is the exact URL.
     const res = await readBoard(asDb(boardDb()), sourceRow({ companyName: 'globalco' }), { now: NOW, fetch: fakeFetch(routes, calls) }, BOTH);
-    expect(calls).toEqual([`${GH_LIST}?content=true`, 'https://boards-api.greenhouse.io/v1/boards/globalco']);
+    expect(calls).toEqual([`${GH_LIST}?content=true&pay_transparency=true`, 'https://boards-api.greenhouse.io/v1/boards/globalco']);
     expect(res.read).toMatchObject({ boardCompanyName: 'Global Co Ltd', calls: 2 });
     expect(res.routed!.byMarket.intl[0]).toMatchObject({ company: 'Global Co Ltd', sourcePublisher: 'Global Co Ltd · Greenhouse' });
     expect(hasPlaceholderName({ companyName: 'globalco', boardToken: 'globalco' })).toBe(true);
@@ -1052,7 +1123,8 @@ describe('SmartRecruiters: the listing is always read completely; posting texts 
     expect(sync.listingUrls()).toHaveLength(3);
     expect(full).toMatchObject({ complete: true, listedCount: 250 });
     // The other systems answer a listing in one call or page quickly: they read it whole and count it.
-    const gh = await greenhouse.read(GH, { now: NOW, fetch: fakeFetch({ 'https://boards-api.greenhouse.io/v1/boards/formosarobotics/jobs': fixture('greenhouse.json') }) }, { listOnly: true, firstPage: true });
+    // The listing without texts, in its own shape (no content, offices or departments).
+    const gh = await greenhouse.read(GH, { now: NOW, fetch: fakeFetch({ 'https://boards-api.greenhouse.io/v1/boards/formosarobotics/jobs': fixture('greenhouse-list.json') }) }, { listOnly: true, firstPage: true });
     expect(gh.listedCount).toBe(gh.listing.length);
     expect(gh.complete).toBe(true);
   });
@@ -1941,5 +2013,1180 @@ describe('ats_public market hooks', () => {
         { tag: 'bianzhi', evidenceQuote: 'q', evidenceUrl: null },
       ]);
     });
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════
+// MKT-5B (JI-8, JC-8): more board systems. Workable, Recruitee, Personio and
+// Lever's EU instance; Greenhouse pay ranges and application deadline; 北森
+// tenant boards behind CN_ATS_BEISEN_ENABLED. Every board below is a fake
+// fetch over a documented-shape or SYNTHETIC fixture; nothing is requested.
+// ═════════════════════════════════════════════════════════════════════════
+
+const BEISEN_ON = { CN_ATS_BEISEN_ENABLED: 'true' };
+/** A fetch that answers every request with one body and records what was asked. */
+function answering(body: string, seen: Array<{ url: string; init: Parameters<FetchLike>[1] }> = []): FetchLike {
+  return async (url, init) => {
+    seen.push({ url, init });
+    return { ok: true, status: 200, text: async () => body };
+  };
+}
+const normalizeAny = (input: ProviderJobInput) => normalizeProviderJob(input, 'ats_public', { now: NOW });
+
+describe('MKT-5B item 1: the list of systems, host rules and board ids', () => {
+  it('PUBLIC_ATS holds every system a connector reads, each with a display name; both Lever instances read "Lever"', () => {
+    expect([...PUBLIC_ATS]).toEqual(['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workable', 'recruitee', 'personio', 'lever_eu', 'beisen']);
+    expect(PUBLIC_ATS_NAMES).toEqual({ greenhouse: 'Greenhouse', lever: 'Lever', ashby: 'Ashby', smartrecruiters: 'SmartRecruiters', workable: 'Workable', recruitee: 'Recruitee', personio: 'Personio', lever_eu: 'Lever', beisen: '北森' });
+    expect(atsSourceName('Nordwind', 'lever_eu')).toBe('Nordwind · Lever');
+    expect(atsSourceName('示例科技', 'beisen')).toBe('示例科技 · 北森');
+    // The older type guard now answers for the whole list.
+    for (const ats of PUBLIC_ATS) expect(toCareerSourceRow({ id: 'x', ats }).ats).toBe(ats);
+  });
+
+  it.each([
+    // The vendors' own API hosts: exact.
+    ['https://apply.workable.com/api/v1/widget/accounts/acme?details=true', {}, true],
+    ['https://api.eu.lever.co/v0/postings/acme?mode=json', {}, true],
+    ['https://www.workable.com/api/v1/widget/accounts/acme', {}, false],
+    ['https://apply.workable.com.evil.net/api/v1/widget/accounts/acme', {}, false],
+    ['https://jobs.eu.lever.co/acme/1', {}, false],
+    // Tenant hosts: one lower-case label in front of the vendor's domain, nothing else.
+    ['https://acme.recruitee.com/api/offers/', {}, true],
+    ['https://acme-co-2.recruitee.com/api/offers/', {}, true],
+    ['https://acme.jobs.personio.de/xml?language=en', {}, true],
+    ['https://acme.jobs.personio.com/xml?language=en', {}, true],
+    ['https://evil.recruitee.com.example.org/api/offers/', {}, false],
+    ['https://recruitee.com.evil.net/api/offers/', {}, false],
+    ['https://recruitee.com/api/offers/', {}, false],
+    ['https://www.recruitee.com/api/offers/', {}, false],
+    ['https://api.recruitee.com/c/1/offers', {}, false],
+    ['https://a.b.recruitee.com/api/offers/', {}, false],
+    ['https://-acme.recruitee.com/api/offers/', {}, false],
+    ['https://acme_co.recruitee.com/api/offers/', {}, false],
+    ['https://xrecruitee.com/api/offers/', {}, false],
+    ['https://acme.jobs.personio.fr/xml', {}, false],
+    ['https://jobs.personio.de/xml', {}, false],
+    ['https://acme.personio.de/xml', {}, false],
+    ['https://acme.jobs.personio.de.evil.net/xml', {}, false],
+    ['https://www.jobs.personio.de/xml', {}, false],
+    // https only, no port, no credentials.
+    ['http://acme.recruitee.com/api/offers/', {}, false],
+    ['https://acme.recruitee.com:8443/api/offers/', {}, false],
+    ['https://user:pw@acme.recruitee.com/api/offers/', {}, false],
+    // 北森 tenant boards: no rule at all while the flag is off.
+    ['https://acme.zhiye.com/api/Jobad/GetJobAdPageList', {}, false],
+    ['https://acme.zhiye.com/api/Jobad/GetJobAdPageList', { CN_ATS_BEISEN_ENABLED: 'false' }, false],
+    ['https://www.zhiye.com/', {}, false],
+    ['https://zhiye.com/', {}, false],
+    ['https://acme.zhiye.com/api/Jobad/GetJobAdPageList', BEISEN_ON, true],
+    ['https://www.zhiye.com/', BEISEN_ON, false],
+    ['https://zhiye.com/', BEISEN_ON, false],
+    ['https://evil.zhiye.com.example.org/api/Jobad/GetJobAdPageList', BEISEN_ON, false],
+    ['https://a.b.zhiye.com/api/Jobad/GetJobAdPageList', BEISEN_ON, false],
+    ['https://evil-zhiye.com/api/Jobad/GetJobAdPageList', BEISEN_ON, false],
+    ['https://acme.beisen.com/', BEISEN_ON, false],
+  ] as Array<[string, Record<string, string>, boolean]>)('assertApiHost %s with %j -> %s', (url, env, allowed) => {
+    if (allowed) expect(assertApiHost(url, env).hostname).toBe(new URL(url).hostname);
+    else expect(() => assertApiHost(url, env)).toThrow(/^host_not_allowed:/);
+  });
+
+  it('each tenant-host rule is one anchored pattern, and the 北森 rule is not among the standing ones', () => {
+    expect(TENANT_HOST_RULES.map((r) => r.ats)).toEqual(['recruitee', 'personio']);
+    for (const pattern of [...TENANT_HOST_RULES.map((r) => r.pattern), BEISEN_HOST_PATTERN]) {
+      expect(pattern.source.startsWith('^')).toBe(true);
+      expect(pattern.source.endsWith('$')).toBe(true);
+      expect(pattern.flags).toBe('');
+    }
+    // Every connector that exists without a flag asks an allowed host with an empty environment.
+    for (const c of Object.values(CONNECTORS)) expect(() => assertApiHost(c.boardUrl('token'), {})).not.toThrow();
+  });
+
+  it('a board id on a tenant host is the lower-case sub-domain label: an upper-case Personio id is refused, a Workable source passes', () => {
+    const body = (ats: string, boardToken: string) => CareerSourceBodySchema.safeParse({ ats, boardToken, companyName: 'Acme' });
+    expect(body('workable', 'acme-co').success).toBe(true);
+    expect(body('lever_eu', 'AcmeCo').success).toBe(true);
+    expect(body('recruitee', 'acme').success).toBe(true);
+    expect(body('personio', 'acme').success).toBe(true);
+    expect(body('personio', 'acme.com').success).toBe(true);
+    expect(body('beisen', 'acme').success).toBe(true);
+    const refused = body('personio', 'Acme');
+    expect(refused.success).toBe(false);
+    expect(refused.error!.issues).toEqual([expect.objectContaining({ path: ['boardToken'], message: 'invalid_board_id' })]);
+    for (const [ats, token] of [['personio', 'acme.de'], ['personio', 'acme_co'], ['personio', 'www'], ['personio', '.com'], ['recruitee', 'acme.com'], ['recruitee', 'Acme'], ['recruitee', 'api'], ['recruitee', '-acme'], ['beisen', 'Acme'], ['beisen', 'acme.zhiye'], ['recruitee', 'a'.repeat(64)]] as const) {
+      expect(body(ats, token).success, `${ats} ${token}`).toBe(false);
+    }
+    // The four older systems keep the general pattern (a SmartRecruiters id is written in mixed case).
+    expect(body('smartrecruiters', 'BoschGroup').success).toBe(true);
+    expect(body('greenhouse', 'Acme_Co.1').success).toBe(true);
+    expect(isBoardTokenFor('recruitee', 'a'.repeat(63))).toBe(true);
+    expect(isBoardTokenFor('recruitee', 42)).toBe(false);
+    expect(tenantLabelOf('personio', 'acme.com')).toBe('acme');
+    expect(tenantLabelOf('recruitee', 'acme.com')).toBeNull();
+    expect(tenantLabelOf('greenhouse', 'acme')).toBeNull();
+    // The import checks a row the same way.
+    expect(checkImportRow({ line: 2, ats: 'personio', boardToken: 'Acme', companyName: 'Acme', countries: [] })).toBe('invalid_board_id');
+    expect(checkImportRow({ line: 2, ats: 'Personio', boardToken: 'acme', companyName: 'Acme', countries: [] })).toMatchObject({ ats: 'personio', boardToken: 'acme' });
+  });
+
+  it('which connectors exist: Workable unless its kill switch is set, 北森 only with its flag; a disabled one cannot be obtained', () => {
+    expect(enabledAts({})).toEqual(['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workable', 'recruitee', 'personio', 'lever_eu']);
+    expect(enabledAts({ ATS_WORKABLE_DISABLED: 'true', ...BEISEN_ON })).toEqual(['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'recruitee', 'personio', 'lever_eu', 'beisen']);
+    expect(workableEnabled({})).toBe(true);
+    expect(workableEnabled({ ATS_WORKABLE_DISABLED: 'false' })).toBe(true);
+    expect(beisenEnabled({})).toBe(false);
+    expect(beisenEnabled({ CN_ATS_BEISEN_ENABLED: 'yes' })).toBe(true);
+    expect(connectorEnabled('beisen', {})).toBe(false);
+    // The registry holds no 北森 object: with an empty environment nothing can build a request to a tenant board.
+    expect(Object.keys(CONNECTORS)).not.toContain('beisen');
+    expect(() => connectorFor('beisen', {})).toThrow(CONNECTOR_DISABLED);
+    expect(() => connectorFor('workable', { ATS_WORKABLE_DISABLED: 'true' })).toThrow(CONNECTOR_DISABLED);
+    expect(connectorFor('workable', {}).ats).toBe('workable');
+    expect(connectorFor('beisen', BEISEN_ON).ats).toBe('beisen');
+    expect(connectorFor('lever_eu', {})).toBe(leverEu);
+    // Passed over, not failed: the reason is not a failure class of its own count.
+    expect(isSkippedBoardError(CONNECTOR_DISABLED)).toBe(true);
+    expect(isSkippedBoardError(TENANT_DENIED)).toBe(true);
+    expect(isSkippedBoardError('board_not_found')).toBe(false);
+    expect(skippedStamp(NOW, CONNECTOR_DISABLED)).toEqual({ lastError: 'connector_disabled', nextSyncAt: new Date(NOW.getTime() + 24 * 3_600_000) });
+  });
+
+  it('a new feed error is a hard failure like its JSON twin: not XML, an id that cannot be a host', () => {
+    expect(classifyBoardError('not_xml')).toBe('hard');
+    expect(classifyBoardError('invalid_board_id')).toBe('hard');
+    expect(classifyBoardError('redirect')).toBe('hard');
+  });
+});
+
+describe('MKT-5B item 1: the XML reader and getXml', () => {
+  it('reads elements by name, CDATA verbatim and entities decoded; skips the declaration, comments and a DOCTYPE', () => {
+    const root = parseXml(
+      '﻿<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE feed [ <!ENTITY boom "never expanded"> ]>\n<!-- a comment with <tags> -->\n' +
+        '<feed xmlns:x="urn:x"><item id="1" note="a > b"><name>Tom &amp; Jerry &#039;s &#x4E2D;&#25991; &boom;</name><value><![CDATA[<p>5 < 6 &amp; raw</p>]]></value><empty/><x:tag>ns</x:tag></item><item><name>second</name></item></feed>',
+    );
+    expect(root.name).toBe('feed');
+    const items = childrenNamed(root, 'item');
+    expect(items).toHaveLength(2);
+    // Predefined and numeric entities are decoded; an entity the document declares itself is left as written.
+    expect(childText(items[0], 'name')).toBe("Tom & Jerry 's 中文 &boom;");
+    // CDATA is verbatim: its markup and its &amp; are the value.
+    expect(childText(items[0], 'value')).toBe('<p>5 < 6 &amp; raw</p>');
+    expect(childNamed(items[0], 'empty')).toMatchObject({ text: '', children: [] });
+    expect(childText(items[0], 'empty')).toBeNull();
+    expect(childText(items[0], 'x:tag')).toBe('ns');
+    expect(childText(items[0], 'missing')).toBeNull();
+    expect(childText(items[1], 'name')).toBe('second');
+    expect(childrenNamed(null, 'item')).toEqual([]);
+  });
+
+  it('an element whose markup is written in unescaped is read from between its tags; text of child elements is not its own', () => {
+    const root = parseXml('<a><value><p>Hello <b>there</b></p></value><plain> spaced \n text </plain></a>');
+    expect(elementMarkup(childNamed(root, 'value'))).toBe('<p>Hello <b>there</b></p>');
+    expect(childNamed(root, 'value')!.text).toBe('');
+    expect(elementMarkup(childNamed(root, 'plain'))).toBe('spaced \n text');
+    expect(elementMarkup(null)).toBeNull();
+  });
+
+  it('is tolerant where a feed is sloppy, and refuses what is not a feed', () => {
+    // A missing end tag at the end of the document; an end tag that closes an outer element.
+    expect(childText(parseXml('<a><b>x</b><c>y'), 'c')).toBe('y');
+    expect(childrenNamed(parseXml('<a><b><c>1</b><b>2</b></a>'), 'b').map((b) => b.text)).toEqual(['', '2']);
+    expect(parseXml('<a>1 < 2</a>').text).toBe('1 < 2');
+    expect(() => parseXml('')).toThrow('not_xml');
+    expect(() => parseXml('just text')).toThrow('not_xml');
+    // Deeper than any feed we read: refused, never recursed into.
+    expect(() => parseXml('<a>'.repeat(MAX_XML_DEPTH + 1))).toThrow('unexpected_shape');
+    expect(parseXml('<a>'.repeat(MAX_XML_DEPTH)).name).toBe('a');
+  });
+
+  it('getXml: the same guards as getJson (host, redirect, size), asks for XML and says who is asking', async () => {
+    const seen: Array<{ url: string; init: Parameters<FetchLike>[1] }> = [];
+    const url = 'https://acme.jobs.personio.de/xml?language=en';
+    expect(await getXml(url, { fetch: answering('<workzag-jobs/>', seen), env: {} })).toBe('<workzag-jobs/>');
+    expect(seen[0]!.init).toMatchObject({ redirect: 'error', headers: { Accept: 'application/xml, text/xml', 'User-Agent': sourceUserAgent('intl', {}) } });
+    expect(seen[0]!.init.method).toBeUndefined();
+    // A redirect (what a host that is not a customer's answers) is never followed.
+    await expect(getXml(url, { fetch: async () => ({ ok: false, status: 302, text: async () => '' }) })).rejects.toMatchObject({ message: 'redirect', status: 302 });
+    await expect(getXml(url, { fetch: async () => { throw new TypeError('fetch failed', { cause: new Error('unexpected redirect') }); } })).rejects.toMatchObject({ message: 'redirect' });
+    // An oversized body is refused whole.
+    await expect(getXml(url, { fetch: answering(`<a>${'x'.repeat(MAX_RESPONSE_BYTES)}</a>`) })).rejects.toThrow('response_too_large');
+    // Not a feed: an HTML page, JSON, nothing.
+    for (const body of ['<!DOCTYPE html><html><body>Sign in</body></html>', '<html lang="en"></html>', '{"jobs":[]}', '']) await expect(getXml(url, { fetch: answering(body) })).rejects.toThrow('not_xml');
+    await expect(getXml(url, { fetch: async () => ({ ok: false, status: 404, text: async () => '' }) })).rejects.toThrow('board_not_found');
+    // A host outside the rules is refused before anything is sent.
+    const never: FetchLike = async () => {
+      throw new Error('must not be called');
+    };
+    await expect(getXml('https://acme.jobs.personio.fr/xml', { fetch: never })).rejects.toThrow('host_not_allowed:acme.jobs.personio.fr');
+  });
+
+  it('postJson reaches 北森 tenant boards only, and only while the flag is on; it sends no cookie, token or Referer', async () => {
+    const never: FetchLike = async () => {
+      throw new Error('must not be called');
+    };
+    const tenant = 'https://acme.zhiye.com/api/Jobad/GetJobAdPageList';
+    // Flag off: no request to that domain can be built.
+    await expect(postJson(tenant, {}, { fetch: never, env: {} })).rejects.toThrow('host_not_allowed:acme.zhiye.com');
+    // Flag on: still not a verb for the systems we read with GET.
+    for (const url of ['https://apply.workable.com/api/v1/widget/accounts/acme', 'https://acme.recruitee.com/api/offers/', 'https://boards-api.greenhouse.io/v1/boards/acme/jobs']) {
+      await expect(postJson(url, {}, { fetch: never, env: BEISEN_ON }), url).rejects.toThrow(/^host_not_allowed:/);
+    }
+    const seen: Array<{ url: string; init: Parameters<FetchLike>[1] }> = [];
+    expect(await postJson(tenant, { PageIndex: 0 }, { fetch: answering('{"Data":[],"Count":0}', seen), env: BEISEN_ON, market: 'cn' })).toEqual({ Data: [], Count: 0 });
+    expect(seen[0]!.init).toMatchObject({ method: 'POST', body: '{"PageIndex":0}', redirect: 'error' });
+    expect(seen[0]!.init.headers).toEqual({ Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': sourceUserAgent('cn', BEISEN_ON) });
+    await expect(postJson(tenant, {}, { fetch: answering('<html>captcha</html>'), env: BEISEN_ON })).rejects.toThrow('not_json');
+    await expect(postJson(tenant, {}, { fetch: async () => ({ ok: false, status: 302, text: async () => '' }), env: BEISEN_ON })).rejects.toThrow('redirect');
+  });
+});
+
+// ── Workable ─────────────────────────────────────────────────────────────
+
+const WK: BoardSource = { ats: 'workable', boardToken: 'tidewater', companyName: 'Tidewater Analytics', countryCode: null };
+const WK_URL = 'https://apply.workable.com/api/v1/widget/accounts/tidewater';
+
+describe('MKT-5B item 2: Workable', () => {
+  it('reads the widget listing once and maps each posting: apply link, publication day, stated country, remote only where stated', async () => {
+    const calls: string[] = [];
+    const read = await connectorFor('workable', {}).read(WK, { now: NOW, fetch: fakeFetch({ [WK_URL]: fixture('workable.json') }, calls), env: {} });
+    expect(calls).toEqual([`${WK_URL}?details=true`]);
+    expect(read).toMatchObject({ complete: true, calls: 1, pendingDetails: 0, failedDetails: 0, boardCompanyName: 'Tidewater Analytics' });
+    // The row without a shortcode is not a posting.
+    expect(read.listedIds).toEqual(['tidewater:A1B2C3D4E5', 'tidewater:F6G7H8J9K0', 'tidewater:L1M2N3P4Q5']);
+    expect(read.inputs[0]).toMatchObject({
+      externalId: 'tidewater:A1B2C3D4E5',
+      sourceBoard: 'workable',
+      title: 'Machine Learning Engineer',
+      company: 'Tidewater Analytics',
+      sourcePublisher: 'Tidewater Analytics · Workable',
+      applyUrl: 'https://apply.workable.com/j/A1B2C3D4E5/apply',
+      sourceUrl: 'https://apply.workable.com/tidewater/j/A1B2C3D4E5',
+      location: 'Paris, Île-de-France, France',
+      // The location the employer hides is not listed.
+      locations: ['Paris, Île-de-France, France'],
+      locationCity: 'Paris',
+      locationCountry: 'FR',
+      locationCountryEstimated: false,
+      workModel: 'remote',
+      employmentType: 'Full-time',
+      seniority: 'Mid-Senior level',
+      postedAt: '2026-09-02',
+      postedAtEstimated: false,
+    });
+    // No pay field exists: none is mapped.
+    for (const input of read.inputs) for (const key of ['salaryMin', 'salaryMax', 'salaryCurrency', 'salaryText']) expect(input).not.toHaveProperty(key);
+    // Remote only where the board says so.
+    expect(read.inputs.map((i) => i.workModel)).toEqual(['remote', null, null]);
+    // A posting that states no link falls back to its page under the account; none stated, no publication day.
+    expect(read.inputs[2]).toMatchObject({ applyUrl: workablePostingUrl('tidewater', 'L1M2N3P4Q5'), postedAt: null, postedAtEstimated: true, locationCountry: 'TW' });
+  });
+
+  it('a place the employer hides is passed on in no field: text, city, region and stated country all come from the first SHOWN place (review finding)', () => {
+    const job = (over: Record<string, unknown>) => mapWorkableJob({ title: 'Analyst', shortcode: 'H1', ...over }, WK, NOW)!;
+    const berlin = { country: 'Germany', countryCode: 'DE', city: 'Berlin', region: 'Berlin' };
+    const paris = { country: 'France', countryCode: 'FR', city: 'Paris', region: 'Île-de-France' };
+    // The top-level fields repeat the first entry of `locations[]`, here the hidden one.
+    const hiddenFirst = job({ country: 'Germany', city: 'Berlin', state: 'Berlin', locations: [{ ...berlin, hidden: true }, { ...paris, hidden: false }] });
+    expect(hiddenFirst).toMatchObject({ location: 'Paris, Île-de-France, France', locations: ['Paris, Île-de-France, France'], locationCity: 'Paris', locationRegion: 'Île-de-France', locationCountry: 'FR', locationCountryEstimated: false });
+    expect(JSON.stringify(hiddenFirst)).not.toMatch(/Berlin|Germany|"DE"/);
+    expect(normalizeAny(hiddenFirst)).toMatchObject({ locationCountry: 'FR', locationCity: 'Paris' });
+    // Every place hidden: the posting states no place (the board's tag stays a weak hint, like on any board).
+    const allHidden = job({ country: 'Germany', city: 'Berlin', state: 'Berlin', locations: [{ ...berlin, hidden: true }] });
+    expect(allHidden).toMatchObject({ location: null, locations: [], locationCity: null, locationRegion: null });
+    expect(allHidden).not.toHaveProperty('locationCountry');
+    expect(JSON.stringify(allHidden)).not.toMatch(/Berlin|Germany/);
+    // No list of places at all: the top-level fields are the posting's place.
+    const topOnly = job({ country: 'Germany', city: 'Berlin', state: 'Berlin' });
+    expect(topOnly).toMatchObject({ location: 'Berlin, Germany', locations: ['Berlin, Germany'], locationCity: 'Berlin', locationRegion: 'Berlin', locationCountry: 'DE', locationCountryEstimated: false });
+    expect(job({ country: 'Germany', city: 'Berlin', state: 'Berlin', locations: [] })).toMatchObject({ location: 'Berlin, Germany', locationCountry: 'DE' });
+    // Shown places in their own order; the first is the posting's own.
+    const two = job({ country: 'France', city: 'Paris', state: 'Île-de-France', locations: [{ ...paris, hidden: false }, { ...berlin, hidden: false }] });
+    expect(two).toMatchObject({ location: 'Paris, Île-de-France, France', locations: ['Paris, Île-de-France, France', 'Berlin, Germany'], locationCountry: 'FR' });
+  });
+
+  it('normalizes to rows with the apply URL, the posted date, the country, and the posting key other sources give the same posting', async () => {
+    const read = await connectorFor('workable', {}).read(WK, { now: NOW, fetch: fakeFetch({ [WK_URL]: fixture('workable.json') }), env: {} });
+    const [first, second, third] = read.inputs.map(normalizeAny);
+    expect(first).toMatchObject({
+      provider: 'ats_public',
+      sourceBoard: 'workable',
+      sourceName: 'Tidewater Analytics · Workable',
+      originalSourceName: null,
+      applyUrl: 'https://apply.workable.com/j/A1B2C3D4E5/apply',
+      atsType: 'workable',
+      atsPostingKey: 'workable:tidewater:a1b2c3d4e5',
+      market: 'intl',
+      locationCountry: 'FR',
+      workModel: 'remote',
+      employmentType: 'full_time',
+      seniority: 'senior',
+      salaryDisclosed: false,
+      postedAtEstimated: false,
+    });
+    // A calendar day is the start of that day.
+    expect(first!.postedAt!.toISOString()).toBe('2026-09-02T00:00:00.000Z');
+    expect(first!.descriptionPlain).toContain('Build & ship models');
+    expect(second).toMatchObject({ locationCountry: 'US', workModel: null, employmentType: 'part_time' });
+    expect(third).toMatchObject({ locationCountry: 'TW', postedAtEstimated: true, applyUrl: 'https://apply.workable.com/tidewater/j/L1M2N3P4Q5' });
+    // The key a JSearch row of the same posting carries (its link names the account and the shortcode).
+    expect(atsPostingKeyFromUrl('https://apply.workable.com/tidewater/j/A1B2C3D4E5/')).toBe(first!.atsPostingKey);
+  });
+
+  it('a posting absent from the next listing is closed; one answer is the whole board', async () => {
+    const stored = boardDb([openRow('workable', 'tidewater:A1B2C3D4E5'), openRow('workable', 'tidewater:GONE000001'), openRow('workable', 'othertenant:A1B2C3D4E5'), openRow('greenhouse', 'tidewater:GONE000001')]);
+    const res = await readBoard(asDb(stored), sourceRow({ ats: 'workable', boardToken: 'tidewater', companyName: 'Tidewater Analytics' }), { now: NOW, fetch: fakeFetch({ [WK_URL]: fixture('workable.json') }), env: {} }, BOTH);
+    expect(res.error).toBeNull();
+    expect(res.read).toMatchObject({ complete: true, calls: 1 });
+    expect(res.closedExternalIds).toEqual(['tidewater:GONE000001']);
+    expect(res.routed!.byMarket.intl.map((i) => i.externalId)).toEqual(['tidewater:A1B2C3D4E5', 'tidewater:F6G7H8J9K0', 'tidewater:L1M2N3P4Q5']);
+  });
+
+  it('with ATS_WORKABLE_DISABLED=true a Workable source is not read: no request, nothing closed, the reason reported', async () => {
+    const calls: string[] = [];
+    const stored = boardDb([openRow('workable', 'tidewater:GONE000001')]);
+    const res = await readBoard(asDb(stored), sourceRow({ ats: 'workable', boardToken: 'tidewater' }), { now: NOW, fetch: fakeFetch({ [WK_URL]: fixture('workable.json') }, calls), env: { ATS_WORKABLE_DISABLED: 'true' } }, BOTH);
+    expect(res).toMatchObject({ read: null, routed: null, closedExternalIds: [], calls: 0, error: 'connector_disabled' });
+    expect(calls).toEqual([]);
+  });
+
+  it('an answer that is not the listing fails the board', async () => {
+    await expect(connectorFor('workable', {}).read(WK, { now: NOW, fetch: fakeFetch({ [WK_URL]: { name: 'x' } }), env: {} })).rejects.toThrow('unexpected_shape');
+    await expect(connectorFor('workable', {}).read(WK, { now: NOW, fetch: fakeFetch({}), env: {} })).rejects.toThrow('board_not_found');
+  });
+});
+
+// ── Recruitee and Personio ───────────────────────────────────────────────
+
+const RC: BoardSource = { ats: 'recruitee', boardToken: 'poldermobility', companyName: 'Polder Mobility', countryCode: null };
+const RC_URL = 'https://poldermobility.recruitee.com/api/offers/';
+const PS: BoardSource = { ats: 'personio', boardToken: 'alpenwerk', companyName: 'Alpenwerk', countryCode: 'DE' };
+const PS_URL = 'https://alpenwerk.jobs.personio.de/xml';
+
+describe('MKT-5B item 3: Recruitee', () => {
+  it('reads the Careers Site API once and maps each published offer, with pay where the offer gives it', async () => {
+    const seen: Array<{ url: string; init: Parameters<FetchLike>[1] }> = [];
+    const read = await connectorFor('recruitee', {}).read(RC, { now: NOW, fetch: answering(fixtureText('recruitee.json'), seen), env: {} });
+    expect(seen.map((r) => r.url)).toEqual([RC_URL]);
+    expect(read).toMatchObject({ complete: true, calls: 1, boardCompanyName: 'Polder Mobility' });
+    // The draft and the row without an id are not postings.
+    expect(read.listedIds).toEqual(['poldermobility:1853589', 'poldermobility:1853590']);
+    expect(read.inputs[0]).toMatchObject({
+      sourceBoard: 'recruitee',
+      title: 'Backend Developer',
+      sourcePublisher: 'Polder Mobility · Recruitee',
+      applyUrl: 'https://poldermobility.recruitee.com/o/backend-developer',
+      sourceUrl: 'https://poldermobility.recruitee.com/o/backend-developer',
+      location: 'Amsterdam, Noord-Holland, Netherlands',
+      locations: ['Amsterdam, Noord-Holland, Netherlands', 'Berlin, Germany'],
+      locationCountry: 'NL',
+      locationCountryEstimated: false,
+      workModel: 'hybrid',
+      employmentType: 'fulltime permanent',
+      salaryMin: 4000,
+      salaryMax: 5200,
+      salaryCurrency: 'EUR',
+      salaryPeriod: 'month',
+      postedAt: '2026-09-26T10:46:21Z',
+      postedAtEstimated: false,
+      expiresAt: '2026-11-15T23:59:59Z',
+    });
+    // The two HTML parts are one posting.
+    expect(read.inputs[0]!.descriptionHtml).toBe('<p>SYNTHETIC description text.</p><ul><li>SYNTHETIC requirement: Go &amp; PostgreSQL</li></ul>');
+    // An offer without amounts states no pay; remote as stated; no country invented.
+    expect(read.inputs[1]).toMatchObject({ workModel: 'remote', location: null, postedAt: '2026-10-02T08:00:00Z' });
+    for (const key of ['salaryMin', 'salaryMax', 'salaryCurrency', 'expiresAt', 'locationCountry']) expect(read.inputs[1]).not.toHaveProperty(key);
+    // The offer's mailbox address is never read into a posting.
+    expect(JSON.stringify(read.inputs)).not.toMatch(/mailbox|job\.wefd3|@poldermobility/);
+  });
+
+  it('normalizes to rows with the apply URL, dates, pay and plain description text', async () => {
+    const read = await connectorFor('recruitee', {}).read(RC, { now: NOW, fetch: answering(fixtureText('recruitee.json')), env: {} });
+    const [first, second] = read.inputs.map(normalizeAny);
+    expect(first).toMatchObject({
+      sourceBoard: 'recruitee',
+      sourceName: 'Polder Mobility · Recruitee',
+      applyUrl: 'https://poldermobility.recruitee.com/o/backend-developer',
+      atsType: 'recruitee',
+      market: 'intl',
+      locationCountry: 'NL',
+      workModel: 'hybrid',
+      employmentType: 'full_time',
+      salaryMin: 4000,
+      salaryMax: 5200,
+      salaryCurrency: 'EUR',
+      salaryPeriod: 'month',
+      salaryDisclosed: true,
+      postedAtEstimated: false,
+    });
+    expect(first!.postedAt!.toISOString()).toBe('2026-09-26T10:46:21.000Z');
+    expect(first!.expiresAt!.toISOString()).toBe('2026-11-15T23:59:59.000Z');
+    // HTML comes out as plain text.
+    expect(first!.descriptionPlain).toBe('SYNTHETIC description text.\n\n• SYNTHETIC requirement: Go & PostgreSQL');
+    expect(second).toMatchObject({ workModel: 'remote', employmentType: 'part_time', salaryDisclosed: false, expiresAt: null });
+  });
+
+  it('reports a complete listing, so a posting that left the board is closed', async () => {
+    const stored = boardDb([openRow('recruitee', 'poldermobility:1853589'), openRow('recruitee', 'poldermobility:777')]);
+    const res = await readBoard(asDb(stored), sourceRow({ ats: 'recruitee', boardToken: 'poldermobility', companyName: 'Polder Mobility' }), { now: NOW, fetch: answering(fixtureText('recruitee.json')), env: {} }, BOTH);
+    expect(res.read!.complete).toBe(true);
+    expect(res.closedExternalIds).toEqual(['poldermobility:777']);
+  });
+
+  it('times: the documented "YYYY-MM-DD HH:MM:SS UTC" and ISO; anything else is no date', () => {
+    expect(recruiteeTime('2026-09-26 10:46:21 UTC')).toBe('2026-09-26T10:46:21Z');
+    expect(recruiteeTime('2026-09-26T10:46:21.000Z')).toBe('2026-09-26T10:46:21.000Z');
+    expect(recruiteeTime('yesterday')).toBeNull();
+    expect(recruiteeTime(null)).toBeNull();
+  });
+});
+
+describe('MKT-5B item 3: Personio', () => {
+  it('reads the XML feed once and maps each position: the tenant\'s own job page, the offices, the sections under their own headings', async () => {
+    const seen: Array<{ url: string; init: Parameters<FetchLike>[1] }> = [];
+    const read = await connectorFor('personio', {}).read(PS, { now: NOW, fetch: answering(fixtureText('personio.xml'), seen), env: {} });
+    expect(seen.map((r) => r.url)).toEqual([`${PS_URL}?language=en`]);
+    expect(seen[0]!.init.headers!.Accept).toBe('application/xml, text/xml');
+    expect(read).toMatchObject({ complete: true, calls: 1, boardCompanyName: null });
+    expect(read.listedIds).toEqual(['alpenwerk:1834171', 'alpenwerk:1834172', 'alpenwerk:1834173']);
+    expect(read.inputs[0]).toMatchObject({
+      sourceBoard: 'personio',
+      title: 'Senior Backend Engineer (m/f/d)',
+      company: 'Alpenwerk',
+      sourcePublisher: 'Alpenwerk · Personio',
+      applyUrl: 'https://alpenwerk.jobs.personio.de/job/1834171',
+      sourceUrl: 'https://alpenwerk.jobs.personio.de/job/1834171',
+      location: 'Munich',
+      locations: ['Munich', 'Berlin', 'Vienna'],
+      // Personio states no country: the board's tag stays a weak hint.
+      locationCountry: 'DE',
+      locationCountryEstimated: true,
+      employmentType: ['full-time', 'permanent'],
+      seniority: 'experienced',
+      postedAt: '2026-09-13T14:10:41+02:00',
+      postedAtEstimated: false,
+    });
+    // CDATA verbatim, the heading's entity decoded then escaped for HTML, the empty section left out.
+    expect(read.inputs[0]!.descriptionHtml).toBe(
+      "<h3>The Role: How you'll make an impact</h3><p>SYNTHETIC role text with <strong>markup</strong> &amp; an entity kept as written.</p><h3>Requirements</h3><ul><li>SYNTHETIC requirement: 5 < years < 10</li></ul>",
+    );
+    // Text sent escaped instead of in CDATA is the same markup.
+    expect(read.inputs[1]).toMatchObject({ title: 'Working Student People & Culture', descriptionHtml: '<h3>Tasks</h3><p>SYNTHETIC text sent escaped instead of in CDATA.</p>', employmentType: ['part-time', 'permanent'] });
+    expect(read.inputs[2]).toMatchObject({ employmentType: ['intern', 'full-time'], descriptionHtml: null, postedAt: null, postedAtEstimated: true });
+    // Personio states no pay: none is mapped.
+    for (const input of read.inputs) for (const key of ['salaryMin', 'salaryMax', 'salaryCurrency', 'salaryText']) expect(input).not.toHaveProperty(key);
+  });
+
+  it('normalizes to rows with the apply URL and dates; HTML and CDATA text come out as plain description text', async () => {
+    const read = await connectorFor('personio', {}).read(PS, { now: NOW, fetch: answering(fixtureText('personio.xml')), env: {} });
+    const [first, second, third] = read.inputs.map(normalizeAny);
+    expect(first).toMatchObject({ sourceBoard: 'personio', sourceName: 'Alpenwerk · Personio', applyUrl: 'https://alpenwerk.jobs.personio.de/job/1834171', atsType: 'personio', locationCountry: 'DE', employmentType: 'full_time', salaryDisclosed: false, postedAtEstimated: false });
+    expect(first!.postedAt!.toISOString()).toBe('2026-09-13T12:10:41.000Z');
+    expect(first!.descriptionPlain).toBe("The Role: How you'll make an impact\nSYNTHETIC role text with markup & an entity kept as written.\nRequirements\n\n• SYNTHETIC requirement: 5 < years < 10");
+    expect(second).toMatchObject({ employmentType: 'part_time' });
+    expect(second!.descriptionPlain).toBe('Tasks\nSYNTHETIC text sent escaped instead of in CDATA.');
+    expect(third).toMatchObject({ employmentType: 'internship', postedAtEstimated: true });
+  });
+
+  it('a redirect (a host that is not a customer\'s) fails the read as a hard failure and closes nothing', async () => {
+    const stored = boardDb([openRow('personio', 'alpenwerk:1834171'), openRow('personio', 'alpenwerk:1')]);
+    const redirecting: FetchLike = async () => ({ ok: false, status: 301, text: async () => '' });
+    const res = await readBoard(asDb(stored), sourceRow({ ats: 'personio', boardToken: 'alpenwerk', companyName: 'Alpenwerk' }), { now: NOW, fetch: redirecting, env: {} }, BOTH);
+    expect(res).toMatchObject({ read: null, routed: null, closedExternalIds: [], error: 'redirect' });
+    expect(classifyBoardError(res.error!)).toBe('hard');
+    // The same board, answering: complete, so the posting that left is closed.
+    const ok = await readBoard(asDb(stored), sourceRow({ ats: 'personio', boardToken: 'alpenwerk', companyName: 'Alpenwerk' }), { now: NOW, fetch: answering(fixtureText('personio.xml')), env: {} }, BOTH);
+    expect(ok.read!.complete).toBe(true);
+    expect(ok.closedExternalIds).toEqual(['alpenwerk:1']);
+  });
+
+  it('a feed with another root, or an HTML page, is not the feed; an empty feed is an empty board', async () => {
+    await expect(connectorFor('personio', {}).read(PS, { now: NOW, fetch: answering('<rss><channel/></rss>'), env: {} })).rejects.toThrow('unexpected_shape');
+    await expect(connectorFor('personio', {}).read(PS, { now: NOW, fetch: answering('<!doctype html><html></html>'), env: {} })).rejects.toThrow('not_xml');
+    expect(await connectorFor('personio', {}).read(PS, { now: NOW, fetch: answering('<?xml version="1.0"?><workzag-jobs></workzag-jobs>'), env: {} })).toMatchObject({ listedIds: [], complete: true });
+  });
+
+  it('a tenant on the .com host is the board id with the .com marker; the offset without its colon is read', async () => {
+    expect(personioHost('acme')).toBe('acme.jobs.personio.de');
+    expect(personioHost('acme.com')).toBe('acme.jobs.personio.com');
+    const seen: Array<{ url: string; init: Parameters<FetchLike>[1] }> = [];
+    const read = await connectorFor('personio', {}).read({ ...PS, boardToken: 'alpenwerk.com' }, { now: NOW, fetch: answering(fixtureText('personio.xml'), seen), env: {} });
+    expect(seen[0]!.url).toBe('https://alpenwerk.jobs.personio.com/xml?language=en');
+    expect(read.inputs[0]).toMatchObject({ externalId: 'alpenwerk.com:1834171', applyUrl: 'https://alpenwerk.jobs.personio.com/job/1834171' });
+    expect(personioTime('2016-05-31T12:14:07+0200')).toBe('2016-05-31T12:14:07+02:00');
+    expect(personioTime('2024-11-13T14:10:41+00:00')).toBe('2024-11-13T14:10:41+00:00');
+    expect(personioTime(null)).toBeNull();
+  });
+});
+
+// ── Lever EU; Greenhouse pay ranges and deadline ─────────────────────────
+
+describe('MKT-5B item 4: Lever\'s EU instance', () => {
+  const EU: BoardSource = { ats: 'lever_eu', boardToken: 'nordwind', companyName: 'Nordwind', countryCode: null };
+
+  it('is the Lever connector on api.eu.lever.co; its rows keep the board name lever_eu and the posting key lever_eu:<site>:<id>', async () => {
+    const calls: string[] = [];
+    const read = await leverEu.read(EU, { now: NOW, fetch: fakeFetch({ 'https://api.eu.lever.co/v0/postings/nordwind': fixture('lever-eu.json') }, calls), env: {} });
+    expect(calls).toEqual(['https://api.eu.lever.co/v0/postings/nordwind?mode=json&skip=0&limit=100']);
+    expect(read).toMatchObject({ complete: true, calls: 1, boardCompanyName: null });
+    expect(read.inputs[0]).toMatchObject({
+      externalId: 'nordwind:7a2b3c4d-0000-4e4e-8c8c-333333333333',
+      sourceBoard: 'lever_eu',
+      sourcePublisher: 'Nordwind · Lever',
+      // The links are the API's own, on the EU instance's host.
+      applyUrl: 'https://jobs.eu.lever.co/nordwind/7a2b3c4d-0000-4e4e-8c8c-333333333333/apply',
+      sourceUrl: 'https://jobs.eu.lever.co/nordwind/7a2b3c4d-0000-4e4e-8c8c-333333333333',
+      // Pay as before: salaryRange and the plain description.
+      salaryMin: 65000,
+      salaryMax: 85000,
+      salaryCurrency: 'EUR',
+      salaryText: 'EUR 65,000 to 85,000 a year',
+    });
+    const jobs = read.inputs.map(normalizeAny);
+    expect(jobs.map((j) => [j.sourceBoard, j.atsPostingKey, j.sourceName])).toEqual([
+      ['lever_eu', 'lever_eu:nordwind:7a2b3c4d-0000-4e4e-8c8c-333333333333', 'Nordwind · Lever'],
+      ['lever_eu', 'lever_eu:nordwind:7a2b3c4d-0000-4e4e-8c8c-444444444444', 'Nordwind · Lever'],
+    ]);
+    expect(jobs[0]).toMatchObject({ salaryDisclosed: true, salaryPeriod: 'year', atsType: 'lever' });
+  });
+
+  it('two tenants with the same site name on the two instances never share a row: different board, different key, different host', async () => {
+    const global = await lever.read({ ...EU, ats: 'lever' }, { now: NOW, fetch: fakeFetch({ 'https://api.lever.co/v0/postings/nordwind': fixture('lever.json') }), env: {} });
+    const eu = await leverEu.read(EU, { now: NOW, fetch: fakeFetch({ 'https://api.eu.lever.co/v0/postings/nordwind': fixture('lever-eu.json') }), env: {} });
+    expect(new Set(global.inputs.map((i) => i.sourceBoard))).toEqual(new Set(['lever']));
+    expect(new Set(eu.inputs.map((i) => i.sourceBoard))).toEqual(new Set(['lever_eu']));
+    expect(lever.boardUrl('nordwind')).toBe('https://api.lever.co/v0/postings/nordwind?mode=json');
+    expect(leverEu.boardUrl('nordwind')).toBe('https://api.eu.lever.co/v0/postings/nordwind?mode=json');
+    // The global connector is unchanged by the refactor: the same fixture, the same first request.
+    expect(global.inputs[0]).toMatchObject({ sourceBoard: 'lever', sourcePublisher: 'Nordwind · Lever' });
+    // Closures of one instance never touch the other's rows.
+    const stored = boardDb([openRow('lever', 'nordwind:gone'), openRow('lever_eu', 'nordwind:gone')]);
+    const res = await readBoard(asDb(stored), sourceRow({ ats: 'lever_eu', boardToken: 'nordwind', companyName: 'Nordwind' }), { now: NOW, fetch: fakeFetch({ 'https://api.eu.lever.co/v0/postings/nordwind': fixture('lever-eu.json') }), env: {} }, BOTH);
+    expect(res.closedExternalIds).toEqual(['nordwind:gone']);
+    expect(res.source.ats).toBe('lever_eu');
+  });
+});
+
+describe('MKT-5B item 4: Greenhouse pay ranges and application deadline', () => {
+  const HL: BoardSource = { ats: 'greenhouse', boardToken: 'harborlabs', companyName: 'Harbor Labs', countryCode: null };
+  const HL_LIST = 'https://boards-api.greenhouse.io/v1/boards/harborlabs/jobs';
+
+  it('asks the list call for the pay ranges and makes no request per posting', async () => {
+    const calls: string[] = [];
+    const read = await greenhouse.read(HL, { now: NOW, fetch: fakeFetch({ [HL_LIST]: fixture('greenhouse-pay.json') }, calls), env: {} });
+    expect(calls).toEqual([`${HL_LIST}?content=true&pay_transparency=true`]);
+    expect(greenhouseReadUrl('harborlabs')).toBe(calls[0]);
+    // The address shown to ops is still the listing itself.
+    expect(greenhouse.boardUrl('harborlabs')).toBe(`${HL_LIST}?content=true`);
+    expect(read.calls).toBe(1);
+    expect(read.inputs).toHaveLength(3);
+  });
+
+  it('a range of 12000000-15000000 cents USD is 120,000-150,000 USD: the first range with numeric bounds, its title as the pay text', async () => {
+    const read = await greenhouse.read(HL, { now: NOW, fetch: fakeFetch({ [HL_LIST]: fixture('greenhouse-pay.json') }), env: {} });
+    expect(read.inputs[0]).toMatchObject({ salaryMin: 120000, salaryMax: 150000, salaryCurrency: 'USD', salaryText: 'NYC Salary Range' });
+    expect(read.inputs[0]).not.toHaveProperty('expiresAt');
+    const job = normalizeAny(read.inputs[0]!);
+    expect(job).toMatchObject({ salaryMin: 120000, salaryMax: 150000, salaryCurrency: 'USD', salaryDisclosed: true, salarySource: 'provider', salaryText: 'NYC Salary Range', expiresAt: null });
+    // The blurb is prose: it is never the pay text.
+    expect(JSON.stringify(read.inputs[0])).not.toContain('blurb');
+  });
+
+  it('a stated application_deadline is the posting\'s expiry, and the posting is archived after it; first_published stays the posting date', async () => {
+    const read = await greenhouse.read(HL, { now: NOW, fetch: fakeFetch({ [HL_LIST]: fixture('greenhouse-pay.json') }), env: {} });
+    expect(read.inputs[1]).toMatchObject({ expiresAt: '2026-10-20T20:00:00Z', postedAt: '2026-10-01T09:00:00-04:00' });
+    const job = normalizeAny(read.inputs[1]!);
+    expect(job.expiresAt!.toISOString()).toBe('2026-10-20T20:00:00.000Z');
+    expect(job.postedAt!.toISOString()).toBe('2026-10-01T13:00:00.000Z');
+    // The daily maintenance archives a row whose stated deadline has passed, whatever its source (ingest/maintain.ts).
+    expect(job.expiresAt!.getTime()).toBeLessThan(new Date('2026-10-21T00:00:00Z').getTime());
+  });
+
+  it('a posting with neither is unchanged from before: no pay field, no expiry, and the description is still read for a pay line', async () => {
+    const read = await greenhouse.read(HL, { now: NOW, fetch: fakeFetch({ [HL_LIST]: fixture('greenhouse-pay.json') }), env: {} });
+    // A range without a numeric bound gives no pay.
+    for (const key of ['salaryMin', 'salaryMax', 'salaryCurrency', 'salaryText', 'expiresAt']) expect(read.inputs[2]).not.toHaveProperty(key);
+    expect(normalizeAny(read.inputs[2]!)).toMatchObject({ salaryDisclosed: false, expiresAt: null });
+    // The older fixture: the keys a live board sends when nothing is set (`[]`, `null`) and a posting without the keys at all.
+    const older = await greenhouse.read(GH, { now: NOW, fetch: fakeFetch({ 'https://boards-api.greenhouse.io/v1/boards/formosarobotics/jobs': fixture('greenhouse.json') }), env: {} });
+    for (const input of older.inputs) for (const key of ['salaryMin', 'salaryMax', 'salaryCurrency', 'expiresAt']) expect(input).not.toHaveProperty(key);
+    // Its second posting states pay in its text only: the normalizer still finds it.
+    expect(normalizeAny(older.inputs[1]!)).toMatchObject({ salaryMin: 55000, salaryMax: 75000, salaryCurrency: 'TWD', salaryDisclosed: true, salarySource: 'posting_text' });
+  });
+});
+
+describe('MKT-5B (carry-over M4.7): Greenhouse asks which postings are listed before it asks for the texts', () => {
+  const LIST = greenhouseListUrl('globalco');
+  /** A posting as the listing WITHOUT texts sends it: no `content`, no `offices`, no `departments` (see __fixtures__/greenhouse-list.json). */
+  const light = (id: number, updatedAt: string, location = 'Singapore', extra: Record<string, unknown> = {}) => ({ id, title: 'Software Engineer', absolute_url: `https://boards.greenhouse.io/globalco/jobs/${id}`, location: { name: location }, updated_at: updatedAt, first_published: '2026-09-01T00:00:00Z', ...extra });
+  /** The same posting as the listing WITH texts sends it: its text and its offices. */
+  const full = (id: number, updatedAt: string, location = 'Singapore', offices: string[] = [location]) => ({ ...light(id, updatedAt, location), content: '&lt;p&gt;SYNTHETIC posting text.&lt;/p&gt;', offices: offices.map((o) => ({ name: o, location: o })) });
+  const SAVED = new Date('2026-10-09T22:00:00.000Z');
+  /** A board whose two requests are told apart by `content=true`. */
+  const board = (lightJobs: unknown[], fullJobs: unknown[], calls: string[]): FetchLike => async (url) => {
+    calls.push(url);
+    return { ok: true, status: 200, text: async () => JSON.stringify({ jobs: url.includes('content=true') ? fullJobs : lightJobs }) };
+  };
+
+  it('the listing without texts, in the shape a live board sends it, names the postings and does not place them: no offices, no departments, no text', () => {
+    const body = fixture('greenhouse-list.json') as { jobs: Array<Record<string, unknown>> };
+    // The keys one live board answered with on 2026-10-12 (names only; every value here is SYNTHETIC).
+    expect(Object.keys(body.jobs[0]!).sort()).toEqual(['absolute_url', 'application_deadline', 'company_name', 'data_compliance', 'first_published', 'id', 'internal_job_id', 'language', 'location', 'metadata', 'requisition_id', 'title', 'updated_at']);
+    for (const job of body.jobs) for (const key of ['offices', 'departments', 'content']) expect(job).not.toHaveProperty(key);
+    const mapped = body.jobs.map((j) => mapGreenhouseJob(j, sourceRow() as unknown as BoardSource, NOW)!);
+    // All it knows of a place is `location.name`: "APAC" places nothing, and the Singapore office of posting 7 is not in it.
+    expect(mapped.map((m) => [m.externalId, m.locations, m.descriptionHtml])).toEqual([['globalco:7', ['Shanghai, China'], null], ['globalco:8', ['APAC'], null]]);
+  });
+
+  it('nothing new and no later edit: ONE small request, no inputs, nothing routed; the rows are compared by posting id', async () => {
+    const calls: string[] = [];
+    const stored = boardDb([openRow('greenhouse', 'globalco:1', SAVED), openRow('greenhouse', 'globalco:2', SAVED), openRow('greenhouse', 'globalco:9', SAVED)]);
+    const jobs = [light(1, '2026-10-01T00:00:00Z'), light(2, '2026-10-09T10:00:00Z')];
+    const res = await readBoard(asDb(stored), sourceRow(), { now: NOW, fetch: board(jobs, [], calls), env: {} }, BOTH);
+    expect(calls).toEqual([LIST]);
+    expect(res.read).toMatchObject({ complete: true, calls: 1, inputs: [], unchangedById: true });
+    expect(res.read!.listedIds).toEqual(['globalco:1', 'globalco:2']);
+    expect(res.routed!.byMarket).toEqual({ intl: [], cn: [] });
+    // The rows the board still lists are marked as seen; the one it dropped is closed.
+    expect(res.seenExternalIds).toEqual(['globalco:1', 'globalco:2']);
+    expect(res.closedExternalIds).toEqual(['globalco:9']);
+  });
+
+  it('a posting we do not hold, or one edited after our copy, makes the second request, and then the whole board is handed on and routed', async () => {
+    for (const lightJobs of [
+      // A new posting.
+      [light(1, '2026-10-01T00:00:00Z'), light(3, '2026-10-09T23:00:00Z')],
+      // An edit after we last saved it.
+      [light(1, '2026-10-09T23:30:00Z')],
+      // An edit just before we last saved it: inside the margin between a read and its write.
+      [light(1, new Date(SAVED.getTime() - GREENHOUSE_CHANGE_MARGIN_MS + 60_000).toISOString())],
+      // An edit time we cannot read.
+      [light(1, 'not a date')],
+    ]) {
+      const calls: string[] = [];
+      const stored = boardDb([openRow('greenhouse', 'globalco:1', SAVED)]);
+      const fullJobs = lightJobs.map((j) => full(j.id, j.updated_at));
+      const res = await readBoard(asDb(stored), sourceRow(), { now: NOW, fetch: board(lightJobs, fullJobs, calls), env: {} }, BOTH);
+      expect(calls, JSON.stringify(lightJobs)).toEqual([LIST, greenhouseReadUrl('globalco')]);
+      expect(res.read).toMatchObject({ complete: true, calls: 2 });
+      expect(res.read!.unchangedById).toBeUndefined();
+      expect(res.read!.inputs).toHaveLength(lightJobs.length);
+      expect(res.read!.inputs[0]!.descriptionHtml).toBe('<p>SYNTHETIC posting text.</p>');
+      expect(res.routed!.byMarket.intl).toHaveLength(lightJobs.length);
+      expect(res.seenExternalIds).toBeUndefined();
+    }
+    // An edit well before our copy is not a change.
+    const calls: string[] = [];
+    const quiet = [light(1, new Date(SAVED.getTime() - GREENHOUSE_CHANGE_MARGIN_MS - 60_000).toISOString())];
+    await readBoard(asDb(boardDb([openRow('greenhouse', 'globalco:1', SAVED)])), sourceRow(), { now: NOW, fetch: board(quiet, [], calls), env: {} }, BOTH);
+    expect(calls).toEqual([LIST]);
+  });
+
+  it('a posting stored in both markets stays open in both: the listing shows only its Shanghai location and neither row is closed (review finding)', async () => {
+    // The whole read stored two rows: the posting's offices are Shanghai and Singapore. The listing without texts
+    // knows only "Shanghai, China". Routed, that listing would map to `globalco:7` alone and close `globalco:7#cn`.
+    const calls: string[] = [];
+    const stored = boardDb([openRow('greenhouse', 'globalco:7', SAVED), openRow('greenhouse', 'globalco:7#cn', SAVED)]);
+    const held = await readBoard(asDb(stored), sourceRow(), { now: NOW, fetch: board([light(7, '2026-10-01T00:00:00Z', 'Shanghai, China')], [], calls), env: {} }, BOTH);
+    expect(calls).toEqual([LIST]);
+    expect(held.closedExternalIds).toEqual([]);
+    expect(held.seenExternalIds).toEqual(['globalco:7', 'globalco:7#cn']);
+    // The same for a posting whose only stored row is its mainland copy's twin on the other side, and the reverse.
+    for (const only of ['globalco:7', 'globalco:7#cn']) {
+      const one = await readBoard(asDb(boardDb([openRow('greenhouse', only, SAVED)])), sourceRow(), { now: NOW, fetch: board([light(7, '2026-10-01T00:00:00Z', 'Shanghai, China')], [], []), env: {} }, BOTH);
+      expect(one.closedExternalIds, only).toEqual([]);
+      expect(one.seenExternalIds, only).toEqual([only]);
+    }
+    // When the board stops listing the posting, both of its rows are closed.
+    const gone = await readBoard(asDb(stored), sourceRow(), { now: NOW, fetch: board([], [], []), env: {} }, BOTH);
+    expect(gone.read).toMatchObject({ unchangedById: true, complete: true });
+    expect(gone.closedExternalIds).toEqual(['globalco:7', 'globalco:7#cn']);
+    expect(gone.seenExternalIds).toBeUndefined();
+    // The comparison itself.
+    expect(diffByPostingId(new Map([['a:1', null], ['a:1#cn', null], ['a:2#cn', null], ['a:3', null]]), ['a:1', 'a:2'])).toEqual({ seen: ['a:1', 'a:1#cn', 'a:2#cn'], closed: ['a:3'] });
+    expect([postingIdOf('a:1#cn'), postingIdOf('a:1'), copyIdsOf('a:1')]).toEqual(['a:1', 'a:1', ['a:1', 'a:1#cn']]);
+  });
+
+  it('a posting that gains or loses a location was edited: the whole read follows, and its routing opens or closes the mainland copy', async () => {
+    // The Shanghai office was removed today: `updated_at` moved, the texts are read, the routed listing closes `#cn`.
+    const calls: string[] = [];
+    const stored = boardDb([openRow('greenhouse', 'globalco:7', SAVED), openRow('greenhouse', 'globalco:7#cn', SAVED)]);
+    const edited = '2026-10-09T23:30:00Z';
+    const res = await readBoard(asDb(stored), sourceRow(), { now: NOW, fetch: board([light(7, edited)], [full(7, edited, 'Singapore', ['Singapore'])], calls), env: {} }, BOTH);
+    expect(calls).toEqual([LIST, greenhouseReadUrl('globalco')]);
+    expect(res.closedExternalIds).toEqual(['globalco:7#cn']);
+    expect(res.routed!.byMarket).toMatchObject({ intl: [{ externalId: 'globalco:7' }], cn: [] });
+  });
+
+  it('a board read for some countries only is read whole: its rows depend on the offices, which only the whole read states (review finding)', async () => {
+    // Read for Taiwan only. The posting's location text is "APAC"; its offices say Taipei.
+    let calls: string[] = [];
+    const tw = sourceRow({ countries: ['TW'] });
+    const twRead = await readBoard(asDb(boardDb([openRow('greenhouse', 'globalco:8', SAVED)])), tw, { now: NOW, fetch: board([light(8, '2026-10-01T00:00:00Z', 'APAC')], [full(8, '2026-10-01T00:00:00Z', 'APAC', ['Taipei, Taiwan'])], calls), env: {} }, BOTH);
+    expect(calls).toEqual([greenhouseReadUrl('globalco')]);
+    expect(twRead.closedExternalIds).toEqual([]);
+    expect(twRead.routed!.byMarket.intl.map((i) => i.externalId)).toEqual(['globalco:8']);
+    // Read for mainland China only. The location text is "Singapore"; the offices add Shanghai, which is the row we hold.
+    calls = [];
+    const cn = sourceRow({ countries: ['CN'] });
+    const cnRead = await readBoard(asDb(boardDb([openRow('greenhouse', 'globalco:10#cn', SAVED)])), cn, { now: NOW, fetch: board([light(10, '2026-10-01T00:00:00Z')], [full(10, '2026-10-01T00:00:00Z', 'Singapore', ['Singapore', 'Shanghai, China'])], calls), env: {} }, BOTH);
+    expect(calls).toEqual([greenhouseReadUrl('globalco')]);
+    expect(cnRead.closedExternalIds).toEqual([]);
+    expect(cnRead.routed!.byMarket.cn.map((i) => i.externalId)).toEqual(['globalco:10#cn']);
+    expect(cnRead.routed!.byMarket.intl).toEqual([]);
+    // A deployment that writes one market keeps only some postings too: the whole read, as before.
+    for (const markets of [['intl'], ['cn']] as const) {
+      calls = [];
+      await readBoard(asDb(boardDb([openRow('greenhouse', 'globalco:1', SAVED)])), sourceRow(), { now: NOW, fetch: board([light(1, '2026-10-01T00:00:00Z')], [full(1, '2026-10-01T00:00:00Z')], calls), env: {} }, { markets });
+      expect(calls, markets[0]).toEqual([greenhouseReadUrl('globalco')]);
+    }
+    // The rule in one place: every country, and both markets written here.
+    expect(storesEveryPosting({ countries: [] }, ['intl', 'cn'])).toBe(true);
+    expect(storesEveryPosting({ countries: ['TW'] }, ['intl', 'cn'])).toBe(false);
+    expect(storesEveryPosting({ countries: [] }, ['intl'])).toBe(false);
+    expect(storesEveryPosting({ countries: [] }, ['cn'])).toBe(false);
+    // The connector by itself takes the first step only when it is told so.
+    calls = [];
+    await greenhouse.read(GH, { now: NOW, fetch: board([light(1, '2026-10-01T00:00:00Z')], [full(1, '2026-10-01T00:00:00Z')], calls), env: {} }, { known: new Map([['formosarobotics:1', SAVED]]) });
+    expect(calls).toEqual([greenhouseReadUrl('formosarobotics')]);
+  });
+
+  it('which postings need their text is decided by posting id and edit time, never by where the posting is', () => {
+    const known = new Map<string, Date | null>([['globalco:1', SAVED], ['globalco:2#cn', SAVED], ['globalco:3', SAVED], ['globalco:3#cn', new Date(SAVED.getTime() - 3 * 3_600_000)], ['globalco:4', null]]);
+    const needs = (id: number, updatedAt: string, extra: Record<string, unknown> = {}) => greenhouseNeedsText(light(id, updatedAt), { externalId: `globalco:${id}`, ...extra }, NOW, known);
+    // Held under its own id, or under its mainland copy's alone: nothing to read.
+    expect(needs(1, '2026-10-01T00:00:00Z')).toBe(false);
+    expect(needs(2, '2026-10-01T00:00:00Z')).toBe(false);
+    // Held under neither: new.
+    expect(needs(5, '2026-10-01T00:00:00Z')).toBe(true);
+    // Two copies: the older one decides whether an edit is later than our copy.
+    expect(needs(3, new Date(SAVED.getTime() - 2 * 3_600_000).toISOString())).toBe(true);
+    expect(needs(3, new Date(SAVED.getTime() - 4 * 3_600_000).toISOString())).toBe(false);
+    // A row we cannot date, or an edit time we cannot read: read it.
+    expect(needs(4, '2026-10-01T00:00:00Z')).toBe(true);
+    expect(needs(1, '')).toBe(true);
+    // A stated deadline that has passed: not kept open, so never "new"; one still ahead is.
+    expect(needs(5, '2026-10-01T00:00:00Z', { expiresAt: '2026-10-05T00:00:00Z' })).toBe(false);
+    expect(needs(5, '2026-10-01T00:00:00Z', { expiresAt: '2026-10-25T00:00:00Z' })).toBe(true);
+  });
+
+  it('a posting whose stated deadline has passed is not kept open, so it does not count as new on every read', async () => {
+    const calls: string[] = [];
+    const jobs = [light(1, '2026-10-01T00:00:00Z'), light(2, '2026-10-01T00:00:00Z', 'Singapore', { application_deadline: '2026-10-05T00:00:00Z' })];
+    await readBoard(asDb(boardDb([openRow('greenhouse', 'globalco:1', SAVED)])), sourceRow(), { now: NOW, fetch: board(jobs, [], calls), env: {} }, BOTH);
+    expect(calls).toEqual([LIST]);
+    // A deadline still ahead is an open posting we do not hold.
+    const again: string[] = [];
+    const ahead = [light(1, '2026-10-01T00:00:00Z'), light(2, '2026-10-01T00:00:00Z', 'Singapore', { application_deadline: '2026-10-25T00:00:00Z' })];
+    await readBoard(asDb(boardDb([openRow('greenhouse', 'globalco:1', SAVED)])), sourceRow(), { now: NOW, fetch: board(ahead, ahead.map((j) => ({ ...j, content: 'x' })), again), env: {} }, BOTH);
+    expect(again).toEqual([LIST, greenhouseReadUrl('globalco')]);
+  });
+
+  it('a board we hold nothing of, a source still without its name, and a check by hand are read as before', async () => {
+    // Nothing stored: the texts at once.
+    let calls: string[] = [];
+    await readBoard(asDb(boardDb()), sourceRow(), { now: NOW, fetch: board([], [full(1, '2026-10-01T00:00:00Z')], calls), env: {} }, BOTH);
+    expect(calls).toEqual([greenhouseReadUrl('globalco')]);
+    // Stored rows that were never stamped (written before this rule): the texts at once.
+    calls = [];
+    await readBoard(asDb(boardDb([openRow('greenhouse', 'globalco:1')])), sourceRow(), { now: NOW, fetch: board([], [full(1, '2026-10-01T00:00:00Z')], calls), env: {} }, BOTH);
+    expect(calls).toEqual([greenhouseReadUrl('globalco')]);
+    // A source registered without its company name: the whole read, and the board's own name.
+    calls = [];
+    const nameless: FetchLike = async (url) => {
+      calls.push(url);
+      const body = url.endsWith('/boards/globalco') ? { name: 'Global Co Ltd' } : { jobs: [full(1, '2026-10-01T00:00:00Z')] };
+      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+    };
+    await readBoard(asDb(boardDb([openRow('greenhouse', 'globalco:1', SAVED)])), sourceRow({ companyName: 'globalco' }), { now: NOW, fetch: nameless, env: {} }, BOTH);
+    expect(calls).toEqual([greenhouseReadUrl('globalco'), 'https://boards-api.greenhouse.io/v1/boards/globalco']);
+    // A check by hand reads the listing only, once, and is never the "nothing to read" answer.
+    calls = [];
+    const check = await greenhouse.read(GH, { now: NOW, fetch: board([light(1, '2026-10-01T00:00:00Z')], [], calls), env: {} }, { listOnly: true, storesEveryPosting: true, known: new Map([['formosarobotics:1', SAVED]]) });
+    expect(calls).toEqual([greenhouseListUrl('formosarobotics')]);
+    expect(check.unchangedById).toBeUndefined();
+  });
+
+  it('once a week, at an hour of its own for every board, the first read is a whole read whatever the listing says', async () => {
+    const week = GREENHOUSE_FULL_READ_EVERY_MS;
+    expect(week).toBe(7 * 24 * 3_600_000);
+    const known = (at: Date) => new Map<string, Date | null>([['globalco:1', at], ['globalco:2', null]]);
+    // Read a moment ago: not due. Read more than a week ago: due.
+    expect(greenhouseFullReadDue('globalco', NOW, known(new Date(NOW.getTime() - 60_000)))).toBe(greenhouseFullReadDue('globalco', NOW, known(new Date(NOW.getTime() - 60_000))));
+    expect(greenhouseFullReadDue('globalco', NOW, known(new Date(NOW.getTime() - week - 1)))).toBe(true);
+    expect(greenhouseFullReadDue('globalco', NOW, new Map([['globalco:1', null]]))).toBe(true);
+    // Over any eight days of reads every two hours, exactly one or two reads are whole reads, never none.
+    for (const token of ['globalco', 'stripe', 'a', 'formosarobotics']) {
+      let last = new Date(NOW.getTime() - 2 * 3_600_000);
+      let whole = 0;
+      for (let t = NOW.getTime(); t < NOW.getTime() + 8 * 24 * 3_600_000; t += 2 * 3_600_000) {
+        if (greenhouseFullReadDue(token, new Date(t), known(last))) whole += 1;
+        last = new Date(t);
+      }
+      expect(whole, token).toBeGreaterThanOrEqual(1);
+      expect(whole, token).toBeLessThanOrEqual(2);
+    }
+    // The boards do not all fall on the same hour.
+    const dueAt = (token: string) => {
+      let last = new Date(NOW.getTime() - 3_600_000);
+      for (let t = NOW.getTime(); ; t += 3_600_000) {
+        if (greenhouseFullReadDue(token, new Date(t), known(last))) return t;
+        last = new Date(t);
+      }
+    };
+    expect(new Set(['globalco', 'stripe', 'coupang', 'databricks', 'airtable', 'aptoslabs'].map(dueAt)).size).toBeGreaterThan(1);
+    // On that read the texts are asked for although the listing shows no change.
+    const calls: string[] = [];
+    const longAgo = new Date(NOW.getTime() - week - 3_600_000);
+    await readBoard(asDb(boardDb([openRow('greenhouse', 'globalco:1', longAgo)])), sourceRow(), { now: NOW, fetch: board([light(1, '2026-01-01T00:00:00Z')], [full(1, '2026-01-01T00:00:00Z')], calls), env: {} }, BOTH);
+    expect(calls).toEqual([greenhouseReadUrl('globalco')]);
+  });
+});
+
+// ── 北森 ───────────────────────────────────────────────────────────────────
+
+describe('MKT-5B item 5: 北森 tenant boards, off until counsel signs off', () => {
+  const pages = (fixture('beisen.json') as { pages: Array<{ Count: number; Data: unknown[] }> }).pages;
+  const BS: BoardSource = { ats: 'beisen', boardToken: 'shili', companyName: '示例科技', countryCode: null };
+  const LIST = 'https://shili.zhiye.com/api/Jobad/GetJobAdPageList';
+  /** A SYNTHETIC tenant board of `total` postings in mainland cities; answers by the page the request body asks for. */
+  const tenant = (total: number, seen: Array<{ url: string; init: Parameters<FetchLike>[1] }> = [], city = '上海'): FetchLike => async (url, init) => {
+    seen.push({ url, init });
+    const body = JSON.parse(init.body ?? '{}') as { PageIndex: number; PageSize: number };
+    const start = body.PageIndex * body.PageSize;
+    const Data = Array.from({ length: Math.max(0, Math.min(body.PageSize, total - start)) }, (_, i) => ({ Id: `00000000-0000-4000-8000-${String(start + i).padStart(12, '0')}`, JobAdName: `合成岗位 ${start + i}`, LocNames: [city], Duty: '<p>合成示例。</p>', Require: '', Salary: '面议', PostDateInt: 0, PostDate: '2026-10-01T09:00:00' }));
+    return { ok: true, status: 200, text: async () => JSON.stringify({ Count: total, Data }) };
+  };
+  const noStrip: ContactStrip = (text) => ({ text, removed: 0 });
+
+  it('off by default: with an empty environment no zhiye.com request can be built, by the host guard or by the registry', async () => {
+    const never: FetchLike = async () => {
+      throw new Error('must not be called');
+    };
+    expect(() => assertApiHost(LIST, {})).toThrow('host_not_allowed:shili.zhiye.com');
+    expect(() => connectorFor('beisen', {})).toThrow('connector_disabled');
+    // Even a connector built by hand is stopped by the host guard while the flag is off.
+    await expect(createBeisenConnector({ maxPostings: 200, strip: noStrip }).read(BS, { now: NOW, fetch: never, env: {} })).rejects.toThrow('host_not_allowed:shili.zhiye.com');
+    // readBoard reports the source as passed over, with no request and nothing closed.
+    const calls: string[] = [];
+    const res = await readBoard(asDb(boardDb([openRow('beisen', 'shili:x')])), sourceRow({ ats: 'beisen', boardToken: 'shili', companyName: '示例科技' }), { now: NOW, fetch: fakeFetch({}, calls), env: {} }, BOTH);
+    expect(res).toMatchObject({ read: null, closedExternalIds: [], calls: 0, error: 'connector_disabled' });
+    expect(calls).toEqual([]);
+    expect(beisenMaxPostingsPerRun({})).toBe(200);
+    expect(beisenMaxPostingsPerRun({ CN_ATS_BEISEN_MAX_POSTINGS_PER_RUN: '50' })).toBe(50);
+    expect(beisenMaxPostingsPerRun({ CN_ATS_BEISEN_MAX_POSTINGS_PER_RUN: '0' })).toBe(1);
+    expect(beisenMaxPostingsPerRun({ CN_ATS_BEISEN_MAX_POSTINGS_PER_RUN: '999999' })).toBe(2000);
+    expect(beisenMaxPostingsPerRun({ CN_ATS_BEISEN_MAX_POSTINGS_PER_RUN: 'many' })).toBe(200);
+  });
+
+  it('with the flag on it POSTs the listing as the mainland brand, with the documented body and nothing that identifies a browser session', async () => {
+    const seen: Array<{ url: string; init: Parameters<FetchLike>[1] }> = [];
+    const read = await connectorFor('beisen', BEISEN_ON).read(BS, { now: NOW, fetch: answering(JSON.stringify(pages[0]), seen), env: BEISEN_ON, market: 'cn' });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.url).toBe(LIST);
+    expect(seen[0]!.init.method).toBe('POST');
+    expect(JSON.parse(seen[0]!.init.body!)).toEqual({ PageIndex: 0, PageSize: 50, Category: ['1'], KeyWords: '', SpecialType: 0, PortalId: '', DisplayFields: ['Category', 'Kind', 'LocId', 'PostDate', 'Salary'] });
+    expect(beisenRequestBody(BEISEN_PASSES[0]!, 3)).toMatchObject({ PageIndex: 3, PageSize: BEISEN_PAGE_SIZE });
+    // Who is asking: GoApply's User-Agent. No cookie, token, signature or Referer.
+    expect(seen[0]!.init.headers).toEqual({ Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': sourceUserAgent('cn', BEISEN_ON) });
+    expect(seen[0]!.init.headers!['User-Agent']).toMatch(/^GoApplyJobs\//);
+    // The QR-code field is not even asked for.
+    expect(BEISEN_DISPLAY_FIELDS).not.toContain('WorkWeChatQrCode');
+    expect(read).toMatchObject({ complete: true, calls: 1, boardCompanyName: null, droppedPostings: 1 });
+    expect(read.listedIds).toEqual(['shili:0a1b2c3d-1111-4a4a-9b9b-000000000001', 'shili:0a1b2c3d-1111-4a4a-9b9b-000000000002', 'shili:0a1b2c3d-1111-4a4a-9b9b-000000000003']);
+  });
+
+  it('every row is market cn, opens the posting\'s page on the employer\'s board, and names the employer and 北森 as its source', async () => {
+    const read = await connectorFor('beisen', BEISEN_ON).read(BS, { now: NOW, fetch: answering(JSON.stringify(pages[0])), env: BEISEN_ON, market: 'cn' });
+    const jobs = read.inputs.map(normalizeAny);
+    expect(jobs).toHaveLength(3);
+    for (const job of jobs) {
+      expect(job).toMatchObject({ market: 'cn', provider: 'ats_public', sourceBoard: 'beisen', sourceName: '示例科技 · 北森', originalSourceName: null, locationCountry: 'CN', atsType: 'beisen' });
+      expect(job.applyUrl).toBe(`https://shili.zhiye.com/social/detail?jobAdId=${job.externalId.slice('shili:'.length)}`);
+    }
+    // The posting located outside mainland China is dropped and counted, never written to either market.
+    expect(read.droppedPostings).toBe(1);
+    expect(JSON.stringify(read.inputs)).not.toContain('新加坡');
+    const routed = routeBoardRead(read, []);
+    expect(routed.byMarket.intl).toEqual([]);
+    expect(routed.byMarket.cn).toHaveLength(3);
+  });
+
+  it('where a posting is: a mainland place the table does not know stays, a place elsewhere is taken out, and a posting with no place left in the mainland is dropped (review findings)', async () => {
+    const places = (fixture('beisen.json') as { places: { Count: number; Data: unknown[] } }).places;
+    const read = await connectorFor('beisen', BEISEN_ON).read(BS, { now: NOW, fetch: answering(JSON.stringify(places)), env: BEISEN_ON, market: 'cn' });
+    // Six of the eight are in mainland China. "香港, 台北" and "海外" are not: dropped and counted.
+    expect(read).toMatchObject({ complete: true, droppedPostings: 2, listedCount: 6 });
+    expect(Object.fromEntries(read.inputs.map((i) => [i.title, i.locations]))).toEqual({
+      // A city the place table does not know, and a posting for the whole country: on a mainland employer's board they are in China.
+      '合成地点示例 1': ['昆山'],
+      '合成地点示例 2': ['全国'],
+      // Places on both sides, in either order: the mainland ones only.
+      '合成地点示例 3': ['上海'],
+      '合成地点示例 4': ['深圳'],
+      // No place at all.
+      '合成地点示例 7': [],
+      '合成地点示例 8': ['义乌', '张家港'],
+    });
+    expect(read.inputs.find((i) => i.title === '合成地点示例 4')!.location).toBe('深圳');
+    // The country is stated for every posting handed on, so the normalizer reads it in China.
+    for (const input of read.inputs) expect(input).toMatchObject({ locationCountry: 'CN', locationCountryEstimated: false });
+    for (const job of read.inputs.map(normalizeAny)) expect(job).toMatchObject({ market: 'cn', locationCountry: 'CN', sourceBoard: 'beisen' });
+    // No place outside the mainland is in what is handed on.
+    const everything = JSON.stringify([read.inputs, read.listing]);
+    for (const elsewhere of ['香港', '新加坡', '台北', '海外']) expect(everything, elsewhere).not.toContain(elsewhere);
+    // Routed, every posting is ONE row of the mainland market under its plain id: no copy for the international market.
+    const routed = routeBoardRead(read, []);
+    expect(routed.byMarket.intl).toEqual([]);
+    expect(routed.byMarket.cn.map((i) => i.externalId)).toEqual(read.listedIds);
+    expect(routed.listedIds.some((id) => id.endsWith(CN_COPY_SUFFIX))).toBe(false);
+    // readBoard hands on the same: nothing for market intl.
+    const res = await readBoard(asDb(boardDb()), sourceRow({ ats: 'beisen', boardToken: 'shili', companyName: '示例科技' }), { now: NOW, fetch: answering(JSON.stringify(places)), env: BEISEN_ON, market: 'cn' }, BOTH);
+    expect(res.routed!.byMarket.intl).toEqual([]);
+    expect(res.routed!.byMarket.cn).toHaveLength(6);
+  });
+
+  it('"outside mainland China" needs positive evidence: the name resolves to another country, or says abroad; an unknown name is not evidence', async () => {
+    for (const name of ['香港', '澳门', '台北', '新竹', '高雄', '台湾', '新加坡', '东京', '美国', '德国', '吉隆坡', 'Singapore', 'Hong Kong', '海外', '境外', '国外']) expect(isOutsideMainland(name), name).toBe(true);
+    // Cities the place table knows, and mainland cities it does not (the review found 41 of 92 such names dropped).
+    const mainland = ['上海', '北京市', '深圳市南山区', '广东省', '昆山', '中山', '金华', '台州', '潍坊', '义乌', '芜湖', '绵阳', '镇江', '盐城', '威海', '桂林', '张家港', '常熟', '江阴', '慈溪', '晋江', '湖州', '嘉兴', '绍兴', '泰州', '扬州', '徐州', '淄博', '烟台', '临沂', '洛阳', '襄阳', '宜昌', '株洲', '赣州', '柳州', '遵义', '咸阳', '包头', '鄂尔多斯'];
+    for (const name of [...mainland, '全国', '不限', '远程']) expect(isOutsideMainland(name), name).toBe(false);
+    // A tenant board that lists one posting in each: every one is handed on, none is counted as outside.
+    const fetch: FetchLike = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ Count: mainland.length, Data: mainland.map((city, i) => ({ Id: `city-${i}`, JobAdName: '合成岗位', LocNames: [city] })) }) });
+    const read = await createBeisenConnector({ maxPostings: 200, strip: noStrip }).read(BS, { now: NOW, fetch, env: BEISEN_ON, market: 'cn' });
+    expect(read).toMatchObject({ complete: true, droppedPostings: 0 });
+    expect(read.inputs).toHaveLength(mainland.length);
+    for (const job of read.inputs.map(normalizeAny)) expect(job, String(job.location)).toMatchObject({ market: 'cn', locationCountry: 'CN' });
+  });
+
+  it('a tenant board never hands on a copy for the international market, whatever the routing says (the second guard)', () => {
+    // What the connector never produces: a posting that still names a place on each side.
+    const twoSided = posting({ externalId: 'shili:1', sourceBoard: 'beisen', location: '上海', locations: ['上海', '香港'], locationCountry: 'CN', locationCountryEstimated: false });
+    const routed = routeBoardRead({ listing: [twoSided], inputs: [twoSided] }, []);
+    expect(routed.byMarket.intl.map((i) => i.externalId)).toEqual(['shili:1']);
+    const read = { droppedPostings: 1 };
+    const kept = withoutInternationalCopies(read, routed);
+    expect(kept.byMarket.intl).toEqual([]);
+    expect(kept.byMarket.cn.map((i) => i.externalId)).toEqual(['shili:1#cn']);
+    expect(read.droppedPostings).toBe(2);
+    // Nothing to take out: the routing as it is, nothing counted.
+    const clean = routeBoardRead({ listing: [], inputs: [] }, []);
+    expect(withoutInternationalCopies(read, clean)).toBe(clean);
+    expect(read.droppedPostings).toBe(2);
+    // The rules of a mainland tenant board all ask the same list, and such a board feeds the mainland market only.
+    expect(MAINLAND_ONLY_ATS).toEqual(['beisen']);
+    expect([isMainlandOnlyAts('beisen'), isMainlandOnlyAts('greenhouse'), isMainlandOnlyAts(null)]).toEqual([true, false, false]);
+    expect([sourceFeedsMarket({ ats: 'beisen', countries: [] }, 'cn'), sourceFeedsMarket({ ats: 'beisen', countries: [] }, 'intl'), sourceFeedsMarket({ ats: 'beisen', countries: ['SG'] }, 'intl')]).toEqual([true, false, false]);
+    expect(sourceFeedsMarket({ ats: 'greenhouse', countries: [] }, 'intl')).toBe(true);
+  });
+
+  it('dates and pay as posted: a zone-less time is Beijing time, year 0001 is no date, a bare pair is words and never an amount', async () => {
+    const read = await connectorFor('beisen', BEISEN_ON).read(BS, { now: NOW, fetch: answering(JSON.stringify(pages[0])), env: BEISEN_ON, market: 'cn' });
+    const [first, second, third] = read.inputs.map(normalizeAny);
+    // "2026-10-08T09:30:00" on the board is 01:30 UTC.
+    expect(first!.postedAt!.toISOString()).toBe('2026-10-08T01:30:00.000Z');
+    expect(first).toMatchObject({ postedAtEstimated: false, salaryMin: 25000, salaryMax: 50000, salaryCurrency: 'CNY', salaryPeriod: 'month', salaryText: '25K-50K 元/月' });
+    // The epoch field is an instant.
+    expect(second!.postedAt!.toISOString()).toBe('2026-10-08T05:20:00.000Z');
+    // "35-57": kept verbatim, not filterable.
+    expect(second).toMatchObject({ salaryText: '35-57', salaryDisclosed: false, salaryMin: null, salaryMax: null });
+    // Year 0001: no date. The row shows "last verified", never "posted".
+    expect(read.inputs[2]).toMatchObject({ postedAt: null, postedAtEstimated: true });
+    expect(third).toMatchObject({ postedAtEstimated: true, salaryText: '面议', salaryDisclosed: false });
+  });
+
+  it('the QR field, phone numbers and WeChat ids appear nowhere in the produced inputs: not as a key, not in a text', async () => {
+    const read = await connectorFor('beisen', BEISEN_ON).read(BS, { now: NOW, fetch: answering(JSON.stringify(pages[0])), env: BEISEN_ON, market: 'cn' });
+    const allowed = new Set(['externalId', 'sourceBoard', 'company', 'sourcePublisher', 'applyIsDirect', 'fetchedAt', 'title', 'applyUrl', 'sourceUrl', 'location', 'locations', 'locationCountry', 'locationCountryEstimated', 'salaryText', 'descriptionHtml', 'postedAt', 'postedAtEstimated']);
+    for (const input of [...read.inputs, ...read.listing]) for (const key of Object.keys(input)) expect(allowed.has(key), key).toBe(true);
+    const everything = JSON.stringify([read.inputs, read.listing]);
+    // The fixture carries each of these: in the QR field, in two contact fields and typed into the posting text.
+    const raw = JSON.stringify(pages[0]);
+    for (const secret of ['synthetic.example.invalid/qr', 'WorkWeChatQrCode', '13800138000', '13900139000', 'synthetic_wx_01', 'synthetic_wx_field', 'ContactPhone', 'ContactWeChat']) {
+      expect(raw, secret).toContain(secret);
+      expect(everything, secret).not.toContain(secret);
+    }
+    // The rest of the text is still there, and so is what the normalizer stores from it.
+    expect(read.inputs[0]!.descriptionHtml).toContain('负责后端服务的设计与开发');
+    const stored = JSON.stringify(read.inputs.map(normalizeAny));
+    for (const secret of ['13800138000', '13900139000', 'synthetic_wx', 'qr/0001']) expect(stored).not.toContain(secret);
+    // Only the keys the mapper names are ever read from a posting.
+    expect([...BEISEN_READ_KEYS].sort()).toEqual(['Duty', 'Id', 'JobAdName', 'LocNames', 'PostDate', 'PostDateInt', 'Require', 'Salary']);
+    // The mapper's source names no other key of a posting.
+    const mapper = readFileSync(join(HERE, 'connectors', 'beisen.ts'), 'utf8');
+    const named = [...mapper.slice(mapper.indexOf('export function mapBeisenPosting'), mapper.indexOf('interface PassRead')).matchAll(/\bj\.([A-Za-z]+)\b/g)].map((m) => m[1]!);
+    expect([...new Set([...named, 'PostDateInt', 'PostDate'])].sort()).toEqual([...BEISEN_READ_KEYS].sort());
+    expect(mapper).not.toMatch(/j\.WorkWeChatQrCode|j\.Contact|j\.Phone|j\.Mobile|j\.Email/);
+  });
+
+  it('a listing longer than the cap is read up to the cap, marked incomplete, and closes nothing', async () => {
+    const seen: Array<{ url: string; init: Parameters<FetchLike>[1] }> = [];
+    const stored = boardDb([openRow('beisen', 'shili:left-the-board')]);
+    const env = { ...BEISEN_ON, CN_ATS_BEISEN_MAX_POSTINGS_PER_RUN: '120' };
+    const res = await readBoard(asDb(stored), sourceRow({ ats: 'beisen', boardToken: 'shili', companyName: '示例科技' }), { now: NOW, fetch: tenant(500, seen), env, market: 'cn' }, BOTH);
+    // 120 postings: three pages of 50, asked one after the other.
+    expect(seen.map((r) => (JSON.parse(r.init.body!) as { PageIndex: number }).PageIndex)).toEqual([0, 1, 2]);
+    expect(res.read).toMatchObject({ complete: false, calls: 3, listedCount: 500 });
+    expect(res.read!.inputs).toHaveLength(120);
+    expect(res.closedExternalIds).toEqual([]);
+    // The default cap is 200: four pages.
+    const four: Array<{ url: string; init: Parameters<FetchLike>[1] }> = [];
+    const capped = await connectorFor('beisen', BEISEN_ON).read(BS, { now: NOW, fetch: tenant(1000, four), env: BEISEN_ON, market: 'cn' });
+    expect(four).toHaveLength(4);
+    expect(capped).toMatchObject({ complete: false, listedCount: 1000 });
+    expect(capped.inputs).toHaveLength(200);
+    // A board under the cap is complete: what left it is closed.
+    const small = await readBoard(asDb(stored), sourceRow({ ats: 'beisen', boardToken: 'shili', companyName: '示例科技' }), { now: NOW, fetch: tenant(60), env: BEISEN_ON, market: 'cn' }, BOTH);
+    expect(small.read).toMatchObject({ complete: true, calls: 2 });
+    expect(small.closedExternalIds).toEqual(['shili:left-the-board']);
+    // Exactly the cap, and the board says that is all of it: complete.
+    expect(await connectorFor('beisen', BEISEN_ON).read(BS, { now: NOW, fetch: tenant(200), env: BEISEN_ON, market: 'cn' })).toMatchObject({ complete: true, calls: 4 });
+  });
+
+  it('a listing is complete only when it holds as many DISTINCT postings as the board states: a portal that repeats rows closes nothing (review finding)', async () => {
+    const row = (n: number) => ({ Id: `id-${n}`, JobAdName: '合成岗位', LocNames: ['上海'] });
+    // A portal that counts its pages from 1: PageIndex 0 and 1 both answer the first 50 of its 120 postings.
+    const asked: number[] = [];
+    const repeating: FetchLike = async (_url, init) => {
+      const body = JSON.parse(init.body!) as { PageIndex: number };
+      asked.push(body.PageIndex);
+      const page = Math.max(0, body.PageIndex - 1);
+      const Data = Array.from({ length: Math.max(0, Math.min(50, 120 - page * 50)) }, (_, i) => row(page * 50 + i));
+      return { ok: true, status: 200, text: async () => JSON.stringify({ Count: 120, Data }) };
+    };
+    const stored = boardDb([openRow('beisen', 'shili:id-110'), openRow('beisen', 'shili:left-the-board')]);
+    const res = await readBoard(asDb(stored), sourceRow({ ats: 'beisen', boardToken: 'shili', companyName: '示例科技' }), { now: NOW, fetch: repeating, env: BEISEN_ON, market: 'cn' }, BOTH);
+    // By the page arithmetic the listing ended (3 pages, 150 rows of 120), but only 100 distinct postings were read.
+    expect(asked).toEqual([0, 1, 2]);
+    expect(res.read).toMatchObject({ complete: false, calls: 3, listedCount: 120 });
+    expect(res.read!.inputs).toHaveLength(100);
+    // `id-110` is still on the board and was not read: nothing is closed.
+    expect(res.closedExternalIds).toEqual([]);
+    const once = (body: unknown): FetchLike => async () => ({ ok: true, status: 200, text: async () => JSON.stringify(body) });
+    const complete = async (body: unknown) => (await createBeisenConnector({ maxPostings: 200, strip: noStrip }).read(BS, { now: NOW, fetch: once(body), env: BEISEN_ON, market: 'cn' })).complete;
+    // The board states more, or fewer, postings than it sent: not complete.
+    expect(await complete({ Count: 5, Data: [row(1), row(2), row(3)] })).toBe(false);
+    expect(await complete({ Count: 2, Data: [row(1), row(2), row(3)] })).toBe(false);
+    // The same posting twice: not complete, with or without a stated total.
+    expect(await complete({ Count: 3, Data: [row(1), row(2), row(2)] })).toBe(false);
+    expect(await complete({ Data: [row(1), row(2), row(2)] })).toBe(false);
+    // As many distinct postings as stated (a row without an id counts for itself); or no total and no row twice.
+    expect(await complete({ Count: 3, Data: [row(1), row(2), { JobAdName: '合成：缺少 Id' }] })).toBe(true);
+    expect(await complete({ Data: [row(1), row(2)] })).toBe(true);
+    expect(await complete({ Count: 0, Data: [] })).toBe(true);
+  });
+
+  it('an answer that is not the listing (a sign-in prompt, a captcha page, a redirect) is a hard failure and is never worked around', async () => {
+    const refused = (fixture('beisen.json') as { refused: unknown }).refused;
+    const cases: Array<[FetchLike, string]> = [
+      [answering(JSON.stringify(refused)), 'unexpected_shape'],
+      [answering('<html><body>请完成验证</body></html>'), 'not_json'],
+      [async () => ({ ok: false, status: 302, text: async () => '' }), 'redirect'],
+      [async () => ({ ok: false, status: 401, text: async () => '' }), 'http_401'],
+      [async () => ({ ok: false, status: 403, text: async () => '' }), 'http_403'],
+    ];
+    for (const [fetch, error] of cases) {
+      let requests = 0;
+      const counting: FetchLike = (url, init) => {
+        requests += 1;
+        return fetch(url, init);
+      };
+      await expect(connectorFor('beisen', BEISEN_ON).read(BS, { now: NOW, fetch: counting, env: BEISEN_ON, market: 'cn' }), error).rejects.toThrow(error);
+      expect(requests, error).toBe(1);
+      expect(classifyBoardError(error), error).toBe('hard');
+    }
+  });
+
+  it('a tenant on CN_ATS_TENANT_DENYLIST is never asked; a check by hand asks for one page only', async () => {
+    const env = { ...BEISEN_ON, CN_ATS_TENANT_DENYLIST: ' Shili , other-co,not a label,' };
+    expect(tenantDenylist(env)).toEqual(['other-co', 'shili']);
+    expect(tenantDenylist({})).toEqual([]);
+    expect(tenantDenied({ ats: 'beisen', boardToken: 'shili' }, env)).toBe(true);
+    expect(tenantDenied({ ats: 'beisen', boardToken: 'free' }, env)).toBe(false);
+    // The list names tenant boards: a Greenhouse board that happens to share the id is not on it.
+    expect(tenantDenied({ ats: 'greenhouse', boardToken: 'shili' }, env)).toBe(false);
+    const never: FetchLike = async () => {
+      throw new Error('must not be called');
+    };
+    await expect(connectorFor('beisen', env).read(BS, { now: NOW, fetch: never, env, market: 'cn' })).rejects.toThrow('tenant_denied');
+    // An id that cannot be a host label makes no request either.
+    await expect(connectorFor('beisen', BEISEN_ON).read({ ...BS, boardToken: 'Shili' }, { now: NOW, fetch: never, env: BEISEN_ON })).rejects.toThrow('invalid_board_id');
+    const seen: Array<{ url: string; init: Parameters<FetchLike>[1] }> = [];
+    const check = await connectorFor('beisen', BEISEN_ON).read(BS, { now: NOW, fetch: tenant(500, seen), env: BEISEN_ON, market: 'cn' }, { listOnly: true, firstPage: true });
+    expect(seen).toHaveLength(1);
+    expect(check).toMatchObject({ inputs: [], listedCount: 500, complete: false });
+  });
+
+  it('the 30-minute floor: no stamp of a tenant board sets its next read earlier; a source just switched off keeps its archive time', () => {
+    expect(BEISEN_TENANT_FLOOR_MS).toBe(30 * 60_000);
+    const soon = { lastSyncedAt: NOW, lastError: null, failCount: 0, nextSyncAt: new Date(NOW.getTime()) };
+    expect(withTenantFloor({ ats: 'beisen' }, soon, NOW).nextSyncAt).toEqual(new Date(NOW.getTime() + 30 * 60_000));
+    // Other systems are not held back (a SmartRecruiters backlog continues at the next run).
+    expect(withTenantFloor({ ats: 'smartrecruiters' }, soon, NOW)).toBe(soon);
+    const later = { ...soon, nextSyncAt: new Date(NOW.getTime() + 2 * 3_600_000) };
+    expect(withTenantFloor({ ats: 'beisen' }, later, NOW)).toBe(later);
+    const off = failureStamp({ failCount: 2, lastChangeAt: null, lastSyncedAt: null, lastError: null }, { now: NOW, error: 'board_not_found' });
+    expect(withTenantFloor({ ats: 'beisen' }, off, NOW)).toBe(off);
+    expect(off.enabled).toBe(false);
+  });
+
+  it('the 30-minute floor: when a tenant was last asked, and when one that is switched on may first be read', () => {
+    const min = (n: number) => new Date(NOW.getTime() + n * 60_000);
+    // The time of the last request is `lastSyncedAt` (written before every request to a tenant).
+    expect(tenantAskedRecently({ ats: 'beisen', lastSyncedAt: min(-29), nextSyncAt: null }, NOW)).toBe(true);
+    expect(tenantAskedRecently({ ats: 'beisen', lastSyncedAt: min(-31), nextSyncAt: null }, NOW)).toBe(false);
+    expect(tenantAskedRecently({ ats: 'beisen', lastSyncedAt: min(-31), nextSyncAt: min(10) }, NOW)).toBe(false);
+    // A tenant with no read time: never asked, or asked only as a candidate, which then carries the time of its next possible request.
+    expect(tenantAskedRecently({ ats: 'beisen', lastSyncedAt: null, nextSyncAt: null }, NOW)).toBe(false);
+    expect(tenantAskedRecently({ ats: 'beisen', lastSyncedAt: null, nextSyncAt: min(20) }, NOW)).toBe(true);
+    expect(tenantAskedRecently({ ats: 'beisen', lastSyncedAt: null, nextSyncAt: min(-1) }, NOW)).toBe(false);
+    // Other systems have no floor.
+    expect(tenantAskedRecently({ ats: 'greenhouse', lastSyncedAt: min(-1), nextSyncAt: min(20) }, NOW)).toBe(false);
+    // Switching a source on: due at the next board sync, except a tenant that still carries such a time.
+    expect(firstReadAfterSwitchOn({ ats: 'greenhouse', nextSyncAt: min(20), disabledAt: null }, NOW)).toBeNull();
+    expect(firstReadAfterSwitchOn({ ats: 'beisen', nextSyncAt: null, disabledAt: null }, NOW)).toBeNull();
+    expect(firstReadAfterSwitchOn({ ats: 'beisen', nextSyncAt: min(-5), disabledAt: null }, NOW)).toBeNull();
+    expect(firstReadAfterSwitchOn({ ats: 'beisen', nextSyncAt: min(20), disabledAt: null }, NOW)).toEqual(min(20));
+    // A candidate waiting for a retry hours away is not held longer than the floor.
+    expect(firstReadAfterSwitchOn({ ats: 'beisen', nextSyncAt: min(120), disabledAt: null }, NOW)).toEqual(min(30));
+    // A tenant that was switched on before (then off): its last request is in `lastSyncedAt`, and on a source
+    // switched off by failures `nextSyncAt` is the time its postings are archived, not a read.
+    expect(firstReadAfterSwitchOn({ ats: 'beisen', nextSyncAt: min(20), disabledAt: min(-60) }, NOW)).toBeNull();
+  });
+
+  it('a second pass (校招) is one more entry once its category is read from a real board: the pass decides the page path, and the cap spans both', async () => {
+    // SYNTHETIC category value and path: the real ones are not known and are not shipped.
+    const passes = [BEISEN_PASSES[0]!, { category: 'SYNTHETIC-CAMPUS', hire: 'campus' as const, pagePath: '/campus/detail' }];
+    const seen: Array<{ url: string; init: Parameters<FetchLike>[1] }> = [];
+    const fetch: FetchLike = async (url, init) => {
+      seen.push({ url, init });
+      const body = JSON.parse(init.body!) as { Category: string[]; PageIndex: number };
+      const campus = body.Category[0] === 'SYNTHETIC-CAMPUS';
+      const Data = body.PageIndex === 0 ? Array.from({ length: campus ? 3 : 2 }, (_, i) => ({ Id: `${campus ? 'c' : 's'}-${i}`, JobAdName: '合成岗位', LocNames: ['北京'], Duty: '<p>合成示例。</p>' })) : [];
+      return { ok: true, status: 200, text: async () => JSON.stringify({ Count: Data.length, Data }) };
+    };
+    const read = await createBeisenConnector({ maxPostings: 4, passes, strip: noStrip }).read(BS, { now: NOW, fetch, env: BEISEN_ON, market: 'cn' });
+    expect(seen.map((r) => (JSON.parse(r.init.body!) as { Category: string[] }).Category[0])).toEqual(['1', 'SYNTHETIC-CAMPUS']);
+    expect(read.inputs.map((i) => i.applyUrl)).toEqual([
+      'https://shili.zhiye.com/social/detail?jobAdId=s-0',
+      'https://shili.zhiye.com/social/detail?jobAdId=s-1',
+      'https://shili.zhiye.com/campus/detail?jobAdId=c-0',
+      'https://shili.zhiye.com/campus/detail?jobAdId=c-1',
+    ]);
+    // Four of five: the cap cut the second pass, so the listing is incomplete.
+    expect(read).toMatchObject({ complete: false, calls: 2 });
+    // The default connector reads the one category the source confirms.
+    expect(BEISEN_PASSES).toEqual([{ category: '1', hire: 'social', pagePath: '/social/detail' }]);
+  });
+});
+
+describe('MKT-5B: the answer limit and large boards', () => {
+  it('one answer may hold 48 MB; a board of 600 postings or more is "large" (ingest/boards.ts reads those one at a time)', () => {
+    expect(MAX_RESPONSE_BYTES).toBe(48 * 1024 * 1024);
+    expect(LARGE_BOARD_POSTINGS).toBe(600);
+    // At the densest answer measured (greenhouse/coupang, 2026-10-11: 11,048,005 characters for 673 postings) a board
+    // under the "large" line answers with under 10 MB, which six answers in flight were allowed before.
+    expect(Math.ceil(11_048_005 / 673) * (LARGE_BOARD_POSTINGS - 1)).toBeLessThan(10 * 1024 * 1024);
+    // The three boards that waited for the limit fit under it (31,155,380 and 14,219,219 characters measured).
+    expect(31_155_380).toBeLessThan(0.75 * MAX_RESPONSE_BYTES);
+    expect(14_219_219).toBeLessThan(0.75 * MAX_RESPONSE_BYTES);
   });
 });

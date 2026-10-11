@@ -21,12 +21,13 @@ import { marketOfPosting } from '../../normalize/index.js';
 import { sourceUserAgent } from '../index.js';
 import { connectorFor, hasPlaceholderName, smartRecruitersListUrl } from './connectors.js';
 import { BOARD_TOKEN_PATTERN, PUBLIC_ATS } from './contract.js';
-import { API_HOSTS, type FetchLike } from './http.js';
+import { API_HOSTS, assertApiHost, type FetchLike } from './http.js';
 import {
   CAREER_SEEDS_CONFIG_KEY,
   LEGACY_SEED_STATE_KEY,
   SEED_FILE_MARKET,
   SEED_FILE_NAMES,
+  SEEDABLE_ATS,
   careerSeedBoards,
   ensureSeedCareerSources,
   loadCareerSeeds,
@@ -387,7 +388,14 @@ describe('the seed files and the validation report', () => {
     for (const name of SEED_FILE_NAMES) expect(builder.renderSeedFile(plan.files[name]), `seeds.${name}.json`).toBe(fileText(name));
     expect(plan.keptAsTheyWere).toEqual([]);
     expect(plan.takenOut).toEqual([]);
-    expect(builder.SEEDABLE_ATS).toEqual([...PUBLIC_ATS]);
+    // The systems a seed may name are the ones the validator reads (MKT-5B: PUBLIC_ATS also holds the systems whose
+    // connectors came later; none of those is seedable until the validator reads its boards).
+    expect(builder.SEEDABLE_ATS).toEqual([...SEEDABLE_ATS]);
+    for (const ats of SEEDABLE_ATS) expect(PUBLIC_ATS as readonly string[]).toContain(ats);
+    for (const ats of ['workable', 'recruitee', 'personio', 'lever_eu', 'beisen']) {
+      expect(PUBLIC_ATS as readonly string[]).toContain(ats);
+      expect(SEEDABLE_ATS as readonly string[]).not.toContain(ats);
+    }
   });
 
   it('every seeded board is a board the report calls valid, under the name the report holds, and the report has no open candidate', () => {
@@ -461,20 +469,27 @@ describe('the seed files and the validation report', () => {
   });
 
   it('the builder\'s size caps leave a quarter of the connector\'s limit free at the density of the one answer each was calibrated on, and no seeded one-answer board is above its cap', () => {
-    // A Greenhouse or an Ashby board comes in ONE answer; one over MAX_RESPONSE_BYTES is refused, and three refusals switch the source off.
+    // A Greenhouse or an Ashby board comes in ONE answer; one over the connector's limit is refused, and three refusals switch the source off.
     // This holds the COUNT caps at the two calibration densities only. It is not a bound on a seeded board's size:
-    // `greenhouse/coupang` measured 11,048,005 characters for 673 postings (70% of the limit; M4 cross-review). The
-    // assertion on recorded answer sizes that replaces this one is MKT-5B's (requests/waveM4-carryover.md, MKT-5B.1).
+    // `greenhouse/coupang` measured 11,048,005 characters for 673 postings (M4 cross-review).
+    // MKT-5B raised the connector's limit (shared.ts MAX_RESPONSE_BYTES, 15 MB -> 48 MB), so that board now uses
+    // 22% of it and no seeded board is near it. The builder's caps still rest on the VALIDATOR's own limit, which is
+    // the smaller of the two until scripts/board-seeds is rebuilt (handoff MKT-5B, Requests): the caps below are
+    // therefore held against that one, and the assertion on recorded answer sizes is still to come with it.
     const { greenhouseMax, ashbyMax } = builder.DEFAULT_LIMITS;
-    expect(greenhouseMax * builder.MEASURED_CHARS_PER_POSTING.greenhouse).toBeLessThanOrEqual(0.75 * MAX_RESPONSE_BYTES);
-    expect(ashbyMax * builder.MEASURED_CHARS_PER_POSTING.ashby).toBeLessThanOrEqual(0.75 * MAX_RESPONSE_BYTES);
+    expect(validator.MAX_RESPONSE_CHARS).toBeLessThanOrEqual(MAX_RESPONSE_BYTES);
+    expect(greenhouseMax * builder.MEASURED_CHARS_PER_POSTING.greenhouse).toBeLessThanOrEqual(0.75 * validator.MAX_RESPONSE_CHARS);
+    expect(ashbyMax * builder.MEASURED_CHARS_PER_POSTING.ashby).toBeLessThanOrEqual(0.75 * validator.MAX_RESPONSE_CHARS);
+    // The densest seeded board measured has more than four times its size to grow before the connector refuses it.
+    expect(11_048_005 * 4).toBeLessThan(MAX_RESPONSE_BYTES);
     const listed = new Map<string, number>();
     for (const x of report().results) if (x.valid === true && !x.countries) listed.set(`${String(x.ats)}:${String(x.token)}`, Number(x.postings));
     for (const b of careerSeedBoards()) {
       if (b.ats === 'greenhouse') expect(listed.get(seedKey(b)), seedKey(b)).toBeLessThanOrEqual(greenhouseMax);
       if (b.ats === 'ashby') expect(listed.get(seedKey(b)), seedKey(b)).toBeLessThanOrEqual(ashbyMax);
     }
-    // The board that answered with 90% of the limit on the validation date is in no file until the limit is raised.
+    // The board that answered with 90% of the validator's limit on the validation date is in no file until the seed
+    // files are rebuilt with the raised limit (the connector itself reads it since MKT-5B).
     expect(careerSeedBoards().some((b) => seedKey(b) === 'ashby:openai')).toBe(false);
   });
 
@@ -493,15 +508,23 @@ describe('scripts/board-seeds/validate.mjs asks as the server does', () => {
     }
   });
 
-  it('asks only the hosts the connectors ask (plus the Lever EU host, which is reported and never seeded), with the same board-id pattern and size limit', () => {
-    expect([...validator.ALLOWED_HOSTS].sort()).toEqual([...API_HOSTS, 'api.eu.lever.co'].sort());
+  it('asks only hosts the connectors ask (the four seedable systems and the Lever EU host, which is reported and not seeded), with the same board-id pattern and never a larger answer than the server reads', () => {
+    // Every host the validator may ask is one the server's own guard allows (MKT-5B added the Lever EU and Workable hosts there).
+    expect([...validator.ALLOWED_HOSTS].sort()).toEqual(['api.ashbyhq.com', 'api.eu.lever.co', 'api.lever.co', 'api.smartrecruiters.com', 'boards-api.greenhouse.io']);
+    for (const host of validator.ALLOWED_HOSTS) {
+      expect(API_HOSTS as readonly string[]).toContain(host);
+      expect(() => assertApiHost(`https://${host}/x`, {})).not.toThrow();
+    }
     expect(validator.BOARD_TOKEN_PATTERN.source).toBe(BOARD_TOKEN_PATTERN.source);
-    expect(validator.MAX_RESPONSE_CHARS).toBe(MAX_RESPONSE_BYTES);
-    expect(validator.CANDIDATE_ATS.filter((a: string) => a !== 'lever_eu')).toEqual([...PUBLIC_ATS]);
+    // A board the validator accepts always fits the server: its limit is the smaller or the same (see the size test above).
+    expect(validator.MAX_RESPONSE_CHARS).toBeLessThanOrEqual(MAX_RESPONSE_BYTES);
+    // The systems a candidate may name: the seedable four, and Lever's EU instance for reporting.
+    expect(validator.CANDIDATE_ATS.filter((a: string) => a !== 'lever_eu')).toEqual([...SEEDABLE_ATS]);
+    for (const ats of validator.CANDIDATE_ATS) expect(PUBLIC_ATS as readonly string[]).toContain(ats);
   });
 
   it('reads the listing the connector reads for a list-only check: the same first request for each job-board system', async () => {
-    const first = async (ats: (typeof PUBLIC_ATS)[number], token: string, countries: string[] = []) => {
+    const first = async (ats: (typeof SEEDABLE_ATS)[number], token: string, countries: string[] = []) => {
       const urls: string[] = [];
       const fetch: FetchLike = async (url) => {
         urls.push(url);

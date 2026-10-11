@@ -40,8 +40,36 @@
 //                  list-only reads are counted in `failCount`: tried again in
 //                  1 h x the attempt, and the third one is final
 //                  (`candidateRetry`).
+//   passed over    the source's connector is switched off (ATS_WORKABLE_DISABLED,
+//                  CN_ATS_BEISEN_ENABLED not set) or its tenant is on the
+//                  denylist: no request is made and nothing is counted. The
+//                  reason is written as `lastError` and the source is looked
+//                  at again in 24 h (`skippedStamp`); its read time, its
+//                  failure count and its postings are left as they are (a
+//                  denylisted tenant's postings are archived by ingest/boards.ts,
+//                  at every board sync).
+//   tenant floor   a 北森 tenant is never asked twice within 30 minutes,
+//                  whatever the rules above say, and whatever happened to the
+//                  run that asked it. Three things hold it together:
+//                    - the time a tenant is asked is written to `lastSyncedAt`
+//                      BEFORE the request (ingest/boards.ts, service.ts), so a
+//                      run that is cut off, dies or runs out of time after
+//                      asking still leaves the time behind; the lease and
+//                      "Check now" refuse a tenant asked under 30 minutes ago
+//                      (`tenantAskedRecently`);
+//                    - no stamp sets a tenant's next read earlier than 30
+//                      minutes away (`withTenantFloor`), and the lease itself
+//                      holds a tenant for 30 minutes, not 15;
+//                    - a candidate has no read time (its `lastSyncedAt` stays
+//                      empty until a verdict), so before it is asked the time
+//                      of its next possible request is written to
+//                      `nextSyncAt`; switching it on by hand keeps that time
+//                      (`firstReadAfterSwitchOn`).
 
+import { CONNECTOR_DISABLED } from './contract.js';
 import {
+  BEISEN_TENANT_FLOOR_MS,
+  isMainlandOnlyAts,
   DISABLED_ARCHIVE_AFTER_MS,
   SYNC_COLD_INTERVAL_MS,
   SYNC_HOT_INTERVAL_MS,
@@ -57,7 +85,61 @@ import {
 export type BoardFailureClass = 'hard' | 'transient';
 
 /** Error codes that mean "this is not a readable board" (http.ts BoardFetchError codes, plus an unknown system). */
-export const HARD_BOARD_ERRORS = ['board_not_found', 'redirect', 'unexpected_shape', 'not_json', 'unsupported_job_board', 'response_too_large'] as const;
+export const HARD_BOARD_ERRORS = ['board_not_found', 'redirect', 'unexpected_shape', 'not_json', 'not_xml', 'invalid_board_id', 'unsupported_job_board', 'response_too_large'] as const;
+
+/** `lastError` of a source whose tenant is on CN_ATS_TENANT_DENYLIST (connectors/beisen.ts throws the same code). */
+export const TENANT_DENIED = 'tenant_denied';
+/** `error` of "Check now" on a 北森 tenant that was read less than 30 minutes ago: no request is made. */
+export const TENANT_FLOOR = 'tenant_floor';
+/** Reasons a source is passed over without a request (see the header). */
+export const SKIPPED_BOARD_ERRORS: readonly string[] = [CONNECTOR_DISABLED, TENANT_DENIED];
+
+export function isSkippedBoardError(error: string | null | undefined): boolean {
+  return !!error && SKIPPED_BOARD_ERRORS.includes(error);
+}
+
+/** The stamp of a source that was passed over: why, and when it is looked at again. Not a failure and not a read. */
+export function skippedStamp(now: Date, error: string): { lastError: string; nextSyncAt: Date } {
+  return { lastError: error.slice(0, 300), nextSyncAt: new Date(now.getTime() + SYNC_COLD_INTERVAL_MS) };
+}
+
+/**
+ * A 北森 tenant is not read again within 30 minutes of a read, whatever the
+ * stamp says. The stamp of a source that was just switched off is left alone:
+ * there `nextSyncAt` is the time its postings are archived, not a read.
+ */
+export function withTenantFloor<T extends { nextSyncAt: Date; enabled?: boolean }>(source: { ats: string }, stamp: T, now: Date): T {
+  if (!isMainlandOnlyAts(source.ats) || stamp.enabled === false) return stamp;
+  const floor = now.getTime() + BEISEN_TENANT_FLOOR_MS;
+  return stamp.nextSyncAt.getTime() >= floor ? stamp : { ...stamp, nextSyncAt: new Date(floor) };
+}
+
+/**
+ * Was this 北森 tenant asked under 30 minutes ago (so it must not be asked
+ * now)? The time of the last request is `lastSyncedAt` (see the header). A
+ * tenant with no read time was only ever asked as a candidate, if at all: it
+ * then carries the earliest time of its next request in `nextSyncAt`, and
+ * until that time has come it counts as asked recently. Other systems: never.
+ */
+export function tenantAskedRecently(source: { ats: string; lastSyncedAt: Date | null; nextSyncAt?: Date | null }, now: Date): boolean {
+  if (!isMainlandOnlyAts(source.ats)) return false;
+  if (source.lastSyncedAt) return now.getTime() - source.lastSyncedAt.getTime() < BEISEN_TENANT_FLOOR_MS;
+  const next = source.nextSyncAt?.getTime() ?? Number.NEGATIVE_INFINITY;
+  return next > now.getTime() && next - now.getTime() <= BEISEN_TENANT_FLOOR_MS;
+}
+
+/**
+ * `nextSyncAt` of a source an admin switches on: null (due at the next board
+ * sync), except for a 北森 tenant that was never switched on and carries a
+ * time before which it must not be asked again (a candidate whose check asked
+ * it, see the header): that time stands, at most 30 minutes from now. A tenant
+ * that was switched on before has its last request in `lastSyncedAt`, which
+ * the lease reads.
+ */
+export function firstReadAfterSwitchOn(source: { ats: string; nextSyncAt: Date | null; disabledAt: Date | null }, now: Date): Date | null {
+  if (!isMainlandOnlyAts(source.ats) || source.disabledAt || !source.nextSyncAt || source.nextSyncAt.getTime() <= now.getTime()) return null;
+  return new Date(Math.min(source.nextSyncAt.getTime(), now.getTime() + BEISEN_TENANT_FLOOR_MS));
+}
 
 /** 4xx answers that pass by themselves: the host was slow, or we asked too often. */
 const PASSING_HTTP_ERRORS = ['http_408', 'http_429'];

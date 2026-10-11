@@ -29,6 +29,10 @@ import { createCareerSourcesService } from './service.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const GH_BODY = readFileSync(join(HERE, '__fixtures__', 'greenhouse.json'), 'utf8');
+/** The same board as its listing WITHOUT texts answers: no `content`, `offices` or `departments` (what "Check now" reads). */
+const GH_LIST_BODY = JSON.stringify({
+  jobs: (JSON.parse(GH_BODY) as { jobs: Array<Record<string, unknown>> }).jobs.map(({ content: _content, offices: _offices, departments: _departments, ...rest }) => rest),
+});
 const RA = 'localhost:3611';
 const GO = 'goapply.localhost:3611';
 const ENV = { NODE_ENV: 'test', DEPLOY_REGION: '' };
@@ -45,7 +49,7 @@ const fetchBoard: FetchLike = async (url, init) => {
   fetched.push(url);
   agents.push(init.headers?.['User-Agent']);
   return url.startsWith('https://boards-api.greenhouse.io/v1/boards/formosarobotics/jobs')
-    ? { ok: true, status: 200, text: async () => GH_BODY }
+    ? { ok: true, status: 200, text: async () => (url.includes('content=true') ? GH_BODY : GH_LIST_BODY) }
     : { ok: false, status: 404, text: async () => '' };
 };
 
@@ -563,5 +567,177 @@ describe('POST /import (bulk import)', () => {
     expect(res.body.data.invalid).toHaveLength(100);
     expect(res.body.data.invalid[99]).toEqual({ line: 100, reason: 'unknown_job_board' });
     expect(rows('rACareerSiteSource')).toHaveLength(3 + 4850);
+  });
+});
+
+// ── MKT-5B (JI-8, JC-8): more systems, and connectors that can be switched off ──
+
+describe('MKT-5B: the systems a board can be added for', () => {
+  it('the list answer names the systems whose connector is switched on here: Workable unless its kill switch is set, 北森 only with its flag', async () => {
+    const res = await harness.request<Ok<CareerSourceView[]> & { data: unknown }>('GET', '/cs', { host: RA });
+    expect((res.body.data as unknown as { systems: string[] }).systems).toEqual(['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workable', 'recruitee', 'personio', 'lever_eu']);
+    serviceEnv = { ATS_WORKABLE_DISABLED: 'true', CN_ATS_BEISEN_ENABLED: 'true' };
+    const other = await harness.request<Ok<CareerSourceView[]> & { data: unknown }>('GET', '/cs', { host: GO });
+    expect((other.body.data as unknown as { systems: string[] }).systems).toEqual(['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'recruitee', 'personio', 'lever_eu', 'beisen']);
+  });
+
+  it('a Workable, Recruitee, Personio or Lever EU board is added like any other; an upper-case Personio id is refused', async () => {
+    for (const body of [
+      { ats: 'workable', boardToken: 'tidewater', companyName: 'Tidewater Analytics' },
+      { ats: 'recruitee', boardToken: 'poldermobility', companyName: 'Polder Mobility' },
+      { ats: 'personio', boardToken: 'alpenwerk', companyName: 'Alpenwerk' },
+      { ats: 'personio', boardToken: 'bergwerk.com', companyName: 'Bergwerk' },
+      { ats: 'lever_eu', boardToken: 'nordwind', companyName: 'Nordwind' },
+    ]) {
+      const res = await harness.request<Ok<CareerSourceView>>('POST', '/cs', { host: RA, body });
+      expect(res.status, body.ats).toBe(201);
+      expect(res.body.data).toMatchObject({ ...body, enabled: true, origin: 'admin', state: 'enabled' });
+    }
+    const upper = await harness.request<Err>('POST', '/cs', { host: RA, body: { ats: 'personio', boardToken: 'Alpenwerk2', companyName: 'Alpenwerk' } });
+    expect(upper.status).toBe(422);
+    expect(JSON.stringify(upper.body)).toContain('invalid_board_id');
+    expect((await harness.request('POST', '/cs', { host: RA, body: { ats: 'recruitee', boardToken: 'polder.com', companyName: 'X' } })).status).toBe(422);
+    expect(rows('rACareerSiteSource').some((r) => r.boardToken === 'Alpenwerk2')).toBe(false);
+  });
+
+  it('a system whose connector is switched off cannot be added: 北森 without its flag, Workable under its kill switch (connector_disabled)', async () => {
+    const off = await harness.request<Err>('POST', '/cs', { host: GO, body: { ats: 'beisen', boardToken: 'shili', companyName: '示例科技' } });
+    expect(off.status).toBe(422);
+    expect(off.body).toMatchObject({ code: 'invalid_request', details: { field: 'ats', reason: 'connector_disabled' } });
+    expect(rows('rACareerSiteSource').some((r) => r.ats === 'beisen')).toBe(false);
+    serviceEnv = { ATS_WORKABLE_DISABLED: 'true' };
+    const killed = await harness.request<Err>('POST', '/cs', { host: RA, body: { ats: 'workable', boardToken: 'tidewater', companyName: 'Tidewater' } });
+    expect(killed.body).toMatchObject({ code: 'invalid_request', details: { reason: 'connector_disabled' } });
+    // With the flag on the tenant is added (and an id that is not a sub-domain label is still refused).
+    serviceEnv = { CN_ATS_BEISEN_ENABLED: 'true' };
+    const on = await harness.request<Ok<CareerSourceView>>('POST', '/cs', { host: GO, body: { ats: 'beisen', boardToken: 'shili', companyName: '示例科技' } });
+    expect(on.status).toBe(201);
+    expect(on.body.data).toMatchObject({ ats: 'beisen', boardToken: 'shili', market: 'cn', enabled: true });
+    expect((await harness.request('POST', '/cs', { host: GO, body: { ats: 'beisen', boardToken: 'Shili', companyName: 'X' } })).status).toBe(422);
+    expect(fetched).toEqual([]);
+  });
+
+  it('an import refuses a row of a switched-off system by its own reason, and a tenant id that cannot be a host label', async () => {
+    const res = await harness.request<Ok<ImportCareerSourcesResult>>('POST', '/cs/import', {
+      host: GO,
+      body: {
+        format: 'json',
+        rows: [
+          { ats: 'beisen', boardToken: 'shili', companyName: '示例科技' },
+          { ats: 'recruitee', boardToken: 'poldermobility', companyName: 'Polder Mobility' },
+          { ats: 'personio', boardToken: 'Alpenwerk', companyName: 'Alpenwerk' },
+          { ats: 'workable', boardToken: 'tidewater' },
+        ],
+      },
+    });
+    expect(res.body.data).toEqual({ total: 4, created: 2, merged: 0, invalid: [{ line: 1, reason: 'connector_disabled' }, { line: 3, reason: 'invalid_board_id' }], invalidCount: 2 });
+    expect(rows('rACareerSiteSource').filter((r) => r.origin === 'import').map((r) => r.ats).sort()).toEqual(['recruitee', 'workable']);
+    // The same file as CSV, with the flag on: the tenant is a candidate like any imported board.
+    serviceEnv = { CN_ATS_BEISEN_ENABLED: 'true' };
+    const csv = await harness.request<Ok<ImportCareerSourcesResult>>('POST', '/cs/import', { host: GO, body: { format: 'csv', csv: 'ats,boardToken,companyName,countries\nbeisen,shili,示例科技,\nbeisen,Shi Li,x,\n' } });
+    expect(csv.body.data).toMatchObject({ total: 2, created: 1, invalid: [{ line: 3, reason: 'invalid_board_id' }] });
+    expect(rows('rACareerSiteSource').find((r) => r.ats === 'beisen')).toMatchObject({ boardToken: 'shili', enabled: false, origin: 'import' });
+  });
+});
+
+describe('MKT-5B: "Check now" on a source that is passed over, and the 30-minute floor of a tenant board', () => {
+  const add = (over: Record<string, unknown>) => {
+    rows('rACareerSiteSource').push(sourceRow({ id: 'extra', countryCode: null, ...over }));
+  };
+
+  it('a Workable source under the kill switch is not asked: the check reports connector_disabled and makes no request', async () => {
+    add({ ats: 'workable', boardToken: 'tidewater', companyName: 'Tidewater', lastJobCount: 3 });
+    serviceEnv = { ATS_WORKABLE_DISABLED: 'true' };
+    const res = await harness.request<Ok<CareerSourceRunResult>>('POST', '/cs/extra/run', { host: RA });
+    expect(res.body.data).toEqual({ sourceId: 'extra', status: 'error', listed: 0, queued: false, error: 'connector_disabled' });
+    expect(fetched).toEqual([]);
+    // Left as it was, apart from the reason.
+    expect(source('extra')).toMatchObject({ lastError: 'connector_disabled', lastJobCount: 3, lastSyncedAt: null, enabled: true });
+  });
+
+  it('a 北森 source without the flag makes no request; with it, the tenant is asked as GoApply even from the RoboApply host, and at most once in 30 minutes', async () => {
+    add({ ats: 'beisen', boardToken: 'shili', companyName: '示例科技', market: 'cn' });
+    const off = await harness.request<Ok<CareerSourceRunResult>>('POST', '/cs/extra/run', { host: GO });
+    expect(off.body.data).toMatchObject({ status: 'error', error: 'connector_disabled' });
+    expect(fetched).toEqual([]);
+    expect(source('extra').lastSyncedAt).toBeNull();
+
+    serviceEnv = { CN_ATS_BEISEN_ENABLED: 'true' };
+    // The fake board answers 404 for this host: a request was made, and the time of it counts.
+    const first = await harness.request<Ok<CareerSourceRunResult>>('POST', '/cs/extra/run', { host: RA });
+    expect(first.body.data).toMatchObject({ status: 'error', error: 'board_not_found' });
+    expect(fetched).toEqual(['https://shili.zhiye.com/api/Jobad/GetJobAdPageList']);
+    expect(agents[0]).toMatch(/^GoApplyJobs\//);
+    expect(source('extra')).toMatchObject({ lastSyncedAt: NOW, lastError: 'board_not_found' });
+    // Asked again at once: refused without a request.
+    const again = await harness.request<Ok<CareerSourceRunResult>>('POST', '/cs/extra/run', { host: GO });
+    expect(again.body.data).toEqual({ sourceId: 'extra', status: 'error', listed: 0, queued: false, error: 'tenant_floor' });
+    expect(fetched).toHaveLength(1);
+    // 29 minutes later: still refused. 31 minutes later: asked.
+    Object.assign(source('extra'), { lastSyncedAt: new Date(NOW.getTime() - 29 * 60_000) });
+    expect((await harness.request<Ok<CareerSourceRunResult>>('POST', '/cs/extra/run', { host: GO })).body.data.error).toBe('tenant_floor');
+    Object.assign(source('extra'), { lastSyncedAt: new Date(NOW.getTime() - 31 * 60_000) });
+    expect((await harness.request<Ok<CareerSourceRunResult>>('POST', '/cs/extra/run', { host: GO })).body.data.error).toBe('board_not_found');
+    expect(fetched).toHaveLength(2);
+  });
+
+  it('the time a tenant is asked is on the source BEFORE the request leaves, so the floor holds when the check is cut off by its time limit', async () => {
+    add({ ats: 'beisen', boardToken: 'shili', companyName: '示例科技', market: 'cn', lastSyncedAt: new Date(NOW.getTime() - 5 * 3_600_000) });
+    const seenAtRequest: unknown[] = [];
+    // A board that never answers; what the source row says when the request is made.
+    const hanging: FetchLike = (_url, init) => {
+      seenAtRequest.push(source('extra').lastSyncedAt);
+      return new Promise((_resolve, reject) => init.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true }));
+    };
+    const service = createCareerSourcesService({ db: () => db as never, fetch: hanging, now: () => NOW, env: { CN_ATS_BEISEN_ENABLED: 'true' }, runNowTimeoutMs: 20 });
+    expect(await service.runNow('extra', 'intl')).toMatchObject({ status: 'error', error: 'timeout', queued: false });
+    expect(seenAtRequest).toEqual([NOW]);
+    expect(source('extra')).toMatchObject({ lastSyncedAt: NOW, lastError: 'timeout' });
+    // Asked again: refused, no second request.
+    expect(await service.runNow('extra', 'cn')).toMatchObject({ status: 'error', error: 'tenant_floor' });
+    expect(seenAtRequest).toHaveLength(1);
+    // A check that reads the board leaves the time too and marks the tenant due; the board sync's lease holds the 30 minutes.
+    const answering: FetchLike = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ Count: 1, Data: [{ Id: 'a', JobAdName: '合成岗位', LocNames: ['上海'] }] }) });
+    Object.assign(source('extra'), { lastSyncedAt: new Date(NOW.getTime() - 31 * 60_000) });
+    const ok = createCareerSourcesService({ db: () => db as never, fetch: answering, now: () => NOW, env: { CN_ATS_BEISEN_ENABLED: 'true' } });
+    expect(await ok.runNow('extra', 'cn')).toMatchObject({ status: 'scheduled', listed: 1, queued: true });
+    expect(source('extra')).toMatchObject({ lastSyncedAt: NOW, nextSyncAt: null, lastJobCount: 1, lastError: null });
+    expect(await ok.runNow('extra', 'cn')).toMatchObject({ status: 'error', error: 'tenant_floor' });
+  });
+
+  it('a tenant that was only ever asked as a candidate keeps the time before which it must not be asked again, when an admin switches it on', async () => {
+    // A candidate whose check was cut off 10 minutes ago: it carries the end of its 30 minutes, and no read time.
+    const until = new Date(NOW.getTime() + 20 * 60_000);
+    add({ ats: 'beisen', boardToken: 'shili', companyName: '示例科技', market: 'cn', origin: 'import', enabled: false, nextSyncAt: until });
+    serviceEnv = { CN_ATS_BEISEN_ENABLED: 'true' };
+    const on = await harness.request<Ok<CareerSourceView>>('PATCH', '/cs/extra', { host: GO, body: { enabled: true } });
+    expect(on.body.data).toMatchObject({ enabled: true, state: 'enabled', nextSyncAt: until.toISOString(), lastSyncedAt: null });
+    // "Check now" inside that time makes no request either.
+    expect((await harness.request<Ok<CareerSourceRunResult>>('POST', '/cs/extra/run', { host: GO })).body.data).toMatchObject({ status: 'error', error: 'tenant_floor' });
+    expect(fetched).toEqual([]);
+    // A candidate waiting for a retry two hours away is read 30 minutes after it is switched on, not two hours.
+    Object.assign(source('extra'), { enabled: false, nextSyncAt: new Date(NOW.getTime() + 2 * 3_600_000) });
+    expect((await harness.request<Ok<CareerSourceView>>('PATCH', '/cs/extra', { host: GO, body: { enabled: true } })).body.data.nextSyncAt).toBe(new Date(NOW.getTime() + 30 * 60_000).toISOString());
+    // A board of another system is due at once, as before.
+    Object.assign(source('cs1'), { enabled: false, nextSyncAt: until, origin: 'import' });
+    expect((await harness.request<Ok<CareerSourceView>>('PATCH', '/cs/cs1', { host: GO, body: { enabled: true } })).body.data.nextSyncAt).toBeNull();
+  });
+
+  it('a 北森 board feeds the mainland site only: it is in GoApply\'s list and not in RoboApply\'s, whatever countries it carries', async () => {
+    add({ ats: 'beisen', boardToken: 'shili', companyName: '示例科技', market: 'cn' });
+    expect((await list(GO)).map((v) => v.id)).toContain('extra');
+    expect((await list(RA)).map((v) => v.id)).not.toContain('extra');
+    // A RoboApply admin can still look at the mainland site's boards.
+    expect((await list(RA, '?market=cn')).map((v) => v.id)).toContain('extra');
+  });
+
+  it('a tenant on the denylist is never asked by a check either', async () => {
+    add({ ats: 'beisen', boardToken: 'shili', companyName: '示例科技', market: 'cn' });
+    serviceEnv = { CN_ATS_BEISEN_ENABLED: 'true', CN_ATS_TENANT_DENYLIST: 'shili' };
+    const res = await harness.request<Ok<CareerSourceRunResult>>('POST', '/cs/extra/run', { host: GO });
+    expect(res.body.data).toMatchObject({ status: 'error', error: 'tenant_denied' });
+    expect(fetched).toEqual([]);
+    // Not a request: the 30 minutes do not start.
+    expect(source('extra').lastSyncedAt).toBeNull();
   });
 });

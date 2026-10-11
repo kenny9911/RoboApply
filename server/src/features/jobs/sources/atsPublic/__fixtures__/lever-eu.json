@@ -1,0 +1,30 @@
+[
+  {
+    "id": "7a2b3c4d-0000-4e4e-8c8c-333333333333",
+    "text": "Data Engineer",
+    "categories": { "commitment": "Full-time", "department": "Data", "location": "Berlin", "team": "Platform", "allLocations": ["Berlin"] },
+    "country": "DE",
+    "workplaceType": "hybrid",
+    "createdAt": 1790640000000,
+    "description": "<div>SYNTHETIC posting text for a board on the EU instance.</div>",
+    "descriptionPlain": "SYNTHETIC posting text for a board on the EU instance.",
+    "lists": [{ "text": "Requirements", "content": "<li>SQL</li><li>Python</li>" }],
+    "hostedUrl": "https://jobs.eu.lever.co/nordwind/7a2b3c4d-0000-4e4e-8c8c-333333333333",
+    "applyUrl": "https://jobs.eu.lever.co/nordwind/7a2b3c4d-0000-4e4e-8c8c-333333333333/apply",
+    "salaryRange": { "currency": "EUR", "interval": "per-year-salary", "min": 65000, "max": 85000 },
+    "salaryDescriptionPlain": "EUR 65,000 to 85,000 a year"
+  },
+  {
+    "id": "7a2b3c4d-0000-4e4e-8c8c-444444444444",
+    "text": "Support Specialist",
+    "categories": { "commitment": "Part-time", "location": "Amsterdam" },
+    "country": "NL",
+    "workplaceType": "on-site",
+    "createdAt": 1790726400000,
+    "description": "<div>SYNTHETIC posting text, second posting.</div>",
+    "descriptionPlain": "SYNTHETIC posting text, second posting.",
+    "lists": [],
+    "hostedUrl": "https://jobs.eu.lever.co/nordwind/7a2b3c4d-0000-4e4e-8c8c-444444444444",
+    "applyUrl": "https://jobs.eu.lever.co/nordwind/7a2b3c4d-0000-4e4e-8c8c-444444444444/apply"
+  }
+]

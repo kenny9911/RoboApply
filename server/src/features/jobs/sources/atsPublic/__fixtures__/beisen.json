@@ -1,0 +1,210 @@
+{
+  "_about": "SYNTHETIC. Hand-built from the field names of the one source the research note cites for this board system (the OpenHire connector, MIT licence, read 2026-10-12). No 北森 board was ever called; no real employer, posting, person, phone number or WeChat id is in this file. Ops must record a real response and re-verify the mapper before CN_ATS_BEISEN_ENABLED is ever set (see README.md).",
+  "pages": [
+    {
+      "Count": 5,
+      "Data": [
+        {
+          "Id": "0a1b2c3d-1111-4a4a-9b9b-000000000001",
+          "JobAdId": 900001,
+          "JobAdName": "后端开发工程师",
+          "Category": "1",
+          "Kind": "全职",
+          "LocNames": [
+            "上海"
+          ],
+          "Salary": "25K-50K 元/月",
+          "PostDateInt": 0,
+          "PostDate": "2026-10-08T09:30:00",
+          "ChangeDate": "2026-10-09T10:00:00",
+          "Duty": "<p>合成示例：负责后端服务的设计与开发。联系电话：13800138000，微信：synthetic_wx_01。</p>",
+          "Require": "<p>合成示例：熟悉 Go 与 PostgreSQL。</p>",
+          "WorkWeChatQrCode": "https://synthetic.example.invalid/qr/0001.png",
+          "ContactPhone": "13900139000",
+          "ContactWeChat": "synthetic_wx_field"
+        },
+        {
+          "Id": "0a1b2c3d-1111-4a4a-9b9b-000000000002",
+          "JobAdId": 900002,
+          "JobAdName": "产品经理",
+          "Category": "1",
+          "Kind": "全职",
+          "LocNames": [
+            "北京",
+            "深圳"
+          ],
+          "Salary": "35-57",
+          "PostDateInt": 1791436800000,
+          "PostDate": "2026-10-08T13:20:00",
+          "Duty": "<p>合成示例：负责产品规划。</p>",
+          "Require": "",
+          "WorkWeChatQrCode": null
+        },
+        {
+          "Id": "0a1b2c3d-1111-4a4a-9b9b-000000000003",
+          "JobAdId": 900003,
+          "JobAdName": "销售代表",
+          "Category": "1",
+          "Kind": "全职",
+          "LocNames": [
+            "成都"
+          ],
+          "Salary": "面议",
+          "PostDateInt": 0,
+          "PostDate": "0001-01-01T00:00:00",
+          "Duty": "<p>合成示例：负责客户拓展。</p>",
+          "Require": "<p>合成示例：一年以上经验。</p>"
+        },
+        {
+          "Id": "0a1b2c3d-1111-4a4a-9b9b-000000000004",
+          "JobAdId": 900004,
+          "JobAdName": "海外市场专员",
+          "Category": "1",
+          "Kind": "全职",
+          "LocNames": [
+            "新加坡"
+          ],
+          "Salary": "",
+          "PostDateInt": 0,
+          "PostDate": "2026-10-07T08:00:00",
+          "Duty": "<p>合成示例：岗位在新加坡。</p>",
+          "Require": ""
+        },
+        {
+          "JobAdName": "合成示例：缺少 Id 的行"
+        }
+      ]
+    }
+  ],
+  "places": {
+    "_about": "SYNTHETIC. Where a posting is: a mainland city the place table does not know, the whole country, places on both sides (in either order), places outside the mainland only, the word for abroad, and no place at all.",
+    "Count": 8,
+    "Data": [
+      {
+        "Id": "0a1b2c3d-2222-4a4a-9b9b-000000000001",
+        "JobAdId": 910001,
+        "JobAdName": "合成地点示例 1",
+        "Category": "1",
+        "Kind": "全职",
+        "Salary": "面议",
+        "PostDateInt": 0,
+        "PostDate": "2026-10-06T10:00:00",
+        "Duty": "<p>合成示例。</p>",
+        "Require": "",
+        "LocNames": [
+          "昆山"
+        ]
+      },
+      {
+        "Id": "0a1b2c3d-2222-4a4a-9b9b-000000000002",
+        "JobAdId": 910002,
+        "JobAdName": "合成地点示例 2",
+        "Category": "1",
+        "Kind": "全职",
+        "Salary": "面议",
+        "PostDateInt": 0,
+        "PostDate": "2026-10-06T10:00:00",
+        "Duty": "<p>合成示例。</p>",
+        "Require": "",
+        "LocNames": [
+          "全国"
+        ]
+      },
+      {
+        "Id": "0a1b2c3d-2222-4a4a-9b9b-000000000003",
+        "JobAdId": 910003,
+        "JobAdName": "合成地点示例 3",
+        "Category": "1",
+        "Kind": "全职",
+        "Salary": "面议",
+        "PostDateInt": 0,
+        "PostDate": "2026-10-06T10:00:00",
+        "Duty": "<p>合成示例。</p>",
+        "Require": "",
+        "LocNames": [
+          "上海",
+          "香港"
+        ]
+      },
+      {
+        "Id": "0a1b2c3d-2222-4a4a-9b9b-000000000004",
+        "JobAdId": 910004,
+        "JobAdName": "合成地点示例 4",
+        "Category": "1",
+        "Kind": "全职",
+        "Salary": "面议",
+        "PostDateInt": 0,
+        "PostDate": "2026-10-06T10:00:00",
+        "Duty": "<p>合成示例。</p>",
+        "Require": "",
+        "LocNames": [
+          "新加坡",
+          "深圳"
+        ]
+      },
+      {
+        "Id": "0a1b2c3d-2222-4a4a-9b9b-000000000005",
+        "JobAdId": 910005,
+        "JobAdName": "合成地点示例 5",
+        "Category": "1",
+        "Kind": "全职",
+        "Salary": "面议",
+        "PostDateInt": 0,
+        "PostDate": "2026-10-06T10:00:00",
+        "Duty": "<p>合成示例。</p>",
+        "Require": "",
+        "LocNames": [
+          "香港",
+          "台北"
+        ]
+      },
+      {
+        "Id": "0a1b2c3d-2222-4a4a-9b9b-000000000006",
+        "JobAdId": 910006,
+        "JobAdName": "合成地点示例 6",
+        "Category": "1",
+        "Kind": "全职",
+        "Salary": "面议",
+        "PostDateInt": 0,
+        "PostDate": "2026-10-06T10:00:00",
+        "Duty": "<p>合成示例。</p>",
+        "Require": "",
+        "LocNames": [
+          "海外"
+        ]
+      },
+      {
+        "Id": "0a1b2c3d-2222-4a4a-9b9b-000000000007",
+        "JobAdId": 910007,
+        "JobAdName": "合成地点示例 7",
+        "Category": "1",
+        "Kind": "全职",
+        "Salary": "面议",
+        "PostDateInt": 0,
+        "PostDate": "2026-10-06T10:00:00",
+        "Duty": "<p>合成示例。</p>",
+        "Require": ""
+      },
+      {
+        "Id": "0a1b2c3d-2222-4a4a-9b9b-000000000008",
+        "JobAdId": 910008,
+        "JobAdName": "合成地点示例 8",
+        "Category": "1",
+        "Kind": "全职",
+        "Salary": "面议",
+        "PostDateInt": 0,
+        "PostDate": "2026-10-06T10:00:00",
+        "Duty": "<p>合成示例。</p>",
+        "Require": "",
+        "LocNames": [
+          "义乌",
+          "张家港"
+        ]
+      }
+    ]
+  },
+  "refused": {
+    "Code": 401,
+    "Message": "SYNTHETIC: an answer that is not the listing (a sign-in prompt). The connector fails the read; it never works around it."
+  }
+}
