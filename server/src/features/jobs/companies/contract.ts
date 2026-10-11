@@ -7,8 +7,9 @@
 //
 // D3: every company fact is `Sourced` (per-field provenance in
 // `RACompany.facts`); no funding block unless `companyFunding` (licensed
-// provider); H-1B numbers cite the DOL LCA source file. Market-scoped:
-// a company of the other market answers 404.
+// provider); H-1B numbers cite the DOL LCA source file; a sponsorship fact
+// names its publication, file and date and is never a statement about a job.
+// Market-scoped: a company of the other market answers 404.
 
 import { z } from 'zod';
 import type { Sourced } from '../../../platform/http.js';
@@ -20,6 +21,14 @@ import type { FeedItem } from '../../feed/contract.js';
  * areas (enrichment) read it from here.
  */
 export { INDUSTRY_IDS, industryIdFor, mapIndustries } from './industryMap.js';
+
+/**
+ * GET /companies/:id/sponsorship (RoboApply, flag `h1bHistory`): the company's
+ * sponsorship facts, each with its year, source and date (JI-11). The types
+ * live in sponsorship/contract.ts and are part of this contract, so the web
+ * reads them through the same mirror.
+ */
+export * from './sponsorship/contract.js';
 
 /** GET /companies?q= — trigram typeahead on the normalized name (≥2 chars), market-scoped, with logo. */
 export const CompanyTypeaheadQuerySchema = z.object({ q: z.string().trim().min(2).max(80), limit: z.coerce.number().int().min(1).max(20).optional() });
@@ -83,6 +92,11 @@ export const CompanyJobsQuerySchema = z.object({ cursor: z.string().max(512).opt
 /**
  * Live canonical public jobs at the company (newest first, 20 a page), as
  * feed cards without fit or derived badges. `cursor` is opaque; null = last page.
+ * Not listed (and not in the profile's open-job count): a recruiter-bank job
+ * whose bank has no candidate-facing posting page, and a job that owes a
+ * credit line (the Taiwan open-data sources) while the surface reading this
+ * list cannot print it. When such rows are listed, each carries its line as
+ * `cardMeta.tw_sources.attribution { text, url }`, like a feed card.
  */
 export interface CompanyJobsResponse {
   items: FeedItem[];

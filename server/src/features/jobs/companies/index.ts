@@ -12,6 +12,7 @@ export { createCompaniesRouter } from './routes.js';
 export type { CompaniesRouterDeps } from './routes.js';
 export {
   COMPANY_JOBS_PAGE,
+  DOL_LCA_URL,
   H1B_DISCLAIMER,
   MAX_POSTING_INDUSTRIES,
   POSTING_INDUSTRY_SOURCE,
@@ -20,14 +21,18 @@ export {
   companyJobsOrder,
   companySlug,
   createCompanyReadService,
+  creditLineMeta,
   escapeLike,
+  findCompanyRow,
   liveJobWhere,
   setIndustryFromPosting,
   toCompanyJobItem,
   toCompanyProfile,
   upsertCompanies,
 } from './service.js';
-export type { CompaniesDb, CompanyReadService, CompanyReadViewer, PostingIndustry, PostingIndustryOutcome } from './service.js';
+export type { CompaniesDb, CompanyReadDeps, CompanyReadService, CompanyReadViewer, PostingIndustry, PostingIndustryOutcome } from './service.js';
+export { createSponsorshipService, matchViewerNeed, needsSponsorshipIn, sponsorshipSourcesInUse, toDolLcaFact, toUkRegisterFact, toUscisFact } from './sponsorship/service.js';
+export type { SponsorshipDb, SponsorshipNeed, SponsorshipService, SponsorshipServiceDeps, SponsorshipSourceInUse, SponsorshipViewer } from './sponsorship/service.js';
 
 /** Market-scoped to the current brand (request or cron context). */
 export interface CompanyService {

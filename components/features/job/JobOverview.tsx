@@ -10,6 +10,10 @@
 // The market block (MarketJobMeta) sits here unless the panel already shows it
 // above the tabs (`marketMeta={false}`): on GoApply it carries the job's pay,
 // dates and source, which must stay on screen on every tab.
+//
+// Under the job's own work-authorization lines sits the EMPLOYER's public
+// sponsorship record (SponsorshipFacts, RoboApply only; JI-11): dated facts
+// about the company, in a block of their own, never a statement about this job.
 
 import { useFormatter, useTranslations } from 'next-intl';
 
@@ -22,6 +26,7 @@ import { CAMPUS_TIME_ZONE } from '../campus/format';
 import { useBrand } from '../../../lib/brand';
 import type { JobDetailResponse, JobCampusInfo } from '../../../lib/api/contracts/jobs/detail';
 import { validDate } from './format';
+import { SponsorshipFacts } from './SponsorshipFacts';
 import styles from './job.module.css';
 
 export interface JobOverviewProps {
@@ -104,6 +109,9 @@ export function JobOverview({ detail, marketMeta = true }: JobOverviewProps) {
           </ul>
         </section>
       ) : null}
+
+      {/* The company's sponsorship record: facts about the employer, apart from what this posting says. */}
+      {intl ? <SponsorshipFacts companyId={detail.company.id} companyName={detail.company.name} jobId={job.id} /> : null}
 
       <section className={styles.section} data-testid="job-sections">
         <p className={styles.label}>{t('fromPost')}</p>

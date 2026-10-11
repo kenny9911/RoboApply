@@ -1,13 +1,44 @@
 // server/src/features/jobs/data/index.ts — static reference data for the job
-// normalizers (WP-16a) and the attribution list for /legal (WP-13 renders it).
+// normalizers (WP-16a), the attribution list for /legal (WP-13 renders it) and
+// the public sponsorship records the owner imports (JI-11).
 //
 // D3: every list here says where it came from. A list compiled by the team is
 // labelled as such; a third-party dataset carries its licence and the
 // attribution it requires.
+//
+// Two kinds of dataset, kept apart on purpose:
+//   - `jobDataAttributions()`: what SHIPS in the repository (city table,
+//     taxonomy sources, staffing list). Each has one copy and one copy date.
+//   - `sponsorshipDataSources()` (sponsorSources.ts): the three government
+//     publications behind the company sponsorship facts. No copy of them
+//     ships; the owner imports files, and every stored row carries its own
+//     file name and date.
+//
+// normalize/agency.ts reads this file while normalize/ is still loading, so
+// nothing imported here may import normalize/: the loaders (lca.ts, uscis.ts,
+// ukSponsors.ts) are imported by their command-line tools, never from here.
 
 import staffing from './staffing-agencies.json' with { type: 'json' };
 import { CITY_TABLE_AS_OF, CITY_TABLE_SOURCE } from '../geo/index.js';
 import { TAXONOMY_AS_OF, TAXONOMY_SOURCES } from '../taxonomy/index.js';
+
+export {
+  DOL_LCA_SOURCE,
+  DOL_LCA_URL,
+  UK_RATING_SEPARATOR,
+  UK_SPONSOR_REGISTER_COUNTRY,
+  UK_SPONSOR_REGISTER_LICENCE,
+  UK_SPONSOR_REGISTER_SOURCE,
+  UK_SPONSOR_REGISTER_URL,
+  USCIS_COUNTRY,
+  USCIS_H1B_HUB_SOURCE,
+  USCIS_H1B_HUB_URL,
+  fiscalYearOfPeriod,
+  sponsorshipDataSource,
+  sponsorshipDataSources,
+  uscisPeriod,
+} from './sponsorSources.js';
+export type { SponsorRegisterSource, SponsorshipDataKind, SponsorshipDataSource } from './sponsorSources.js';
 
 export interface DataSource {
   id: string;
