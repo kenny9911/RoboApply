@@ -1,8 +1,9 @@
 'use client';
 
 // FitAnalysisCard — the structured fit analysis (PRODUCT F-ORION-03): the
-// score with its honesty line, why you fit / what you're missing, education,
-// and every part with its evidence. Uses the `fit_analysis` credit only when
+// score with its honesty line, why you fit / what you're missing, the
+// requirement checklist when the fit carries one (scorer v4), education, and
+// every part with its evidence. Uses the `fit_analysis` credit only when
 // a model call is needed (the server says `charged`); a quick estimate (AI
 // off, no resume) is free and labelled.
 
@@ -14,7 +15,8 @@ import type { FitAnalysisCard as FitAnalysisCardData } from '../../../lib/api/co
 import { DimensionList } from './DimensionList';
 import { FitScore } from './FitScore';
 import { useDegreeLabel } from './labels';
-import { WhatYoureMissing, WhyYouFit } from './WhyYouFit';
+import { RequirementChecklist } from './RequirementChecklist';
+import { WhatYoureMissing, WhyYouFit, skillCounts } from './WhyYouFit';
 import styles from './match.module.css';
 
 export interface FitAnalysisViewProps {
@@ -26,6 +28,7 @@ export function FitAnalysisView({ card }: FitAnalysisViewProps) {
   const degree = useDegreeLabel();
   const required = degree(card.education.required);
   const yours = degree(card.education.yours);
+  const counts = skillCounts(card.skills);
   return (
     <div className={styles.score} data-testid="fit-analysis">
       <section className={styles.section} aria-labelledby="fit-analysis-heading">
@@ -36,9 +39,11 @@ export function FitAnalysisView({ card }: FitAnalysisViewProps) {
         {card.charged || card.kind === 'ai' ? <p className={styles.muted}>{card.charged ? t('charged') : t('notCharged')}</p> : null}
       </section>
       <div className={styles.twoUp}>
-        <WhyYouFit strengths={card.highlights} aligned={card.skills.aligned} listed={card.skills.listed} />
-        <WhatYoureMissing gaps={card.gaps} missing={card.skills.missing} listed={card.skills.listed} />
+        <WhyYouFit strengths={card.highlights} aligned={card.skills.aligned} listed={card.skills.listed} compared={counts.compared} unchecked={counts.unchecked} />
+        <WhatYoureMissing gaps={card.gaps} missing={card.skills.missing} listed={card.skills.listed} compared={counts.compared} unchecked={counts.unchecked} />
       </div>
+      {/* Must-haves first, each with the posting's line and the resume's own words; nothing when the card carries none. */}
+      <RequirementChecklist requirements={card.kind === 'ai' ? card.requirements : null} />
       <section className={styles.section} aria-labelledby="fit-education-heading">
         <h3 id="fit-education-heading" className={styles.heading}>
           {t('education.title')}
@@ -50,7 +55,7 @@ export function FitAnalysisView({ card }: FitAnalysisViewProps) {
           {card.education.meets === false ? <span className={styles.alert}>{t('education.doesNotMeet')}</span> : null}
         </div>
       </section>
-      <DimensionList dimensions={card.dimensions} />
+      <DimensionList dimensions={card.dimensions} kind={card.kind} />
     </div>
   );
 }

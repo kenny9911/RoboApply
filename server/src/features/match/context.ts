@@ -44,6 +44,8 @@ export interface UserMatchInputs {
   searchProfile: { filters: unknown; version: number } | null;
   /** Industries of the user's past employers, resolved from our company records. */
   employerIndustries: string[];
+  /** The language this request reads skill labels in, when the caller knows it (`MatchUser.locale`). */
+  locale?: string | null;
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -245,6 +247,7 @@ export function buildMatchUser(inputs: UserMatchInputs, now: Date = new Date()):
       pay: !!filters.salaryMin,
     },
     searchProfileVersion: inputs.searchProfile?.version ?? null,
+    ...(str(inputs.locale) ? { locale: str(inputs.locale) } : {}),
   };
 }
 
@@ -303,11 +306,11 @@ export interface MatchJobRecord {
   archivedAt: Date | null;
   companyIndustries: string[];
   // ── Market wave columns (MKT-0), carried by every projection so later phases need not edit them. ──
-  /** RASkill ids of the posting's skills (canonical vocabulary). Unused until the skill vocabulary reads it. */
+  /** RASkill ids of the posting's hard skills and certificates (enrichment v3). Empty until the row is re-enriched: the matcher then compares strings. */
   skillIds?: string[];
   /** RAJob.contentHash: `jobContentHash(row)` as stored with the search document; null until it is written. */
   contentHash?: string | null;
-  /** The posting's language tag ('en', 'zh-CN', 'zh-TW', …). */
+  /** RAJob.lang: 'en', 'zh-Hans', 'zh-Hant', 'ja', 'ko' or 'other' (features/retrieval/lang.ts). */
   lang?: string | null;
   /** RAJob.requirements `{ v, contentHash, model, extractedAt, items }` (scorer v4). */
   requirements?: unknown;
@@ -338,7 +341,19 @@ function skillsDetailOf(v: unknown): MatchJob['skillsDetail'] {
   return v
     .filter(isRecord)
     .filter((s) => typeof s.skill === 'string')
-    .map((s) => ({ skill: s.skill as string, kind: typeof s.kind === 'string' ? s.kind : undefined, required: s.required === true }));
+    .map((s) => ({
+      skill: s.skill as string,
+      kind: typeof s.kind === 'string' ? s.kind : undefined,
+      required: s.required === true,
+      // The canonical skill enrichment v3 mapped the string to; absent on a row it has not written.
+      ...(str(s.skillId) ? { skillId: str(s.skillId) } : {}),
+      // How the id was found, when enrichment stores it ('embedding' is a machine guess; preScore.ts never compares it).
+      ...(str(s.skillId) && str(s.via) ? { via: str(s.via) } : {}),
+    }));
+}
+
+function skillIdsOf(v: unknown): string[] {
+  return Array.isArray(v) ? [...new Set(v.map((x) => str(x)).filter((x): x is string => !!x))] : [];
 }
 
 /** The posting's pay words when they state an amount, without a label of their own; null otherwise. */
@@ -349,6 +364,7 @@ export function payAsPosted(salaryText: string | null | undefined): string | nul
 
 export function toMatchJob(row: MatchJobRecord): MatchJob {
   const cy = classYearsFromTags(row.marketTags);
+  const skillIds = skillIdsOf(row.skillIds);
   return {
     id: row.id,
     market: row.market,
@@ -358,6 +374,9 @@ export function toMatchJob(row: MatchJobRecord): MatchJob {
     seniority: row.seniority,
     skills: row.skills ?? [],
     skillsDetail: skillsDetailOf(row.skillsDetail),
+    // Only when the row has them: a posting without ids is compared by its strings (preScore.ts `carriesSkillIds`).
+    ...(skillIds.length ? { skillIds } : {}),
+    ...(str(row.lang) ? { lang: str(row.lang) } : {}),
     educationLevel: isDegreeLevel(row.educationLevel) ? row.educationLevel : null,
     workModel: row.workModel,
     remoteScope: row.remoteScope,

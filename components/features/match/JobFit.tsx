@@ -3,7 +3,8 @@
 // JobFit — the fit block for job detail (WP-34 places it): score with its
 // honesty line (and, for a quick estimate that rests on little, the one
 // reason: `FitScore` reads `confidence` and `confidenceReason` from the fit it
-// is handed whole), why you fit / what you're missing, and "What we compared".
+// is handed whole), why you fit / what you're missing, the requirement
+// checklist when the fit carries one (scorer v4), and "What we compared".
 // Loads through hooks/match `useJobFit` (platform-paid; never a user credit).
 
 import { useTranslations } from 'next-intl';
@@ -13,7 +14,8 @@ import { useJobFit, useRewriteFitText } from '../../../hooks/match';
 import type { MatchFitView } from '../../../lib/api/contracts/match';
 import { DimensionList } from './DimensionList';
 import { FitScore } from './FitScore';
-import { WhatYoureMissing, WhyYouFit } from './WhyYouFit';
+import { RequirementChecklist } from './RequirementChecklist';
+import { WhatYoureMissing, WhyYouFit, skillCounts } from './WhyYouFit';
 import styles from './match.module.css';
 
 export interface JobFitViewProps {
@@ -44,6 +46,8 @@ export function JobFitView({ fit, rewrite }: JobFitViewProps) {
   // A term the resume shows is never also listed as missing.
   const have = new Set(aligned.map(chipKey));
   const missing = uniq([...fit.skills.missing, ...fit.keywordsMissing]).filter((s) => !have.has(chipKey(s)));
+  // Counted on the server's own skill lists, before the model's terms are merged in.
+  const counts = skillCounts(fit.skills);
   return (
     <div className={styles.score} data-testid="job-fit">
       <section className={styles.section}>
@@ -67,10 +71,12 @@ export function JobFitView({ fit, rewrite }: JobFitViewProps) {
         ) : null}
       </section>
       <div className={styles.twoUp}>
-        <WhyYouFit strengths={fit.strengths} aligned={aligned} listed={fit.skills.listed} />
-        <WhatYoureMissing gaps={fit.gaps} missing={missing} listed={fit.skills.listed} />
+        <WhyYouFit strengths={fit.strengths} aligned={aligned} listed={fit.skills.listed} compared={counts.compared} unchecked={counts.unchecked} />
+        <WhatYoureMissing gaps={fit.gaps} missing={missing} listed={fit.skills.listed} compared={counts.compared} unchecked={counts.unchecked} />
       </div>
-      <DimensionList dimensions={fit.dimensions} />
+      {/* The requirement checklist of an AI fit (scorer v4); nothing for a quick estimate or an older fit. */}
+      <RequirementChecklist requirements={fit.kind === 'ai' ? fit.requirements : null} />
+      <DimensionList dimensions={fit.dimensions} kind={fit.kind} />
     </div>
   );
 }

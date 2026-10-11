@@ -22,10 +22,10 @@ vi.mock('../../../lib/api/jobs', () => ({ scoreJob: api.scoreJob }));
 vi.mock('../../../lib/api/credits', () => ({ getCredits: api.getCredits }));
 
 import { RoboApiError } from '../../../lib/api/client';
-import type { FitAnalysisCard as Card, KeywordRow, MatchDimension, MatchFitView } from '../../../lib/api/contracts/match';
+import type { FitAnalysisCard as Card, KeywordItem, KeywordRow, MatchDimension, MatchFitView, RequirementCheck } from '../../../lib/api/contracts/match';
 import { renderWithProviders } from '../../../__tests__/utils/renderWithProviders';
 import { renderWithBrand } from '../../../__tests__/shell/helpers';
-import { DimensionList, FitAnalysisCard, FitAnalysisView, FitScore, JobFit, JobFitView, KeywordCheck, WhatYoureMissing, WhyYouFit } from './index';
+import { DimensionList, FitAnalysisCard, FitAnalysisView, FitScore, JobFit, JobFitView, JobKeywordCheck, KeywordCheck, RequirementChecklist, WhatYoureMissing, WhyYouFit, keywordCounts, keywordState, listedRequirements, notComparedKey, skillCounts } from './index';
 import { lowConfidenceReason } from './FitScore';
 import { uniq } from './JobFit';
 import { plainQuote } from './labels';
@@ -226,6 +226,9 @@ describe('MKT-2F: GoApply fit card wording (strategy 2.5: no visa wording; pay a
     const variants: Array<Partial<MatchFitView>> = [
       { kind: 'ai', dimensions: cnDims },
       { kind: 'ai', dimensions: cnDims, summaryLocaleStale: true },
+      // A fit with the requirement checklist of scorer v4, and one whose skills part holds unchecked skills.
+      { kind: 'ai', dimensions: cnDims, requirements: [{ id: 'r1', kind: 'education', text: '本科及以上学历', importance: 'must', status: 'met', evidence: '本科，计算机科学（2018）' }, { id: 'r2', kind: 'skill', text: '熟悉 Kubernetes 优先', importance: 'preferred', status: 'not_shown', evidence: '' }] },
+      { kind: 'pre', summary: null, strengths: [], gaps: [], dimensions: cnDims, skills: { aligned: [], missing: [], listed: 2, unchecked: ['飞书', '钉钉'] } },
       { kind: 'pre', summary: null, strengths: [], gaps: [], dimensions: cnDims, estimateReason: 'ai_off' },
       ...(['no_skills_listed', 'no_level_stated', 'no_role_evidence', 'no_resume', 'few_details'] as const).map((confidenceReason) => ({
         kind: 'pre' as const,
@@ -287,10 +290,44 @@ describe('DimensionList — "What we compared"', () => {
     const part = screen.getAllByRole('listitem').find((li) => li.getAttribute('data-part') === 'logistics')!;
     expect(within(part).getByText('These already match the filters you set, so they do not change the score: Austin, TX · USD 120,000–150,000 a year')).toBeInTheDocument();
     expect(within(part).queryByRole('meter')).not.toBeInTheDocument();
-    expect(within(part).getByText('Not enough to compare.')).toBeInTheDocument();
+    // In its own words (MKT-4E): the part was not compared because the person's own filters already cover it.
+    expect(within(part).getByText('Not compared. The filters you set already cover this part.')).toBeInTheDocument();
+    expect(within(part).queryByText('Not enough to compare.')).not.toBeInTheDocument();
     expect(within(part).queryByText(/count toward the score/)).not.toBeInTheDocument();
     // Never the plain-quote fallback for this ref.
     expect(within(part).queryByText('“Austin, TX · USD 120,000–150,000 a year”')).not.toBeInTheDocument();
+  });
+
+  // MKT-4E (carry-over of MKT-2F): a part that was not compared means two things, and the line says which.
+  it('a part that was not compared says what that means for this kind of fit', () => {
+    const notStated: MatchDimension[] = [{ key: 'industry', weight: 15, score: null, status: 'not_stated', evidence: [] }];
+    const estimate = renderWithProviders(<DimensionList dimensions={notStated} kind="pre" />);
+    expect(screen.getByText('Not enough to compare, so this part is counted at a typical value.')).toBeInTheDocument();
+    estimate.unmount();
+    const ai = renderWithProviders(<DimensionList dimensions={notStated} kind="ai" />);
+    expect(screen.getByText('Not enough to compare, so this part is left out of the score.')).toBeInTheDocument();
+    ai.unmount();
+    renderWithProviders(<DimensionList dimensions={notStated} />);
+    expect(screen.getByText('Not enough to compare.')).toBeInTheDocument();
+    expect(notComparedKey({ key: 'logistics', evidence: [{ text: 'Berlin', source: 'posting', ref: 'logistics_by_your_filters' }] }, 'ai')).toBe('byFilters');
+    expect(notComparedKey({ key: 'logistics', evidence: [] }, 'pre')).toBe('notComparedEstimate');
+  });
+
+  it('the job page passes the kind of fit through: an estimate and an AI fit word the same empty part differently', () => {
+    const dims: MatchDimension[] = [{ key: 'career_path', weight: 10, score: null, status: 'not_stated', evidence: [] }];
+    const estimate = renderWithProviders(<JobFitView fit={fit({ kind: 'pre', summary: null, strengths: [], gaps: [], dimensions: dims })} />);
+    expect(screen.getByText('Not enough to compare, so this part is counted at a typical value.')).toBeInTheDocument();
+    estimate.unmount();
+    renderWithProviders(<JobFitView fit={fit({ dimensions: dims })} />);
+    expect(screen.getByText('Not enough to compare, so this part is left out of the score.')).toBeInTheDocument();
+  });
+
+  it('a skill shown by a more specific one has its own evidence line, never "your resume mentions it"', () => {
+    renderWithProviders(
+      <DimensionList dimensions={[{ key: 'skills', weight: 30, score: 50, status: 'scored', evidence: [{ text: 'Relational databases', source: 'resume', ref: 'skill_related' }] }]} />,
+    );
+    expect(screen.getByText('They ask for Relational databases, and your resume shows a related skill')).toBeInTheDocument();
+    expect(screen.queryByText(/Your resume or profile mentions Relational databases/)).not.toBeInTheDocument();
   });
 });
 
@@ -334,6 +371,183 @@ describe('WhyYouFit / WhatYoureMissing', () => {
   });
 });
 
+describe('MKT-4E: skills that were not compared are never called missing', () => {
+  const EVERY = 'Your resume or profile shows every skill we compared for this post.';
+  const NONE_SHOW = 'None of the skills this post lists show up in your resume or profile.';
+
+  it('the gap section says how many skills were not checked, and "nothing missing" only claims what was compared', () => {
+    const some = renderWithProviders(<WhatYoureMissing gaps={[]} missing={['Kubernetes']} listed={4} compared={2} unchecked={2} />);
+    expect(screen.getByTestId('fit-missing-unchecked')).toHaveTextContent('2 more skills in the post are not checked yet.');
+    some.unmount();
+    const none = renderWithProviders(<WhatYoureMissing gaps={[]} missing={[]} listed={3} compared={2} unchecked={1} />);
+    expect(screen.getByText(EVERY)).toBeInTheDocument();
+    expect(screen.getByText('1 more skill in the post is not checked yet.')).toBeInTheDocument();
+    // The older sentence claimed every skill the post lists, which is more than was compared.
+    expect(screen.queryByText('Your resume or profile mentions every skill this post lists.')).not.toBeInTheDocument();
+    none.unmount();
+    renderWithProviders(<JobFitView fit={fit({ strengths: [], gaps: [], keywordsMissing: [], skills: { aligned: ['TypeScript'], missing: [], listed: 2, unchecked: ['Vertex AI'] } })} />);
+    const section = screen.getByTestId('fit-missing');
+    expect(within(section).getByText('1 more skill in the post is not checked yet.')).toBeInTheDocument();
+    // They are counted, not listed as chips: nothing says they are missing.
+    expect(within(section).queryByText('Vertex AI')).not.toBeInTheDocument();
+  });
+
+  it('skillCounts: what is left of the listed skills, with or without the list from the server; never from merged lists', () => {
+    expect(skillCounts({ aligned: ['TypeScript'], missing: ['Go'], listed: 3, unchecked: ['Vertex AI'] })).toEqual({ compared: 2, unchecked: 1 });
+    expect(skillCounts({ aligned: ['TypeScript'], missing: ['Go'], listed: 5 })).toEqual({ compared: 2, unchecked: 3 });
+    expect(skillCounts({ aligned: ['TypeScript'], missing: ['Go'], listed: 2 })).toEqual({ compared: 2, unchecked: 0 });
+    expect(skillCounts({ aligned: [], missing: [], listed: 0 })).toEqual({ compared: 0, unchecked: 0 });
+    // An older answer whose count is behind its lists never gives a negative number.
+    expect(skillCounts({ aligned: ['TypeScript', 'Go'], missing: ['Rust'], listed: 2 })).toEqual({ compared: 3, unchecked: 0 });
+    // The list and the remainder agree on a consistent answer; when they do not, no skill is passed over in silence.
+    expect(skillCounts({ aligned: [], missing: [], listed: 2, unchecked: [] })).toEqual({ compared: 0, unchecked: 2 });
+    expect(skillCounts({ aligned: ['TypeScript'], missing: [], listed: 1, unchecked: ['Vertex AI'] })).toEqual({ compared: 1, unchecked: 1 });
+  });
+
+  it('the count works before the server sends the list: it is what is left of the listed skills', () => {
+    // No `unchecked` on the fit (the producer is another bundle): 4 listed, 1 aligned, 1 missing.
+    renderWithProviders(<JobFitView fit={fit({ strengths: [], gaps: [], keywordsMatched: ['Payments'], keywordsMissing: ['Helm'], skills: { aligned: ['TypeScript'], missing: ['Kubernetes'], listed: 4 } })} />);
+    expect(within(screen.getByTestId('fit-missing')).getByTestId('fit-missing-unchecked')).toHaveTextContent('2 more skills in the post are not checked yet.');
+  });
+
+  it('a post whose skills were all left out: neither "shows every skill we compared" nor "none of them show up"', () => {
+    // Raw lists empty, two skills listed: nothing was compared (both waiting for review, or a word with another reading).
+    for (const skills of [{ aligned: [], missing: [], listed: 2 }, { aligned: [], missing: [], listed: 2, unchecked: ['飞书', '钉钉'] }]) {
+      const view = renderWithProviders(<JobFitView fit={fit({ kind: 'pre', summary: null, strengths: [], gaps: [], keywordsMatched: [], keywordsMissing: [], skills })} />);
+      const missing = screen.getByTestId('fit-missing');
+      expect(within(missing).queryByText(EVERY)).not.toBeInTheDocument();
+      expect(within(missing).getByTestId('fit-missing-unchecked')).toHaveTextContent('The 2 skills in this post are not checked against your resume yet.');
+      const why = screen.getByTestId('fit-why');
+      expect(within(why).queryByText(NONE_SHOW)).not.toBeInTheDocument();
+      expect(within(why).getByText('The skills this post lists are not checked against your resume yet.')).toBeInTheDocument();
+      view.unmount();
+    }
+    // One skill: the singular.
+    const one = renderWithProviders(<WhatYoureMissing gaps={[]} missing={[]} listed={1} compared={0} unchecked={1} />);
+    expect(screen.getByTestId('fit-missing-unchecked')).toHaveTextContent('The 1 skill in this post is not checked against your resume yet.');
+    one.unmount();
+    // The model's verified terms still show: they were checked against the resume themselves.
+    renderWithProviders(<JobFitView fit={fit({ strengths: [], gaps: [], keywordsMatched: ['Payments'], keywordsMissing: ['Helm'], skills: { aligned: [], missing: [], listed: 2 } })} />);
+    expect(within(screen.getByTestId('fit-why')).getByText('Payments')).toBeInTheDocument();
+    expect(within(screen.getByTestId('fit-missing')).getByText('Helm')).toBeInTheDocument();
+    expect(screen.getByTestId('fit-missing-unchecked')).toHaveTextContent('The 2 skills in this post are not checked against your resume yet.');
+  });
+
+  it('skills that were compared and all shown, or all missing, read as before', () => {
+    const shown = renderWithProviders(<JobFitView fit={fit({ kind: 'pre', summary: null, strengths: [], gaps: [], keywordsMissing: [], skills: { aligned: ['TypeScript', 'Go'], missing: [], listed: 2 } })} />);
+    expect(within(screen.getByTestId('fit-missing')).getByText(EVERY)).toBeInTheDocument();
+    expect(screen.queryByTestId('fit-missing-unchecked')).not.toBeInTheDocument();
+    shown.unmount();
+    renderWithProviders(<JobFitView fit={fit({ kind: 'pre', summary: null, strengths: [], gaps: [], keywordsMissing: [], skills: { aligned: [], missing: ['Kubernetes'], listed: 1 } })} />);
+    expect(within(screen.getByTestId('fit-why')).getByText(NONE_SHOW)).toBeInTheDocument();
+    expect(screen.queryByTestId('fit-missing-unchecked')).not.toBeInTheDocument();
+  });
+
+  it('the fit analysis card counts the same way', () => {
+    renderWithProviders(<FitAnalysisView card={{ ...CARD, kind: 'pre', highlights: [], gaps: [], skills: { aligned: [], missing: [], listed: 3 } }} />);
+    const view = screen.getByTestId('fit-analysis');
+    expect(within(view).queryByText(EVERY)).not.toBeInTheDocument();
+    expect(within(view).queryByText(NONE_SHOW)).not.toBeInTheDocument();
+    expect(within(view).getByTestId('fit-missing-unchecked')).toHaveTextContent('The 3 skills in this post are not checked against your resume yet.');
+  });
+});
+
+const REQUIREMENTS: RequirementCheck[] = [
+  { id: 'r1', kind: 'skill', text: 'Nice to have: Kubernetes', importance: 'preferred', status: 'not_shown', evidence: '' },
+  { id: 'r2', kind: 'experience', text: '5+ years building backend services', importance: 'must', status: 'met', evidence: '- Led the rewrite of the **billing** API over six years.' },
+  { id: 'r3', kind: 'skill', text: 'Production experience with PostgreSQL', importance: 'must', status: 'partly', evidence: 'Tuned MySQL queries for the reporting service.' },
+  { id: 'r4', kind: 'education', text: "Bachelor's degree in Computer Science or similar", importance: 'must', status: 'not_shown', evidence: '' },
+  { id: 'r5', kind: 'scope', text: 'We offer a generous learning budget', importance: 'preferred', status: 'not_applicable', evidence: '' },
+  { id: 'r6', kind: 'domain', text: 'Experience in payments', importance: 'preferred', status: 'met', evidence: 'Built payment APIs in TypeScript and Go serving 2M users.' },
+];
+
+describe('MKT-4E: the requirement checklist ("What the post asks for")', () => {
+  it('lists must-haves first, then the preferred ones, each with its status, the posting line and the resume quote', () => {
+    renderWithProviders(<RequirementChecklist requirements={REQUIREMENTS} />);
+    const section = screen.getByTestId('fit-requirements');
+    expect(within(section).getByRole('heading', { name: 'What the post asks for' })).toBeInTheDocument();
+    const groups = Array.from(section.querySelectorAll('[data-group]'));
+    expect(groups.map((g) => g.getAttribute('data-group'))).toEqual(['must', 'preferred']);
+    expect(within(groups[0] as HTMLElement).getByRole('heading', { name: 'Must have' })).toBeInTheDocument();
+    expect(within(groups[1] as HTMLElement).getByRole('heading', { name: 'Nice to have' })).toBeInTheDocument();
+    // The posting's order inside a group; the "not applicable" line (a benefit) is not listed.
+    const ids = (g: Element) => Array.from(g.querySelectorAll('[data-requirement]')).map((li) => li.getAttribute('data-requirement'));
+    expect(ids(groups[0]!)).toEqual(['r2', 'r3', 'r4']);
+    expect(ids(groups[1]!)).toEqual(['r1', 'r6']);
+    expect(section.textContent).not.toContain('learning budget');
+
+    const req = (id: string) => section.querySelector(`[data-requirement="${id}"]`) as HTMLElement;
+    // The posting line verbatim, the status in plain words, the resume's own words without its markdown.
+    expect(within(req('r2')).getByText('“5+ years building backend services”')).toBeInTheDocument();
+    expect(within(req('r2')).getByText('Met')).toBeInTheDocument();
+    expect(within(req('r2')).getByText('“Led the rewrite of the billing API over six years.”')).toBeInTheDocument();
+    expect(within(req('r2')).getByText('From your resume')).toBeInTheDocument();
+    expect(within(req('r3')).getByText('Partly')).toBeInTheDocument();
+    expect(within(req('r3')).getByText('“Tuned MySQL queries for the reporting service.”')).toBeInTheDocument();
+    // Not shown: a statement about the resume, with no quote and no verdict on the person.
+    expect(within(req('r4')).getByText('Not shown in your resume')).toBeInTheDocument();
+    expect(within(req('r4')).queryByText('From your resume')).not.toBeInTheDocument();
+    expect(req('r4')).toHaveAttribute('data-status', 'not_shown');
+    expect(section.textContent).not.toMatch(/you lack|you don't have|you are missing/i);
+    // One count per group.
+    expect(within(groups[0] as HTMLElement).getByText('1 met, 1 partly, 1 not shown, of 3')).toBeInTheDocument();
+    expect(within(groups[1] as HTMLElement).getByText('1 met, 0 partly, 1 not shown, of 2')).toBeInTheDocument();
+    // The statuses are a model's reading: the block says so.
+    expect(within(section).getByTestId('fit-requirements-note')).toHaveTextContent('AI compared each line with your resume. Check it before you rely on it.');
+  });
+
+  it('a quote is never shown for a "not shown" line, even when an answer carries one', () => {
+    renderWithProviders(<RequirementChecklist requirements={[{ id: 'r1', kind: 'skill', text: 'Kubernetes in production', importance: 'must', status: 'not_shown', evidence: 'Ran Docker Swarm.' }]} />);
+    expect(screen.getByTestId('fit-requirements').textContent).not.toContain('Docker Swarm');
+  });
+
+  it('with no checklist nothing is rendered: an estimate and an older fit look as they always did', () => {
+    for (const requirements of [[], null, undefined, [REQUIREMENTS[4]!]]) {
+      const r = renderWithProviders(<RequirementChecklist requirements={requirements} />);
+      expect(r.container).toBeEmptyDOMElement();
+      r.unmount();
+    }
+    expect(listedRequirements([REQUIREMENTS[4]!])).toEqual({ must: [], preferred: [] });
+    // The job page: an AI fit written before the checklist, and a quick estimate.
+    const older = renderWithProviders(<JobFitView fit={fit()} />);
+    expect(screen.queryByTestId('fit-requirements')).not.toBeInTheDocument();
+    expect(Array.from(screen.getByTestId('job-fit').children).map((c) => (c as HTMLElement).dataset.testid ?? c.tagName)).toEqual(['SECTION', 'DIV', 'fit-dimensions']);
+    older.unmount();
+    renderWithProviders(<JobFitView fit={fit({ kind: 'pre', summary: null, strengths: [], gaps: [], requirements: [] })} />);
+    expect(screen.queryByTestId('fit-requirements')).not.toBeInTheDocument();
+    expect(screen.getByText('Quick estimate')).toBeInTheDocument();
+  });
+
+  it('a fit with a checklist shows it on the job page between the skills and "What we compared"', () => {
+    renderWithProviders(<JobFitView fit={fit({ requirements: REQUIREMENTS })} />);
+    const order = Array.from(screen.getByTestId('job-fit').children).map((c) => (c as HTMLElement).dataset.testid ?? c.tagName);
+    expect(order).toEqual(['SECTION', 'DIV', 'fit-requirements', 'fit-dimensions']);
+    expect(within(screen.getByTestId('fit-requirements')).getByText('“5+ years building backend services”')).toBeInTheDocument();
+  });
+
+  it('a quick estimate never shows a checklist, even if an answer carries one (only an AI fit has checked lines)', () => {
+    renderWithProviders(<JobFitView fit={fit({ kind: 'pre', summary: null, strengths: [], gaps: [], requirements: REQUIREMENTS })} />);
+    expect(screen.queryByTestId('fit-requirements')).not.toBeInTheDocument();
+  });
+
+  it('the fit analysis card shows the checklist when the card carries one', () => {
+    const withList = renderWithProviders(<FitAnalysisView card={{ ...CARD, requirements: REQUIREMENTS }} />);
+    expect(within(screen.getByTestId('fit-analysis')).getByTestId('fit-requirements')).toBeInTheDocument();
+    withList.unmount();
+    renderWithProviders(<FitAnalysisView card={CARD} />);
+    expect(screen.queryByTestId('fit-requirements')).not.toBeInTheDocument();
+  });
+
+  it('GoApply: the checklist carries the AI label, and nothing in it uses visa wording', () => {
+    renderWithBrand(<JobFitView fit={fit({ requirements: REQUIREMENTS })} />, { brand: 'goapply' });
+    const section = screen.getByTestId('fit-requirements');
+    expect(within(section).getByTestId('ai-badge')).toHaveTextContent('AI-text');
+    expect(section.textContent ?? '').not.toMatch(/visa|sponsor|签证|簽證|work permit/i);
+    // Every other AI-written block on the card keeps its label too (summary, strengths, gaps, the checklist).
+    expect(screen.getAllByTestId('ai-badge')).toHaveLength(4);
+  });
+});
+
 describe('JobFitView chips', () => {
   it('uses the complete deterministic split, not the 1–2 evidence lines, plus verified AI terms', () => {
     // The skills evidence names only TypeScript / Kubernetes; the split has Go too.
@@ -352,13 +566,18 @@ describe('JobFitView chips', () => {
   });
 });
 
+/** A keyword item as the server sends it (MKT-4E): a state, the canonical id and, when shown from the text, the sentence. */
+function term(name: string, state: KeywordItem['state'], more: Partial<KeywordItem> = {}): KeywordItem {
+  return { term: name, state, found: state !== 'not_shown', skillId: name.toLowerCase().replace(/[^a-z0-9]+/g, '_'), quote: null, ...more };
+}
+
 describe('KeywordCheck', () => {
   const rows: KeywordRow[] = [
     { key: 'title', status: 'met', need: 'Backend Engineer', have: 'Software Engineer', found: null, total: null, items: [] },
     { key: 'years', status: 'unknown', need: 5, have: null, found: null, total: null, items: [] },
     { key: 'education', status: 'not_stated', need: null, have: 'bachelor', found: null, total: null, items: [] },
-    { key: 'skills', status: 'partly', need: null, have: null, found: 1, total: 2, items: [{ term: 'TypeScript', found: true, required: true }, { term: 'Kubernetes', found: false, required: true }] },
-    { key: 'keywords', status: 'not_met', need: null, have: null, found: 0, total: 1, items: [{ term: 'gRPC', found: false }] },
+    { key: 'skills', status: 'partly', need: null, have: null, found: 1, total: 2, items: [term('TypeScript', 'shown', { required: true }), term('Kubernetes', 'not_shown', { required: true })] },
+    { key: 'keywords', status: 'not_met', need: null, have: null, found: 0, total: 1, items: [term('gRPC', 'not_shown')] },
   ];
 
   it('renders one row per requirement with plain statuses and counts', () => {
@@ -370,9 +589,133 @@ describe('KeywordCheck', () => {
     expect(within(byRow('years')).getByText('Not shown on your resume')).toBeInTheDocument();
     expect(within(byRow('years')).getByText('They ask for 5+ years')).toBeInTheDocument();
     expect(within(byRow('education')).getByText('Not stated in the post')).toBeInTheDocument();
-    expect(within(byRow('skills')).getByText('1 of 2 shown by your resume')).toBeInTheDocument();
-    expect(within(byRow('skills')).getByLabelText('Kubernetes: Not mentioned in your resume (Required)')).toBeInTheDocument();
+    expect(within(byRow('skills')).getByText('1 shown, 0 related, of 2')).toBeInTheDocument();
+    const kubernetes = within(byRow('skills')).getByText('Kubernetes').closest('li')!;
+    expect(within(kubernetes).getByText('Not in your resume')).toBeInTheDocument();
+    expect(within(kubernetes).getByText('Required')).toBeInTheDocument();
     expect(within(byRow('keywords')).getByText('Not met')).toBeInTheDocument();
+  });
+});
+
+describe('MKT-4E: the keyword check has three states, each in its own words', () => {
+  const skills: KeywordRow = {
+    key: 'skills',
+    status: 'partly',
+    need: null,
+    have: null,
+    found: 3,
+    total: 4,
+    items: [
+      term('TypeScript', 'shown', { required: true, quote: '- Rewrote the **billing** service in TypeScript for 40 partner teams.' }),
+      term('Go', 'shown'),
+      term('Relational databases', 'related', { via: 'PostgreSQL', required: true }),
+      term('Kubernetes', 'not_shown'),
+    ],
+  };
+  const item = (name: string) => screen.getByText(name, { selector: 'span' }).closest('li')!;
+
+  it('shown says so with the resume sentence; related names what the resume shows; not shown is a statement about the resume', () => {
+    renderWithProviders(<KeywordCheck rows={[skills]} />);
+    const ts = item('TypeScript');
+    expect(ts).toHaveAttribute('data-state', 'shown');
+    expect(within(ts).getByText('Your resume shows it')).toBeInTheDocument();
+    // The sentence it was found in, as the person wrote it (no markdown markup).
+    expect(within(ts).getByText('“Rewrote the billing service in TypeScript for 40 partner teams.”')).toBeInTheDocument();
+    // Shown from the skill list only: no quote, and none is made up.
+    const go = item('Go');
+    expect(within(go).getByText('Your resume shows it')).toBeInTheDocument();
+    expect(go.textContent).not.toContain('“');
+
+    const related = item('Relational databases');
+    expect(related).toHaveAttribute('data-state', 'related');
+    expect(within(related).getByText('Related: your resume shows PostgreSQL')).toBeInTheDocument();
+    expect(within(related).queryByText('Your resume shows it')).not.toBeInTheDocument();
+
+    const missing = item('Kubernetes');
+    expect(missing).toHaveAttribute('data-state', 'not_shown');
+    expect(within(missing).getByText('Not in your resume')).toBeInTheDocument();
+    // Never a verdict on the person.
+    expect(screen.getByTestId('fit-keyword-check').textContent).not.toMatch(/you lack|you don't have|you are missing|missing skill/i);
+  });
+
+  it('counts read "{shown} shown, {related} related, of {total}"', () => {
+    renderWithProviders(<KeywordCheck rows={[skills]} />);
+    expect(screen.getByText('2 shown, 1 related, of 4')).toBeInTheDocument();
+    expect(keywordCounts(skills.items)).toEqual({ shown: 2, related: 1, total: 4 });
+    expect(keywordCounts([])).toEqual({ shown: 0, related: 0, total: 0 });
+  });
+
+  it('a quote is shown for a shown item only, whatever an answer carries', () => {
+    renderWithProviders(<KeywordCheck rows={[{ ...skills, items: [term('Kubernetes', 'not_shown', { quote: 'Ran Kubernetes.' }), term('SQL', 'related', { via: 'MySQL', quote: 'Tuned MySQL.' })] }]} />);
+    expect(screen.getByTestId('fit-keyword-check').textContent).not.toContain('“');
+  });
+
+  it('an answer written before the three states existed reads the same way (found and via)', () => {
+    const old = [{ term: 'Relational databases', found: true, via: 'PostgreSQL' }, { term: 'TypeScript', found: true }, { term: 'Kubernetes', found: false }] as unknown as KeywordItem[];
+    expect(old.map((i) => keywordState(i))).toEqual(['related', 'shown', 'not_shown']);
+    renderWithProviders(<KeywordCheck rows={[{ ...skills, items: old }]} />);
+    expect(within(item('Relational databases')).getByText('Related: your resume shows PostgreSQL')).toBeInTheDocument();
+    expect(within(item('TypeScript')).getByText('Your resume shows it')).toBeInTheDocument();
+    expect(within(item('Kubernetes')).getByText('Not in your resume')).toBeInTheDocument();
+    expect(screen.getByText('1 shown, 1 related, of 3')).toBeInTheDocument();
+  });
+
+  it('skills nobody has reviewed are left out and counted; a row with nothing else is "Not checked yet", never a miss', () => {
+    const first = renderWithProviders(<KeywordCheck rows={[{ ...skills, unchecked: 2 }]} />);
+    expect(screen.getByTestId('fit-keyword-unchecked')).toHaveTextContent('2 more skills from the post are not checked yet.');
+    first.unmount();
+    renderWithProviders(
+      <KeywordCheck
+        rows={[
+          { key: 'skills', status: 'not_checked', need: null, have: null, found: null, total: null, items: [], unchecked: 1 },
+          // A posting that has keywords, none of which could be checked: the status, and no count of loose words.
+          { key: 'keywords', status: 'not_checked', need: null, have: null, found: null, total: null, items: [] },
+        ]}
+      />,
+    );
+    const row = document.querySelector('[data-row="skills"]') as HTMLElement;
+    expect(within(row).getByText('Not checked yet')).toBeInTheDocument();
+    // Nothing else is listed in the row, so it is not "1 more".
+    expect(within(row).getByText('The 1 skill from the post is not checked yet.')).toBeInTheDocument();
+    expect(within(row).queryByText(/Not met|Not in your resume|Not stated in the post/)).not.toBeInTheDocument();
+    const keywords = document.querySelector('[data-row="keywords"]') as HTMLElement;
+    expect(within(keywords).getByText('Not checked yet')).toBeInTheDocument();
+    expect(within(keywords).queryByText(/Not stated in the post|not checked yet\./)).not.toBeInTheDocument();
+  });
+
+  it('offers the way to add a term yourself only when there is one to add, and never edits anything', () => {
+    const add = { href: '/resume/v1?tailor=job1&from=keyword_check', label: 'Open your resume for this job' };
+    const some = renderWithProviders(<KeywordCheck rows={[skills]} addToResume={add} />);
+    const box = screen.getByTestId('fit-keyword-add');
+    expect(within(box).getByText('Have one of these? Add the exact words to your resume yourself. Nothing is added for you.')).toBeInTheDocument();
+    expect(within(box).getByRole('link', { name: 'Open your resume for this job' })).toHaveAttribute('href', add.href);
+    // A link, not a button: nothing is changed from this page.
+    expect(within(screen.getByTestId('fit-keyword-check')).queryByRole('button')).not.toBeInTheDocument();
+    some.unmount();
+    // Everything shown: nothing to add, so no prompt.
+    const all = renderWithProviders(<KeywordCheck rows={[{ ...skills, items: [term('TypeScript', 'shown')] }]} addToResume={add} />);
+    expect(screen.queryByTestId('fit-keyword-add')).not.toBeInTheDocument();
+    all.unmount();
+    // No path given: no prompt.
+    renderWithProviders(<KeywordCheck rows={[skills]} />);
+    expect(screen.queryByTestId('fit-keyword-add')).not.toBeInTheDocument();
+  });
+
+  it('the connected check opens tailoring for the resume it read when the brand can tailor, else the person\'s resumes', async () => {
+    api.getKeywordCheck.mockResolvedValue({ jobId: 'job1', resumeVariantId: 'v1', rows: [skills], asOf: '2026-10-11T08:00:00.000Z', vocabularyAsOf: null });
+    const withAi = renderWithBrand(<JobKeywordCheck jobId="job1" />, { flags: { 'ai.text': true } });
+    expect(await screen.findByRole('link', { name: 'Open your resume for this job' })).toHaveAttribute('href', '/resume/v1?tailor=job1&from=keyword_check');
+    withAi.unmount();
+    renderWithBrand(<JobKeywordCheck jobId="job1" />, { flags: { 'ai.text': false } });
+    expect(await screen.findByRole('link', { name: 'Open your resume' })).toHaveAttribute('href', '/resume');
+    expect(screen.queryByRole('link', { name: 'Open your resume for this job' })).not.toBeInTheDocument();
+  });
+
+  it('GoApply renders the same three states', () => {
+    renderWithBrand(<KeywordCheck rows={[skills]} />, { brand: 'goapply' });
+    expect(screen.getAllByText('Your resume shows it')).toHaveLength(2);
+    expect(screen.getByText('Related: your resume shows PostgreSQL')).toBeInTheDocument();
+    expect(screen.getByText('Not in your resume')).toBeInTheDocument();
   });
 });
 
@@ -388,19 +731,15 @@ describe('FIX-3: the keyword check', () => {
             have: null,
             found: 2,
             total: 3,
-            items: [
-              { term: 'Relational databases', found: true, via: 'PostgreSQL' },
-              { term: 'TypeScript', found: true },
-              { term: 'Kubernetes', found: false },
-            ],
+            items: [term('Relational databases', 'related', { via: 'PostgreSQL' }), term('TypeScript', 'shown'), term('Kubernetes', 'not_shown')],
           },
         ]}
       />,
     );
-    expect(screen.getByLabelText('Relational databases: your resume shows PostgreSQL')).toBeInTheDocument();
-    expect(screen.getByText('from PostgreSQL')).toBeInTheDocument();
-    expect(screen.getByLabelText('TypeScript: Mentioned in your resume')).toBeInTheDocument();
-    expect(screen.getByLabelText('Kubernetes: Not mentioned in your resume')).toBeInTheDocument();
+    const li = (name: string) => screen.getByText(name, { selector: 'span' }).closest('li')!;
+    expect(within(li('Relational databases')).getByText('Related: your resume shows PostgreSQL')).toBeInTheDocument();
+    expect(within(li('TypeScript')).getByText('Your resume shows it')).toBeInTheDocument();
+    expect(within(li('Kubernetes')).getByText('Not in your resume')).toBeInTheDocument();
   });
 
   it('the same words on both sides (本科 asked, 本科 held) and a repeated term do not collide as React keys', () => {
@@ -410,7 +749,7 @@ describe('FIX-3: the keyword check', () => {
         <KeywordCheck
           rows={[
             { key: 'education', status: 'met', need: '本科', have: '本科', found: null, total: null, items: [] },
-            { key: 'keywords', status: 'met', need: null, have: null, found: 2, total: 2, items: [{ term: 'Go', found: true }, { term: 'Go', found: true }] },
+            { key: 'keywords', status: 'met', need: null, have: null, found: 2, total: 2, items: [term('Go', 'shown'), term('Go', 'shown')] },
           ]}
         />,
       );

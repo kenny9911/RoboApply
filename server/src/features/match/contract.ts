@@ -60,7 +60,9 @@ export const MatchJobParamsSchema = z.object({ id: Id });
 
 /**
  * `RAJobMatchScore.dimensions`. Evidence `ref` names what a deterministic
- * evidence line is (`title`, `seniority`, `skill_have`, `skill_missing`,
+ * evidence line is (`title`, `seniority`, `skill_have`, `skill_related`: the
+ * posting asks for a broader skill and the resume shows a more specific one,
+ * `skill_missing`,
  * `education_required`, `class_year`, `industry`, `location_met`,
  * `location_not_met`, `pay_met`, `pay_not_met`, `visa_offered`,
  * `visa_not_offered`, and `logistics_by_your_filters`: every stated location
@@ -99,9 +101,13 @@ export const MatchExplanationSchema = z
   })
   .passthrough();
 
-/** `RAKeywordExtraction.keywords`: top 30 `{ keyword, importance, frequency }` */
+/**
+ * `RAKeywordExtraction.keywords`: top 30 `{ keyword, importance, frequency }`.
+ * Enrichment v3 adds `skillId`, the canonical skill the keyword names (absent
+ * on rows written before it; the keyword check then looks the string up).
+ */
 export const KeywordExtractionSchema = z.array(
-  z.object({ keyword: z.string(), importance: z.enum(['high', 'medium', 'low']), frequency: z.number() }).strict(),
+  z.object({ keyword: z.string(), importance: z.enum(['high', 'medium', 'low']), frequency: z.number(), skillId: z.string().nullable().optional() }).strict(),
 );
 
 /** `RAFitReport.report` — a `CompetitivenessReportBody` (kind 'competitiveness'); read back by `parseStoredReport`. */
@@ -200,6 +206,15 @@ export interface MatchFitView {
     listed: number;
     /** Soft skills the posting names ("communication"): shown, never compared and never part of the number. */
     softSkills?: string[];
+    /**
+     * Skills the posting names that are not compared, so they are neither in
+     * `aligned` nor in `missing` (nothing may say "not in your resume" about
+     * them): one nobody has reviewed yet that the resume does not name, and a
+     * reviewed one whose only trace in the resume is a word with another
+     * reading. Optional and additive: a reader without it counts them as
+     * `listed` minus the two lists.
+     */
+    unchecked?: string[];
   };
   /** One overlap and one gap for cards (real data only; null when none). */
   topOverlap: string | null;
@@ -348,7 +363,7 @@ export interface FitAnalysisCard {
   kind: 'pre' | 'ai';
   dimensions: MatchDimension[];
   /** Deterministic: the posting's skills your resume/profile shows, the ones it does not, and how many it lists. */
-  skills: { aligned: string[]; missing: string[]; listed: number };
+  skills: { aligned: string[]; missing: string[]; listed: number; unchecked?: string[] };
   /** `required` is the posting's stated degree level; null when not stated. */
   education: { required: string | null; yours: string | null; meets: boolean | null };
   /** AI-written strengths (empty for a quick estimate). */
@@ -363,6 +378,12 @@ export interface FitAnalysisCard {
   estimateReason: EstimateReason | null;
   /** True when this request spent a `fit_analysis` credit. */
   charged: boolean;
+  /**
+   * The requirement checklist of the fit (scorer v4), as on `MatchFitView`.
+   * Optional and additive: absent or empty for a quick estimate and for a fit
+   * written before scorer v4, and the card then renders without the list.
+   */
+  requirements?: RequirementCheck[];
 }
 
 // ── GET /match/jobs/:id/keyword-check (free, deterministic; F-RES-08) ─────
@@ -374,9 +395,47 @@ export const KeywordCheckQuerySchema = z.object({ resumeVariantId: Id.optional()
 export type KeywordRowKey = 'title' | 'years' | 'education' | 'skills' | 'keywords';
 /**
  * `not_stated`: the posting does not say. `unknown`: your resume/profile does
- * not show it, so we cannot tell (never counted as a miss).
+ * not show it, so we cannot tell (never counted as a miss). `not_checked`: the
+ * posting names skills or keywords, and nothing may be said about any of them
+ * yet (none is a reviewed skill, or the resume's only trace of it is a word
+ * with another reading), so the row lists none (the skills and keywords rows
+ * only; never counted as a miss either).
  */
-export type KeywordRowStatus = 'met' | 'partly' | 'not_met' | 'not_stated' | 'unknown';
+export type KeywordRowStatus = 'met' | 'partly' | 'not_met' | 'not_stated' | 'unknown' | 'not_checked';
+
+/**
+ * What the resume says about one skill or keyword of the posting (SM-6):
+ *   shown      the resume or profile names the skill itself (its canonical id
+ *              is among the person's, or one of its names is in the resume text);
+ *   related    it names a more specific skill that shows this broader one
+ *              (PostgreSQL for "relational databases"); `via` says which;
+ *   not_shown  neither.
+ * A skill nobody has reviewed is never an item: it is neither claimed nor denied.
+ */
+export const KEYWORD_STATES = ['shown', 'related', 'not_shown'] as const;
+export type KeywordState = (typeof KEYWORD_STATES)[number];
+
+export interface KeywordItem {
+  /** The skill in its usual spelling (the vocabulary's label when it has one). */
+  term: string;
+  state: KeywordState;
+  /** Kept for older clients: true for `shown` and `related`. */
+  found: boolean;
+  /** The canonical skill id; null for a skill of a posting that carries no ids and that the vocabulary does not know. */
+  skillId: string | null;
+  /** For `related`: what the resume shows that counted (a skill, or the title that shows the practice). */
+  via?: string;
+  /**
+   * For `shown`: the resume sentence the term was found in, verbatim, at most
+   * KEYWORD_QUOTE_MAX characters. Null when the term comes from the skill list
+   * only, and for every other state.
+   */
+  quote: string | null;
+  required?: boolean;
+}
+/** The longest resume quote a keyword item carries. */
+export const KEYWORD_QUOTE_MAX = 160;
+
 export interface KeywordRow {
   key: KeywordRowKey;
   status: KeywordRowStatus;
@@ -384,22 +443,32 @@ export interface KeywordRow {
   need: string | number | null;
   /** What your resume/profile shows, when known. */
   have: string | number | null;
-  /** For skills/keywords: how many of `total` your resume mentions. */
+  /** For skills/keywords: how many of `total` your resume shows or has related evidence for. */
   found: number | null;
   total: number | null;
   /**
-   * For skills/keywords: each term and whether your resume shows it. `via` is
-   * set when the resume does not name the term itself but names something
-   * that shows it ("relational databases" via "PostgreSQL"), so the reader
-   * sees what counted.
+   * For skills/keywords: one item per skill, each with its state. The row's
+   * status counts a shown item 1 and a related one 0.5.
    */
-  items: Array<{ term: string; found: boolean; required?: boolean; via?: string }>;
+  items: KeywordItem[];
+  /**
+   * For skills: how many of the posting's hard skills are not listed because
+   * nothing may be said about them (nobody has reviewed what they are, or the
+   * resume's only trace is a word with another reading). Absent or 0: none.
+   */
+  unchecked?: number;
 }
 export interface KeywordCheckResponse {
   jobId: string;
   resumeVariantId: string | null;
   rows: KeywordRow[];
   asOf: string;
+  /**
+   * When the skill vocabulary that answered was read from the database (ISO);
+   * null while only the committed seed is loaded. Optional: absent on an
+   * answer assembled without it.
+   */
+  vocabularyAsOf?: string | null;
 }
 
 // ── Competitiveness report: "You and what employers ask" (flag `competitiveness`; credit `competitiveness`; WP-77) ──

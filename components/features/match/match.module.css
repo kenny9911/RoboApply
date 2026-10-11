@@ -299,6 +299,166 @@
   color: var(--warn);
 }
 
+/* Skills and keywords: one line per term with its state, and the resume's own
+   sentence when the term was found in the text. */
+.terms {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+
+.term {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--rule);
+  border-left: 3px solid var(--rule);
+  min-width: 0;
+}
+
+.term:first-child {
+  border-top-left-radius: var(--r-sm);
+}
+
+.term:last-child {
+  border-bottom: none;
+  border-bottom-left-radius: var(--r-sm);
+}
+
+.termShown {
+  border-left-color: var(--ok);
+}
+
+.termRelated {
+  border-left-color: var(--action);
+}
+
+.termMissing {
+  border-left-style: dashed;
+  border-left-color: var(--rule-strong);
+}
+
+.termHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-2);
+  color: var(--text);
+}
+
+.termName {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.termState {
+  margin: 0;
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.termQuote {
+  margin: 0;
+  padding-left: var(--sp-2);
+  border-left: 2px solid var(--rule);
+  font-size: var(--fs-meta);
+  color: var(--text-muted);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  color: var(--action);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.link:hover {
+  color: var(--action-hover);
+}
+
+/* ── What the post asks for (the requirement checklist) ─────────────────── */
+.reqGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.reqGroupHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-1) var(--sp-3);
+}
+
+.reqList {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+}
+
+.req {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-1) var(--sp-3);
+  padding: var(--sp-3);
+  border-bottom: 1px solid var(--rule);
+  min-width: 0;
+}
+
+.req:last-child {
+  border-bottom: none;
+}
+
+.reqText {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.reqEvidence {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-2);
+  margin: 0;
+  font-size: var(--fs-meta);
+  line-height: 1.45;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .req {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .req .status {
+    justify-self: start;
+  }
+}
+
 /* ── Education and actions ──────────────────────────────────────────────── */
 .facts {
   display: flex;

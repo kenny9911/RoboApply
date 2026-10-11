@@ -152,6 +152,47 @@ describe('toMatchJob', () => {
     expect(classYearsFromTags('nope')).toEqual({ years: [], quote: null });
     expect(postingText(jobRecord())).toContain('Kubernetes required');
   });
+
+  it('carries the canonical skill ids enrichment v3 wrote: the id column, the id of each skill, and the posting language', () => {
+    const j = toMatchJob(
+      jobRecord({
+        skillIds: ['typescript', 'kubernetes', 'typescript', ' '],
+        skillsDetail: [
+          { skill: 'TypeScript', kind: 'hard', required: true, skillId: 'typescript' },
+          // How the id was found travels with it when enrichment stores it: a guess of the nearest vector is never compared.
+          { skill: 'Kubernetes', kind: 'hard', required: true, skillId: 'kubernetes', via: 'embedding' },
+          // No canonical skill was found for this one (enrichment writes null), and a malformed id is no id.
+          { skill: 'Fast-paced environment', kind: 'hard', required: false, skillId: null, via: 'none' },
+          { skill: 'Go', kind: 'hard', required: false, skillId: 42 },
+        ],
+        lang: 'zh-TW',
+      }),
+    );
+    expect(j.skillIds).toEqual(['typescript', 'kubernetes']);
+    expect(j.skillsDetail).toEqual([
+      { skill: 'TypeScript', kind: 'hard', required: true, skillId: 'typescript' },
+      { skill: 'Kubernetes', kind: 'hard', required: true, skillId: 'kubernetes', via: 'embedding' },
+      { skill: 'Fast-paced environment', kind: 'hard', required: false },
+      { skill: 'Go', kind: 'hard', required: false },
+    ]);
+    expect(j.lang).toBe('zh-TW');
+  });
+
+  it('a row enrichment v3 has not written yet has no ids: nothing is added to it, so it is compared by its strings', () => {
+    for (const row of [jobRecord(), jobRecord({ skillIds: [], lang: null }), jobRecord({ skillIds: undefined })]) {
+      const j = toMatchJob(row);
+      expect('skillIds' in j).toBe(false);
+      expect('lang' in j).toBe(false);
+      expect(j.skillsDetail?.every((s) => !('skillId' in s))).toBe(true);
+    }
+  });
+
+  it('buildMatchUser carries the request language for labels when the caller knows it, and adds nothing otherwise', () => {
+    const base = { userId: 'u1', market: 'intl' as const, ...defaultUserInputs(), resumeParsed: null };
+    expect('locale' in buildMatchUser(base, NOW)).toBe(false);
+    expect(buildMatchUser({ ...base, locale: 'zh-TW' }, NOW).locale).toBe('zh-TW');
+    expect('locale' in buildMatchUser({ ...base, locale: '  ' }, NOW)).toBe(false);
+  });
 });
 
 describe('CitationGuard', () => {
@@ -284,6 +325,21 @@ describe('keyword rows (F-RES-08)', () => {
     expect(mentions(t, '')).toBe(false);
   });
 
+  it('mentions: a Chinese, Japanese or Korean character next to a Latin name is a word boundary (those scripts write no spaces)', () => {
+    const zh = normalizeText('熟悉Java和Python，使用Go开发后端服务；了解React框架。');
+    for (const name of ['Java', 'Python', 'Go', 'React']) expect(mentions(zh, name), name).toBe(true);
+    // Still a whole word among Latin letters and digits: "Java" is not found in "JavaScript", "Go" not in "Golang".
+    const glued = normalizeText('熟悉JavaScript和Golang，C++也用过');
+    expect(mentions(glued, 'Java')).toBe(false);
+    expect(mentions(glued, 'Go')).toBe(false);
+    expect(mentions(glued, 'C')).toBe(false);
+    expect(mentions(glued, 'C++')).toBe(true);
+    expect(mentions(normalizeText('バックエンドはGoで開発'), 'Go')).toBe(true);
+    expect(mentions(normalizeText('백엔드는Go로개발'), 'Go')).toBe(true);
+    // A letter of another spaced script still continues the word.
+    expect(mentions(normalizeText('разработкаGoсервисов'), 'Go')).toBe(false);
+  });
+
   it('builds title, years, education, skills n/m and keywords n/m rows', () => {
     const rows = buildKeywordRows({
       job: { ...matchJob({ educationLevel: 'master', skillsDetail: [{ skill: 'TypeScript', required: true }, { skill: 'Kubernetes', required: true }] }), minYears: 5 },
@@ -300,7 +356,7 @@ describe('keyword rows (F-RES-08)', () => {
     expect(byKey.years).toMatchObject({ status: 'met', need: 5, have: 6 });
     expect(byKey.education).toMatchObject({ status: 'not_met', need: 'master', have: 'bachelor' });
     expect(byKey.skills).toMatchObject({ found: 2, total: 3, status: 'partly' });
-    expect(byKey.skills!.items).toContainEqual({ term: 'Kubernetes', found: false, required: true });
+    expect(byKey.skills!.items).toContainEqual({ term: 'Kubernetes', state: 'not_shown', found: false, skillId: 'kubernetes', quote: null, required: true });
     expect(byKey.keywords).toMatchObject({ found: 1, total: 2, status: 'partly' });
     expect(byKey.keywords!.items.map((i) => i.term)).toEqual(['PostgreSQL', 'gRPC']);
   });

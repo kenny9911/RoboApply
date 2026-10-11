@@ -5,6 +5,7 @@ import type { Market } from '../../platform/brand/registry.js';
 import { HttpError } from '../../platform/http.js';
 import type { FeedCountResult, LimitingFilter } from '../feed/index.js';
 import type { SearchProfileWire } from '../search/index.js';
+import type { SkillRecord } from '../skills/index.js';
 import type { ReportInventory } from './reportInventory.js';
 import type { MatchJobRecord, UserMatchInputs } from './context.js';
 import type { KeywordInput } from './keywordRows.js';
@@ -111,6 +112,45 @@ export function matchJob(overrides: Partial<MatchJob> = {}): MatchJob {
     ...overrides,
   };
 }
+
+// ── A fixture skill vocabulary (SM-6) ─────────────────────────────────────
+
+/** One skill of a fixture vocabulary: reviewed and hard unless the overrides say otherwise. */
+export function skillRecord(id: string, labelEn: string, overrides: Partial<SkillRecord> = {}): SkillRecord {
+  return { id, kind: 'hard', labelEn, labelZh: null, labelZhHant: null, aliases: [], parentId: null, esco: null, onet: null, status: 'reviewed', ...overrides };
+}
+
+/**
+ * A small vocabulary for tests of the estimate and the keyword check. Pin it
+ * with `setVocabularyForTests(FIXTURE_SKILLS)` (features/skills) and call
+ * `resetVocabularyForTests()` in `afterEach`.
+ *
+ *   postgresql, mysql → sql → relational_databases     the related-evidence chain
+ *   react → frontend_frameworks                        an everyday word under a broader skill
+ *   go, excel                                          everyday words
+ *   nodejs                                             three spellings, one skill
+ *   machine_learning                                   labels in three scripts, a short alias with another reading
+ *   cpa                                                a certificate with an ambiguous abbreviation
+ *   communication                                      a soft skill
+ *   vertex_ai                                          a skill nobody has reviewed
+ */
+export const FIXTURE_SKILLS: SkillRecord[] = [
+  skillRecord('relational_databases', 'Relational databases', { labelZh: '关系型数据库', labelZhHant: '關聯式資料庫', aliases: ['relational database', 'rdbms'] }),
+  skillRecord('sql', 'SQL', { parentId: 'relational_databases' }),
+  skillRecord('postgresql', 'PostgreSQL', { aliases: ['postgres'], parentId: 'sql' }),
+  skillRecord('mysql', 'MySQL', { parentId: 'sql' }),
+  skillRecord('frontend_frameworks', 'Frontend frameworks', { labelZh: '前端框架', labelZhHant: '前端框架' }),
+  skillRecord('react', 'React', { aliases: ['react.js', 'reactjs'], parentId: 'frontend_frameworks', everydayWord: true }),
+  skillRecord('go', 'Go', { aliases: ['golang'], everydayWord: true }),
+  skillRecord('excel', 'Excel', { aliases: ['microsoft excel'], everydayWord: true }),
+  skillRecord('nodejs', 'Node.js', { aliases: ['node'] }),
+  skillRecord('typescript', 'TypeScript'),
+  skillRecord('kubernetes', 'Kubernetes', { aliases: ['k8s'] }),
+  skillRecord('machine_learning', 'Machine learning', { labelZh: '机器学习', labelZhHant: '機器學習', aliases: ['ml'] }),
+  skillRecord('cpa', 'CPA', { kind: 'certification', labelZh: '注册会计师', aliases: ['certified public accountant', '注会'] }),
+  skillRecord('communication', 'Communication', { kind: 'soft', labelZh: '沟通能力', labelZhHant: '溝通能力', aliases: ['communication skills'] }),
+  skillRecord('vertex_ai', 'Vertex AI', { status: 'unreviewed' }),
+];
 
 export const RESUME_MD = [
   '# Ada Lovelace',

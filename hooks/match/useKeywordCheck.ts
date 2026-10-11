@@ -2,6 +2,12 @@
 
 // hooks/match/useKeywordCheck.ts — requirement rows for a job against a resume
 // (`GET /match/jobs/:id/keyword-check`; free, deterministic; F-RES-08).
+//
+// Each skill and keyword of the answer carries one of three states (`shown`,
+// `related`, `not_shown`), the canonical skill id, what counted for a related
+// one (`via`) and, for a shown one found in the text, the resume sentence
+// (`quote`). The answer also says which vocabulary read it (`vocabularyAsOf`).
+// The types are the server contract's (lib/api/contracts/match).
 
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
