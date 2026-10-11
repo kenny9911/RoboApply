@@ -15,6 +15,12 @@
 //                                  brandEnv (D5): GoApply uses CN_MATCH_PRIORS when set, else the shared value.
 //   MATCH_CALIBRATION_MIN_PAIRS    (estimate, AI) pairs a market needs before the isotonic map replaces the
 //                                  ranking blend (500)
+//   MATCH_SCORER_RUBRIC / CN_…     fit_v4 (default) or fit_v3: the rubric the fit scorer writes. fit_v4 is the
+//                                  requirement checklist (scorer_v4); fit_v3 is the rollback (four judged
+//                                  components, scorer_v3). Read through brandEnv (D5): GoApply uses
+//                                  CN_MATCH_SCORER_RUBRIC when set, else the shared value. Any other value keeps
+//                                  the default. A change needs no deploy: rows of the other rubric keep serving,
+//                                  flagged stale, and the precompute cron replaces them within its budgets (I7).
 
 import { brandEnv, type EnvSource } from '../../platform/brand/brandEnv.js';
 import type { BrandId, ProductBrand } from '../../platform/brand/registry.js';
@@ -25,8 +31,8 @@ import {
   DEFAULT_MATCH_WEIGHTS,
   FIT_RUBRIC_BY_PROMPT,
   MATCH_DIMENSION_KEYS,
-  SCORER_PROMPT_VERSION,
   tierForScore,
+  type FitPromptVersion,
   type FitRubric,
   type FitTierKey,
   type MatchPriors,
@@ -103,21 +109,52 @@ export function calibrationMinPairs(env: EnvSource = process.env): number {
   return n >= 1 ? n : DEFAULT_CALIBRATION_MIN_PAIRS;
 }
 
+/** The rubric a new fit score is written under when nothing is configured (scorer v4: the requirement checklist). */
+export const DEFAULT_SCORER_RUBRIC: FitRubric = 'fit_v4';
+
+/** The scorer prompt that writes each rubric (the inverse of `FIT_RUBRIC_BY_PROMPT`). */
+const PROMPT_OF_RUBRIC = Object.fromEntries(Object.entries(FIT_RUBRIC_BY_PROMPT).map(([prompt, rubric]) => [rubric, prompt])) as Record<FitRubric, FitPromptVersion>;
+
+/** The scorer prompt that writes `rubric`. */
+export function promptOfRubric(rubric: FitRubric): FitPromptVersion {
+  return PROMPT_OF_RUBRIC[rubric];
+}
+
+/**
+ * MATCH_SCORER_RUBRIC (GoApply: CN_MATCH_SCORER_RUBRIC, else the shared
+ * value): `fit_v4` or `fit_v3`. Unset, empty or anything else is `fit_v4`: a
+ * typo never switches the scorer.
+ */
+export function scorerRubric(brand: BrandId | ProductBrand = 'roboapply', env: EnvSource = process.env): FitRubric {
+  const raw = (brandEnv(brand, 'MATCH_SCORER_RUBRIC', env) ?? '').trim().toLowerCase();
+  return Object.hasOwn(PROMPT_OF_RUBRIC, raw) ? (raw as FitRubric) : DEFAULT_SCORER_RUBRIC;
+}
+
 /**
  * The scorer version a brand's fits are pinned to: one model, one prompt and
- * the rubric that prompt writes. A stored row written under another model or
- * prompt keeps serving (flagged stale) until the precompute cron replaces it;
- * a version change is a planned backfill, never a silent cache miss (I7).
- * `model` is the resolved scorer model, or null when none is configured.
+ * the rubric that prompt writes. One version at a time per market. A stored
+ * row written under another model, prompt or rubric keeps serving (flagged
+ * stale) until the precompute cron replaces it, newest feed candidates first
+ * and inside the existing budgets; a version change is a planned backfill,
+ * never a silent cache miss and never a bulk invalidation (I7).
  */
 export interface ScorerPin {
+  /** The resolved scorer model of the brand, or null when none is configured. */
   model: string | null;
-  prompt: string;
+  prompt: FitPromptVersion;
   rubric: FitRubric;
 }
 
-export function currentScorerPin(_brand: BrandId | ProductBrand, model: string | null): ScorerPin {
-  return { model, prompt: SCORER_PROMPT_VERSION, rubric: FIT_RUBRIC_BY_PROMPT[SCORER_PROMPT_VERSION] };
+/**
+ * The pin of a brand. `model` is the scorer model the caller resolved for the
+ * brand (LLM_MATCHING_MODEL; GoApply: CN_LLM_MATCHING_MODEL when set, else the
+ * shared one; whether the brand may call its route is match/scorerRoute.ts).
+ * The rubric is `scorerRubric(brand, env)` and the prompt is the one that
+ * writes it.
+ */
+export function currentScorerPin(brand: BrandId | ProductBrand, model: string | null, env: EnvSource = process.env): ScorerPin {
+  const rubric = scorerRubric(brand, env);
+  return { model, prompt: promptOfRubric(rubric), rubric };
 }
 
 /** MATCH_TIERS: 0 ≤ possible < good < great ≤ 100; else the defaults. */

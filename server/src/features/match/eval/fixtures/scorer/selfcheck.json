@@ -1,0 +1,311 @@
+{
+  "_synthetic": true,
+  "_note": "SYNTHETIC. The deterministic self-check of the scorer suite (eval/suites/scorer.suite.ts): ten resume-posting pairs written by hand, each with three hand-written answers. The three answers of a pair are the same checklist in three spellings a model produces (plain JSON; in a code fence with keys reordered, fixed-list values in capitals and numbers nobody asked for; prose around the object, decorated quotes, other ids and one invented line, never more than a third of the copied lines: beyond that the answer is refused). None is model output. Every expected number is worked out in the pair's \"what\". The parser, the verification, the arithmetic and the borderline rule must give the same total and tier for all three: ICC 1 and no tier flip.",
+  "pairs": [
+    {
+      "id": "sc01",
+      "what": "The plain case: a required line met, one not shown, a preferred one shown in part. 100 x (1 + 0 + 0.25) / 2.5 = 50; (35x100 + 30x50 + 15x60 + 10x100 + 10x100) / 100 = 79. One point under the Great edge with an estimate of 70: Good.",
+      "market": "intl",
+      "resume": "# Sample Person\n\n## Experience\nSenior Software Engineer, PayCo (2019-01 – present)\n- Built payment APIs in TypeScript and Go serving 2M users.\n- Ran PostgreSQL clusters for the ledger service.\n\n## Education\nBSc Computer Science, 2014\n\n## Skills\nTypeScript, Go, PostgreSQL",
+      "posting": {
+        "title": "Backend Engineer",
+        "description": "Build APIs in TypeScript and Go. You will own our payments service.",
+        "qualifications": "5+ years of backend experience. Kubernetes required. Nice to have: Rust.",
+        "seniority": "senior"
+      },
+      "estimate": 70,
+      "answers": [
+        "{\"requirements\":[{\"id\":\"r1\",\"kind\":\"experience\",\"text\":\"5+ years of backend experience\",\"importance\":\"must\",\"status\":\"met\",\"evidence\":\"Senior Software Engineer, PayCo (2019-01 – present)\"},{\"id\":\"r2\",\"kind\":\"skill\",\"text\":\"Kubernetes required\",\"importance\":\"must\",\"status\":\"not_shown\",\"evidence\":\"\"},{\"id\":\"r3\",\"kind\":\"skill\",\"text\":\"Nice to have: Rust\",\"importance\":\"preferred\",\"status\":\"partly\",\"evidence\":\"Built payment APIs in TypeScript and Go serving 2M users.\"}],\"level\":{\"post\":\"senior\",\"resume\":\"senior\",\"direction\":\"match\"},\"domain\":{\"status\":\"adjacent\",\"evidence\":\"Built payment APIs in TypeScript and Go serving 2M users.\"},\"trajectory\":{\"status\":\"toward\",\"evidence\":\"Senior Software Engineer, PayCo (2019-01 – present)\"},\"strengths\":[\"Your backend work matches what the post describes.\"],\"gaps\":[\"The post asks for something your resume does not show.\"],\"summary\":\"Your recent work lines up with this role, with one gap to close.\"}",
+        "```json\n{\n  \"score\": 93,\n  \"total\": \"93%\",\n  \"summary\": \"Your recent work lines up with this role, with one gap to close.\",\n  \"gaps\": [\n    \"The post asks for something your resume does not show.\"\n  ],\n  \"strengths\": [\n    \"Your backend work matches what the post describes.\"\n  ],\n  \"trajectory\": {\n    \"score\": 80,\n    \"evidence\": \"Senior Software Engineer, PayCo (2019-01 – present)\",\n    \"status\": \"TOWARD\"\n  },\n  \"domain\": {\n    \"evidence\": \"Built payment APIs in TypeScript and Go serving 2M users.\",\n    \"status\": \" adjacent \",\n    \"score\": 70\n  },\n  \"level\": {\n    \"direction\": \"match\",\n    \"resume\": \"SENIOR\",\n    \"post\": \"senior\",\n    \"score\": 100\n  },\n  \"requirements\": [\n    {\n      \"evidence\": \"Senior Software Engineer, PayCo (2019-01 – present)\",\n      \"status\": \"MET\",\n      \"importance\": \"must\",\n      \"text\": \"5+ years of backend experience\",\n      \"kind\": \"experience\",\n      \"id\": \"r1\",\n      \"score\": 100,\n      \"points\": 1\n    },\n    {\n      \"evidence\": \"\",\n      \"status\": \"NOT_SHOWN\",\n      \"importance\": \"must\",\n      \"text\": \"Kubernetes required\",\n      \"kind\": \"skill\",\n      \"id\": \"r2\",\n      \"score\": 100,\n      \"points\": 1\n    },\n    {\n      \"evidence\": \"Built payment APIs in TypeScript and Go serving 2M users.\",\n      \"status\": \"PARTLY\",\n      \"importance\": \"preferred\",\n      \"text\": \"Nice to have: Rust\",\n      \"kind\": \"skill\",\n      \"id\": \"r3\",\n      \"score\": 100,\n      \"points\": 1\n    }\n  ]\n}\n```",
+        "Here is the checklist you asked for.\n\n{\n \"requirements\": [\n  {\n   \"id\": \"req-a\",\n   \"kind\": \"experience\",\n   \"text\": \"5+ years of backend experience\",\n   \"importance\": \"must\",\n   \"status\": \"met\",\n   \"evidence\": \"“Senior Software Engineer, PayCo (2019-01 – present)”\"\n  },\n  {\n   \"id\": \"req-b\",\n   \"kind\": \"skill\",\n   \"text\": \"Kubernetes required\",\n   \"importance\": \"must\",\n   \"status\": \"not_shown\",\n   \"evidence\": \"\"\n  },\n  {\n   \"id\": \"req-c\",\n   \"kind\": \"skill\",\n   \"text\": \"Nice to have: Rust\",\n   \"importance\": \"preferred\",\n   \"status\": \"partly\",\n   \"evidence\": \"“Built payment APIs in TypeScript and Go serving 2M users.”\"\n  },\n  {\n   \"id\": \"req-z\",\n   \"kind\": \"skill\",\n   \"text\": \"A requirement line that the posting does not contain\",\n   \"importance\": \"must\",\n   \"status\": \"met\",\n   \"evidence\": \"TypeScript, Go, PostgreSQL\"\n  }\n ],\n \"level\": {\n  \"post\": \"senior\",\n  \"resume\": \"senior\",\n  \"direction\": \"match\"\n },\n \"domain\": {\n  \"status\": \"adjacent\",\n  \"evidence\": \"- Built payment APIs in TypeScript and Go serving 2M users.\"\n },\n \"trajectory\": {\n  \"status\": \"toward\",\n  \"evidence\": \"Senior Software Engineer, PayCo (2019-01 – present)\"\n },\n \"strengths\": [\n  \"Your backend work matches what the post describes.\"\n ],\n \"gaps\": [\n  \"The post asks for something your resume does not show.\"\n ],\n \"summary\": \"Overall an 85/100 fit for you.\"\n}\n\nLet me know if you need anything else."
+      ],
+      "expected": {
+        "total": 79,
+        "tier": "good",
+        "title_level": 100,
+        "skills": 50,
+        "industry": 60,
+        "career_path": 100
+      }
+    },
+    {
+      "id": "sc02",
+      "what": "An invented quote: the \"met\" becomes \"not shown\". Skills 0; (35x100 + 0 + 15x100 + 10x100 + 10x60) / 100 = 66. One point over the Good edge with an estimate of 58: Possible (the case of the plan).",
+      "market": "intl",
+      "resume": "# Sample Person\n\n## Experience\nSenior Software Engineer, PayCo (2019-01 – present)\n- Built payment APIs in TypeScript and Go serving 2M users.\n- Ran PostgreSQL clusters for the ledger service.\n\n## Education\nBSc Computer Science, 2014\n\n## Skills\nTypeScript, Go, PostgreSQL",
+      "posting": {
+        "title": "Backend Engineer",
+        "description": "Build APIs in TypeScript and Go. You will own our payments service.",
+        "qualifications": "5+ years of backend experience. Kubernetes required.",
+        "seniority": "senior"
+      },
+      "estimate": 58,
+      "answers": [
+        "{\"requirements\":[{\"id\":\"r1\",\"kind\":\"experience\",\"text\":\"5+ years of backend experience\",\"importance\":\"must\",\"status\":\"met\",\"evidence\":\"Led a platform team of 40 engineers across three continents.\"},{\"id\":\"r2\",\"kind\":\"skill\",\"text\":\"Kubernetes required\",\"importance\":\"must\",\"status\":\"not_shown\",\"evidence\":\"\"}],\"level\":{\"post\":\"senior\",\"resume\":\"senior\",\"direction\":\"match\"},\"domain\":{\"status\":\"direct\",\"evidence\":\"Built payment APIs in TypeScript and Go serving 2M users.\"},\"trajectory\":{\"status\":\"neutral\",\"evidence\":\"\"},\"strengths\":[\"Your backend work matches what the post describes.\"],\"gaps\":[\"The post asks for something your resume does not show.\"],\"summary\":\"Your recent work lines up with this role, with one gap to close.\"}",
+        "```json\n{\n  \"score\": 93,\n  \"total\": \"93%\",\n  \"summary\": \"Your recent work lines up with this role, with one gap to close.\",\n  \"gaps\": [\n    \"The post asks for something your resume does not show.\"\n  ],\n  \"strengths\": [\n    \"Your backend work matches what the post describes.\"\n  ],\n  \"trajectory\": {\n    \"score\": 80,\n    \"evidence\": \"\",\n    \"status\": \"NEUTRAL\"\n  },\n  \"domain\": {\n    \"evidence\": \"Built payment APIs in TypeScript and Go serving 2M users.\",\n    \"status\": \" direct \",\n    \"score\": 70\n  },\n  \"level\": {\n    \"direction\": \"match\",\n    \"resume\": \"SENIOR\",\n    \"post\": \"senior\",\n    \"score\": 100\n  },\n  \"requirements\": [\n    {\n      \"evidence\": \"Led a platform team of 40 engineers across three continents.\",\n      \"status\": \"MET\",\n      \"importance\": \"must\",\n      \"text\": \"5+ years of backend experience\",\n      \"kind\": \"experience\",\n      \"id\": \"r1\",\n      \"score\": 100,\n      \"points\": 1\n    },\n    {\n      \"evidence\": \"\",\n      \"status\": \"NOT_SHOWN\",\n      \"importance\": \"must\",\n      \"text\": \"Kubernetes required\",\n      \"kind\": \"skill\",\n      \"id\": \"r2\",\n      \"score\": 100,\n      \"points\": 1\n    }\n  ]\n}\n```",
+        "Here is the checklist you asked for.\n\n{\n \"requirements\": [\n  {\n   \"id\": \"req-a\",\n   \"kind\": \"experience\",\n   \"text\": \"5+ years of backend experience\",\n   \"importance\": \"must\",\n   \"status\": \"met\",\n   \"evidence\": \"“Led a platform team of 40 engineers across three continents.”\"\n  },\n  {\n   \"id\": \"req-b\",\n   \"kind\": \"skill\",\n   \"text\": \"Kubernetes required\",\n   \"importance\": \"must\",\n   \"status\": \"not_shown\",\n   \"evidence\": \"\"\n  },\n  {\n   \"id\": \"req-z\",\n   \"kind\": \"skill\",\n   \"text\": \"A requirement line that the posting does not contain\",\n   \"importance\": \"must\",\n   \"status\": \"met\",\n   \"evidence\": \"TypeScript, Go, PostgreSQL\"\n  }\n ],\n \"level\": {\n  \"post\": \"senior\",\n  \"resume\": \"senior\",\n  \"direction\": \"match\"\n },\n \"domain\": {\n  \"status\": \"direct\",\n  \"evidence\": \"- Built payment APIs in TypeScript and Go serving 2M users.\"\n },\n \"trajectory\": {\n  \"status\": \"neutral\",\n  \"evidence\": \"\"\n },\n \"strengths\": [\n  \"Your backend work matches what the post describes.\"\n ],\n \"gaps\": [\n  \"The post asks for something your resume does not show.\"\n ],\n \"summary\": \"Overall an 85/100 fit for you.\"\n}\n\nLet me know if you need anything else."
+      ],
+      "expected": {
+        "total": 66,
+        "tier": "possible",
+        "title_level": 100,
+        "skills": 0,
+        "industry": 100,
+        "career_path": 60
+      }
+    },
+    {
+      "id": "sc03",
+      "what": "A line that is not in the posting disappears with its \"met\": one copied line in three, which is tolerated (more than a third would refuse the answer). Skills 100 from the two real lines, both met; one level apart 60; (35x60 + 30x100 + 15x20 + 10x100 + 10x25) / 100 = 66.5, stored 67. Two points over the Good edge with an estimate of 70: Good.",
+      "market": "intl",
+      "resume": "# Sample Person\n\n## Experience\nSenior Software Engineer, PayCo (2019-01 – present)\n- Built payment APIs in TypeScript and Go serving 2M users.\n- Ran PostgreSQL clusters for the ledger service.\n\n## Education\nBSc Computer Science, 2014\n\n## Skills\nTypeScript, Go, PostgreSQL",
+      "posting": {
+        "title": "Backend Engineer",
+        "description": "Build APIs in TypeScript and Go. You will own our payments service.",
+        "qualifications": "5+ years of backend experience. PostgreSQL in production.",
+        "seniority": "senior"
+      },
+      "estimate": 70,
+      "answers": [
+        "{\"requirements\":[{\"id\":\"r1\",\"kind\":\"experience\",\"text\":\"5+ years of backend experience\",\"importance\":\"must\",\"status\":\"met\",\"evidence\":\"Senior Software Engineer, PayCo (2019-01 – present)\"},{\"id\":\"r2\",\"kind\":\"skill\",\"text\":\"PostgreSQL in production\",\"importance\":\"must\",\"status\":\"met\",\"evidence\":\"Ran PostgreSQL clusters for the ledger service.\"},{\"id\":\"r3\",\"kind\":\"skill\",\"text\":\"10 years of COBOL on mainframes\",\"importance\":\"must\",\"status\":\"met\",\"evidence\":\"TypeScript, Go, PostgreSQL\"}],\"level\":{\"post\":\"senior\",\"resume\":\"mid\",\"direction\":\"post_higher\"},\"domain\":{\"status\":\"unrelated\",\"evidence\":\"\"},\"trajectory\":{\"status\":\"away\",\"evidence\":\"\"},\"strengths\":[\"Your backend work matches what the post describes.\"],\"gaps\":[\"The post asks for something your resume does not show.\"],\"summary\":\"Your recent work lines up with this role, with one gap to close.\"}",
+        "```json\n{\n  \"score\": 93,\n  \"total\": \"93%\",\n  \"summary\": \"Your recent work lines up with this role, with one gap to close.\",\n  \"gaps\": [\n    \"The post asks for something your resume does not show.\"\n  ],\n  \"strengths\": [\n    \"Your backend work matches what the post describes.\"\n  ],\n  \"trajectory\": {\n    \"score\": 80,\n    \"evidence\": \"\",\n    \"status\": \"AWAY\"\n  },\n  \"domain\": {\n    \"evidence\": \"\",\n    \"status\": \" unrelated \",\n    \"score\": 70\n  },\n  \"level\": {\n    \"direction\": \"match\",\n    \"resume\": \"MID\",\n    \"post\": \"senior\",\n    \"score\": 100\n  },\n  \"requirements\": [\n    {\n      \"evidence\": \"Senior Software Engineer, PayCo (2019-01 – present)\",\n      \"status\": \"MET\",\n      \"importance\": \"must\",\n      \"text\": \"5+ years of backend experience\",\n      \"kind\": \"experience\",\n      \"id\": \"r1\",\n      \"score\": 100,\n      \"points\": 1\n    },\n    {\n      \"evidence\": \"Ran PostgreSQL clusters for the ledger service.\",\n      \"status\": \"MET\",\n      \"importance\": \"must\",\n      \"text\": \"PostgreSQL in production\",\n      \"kind\": \"skill\",\n      \"id\": \"r2\",\n      \"score\": 100,\n      \"points\": 1\n    },\n    {\n      \"evidence\": \"TypeScript, Go, PostgreSQL\",\n      \"status\": \"MET\",\n      \"importance\": \"must\",\n      \"text\": \"10 years of COBOL on mainframes\",\n      \"kind\": \"skill\",\n      \"id\": \"r3\",\n      \"score\": 100,\n      \"points\": 1\n    }\n  ]\n}\n```",
+        "Here is the checklist you asked for.\n\n{\n \"requirements\": [\n  {\n   \"id\": \"req-a\",\n   \"kind\": \"experience\",\n   \"text\": \"5+ years of backend experience\",\n   \"importance\": \"must\",\n   \"status\": \"met\",\n   \"evidence\": \"“Senior Software Engineer, PayCo (2019-01 – present)”\"\n  },\n  {\n   \"id\": \"req-b\",\n   \"kind\": \"skill\",\n   \"text\": \"PostgreSQL in production\",\n   \"importance\": \"must\",\n   \"status\": \"met\",\n   \"evidence\": \"“Ran PostgreSQL clusters for the ledger service.”\"\n  },\n  {\n   \"id\": \"req-z\",\n   \"kind\": \"skill\",\n   \"text\": \"10 years of COBOL on mainframes\",\n   \"importance\": \"must\",\n   \"status\": \"met\",\n   \"evidence\": \"“TypeScript, Go, PostgreSQL”\"\n  }\n ],\n \"level\": {\n  \"post\": \"senior\",\n  \"resume\": \"mid\",\n  \"direction\": \"post_higher\"\n },\n \"domain\": {\n  \"status\": \"unrelated\",\n  \"evidence\": \"\"\n },\n \"trajectory\": {\n  \"status\": \"away\",\n  \"evidence\": \"\"\n },\n \"strengths\": [\n  \"Your backend work matches what the post describes.\"\n ],\n \"gaps\": [\n  \"The post asks for something your resume does not show.\"\n ],\n \"summary\": \"Overall an 85/100 fit for you.\"\n}\n\nLet me know if you need anything else."
+      ],
+      "expected": {
+        "total": 67,
+        "tier": "good",
+        "title_level": 60,
+        "skills": 100,
+        "industry": 20,
+        "career_path": 25
+      }
+    },
+    {
+      "id": "sc04",
+      "what": "A benefits line is not applicable and left out; a preferred line counts half; nothing stated for domain and trajectory. 100 x 1 / 1.5 = 67; (35x100 + 30x67 + 10x100) / 75 = 86.8, stored 87. Far from an edge: Great.",
+      "market": "intl",
+      "resume": "# Sample Person\n\n## Experience\nSenior Software Engineer, PayCo (2019-01 – present)\n- Built payment APIs in TypeScript and Go serving 2M users.\n- Ran PostgreSQL clusters for the ledger service.\n\n## Education\nBSc Computer Science, 2014\n\n## Skills\nTypeScript, Go, PostgreSQL",
+      "posting": {
+        "title": "Backend Engineer",
+        "description": "Build APIs in TypeScript and Go. You will own our payments service.",
+        "qualifications": "5+ years of backend experience. Nice to have: Rust. We offer a gym membership.",
+        "seniority": "senior"
+      },
+      "estimate": 60,
+      "answers": [
+        "{\"requirements\":[{\"id\":\"r1\",\"kind\":\"experience\",\"text\":\"5+ years of backend experience\",\"importance\":\"must\",\"status\":\"met\",\"evidence\":\"Senior Software Engineer, PayCo (2019-01 – present)\"},{\"id\":\"r2\",\"kind\":\"skill\",\"text\":\"Nice to have: Rust\",\"importance\":\"preferred\",\"status\":\"not_shown\",\"evidence\":\"\"},{\"id\":\"r3\",\"kind\":\"scope\",\"text\":\"We offer a gym membership\",\"importance\":\"preferred\",\"status\":\"not_applicable\",\"evidence\":\"\"}],\"level\":{\"post\":\"senior\",\"resume\":\"senior\",\"direction\":\"match\"},\"domain\":{\"status\":\"not_stated\",\"evidence\":\"\"},\"trajectory\":{\"status\":\"no_history\",\"evidence\":\"\"},\"strengths\":[\"Your backend work matches what the post describes.\"],\"gaps\":[\"The post asks for something your resume does not show.\"],\"summary\":\"Your recent work lines up with this role, with one gap to close.\"}",
+        "```json\n{\n  \"score\": 93,\n  \"total\": \"93%\",\n  \"summary\": \"Your recent work lines up with this role, with one gap to close.\",\n  \"gaps\": [\n    \"The post asks for something your resume does not show.\"\n  ],\n  \"strengths\": [\n    \"Your backend work matches what the post describes.\"\n  ],\n  \"trajectory\": {\n    \"score\": 80,\n    \"evidence\": \"\",\n    \"status\": \"NO_HISTORY\"\n  },\n  \"domain\": {\n    \"evidence\": \"\",\n    \"status\": \" not_stated \",\n    \"score\": 70\n  },\n  \"level\": {\n    \"direction\": \"match\",\n    \"resume\": \"SENIOR\",\n    \"post\": \"senior\",\n    \"score\": 100\n  },\n  \"requirements\": [\n    {\n      \"evidence\": \"Senior Software Engineer, PayCo (2019-01 – present)\",\n      \"status\": \"MET\",\n      \"importance\": \"must\",\n      \"text\": \"5+ years of backend experience\",\n      \"kind\": \"experience\",\n      \"id\": \"r1\",\n      \"score\": 100,\n      \"points\": 1\n    },\n    {\n      \"evidence\": \"\",\n      \"status\": \"NOT_SHOWN\",\n      \"importance\": \"preferred\",\n      \"text\": \"Nice to have: Rust\",\n      \"kind\": \"skill\",\n      \"id\": \"r2\",\n      \"score\": 100,\n      \"points\": 1\n    },\n    {\n      \"evidence\": \"\",\n      \"status\": \"NOT_APPLICABLE\",\n      \"importance\": \"preferred\",\n      \"text\": \"We offer a gym membership\",\n      \"kind\": \"scope\",\n      \"id\": \"r3\",\n      \"score\": 100,\n      \"points\": 1\n    }\n  ]\n}\n```",
+        "Here is the checklist you asked for.\n\n{\n \"requirements\": [\n  {\n   \"id\": \"req-a\",\n   \"kind\": \"experience\",\n   \"text\": \"5+ years of backend experience\",\n   \"importance\": \"must\",\n   \"status\": \"met\",\n   \"evidence\": \"“Senior Software Engineer, PayCo (2019-01 – present)”\"\n  },\n  {\n   \"id\": \"req-b\",\n   \"kind\": \"skill\",\n   \"text\": \"Nice to have: Rust\",\n   \"importance\": \"preferred\",\n   \"status\": \"not_shown\",\n   \"evidence\": \"\"\n  },\n  {\n   \"id\": \"req-c\",\n   \"kind\": \"scope\",\n   \"text\": \"We offer a gym membership\",\n   \"importance\": \"preferred\",\n   \"status\": \"not_applicable\",\n   \"evidence\": \"\"\n  },\n  {\n   \"id\": \"req-z\",\n   \"kind\": \"skill\",\n   \"text\": \"A requirement line that the posting does not contain\",\n   \"importance\": \"must\",\n   \"status\": \"met\",\n   \"evidence\": \"TypeScript, Go, PostgreSQL\"\n  }\n ],\n \"level\": {\n  \"post\": \"senior\",\n  \"resume\": \"senior\",\n  \"direction\": \"match\"\n },\n \"domain\": {\n  \"status\": \"not_stated\",\n  \"evidence\": \"\"\n },\n \"trajectory\": {\n  \"status\": \"no_history\",\n  \"evidence\": \"\"\n },\n \"strengths\": [\n  \"Your backend work matches what the post describes.\"\n ],\n \"gaps\": [\n  \"The post asks for something your resume does not show.\"\n ],\n \"summary\": \"Overall an 85/100 fit for you.\"\n}\n\nLet me know if you need anything else."
+      ],
+      "expected": {
+        "total": 87,
+        "tier": "great",
+        "title_level": 100,
+        "skills": 67,
+        "industry": null,
+        "career_path": null
+      }
+    },
+    {
+      "id": "sc05",
+      "what": "A required degree that is not shown halves title_level: 50. (35x50 + 30x100 + 15x60 + 10x100 + 10x100) / 100 = 76.5, stored 77. Three points under the Great edge is no longer near it: Good, whatever the estimate.",
+      "market": "intl",
+      "resume": "# Sample Person\n\n## Experience\nSenior Software Engineer, PayCo (2019-01 – present)\n- Built payment APIs in TypeScript and Go serving 2M users.\n- Ran PostgreSQL clusters for the ledger service.\n\n## Education\nBSc Computer Science, 2014\n\n## Skills\nTypeScript, Go, PostgreSQL",
+      "posting": {
+        "title": "Backend Engineer",
+        "description": "Build APIs in TypeScript and Go. You will own our payments service.",
+        "qualifications": "5+ years of backend experience. Master's degree in Statistics required.",
+        "seniority": "senior"
+      },
+      "estimate": 82,
+      "answers": [
+        "{\"requirements\":[{\"id\":\"r1\",\"kind\":\"experience\",\"text\":\"5+ years of backend experience\",\"importance\":\"must\",\"status\":\"met\",\"evidence\":\"Senior Software Engineer, PayCo (2019-01 – present)\"},{\"id\":\"r2\",\"kind\":\"education\",\"text\":\"Master's degree in Statistics required\",\"importance\":\"must\",\"status\":\"not_shown\",\"evidence\":\"\"}],\"level\":{\"post\":\"senior\",\"resume\":\"senior\",\"direction\":\"match\"},\"domain\":{\"status\":\"adjacent\",\"evidence\":\"Built payment APIs in TypeScript and Go serving 2M users.\"},\"trajectory\":{\"status\":\"toward\",\"evidence\":\"\"},\"strengths\":[\"Your backend work matches what the post describes.\"],\"gaps\":[\"The post asks for something your resume does not show.\"],\"summary\":\"Your recent work lines up with this role, with one gap to close.\"}",
+        "```json\n{\n  \"score\": 93,\n  \"total\": \"93%\",\n  \"summary\": \"Your recent work lines up with this role, with one gap to close.\",\n  \"gaps\": [\n    \"The post asks for something your resume does not show.\"\n  ],\n  \"strengths\": [\n    \"Your backend work matches what the post describes.\"\n  ],\n  \"trajectory\": {\n    \"score\": 80,\n    \"evidence\": \"\",\n    \"status\": \"TOWARD\"\n  },\n  \"domain\": {\n    \"evidence\": \"Built payment APIs in TypeScript and Go serving 2M users.\",\n    \"status\": \" adjacent \",\n    \"score\": 70\n  },\n  \"level\": {\n    \"direction\": \"match\",\n    \"resume\": \"SENIOR\",\n    \"post\": \"senior\",\n    \"score\": 100\n  },\n  \"requirements\": [\n    {\n      \"evidence\": \"Senior Software Engineer, PayCo (2019-01 – present)\",\n      \"status\": \"MET\",\n      \"importance\": \"must\",\n      \"text\": \"5+ years of backend experience\",\n      \"kind\": \"experience\",\n      \"id\": \"r1\",\n      \"score\": 100,\n      \"points\": 1\n    },\n    {\n      \"evidence\": \"\",\n      \"status\": \"NOT_SHOWN\",\n      \"importance\": \"must\",\n      \"text\": \"Master's degree in Statistics required\",\n      \"kind\": \"education\",\n      \"id\": \"r2\",\n      \"score\": 100,\n      \"points\": 1\n    }\n  ]\n}\n```",
+        "Here is the checklist you asked for.\n\n{\n \"requirements\": [\n  {\n   \"id\": \"req-a\",\n   \"kind\": \"experience\",\n   \"text\": \"5+ years of backend experience\",\n   \"importance\": \"must\",\n   \"status\": \"met\",\n   \"evidence\": \"“Senior Software Engineer, PayCo (2019-01 – present)”\"\n  },\n  {\n   \"id\": \"req-b\",\n   \"kind\": \"education\",\n   \"text\": \"Master's degree in Statistics required\",\n   \"importance\": \"must\",\n   \"status\": \"not_shown\",\n   \"evidence\": \"\"\n  },\n  {\n   \"id\": \"req-z\",\n   \"kind\": \"skill\",\n   \"text\": \"A requirement line that the posting does not contain\",\n   \"importance\": \"must\",\n   \"status\": \"met\",\n   \"evidence\": \"TypeScript, Go, PostgreSQL\"\n  }\n ],\n \"level\": {\n  \"post\": \"senior\",\n  \"resume\": \"senior\",\n  \"direction\": \"match\"\n },\n \"domain\": {\n  \"status\": \"adjacent\",\n  \"evidence\": \"- Built payment APIs in TypeScript and Go serving 2M users.\"\n },\n \"trajectory\": {\n  \"status\": \"toward\",\n  \"evidence\": \"\"\n },\n \"strengths\": [\n  \"Your backend work matches what the post describes.\"\n ],\n \"gaps\": [\n  \"The post asks for something your resume does not show.\"\n ],\n \"summary\": \"Overall an 85/100 fit for you.\"\n}\n\nLet me know if you need anything else."
+      ],
+      "expected": {
+        "total": 77,
+        "tier": "good",
+        "title_level": 50,
+        "skills": 100,
+        "industry": 60,
+        "career_path": 100
+      }
+    },
+    {
+      "id": "sc06",
+      "what": "Two levels apart: 25. A line shown in part and one not shown: 100 x 0.5 / 2 = 25. (35x25 + 30x25 + 15x60 + 10x100 + 10x60) / 100 = 41.25, stored 41. Four points under the Possible edge: Unlikely.",
+      "market": "intl",
+      "resume": "# Sample Person\n\n## Experience\nSenior Software Engineer, PayCo (2019-01 – present)\n- Built payment APIs in TypeScript and Go serving 2M users.\n- Ran PostgreSQL clusters for the ledger service.\n\n## Education\nBSc Computer Science, 2014\n\n## Skills\nTypeScript, Go, PostgreSQL",
+      "posting": {
+        "title": "Backend Engineer",
+        "description": "Build APIs in TypeScript and Go. You will own our payments service.",
+        "qualifications": "5+ years of backend experience. Kubernetes required.",
+        "seniority": "senior"
+      },
+      "estimate": 50,
+      "answers": [
+        "{\"requirements\":[{\"id\":\"r1\",\"kind\":\"experience\",\"text\":\"5+ years of backend experience\",\"importance\":\"must\",\"status\":\"partly\",\"evidence\":\"Senior Software Engineer, PayCo (2019-01 – present)\"},{\"id\":\"r2\",\"kind\":\"skill\",\"text\":\"Kubernetes required\",\"importance\":\"must\",\"status\":\"not_shown\",\"evidence\":\"\"}],\"level\":{\"post\":\"senior\",\"resume\":\"entry\",\"direction\":\"post_higher\"},\"domain\":{\"status\":\"adjacent\",\"evidence\":\"\"},\"trajectory\":{\"status\":\"neutral\",\"evidence\":\"\"},\"strengths\":[\"Your backend work matches what the post describes.\"],\"gaps\":[\"The post asks for something your resume does not show.\"],\"summary\":\"Your recent work lines up with this role, with one gap to close.\"}",
+        "```json\n{\n  \"score\": 93,\n  \"total\": \"93%\",\n  \"summary\": \"Your recent work lines up with this role, with one gap to close.\",\n  \"gaps\": [\n    \"The post asks for something your resume does not show.\"\n  ],\n  \"strengths\": [\n    \"Your backend work matches what the post describes.\"\n  ],\n  \"trajectory\": {\n    \"score\": 80,\n    \"evidence\": \"\",\n    \"status\": \"NEUTRAL\"\n  },\n  \"domain\": {\n    \"evidence\": \"\",\n    \"status\": \" adjacent \",\n    \"score\": 70\n  },\n  \"level\": {\n    \"direction\": \"match\",\n    \"resume\": \"ENTRY\",\n    \"post\": \"senior\",\n    \"score\": 100\n  },\n  \"requirements\": [\n    {\n      \"evidence\": \"Senior Software Engineer, PayCo (2019-01 – present)\",\n      \"status\": \"PARTLY\",\n      \"importance\": \"must\",\n      \"text\": \"5+ years of backend experience\",\n      \"kind\": \"experience\",\n      \"id\": \"r1\",\n      \"score\": 100,\n      \"points\": 1\n    },\n    {\n      \"evidence\": \"\",\n      \"status\": \"NOT_SHOWN\",\n      \"importance\": \"must\",\n      \"text\": \"Kubernetes required\",\n      \"kind\": \"skill\",\n      \"id\": \"r2\",\n      \"score\": 100,\n      \"points\": 1\n    }\n  ]\n}\n```",
+        "Here is the checklist you asked for.\n\n{\n \"requirements\": [\n  {\n   \"id\": \"req-a\",\n   \"kind\": \"experience\",\n   \"text\": \"5+ years of backend experience\",\n   \"importance\": \"must\",\n   \"status\": \"partly\",\n   \"evidence\": \"“Senior Software Engineer, PayCo (2019-01 – present)”\"\n  },\n  {\n   \"id\": \"req-b\",\n   \"kind\": \"skill\",\n   \"text\": \"Kubernetes required\",\n   \"importance\": \"must\",\n   \"status\": \"not_shown\",\n   \"evidence\": \"\"\n  },\n  {\n   \"id\": \"req-z\",\n   \"kind\": \"skill\",\n   \"text\": \"A requirement line that the posting does not contain\",\n   \"importance\": \"must\",\n   \"status\": \"met\",\n   \"evidence\": \"TypeScript, Go, PostgreSQL\"\n  }\n ],\n \"level\": {\n  \"post\": \"senior\",\n  \"resume\": \"entry\",\n  \"direction\": \"post_higher\"\n },\n \"domain\": {\n  \"status\": \"adjacent\",\n  \"evidence\": \"\"\n },\n \"trajectory\": {\n  \"status\": \"neutral\",\n  \"evidence\": \"\"\n },\n \"strengths\": [\n  \"Your backend work matches what the post describes.\"\n ],\n \"gaps\": [\n  \"The post asks for something your resume does not show.\"\n ],\n \"summary\": \"Overall an 85/100 fit for you.\"\n}\n\nLet me know if you need anything else."
+      ],
+      "expected": {
+        "total": 41,
+        "tier": "unlikely",
+        "title_level": 25,
+        "skills": 25,
+        "industry": 60,
+        "career_path": 60
+      }
+    },
+    {
+      "id": "sc07",
+      "what": "The posting has a stored list: ids, kinds, texts and importances are the store's, whatever the answer says. 100 x (1 + 0 + 0.5) / 2.5 = 60; (35x100 + 30x60 + 15x100 + 10x100 + 10x100) / 100 = 88: Great.",
+      "market": "intl",
+      "resume": "# Sample Person\n\n## Experience\nSenior Software Engineer, PayCo (2019-01 – present)\n- Built payment APIs in TypeScript and Go serving 2M users.\n- Ran PostgreSQL clusters for the ledger service.\n\n## Education\nBSc Computer Science, 2014\n\n## Skills\nTypeScript, Go, PostgreSQL",
+      "posting": {
+        "title": "Backend Engineer",
+        "description": "Build APIs in TypeScript and Go. You will own our payments service.",
+        "qualifications": "5+ years of backend experience. Kubernetes required.",
+        "seniority": "senior",
+        "requirements": [
+          {
+            "id": "r1",
+            "kind": "experience",
+            "text": "5+ years of backend experience",
+            "importance": "must"
+          },
+          {
+            "id": "r2",
+            "kind": "skill",
+            "text": "Kubernetes required",
+            "importance": "must"
+          },
+          {
+            "id": "r3",
+            "kind": "skill",
+            "text": "Build APIs in TypeScript and Go",
+            "importance": "preferred"
+          }
+        ]
+      },
+      "estimate": 85,
+      "answers": [
+        "{\"requirements\":[{\"id\":\"r1\",\"kind\":\"experience\",\"text\":\"5+ years of backend experience\",\"importance\":\"must\",\"status\":\"met\",\"evidence\":\"Senior Software Engineer, PayCo (2019-01 – present)\"},{\"id\":\"r2\",\"kind\":\"skill\",\"text\":\"Kubernetes required\",\"importance\":\"must\",\"status\":\"not_shown\",\"evidence\":\"\"},{\"id\":\"r3\",\"kind\":\"skill\",\"text\":\"Build APIs in TypeScript and Go\",\"importance\":\"preferred\",\"status\":\"met\",\"evidence\":\"Built payment APIs in TypeScript and Go serving 2M users.\"}],\"level\":{\"post\":\"senior\",\"resume\":\"senior\",\"direction\":\"match\"},\"domain\":{\"status\":\"direct\",\"evidence\":\"Built payment APIs in TypeScript and Go serving 2M users.\"},\"trajectory\":{\"status\":\"toward\",\"evidence\":\"Senior Software Engineer, PayCo (2019-01 – present)\"},\"strengths\":[\"Your backend work matches what the post describes.\"],\"gaps\":[\"The post asks for something your resume does not show.\"],\"summary\":\"Your recent work lines up with this role, with one gap to close.\"}",
+        "```json\n{\n  \"score\": 93,\n  \"total\": \"93%\",\n  \"summary\": \"Your recent work lines up with this role, with one gap to close.\",\n  \"gaps\": [\n    \"The post asks for something your resume does not show.\"\n  ],\n  \"strengths\": [\n    \"Your backend work matches what the post describes.\"\n  ],\n  \"trajectory\": {\n    \"score\": 80,\n    \"evidence\": \"Senior Software Engineer, PayCo (2019-01 – present)\",\n    \"status\": \"TOWARD\"\n  },\n  \"domain\": {\n    \"evidence\": \"Built payment APIs in TypeScript and Go serving 2M users.\",\n    \"status\": \" direct \",\n    \"score\": 70\n  },\n  \"level\": {\n    \"direction\": \"match\",\n    \"resume\": \"SENIOR\",\n    \"post\": \"senior\",\n    \"score\": 100\n  },\n  \"requirements\": [\n    {\n      \"evidence\": \"Senior Software Engineer, PayCo (2019-01 – present)\",\n      \"status\": \"MET\",\n      \"importance\": \"must\",\n      \"text\": \"5+ years of backend experience\",\n      \"kind\": \"experience\",\n      \"id\": \"r1\",\n      \"score\": 100,\n      \"points\": 1\n    },\n    {\n      \"evidence\": \"\",\n      \"status\": \"NOT_SHOWN\",\n      \"importance\": \"must\",\n      \"text\": \"Kubernetes required\",\n      \"kind\": \"skill\",\n      \"id\": \"r2\",\n      \"score\": 100,\n      \"points\": 1\n    },\n    {\n      \"evidence\": \"Built payment APIs in TypeScript and Go serving 2M users.\",\n      \"status\": \"MET\",\n      \"importance\": \"preferred\",\n      \"text\": \"Build APIs in TypeScript and Go\",\n      \"kind\": \"skill\",\n      \"id\": \"r3\",\n      \"score\": 100,\n      \"points\": 1\n    }\n  ]\n}\n```",
+        "Here is the checklist you asked for.\n\n{\n \"requirements\": [\n  {\n   \"id\": \"r1\",\n   \"kind\": \"experience\",\n   \"text\": \"5+ years of backend experience (reworded)\",\n   \"importance\": \"must\",\n   \"status\": \"met\",\n   \"evidence\": \"“Senior Software Engineer, PayCo (2019-01 – present)”\"\n  },\n  {\n   \"id\": \"r2\",\n   \"kind\": \"skill\",\n   \"text\": \"Kubernetes required (reworded)\",\n   \"importance\": \"must\",\n   \"status\": \"not_shown\",\n   \"evidence\": \"\"\n  },\n  {\n   \"id\": \"r3\",\n   \"kind\": \"skill\",\n   \"text\": \"Build APIs in TypeScript and Go (reworded)\",\n   \"importance\": \"preferred\",\n   \"status\": \"met\",\n   \"evidence\": \"“Built payment APIs in TypeScript and Go serving 2M users.”\"\n  },\n  {\n   \"id\": \"r99\",\n   \"kind\": \"skill\",\n   \"text\": \"An entry the stored list does not have\",\n   \"importance\": \"must\",\n   \"status\": \"met\",\n   \"evidence\": \"TypeScript, Go, PostgreSQL\"\n  }\n ],\n \"level\": {\n  \"post\": \"senior\",\n  \"resume\": \"senior\",\n  \"direction\": \"match\"\n },\n \"domain\": {\n  \"status\": \"direct\",\n  \"evidence\": \"- Built payment APIs in TypeScript and Go serving 2M users.\"\n },\n \"trajectory\": {\n  \"status\": \"toward\",\n  \"evidence\": \"Senior Software Engineer, PayCo (2019-01 – present)\"\n },\n \"strengths\": [\n  \"Your backend work matches what the post describes.\"\n ],\n \"gaps\": [\n  \"The post asks for something your resume does not show.\"\n ],\n \"summary\": \"Overall an 85/100 fit for you.\"\n}\n\nLet me know if you need anything else."
+      ],
+      "expected": {
+        "total": 88,
+        "tier": "great",
+        "title_level": 100,
+        "skills": 60,
+        "industry": 100,
+        "career_path": 100
+      }
+    },
+    {
+      "id": "sc08",
+      "what": "GoApply: the posting is for the class of 2027 and the profile says 2024, so title_level is halved once (50); the 届别 line of the checklist is the same fact and is not counted again. (35x50 + 30x100 + 15x100 + 10x100 + 10x100) / 100 = 82.5, stored 83. Three points over the Great edge: Great.",
+      "market": "cn",
+      "resume": "# 示例人物\n\n## 工作经历\n后端开发工程师，示例支付（2021-07 至今）\n- 使用 Go 语言开发支付接口。\n\n## 教育经历\n计算机科学 本科，2021\n\n## 技能\nGo, MySQL",
+      "classYear": 2024,
+      "posting": {
+        "title": "后端开发工程师",
+        "description": "负责支付系统后端开发。",
+        "qualifications": "面向2027届毕业生。熟悉 Go 语言。本科及以上学历。",
+        "seniority": "entry",
+        "classYears": [
+          2027
+        ],
+        "classYearQuote": "面向2027届毕业生"
+      },
+      "estimate": 85,
+      "answers": [
+        "{\"requirements\":[{\"id\":\"r1\",\"kind\":\"education\",\"text\":\"面向2027届毕业生\",\"importance\":\"must\",\"status\":\"not_shown\",\"evidence\":\"\"},{\"id\":\"r2\",\"kind\":\"skill\",\"text\":\"熟悉 Go 语言\",\"importance\":\"must\",\"status\":\"met\",\"evidence\":\"使用 Go 语言开发支付接口。\"},{\"id\":\"r3\",\"kind\":\"education\",\"text\":\"本科及以上学历\",\"importance\":\"must\",\"status\":\"met\",\"evidence\":\"计算机科学 本科，2021\"}],\"level\":{\"post\":\"entry\",\"resume\":\"entry\",\"direction\":\"match\"},\"domain\":{\"status\":\"direct\",\"evidence\":\"使用 Go 语言开发支付接口。\"},\"trajectory\":{\"status\":\"toward\",\"evidence\":\"\"},\"strengths\":[\"Your backend work matches what the post describes.\"],\"gaps\":[\"The post asks for something your resume does not show.\"],\"summary\":\"Your recent work lines up with this role, with one gap to close.\"}",
+        "```json\n{\n  \"score\": 93,\n  \"total\": \"93%\",\n  \"summary\": \"Your recent work lines up with this role, with one gap to close.\",\n  \"gaps\": [\n    \"The post asks for something your resume does not show.\"\n  ],\n  \"strengths\": [\n    \"Your backend work matches what the post describes.\"\n  ],\n  \"trajectory\": {\n    \"score\": 80,\n    \"evidence\": \"\",\n    \"status\": \"TOWARD\"\n  },\n  \"domain\": {\n    \"evidence\": \"使用 Go 语言开发支付接口。\",\n    \"status\": \" direct \",\n    \"score\": 70\n  },\n  \"level\": {\n    \"direction\": \"match\",\n    \"resume\": \"ENTRY\",\n    \"post\": \"entry\",\n    \"score\": 100\n  },\n  \"requirements\": [\n    {\n      \"evidence\": \"\",\n      \"status\": \"NOT_SHOWN\",\n      \"importance\": \"must\",\n      \"text\": \"面向2027届毕业生\",\n      \"kind\": \"education\",\n      \"id\": \"r1\",\n      \"score\": 100,\n      \"points\": 1\n    },\n    {\n      \"evidence\": \"使用 Go 语言开发支付接口。\",\n      \"status\": \"MET\",\n      \"importance\": \"must\",\n      \"text\": \"熟悉 Go 语言\",\n      \"kind\": \"skill\",\n      \"id\": \"r2\",\n      \"score\": 100,\n      \"points\": 1\n    },\n    {\n      \"evidence\": \"计算机科学 本科，2021\",\n      \"status\": \"MET\",\n      \"importance\": \"must\",\n      \"text\": \"本科及以上学历\",\n      \"kind\": \"education\",\n      \"id\": \"r3\",\n      \"score\": 100,\n      \"points\": 1\n    }\n  ]\n}\n```",
+        "Here is the checklist you asked for.\n\n{\n \"requirements\": [\n  {\n   \"id\": \"req-a\",\n   \"kind\": \"education\",\n   \"text\": \"面向2027届毕业生\",\n   \"importance\": \"must\",\n   \"status\": \"not_shown\",\n   \"evidence\": \"\"\n  },\n  {\n   \"id\": \"req-b\",\n   \"kind\": \"skill\",\n   \"text\": \"熟悉 Go 语言\",\n   \"importance\": \"must\",\n   \"status\": \"met\",\n   \"evidence\": \"“使用 Go 语言开发支付接口。”\"\n  },\n  {\n   \"id\": \"req-c\",\n   \"kind\": \"education\",\n   \"text\": \"本科及以上学历\",\n   \"importance\": \"must\",\n   \"status\": \"met\",\n   \"evidence\": \"“计算机科学 本科，2021”\"\n  },\n  {\n   \"id\": \"req-z\",\n   \"kind\": \"skill\",\n   \"text\": \"A requirement line that the posting does not contain\",\n   \"importance\": \"must\",\n   \"status\": \"met\",\n   \"evidence\": \"Go, MySQL\"\n  }\n ],\n \"level\": {\n  \"post\": \"entry\",\n  \"resume\": \"entry\",\n  \"direction\": \"match\"\n },\n \"domain\": {\n  \"status\": \"direct\",\n  \"evidence\": \"- 使用 Go 语言开发支付接口。\"\n },\n \"trajectory\": {\n  \"status\": \"toward\",\n  \"evidence\": \"\"\n },\n \"strengths\": [\n  \"Your backend work matches what the post describes.\"\n ],\n \"gaps\": [\n  \"The post asks for something your resume does not show.\"\n ],\n \"summary\": \"Overall an 85/100 fit for you.\"\n}\n\nLet me know if you need anything else."
+      ],
+      "expected": {
+        "total": 83,
+        "tier": "great",
+        "title_level": 50,
+        "skills": 100,
+        "industry": 100,
+        "career_path": 100
+      }
+    },
+    {
+      "id": "sc09",
+      "what": "Lines that are never judged: an age line and a school-tier line of the stored list are not applicable for everyone, so the age line is not in the skills component and the school line does not halve the level. Skills 100; (35x100 + 30x100 + 15x60 + 10x100 + 10x60) / 100 = 90: Great.",
+      "market": "intl",
+      "resume": "# Sample Person\n\n## Experience\nSenior Software Engineer, PayCo (2019-01 – present)\n- Built payment APIs in TypeScript and Go serving 2M users.\n- Ran PostgreSQL clusters for the ledger service.\n\n## Education\nBSc Computer Science, 2014\n\n## Skills\nTypeScript, Go, PostgreSQL",
+      "posting": {
+        "title": "Backend Engineer",
+        "description": "Build APIs in TypeScript and Go. You will own our payments service.",
+        "qualifications": "5+ years of backend experience.",
+        "seniority": "senior",
+        "requirements": [
+          {
+            "id": "r1",
+            "kind": "experience",
+            "text": "5+ years of backend experience",
+            "importance": "must"
+          },
+          {
+            "id": "r2",
+            "kind": "experience",
+            "text": "年龄35岁以下",
+            "importance": "must"
+          },
+          {
+            "id": "r3",
+            "kind": "education",
+            "text": "985/211 院校本科及以上学历",
+            "importance": "must"
+          }
+        ]
+      },
+      "estimate": 30,
+      "answers": [
+        "{\"requirements\":[{\"id\":\"r1\",\"kind\":\"experience\",\"text\":\"5+ years of backend experience\",\"importance\":\"must\",\"status\":\"met\",\"evidence\":\"Senior Software Engineer, PayCo (2019-01 – present)\"},{\"id\":\"r2\",\"kind\":\"experience\",\"text\":\"年龄35岁以下\",\"importance\":\"must\",\"status\":\"not_shown\",\"evidence\":\"\"},{\"id\":\"r3\",\"kind\":\"education\",\"text\":\"985/211 院校本科及以上学历\",\"importance\":\"must\",\"status\":\"not_shown\",\"evidence\":\"\"}],\"level\":{\"post\":\"senior\",\"resume\":\"senior\",\"direction\":\"match\"},\"domain\":{\"status\":\"adjacent\",\"evidence\":\"\"},\"trajectory\":{\"status\":\"neutral\",\"evidence\":\"\"},\"strengths\":[\"Your backend work matches what the post describes.\"],\"gaps\":[\"The post asks for something your resume does not show.\"],\"summary\":\"Your recent work lines up with this role, with one gap to close.\"}",
+        "```json\n{\n  \"score\": 93,\n  \"total\": \"93%\",\n  \"summary\": \"Your recent work lines up with this role, with one gap to close.\",\n  \"gaps\": [\n    \"The post asks for something your resume does not show.\"\n  ],\n  \"strengths\": [\n    \"Your backend work matches what the post describes.\"\n  ],\n  \"trajectory\": {\n    \"score\": 80,\n    \"evidence\": \"\",\n    \"status\": \"NEUTRAL\"\n  },\n  \"domain\": {\n    \"evidence\": \"\",\n    \"status\": \" adjacent \",\n    \"score\": 70\n  },\n  \"level\": {\n    \"direction\": \"match\",\n    \"resume\": \"SENIOR\",\n    \"post\": \"senior\",\n    \"score\": 100\n  },\n  \"requirements\": [\n    {\n      \"evidence\": \"Senior Software Engineer, PayCo (2019-01 – present)\",\n      \"status\": \"MET\",\n      \"importance\": \"must\",\n      \"text\": \"5+ years of backend experience\",\n      \"kind\": \"experience\",\n      \"id\": \"r1\",\n      \"score\": 100,\n      \"points\": 1\n    },\n    {\n      \"evidence\": \"\",\n      \"status\": \"NOT_SHOWN\",\n      \"importance\": \"must\",\n      \"text\": \"年龄35岁以下\",\n      \"kind\": \"experience\",\n      \"id\": \"r2\",\n      \"score\": 100,\n      \"points\": 1\n    },\n    {\n      \"evidence\": \"\",\n      \"status\": \"NOT_SHOWN\",\n      \"importance\": \"must\",\n      \"text\": \"985/211 院校本科及以上学历\",\n      \"kind\": \"education\",\n      \"id\": \"r3\",\n      \"score\": 100,\n      \"points\": 1\n    }\n  ]\n}\n```",
+        "Here is the checklist you asked for.\n\n{\n \"requirements\": [\n  {\n   \"id\": \"r1\",\n   \"kind\": \"experience\",\n   \"text\": \"5+ years of backend experience (reworded)\",\n   \"importance\": \"must\",\n   \"status\": \"met\",\n   \"evidence\": \"“Senior Software Engineer, PayCo (2019-01 – present)”\"\n  },\n  {\n   \"id\": \"r2\",\n   \"kind\": \"experience\",\n   \"text\": \"年龄35岁以下 (reworded)\",\n   \"importance\": \"must\",\n   \"status\": \"not_shown\",\n   \"evidence\": \"\"\n  },\n  {\n   \"id\": \"r3\",\n   \"kind\": \"education\",\n   \"text\": \"985/211 院校本科及以上学历 (reworded)\",\n   \"importance\": \"must\",\n   \"status\": \"not_shown\",\n   \"evidence\": \"\"\n  },\n  {\n   \"id\": \"r99\",\n   \"kind\": \"skill\",\n   \"text\": \"An entry the stored list does not have\",\n   \"importance\": \"must\",\n   \"status\": \"met\",\n   \"evidence\": \"TypeScript, Go, PostgreSQL\"\n  }\n ],\n \"level\": {\n  \"post\": \"senior\",\n  \"resume\": \"senior\",\n  \"direction\": \"match\"\n },\n \"domain\": {\n  \"status\": \"adjacent\",\n  \"evidence\": \"\"\n },\n \"trajectory\": {\n  \"status\": \"neutral\",\n  \"evidence\": \"\"\n },\n \"strengths\": [\n  \"Your backend work matches what the post describes.\"\n ],\n \"gaps\": [\n  \"The post asks for something your resume does not show.\"\n ],\n \"summary\": \"Overall an 85/100 fit for you.\"\n}\n\nLet me know if you need anything else."
+      ],
+      "expected": {
+        "total": 90,
+        "tier": "great",
+        "title_level": 100,
+        "skills": 100,
+        "industry": 60,
+        "career_path": 60
+      }
+    },
+    {
+      "id": "sc10",
+      "what": "One level apart and the two required lines not shown: skills 0. (35x60 + 0 + 15x20 + 10x100 + 10x100) / 100 = 44. One point under the Possible edge with an estimate of 50: Possible.",
+      "market": "intl",
+      "resume": "# Sample Person\n\n## Experience\nSenior Software Engineer, PayCo (2019-01 – present)\n- Built payment APIs in TypeScript and Go serving 2M users.\n- Ran PostgreSQL clusters for the ledger service.\n\n## Education\nBSc Computer Science, 2014\n\n## Skills\nTypeScript, Go, PostgreSQL",
+      "posting": {
+        "title": "Backend Engineer",
+        "description": "Build APIs in TypeScript and Go. You will own our payments service.",
+        "qualifications": "Kubernetes required. Terraform required.",
+        "seniority": "senior"
+      },
+      "estimate": 50,
+      "answers": [
+        "{\"requirements\":[{\"id\":\"r1\",\"kind\":\"skill\",\"text\":\"Kubernetes required\",\"importance\":\"must\",\"status\":\"not_shown\",\"evidence\":\"\"},{\"id\":\"r2\",\"kind\":\"skill\",\"text\":\"Terraform required\",\"importance\":\"must\",\"status\":\"not_shown\",\"evidence\":\"\"}],\"level\":{\"post\":\"senior\",\"resume\":\"mid\",\"direction\":\"post_higher\"},\"domain\":{\"status\":\"unrelated\",\"evidence\":\"\"},\"trajectory\":{\"status\":\"toward\",\"evidence\":\"\"},\"strengths\":[\"Your backend work matches what the post describes.\"],\"gaps\":[\"The post asks for something your resume does not show.\"],\"summary\":\"Your recent work lines up with this role, with one gap to close.\"}",
+        "```json\n{\n  \"score\": 93,\n  \"total\": \"93%\",\n  \"summary\": \"Your recent work lines up with this role, with one gap to close.\",\n  \"gaps\": [\n    \"The post asks for something your resume does not show.\"\n  ],\n  \"strengths\": [\n    \"Your backend work matches what the post describes.\"\n  ],\n  \"trajectory\": {\n    \"score\": 80,\n    \"evidence\": \"\",\n    \"status\": \"TOWARD\"\n  },\n  \"domain\": {\n    \"evidence\": \"\",\n    \"status\": \" unrelated \",\n    \"score\": 70\n  },\n  \"level\": {\n    \"direction\": \"match\",\n    \"resume\": \"MID\",\n    \"post\": \"senior\",\n    \"score\": 100\n  },\n  \"requirements\": [\n    {\n      \"evidence\": \"\",\n      \"status\": \"NOT_SHOWN\",\n      \"importance\": \"must\",\n      \"text\": \"Kubernetes required\",\n      \"kind\": \"skill\",\n      \"id\": \"r1\",\n      \"score\": 100,\n      \"points\": 1\n    },\n    {\n      \"evidence\": \"\",\n      \"status\": \"NOT_SHOWN\",\n      \"importance\": \"must\",\n      \"text\": \"Terraform required\",\n      \"kind\": \"skill\",\n      \"id\": \"r2\",\n      \"score\": 100,\n      \"points\": 1\n    }\n  ]\n}\n```",
+        "Here is the checklist you asked for.\n\n{\n \"requirements\": [\n  {\n   \"id\": \"req-a\",\n   \"kind\": \"skill\",\n   \"text\": \"Kubernetes required\",\n   \"importance\": \"must\",\n   \"status\": \"not_shown\",\n   \"evidence\": \"\"\n  },\n  {\n   \"id\": \"req-b\",\n   \"kind\": \"skill\",\n   \"text\": \"Terraform required\",\n   \"importance\": \"must\",\n   \"status\": \"not_shown\",\n   \"evidence\": \"\"\n  },\n  {\n   \"id\": \"req-z\",\n   \"kind\": \"skill\",\n   \"text\": \"A requirement line that the posting does not contain\",\n   \"importance\": \"must\",\n   \"status\": \"met\",\n   \"evidence\": \"TypeScript, Go, PostgreSQL\"\n  }\n ],\n \"level\": {\n  \"post\": \"senior\",\n  \"resume\": \"mid\",\n  \"direction\": \"post_higher\"\n },\n \"domain\": {\n  \"status\": \"unrelated\",\n  \"evidence\": \"\"\n },\n \"trajectory\": {\n  \"status\": \"toward\",\n  \"evidence\": \"\"\n },\n \"strengths\": [\n  \"Your backend work matches what the post describes.\"\n ],\n \"gaps\": [\n  \"The post asks for something your resume does not show.\"\n ],\n \"summary\": \"Overall an 85/100 fit for you.\"\n}\n\nLet me know if you need anything else."
+      ],
+      "expected": {
+        "total": 44,
+        "tier": "possible",
+        "title_level": 60,
+        "skills": 0,
+        "industry": 20,
+        "career_path": 100
+      }
+    }
+  ]
+}

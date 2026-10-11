@@ -6,12 +6,25 @@
 //   'job.score'  AI score for one (user, job, resume variant), queued by the
 //                score-precompute cron (ARCH §4.7). Counts against the brand's
 //                daily budget; the per-user precompute cap was spent when the
-//                item was queued. A failed model call is retried with backoff
+//                item was queued. A failed model CALL is retried with backoff
 //                (it persists nothing and costs the user nothing); a spent
-//                budget defers the item to the next UTC day.
+//                budget defers the item to the next UTC day. An ANSWER that
+//                was received and refused (it is not a checklist, or its
+//                checklist cannot be trusted: `ScorerFailedError.kind ===
+//                'answer'`) is not retried: the scorer runs at temperature 0,
+//                so every further attempt would be one more paid call and one
+//                more unit of the brand's budget for the same refusal. The
+//                item is marked dead after that one attempt; the person's job
+//                page still scores on demand, and the cron queues the pair
+//                again when its resume, its posting or the scorer changes.
+//                The payload names no scorer version: the service scores with
+//                the pin of the moment the item runs (config.ts
+//                `currentScorerPin`), so a queued item follows a switch of
+//                MATCH_SCORER_RUBRIC or of the model, and a row it writes is
+//                always of the version that is pinned now.
 
-import { DeferWorkError, type LeasedWorkItem, type WorkerDefinition } from '../../platform/queue/index.js';
-import type { MatchService } from './MatchService.js';
+import { DeferWorkError, PermanentWorkError, type LeasedWorkItem, type WorkerDefinition } from '../../platform/queue/index.js';
+import { ScorerFailedError, type MatchService } from './MatchService.js';
 
 export const MATCH_WORK_KINDS = { jobScore: 'job.score' } as const;
 
@@ -48,6 +61,8 @@ export function createJobScoreHandler(getService: () => Promise<MatchService>, n
     } catch (err) {
       // A job or resume that is gone (404) is not worth a retry.
       if ((err as { code?: unknown })?.code === 'not_found') return;
+      // The model answered and the answer was refused: the same input gives the same answer, so no second attempt.
+      if (err instanceof ScorerFailedError && err.kind === 'answer') throw new PermanentWorkError(err.message);
       throw err;
     }
     if (view.estimateReason === 'budget') throw new DeferWorkError(msToNextUtcDay(now()), 'score budget spent for today');
