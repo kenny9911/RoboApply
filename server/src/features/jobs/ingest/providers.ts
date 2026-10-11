@@ -15,9 +15,20 @@
 // `user_import` is not an ingest source (job import writes those rows).
 // This module registers the built-in adapters and hands ingest the adapters
 // of a brand; it adds no rule of its own.
+//
+// Two lists, one rule each:
+//   adaptersForBrand        every adapter the brand has, on or off. The planner
+//                           and maintenance take this one: they must know a
+//                           source that is off (its queries are left alone,
+//                           not retired, and it is reported as skipped).
+//   listEnabledAdaptersFor  the ones that are on for the brand's market right
+//                           now (`adapterEnabledFor`: key present, kill switch
+//                           off, quota gate open). Whoever is about to CALL a
+//                           source takes this one: the ingest tick and the
+//                           targeted ingest of one search profile.
 
 import type { EnvSource, ProductBrand } from '../../../platform/brand/index.js';
-import { getSourceAdapter, jobSourcesForBrand, registerSourceAdapter, sourceProvidersForBrand } from '../sources/index.js';
+import { adapterEnabledFor, getSourceAdapter, jobSourcesForBrand, registerSourceAdapter, sourceProvidersForBrand } from '../sources/index.js';
 import type { IngestProvider, JobSourceAdapter, JobSourceDescription } from '../sources/index.js';
 import { createBankAdapter } from './adapters/bank.js';
 import { createRapidApiAdapter } from './adapters/rapidApi.js';
@@ -58,6 +69,15 @@ export function adaptersForBrand(brand: ProductBrand, env: EnvSource = process.e
   return sourcesForBrand(brand, env)
     .map((s) => s.adapter)
     .filter((a): a is JobSourceAdapter => !!a);
+}
+
+/**
+ * The brand's adapters that are on for its market right now, in registry
+ * order. An adapter that serves two markets and is on for the other one only
+ * is not in the list.
+ */
+export function listEnabledAdaptersFor(brand: ProductBrand, env: EnvSource = process.env): JobSourceAdapter[] {
+  return adaptersForBrand(brand, env).filter((a) => adapterEnabledFor(a, brand.market));
 }
 
 /** Test seam. */

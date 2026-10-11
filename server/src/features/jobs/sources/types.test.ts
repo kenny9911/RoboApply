@@ -9,7 +9,7 @@ import { ensureBuiltinAdapters } from '../ingest/providers.js';
 import { createAtsPublicAdapter } from './atsPublic/adapter.js';
 import { ensureAtsPublicAdapter } from './atsPublic/register.js';
 import { getSourceAdapter, registeredSourceAdapters } from './index.js';
-import { adapterCostModel, adapterEnabledFor, type IngestProvider, type JobSourceAdapter, type SourceCostModel } from './types.js';
+import { adapterCostModel, adapterDateWindow, adapterEnabledFor, adapterQueryLanguages, type IngestProvider, type JobSourceAdapter, type SourceCostModel } from './types.js';
 
 function fake(over: Partial<JobSourceAdapter> & { provider: IngestProvider }): JobSourceAdapter {
   return {
@@ -50,7 +50,6 @@ describe('adapterCostModel', () => {
     ['jsearch', 'per_request'],
     ['activejobs', 'per_job'],
     ['activejobs_feed', 'per_job'],
-    ['linkedin', 'per_job'],
     ['ats_public', 'free'],
     ['bank_robohire', 'free'],
     ['bank_gohire', 'free'],
@@ -67,6 +66,62 @@ describe('adapterCostModel', () => {
     expect(adapterCostModel(fake({ provider: 'jsearch', costModel: 'free' }))).toBe('free');
     expect(adapterCostModel(fake({ provider: 'ats_public', costModel: 'per_request' }))).toBe('per_request');
     expect(adapterCostModel(fake({ provider: 'usajobs', costModel: 'per_job' }))).toBe('per_job');
+  });
+});
+
+describe('adapterCostModel: providers that are not a source', () => {
+  it('holds no cost for the LinkedIn feed (dropped by MARKET_STRATEGY M-4: nothing is ever spent on it)', () => {
+    expect(adapterCostModel({ provider: 'linkedin' as IngestProvider })).toBe('free');
+  });
+});
+
+describe('adapterQueryLanguages', () => {
+  it('JSearch reads English and Traditional Chinese role labels; every other provider English only', () => {
+    expect(adapterQueryLanguages(createRapidApiAdapter('jsearch'))).toEqual(['en', 'zh-TW']);
+    expect(adapterQueryLanguages(createRapidApiAdapter('activejobs'))).toEqual(['en']);
+    for (const provider of ['activejobs', 'activejobs_feed', 'usajobs', 'tw_open_data', 'tw_gov_jobs', 'ats_public', 'bank_robohire', 'bank_gohire'] as IngestProvider[]) {
+      expect(adapterQueryLanguages({ provider }), provider).toEqual(['en']);
+    }
+    // No provider is asked in Simplified Chinese unless its adapter says it reads it.
+    for (const adapter of [createRapidApiAdapter('jsearch'), createRapidApiAdapter('activejobs')]) expect(adapterQueryLanguages(adapter)).not.toContain('zh-CN');
+  });
+
+  it('a declared list wins over the default for the provider id', () => {
+    expect(adapterQueryLanguages(fake({ provider: 'jsearch', queryLanguages: ['en'] }))).toEqual(['en']);
+    expect(adapterQueryLanguages(fake({ provider: 'activejobs', queryLanguages: ['en', 'zh-CN'] }))).toEqual(['en', 'zh-CN']);
+    expect(adapterQueryLanguages(fake({ provider: 'usajobs', queryLanguages: [] }))).toEqual([]);
+  });
+});
+
+describe('adapterDateWindow', () => {
+  const WINDOWS = ['today', '3days', 'week', 'month', 'all'];
+
+  it('Active Jobs DB asks one fixed frame of seven days, on the search route and on the feed; every other provider applies the value it is given', () => {
+    for (const provider of ['activejobs', 'activejobs_feed'] as IngestProvider[]) {
+      expect(WINDOWS.map((w) => adapterDateWindow({ provider }, w)), provider).toEqual(['week', 'week', 'week', 'week', 'week']);
+    }
+    expect(WINDOWS.map((w) => adapterDateWindow(createRapidApiAdapter('activejobs'), w))).toEqual(['week', 'week', 'week', 'week', 'week']);
+    for (const provider of ['jsearch', 'usajobs', 'tw_open_data', 'tw_gov_jobs', 'ats_public', 'bank_robohire', 'bank_gohire'] as IngestProvider[]) {
+      expect(WINDOWS.map((w) => adapterDateWindow({ provider }, w)), provider).toEqual(WINDOWS);
+    }
+    expect(WINDOWS.map((w) => adapterDateWindow(createRapidApiAdapter('jsearch'), w))).toEqual(WINDOWS);
+  });
+
+  it('a declared list wins over the default for the provider id: a value outside it is asked as the first entry', () => {
+    const day = fake({ provider: 'activejobs', dateWindows: ['today'] });
+    expect(WINDOWS.map((w) => adapterDateWindow(day, w))).toEqual(['today', 'today', 'today', 'today', 'today']);
+    const two = fake({ provider: 'jsearch', dateWindows: ['week', 'month'] });
+    expect(WINDOWS.map((w) => adapterDateWindow(two, w))).toEqual(['week', 'week', 'week', 'month', 'week']);
+    // An empty list states nothing: any value is applied.
+    expect(WINDOWS.map((w) => adapterDateWindow(fake({ provider: 'activejobs', dateWindows: [] }), w))).toEqual(WINDOWS);
+  });
+
+  it('every registered adapter that applies the hot three days applies a week too (a query nobody asks for is widened in place)', () => {
+    ensureBuiltinAdapters();
+    ensureAtsPublicAdapter();
+    for (const adapter of registeredSourceAdapters()) {
+      if (adapterDateWindow(adapter, '3days') === '3days') expect(adapterDateWindow(adapter, 'week'), adapter.provider).toBe('week');
+    }
   });
 });
 

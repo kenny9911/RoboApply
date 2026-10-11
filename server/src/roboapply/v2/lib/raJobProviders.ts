@@ -3,17 +3,21 @@
 // Provider seam + fan-out aggregator for the external RapidAPI job-search APIs
 // retained from onboarding and reused by the HTTP-independent job-search service.
 //
-// Three implementations behind ONE RAPID_API_KEY (each separately subscribed on
+// Two implementations behind ONE RAPID_API_KEY (each separately subscribed on
 // the RapidAPI app):
-//   • jsearch    — raRapidApiJobs.ts   (JSearch / OpenWeb Ninja — Google-for-Jobs
-//                                       aggregator; global + multilingual)
 //   • activejobs — raFantasticJobs.ts  (Active Jobs DB — direct-from-employer ATS
 //                                       postings; clean direct apply links)
-//   • linkedin   — raFantasticJobs.ts  (LinkedIn Job Search API — LinkedIn feed)
+//   • jsearch    — raRapidApiJobs.ts   (JSearch / OpenWeb Ninja — Google-for-Jobs
+//                                       aggregator; global + multilingual)
+//
+// The LinkedIn Job Search API is NOT a provider (MARKET_STRATEGY M-4, JI-2: not
+// subscribed and not to be). It is in no list here, and the fan-out refuses a
+// provider with that id whoever hands it one (`isDroppedProvider`), so no
+// request of any brand reaches a LinkedIn client through this module.
 //
 // Every client honors the never-throws contract (null = unavailable/failed) and
-// self-guards (per-provider LRU cache + circuit breaker + daily billed-call
-// budget + kill switch). This module adds:
+// self-guards (per-provider LRU cache + circuit breaker + call budget + kill
+// switch). This module adds:
 //   - a per-provider kill switch (RA_ONBOARDING_<PROVIDER>_DISABLED) layered on
 //     each provider's own isEnabled();
 //   - searchAllProviders(): fan out across every ENABLED provider in parallel
@@ -22,7 +26,7 @@
 
 import { logger } from '../../../services/LoggerService.js';
 import { isJSearchEnabled, searchJSearchJobs } from './raRapidApiJobs.js';
-import { activeJobsDbProvider, linkedInJobsProvider } from './raFantasticJobs.js';
+import { activeJobsDbProvider } from './raFantasticJobs.js';
 import {
   EXTERNAL_SOURCE_BOARDS,
   EXTERNAL_SOURCE_BOARD_SET,
@@ -48,23 +52,35 @@ export {
 // ─── Per-provider kill switch ──────────────────────────────────────────────
 // Layered ON TOP of each client's own isEnabled() (which already checks the key,
 // the global RA_ONBOARDING_EXTERNAL_JOBS_DISABLED switch, its circuit breaker,
-// and its daily budget). Lets one provider be turned off without touching the
-// shared key or the other two.
+// and its call budget). Lets one provider be turned off without touching the shared
+// key or the other one.
 
-const PROVIDER_DISABLE_ENV: Record<ExternalSourceBoard, string> = {
+const PROVIDER_DISABLE_ENV: Readonly<Record<string, string>> = {
   jsearch: 'RA_ONBOARDING_JSEARCH_DISABLED',
   activejobs: 'RA_ONBOARDING_ACTIVEJOBS_DISABLED',
-  linkedin: 'RA_ONBOARDING_LINKEDIN_JOBS_DISABLED',
 };
 
-function providerKilled(id: ExternalSourceBoard): boolean {
-  return process.env[PROVIDER_DISABLE_ENV[id]] === 'true';
+function providerKilled(id: string): boolean {
+  const name = PROVIDER_DISABLE_ENV[id];
+  return name !== undefined && process.env[name] === 'true';
+}
+
+// ─── Dropped providers ─────────────────────────────────────────────────────
+// A provider id that must never be called, whatever is exported, registered or
+// passed in. Plain strings: the rule outlives the id's removal from the
+// provider unions.
+
+const DROPPED_PROVIDER_IDS: ReadonlySet<string> = new Set(['linkedin']);
+
+/** True for a provider that was dropped by decision and is never called (the LinkedIn feed: MARKET_STRATEGY M-4). */
+export function isDroppedProvider(id: string): boolean {
+  return DROPPED_PROVIDER_IDS.has(id);
 }
 
 // ─── Providers ─────────────────────────────────────────────────────────────
 // JSearch wraps the existing client verbatim; the per-provider kill switch is
-// applied here so the client file stays untouched. The Fantastic Jobs providers
-// already fold their own kill switch into isEnabled(), so here we only add the
+// applied here so the client file stays untouched. The Active Jobs DB provider
+// already folds its own kill switch into isEnabled(), so here we only add the
 // generic providerKilled() layer for symmetry (double-checking is harmless).
 
 export const jsearchProvider: JobSearchProvider = {
@@ -75,20 +91,16 @@ export const jsearchProvider: JobSearchProvider = {
 
 /**
  * Registry, ordered by apply-link quality (dedup keeps the FIRST occurrence):
- * direct-employer ATS (Active Jobs DB) → LinkedIn → Google aggregator (JSearch).
- * So when the same posting is surfaced by more than one provider, the row with
- * the cleanest direct apply link wins.
+ * direct-employer ATS (Active Jobs DB) → Google aggregator (JSearch). So when
+ * the same posting is surfaced by both, the row with the cleanest direct apply
+ * link wins. These are the two RapidAPI providers the product runs.
  */
-export const externalProviders: readonly JobSearchProvider[] = [
-  activeJobsDbProvider,
-  linkedInJobsProvider,
-  jsearchProvider,
-];
+export const externalProviders: readonly JobSearchProvider[] = [activeJobsDbProvider, jsearchProvider];
 
-/** Enabled providers, in registry order. Swallows a throwing isEnabled(). */
+/** Enabled providers, in registry order. Swallows a throwing isEnabled(). Never a dropped provider. */
 export function enabledExternalProviders(): JobSearchProvider[] {
   return externalProviders.filter((p) => {
-    if (providerKilled(p.id)) return false;
+    if (isDroppedProvider(p.id) || providerKilled(p.id)) return false;
     try {
       return p.isEnabled();
     } catch {
@@ -116,13 +128,14 @@ export interface AggregateSearchResult {
  *
  * `opts.providers` restricts the fan-out to a caller-chosen subset (the consumer
  * captures enabledExternalProviders() once, up front, so its status event and
- * the actual fetch agree on which providers ran).
+ * the actual fetch agree on which providers ran). A dropped provider in that
+ * subset is left out: it is not queried and not reported.
  */
 export async function searchAllProviders(
   params: ExternalSearchParams,
   opts?: { requestId?: string; signal?: AbortSignal; providers?: JobSearchProvider[] },
 ): Promise<AggregateSearchResult> {
-  const active = opts?.providers ?? enabledExternalProviders();
+  const active = (opts?.providers ?? enabledExternalProviders()).filter((p) => !isDroppedProvider(p.id));
   const empty: AggregateSearchResult = {
     jobs: [],
     providersQueried: [],
