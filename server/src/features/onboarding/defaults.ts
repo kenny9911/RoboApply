@@ -33,9 +33,10 @@ const TITLE_SUGGEST_LIMIT = 10;
  * O2 typeahead. Labels come from the taxonomy in the asked locale (it has
  * English and Simplified Chinese; other locales get English there, and the
  * web localizes categories and role groups from its own bundle through
- * `contextIds` / the node id). The taxonomy's Chinese phrases are Simplified,
- * so a query in Traditional characters is also searched in its Simplified
- * reading (zhFold.ts): "後端" finds the backend roles.
+ * `contextIds` / the node id). The taxonomy holds Simplified phrases and,
+ * since MKT-3E, Taiwan labels and titles (the zh typeahead leaves those out);
+ * a query in Traditional characters is also searched in its Simplified
+ * reading (zhFold.ts), so "後端" finds the backend roles either way.
  */
 export function suggestTitles(q: string, locale: string): TitleSuggestionView[] {
   const direct = searchTaxonomy(q, { locale, limit: TITLE_SUGGEST_LIMIT });

@@ -625,18 +625,30 @@ describe('which adapters a run plans', () => {
     ...over,
   });
 
-  it('a quota is closed while the provider says so and its reset is ahead', () => {
-    expect(quotaClosed(snapshot({}), NOW)).toBe(true);
-    expect(quotaClosed(snapshot({ state: 'not_subscribed', lastStatus: 403 }), NOW)).toBe(true);
-    expect(quotaClosed(snapshot({ state: 'unauthorized', lastStatus: 401 }), NOW)).toBe(true);
-    expect(quotaClosed(snapshot({ state: 'ok', requestsRemaining: 9773 }), NOW)).toBe(false);
-    expect(quotaClosed(snapshot({ state: 'unknown' }), NOW)).toBe(false);
+  it('a quota is closed while the provider says so and the reading still blocks calls: ingest\'s own rule for how long (cross-review, M3 gate)', () => {
+    // A used-up plan: until the reset the provider stated.
+    expect(quotaClosed(snapshot({}), NOW, {})).toBe(true);
+    expect(quotaClosed(snapshot({ state: 'ok', requestsRemaining: 9773 }), NOW, {})).toBe(false);
+    expect(quotaClosed(snapshot({ state: 'unknown' }), NOW, {})).toBe(false);
     // After the reset the reading says nothing about today.
-    expect(quotaClosed(snapshot({}), new Date('2026-10-28T00:00:01.000Z'))).toBe(false);
-    // No reset time stated: we would not know until when, so the adapter's own answer decides.
-    expect(quotaClosed(snapshot({ resetAt: null }), NOW)).toBe(false);
-    expect(quotaClosed(null, NOW)).toBe(false);
-    expect(quotaClosed(undefined, NOW)).toBe(false);
+    expect(quotaClosed(snapshot({}), new Date('2026-10-28T00:00:01.000Z'), {})).toBe(false);
+    // A refused key or a missing subscription blocks for an hour after the answer, whatever reset its
+    // headers carry (a 403 with quota headers: reset 18 days ahead). Ingest asks again after that hour,
+    // so the planner must not keep the provider out of the plan until the reset.
+    const halfAnHourAgo = new Date(NOW.getTime() - 30 * 60_000).toISOString();
+    const sevenHoursAgo = new Date(NOW.getTime() - 7 * 3_600_000).toISOString();
+    for (const refused of [{ state: 'not_subscribed' as const, lastStatus: 403 }, { state: 'unauthorized' as const, lastStatus: 401 }]) {
+      expect(quotaClosed(snapshot({ ...refused, observedAt: halfAnHourAgo }), NOW, {})).toBe(true);
+      expect(quotaClosed(snapshot({ ...refused, observedAt: sevenHoursAgo }), NOW, {})).toBe(false);
+    }
+    // No reset time stated: an hour after the reading, as ingest does.
+    expect(quotaClosed(snapshot({ resetAt: null, observedAt: halfAnHourAgo }), NOW, {})).toBe(true);
+    expect(quotaClosed(snapshot({ resetAt: null, observedAt: sevenHoursAgo }), NOW, {})).toBe(false);
+    // INGEST_QUOTA_RECHECK_HOURS cuts any block short (a plan bought mid-period).
+    expect(quotaClosed(snapshot({ observedAt: sevenHoursAgo }), NOW, { INGEST_QUOTA_RECHECK_HOURS: '6' })).toBe(false);
+    expect(quotaClosed(snapshot({ observedAt: sevenHoursAgo }), NOW, { INGEST_QUOTA_RECHECK_HOURS: '12' })).toBe(true);
+    expect(quotaClosed(null, NOW, {})).toBe(false);
+    expect(quotaClosed(undefined, NOW, {})).toBe(false);
   });
 
   it('splits a brand\'s adapters into the ones planned and the ones left out', () => {
@@ -838,6 +850,27 @@ describe('database steps', () => {
     const fresh = createFakePrisma();
     expect(await ensureBankSyncQueries(fresh as unknown as IngestDb, 'intl', [bank])).toBe(1);
     expect(fresh.$rows('rAIngestQuery')[0]).toMatchObject({ provider: 'bank_robohire', origin: 'bank_sync', market: 'intl', paramsHash: paramsHash('intl', BANK_SYNC_PARAMS) });
+  });
+
+  it('a source read by a run of its own (ownRun: the employer boards) gets no standing query, and one planned earlier is switched off (MKT-3D request, M3 gate)', async () => {
+    const boards = adapter('ats_public', { kind: 'cursor', markets: ['intl', 'cn'], ownRun: true });
+    const bank = adapter('bank_gohire', { kind: 'cursor', markets: ['cn'] });
+    const fake = createFakePrisma({ sql: { defaultResult: 0 } });
+    expect(await ensureBankSyncQueries(fake as unknown as IngestDb, 'cn', [boards, bank])).toBe(1);
+    expect(fake.$rows('rAIngestQuery').map((r) => [r.provider, r.market])).toEqual([['bank_gohire', 'cn']]);
+    // First the boards' earlier standing query is switched off, then the bank's is (re)enabled.
+    const [off, on] = fake.$sql.calls;
+    expect(off!.text.replace(/\s+/g, ' ').trim()).toBe(`UPDATE "RAIngestQuery" SET "enabled" = false WHERE "market" = $1 AND "origin" = 'bank_sync' AND "enabled" = true AND "provider" = ANY($2::text[])`);
+    expect(off!.values).toEqual(['cn', ['ats_public']]);
+    expect(on!.values).toEqual(['cn', ['bank_gohire']]);
+    // Alone in a market, the boards still get nothing and the statement still runs.
+    const alone = createFakePrisma({ sql: { defaultResult: 0 } });
+    expect(await ensureBankSyncQueries(alone as unknown as IngestDb, 'intl', [boards])).toBe(0);
+    expect(alone.$rows('rAIngestQuery')).toHaveLength(0);
+    expect(alone.$sql.calls.map((c) => c.values)).toEqual([['intl', ['ats_public']]]);
+    // The real adapter declares it.
+    const { createAtsPublicAdapter } = await import('../sources/atsPublic/adapter.js');
+    expect(createAtsPublicAdapter({ env: {} }).ownRun).toBe(true);
   });
 
   it('a cursor adapter that is off gets no standing query, and its existing one is neither removed nor switched on', async () => {

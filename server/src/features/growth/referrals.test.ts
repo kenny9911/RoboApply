@@ -590,7 +590,10 @@ describe('evaluateReferral', () => {
     const id = ((await h.service.attachFromSignup('b', 'ABCDEFGH')) as { referralId: string }).referralId; // signup passed no signals
     expect(await h.service.evaluateReferral(id)).toBe('waiting');
     expect(h.grants).toEqual([]);
-    h.setNow(new Date(NOW.getTime() + 8 * DAY));
+    // Eight days after the referral was created. The fake stamps `createdAt` with the wall clock, so the
+    // eight days are counted from the later of the two clocks (counted from NOW alone, the test turned red
+    // at 2026-10-11 12:00 UTC, when the wall clock came within seven days of NOW + 8 days).
+    h.setNow(new Date(Math.max(NOW.getTime(), Date.now()) + 8 * DAY));
     expect(await h.service.evaluateReferral(id)).toBe('held');
     expect(await referralOf(h)).toMatchObject({ status: 'held', riskReasons: ['signals_missing'], riskScore: 50 });
     expect(h.grants).toEqual([]);

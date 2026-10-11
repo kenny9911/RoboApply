@@ -152,8 +152,8 @@ describe('GoApply onboarding contract (PIPL)', () => {
 describe('marketHooks', () => {
   const ctx = { brand: 'goapply' as const, market: 'cn' as const, stage: 'ingest' as const };
 
-  it('statically registers the cn and ats_public hook modules (WP-41 / WP-42 fill them in place)', () => {
-    expect(MARKET_HOOK_SETS.map((s) => s.id)).toEqual(['cn', 'ats_public']);
+  it('statically registers the cn, ats_public and tw_sources hook modules (WP-41 / WP-42 fill them in place; MKT-3E adds the Taiwan open-data set)', () => {
+    expect(MARKET_HOOK_SETS.map((s) => s.id)).toEqual(['cn', 'ats_public', 'tw_sources']);
     for (const set of MARKET_HOOK_SETS) expect(typeof set.appliesTo).toBe('function');
     // Hooks never apply to the other market's jobs.
     const cnSet = MARKET_HOOK_SETS.find((s) => s.id === 'cn')!;

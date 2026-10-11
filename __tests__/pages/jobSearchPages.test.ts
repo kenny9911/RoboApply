@@ -83,7 +83,7 @@ describe('job-search pages per brand', () => {
 });
 
 describe('request examples per brand', () => {
-  it('RoboApply: the two examples are exactly what they were', () => {
+  it('RoboApply: its own examples, with no LinkedIn-only search', () => {
     const ra = jobSearchExamples(jobSearchBrandExamples(clientBrandFor('roboapply')));
     expect(ra.curl).toBe(JOB_SEARCH_CURL_EXAMPLE);
     expect(ra.agentCurl).toBe(JOB_SEARCH_AGENT_CURL_EXAMPLE);
@@ -91,7 +91,9 @@ describe('request examples per brand', () => {
   --header "Authorization: Bearer $ROBOAPPLY_JOB_SEARCH_KEY" \\
   --header "Content-Type: application/json" \\
   --data '{"query":"software engineer","country":"US","remote":true,"datePosted":"week","limit":20}'`);
-    expect(ra.agentCurl).toContain('"linkedinOnly":true');
+    // LinkedIn is not a source of either site (MARKET_STRATEGY M-4): the example does not ask for it.
+    expect(ra.agentCurl).not.toContain('linkedinOnly');
+    expect(ra.agentCurl).toContain('"request":"Find remote backend engineering jobs in Taiwan posted this week.","limit":20');
   });
 
   it('GoApply: mainland examples, its own variable names, no LinkedIn and no other brand', () => {

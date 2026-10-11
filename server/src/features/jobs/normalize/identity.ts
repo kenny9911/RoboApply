@@ -150,6 +150,27 @@ export function resolvePostedAt(
 }
 
 /**
+ * The date a reader may print for a row, of the three date facts of a posting
+ * (posted, first seen, last verified: MARKET_STRATEGY §1.5). An estimated
+ * `postedAt` is printed as "First seen {date}", and that is true only when the
+ * estimate IS the day we first saw the row (`resolvePostedAt`'s fallback; a
+ * response served from a provider cache is fetched a few hours earlier, hence
+ * the day of tolerance). A source may hand an estimated date that is something
+ * else: 台灣就業通's `TRANDATE` is the day the row was last updated at the
+ * source. That date stays in the row for the feed's floor and ordering; no
+ * reader prints it under a label it does not fit, so this answers null and the
+ * card says "Posting date not listed" beside its "Last checked" date. A row
+ * read without `firstSeenAt` is answered as before.
+ */
+export function displayPostedAt(row: { postedAt: Date | null; postedAtEstimated?: boolean | null; firstSeenAt?: Date | null }): Date | null {
+  if (!row.postedAt) return null;
+  if (row.postedAtEstimated !== true || !row.firstSeenAt) return row.postedAt;
+  // A raw-SQL row can carry its timestamps as text.
+  const apart = Math.abs(new Date(row.postedAt).getTime() - new Date(row.firstSeenAt).getTime());
+  return Number.isFinite(apart) && apart > DAY_MS ? null : row.postedAt;
+}
+
+/**
  * The aggregators: the only providers whose rows get a life from their posting
  * date when the source states no deadline (M-22: "a posting-age cut-off
  * applies to aggregator rows only"). `activejobs_feed` is closed earlier by the

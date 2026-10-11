@@ -28,7 +28,10 @@ export function useExternalLinks(query: string, city?: string | null) {
     queryKey: cnJobsKeys.links(q, city?.trim() || null),
     queryFn: ({ signal }) => getExternalLinks({ q, ...(city?.trim() ? { city: city.trim() } : {}) }, { signal }),
     enabled: q.length > 0,
-    staleTime: Infinity,
+    // The order follows the signed-in user's identity since MKT-3G (campus sites first for 在校 / 应届), so the
+    // answer is not fixed per (query, city) any more: a person who changes their identity gets the new order
+    // within five minutes, without a reload.
+    staleTime: 5 * 60_000,
   });
 }
 

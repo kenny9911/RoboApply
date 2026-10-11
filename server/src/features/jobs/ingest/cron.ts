@@ -1,7 +1,9 @@
 // server/src/features/jobs/ingest/cron.ts — the inventory crons (WP-16b; FND-3 contract).
 //
 // Called by server/src/cron/handlers.ts (Vercel Cron) and RoboApplyCronService
-// (node-cron) inside `runWithBrand(brand, …)` with the shared 240 s budget.
+// (node-cron) inside `runWithBrand(brand, …)` with the brand's slice of the
+// 240 s budget (cron/handlers.ts `brandBudget`: one brand's sweep never takes
+// the other brand's tick).
 // Each returns `{ skipped }` at once when there is nothing to do and reports
 // the work it did otherwise.
 //

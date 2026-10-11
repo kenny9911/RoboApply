@@ -27,6 +27,7 @@ import inbox from './inbox.en.json';
 import invite from './invite.en.json';
 import jobDetail from './jobDetail.en.json';
 import jobImport from './jobImport.en.json';
+import jobSearch from './jobSearch.en.json';
 import jobs from './jobs.en.json';
 import jobsCn from './jobsCn.en.json';
 import jobsTw from './jobsTw.en.json';
@@ -65,7 +66,7 @@ function deepMerge(dst: Messages, src: Messages): Messages {
 }
 
 /** Staging namespaces, in file order. */
-export const STAGING_NAMESPACES: readonly string[] = ['accountV2', 'admin', 'applications', 'assistant', 'auth', 'authCn', 'billingCn', 'brand', 'campus', 'coaching', 'competitiveness', 'coverLetter', 'credits', 'extensionWeb', 'filters', 'fit', 'growth', 'inbox', 'invite', 'jobDetail', 'jobImport', 'jobs', 'jobsCn', 'jobsTw', 'landing', 'legal', 'nav', 'notifyCn', 'offers', 'onboarding', 'onboardingCn', 'people', 'practice', 'practiceCn', 'practiceQuestions', 'profile', 'pwa', 'ready', 'resume', 'resumeBuilder', 'resumeCheck', 'seo', 'tailor', 'taxonomy', 'tools', 'visitor'];
+export const STAGING_NAMESPACES: readonly string[] = ['accountV2', 'admin', 'applications', 'assistant', 'auth', 'authCn', 'billingCn', 'brand', 'campus', 'coaching', 'competitiveness', 'coverLetter', 'credits', 'extensionWeb', 'filters', 'fit', 'growth', 'inbox', 'invite', 'jobDetail', 'jobImport', 'jobSearch', 'jobs', 'jobsCn', 'jobsTw', 'landing', 'legal', 'nav', 'notifyCn', 'offers', 'onboarding', 'onboardingCn', 'people', 'practice', 'practiceCn', 'practiceQuestions', 'profile', 'pwa', 'ready', 'resume', 'resumeBuilder', 'resumeCheck', 'seo', 'tailor', 'taxonomy', 'tools', 'visitor'];
 
 /** All staged English strings (cloned, so callers may not mutate the JSON modules). */
 export const STAGING_EN: Messages = [
@@ -90,6 +91,7 @@ export const STAGING_EN: Messages = [
   invite,
   jobDetail,
   jobImport,
+  jobSearch,
   jobs,
   jobsCn,
   jobsTw,

@@ -48,7 +48,7 @@ TASK: integrate wave ${A.wave}.
 4) Verify the cross-bundle contracts named in the plan documents field by field: producer and consumer agree on paths, request and response shapes, error codes, capability and flag keys, env variable names and defaults; the consumer is wired to the real producer, not to a default or a stub.
 5) What belongs to a LATER wave or bundle: do not build it; write it to ${PLAN}/requests/wave${A.wave}-carryover.md grouped by target, with enough detail to act on. What only the owner can decide or supply goes under "Owner" there.
 6) Run all GATES until green.
-Return: the table, every fix with its reason, env variables that are new or redefined after this wave (name, meaning, default), the i18n staging state (namespaces with new keys), and the final gate results with counts.${n > 1 ? INTERRUPTED : ''}`, { label: `integrate-${A.wave}`, phase: 'Integrate', effort: 'high' }, 3)
+Return: the table, every fix with its reason, env variables that are new or redefined after this wave (name, meaning, default), the i18n staging state (namespaces with new keys), and the final gate results with counts.${n > 1 ? INTERRUPTED : ''}`, { label: `integrate-${A.wave}`, phase: 'Integrate' }, 3)
 if (!integ) return { integ: null, findings: 0, low: 0, fix: null, failed: 'integrate' }
 
 const REVIEW_SCHEMA = { type: 'object', properties: { findings: { type: 'array', items: { type: 'object', properties: { severity: { type: 'string', enum: ['critical', 'high', 'medium', 'low'] }, file: { type: 'string' }, title: { type: 'string' }, detail: { type: 'string' }, fix: { type: 'string' } }, required: ['severity', 'title', 'detail', 'fix'] } }, checked: { type: 'array', items: { type: 'string' } } }, required: ['findings'] }
@@ -61,7 +61,7 @@ LENS (${l.key}): ${l.prompt}
 The integrator reported:
 ${integ}
 
-Report only real, specific defects (file and line, what happens, why it is wrong under the plan documents or the rulings) each with a concrete fix. List under "checked" what you verified and found correct.`, { label: `xreview-${A.wave}-${l.key}`, phase: 'Cross-review', schema: REVIEW_SCHEMA, effort: 'high' }, 3).then((r) => (r ? { key: l.key, ...r } : null))))
+Report only real, specific defects (file and line, what happens, why it is wrong under the plan documents or the rulings) each with a concrete fix. List under "checked" what you verified and found correct.`, { label: `xreview-${A.wave}-${l.key}`, phase: 'Cross-review', schema: REVIEW_SCHEMA }, 3).then((r) => (r ? { key: l.key, ...r } : null))))
 const findings = reviews.filter(Boolean).flatMap((r) => r.findings.map((f) => ({ lens: r.key, ...f }))).filter((f) => f.severity !== 'low')
 const low = reviews.filter(Boolean).flatMap((r) => r.findings.map((f) => ({ lens: r.key, ...f }))).filter((f) => f.severity === 'low')
 log(`cross-review findings: ${findings.length} to fix, ${low.length} low`)
@@ -78,7 +78,7 @@ FINDINGS TO FIX:
 ${JSON.stringify(findings, null, 2)}
 
 LOW FINDINGS:
-${JSON.stringify(low, null, 2)}${n > 1 ? INTERRUPTED : ''}`, { label: `fix-${A.wave}`, phase: 'Fix', effort: 'high' }, 3)
+${JSON.stringify(low, null, 2)}${n > 1 ? INTERRUPTED : ''}`, { label: `fix-${A.wave}`, phase: 'Fix' }, 3)
 }
 const lensesRun = reviews.filter(Boolean).map((r) => r.key)
 return { integ, findings: findings.length, low: low.length, fix, lensesRun, failed: fix ? null : 'fix' }

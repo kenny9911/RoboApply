@@ -55,20 +55,25 @@ describe('normalizeJSearchJob', () => {
     expect(n.fetchedAt).toBe(fetchedAt.toISOString());
     expect(n.salaryCurrencyInferred).toBe(true);
   });
-  it('retains LinkedIn provenance while preferring the direct employer application', () => {
+  it('a LinkedIn page is never the row\'s source link: the first link that is not on LinkedIn is (MARKET_STRATEGY 1.5)', () => {
     const link = 'https://www.linkedin.com/jobs/view/1234567890';
     const n = normalizeJSearchJob(rawJob({ job_apply_link: link, job_publisher: 'LinkedIn' }), { country: 'us', fetchedAt: new Date() })!;
     expect(n.applyIsDirect).toBe(true);
     expect(n.applyUrl).toContain('careers.caterpillar.com');
-    expect(n.sourceUrl).toBe(link);
+    expect(n.sourceUrl).toBe(n.applyUrl);
   });
-  it('retains a LinkedIn posting found only in alternative apply options', () => {
+  it('a LinkedIn posting among the alternative apply options changes nothing', () => {
     const link = 'https://tw.linkedin.com/jobs/view/software-engineer-1234567890?trackingId=example';
     const raw = rawJob();
     raw.apply_options.push({ apply_link: link, is_direct: false, publisher: 'LinkedIn' });
     const n = normalizeJSearchJob(raw, { country: 'us', fetchedAt: new Date() })!;
-    expect(n.sourceUrl).toBe(link);
+    expect(n.sourceUrl).toBe(raw.job_apply_link);
     expect(n.applyUrl).toBe(raw.job_apply_link);
+  });
+  it('a row whose only link is on LinkedIn has no source link at all', () => {
+    const link = 'https://www.linkedin.com/jobs/view/1234567890';
+    const n = normalizeJSearchJob(rawJob({ job_apply_link: link, apply_options: [{ apply_link: link, is_direct: false, publisher: 'LinkedIn' }] }), { country: 'us', fetchedAt: new Date() })!;
+    expect(n.sourceUrl).toBeNull();
   });
   it.each([
     'https://linkedin.com.example.org/jobs/view/123',
@@ -98,7 +103,7 @@ describe('the apply link is decided by its host (JI-6)', () => {
     expect(n.sourceUrl).toBe(link);
   });
 
-  it('a LinkedIn link plus an employer option: applies on the employer site; the LinkedIn page stays provenance only', () => {
+  it('a LinkedIn link plus an employer option: applies on the employer site, which is the source link too', () => {
     const linkedin = 'https://www.linkedin.com/jobs/view/4000000001';
     const employer = 'https://careers.acme.com/jobs/88';
     const n = normalizeJSearchJob(
@@ -107,7 +112,7 @@ describe('the apply link is decided by its host (JI-6)', () => {
     )!;
     expect(n.applyUrl).toBe(employer);
     expect(n.applyIsDirect).toBe(true);
-    expect(n.sourceUrl).toBe(linkedin);
+    expect(n.sourceUrl).toBe(employer);
   });
 
   it('a row whose only link is a job board is not direct', () => {
@@ -122,7 +127,8 @@ describe('the apply link is decided by its host (JI-6)', () => {
     expect(employer).toMatchObject({ applyUrl: 'https://jobs.acme.example/role/7', applyIsDirect: true });
     const board = normalizeJSearchJob(row({ apply: 'https://www.indeed.com/viewjob?jk=abc', options: [] }), at)!;
     expect(board).toMatchObject({ applyUrl: 'https://www.indeed.com/viewjob?jk=abc', applyIsDirect: false });
-    // A LinkedIn-only row is still returned to interactive callers (they hide the link); the normalizer does not ingest it.
+    // A LinkedIn-only row still leaves the client with its link; no caller shows it: the normalizer does not
+    // ingest it and the job-search API drops it (job-search/normalization.ts).
     const linkedin = normalizeJSearchJob(row({ apply: 'https://www.linkedin.com/jobs/view/4000000002', options: [] }), at)!;
     expect(linkedin).toMatchObject({ applyUrl: 'https://www.linkedin.com/jobs/view/4000000002', applyIsDirect: false });
   });

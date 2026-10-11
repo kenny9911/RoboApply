@@ -130,6 +130,26 @@ describe('job tools (read only)', () => {
     expectNoWrites(s.areas);
   });
 
+  it('search_jobs and top_fit_jobs never list a row the card cannot credit (a 台灣就業通 open-data row); one wider read fills the list', async () => {
+    const attribution = { text: '資料來源：勞動部勞動力發展署 2026「台灣就業通網站職缺清單」，依政府資料開放授權條款第1版公開釋出', url: 'https://data.gov.tw/license' };
+    const open = (id: string) => feedItem({ jobId: id, title: `Open-data ${id}`, cardMeta: { tw_sources: { attribution } } });
+    const s = ctxFor();
+    s.areas.feedPreview.mockImplementation(async (_u: string, input: { limit: number }) =>
+      [open('tw_1'), feedItem(), open('tw_2'), feedItem({ jobId: 'job_2' }), feedItem({ jobId: 'job_3' }), feedItem({ jobId: 'job_4' })].slice(0, input.limit),
+    );
+    const r = await run('search_jobs', { q: 'analyst', limit: 3 }, s);
+    // The first read (3) held two open-data rows; the wider one (12) is filtered and cut back to 3.
+    expect(s.areas.feedPreview.mock.calls.map((c) => (c[1] as { limit: number }).limit)).toEqual([3, 12]);
+    expect(r.output.jobIds).toEqual(['job_1', 'job_2', 'job_3']);
+    expect(JSON.stringify(r.output)).not.toMatch(/tw_1|tw_2|Open-data/);
+    const top = await run('top_fit_jobs', { limit: 2 }, s);
+    expect(top.output.jobIds).toEqual(['job_1', 'job_2']);
+    // A list with no such row is read once, as before.
+    const plain = ctxFor();
+    await run('top_fit_jobs', {}, plain);
+    expect(plain.areas.feedPreview).toHaveBeenCalledTimes(1);
+  });
+
   it('search_jobs "only jobs that list pay": the search\'s own filter, and no pay-less row on the card (verification finding)', async () => {
     const s = ctxFor();
     // The feed can still hand back a row without pay (the filter steps back beside a minimum pay).

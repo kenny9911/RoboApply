@@ -61,8 +61,9 @@
 //   8. Two plan runs that overlap (a cron delivered twice) are safe: the
 //      "planned today" stamp never moves backwards, so neither run takes the
 //      other's rows for rows the plan no longer names.
-// Standing syncs (banks, employer boards, feeds) get one query per cursor
-// adapter that is on for the market (`ensureBankSyncQueries`).
+// Standing syncs (banks, feeds, the Taiwan sweep) get one query per cursor
+// adapter that is on for the market (`ensureBankSyncQueries`). The employer
+// boards get none: their own run reads them (`JobSourceAdapter.ownRun`).
 // The planner never calls a provider.
 
 import { createHash } from 'node:crypto';
@@ -73,9 +74,9 @@ import { CITIES, citiesNamed, findCity } from '../geo/index.js';
 import { TAXONOMY_NODES, getTaxonomyNode, providerQueryLabels, type ProviderQueryLabel, type QueryLanguage } from '../taxonomy/index.js';
 import { adapterCostModel, adapterDateWindow, adapterEnabledFor, adapterQueryLanguages } from '../sources/index.js';
 import type { IngestOrigin, IngestQueryParams, IngestProvider, JobSourceAdapter } from '../sources/index.js';
-import { ACTIVE_USER_DAYS, DISABLE_UNUSED_DAYS, MAX_LOCATIONS_PER_PROFILE, seedCitiesPerCountry, seedCountries, seedRoleLimit } from './config.js';
+import { ACTIVE_USER_DAYS, DISABLE_UNUSED_DAYS, MAX_LOCATIONS_PER_PROFILE, quotaRecheckMs, seedCitiesPerCountry, seedCountries, seedRoleLimit } from './config.js';
 import { newId, type IngestDb } from './db.js';
-import { PROVIDER_QUOTA_CONFIG_KEY, parseProviderQuota, usageKey, type ProviderQuotaSnapshot } from './quotaContract.js';
+import { PROVIDER_QUOTA_CONFIG_KEY, parseProviderQuota, quotaBlockedUntil, usageKey, type ProviderQuotaSnapshot } from './quotaContract.js';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -481,15 +482,18 @@ export const BANK_SYNC_PARAMS: IngestQueryParams = { q: '', country: '*', datePo
 const CLOSED_QUOTA_STATES: ReadonlySet<string> = new Set(['exhausted', 'not_subscribed', 'unauthorized']);
 
 /**
- * The provider itself said its quota is closed, and until when: state
- * exhausted, not subscribed or unauthorized with a reset time still ahead.
- * A reading without a reset time closes nothing here (we would not know
- * until when): the adapter's own answer decides then.
+ * The provider itself said its quota is closed (state exhausted, not
+ * subscribed or unauthorized) and that reading still blocks calls. For how
+ * long a reading blocks is ingest's own rule (`quotaBlockedUntil`), so the
+ * planner and the tick agree: a used-up plan until its stated reset; a refused
+ * key or a missing subscription for an hour after the answer, whatever reset
+ * its headers carry (ingest asks again hourly, and the planner must not keep
+ * the provider out of the plan for the rest of the month); either cut short
+ * by INGEST_QUOTA_RECHECK_HOURS. Past that, the adapter's own answer decides.
  */
-export function quotaClosed(snapshot: Pick<ProviderQuotaSnapshot, 'state' | 'resetAt'> | null | undefined, now: Date): boolean {
+export function quotaClosed(snapshot: Pick<ProviderQuotaSnapshot, 'state' | 'resetAt' | 'observedAt'> | null | undefined, now: Date, env: EnvSource = process.env): boolean {
   if (!snapshot || !CLOSED_QUOTA_STATES.has(snapshot.state)) return false;
-  const reset = snapshot.resetAt ? Date.parse(snapshot.resetAt) : Number.NaN;
-  return Number.isFinite(reset) && reset > now.getTime();
+  return quotaBlockedUntil(snapshot, now, quotaRecheckMs(env)) !== null;
 }
 
 export interface PlannableAdapters {
@@ -510,13 +514,14 @@ export function plannableAdapters(
   market: Market,
   quota: ReadonlyMap<string, ProviderQuotaSnapshot> = new Map(),
   now: Date = new Date(),
+  env: EnvSource = process.env,
 ): PlannableAdapters {
   const open: JobSourceAdapter[] = [];
   const skipped: IngestProvider[] = [];
   for (const a of adapters) {
     if (!a.markets.includes(market)) continue;
     const metered = a.kind === 'search' && adapterCostModel(a) !== 'free';
-    const closed = metered && [usageKey(a.provider, market), a.provider].some((key) => quotaClosed(quota.get(key), now));
+    const closed = metered && [usageKey(a.provider, market), a.provider].some((key) => quotaClosed(quota.get(key), now, env));
     if (!closed && adapterEnabledFor(a, market)) open.push(a);
     else if (!skipped.includes(a.provider)) skipped.push(a.provider);
   }
@@ -753,9 +758,20 @@ export async function retireSuperseded(db: IngestDb, market: Market, providers: 
  * query and its existing one is left alone. A standing query that was
  * switched off while its provider was not run (`retireUnrunProviders`) is
  * switched on again and made due.
+ *
+ * A source read by a run of its own (`ownRun`: the employer boards, cron
+ * `jobs-boards`) gets none, and one planned for it earlier is switched off:
+ * the tick would lease it every 30 minutes, read nothing, and write an empty
+ * "last run" over the status the source's own run stores.
  */
 export async function ensureBankSyncQueries(db: IngestDb, market: Market, adapters: readonly JobSourceAdapter[]): Promise<number> {
-  const banks = adapters.filter((a) => a.kind === 'cursor' && a.markets.includes(market) && adapterEnabledFor(a, market));
+  const ownRun = adapters.filter((a) => a.kind === 'cursor' && a.ownRun === true && a.markets.includes(market)).map((a) => a.provider as string);
+  if (ownRun.length > 0) {
+    await db.$executeRaw`
+      UPDATE "RAIngestQuery" SET "enabled" = false
+      WHERE "market" = ${market} AND "origin" = 'bank_sync' AND "enabled" = true AND "provider" = ANY(${ownRun}::text[])`;
+  }
+  const banks = adapters.filter((a) => a.kind === 'cursor' && a.ownRun !== true && a.markets.includes(market) && adapterEnabledFor(a, market));
   if (banks.length === 0) return 0;
   const hash = paramsHash(market, BANK_SYNC_PARAMS);
   const { count } = await db.rAIngestQuery.createMany({
@@ -803,7 +819,7 @@ export async function runPlanner(
   const now = options.now ?? new Date();
   const env = options.env ?? process.env;
   const market = brand.market;
-  const { open, skipped } = plannableAdapters(adapters, market, await readQuotaSnapshots(db), now);
+  const { open, skipped } = plannableAdapters(adapters, market, await readQuotaSnapshots(db), now, env);
   const demand = await collectDemand(db, brand, now);
   const seeds = seedTuples(brand, env);
   const planned = planQueries(mergeTuples(demand, seeds), open, { queryLabels: options.queryLabels });

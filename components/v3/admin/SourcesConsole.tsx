@@ -50,8 +50,8 @@ type T = ReturnType<typeof useTranslations>;
 /** Job-board systems the server can read (vendor names are data, not copy). */
 export const BOARD_SYSTEMS: Readonly<Record<PublicAts, string>> = { greenhouse: 'Greenhouse', lever: 'Lever', ashby: 'Ashby', smartrecruiters: 'SmartRecruiters' };
 
-const KNOWN_SOURCES = new Set(['ats_public', 'activejobs', 'jsearch', 'linkedin', 'user_import']);
-const KNOWN_REASONS = new Set(['kill_switch', 'transport_off', 'tls_required', 'tls_required_no_api_key', 'no_api_key', 'not_configured', 'cross_tenant_unconfirmed', 'not_registered', 'wrong_market', 'disabled']);
+const KNOWN_SOURCES = new Set(['ats_public', 'activejobs', 'jsearch', 'linkedin', 'tw_open_data', 'user_import']);
+const KNOWN_REASONS = new Set(['kill_switch', 'transport_off', 'tls_required', 'tls_required_no_api_key', 'no_api_key', 'not_configured', 'cross_tenant_unconfirmed', 'not_registered', 'wrong_market', 'url_invalid', 'quota', 'disabled']);
 const KNOWN_TRANSPORTS = new Set(['db', 'api', 'syndication', 'board_api', 'rapidapi', 'off']);
 /**
  * Tallies shown, in this order; `wrong_market` reads differently on each site.
@@ -75,8 +75,20 @@ export const TALLY_ORDER = [
   'private_row',
   'normalize_failed',
   'no_external_id',
+  'linkedin_only_link',
+  'indeed_only_link',
   'bank_page_cap',
   'bank_pass_cut_short',
+  // The Taiwan open-data sweep (sources/twOpenData.ts): what it finished, what failed, what it could not reach.
+  'tw_sweep_finished',
+  'tw_sweep_incomplete',
+  'tw_request_errors',
+  'tw_skipped_position',
+  'tw_county_only',
+  'tw_county_unreached',
+  'tw_capped_leaf',
+  'tw_capped_county_major',
+  'tw_absence_unproven',
 ] as const;
 const BANK_NAMES: Readonly<Record<string, string>> = { bank_gohire: 'GoHire', bank_robohire: 'RoboHire' };
 
@@ -258,8 +270,10 @@ export function CareerBoardsPanel({ market }: { market: 'intl' | 'cn' }) {
   };
   const errorText = (err: unknown) => {
     const code = apiErrorCode(err);
-    // A board is read for one site only: the server says when the other site already has it.
-    if (code === 'conflict') return t(apiErrorReason(err) === 'board_on_other_site' ? 'errors.otherSite' : 'errors.duplicate');
+    // A board is one shared row for both sites since MKT-3D (JC-4). The server says when the board exists
+    // but is read only for countries that do not feed this site (so this list does not show it); the old
+    // reason `board_on_other_site` is retired. The shared panel's sentence says exactly that.
+    if (code === 'conflict') return apiErrorReason(err) === 'board_read_for_other_countries' ? tp('errors.otherCountries') : t('errors.duplicate');
     return code === 'invalid_request' ? t('errors.invalid') : t('errors.generic');
   };
   const problem = (code: string | null) => tp(`problem.${boardProblemKey(code ?? '')}`);

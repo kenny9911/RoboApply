@@ -35,6 +35,8 @@ import {
   toBadges,
   toCampusInfo,
   toPay,
+  toPayText,
+  toSimilarItem,
   toRequirements,
   toJobDetail,
   toSections,
@@ -902,12 +904,65 @@ describe('save, share, similar, company news', () => {
       jobs: [
         job(),
         job({ id: 'jw', salaryMin: 1200, salaryMax: 1500, salaryPeriod: 'week', salaryDisclosed: true }),
-        job({ id: 'jt', salaryText: '待遇面議(經常性薪資達4萬元或以上)', salaryDisclosed: false }),
+        job({ id: 'jt', salaryText: '月薪四萬元以上', salaryDisclosed: false }),
       ],
     });
     const items = (await service.similar('u1', 'j1')).items;
     expect(items.find((i) => i.jobId === 'jw')!.pay).toMatchObject({ min: 1200, max: 1500, period: 'week' });
-    expect(items.find((i) => i.jobId === 'jt')).toMatchObject({ pay: null, payText: '待遇面議(經常性薪資達4萬元或以上)' });
+    expect(items.find((i) => i.jobId === 'jt')).toMatchObject({ pay: null, payText: '月薪四萬元以上' });
+  });
+
+  it('a 台灣就業通 row is not labelled "First seen" with the dataset\'s update date: the job page and similar jobs get no posting date (MARKET_STRATEGY 1.5)', async () => {
+    const firstSeenAt = new Date(NOW.getTime() - 2 * 3_600_000);
+    const { service } = setup({
+      jobs: [
+        job(),
+        // TRANDATE four months before our first sight, stored as an estimated postedAt.
+        job({ id: 'tw', sourceBoard: 'tw_open_data', postedAt: new Date(NOW.getTime() - 124 * DAY), postedAtEstimated: true, firstSeenAt, lastSeenAt: firstSeenAt }),
+        // An undated row of another source: the estimate is our first sight.
+        job({ id: 'und', postedAt: firstSeenAt, postedAtEstimated: true, firstSeenAt, lastSeenAt: firstSeenAt }),
+      ],
+    });
+    expect((await service.get('u1', 'tw')).job).toMatchObject({ postedAt: null, postedAtEstimated: true, lastSeenAt: firstSeenAt.toISOString() });
+    expect((await service.get('u1', 'und')).job).toMatchObject({ postedAt: firstSeenAt.toISOString(), postedAtEstimated: true });
+    const items = (await service.similar('u1', 'j1')).items;
+    expect(items.find((i) => i.jobId === 'und')).toMatchObject({ postedAt: firstSeenAt.toISOString() });
+    // The same rule on a similar-jobs card (an estimated date far from our first sight, whatever the source).
+    expect(toSimilarItem({ ...(job({ id: 'far', postedAt: new Date(NOW.getTime() - 124 * DAY), postedAtEstimated: true, firstSeenAt, lastSeenAt: firstSeenAt }) as unknown as JobRow) }, NOW, null, null)).toMatchObject({
+      postedAt: null,
+      lastSeenAt: firstSeenAt.toISOString(),
+    });
+  });
+
+  it('similar jobs never recommend a row whose credit line the card cannot print yet (a 台灣就業通 open-data row); its own page still opens (MARKET_STRATEGY 1.3)', async () => {
+    const { service } = setup({
+      jobs: [job(), job({ id: 'tw', sourceBoard: 'tw_open_data' }), job({ id: 'gov', sourceBoard: 'tw_gov_jobs' }), job({ id: 'ok', sourceBoard: 'greenhouse' })],
+    });
+    const ids = (await service.similar('u1', 'j1')).items.map((i) => i.jobId);
+    expect(ids).toContain('ok');
+    expect(ids).not.toContain('tw');
+    expect(ids).not.toContain('gov');
+    expect((await service.get('u1', 'tw')).job.id).toBe('tw');
+  });
+
+  it('the Taiwan statutory threshold is never a job\'s pay: similar jobs and the job page say "not listed" for the no-figure sentence (MARKET_STRATEGY 1.5; JT-1, JT-6)', async () => {
+    // What 台灣就業通 sends for a vacancy with no figure (`SALARYCD`), at today's threshold and at a higher one.
+    const four = '依學經歷、證照核薪(每月經常性薪資達4萬元以上)';
+    const five = '依學經歷、證照核薪(每月經常性薪資達5萬元以上)';
+    const { service } = setup({
+      jobs: [
+        job(),
+        // (On a board row here: similar jobs hold 台灣就業通 rows out until the card prints their credit line.)
+        job({ id: 'tw4', salaryText: four, salaryDisclosed: false }),
+        job({ id: 'tw5', salaryText: five, salaryDisclosed: false }),
+        job({ id: 'tw6', salaryText: '待遇面議(經常性薪資達4萬元或以上)', salaryDisclosed: false }),
+      ],
+    });
+    const items = (await service.similar('u1', 'j1')).items;
+    for (const id of ['tw4', 'tw5', 'tw6']) expect(items.find((i) => i.jobId === id), id).toMatchObject({ pay: null, payText: null });
+    expect((await service.get('u1', 'tw4')).job).toMatchObject({ pay: null, payText: null });
+    expect(toPayText({ salaryText: four }, null)).toBeNull();
+    expect(toPayText({ salaryText: five }, null)).toBeNull();
   });
 
   it('FIX-3: words with no amount are not "Pay as stated", and a figure that cannot be pay is not shown as a number', async () => {

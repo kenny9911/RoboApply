@@ -17,6 +17,7 @@ import {
   dedupePlace,
   naiveOffsetMinutesFor,
   resolveExpiresAt,
+  displayPostedAt,
   resolvePostedAt,
   toDate,
 } from './identity.js';
@@ -273,6 +274,20 @@ describe('dedupe key, search text and dates', () => {
     expect(resolvePostedAt(null, { now, fetchedAt: '2026-10-09T00:00:00Z' })).toEqual({ postedAt: new Date('2026-10-09T00:00:00Z'), estimated: true });
     expect(resolvePostedAt('2027-01-01T00:00:00Z', { now })).toEqual({ postedAt: now, estimated: true });
     expect(resolvePostedAt('1999-01-01T00:00:00Z', { now }).estimated).toBe(true);
+  });
+
+  it('displayPostedAt: an estimated date is printable (as "First seen") only when it is the day we first saw the row', () => {
+    const firstSeenAt = new Date('2026-10-12T03:00:00Z');
+    // A stated posting date is printed whatever our first sight was.
+    expect(displayPostedAt({ postedAt: new Date('2026-06-10T00:00:00Z'), postedAtEstimated: false, firstSeenAt })).toEqual(new Date('2026-06-10T00:00:00Z'));
+    // The normalizer's own estimate: our first sight, or the fetch a few hours before it.
+    expect(displayPostedAt({ postedAt: firstSeenAt, postedAtEstimated: true, firstSeenAt })).toEqual(firstSeenAt);
+    expect(displayPostedAt({ postedAt: new Date('2026-10-11T21:00:00Z'), postedAtEstimated: true, firstSeenAt })).toEqual(new Date('2026-10-11T21:00:00Z'));
+    // 台灣就業通: TRANDATE 20260610 (the row's update date at the source) on a row first seen on 2026-10-12.
+    expect(displayPostedAt({ postedAt: new Date('2026-06-09T16:00:00Z'), postedAtEstimated: true, firstSeenAt })).toBeNull();
+    // No date, or a row read without firstSeenAt: as before.
+    expect(displayPostedAt({ postedAt: null, postedAtEstimated: true, firstSeenAt })).toBeNull();
+    expect(displayPostedAt({ postedAt: new Date('2026-06-09T16:00:00Z'), postedAtEstimated: true })).toEqual(new Date('2026-06-09T16:00:00Z'));
   });
 
   it.each([

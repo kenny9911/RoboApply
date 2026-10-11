@@ -1,7 +1,7 @@
 // backend/src/roboapply/v2/lib/raFantasticJobs.test.ts
 //
-// Unit tests for the Fantastic Jobs client (Active Jobs DB + LinkedIn Job
-// Search). Focus: the load-bearing normalizer mapping (the synthesis §1 table),
+// Unit tests for the Fantastic Jobs client (Active Jobs DB; the LinkedIn
+// board was removed at the M3 gate of the market wave). Focus: the load-bearing normalizer mapping (the synthesis §1 table),
 // request building, window/kill-switch gating, and the never-throws
 // contract. Run: npx vitest run server/src/roboapply/v2/lib/raFantasticJobs.test.ts
 //
@@ -77,10 +77,10 @@ describe('normalizeFantasticJob — identity + prefix', () => {
     expect(n.sourceBoard).toBe('activejobs');
   });
 
-  it('coerces a numeric LinkedIn id to string', () => {
-    const n = normalizeFantasticJob(atsRow({ id: 4012345678 }), 'linkedin', FETCH_AT)!;
-    expect(n.externalId).toBe('linkedin:4012345678');
-    expect(n.sourceBoard).toBe('linkedin');
+  it('coerces a numeric id to string', () => {
+    const n = normalizeFantasticJob(atsRow({ id: 4012345678 }), 'activejobs', FETCH_AT)!;
+    expect(n.externalId).toBe('activejobs:4012345678');
+    expect(n.sourceBoard).toBe('activejobs');
   });
 
   it('drops rows missing id / title / organization', () => {
@@ -104,7 +104,7 @@ describe('normalizeFantasticJob — location + country ISO preference', () => {
   });
 
   it('falls back to countries_derived full name when no JSON-LD country', () => {
-    const n = normalizeFantasticJob(atsRow({ locations_raw: null }), 'linkedin', FETCH_AT)!;
+    const n = normalizeFantasticJob(atsRow({ locations_raw: null }), 'activejobs', FETCH_AT)!;
     expect(n.locationCountry).toBe('United States');
   });
 
@@ -260,10 +260,10 @@ describe('normalizeFantasticJob — apply + publisher + description', () => {
     expect(n.applyUrl).toBe('https://careers.acme.com/jobs/123');
     expect(n.applyIsDirect).toBe(true);
   });
-  it('LinkedIn jobboard source_type → applyIsDirect false', () => {
+  it("a row the provider read from a job board (source_type 'jobboard') → applyIsDirect false", () => {
     const n = normalizeFantasticJob(
       atsRow({ source_type: 'jobboard', source: 'linkedin', url: 'https://www.linkedin.com/jobs/view/4012345678' }),
-      'linkedin',
+      'activejobs',
       FETCH_AT,
     )!;
     expect(n.applyIsDirect).toBe(false);
@@ -372,7 +372,14 @@ describe('isFantasticJobsEnabled — gating', () => {
   it('per-provider kill switch is independent', () => {
     process.env.RA_ONBOARDING_ACTIVEJOBS_DISABLED = 'true';
     expect(isFantasticJobsEnabled('activejobs')).toBe(false);
-    expect(isFantasticJobsEnabled('linkedin')).toBe(true);
+  });
+  it('the LinkedIn board is gone (MARKET_STRATEGY M-4, §1.6): never enabled, never called, never a throw', async () => {
+    const fn = vi.fn();
+    vi.stubGlobal('fetch', fn);
+    expect(isFantasticJobsEnabled('linkedin' as never)).toBe(false);
+    expect(await searchFantasticJobs('linkedin' as never, { query: 'engineer', country: 'us' })).toBeNull();
+    expect(fn).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });
 
@@ -424,13 +431,14 @@ describe('searchFantasticJobs — never-throws + wire behavior (fetch mocked)', 
     mockFetch(200, { message: 'oops' });
     expect(await searchFantasticJobs('activejobs', { query: 'dev', country: 'us' })).toBeNull();
   });
-  it('uses current job-board route and restricts optional LinkedIn source', async () => {
+  it('every request goes to the Active Jobs DB host and route; none names LinkedIn', async () => {
     const fn = mockFetch(200, [atsRow()]);
-    await searchFantasticJobs('linkedin', { query: 'engineer', country: 'us' });
+    await searchFantasticJobs('activejobs', { query: 'engineer', country: 'us' });
     const url = new URL(fn.mock.calls[0][0] as string);
-    expect(url.pathname).toBe('/active-jb');
-    expect(url.searchParams.get('source')).toBe('linkedin');
-    expect(url.searchParams.get('exclude_recruiter_fields')).toBe('true');
+    expect(url.host).toBe('active-jobs-db.p.rapidapi.com');
+    expect(url.pathname).toBe('/active-ats');
+    expect(url.searchParams.get('source')).toBeNull();
+    expect(url.href.toLowerCase()).not.toContain('linkedin');
   });
 
   it('403 opens the breaker so the next call short-circuits (no 2nd fetch)', async () => {
@@ -473,15 +481,17 @@ describe('searchFantasticJobs — never-throws + wire behavior (fetch mocked)', 
   describe('the call gate (one budget per provider)', () => {
     afterEach(() => setCallGate(null));
 
-    it('a gate that refuses: no upstream call, null; each board is asked under its own id', async () => {
-      const gate = vi.fn((provider: string) => provider !== 'activejobs');
+    it('a gate that refuses: no upstream call, null; the board is asked under its own id', async () => {
+      let open = false;
+      const gate = vi.fn(() => open);
       setCallGate(gate);
       const fn = mockFetch(200, [atsRow()]);
       expect(await searchFantasticJobs('activejobs', { query: 'engineer', country: 'us' })).toBeNull();
       expect(fn).not.toHaveBeenCalled();
       expect(gate).toHaveBeenLastCalledWith('activejobs', 'interactive', undefined);
-      expect(await searchFantasticJobs('linkedin', { query: 'engineer', country: 'us' })).toHaveLength(1);
-      expect(gate).toHaveBeenLastCalledWith('linkedin', 'interactive', undefined);
+      open = true;
+      expect(await searchFantasticJobs('activejobs', { query: 'engineer', country: 'us' })).toHaveLength(1);
+      expect(gate).toHaveBeenLastCalledWith('activejobs', 'interactive', undefined);
       expect(fn).toHaveBeenCalledTimes(1);
     });
 
@@ -527,7 +537,6 @@ describe('searchFantasticJobs — never-throws + wire behavior (fetch mocked)', 
       setCallGate(() => true);
       process.env.RA_ONBOARDING_ACTIVEJOBS_DISABLED = 'true';
       expect(isFantasticJobsEnabled('activejobs')).toBe(false);
-      expect(isFantasticJobsEnabled('linkedin')).toBe(true);
     });
   });
 
@@ -567,9 +576,9 @@ describe('searchFantasticJobs — never-throws + wire behavior (fetch mocked)', 
       const seen: ProviderQuotaObservation[] = [];
       setQuotaListener((o) => seen.push(o));
       mockFetch(403, { message: 'You are not subscribed to this API.' });
-      expect(await searchFantasticJobs('linkedin', { query: 'engineer', country: 'us' })).toBeNull();
+      expect(await searchFantasticJobs('activejobs', { query: 'engineer', country: 'us' })).toBeNull();
       expect(seen).toHaveLength(1);
-      expect(seen[0]).toMatchObject({ provider: 'linkedin', status: 403, reason: 'not_subscribed', requestsLimit: null, requestsRemaining: null, plan: null });
+      expect(seen[0]).toMatchObject({ provider: 'activejobs', status: 403, reason: 'not_subscribed', requestsLimit: null, requestsRemaining: null, plan: null });
     });
 
     it("a listener that answers with a promise (a reading being stored) is waited for by a person's search, at most 500 ms; never by an ingest call", async () => {

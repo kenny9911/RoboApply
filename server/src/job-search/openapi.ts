@@ -6,7 +6,7 @@ const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` });
 const json = (schema: object) => ({ 'application/json': { schema } });
 const failure = (description: string) => ({ description, content: json(ref('Error')) });
 
-const AGENT_DESCRIPTION = 'Plans up to two focused queries through the configured language model, then searches authorized sources. Explicit filters override extracted values; omit filters to use the request. Every query consumes a shared quota reservation, including one before planning. Unsupported preferences are disclosed as unverified. LinkedIn-only uses actual posting provenance and cannot enable sources or expand redistribution rights. The agent never invents jobs or submits applications.';
+const AGENT_DESCRIPTION = 'Plans up to two focused queries through the configured language model, then searches authorized sources. Explicit filters override extracted values; omit filters to use the request. Every query consumes a shared quota reservation, including one before planning. Unsupported preferences are disclosed as unverified. A search cannot be restricted to LinkedIn postings: LinkedIn is not a source, and no result names it or links to it. The agent never invents jobs or submits applications.';
 
 /** What the contract says differently per brand: the name, the default country, the sources and the examples. */
 interface BrandContract {
@@ -42,7 +42,7 @@ function brandContract(brand: Pick<ProductBrand, 'name' | 'market' | 'defaultCou
     country, location: 'Taipei', query: 'software engineer',
     request: 'Find remote backend engineering jobs in Taiwan posted this week. Visa sponsorship is important.',
     agentDescription: AGENT_DESCRIPTION,
-    linkedinOnly: 'Override source intent. Omit to extract it from the request. Matching depends on posting URLs or exact publisher provenance.',
+    linkedinOnly: 'Not offered: LinkedIn is not a source of this API. true is answered with 400 invalid_request. A request that asks for LinkedIn postings in words is searched on the available sources, and that wish is listed in unverifiedPreferences.',
     exampleCountry: 'tw', locales: ['en', 'zh-TW'], aiConsent: false,
   };
 }

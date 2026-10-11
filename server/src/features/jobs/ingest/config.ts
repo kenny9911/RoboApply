@@ -36,6 +36,11 @@
 //   INGEST_BANK_PAGE                bank rows read per sync step (default 200)
 //   INGEST_SEED_BUDGET_SHARE        share of a provider's daily calls SEO seeds may use
 //                                   (default 0.5; demand always keeps the rest)
+//   INGEST_SCHEDULED_DEMAND_SHARE   share of a provider's daily calls the standing demand
+//                                   queries of the ingest tick may use (default 0.8; 1 = the
+//                                   whole day, as before). The rest is kept for a person's own
+//                                   search of that day: onboarding's targeted ingest and its
+//                                   queued remainder, which may use the day up to its limit.
 
 import { logger } from '../../../services/LoggerService.js';
 import type { EnvSource, Market } from '../../../platform/brand/index.js';
@@ -82,10 +87,6 @@ function shareEnv(env: EnvSource, name: string, fallback: number): number {
   return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : fallback;
 }
 
-/** The client-local budget variable each provider used to have (LinkedIn's carries `_JOBS`). */
-const DEPRECATED_BUDGET_ENV: Readonly<Partial<Record<IngestProvider, string>>> = {
-  linkedin: 'RA_ONBOARDING_LINKEDIN_JOBS_DAILY_BUDGET',
-};
 const aliasWarned = new Set<string>();
 
 /**
@@ -95,7 +96,7 @@ const aliasWarned = new Set<string>();
  */
 function configuredDailyCalls(provider: IngestProvider, env: EnvSource): number | null {
   const name = `INGEST_${provider.toUpperCase()}_DAILY_CALLS`;
-  const alias = DEPRECATED_BUDGET_ENV[provider] ?? `RA_ONBOARDING_${provider.toUpperCase()}_DAILY_BUDGET`;
+  const alias = `RA_ONBOARDING_${provider.toUpperCase()}_DAILY_BUDGET`;
   for (const key of [name, alias]) {
     const raw = env[key]?.trim();
     if (!raw || !Number.isFinite(Number(raw))) continue;
@@ -199,6 +200,10 @@ export function quotaDailyCap(reading: QuotaReading | null | undefined, now: Dat
  *   cn    `INGEST_<PROVIDER>_CN_DAILY_CALLS` (default 0), under the same cap.
  *
  * Null = nothing is known about the provider (not metered by this module).
+ *
+ * The reading is the one quota.ts holds in memory. A caller that holds the
+ * stored reading instead (the admin System panel) uses `effectiveDailyLimitFor`:
+ * the same rule with the reading as an argument.
  */
 export function effectiveDailyLimit(provider: IngestProvider, market: Market, env: EnvSource = process.env, now: Date = new Date()): number | null {
   let reading: QuotaReading | null = null;
@@ -207,6 +212,11 @@ export function effectiveDailyLimit(provider: IngestProvider, market: Market, en
   } catch {
     reading = null;
   }
+  return effectiveDailyLimitFor(provider, market, env, reading, now);
+}
+
+/** `effectiveDailyLimit` for a given quota reading (null: the provider stated no quota, or its period has ended). The one definition of the rule. */
+export function effectiveDailyLimitFor(provider: IngestProvider, market: Market, env: EnvSource, reading: QuotaReading | null, now: Date): number | null {
   const cap = quotaDailyCap(reading, now, env);
   if (market === 'cn') {
     const cn = intEnv(env, `INGEST_${provider.toUpperCase()}_CN_DAILY_CALLS`, 0, 0);
@@ -246,6 +256,28 @@ export function seedCountries(defaultCountry: string, env: EnvSource = process.e
 
 export function bankPageSize(env: EnvSource = process.env): number {
   return intEnv(env, 'INGEST_BANK_PAGE', 200, 10, 1000);
+}
+
+/**
+ * Share (0–1) of a provider's daily calls the tick's standing demand queries
+ * may use (see the header). With no SEO seeds on a per-request provider any
+ * more, standing demand alone can fill the day shortly after midnight UTC; a
+ * person who onboards later that day must still find calls left for their own
+ * role and place. Calls the share leaves unused are not lost: they stay in the
+ * plan's month and raise the following days' limit.
+ */
+export function scheduledDemandShare(env: EnvSource = process.env): number {
+  return shareEnv(env, 'INGEST_SCHEDULED_DEMAND_SHARE', 0.8);
+}
+
+/**
+ * The calls of a day's limit that standing demand may use: the share of it,
+ * at least one call (a limit of 1 or 2 is not rounded down to nothing).
+ */
+export function scheduledDemandLimit(limit: number, env: EnvSource = process.env): number {
+  const share = scheduledDemandShare(env);
+  if (limit <= 1 || share >= 1) return limit;
+  return Math.max(1, Math.floor(limit * share));
 }
 
 /** Share (0–1) of a provider's daily calls SEO seed queries may use. */

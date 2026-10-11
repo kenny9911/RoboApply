@@ -203,6 +203,24 @@ describe('idempotency keys', () => {
     expect(sessionParams(f).customer).toBe('cus_new');
   });
 
+  it('STRIPE_TEST_CLOCK_ID: a NEW customer is created under the test clock with a test key only; never with a live key, never without the variable', async () => {
+    const created = async (env: Record<string, string>) => {
+      const f = fakeStripe();
+      await railWith(f, { env, db: createFakePrisma() as unknown as StripeRailDb }).createCheckout(order('pro_monthly', { stripeCustomerId: null, seekerProfileId: 'sp_clock' }, env));
+      return f.api.customers.create.mock.calls[0]![0];
+    };
+    expect(await created({ ...ENV, STRIPE_TEST_CLOCK_ID: ' clock_123 ' })).toMatchObject({ test_clock: 'clock_123' });
+    expect(await created({ ...ENV, STRIPE_SECRET_KEY: 'rk_test_x', STRIPE_TEST_CLOCK_ID: 'clock_123' })).toMatchObject({ test_clock: 'clock_123' });
+    expect(await created(ENV)).not.toHaveProperty('test_clock');
+    expect(await created({ ...ENV, STRIPE_TEST_CLOCK_ID: '  ' })).not.toHaveProperty('test_clock');
+    // A live key (usable here only because the fake client is injected): the variable is ignored.
+    expect(await created({ ...ENV, STRIPE_SECRET_KEY: 'sk_live_x', VERCEL_ENV: 'production', STRIPE_TEST_CLOCK_ID: 'clock_123' })).not.toHaveProperty('test_clock');
+    // An existing customer is never recreated or moved.
+    const f = fakeStripe();
+    await railWith(f, { env: { ...ENV, STRIPE_TEST_CLOCK_ID: 'clock_123' } }).createCheckout(order('pro_monthly'));
+    expect(f.api.customers.create).not.toHaveBeenCalled();
+  });
+
   it('the same attempt key twice gives the same Stripe idempotency key; a different one a different key', async () => {
     const f = fakeStripe();
     const rail = railWith(f);

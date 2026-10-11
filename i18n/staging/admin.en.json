@@ -19,6 +19,7 @@
           "jsearch": "JSearch",
           "linkedin": "LinkedIn job search",
           "user_import": "Jobs people add themselves",
+          "tw_open_data": "Taiwan government open data",
           "other": "{provider}"
         },
         "about": {
@@ -28,6 +29,7 @@
           "jsearch": "A job search service. Used for searches people ask for.",
           "linkedin": "A job search service that is no longer used.",
           "user_import": "A person pastes a link or a posting. Only that person sees it.",
+          "tw_open_data": "Vacancies from the open data set of Taiwan's public employment service. Each one shows the credit line its licence asks for.",
           "other": "A job source."
         },
         "state": {
@@ -53,6 +55,8 @@
           "not_registered": "Not available on this server.",
           "wrong_market": "Not a source for this site.",
           "disabled": "Turned off, or its key is missing.",
+          "url_invalid": "The address set for it is not one we accept, so it is not read.",
+          "quota": "Paused: its plan's quota for this period is used up, was refused, or is kept for people's own searches.",
           "other": "Off ({code})."
         },
         "facts": {
@@ -93,7 +97,18 @@
           "no_external_id": "No posting ID from the source: {count}",
           "boards_read": "Boards checked: {count}",
           "board_errors": "Boards that could not be read: {count}",
-          "board_backlog": "Postings still to read: {count}"
+          "board_backlog": "Postings still to read: {count}",
+          "linkedin_only_link": "Left out because the only link was to LinkedIn: {count}",
+          "indeed_only_link": "Left out because the only link was to Indeed: {count}",
+          "tw_sweep_finished": "Daily reads finished: {count}",
+          "tw_sweep_incomplete": "Daily reads that ended incomplete: {count}",
+          "tw_request_errors": "Requests that failed: {count}",
+          "tw_skipped_position": "Parts of a daily read given up after repeated failures: {count}",
+          "tw_county_only": "Vacancies the daily read did not reach by district: {count}",
+          "tw_county_unreached": "Vacancies not reached by district or by job category: {count}",
+          "tw_capped_leaf": "Requests that hit the limit on rows and could not be split further: {count}",
+          "tw_capped_county_major": "Requests by county and job category that hit the limit on rows: {count}",
+          "tw_absence_unproven": "Not returned by the last two daily reads but kept open, because their county could not be read whole: {count}"
         },
         "boards": {
           "title": "Company job boards",

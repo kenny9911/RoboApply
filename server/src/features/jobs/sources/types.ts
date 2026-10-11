@@ -138,6 +138,14 @@ export interface SourceFetchResult {
   /** The complete listing of the source, for the listing diff (see SourceListing). */
   listing?: SourceListing | null;
   /**
+   * Search adapters: false when the answer is NOT everything the query can
+   * return (a ranked search cut at a page cap: JSearch answers 2 pages of
+   * about 10 rows and a cursor for more). A posting missing from such an
+   * answer is not gone, so the run is not counted for the "missed twice"
+   * archive (ingest/tracking.ts). Absent or true: the run counts as before.
+   */
+  complete?: boolean;
+  /**
    * Skip tallies of this fetch, by reason ('bank_unpublished', 'bank_no_company',
    * 'bank_test_posting', 'bank_no_public_page', 'wrong_market' …) plus
    * informational counters ('bank_synced'). Counts only: never a posting field.
@@ -183,6 +191,14 @@ export interface JobSourceAdapter {
    * is widened to a week in place.
    */
   readonly dateWindows?: readonly string[];
+  /**
+   * Cursor adapters: true when the source is read by a run of its own and not
+   * by the ingest tick (the employer boards: ingest/boards.ts, cron
+   * `jobs-boards`). The planner gives such a source no standing query and
+   * switches an existing one off: a lease of it reads nothing, and its empty
+   * result would be written over the source's own "last run" status.
+   */
+  readonly ownRun?: boolean;
   /** RAJob.sourceBoard values this adapter writes (maintenance uses them). */
   readonly sourceBoards: readonly string[];
   /** Key present, kill switch off, guards closed (cheap; never throws). */

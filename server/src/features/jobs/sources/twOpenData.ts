@@ -436,6 +436,9 @@ export function twOpenDataRowToInput(row: TwOpenDataRow, now: Date): TwRowResult
     ...(hasFigure
       ? { salaryMin: min, salaryMax: max, salaryCurrency: 'TWD', salaryPeriod: period }
       : { salaryMin: null, salaryMax: null, salaryText: cell(row, 'SALARYCD') || null }),
+    // Pay is what the numeric fields state and nothing else: the normalizer does not look for a
+    // figure in JOB_DETAIL (a piece-work row has none on purpose).
+    payFromFieldsOnly: true,
     // TRANDATE is the row's update date, not the day the employer posted it: cards say "last verified".
     postedAt: taipeiDayStart(field(row, 'TRANDATE')),
     postedAtEstimated: true,
@@ -951,9 +954,13 @@ export function createTwOpenDataAdapter(deps: TwOpenDataAdapterDeps = {}): JobSo
           calls,
           cursor: formatTwSweepCursor(cursor),
           notes,
-          // More to read now: the sweep is not finished and nothing stopped it; or a closure waits for its own step
+          // More to read now: the sweep is not finished and no request failed; or a closure waits for its own step
           // (after this fetch's rows are written, so a row seen in the sweep's last answer is never closed).
-          exhausted: finished ? cursor.close === null : failed || (cut && calls === 0),
+          // A fetch cut before its first request (the budget could not hold the pause and a request) says
+          // "more" as well: it is not done for half an hour. The ingest tick sets a source aside for the rest
+          // of the tick when it answers "more" without having asked anything (ingest/run.ts), so this cannot
+          // spin, and the query stays due for the next tick.
+          exhausted: finished ? cursor.close === null : failed,
         };
       } catch (err) {
         return { jobs: [], calls: 0, error: err instanceof Error ? `tw_open_data:${err.message.slice(0, 160)}` : 'tw_open_data_failed' };

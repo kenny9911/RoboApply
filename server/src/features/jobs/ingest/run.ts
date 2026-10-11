@@ -197,6 +197,9 @@ export async function runIngestTick(options: TickOptions): Promise<IngestTally &
           // a cursor source also inside what is left of its share of the tick.
           budgetMs: Math.max(0, Math.min(budget.remainingMs() - reserveMs, adapter.kind === 'cursor' ? shareLeft(row.provider) : Number.POSITIVE_INFINITY)),
           env,
+          // Queries asked for by id are a person's own search (onboarding's targeted ingest, the
+          // `ingest.query` worker): they may use the provider's day to its limit (pipeline.ts).
+          targeted: !!options.queryIds,
         };
         const startedAt = clock();
         const result = await runIngestQuery(ctx, adapter, row);
@@ -207,6 +210,14 @@ export async function runIngestTick(options: TickOptions): Promise<IngestTally &
           // too little for another useful fetch): the query stays due and the source steps aside.
           if (result.more === true && shareLeft(row.provider) <= reserveMs) {
             shareSpent.add(row.provider);
+            enabled.delete(row.provider);
+          }
+          // "More", and nothing was asked, read or closed: the time handed to the fetch was too short for one
+          // request (a sweep that owes its pause). The source is set aside for the rest of this tick and gets
+          // no further share in it (leasing it again at once would spin); its query is due now, so the next
+          // tick continues. Without this the source would have to answer "nothing more", which the pipeline
+          // reads as "come back in 30 minutes" in the middle of a sweep.
+          else if (result.more === true && result.calls === 0 && (result.process?.received ?? 0) === 0 && (result.closed ?? 0) === 0) {
             enabled.delete(row.provider);
           }
         }

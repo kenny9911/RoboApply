@@ -65,7 +65,7 @@ export function jobSearchExamples(spec: JobSearchExampleSpec): JobSearchExamples
 const ROBOAPPLY_EXAMPLES = jobSearchExamples({
   envPrefix: 'ROBOAPPLY',
   search: { query: 'software engineer', country: 'US', remote: true, datePosted: 'week', limit: 20 },
-  agent: { request: 'Find remote backend engineering jobs in Taiwan posted this week.', linkedinOnly: true, limit: 20 },
+  agent: { request: 'Find remote backend engineering jobs in Taiwan posted this week.', limit: 20 },
 });
 
 export const JOB_SEARCH_CURL_EXAMPLE = ROBOAPPLY_EXAMPLES.curl;

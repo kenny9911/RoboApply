@@ -71,13 +71,15 @@ describe('cross-bank materialization honesty fields', () => {
 
   it('GoHire rows are market cn, RoboHire intl, on create and on update; both fromRecruiterBank; no invented USD', () => {
     const gh = mapRecruiterJobToRAJobUpsert(cand('gohire', null))!;
-    expect(gh.create).toMatchObject({ market: 'cn', fromRecruiterBank: true, sourceName: 'GoHire', sourcePriority: 15, salaryCurrency: null });
+    // GoHire's own priority (3 since MKT-3C: the bank outranks an employer board; strategy 1.5, C10), the value the bank sync writes.
+    expect(gh.create).toMatchObject({ market: 'cn', fromRecruiterBank: true, sourceName: 'GoHire', sourcePriority: 3, salaryCurrency: null });
+    expect(gh.update).toMatchObject({ sourcePriority: 3 });
     // The update moves a row that sits in the wrong market back to its bank's market.
     expect(gh.update).toMatchObject({ market: 'cn' });
     expect(gh.create).not.toHaveProperty('publicDisplay');
     expect(gh.create).not.toHaveProperty('employerVerified');
     const rh = mapRecruiterJobToRAJobUpsert(cand('robohire', 'CAD'))!;
-    expect(rh.update).toMatchObject({ market: 'intl', fromRecruiterBank: true, salaryCurrency: 'CAD' });
+    expect(rh.update).toMatchObject({ market: 'intl', fromRecruiterBank: true, salaryCurrency: 'CAD', sourcePriority: 15 });
     expect(rh.create).toMatchObject({ market: 'intl' });
   });
 

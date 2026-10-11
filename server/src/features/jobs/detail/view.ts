@@ -20,7 +20,7 @@ import { cnSalary } from '../../cn/jobs/contract.js';
 import { applyLinkOf, bankListable, hasPayFigure, salaryLineOf, sourceFactsOf, sourceKindOf, type FeedItem, type FitBadge, type SalaryLine } from '../../feed/contract.js';
 import { toWireKind } from '../../match/contract.js';
 import type { Fit } from '../../match/index.js';
-import { payPlausible, statesAmount } from '../normalize/index.js';
+import { displayPostedAt, payPlausible, statesAmount } from '../normalize/index.js';
 import { bestTaxonomyMatch, taxonomyLabel } from '../taxonomy/index.js';
 import { findCity, resolveCountry } from '../geo/index.js';
 import {
@@ -71,6 +71,7 @@ export const JOB_ROW_SELECT = {
   atsType: true,
   postedAt: true,
   postedAtEstimated: true,
+  firstSeenAt: true,
   lastSeenAt: true,
   closedAt: true,
   archivedAt: true,
@@ -129,6 +130,8 @@ export interface JobRow {
   atsType: string | null;
   postedAt: Date | null;
   postedAtEstimated: boolean;
+  /** When ingest first wrote the row (absent on rows built by older callers and fixtures). */
+  firstSeenAt?: Date | null;
   lastSeenAt: Date;
   closedAt: Date | null;
   archivedAt: Date | null;
@@ -332,7 +335,8 @@ export function toJobDetail(row: JobRow, now: Date, campus: JobCampusInfo | null
     // A recruiter-bank row whose bank has no posting page hands out no link at all (the stored one is "Page not found").
     applyUrl: bankListable(row) ? clean(row.applyUrl) : null,
     apply: applyOf(row),
-    postedAt: row.postedAt ? row.postedAt.toISOString() : null,
+    // Never an estimated date that is not our first sight of the row, under "First seen" (displayPostedAt).
+    postedAt: displayPostedAt(row)?.toISOString() ?? null,
     postedAtEstimated: row.postedAtEstimated,
     lastSeenAt: row.lastSeenAt ? row.lastSeenAt.toISOString() : null,
     closedAt: (row.closedAt ?? row.archivedAt)?.toISOString() ?? null,
@@ -398,7 +402,7 @@ export function toSimilarItem(row: JobRow, now: Date, fit: FitBadge | null, trac
     pay,
     payText,
     salary: toSalary(row, pay, payText),
-    postedAt: row.postedAt ? row.postedAt.toISOString() : null,
+    postedAt: displayPostedAt(row)?.toISOString() ?? null,
     lastSeenAt: row.lastSeenAt ? row.lastSeenAt.toISOString() : null,
     source: { name: source.name, kind: source.kind, original: source.original, url: source.url, lastVerifiedAt: source.lastVerifiedAt, ...(source.via ? { via: source.via } : {}) },
     apply: applyOf(row),

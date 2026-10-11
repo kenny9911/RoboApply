@@ -12,7 +12,8 @@
 // Platform crons (FND-3, TASK_PLAN.md §4.1.d): `PLATFORM_CRON_JOBS` below is
 // the one table of the jobright-clone crons. Each runs once per brand this
 // deployment serves (`ALLOWED_BRANDS`), inside `runWithBrand(brand, …)`, with
-// one 240 s budget per invocation; the area tasks live in
+// one 240 s budget per invocation, of which each brand gets its own slice
+// (`brandBudget`: what is left, divided by the brands still to run); the area tasks live in
 // server/src/features/<area>/cron.ts (stubs until their WP fills them). The
 // same table drives the node-cron mirrors in RoboApplyCronService and is
 // checked against vercel.json by a test. Every run logs what it did and
@@ -233,6 +234,14 @@ async function runStep(
   }
 }
 
+/**
+ * One brand's share of a cron's budget: what is left, divided by the brands still to run
+ * (this one included). The whole remainder when the brand is the only one or the last.
+ */
+export function brandBudget(budget: Budget, brandsToRun: number, clock: () => number = Date.now): Budget {
+  return createBudget(Math.floor(budget.remainingMs() / Math.max(1, brandsToRun)), clock);
+}
+
 function commonSkip(results: PlatformCronReport['results']): string | undefined {
   const reasons = new Set<string>();
   let ran = 0;
@@ -270,10 +279,16 @@ export function brandCronJob(
       const now = new Date(clock());
       const results: PlatformCronReport['results'] = {};
       let failed = false;
-      for (const brandId of options.brands ?? allowedBrands()) {
+      const brands = options.brands ?? allowedBrands();
+      for (const [index, brandId] of brands.entries()) {
+        // Each brand gets its own slice of what is left (D5): the brand that runs first cannot use the
+        // time of the brands after it (a multi-tick sweep of one market's source would otherwise skip
+        // the other market's tick as 'budget'). A brand with nothing to do returns at once and the
+        // next brand's slice is cut from the rest, so the last brand gets everything still unused.
+        const slice = brandBudget(budget, brands.length - index, clock);
         const perStep: Record<string, CronResult> = {};
         for (const step of steps) {
-          const r = await runStep(name, step, brandId, budget, now);
+          const r = await runStep(name, step, brandId, slice, now);
           perStep[step.name] = r.result;
           failed ||= r.failed;
         }

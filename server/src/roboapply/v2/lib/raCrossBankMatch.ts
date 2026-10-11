@@ -12,7 +12,7 @@
 
 import { createHash } from 'node:crypto';
 import { jobFingerprint } from './raOnboardingDraft.js';
-import { employmentTypeFromLabel, normalizeCompanyName, normalizeJobTitle } from '../../../features/jobs/normalize/index.js';
+import { PROVIDER_META, employmentTypeFromLabel, normalizeCompanyName, normalizeJobTitle } from '../../../features/jobs/normalize/index.js';
 import { logger } from '../../../services/LoggerService.js';
 import type {
   BankId,
@@ -831,7 +831,10 @@ export function mapRecruiterJobToRAJobUpsert(c: PreMatchedCandidate): {
     market: bankMarket(c.bank),
     fromRecruiterBank: true,
     sourceName: bankDisplayName(c.bank),
-    sourcePriority: 15,
+    // The bank's own priority, the one the bank sync and the daily maintenance write (normalize/source.ts:
+    // GoHire 3, RoboHire 15). A literal here put a GoHire row a search touched back to 15, and the canonical
+    // row of its dedupe group then alternated between the bank row and the employer-board row (MKT-3C, C10).
+    sourcePriority: PROVIDER_META[c.bank === 'gohire' ? 'bank_gohire' : 'bank_robohire'].sourcePriority,
   };
   // The bank sync (features/jobs/ingest, WP-16b) owns this (externalId,
   // sourceBoard) row once it exists. The update therefore never:

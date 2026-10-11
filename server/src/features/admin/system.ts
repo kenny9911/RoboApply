@@ -57,7 +57,9 @@ import {
 import {
   PROVIDER_QUOTA_CONFIG_KEY,
   bankPublicPageState,
+  MAINLAND_CALLABLE,
   daysToReset,
+  hydrateProviderQuota,
   parseProviderQuota,
   readSourceStatuses,
   sourcesForBrand,
@@ -72,6 +74,8 @@ import { adapterCostModel, adapterEnabledFor } from '../jobs/sources/index.js';
 import { FEED_MIN_MONTHLY_JOBS, copilotDailyBudgetUsd, enrichCounterKey, enrichDailyLimit, mainlandCallBudget, providerDailyLimit, quotaReserve, scoreCounterKeys, scoreDailyBudget } from './limits.js';
 
 const DAY_MS = DAY * 1000;
+/** Board rows read to count the boards that feed a site (the board list's own scan bound). */
+const CAREER_SOURCE_SCAN = 20_000;
 const COPILOT_SKU = 'ra_copilot_turn';
 export const JOB_ALERT_TEMPLATES: readonly string[] = [NOTIFY_TEMPLATES.jobAlertInstant, NOTIFY_TEMPLATES.jobAlertDigest];
 
@@ -102,6 +106,14 @@ export interface SystemStore {
   copilotStats(brand: string, range: TimeRange): Promise<{ turns: number; guardHits: number; costUsd: number }>;
   /** Distinct people per bucket in `range`; null when no out-of-credits event was ever recorded for the brand. */
   creditExhaustion(brand: string, range: TimeRange): Promise<Array<{ bucket: string; count: number }> | null>;
+  /**
+   * Loads the stored quota readings into this process (ingest's
+   * `hydrateProviderQuota`: one AppConfig read, never throws), so a source's
+   * own "on / off / why" is answered from what the last response anywhere
+   * said, not only from what this process happened to see. Optional: a store
+   * without it (tests) leaves the process memory as it is.
+   */
+  hydrateQuota?(): Promise<void>;
   /** The stored run status of each provider in a market (absent = it never ran). */
   sourceStatuses(market: string, providers: readonly string[]): Promise<Map<string, SourceStatusDoc>>;
   /** Public rows of these source boards in a market: open, and archived as 'no_apply_target'. */
@@ -141,6 +153,11 @@ export interface ProviderUsageCounters {
 /** A brand's job sources with their state (the admin sources panel). */
 export async function jobSourcesHealth(store: SystemStore, brandId: BrandId, env: EnvSource = process.env, list: SourceLister = sourcesForBrand): Promise<JobSourceView[]> {
   const brand = getBrand(brandId);
+  // A metered adapter answers "on / off / why" from the quota readings in process memory. A function
+  // instance that has made no provider call and run no cron since it started holds none, and would
+  // read a used-up provider as on while the provider table of the same response (built from the
+  // stored row) says exhausted: load the stored readings first.
+  await store.hydrateQuota?.();
   const sources = readBrandSources(brandId, env, list, (source) => ({ source, status: source.status(), publicPage: bankPublicPageState(source.provider, env) }));
   const statuses = await store.sourceStatuses(brand.market, sources.map((s) => s.source.provider));
   return Promise.all(
@@ -349,8 +366,11 @@ export function providerSources(brands: readonly BrandId[], env: EnvSource = pro
  * vanish on the day the plan dies (no call is made, so no usage row exists).
  *
  * One source per provider the quota snapshot knows, when a served brand is a
- * mainland brand and the provider's mainland budget is above 0. The
- * operator's own setting decides: a snapshot entry alone never creates a row.
+ * mainland brand, the provider may be called for the mainland at all
+ * (ingest's `MAINLAND_CALLABLE`: JSearch never is) and its mainland budget is
+ * above 0. The operator's own setting decides: a snapshot entry alone never
+ * creates a row, and a budget set for a provider that is never called for the
+ * mainland creates none either (its counter would never move).
  */
 export function mainlandCounterSources(input: {
   brands: readonly BrandId[];
@@ -367,7 +387,7 @@ export function mainlandCounterSources(input: {
     if (seen.has(provider)) continue;
     seen.add(provider);
     const costModel = adapterCostModel({ provider: provider as IngestProvider });
-    if (costModel === 'free' || mainlandCallBudget(provider, env) <= 0) continue;
+    if (costModel === 'free' || !MAINLAND_CALLABLE.has(provider) || mainlandCallBudget(provider, env) <= 0) continue;
     out.push({ provider, market: 'cn', enabled: true, reason: null, costModel });
   }
   return out;
@@ -678,6 +698,7 @@ export function createPrismaSystemStore(db: Db = prisma): SystemStore {
       const row = await db.appConfig.findUnique({ where: { key: PROVIDER_QUOTA_CONFIG_KEY }, select: { value: true } });
       return parseProviderQuota(row?.value);
     },
+    hydrateQuota: () => hydrateProviderQuota(db),
     async emailStatus(brand, range, templates) {
       const rows = await db.rAEmailLog.groupBy({
         by: ['status'],
@@ -721,12 +742,14 @@ export function createPrismaSystemStore(db: Db = prisma): SystemStore {
       return { open, held };
     },
     async careerSourceCounts(market) {
-      const [total, enabled, failing] = await Promise.all([
-        db.rACareerSiteSource.count({ where: { market } }),
-        db.rACareerSiteSource.count({ where: { market, enabled: true } }),
-        db.rACareerSiteSource.count({ where: { market, enabled: true, lastError: { not: null } } }),
-      ]);
-      return { total, enabled, failing };
+      // A board is one row for both sites since MKT-3D (JC-4): the countries it is read for decide which site
+      // it feeds (`sourceFeedsMarket`), and the `market` column only keeps the console that added it. Counting
+      // by that column gave both brands wrong numbers for every shared board.
+      const { sourceFeedsMarket } = await import('../jobs/sources/atsPublic/index.js');
+      const rows = await db.rACareerSiteSource.findMany({ select: { countries: true, enabled: true, lastError: true }, take: CAREER_SOURCE_SCAN });
+      const feeds = rows.filter((r) => sourceFeedsMarket(r, market === 'cn' ? 'cn' : 'intl'));
+      const enabled = feeds.filter((r) => r.enabled);
+      return { total: feeds.length, enabled: enabled.length, failing: enabled.filter((r) => r.lastError !== null).length };
     },
     async creditExhaustion(brand, range) {
       const ever = await db.$queryRaw<Array<{ one: number }>>`

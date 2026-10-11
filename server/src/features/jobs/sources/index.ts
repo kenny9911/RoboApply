@@ -30,7 +30,7 @@ export type {
   SourceQuery,
   SourceTransport,
 } from './types.js';
-export { jobProvidersEnvName, jobSourceKind, jobSourceTransport, jobSourcesForBrand, resetJobSourceWarningsForTests, sourceProvidersForBrand } from './registry.js';
+export { jobProvidersEnvName, jobProvidersNarrowedTo, jobSourceKind, jobSourceTransport, jobSourcesForBrand, resetJobSourceWarningsForTests, sourceProvidersForBrand } from './registry.js';
 export type { JobSourceDescription, JobSourceKind, JobSourceStatus } from './registry.js';
 // MKT-1C contracts the source phases (M3, M5) read from other areas: the adapter cost model and the
 // per-market switch (./types.ts), and the identifying User-Agent (./userAgent.ts). Exported at the

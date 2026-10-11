@@ -16,7 +16,7 @@ import type { FitSnapshot } from '../match/contract.js';
 import { fitSnapshot } from '../match/fit.js';
 import { FIT_FIXTURE_AT, fitFixture, fitsFixture } from '../agent/__tests__/fitFixture.js';
 import type { ScoredJob } from './selection.js';
-import { createJobAlertsTask, scoredFromFits, type AlertCard, type JobAlertsDeps } from './service.js';
+import { createJobAlertsTask, jobCard, scoredFromFits, type AlertCard, type JobAlertsDeps } from './service.js';
 
 // ── In-memory world ──────────────────────────────────────────────────────
 
@@ -498,6 +498,20 @@ describe('registerDeliveryChannel (WP-61 web push, WP-73 WeChat)', () => {
 });
 
 // ── MKT-2F: the alert reads THE fit and carries a snapshot of it (strategy 2.2 I1, I2, I6) ──
+
+describe('job-alerts: the pay slot of a card', () => {
+  const pick = { jobId: 'j1', tier: 'good', gap: null } as unknown as Parameters<typeof jobCard>[1];
+
+  it('prints pay words only when they state an amount for the job: never 面議, never the Taiwan statutory threshold (MARKET_STRATEGY 1.5)', () => {
+    const noFigure = { salaryMin: null, salaryMax: null, salaryCurrency: null, salaryPeriod: null, salaryDisclosed: false };
+    expect(jobCard(card('j1'), pick, 'd1').pay).toMatchObject({ min: 100000, max: 130000 });
+    expect(jobCard(card('j1', { ...noFigure, salaryText: '15-25K·13薪' }), pick, 'd1').pay).toEqual({ min: null, max: null, currency: null, period: null, text: '15-25K·13薪' });
+    // 台灣就業通's no-figure sentence, at today's threshold and at a higher one.
+    for (const salaryText of ['依學經歷、證照核薪(每月經常性薪資達4萬元以上)', '依學經歷、證照核薪(每月經常性薪資達5萬元以上)', '面議', null]) {
+      expect(jobCard(card('j1', { ...noFigure, salaryText }), pick, 'd1').pay, String(salaryText)).toBeNull();
+    }
+  });
+});
 
 describe('job-alerts: the fit every surface shows, with a snapshot on each card', () => {
   const AT = '2026-10-10T08:00:00.000Z';

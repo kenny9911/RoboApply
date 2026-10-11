@@ -129,8 +129,17 @@ function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw new DOMException('Search cancelled.', 'AbortError');
 }
 
-/** The sources a LinkedIn-only search can run on. */
-const LINKEDIN_CAPABLE = ['linkedin', 'jsearch'];
+/**
+ * The sources a LinkedIn-only search can run on: none, on either site.
+ * LinkedIn is not a source (MARKET_STRATEGY M-4: the feed is dropped) and no
+ * source field may carry its name or a link to it (§1.5), so a search cannot
+ * be restricted to "LinkedIn listings" read third-hand out of JSearch. With
+ * the list empty every brand takes the path GoApply already took: an explicit
+ * `linkedinOnly: true` is a 400 before any reservation or model call, and a
+ * wish in words is searched on the site's sources and listed under
+ * `unverifiedPreferences`.
+ */
+const LINKEDIN_CAPABLE: readonly string[] = [];
 
 function eligibleProviders(service: Service, input: AgentSearchInput, audience: SearchAudience, linkedinOnly: boolean, brand: ProductBrand): ProviderInfo[] {
   return service.providers(audience, brand).filter(provider =>
@@ -138,7 +147,7 @@ function eligibleProviders(service: Service, input: AgentSearchInput, audience: 
   );
 }
 
-/** True when the brand's source list has a LinkedIn-capable source at all (configured or not). GoApply's has none. */
+/** True when the brand's source list has a LinkedIn-capable source at all (configured or not). No brand has one (see LINKEDIN_CAPABLE). */
 function offersLinkedIn(service: Service, audience: SearchAudience, brand: ProductBrand): boolean {
   return service.providers(audience, brand).some(provider => LINKEDIN_CAPABLE.includes(provider.id));
 }

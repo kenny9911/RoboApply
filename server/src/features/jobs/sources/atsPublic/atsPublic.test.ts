@@ -1613,7 +1613,8 @@ const TW_JOB = {
 
 describe('ats_public market hooks', () => {
   it('stays registered second in MARKET_HOOK_SETS', () => {
-    expect(MARKET_HOOK_SETS.map((s) => s.id)).toEqual(['cn', 'ats_public']);
+    // MKT-3E registers the Taiwan open-data set third; this set keeps its place.
+    expect(MARKET_HOOK_SETS.map((s) => s.id)).toEqual(['cn', 'ats_public', 'tw_sources']);
   });
 
   it('afterNormalize composes sourceName = company + ATS for ats_public postings only', async () => {

@@ -206,6 +206,12 @@ export interface AlertCandidateOptions {
   limit: number;
   /** Also require `postedAt` on or after this (instant alerts skip old postings we only just found). */
   postedSince?: Date | null;
+  /**
+   * `sourceBoard` values left out of the candidates: the caller cannot show
+   * their rows (job alerts pass `CREDIT_LINE_BOARDS` until an alert carries
+   * the open-data credit line). A count that links to the feed passes none.
+   */
+  excludeBoards?: readonly string[];
 }
 
 export interface AlertCandidates {
@@ -1041,7 +1047,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     const limit = Math.max(1, Math.min(L.retrievalLimit, Math.floor(opts.limit)));
     const parsed = parseFilterSet(profile.filters, { market: ctx.market });
     const { fitTier: _view, ...filters } = normalizeFilterSet(parsed.ok ? parsed.value : coerceFilterSet(profile.filters, { market: ctx.market }).value);
-    const scope: SqlScope = { market: ctx.market, userId: profile.userId, now: ctx.now, publicOnly: true, heldBanks: heldBanks() };
+    const scope: SqlScope = { market: ctx.market, userId: profile.userId, now: ctx.now, publicOnly: true, heldBanks: heldBanks(), ...(opts.excludeBoards?.length ? { heldBoards: opts.excludeBoards } : {}) };
     const ids = await repo.queryIds(
       jobIdsSql({
         scope,

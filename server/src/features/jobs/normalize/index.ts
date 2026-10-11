@@ -37,6 +37,7 @@ export {
   deadlineInstant,
   dedupeKey,
   dedupePlace,
+  displayPostedAt,
   naiveOffsetMinutesFor,
   resolveExpiresAt,
   resolvePostedAt,
@@ -62,7 +63,7 @@ export type { ParsedPay, SalaryInput, SalaryResult } from './salary.js';
 // The Taiwan card hook (sources/atsPublic/hooks.ts) holds character-for-character copies today; with these
 // exported it can import them instead (MKT-3D). Exported at the M1 gate.
 export { CJK_NEGOTIABLE_SOURCE, TW_FLOOR_CLAUSE_SOURCE, TW_FLOOR_OTHER_PAY_BEFORE_SOURCE, TW_FLOOR_STATUTE_SOURCE } from './salary.js';
-export { NO_APPLICANT_COUNT_PROVIDERS, PROVIDER_META, applicantCountAllowed, isLinkedInAssetHost, isLinkedInBranded, isLinkedInHost, sourceFields } from './source.js';
+export { NEVER_PUBLIC_DISPLAY_PROVIDERS, NO_APPLICANT_COUNT_PROVIDERS, PROVIDER_META, applicantCountAllowed, isLinkedInAssetHost, isLinkedInBranded, isLinkedInHost, sourceFields } from './source.js';
 export type { ProviderMeta, SourceFields } from './source.js';
 export { foldTwToCn } from './zhVariants.js';
 export { cleanText, htmlToPlain, hostOf, normalizeCompanyName, normalizeJobTitle, safeUrl, stripControl } from './text.js';

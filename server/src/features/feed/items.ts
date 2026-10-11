@@ -22,7 +22,7 @@
 
 import { cnSalary } from '../cn/jobs/contract.js';
 import type { MatchExplanation } from '../compliance/contract.js';
-import { payPlausible, statesAmount } from '../jobs/normalize/index.js';
+import { displayPostedAt, payPlausible, statesAmount } from '../jobs/normalize/index.js';
 import type { MatchUser } from '../match/index.js';
 import type { FeedBadge, FeedItem, FitBadge, PublicFeedItem } from './contract.js';
 import type { FeedJobRow } from './types.js';
@@ -167,7 +167,9 @@ export function publicItem(row: FeedJobRow, user: ItemContext['user'] = null, no
     pay,
     salary: salaryOf(row, pay),
     payMonths: row.market === 'cn' ? row.salaryMonths : null,
-    postedAt: iso(row.postedAt),
+    // An estimated date that is not the day we first saw the row (台灣就業通's update date) is not
+    // printed as "First seen": the card then says the posting date is not listed (displayPostedAt).
+    postedAt: iso(displayPostedAt(row)),
     postedAtEstimated: row.postedAtEstimated === true,
     lastSeenAt: iso(row.lastSeenAt),
     source,

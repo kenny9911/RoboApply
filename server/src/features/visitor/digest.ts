@@ -23,6 +23,7 @@
 import type { ProductBrand } from '../../platform/brand/registry.js';
 import type { SendEmailResult } from '../../platform/email/EmailService.js';
 import type { CronContext, CronResult, CronTask } from '../../platform/queue/index.js';
+import { statesAmount } from '../jobs/normalize/index.js';
 import { jobPath } from '../seo/index.js';
 import {
   ANON_ALERT_CONFIRM_TTL_HOURS,
@@ -56,7 +57,9 @@ export function digestJobHref(job: Pick<AlertJobRow, 'id' | 'title' | 'companyNa
 }
 
 export function toDigestJob(row: AlertJobRow, brand: ProductBrand, origin: string): AnonDigestJob {
-  const listed = row.salaryDisclosed || !!row.salaryText?.trim();
+  // Pay words alone count only when they state an amount for this job (never "面議" or the Taiwan
+  // statutory-threshold sentence: MARKET_STRATEGY §1.5).
+  const listed = row.salaryDisclosed || statesAmount(row.salaryText);
   return {
     id: row.id,
     title: row.title,

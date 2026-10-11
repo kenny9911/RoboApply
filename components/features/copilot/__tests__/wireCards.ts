@@ -196,7 +196,7 @@ export async function wireCards(): Promise<Record<CardType, CopilotCard>> {
     isEnabled: async () => true,
     hiringContactsMode: () => 'on',
     propose: async (draft) => {
-      const row = await store.createProposal({ threadId: 'thread_1', userId: USER, kind: draft.kind, payload: draft.payload, expiresAt: new Date(NOW.getTime() + 86_400_000) });
+      const row = await store.createProposal({ threadId: 'thread_1', userId: USER, kind: draft.kind, payload: draft.payload, expiresAt: new Date('2099-01-01T00:00:00.000Z') });
       return { id: row.id, expiresAt: row.expiresAt };
     },
     creditsLeft: async () => ({ remaining: 2, resetsAt: '2026-10-11T00:00:00.000Z' }),
@@ -331,5 +331,10 @@ export async function wireFilterConflict(opts: { fresh?: boolean } = {}): Promis
   const err = (await service.apply(USER, (proposal.data as { proposalId: string }).proposalId).catch((e: unknown) => e)) as { code?: string; details?: Record<string, unknown> };
   if (err?.code !== 'version_conflict' || !err.details) throw new Error(`expected a version_conflict, got ${String(err?.code)}`);
   // As it travels: JSON, so Dates and undefined behave as on the wire.
-  return { proposal, details: JSON.parse(JSON.stringify(err.details)) as Record<string, unknown> };
+  const details = JSON.parse(JSON.stringify(err.details)) as Record<string, unknown>;
+  // The service stamps the fresh proposal with its own clock (the fixed NOW plus a day), and the card compares the
+  // expiry with the real clock: the fixture carries a far instant, like the proposals the harness creates.
+  const freshData = (details.card as { data?: Record<string, unknown> } | null | undefined)?.data;
+  if (freshData && typeof freshData.expiresAt === 'string') freshData.expiresAt = '2099-01-01T00:00:00.000Z';
+  return { proposal, details };
 }

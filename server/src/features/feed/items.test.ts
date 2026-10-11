@@ -27,6 +27,20 @@ describe('FeedItem', () => {
     });
   });
 
+  it('a 台灣就業通 row is never labelled "First seen" with the dataset\'s update date: the card gets no posting date and keeps "Last checked" (MARKET_STRATEGY 1.5)', () => {
+    // TRANDATE 20260610, stored as an estimated postedAt; the row was first ingested on 2026-10-12.
+    const tw = publicItem(
+      feedRow({ id: 'tw', sourceBoard: 'tw_open_data', postedAt: new Date('2026-06-09T16:00:00Z'), postedAtEstimated: true, firstSeenAt: new Date('2026-10-12T03:00:00Z'), lastSeenAt: new Date('2026-10-12T03:00:00Z') }),
+    );
+    expect(tw).toMatchObject({ postedAt: null, postedAtEstimated: true, lastSeenAt: '2026-10-12T03:00:00.000Z' });
+    // An undated row of another source: its estimate IS our first sight, so "First seen {date}" stays.
+    const undated = publicItem(feedRow({ id: 'u', postedAt: new Date('2026-10-09T08:00:00Z'), postedAtEstimated: true, firstSeenAt: new Date('2026-10-09T08:00:00Z') }));
+    expect(undated).toMatchObject({ postedAt: '2026-10-09T08:00:00.000Z', postedAtEstimated: true });
+    // A stated posting date is untouched.
+    const stated = publicItem(feedRow({ id: 's', postedAt: new Date('2026-06-10T00:00:00Z'), postedAtEstimated: false, firstSeenAt: new Date('2026-10-12T03:00:00Z') }));
+    expect(stated.postedAt).toBe('2026-06-10T00:00:00.000Z');
+  });
+
   it('pay is null ("Pay not listed") when undisclosed — never 0; 面議 text alone does not count as disclosed', () => {
     expect(publicItem(feedRow({ id: 'a', salaryDisclosed: false, salaryMin: 40000, salaryText: '面議' })).pay).toBeNull();
     expect(publicItem(feedRow({ id: 'b', salaryDisclosed: true, salaryMin: null, salaryMax: null, salaryText: null })).pay).toBeNull();

@@ -70,11 +70,19 @@ const issue = (id: string, type: string, severity: 'urgent' | 'critical' | 'opti
   source: 'rules' as const,
 });
 
+/**
+ * When the fixture reports expire. Far ahead on purpose: a remembered result is
+ * read back at the wall clock (`readPendingResult()`), so a fixed date near the
+ * day the test was written turned it red once that moment passed (it did on
+ * 2026-10-11 12:00 UTC, at the M3 gate's cross-review).
+ */
+const REPORT_EXPIRES_AT = '2999-01-01T12:00:00.000Z';
+
 function checkReport(over: Partial<ResumeCheckReport> = {}): ResumeCheckReport {
   return {
     kind: 'resume_check',
     resultId: RID,
-    expiresAt: '2026-10-11T12:00:00.000Z',
+    expiresAt: REPORT_EXPIRES_AT,
     cached: false,
     full: false,
     label: 'fair',
@@ -92,7 +100,7 @@ function matchReport(): ResumeJobMatchReport {
   return {
     kind: 'resume_job_match',
     resultId: RID,
-    expiresAt: '2026-10-11T12:00:00.000Z',
+    expiresAt: REPORT_EXPIRES_AT,
     cached: false,
     full: false,
     postingTitle: 'Backend Engineer',
@@ -322,7 +330,7 @@ describe('resume check', () => {
     const signupLink = screen.getByRole('link', { name: 'Create a free account' });
     signupLink.addEventListener('click', (e) => e.preventDefault());
     fireEvent.click(signupLink);
-    expect(readPendingResult()).toMatchObject({ id: RID, kind: 'resume_check', expiresAt: '2026-10-11T12:00:00.000Z' });
+    expect(readPendingResult()).toMatchObject({ id: RID, kind: 'resume_check', expiresAt: REPORT_EXPIRES_AT });
   });
 
   it('says plainly when today’s free checks are used up', async () => {

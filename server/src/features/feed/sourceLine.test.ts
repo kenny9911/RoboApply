@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import * as contract from './contract.js';
 import {
+  CREDIT_LINE_BOARDS,
   EMPLOYER_BOARD_SOURCES,
   NO_AGE_FLOOR_BOARDS,
   RECRUITER_BANK_BOARDS,
@@ -16,6 +17,9 @@ import {
   bankListableWhere,
   cnListable,
   cnListableWhere,
+  creditLineHeld,
+  creditLineHeldWhere,
+  itemOwesCreditLine,
   heldBankBoards,
   hasApplyLink,
   httpUrl,
@@ -26,6 +30,7 @@ import {
   viaOf,
 } from './sourceLine.js';
 import { PUBLIC_ATS } from '../jobs/sources/atsPublic/contract.js';
+import { TW_OPEN_DATA_ATTRIBUTIONS } from '../jobs/sources/twHooks.js';
 import { NO_DATE_EXPIRY_BOARDS } from '../jobs/ingest/maintain.js';
 import { BANK_PAGES_ENV } from './testkit.js';
 
@@ -96,6 +101,29 @@ describe('no posting-age cut-off for board or bank rows', () => {
     for (const ats of PUBLIC_ATS) expect(NO_AGE_FLOOR_BOARDS).toContain(ats);
     expect(NO_AGE_FLOOR_BOARDS).not.toContain('user_import');
     expect(NO_AGE_FLOOR_BOARDS).not.toContain('jsearch');
+  });
+});
+
+describe('a row that owes a credit line is held out of the surfaces that cannot print it (MARKET_STRATEGY 1.3: the licence voids itself without attribution)', () => {
+  it('the boards are exactly the open-data sources that have an attribution sentence', () => {
+    expect([...CREDIT_LINE_BOARDS].sort()).toEqual(Object.keys(TW_OPEN_DATA_ATTRIBUTIONS).sort());
+    expect(contract.CREDIT_LINE_BOARDS).toBe(CREDIT_LINE_BOARDS);
+  });
+
+  it('creditLineHeld / creditLineHeldWhere: 台灣就業通 rows, never a board, bank, aggregator or a user\'s own row', () => {
+    expect(creditLineHeld({ sourceBoard: 'tw_open_data' })).toBe(true);
+    expect(creditLineHeld({ sourceBoard: 'tw_gov_jobs' })).toBe(true);
+    for (const sourceBoard of ['greenhouse', 'jsearch', 'gohire', 'robohire', 'user_import', '', null, undefined]) expect(creditLineHeld({ sourceBoard }), String(sourceBoard)).toBe(false);
+    expect(creditLineHeldWhere()).toEqual({ NOT: { sourceBoard: { in: ['tw_open_data', 'tw_gov_jobs'] } } });
+  });
+
+  it('itemOwesCreditLine reads the sentence the feed attached to the item', () => {
+    const attribution = { text: '資料來源：勞動部勞動力發展署 2026「台灣就業通網站職缺清單」，依政府資料開放授權條款第1版公開釋出', url: 'https://data.gov.tw/license' };
+    expect(itemOwesCreditLine({ cardMeta: { tw_sources: { attribution } } })).toBe(true);
+    // A Taiwan card of another source has market lines and no attribution.
+    expect(itemOwesCreditLine({ cardMeta: { ats_public: { permitTags: [] } } })).toBe(false);
+    expect(itemOwesCreditLine({ cardMeta: { tw_sources: {} } })).toBe(false);
+    expect(itemOwesCreditLine({})).toBe(false);
   });
 });
 

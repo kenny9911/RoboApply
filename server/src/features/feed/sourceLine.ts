@@ -97,8 +97,10 @@ type EnvLike = Record<string, string | undefined>;
  * or unusable). "A recruiter-bank row needs a real posting page"
  * (GOAPPLY_PARITY_PLAN §3.9): the link such a row stores is the bank site's
  * "Page not found", so the row is held, never listed. The bank sync archives
- * these rows ('no_apply_target'); this is the read-side twin for rows stored
- * before that rule, by another writer, or while the bank's sync does not run.
+ * these rows ('no_apply_target'), and since MKT-3C the daily maintenance does
+ * too, whatever the sync's state (ingest/maintain.ts `archiveDeadBankLinks`).
+ * This hold stays as the read-side safety net between those runs: for a row
+ * stored by another writer, or one maintenance has not reached yet.
  * Both markets.
  */
 export function heldBankBoards(env: EnvLike = process.env): string[] {
@@ -119,6 +121,52 @@ export function bankListable(row: { fromRecruiterBank?: unknown; sourceBoard?: u
 export function bankListableWhere(env: EnvLike = process.env): { NOT: { fromRecruiterBank: true; sourceBoard: { in: string[] } } } | null {
   const held = heldBankBoards(env);
   return held.length ? { NOT: { fromRecruiterBank: true, sourceBoard: { in: held } } } : null;
+}
+
+/**
+ * `RAJob.sourceBoard` of the sources whose licence asks for a credit line
+ * wherever one of their rows is shown: the Taiwan open-data datasets (OGDL
+ * v1: 台灣就業通's vacancy list and 事求人; "Attribution on every open-data
+ * row (the licence voids itself without it)", MARKET_STRATEGY §1.3). The
+ * sentence itself is server data (jobs/sources/twHooks.ts
+ * `TW_OPEN_DATA_ATTRIBUTIONS`, the same keys: a test holds the two together).
+ */
+export const CREDIT_LINE_BOARDS: readonly string[] = ['tw_open_data', 'tw_gov_jobs'];
+
+/**
+ * True for a row that owes a credit line. A surface that prints the line
+ * shows the row (the feed card and the job page: `cardMeta.tw_sources`
+ * through `JobMetaTw`). A surface that CANNOT print it yet holds the row out
+ * with this predicate, so no open-data row is shown uncredited:
+ *   - job alerts, in the app and by e-mail (alerts/repo.ts, alerts/service.ts);
+ *   - similar jobs (jobs/detail/service.ts `similarScope`);
+ *   - the Assistant's job lists (copilot/tools/jobs.ts) and the Ready to
+ *     apply suggestions and picks (agent/deps.ts), through `itemOwesCreditLine`.
+ * Remove a use when its surface carries the line: the Assistant cards with
+ * MKT-4H.1, similar jobs with MKT-5C.3, alerts and Ready to apply with
+ * Orchestrator 3 (requests/waveM3-carryover.md). Tracker rows are the
+ * person's own saved jobs and are not held (Orchestrator 3 there).
+ */
+export function creditLineHeld(row: { sourceBoard?: unknown }): boolean {
+  return typeof row.sourceBoard === 'string' && CREDIT_LINE_BOARDS.includes(row.sourceBoard);
+}
+
+/**
+ * `creditLineHeld` for a feed item, which carries no `sourceBoard`: the feed
+ * attaches the sentence the row owes as `cardMeta.tw_sources.attribution`
+ * (jobs/sources/twHooks.ts). For the readers that take their rows from
+ * `feedService.preview` (the Assistant's job lists, the Ready to apply picks).
+ */
+export function itemOwesCreditLine(item: { cardMeta?: unknown }): boolean {
+  const meta = item.cardMeta;
+  if (!meta || typeof meta !== 'object') return false;
+  const tw = (meta as Record<string, unknown>).tw_sources;
+  return !!tw && typeof tw === 'object' && !!(tw as { attribution?: unknown }).attribution;
+}
+
+/** `creditLineHeld` as a Prisma `where` fragment (AND it in). The raw-SQL twin is `SqlScope.heldBoards` (feed/sql.ts). */
+export function creditLineHeldWhere(): { NOT: { sourceBoard: { in: string[] } } } {
+  return { NOT: { sourceBoard: { in: [...CREDIT_LINE_BOARDS] } } };
 }
 
 /**

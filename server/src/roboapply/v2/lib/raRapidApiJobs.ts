@@ -221,22 +221,22 @@ function pickApplyUrl(j: any): { url: string | null; isDirect: boolean } {
   return { url: chosen.url, isDirect: chosen.kind === 'employer' || (chosen.kind === 'board' && chosen.flagged) };
 }
 
-/** Retain board provenance separately from the best application destination. */
+/**
+ * The posting's page at its publisher, kept apart from the best application
+ * destination: the first valid link (`job_apply_link`, then `apply_options`
+ * in their order) that is not on a LinkedIn host. Never a LinkedIn URL
+ * (MARKET_STRATEGY §1.5: no LinkedIn name, logo or URL on any source field);
+ * null when LinkedIn is the row's only link.
+ */
 function pickSourceUrl(j: any): string | null {
   const original = typeof j?.job_apply_link === 'string' ? j.job_apply_link : null;
   const options = Array.isArray(j?.apply_options) ? j.apply_options : [];
   const links: unknown[] = [original, ...options.map((option: any) => option?.apply_link)];
-  const linkedin = links.find((link): link is string => {
-    if (typeof link !== 'string') return false;
-    try {
-      const url = new URL(link);
-      const host = url.hostname.toLowerCase();
-      return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password &&
-        (host === 'linkedin.com' || host.endsWith('.linkedin.com')) &&
-        /^\/jobs\/view\/[^/]+\/?$/.test(url.pathname);
-    } catch { return false; }
-  });
-  return linkedin ?? original;
+  for (const link of links) {
+    if (typeof link !== 'string' || !safeUrl(link)) continue;
+    if (!isLinkedInHost(hostOf(link))) return link;
+  }
+  return null;
 }
 
 /**

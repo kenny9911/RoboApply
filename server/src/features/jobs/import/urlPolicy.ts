@@ -10,10 +10,11 @@
 //   - is not http(s), carries a login (`user:pass@`), uses a non-web port, or
 //     names an IP address / localhost / a single-label intranet host
 //     (`not_a_web_address`);
-//   - is on IMPORT_FETCH_DENYLIST (boards whose terms forbid scraping:
-//     LinkedIn, Indeed, Glassdoor, BOSS直聘, 智联, 猎聘, 51job, 脉脉, 104,
-//     1111, Cake, Yourator) → `blocked_site`: the user pastes the job text or
-//     saves it with the extension.
+//   - is on IMPORT_FETCH_DENYLIST (sites that must not be read by a machine:
+//     LinkedIn, Indeed, Glassdoor; BOSS直聘, 智联, 猎聘, 51job, 拉勾, 脉脉,
+//     飞书招聘, Moka; 104, 1111, 518, yes123, Cake, Yourator, Meet.jobs) →
+//     `blocked_site`: the user pastes the job text or saves it with the
+//     extension.
 // The same denylist is applied to the page Firecrawl ends up on, so a
 // redirect onto a listed board is discarded.
 //

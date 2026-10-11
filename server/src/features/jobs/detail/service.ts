@@ -47,7 +47,7 @@ import type { MatchFitView } from '../../match/contract.js';
 import type { Fit } from '../../match/index.js';
 import type { MatchExplanation } from '../../compliance/contract.js';
 import { cnPostingVisible } from '../../cn/jobs/index.js';
-import { bankListable, bankListableWhere, cnListableWhere } from '../../feed/contract.js';
+import { bankListable, bankListableWhere, cnListableWhere, creditLineHeldWhere } from '../../feed/contract.js';
 import { OUTCOME_STATUS } from '../../tracker/contract.js';
 import {
   JOB_DETAIL_ERROR_CODES,
@@ -334,7 +334,9 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
       closedAt: null,
       ...(row.locationCountry ? { locationCountry: row.locationCountry } : {}),
       // Mainland: a posting with no usable apply link is never recommended (the feed's own rule).
-      ...(row.market === 'cn' || bank ? { AND: [...(row.market === 'cn' ? [cnListableWhere()] : []), ...(bank ? [bank] : [])] } : {}),
+      // Every market: a row that owes a credit line the similar-jobs card cannot print yet is not
+      // recommended there (feed/sourceLine.ts `creditLineHeld`; it stays on the feed and has its own page).
+      AND: [...(row.market === 'cn' ? [cnListableWhere()] : []), ...(bank ? [bank] : []), creditLineHeldWhere()],
     };
   }
 

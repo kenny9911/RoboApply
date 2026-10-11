@@ -81,7 +81,7 @@ async function tryAgent(makePrompt, opts, attempts) {
 }
 
 async function runBundle(id, wt, note) {
-  const impl = await tryAgent((n) => `${common(id, wt)}\n\nTASK: implement every item of bundle ${id}.${note ? '\n\n' + note : ''}${n > 1 ? INTERRUPTED(wt) : ''}`, { label: `impl:${id}`, phase: 'Implement', effort: 'high' }, 3)
+  const impl = await tryAgent((n) => `${common(id, wt)}\n\nTASK: implement every item of bundle ${id}.${note ? '\n\n' + note : ''}${n > 1 ? INTERRUPTED(wt) : ''}`, { label: `impl:${id}`, phase: 'Implement' }, 3)
   if (!impl) return { id, worktree: wt, review: null, handoffChars: 0, failed: 'implement' }
   const review = await tryAgent(() => `You are an independent senior reviewer for bundle ${id} (wave ${A.wave}) of the Jobright clone of RoboApply (two brands by Host: RoboApply international incl. Taiwan; GoApply mainland China). READ-ONLY: do not edit, create or delete any file.
 Worktree: ${wt} (branch wp/${id}). Inspect the uncommitted work: 'git -C ${wt} status --porcelain -uall', 'git -C ${wt} diff', and read the untracked files.
@@ -93,12 +93,12 @@ For EACH item decide whether every ACCEPT line is really met: trace the code pat
 Report only real, specific defects, each with a concrete fix.
 
 ENGINEER HANDOFF:
-${impl || '(none returned; read ' + A.handoffDir + '/' + id + '.md if it exists)'}`, { label: `review:${id}`, phase: 'Review', schema: REVIEW_SCHEMA, effort: 'high' }, 3)
+${impl || '(none returned; read ' + A.handoffDir + '/' + id + '.md if it exists)'}`, { label: `review:${id}`, phase: 'Review', schema: REVIEW_SCHEMA }, 3)
   const blocking = review ? review.findings.filter((f) => f.severity !== 'low') : []
   const undone = review ? review.items.filter((a) => !a.done) : []
   let final = impl
   if (review && (blocking.length || undone.length || review.unownedEdits.length)) {
-    const refix = await tryAgent((n) => `${common(id, wt)}\n\nTASK: finish bundle ${id} after an independent review. Your work is already in the worktree (uncommitted). Resolve every real review finding and every item the reviewer judged not done (verify each first; reject a wrong one with a reason and evidence). Revert unowned edits (those paths only, with 'git checkout -- <path>' for tracked files or by deleting the new file) and move the need into Requests. Re-run all gates. Rewrite ${A.handoffDir}/${id}.md as the COMPLETE updated handoff plus a "Review resolution" list, and return it as your final message.\n\nREVIEW:\n${JSON.stringify({ undone, findings: review.findings, unownedEdits: review.unownedEdits }, null, 2)}\n\nPREVIOUS HANDOFF:\n${impl || '(none)'}${n > 1 ? INTERRUPTED(wt) : ''}`, { label: `refix:${id}`, phase: 'Refix', effort: 'high' }, 3)
+    const refix = await tryAgent((n) => `${common(id, wt)}\n\nTASK: finish bundle ${id} after an independent review. Your work is already in the worktree (uncommitted). Resolve every real review finding and every item the reviewer judged not done (verify each first; reject a wrong one with a reason and evidence). Revert unowned edits (those paths only, with 'git checkout -- <path>' for tracked files or by deleting the new file) and move the need into Requests. Re-run all gates. Rewrite ${A.handoffDir}/${id}.md as the COMPLETE updated handoff plus a "Review resolution" list, and return it as your final message.\n\nREVIEW:\n${JSON.stringify({ undone, findings: review.findings, unownedEdits: review.unownedEdits }, null, 2)}\n\nPREVIOUS HANDOFF:\n${impl || '(none)'}${n > 1 ? INTERRUPTED(wt) : ''}`, { label: `refix:${id}`, phase: 'Refix' }, 3)
     if (!refix) return { id, worktree: wt, review: { undone: undone.length, findings: review.findings.length, blocking: blocking.length, unowned: review.unownedEdits }, handoffChars: (impl || '').length, failed: 'refix' }
     final = refix
   }

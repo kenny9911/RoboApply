@@ -63,6 +63,7 @@ import { quotaObservationFrom, type ExternalSourceBoard } from '../../../roboapp
 import type { ProviderJobInput } from '../normalize/index.js';
 import type { JobSourceAdapter, SourceFetchResult } from '../sources/index.js';
 import { createBankAdapter, type BankSyncRow } from './adapters/bank.js';
+import { scheduledDemandLimit } from './config.js';
 import {
   buildDeferProviderSql,
   buildLeaseSql,
@@ -180,7 +181,8 @@ describe('bank sync through the pipeline', () => {
     expect(result.status).toBe('ok');
     expect(written.map((r) => r.externalId)).toEqual(['gh1']);
     const [row] = written;
-    expect(row).toMatchObject({ market: 'cn', sourceBoard: 'gohire', fromRecruiterBank: true, publicDisplay: false, employerVerified: false, sourcePriority: 15, sourceName: 'GoHire' });
+    // GoHire's own bank outranks an employer board (5) for the canonical row: priority 3 (MARKET_STRATEGY 1.5, critic C10; MKT-3C).
+    expect(row).toMatchObject({ market: 'cn', sourceBoard: 'gohire', fromRecruiterBank: true, publicDisplay: false, employerVerified: false, sourcePriority: 3, sourceName: 'GoHire' });
     // The bank's own posting page (the configured template), and a recruiter posting for a named employer is 代招.
     expect(row).toMatchObject({ applyUrl: 'https://example.test/p/gh1', isAgency: true });
     expect(result.notes).toMatchObject({ bank_synced: 1, bank_unpublished: 1, bank_closed: 2 });
@@ -188,7 +190,11 @@ describe('bank sync through the pipeline', () => {
     expect(hookSpy).toHaveBeenCalledWith('gh1', { brand: 'goapply', market: 'cn', stage: 'ingest' });
     // Cursor advanced to the last row READ (synced or not).
     const finish = fake.$sql.calls.find((c) => c.text.startsWith('UPDATE "RAIngestQuery" SET "lastRunAt"'))!;
-    expect(String(finish.values.find((v) => typeof v === 'string' && v.includes('cursor')))).toContain('2026-10-05T00:00:00.000Z|gh-closed');
+    // Only the cursor is written, into the row's params as they are at that moment (never the params read at lease time).
+    expect(finish.text).toContain(`"params" = CASE WHEN $7::text IS NULL THEN "params" ELSE jsonb_set("params", '{cursor}', to_jsonb($8::text)) END`);
+    const stored = finish.values.slice(6, 8).map(String);
+    expect(stored[0]).toContain('2026-10-05T00:00:00.000Z|gh-closed');
+    expect(stored[1]).toBe(stored[0]);
   });
 
   it('archives bank jobs that were closed, paused or unpublished', async () => {
@@ -557,6 +563,46 @@ describe('leases and budgets', () => {
     expect(nextBudgetDay(NOW).toISOString()).toBe('2026-10-11T00:05:00.000Z');
   });
 
+  it('standing demand stops at its share of the day and parks nothing; a person\'s own search still runs that day, to the limit (cross-review, M3 gate)', async () => {
+    // The operator's bound is 10 a day: the tick's standing demand may reserve while calls < 8.
+    const env = { INGEST_JSEARCH_DAILY_CALLS: '10' };
+    const adapter = searchAdapter('jsearch', async () => ({ jobs: [], calls: 1 }));
+    const day8 = createIngestFake({ used: { jsearch: 8 } });
+    const standing = await runIngestQuery(ctxFor(day8.db, 'intl', { env }).ctx, adapter, leased('jsearch', 'q-standing'));
+    expect(standing).toMatchObject({ status: 'budget', calls: 0 });
+    expect(adapter.fetch).not.toHaveBeenCalled();
+    expect(day8.fake.$sql.calls.find((c) => c.text.includes('RETURNING "calls"'))!.values).toEqual(['jsearch', '2026-10-10', 8]);
+    // Not parked: the queries a new user's search asks for by id stay due today.
+    expect(day8.fake.$sql.calls.some((c) => c.text.startsWith('UPDATE "RAIngestQuery" SET "nextRunAt" = $1'))).toBe(false);
+    // The same day, the same count: onboarding's targeted run reserves against the whole limit and makes its call.
+    const own = await runIngestQuery(ctxFor(day8.db, 'intl', { env, targeted: true }).ctx, adapter, leased('jsearch', 'q-own'));
+    expect(own).toMatchObject({ status: 'ok', calls: 1 });
+    expect(day8.fake.$sql.calls.filter((c) => c.text.includes('RETURNING "calls"')).at(-1)!.values).toEqual(['jsearch', '2026-10-10', 10]);
+    // The whole day spent: a person's own search is refused too, and now the provider's queries wait for the next day.
+    const day10 = createIngestFake({ used: { jsearch: 10 } });
+    expect(await runIngestQuery(ctxFor(day10.db, 'intl', { env, targeted: true }).ctx, adapter, leased('jsearch', 'q-late'))).toMatchObject({ status: 'budget', calls: 0 });
+    expect(day10.fake.$sql.calls.find((c) => c.text.startsWith('UPDATE "RAIngestQuery" SET "nextRunAt" = $1'))!.values[0]).toEqual(nextBudgetDay(NOW));
+    // … and so does the tick's standing demand once the day is spent (one read told it so).
+    const spent = createIngestFake({ used: { jsearch: 10 } });
+    expect((await runIngestQuery(ctxFor(spent.db, 'intl', { env }).ctx, adapter, leased('jsearch', 'q2'))).status).toBe('budget');
+    expect(spent.fake.$sql.calls.find((c) => c.text.startsWith('UPDATE "RAIngestQuery" SET "nextRunAt" = $1'))!.values[0]).toEqual(nextBudgetDay(NOW));
+    // INGEST_SCHEDULED_DEMAND_SHARE=1 is the old rule; a limit of 1 or 2 is never rounded down to nothing.
+    const whole = createIngestFake({ used: { jsearch: 8 } });
+    expect((await runIngestQuery(ctxFor(whole.db, 'intl', { env: { ...env, INGEST_SCHEDULED_DEMAND_SHARE: '1' } }).ctx, adapter, leased('jsearch', 'q3'))).status).toBe('ok');
+    expect([1, 2, 10, 316].map((limit) => scheduledDemandLimit(limit, {}))).toEqual([1, 1, 8, 252]);
+  });
+
+  it('a targeted ingest tick (queries asked for by id) runs as a person\'s own search; the cron tick does not', async () => {
+    const env = { INGEST_JSEARCH_DAILY_CALLS: '10' };
+    const adapter = searchAdapter('jsearch', async () => ({ jobs: [], calls: 1 }));
+    const own = createIngestFake({ used: { jsearch: 8 }, due: [leased('jsearch', 'q1')] });
+    const ran = await runIngestTick({ db: own.db, brand: robo, adapters: [adapter], budgetMs: 60_000, now: () => NOW, enqueueMany: async () => ({ inserted: 0 }), env, queryIds: ['q1'], perQueryTracking: false });
+    expect(ran).toMatchObject({ queries: 1, calls: 1, budgetStops: [] });
+    const cron = createIngestFake({ used: { jsearch: 8 }, due: [leased('jsearch', 'q1')] });
+    const held = await runIngestTick({ db: cron.db, brand: robo, adapters: [adapter], budgetMs: 60_000, now: () => NOW, enqueueMany: async () => ({ inserted: 0 }), env, perQueryTracking: false });
+    expect(held).toMatchObject({ calls: 0, budgetStops: ['jsearch'] });
+  });
+
   it('SEO seeds stop at their share of the day; demand keeps the rest', async () => {
     // The operator's bound is 10 a day → seeds may reserve while calls < 5.
     const { db, fake } = createIngestFake({ budget: { jsearch: 0 } });
@@ -594,6 +640,26 @@ describe('leases and budgets', () => {
     const finish = fake.$sql.calls.find((c) => c.text.startsWith('UPDATE "RAIngestQuery" SET "lastRunAt"'))!;
     expect(finish.values[4]).toBe(4);
     expect(go.market).toBe('cn');
+  });
+
+  it('a finished run never writes the params it leased back: what the planner rewrote in the meantime stays (MKT-3B review finding 3)', async () => {
+    // jobs-plan (02:00) and jobs-ingest (every 10 min) start together with no lock: a query leased with
+    // yesterday's window and text is finished after the plan rewrote the row in place.
+    const leasedParams = { q: 'Backend engineer', country: 'US', datePosted: '3days', taxonomyId: 'backend_engineer' };
+    for (const fetched of [{ jobs: [], calls: 1 }, { jobs: [], calls: 1, error: 'provider_unavailable' }, { jobs: [], calls: 1, cursor: 'ignored-for-a-search-source' }]) {
+      const { db, fake } = createIngestFake();
+      await runIngestQuery(ctxFor(db).ctx, searchAdapter('jsearch', async () => fetched), leased('jsearch', 'q', { params: leasedParams }));
+      const finish = fake.$sql.calls.find((c) => c.text.startsWith('UPDATE "RAIngestQuery" SET "lastRunAt"'))!;
+      expect(finish.text).toContain('"params" = CASE WHEN');
+      // No value of the statement carries the leased window or text; the cursor of a search source is null.
+      expect(finish.values.some((v) => typeof v === 'string' && (v.includes('3days') || v.includes('Backend engineer')))).toBe(false);
+      expect(finish.values.slice(6, 8)).toEqual([null, null]);
+    }
+    // A cursor source that reports no new cursor leaves the stored one alone as well.
+    const { db, fake } = createIngestFake();
+    const sweep: JobSourceAdapter = { ...searchAdapter('jsearch', async () => ({ jobs: [], calls: 1, exhausted: true })), kind: 'cursor', dailyCallLimit: () => null };
+    await runIngestQuery(ctxFor(db).ctx, sweep, leased('jsearch', 'cur', { params: { ...leasedParams, cursor: 'stored' } }));
+    expect(fake.$sql.calls.find((c) => c.text.startsWith('UPDATE "RAIngestQuery" SET "lastRunAt"'))!.values.slice(6, 8)).toEqual([null, null]);
   });
 });
 
@@ -680,7 +746,8 @@ describe('one budget per provider (MKT-3A: JI-1, JC-6)', () => {
     const open = createIngestFake();
     expect((await runIngestQuery(ctxFor(open.db, 'intl', { env, now: sixHours }).ctx, adapter, leased('activejobs', 'q1'))).status).toBe('error');
     expect(adapter.fetch).toHaveBeenCalledTimes(1);
-    expect(open.fake.$sql.calls.find((c) => c.text.includes('RETURNING "calls"'))!.values).toEqual(['activejobs', '2026-10-10', 300]);
+    // (240: a standing demand query reserves within its share, 80% of the default 300 a day.)
+    expect(open.fake.$sql.calls.find((c) => c.text.includes('RETURNING "calls"'))!.values).toEqual(['activejobs', '2026-10-10', 240]);
     // …and q2, leased right after it, finds the plan still used up: parked for another window, no second call.
     const next = createIngestFake();
     expect((await runIngestQuery(ctxFor(next.db, 'intl', { env, now: sixHours }).ctx, adapter, leased('activejobs', 'q2'))).status).toBe('quota');
@@ -736,12 +803,17 @@ describe('one budget per provider (MKT-3A: JI-1, JC-6)', () => {
   it('the day\'s limit is what is left of the plan spread over the days to its reset (545 a day), under the operator\'s bound', async () => {
     quotaReading('jsearch', 200, 10_000, 9_773, Math.round(16.9 * 86_400));
     const adapter = searchAdapter('jsearch', async () => ({ jobs: [], calls: 1 }));
+    // The limit itself is what a person's own search (a targeted run) reserves against;
+    // the tick's standing demand stops at its share of it (0.8 by default, the tests below).
     const a = createIngestFake();
-    await runIngestQuery(ctxFor(a.db, 'intl', { env: {} }).ctx, adapter, leased('jsearch'));
+    await runIngestQuery(ctxFor(a.db, 'intl', { env: {}, targeted: true }).ctx, adapter, leased('jsearch'));
     const reserveA = a.fake.$sql.calls.find((c) => c.text.includes('RETURNING "calls"'))!;
     expect(reserveA.values).toEqual(['jsearch', day, 545]);
+    const standing = createIngestFake();
+    await runIngestQuery(ctxFor(standing.db, 'intl', { env: {} }).ctx, adapter, leased('jsearch'));
+    expect(standing.fake.$sql.calls.find((c) => c.text.includes('RETURNING "calls"'))!.values).toEqual(['jsearch', day, 436]); // floor(545 × 0.8)
     const b = createIngestFake();
-    await runIngestQuery(ctxFor(b.db, 'intl', { env: { INGEST_JSEARCH_DAILY_CALLS: '120' } }).ctx, adapter, leased('jsearch'));
+    await runIngestQuery(ctxFor(b.db, 'intl', { env: { INGEST_JSEARCH_DAILY_CALLS: '120' }, targeted: true }).ctx, adapter, leased('jsearch'));
     expect(b.fake.$sql.calls.find((c) => c.text.includes('RETURNING "calls"'))!.values).toEqual(['jsearch', day, 120]);
     // Seeds get their share of that same limit.
     const c = createIngestFake();
@@ -750,7 +822,7 @@ describe('one budget per provider (MKT-3A: JI-1, JC-6)', () => {
     // Once the headers have shown that one call takes two requests, the day's 545 requests are 272 calls (review fix).
     quotaReading('jsearch', 200, 10_000, 9_771, Math.round(16.9 * 86_400) - 3, '', new Date(NOW.getTime() + 3_000));
     const d = createIngestFake();
-    await runIngestQuery(ctxFor(d.db, 'intl', { env: {}, now: new Date(NOW.getTime() + 3_000) }).ctx, adapter, leased('jsearch'));
+    await runIngestQuery(ctxFor(d.db, 'intl', { env: {}, now: new Date(NOW.getTime() + 3_000), targeted: true }).ctx, adapter, leased('jsearch'));
     expect(d.fake.$sql.calls.find((x) => x.text.includes('RETURNING "calls"'))!.values).toEqual(['jsearch', day, 272]); // floor(floor((9771 − 500) / 17) / 2)
   });
 
@@ -770,12 +842,12 @@ describe('one budget per provider (MKT-3A: JI-1, JC-6)', () => {
     expect(on.reserved).toEqual(['activejobs:cn']);
     const rows = usageRows(on.fake);
     expect(rows.map((r) => r.values[0])).toEqual(['activejobs:cn', 'activejobs:cn']);
-    expect(rows[0]!.values).toEqual(['activejobs:cn', day, 20]);
+    expect(rows[0]!.values).toEqual(['activejobs:cn', day, 16]); // a standing query: 80% of the 20 a day
     // The international site's row is untouched by a mainland call, and the other way round.
     const intl = createIngestFake();
     await runIngestQuery(ctxFor(intl.db, 'intl', { env: { INGEST_ACTIVEJOBS_CN_DAILY_CALLS: '20' } }).ctx, adapter, leased('activejobs'));
     expect(usageRows(intl.fake).map((r) => r.values[0])).toEqual(['activejobs', 'activejobs']);
-    expect(usageRows(intl.fake)[0]!.values).toEqual(['activejobs', day, 300]);
+    expect(usageRows(intl.fake)[0]!.values).toEqual(['activejobs', day, 240]); // a standing query: 80% of the default 300
   });
 
   it('a person\'s own search and an ingest query of the same day add up in ONE usage row; the ingest call is counted once', async () => {
@@ -877,6 +949,24 @@ describe('a cursor source uses at most its share of a tick (INGEST_CURSOR_TICK_S
     expect(order.slice(fifthSweep).every((who) => who === 'sweep')).toBe(true);
     expect(tally.stoppedBy).toBe('budget');
     expect(tally.budgetStops).toEqual([]);
+  });
+
+  it('a sweep handed too little time for one request says "more" without asking anything: it is not leased again in this tick and its query is due now, not in 30 minutes (cross-review, M3 gate)', async () => {
+    let t = 0;
+    // The 台灣就業通 adapter's answer when the fetch is cut before its first request (it owes its pause).
+    const sweep = cursorAdapter('tw_open_data', async () => {
+      t += 10;
+      return { jobs: [], calls: 0, cursor: 'unchanged', exhausted: false };
+    });
+    const kit = sweepFake([]);
+    const tally = await runIngestTick({ db: kit.db, brand: robo, adapters: [sweep], budgetMs: 100_000, now: () => NOW, clock: () => t, enqueueMany: async () => ({ inserted: 0 }), env: {}, perQueryTracking: false });
+    // One fetch, not a spin to the end of the tick.
+    expect(sweep.fetch).toHaveBeenCalledTimes(1);
+    expect(tally).toMatchObject({ queries: 1, calls: 0, stoppedBy: 'idle' });
+    // The query is due at once (the next tick continues the sweep); nothing moved it half an hour ahead.
+    const finish = kit.fake.$sql.calls.find((c) => c.text.includes('"lastRunAt" ='))!;
+    expect(finish.values).toContainEqual(NOW);
+    expect(finish.values.some((v) => v instanceof Date && v.getTime() > NOW.getTime())).toBe(false);
   });
 
   it('a cursor source alone in a tick runs to the tick\'s end, a share at a time (review fix: nothing else could use the time)', async () => {
@@ -1152,18 +1242,24 @@ describe('known employer domains reach the normalizer, page by page (JI-5 suppor
     expect(cn.lookups()[0]!.values[0]).toBe('cn');
   });
 
-  it('with no domain known anywhere the context carries an empty map and the rows are written exactly as without it', async () => {
+  it('with no domain known anywhere the context carries an empty map; a known domain changes the dedupe key of a row and nothing else', async () => {
     const inputs = [job(), job({ externalId: 'jsearch:2', company: 'Beta LLC', title: 'QA Engineer' })];
     const { db, written, lookups } = withCompanies([]);
     await processJobs(ctxFor(db).ctx, { provider: 'jsearch' }, inputs);
     expect(lookups()).toHaveLength(1);
     expect(domainsSeen().map((m) => m!.size)).toEqual([0, 0]);
-    // The same page with domains known: nothing in a written row depends on the map in this bundle
-    // (the dedupe key reads it in the normalizer, MKT-3C).
+    // The same page with domains known: the normalizer puts the employer's domain into the fuzzy key
+    // (MKT-3C, strategy 1.5 K3), so each row's dedupe key moves from the name key to the domain key.
+    // Nothing else in a written row depends on the map.
     const known = withCompanies([{ nameNormalized: 'acme', domain: 'acme.example' }, { nameNormalized: 'beta', domain: 'beta.example' }]);
     await processJobs(ctxFor(known.db).ctx, { provider: 'jsearch' }, inputs);
-    const strip = (rows: typeof written) => rows.map(({ id: _id, companyId: _companyId, ...rest }) => rest);
+    const strip = (rows: typeof written) => rows.map(({ id: _id, companyId: _companyId, dedupeKey: _dedupeKey, ...rest }) => rest);
     expect(strip(known.written)).toEqual(strip(written));
+    expect(written).toHaveLength(2);
+    known.written.forEach((row, i) => {
+      expect(typeof row.dedupeKey).toBe('string');
+      expect(row.dedupeKey, String(row.externalId)).not.toBe(written[i]!.dedupeKey);
+    });
   });
 
   it('companyDomainsForPage: stated domain before stated website before the stored row; a job board\'s company page is not a domain; empty names are skipped', async () => {

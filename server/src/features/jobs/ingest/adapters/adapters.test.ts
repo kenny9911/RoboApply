@@ -202,9 +202,19 @@ describe('RapidAPI search params (planner seam)', () => {
     const a = createRapidApiAdapter('jsearch', { provider, isEnabled: () => true });
     const signal = new AbortController().signal;
     const q = { id: 'q', provider: 'jsearch' as const, market: 'intl' as const, origin: 'demand' as const, params: { q: '軟體工程師', country: 'TW', city: 'Taipei', datePosted: 'month' } };
-    expect(await a.fetch(q, { now: NOW, signal, requestId: 'r1' })).toEqual({ jobs: [], calls: 1 });
+    // `complete: false`: JSearch answers the first pages of a ranked search, never the whole result.
+    expect(await a.fetch(q, { now: NOW, signal, requestId: 'r1' })).toEqual({ jobs: [], calls: 1, complete: false });
     expect(provider.search).toHaveBeenCalledTimes(1);
     expect(provider.search).toHaveBeenCalledWith({ query: '軟體工程師 台北', country: 'tw', language: 'zh-TW', datePosted: 'month' }, { signal, requestId: 'r1', reservedByIngest: true });
+  });
+
+  it('a per-request provider says its answer is not the whole result; a per-job feed does not (the "missed twice" rule reads it)', async () => {
+    const q = { id: 'q', provider: 'jsearch' as const, market: 'intl' as const, origin: 'demand' as const, params: { q: 'QA', country: 'US', datePosted: 'week' } };
+    const signal = new AbortController().signal;
+    const jsearch = createRapidApiAdapter('jsearch', { provider: { id: 'jsearch', isEnabled: () => true, search: vi.fn(async () => []) }, isEnabled: () => true });
+    expect((await jsearch.fetch(q, { now: NOW, signal })).complete).toBe(false);
+    const feed = createRapidApiAdapter('activejobs', { provider: { id: 'activejobs', isEnabled: () => true, search: vi.fn(async () => []) }, isEnabled: () => true });
+    expect('complete' in (await feed.fetch({ ...q, provider: 'activejobs' }, { now: NOW, signal }))).toBe(false);
   });
 
   it('the adapter is off for ingest while the plan\'s quota stops ingest, and on again from the reset', () => {

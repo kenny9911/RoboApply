@@ -1,9 +1,11 @@
 // backend/src/roboapply/v2/lib/raFantasticJobs.ts
 //
-// Fantastic Jobs job-search client — ONE parameterized implementation for the
-// two sibling RapidAPI APIs by the same provider, which share a schema:
-//   • Active Jobs DB      (active-jobs-db.p.rapidapi.com)          → sourceBoard 'activejobs'
-//   • LinkedIn Job Search (linkedin-job-search-api.p.rapidapi.com) → sourceBoard 'linkedin'
+// Fantastic Jobs job-search client: Active Jobs DB
+// (active-jobs-db.p.rapidapi.com) → sourceBoard 'activejobs'.
+//
+// The provider's sibling LinkedIn Job Search API shared this client until the
+// M3 gate of the market wave. It is removed: LinkedIn is not a source
+// (MARKET_STRATEGY M-4, §1.6), so no code here can build a request to it.
 //
 // Mirrors the raRapidApiJobs.ts (JSearch) discipline exactly:
 //   - self-contained V2-local client (the boundary script forbids importing
@@ -58,7 +60,7 @@ const RESULT_LIMIT = 20; // jobs per billed call (Fantastic Jobs bills per row r
 
 interface FantasticConfig {
   /** sourceBoard + externalId prefix. */
-  readonly board: Extract<ExternalSourceBoard, 'activejobs' | 'linkedin'>;
+  readonly board: Extract<ExternalSourceBoard, 'activejobs'>;
   readonly host: string;
   /** Current marketplace route; freshness is sent as time_frame. */
   readonly pathPrefix: string;
@@ -71,13 +73,6 @@ const ACTIVE_JOBS_CONFIG: FantasticConfig = {
   host: 'active-jobs-db.p.rapidapi.com',
   pathPrefix: '/active-ats',
   disableEnv: 'RA_ONBOARDING_ACTIVEJOBS_DISABLED',
-};
-
-const LINKEDIN_CONFIG: FantasticConfig = {
-  board: 'linkedin',
-  host: 'linkedin-job-search-api.p.rapidapi.com',
-  pathPrefix: '/active-jb',
-  disableEnv: 'RA_ONBOARDING_LINKEDIN_JOBS_DISABLED',
 };
 
 /**
@@ -286,7 +281,7 @@ export function normalizeFantasticJob(
     fetchedAt: fetchedAt.toISOString(),
     applyUrl,
     // Active Jobs DB `url` is the employer/ATS posting (source_type 'ats') → direct.
-    // LinkedIn `url` is a linkedin.com/jobs/view page (source_type 'jobboard') → not direct.
+    // A row the provider read from a job board (source_type 'jobboard') → not direct.
     applyIsDirect: j.source_type === 'ats',
     description: descriptionRaw,
     sourcePublisher: prettifySource(j.source) ?? hostOf(j.source_domain),
@@ -362,8 +357,8 @@ async function reportQuota(board: FantasticConfig['board'], response: Response, 
 }
 
 // ─── Per-provider guard: LRU cache, circuit breaker ────────────────────────
-// One instance per config (activejobs / linkedin) so their caches + breakers
-// are fully independent. No call counter: the gate above is the one budget.
+// One instance per config, so caches and breakers stay independent if a second
+// board is ever added. No call counter: the gate above is the one budget.
 
 class ProviderState {
   private cache = new Map<string, { at: number; jobs: ExternalJobNormalized[] }>();
@@ -438,12 +433,10 @@ class ProviderState {
 
 const STATE: Record<FantasticConfig['board'], ProviderState> = {
   activejobs: new ProviderState(ACTIVE_JOBS_CONFIG),
-  linkedin: new ProviderState(LINKEDIN_CONFIG),
 };
 
 const CONFIG: Record<FantasticConfig['board'], FantasticConfig> = {
   activejobs: ACTIVE_JOBS_CONFIG,
-  linkedin: LINKEDIN_CONFIG,
 };
 
 // ─── HTTP helpers (forked, raRapidApiJobs.ts precedent) ────────────────────
@@ -536,6 +529,8 @@ export async function searchFantasticJobs(
 ): Promise<ExternalJobNormalized[] | null> {
   const cfg = CONFIG[board];
   const state = STATE[board];
+  // A board this client has no config for (an untyped caller naming a dropped one) is never called and never throws.
+  if (!cfg || !state) return null;
   if (process.env.RA_ONBOARDING_EXTERNAL_JOBS_DISABLED === 'true') return null;
   if (process.env[cfg.disableEnv] === 'true') return null;
   const apiKey = process.env.RAPID_API_KEY?.trim(); // read per call — never cached, never logged
@@ -550,10 +545,6 @@ export async function searchFantasticJobs(
   const q = buildQuery(params);
   // A nonempty punctuation-only query must never become a paid full-window scan.
   if (!q.get('title')) return null;
-  if (board === 'linkedin') {
-    q.set('source', 'linkedin');
-    q.set('exclude_recruiter_fields', 'true');
-  }
   const cacheKey = cacheKeyFor(board, q);
   const cached = state.cacheGet(cacheKey, now);
   if (cached) {
@@ -682,7 +673,7 @@ export async function searchFantasticJobs(
 }
 
 export function isFantasticJobsEnabled(board: FantasticConfig['board']): boolean {
-  return STATE[board].isEnabled();
+  return STATE[board]?.isEnabled() ?? false;
 }
 
 // ─── Providers ─────────────────────────────────────────────────────────────
@@ -693,18 +684,11 @@ export const activeJobsDbProvider: JobSearchProvider = {
   search: (params, opts) => searchFantasticJobs('activejobs', params, opts),
 };
 
-export const linkedInJobsProvider: JobSearchProvider = {
-  id: 'linkedin',
-  isEnabled: () => isFantasticJobsEnabled('linkedin'),
-  search: (params, opts) => searchFantasticJobs('linkedin', params, opts),
-};
-
 // ─── Test seam ─────────────────────────────────────────────────────────────
 
 export const __test = {
   reset(): void {
     STATE.activejobs.reset();
-    STATE.linkedin.reset();
   },
   state(board: FantasticConfig['board']) {
     return STATE[board].snapshot();

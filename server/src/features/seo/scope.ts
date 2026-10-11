@@ -24,11 +24,16 @@ import type { Market } from '../../platform/brand/registry.js';
 import { PUBLIC_ATS } from '../jobs/sources/atsPublic/contract.js';
 import { heldBankBoards } from '../feed/contract.js';
 
-/** Provider → the `sourceBoard` values its rows carry. Banks are governed by consent, not this list. */
+/**
+ * Provider → the `sourceBoard` values its rows carry. Banks are governed by
+ * consent, not this list. JSearch and the dropped LinkedIn feed are not in it
+ * and cannot be added by the env (MARKET_STRATEGY M-3 "never public pages",
+ * M-4; normalize `NEVER_PUBLIC_DISPLAY_PROVIDERS`): listing one of them in
+ * PUBLIC_DISPLAY_PROVIDERS publishes nothing. `tw_open_data` joins when the
+ * visitor list carries its credit line (requests/waveM3-carryover.md Owner 6).
+ */
 const PROVIDER_BOARDS: Readonly<Record<string, readonly string[]>> = {
   activejobs: ['activejobs'],
-  linkedin: ['linkedin'],
-  jsearch: ['jsearch'],
   ats_public: PUBLIC_ATS,
 };
 

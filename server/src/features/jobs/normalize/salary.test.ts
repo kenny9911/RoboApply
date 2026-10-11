@@ -239,8 +239,34 @@ describe('FIX-3: figures that cannot be pay, and words that are not pay text', (
     expect(statesAmount('Competitive')).toBe(false);
   });
 
-  it.each(['$60,000K-$90,000K', '$90k–$110k a year', '18-28K·15薪', '待遇面議(經常性薪資達4萬元或以上)', '月薪四萬元以上', '200-300元/天', 'USD 120,000'])('statesAmount(%s) is true', (text) => {
+  it.each(['$60,000K-$90,000K', '$90k–$110k a year', '18-28K·15薪', '月薪四萬元以上', '月薪 5萬以上', '200-300元/天', 'USD 120,000'])('statesAmount(%s) is true', (text) => {
     expect(statesAmount(text)).toBe(true);
+  });
+
+  // MARKET_STRATEGY 1.5 "never show or filter on the statutory threshold"; JT-1, JT-6: the Art. 5 clause is
+  // not a figure for the job, at any threshold. 台灣就業通 sends the first sentence on 8.4% of its rows.
+  it.each([
+    '依學經歷、證照核薪(每月經常性薪資達4萬元以上)',
+    '依學經歷、證照核薪(每月經常性薪資達5萬元以上)',
+    '待遇面議(經常性薪資達4萬元或以上)',
+    '面議（經常性薪資達4萬元）',
+    '每月經常性薪資達4萬元以上',
+    '面議，月薪 NT$40,000 以上',
+  ])('statesAmount(%s) is false: the statutory threshold is not this job\'s pay', (text) => {
+    expect(statesAmount(text)).toBe(false);
+    expect(statesAmount(text, { country: 'TW' })).toBe(false);
+  });
+
+  it('statesAmount keeps a real figure beside the clause, and reads a bare "…以上" by where the job is', () => {
+    expect(statesAmount('月薪 45,000-60,000 元（經常性薪資達4萬元以上）')).toBe(true);
+    // Bare (no statute term, no NT$) next to 面議: the clause for a job in Taiwan or of unknown country,
+    // a stated minimum for a mainland or Hong Kong posting (the parser's own rule).
+    expect(statesAmount('面議，月薪5萬以上', { country: 'TW' })).toBe(false);
+    expect(statesAmount('面議，月薪5萬以上')).toBe(false);
+    expect(statesAmount('面议，月薪5万以上', { market: 'cn' })).toBe(true);
+    expect(statesAmount('面議，月薪5萬以上', { country: 'HK' })).toBe(true);
+    // Another currency or period is never the clause.
+    expect(statesAmount('面議，年薪 USD 60,000 以上', { country: 'TW' })).toBe(true);
   });
 
   it('a description pay line is kept without its own label (the row is already labelled: "薪资 薪资:18-28K·15薪")', () => {

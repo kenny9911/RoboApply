@@ -13,6 +13,7 @@ import { createBudget } from '../../../platform/queue/index.js';
 import { createFakePrisma } from '../../../test/fakePrisma.js';
 import { toRecordedSql } from '../../../test/sqlSnapshot.js';
 import { normalizeCompanyName, type ProviderJobInput } from '../normalize/index.js';
+import { SR_HOST_CONCURRENCY, createHostGate } from '../sources/atsPublic/connectors.js';
 import { BoardFetchError, type FetchLike } from '../sources/atsPublic/http.js';
 import { careerSeedBoards } from '../sources/atsPublic/index.js';
 import { sourceUserAgent as userAgent } from '../sources/index.js';
@@ -336,6 +337,55 @@ describe('reading: several boards in flight, one write at a time', () => {
     }
   });
 
+  it('SmartRecruiters posting texts share ONE cap per host: several of its boards read at once never hold more than 4 text requests open (cross-review, M3 gate)', async () => {
+    // Six boards with 12 unread texts each, all due in the first round and read together (6 boards in flight).
+    const tokens = ['Harbor1', 'Harbor2', 'Harbor3', 'Harbor4', 'Harbor5', 'Harbor6'];
+    const h = harness({
+      sources: tokens.map((token, i) => sourceRow({ id: `sr${i}`, ats: 'smartrecruiters', boardToken: token, companyName: `Harbor ${i}`, countries: ['SG'] })),
+    });
+    let texts = 0;
+    let peak = 0;
+    const isText = (url: string) => /\/postings\/[^/?]+$/.test(new URL(url).pathname);
+    const w = world({
+      sr: Object.fromEntries(tokens.map((token) => [token, { company: token, postings: Array.from({ length: 12 }, (_, i) => ({ id: `${token}-${i}`, country: 'sg', city: 'Singapore' })) }])),
+      onRequest: async (url) => {
+        if (!isText(url)) return;
+        texts += 1;
+        peak = Math.max(peak, texts);
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        texts -= 1;
+      },
+    });
+    const tally = await run(h, w, { process: recorder().process });
+    expect(tally).toMatchObject({ boards: 6, received: 72, boardErrors: 0 });
+    expect(w.urls.filter(isText)).toHaveLength(72);
+    // Without the shared gate this is 6 boards x 4 = 24.
+    expect(peak).toBe(SR_HOST_CONCURRENCY);
+    expect(SR_HOST_CONCURRENCY).toBe(4);
+  });
+
+  it('the host gate hands a slot straight to the next waiter and survives a failed request', async () => {
+    const gate = createHostGate(2);
+    let active = 0;
+    let peak = 0;
+    const job = (fail: boolean) =>
+      gate(async () => {
+        active += 1;
+        peak = Math.max(peak, active);
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        active -= 1;
+        if (fail) throw new Error('refused');
+        return 'ok';
+      });
+    const results = await Promise.allSettled([job(false), job(true), job(false), job(true), job(false), job(false), job(false)]);
+    expect(results.map((r) => r.status)).toEqual(['fulfilled', 'rejected', 'fulfilled', 'rejected', 'fulfilled', 'fulfilled', 'fulfilled']);
+    expect(peak).toBe(2);
+    // Every slot was given back: two more still run together, never three.
+    peak = 0;
+    await Promise.all([job(false), job(false), job(false)]);
+    expect(peak).toBe(2);
+  });
+
   it('a 728-posting Greenhouse board is read whole and handed to the normalizer in ONE run, from one request; none of its stored rows is closed', async () => {
     const jobs = Array.from({ length: 728 }, (_, i) => ghJob('globalco', i + 1, 'Dublin, Ireland'));
     const h = harness({ sources: [sourceRow()], jobs: jobs.map((j) => openJob('greenhouse', `globalco:${j.id}`)) });
@@ -475,6 +525,22 @@ describe('one board read feeds both brands', () => {
     expect(writingBrands(BOTH, {})).toEqual({ intl: 'roboapply', cn: 'goapply' });
   });
 
+  it('JOB_PROVIDERS_<BRAND> without ats_public stops the boards for that brand: its postings are counted as dropped, the other brand is unaffected', async () => {
+    // The variable narrowed the brand's ingest while the boards were read by the tick; the boards' own run honours it too.
+    const h = harness({ sources: [sourceRow()] });
+    const rec = recorder();
+    const env = { JOB_PROVIDERS_GOAPPLY: 'bank_gohire' };
+    const tally = await run(h, world({ greenhouse: { globalco: board() } }), { env, process: rec.process });
+    expect(rec.calls.map((c) => [c.market, c.brand, c.ids])).toEqual([['intl', 'roboapply', ['globalco:2', 'globalco:3']]]);
+    expect(tally).toMatchObject({ droppedCn: 2, droppedIntl: 0, received: 2 });
+    expect(writingBrands(BOTH, env)).toEqual({ intl: 'roboapply' });
+    // A list that names the boards keeps them; RoboApply narrowed to its search provider and bank loses them.
+    expect(writingBrands(BOTH, { JOB_PROVIDERS_GOAPPLY: 'bank_gohire, ATS_PUBLIC' })).toEqual({ intl: 'roboapply', cn: 'goapply' });
+    expect(writingBrands(BOTH, { JOB_PROVIDERS_ROBOAPPLY: 'jsearch,bank_robohire' })).toEqual({ cn: 'goapply' });
+    // An empty value is "not set".
+    expect(writingBrands(BOTH, { JOB_PROVIDERS_GOAPPLY: ' ' })).toEqual({ intl: 'roboapply', cn: 'goapply' });
+  });
+
   it('a deployment that serves one brand writes that market only and counts the rest', async () => {
     const intlOnly = recorder();
     const a = await run(harness({ sources: [sourceRow()] }), world({ greenhouse: { globalco: board() } }), { brands: ['roboapply'], process: intlOnly.process });
@@ -527,6 +593,36 @@ describe('the run status per market (AppConfig jobs.source.status:<market>:ats_p
     expect(intl.counted).toEqual(intl.last);
     // Counters and codes only.
     expect(JSON.stringify([intl, cn])).not.toMatch(/https?:|Global Co|SYNTHETIC/);
+  });
+
+  it('adds the same counters to the day\'s RAProviderUsage row of each market (ats_public, ats_public:cn), which the System panel prints', async () => {
+    const h = harness({
+      sources: [sourceRow(), sourceRow({ id: 'gone', boardToken: 'gone', companyName: 'Gone' })],
+    });
+    const w = world({ greenhouse: { globalco: [ghJob('globalco', 1, '上海'), ghJob('globalco', 2, 'Singapore'), ghJob('globalco', 3, ['Shanghai, China', 'Singapore'])] } });
+    h.clock.now = T0 + 7 * MIN;
+    await run(h, w, { process: recorder().process });
+    const usage = h.fake.$sql.calls.filter((c) => c.text.includes('INSERT INTO "RAProviderUsage"')).map((c) => c.values);
+    const intl = doc(h, 'intl')!.last!;
+    const cn = doc(h, 'cn')!.last!;
+    // provider key, day (UTC), calls, postings returned, postings added, boards that failed.
+    expect(usage).toEqual([
+      ['ats_public', '2026-10-10', intl.calls, 2, 2, 1],
+      ['ats_public:cn', '2026-10-10', cn.calls, 2, 2, 1],
+    ]);
+    expect(intl.calls).toBeGreaterThan(0);
+    // A run that reads no board writes no usage row; a failed write never fails the run.
+    const idle = harness({});
+    await run(idle, world({}), { process: recorder().process });
+    expect(idle.fake.$sql.calls.some((c) => c.text.includes('"RAProviderUsage"'))).toBe(false);
+    const broken = harness({ sources: [sourceRow()] });
+    const exec = broken.db.$executeRaw.bind(broken.db) as (...a: unknown[]) => Promise<unknown>;
+    (broken.db as unknown as { $executeRaw: unknown }).$executeRaw = async (first: unknown, ...rest: unknown[]) => {
+      const text = ((first as { strings?: string[] }).strings ?? (first as string[])).join('?');
+      if (text.includes('"RAProviderUsage"')) throw new Error('relation missing');
+      return exec(first, ...rest);
+    };
+    await expect(run(broken, w, { process: recorder().process })).resolves.toMatchObject({ boards: 1 });
   });
 
   it('a run in which every board failed says so; a run that read no board leaves the last status standing; a market not written gets none', async () => {

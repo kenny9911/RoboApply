@@ -407,6 +407,8 @@ describe('tw_open_data: a row becomes a posting', () => {
       salaryMax: 38000,
       salaryCurrency: 'TWD',
       salaryPeriod: 'month',
+      // Pay is what the numeric fields say: the normalizer reads no figure out of JOB_DETAIL.
+      payFromFieldsOnly: true,
       // TRANDATE 20261009, the first instant of that day in Taipei.
       postedAt: new Date('2026-10-08T16:00:00.000Z'),
       postedAtEstimated: true,
@@ -468,6 +470,14 @@ describe('tw_open_data: a row becomes a posting', () => {
     expect(job.salaryMin).toBeNull();
     expect(job.salaryMax).toBeNull();
     expect(job.salaryDisclosed).toBe(false);
+    // … and the normalizer takes none from the vacancy's free text either (cross-review, M3 gate): a
+    // monthly figure in JOB_DETAIL is not this piece-work vacancy's stated pay.
+    expect(piece.payFromFieldsOnly).toBe(true);
+    const withText = normalized({ ...piece, description: `${piece.description ?? ''}\n薪資：月薪約 35,000 元至 45,000 元` });
+    expect(withText).toMatchObject({ salaryMin: null, salaryMax: null, salaryDisclosed: false, salarySource: null });
+    // The same text on a row of a source that states no such rule is read, as before.
+    const other = normalized({ ...piece, payFromFieldsOnly: undefined, description: '薪資：月薪約 35,000 元至 45,000 元' });
+    expect(other).toMatchObject({ salaryMin: 35_000, salaryMax: 45_000, salaryDisclosed: true });
   });
 
   it('a bound that is not a positive number is no bound, whatever the type says', () => {
@@ -936,21 +946,22 @@ describe('tw_open_data: a sweep through the adapter', () => {
     // Leased again at once with a full budget: the owed pause first, then five requests.
     expect(await h.step(NOW, { budgetMs: 60_000 })).toMatchObject({ calls: 5, exhausted: false });
     expect(h.sleeps).toEqual([1500, 1500, 1500, 1500, 1500]);
-    // Leased again at once with a budget that cannot hold the owed pause: nothing is asked, the cursor
-    // stays where it was and the query is not leased again in this tick.
+    // Leased again at once with a budget that cannot hold the owed pause: nothing is asked and the cursor
+    // stays where it was. The answer is still "more" (the sweep is not done for half an hour): the tick
+    // sets a source aside that says so without a request (ingest/run.ts), and the query stays due.
     const stored = h.cursor;
     const held = await h.step(NOW, { budgetMs: 5000 });
-    expect(held).toMatchObject({ jobs: [], calls: 0, exhausted: true });
+    expect(held).toMatchObject({ jobs: [], calls: 0, exhausted: false });
     expect(held.cursor).toBe(stored);
     expect(endpoint.calls.map((c) => c.city)).toEqual(TW_COUNTIES.slice(0, 7).map((c) => c.code));
   });
 
-  it('an aborted run makes no request and does not spin', async () => {
+  it('an aborted run makes no request; it is not "done", and the tick does not lease it again (run.ts)', async () => {
     const endpoint = fakeEndpoint(() => 1);
     const controller = new AbortController();
     controller.abort();
     const h = harness({ fetch: endpoint.fetch });
-    expect(await h.step(NOW, { signal: controller.signal })).toMatchObject({ jobs: [], calls: 0, exhausted: true });
+    expect(await h.step(NOW, { signal: controller.signal })).toMatchObject({ jobs: [], calls: 0, exhausted: false });
     expect(endpoint.calls).toHaveLength(0);
   });
 

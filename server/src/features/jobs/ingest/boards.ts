@@ -29,9 +29,10 @@
 // market of its own location. `processJobs` is called once per market that has
 // postings, as the brand that serves that market, inside `runWithBrand`. A
 // market this deployment does not serve, or whose ingest is switched off
-// (GoApply under CN_RECRUITMENT_INFO_MODE=off), has its postings dropped and
-// counted (`droppedIntl` / `droppedCn`); they are never written to the other
-// market.
+// (GoApply under CN_RECRUITMENT_INFO_MODE=off), or whose brand's source list
+// is narrowed to exclude the boards (JOB_PROVIDERS_<BRAND> without
+// `ats_public`), has its postings dropped and counted (`droppedIntl` /
+// `droppedCn`); they are never written to the other market.
 //
 // A board is read at most once per run. A SmartRecruiters board whose posting
 // texts are not all asked for yet (`pendingDetails`) is due again at the next
@@ -46,7 +47,9 @@
 // admin sources console reads: boards read, boards that failed, boards with
 // texts still unread, postings received, written, added and closed. A board
 // read for both markets counts in both documents (its requests too); postings
-// are counted in the market they were written to. Counters only.
+// are counted in the market they were written to. Counters only. The same
+// counters are added to the day's RAProviderUsage row of the source
+// (`ats_public`, `ats_public:cn`), which the admin System panel reads.
 //
 // The requests say who is asking (the identifying User-Agent, sources/
 // userAgent.ts; `signingMarket`): GoApply's for a board that is read for the
@@ -60,6 +63,7 @@ import { allowedBrands, getBrand, type BrandId, type EnvSource, type Market } fr
 import { kickDrain, type Budget, type CronResult } from '../../../platform/queue/index.js';
 import { logger } from '../../../services/LoggerService.js';
 import { normalizeCompanyName } from '../normalize/index.js';
+import { jobProvidersNarrowedTo } from '../sources/index.js';
 import {
   CAREER_SOURCE_COLUMNS,
   DISABLED_ARCHIVE_AFTER_MS,
@@ -89,8 +93,10 @@ import {
   type SeedLoadResult,
 } from '../sources/atsPublic/index.js';
 import { ingestAllowed } from './cron.js';
-import type { IngestDb } from './db.js';
+import { dayKey, type IngestDb } from './db.js';
 import { ENRICH_KIND, processJobs, type EnqueueManyFn, type ProcessResult } from './pipeline.js';
+import { recordProviderUsage } from './quota.js';
+import { usageKey } from './quotaContract.js';
 import { emptyRunStatus, isSourceStatusNote, writeSourceStatus, type SourceRunStatus } from './status.js';
 import { archiveClosedBankJobs } from './upsert.js';
 
@@ -216,12 +222,19 @@ async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) 
   return out;
 }
 
-/** The brand that writes each market on this deployment (absent: not served, or its ingest is off). */
+/**
+ * The brand that writes each market on this deployment. Absent: the market is
+ * not served, its ingest is off, or JOB_PROVIDERS_<BRAND> narrows the brand's
+ * sources to a list without the employer boards (the variable switched them
+ * off while they were read through the ingest tick, and still does).
+ */
 export function writingBrands(brands: readonly BrandId[], env: EnvSource): Partial<Record<Market, BrandId>> {
   const out: Partial<Record<Market, BrandId>> = {};
   for (const id of brands) {
     const brand = getBrand(id);
-    if (!out[brand.market] && ingestAllowed(brand, env)) out[brand.market] = id;
+    const narrowed = jobProvidersNarrowedTo(id, env);
+    const runsBoards = narrowed === null || narrowed.includes(BOARDS_ADAPTER.provider);
+    if (!out[brand.market] && ingestAllowed(brand, env) && runsBoards) out[brand.market] = id;
   }
   return out;
 }
@@ -575,6 +588,15 @@ export async function runBoardSync(deps: BoardSyncDeps): Promise<BoardSyncTally 
     if (read === 0) continue;
     const failed = status[m].notes.board_errors ?? 0;
     await writeSourceStatus(db, m, BOARDS_ADAPTER.provider, { ...status[m], at: finishedAt, ok: failed < read, error: failed > 0 ? status[m].error : null });
+    // The day's counters of the source (RAProviderUsage), which the admin System panel and the daily
+    // health e-mail print per provider: requests made, postings handed to the normalizer, postings
+    // added, boards that failed. The same numbers as the status document, under the market's usage key
+    // (`ats_public` / `ats_public:cn`). The boards are not metered, so nothing reads this as a budget.
+    try {
+      await recordProviderUsage(db, usageKey(BOARDS_ADAPTER.provider, m), dayKey(new Date(finishedAt)), { calls: status[m].calls, returned: status[m].received, inserted: status[m].inserted, errors: failed });
+    } catch (err) {
+      logger.warn(TAG, 'board usage not recorded', { market: m, error: err instanceof Error ? err.message.slice(0, 160) : 'error' });
+    }
   }
   if (tally.enrichQueued > 0) {
     Promise.resolve()

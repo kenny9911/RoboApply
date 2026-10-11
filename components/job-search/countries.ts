@@ -35,7 +35,7 @@ export function jobSearchBrandExamples(brand: { id: string; market: string; defa
     defaultCountry: brand.defaultCountry,
     envPrefix,
     search: { query: 'software engineer', country: 'US', remote: true, datePosted: 'week', limit: 20 },
-    agent: { request: 'Find remote backend engineering jobs in Taiwan posted this week.', linkedinOnly: true, limit: 20 },
+    agent: { request: 'Find remote backend engineering jobs in Taiwan posted this week.', limit: 20 },
   };
 }
 

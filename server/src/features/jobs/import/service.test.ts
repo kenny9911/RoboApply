@@ -34,6 +34,7 @@ import { FIRECRAWL_SCRAPE_URL, ScrapeError, scrapeJobPage, type ScrapedPage } fr
 import { draftImportId } from './importId.js';
 import { createImportLimitStore, type CounterDelegate } from './limits.js';
 import { createPrismaImportRepository } from './repository.js';
+import { normalizeProviderJob } from '../normalize/index.js';
 import { createJobImportService, linkCarriesPersonalInfo, storedWarnings, type JobImportDeps } from './service.js';
 import { createCompanyReadService, type CompaniesDb } from '../companies/index.js';
 import type { ImportJobResponse, ManualJob } from './contract.js';
@@ -485,6 +486,31 @@ describe('saving a job', () => {
     const mine = await service().importJob('u1', { manual: manual({ applyUrl: 'https://only.u2.example/job', title: 'Other role' }) });
     expect(mine.matched).toBeNull();
     expect(mine.jobId).not.toBe('other_private');
+  });
+
+  it('finds its public twin by the exact posting key of an ATS link, and by the fuzzy key ingest computed from the stored company domain (MKT-3C review finding 7)', async () => {
+    // The pasted link is the posting on its board; the public row stores another spelling of that link.
+    const pasted = 'https://boards.greenhouse.io/acme/jobs/123?gh_src=abc';
+    fake.$rows('rAJob').push({ id: 'pub_key', externalId: 'acme:123', sourceBoard: 'greenhouse', visibility: 'public', market: 'intl', archivedAt: null, isCanonical: true, applyUrl: 'https://job-boards.greenhouse.io/acme/jobs/123', sourceUrl: null, dedupeKey: 'adopted-from-a-twin', atsPostingKey: 'greenhouse:acme:123', sourcePriority: 5 });
+    const byKey = await service().importJob('u1', { manual: manual({ applyUrl: pasted }) });
+    expect(byKey).toMatchObject({ status: 'done', jobId: 'pub_key', matched: 'public' });
+    expect(await used()).toBe(0);
+
+    // No link in common and no posting key: the public row carries the DOMAIN key (ingest knew the employer's
+    // domain), the import states no domain. With the company record's domain the import computes the same key.
+    const fields = manual({ title: 'Staff Platform Engineer', applyUrl: 'https://careers.acme.example/roles/77' });
+    const input = { externalId: 'any', title: fields.title, company: fields.company, description: fields.description, applyUrl: fields.applyUrl ?? null, sourceUrl: fields.applyUrl ?? null, location: fields.location ?? null, fetchedAt: NOW };
+    const nameSide = normalizeProviderJob(input, 'user_import', { market: 'intl', ownerUserId: 'u1', now: NOW });
+    const domainSide = normalizeProviderJob(input, 'user_import', { market: 'intl', ownerUserId: 'u1', now: NOW, companyDomains: new Map([[nameSide.companyNameNormalized, 'acme.example']]) });
+    expect(domainSide.dedupeKey).not.toBe(nameSide.dedupeKey);
+    fake.$rows('rAJob').push({ id: 'pub_domain', externalId: 'aj:9', sourceBoard: 'activejobs', visibility: 'public', market: 'intl', archivedAt: null, isCanonical: true, applyUrl: 'https://other.example/9', sourceUrl: null, dedupeKey: domainSide.dedupeKey, atsPostingKey: null, sourcePriority: 10 });
+    // Without a stored domain the import cannot know the key: a private job, as before.
+    const unknown = await service().importJob('u2', { manual: fields });
+    expect(unknown.matched).toBeNull();
+    fake.$rows('rACompany').push({ id: 'co_acme', market: 'intl', nameNormalized: nameSide.companyNameNormalized, domain: 'acme.example' });
+    const byDomain = await service().importJob('u1', { manual: fields });
+    expect(byDomain).toMatchObject({ status: 'done', jobId: 'pub_domain', matched: 'public' });
+    expect(await used()).toBe(0);
   });
 
   it('does not surface public listings where the brand may not show them (GoApply recruitment-info mode off)', async () => {

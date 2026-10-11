@@ -27,7 +27,7 @@ import {
   yearsFromText,
 } from './level.js';
 import { normalizeSalary } from './salary.js';
-import { applicantCountAllowed, isLinkedInAssetHost, isLinkedInBranded, PROVIDER_META, sourceFields } from './source.js';
+import { applicantCountAllowed, isLinkedInAssetHost, isLinkedInBranded, NEVER_PUBLIC_DISPLAY_PROVIDERS, PROVIDER_META, sourceFields } from './source.js';
 import { asWritten, cleanOrNull, cleanText, hostOf, htmlToPlain, normalizeCompanyName, normalizeJobTitle, safeUrl, truncate } from './text.js';
 import { WORK_SHIFTS, type NormalizedJob, type NormalizedLocation, type NormalizeContext, type NormalizeProvider, type ProviderJobInput, type Seniority, type WorkShift } from './types.js';
 import { resolveWorkModel } from './workModel.js';
@@ -321,7 +321,8 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
     period: raw.salaryPeriod,
     text: raw.salaryText,
     months: raw.salaryMonths,
-    description: descriptionPlain,
+    // A source whose pay fields are the whole truth is never given a figure out of its free text.
+    description: raw.payFromFieldsOnly === true ? null : descriptionPlain,
     country: primaryLoc?.country ?? null,
     market,
   });
@@ -380,7 +381,9 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
   // ── Visibility and display ──
   const isBank = meta.fromRecruiterBank;
   const visibility = provider === 'user_import' ? 'private' : 'public';
-  const publicDisplay = provider === 'user_import' ? false : isBank ? raw.syndicationConsent === true : (ctx.publicDisplayProviders ?? []).includes(provider);
+  // A provider the operator lists may be shown publicly, except the ones that never may (JSearch, LinkedIn: M-3, M-4).
+  const listedPublic = (ctx.publicDisplayProviders ?? []).includes(provider) && !NEVER_PUBLIC_DISPLAY_PROVIDERS.includes(provider);
+  const publicDisplay = provider === 'user_import' ? false : isBank ? raw.syndicationConsent === true : listedPublic;
 
   const place = { cityId: primaryLoc?.cityId ?? null, city: primary?.city?.name ?? primary?.cityName ?? null, remoteScope, country: primaryLoc?.country ?? null };
   // K3: the employer's own domain replaces the name when one is known for the row (the source states

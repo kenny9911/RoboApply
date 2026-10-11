@@ -147,6 +147,15 @@ describe('alert candidates: the selection seam', () => {
     expect(Object.keys(cards[0]!)).not.toContain('fromRecruiterBank');
   });
 
+  it('a 台灣就業通 open-data row is never a candidate and never a card: an alert cannot print its credit line yet (MARKET_STRATEGY 1.3)', async () => {
+    const w = world([
+      gohirePosting({ id: 'job_tw', market: 'intl', provider: 'tw_open_data', sourceBoard: 'tw_open_data', applyUrl: 'https://job.taiwanjobs.gov.tw/Internet/Index/JobDetail.aspx?EMPLOYER_ID=1&HIRE_ID=2' }),
+      gohirePosting({ id: 'job_intl', market: 'intl', provider: 'ats_public', sourceBoard: 'greenhouse' }),
+    ]);
+    expect((await w.repoFor({}).candidateJobIds(query({ market: 'intl' }))).ids).toEqual(['job_intl']);
+    expect((await w.repoFor({}).jobCards(['job_tw', 'job_intl'])).map((c) => c.id)).toEqual(['job_intl']);
+  });
+
   it('a user’s own import never alerts, in either mode', async () => {
     const w = world([gohirePosting({ id: 'job_own', visibility: 'private', ownerUserId: 'u1', provider: 'user_import', sourceBoard: null })]);
     for (const env of [OFF, PARTNER]) expect((await w.repoFor(env).candidateJobIds(query())).ids).toEqual([]);

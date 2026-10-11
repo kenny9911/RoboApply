@@ -41,7 +41,7 @@ import type { ExtendedPrismaClient } from '../../../lib/prisma.js';
 import { BillingError } from '../errors.js';
 import { appOrigin, withQueryParam } from '../origins.js';
 import { getStripe as defaultGetStripe, type StripeClient } from '../stripeClient.js';
-import { stripeRailReady } from '../stripeEnv.js';
+import { stripeKeyMode, stripeRailReady } from '../stripeEnv.js';
 import { resolveStripePriceId, type StripeCatalogCurrency } from '../stripeCatalog.js';
 import { CHECKOUT_ACK_PROSE_VERSION } from '../acknowledgements.js';
 import { isStudentPlan, type CatalogPlan } from '../planCatalog.js';
@@ -196,14 +196,19 @@ export function createStripeRail(deps: StripeRailDeps = {}): PaymentRailImpl {
   const getDb = deps.getDb ?? defaultGetDb;
   const now = deps.now ?? (() => new Date());
 
-  async function ensureCustomer(stripe: StripeClient, order: CheckoutOrder): Promise<string> {
+  async function ensureCustomer(stripe: StripeClient, order: CheckoutOrder, env: EnvSource): Promise<string> {
     if (order.stripeCustomerId) return order.stripeCustomerId;
+    // Test mode only (STRIPE_TEST_RECIPE.md 5.2): a Stripe test clock holds only customers created under it,
+    // so the renewal and dunning rows of the scenario pass need the NEW customer of a test account attached to
+    // the clock the operator made. Never with a live key, and never for a customer that already exists.
+    const testClock = stripeKeyMode(env) === 'test' ? env.STRIPE_TEST_CLOCK_ID?.trim() : '';
     let customer;
     try {
       customer = await stripe.customers.create(
         {
           email: order.user.email,
           metadata: { userId: order.user.id, seekerProfileId: order.seekerProfileId, product: 'roboapply', brand: order.brand.id },
+          ...(testClock ? { test_clock: testClock } : {}),
         },
         // One customer per seeker profile, however many requests race here.
         { idempotencyKey: `customer:${order.seekerProfileId}` },
@@ -246,7 +251,7 @@ export function createStripeRail(deps: StripeRailDeps = {}): PaymentRailImpl {
       const amountMinor = twd ? plan.twdPrice!.amountMinor : plan.amountMinor;
       // A pin, else the price found or created under the plan's lookup key.
       const priceId = await resolveStripePriceId(stripe, plan, currency);
-      const customer = await ensureCustomer(stripe, order);
+      const customer = await ensureCustomer(stripe, order, env);
       const metadata = stripeCheckoutMetadata(order);
       const origin = appOrigin(order.brand, env);
       const successPath = order.successPath ?? '/settings/billing/return';

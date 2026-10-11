@@ -228,6 +228,9 @@ export class FakeFeedRepo implements FeedRepo {
     // The bank rule of `scopePredicates`: a recruiter-bank row whose bank has no posting page is never listed.
     const heldBanks = valueAfter(s, /NOT \(j\."fromRecruiterBank" = true AND j\."sourceBoard" = ANY\(\$(\d+)/) as string[] | undefined;
     if (heldBanks) rows = rows.filter((r) => !(r.fromRecruiterBank && heldBanks.includes(r.sourceBoard)));
+    // The board hold of `scopePredicates` (`SqlScope.heldBoards`): rows of a source the reader cannot credit yet.
+    const heldBoards = valueAfter(s, /NOT \(j\."sourceBoard" = ANY\(\$(\d+)/) as string[] | undefined;
+    if (heldBoards) rows = rows.filter((r) => !heldBoards.includes(r.sourceBoard));
     const ids = valueAfter(s, /j\."id" = ANY\(\$(\d+)/) as string[] | undefined;
     if (ids) return rows.filter((r) => ids.includes(r.id));
     // The browse category predicate only (a bare AND part; a search's role predicate sits in parentheses with its title match).

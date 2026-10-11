@@ -49,7 +49,9 @@ import { dailyCallLimit, effectiveDailyLimit, quotaRecheckMs, quotaReserve, setQ
 import { dayKey, type IngestDb } from './db.js';
 import {
   PROVIDER_QUOTA_CONFIG_KEY,
+  QUOTA_RETRY_MS,
   parseProviderQuota,
+  quotaBlockedUntil,
   serializeProviderQuota,
   usageKey,
   type ProviderQuotaSnapshot,
@@ -62,12 +64,9 @@ const TAG = 'JOBS_QUOTA';
 export const QUOTA_PERSIST_INTERVAL_MS = 60_000;
 /** `lastCallCost` is the header delta only when the previous reading is younger than this. */
 export const QUOTA_COST_WINDOW_MS = 60_000;
-/**
- * How long a refusal (the key refused, no subscription) and a reading without
- * a stated reset time keep blocking calls. The clients' circuit breakers use
- * the same hour: one call an hour re-reads the plan.
- */
-export const QUOTA_RETRY_MS = 60 * 60 * 1000;
+// How long a refusal and a reading without a stated reset time keep blocking calls: with the
+// rule itself in the contract (`quotaBlockedUntil`), which the planner reads too.
+export { QUOTA_RETRY_MS };
 /**
  * The longest a quota stop parks a provider's due queries in one go
  * (`quotaParkUntil`). Parked queries come due once in this time, find the
@@ -90,7 +89,7 @@ const REFUSED: ReadonlySet<ProviderQuotaState> = new Set(['not_subscribed', 'una
  * is never one: its country=cn rows carry no apply link and misstate their
  * source (MARKET_STRATEGY M-6, §1.6).
  */
-const MAINLAND_CALLABLE: ReadonlySet<string> = new Set(['activejobs']);
+export const MAINLAND_CALLABLE: ReadonlySet<string> = new Set(['activejobs']);
 
 export type QuotaDb = Pick<IngestDb, 'appConfig' | '$queryRaw' | '$executeRaw'>;
 
@@ -292,13 +291,7 @@ export function providerQuotaSnapshots(now: Date = clock()): Map<string, Provide
  *   - either is cut short by INGEST_QUOTA_RECHECK_HOURS when that is set.
  */
 function blockedUntil(snapshot: ProviderQuotaSnapshot, now: Date, env: EnvSource): Date | null {
-  const observed = ms(snapshot.observedAt);
-  if (!Number.isFinite(observed)) return null;
-  const reset = ms(snapshot.resetAt);
-  let until = !REFUSED.has(snapshot.state) && Number.isFinite(reset) ? reset : observed + QUOTA_RETRY_MS;
-  const recheck = quotaRecheckMs(env);
-  if (recheck > 0) until = Math.min(until, observed + recheck);
-  return until > now.getTime() ? new Date(until) : null;
+  return quotaBlockedUntil(snapshot, now, quotaRecheckMs(env));
 }
 
 /**
@@ -376,6 +369,15 @@ export async function reserveProviderCall(store: Pick<IngestDb, '$queryRaw'>, pr
     WHERE "RAProviderUsage"."calls" < ${limit}::int
     RETURNING "calls"`;
   return rows.length > 0;
+}
+
+/** Calls counted today under a usage key (0 when the day has no row yet); null when the read gave nothing usable. */
+export async function providerCallsToday(store: Pick<IngestDb, '$queryRaw'>, provider: string, day: string): Promise<number | null> {
+  const rows = await store.$queryRaw<Array<{ calls: number | bigint }>>`
+    SELECT "calls" FROM "RAProviderUsage" WHERE "provider" = ${provider} AND "dayKey" = ${day}`;
+  if (!Array.isArray(rows)) return null;
+  const calls = Number(rows[0]?.calls ?? 0);
+  return Number.isFinite(calls) ? calls : null;
 }
 
 /** Adds calls and yield counters to the day's usage row of a usage key. */

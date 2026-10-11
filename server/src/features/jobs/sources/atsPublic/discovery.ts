@@ -43,7 +43,7 @@
 import type { EnvSource } from '../../../../platform/brand/index.js';
 import { parseBoolEnv } from '../../../../platform/brand/index.js';
 import type { MarketHookContext, MarketHookJob } from '../../marketHooks.js';
-import { normalizeCompanyName } from '../../normalize/index.js';
+import { atsPostingKeyOf, atsPostingRefFromUrl, normalizeCompanyName } from '../../normalize/index.js';
 import { hasPlaceholderName } from './connectors.js';
 import { PUBLIC_ATS } from './contract.js';
 import { readRemovedBoards, removedBoardKey, type RemovedBoardsDb } from './removed.js';
@@ -108,6 +108,18 @@ async function defaultDb(): Promise<DiscoveryDb> {
 
 const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
+/**
+ * The tenant of the job's posting key in the spelling of the link it was read
+ * from (`applyUrl`, else `sourceUrl`); null when neither link gives that key.
+ */
+function tenantAsWritten(job: MarketHookJob, postingKey: string): string | null {
+  for (const url of [text(job.applyUrl), text(job.sourceUrl)]) {
+    const ref = atsPostingRefFromUrl(url);
+    if (ref && atsPostingKeyOf(ref) === postingKey && isBoardToken(ref.tenant)) return ref.tenant;
+  }
+  return null;
+}
+
 export function createBoardDiscovery(deps: DiscoveryDeps = {}) {
   /** Insertion-ordered: the oldest board is forgotten first. */
   const seen = new Map<string, true>();
@@ -140,6 +152,11 @@ export function createBoardDiscovery(deps: DiscoveryDeps = {}) {
         if (clock() < pausedUntil) return count('paused');
         remember(boardKey);
         memo = boardKey;
+        // The token the board's API is asked with is the tenant as the posting's own link writes it:
+        // the key is lower case (an identity for comparison), and a Lever site name is case-sensitive
+        // (`…/postings/SomeCo` answers, `…/postings/someco` is a 404, which is a final verdict for a
+        // candidate). The key stays what boards are compared and remembered by.
+        const boardToken = tenantAsWritten(job, String(job.atsPostingKey).toLowerCase()) ?? key.tenant;
         const imported = ctx?.stage === 'import' || job.provider === 'user_import';
         const board = text(job.sourceBoard);
         const externalId = text(job.externalId);
@@ -156,8 +173,8 @@ export function createBoardDiscovery(deps: DiscoveryDeps = {}) {
             {
               market: job.market === 'cn' ? 'cn' : 'intl',
               ats: key.ats,
-              boardToken: key.tenant,
-              companyName: (text(job.companyName) ?? key.tenant).slice(0, 200),
+              boardToken,
+              companyName: (text(job.companyName) ?? boardToken).slice(0, 200),
               origin: 'discovered',
               discoveredFrom,
               enabled: false,

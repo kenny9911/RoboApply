@@ -26,9 +26,11 @@ import { hydrateProviderQuota } from './quota.js';
 
 export { runJobsIngest, runJobsMaintain, runJobsPlan, ingestAllowed } from './cron.js';
 /** A provider's daily call limit from env (admin "Limits" page reads it here, never from a copy). */
-export { dailyCallLimit, effectiveDailyLimit } from './config.js';
+export { dailyCallLimit, effectiveDailyLimit, effectiveDailyLimitFor, quotaDailyCap, quotaReserve } from './config.js';
+export type { QuotaReading } from './config.js';
 // One budget per metered provider (MKT-3A): the plan's quota as the provider states it, and what it allows.
 export {
+  MAINLAND_CALLABLE,
   answerForMarket,
   flushProviderQuota,
   hydrateProviderQuota,
@@ -43,7 +45,7 @@ export {
 export { JOBS_INGEST_WORK_KINDS, workers } from './workers.js';
 export { rapidApiCountry, rapidApiSearchParams } from './adapters/rapidApi.js';
 export { bankPublicPageState, readBankEmployerSignals, isSyncableBankJob } from './adapters/bank.js';
-export { adaptersForBrand, ingestProvidersForBrand, sourcesForBrand } from './providers.js';
+export { adaptersForBrand, ingestProvidersForBrand, listEnabledAdaptersFor, sourcesForBrand } from './providers.js';
 export { readSourceStatuses, sourceStatusKey } from './status.js';
 export type { SourceRunStatus, SourceStatusDoc } from './status.js';
 // MKT-1C: the provider quota snapshot contract (AppConfig `jobs.providerQuota.v1`). Types, constants and

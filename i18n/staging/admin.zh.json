@@ -19,6 +19,7 @@
           "jsearch": "JSearch",
           "linkedin": "LinkedIn 职位搜索",
           "user_import": "用户自己添加的职位",
+          "tw_open_data": "台湾官方开放数据",
           "other": "{provider}"
         },
         "about": {
@@ -28,6 +29,7 @@
           "jsearch": "职位搜索服务，用于用户发起的搜索。",
           "linkedin": "已不再使用的职位搜索服务。",
           "user_import": "用户粘贴链接或职位描述，只有本人可见。",
+          "tw_open_data": "来自台湾公共就业服务开放数据集的职缺，每条都显示其授权条款要求的来源说明。",
           "other": "职位来源。"
         },
         "state": {
@@ -53,6 +55,8 @@
           "not_registered": "本服务器不提供该来源。",
           "wrong_market": "不是本站的来源。",
           "disabled": "已关闭，或缺少密钥。",
+          "url_invalid": "为它设置的地址不是我们接受的地址，因此不会读取。",
+          "quota": "已暂停：其套餐本期配额已用完、被拒绝，或留给用户自己的搜索。",
           "other": "已关闭（{code}）。"
         },
         "facts": {
@@ -93,7 +97,18 @@
           "no_external_id": "来源未提供职位编号：{count}",
           "boards_read": "已检查的招聘页面：{count}",
           "board_errors": "无法读取的招聘页面：{count}",
-          "board_backlog": "尚待读取的职位：{count}"
+          "board_backlog": "尚待读取的职位：{count}",
+          "linkedin_only_link": "因唯一链接指向 LinkedIn 而未收录：{count}",
+          "indeed_only_link": "因唯一链接指向 Indeed 而未收录：{count}",
+          "tw_sweep_finished": "已完成的每日读取：{count}",
+          "tw_sweep_incomplete": "未完整结束的每日读取：{count}",
+          "tw_request_errors": "失败的请求：{count}",
+          "tw_skipped_position": "多次失败后放弃的读取部分：{count}",
+          "tw_county_only": "每日读取未能按区读到的职缺：{count}",
+          "tw_county_unreached": "按区和按职类都未读到的职缺：{count}",
+          "tw_capped_leaf": "达到行数上限且无法再细分的请求：{count}",
+          "tw_capped_county_major": "按县市和职类读取时达到行数上限的请求：{count}",
+          "tw_absence_unproven": "最近两次每日读取均未返回，但仍保持开放（所在县市未能完整读取）：{count}"
         },
         "boards": {
           "title": "企业招聘官网",

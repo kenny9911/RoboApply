@@ -127,6 +127,18 @@ function listEnv(env: EnvSource, name: string): string[] | null {
 }
 
 /**
+ * What JOB_PROVIDERS_<BRAND> narrows the brand's sources to (lower case), or
+ * null when the variable is unset or empty: the brand then has every source of
+ * its list. The one reading of the variable: `sourceProvidersForBrand` filters
+ * with it, and a run that does not go through a brand's adapter list (the
+ * employer-board sync, which reads a board once for both brands) asks it
+ * before it writes a brand's market.
+ */
+export function jobProvidersNarrowedTo(brand: BrandId, env: EnvSource = process.env): string[] | null {
+  return listEnv(env, jobProvidersEnvName(brand));
+}
+
+/**
  * Every provider of the brand, in order: its registry list (user_import
  * included), then the adapters registered for its market; never a dropped
  * provider. Narrowed by JOB_PROVIDERS_<BRAND> when that is set (user_import
@@ -146,7 +158,7 @@ export function sourceProvidersForBrand(brand: ProductBrand, env: EnvSource = pr
   }
 
   const name = jobProvidersEnvName(brand.id);
-  const narrow = listEnv(env, name);
+  const narrow = jobProvidersNarrowedTo(brand.id, env);
   if (!narrow) return all;
   const unknown = narrow.filter((p) => !all.includes(p as IngestProvider));
   if (unknown.length) {

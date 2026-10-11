@@ -25,6 +25,7 @@ import type { CronResult, CronTask } from '../../platform/queue/index.js';
 import { logger } from '../../services/LoggerService.js';
 import type { AlertJobCard, AlertJobPay } from '../../platform/email/templates/notify/index.js';
 import { NOTIFY_TEMPLATES } from '../../platform/email/templates/notify/index.js';
+import { statesAmount } from '../jobs/normalize/index.js';
 import type { FitSnapshot } from '../match/contract.js';
 import type { Fit } from '../match/index.js';
 import type { AlertCandidateSource } from './candidates.js';
@@ -98,9 +99,11 @@ export function scoredFromFits(fits: ReadonlyMap<string, Fit>, snapshot: (fit: F
 }
 
 export function jobCard(row: JobCardRow, pick: PickedJob, deliveryId: string): AlertCard {
+  // Pay words alone are shown only when they state an amount for this job: "面議" and the Taiwan
+  // statutory-threshold sentence ("…每月經常性薪資達4萬元以上") are "pay not listed" (MARKET_STRATEGY §1.5).
   const pay: AlertJobPay | null = row.salaryDisclosed
     ? { min: row.salaryMin, max: row.salaryMax, currency: row.salaryCurrency, period: row.salaryPeriod, text: row.salaryText }
-    : row.salaryText
+    : statesAmount(row.salaryText)
       ? { min: null, max: null, currency: null, period: null, text: row.salaryText }
       : null;
   return {
@@ -347,8 +350,10 @@ export async function defaultJobAlertsDeps(): Promise<JobAlertsDeps> {
     // The cron runs inside `runWithBrand`, which is where the feed reads the market from; the
     // recruitment-info gate stays around the source.
     candidates: modeGatedCandidates(async (q) => {
-      const { feedService } = await import('../feed/index.js');
-      return feedService.alertCandidates(q.searchProfileId, { since: q.since, limit: q.limit, postedSince: q.postedSince });
+      const { feedService, CREDIT_LINE_BOARDS } = await import('../feed/index.js');
+      // An alert (in the app or by e-mail) cannot print an open-data row's credit line yet, so those rows
+      // are not candidates (feed/sourceLine.ts `creditLineHeld`; requests/waveM3-carryover.md Orchestrator 3).
+      return feedService.alertCandidates(q.searchProfileId, { since: q.since, limit: q.limit, postedSince: q.postedSince, excludeBoards: CREDIT_LINE_BOARDS });
     }),
     prefs: createPrismaPreferencesRepo(),
     fits: async (userId, jobIds) => scoredFromFits(await getFits(userId, jobIds), fitSnapshot),

@@ -331,6 +331,11 @@ export function redactPii(text: string, options: RedactOptions = {}): RedactResu
   const has = (k: PiiKind) => kinds.has(k);
   let out = text;
 
+  // E-mail addresses before the known values: an address whose local part is the person's name
+  // ("ada@example.com" with the known value "Ada") must go whole. Removing the name first left
+  // "[removed]@example.com": the address pattern no longer matched and the domain stayed in the text.
+  if (has('email')) out = out.replace(EMAIL, () => hold('email'));
+
   if (has('known_value') && options.knownValues?.length) {
     const values = [...new Set(options.knownValues.map((v) => (v ?? '').trim()).filter((v) => v.length >= 2))].sort(
       (a, b) => b.length - a.length,
@@ -356,8 +361,6 @@ export function redactPii(text: string, options: RedactOptions = {}): RedactResu
     out = out.replace(SSN_LABELLED, (_w, label: string) => `${label}${hold('us_ssn')}`);
     out = out.replace(SSN_SEPARATED, () => hold('us_ssn'));
   }
-
-  if (has('email')) out = out.replace(EMAIL, () => hold('email'));
 
   if (has('address')) {
     out = out.replace(LABELLED_ADDRESS, (whole, label: string, sep: string, value: string) =>

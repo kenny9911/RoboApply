@@ -45,6 +45,7 @@ import { DEFAULT_SCORE_DAILY_BUDGET, scoreDailyBudget, scoreCounterKeys } from '
 import { DEFAULT_COPILOT_DAILY_BUDGET_USD, copilotDailyBudgetUsd } from '../../copilot/budget.js';
 import { dailyCallLimit } from '../../jobs/ingest/config.js';
 import * as ingest from '../../jobs/ingest/index.js';
+import { resetProviderQuotaForTests } from '../../jobs/ingest/quota.js';
 import { PROVIDER_QUOTA_CONFIG_KEY, serializeProviderQuota } from '../../jobs/ingest/quotaContract.js';
 import { enrichBudgetKey } from '../../jobs/enrich/budget.js';
 
@@ -657,6 +658,9 @@ describe('mainlandCounterSources (a mainland counter the operator opened)', () =
     // An unmetered provider has no quota to watch, whatever a snapshot says.
     const bank = new Map([['bank_gohire', quotaSnapshot('bank_gohire')]]);
     expect(mainlandCounterSources({ brands: ['goapply'], quota: bank, listed: [], env: { INGEST_BANK_GOHIRE_CN_DAILY_CALLS: '20' } })).toEqual([]);
+    // A provider that is never called for the mainland (JSearch: strategy M-6, 1.6) gets no counter, whatever budget is set for it.
+    const jsearch = new Map([['jsearch', quotaSnapshot('jsearch', { requestsLimit: 10_000, requestsRemaining: 9_000, resetAt: RESET_17D })]]);
+    expect(mainlandCounterSources({ brands: ['goapply'], quota: jsearch, listed: [], env: { INGEST_JSEARCH_CN_DAILY_CALLS: '20' } })).toEqual([]);
   });
 });
 
@@ -719,17 +723,25 @@ describe('providerDailyLimit', () => {
   });
 
   // The rule belongs to the ingest area (jobs/ingest/config.ts `effectiveDailyLimit`, which reads the quota from
-  // ingest's in-memory copy). limits.ts states it with the reading as an argument, because the admin process
-  // holds the stored reading instead. This test compares the two as soon as the ingest area exports its own.
+  // ingest's in-memory copy). Since the M3 gate limits.ts delegates to the ingest area's own function with the
+  // stored reading as the argument (`effectiveDailyLimitFor`); this test holds the two answers together.
   const upstream = ingest as unknown as {
-    effectiveDailyLimit?: (provider: string, market: 'intl' | 'cn', env: Record<string, string | undefined>, now: Date) => number | null;
-    hydrateProviderQuota?: (store: { appConfig: { findUnique: (args: unknown) => Promise<{ value: string } | null> } }) => Promise<void>;
+    effectiveDailyLimit: (provider: string, market: 'intl' | 'cn', env: Record<string, string | undefined>, now: Date) => number | null;
+    hydrateProviderQuota: (store: { appConfig: { findUnique: (args: unknown) => Promise<{ value: string } | null> } }) => Promise<void>;
   };
-  it.skipIf(typeof upstream.effectiveDailyLimit !== 'function' || typeof upstream.hydrateProviderQuota !== 'function')('the daily limit is the one ingest enforces (same reading, same answer)', async () => {
+  it.each([
+    ['no call cost known', null, 545, '2026-10-10T11:00:00.000Z'],
+    // The provider's headers showed that one call took two requests: the day's requests are half as many calls.
+    // (A later reading: ingest keeps the newest one it was handed.)
+    ['a call costs two requests', 2, 272, '2026-10-10T11:30:00.000Z'],
+  ])('the daily limit is the one ingest enforces (same reading, same answer): %s', async (_name, lastCallCost, jsearchCalls, observedAt) => {
+    expect(typeof upstream.effectiveDailyLimit).toBe('function');
+    expect(typeof upstream.hydrateProviderQuota).toBe('function');
     const stored = new Map([
-      ['activejobs', quotaSnapshot('activejobs', { plan: 'BASIC', requestsLimit: 25, requestsRemaining: 23, resetAt: RESET_17D })],
-      ['jsearch', quotaSnapshot('jsearch', { requestsLimit: 10_000, requestsRemaining: 9_773, resetAt: RESET_17D })],
+      ['activejobs', quotaSnapshot('activejobs', { plan: 'BASIC', requestsLimit: 25, requestsRemaining: 23, resetAt: RESET_17D, observedAt })],
+      ['jsearch', quotaSnapshot('jsearch', { requestsLimit: 10_000, requestsRemaining: 9_773, resetAt: RESET_17D, lastCallCost, observedAt })],
     ]);
+    expect(limits.providerDailyLimit('jsearch', 'intl', {}, stored.get('jsearch')!, NOW)).toBe(jsearchCalls);
     await upstream.hydrateProviderQuota!({ appConfig: { findUnique: async () => ({ value: serializeProviderQuota(stored) }) } });
     const envs: Array<Record<string, string>> = [
       {},
@@ -747,6 +759,57 @@ describe('providerDailyLimit', () => {
           expect(mine, `${provider} ${market} ${JSON.stringify(env)}`).toBe(upstream.effectiveDailyLimit!(provider, market, env, NOW));
         }
       }
+    }
+  });
+});
+
+describe('createPrismaSystemStore.careerSourceCounts', () => {
+  it('counts the boards that FEED the site (their countries), not the console that added them (MKT-3D request, M3 gate)', async () => {
+    const rows = [
+      { market: 'cn', countries: [], enabled: true, lastError: null }, // every country: both sites
+      { market: 'cn', countries: ['CN'], enabled: true, lastError: 'timeout' }, // mainland only
+      { market: 'intl', countries: ['TW', 'CN'], enabled: true, lastError: null }, // both
+      { market: 'cn', countries: ['US'], enabled: false, lastError: null }, // international only, added on the mainland console
+      { market: 'intl', countries: ['SG'], enabled: true, lastError: 'board_not_found' }, // international only
+    ];
+    const seen: unknown[] = [];
+    const db = { rACareerSiteSource: { findMany: async (args: unknown) => (seen.push(args), rows) } };
+    const store = createPrismaSystemStore(db as never);
+    expect(await store.careerSourceCounts('cn')).toEqual({ total: 3, enabled: 3, failing: 1 });
+    expect(await store.careerSourceCounts('intl')).toEqual({ total: 4, enabled: 3, failing: 1 });
+    // One bounded read, no filter on the display column.
+    expect(seen[0]).toEqual({ select: { countries: true, enabled: true, lastError: true }, take: 20_000 });
+  });
+});
+
+describe('the sources list reads the stored quota, not only this process\'s memory (cross-review, M3 gate)', () => {
+  it('a provider another process saw used up reads off with reason "quota" in a process that made no call itself', async () => {
+    vi.stubEnv('RAPID_API_KEY', 'synthetic-key');
+    for (const name of ['RA_ONBOARDING_EXTERNAL_JOBS_DISABLED', 'RA_ONBOARDING_ACTIVEJOBS_DISABLED', 'RA_ONBOARDING_JSEARCH_DISABLED']) vi.stubEnv(name, '');
+    try {
+      // SYNTHETIC stored reading, relative to the wall clock (the adapter asks the quota gate "now").
+      const observed = Date.now();
+      const stored = serializeProviderQuota([
+        quotaSnapshot('activejobs', { plan: 'BASIC', requestsLimit: 25, requestsRemaining: 0, resetAt: new Date(observed + 17 * 86_400_000).toISOString(), observedAt: new Date(observed).toISOString(), lastStatus: 429, state: 'exhausted' }),
+      ]);
+      const db = { appConfig: { findUnique: async () => ({ value: stored }) } };
+      const of = (list: Array<{ provider: string; enabled: boolean; reason: string | null }>) => list.find((x) => x.provider === 'activejobs')!;
+      // A store that cannot hydrate (the old reading path): the cold process says the provider is on.
+      resetProviderQuotaForTests();
+      const cold = fakeSystemStore();
+      expect(of(await jobSourcesHealth(cold, 'roboapply'))).toMatchObject({ enabled: true, reason: null });
+      // The real store loads the stored readings first: off, and the reason is the quota.
+      resetProviderQuotaForTests();
+      const store = { ...fakeSystemStore(), hydrateQuota: createPrismaSystemStore(db as never).hydrateQuota };
+      expect(of(await jobSourcesHealth(store, 'roboapply'))).toMatchObject({ enabled: false, reason: 'quota' });
+      // … and so does the whole status: the sources list and the provider table agree.
+      resetProviderQuotaForTests();
+      const status = await buildSystemStatus({ ...store, providerQuota: createPrismaSystemStore(db as never).providerQuota }, { brands: ['roboapply'], brandsServed: ['roboapply'], env: {} });
+      expect(of(status.brands[0]!.sources)).toMatchObject({ enabled: false, reason: 'quota' });
+      expect(status.providers.find((p) => p.provider === 'activejobs')!.state).toBe('exhausted');
+    } finally {
+      resetProviderQuotaForTests();
+      vi.unstubAllEnvs();
     }
   });
 });
@@ -1508,8 +1571,12 @@ describe('limits come from the owning areas (J3)', () => {
     const system = readFileSync(new URL('../system.ts', import.meta.url), 'utf8');
     expect(system).toContain("import { FEED_MIN_MONTHLY_JOBS, copilotDailyBudgetUsd, enrichCounterKey, enrichDailyLimit, mainlandCallBudget, providerDailyLimit, quotaReserve, scoreCounterKeys, scoreDailyBudget } from './limits.js';");
     // The provider limit is built on the ingest area's readers, not on a copy of its defaults.
-    expect(src).toContain("import { dailyCallLimit, daysToReset, type IngestProvider, type ProviderQuotaSnapshot } from '../jobs/ingest/index.js';");
+    expect(src).toContain("import { dailyCallLimit, effectiveDailyLimitFor, quotaDailyCap, quotaReserve, type IngestProvider, type QuotaReading } from '../jobs/ingest/index.js';");
     expect(src).not.toMatch(/DEFAULT_DAILY_CALLS|activejobs: \d|jsearch: \d/);
+    // The quota rule itself (reserve, days to reset, requests per call) is the ingest area's too: re-exported, never restated (M3 gate).
+    expect(limits.quotaDailyCap).toBe(ingest.quotaDailyCap);
+    expect(limits.quotaReserve).toBe(ingest.quotaReserve);
+    expect(src).not.toMatch(/function quotaDailyCap|function quotaReserve|RESERVE_SHARE = /);
   });
 });
 

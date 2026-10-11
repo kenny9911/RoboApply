@@ -440,20 +440,17 @@ export function createJobImportService(partial: Partial<JobImportDeps> = {}): Jo
     const brand = d.brand();
     const now = d.now();
     const externalId = importExternalId(userId, fields);
-    const normalized: NormalizedJob = normalizeProviderJob(
-      {
-        externalId,
-        title: fields.title,
-        company: fields.company,
-        description: fields.description,
-        applyUrl: fields.applyUrl ?? null,
-        sourceUrl: fields.applyUrl ?? null,
-        location: fields.location ?? null,
-        fetchedAt: now,
-      },
-      'user_import',
-      { market: brand.market, ownerUserId: userId, now },
-    );
+    const input = {
+      externalId,
+      title: fields.title,
+      company: fields.company,
+      description: fields.description,
+      applyUrl: fields.applyUrl ?? null,
+      sourceUrl: fields.applyUrl ?? null,
+      location: fields.location ?? null,
+      fetchedAt: now,
+    };
+    const normalized: NormalizedJob = normalizeProviderJob(input, 'user_import', { market: brand.market, ownerUserId: userId, now });
     const placeKnown = !!(normalized.locationCity || normalized.locationCountry || normalized.remoteScope);
     const dedupeKey = placeKnown ? normalized.dedupeKey : null;
     // The user's own jobs match on identical content, or the same link and title only: two postings with
@@ -470,7 +467,18 @@ export function createJobImportService(partial: Partial<JobImportDeps> = {}): Jo
     // 2. The same job in our public listings (only where the brand may show them): use it, no charge.
     if (await d.publicListingsOn(userId, brand, d.env)) {
       const urls = normalized.applyUrl ? [normalized.applyUrl] : [];
-      const pub = await d.repo.findPublicMatch({ market: brand.market, urls, dedupeKey });
+      // A public row's fuzzy key holds the employer's domain when ingest knew one (MKT-3C, strategy 1.5 K3),
+      // and an import states none: ask with the key ingest would have computed from the stored company
+      // domain as well, and with the exact posting key of an ATS link. A failed read only loses that key.
+      let domainDedupeKey: string | null = null;
+      if (placeKnown && d.repo.findCompanyDomain) {
+        const domain = await d.repo.findCompanyDomain(brand.market, normalized.companyNameNormalized).catch(() => null);
+        if (domain) {
+          const companyDomains = new Map([[normalized.companyNameNormalized, domain]]);
+          domainDedupeKey = normalizeProviderJob(input, 'user_import', { market: brand.market, ownerUserId: userId, now, companyDomains }).dedupeKey;
+        }
+      }
+      const pub = await d.repo.findPublicMatch({ market: brand.market, urls, dedupeKey, atsPostingKey: normalized.atsPostingKey ?? null, domainDedupeKey });
       if (pub) return doneFor(pub.id, 'public');
     }
 

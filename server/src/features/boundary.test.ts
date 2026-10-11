@@ -37,7 +37,8 @@ function areaOf(rel: string): string {
 }
 
 const SEAM_TARGETS = new Set(['jobs/marketHooks.ts']);
-const HOOK_MODULES = new Set(['cn/jobs/hooks.ts', 'jobs/sources/atsPublic/hooks.ts']);
+// The three statically registered hook sets (MARKET_HOOK_SETS): cn, ats_public, tw_sources (MKT-3E).
+const HOOK_MODULES = new Set(['cn/jobs/hooks.ts', 'jobs/sources/atsPublic/hooks.ts', 'jobs/sources/twHooks.ts']);
 
 function specifiers(source: string): string[] {
   const out: string[] = [];

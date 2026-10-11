@@ -126,6 +126,14 @@ export interface ProviderJobInput {
   salaryText?: string | null;
   /** CN "N薪" when the provider states it separately. */
   salaryMonths?: number | null;
+  /**
+   * The source's own pay fields are the whole truth about pay: the posting's
+   * description is never read for a figure (a 台灣就業通 row states pay in
+   * numeric fields with their period, and a piece-work row deliberately has
+   * none: a "月薪約 35,000 元" in its free text is not this vacancy's stated
+   * pay). Absent: the description is read as for every other source.
+   */
+  payFromFieldsOnly?: boolean | null;
   /** True when the provider guessed the currency from the search country. */
   salaryCurrencyInferred?: boolean | null;
 

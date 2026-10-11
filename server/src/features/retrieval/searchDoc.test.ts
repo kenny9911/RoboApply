@@ -81,7 +81,7 @@ describe('buildCardText', () => {
   it('is the title, the role labels, the level, required then preferred skills, the summary and the requirements head', () => {
     expect(buildCardText(indexJob()).split('\n')).toEqual([
       'Senior Backend Engineer',
-      'Backend engineer / 后端开发工程师',
+      'Backend engineer / 后端开发工程师 / 後端工程師',
       'senior',
       'Go, PostgreSQL',
       'Kubernetes',

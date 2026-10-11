@@ -57,8 +57,23 @@ export interface ImportRepository {
     userId: string,
     match: { externalId: string; applyUrl: string | null; titleNormalized: string },
   ): Promise<{ id: string; archivedAt: Date | null } | null>;
-  findPublicMatch(match: { market: string; urls: string[]; dedupeKey: string | null }): Promise<{ id: string } | null>;
+  /**
+   * A live canonical public job of the market that is the same posting: the
+   * same link, the same exact posting key (`atsPostingKey`, MKT-3C), or the
+   * same fuzzy key. A public row's fuzzy key holds the employer's domain when
+   * ingest knew one and its name otherwise, so both spellings are asked
+   * (`dedupeKey` by name, `domainDedupeKey` by the stored domain of the company).
+   */
+  findPublicMatch(match: {
+    market: string;
+    urls: string[];
+    dedupeKey: string | null;
+    atsPostingKey?: string | null;
+    domainDedupeKey?: string | null;
+  }): Promise<{ id: string } | null>;
   findCompanyId(market: string, nameNormalized: string): Promise<string | null>;
+  /** The stored domain of the market's company record of that name (what ingest hands the normalizer), or null. Optional for a test double. */
+  findCompanyDomain?(market: string, nameNormalized: string): Promise<string | null>;
   createPrivateJob(input: PrivateJobInput): Promise<{ id: string }>;
   restore(jobId: string): Promise<void>;
   loadJob(jobId: string): Promise<StoredImportJob | null>;
@@ -165,7 +180,9 @@ export function createPrismaImportRepository(getDb: () => ImportDb = () => prism
     async findPublicMatch(match) {
       const or: Prisma.RAJobWhereInput[] = [];
       for (const url of match.urls) or.push({ applyUrl: url }, { sourceUrl: url });
+      if (match.atsPostingKey) or.push({ atsPostingKey: match.atsPostingKey });
       if (match.dedupeKey) or.push({ dedupeKey: match.dedupeKey });
+      if (match.domainDedupeKey && match.domainDedupeKey !== match.dedupeKey) or.push({ dedupeKey: match.domainDedupeKey });
       if (!or.length) return null;
       const row = await getDb().rAJob.findFirst({
         where: { visibility: 'public', market: match.market, archivedAt: null, isCanonical: true, OR: or },
@@ -179,6 +196,12 @@ export function createPrismaImportRepository(getDb: () => ImportDb = () => prism
       if (!nameNormalized) return null;
       const row = await getDb().rACompany.findFirst({ where: { market, nameNormalized }, select: { id: true } });
       return row?.id ?? null;
+    },
+
+    async findCompanyDomain(market, nameNormalized) {
+      if (!nameNormalized) return null;
+      const row = await getDb().rACompany.findFirst({ where: { market, nameNormalized, domain: { not: null } }, select: { domain: true } });
+      return row?.domain?.trim() || null;
     },
 
     async createPrivateJob(input) {

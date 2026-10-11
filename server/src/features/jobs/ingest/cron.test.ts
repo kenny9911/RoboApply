@@ -19,9 +19,10 @@ import { toRecordedSql } from '../../../test/sqlSnapshot.js';
 import { resetSourceAdaptersForTests, registerSourceAdapter } from '../sources/index.js';
 import type { JobSourceAdapter } from '../sources/index.js';
 import { ingestAllowed, runJobsIngest, runJobsMaintain, runJobsPlan, setIngestCronDepsForTests } from './cron.js';
+import { createRapidApiAdapter } from './adapters/rapidApi.js';
 import { buildExpireSql, runMaintenance } from './maintain.js';
 import { runIngestQuery } from './pipeline.js';
-import { paramsHash } from './planner.js';
+import { queryHash } from './planner.js';
 import { resetBuiltinAdaptersForTests } from './providers.js';
 import { QUOTA_PARK_MAX_MS, quotaAllows, quotaSnapshot, resetProviderQuotaForTests } from './quota.js';
 import { PROVIDER_QUOTA_CONFIG_KEY, serializeProviderQuota, type ProviderQuotaSnapshot } from './quotaContract.js';
@@ -250,7 +251,8 @@ describe('crons', () => {
     expect(Number(first.seedBoardsAdded)).toBeGreaterThanOrEqual(10);
     const sources = [...fake.$rows('rACareerSiteSource')];
     expect(sources).toHaveLength(Number(first.seedBoardsAdded));
-    expect(sources.every((r) => r.market === 'cn' && r.countryCode === 'CN' && r.enabled === true && String(r.createdBy).startsWith('seed:'))).toBe(true);
+    // A seeded board is one source for both sites since MKT-3D (JC-4): its countries decide which site it feeds, not `market`.
+    expect(sources.every((r) => r.origin === 'seed' && r.enabled === true && r.createdBy === 'seed')).toBe(true);
     expect(fake.$rows('rAIngestQuery').map((q) => [q.provider, q.market, q.origin]).sort()).toEqual([
       ['ats_public', 'cn', 'bank_sync'],
       ['bank_gohire', 'cn', 'bank_sync'],
@@ -261,9 +263,8 @@ describe('crons', () => {
     expect(fake.$rows('rACareerSiteSource')).toHaveLength(sources.length - 1);
     expect(jsearch.fetch).not.toHaveBeenCalled();
     expect(boards.fetch).not.toHaveBeenCalled();
-    // RoboApply ships no seed list in this wave: its plan adds no board.
+    // The list is one for both sites and already loaded: RoboApply's plan adds no board.
     expect(await runJobsPlan({ ...ctx(), name: 'jobs-plan' })).toMatchObject({ seedBoardsAdded: 0 });
-    expect(fake.$rows('rACareerSiteSource').every((r) => r.market === 'cn')).toBe(true);
   });
 
   it('jobs-plan writes queries without calling providers', async () => {
@@ -272,8 +273,9 @@ describe('crons', () => {
     const { db } = createIngestFake();
     setIngestCronDepsForTests({ db, env: { INGEST_SEED_ROLES: '2', INGEST_SEED_CITIES_PER_COUNTRY: '1' } });
     const res = await runJobsPlan({ ...ctx(), name: 'jobs-plan' });
-    // 2 seeds × 2 search adapters, activejobs and jsearch (planned even while a key is missing; leases skip disabled providers).
-    expect(res).toMatchObject({ seedTuples: 2, planned: 4, bankQueries: 1 });
+    // JSearch is billed per request: no seed query (MKT-3B, JI-2). Active Jobs DB and the bank are off here:
+    // a source that is off is skipped, not planned, and gets no standing query either.
+    expect(res).toMatchObject({ seedTuples: 2, planned: 0, bankQueries: 0, skippedProviders: ['activejobs', 'bank_robohire'] });
     expect(a.fetch).not.toHaveBeenCalled();
   });
 
@@ -330,8 +332,48 @@ describe('crons', () => {
     setIngestCronDepsForTests({ db, env: {}, perQueryTracking: true });
     const res = await runJobsMaintain({ ...ctx(), name: 'jobs-maintain' });
     expect(res).toMatchObject({ missedRule: true });
-    // activejobs, jsearch — never the bank (it closes its own jobs).
-    expect(fake.$sql.texts().filter((t) => t.includes(`'source_removed'`))).toHaveLength(2);
+    // activejobs only. Never the bank (it closes its own jobs), and never JSearch: it answers the first
+    // pages of a ranked search, so a posting missing from two runs is not gone (MARKET_STRATEGY §1.5).
+    const removed = fake.$sql.calls.filter((c) => c.text.includes(`'source_removed'`));
+    expect(removed).toHaveLength(1);
+    expect(removed[0]!.values).toContain('activejobs');
+    expect(removed[0]!.values).not.toContain('jsearch');
+  });
+
+  it('a JSearch posting that is outside the first pages on two later runs stays open: page-capped runs are not counted (cross-review, M3 gate)', async () => {
+    // SYNTHETIC: 20 rows on the first run (2 pages of 10), then two full pages without posting 1.
+    const page = (from: number) =>
+      Array.from({ length: 20 }, (_, i) => ({
+        externalId: `jsearch:${from + i}`,
+        sourceBoard: 'jsearch' as const,
+        title: `QA Engineer ${from + i}`,
+        company: 'Acme Testing',
+        location: 'Taipei, Taiwan',
+        locationCountry: 'TW',
+        applyUrl: `https://careers.acme-testing.example/jobs/${from + i}`,
+        applyIsDirect: true,
+        description: 'Test the product.',
+        postedAt: '2026-10-09T00:00:00.000Z',
+        fetchedAt: NOW.toISOString(),
+      }));
+    const pages = [page(1), page(2), page(2)];
+    const search = vi.fn(async () => pages.shift() ?? []);
+    const adapter = createRapidApiAdapter('jsearch', { provider: { id: 'jsearch', isEnabled: () => true, search } as never, isEnabled: () => true });
+    const row = { id: 'q1', market: 'intl', provider: 'jsearch', params: { q: '軟體工程師', country: 'TW', city: 'Taipei', datePosted: 'month' }, origin: 'demand', demandScore: 1, priority: 50, consecutiveEmpty: 0 };
+    const { db, fake, written } = createIngestFake();
+    const base = { db, brand: 'roboapply' as const, market: 'intl' as const, now: NOW, enqueueMany: async (items: unknown[]) => ({ inserted: items.length }), perQueryTracking: true };
+    for (let run = 0; run < 3; run += 1) await runIngestQuery(base, adapter, row);
+    expect(search).toHaveBeenCalledTimes(3);
+    expect(written.length).toBeGreaterThanOrEqual(20);
+    // No run was counted and no row was stamped, so the rule has nothing to compare …
+    expect(fake.$sql.texts().some((t) => t.includes('"runCount"') || t.includes('"lastSeenQueryId"'))).toBe(false);
+    // … and maintenance does not run the rule for the provider at all (rows stamped before this gate included).
+    installStubs([adapter]);
+    setIngestCronDepsForTests({ db, env: {}, perQueryTracking: true });
+    await runJobsMaintain({ ...ctx(), name: 'jobs-maintain' });
+    // The rule's own statement (the upsert names 'source_removed' too, to reopen a row).
+    const rule = fake.$sql.calls.filter((c) => c.text.includes('q."runCount" >= j."lastSeenRun"'));
+    expect(rule.map((c) => c.values.filter((v) => v === 'jsearch' || v === 'activejobs'))).toEqual([['activejobs']]);
   });
 });
 
@@ -340,9 +382,10 @@ describe('maintenance SQL', () => {
     const rec = toRecordedSql('$executeRaw', buildExpireSql('intl'), []);
     expect(rec.text).toMatchSnapshot();
     expect(rec.text).toContain(`"closeReason" = 'expired'`);
-    expect(rec.text).toContain('"sourceBoard" <> ALL(');
-    // The banks and the ats_public boards: their own sync closes what the source stopped listing.
-    expect(rec.values).toEqual(['intl', ['robohire', 'gohire', 'greenhouse', 'lever', 'ashby', 'smartrecruiters'], 45]);
+    // A stated deadline closes a row of any source; a life from the posting date is the aggregators' only
+    // (MKT-3C, JI-10): the banks, the employer boards and the government sources are closed by their own sync.
+    expect(rec.text).toContain('"sourceBoard" = ANY(');
+    expect(rec.values).toEqual(['intl', ['activejobs', 'linkedin', 'jsearch'], 45]);
   });
 
   it('archives a job only after 2 counted runs of the query that last returned it, inside that query\'s date window', () => {
@@ -421,6 +464,11 @@ describe('maintenance SQL', () => {
     const off = createIngestFake();
     await runIngestQuery({ ...base, db: off.db, perQueryTracking: false }, stubAdapter('jsearch', { fetch: vi.fn(async () => ({ jobs: [posting], calls: 1 })) }), row);
     expect(off.fake.$sql.texts().some((t) => t.includes('"runCount"'))).toBe(false);
+    // A page-capped answer (`complete: false`) is not a counted run either.
+    const capped = createIngestFake();
+    await runIngestQuery({ ...base, db: capped.db }, stubAdapter('jsearch', { fetch: vi.fn(async () => ({ jobs: [posting], calls: 1, complete: false })) }), row);
+    expect(capped.written).toHaveLength(1);
+    expect(capped.fake.$sql.texts().some((t) => t.includes('"runCount"') || t.includes('"lastSeenQueryId"'))).toBe(false);
   });
 
   it.todo('SR-16b-1 (needs the columns in a real database): the per-query archive and the stamping UPDATEs execute against Postgres and archive exactly the jobs isMissedTwice selects');
@@ -432,8 +480,9 @@ describe('targeted ingest for onboarding (ingestForProfile)', () => {
     const { db, fake } = createIngestFake({
       seed: { rASearchProfile: [{ id: 'sp1', userId: 'u1', filters: { taxonomyIds: ['backend_engineer'], country: 'US' } }] },
     });
-    const planned = { q: 'Backend engineer', country: 'US', datePosted: 'week', taxonomyId: 'backend_engineer' };
-    fake.$rows('rAIngestQuery').push({ id: 'q-new', provider: 'jsearch', paramsHash: paramsHash('intl', planned), enabled: true, nextRunAt: new Date(NOW.getTime() - 1) });
+    // A planned search query is identified by its tuple and language, not by its params (MKT-3B: `queryHash`).
+    const hash = queryHash({ market: 'intl', taxonomyId: 'backend_engineer', q: 'Backend engineer', country: 'US' }, 'en');
+    fake.$rows('rAIngestQuery').push({ id: 'q-new', provider: 'jsearch', paramsHash: hash, enabled: true, nextRunAt: new Date(NOW.getTime() - 1) });
     const enqueueMany = vi.fn(async (items: unknown[]) => ({ inserted: items.length }));
     const result = await ingestForProfileWith({ db, brand: robo, adapters: [adapter], now: () => NOW, enqueueMany, env: {} }, 'sp1', 5_000);
     expect(result.planned).toBe(1);

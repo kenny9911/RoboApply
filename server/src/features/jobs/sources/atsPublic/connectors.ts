@@ -388,6 +388,36 @@ const SR_PAGE = 100;
 /** Posting texts read per board and run (one request each). */
 export const SR_MAX_DETAILS = 100;
 const SR_CONCURRENCY = 4;
+/**
+ * Posting-text requests in flight on SmartRecruiters' API host across ALL
+ * boards this process reads at once. The board sync reads several boards in
+ * parallel (ATS_BOARDS_CONCURRENCY, up to 8), and every SmartRecruiters board
+ * among them asks for up to 100 texts: without a cap of its own the host
+ * would see boards x 4 requests at a time from one identifying User-Agent
+ * (MARKET_STRATEGY §1.2 asks for 4 to 8 boards in flight, not 4 to 8 times
+ * four requests on one host). A refusal costs a board an hour, so asking
+ * politely is also the faster way through a large backlog.
+ */
+export const SR_HOST_CONCURRENCY = 4;
+
+/** A counting gate: at most `limit` callers run at once; the others wait in order. A slot is handed straight to the next waiter. */
+export function createHostGate(limit: number): <T>(fn: () => Promise<T>) => Promise<T> {
+  let active = 0;
+  const waiting: Array<() => void> = [];
+  return async function run<T>(fn: () => Promise<T>): Promise<T> {
+    if (active >= limit) await new Promise<void>((resolve) => waiting.push(resolve));
+    else active += 1;
+    try {
+      return await fn();
+    } finally {
+      const next = waiting.shift();
+      if (next) next();
+      else active -= 1;
+    }
+  };
+}
+
+const smartRecruitersTextGate = createHostGate(SR_HOST_CONCURRENCY);
 
 export function mapSmartRecruitersPosting(listRaw: unknown, detailRaw: unknown, source: BoardSource, now: Date): ProviderJobInput | null {
   const j = obj(listRaw);
@@ -533,9 +563,16 @@ export const smartrecruiters: AtsConnector = {
     const withText = await mapLimit(batch, SR_CONCURRENCY, async (e) => {
       if (deps.signal?.aborted || limited) return null;
       const url = `${this.boardUrl(source.boardToken)}/${enc(str(e.row.id)!)}`;
-      calls += 1;
       try {
-        const input = mapSmartRecruitersPosting(e.row, await getJson(url, deps), as, deps.now);
+        // One gate for the host, shared by every board being read (see SR_HOST_CONCURRENCY). What
+        // changed while this request waited for its turn still counts: no request after a 429 or a cut.
+        const detail = await smartRecruitersTextGate(async () => {
+          if (deps.signal?.aborted || limited) return undefined;
+          calls += 1;
+          return getJson(url, deps);
+        });
+        if (detail === undefined) return null;
+        const input = mapSmartRecruitersPosting(e.row, detail, as, deps.now);
         if (!input) failed.add(idOf(e));
         return input;
       } catch (err) {

@@ -69,6 +69,12 @@ export interface SqlScope {
    * (sourceLine.ts `heldBankBoards`): their bank rows are never listed.
    */
   heldBanks?: readonly string[];
+  /**
+   * `sourceBoard` values whose rows this reader must not list at all
+   * (sourceLine.ts `CREDIT_LINE_BOARDS`: a surface that cannot print a
+   * source's credit line yet holds its rows out).
+   */
+  heldBoards?: readonly string[];
 }
 
 const DAY_MS = 86_400_000;
@@ -392,6 +398,8 @@ export function scopePredicates(scope: SqlScope): Prisma.Sql[] {
   if (scope.market === 'cn') out.push(Prisma.sql`(j."visibility" <> 'public' OR j."applyUrl" ~* '^[[:space:]]*https?://')`);
   // A recruiter-bank row whose bank has no posting page is held, not listed (sourceLine.ts `heldBankBoards`).
   if (scope.heldBanks?.length) out.push(Prisma.sql`NOT (j."fromRecruiterBank" = true AND j."sourceBoard" = ANY(${[...scope.heldBanks]}::text[]))`);
+  // Rows of a source this reader cannot credit yet are held out (sourceLine.ts `creditLineHeld`).
+  if (scope.heldBoards?.length) out.push(Prisma.sql`NOT (j."sourceBoard" = ANY(${[...scope.heldBoards]}::text[]))`);
   if (scope.publicDisplayOnly) {
     out.push(Prisma.sql`j."publicDisplay" = true`);
     out.push(Prisma.sql`(j."expiresAt" IS NULL OR j."expiresAt" > ${scope.now}::timestamp(3))`);

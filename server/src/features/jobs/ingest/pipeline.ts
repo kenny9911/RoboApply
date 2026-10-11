@@ -7,7 +7,9 @@
 //      blocking, at most a day at a time ('quota');
 //      otherwise a call is reserved in today's RAProviderUsage row under
 //      `usageKey(provider, market)` (atomic; over the effective daily limit →
-//      no call, the query waits for the next UTC day);
+//      no call, the query waits for the next UTC day). The tick's standing
+//      demand stops at INGEST_SCHEDULED_DEMAND_SHARE of that limit, so a
+//      person's own search of the day (a targeted run) still finds calls;
 //   2. the adapter fetches (never throws);
 //   3. `processJobs`: the page's known employer domains → normalizeProviderJob →
 //      marketHooks.afterNormalize → RACompany upsert → batched RAJob upsert
@@ -21,7 +23,8 @@
 //      planner's `updatedAt` "last demanded" stamp is not touched);
 //   6. with Schema request SR-16b-1 in place (`perQueryTracking`), a search
 //      run that returned postings is counted and stamps them (tracking.ts),
-//      which the missed-refresh archive in `jobs-maintain` reads.
+//      which the missed-refresh archive in `jobs-maintain` reads. A run whose
+//      answer was cut at a page cap (`complete: false`: JSearch) is not counted.
 
 import { Prisma } from '../../../generated/prisma/client.js';
 import type { BrandId, EnvSource, Market } from '../../../platform/brand/index.js';
@@ -31,10 +34,10 @@ import { asMarketHookJob, cleanText, hostOf, isJobBoardHost, normalizeCompanyNam
 import { companyKey, upsertCompanies } from '../companies/index.js';
 import { adapterEnabledFor } from '../sources/index.js';
 import type { IngestOrigin, IngestQueryParams, JobSourceAdapter, SourceClosure, SourceQuery } from '../sources/index.js';
-import { effectiveDailyLimit, publicDisplayProviders, seedBudgetShare } from './config.js';
+import { effectiveDailyLimit, publicDisplayProviders, scheduledDemandLimit, seedBudgetShare } from './config.js';
 import { dayKey, type IngestDb } from './db.js';
 import { nextRunDelayMs, REFRESH } from './planner.js';
-import { quotaAllows, quotaParkUntil, recordProviderUsage, reserveProviderCall } from './quota.js';
+import { providerCallsToday, quotaAllows, quotaParkUntil, recordProviderUsage, reserveProviderCall } from './quota.js';
 import { usageKey } from './quotaContract.js';
 import { recordCountedRun } from './tracking.js';
 import { applyDedupe, archiveClosedBankJobs, archiveUnlistedJobs, contentHash, existingKey, prefetchExisting, toUpsertRow, upsertJobRows } from './upsert.js';
@@ -59,6 +62,13 @@ export interface PipelineContext {
   budgetMs?: number;
   /** Env the budgets are read from (default process.env). */
   env?: EnvSource;
+  /**
+   * The run is a person's own search (targeted ingest of one search profile,
+   * or its queued `ingest.query` remainder), not the tick's standing work: a
+   * demand query then may use the provider's day up to its limit, where
+   * standing demand stops at its share (config.ts `scheduledDemandLimit`).
+   */
+  targeted?: boolean;
 }
 
 export interface ProcessResult {
@@ -311,10 +321,17 @@ export function buildDeferProviderSql(market: Market, provider: string, until: D
       AND "nextRunAt" < ${until}::timestamp(3) ${originFilter}`;
 }
 
+/**
+ * Stamps a finished run. Of `params` only the cursor of a cursor source is
+ * written, into the row as it is NOW: the planner rewrites a query's window
+ * and text in place (`upsertPlannedQueries`, `retireUnusedDemand`), and
+ * `jobs-plan` can run between this query's lease and its finish, so writing
+ * the params read at lease time back would undo that plan for a day.
+ */
 async function finishQuery(
   db: IngestDb,
   id: string,
-  data: { now: Date; next: Date; seen: number; inserted: number; consecutiveEmpty: number; error: string | null; params: IngestQueryParams },
+  data: { now: Date; next: Date; seen: number; inserted: number; consecutiveEmpty: number; error: string | null; cursor: string | null },
 ): Promise<void> {
   await db.$executeRaw`
     UPDATE "RAIngestQuery" SET
@@ -324,7 +341,7 @@ async function finishQuery(
       "lastNewCount" = ${data.inserted}::int,
       "consecutiveEmpty" = ${data.consecutiveEmpty}::int,
       "lastError" = ${data.error}::text,
-      "params" = ${JSON.stringify(data.params)}::jsonb
+      "params" = CASE WHEN ${data.cursor}::text IS NULL THEN "params" ELSE jsonb_set("params", '{cursor}', to_jsonb(${data.cursor}::text)) END
     WHERE "id" = ${id}`;
 }
 
@@ -391,11 +408,21 @@ export async function runIngestQuery(ctx: PipelineContext, adapter: JobSourceAda
     // One limit per provider and market: the operator's bound under what is left of the plan
     // (an adapter this module knows no budget for keeps the bound it declares itself).
     const limit = effectiveDailyLimit(adapter.provider, ctx.market, env, ctx.now) ?? configured;
-    // SEO seeds may use only part of the day's calls, so demand (users' own
-    // searches, onboarding) always finds budget left.
+    // Three shares of one day, so the query a person is waiting for always finds calls left:
+    // SEO seeds use part of the day; the tick's standing demand stops at its own share; a person's
+    // own search (a targeted run: onboarding and its queued remainder) may use the day to its limit.
     const isSeed = query.origin === 'seo_seed';
-    const effective = isSeed ? Math.floor(limit * seedBudgetShare(env)) : limit;
+    const effective = isSeed ? Math.floor(limit * seedBudgetShare(env)) : ctx.targeted ? limit : scheduledDemandLimit(limit, env);
     if (!(await reserveProviderCall(ctx.db, usage, day, effective))) {
+      // Standing demand at its share while the day still has calls (one read tells): nothing is
+      // parked, because the provider's other queries include the ones a person's own search of today
+      // will ask for by id (a parked query is not due and would wait for tomorrow). This query keeps
+      // its 15-minute lease and the tick drops the provider ('budget'). Once the whole day is spent
+      // (or the read says nothing) the provider's queries are parked to the next day, as before.
+      if (!isSeed && effective < limit) {
+        const calls = await providerCallsToday(ctx.db, usage, day);
+        if (calls !== null && calls < limit) return { ...base, status: 'budget' };
+      }
       await ctx.db.$executeRaw(buildDeferProviderSql(ctx.market, adapter.provider, nextBudgetDay(ctx.now), isSeed ? 'seo_seed' : null));
       return { ...base, status: isSeed ? 'seed_budget' : 'budget' };
     }
@@ -412,7 +439,7 @@ export async function runIngestQuery(ctx: PipelineContext, adapter: JobSourceAda
       inserted: 0,
       consecutiveEmpty: row.consecutiveEmpty,
       error: fetched.error.slice(0, 300),
-      params: query.params,
+      cursor: null,
     });
     return { ...base, status: 'error', calls: fetched.calls, error: fetched.error.slice(0, 300), notes: mergeNotes(fetched.notes) };
   }
@@ -435,8 +462,10 @@ export async function runIngestQuery(ctx: PipelineContext, adapter: JobSourceAda
     for (const board of adapter.sourceBoards) closed += await archiveUnlistedJobs(ctx.db, ctx.market, board, fetched.listing.externalIds, ctx.now, reason);
   }
   await recordProviderUsage(ctx.db, usage, day, { calls: extraCalls, returned: fetched.jobs.length, inserted: processed.inserted });
-  // SR-16b-1: only a search run that returned postings counts (an empty page is inconclusive).
-  if (ctx.perQueryTracking && adapter.kind === 'search' && fetched.jobs.length > 0) {
+  // SR-16b-1: only a search run that returned postings counts (an empty page is inconclusive), and
+  // only when the answer was everything the query can return: a posting outside a page-capped answer
+  // is still listed by its source, so its absence is no "missed refresh" (MARKET_STRATEGY §1.5).
+  if (ctx.perQueryTracking && adapter.kind === 'search' && fetched.jobs.length > 0 && fetched.complete !== false) {
     await recordCountedRun(ctx.db, query.id, processed.jobIds);
   }
 
@@ -444,11 +473,11 @@ export async function runIngestQuery(ctx: PipelineContext, adapter: JobSourceAda
   const isCursor = adapter.kind === 'cursor';
   const more = isCursor && fetched.exhausted === false;
   const consecutiveEmpty = isCursor ? 0 : seen === 0 ? row.consecutiveEmpty + 1 : 0;
-  const params: IngestQueryParams = isCursor && fetched.cursor ? { ...query.params, cursor: fetched.cursor } : query.params;
+  const cursor = isCursor && fetched.cursor ? fetched.cursor : null;
   // A variable, not a literal: the planner's RefreshInput takes the country as an optional field
   // (Taiwan demand every 12 h, other cold demand every 24 h, hot 6 h: MARKET_STRATEGY §1.2, §1.3).
   const refreshInput = { origin: query.origin, demandScore: row.demandScore, consecutiveEmpty, country: query.params.country ?? null };
   const next = more ? ctx.now : new Date(ctx.now.getTime() + nextRunDelayMs(refreshInput));
-  await finishQuery(ctx.db, query.id, { now: ctx.now, next, seen, inserted: processed.inserted, consecutiveEmpty, error: null, params });
+  await finishQuery(ctx.db, query.id, { now: ctx.now, next, seen, inserted: processed.inserted, consecutiveEmpty, error: null, cursor });
   return { ...base, calls: fetched.calls, process: processed, closed, more, notes: mergeNotes(processed.notes, fetched.notes) };
 }

@@ -68,6 +68,20 @@ export const SOURCE_STATUS_NOTES = [
   'private_row',
   'normalize_failed',
   'no_external_id',
+  // A JSearch row whose only links are LinkedIn's or Indeed's (normalize/normalizeProviderJob.ts; also counted as no_apply_url).
+  'linkedin_only_link',
+  'indeed_only_link',
+  // The 台灣就業通 sweep's own counters (sources/twOpenData.ts). `tw_county_only` is the measured number of
+  // vacancies a sweep did not reach by district; a failed request is counted here and is not an ingest error.
+  'tw_sweep_finished',
+  'tw_sweep_incomplete',
+  'tw_request_errors',
+  'tw_skipped_position',
+  'tw_county_only',
+  'tw_county_unreached',
+  'tw_capped_leaf',
+  'tw_capped_county_major',
+  'tw_absence_unproven',
 ] as const;
 export type SourceStatusNote = (typeof SOURCE_STATUS_NOTES)[number];
 

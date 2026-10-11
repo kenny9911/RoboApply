@@ -7,6 +7,7 @@ import { Prisma } from '../../generated/prisma/client.js';
 import { INDEX_FLOORS, type SeoPageStats } from './contract.js';
 import { citySlug, classifyBrowsePath, jobIdSlug, jobPath, parseIdSlug, resolveBrowsePath, resolveCity, seoCacheTag, targetFromParams } from './paths.js';
 import { allowedPublicBoards, basePublicWhere, matchesScope, publicJobWhere, type ScopeContext } from './scope.js';
+import { NEVER_PUBLIC_DISPLAY_PROVIDERS } from '../jobs/normalize/index.js';
 import { introFor, introNumbersMatch, introText, isIndexable, median, medianPay, statsView } from './stats.js';
 import { createSeoService, publicListingsOpen } from './service.js';
 import { createMemorySeoRepo, seoJob } from './testkit.js';
@@ -147,6 +148,15 @@ describe('public-job predicate (TASK_PLAN §2.2, ARCH §9.4)', () => {
     expect(allowedPublicBoards({})).toEqual([]);
     expect(matchesScope(row, {}, { ...CTX, publicBoards: allowedPublicBoards({ PUBLIC_DISPLAY_PROVIDERS: 'jsearch' }) })).toBe(false);
     expect(matchesScope(row, {}, { ...CTX, publicBoards: allowedPublicBoards({ PUBLIC_DISPLAY_PROVIDERS: 'ats_public, jsearch' }) })).toBe(true);
+  });
+
+  it('JSearch and LinkedIn rows are never public, whatever PUBLIC_DISPLAY_PROVIDERS names (MARKET_STRATEGY M-3, M-4)', () => {
+    expect(allowedPublicBoards({ PUBLIC_DISPLAY_PROVIDERS: 'jsearch' })).toEqual([]);
+    expect(allowedPublicBoards({ PUBLIC_DISPLAY_PROVIDERS: 'jsearch, linkedin, activejobs' })).toEqual(['activejobs']);
+    for (const p of NEVER_PUBLIC_DISPLAY_PROVIDERS) expect(allowedPublicBoards({ PUBLIC_DISPLAY_PROVIDERS: p })).toEqual([]);
+    // A row an older ingest flagged while the operator listed the provider is not shown either.
+    const flagged = seoJob({ fromRecruiterBank: false, sourceBoard: 'jsearch', publicDisplay: true });
+    expect(matchesScope(flagged, {}, { ...CTX, publicBoards: allowedPublicBoards({ PUBLIC_DISPLAY_PROVIDERS: 'jsearch' }) })).toBe(false);
   });
 
   it('sponsorship needs a quote; remote honours the country scope', () => {

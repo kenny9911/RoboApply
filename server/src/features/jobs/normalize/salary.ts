@@ -709,13 +709,25 @@ export function payPlausible(p: { min: number | null | undefined; max: number | 
 }
 
 /**
- * Does a pay text carry a figure ("$90k", "4萬元", "18-28K·15薪")? Words alone
- * ("Competitive pay and benefits", 面議) are not something to show as "Pay
- * as stated"; benefit-plan names ("401k") are not figures.
+ * Does a pay text carry a figure for THIS job ("$90k", "月薪4萬元", "18-28K·15薪")?
+ * Words alone ("Competitive pay and benefits", 面議) are not something to show
+ * as "Pay as stated"; benefit-plan names ("401k") are not figures; and the
+ * Taiwan statutory-threshold clause is not one either (TW-03, JT-1, JT-6;
+ * MARKET_STRATEGY §1.5 "never show or filter on the statutory threshold"):
+ * "依學經歷、證照核薪(每月經常性薪資達4萬元以上)" states no pay, at any
+ * threshold. The clause is blanked by the rule the parser uses (`isFloorClause`)
+ * before the text is tested, so every reader of this answer (the job page's
+ * "Pay as stated", similar jobs, the Assistant, alert e-mails, the fit
+ * context) says "Pay not listed" for such a row. `where`: the job's country
+ * and market when the caller knows them (default: unknown, international, the
+ * parser's own default).
  */
-export function statesAmount(text: string | null | undefined): boolean {
+export function statesAmount(text: string | null | undefined, where: { country?: string | null; market?: 'intl' | 'cn' } = {}): boolean {
   if (!text) return false;
-  const s = text.normalize('NFKC').replace(PLAN_TOKEN_RE, ' ');
+  const normal = text.normalize('NFKC');
+  const floors = floorClauses(normal);
+  const negotiable = NEGOTIABLE_RE.test(normal) || floors.some((f) => f.kind === 'statute');
+  const s = withoutFloorClauses(normal, floors, { country: where.country?.toUpperCase() ?? null, market: where.market ?? 'intl', negotiable }).replace(PLAN_TOKEN_RE, ' ');
   return MARKED_AMOUNT_RE.test(s) || CJK_UNIT_AMOUNT_RE.test(s) || /[一二三四五六七八九十百千两兩]+\s*(?:万|萬|千)?\s*(?:元|塊|块)|[一二三四五六七八九十百两兩]+\s*(?:万|萬)/.test(s);
 }
 

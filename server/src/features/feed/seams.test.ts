@@ -186,6 +186,20 @@ describe('alertCandidates (saved-search alerts)', () => {
     expect(cands.ids).not.toContain('j002');
   });
 
+  it('excludeBoards leaves a source\'s rows out (job alerts cannot print an open-data credit line yet); a caller that passes none keeps them', async () => {
+    seed(4, (i) => ({ postedAt: daysAgo(i + 0.5), firstSeenAt: daysAgo(i + 0.5) }));
+    repo.rows.push(feedRow({ id: 'tw1', sourceBoard: 'tw_open_data', locationCountry: 'TW', postedAt: daysAgo(0.2), firstSeenAt: daysAgo(0.2) }));
+    profileFilters = {};
+    const svc = service();
+    const all = await svc.alertCandidates({ market: 'intl', now: NOW }, 'sp1', { since: daysAgo(7), limit: 100 });
+    expect(all.ids).toContain('tw1');
+    const held = await svc.alertCandidates({ market: 'intl', now: NOW }, 'sp1', { since: daysAgo(7), limit: 100, excludeBoards: ['tw_open_data', 'tw_gov_jobs'] });
+    expect(held.ids).toEqual(all.ids.filter((id) => id !== 'tw1'));
+    const sql = repo.queries.at(-1)!;
+    expect(sql.text).toContain('NOT (j."sourceBoard" = ANY(');
+    expect(sql.values).toContainEqual(['tw_open_data', 'tw_gov_jobs']);
+  });
+
   it('builds its SQL from the feed’s own predicates: radius, posted-within and GoApply fields', async () => {
     profileFilters = {
       locations: [{ label: '上海', city: '上海', country: 'CN', lat: 31.23, lng: 121.47, radiusKm: 40 }],

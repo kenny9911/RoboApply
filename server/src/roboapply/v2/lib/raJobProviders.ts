@@ -16,8 +16,9 @@
 // request of any brand reaches a LinkedIn client through this module.
 //
 // Every client honors the never-throws contract (null = unavailable/failed) and
-// self-guards (per-provider LRU cache + circuit breaker + call budget + kill
-// switch). This module adds:
+// self-guards (per-provider LRU cache + circuit breaker + kill switch) and asks
+// the call gate before every upstream call (features/jobs/ingest/quota.ts: one
+// budget per provider; the clients keep no counter). This module adds:
 //   - a per-provider kill switch (RA_ONBOARDING_<PROVIDER>_DISABLED) layered on
 //     each provider's own isEnabled();
 //   - searchAllProviders(): fan out across every ENABLED provider in parallel
@@ -52,7 +53,7 @@ export {
 // ─── Per-provider kill switch ──────────────────────────────────────────────
 // Layered ON TOP of each client's own isEnabled() (which already checks the key,
 // the global RA_ONBOARDING_EXTERNAL_JOBS_DISABLED switch, its circuit breaker,
-// and its call budget). Lets one provider be turned off without touching the shared
+// and the call gate of features/jobs/ingest/quota.ts). Lets one provider be turned off without touching the shared
 // key or the other one.
 
 const PROVIDER_DISABLE_ENV: Readonly<Record<string, string>> = {
@@ -63,6 +64,18 @@ const PROVIDER_DISABLE_ENV: Readonly<Record<string, string>> = {
 function providerKilled(id: string): boolean {
   const name = PROVIDER_DISABLE_ENV[id];
   return name !== undefined && process.env[name] === 'true';
+}
+
+/**
+ * Why a provider of this registry is off by configuration, as the short code
+ * the job-source registry shows: a kill switch (the shared one or its own)
+ * first, then the shared key. Null when neither applies: the provider is on,
+ * or off for a reason of the moment (its breaker, its plan's quota).
+ */
+export function externalProviderOffReason(id: string): 'kill_switch' | 'no_api_key' | null {
+  if (process.env.RA_ONBOARDING_EXTERNAL_JOBS_DISABLED === 'true' || providerKilled(id)) return 'kill_switch';
+  if (!process.env.RAPID_API_KEY?.trim()) return 'no_api_key';
+  return null;
 }
 
 // ─── Dropped providers ─────────────────────────────────────────────────────

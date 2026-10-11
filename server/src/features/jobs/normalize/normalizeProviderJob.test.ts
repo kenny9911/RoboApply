@@ -264,6 +264,15 @@ describe('fixtures: recruiter banks (zh, en)', () => {
     expect(rh().company.isAgency).toBe(true);
   });
 
+  it('a JSearch or LinkedIn row is never publicly displayable, even when PUBLIC_DISPLAY_PROVIDERS names the provider (MARKET_STRATEGY M-3, M-4)', () => {
+    const input = { externalId: 'jsearch:pd1', title: 'Data Analyst', company: 'Acme', applyUrl: 'https://careers.acme.example/9', description: 'Analyse data.' };
+    for (const provider of ['jsearch', 'linkedin'] as const) {
+      expect(normalizeProviderJob(input, provider, { now, publicDisplayProviders: ['jsearch', 'linkedin', 'activejobs'] }).publicDisplay, provider).toBe(false);
+    }
+    // A provider that may be listed still is.
+    expect(normalizeProviderJob({ ...input, externalId: 'activejobs:pd1' }, 'activejobs', { now, publicDisplayProviders: ['activejobs'] }).publicDisplay).toBe(true);
+  });
+
   it('a bank job without syndication consent is not publicly displayed', () => {
     const job = normalizeProviderJob(inputFromBankJob(bank.robohire_en, 'robohire', { applyUrl: 'https://robohire.example/jobs/x' })!, 'bank_robohire', { now });
     expect(job.publicDisplay).toBe(false);

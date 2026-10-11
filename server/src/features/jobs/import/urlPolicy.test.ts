@@ -8,7 +8,7 @@ import { checkImportUrl, hostMatchesPattern, importDenylist, isDeniedHost } from
 
 describe('IMPORT_FETCH_DENYLIST', () => {
   it('lists every board the plan names, plus LinkedIn’s shortener', () => {
-    for (const p of ['linkedin.com', 'indeed.*', 'glassdoor.*', 'zhipin.com', 'zhaopin.com', 'liepin.com', '51job.com', 'maimai.cn', '104.com.tw', '1111.com.tw', 'cake.me', 'yourator.co', 'lnkd.in', '518.com.tw', 'yes123.com.tw', 'meet.jobs']) {
+    for (const p of ['linkedin.com', 'indeed.*', 'glassdoor.*', 'zhipin.com', 'zhaopin.com', 'liepin.com', '51job.com', 'maimai.cn', '104.com.tw', '1111.com.tw', 'cake.me', 'yourator.co', 'lnkd.in', '518.com.tw', 'yes123.com.tw', 'meet.jobs', 'cakeresume.com', 'lagou.com', 'jobs.feishu.cn', 'mokahr.com']) {
       expect(DEFAULT_IMPORT_FETCH_DENYLIST).toContain(p);
     }
   });
@@ -36,6 +36,16 @@ describe('IMPORT_FETCH_DENYLIST', () => {
     ['www.yes123.com.tw', true],
     ['meet.jobs', true],
     ['www.meet.jobs', true],
+    // Cross-review, M3 gate (MARKET_STRATEGY §1.6): 拉勾, 飞书招聘's public pages, Moka's boards, Cake's earlier domain.
+    ['www.lagou.com', true],
+    ['acme.jobs.feishu.cn', true],
+    ['jobs.feishu.cn', true],
+    ['app.mokahr.com', true],
+    ['www.cakeresume.com', true],
+    // Feishu itself (documents, the open platform) is not the recruiting site.
+    ['www.feishu.cn', false],
+    ['open.feishu.cn', false],
+    ['notlagou.com', false],
     // A look-alike host is not the board.
     ['my518.com.tw', false],
     ['meet.jobs.example.org', false],

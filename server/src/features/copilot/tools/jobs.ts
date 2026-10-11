@@ -24,7 +24,7 @@
 // rows are theirs to ask about.
 
 import { z } from 'zod';
-import { FEED_SORTS } from '../../feed/contract.js';
+import { FEED_SORTS, itemOwesCreditLine } from '../../feed/contract.js';
 import { parseFilterSetPatch, type FilterSet } from '../../search/index.js';
 import type { CardSource, CompetitivenessCardData } from '../contract.js';
 import type { FeedItem, SalaryStatsResult } from '../../feed/index.js';
@@ -134,6 +134,29 @@ const SearchJobsArgs = z
 
 const hasPay = (item: FeedItem): boolean => item.pay !== null && item.pay !== undefined;
 
+/**
+ * A feed item that owes a source credit line (a 台灣就業通 open-data row; the
+ * licence asks for it wherever the row is shown, MARKET_STRATEGY §1.3).
+ */
+const owesCreditLine = (item: FeedItem): boolean => itemOwesCreditLine(item);
+
+/** The largest list `feedPreview` builds. */
+const PREVIEW_MAX = 50;
+
+/**
+ * `feedPreview` without the rows the job-list card cannot credit yet: the card
+ * has no place for the credit line, so such a row is not listed here (it stays
+ * on the feed and its own page, which print it). When the first read holds
+ * such rows, one wider read fills the list. Remove with MKT-4H.1, when the
+ * card prints the line (requests/waveM3-carryover.md).
+ */
+async function creditablePreview(ctx: ToolContext, userId: string, input: Parameters<ToolContext['areas']['feedPreview']>[1]): Promise<FeedItem[]> {
+  const first = await ctx.areas.feedPreview(userId, input);
+  if (!first.some(owesCreditLine)) return first;
+  const wider = input.limit >= PREVIEW_MAX ? first : await ctx.areas.feedPreview(userId, { ...input, limit: Math.min(PREVIEW_MAX, input.limit * 4) });
+  return wider.filter((item) => !owesCreditLine(item)).slice(0, input.limit);
+}
+
 export const searchJobs: CopilotTool<z.infer<typeof SearchJobsArgs>> = {
   name: 'search_jobs',
   description:
@@ -148,7 +171,7 @@ export const searchJobs: CopilotTool<z.infer<typeof SearchJobsArgs>> = {
     // "Only jobs that list pay" is the search's own filter; asked for by argument or inside `filters`.
     const payOnly = args.payListed === true || read.filters.includeUndisclosedPay === false;
     const filters: Partial<FilterSet> = payOnly ? { ...read.filters, includeUndisclosedPay: false } : read.filters;
-    const found = await ctx.areas.feedPreview(userId, { q: args.q, filters, sort: args.sort, limit });
+    const found = await creditablePreview(ctx, userId, { q: args.q, filters, sort: args.sort, limit });
     // The card is the list: a row without pay never rides along on a pay-only search
     // (the filter steps back when a minimum pay is set; this does not).
     const items = payOnly ? found.filter(hasPay) : found;
@@ -241,7 +264,7 @@ export const topFitJobs: CopilotTool<z.infer<typeof TopFitArgs>> = {
   available: (ctx) => ctx.areas.postingsAllowed(ctx.market),
   async run(args, ctx) {
     const userId = requireUser(ctx);
-    const items = await ctx.areas.feedPreview(userId, { sort: 'best_fit', limit: args.limit ?? 5 });
+    const items = await creditablePreview(ctx, userId, { sort: 'best_fit', limit: args.limit ?? 5 });
     return {
       data: { count: items.length, jobs: items.map(jobForModel), fitNote: FIT_LINE, listNote: LIST_NOTE },
       cards: items.length ? [card(ctx, 'job_list', { items, query: { sort: 'best_fit' } })] : [],

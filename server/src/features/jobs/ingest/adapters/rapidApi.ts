@@ -22,7 +22,7 @@
 
 import { citiesNamed, countryByCode, findCity } from '../../geo/index.js';
 import { inputFromExternalJob, type ProviderJobInput } from '../../normalize/index.js';
-import { externalProviders, enabledExternalProviders } from '../../../../roboapply/v2/lib/raJobProviders.js';
+import { externalProviders, enabledExternalProviders, externalProviderOffReason } from '../../../../roboapply/v2/lib/raJobProviders.js';
 import { fantasticCountryName } from '../../../../roboapply/v2/lib/raFantasticJobs.js';
 import type {
   ExternalJobNormalized,
@@ -33,6 +33,7 @@ import type {
 import type { Market } from '../../../../platform/brand/index.js';
 import { dailyCallLimit } from '../config.js';
 import { answerForMarket, quotaAllows } from '../quota.js';
+import { adapterCostModel } from '../../sources/index.js';
 import type { IngestQueryParams, JobSourceAdapter, SourceFetchResult } from '../../sources/index.js';
 
 const DATE_POSTED = new Set(['all', 'today', '3days', 'week', 'month']);
@@ -125,6 +126,7 @@ const ADAPTER_MARKET: Market = 'intl';
 export function createRapidApiAdapter(id: ExternalSourceBoard, deps: RapidApiAdapterDeps = {}): JobSourceAdapter {
   // International only, for every RapidAPI provider (see the header).
   const markets: readonly Market[] = [ADAPTER_MARKET];
+  const costModel = adapterCostModel({ provider: id });
   return {
     provider: id,
     kind: 'search',
@@ -146,6 +148,17 @@ export function createRapidApiAdapter(id: ExternalSourceBoard, deps: RapidApiAda
         return false;
       }
     },
+    // Why it is off, for the admin panels: a kill switch or the missing key first (configuration), then
+    // 'quota' when the plan stops ingest (used up, refused, or down to the reserve). Null when it is on,
+    // or off for a reason of the moment that has no code (the client's breaker).
+    disabledReason: () => {
+      try {
+        if (deps.isEnabled) return null;
+        return externalProviderOffReason(id) ?? (quotaAllows(id, 'ingest') ? null : 'quota');
+      } catch {
+        return null;
+      }
+    },
     supportsCountry: (country) => rapidApiSupportsCountry(id, country),
     dailyCallLimit: () => dailyCallLimit(id),
     async fetch(query, ctx): Promise<SourceFetchResult> {
@@ -155,7 +168,11 @@ export function createRapidApiAdapter(id: ExternalSourceBoard, deps: RapidApiAda
         // The pipeline reserved this call in RAProviderUsage before fetching: the client's gate must not count it again.
         const rows = await client.search(rapidApiSearchParams(query.params, id), { signal: ctx.signal, requestId: ctx.requestId, reservedByIngest: true });
         if (rows === null) return { jobs: [], calls: 1, error: 'provider_unavailable' };
-        return { jobs: rows.map(inputFromRapidApiRow), calls: 1 };
+        // A per-request provider (JSearch) answers the first pages of a ranked search (2 pages of about
+        // 10 rows, with a cursor for more: JOB_SOURCES_INTL §3.1), never the whole result: the run must
+        // not count for the "missed twice" archive, or a live posting ranked outside those pages on two
+        // runs would be closed as removed by its source.
+        return { jobs: rows.map(inputFromRapidApiRow), calls: 1, ...(costModel === 'per_request' ? { complete: false } : {}) };
       } catch (err) {
         return { jobs: [], calls: 1, error: err instanceof Error ? err.message.slice(0, 200) : 'provider_threw' };
       }

@@ -54,6 +54,22 @@ describe('normalization and deduplication', () => {
     expect(result.remote).toBeNull();
     expect(result.salary).toEqual({ min: 100, max: 140, currency: null, period: 'hour' });
   });
+  it('LinkedIn is never on a result: no LinkedIn source link, no LinkedIn publisher, and a row whose only apply link is LinkedIn is dropped (MARKET_STRATEGY M-3, M-4, 1.5)', () => {
+    // A JSearch row as the client hands it on: applies at the employer, published "LinkedIn", with the LinkedIn page as provenance.
+    const kept = normalizeJob(row({ sourceBoard: 'jsearch', externalId: 'jsearch:9', applyUrl: 'https://careers.example.com/job/9', sourceUrl: 'https://tw.linkedin.com/jobs/view/123', sourcePublisher: ' LinkedIn ' }), '')!;
+    expect(kept.sourceUrl).toBe('https://careers.example.com/job/9');
+    expect(kept.sources).toEqual([{ provider: 'jsearch', id: 'jsearch:9', applyUrl: 'https://careers.example.com/job/9', publisher: null, sourceUrl: 'https://careers.example.com/job/9' }]);
+    expect(JSON.stringify(kept)).not.toMatch(/linkedin/i);
+    // Another publisher and another source page are kept as stated.
+    const board = normalizeJob(row({ sourceBoard: 'jsearch', applyUrl: 'https://careers.example.com/job/9', sourceUrl: 'https://www.ziprecruiter.com/c/x/job/9', sourcePublisher: 'ZipRecruiter' }), '')!;
+    expect(board).toMatchObject({ sourceUrl: 'https://www.ziprecruiter.com/c/x/job/9', sources: [{ publisher: 'ZipRecruiter' }] });
+    // The only link is LinkedIn: no usable apply link, so no result (ingest refuses the same row as linkedin_only_link).
+    for (const applyUrl of ['https://www.linkedin.com/jobs/view/4000000002', 'https://linkedin.com/jobs/view/1', 'https://tw.linkedin.com/jobs/view/1?trk=x']) {
+      expect(normalizeJob(row({ sourceBoard: 'jsearch', applyUrl }), ''), applyUrl).toBeNull();
+    }
+    // A lookalike host is not LinkedIn.
+    expect(normalizeJob(row({ applyUrl: 'https://notlinkedin.com/jobs/view/1' }), '')).not.toBeNull();
+  });
   it('merges cross-source provenance and prefers an explicitly direct link', () => {
     const aggregator = normalizeJob(row({ sourceBoard: 'jsearch', externalId: 'jsearch:1', applyUrl: 'https://aggregator.example.com/job/1', applyIsDirect: false }), '')!;
     const ats = normalizeJob(row(), '')!;

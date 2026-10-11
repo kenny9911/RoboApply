@@ -8,7 +8,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import type prismaClient from '../../lib/prisma.js';
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { BrandId, Market } from '../../platform/brand/registry.js';
-import { bankListable, bankListableWhere, cnListable, cnListableWhere } from '../feed/contract.js';
+import { bankListable, bankListableWhere, cnListable, cnListableWhere, creditLineHeld, creditLineHeldWhere } from '../feed/contract.js';
 import { coerceFilterSet } from '../search/index.js';
 import { jobWhereForFilters } from './jobFilters.js';
 import { isLiveAccount } from './preferences.js';
@@ -207,6 +207,8 @@ export function createPrismaAlertsRepo(options: PrismaAlertsRepoOptions = {}): A
             ...(await cnModeWhere(market, env)),
             // Both markets: a recruiter-bank row whose bank has no posting page never alerts (feed/sourceLine.ts).
             ...(bankWhere(env) as Prisma.RAJobWhereInput[]),
+            // A row that owes a credit line an alert cannot print yet never alerts (feed/sourceLine.ts `creditLineHeld`).
+            creditLineHeldWhere() as Prisma.RAJobWhereInput,
             { firstSeenAt: { gt: since } },
             ...(postedSince ? [{ OR: [{ postedAt: null }, { postedAt: { gte: postedSince } }] }] : []),
           ],
@@ -317,6 +319,8 @@ export function createPrismaAlertsRepo(options: PrismaAlertsRepoOptions = {}): A
       return filterCnPostings(rows, null, env)
         .filter(cnListable)
         .filter((r) => bankListable(r, env as Record<string, string | undefined>))
+        // Never a card for a row whose credit line the alert cannot print (the candidates leave it out already).
+        .filter((r) => !creditLineHeld(r))
         .map(({ market: _m, visibility: _v, ownerUserId: _o, sourceBoard: _s, applyUrl: _a, fromRecruiterBank: _b, ...card }) => card);
     },
 

@@ -19,7 +19,12 @@
 // The rule, once the columns exist (`buildMissedSql`, mirrored by the pure
 // `isMissedTwice`):
 //   - a run counts only when it succeeded AND returned at least one posting
-//     (an empty page from a flaky API is inconclusive);
+//     (an empty page from a flaky API is inconclusive) AND the answer was
+//     everything the query can return (`SourceFetchResult.complete !== false`).
+//     JSearch answers the first two pages of a ranked search, so its runs are
+//     never counted and `jobs-maintain` does not run the rule for a
+//     per-request provider: those rows end by `expiresAt` (MARKET_STRATEGY
+//     §1.5 "JSearch: no signal, so 21 days …");
 //   - each counted run bumps runCount and stamps the jobs it returned with
 //     (lastSeenQueryId, lastSeenRun = the new runCount);
 //   - a job is archived when its query's runCount ≥ lastSeenRun + 2, i.e. two

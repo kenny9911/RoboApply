@@ -29,6 +29,12 @@ export interface IngestFakeOptions {
   existing?: ExistingJobRow[];
   /** Calls each provider may still make today (absent = unlimited). */
   budget?: Record<string, number>;
+  /**
+   * Calls each usage key has made today. When a key is listed, a reservation
+   * is decided as the statement decides it: against the limit the statement
+   * itself carries (so a share of the day is honoured), and it counts up.
+   */
+  used?: Record<string, number>;
   /** Due queries handed out by the lease (each leased once). */
   due?: LeasedQueryRow[];
   seed?: Record<string, Record<string, unknown>[]>;
@@ -37,6 +43,7 @@ export interface IngestFakeOptions {
 export function createIngestFake(options: IngestFakeOptions = {}) {
   const existing = options.existing ?? [];
   const budget = { ...(options.budget ?? {}) };
+  const used = { ...(options.used ?? {}) };
   const due = [...(options.due ?? [])];
   const written: JobUpsertRow[] = [];
   const reserved: string[] = [];
@@ -58,10 +65,23 @@ export function createIngestFake(options: IngestFakeOptions = {}) {
         if (t.includes('INSERT INTO "RAProviderUsage"') && t.includes('RETURNING "calls"')) {
           const provider = String(call.values[0]);
           reserved.push(provider);
+          if (provider in used) {
+            const limit = Number(call.values[2]);
+            if (used[provider]! >= limit) return [];
+            used[provider]! += 1;
+            return [{ calls: used[provider] }];
+          }
           if (!(provider in budget)) return [{ calls: 1 }];
           if (budget[provider]! <= 0) return [];
           budget[provider]! -= 1;
           return [{ calls: 1 }];
+        }
+        // The day's calls of a usage key (asked when standing demand is refused at its share).
+        if (t.includes('SELECT "calls" FROM "RAProviderUsage"')) {
+          const provider = String(call.values[0]);
+          if (provider in used) return [{ calls: used[provider] }];
+          // `budget` models a day by the calls left: none left = the whole day is spent, whatever its limit.
+          return provider in budget && budget[provider]! <= 0 ? [{ calls: 2_147_483_647 }] : undefined;
         }
         // SR-16b-1 counted run: the query had 7 counted runs before this one.
         if (t.startsWith('UPDATE "RAIngestQuery" SET "runCount"')) return [{ runCount: 8 }];

@@ -188,6 +188,11 @@ describe('anon alert digest', () => {
       text: null,
     });
     expect(toDigestJob(job('j', 1, { salaryText: '15-25K·13薪' }), ROBO, 'o').pay?.text).toBe('15-25K·13薪');
+    // Words with no amount for this job are "not listed": 面議, and the Taiwan statutory-threshold sentence
+    // at any threshold (MARKET_STRATEGY 1.5: never show the statutory threshold as a job's pay).
+    for (const salaryText of ['面議', '依學經歷、證照核薪(每月經常性薪資達4萬元以上)', '依學經歷、證照核薪(每月經常性薪資達5萬元以上)']) {
+      expect(toDigestJob(job('j', 1, { salaryText }), ROBO, 'o').pay, salaryText).toBeNull();
+    }
     expect(toDigestJob(job('j', 1, { workModel: 'remote' }), ROBO, 'o').remote).toBe(true);
   });
 });

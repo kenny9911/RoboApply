@@ -14,9 +14,12 @@ describe('title evidence (SM-2)', () => {
 
   it('a Taiwan title is also read in its mainland form, for matching only', () => {
     expect(titleReadings('資深後端工程師')).toEqual(['資深後端工程師', '资深后端工程师']);
-    // The taxonomy alone finds nothing in the Traditional text.
-    expect(bestTaxonomyMatch('資深後端工程師')).toBeNull();
+    // Since MKT-3E the taxonomy reads Taiwan titles itself (it carries zh-Hant labels and titles) …
+    expect(bestTaxonomyMatch('資深後端工程師')).toMatchObject({ id: 'backend_engineer', score: 1 });
     expect(titleEvidence('資深後端工程師')).toMatchObject({ id: 'backend_engineer', score: 1 });
+    // … and mainland wording written in Traditional characters is still found only through the mainland reading.
+    expect(bestTaxonomyMatch('數據分析師')).toBeNull();
+    expect(titleEvidence('數據分析師')).toMatchObject({ id: 'data_analyst', score: 1 });
     expect(titleEvidence('資料分析師')).toMatchObject({ id: 'data_analyst', score: 1 });
     expect(titleEvidence('專案經理')).toMatchObject({ id: 'project_manager', score: 1 });
     expect(titleEvidence('Senior Backend Engineer 資深後端工程師')?.id).toBe('backend_engineer');
@@ -24,9 +27,12 @@ describe('title evidence (SM-2)', () => {
   });
 
   it('takes the better of the two readings, not the first that matches', () => {
-    // As written only the shared characters 前端 match (0.7); the mainland reading is the role by name.
-    expect(bestTaxonomyMatch('前端工程師')).toMatchObject({ id: 'frontend_engineer', score: 0.7 });
+    // A Taiwan title is the role by name in either reading (MKT-3E).
+    expect(bestTaxonomyMatch('前端工程師')).toMatchObject({ id: 'frontend_engineer', score: 1 });
     expect(titleEvidence('前端工程師')).toMatchObject({ id: 'frontend_engineer', score: 1 });
+    // Mainland wording in Traditional characters: as written only the shared characters 前端 match; the mainland reading is the role by name.
+    expect(bestTaxonomyMatch('前端開發')).toMatchObject({ id: 'frontend_engineer', score: 0.75 });
+    expect(titleEvidence('前端開發')).toMatchObject({ id: 'frontend_engineer', score: 1 });
     const ranked = titleMatches('前端工程師', { limit: 3, minScore: 0.4 });
     expect(ranked[0]).toMatchObject({ id: 'frontend_engineer', score: 1 });
     expect(new Set(ranked.map((m) => m.id)).size).toBe(ranked.length);

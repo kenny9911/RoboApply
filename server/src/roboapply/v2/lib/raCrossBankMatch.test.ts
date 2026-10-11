@@ -329,6 +329,19 @@ describe('mapRecruiterJobToRAJobUpsert', () => {
     expect(bankMarket('robohire')).toBe('intl');
   });
 
+  it('writes the bank\'s own source priority on create and on update: GoHire 3, RoboHire 15 (the bank sync\'s values; MARKET_STRATEGY 1.5, C10)', async () => {
+    vi.stubEnv('GOHIRE_PUBLIC_JOB_URL_TEMPLATE', 'https://example.test/p/{id}');
+    vi.stubEnv('ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE', 'https://jobs.example.test/r/{id}');
+    const { PROVIDER_META } = await import('../../../features/jobs/normalize/index.js');
+    const gh = mapRecruiterJobToRAJobUpsert(cand('gohire'))!;
+    expect(gh.create.sourcePriority).toBe(PROVIDER_META.bank_gohire.sourcePriority);
+    expect(gh.update.sourcePriority).toBe(PROVIDER_META.bank_gohire.sourcePriority);
+    expect(gh.create.sourcePriority).toBe(3);
+    const rh = mapRecruiterJobToRAJobUpsert(cand('robohire'))!;
+    expect(rh.create.sourcePriority).toBe(PROVIDER_META.bank_robohire.sourcePriority);
+    expect(rh.update.sourcePriority).toBe(15);
+  });
+
   it('skips a candidate with no apply URL: the bank has no candidate-facing posting page', () => {
     expect(mapRecruiterJobToRAJobUpsert(cand('gohire'))).toBeNull();
     expect(mapRecruiterJobToRAJobUpsert(cand('robohire'))).toBeNull();

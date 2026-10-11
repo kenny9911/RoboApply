@@ -221,6 +221,15 @@ describe('redactPii — passports, travel permits and other ID documents (gov_id
 });
 
 describe('knownValues', () => {
+  it('an e-mail address whose local part is a known value is removed whole (M2 gate probe: the domain used to stay behind)', () => {
+    const r = redactPii('Email ada@example.com. Ada Lovelace, ada.lovelace@corp.example', { knownValues: ['Ada', 'Ada Lovelace'] });
+    expect(r.text).toBe('Email [email removed]. [removed], [email removed]');
+    expect(r.text).not.toMatch(/example|corp|@/);
+    expect(r.counts).toMatchObject({ email: 2, known_value: 1 });
+    // With only the name asked for, the address is not an e-mail match and the name inside it still goes.
+    expect(redactText('Email ada@example.com', { knownValues: ['Ada'], kinds: ['known_value'] })).toBe('Email [removed]@example.com');
+  });
+
   it('match Latin-script values as whole words: "Li" never eats the start of "Linux"', () => {
     const r = redactPii('Li Wei — Linux kernel engineer, Lisbon', { knownValues: ['Li'], kinds: ['known_value'] });
     expect(r.text).toBe('[removed] Wei — Linux kernel engineer, Lisbon');

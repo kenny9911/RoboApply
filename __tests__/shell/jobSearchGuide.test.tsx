@@ -48,7 +48,7 @@ describe('JobSearchDeveloperGuide', () => {
     expect(page).toHaveTextContent('This endpoint does not submit applications.');
   });
 
-  it('RoboApply: the page is what it was', () => {
+  it('RoboApply: its own page, with no LinkedIn search', () => {
     renderWithBrand(<JobSearchDeveloperGuide />, { brand: 'roboapply', flags: { 'jobs.feed': true } });
     const page = screen.getByRole('main');
     expect(page.querySelector('.job-search-brand')).toHaveTextContent('RoboApply');
@@ -56,9 +56,11 @@ describe('JobSearchDeveloperGuide', () => {
     const [search, agent] = [...page.querySelectorAll('pre code')].map((c) => c.textContent ?? '');
     expect(search).toContain('$ROBOAPPLY_ORIGIN/api/v1/job-search/search');
     expect(search).toContain('"country":"US"');
-    expect(agent).toContain('"linkedinOnly":true');
+    expect(agent).not.toContain('linkedinOnly');
     expect(page).toHaveTextContent('Replace ROBOAPPLY_ORIGIN with your deployment URL and ROBOAPPLY_JOB_SEARCH_KEY with your API key.');
-    expect(page).toHaveTextContent('including LinkedIn listings when available');
+    // LinkedIn is not a source (MARKET_STRATEGY M-4): the page neither offers a LinkedIn-only search nor names it.
+    expect(page).toHaveTextContent('Turn your request into focused searches across connected job sources.');
+    expect(page.textContent).not.toMatch(/LinkedIn/);
     expect(page).toHaveTextContent('Available sources depend on server configuration and provider entitlements.');
     expect(page.textContent).not.toMatch(/GOAPPLY|mainland China/);
   });

@@ -303,4 +303,40 @@ describe('brandCronJob', () => {
     const report = await job.run({ brands: ['roboapply'], now: () => t });
     expect(report.results.roboapply).toEqual({ a: { processed: 1 }, b: { skipped: 'budget' } });
   });
+
+  it('gives each brand its own slice: a first brand that works to the end of its budget leaves the second brand half (D5)', async () => {
+    // What a jobs-ingest tick does while a cursor source keeps answering "more" (the 台灣就業通 sweep):
+    // it runs until 5 s of the budget it was handed are left.
+    let t = 0;
+    const seen: Array<{ brand: string; budgetMs: number }> = [];
+    const greedy: CronTask = async (ctx) => {
+      const mine = ctx.budget.remainingMs();
+      seen.push({ brand: ctx.brand.id, budgetMs: mine });
+      if (ctx.brand.id === 'roboapply') t += Math.max(0, mine - 5_000);
+      return { processed: 1 };
+    };
+    const job = brandCronJob('greedy', '* * * * *', 'TEST', [{ name: 'ingest', task: greedy }]);
+    const report = await job.run({ brands: ['roboapply', 'goapply'], now: () => t });
+    expect(report.results.goapply).toEqual({ ingest: { processed: 1 } });
+    expect(seen).toEqual([
+      { brand: 'roboapply', budgetMs: 120_000 },
+      // The rest: its own half plus the 5 s the first brand left.
+      { brand: 'goapply', budgetMs: 125_000 },
+    ]);
+  });
+
+  it('a brand with nothing to do hands its slice on, and a single brand gets the whole budget', async () => {
+    let t = 0;
+    const seen: Record<string, number> = {};
+    const idle: CronTask = async (ctx) => {
+      seen[ctx.brand.id] = ctx.budget.remainingMs();
+      t += 100;
+      return { skipped: 'no_work' };
+    };
+    await brandCronJob('idle', '* * * * *', 'TEST', [{ name: 'a', task: idle }]).run({ brands: ['roboapply', 'goapply'], now: () => t });
+    expect(seen).toEqual({ roboapply: 120_000, goapply: 239_900 });
+    t = 0;
+    await brandCronJob('one', '* * * * *', 'TEST', [{ name: 'a', task: idle }]).run({ brands: ['goapply'], now: () => t });
+    expect(seen.goapply).toBe(240_000);
+  });
 });

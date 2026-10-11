@@ -202,20 +202,22 @@ describe('LinkedIn provenance and audience rights', () => {
     expect(isLinkedInJob(job({ sources: [{ provider: 'activejobs', id: 'a1', applyUrl: 'https://careers.example.com/job/1', publisher: 'Not LinkedIn' }] }))).toBe(false);
     expect(isLinkedInJob(job({ sources: [{ provider: 'jsearch', id: 'j1', applyUrl: 'https://careers.example.com/job/1', publisher: null, sourceUrl: 'https://linkedin.com/jobs/view/123' }] }))).toBe(true);
   });
-  it('filters actual source matches and recalculates result counts after filtering', async () => {
-    const { agent, service } = setup({ queries: ['engineer'], unverifiedPreferences: [] });
-    service.search.mockResolvedValueOnce(result([job(), job({ id: 'linkedin-job', sourceUrl: 'https://linkedin.com/jobs/view/123' })]));
-    const response = await agent.search({ ...INPUT, linkedinOnly: true }, CONTEXT);
-    expect(response.jobs).toHaveLength(1); expect(response.agent.linkedinOnly).toBe(true);
-    expect(response.meta.providers[0].resultCount).toBe(1); expect(response.searches[0].providers[0].resultCount).toBe(1);
+  it('an explicit linkedinOnly is refused on RoboApply too, before any reservation or model call: LinkedIn is not a source (M-4)', async () => {
+    const { agent, planner, quota, service } = setup({ queries: ['engineer'], unverifiedPreferences: [] });
+    const refused = agent.search({ ...INPUT, linkedinOnly: true }, { ...CONTEXT, brand: getBrand('roboapply') });
+    await expect(refused).rejects.toBeInstanceOf(JobSearchValidationError);
+    await expect(refused).rejects.toMatchObject({ field: 'linkedinOnly' });
+    expect(planner).not.toHaveBeenCalled(); expect(quota.reserve).not.toHaveBeenCalled(); expect(service.search).not.toHaveBeenCalled();
   });
-  it('keeps unavailable dedicated LinkedIn diagnostics without auto-enabling it', async () => {
+  it('a planned linkedinOnly restricts nothing: no source is picked for it, no result is filtered, and the wish is disclosed', async () => {
     const { agent, service } = setup({ queries: ['engineer'], unverifiedPreferences: [], linkedinOnly: true });
+    // A stored `linkedin` provider row (off) and a JSearch row that came with a LinkedIn page: neither makes the search "LinkedIn only".
     service.providers.mockReturnValue([...PROVIDERS, { id: 'linkedin', name: 'LinkedIn', enabled: false, reason: 'disabled', sourceType: 'board', homepage: 'https://fantastic.jobs' }]);
-    service.search.mockResolvedValueOnce({ ...result([]), meta: { ...result([]).meta, partial: true, providers: [...result([]).meta.providers, { id: 'linkedin', name: 'LinkedIn', status: 'unavailable', reason: 'disabled', resultCount: 0 }] } });
+    service.search.mockResolvedValueOnce(result([job(), job({ id: 'other-job', title: 'Data Engineer', applyUrl: 'https://careers.example.com/jobs/2', sources: [{ provider: 'jsearch', id: 'jsearch:2', applyUrl: 'https://careers.example.com/jobs/2', publisher: null }] })]));
     const response = await agent.search(INPUT, CONTEXT);
-    expect(service.search.mock.calls[0][0].providers).toEqual(['jsearch', 'linkedin']);
-    expect(response.meta.partial).toBe(true); expect(response.meta.providers[1].status).toBe('unavailable');
+    expect(service.search.mock.calls[0][0].providers).toBeUndefined();
+    expect(response.jobs).toHaveLength(2);
+    expect(response.agent).toMatchObject({ linkedinOnly: false, unverifiedPreferences: ['LinkedIn'] });
   });
   it('denies an API with no granted sources before model work or quota reservation', async () => {
     const { agent, service, planner, quota } = setup();
@@ -395,7 +397,7 @@ describe('the planner gate (phone binding, AI consent and the AI text capability
   });
 });
 
-describe('LinkedIn-only on a site with no LinkedIn-capable source (GoApply)', () => {
+describe('LinkedIn-only: no site has a LinkedIn-capable source (GoApply by its list, RoboApply since M-4)', () => {
   const GO = getBrand('goapply');
   const INDEX: ProviderInfo[] = [{ id: 'index', name: 'Job index', enabled: true, sourceType: 'index', homepage: '' }];
   const open = createPlannerGate({ phoneBindingRequired: async () => false, aiAllowed: async () => true, aiTextEnabled: async () => true });
@@ -430,10 +432,11 @@ describe('LinkedIn-only on a site with no LinkedIn-capable source (GoApply)', ()
     expect(response.agent).toMatchObject({ linkedinOnly: false, unverifiedPreferences: ['LinkedIn', '五险一金'] });
   });
 
-  it('RoboApply is unchanged: a planned linkedinOnly still restricts the search to its LinkedIn-capable sources', async () => {
+  it('RoboApply takes the same path: a planned linkedinOnly is not applied, the search runs on its sources and the wish is disclosed in the user\'s words', async () => {
     const base = setup({ ...PLAN, queries: ['software engineer'], linkedinOnly: true });
-    const response = await base.agent.search({ request: 'Find software engineer jobs in Taipei, LinkedIn only.' }, { ...CONTEXT, brand: getBrand('roboapply') });
-    expect(response.agent.linkedinOnly).toBe(true);
-    expect(base.service.search).toHaveBeenCalledWith(expect.objectContaining({ providers: ['jsearch'] }), expect.anything());
+    const response = await base.agent.search({ request: 'Find software engineer jobs in Taipei. LinkedIn only.' }, { ...CONTEXT, brand: getBrand('roboapply') });
+    expect(response.agent.linkedinOnly).toBe(false);
+    expect(response.agent.unverifiedPreferences).toEqual(['Find software engineer jobs in Taipei. LinkedIn only.']);
+    expect(base.service.search).toHaveBeenCalledWith(expect.objectContaining({ providers: undefined }), expect.anything());
   });
 });

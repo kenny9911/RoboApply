@@ -226,14 +226,15 @@ describe('CareerBoardsPanel (GoApply can add a public board)', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/already in the list|did not work/);
   });
 
-  it('says when the other site already reads the board, and when the board is in this list', async () => {
+  it('says when the board exists but is read for other countries only (so this list does not show it), and when it is in this list', async () => {
     const conflict = (details: Record<string, unknown>) => new RoboApiError('conflict', { code: 'conflict', status: 409, payload: { code: 'conflict', details } });
-    boards.adminCreateCareerSource.mockRejectedValueOnce(conflict({ field: 'boardToken', reason: 'board_on_other_site' }));
+    // The server's 409 for a shared board that does not feed this site (MKT-3D; `board_on_other_site` is retired).
+    boards.adminCreateCareerSource.mockRejectedValueOnce(conflict({ field: 'boardToken', reason: 'board_read_for_other_countries', id: 'cs9', countries: ['US'], market: 'cn' }));
     renderWithBrand(<CareerBoardsPanel market="cn" />, { brand: 'goapply' });
     fireEvent.change(screen.getByLabelText(/Board ID/), { target: { value: 'airbnb' } });
     fireEvent.change(screen.getByLabelText(/Company name/), { target: { value: 'Airbnb' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add board' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('This board is already read for the other site, so it cannot be added here. A board is read for one site at a time.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('This board is already in the list, but it is read for other countries, so it does not show here.');
     boards.adminCreateCareerSource.mockRejectedValueOnce(conflict({ field: 'boardToken' }));
     fireEvent.click(screen.getByRole('button', { name: 'Add board' }));
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('This board is already in the list.'));

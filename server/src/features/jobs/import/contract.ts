@@ -41,8 +41,13 @@ export type { HtmlVisitor, ScanOptions } from './html.js';
  * (indeed.com, uk.indeed.com, indeed.co.uk); `domain` matches it and every
  * subdomain. `lnkd.in` is LinkedIn's link shortener.
  *
- * Taiwan (MARKET_STRATEGY §1.6, JT-5): 104, 1111, 518, yes123, Cake, Yourator
- * and Meet.jobs. `taiwanjobs.gov.tw` is deliberately not listed: its
+ * Mainland China (MARKET_STRATEGY §1.6): BOSS直聘, 智联, 猎聘, 前程无忧, 拉勾,
+ * 脉脉, and the two employer-board systems that must not be read without the
+ * employer's authorisation, 飞书招聘 and Moka. The person pastes the job text
+ * instead, as for every blocked site.
+ *
+ * Taiwan (MARKET_STRATEGY §1.6, JT-5): 104, 1111, 518, yes123, Cake (both of
+ * its domains), Yourator and Meet.jobs. `taiwanjobs.gov.tw` is deliberately not listed: its
  * vacancies are open data (read through the open-data API), and a user may
  * import one of its vacancy pages.
  */
@@ -63,6 +68,14 @@ export const DEFAULT_IMPORT_FETCH_DENYLIST = [
   '518.com.tw',
   'yes123.com.tw',
   'meet.jobs',
+  // Cake's earlier domain (the board is listed above as cake.me).
+  'cakeresume.com',
+  // Mainland (MARKET_STRATEGY §1.6; JOB_SOURCES_CN "Never"): 拉勾, like the four boards above;
+  // 飞书招聘's public pages (signed requests behind a captcha: never read); Moka's boards
+  // (wrapped responses: only with the official API and the employer's authorisation).
+  'lagou.com',
+  'jobs.feishu.cn',
+  'mokahr.com',
 ] as const;
 
 const HttpUrl = z

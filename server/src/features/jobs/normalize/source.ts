@@ -72,6 +72,16 @@ export const NO_APPLICANT_COUNT_PROVIDERS: readonly NormalizeProvider[] = (Objec
   (p) => !PROVIDER_META[p].applicantCountAllowed && p !== 'user_import',
 );
 
+/**
+ * Providers whose rows are never publicly displayable, whatever
+ * PUBLIC_DISPLAY_PROVIDERS names (MARKET_STRATEGY M-3: JSearch is the
+ * signed-in long tail, "never public pages"; its rows are third-party boards'
+ * postings read out of a search index, with unresolved redisplay rights; M-4:
+ * the LinkedIn feed is dropped). The normalizer never sets `publicDisplay`
+ * for them and the public pages never list their boards (seo/scope.ts).
+ */
+export const NEVER_PUBLIC_DISPLAY_PROVIDERS: readonly NormalizeProvider[] = ['jsearch', 'linkedin'];
+
 const LINKEDIN_RE = /linked\s*-?\s*in|lnkd\.in|領英|领英/i;
 
 export function isLinkedInBranded(value: string | null | undefined): boolean {

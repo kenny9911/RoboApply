@@ -211,8 +211,10 @@ export function defaultAgentDeps(): AgentDeps {
       return missing.map((m) => ({ key: m.key, label: m.label }));
     },
     async feedPreview(userId, input) {
-      const { feedService } = await import('../feed/index.js');
-      return feedService.preview(userId, input);
+      const { feedService, itemOwesCreditLine } = await import('../feed/index.js');
+      // Ready to apply rows have no place for an open-data row's credit line yet, so such a row is
+      // neither suggested nor picked here (feed/sourceLine.ts `creditLineHeld`; it stays on the feed).
+      return (await feedService.preview(userId, input)).filter((item) => !itemOwesCreditLine(item));
     },
     async activeSearch(userId) {
       const { searchProfileService } = await import('../search/index.js');

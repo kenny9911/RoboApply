@@ -577,15 +577,14 @@ describe('the daily budget (config.ts effectiveDailyLimit)', () => {
     expect(dailyCallLimit('jsearch', { RA_ONBOARDING_JSEARCH_DAILY_BUDGET: '50' })).toBe(50);
     expect(effectiveDailyLimit('jsearch', 'intl', { RA_ONBOARDING_JSEARCH_DAILY_BUDGET: '50' }, T0)).toBe(50);
     expect(dailyCallLimit('activejobs', { RA_ONBOARDING_ACTIVEJOBS_DAILY_BUDGET: '7' })).toBe(7);
-    // LinkedIn's old name carried `_JOBS`.
-    expect(dailyCallLimit('linkedin', { RA_ONBOARDING_LINKEDIN_JOBS_DAILY_BUDGET: '9' })).toBe(9);
+    // The LinkedIn client is gone (M3 gate): its old `_JOBS` name is read by nothing.
+    expect(dailyCallLimit('linkedin', { RA_ONBOARDING_LINKEDIN_JOBS_DAILY_BUDGET: '9' })).not.toBe(9);
     // The INGEST_ name wins.
     expect(dailyCallLimit('jsearch', { INGEST_JSEARCH_DAILY_CALLS: '120', RA_ONBOARDING_JSEARCH_DAILY_BUDGET: '50' })).toBe(120);
     const reports = logged.warn.mock.calls.filter((c) => String(c[1]).includes('deprecated env name'));
     expect(reports.map((c) => (c[2] as { deprecated: string }).deprecated).sort()).toEqual([
       'RA_ONBOARDING_ACTIVEJOBS_DAILY_BUDGET',
       'RA_ONBOARDING_JSEARCH_DAILY_BUDGET',
-      'RA_ONBOARDING_LINKEDIN_JOBS_DAILY_BUDGET',
     ]);
     expect(reports[0]![2]).toMatchObject({ use: expect.stringMatching(/^INGEST_[A-Z]+_DAILY_CALLS$/) });
   });
@@ -838,13 +837,11 @@ describe('the clients, wired (mocked fetch): one reading, one gate, no key anywh
   it('the API key is in no snapshot, no stored row and no log line', async () => {
     mockFetch(429, { message: BASIC_429 }, requests(25, 0, RESET_16_9_DAYS));
     await searchFantasticJobs('activejobs', { query: 'engineer', country: 'us', titleQuery: 'engineer' });
-    mockFetch(403, { message: 'You are not subscribed to this API.' });
-    await searchFantasticJobs('linkedin', { query: 'engineer', country: 'us', titleQuery: 'engineer' });
     mockFetch(200, { status: 'OK', data: { jobs: [] } }, requests(10_000, 9_773, 17 * 86_400));
     await searchJSearchJobs({ query: 'engineer in Austin', country: 'us' });
     await flushProviderQuota();
     const row = (await store.appConfig.findUnique({ where: { key: PROVIDER_QUOTA_CONFIG_KEY } })) as { value: string };
-    expect(Object.keys(JSON.parse(row.value).providers).sort()).toEqual(['activejobs', 'jsearch', 'linkedin']);
+    expect(Object.keys(JSON.parse(row.value).providers).sort()).toEqual(['activejobs', 'jsearch']);
     const everything = JSON.stringify([row, [...providerQuotaSnapshots(clock).values()], store.$sql.calls, ...Object.values(logged).map((fn) => fn.mock.calls)]);
     expect(everything).not.toContain(KEY);
     expect(everything).toContain('BASIC');

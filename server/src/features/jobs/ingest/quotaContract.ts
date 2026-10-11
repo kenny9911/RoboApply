@@ -173,6 +173,41 @@ export function daysToReset(snapshot: Pick<ProviderQuotaSnapshot, 'resetAt'> | n
 }
 
 /**
+ * How long a refusal (the key refused, no subscription) and a reading without
+ * a stated reset time keep blocking calls. The clients' circuit breakers use
+ * the same hour: one call an hour re-reads the plan.
+ */
+export const QUOTA_RETRY_MS = 60 * 60 * 1000;
+
+const REFUSED_STATES: ReadonlySet<ProviderQuotaState> = new Set(['not_subscribed', 'unauthorized']);
+
+/**
+ * Until when a reading blocks calls; null = it blocks nothing at `now`. THE
+ * rule, for ingest (quota.ts `quotaAllows`) and for the planner (planner.ts
+ * `quotaClosed`), so the two never disagree on how long a provider is closed:
+ *
+ *   - a used-up plan, or one down to its reserve: until the reset time the
+ *     provider stated (QUOTA_RETRY_MS after the reading when it stated none);
+ *   - a refused key or a missing subscription: QUOTA_RETRY_MS after the
+ *     reading, whatever reset its headers carry. That reset says when the
+ *     quota refills, not when the key or the subscription is put right, so
+ *     one call an hour asks again (the snapshot keeps `resetAt` for display);
+ *   - either is cut short by `recheckMs` (INGEST_QUOTA_RECHECK_HOURS) when
+ *     that is above 0.
+ *
+ * Whether the reading stops a call at all (its state, what is left against
+ * the reserve) is the caller's question; this is only "for how long". Pure.
+ */
+export function quotaBlockedUntil(snapshot: Pick<ProviderQuotaSnapshot, 'state' | 'resetAt' | 'observedAt'>, now: Date, recheckMs = 0): Date | null {
+  const observed = Date.parse(snapshot.observedAt);
+  if (!Number.isFinite(observed)) return null;
+  const reset = snapshot.resetAt ? Date.parse(snapshot.resetAt) : Number.NaN;
+  let until = !REFUSED_STATES.has(snapshot.state) && Number.isFinite(reset) ? reset : observed + QUOTA_RETRY_MS;
+  if (recheckMs > 0) until = Math.min(until, observed + recheckMs);
+  return until > now.getTime() ? new Date(until) : null;
+}
+
+/**
  * The `RAProviderUsage.provider` key a call is counted under: the provider for
  * the international market, `<provider>:cn` for mainland calls, so one
  * market's daily usage never eats the other's budget (JI-1, JC-6).

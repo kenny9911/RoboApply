@@ -70,7 +70,7 @@ import type { EnvSource, Market, ProductBrand } from '../../../platform/brand/in
 import type { EnqueueManyItem } from '../../../platform/queue/index.js';
 import { bankPublicJobUrl, bankPublicJobUrlTemplate } from '../../../roboapply/v2/lib/raCrossBankMatch.js';
 import { AGE_EXPIRY_BOARDS, PROVIDER_META, safeUrl } from '../normalize/index.js';
-import { adapterEnabledFor, type JobSourceAdapter } from '../sources/index.js';
+import { adapterCostModel, adapterEnabledFor, type JobSourceAdapter } from '../sources/index.js';
 import { PUBLIC_ATS } from '../sources/atsPublic/contract.js';
 import { MAX_AGE_DAYS } from './config.js';
 import type { IngestDb } from './db.js';
@@ -339,6 +339,11 @@ export async function runMaintenance(
     for (const a of adapters) {
       // Only metered search providers run planned queries; banks close their own jobs.
       if (a.kind !== 'search' || a.dailyCallLimit() === null) continue;
+      // A per-request provider (JSearch) answers the first pages of a ranked search, never the whole
+      // result, so two runs without a posting prove nothing: its rows end by `expiresAt` only (21 or
+      // 45 days, normalize/identity.ts; MARKET_STRATEGY §1.5 "JSearch: no signal"). The pipeline does
+      // not count those runs either (`complete: false`); this also covers rows stamped before that.
+      if (adapterCostModel(a) === 'per_request') continue;
       missed += await db.$executeRaw(buildMissedSql(market, a.provider, a.sourceBoards));
     }
   }

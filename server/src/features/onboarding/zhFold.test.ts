@@ -2,7 +2,9 @@
 //
 // Verification finding: the job-title typeahead found nothing for Chinese
 // typed in Traditional characters (zh-TW): GET /onboarding/title-suggest
-// ?q=後端 → items []. The taxonomy's Chinese phrases are Simplified.
+// ?q=後端 → items []. The taxonomy's Chinese phrases were Simplified only then;
+// since MKT-3E it also holds Taiwan labels and titles, and the fold stays as
+// the second reading of a Traditional query.
 
 import { describe, expect, it, vi } from 'vitest';
 
@@ -50,17 +52,20 @@ describe('foldToSimplified', () => {
 describe('title typeahead with Traditional Chinese input', () => {
   const ids = (q: string, locale = 'zh-TW') => suggestTitles(q, locale).map((s) => s.taxonomyId);
 
+  // Since MKT-3E the taxonomy carries Taiwan labels and titles, and the zh-TW typeahead finds them directly as well
+  // as through the Simplified reading. A Traditional query therefore returns everything its Simplified reading
+  // returns, and may return more (the Taiwan matches first): containment, not equality.
   it('"後端" finds the backend roles (it found nothing)', () => {
     expect(ids('后端', 'zh')).toContain('backend_engineer');
     expect(ids('後端')).toContain('backend_engineer');
-    expect(ids('後端')).toEqual(ids('后端', 'zh-TW'));
+    for (const id of ids('后端', 'zh-TW')) expect(ids('後端'), id).toContain(id);
   });
 
   it('Taiwan wording finds the role too', () => {
-    expect(ids('產品經理').length).toBeGreaterThan(0);
-    expect(ids('產品經理')).toEqual(ids('产品经理', 'zh-TW'));
-    expect(ids('軟體工程師')).toEqual(ids('软件工程师', 'zh-TW'));
-    expect(ids('軟體工程師').length).toBeGreaterThan(0);
+    expect(ids('產品經理')[0]).toBe('product_manager');
+    for (const id of ids('产品经理', 'zh-TW')) expect(ids('產品經理'), id).toContain(id);
+    expect(ids('軟體工程師')[0]).toBe('software_engineer');
+    for (const id of ids('软件工程师', 'zh-TW')) expect(ids('軟體工程師'), id).toContain(id);
   });
 
   it('English input is unchanged, and at most ten titles come back', () => {

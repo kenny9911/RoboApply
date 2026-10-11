@@ -10,8 +10,10 @@
 // The adapter stays registered because three places read it: the source
 // registry (which brands list `ats_public`, and under which markets), the
 // daily maintenance (`sourceBoards`: these rows never expire by posting age),
-// and the admin consoles (transport and state). Its `fetch` reads nothing:
-// ingest's standing `ats_public` query finds no work and costs no request.
+// and the admin consoles (transport and state). It declares `ownRun`, so the
+// planner keeps no standing `ats_public` query (one planned before the M3 gate
+// is switched off by the next `jobs-plan`); its `fetch` reads nothing, so a
+// query leased in the meantime finds no work and costs no request.
 //
 // Both markets. One board feeds both brands; a board is one source row
 // ((ats, boardToken) is unique), whatever console added it. Unmetered (public
@@ -47,6 +49,8 @@ export function createAtsPublicAdapter(deps: AtsPublicAdapterDeps = {}): JobSour
     kind: 'cursor',
     markets: ['intl', 'cn'],
     costModel: 'free',
+    // The board sync is the only reader: no standing ingest query (see `JobSourceAdapter.ownRun`).
+    ownRun: true,
     sourceBoards: [...PUBLIC_ATS],
     transport: () => 'board_api',
     disabledReason: () => (enabled() ? null : 'kill_switch'),
