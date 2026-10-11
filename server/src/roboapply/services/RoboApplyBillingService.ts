@@ -88,6 +88,15 @@
 //     FRONT of the rail (the frozen request and callback path is untouched)
 //     and fails open: a limiter that cannot answer never blocks a payment.
 //
+//   • a subscription that ends before its paid period runs out (a
+//     withdrawal, a cancellation made at once) takes the period's practice
+//     allowance with it; one that runs to its end keeps today's behaviour.
+//   • the billing history is one list under one cursor: Stripe invoices
+//     (paid, open and uncollectible; never a draft or a void) and completed
+//     CN orders, merged by date. A refunded row carries a marker read from
+//     RABillingRefund and a WeChat Pay order names its channel; a row that
+//     says nothing new keeps the eight keys it always had (rule A10).
+//
 // Revenue state lives on SeekerSubscription (keyed by seekerProfileId);
 // practice credits stay in lib/mockCreditService.ts.
 
@@ -95,7 +104,12 @@ import type Stripe from 'stripe';
 import prisma, { type ExtendedPrismaClient } from '../../lib/prisma.js';
 import { logger } from '../../services/LoggerService.js';
 import { getMockPlanCatalog, priceIdToMockPlanKey, isPaidMockPlan, type MockPlanKey } from '../../lib/mockInterviewPlans.js';
-import { getBalance as defaultGetBalance, grantForPlanIfNewPeriod as defaultGrantIfNewPeriod, type GrantTier } from '../../lib/mockCreditService.js';
+import {
+  getBalance as defaultGetBalance,
+  grantForPlan as defaultGrantForPlan,
+  grantForPlanIfNewPeriod as defaultGrantIfNewPeriod,
+  type GrantTier,
+} from '../../lib/mockCreditService.js';
 import { billingRegionForBrand, type BillingRegion } from '../../lib/billingRegion.js';
 import { tierDailyCap, getRateCard } from '../../lib/rateCard.js';
 import { getBrand, parseBrandId, type BrandId, type PaymentRail, type ProductBrand } from '../../platform/brand/registry.js';
@@ -151,12 +165,13 @@ import { isEnabled } from '../../platform/flags.js';
 import { HttpError } from '../../platform/http.js';
 import { consumeRateLimit as platformConsumeRateLimit, rateLimitKey, rateLimitWindows, type RateWindow } from '../../platform/ratelimit/index.js';
 import type { CheckoutResponse } from '../../features/credits/contract.js';
+import { refundedMarkOf, type RefundedMark } from '../../features/credits/adminBillingTypes.js';
 
 // ── Dependencies (tests replace them) ─────────────────────────────────────
 
 export type BillingServiceDb = Pick<
   ExtendedPrismaClient,
-  '$transaction' | 'user' | 'seekerProfile' | 'seekerSubscription' | 'alipayOrder' | 'rACreditLedger' | 'seekerConsentRecord' | 'roboApplyMission'
+  '$transaction' | 'user' | 'seekerProfile' | 'seekerSubscription' | 'alipayOrder' | 'rACreditLedger' | 'seekerConsentRecord' | 'roboApplyMission' | 'rABillingRefund'
 >;
 
 export interface BillingServiceDeps {
@@ -183,6 +198,12 @@ export interface BillingServiceDeps {
   quoteSwitch: typeof quoteSwitch;
   /** The plan switch itself (platform/billing/subscriptions.ts). */
   confirmSwitch: typeof confirmSwitch;
+  /**
+   * Put the practice balance back on the Free allotment; unspent packs stay
+   * (lib/mockCreditService.ts `grantForPlan`, tier 'free': the same reset a
+   * fully refunded subscription gets). `ref` names what caused it.
+   */
+  resetPracticeToFree: (input: { userId: string; ref: string }) => Promise<void>;
 }
 
 export interface CnPayTermsInput {
@@ -223,6 +244,8 @@ function defaultDeps(): BillingServiceDeps {
     consumeRateLimit: (key, windows) => platformConsumeRateLimit({ key, windows }),
     quoteSwitch,
     confirmSwitch,
+    resetPracticeToFree: ({ userId, ref }) =>
+      defaultGrantForPlan({ userId, tier: 'free', reason: 'grant_renewal', source: 'stripe', metadata: { cause: 'subscription_ended_early', ref } }),
   };
 }
 
@@ -753,7 +776,36 @@ export interface BillingInvoice {
   status: string;
   description: string;
   downloadable: boolean;
+  /**
+   * How it was paid, sent ONLY when `kind` does not already say it (kind
+   * 'stripe' is a card, kind 'alipay' is Alipay): today a WeChat Pay order.
+   * Left out, never null, otherwise.
+   */
+  channel?: 'card' | 'alipay' | 'wechatpay';
+  /** Sent ONLY on a refunded row ('full', or 'partial'). Left out, never null, when nothing was refunded. */
+  refunded?: RefundedMark;
 }
+
+export interface BillingHistoryPage {
+  invoices: BillingInvoice[];
+  /** Opaque; pass it back as `cursor` for the next page. Null on the last page. */
+  nextCursor: string | null;
+}
+
+export interface BillingHistoryOptions {
+  cursor?: string | null;
+  /** 1 to 50 rows a page (held to that range); default 20. */
+  limit?: number;
+}
+
+export const BILLING_HISTORY_DEFAULT_LIMIT = 20;
+export const BILLING_HISTORY_MAX_LIMIT = 50;
+
+/** Stripe statuses that are listed. A draft was never sent and a void is cancelled paperwork: neither is a bill. */
+const UNLISTED_INVOICE_STATUSES = new Set(['draft', 'void']);
+/** Stripe's own page limit, and how many pages one request reads at most (drafts and voids are skipped, so a page can come up short). */
+const STRIPE_INVOICE_PAGE_MAX = 100;
+const STRIPE_INVOICE_MAX_PAGES = 5;
 
 function orderPlanLabel(order: { planKey: string | null; tier: string; brand: string | null }): string {
   const key = order.planKey ?? order.tier.replace(/^ra_/, '');
@@ -762,52 +814,239 @@ function orderPlanLabel(order: { planKey: string | null; tier: string; brand: st
   return planDefinitionFor(brand, key)?.defaultLabel ?? key;
 }
 
-export async function getBillingHistory(userId: string): Promise<{ invoices: BillingInvoice[] }> {
-  const account = await requireAccount(userId);
-  const out: BillingInvoice[] = [];
-  const brandName = getBrand(account.brand).name;
-  // Rule A11: only a RoboApply account has invoices at Stripe; no other account makes the server ask.
-  const stripe = stripeServesAccount(account) ? deps.getStripe() : null;
-  const customer = account.subscription?.stripeCustomerId;
-  if (stripe && customer) {
-    try {
-      const list = await stripe.invoices.list({ customer, limit: 50 });
-      for (const inv of list.data) {
-        out.push({
+/**
+ * Where a page ended, per source. `s` is the last Stripe invoice consumed
+ * (handed to Stripe as `starting_after`), `c` the last CN order taken
+ * (`<completedAt ISO>|<id>`; the date part is empty for an order without
+ * one). A source that has nothing more is marked done and not read again.
+ */
+interface HistoryCursor {
+  s: string | null;
+  sDone: boolean;
+  c: string | null;
+  cDone: boolean;
+}
+
+const HISTORY_START: HistoryCursor = { s: null, sDone: false, c: null, cDone: false };
+const STRIPE_INVOICE_ID = /^in_[A-Za-z0-9_]{1,250}$/;
+
+function encodeHistoryCursor(cursor: HistoryCursor): string {
+  return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
+}
+
+function parseOrderPosition(value: string): { completedAt: Date | null; id: string } | null {
+  const bar = value.indexOf('|');
+  if (bar < 0) return null;
+  const iso = value.slice(0, bar);
+  const id = value.slice(bar + 1);
+  if (!id || id.length > 64) return null;
+  if (!iso) return { completedAt: null, id };
+  const completedAt = new Date(iso);
+  return Number.isNaN(completedAt.getTime()) ? null : { completedAt, id };
+}
+
+function decodeHistoryCursor(raw: string | null | undefined): HistoryCursor {
+  if (!raw) return HISTORY_START;
+  const invalid = () => new RoboApplyBillingError('invalid_request', 'The cursor is not valid.', 422, { field: 'cursor' });
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
+  } catch {
+    throw invalid();
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw invalid();
+  const { s, sDone, c, cDone } = parsed as Record<string, unknown>;
+  if (typeof sDone !== 'boolean' || typeof cDone !== 'boolean') throw invalid();
+  if (s !== null && !(typeof s === 'string' && STRIPE_INVOICE_ID.test(s))) throw invalid();
+  if (c !== null && !(typeof c === 'string' && parseOrderPosition(c))) throw invalid();
+  return { s, sDone, c, cDone };
+}
+
+function historyLimit(limit: number | undefined): number {
+  if (limit === undefined || !Number.isFinite(limit)) return BILLING_HISTORY_DEFAULT_LIMIT;
+  return Math.min(BILLING_HISTORY_MAX_LIMIT, Math.max(1, Math.floor(limit)));
+}
+
+interface StripeHistoryRead {
+  /** Listed invoices after the cursor, newest first (at most one more than the page needs). */
+  rows: BillingInvoice[];
+  /** The last invoice Stripe returned, listed or not: everything up to it was looked at. */
+  lastSeenId: string | null;
+  /** Stripe has invoices after `lastSeenId`. */
+  more: boolean;
+  failed: boolean;
+}
+
+/**
+ * The customer's invoices after `after`, page by page, until the page is
+ * full (one row more, to know whether there is a next page) or Stripe has no
+ * more. Drafts and voids are skipped. An invoice that names another customer
+ * is never listed, whatever the list returns.
+ */
+async function readStripeInvoices(stripe: Stripe, customer: string, after: string | null, want: number, brandName: string): Promise<StripeHistoryRead> {
+  const rows: BillingInvoice[] = [];
+  let lastSeenId = after;
+  let more = false;
+  try {
+    for (let page = 0; page < STRIPE_INVOICE_MAX_PAGES && rows.length <= want; page += 1) {
+      const list = await stripe.invoices.list({ customer, limit: Math.min(STRIPE_INVOICE_PAGE_MAX, want + 1), ...(lastSeenId ? { starting_after: lastSeenId } : {}) });
+      const data = list.data ?? [];
+      for (const inv of data) {
+        if (typeof inv.id === 'string') lastSeenId = inv.id;
+        const owner = stripeRefId(inv.customer);
+        if (owner && owner !== customer) continue;
+        const status = inv.status ?? 'open';
+        if (UNLISTED_INVOICE_STATUSES.has(status)) continue;
+        rows.push({
           id: inv.id as string,
           kind: 'stripe',
           date: new Date((inv.created ?? 0) * 1000).toISOString(),
-          amountMinor: inv.amount_paid ?? inv.amount_due ?? 0,
+          // What was paid; for a bill that is still open, what is due.
+          amountMinor: (inv.amount_paid || inv.amount_due) ?? 0,
           currency: (inv.currency ?? 'usd').toUpperCase(),
-          status: inv.status ?? 'open',
+          status,
           description: inv.lines?.data?.[0]?.description ?? `${brandName} subscription`,
           downloadable: Boolean(inv.invoice_pdf || inv.hosted_invoice_url),
         });
       }
-    } catch (err) {
-      logger.warn('RA_BILLING', 'stripe invoice list failed', { error: err instanceof Error ? err.message : String(err) });
+      more = Boolean(list.has_more) && data.length > 0;
+      if (!more) break;
+    }
+  } catch (err) {
+    logger.warn('RA_BILLING', 'stripe invoice list failed', { error: err instanceof Error ? err.message : String(err) });
+    return { rows: [], lastSeenId: after, more: true, failed: true };
+  }
+  return { rows, lastSeenId, more, failed: false };
+}
+
+interface OrderHistoryRow {
+  invoice: BillingInvoice;
+  /** `<completedAt ISO>|<id>`: where the next page continues after this order. */
+  position: string;
+}
+
+/** Completed seeker orders on the CN rails after `after`, newest first: `take` rows. */
+async function readCnOrders(userId: string, after: string | null, take: number): Promise<OrderHistoryRow[]> {
+  const at = after ? parseOrderPosition(after) : null;
+  // Newest first; an order without a completion date sorts in front of the dated ones.
+  const afterCursor = !at
+    ? {}
+    : at.completedAt
+      ? { OR: [{ completedAt: { lt: at.completedAt } }, { completedAt: at.completedAt, id: { lt: at.id } }] }
+      : { OR: [{ completedAt: null, id: { lt: at.id } }, { completedAt: { not: null } }] };
+  const orders = await deps.db.alipayOrder.findMany({
+    where: { userId, tier: { startsWith: 'ra_' }, status: 'completed', ...afterCursor },
+    orderBy: [{ completedAt: 'desc' }, { id: 'desc' }],
+    take,
+  });
+  return orders.map((o) => {
+    const orderBrand = getBrand(parseBrandId(o.brand) ?? 'roboapply').name;
+    const wechat = o.channel === 'wechatpay';
+    return {
+      position: `${o.completedAt?.toISOString() ?? ''}|${o.id}`,
+      invoice: {
+        id: o.id,
+        kind: 'alipay' as const,
+        date: (o.completedAt ?? o.createdAt).toISOString(),
+        amountMinor: o.amountMinor ?? Math.round(o.amount * 100),
+        currency: 'CNY',
+        status: 'paid',
+        description: `${orderBrand} ${orderPlanLabel(o)} (${wechat ? 'WeChat Pay' : 'Alipay'})`,
+        downloadable: true,
+        // `kind` already says Alipay; only the other CN rail has to be named.
+        ...(wechat ? { channel: 'wechatpay' as const } : {}),
+      },
+    };
+  });
+}
+
+/**
+ * The refunded marker of each row of a page, in one query: refund rows by
+ * invoice id for Stripe rows and by order id for CN rows. A history that
+ * cannot read them is still a history: the rows are then served unmarked.
+ */
+async function refundMarksFor(userId: string, rows: readonly BillingInvoice[]): Promise<Map<string, RefundedMark>> {
+  const marks = new Map<string, RefundedMark>();
+  const invoiceIds = rows.filter((r) => r.kind === 'stripe').map((r) => r.id);
+  const orderIds = rows.filter((r) => r.kind === 'alipay').map((r) => r.id);
+  if (invoiceIds.length === 0 && orderIds.length === 0) return marks;
+  try {
+    const refunds = await deps.db.rABillingRefund.findMany({
+      where: { userId, OR: [...(invoiceIds.length ? [{ invoiceId: { in: invoiceIds } }] : []), ...(orderIds.length ? [{ alipayOrderId: { in: orderIds } }] : [])] },
+      select: { invoiceId: true, alipayOrderId: true, kind: true, full: true },
+    });
+    for (const row of rows) {
+      const mark = refundedMarkOf(refunds.filter((r) => (row.kind === 'stripe' ? r.invoiceId === row.id : r.alipayOrderId === row.id)));
+      if (mark) marks.set(row.id, mark);
+    }
+  } catch (err) {
+    logger.warn('RA_BILLING', 'refund markers could not be read; history served without them', { userId, error: err instanceof Error ? err.message : String(err) });
+  }
+  return marks;
+}
+
+/**
+ * One page of the caller's billing history: Stripe invoices and completed CN
+ * orders merged by date, newest first. Each page reads up to `limit` rows
+ * from each source after its own cursor, returns the first `limit` of the
+ * merge and moves each cursor only past the rows it used, so no row is
+ * repeated or skipped. When Stripe cannot be read the CN orders are still
+ * served and the next page asks Stripe again.
+ */
+export async function getBillingHistory(userId: string, opts: BillingHistoryOptions = {}): Promise<BillingHistoryPage> {
+  const account = await requireAccount(userId);
+  const limit = historyLimit(opts.limit);
+  const cursor = decodeHistoryCursor(opts.cursor);
+  const brandName = getBrand(account.brand).name;
+
+  // Rule A11: only a RoboApply account has invoices at Stripe; no other account makes the server ask.
+  const stripe = stripeServesAccount(account) ? deps.getStripe() : null;
+  const customer = account.subscription?.stripeCustomerId;
+  const stripeOpen = Boolean(stripe && customer) && !cursor.sDone;
+  const fromStripe: StripeHistoryRead = stripeOpen
+    ? await readStripeInvoices(stripe!, customer!, cursor.s, limit, brandName)
+    : { rows: [], lastSeenId: cursor.s, more: false, failed: false };
+
+  const orders = cursor.cDone ? [] : await readCnOrders(userId, cursor.c, limit + 1);
+  const moreOrders = orders.length > limit;
+  const fromOrders = orders.slice(0, limit);
+
+  // Merge by date, newest first, until the page is full.
+  const invoices: BillingInvoice[] = [];
+  let usedStripe = 0;
+  let usedOrders = 0;
+  while (invoices.length < limit) {
+    const s = fromStripe.rows[usedStripe];
+    const o = fromOrders[usedOrders];
+    if (!s && !o) break;
+    if (s && (!o || s.date >= o.invoice.date)) {
+      invoices.push(s);
+      usedStripe += 1;
+    } else {
+      invoices.push(o!.invoice);
+      usedOrders += 1;
     }
   }
-  const orders = await deps.db.alipayOrder.findMany({
-    where: { userId, tier: { startsWith: 'ra_' }, status: 'completed' },
-    orderBy: { completedAt: 'desc' },
-    take: 50,
-  });
-  for (const o of orders) {
-    const orderBrand = getBrand(parseBrandId(o.brand) ?? 'roboapply').name;
-    out.push({
-      id: o.id,
-      kind: 'alipay',
-      date: (o.completedAt ?? o.createdAt).toISOString(),
-      amountMinor: o.amountMinor ?? Math.round(o.amount * 100),
-      currency: 'CNY',
-      status: 'paid',
-      description: `${orderBrand} ${orderPlanLabel(o)} (${o.channel === 'wechatpay' ? 'WeChat Pay' : 'Alipay'})`,
-      downloadable: true,
-    });
+  invoices.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+
+  const marks = await refundMarksFor(userId, invoices);
+  for (const row of invoices) {
+    const mark = marks.get(row.id);
+    if (mark) row.refunded = mark;
   }
-  out.sort((a, b) => (a.date < b.date ? 1 : -1));
-  return { invoices: out };
+
+  // Each cursor moves only past what this page used.
+  const allStripeUsed = usedStripe === fromStripe.rows.length;
+  const next: HistoryCursor = {
+    // With every listed invoice used, the skipped ones behind them are done with too.
+    s: allStripeUsed ? fromStripe.lastSeenId : usedStripe > 0 ? fromStripe.rows[usedStripe - 1]!.id : cursor.s,
+    sDone: !fromStripe.failed && allStripeUsed && !fromStripe.more,
+    c: usedOrders > 0 ? fromOrders[usedOrders - 1]!.position : cursor.c,
+    cDone: cursor.cDone || (usedOrders === fromOrders.length && !moreOrders),
+  };
+  // Stripe is down and nothing else is left: end here rather than offer a next page that has nothing.
+  const deadEnd = fromStripe.failed && next.cDone && invoices.length === 0;
+  return { invoices, nextCursor: (next.sDone && next.cDone) || deadEnd ? null : encodeHistoryCursor(next) };
 }
 
 export async function resolveInvoiceDownload(
@@ -1621,6 +1860,37 @@ async function confirmOutsideCancellation(before: { cancelAtPeriodEnd: boolean }
   logger.info('RA_BILLING', 'cancellation from outside the app confirmed by mail', { userId: synced.userId, subId: sub.id });
 }
 
+/** How long before the end of its paid period a subscription must have ended to count as cut short. */
+const CUT_SHORT_SLACK_MS = 3_600_000;
+
+/**
+ * A subscription that ended BEFORE the period it was on ran out takes that
+ * period's practice allowance with it: the balance goes back to the Free
+ * allotment (unspent packs stay), once per subscription (claim
+ * `billing:subend:<sub>`). That is what happens on a statutory withdrawal
+ * (the subscription is cancelled at once and the unused days are refunded),
+ * on a cancellation made at once in the Stripe Dashboard, and when Stripe
+ * gives up on a renewal it could not collect. A fully refunded subscription
+ * already gets the same reset from the refund engine; this is the same end
+ * state.
+ *
+ * A subscription that ran to the end of its paid period (the ordinary
+ * cancellation) is left as it is, and so is one whose end time Stripe does
+ * not state: nothing changes for them.
+ */
+async function resetPracticeWhenCutShort(sub: Stripe.Subscription, synced: UpsertResult): Promise<void> {
+  if (!synced.userId || !subscriptionEnded(sub)) return;
+  const endedAtS = sub.ended_at;
+  const { end } = stripePeriod(sub);
+  if (typeof endedAtS !== 'number' || !end) return;
+  if (endedAtS * 1000 + CUT_SHORT_SLACK_MS >= end.getTime()) return;
+  const ref = `subend:${sub.id}`;
+  if (!(await claimOnce(deps.db, synced.userId, ref, 'stripe_subscription'))) return;
+  await deps.resetPracticeToFree({ userId: synced.userId, ref });
+  deps.invalidate(synced.userId);
+  logger.info('RA_BILLING', 'subscription ended before its paid period: practice allowance reset', { userId: synced.userId, subId: sub.id });
+}
+
 async function handleSubscriptionEvent(type: string, snapshot: Stripe.Subscription, stripe: Stripe): Promise<StripeEventResult> {
   const meta = snapshot.metadata ?? {};
   const row = await deps.db.seekerSubscription.findFirst({
@@ -1643,7 +1913,10 @@ async function handleSubscriptionEvent(type: string, snapshot: Stripe.Subscripti
   const sub = await currentSubscription(stripe, snapshot, type);
   if (!row) return { handled: (await attachSubscription(sub, { creditGrant: async () => 'none' })).handled };
   const synced = await upsertFromSubscription(sub, { planKey: (sub.metadata?.planKey as string) || (sub.metadata?.tier as string) || undefined }, 'none');
-  if (synced.handled) await confirmOutsideCancellation(row, sub, synced);
+  if (synced.handled) {
+    await confirmOutsideCancellation(row, sub, synced);
+    await resetPracticeWhenCutShort(sub, synced);
+  }
   return { handled: synced.handled };
 }
 
