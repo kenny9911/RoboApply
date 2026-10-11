@@ -11,7 +11,7 @@
 // Stripe-redirect endpoints (checkout / portal) return `{ url }`; the caller
 // is responsible for `window.location.href = url`.
 
-import { roboApi } from './client';
+import { roboApi, type RequestOptions } from './client';
 import { API_BASE } from '../config';
 import type { CheckoutResponse } from './contracts/credits';
 
@@ -215,12 +215,120 @@ export interface PlanCheckoutBody {
 }
 
 /**
+ * One checkout attempt (MARKET_STRATEGY §5.1 "Idempotency keys"). The plan
+ * sheet makes one key per attempt and sends it as the `Idempotency-Key`
+ * request header; the server turns it into the payment provider's own
+ * idempotency key, so a double click opens one payment page and a second,
+ * intended purchase (a new attempt, a new key) opens a new one. Without the
+ * header the server falls back to a 60-second bucket. The Alipay route takes
+ * the header too and ignores it today.
+ */
+export interface CheckoutCallOptions {
+  attemptKey?: string | null;
+}
+
+/** What the server accepts as an attempt key (a UUID fits). */
+export const CHECKOUT_ATTEMPT_KEY_PATTERN = /^[A-Za-z0-9_-]{8,64}$/;
+export const CHECKOUT_ATTEMPT_HEADER = 'Idempotency-Key';
+
+/** Request options carrying the attempt key, or none when the key is missing or not in the accepted form. */
+export function checkoutRequestOptions(opts?: CheckoutCallOptions | null): RequestOptions | undefined {
+  const key = typeof opts?.attemptKey === 'string' ? opts.attemptKey.trim() : '';
+  return CHECKOUT_ATTEMPT_KEY_PATTERN.test(key) ? { headers: { [CHECKOUT_ATTEMPT_HEADER]: key } } : undefined;
+}
+
+/**
  * What checkout answers, by `kind`: `redirect` (open `url`: Stripe, the Alipay
  * cashier, WeChat Pay H5), `qr` (`qrCodeUrl` is the content of a payment code,
  * e.g. a `weixin://` link — draw a QR code from it, never load it as an
  * image) or `jsapi` (parameters for the WeChat in-app cashier).
  */
 export type PlanCheckoutResponse = CheckoutResponse;
+
+// ─────────────────────────────────────────────────────────────────────
+// Facts `GET /billing/plans` adds for the pricing page (market wave, D6).
+//
+// Written by hand from the cross-bundle contract (MARKET_TASK_PLAN.md §3.1;
+// the server half is built in parallel): the fields are OPTIONAL here, read
+// through `plansBillingFacts`, and anything absent or malformed is "not
+// stated", so the page prints nothing instead of a made-up number or name
+// (D3). No number of the refund rules is written in the web bundle.
+//
+//   refundPolicy: { firstPurchaseDays, shortPlanHours, paidOnlyCreditLimit,
+//                   accidentalRenewalDays, withdrawalDays, packValidMonths,
+//                   version }
+//   checkout.collectingEntity: string | null   (GoApply only)
+//   studentOffer: Array<{ key, amountMinor, studentDiscountPercent }> | null
+//     (requested: the student prices for a visitor who is not sent the
+//      student plans; absent until the server sends it)
+// ─────────────────────────────────────────────────────────────────────
+
+/** The numbers of the published refund rules (server `platform/billing/refunds.ts`). */
+export interface RefundPolicyFacts {
+  /** First purchase: refund within this many days… */
+  firstPurchaseDays: number;
+  /** …or this many hours for the weekly plan and the 7-day pass… */
+  shortPlanHours: number;
+  /** …if fewer than this many paid-only actions were used. */
+  paidOnlyCreditLimit: number;
+  /** A renewal charged by mistake: within this many days. */
+  accidentalRenewalDays: number;
+  /** Statutory withdrawal window (EU / EEA / UK / Taiwan), days. */
+  withdrawalDays: number;
+  /** A practice pack stays valid this many months. */
+  packValidMonths: number;
+  /** The policy version the server applies ('' when not stated). */
+  version: string;
+}
+
+/** One student price published to a visitor (the plan itself is listed only for a verified student). */
+export interface StudentOfferRow {
+  key: string;
+  amountMinor: number;
+  studentDiscountPercent: number | null;
+}
+
+export interface PlansBillingFacts {
+  /** Null → the refund lines are not printed. */
+  refundPolicy: RefundPolicyFacts | null;
+  /** The legal entity that collects the payment; null → the line is not printed. */
+  collectingEntity: string | null;
+  /** Empty → no student price is published on this response. */
+  studentOffer: StudentOfferRow[];
+}
+
+const REFUND_POLICY_NUMBERS = ['firstPurchaseDays', 'shortPlanHours', 'paidOnlyCreditLimit', 'accidentalRenewalDays', 'withdrawalDays', 'packValidMonths'] as const;
+const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v > 0;
+
+/** The additive facts of a plans response, normalised. Works before and after the server sends them. */
+export function plansBillingFacts(view: unknown): PlansBillingFacts {
+  const root = isRecord(view) ? view : {};
+  const rawPolicy = root.refundPolicy;
+  const refundPolicy: RefundPolicyFacts | null =
+    isRecord(rawPolicy) && REFUND_POLICY_NUMBERS.every((k) => isCount(rawPolicy[k]))
+      ? {
+          firstPurchaseDays: rawPolicy.firstPurchaseDays as number,
+          shortPlanHours: rawPolicy.shortPlanHours as number,
+          paidOnlyCreditLimit: rawPolicy.paidOnlyCreditLimit as number,
+          accidentalRenewalDays: rawPolicy.accidentalRenewalDays as number,
+          withdrawalDays: rawPolicy.withdrawalDays as number,
+          packValidMonths: rawPolicy.packValidMonths as number,
+          version: typeof rawPolicy.version === 'string' ? rawPolicy.version : '',
+        }
+      : null;
+  const checkout = isRecord(root.checkout) ? root.checkout : {};
+  const entity = typeof checkout.collectingEntity === 'string' ? checkout.collectingEntity.trim() : '';
+  const studentOffer: StudentOfferRow[] = [];
+  if (Array.isArray(root.studentOffer)) {
+    for (const row of root.studentOffer) {
+      if (!isRecord(row) || typeof row.key !== 'string' || !row.key || !isCount(row.amountMinor)) continue;
+      const pct = row.studentDiscountPercent;
+      studentOffer.push({ key: row.key, amountMinor: row.amountMinor, studentDiscountPercent: isCount(pct) && pct < 100 ? pct : null });
+    }
+  }
+  return { refundPolicy, collectingEntity: entity || null, studentOffer };
+}
 
 /** POST /billing/switch/quote — what a legacy practice-plan subscriber pays to switch to Pro. Nothing is charged. */
 export interface SwitchQuote {
@@ -331,16 +439,16 @@ export const accountApi = {
   cancel: () => roboApi.post<CancelPlanResponse>(`${BILLING_BASE}/cancel`),
   history: () => roboApi.get<BillingHistoryResponse>(`${BILLING_BASE}/history`),
   /** Clone plan checkout (Stripe, RoboApply). */
-  checkoutPlan: (body: PlanCheckoutBody) =>
-    roboApi.post<PlanCheckoutResponse>(`${BILLING_BASE}/checkout`, body),
+  checkoutPlan: (body: PlanCheckoutBody, opts?: CheckoutCallOptions) =>
+    roboApi.post<PlanCheckoutResponse>(`${BILLING_BASE}/checkout`, body, checkoutRequestOptions(opts)),
   /**
    * Clone plan checkout through Alipay (GoApply). The rail is open whenever
    * `GET /billing/plans` lists `alipay` in `checkout.rails`; there is no
    * payments switch to turn on. Answers `rail_not_configured` (503) when the
    * rail cannot charge and `plan_not_sellable` (409) under the kill switch.
    */
-  alipayCheckoutPlan: (body: PlanCheckoutBody) =>
-    roboApi.post<PlanCheckoutResponse>(`${BILLING_BASE}/alipay`, body),
+  alipayCheckoutPlan: (body: PlanCheckoutBody, opts?: CheckoutCallOptions) =>
+    roboApi.post<PlanCheckoutResponse>(`${BILLING_BASE}/alipay`, body, checkoutRequestOptions(opts)),
   /** Legacy practice plan → Pro: a quote first; nothing is charged (POST /billing/switch without `confirm`). */
   switchQuote: async (body: SwitchQuoteBody): Promise<SwitchQuote> => {
     const { quote } = await roboApi.post<{ quote: ServerSwitchQuote }>(`${BILLING_BASE}/switch`, { planKey: body.planKey });

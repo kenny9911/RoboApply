@@ -27,12 +27,19 @@ export function usePlans(options: { enabled?: boolean } = {}): UseQueryResult<Pl
   });
 }
 
-/** Plans the in-app sheet offers: priced, current phase, not a flag-gated V2 SKU (unless on). */
+/**
+ * Plans the in-app sheet offers: current phase, not a flag-gated V2 SKU
+ * (unless on). Every plan of either brand's catalog arrives with its amount
+ * (a default in code, env values as overrides; MARKET_STRATEGY §4.3); a plan
+ * the API sends with no amount is left out, on any brand: the one rule the
+ * pricing page follows too. Whether a listed plan can be bought is its own
+ * `sellable` flag, never a guess from the price.
+ */
 export function visiblePlans(plans: readonly CatalogPlan[] | null | undefined, opts: { studentEnabled?: boolean } = {}): CatalogPlan[] {
   if (!plans) return [];
   return plans.filter((p) => {
     if (p.kind === 'free') return false;
-    if (p.amountMinor === null || p.unsellableReason === 'price_unset') return false;
+    if (p.amountMinor === null) return false;
     if (p.requiresFlag === 'student' && !opts.studentEnabled) return false;
     if (p.phase !== 'mvp' && !(p.requiresFlag === 'student' && opts.studentEnabled)) return false;
     return true;
@@ -61,7 +68,7 @@ export function initialSelection(view: Pick<PlansView, 'plans' | 'defaultSelecti
   return plan.key;
 }
 
-/** The brand's monthly plan (for "Save N%"), if priced. */
+/** The brand's monthly plan, the reference of "Save N%" (null when the response has none with an amount). */
 export function monthlyPlan(plans: readonly CatalogPlan[] | null | undefined): CatalogPlan | null {
   return plans?.find((p) => p.key === 'pro_monthly' && p.amountMinor !== null) ?? null;
 }

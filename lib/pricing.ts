@@ -1,21 +1,19 @@
 // lib/pricing.ts
 //
-// Which currency a visitor pays in, and the plan prices in both currencies,
-// for the surfaces that render BEFORE the API can be asked: the public
-// landing page and its JSON-LD. Signed-in surfaces (/settings) read the same
-// decision from GET /billing/plan, which is the authority at checkout time.
+// Which currency a visitor pays in, and the helpers that DERIVE display
+// numbers from the plans the server sends.
 //
-// The rule is about location, not preference (owner ruling, mirrored from
-// server/src/lib/billingRegion.ts): mainland China pays RMB through Alipay;
-// everyone else — INCLUDING Taiwan, Hong Kong, US, EU, JP — pays US dollars
-// by card. Only `cn` is special; `zh-TW` is `other`.
+// The currency rule is about location, not preference (owner ruling, mirrored
+// from server/src/lib/billingRegion.ts): mainland China pays RMB through
+// Alipay; everyone else, INCLUDING Taiwan, Hong Kong, US, EU and JP, pays US
+// dollars by card. Only `cn` is special; `zh-TW` is `other`.
 //
-// The numbers are the owner-locked defaults in
-// server/src/lib/mockInterviewPlans.ts. Admins can override that catalogue at
-// runtime through AppConfig, which these constants cannot see — the landing
-// page is marketing, and a retuned price reaches the buyer at /settings before
-// any money moves. __tests__/lib/pricing.test.ts reads the server file and
-// fails if the two default tables drift.
+// No amount, percentage or day count lives in this file (D3, D6;
+// MARKET_STRATEGY.md §4.3). Every price comes from `GET /billing/plans`, whose
+// defaults are the server's plan catalog; the labels next to a price ("Save
+// N%", "about $43 a month", the student percentage, "same price as weekly
+// billing") are computed here from those amounts, so the pricing page and the
+// plan sheet print the same thing.
 
 export type BillingMarket = 'cn' | 'other';
 export type BillingCurrency = 'CNY' | 'USD';
@@ -24,19 +22,6 @@ export const MARKET_CURRENCY: Record<BillingMarket, BillingCurrency> = {
   cn: 'CNY',
   other: 'USD',
 };
-
-export type PlanKey = 'free' | 'starter' | 'growth';
-
-/** Monthly price per plan, in minor units (cents / fen). */
-export const PLAN_PRICES_MINOR: Record<PlanKey, Record<BillingCurrency, number>> = {
-  free: { USD: 0, CNY: 0 },
-  starter: { USD: 1500, CNY: 1900 },
-  growth: { USD: 2900, CNY: 4500 },
-};
-
-export function planPriceMinor(plan: PlanKey, market: BillingMarket): number {
-  return PLAN_PRICES_MINOR[plan][MARKET_CURRENCY[market]];
-}
 
 /**
  * Market from an edge country header (`x-vercel-ip-country`, `cf-ipcountry`).
@@ -213,7 +198,8 @@ export function displayPrice(plan: PricedPlanLike, monthly: PricedPlanLike | nul
       amountMinor: plan.localPrice.amountMinor,
       currency: plan.localPrice.currency,
       savingsPercent: plan.localPrice.savingsPercent,
-      monthlyEquivalentMinor: plan.localPrice.monthlyEquivalentMinor,
+      // "About … a month" is a whole amount in every currency: computed from the amount shown.
+      monthlyEquivalentMinor: plan.interval === 'week' ? monthlyEquivalentMinor(plan.localPrice.amountMinor) : null,
       local: true,
       studentDiscountPercent: plan.localPrice.studentDiscountPercent ?? null,
     };
@@ -227,6 +213,27 @@ export function displayPrice(plan: PricedPlanLike, monthly: PricedPlanLike | nul
     local: false,
     studentDiscountPercent: plan.studentDiscountPercent ?? null,
   };
+}
+
+/**
+ * True for the 7-day pass when the brand also sells weekly billing at exactly
+ * the same price, in the currency this buyer is shown (MARKET_STRATEGY §4.1:
+ * at the same price the page can say something true, "the price is the same
+ * whether or not it renews"). Computed from the two amounts the API sent,
+ * never assumed: a different amount, a different currency or no weekly plan
+ * (GoApply sells none) → false, and the line is not rendered.
+ */
+export function samePriceAsWeeklyBilling(
+  plan: PricedPlanLike & { kind?: string | null },
+  plans: ReadonlyArray<PricedPlanLike & { kind?: string | null }> | null | undefined,
+): boolean {
+  if (plan.kind !== 'pass' || plan.passDays !== 7) return false;
+  const weekly = plans?.find((p) => p.kind === 'subscription' && p.interval === 'week');
+  if (!weekly) return false;
+  const pass = displayPrice(plan, null);
+  const week = displayPrice(weekly, null);
+  if (pass.amountMinor === null || week.amountMinor === null || pass.amountMinor <= 0) return false;
+  return pass.amountMinor === week.amountMinor && pass.currency.toUpperCase() === week.currency.toUpperCase();
 }
 
 /** The monthly plan → the quarterly plan it may be switched to. */

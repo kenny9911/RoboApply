@@ -23,6 +23,13 @@
     },
     "usage": {
       "usedPractice": "已用 {n} 个练习额度"
+    },
+    "pricing": {
+      "studentOffer": {
+        "title": "学生价",
+        "row": "{name}：{price}。",
+        "how": "学生价面向在“设置”中验证学校邮箱的学生。邮箱验证后，学生套餐会显示在那里。"
+      }
     }
   }
 }

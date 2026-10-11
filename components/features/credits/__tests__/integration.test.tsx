@@ -13,7 +13,7 @@ import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 
-import { GA_ENV, atPhoneWidth, creditsResponse, plansView, renderUi, withBrand } from './fixtures';
+import { ATTEMPT_KEY_RE, GA_ENV, anAttempt, atPhoneWidth, attemptKeys, checkoutOf, creditsResponse, plansView, renderUi, withBrand } from './fixtures';
 import { buildPlanViews } from '../../../../server/src/platform/billing/planViews';
 import { RoboApiError } from '../../../../lib/api/client';
 import type { BillingPlanResponse } from '../../../../lib/api/account';
@@ -76,7 +76,7 @@ const WECHAT_ON = { 'pay.wechatpay': true };
 function goPlans(rails: Array<'alipay' | 'wechatpay'> = ['wechatpay'], env: Record<string, string> = GA_ENV): PlansView {
   return plansView('goapply', env, {
     paymentsOpen: rails.length > 0,
-    checkout: { rails, showWithdrawalWaiver: false, country: null, acknowledgementVersion: 'test' },
+    checkout: checkoutOf(rails),
   });
 }
 
@@ -324,7 +324,7 @@ describe('PlanPicker on GoApply', () => {
     await waitFor(() => expect(continueBtn()).toBeEnabled());
     fireEvent.click(continueBtn());
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('https://payments.example.com/pay'));
-    expect(account.alipayCheckoutPlan).toHaveBeenCalledWith(expect.objectContaining({ planKey: 'pro_monthly' }));
+    expect(account.alipayCheckoutPlan).toHaveBeenCalledWith(expect.objectContaining({ planKey: 'pro_monthly' }), anAttempt());
     expect(screen.queryByTestId('wechatpay-checkout')).toBeNull();
   });
 
@@ -368,7 +368,7 @@ describe('PlanPicker on GoApply', () => {
     expect(screen.queryByText('Not available yet')).toBeNull();
     fireEvent.click(continueBtn());
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('https://payments.example.com/pay'));
-    expect(account.alipayCheckoutPlan).toHaveBeenCalledWith(expect.objectContaining({ planKey: 'pro_monthly', next: '/settings/billing/return?plan=pro_monthly' }));
+    expect(account.alipayCheckoutPlan).toHaveBeenCalledWith(expect.objectContaining({ planKey: 'pro_monthly', next: '/settings/billing/return?plan=pro_monthly' }), anAttempt());
     expect(account.checkoutPlan).not.toHaveBeenCalled();
   });
 
@@ -443,15 +443,19 @@ describe('PlanPicker on GoApply', () => {
     expect(cn.createWechatPayOrder).not.toHaveBeenCalled();
   });
 
-  it('the kill switch (server: every plan payments_disabled, no rail): the same note, every row disabled, nothing can be bought', async () => {
+  it('the kill switch (server: every plan payments_disabled, no rail): the same note, every row disabled and marked "Not available yet", nothing can be bought', async () => {
     api.getPlans.mockResolvedValue(plansView('goapply', { CN_PAYMENTS_ENABLED: 'false' }));
     renderUi(<PlanPicker navigate={vi.fn()} />, { brand: 'goapply', flags: WECHAT_ON });
     const picker = await screen.findByTestId('plan-picker');
     expect(picker.querySelector('[data-plan="pro_monthly"]')).toHaveTextContent('¥39');
     expect(document.querySelectorAll('[data-plan] input[type="radio"]:not(:disabled)')).toHaveLength(0);
     expect(screen.getByTestId('payments-not-open')).toBeInTheDocument();
-    // Said once for the sheet, not on every row.
-    expect(screen.queryByText('Not available yet')).toBeNull();
+    // A row that cannot be chosen says why (the same rule as RoboApply with its card rail not ready);
+    // the sheet-level note is still said once.
+    const rows = Array.from(document.querySelectorAll('[data-plan]'));
+    expect(rows).toHaveLength(5);
+    for (const row of rows) expect(row.querySelector('[data-not-available]'), row.getAttribute('data-plan') ?? '').toHaveTextContent('Not available yet');
+    expect(screen.getAllByTestId('payments-not-open')).toHaveLength(1);
     expect(continueBtn()).toBeDisabled();
   });
 
@@ -467,11 +471,11 @@ describe('PlanPicker on GoApply', () => {
     expect(monthly).toHaveTextContent('Student 30-day pass');
     expect(monthly).toHaveTextContent('¥29, paid once');
     expect(monthly).toHaveTextContent('25% below the regular price');
-    expect(monthly).toHaveTextContent("30 days of Pro. One payment; it doesn't renew.");
+    expect(monthly).toHaveTextContent('30 days of Pro. One-time payment. It does not renew automatically when it ends.');
     expect(quarterly).toHaveTextContent('Student 90-day pass');
     expect(quarterly).toHaveTextContent('¥69, paid once');
     expect(quarterly).toHaveTextContent('30% below the regular price');
-    expect(quarterly).toHaveTextContent("90 days of Pro. One payment; it doesn't renew.");
+    expect(quarterly).toHaveTextContent('90 days of Pro. One-time payment. It does not renew automatically when it ends.');
     // Never preselected: the regular 30-day pass is.
     expect(radio('pro_monthly')).toBeChecked();
     expect(radio('student_monthly')).not.toBeChecked();
@@ -481,7 +485,7 @@ describe('PlanPicker on GoApply', () => {
     expect(screen.queryByRole('checkbox', { name: /renews automatically/i })).toBeNull();
     fireEvent.click(continueBtn());
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('https://payments.example.com/pay'));
-    expect(account.alipayCheckoutPlan).toHaveBeenCalledWith(expect.objectContaining({ planKey: 'student_monthly' }));
+    expect(account.alipayCheckoutPlan).toHaveBeenCalledWith(expect.objectContaining({ planKey: 'student_monthly' }), anAttempt());
   });
 
   it('a buyer who verifies while the sheet holds the earlier list: the plans are asked for once more and the student passes appear', async () => {
@@ -534,6 +538,166 @@ describe('PlanPicker on GoApply', () => {
     fireEvent.click(continueBtn());
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('https://checkout.stripe.test/s'));
     expect(screen.queryByTestId('wechatpay-checkout')).toBeNull();
+  });
+});
+
+// ST-2 (web half; MARKET_STRATEGY §5.1 "Idempotency keys"): one checkout
+// attempt = one key. The server builds the payment provider's idempotency key
+// from it, so a double click opens one payment page and a second, intended
+// purchase opens another.
+describe('PlanPicker: one checkout attempt, one Idempotency-Key', () => {
+  const redirect = (n: number) => ({ kind: 'redirect' as const, url: `https://checkout.stripe.test/s${n}`, orderId: `cs_${n}`, rail: 'stripe' as const });
+  const ack = () => screen.getByRole('checkbox', { name: /renews automatically/i });
+  const continueBtn = () => screen.getByRole('button', { name: /continue to payment/i });
+  async function ready() {
+    await waitFor(() => expect(radio('pro_monthly')).toBeChecked());
+  }
+
+  it('the key is a UUID that fits the header the server accepts', async () => {
+    account.checkoutPlan.mockResolvedValue(redirect(1));
+    renderUi(<PlanPicker navigate={vi.fn()} />);
+    await ready();
+    fireEvent.click(ack());
+    fireEvent.click(continueBtn());
+    await waitFor(() => expect(account.checkoutPlan).toHaveBeenCalledTimes(1));
+    const [key] = attemptKeys(account.checkoutPlan);
+    expect(key).toMatch(ATTEMPT_KEY_RE);
+    expect(key).toMatch(/^[A-Za-z0-9_-]{8,64}$/);
+    // The key travels beside the body, never inside it.
+    expect(account.checkoutPlan.mock.calls[0][0]).not.toHaveProperty('attemptKey');
+  });
+
+  it('a double click sends one key: the button is disabled while the call is pending, and a click after the answer repeats the same key', async () => {
+    let release: (v: unknown) => void = () => undefined;
+    account.checkoutPlan.mockImplementationOnce(() => new Promise((r) => (release = r)));
+    account.checkoutPlan.mockResolvedValue(redirect(1));
+    const navigate = vi.fn();
+    renderUi(<PlanPicker navigate={navigate} />);
+    await ready();
+    fireEvent.click(ack());
+    fireEvent.click(continueBtn());
+    await waitFor(() => expect(account.checkoutPlan).toHaveBeenCalledTimes(1));
+    // The second click of a double click lands on a disabled button.
+    await waitFor(() => expect(screen.getByRole('button', { name: /opening the payment page/i })).toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: /opening the payment page/i }));
+    expect(account.checkoutPlan).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      release(redirect(1));
+    });
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('https://checkout.stripe.test/s1'));
+    // Same sheet, same request, clicked again (the browser has not left yet): the same key, so the provider answers the same page.
+    await waitFor(() => expect(continueBtn()).toBeEnabled());
+    fireEvent.click(continueBtn());
+    await waitFor(() => expect(account.checkoutPlan).toHaveBeenCalledTimes(2));
+    const keys = attemptKeys(account.checkoutPlan);
+    expect(keys[1]).toBe(keys[0]);
+    expect(new Set(keys).size).toBe(1);
+  });
+
+  it('reopening the plan sheet sends a new key', async () => {
+    account.checkoutPlan.mockResolvedValue(redirect(1));
+    const first = renderUi(<PlanPicker navigate={vi.fn()} />);
+    await ready();
+    fireEvent.click(ack());
+    fireEvent.click(continueBtn());
+    await waitFor(() => expect(account.checkoutPlan).toHaveBeenCalledTimes(1));
+    first.unmount();
+    renderUi(<PlanPicker navigate={vi.fn()} />);
+    await ready();
+    fireEvent.click(ack());
+    fireEvent.click(continueBtn());
+    await waitFor(() => expect(account.checkoutPlan).toHaveBeenCalledTimes(2));
+    const keys = attemptKeys(account.checkoutPlan);
+    // The same plan and the same boxes, and still a new attempt.
+    expect(account.checkoutPlan.mock.calls[1][0]).toEqual(account.checkoutPlan.mock.calls[0][0]);
+    expect(keys[1]).toMatch(ATTEMPT_KEY_RE);
+    expect(keys[1]).not.toBe(keys[0]);
+  });
+
+  it('changing the selected plan makes a new key, also when the buyer comes back to the first plan', async () => {
+    account.checkoutPlan.mockResolvedValue(redirect(1));
+    renderUi(<PlanPicker navigate={vi.fn()} />);
+    await ready();
+    fireEvent.click(radio('practice_pack_5'));
+    await waitFor(() => expect(continueBtn()).toBeEnabled());
+    fireEvent.click(continueBtn());
+    await waitFor(() => expect(account.checkoutPlan).toHaveBeenCalledTimes(1));
+    fireEvent.click(radio('practice_pack_15'));
+    await waitFor(() => expect(continueBtn()).toBeEnabled());
+    fireEvent.click(continueBtn());
+    await waitFor(() => expect(account.checkoutPlan).toHaveBeenCalledTimes(2));
+    fireEvent.click(radio('practice_pack_5'));
+    await waitFor(() => expect(continueBtn()).toBeEnabled());
+    fireEvent.click(continueBtn());
+    await waitFor(() => expect(account.checkoutPlan).toHaveBeenCalledTimes(3));
+    expect(account.checkoutPlan.mock.calls.map((c) => (c[0] as { planKey: string }).planKey)).toEqual(['practice_pack_5', 'practice_pack_15', 'practice_pack_5']);
+    expect(new Set(attemptKeys(account.checkoutPlan)).size).toBe(3);
+  });
+
+  it('ticking an acknowledgement box makes a new key (the request body changed)', async () => {
+    account.checkoutPlan.mockResolvedValue(redirect(1));
+    renderUi(<PlanPicker visitorCountry="DE" navigate={vi.fn()} />);
+    await ready();
+    fireEvent.click(ack());
+    await waitFor(() => expect(continueBtn()).toBeEnabled());
+    fireEvent.click(continueBtn());
+    await waitFor(() => expect(account.checkoutPlan).toHaveBeenCalledTimes(1));
+    // The optional withdrawal waiver is ticked: another body, another key.
+    fireEvent.click(screen.getByRole('checkbox', { name: /right of withdrawal/i }));
+    await waitFor(() => expect(continueBtn()).toBeEnabled());
+    fireEvent.click(continueBtn());
+    await waitFor(() => expect(account.checkoutPlan).toHaveBeenCalledTimes(2));
+    expect(account.checkoutPlan.mock.calls[0][0]).toMatchObject({ withdrawalWaiver: false });
+    expect(account.checkoutPlan.mock.calls[1][0]).toMatchObject({ withdrawalWaiver: true });
+    // The renewal box unticked and ticked again: the same body, and still a new attempt.
+    fireEvent.click(ack());
+    fireEvent.click(ack());
+    await waitFor(() => expect(continueBtn()).toBeEnabled());
+    fireEvent.click(continueBtn());
+    await waitFor(() => expect(account.checkoutPlan).toHaveBeenCalledTimes(3));
+    expect(new Set(attemptKeys(account.checkoutPlan)).size).toBe(3);
+  });
+
+  it('a failed call is followed by a new key; the conflict answer (502 idempotency_conflict) shows the normal error line', async () => {
+    account.checkoutPlan.mockRejectedValueOnce(apiError({ code: 'payment_provider_error', details: { reason: 'idempotency_conflict' } }, 502));
+    account.checkoutPlan.mockResolvedValue(redirect(2));
+    const navigate = vi.fn();
+    renderUi(<PlanPicker navigate={navigate} />);
+    await ready();
+    fireEvent.click(ack());
+    fireEvent.click(continueBtn());
+    expect(await screen.findByRole('alert')).toHaveTextContent("We couldn't open the payment page. Nothing was charged. Try again.");
+    await waitFor(() => expect(continueBtn()).toBeEnabled());
+    fireEvent.click(continueBtn());
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('https://checkout.stripe.test/s2'));
+    const keys = attemptKeys(account.checkoutPlan);
+    expect(keys).toHaveLength(2);
+    expect(keys[1]).toMatch(ATTEMPT_KEY_RE);
+    expect(keys[1]).not.toBe(keys[0]);
+    // The body did not change: only the attempt did.
+    expect(account.checkoutPlan.mock.calls[1][0]).toEqual(account.checkoutPlan.mock.calls[0][0]);
+  });
+
+  it('GoApply: the Alipay call carries the key too, and choosing another way to pay starts a new attempt', async () => {
+    api.getPlans.mockResolvedValue(goPlans(['alipay', 'wechatpay']));
+    account.alipayCheckoutPlan.mockResolvedValue({ kind: 'redirect', url: 'https://payments.example.com/pay', orderId: null, rail: 'alipay' });
+    renderUi(<PlanPicker navigate={vi.fn()} />, { brand: 'goapply', flags: WECHAT_ON });
+    const chooser = await screen.findByTestId('rail-chooser');
+    await waitFor(() => expect(continueBtn()).toBeEnabled());
+    fireEvent.click(continueBtn());
+    await waitFor(() => expect(account.alipayCheckoutPlan).toHaveBeenCalledTimes(1));
+    fireEvent.click(continueBtn());
+    await waitFor(() => expect(account.alipayCheckoutPlan).toHaveBeenCalledTimes(2));
+    fireEvent.click(within(chooser).getByRole('radio', { name: /WeChat Pay/ }));
+    fireEvent.click(within(chooser).getByRole('radio', { name: /Alipay/ }));
+    await waitFor(() => expect(continueBtn()).toBeEnabled());
+    fireEvent.click(continueBtn());
+    await waitFor(() => expect(account.alipayCheckoutPlan).toHaveBeenCalledTimes(3));
+    const keys = attemptKeys(account.alipayCheckoutPlan);
+    for (const key of keys) expect(key).toMatch(ATTEMPT_KEY_RE);
+    expect(keys[1]).toBe(keys[0]);
+    expect(keys[2]).not.toBe(keys[0]);
+    expect(account.checkoutPlan).not.toHaveBeenCalled();
   });
 });
 

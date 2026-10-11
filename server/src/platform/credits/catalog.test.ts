@@ -48,7 +48,7 @@ describe('default credit catalog (PRODUCT §6.2, R-07)', () => {
       rewrite: [20, 300, 'day'],
       outreach: [3, 50, 'day'],
       assistant: [30, 300, 'day'],
-      autofill: [5, 100, 'day'],
+      autofill: [20, 100, 'day'],
       job_import: [10, 50, 'day'],
       ready_kits: [3, 30, 'week'],
     };
@@ -68,6 +68,38 @@ describe('default credit catalog (PRODUCT §6.2, R-07)', () => {
     const cn = DEFAULT_CREDIT_CATALOG.goapply.buckets;
     expect(cn.tailor.caps.free.cap).toBe(3);
     for (const b of WINDOW_BUCKETS) if (b !== 'tailor') expect(cn[b].caps, b).toEqual(intl[b].caps);
+  });
+
+  // MARKET_STRATEGY §3, M-14 (PC-3): free autofill is 20 a day on both brands.
+  it.each(['roboapply', 'goapply'] as const)('gives %s Free 20 autofills a day and Pro 100 a day', (brand) => {
+    const { free, pro } = DEFAULT_CREDIT_CATALOG[brand].buckets.autofill.caps;
+    expect(free).toEqual({ cap: 20, window: 'day' });
+    expect(pro).toEqual({ cap: 100, window: 'day' });
+    // With no admin override the served catalog is the default.
+    expect(catalogFor(brand, null).buckets.autofill.caps.free).toEqual({ cap: 20, window: 'day' });
+  });
+
+  it('keeps every other free cap of the §3 table (only autofill moved)', () => {
+    const expected: Record<string, [number, string]> = {
+      fit_analysis: [10, 'day'],
+      cover_letter: [2, 'day'],
+      resume_check: [1, 'day'],
+      rewrite: [20, 'day'],
+      outreach: [3, 'day'],
+      assistant: [30, 'day'],
+      ai_answer: [10, 'day'],
+      job_import: [10, 'day'],
+      ready_kits: [3, 'week'],
+      competitiveness: [1, 'week'],
+    };
+    for (const brand of ['roboapply', 'goapply'] as const) {
+      const c = DEFAULT_CREDIT_CATALOG[brand].buckets;
+      for (const [bucket, [cap, window]] of Object.entries(expected)) {
+        expect(c[bucket as keyof typeof c].caps.free, `${brand}.${bucket}`).toEqual({ cap, window });
+      }
+    }
+    expect(DEFAULT_CREDIT_CATALOG.roboapply.buckets.tailor.caps.free.cap).toBe(2);
+    expect(DEFAULT_CREDIT_CATALOG.goapply.buckets.tailor.caps.free.cap).toBe(3);
   });
 
   it('caps every bucket with a finite number on every plan (no unlimited, R-07)', () => {
@@ -109,6 +141,33 @@ describe('credits.catalog.v1 override', () => {
     expect(cn.buckets.tailor.caps.free).toEqual({ cap: 4, window: 'day' });
     expect(cn.entitlements.pro.saved_searches).toBe(12);
     expect(catalogFor('roboapply', override).buckets.tailor.caps.free.cap).toBe(2);
+  });
+
+  it('an admin override of free autofill still wins over the default of 20, per brand', () => {
+    const { override, error } = parseCreditCatalogOverride(
+      JSON.stringify({ version: 1, brands: { roboapply: { buckets: { autofill: { free: { cap: 5 } } } } } }),
+    );
+    expect(error).toBeNull();
+    expect(catalogFor('roboapply', override).buckets.autofill.caps.free).toEqual({ cap: 5, window: 'day' });
+    expect(catalogFor('roboapply', override).buckets.autofill.caps.pro).toEqual({ cap: 100, window: 'day' });
+    // The other brand keeps its own default until it is overridden too.
+    expect(catalogFor('goapply', override).buckets.autofill.caps.free).toEqual({ cap: 20, window: 'day' });
+
+    const both = parseCreditCatalogOverride(
+      JSON.stringify({ version: 1, brands: { roboapply: { buckets: { autofill: { free: { cap: 5 } } } }, goapply: { buckets: { autofill: { free: { cap: 8 } } } } } }),
+    ).override;
+    expect(catalogFor('roboapply', both).buckets.autofill.caps.free.cap).toBe(5);
+    expect(catalogFor('goapply', both).buckets.autofill.caps.free.cap).toBe(8);
+  });
+
+  it('the stored AppConfig override (credits.catalog.v1) is what each brand is served; without one the default of 20 stands', async () => {
+    setCreditCatalogConfigLoader(async () => null);
+    expect((await getCreditCatalog('roboapply')).buckets.autofill.caps.free.cap).toBe(20);
+    expect((await getCreditCatalog('goapply')).buckets.autofill.caps.free.cap).toBe(20);
+    setCreditCatalogConfigLoader(async () => JSON.stringify({ version: 1, brands: { goapply: { buckets: { autofill: { free: { cap: 5 } } } } } }));
+    expect((await getCreditCatalog('goapply')).buckets.autofill.caps.free).toEqual({ cap: 5, window: 'day' });
+    expect((await getCreditCatalog('goapply')).buckets.autofill.caps.pro).toEqual({ cap: 100, window: 'day' });
+    expect((await getCreditCatalog('roboapply')).buckets.autofill.caps.free.cap).toBe(20);
   });
 
   it('rejects invalid JSON, unknown keys and out-of-range caps', () => {

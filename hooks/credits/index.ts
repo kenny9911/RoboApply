@@ -10,12 +10,15 @@ export {
   useCancelSubscription,
   useCancelSurvey,
   usePlanCheckout,
+  useCheckoutAttempt,
+  newAttemptKey,
   checkoutRedirectUrl,
   useSwitchQuote,
   useConfirmSwitch,
   usePaymentPortal,
   type CancelSurveyVars,
   type PlanCheckoutVars,
+  type CheckoutAttempt,
 } from './useBillingActions';
 export { useRequestCancelLink, useConfirmPublicCancel } from './usePublicCancel';
 export { useCreditHistory, CREDIT_HISTORY_QUERY_KEY } from './useCreditHistory';

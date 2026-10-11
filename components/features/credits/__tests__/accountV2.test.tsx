@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 
 import { buildPlanViews } from '../../../../server/src/platform/billing/planViews';
-import { RA_ENV, atPhoneWidth, creditsResponse, plansView, renderUi } from './fixtures';
+import { RA_ENV, atPhoneWidth, checkoutOf, creditsResponse, plansView, renderUi } from './fixtures';
 import type { BillingPlanResponse } from '../../../../lib/api/account';
 import { RoboApiError } from '../../../../lib/api/client';
 import { QUARTERLY_SUGGESTION_KEYS, displayPrice, quarterlySuggestion } from '../../../../lib/pricing';
@@ -129,7 +129,7 @@ describe('pure helpers (lib/pricing)', () => {
 describe('PlanPicker V2', () => {
   it('shows a Taiwan buyer the configured TWD price instead of the USD price', async () => {
     const { plans, defaultSelection } = buildPlanViews('roboapply', { env: V2_ENV, country: 'TW' });
-    api.getPlans.mockResolvedValue({ ...plansView('roboapply', V2_ENV), plans, defaultSelection, checkout: { rails: ['stripe'], showWithdrawalWaiver: true, country: 'TW', acknowledgementVersion: 't' } });
+    api.getPlans.mockResolvedValue({ ...plansView('roboapply', V2_ENV), plans, defaultSelection, checkout: checkoutOf(['stripe'], { showWithdrawalWaiver: true, country: 'TW' }) });
     renderUi(<PlanPicker navigate={vi.fn()} />);
     await waitFor(() => expect(option('pro_monthly')).not.toBeNull());
     expect(option('pro_monthly')!.textContent).toMatch(/NT\$749|\$749/);
@@ -140,7 +140,7 @@ describe('PlanPicker V2', () => {
   it('shows a Taiwan student the discount computed from the TWD prices', async () => {
     const env = { ...V2_ENV, STRIPE_PRICE_STUDENT_MONTHLY_TWD: 'price_sm_twd', STRIPE_PRICE_STUDENT_MONTHLY_TWD_CENTS: '59900' };
     const { plans, defaultSelection } = buildPlanViews('roboapply', { env, studentEnabled: true, country: 'TW' });
-    api.getPlans.mockResolvedValue({ ...plansView('roboapply', env), plans, defaultSelection, checkout: { rails: ['stripe'], showWithdrawalWaiver: true, country: 'TW', acknowledgementVersion: 't' } });
+    api.getPlans.mockResolvedValue({ ...plansView('roboapply', env), plans, defaultSelection, checkout: checkoutOf(['stripe'], { showWithdrawalWaiver: true, country: 'TW' }) });
     v2.getStudentStatus.mockResolvedValue(studentStatus(true));
     renderUi(<PlanPicker navigate={vi.fn()} />, { flags: { student: true } });
     await waitFor(() => expect(option('student_monthly')).not.toBeNull());
@@ -209,8 +209,9 @@ describe('QuarterlySuggestion', () => {
     v2.getUiState.mockResolvedValue(uiState({ [QUARTERLY_SUGGESTION_KEYS.monthlySeenAt]: '2026-09-01T00:00:00.000Z' }));
     renderUi(<QuarterlySuggestion now={() => NOW} />);
     const card = await screen.findByTestId('quarterly-suggestion');
-    expect(card.textContent).toContain('save 19%');
-    expect(card.textContent).toContain('$59.99');
+    // $54.99 against 3 × $24.99 = $74.97: 26.65%, printed rounded down.
+    expect(card.textContent).toContain('save 26%');
+    expect(card.textContent).toContain('$54.99');
     expect(card.textContent).toContain('$74.97');
     await waitFor(() => expect(v2.patchUiState).toHaveBeenCalledWith({ values: { [QUARTERLY_SUGGESTION_KEYS.shownAt]: NOW.toISOString() } }));
     // The stamp does not hide the card that caused it.

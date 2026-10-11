@@ -3,9 +3,13 @@
 // PlanPicker — the in-app plan sheet (PRODUCT_PLAN.md §6.3, F-BILL-02;
 // TASK_PLAN.md WP-21b). Rules it enforces:
 //
-//   - Prices and labels come only from `GET /billing/plans` (D3). Unpriced
-//     plans are hidden; a plan that is not on sale shows "Not available yet"
-//     and cannot be bought.
+//   - Prices and labels come only from `GET /billing/plans` (D3, D6): every
+//     plan of either brand arrives with its amount (the catalog default or an
+//     override), and the labels beside it are computed from those amounts by
+//     `displayPrice`, the same function /pricing uses. A row that cannot be
+//     chosen says "Not available yet" and cannot be bought. A plan the API
+//     sends with no amount is not listed (nothing here invents a price or
+//     says that one is missing).
 //   - What can be paid with also comes from that response, never from the
 //     brand: `checkout.rails` lists the rails that can charge now, in the
 //     order to offer them. One rail: "Continue" uses it. Two: the buyer picks,
@@ -13,6 +17,14 @@
 //     Pay second and only when it is set up). `paymentsOpen: false` (no rail
 //     can charge, or payments are switched off) keeps the prices on the page
 //     and shows one "payment is not open yet" note; nothing can be bought.
+//     On RoboApply that is a deployment whose card rail is not ready (the
+//     server then sends every plan as not on sale, so every row carries the
+//     "Not available yet" tag too); on GoApply one without its rail's
+//     credential, or with payments switched off.
+//   - One checkout attempt = one `Idempotency-Key` (`useCheckoutAttempt`): a
+//     double click sends the same key, so one payment page opens; a new key
+//     is made when the sheet opens, when the plan, an acknowledgement box or
+//     the way to pay changes, and after a failed call.
 //   - Monthly is preselected; weekly plans and passes are NEVER preselected
 //     (server `defaultSelection`, re-checked here).
 //   - The weekly price shows its monthly equivalent ("about $43 a month");
@@ -27,6 +39,10 @@
 //     quote sheet (amount today, renewal price, next renewal date) before
 //     anything is charged.
 //   - Taiwan visitors see the TWD reference line under USD prices.
+//   - The 7-day pass says "same price as weekly billing" only while the two
+//     amounts the API sent are equal (`samePriceAsWeeklyBilling`).
+//   - GoApply passes carry the mainland line 一次性付款 · 到期不自动续费 with
+//     the pass's own day count (`billingCn.pricing.passNote`).
 //   - Only what is shown can be bought: the selection is resolved from the
 //     rendered options, so a hidden plan can never enable "Continue".
 //   - A Pro subscriber manages renewal in the payment portal; once they have
@@ -37,11 +53,10 @@
 //     payment code is only ever drawn there, as a QR code: a `weixin://` link
 //     is never used as an image address. Every other rail answers a payment
 //     page to open.
-//   - A one-time pass says so on its row, with its day count ("30 days of
-//     Pro. One payment; it doesn't renew."). Student plans are listed only
-//     for a verified student, on either brand: the server sends them to
-//     nobody else, so the list is asked for again once the buyer verifies
-//     on this page.
+//   - A one-time pass says so on its row, with its day count. Student plans
+//     are listed only for a verified student, on either brand: the server
+//     sends them to nobody else, so the list is asked for again once the
+//     buyer verifies on this page.
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -50,13 +65,13 @@ import { Btn } from '../../v3/primitives/Btn';
 import { PriceReference, PriceReferenceCountry } from '../market/PriceReference';
 import { useBrand } from '../../../lib/brand/BrandProvider';
 import { useFlag } from '../../../lib/flags';
-import { QUARTERLY_SWITCH, displayPrice, requiresWithdrawalWaiver } from '../../../lib/pricing';
+import { QUARTERLY_SWITCH, displayPrice, requiresWithdrawalWaiver, samePriceAsWeeklyBilling } from '../../../lib/pricing';
 import { apiErrorCode } from '../../../lib/api/contracts/wire';
 import { useStudentStatus } from '../account-v2';
 import { WechatPaySheet, sellableCnPlan, useWechatPayAvailable } from '../billing-cn';
 import type { CatalogPlan } from '../../../lib/api/credits';
 import { initialSelection, monthlyPlan, plansExtras, usePlans, visiblePlans } from '../../../hooks/credits/usePlans';
-import { checkoutRedirectUrl, usePlanCheckout } from '../../../hooks/credits/useBillingActions';
+import { checkoutRedirectUrl, useCheckoutAttempt, usePlanCheckout } from '../../../hooks/credits/useBillingActions';
 import { useSubscriptionState } from '../../../hooks/credits/useSubscriptionState';
 import { useVisitorCountry } from '../../../hooks/credits/useVisitorCountry';
 import { useCredits } from '../../../hooks/shared/useCredits';
@@ -137,6 +152,7 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
   const sub = useSubscriptionState();
   const credits = useCredits();
   const checkout = usePlanCheckout();
+  const attempt = useCheckoutAttempt();
   const groupId = useId();
 
   const plans = useMemo(() => visiblePlans(plansQ.data?.plans, { studentEnabled }), [plansQ.data, studentEnabled]);
@@ -184,6 +200,12 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
     setAutoRenewAck(false);
     setWaiver(false);
   }, [selected]);
+
+  // A changed plan, acknowledgement box or way to pay is a new checkout attempt.
+  const renewAttempt = attempt.renew;
+  useEffect(() => {
+    renewAttempt();
+  }, [renewAttempt, selected, autoRenewAck, waiver, railChoice]);
 
   if (plansQ.isLoading) return <p className={styles.muted} aria-busy="true">{t('planSheet.loading')}</p>;
   if (plansQ.isError || !plansQ.data) {
@@ -255,20 +277,24 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
       setWechatFor(plan);
       return;
     }
+    const body = {
+      planKey: plan.key,
+      autoRenewAck: needsAck ? autoRenewAck : undefined,
+      withdrawalWaiver: showWaiver ? waiver : undefined,
+      next: checkoutReturnPath(plan, credits.data?.practice?.balance ?? null),
+      cancelNext: CHECKOUT_CANCEL_PATH,
+    };
     checkout.mutate(
-      {
-        rail,
-        planKey: plan.key,
-        autoRenewAck: needsAck ? autoRenewAck : undefined,
-        withdrawalWaiver: showWaiver ? waiver : undefined,
-        next: checkoutReturnPath(plan, credits.data?.practice?.balance ?? null),
-        cancelNext: CHECKOUT_CANCEL_PATH,
-      },
+      // The same request keeps its key; anything that changes it gets a new one.
+      { rail, ...body, attemptKey: attempt.keyFor({ rail, ...body }) },
       {
         onSuccess: (res) => {
           const url = checkoutRedirectUrl(res);
           if (url) navigate(url);
         },
+        // A failed call (a refusal, a provider error, a key the provider saw
+        // with other parameters) ends this attempt: the next click is a new one.
+        onError: () => attempt.renew(),
       },
     );
   }
@@ -304,16 +330,26 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
           {weekly !== null ? <span className={styles.muted}>{t('monthlyEquivalent', { price: money(locale, weekly, d.currency) })}</span> : null}
           {save !== null ? <span className={styles.tag}>{t('save', { pct: save })}</span> : null}
           {studentPct !== null ? <span className={styles.tag}>{tv('plans.studentTag', { pct: studentPct })}</span> : null}
-          {p.kind === 'pass' ? <span className={styles.muted}>{t('passNote', { days: p.passDays ?? 0 })}</span> : null}
-          {p.kind === 'pack' && p.practice ? (
-            <span className={styles.muted}>{t('packNote', { credits: p.practice.credits, months: p.practice.validMonths ?? 12 })}</span>
+          {p.kind === 'pass' && p.passDays ? (
+            <span className={styles.muted} data-pass-note="">
+              {/* Mainland passes carry the market's own line: one-time payment, no auto-renewal. The day count is the pass's own. */}
+              {brand.market === 'cn' ? tc('pricing.passNote', { days: p.passDays }) : t('passNote', { days: p.passDays })}
+            </span>
+          ) : null}
+          {samePriceAsWeeklyBilling(p, plansQ.data?.plans) ? (
+            <span className={styles.muted} data-same-price-as-weekly="">
+              {t('pricing.samePriceAsWeekly')}
+            </span>
+          ) : null}
+          {p.kind === 'pack' && p.practice && p.practice.validMonths ? (
+            <span className={styles.muted}>{t('packNote', { credits: p.practice.credits, months: p.practice.validMonths })}</span>
           ) : null}
           {p.kind === 'subscription' ? <span className={styles.muted}>{t('renewsNote', { period: per })}</span> : null}
           {d.local ? <span className={styles.muted}>{tv('plans.localPrice')}</span> : null}
           {!d.local && p.currency === 'USD' && p.amountMinor !== null ? <PriceReference amountMinor={p.amountMinor} currency="USD" /> : null}
           {current ? <span className={styles.tag}>{t('planSheet.yourPlan')}</span> : null}
-          {/* One plan off sale while others can be bought. When payments are closed altogether the sheet says so once, below. */}
-          {!p.sellable && !current && paymentsOpen ? <span className={styles.muted}>{t('planSheet.notAvailable')}</span> : null}
+          {/* A row that is off sale says so, whether it is one plan or all of them; when no payment can open at all the sheet also says that once, below. */}
+          {!p.sellable && !current ? <span className={styles.muted} data-not-available="">{t('planSheet.notAvailable')}</span> : null}
         </span>
       </label>
     );

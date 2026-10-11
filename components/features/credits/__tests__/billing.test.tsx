@@ -4,7 +4,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 
-import { atPhoneWidth, creditsResponse, plansView, renderUi, withBrand } from './fixtures';
+import { RA_ENV, anAttempt, atPhoneWidth, checkoutOf, creditsResponse, plansView, railNotReadyPlansView, renderUi, unpricedPlansView, withBrand } from './fixtures';
+import { buildPlanViews } from '../../../../server/src/platform/billing/planViews';
 import type { BillingPlanResponse } from '../../../../lib/api/account';
 
 const api = vi.hoisted(() => ({
@@ -81,6 +82,69 @@ beforeEach(() => {
 const radio = (key: string) => document.querySelector<HTMLInputElement>(`[data-plan="${key}"] input[type="radio"]`)!;
 const continueBtn = () => screen.getByRole('button', { name: /continue to payment|see what switching costs/i });
 
+// R-25 / MARKET_STRATEGY §4.1 "Taiwan reference": billing stays in USD; the
+// line is a reference computed from the admin's rate, with source and date.
+describe('PlanPicker: the TWD reference line for a Taiwan visitor', () => {
+  const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+  const fx = (asOf: string) => ({ currency: 'TWD' as const, ratePerUsd: 32, source: 'Bank of Taiwan', asOf, amounts: {} });
+  const refs = (key: string) => document.querySelectorAll(`[data-plan="${key}"] [data-testid="price-reference"]`);
+
+  it('shows it under every USD price, with the source and the date, when the API sends a fresh reference', async () => {
+    const asOf = daysAgo(5);
+    api.getPlans.mockResolvedValue(plansView('roboapply', undefined, { fxReference: fx(asOf) }));
+    renderUi(<PlanPicker visitorCountry="TW" navigate={vi.fn()} />);
+    await waitFor(() => expect(radio('pro_monthly')).toBeChecked());
+    await waitFor(() => expect(refs('pro_monthly')).toHaveLength(1));
+    const monthly = refs('pro_monthly')[0];
+    // $24.99 × 32 = NT$799.68 → NT$800; the price itself stays in dollars.
+    expect(monthly).toHaveTextContent(/About NT\$800/);
+    expect(monthly).toHaveTextContent('Bank of Taiwan');
+    expect(monthly).toHaveTextContent(asOf);
+    expect(monthly).toHaveAttribute('data-as-of', asOf);
+    expect(document.querySelector('[data-plan="pro_monthly"]')).toHaveTextContent('$24.99 / month');
+    for (const key of ['pro_weekly', 'pro_quarterly', 'pro_week_pass', 'practice_pack_5', 'practice_pack_15']) expect(refs(key), key).toHaveLength(1);
+    // $54.99 × 32 = NT$1,759.68 → NT$1,760.
+    expect(refs('pro_quarterly')[0]).toHaveTextContent(/NT\$1,760/);
+  });
+
+  it('shows nothing when the reference is older than 45 days, and nothing for a visitor outside Taiwan', async () => {
+    api.getPlans.mockResolvedValue(plansView('roboapply', undefined, { fxReference: fx(daysAgo(46)) }));
+    const stale = renderUi(<PlanPicker visitorCountry="TW" navigate={vi.fn()} />);
+    await waitFor(() => expect(radio('pro_monthly')).toBeChecked());
+    expect(document.querySelector('[data-plan="pro_monthly"]')).toHaveTextContent('$24.99 / month');
+    expect(screen.queryByTestId('price-reference')).toBeNull();
+    stale.unmount();
+    // A reference from 44 days ago is still inside the 45-day window.
+    api.getPlans.mockResolvedValue(plansView('roboapply', undefined, { fxReference: fx(daysAgo(44)) }));
+    const edge = renderUi(<PlanPicker visitorCountry="TW" navigate={vi.fn()} />);
+    await waitFor(() => expect(refs('pro_monthly')).toHaveLength(1));
+    edge.unmount();
+    api.getPlans.mockResolvedValue(plansView('roboapply', undefined, { fxReference: fx(daysAgo(5)) }));
+    renderUi(<PlanPicker visitorCountry="US" navigate={vi.fn()} />);
+    await waitFor(() => expect(radio('pro_monthly')).toBeChecked());
+    expect(screen.queryByTestId('price-reference')).toBeNull();
+  });
+
+  it('a plan with a real TWD price shows that price and no reference line; plans still in USD keep theirs', async () => {
+    const env = { ...RA_ENV, STRIPE_PRICE_PRO_MONTHLY_TWD: 'price_m_twd', STRIPE_PRICE_PRO_MONTHLY_TWD_CENTS: '74900' };
+    const { plans, defaultSelection } = buildPlanViews('roboapply', { env, country: 'TW' });
+    api.getPlans.mockResolvedValue({
+      ...plansView('roboapply', env, { fxReference: fx(daysAgo(5)) }),
+      plans,
+      defaultSelection,
+      checkout: checkoutOf(['stripe'], { showWithdrawalWaiver: true, country: 'TW' }),
+    });
+    renderUi(<PlanPicker visitorCountry="TW" navigate={vi.fn()} />);
+    await waitFor(() => expect(radio('pro_monthly')).toBeChecked());
+    const monthly = document.querySelector('[data-plan="pro_monthly"]')!;
+    expect(monthly.textContent).toMatch(/NT\$749|\$749/);
+    expect(monthly).toHaveTextContent('Charged in New Taiwan dollars.');
+    expect(refs('pro_monthly')).toHaveLength(0);
+    await waitFor(() => expect(refs('pro_quarterly')).toHaveLength(1));
+    expect(document.querySelector('[data-plan="pro_quarterly"]')).toHaveTextContent('$54.99 / 3 months');
+  });
+});
+
 describe('PlanPicker (375 px)', () => {
   it('preselects Monthly, never weekly; shows the monthly equivalent and the rounded-down saving', async () => {
     renderUi(<PlanPicker navigate={vi.fn()} />);
@@ -90,7 +154,9 @@ describe('PlanPicker (375 px)', () => {
     const weekly = document.querySelector('[data-plan="pro_weekly"]')!;
     expect(weekly).toHaveTextContent('$9.99 / week');
     expect(weekly).toHaveTextContent('About $43 a month');
-    expect(document.querySelector('[data-plan="pro_quarterly"]')).toHaveTextContent('Save 19%');
+    // 3 × $24.99 = $74.97; $54.99 saves 26.65%, printed rounded down.
+    expect(document.querySelector('[data-plan="pro_quarterly"]')).toHaveTextContent('$54.99 / 3 months');
+    expect(document.querySelector('[data-plan="pro_quarterly"]')).toHaveTextContent('Save 26%');
     expect(document.body.textContent?.toLowerCase()).not.toContain('unlimited');
   });
 
@@ -116,6 +182,7 @@ describe('PlanPicker (375 px)', () => {
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('https://checkout.stripe.test/s'));
     expect(account.checkoutPlan).toHaveBeenCalledWith(
       expect.objectContaining({ planKey: 'pro_monthly', autoRenewAck: true, withdrawalWaiver: undefined, next: '/settings/billing/return?plan=pro_monthly' }),
+      anAttempt(),
     );
   });
 
@@ -182,12 +249,102 @@ describe('PlanPicker (375 px)', () => {
     renderUi(<PlanPicker navigate={vi.fn()} />, { brand: 'goapply' });
     const picker = await screen.findByTestId('plan-picker');
     const row = (key: string) => picker.querySelector(`[data-plan="${key}"]`)!;
-    expect(row('pro_week_pass')).toHaveTextContent("7 days of Pro. One payment; it doesn't renew.");
+    // One-time, no auto-renewal, with the pass's own day count (一次性付款 · 到期不自动续费 in the zh bundle).
+    expect(row('pro_week_pass')).toHaveTextContent('7 days of Pro. One-time payment. It does not renew automatically when it ends.');
     expect(row('pro_monthly')).toHaveTextContent('¥39, paid once');
-    expect(row('pro_monthly')).toHaveTextContent("30 days of Pro. One payment; it doesn't renew.");
-    expect(row('pro_quarterly')).toHaveTextContent("90 days of Pro. One payment; it doesn't renew.");
+    expect(row('pro_monthly')).toHaveTextContent('30 days of Pro. One-time payment. It does not renew automatically when it ends.');
+    expect(row('pro_quarterly')).toHaveTextContent('90 days of Pro. One-time payment. It does not renew automatically when it ends.');
     expect(row('pro_quarterly')).toHaveTextContent('Save 15% compared with paying monthly');
     expect(picker).not.toHaveTextContent(/Renews every/);
+    // GoApply sells no weekly billing, so its week pass is compared with nothing.
+    expect(picker.querySelector('[data-same-price-as-weekly]')).toBeNull();
+  });
+
+  it('GoApply: the day count on a pass is the plan\'s own (passDays from the API), never a number in the copy', async () => {
+    const view = plansView('goapply');
+    api.getPlans.mockResolvedValue({ ...view, plans: view.plans.map((p) => (p.key === 'pro_week_pass' ? { ...p, passDays: 10 } : p)) });
+    renderUi(<PlanPicker navigate={vi.fn()} />, { brand: 'goapply' });
+    const picker = await screen.findByTestId('plan-picker');
+    expect(picker.querySelector('[data-plan="pro_week_pass"] [data-pass-note]')).toHaveTextContent('10 days of Pro. One-time payment. It does not renew automatically when it ends.');
+    expect(picker.querySelector('[data-plan="pro_monthly"] [data-pass-note]')).toHaveTextContent('30 days of Pro.');
+  });
+
+  // MARKET_STRATEGY §4.1, §4.2: the sheet lists exactly what the API sends.
+  it('RoboApply lists the §4.1 amounts: $9.99 a week (about $43 a month), $24.99, $54.99 with Save 26%, the pass at $9.99, packs $9.99 and $24.99', async () => {
+    renderUi(<PlanPicker navigate={vi.fn()} />);
+    const picker = await screen.findByTestId('plan-picker');
+    await waitFor(() => expect(radio('pro_monthly')).toBeChecked());
+    const row = (key: string) => picker.querySelector(`[data-plan="${key}"]`)!;
+    expect(row('pro_weekly')).toHaveTextContent('$9.99 / week');
+    expect(row('pro_weekly')).toHaveTextContent('About $43 a month');
+    expect(row('pro_weekly')).not.toHaveTextContent('43.29');
+    expect(row('pro_monthly')).toHaveTextContent('$24.99 / month');
+    expect(row('pro_quarterly')).toHaveTextContent('$54.99 / 3 months');
+    expect(row('pro_quarterly')).toHaveTextContent('Save 26% compared with paying monthly');
+    expect(row('pro_week_pass')).toHaveTextContent('$9.99, paid once');
+    expect(row('practice_pack_5')).toHaveTextContent('$9.99, paid once');
+    expect(row('practice_pack_15')).toHaveTextContent('$24.99, paid once');
+    // RoboApply's pass keeps its own wording; the mainland line is GoApply's.
+    expect(row('pro_week_pass')).toHaveTextContent("7 days of Pro. One payment; it doesn't renew.");
+    expect(picker).not.toHaveTextContent(/Price not set|Not available yet/);
+  });
+
+  it('GoApply lists the §4.2 amounts: ¥12, ¥39, ¥99 with Save 15%, packs ¥29 and ¥79', async () => {
+    api.getPlans.mockResolvedValue(plansView('goapply'));
+    renderUi(<PlanPicker navigate={vi.fn()} />, { brand: 'goapply' });
+    const picker = await screen.findByTestId('plan-picker');
+    const text = (key: string) => picker.querySelector(`[data-plan="${key}"]`)!;
+    expect(text('pro_week_pass')).toHaveTextContent('¥12, paid once');
+    expect(text('pro_monthly')).toHaveTextContent('¥39, paid once');
+    expect(text('pro_quarterly')).toHaveTextContent('¥99, paid once');
+    expect(text('pro_quarterly')).toHaveTextContent('Save 15%');
+    expect(text('practice_pack_5')).toHaveTextContent('¥29, paid once');
+    expect(text('practice_pack_15')).toHaveTextContent('¥79, paid once');
+    await waitFor(() => expect(radio('pro_monthly')).toBeChecked());
+    expect(radio('pro_week_pass')).not.toBeChecked();
+  });
+
+  it('the 7-day pass says "same price as weekly billing" only while the two amounts from the API are equal', async () => {
+    const { unmount } = renderUi(<PlanPicker navigate={vi.fn()} />);
+    await waitFor(() => expect(radio('pro_monthly')).toBeChecked());
+    const line = () => document.querySelector('[data-plan="pro_week_pass"] [data-same-price-as-weekly]');
+    expect(line()).toHaveTextContent('Same price as weekly billing. The pass does not renew; weekly billing does.');
+    // Only the pass carries it.
+    expect(document.querySelectorAll('[data-same-price-as-weekly]')).toHaveLength(1);
+    unmount();
+    // A pass priced differently from weekly billing: no line (it is computed, not written).
+    const view = plansView();
+    api.getPlans.mockResolvedValue({ ...view, plans: view.plans.map((p) => (p.key === 'pro_week_pass' ? { ...p, amountMinor: 699 } : p)) });
+    renderUi(<PlanPicker navigate={vi.fn()} />);
+    await waitFor(() => expect(radio('pro_monthly')).toBeChecked());
+    expect(document.querySelector('[data-plan="pro_week_pass"]')).toHaveTextContent('$6.99, paid once');
+    expect(document.querySelector('[data-same-price-as-weekly]')).toBeNull();
+  });
+
+  // M-25: the card rail needs its key AND a webhook secret. Without either the
+  // server lists every plan with its amount as not on sale (`payments_disabled`).
+  it('RoboApply with its card rail not ready: every amount stays, every row says "Not available yet", one note, nothing can be bought', async () => {
+    account.checkoutPlan.mockResolvedValue({ kind: 'redirect', url: 'https://checkout.stripe.test/never', orderId: 'cs_x', rail: 'stripe' });
+    api.getPlans.mockResolvedValue(railNotReadyPlansView());
+    renderUi(<PlanPicker navigate={vi.fn()} />);
+    const picker = await screen.findByTestId('plan-picker');
+    const keys = ['pro_weekly', 'pro_monthly', 'pro_quarterly', 'pro_week_pass', 'practice_pack_5', 'practice_pack_15'];
+    for (const key of keys) {
+      const row = picker.querySelector(`[data-plan="${key}"]`)!;
+      expect(row.querySelector('[data-not-available]'), key).toHaveTextContent('Not available yet');
+      expect(radio(key), key).toBeDisabled();
+    }
+    expect(picker.querySelector('[data-plan="pro_monthly"]')).toHaveTextContent('$24.99 / month');
+    expect(picker.querySelector('[data-plan="pro_quarterly"]')).toHaveTextContent('$54.99 / 3 months');
+    expect(screen.getByTestId('payments-not-open')).toHaveTextContent('These are the prices. Payment is not open yet, so nothing can be bought right now.');
+    // Nothing is preselected, no renewal box is asked for, and Continue does nothing.
+    expect(document.querySelectorAll('input[type="radio"]:checked')).toHaveLength(0);
+    expect(screen.queryByRole('checkbox', { name: /renews automatically/i })).toBeNull();
+    expect(continueBtn()).toBeDisabled();
+    fireEvent.click(continueBtn());
+    expect(account.checkoutPlan).not.toHaveBeenCalled();
+    // The closed state never talks about a missing price.
+    expect(document.body.textContent).not.toMatch(/price (is )?not set|not priced|no price/i);
   });
 
   it('RoboApply shows no "not open yet" note and no rail chooser when its one rail can charge', async () => {
@@ -197,10 +354,12 @@ describe('PlanPicker (375 px)', () => {
     expect(screen.queryByTestId('rail-chooser')).toBeNull();
   });
 
-  it('no priced plans → an honest empty line, not a fake price', async () => {
-    api.getPlans.mockResolvedValue(plansView('roboapply', {}));
+  it('plans the API sends with no amount are not listed → an honest empty line, never a fake price or a "price not set" row', async () => {
+    api.getPlans.mockResolvedValue(unpricedPlansView());
     renderUi(<PlanPicker navigate={vi.fn()} />);
     expect(await screen.findByText('No plans are on sale right now.')).toBeInTheDocument();
+    expect(document.querySelectorAll('[data-plan]')).toHaveLength(0);
+    expect(document.body.textContent).not.toMatch(/Price not set|\$|—/);
   });
 
   it('a pack purchase carries the plan and the practice balance before checkout to the return page', async () => {
@@ -213,6 +372,7 @@ describe('PlanPicker (375 px)', () => {
     await waitFor(() =>
       expect(account.checkoutPlan).toHaveBeenCalledWith(
         expect.objectContaining({ planKey: 'practice_pack_5', next: '/settings/billing/return?plan=practice_pack_5&practiceBefore=2' }),
+        anAttempt(),
       ),
     );
   });
@@ -256,7 +416,7 @@ describe('PlanPicker (375 px)', () => {
     await waitFor(() => expect(continueBtn()).toBeEnabled());
     fireEvent.click(continueBtn());
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('https://checkout.stripe.test/again'));
-    expect(account.checkoutPlan).toHaveBeenCalledWith(expect.objectContaining({ planKey: 'pro_week_pass' }));
+    expect(account.checkoutPlan).toHaveBeenCalledWith(expect.objectContaining({ planKey: 'pro_week_pass' }), anAttempt());
   });
 
   it('a running subscription is still "Your plan" and cannot be bought twice', async () => {
@@ -457,7 +617,7 @@ describe('BillingView', () => {
     view.rerender(withBrand(<BillingView requestedPlan="pro_week_pass" navigate={vi.fn()} />));
     await waitFor(() => expect(radio('pro_week_pass')).toBeChecked());
     expect(radio('pro_week_pass')).toBeEnabled();
-    expect(document.querySelector('[data-plan="pro_week_pass"]')).toHaveTextContent('$6.99');
+    expect(document.querySelector('[data-plan="pro_week_pass"]')).toHaveTextContent('$9.99, paid once');
     await waitFor(() => expect(continueBtn()).toBeEnabled());
   });
 

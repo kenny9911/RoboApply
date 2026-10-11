@@ -37,7 +37,7 @@ vi.mock('next/navigation', () => ({
 import { DEFAULT_CREDIT_CATALOG } from '../../../../server/src/platform/credits/catalog';
 import { capsFromCatalog } from '../../../../server/src/features/support/service';
 import { RoboApiError } from '../../../../lib/api/client';
-import { plansView } from '../../credits/__tests__/fixtures';
+import { plansView, unpricedPlansView } from '../../credits/__tests__/fixtures';
 import { sortsFor } from '../../feed/SortMenu';
 import { featuresFor, findFeature, OTHER_SORTS } from '../catalog';
 import { AboutPage, HelpPage, RankingPage, SecurityPage } from '../CompanyPages';
@@ -86,8 +86,9 @@ describe('/pricing', () => {
     expect(card('pro_monthly').getByText('$24.99 / month')).toBeInTheDocument();
     expect(card('pro_monthly').getByText(/Renews every month until you cancel/)).toBeInTheDocument();
     expect(card('pro_weekly').getByText('$9.99 / week')).toBeInTheDocument();
-    expect(card('pro_weekly').getByText(/About \$43\.29 a month/)).toBeInTheDocument();
-    expect(card('pro_quarterly').getByText(/Save 19% compared with paying monthly/)).toBeInTheDocument();
+    // The same computed labels as the plan sheet: a whole "about" amount and the rounded-down saving.
+    expect(card('pro_weekly').getByText('About $43 a month')).toBeInTheDocument();
+    expect(card('pro_quarterly').getByText(/Save 26% compared with paying monthly/)).toBeInTheDocument();
     expect(card('pro_week_pass').getByText(/7 days of Pro/)).toBeInTheDocument();
     expect(card('practice_pack_5').getByText(/5 practice interviews, usable for 12 months/)).toBeInTheDocument();
     expect(screen.queryByText(/Not open yet/)).toBeNull();
@@ -111,14 +112,15 @@ describe('/pricing', () => {
     expect(screen.queryByRole('link', { name: 'Create a free account to buy' })).toBeNull();
   });
 
-  it('a plan without a configured price says so instead of inventing one', async () => {
-    api.getPlans.mockImplementation(async () => plansView('roboapply', {}));
+  it('a plan the API sends with no amount is not printed at all: no card, no invented price, no "Price not set yet"', async () => {
+    api.getPlans.mockImplementation(async () => unpricedPlansView());
     const { container } = renderMarketing(<PricingPage />);
-    await waitFor(() => expect(container.querySelector('[data-plan="pro_monthly"]')).not.toBeNull());
-    const monthly = within(container.querySelector('[data-plan="pro_monthly"]') as HTMLElement);
-    expect(monthly.getByText('Price not set yet')).toBeInTheDocument();
-    // A plan that cannot be sold has no buy button.
-    expect(monthly.queryByRole('link')).toBeNull();
+    await waitFor(() => expect(api.getPlans).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('Loading plans…')).toBeNull());
+    // Only the Free card is left.
+    expect(Array.from(container.querySelectorAll('[data-plan]')).map((el) => el.getAttribute('data-plan'))).toEqual(['free']);
+    expect(container.textContent).not.toContain('Price not set yet');
+    expect(container.textContent).not.toMatch(/\$[1-9]/);
   });
 
   it('prints caps from the credit catalog ("Up to N a day", never unlimited)', async () => {
@@ -178,7 +180,7 @@ describe('/pricing', () => {
       expect(card(key).getByRole('link', { name: 'Create a free account to buy' })).toHaveAttribute('href', `/signup?from=pricing%3A${key}&utm_source=ads`);
       expect(card(key).queryByText('Not open yet')).toBeNull();
     }
-    expect(card('pro_monthly').getByText(/30 days of Pro\. One payment; it doesn't renew\./)).toBeInTheDocument();
+    expect(card('pro_monthly').getByText('30 days of Pro. One-time payment. It does not renew automatically when it ends.')).toBeInTheDocument();
     expect(card('pro_week_pass').getByText(/7 days of Pro/)).toBeInTheDocument();
     expect(card('practice_pack_15').getByText(/15 practice interviews, usable for 12 months/)).toBeInTheDocument();
     // Nothing on the page says payments are closed, and nothing is priced in dollars.
@@ -189,8 +191,8 @@ describe('/pricing', () => {
     // What follows from the rail: one-time passes, their refund rules, no cancel entry.
     expect(screen.getByText('Memberships are one-time passes. They never renew automatically.')).toBeInTheDocument();
     const refunds = within(container.querySelector('[data-pass-refunds]') as HTMLElement);
-    expect(refunds.getByText(/within 7 days \(48 hours for the week pass\)/)).toBeInTheDocument();
-    expect(refunds.getByText(/A practice pack can be refunded while none of its practice interviews has been used/)).toBeInTheDocument();
+    expect(refunds.getByText(/within 7 days \(week pass: within 48 hours\)/)).toBeInTheDocument();
+    expect(refunds.getByText(/Practice packs: you can get a refund while no interview from the pack has been used/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Ask for a refund from the Help page' })).toHaveAttribute('href', '/help');
     expect(screen.queryByTestId('cancel-footer-link')).toBeNull();
     expect(screen.queryByRole('link', { name: 'Read the refund policy' })).toBeNull();

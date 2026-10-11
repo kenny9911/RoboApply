@@ -81,6 +81,7 @@ export function pricePeriod(plan: { kind: string; interval: string | null }): Pr
   return 'once';
 }
 
+/** An amount the server sent, formatted; "—" only when a caller has none to show (never a stand-in for a price that is "not set"). */
 export function money(locale: string, amountMinor: number | null | undefined, currency: string): string {
   if (amountMinor === null || amountMinor === undefined || !Number.isFinite(amountMinor)) return '—';
   return formatMoney(locale, amountMinor, currency);

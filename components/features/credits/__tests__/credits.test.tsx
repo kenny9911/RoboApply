@@ -5,7 +5,7 @@ import { act, type ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 
-import { atPhoneWidth, creditsResponse, plansView, renderUi } from './fixtures';
+import { atPhoneWidth, checkoutOf, creditsResponse, plansView, railNotReadyPlansView, renderUi, unpricedPlansView } from './fixtures';
 
 const api = vi.hoisted(() => ({ getCredits: vi.fn(), getPlans: vi.fn(), getCreditHistory: vi.fn() }));
 const account = vi.hoisted(() => ({ plan: vi.fn() }));
@@ -103,7 +103,7 @@ describe('OutOfCreditsSheet', () => {
 
   it('practice on GoApply with Alipay able to charge: the pack link is offered, as on RoboApply', async () => {
     api.getPlans.mockResolvedValue(
-      plansView('goapply', {}, { paymentsOpen: true, checkout: { rails: ['alipay'], showWithdrawalWaiver: false, country: null, acknowledgementVersion: 'test' } }),
+      plansView('goapply', {}, { paymentsOpen: true, checkout: checkoutOf(['alipay']) }),
     );
     renderUi(<OutOfCreditsSheet />, { brand: 'goapply' });
     act(() => reportCreditsExhausted({ bucket: 'practice', resetsAt: null, upgradable: false }));
@@ -126,6 +126,41 @@ describe('OutOfCreditsSheet', () => {
     expect(options.children).toHaveLength(1);
     expect(options).toHaveTextContent('Continue without it');
     expect(screen.queryByText('Get practice credits')).toBeNull();
+  });
+
+  // M-25: RoboApply's card rail needs its key and a webhook secret. Until both are set the
+  // packs list with their amounts and none can be bought, so the sheet offers none.
+  it('practice on RoboApply with its card rail not ready: no pack link and no talk of a missing price', async () => {
+    api.getPlans.mockResolvedValue(railNotReadyPlansView());
+    renderUi(
+      <>
+        <OutOfCreditsSheet />
+        <PlansSettled />
+      </>,
+    );
+    act(() => reportCreditsExhausted({ bucket: 'practice', resetsAt: null, upgradable: false }));
+    const options = await screen.findByTestId('out-of-credits-options');
+    await screen.findByTestId('plans-settled');
+    expect(options.children).toHaveLength(1);
+    expect(options).toHaveTextContent('Continue without it');
+    expect(screen.queryByText('Get practice credits')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/price/i);
+  });
+
+  it('practice when the API lists packs with no amount: nothing to offer, nothing invented', async () => {
+    api.getPlans.mockResolvedValue({ ...unpricedPlansView(), paymentsOpen: true });
+    renderUi(
+      <>
+        <OutOfCreditsSheet />
+        <PlansSettled />
+      </>,
+    );
+    act(() => reportCreditsExhausted({ bucket: 'practice', resetsAt: null, upgradable: true }));
+    const options = await screen.findByTestId('out-of-credits-options');
+    await screen.findByTestId('plans-settled');
+    expect(screen.queryByText('Get practice credits')).toBeNull();
+    // The server's own "Pro helps" answer still decides the other option.
+    expect(options).toHaveTextContent('Get Pro');
   });
 
   it('practice with a server refill time offers Wait', async () => {
