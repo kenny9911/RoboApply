@@ -1,12 +1,18 @@
 // server/src/features/jobs/ingest/pipeline.ts — fetch → normalize → upsert → dedupe → enrich (ARCH §4.4).
 //
 // `runIngestQuery` runs ONE leased RAIngestQuery:
-//   1. metered providers reserve a call in RAProviderUsage (atomic; over the
-//      daily budget → no call, the query waits for the next UTC day);
+//   1. metered providers have ONE budget (quota.ts): while the plan's monthly
+//      quota is used up, refused or down to its reserve, no call is made and
+//      every due query of the provider is parked until the quota stops
+//      blocking, at most a day at a time ('quota');
+//      otherwise a call is reserved in today's RAProviderUsage row under
+//      `usageKey(provider, market)` (atomic; over the effective daily limit →
+//      no call, the query waits for the next UTC day);
 //   2. the adapter fetches (never throws);
-//   3. `processJobs`: normalizeProviderJob → marketHooks.afterNormalize →
-//      RACompany upsert → batched RAJob upsert (xmax = 0 counts new rows) →
-//      dedupe → enqueue `job.enrich` for new or materially changed rows;
+//   3. `processJobs`: the page's known employer domains → normalizeProviderJob →
+//      marketHooks.afterNormalize → RACompany upsert → batched RAJob upsert
+//      (xmax = 0 counts new rows) → dedupe → enqueue `job.enrich` for new or
+//      materially changed rows;
 //   4. the source's own closures are archived, each with its reason
 //      ('bank_closed', 'source_removed', 'no_apply_target'), and a source that
 //      reports its complete listing has the open rows missing from it archived
@@ -18,15 +24,18 @@
 //      which the missed-refresh archive in `jobs-maintain` reads.
 
 import { Prisma } from '../../../generated/prisma/client.js';
-import type { BrandId, Market } from '../../../platform/brand/index.js';
+import type { BrandId, EnvSource, Market } from '../../../platform/brand/index.js';
 import { enqueueMany as platformEnqueueMany, type EnqueueManyItem } from '../../../platform/queue/index.js';
 import { afterNormalize, type MarketHookJob } from '../marketHooks.js';
-import { asMarketHookJob, normalizeProviderJob, PROVIDER_META, type NormalizedJob, type ProviderJobInput } from '../normalize/index.js';
+import { asMarketHookJob, cleanText, hostOf, isJobBoardHost, normalizeCompanyName, normalizeProviderJob, PROVIDER_META, type NormalizedJob, type ProviderJobInput } from '../normalize/index.js';
 import { companyKey, upsertCompanies } from '../companies/index.js';
+import { adapterEnabledFor } from '../sources/index.js';
 import type { IngestOrigin, IngestQueryParams, JobSourceAdapter, SourceClosure, SourceQuery } from '../sources/index.js';
-import { publicDisplayProviders, seedBudgetShare } from './config.js';
+import { effectiveDailyLimit, publicDisplayProviders, seedBudgetShare } from './config.js';
 import { dayKey, type IngestDb } from './db.js';
 import { nextRunDelayMs, REFRESH } from './planner.js';
+import { quotaAllows, quotaParkUntil, recordProviderUsage, reserveProviderCall } from './quota.js';
+import { usageKey } from './quotaContract.js';
 import { recordCountedRun } from './tracking.js';
 import { applyDedupe, archiveClosedBankJobs, archiveUnlistedJobs, contentHash, existingKey, prefetchExisting, toUpsertRow, upsertJobRows } from './upsert.js';
 
@@ -48,6 +57,8 @@ export interface PipelineContext {
   signal?: AbortSignal;
   /** Milliseconds left for the query being run (the tick's remaining budget less its reserve); handed to the source. */
   budgetMs?: number;
+  /** Env the budgets are read from (default process.env). */
+  env?: EnvSource;
 }
 
 export interface ProcessResult {
@@ -70,6 +81,58 @@ function bump(notes: Record<string, number>, key: string): void {
 function boardFor(input: ProviderJobInput, adapter: Pick<JobSourceAdapter, 'provider'>): string {
   const own = typeof input.sourceBoard === 'string' ? input.sourceBoard.trim().toLowerCase() : '';
   return own || PROVIDER_META[adapter.provider].sourceBoard;
+}
+
+/** The key a company's domain is known under: the normalizer's own `companyNameNormalized`. */
+function companyNameKey(company: unknown): string {
+  const name = cleanText(typeof company === 'string' ? company : '').slice(0, 200).trimEnd();
+  return normalizeCompanyName(name) || name.toLowerCase();
+}
+
+/**
+ * The domain an input itself states for its employer: the stated domain, else
+ * the host of the stated website. A company page on a job board (Active Jobs
+ * DB often states `linkedin.com/company/…` as the organisation's URL) is not
+ * the employer's domain: the name then falls to the RACompany lookup.
+ */
+function statedDomain(input: ProviderJobInput): string | null {
+  const facts = input.companyFacts;
+  if (!facts) return null;
+  const domain = typeof facts.domain === 'string' ? facts.domain.trim().toLowerCase().replace(/^www\./, '') : '';
+  const host = domain || hostOf(typeof facts.website === 'string' ? facts.website : null);
+  return host && !isJobBoardHost(host) ? host : null;
+}
+
+/**
+ * Known employer domains of one page, by normalised company name
+ * (MARKET_STRATEGY §1.5 K3): the normalizer's dedupe key uses the domain in
+ * place of the name. First what the page's own inputs state, then ONE read of
+ * RACompany for the names still unknown. Hosts are handed on as stated or
+ * stored (only a job-board host stated as a company's website is skipped, see
+ * statedDomain); the key logic reduces them to a registrable domain and
+ * refuses job boards and ATS hosts. Reads only, never writes.
+ */
+export async function companyDomainsForPage(db: IngestDb, market: Market, inputs: Iterable<ProviderJobInput>): Promise<Map<string, string>> {
+  const domains = new Map<string, string>();
+  const names = new Set<string>();
+  for (const input of inputs) {
+    const key = companyNameKey(input.company);
+    if (!key) continue;
+    names.add(key);
+    if (domains.has(key)) continue;
+    const domain = statedDomain(input);
+    if (domain) domains.set(key, domain);
+  }
+  const unknown = [...names].filter((n) => !domains.has(n));
+  if (unknown.length === 0) return domains;
+  const rows = await db.$queryRaw<Array<{ nameNormalized: string; domain: string | null }>>`
+    SELECT "nameNormalized", "domain" FROM "RACompany"
+    WHERE "market" = ${market} AND "nameNormalized" = ANY(${unknown}::text[]) AND "domain" IS NOT NULL`;
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const domain = typeof row?.domain === 'string' ? row.domain.trim() : '';
+    if (domain && typeof row.nameNormalized === 'string' && !domains.has(row.nameNormalized)) domains.set(row.nameNormalized, domain);
+  }
+  return domains;
 }
 
 /** Normalize → hooks → company → upsert → dedupe → enrich, for one fetched page. */
@@ -101,6 +164,8 @@ export async function processJobs(
   const existing = await prefetchExisting(ctx.db, keys);
   const display = ctx.publicDisplayProviders ?? publicDisplayProviders();
   const country = options.countryHint && options.countryHint !== '*' ? options.countryHint : null;
+  // One read per page, before the first row is normalized (JI-5: the employer's domain in the dedupe key).
+  const companyDomains = await companyDomainsForPage(ctx.db, ctx.market, unique.values());
 
   const jobs: NormalizedJob[] = [];
   for (const [key, input] of unique) {
@@ -118,6 +183,7 @@ export async function processJobs(
         publicDisplayProviders: display,
         countryHint: country,
         firstSeenAt: prior?.firstSeenAt ?? null,
+        companyDomains,
       });
       const hooked: MarketHookJob = await afterNormalize(asMarketHookJob(job), { brand: ctx.brand, market: ctx.market, stage: 'ingest' });
       job = hooked as NormalizedJob;
@@ -218,37 +284,8 @@ export async function leaseDueQueries(db: IngestDb, market: Market, providers: s
   return db.$queryRaw<LeasedQueryRow[]>(buildLeaseSql(market, providers, limit, ids));
 }
 
-/** Atomically reserves one call against the provider's daily budget. False = budget spent. */
-export async function reserveProviderCall(db: IngestDb, provider: string, day: string, limit: number): Promise<boolean> {
-  if (limit <= 0) return false;
-  const rows = await db.$queryRaw<Array<{ calls: number }>>`
-    INSERT INTO "RAProviderUsage" ("provider", "dayKey", "calls") VALUES (${provider}, ${day}, 1)
-    ON CONFLICT ("provider", "dayKey") DO UPDATE SET "calls" = "RAProviderUsage"."calls" + 1
-    WHERE "RAProviderUsage"."calls" < ${limit}::int
-    RETURNING "calls"`;
-  return rows.length > 0;
-}
-
-/** Adds yield counters (and, for unmetered sources, the calls) to today's usage row. */
-export async function recordProviderUsage(
-  db: IngestDb,
-  provider: string,
-  day: string,
-  counts: { calls?: number; returned?: number; inserted?: number; errors?: number },
-): Promise<void> {
-  const calls = counts.calls ?? 0;
-  const returned = counts.returned ?? 0;
-  const inserted = counts.inserted ?? 0;
-  const errors = counts.errors ?? 0;
-  await db.$executeRaw`
-    INSERT INTO "RAProviderUsage" ("provider", "dayKey", "calls", "jobsReturned", "jobsNew", "errors")
-    VALUES (${provider}, ${day}, ${calls}::int, ${returned}::int, ${inserted}::int, ${errors}::int)
-    ON CONFLICT ("provider", "dayKey") DO UPDATE SET
-      "calls" = "RAProviderUsage"."calls" + EXCLUDED."calls",
-      "jobsReturned" = "RAProviderUsage"."jobsReturned" + EXCLUDED."jobsReturned",
-      "jobsNew" = "RAProviderUsage"."jobsNew" + EXCLUDED."jobsNew",
-      "errors" = "RAProviderUsage"."errors" + EXCLUDED."errors"`;
-}
+// The usage counters live with the quota (one budget per provider); re-exported for callers of this module.
+export { recordProviderUsage, reserveProviderCall } from './quota.js';
 
 /** Next UTC midnight + 5 minutes (a provider's budget resets with the day key). */
 export function nextBudgetDay(now: Date): Date {
@@ -256,7 +293,8 @@ export function nextBudgetDay(now: Date): Date {
   return d;
 }
 
-async function deferQuery(db: IngestDb, id: string, until: Date): Promise<void> {
+/** Sets when one query runs next (also hands a leased query back: `until` = now makes it due again). */
+export async function deferQuery(db: IngestDb, id: string, until: Date): Promise<void> {
   await db.$executeRaw`UPDATE "RAIngestQuery" SET "nextRunAt" = ${until}::timestamp(3) WHERE "id" = ${id}`;
 }
 
@@ -304,8 +342,11 @@ function toSourceQuery(row: LeasedQueryRow): SourceQuery {
 export interface QueryRunResult {
   queryId: string;
   provider: string;
-  /** 'budget': the provider's day is spent; 'seed_budget': only the seeds' share is. */
-  status: 'ok' | 'error' | 'budget' | 'seed_budget' | 'disabled';
+  /**
+   * 'quota': the provider's plan is used up, refused or down to its reserve (its due queries are parked, see quotaParkUntil);
+   * 'budget': the provider's day is spent; 'seed_budget': only the seeds' share is.
+   */
+  status: 'ok' | 'error' | 'quota' | 'budget' | 'seed_budget' | 'disabled';
   calls: number;
   process?: ProcessResult;
   closed?: number;
@@ -327,27 +368,43 @@ function mergeNotes(...lists: Array<Record<string, number> | undefined>): Record
 export async function runIngestQuery(ctx: PipelineContext, adapter: JobSourceAdapter, row: LeasedQueryRow): Promise<QueryRunResult> {
   const query = toSourceQuery(row);
   const day = dayKey(ctx.now);
+  const env = ctx.env ?? process.env;
+  // Mainland calls are counted apart (`<provider>:cn`), so one market's day never eats the other's.
+  const usage = usageKey(adapter.provider, ctx.market);
   const base: QueryRunResult = { queryId: query.id, provider: adapter.provider, status: 'ok', calls: 0 };
-  if (!adapter.isEnabled()) {
+  const configured = adapter.dailyCallLimit();
+  const metered = configured !== null;
+  // The plan's own quota first (asked before the enabled check: a provider whose plan is used up
+  // reports itself off, and its queries must be parked together, not retried one by one every hour).
+  if (metered && !quotaAllows(adapter.provider, 'ingest', ctx.now, env)) {
+    // Parked until the quota stops blocking, at most a day at a time: the queries are looked at once a
+    // day (no provider call) and run within a day of the plan reopening, whoever learns of it.
+    const until = quotaParkUntil(adapter.provider, ctx.now, env);
+    await ctx.db.$executeRaw(buildDeferProviderSql(ctx.market, adapter.provider, until, null));
+    return { ...base, status: 'quota' };
+  }
+  if (!adapterEnabledFor(adapter, ctx.market)) {
     await deferQuery(ctx.db, query.id, new Date(ctx.now.getTime() + REFRESH.errorRetryMs));
     return { ...base, status: 'disabled' };
   }
-  const limit = adapter.dailyCallLimit();
-  if (limit !== null) {
+  if (metered) {
+    // One limit per provider and market: the operator's bound under what is left of the plan
+    // (an adapter this module knows no budget for keeps the bound it declares itself).
+    const limit = effectiveDailyLimit(adapter.provider, ctx.market, env, ctx.now) ?? configured;
     // SEO seeds may use only part of the day's calls, so demand (users' own
     // searches, onboarding) always finds budget left.
     const isSeed = query.origin === 'seo_seed';
-    const effective = isSeed ? Math.floor(limit * seedBudgetShare()) : limit;
-    if (!(await reserveProviderCall(ctx.db, adapter.provider, day, effective))) {
+    const effective = isSeed ? Math.floor(limit * seedBudgetShare(env)) : limit;
+    if (!(await reserveProviderCall(ctx.db, usage, day, effective))) {
       await ctx.db.$executeRaw(buildDeferProviderSql(ctx.market, adapter.provider, nextBudgetDay(ctx.now), isSeed ? 'seo_seed' : null));
       return { ...base, status: isSeed ? 'seed_budget' : 'budget' };
     }
   }
 
   const fetched = await adapter.fetch(query, { now: ctx.now, signal: ctx.signal, ...(ctx.budgetMs !== undefined ? { budgetMs: ctx.budgetMs } : {}) });
-  const extraCalls = limit === null ? fetched.calls : Math.max(0, fetched.calls - 1);
+  const extraCalls = metered ? Math.max(0, fetched.calls - 1) : fetched.calls;
   if (fetched.error) {
-    await recordProviderUsage(ctx.db, adapter.provider, day, { calls: extraCalls, errors: 1 });
+    await recordProviderUsage(ctx.db, usage, day, { calls: extraCalls, errors: 1 });
     await finishQuery(ctx.db, query.id, {
       now: ctx.now,
       next: new Date(ctx.now.getTime() + REFRESH.errorRetryMs),
@@ -377,7 +434,7 @@ export async function runIngestQuery(ctx: PipelineContext, adapter: JobSourceAda
     const reason = fetched.listing.reason ?? 'bank_closed';
     for (const board of adapter.sourceBoards) closed += await archiveUnlistedJobs(ctx.db, ctx.market, board, fetched.listing.externalIds, ctx.now, reason);
   }
-  await recordProviderUsage(ctx.db, adapter.provider, day, { calls: extraCalls, returned: fetched.jobs.length, inserted: processed.inserted });
+  await recordProviderUsage(ctx.db, usage, day, { calls: extraCalls, returned: fetched.jobs.length, inserted: processed.inserted });
   // SR-16b-1: only a search run that returned postings counts (an empty page is inconclusive).
   if (ctx.perQueryTracking && adapter.kind === 'search' && fetched.jobs.length > 0) {
     await recordCountedRun(ctx.db, query.id, processed.jobIds);
@@ -388,9 +445,10 @@ export async function runIngestQuery(ctx: PipelineContext, adapter: JobSourceAda
   const more = isCursor && fetched.exhausted === false;
   const consecutiveEmpty = isCursor ? 0 : seen === 0 ? row.consecutiveEmpty + 1 : 0;
   const params: IngestQueryParams = isCursor && fetched.cursor ? { ...query.params, cursor: fetched.cursor } : query.params;
-  const next = more
-    ? ctx.now
-    : new Date(ctx.now.getTime() + nextRunDelayMs({ origin: query.origin, demandScore: row.demandScore, consecutiveEmpty }));
+  // A variable, not a literal: the planner's RefreshInput takes the country as an optional field
+  // (Taiwan demand every 12 h, other cold demand every 24 h, hot 6 h: MARKET_STRATEGY §1.2, §1.3).
+  const refreshInput = { origin: query.origin, demandScore: row.demandScore, consecutiveEmpty, country: query.params.country ?? null };
+  const next = more ? ctx.now : new Date(ctx.now.getTime() + nextRunDelayMs(refreshInput));
   await finishQuery(ctx.db, query.id, { now: ctx.now, next, seen, inserted: processed.inserted, consecutiveEmpty, error: null, params });
   return { ...base, calls: fetched.calls, process: processed, closed, more, notes: mergeNotes(processed.notes, fetched.notes) };
 }

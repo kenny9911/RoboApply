@@ -4,11 +4,15 @@
 // maintenance SQL (45-day expiry, per-query missed refreshes behind the
 // SR-16b-1 probe, dedupe repair), targeted ingest for onboarding and the
 // `ingest.query` worker.
+// Market wave (MKT-3A): every entry point (jobs-plan, jobs-ingest, the worker)
+// first loads what the providers last said about their plans from AppConfig, so
+// a process that never called a provider stops for a used-up plan too.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../lib/prisma.js', () => ({ default: {}, prisma: {} }));
 vi.mock('../../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
 
+import prisma from '../../../lib/prisma.js';
 import { getBrand, runWithBrand } from '../../../platform/brand/index.js';
 import { createBudget } from '../../../platform/queue/index.js';
 import { toRecordedSql } from '../../../test/sqlSnapshot.js';
@@ -19,6 +23,8 @@ import { buildExpireSql, runMaintenance } from './maintain.js';
 import { runIngestQuery } from './pipeline.js';
 import { paramsHash } from './planner.js';
 import { resetBuiltinAdaptersForTests } from './providers.js';
+import { QUOTA_PARK_MAX_MS, quotaAllows, quotaSnapshot, resetProviderQuotaForTests } from './quota.js';
+import { PROVIDER_QUOTA_CONFIG_KEY, serializeProviderQuota, type ProviderQuotaSnapshot } from './quotaContract.js';
 import { buildMissedSql, isMissedTwice, perQueryTrackingAvailable, resetTrackingCacheForTests } from './tracking.js';
 import { ingestForProfileWith, INGEST_QUERY_KIND } from './run.js';
 import { createIngestFake } from './testkit.js';
@@ -63,7 +69,34 @@ afterEach(() => {
   resetTrackingCacheForTests();
   resetSourceAdaptersForTests();
   resetBuiltinAdaptersForTests();
+  resetProviderQuotaForTests();
+  for (const key of Object.keys(prisma)) delete (prisma as unknown as Record<string, unknown>)[key];
 });
+
+/**
+ * SYNTHETIC stored reading, as another process would have written it after a 429 on a BASIC plan
+ * (25 requests a month, none left, reset in 17 days). The tick reads the wall clock, so the times are relative to it.
+ */
+function storedQuota(over: Partial<ProviderQuotaSnapshot> = {}): { key: string; value: string } {
+  const observed = Date.now();
+  const snapshot: ProviderQuotaSnapshot = {
+    provider: 'activejobs',
+    plan: 'BASIC',
+    requestsLimit: 25,
+    requestsRemaining: 0,
+    jobsLimit: 250,
+    jobsRemaining: 0,
+    resetAt: new Date(observed + 17 * 86_400_000).toISOString(),
+    observedAt: new Date(observed).toISOString(),
+    lastStatus: 429,
+    lastCallCost: null,
+    state: 'exhausted',
+    ...over,
+  };
+  return { key: PROVIDER_QUOTA_CONFIG_KEY, value: serializeProviderQuota([snapshot]) };
+}
+
+const dueQuery = (id: string, provider: string) => ({ id, market: 'intl', provider, params: { q: 'QA', country: 'US', datePosted: 'week' }, origin: 'demand', demandScore: 1, priority: 50, consecutiveEmpty: 0 });
 
 describe('crons', () => {
   it('jobs-ingest answers no_work fast when nothing is due (one lease statement)', async () => {
@@ -95,6 +128,81 @@ describe('crons', () => {
     expect(enqueueMany).toHaveBeenCalledTimes(1);
     expect(res).toMatchObject({ processed: 1, queries: 1, inserted: 1, calls: 1 });
     expect(kick).toHaveBeenCalledWith(['job.enrich']);
+  });
+
+  it('jobs-ingest with a provider whose plan is used up (read from AppConfig): no call to it, its due queries are parked (a day at a time, toward the reset), it is reported under budgetStops', async () => {
+    // The real adapter reports itself off while its plan is used up; the stub does the same.
+    const activejobs = stubAdapter('activejobs', { isEnabled: () => false });
+    const jsearch = stubAdapter('jsearch');
+    installStubs([activejobs, jsearch]);
+    const stored = storedQuota();
+    const resetAt = new Date(JSON.parse(stored.value).providers.activejobs.resetAt);
+    const { db, fake } = createIngestFake({ seed: { appConfig: [stored] }, due: [dueQuery('a1', 'activejobs'), dueQuery('j1', 'jsearch')] });
+    setIngestCronDepsForTests({ db, env: {}, enqueueMany: async () => ({ inserted: 0 }), perQueryTracking: false });
+    // This process has made no provider call: it knows nothing until it reads the stored row.
+    expect(quotaSnapshot('activejobs')).toBeNull();
+
+    const startedAt = Date.now();
+    const res = await runWithBrand('roboapply', () => runJobsIngest(ctx()));
+    const endedAt = Date.now();
+
+    expect(quotaSnapshot('activejobs')).toMatchObject({ state: 'exhausted', plan: 'BASIC', requestsRemaining: 0 });
+    expect(activejobs.fetch).not.toHaveBeenCalled();
+    expect(jsearch.fetch).toHaveBeenCalledTimes(1);
+    expect(res).toMatchObject({ processed: 2, queries: 2, calls: 1, budgetStops: ['activejobs'] });
+    // The lease included the stopped provider (so its queries could be pushed out), then one statement deferred them.
+    const lease = fake.$sql.calls.find((c) => c.text.includes('FOR UPDATE SKIP LOCKED'))!;
+    expect(lease.values[1]).toEqual(['activejobs', 'jsearch']);
+    const defer = fake.$sql.calls.filter((c) => c.text.startsWith('UPDATE "RAIngestQuery" SET "nextRunAt" = $1'));
+    expect(defer).toHaveLength(1);
+    // Parked for a day (the reset is 17 days away): tomorrow one lease looks again, with no provider call.
+    const until = defer[0]!.values[0] as Date;
+    expect(defer[0]!.values).toEqual([until, 'intl', 'activejobs', until]);
+    expect(until.getTime()).toBeGreaterThanOrEqual(startedAt + QUOTA_PARK_MAX_MS);
+    expect(until.getTime()).toBeLessThanOrEqual(endedAt + QUOTA_PARK_MAX_MS);
+    expect(until.getTime()).toBeLessThan(resetAt.getTime());
+    // No usage row was reserved for it.
+    expect(fake.$sql.calls.filter((c) => c.text.includes('RETURNING "calls"')).map((c) => c.values[0])).toEqual(['jsearch']);
+  });
+
+  it('jobs-ingest: a used-up provider alone still gets its queries deferred; a provider that is simply off is not leased', async () => {
+    installStubs([stubAdapter('activejobs', { isEnabled: () => false })]);
+    const quiet = createIngestFake({ due: [dueQuery('a1', 'activejobs')] });
+    setIngestCronDepsForTests({ db: quiet.db, env: {} });
+    // No reading anywhere: the provider is off (no key, a kill switch) and nothing is leased.
+    expect(await runJobsIngest(ctx())).toEqual({ skipped: 'no_providers' });
+    expect(quiet.fake.$sql.calls).toHaveLength(0);
+
+    const stopped = createIngestFake({ seed: { appConfig: [storedQuota()] }, due: [dueQuery('a1', 'activejobs')] });
+    setIngestCronDepsForTests({ db: stopped.db, env: {}, perQueryTracking: false });
+    expect(await runJobsIngest(ctx())).toMatchObject({ processed: 1, calls: 0, budgetStops: ['activejobs'] });
+    // The next tick finds nothing due for it (the fake lease is empty now) and makes no call either.
+    expect(await runJobsIngest(ctx())).toEqual({ skipped: 'no_work' });
+  });
+
+  it('jobs-ingest: a stored reading whose reset has passed stops nothing', async () => {
+    const adapter = stubAdapter('activejobs');
+    installStubs([adapter]);
+    const past = Date.now() - 3_600_000;
+    const { db } = createIngestFake({
+      seed: { appConfig: [storedQuota({ observedAt: new Date(past - 86_400_000).toISOString(), resetAt: new Date(past).toISOString() })] },
+      due: [dueQuery('a1', 'activejobs')],
+    });
+    setIngestCronDepsForTests({ db, env: {}, enqueueMany: async () => ({ inserted: 0 }), perQueryTracking: false });
+    const res = await runJobsIngest(ctx());
+    expect(adapter.fetch).toHaveBeenCalledTimes(1);
+    expect(res).toMatchObject({ processed: 1, calls: 1, budgetStops: [] });
+    expect(quotaSnapshot('activejobs')).toMatchObject({ state: 'unknown', requestsRemaining: null });
+  });
+
+  it('jobs-plan loads the stored quota before it plans (a provider that is out of quota is not planned)', async () => {
+    installStubs([stubAdapter('jsearch')]);
+    const { db } = createIngestFake({ seed: { appConfig: [storedQuota()] } });
+    setIngestCronDepsForTests({ db, env: {} });
+    expect(quotaAllows('activejobs', 'ingest')).toBe(true);
+    await runJobsPlan({ ...ctx(), name: 'jobs-plan' });
+    expect(quotaAllows('activejobs', 'ingest')).toBe(false);
+    expect(quotaAllows('jsearch', 'ingest')).toBe(true);
   });
 
   it('GoApply plans and ingests by default; only CN_RECRUITMENT_INFO_MODE=off stops it', async () => {
@@ -356,5 +464,28 @@ describe('ingest.query worker', () => {
         { budget: createBudget(10_000), leaseOwner: 't' },
       ),
     ).rejects.toThrow(/queryId/);
+  });
+
+  it('loads the stored quota first: a queued query of a used-up provider makes no call and is parked until the reset the provider stated', async () => {
+    const activejobs = stubAdapter('activejobs', { isEnabled: () => false });
+    installStubs([activejobs]);
+    // The plan resets in six hours (under a day: the queries wait for exactly that instant).
+    const stored = storedQuota({ resetAt: new Date(Date.now() + 6 * 3_600_000).toISOString() });
+    const { fake } = createIngestFake({ seed: { appConfig: [stored] }, due: [dueQuery('a1', 'activejobs')] });
+    // The worker runs on the process's own client (mocked as an empty object in this file).
+    Object.assign(prisma as unknown as Record<string, unknown>, { appConfig: fake.appConfig, $queryRaw: fake.$queryRaw.bind(fake), $executeRaw: fake.$executeRaw.bind(fake) });
+    expect(quotaSnapshot('activejobs')).toBeNull();
+    await runWithBrand('roboapply', () =>
+      workers[0]!.handler(
+        { id: 'w', kind: 'ingest.query', brand: 'roboapply', userId: null, payload: { queryId: 'a1' }, attempts: 1, maxAttempts: 5, dedupeKey: null, priority: 100 },
+        { budget: createBudget(10_000), leaseOwner: 't' },
+      ),
+    );
+    expect(quotaSnapshot('activejobs')).toMatchObject({ state: 'exhausted' });
+    expect(activejobs.fetch).not.toHaveBeenCalled();
+    const lease = fake.$sql.calls.find((c) => c.text.includes('FOR UPDATE SKIP LOCKED'))!;
+    expect(lease.values).toContainEqual(['a1']);
+    const defer = fake.$sql.calls.find((c) => c.text.startsWith('UPDATE "RAIngestQuery" SET "nextRunAt" = $1'))!;
+    expect(defer.values[0]).toEqual(new Date(JSON.parse(stored.value).providers.activejobs.resetAt));
   });
 });

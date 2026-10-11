@@ -31,7 +31,7 @@ import {
 import { resetBankPublicJobUrlWarningsForTests } from '../../../../roboapply/v2/lib/raCrossBankMatch.js';
 import { normalizeFantasticJob } from '../../../../roboapply/v2/lib/raFantasticJobs.js';
 import { normalizeJSearchJob } from '../../../../roboapply/v2/lib/raRapidApiJobs.js';
-import { getBrand } from '../../../../platform/brand/index.js';
+import { getBrand, runWithBrand } from '../../../../platform/brand/index.js';
 import { getSourceAdapter, jobSourcesForBrand, registerSourceAdapter, resetJobSourceWarningsForTests, resetSourceAdaptersForTests } from '../../sources/index.js';
 import type { JobSourceAdapter, SourceQuery } from '../../sources/index.js';
 import { normalizeProviderJob } from '../../normalize/index.js';
@@ -57,7 +57,11 @@ import {
   readBankEmployerSignals,
   type BankFetchLike,
 } from './bank.js';
-import { createRapidApiAdapter, inputFromRapidApiRow, rapidApiCountry, rapidApiSearchParams, rapidApiSupportsCountry } from './rapidApi.js';
+import { quotaObservationFrom } from '../../../../roboapply/v2/lib/raExternalJobTypes.js';
+import { __test as fantasticClientTest } from '../../../../roboapply/v2/lib/raFantasticJobs.js';
+import { __test as jsearchClientTest, isJSearchEnabled } from '../../../../roboapply/v2/lib/raRapidApiJobs.js';
+import { recordQuotaObservation, registerQuotaListeners, resetProviderQuotaForTests, setQuotaDepsForTests, type QuotaDb } from '../quota.js';
+import { createRapidApiAdapter, inputFromRapidApiRow, rapidApiCountry, rapidApiSearchParams, rapidApiSupportsCountry, taiwanCityQueryName } from './rapidApi.js';
 
 const NOW = new Date('2026-10-10T00:00:00Z');
 
@@ -83,6 +87,69 @@ describe('RapidAPI search params (planner seam)', () => {
       titleQuery: 'Backend engineer',
       locationText: 'Taiwan',
     });
+  });
+
+  it('JT-3: a Taiwan query in Chinese goes to JSearch as "<職稱> <縣市>" with language=zh-TW; the English tuple keeps the English form', () => {
+    // The Traditional Chinese variant of a Taiwan demand tuple (the planner sends both, each over a month).
+    expect(rapidApiSearchParams({ q: '軟體工程師', country: 'TW', city: 'Taipei', datePosted: 'month' }, 'jsearch')).toEqual({
+      query: '軟體工程師 台北',
+      country: 'tw',
+      language: 'zh-TW',
+      datePosted: 'month',
+    });
+    // The English variant of the same role: no language is sent.
+    expect(rapidApiSearchParams({ q: 'software engineer', country: 'TW', city: 'Taipei', datePosted: 'month' }, 'jsearch')).toEqual({
+      query: 'software engineer in Taipei',
+      country: 'tw',
+      datePosted: 'month',
+    });
+    // The city decides the country, as before (WP-42), and with it the language of a Chinese query.
+    expect(rapidApiSearchParams({ q: '產品經理', country: 'US', city: 'Hsinchu', datePosted: 'month' }, 'jsearch')).toEqual({
+      query: '產品經理 新竹',
+      country: 'tw',
+      language: 'zh-TW',
+      datePosted: 'month',
+    });
+    // No city: the role text alone, still zh-TW.
+    expect(rapidApiSearchParams({ q: '護理師', country: 'TW', datePosted: 'month' }, 'jsearch')).toEqual({ query: '護理師', country: 'tw', language: 'zh-TW', datePosted: 'month' });
+    // Remote keeps work_from_home.
+    expect(rapidApiSearchParams({ q: '軟體工程師', country: 'TW', datePosted: 'month', remote: true }, 'jsearch')).toMatchObject({ language: 'zh-TW', workFromHome: true });
+  });
+
+  it('JT-3: a Chinese query for another country is not given zh-TW; a city the table does not know is sent as written', () => {
+    expect(rapidApiSearchParams({ q: '软件工程师', country: 'SG', city: 'Singapore', datePosted: 'week' }, 'jsearch')).toEqual({
+      query: '软件工程师 in Singapore',
+      country: 'sg',
+      datePosted: 'week',
+    });
+    expect(rapidApiSearchParams({ q: 'ソフトウェアエンジニア', country: 'JP', city: 'Tokyo', datePosted: 'week' }, 'jsearch')).not.toHaveProperty('language');
+    // A place in Taiwan the city table has no entry for: nothing is invented, the text is used as given.
+    expect(rapidApiSearchParams({ q: '軟體工程師', country: 'TW', city: 'Somewhere Township', datePosted: 'month' }, 'jsearch')).toEqual({
+      query: '軟體工程師 Somewhere Township',
+      country: 'tw',
+      language: 'zh-TW',
+      datePosted: 'month',
+    });
+    expect(taiwanCityQueryName('Somewhere Township')).toBe('Somewhere Township');
+    // People and job boards write 台, the table holds the official 臺.
+    expect(taiwanCityQueryName('Taipei')).toBe('台北');
+    expect(taiwanCityQueryName('Taichung')).toBe('台中');
+    expect(taiwanCityQueryName('New Taipei')).toBe('新北');
+    // A city of the same name elsewhere is not a Taiwan city.
+    expect(taiwanCityQueryName('Austin')).toBe('Austin');
+  });
+
+  it('JT-3: Active Jobs DB keeps the English title and location name for either text', () => {
+    expect(rapidApiSearchParams({ q: 'software engineer', country: 'TW', city: 'Taipei', datePosted: 'month' }, 'activejobs')).toEqual({
+      query: 'software engineer',
+      country: 'tw',
+      datePosted: 'month',
+      titleQuery: 'software engineer',
+      locationText: 'Taipei',
+    });
+    const zh = rapidApiSearchParams({ q: '軟體工程師', country: 'TW', city: 'Taipei', datePosted: 'month' }, 'activejobs');
+    expect(zh).not.toHaveProperty('language');
+    expect(zh).toMatchObject({ query: '軟體工程師', titleQuery: '軟體工程師', locationText: 'Taipei' });
   });
 
   it('Fantastic Jobs only plans countries it can scope; JSearch takes any ISO country', () => {
@@ -128,6 +195,100 @@ describe('RapidAPI search params (planner seam)', () => {
     // Nothing is invented when the provider is silent.
     const bare = normalizeJSearchJob({ job_id: 'z', job_title: 'Analyst', employer_name: 'Beta' }, { country: 'us', fetchedAt: NOW })!;
     expect('skills' in bare || 'experienceMonths' in bare || 'companyWebsite' in bare).toBe(false);
+  });
+
+  it('an ingest call tells the client it is already counted (reservedByIngest), so the one budget counts it once', async () => {
+    const provider = { id: 'jsearch' as const, isEnabled: () => true, search: vi.fn(async () => []) };
+    const a = createRapidApiAdapter('jsearch', { provider, isEnabled: () => true });
+    const signal = new AbortController().signal;
+    const q = { id: 'q', provider: 'jsearch' as const, market: 'intl' as const, origin: 'demand' as const, params: { q: '軟體工程師', country: 'TW', city: 'Taipei', datePosted: 'month' } };
+    expect(await a.fetch(q, { now: NOW, signal, requestId: 'r1' })).toEqual({ jobs: [], calls: 1 });
+    expect(provider.search).toHaveBeenCalledTimes(1);
+    expect(provider.search).toHaveBeenCalledWith({ query: '軟體工程師 台北', country: 'tw', language: 'zh-TW', datePosted: 'month' }, { signal, requestId: 'r1', reservedByIngest: true });
+  });
+
+  it('the adapter is off for ingest while the plan\'s quota stops ingest, and on again from the reset', () => {
+    vi.stubEnv('RAPID_API_KEY', 'synthetic-key');
+    vi.stubEnv('RA_ONBOARDING_EXTERNAL_JOBS_DISABLED', '');
+    vi.stubEnv('RA_ONBOARDING_ACTIVEJOBS_DISABLED', '');
+    vi.stubEnv('RA_ONBOARDING_JSEARCH_DISABLED', '');
+    jsearchClientTest.reset();
+    fantasticClientTest.reset();
+    resetProviderQuotaForTests();
+    let now = new Date('2026-10-11T08:00:00.000Z');
+    setQuotaDepsForTests({ db: {} as unknown as QuotaDb, now: () => now, env: {}, market: () => 'intl' });
+    try {
+      const headers = (h: Record<string, string>) => ({ get: (name: string) => h[name.toLowerCase()] ?? null });
+      const activejobs = createRapidApiAdapter('activejobs');
+      const jsearch = createRapidApiAdapter('jsearch');
+      expect(activejobs.isEnabled()).toBe(true);
+      expect(jsearch.isEnabled()).toBe(true);
+      // SYNTHETIC reading in the shape of the 2026-10-11 probe: a BASIC plan of 25 requests, none left, reset in a day.
+      recordQuotaObservation(
+        quotaObservationFrom(
+          'activejobs',
+          { status: 429, headers: headers({ 'x-ratelimit-requests-limit': '25', 'x-ratelimit-requests-remaining': '0', 'x-ratelimit-requests-reset': '86400' }) },
+          'You have exceeded the MONTHLY quota for Requests on your current plan, BASIC.',
+          now,
+        ),
+      );
+      expect(activejobs.isEnabled()).toBe(false);
+      expect(jsearch.isEnabled()).toBe(true);
+      // JSearch down to the reserve kept for people's own searches (5% of 10,000): ingest stops, the client stays usable.
+      recordQuotaObservation(
+        quotaObservationFrom('jsearch', { status: 200, headers: headers({ 'x-ratelimit-requests-limit': '10000', 'x-ratelimit-requests-remaining': '500', 'x-ratelimit-requests-reset': '86400' }) }, '', now),
+      );
+      expect(jsearch.isEnabled()).toBe(false);
+      now = new Date(now.getTime() + 86_400_000);
+      expect(activejobs.isEnabled()).toBe(true);
+      expect(jsearch.isEnabled()).toBe(true);
+    } finally {
+      resetProviderQuotaForTests();
+    }
+  });
+
+  it('isEnabled() answers for the adapter\'s own market: asked inside a GoApply request, RoboApply\'s sources still read as on (review fix)', () => {
+    vi.stubEnv('RAPID_API_KEY', 'synthetic-key');
+    vi.stubEnv('RA_ONBOARDING_EXTERNAL_JOBS_DISABLED', '');
+    vi.stubEnv('RA_ONBOARDING_ACTIVEJOBS_DISABLED', '');
+    vi.stubEnv('RA_ONBOARDING_JSEARCH_DISABLED', '');
+    jsearchClientTest.reset();
+    fantasticClientTest.reset();
+    resetProviderQuotaForTests();
+    registerQuotaListeners();
+    const now = new Date('2026-10-11T08:00:00.000Z');
+    // No market override: the gate reads the brand of the request, as in production.
+    setQuotaDepsForTests({ db: {} as unknown as QuotaDb, now: () => now, env: {} });
+    try {
+      const jsearch = createRapidApiAdapter('jsearch');
+      const activejobs = createRapidApiAdapter('activejobs');
+      runWithBrand('goapply', () => {
+        // The client itself refuses a mainland request (no RapidAPI call is ever made for market cn)…
+        expect(isJSearchEnabled()).toBe(false);
+        // …but the adapter is RoboApply's source: GET /admin/system on the GoApply host must not show it as off.
+        expect(jsearch.isEnabled()).toBe(true);
+        expect(activejobs.isEnabled()).toBe(true);
+        // The brand of the request is untouched by the question.
+        expect(isJSearchEnabled()).toBe(false);
+      });
+      runWithBrand('roboapply', () => {
+        expect(isJSearchEnabled()).toBe(true);
+        expect(jsearch.isEnabled()).toBe(true);
+      });
+      // What is really wrong with the source still shows, whoever asks: a used-up plan, a kill switch, no key.
+      const headers = (h: Record<string, string>) => ({ get: (name: string) => h[name.toLowerCase()] ?? null });
+      recordQuotaObservation(
+        quotaObservationFrom('jsearch', { status: 429, headers: headers({ 'x-ratelimit-requests-limit': '10000', 'x-ratelimit-requests-remaining': '0', 'x-ratelimit-requests-reset': '86400' }) }, 'MONTHLY quota exceeded', now),
+      );
+      runWithBrand('goapply', () => {
+        expect(jsearch.isEnabled()).toBe(false);
+        expect(activejobs.isEnabled()).toBe(true);
+      });
+      vi.stubEnv('RA_ONBOARDING_ACTIVEJOBS_DISABLED', 'true');
+      runWithBrand('goapply', () => expect(activejobs.isEnabled()).toBe(false));
+    } finally {
+      resetProviderQuotaForTests();
+    }
   });
 
   it('a failing client becomes an error result, never a throw', async () => {
