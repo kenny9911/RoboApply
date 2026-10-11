@@ -192,6 +192,17 @@ function locationSql(loc: NonNullable<FilterSet['locations']>[number]): Prisma.S
   return Prisma.sql`(lower(j."locationCity") = ANY(${names}::text[])${country})`;
 }
 
+
+/**
+ * The typed-query predicate on `searchText`: a case-insensitive substring
+ * match, or a trigram word-similarity match for a misspelt or partial word.
+ * `q` is the trimmed, non-empty query. Its own function so the hybrid legs of
+ * phase M4 reuse the very predicate `predicateFor` applies for the `q` field.
+ */
+export function qPredicateSql(q: string): Prisma.Sql {
+  return Prisma.sql`(j."searchText" ILIKE ${`%${likeEscape(q.toLowerCase())}%`} OR ${q.toLowerCase()} <% j."searchText")`;
+}
+
 /** The SQL predicate for one FilterSet field, or null when it does not filter (absent, view-only, boost-only). */
 export function predicateFor(field: FilterField, filters: FilterSet, scope: Pick<SqlScope, 'market' | 'now'>): Prisma.Sql | null {
   const f = filters;
@@ -291,7 +302,7 @@ export function predicateFor(field: FilterField, filters: FilterSet, scope: Pick
     case 'q': {
       const q = f.q?.trim();
       if (!q) return null;
-      return Prisma.sql`(j."searchText" ILIKE ${`%${likeEscape(q.toLowerCase())}%`} OR ${q.toLowerCase()} <% j."searchText")`;
+      return qPredicateSql(q);
     }
     // ── GoApply (market cn) ──
     case 'employerTags':

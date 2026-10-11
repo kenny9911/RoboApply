@@ -24,7 +24,10 @@
 //      row, the RAKeywordExtraction row (top 30) and the cost row; when a
 //      public posting states what its employer does, pass that industry to
 //      the company row (SM-10);
-//   7. call `marketHooks.afterEnrich` (WP-41's CN classifier and others).
+//   7. queue the job for indexing (`job.index`, features/retrieval: the search
+//      document, the content hash and the vector), once per enrichment, after
+//      an enriched and after a rules-only finish alike;
+//   8. call `marketHooks.afterEnrich` (WP-41's CN classifier and others).
 // A failed or unparsable call is retried by the queue; on the last attempt
 // the job is finished rules-only so it never stays unenriched forever.
 
@@ -64,8 +67,29 @@ export interface EnrichDeps {
    * not model it (absent = the industry is not stored).
    */
   setCompanyIndustry?: (companyId: string, input: PostingIndustry) => Promise<unknown>;
+  /**
+   * Queue the job for indexing (MKT-2H): `job.index` with the job's id, one
+   * item per job and enrichment (dedupe key `job.index:<jobId>:<enrichedAt ms>`),
+   * in the brand of the job's market. Optional so a caller's own dependency
+   * double need not model it (absent = the retrieval sweep indexes the row later).
+   */
+  enqueueIndex?: (job: EnrichedJobRef) => Promise<unknown>;
   env: Record<string, string | undefined>;
   now: () => Date;
+}
+
+/** What the index hook needs of a job that just finished enrichment. */
+export interface EnrichedJobRef {
+  id: string;
+  market: string;
+  /** The stamp of the enrichment that just finished (the row's own when hooks are re-run). */
+  enrichedAt: Date | null;
+}
+
+/** `job.index` for one enriched job, once per enrichment. Loaded on first use: the retrieval area is not part of enrichment's start-up. */
+async function defaultEnqueueIndex(job: EnrichedJobRef): Promise<unknown> {
+  const [{ enqueue }, { RETRIEVAL_WORK_KINDS, jobIndexDedupeKey }] = await Promise.all([import('../../../platform/queue/index.js'), import('../../retrieval/index.js')]);
+  return enqueue(RETRIEVAL_WORK_KINDS.jobIndex, { jobIds: [job.id] }, { dedupeKey: jobIndexDedupeKey(job.id, job.enrichedAt), brand: brandForMarket(job.market) });
 }
 
 export function defaultEnrichDeps(): EnrichDeps {
@@ -77,6 +101,7 @@ export function defaultEnrichDeps(): EnrichDeps {
     afterEnrich: (job, ctx) => marketAfterEnrich(job, ctx),
     // Loaded on first use: the companies area (its routes included) is not part of enrichment's start-up.
     setCompanyIndustry: async (companyId, input) => (await import('../companies/index.js')).recordPostingIndustry(companyId, input),
+    enqueueIndex: defaultEnqueueIndex,
     env: process.env,
     now: () => new Date(),
   };
@@ -129,6 +154,15 @@ function hookJob(job: EnrichJobRecord, update: EnrichUpdate): MarketHookJob {
 
 async function runHooks(deps: EnrichDeps, job: EnrichJobRecord, update: EnrichUpdate): Promise<void> {
   const market = job.market === 'cn' ? 'cn' : 'intl';
+  // Indexing first, so a market hook that fails cannot hold it back. A lost enqueue is not worth failing the
+  // enrichment for: the retrieval sweep finds a row without a search document or a current vector.
+  if (deps.enqueueIndex) {
+    try {
+      await deps.enqueueIndex({ id: job.id, market: job.market, enrichedAt: update.enrichedAt ?? job.enrichedAt ?? null });
+    } catch (err) {
+      logger.warn('JOB_ENRICH', 'could not queue the job for indexing; the retrieval sweep picks it up', { jobId: job.id, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
   await deps.afterEnrich(hookJob(job, update), { brand: brandForMarket(market), market, stage: 'enrich', userId: job.ownerUserId });
 }
 

@@ -20,6 +20,7 @@ import {
   isCountryWideLocation,
   jobIdsSql,
   predicateFor,
+  qPredicateSql,
   retrievalSql,
   roleTaxonomyIds,
   rowsByIdSql,
@@ -82,6 +83,20 @@ describe('predicates (one snapshot per FilterSet field)', () => {
 
   it.each(SAMPLES)('%s', (field, filters, market) => {
     expect(show(predicateFor(field, filters, market === 'cn' ? cn : intl))).toMatchSnapshot();
+  });
+
+  it('qPredicateSql is the predicate of the q field, as its own function (the hybrid legs of phase M4 reuse it)', () => {
+    const viaField = predicateFor('q', { q: '  Data 50%  ' }, intl)!;
+    const direct = qPredicateSql('Data 50%');
+    expect(show(direct)).toEqual(show(viaField));
+    expect(direct.text).toBe(viaField.text);
+    expect(direct.values).toEqual(viaField.values);
+    // The statement itself: a substring match on searchText, or a trigram word-similarity match.
+    expect(direct.text).toBe('(j."searchText" ILIKE $1 OR $2 <% j."searchText")');
+    expect(direct.values).toEqual(['%data 50\\%%', 'data 50%']);
+    // The same on both markets, and nothing for an empty query.
+    expect(show(predicateFor('q', { q: 'Data 50%' }, cn))).toEqual(show(direct));
+    expect(predicateFor('q', { q: '   ' }, intl)).toBeNull();
   });
 
   it('fitTier and preferredCompanies never become SQL (view filter / boost only)', () => {

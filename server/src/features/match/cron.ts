@@ -28,6 +28,12 @@
 // (calibration.ts): the estimate-to-AI map weekly and the priors monthly, for
 // the brand's market, inside the same time budget. It calls no model. No cron
 // entry of its own: the job already runs every 15 minutes.
+//
+// The third and last step is the retrieval sweep (features/retrieval/sweep.ts,
+// MKT-2H): it queues the postings that still need a search document or a
+// vector and the people whose vector is out of date, and removes the vectors
+// of GoApply users without a live consent. It only enqueues and deletes; the
+// embedding runs in the queue workers. Skipped when the time budget is gone.
 
 import crypto from 'node:crypto';
 import type { RateLimitResult, RateWindow } from '../../platform/ratelimit/index.js';
@@ -234,15 +240,43 @@ export function createCalibrationRefresh(getDeps: () => Promise<CalibrationStepD
   };
 }
 
+/** What the retrieval step runs: the sweep of features/retrieval for the cron's brand. */
+export interface RetrievalSweepStepDeps {
+  sweep: (ctx: Parameters<CronTask>[0]) => Promise<Record<string, unknown>>;
+}
+
+/**
+ * The retrieval sweep as a step of this cron. Skipped when the time budget is
+ * nearly spent; a failure is reported, never thrown: it must not fail the
+ * steps that came before it.
+ */
+export function createRetrievalSweepStep(getDeps: () => Promise<RetrievalSweepStepDeps>) {
+  return async (ctx: Parameters<CronTask>[0]): Promise<Record<string, unknown>> => {
+    if (ctx.budget.exhausted(RESERVE_MS)) return { skipped: 'no_time' };
+    try {
+      return await (await getDeps()).sweep(ctx);
+    } catch (err) {
+      logger.warn('RETRIEVAL_SWEEP', 'retrieval sweep failed; the next run tries again', { brand: ctx.brand.id, error: err instanceof Error ? err.message : String(err) });
+      return { skipped: 'failed' };
+    }
+  };
+}
+
 /**
  * score-precompute as the cron runs it: the precompute task, then the
- * calibration refresh. Both results are reported; `calibration` sits next to
- * the precompute fields.
+ * calibration refresh, then (when given) the retrieval sweep, last. Every
+ * result is reported: `calibration` and `retrieval` sit next to the
+ * precompute fields.
  */
-export function composeScorePrecompute(precompute: CronTask, calibration: ReturnType<typeof createCalibrationRefresh>): CronTask {
+export function composeScorePrecompute(
+  precompute: CronTask,
+  calibration: ReturnType<typeof createCalibrationRefresh>,
+  retrieval?: ReturnType<typeof createRetrievalSweepStep>,
+): CronTask {
   return async (ctx): Promise<CronResult> => {
     const result = await precompute(ctx);
-    return { ...result, calibration: await calibration(ctx) };
+    const withCalibration = { ...result, calibration: await calibration(ctx) };
+    return retrieval ? { ...withCalibration, retrieval: await retrieval(ctx) } : withCalibration;
   };
 }
 
@@ -255,5 +289,19 @@ async function defaultCalibrationDeps(): Promise<CalibrationStepDeps> {
 /** Kept for callers that refresh outside the cron (an admin action, a script): the calibration step on its own. */
 export const refreshCalibrationIfDue = createCalibrationRefresh(defaultCalibrationDeps);
 
-/** score-precompute (every 15 min): AI scores within the daily budget (ARCH §4.7), then the calibration refresh. */
-export const runScorePrecompute: CronTask = composeScorePrecompute(createScorePrecompute(defaultDeps), refreshCalibrationIfDue);
+/** The sweep of features/retrieval (lazy: that area imports MATCH); who was active comes from this area's repository. */
+async function defaultRetrievalSweepDeps(): Promise<RetrievalSweepStepDeps> {
+  const [{ runRetrievalSweep }, { defaultMatchRepo }] = await Promise.all([import('../retrieval/index.js'), import('./defaultService.js')]);
+  return {
+    sweep: async (ctx) => ({ ...(await runRetrievalSweep(ctx, { activeUsers: (brandId, since, limit) => defaultMatchRepo.activeUsers(brandId, since, limit) })) }),
+  };
+}
+
+/** The retrieval sweep on its own (a script, an admin action). */
+export const runRetrievalSweepStep = createRetrievalSweepStep(defaultRetrievalSweepDeps);
+
+/**
+ * score-precompute (every 15 min): AI scores within the daily budget (ARCH §4.7), then the calibration refresh, then the
+ * retrieval sweep.
+ */
+export const runScorePrecompute: CronTask = composeScorePrecompute(createScorePrecompute(defaultDeps), refreshCalibrationIfDue, runRetrievalSweepStep);

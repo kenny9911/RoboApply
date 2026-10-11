@@ -184,6 +184,20 @@ describe('POST /query', () => {
     expect(res.body.details).toMatchObject({ reason: 'deadline_sort_cn_only' });
   });
 
+  it('accepts relevance (free text to order by) and refuses one longer than 240 characters with invalid_request', async () => {
+    const plain = await h.request<Env<{ items: Array<{ jobId: string }> }>>('POST', `${P}/query`, { body: { sort: 'newest' } });
+    const ranked = await h.request<Env<{ items: Array<{ jobId: string }> }>>('POST', `${P}/query`, { body: { sort: 'newest', relevance: 'climate startups Rust' } });
+    expect(ranked.status).toBe(200);
+    // Same order as without it in this phase.
+    expect(ranked.body.data.items.map((i) => i.jobId)).toEqual(plain.body.data.items.map((i) => i.jobId));
+    const tooLong = await h.request<Env<unknown>>('POST', `${P}/query`, { body: { sort: 'newest', relevance: 'x'.repeat(241) } });
+    expect(tooLong.status).toBe(422);
+    expect(tooLong.body.code).toBe('invalid_request');
+    expect((await h.request('POST', `${P}/query`, { body: { sort: 'newest', relevance: 42 } })).status).toBe(422);
+    // A client that does not send the field is unaffected, and unknown fields are still refused.
+    expect((await h.request('POST', `${P}/query`, { body: { sort: 'newest', rankBy: 'x' } })).status).toBe(422);
+  });
+
   it('429 with Retry-After when refreshes run out', async () => {
     refreshAllowed = false;
     const res = await h.request<Env<unknown>>('POST', `${P}/query`, { body: {} });

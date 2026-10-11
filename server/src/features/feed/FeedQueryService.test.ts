@@ -177,6 +177,40 @@ describe('POST /feed/query — sessions and pagination', () => {
     expect(repo.visits.get('u1')).toEqual(NOW);
   });
 
+  it('relevance is accepted and part of the session identity, and does not change the order in this phase', async () => {
+    seed(70);
+    const s = service();
+    const plain = await s.query(ctx(), { sort: 'recommended' });
+    const ranked = await s.query(ctx(), { sort: 'recommended', relevance: 'climate startups Rust' });
+    // Same list, same order: nothing reads the text for ordering before phase M4.
+    expect(ranked.items.map((i) => i.jobId)).toEqual(plain.items.map((i) => i.jobId));
+    expect(ranked.order).toBe(plain.order);
+    // A different session hash: a cursor of one query is not a cursor of the other.
+    const hashPlain = repo.sessions.get(plain.sessionId)!.queryHash;
+    const hashRanked = repo.sessions.get(ranked.sessionId)!.queryHash;
+    expect(hashRanked).not.toBe(hashPlain);
+    await expectHttp(s.query(ctx(), { sort: 'recommended', cursor: ranked.cursor! }), 'conflict', 'feed_session_expired');
+    const next = await s.query(ctx(), { sort: 'recommended', relevance: 'climate startups Rust', cursor: ranked.cursor! });
+    expect(next.items[0]!.position).toBe(20);
+    // The text is trimmed; another text is another session; an empty one is no text at all.
+    const padded = await s.query(ctx(), { sort: 'recommended', relevance: '  climate startups Rust ' });
+    expect(repo.sessions.get(padded.sessionId)!.queryHash).toBe(hashRanked);
+    const other = await s.query(ctx(), { sort: 'recommended', relevance: 'fintech Go' });
+    expect(repo.sessions.get(other.sessionId)!.queryHash).not.toBe(hashRanked);
+    const blank = await s.query(ctx(), { sort: 'recommended', relevance: '   ' });
+    expect(repo.sessions.get(blank.sessionId)!.queryHash).toBe(hashPlain);
+  });
+
+  it('relevance longer than 240 characters is refused, on the query and on the preview seam', async () => {
+    seed(5);
+    await expectHttp(service().query(ctx(), { sort: 'newest', relevance: 'x'.repeat(241) }), 'invalid_request', 'relevance_too_long');
+    await expectHttp(service().preview(ctx(), { limit: 5, relevance: 'x'.repeat(241) }), 'invalid_request', 'relevance_too_long');
+    // The preview accepts the field and answers the list it answers without it.
+    const without = await service().preview(ctx(), { limit: 5, sort: 'newest' });
+    const withText = await service().preview(ctx(), { limit: 5, sort: 'newest', relevance: 'climate startups' });
+    expect(withText.map((i) => i.jobId)).toEqual(without.map((i) => i.jobId));
+  });
+
   it('cursor stability: the same cursor returns the same page; pages never overlap', async () => {
     seed(70);
     const s = service();
@@ -645,6 +679,22 @@ describe('NL query', () => {
     expect(res.diff.countAfter).toBe(17);
     expect(res.unmatched).toEqual(['great culture']);
     expect(res.explanation).toBe('great culture');
+  });
+
+  it('returns rankedBy next to the diff: the topics of the request, never a pay phrase; explanation and unmatched are as before', async () => {
+    repo.countResponder = () => 9;
+    plannerImpl = async () => ({ queries: ['Backend Engineer'], unverifiedPreferences: ['climate startups', 'using Rust', 'salary above 150k'] });
+    const res = await service().nlQuery(ctx(), { text: 'backend jobs at climate startups using Rust, salary above 150k' }, 'en');
+    expect(res.rankedBy).toEqual(['climate startups', 'Rust']);
+    expect(res.unmatched).toEqual(['climate startups', 'using Rust', 'salary above 150k']);
+    expect(res.explanation).toBe('climate startups; using Rust; salary above 150k');
+    expect(res.diff.patch).toMatchObject({ titles: ['Backend Engineer'] });
+    // The planner's own terms win when it gives them.
+    plannerImpl = async () => ({ queries: ['Backend Engineer'], unverifiedPreferences: ['salary above 150k'], relevanceTerms: ['climate tech', 'Rust'] }) as never;
+    expect((await service().nlQuery(ctx(), { text: 'backend jobs' }, 'en')).rankedBy).toEqual(['climate tech', 'Rust']);
+    // Nothing left over: an empty list, never undefined.
+    plannerImpl = async () => ({ queries: ['Data Analyst'], unverifiedPreferences: [] });
+    expect((await service().nlQuery(ctx(), { text: 'data analyst' }, 'en')).rankedBy).toEqual([]);
   });
 
   it('a request with no role is 422; a planner failure is 503', async () => {

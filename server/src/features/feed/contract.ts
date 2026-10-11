@@ -53,6 +53,11 @@ export type FitTier = (typeof FIT_TIER_LABELS)[number];
 
 // ── POST /feed/query ─────────────────────────────────────────────────────
 
+/** Longest `relevance` text a query or a preview accepts. */
+export const FEED_RELEVANCE_MAX_CHARS = 240;
+/** `relevance`: optional free text, trimmed, at most 240 characters (longer is refused, never cut). */
+export const FeedRelevanceSchema = z.string().trim().max(FEED_RELEVANCE_MAX_CHARS).optional();
+
 export const FeedQueryBodySchema = z
   .object({
     searchProfileId: Id.optional(),
@@ -67,15 +72,23 @@ export const FeedQueryBodySchema = z
     cursor: z.string().max(512).optional(),
     /** View filter: hide weaker fits (counts returned in `hiddenByTier`). */
     fitTier: z.enum(['all', 'good', 'great']).optional(),
+    /**
+     * Free text the list may be ORDERED by ("climate startups Rust"). It is
+     * never a filter and nothing is claimed to be checked against it. Accepted
+     * and part of the session's identity from this phase; it changes the order
+     * from phase M4 (hybrid retrieval).
+     */
+    relevance: FeedRelevanceSchema,
   })
   .strict();
 
 /**
  * How the list was ordered. `recency` = date posted + filters only: GoApply
  * users who turned 个性化推荐 off or have not chosen yet (PIPL Art. 24), where
- * no fit score is used or shown.
+ * no fit score is used or shown. `query_match` = closeness to the typed query
+ * (lexical and dense legs); reserved for phase M4 and never sent before it.
  */
-export type FeedOrder = 'personalized' | 'recency';
+export type FeedOrder = 'personalized' | 'recency' | 'query_match';
 
 export interface FitBadge {
   tier: FitTier;
@@ -180,6 +193,13 @@ export interface FeedItem {
    * fit is shown, and on GoApply lists ordered by date (which say so).
    */
   explanation?: FeedExplanation;
+  /**
+   * The same role at the same company posted for other places, collapsed into
+   * this card ("also in N locations"): how many other postings, their places
+   * and their job ids. Reserved for phase M4 (same-role collapse); never sent
+   * before it. A reader treats a missing value as "no other postings".
+   */
+  alsoIn?: { count: number; locations: string[]; jobIds: string[] };
 }
 
 /**
@@ -338,6 +358,14 @@ export interface NlQueryResponse {
   /** The request parts that were not turned into filters, in the user's words (nothing is claimed to be checked). */
   explanation: string;
   unmatched: string[];
+  /**
+   * The topics of the request the list may be ordered by ("climate startups",
+   * "Rust"): at most 5, each at most 60 characters. Never a filter, and never
+   * a phrase about pay, visa, benefits, hours, time zone or commute (those stay
+   * in `unmatched` only). The client sends them back as `relevance` on
+   * `POST /feed/query`; they change the order from phase M4.
+   */
+  rankedBy: string[];
 }
 
 /**
@@ -423,49 +451,11 @@ export const FEED_ERROR_CODES = {
 // ── Ranking factors (public "How ranking works" page, /help/ranking, WP-40) ──
 
 /**
- * Every factor of the Recommended order, with its weight. There is NO boost
- * for recruiter-bank jobs (a filter only, ARCH §4.8). WP-40 lists these on
- * /help/ranking; tests pin them so the page and the code cannot drift.
+ * The published texts of the Recommended order (factors and weights, the
+ * ordering rules besides them, the points a career goal adds) live in
+ * rankingText.ts; these are the same three constants, re-exported.
  */
-export const RANKING_FACTORS = [
-  { key: 'fit', weight: 0.55, what: 'Fit score: the AI score when one exists, otherwise the quick estimate. Both are on the same scale. Until a market has enough scored jobs to line the two up, a job with an AI score is ranked halfway between its quick estimate and its AI score.' },
-  { key: 'freshness', weight: 0.2, what: 'How recently the job was posted: 100 × e^(−hours since posting / 72).' },
-  { key: 'affinity', weight: 0.15, what: 'Your own actions: saving, applying and hiding jobs, and companies you marked as preferred; fades 2% a day.' },
-  { key: 'source_quality', weight: 0.1, what: 'How complete the posting is: pay listed, a known application system, a real posting date, a detailed description.' },
-] as const;
-
-/**
- * Ordering rules besides the weighted factors (also listed on /help/ranking).
- * `sponsorship_first` applies under every sort, within each retrieval window
- * (the newest 400 matching jobs, then the next older ones).
- */
-export const ORDERING_RULES = [
-  {
-    key: 'sponsorship_first',
-    points: null,
-    when: 'You said you need visa sponsorship (RoboApply).',
-    what: 'Jobs whose posting mentions sponsorship come first, in the order you chose; jobs whose posting says it does not sponsor are hidden.',
-  },
-  {
-    key: 'skills_boost',
-    points: 10,
-    when: 'Skills is the only filter that narrows your list.',
-    what: 'Jobs that require more of your chosen skills rank higher in Recommended: up to 10 points, in proportion to how many of them the job asks for.',
-  },
-] as const;
-
-/** Points added to a Recommended rank for the career goal chosen in onboarding (`onboardingAnswers.goal`). */
-export const GOAL_ADJUSTMENTS = {
-  more_senior: { points: 6, when: 'The job is above the lowest level you selected.' },
-  management: { points: 6, when: 'The job manages people (role type or title).' },
-  higher_pay: { points: 6, when: 'The listed pay is above your minimum, in the same currency.' },
-  flexibility: { points: 4, when: 'The job is remote or hybrid.' },
-  new_industry: { points: 0, when: 'No adjustment.' },
-  different_role: { points: 0, when: 'No adjustment.' },
-  learn_skills: { points: 0, when: 'No adjustment.' },
-  work_life_balance: { points: 0, when: 'No adjustment.' },
-  job_security: { points: 0, when: 'No adjustment.' },
-} as const;
+export { GOAL_ADJUSTMENTS, ORDERING_RULES, RANKING_FACTORS } from './rankingText.js';
 
 /**
  * A result list shorter than this is "thin" (`FeedQueryResponse.thin`). It is
@@ -478,6 +468,10 @@ export const FEED_THIN_BELOW = 60;
 export const FEED_LIMITS = {
   pageSize: 20,
   retrievalLimit: 400,
+  /** Rows each retrieval leg (recency, lexical, dense) contributes before fusion. Not read until phase M4. */
+  legLimit: 200,
+  /** The constant k of reciprocal rank fusion: a row scores Σ 1 / (k + rank) over the legs. Not read until phase M4. */
+  rrfK: 60,
   firstWindowDays: 14,
   widenWindowDays: 45,
   widenBelowRows: FEED_THIN_BELOW,

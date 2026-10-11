@@ -6,10 +6,19 @@ vi.mock('../../../services/LoggerService.js', () => ({
 }));
 vi.mock('../../../lib/prisma.js', () => ({ default: {} }));
 vi.mock('../../../lib/modelPricing.js', () => ({ calculateModelCost: vi.fn(() => 0.0012) }));
+// The default index hook enqueues through the platform queue: recorded here, never a database write.
+const queued = vi.hoisted(() => [] as Array<{ kind: string; payload: unknown; options: Record<string, unknown> }>);
+vi.mock('../../../platform/queue/index.js', async (original) => ({
+  ...(await original<typeof import('../../../platform/queue/index.js')>()),
+  enqueue: vi.fn(async (kind: string, payload: unknown, options: Record<string, unknown>) => {
+    queued.push({ kind, payload, options });
+    return { id: 'w1', kind, status: 'queued', dedupeKey: options.dedupeKey ?? null, created: true };
+  }),
+}));
 
 import { getCurrentBrandId, runWithBrand } from '../../../lib/requestContext.js';
 import { SHARED_COST_USER_ID } from '../../../roboapply/v2/lib/raFeatureCatalog.js';
-import { enrichDedupeKey, enrichJob, rulesOnlyMarker, systemUserIdFor, type EnrichDeps } from './service.js';
+import { defaultEnrichDeps, enrichDedupeKey, enrichJob, rulesOnlyMarker, systemUserIdFor, type EnrichDeps, type EnrichedJobRef } from './service.js';
 import type { EnrichLlmOptions } from './agent.js';
 import type { EnrichJobRecord, EnrichUpdate } from './reconcile.js';
 import type { EnrichCostEntry, KeywordRow } from './repository.js';
@@ -559,6 +568,96 @@ describe('enrichJob', () => {
     const h = harness(makeJob());
     h.deps.afterEnrich = async () => Promise.reject(new Error('hook failed'));
     await expect(enrichJob({ jobId: 'job_1' }, FIRST, h.deps)).rejects.toThrow('hook failed');
+  });
+});
+
+describe('index hook (MKT-2H: job.index after every finished enrichment)', () => {
+  function withIndex(job: EnrichJobRecord, options: Parameters<typeof harness>[1] = {}) {
+    const h = harness(job, options);
+    const indexed: EnrichedJobRef[] = [];
+    const order: string[] = [];
+    h.deps.enqueueIndex = async (ref) => {
+      indexed.push(ref);
+      order.push('index');
+    };
+    const afterEnrich = h.deps.afterEnrich;
+    h.deps.afterEnrich = async (j, ctx) => {
+      order.push('hook');
+      return afterEnrich(j, ctx);
+    };
+    return { h, indexed, order };
+  }
+
+  it('is called once after an enriched finish, with the stamp of this enrichment', async () => {
+    const { h, indexed } = withIndex(makeJob());
+    expect(await enrichJob({ jobId: 'job_1' }, FIRST, h.deps)).toMatchObject({ status: 'enriched' });
+    expect(indexed).toEqual([{ id: 'job_1', market: 'intl', enrichedAt: NOW }]);
+  });
+
+  it('is called after a rules-only finish too: no model, no AI consent, enrichment off', async () => {
+    const noModel = withIndex(makeJob(), { env: {} });
+    expect(await enrichJob({ jobId: 'job_1' }, FIRST, noModel.h.deps)).toEqual({ status: 'rules_only', reason: 'no_model' });
+    expect(noModel.indexed).toEqual([{ id: 'job_1', market: 'intl', enrichedAt: NOW }]);
+
+    const noConsent = withIndex(makeJob({ id: 'job_cn', market: 'cn', visibility: 'private', ownerUserId: 'u1' }), { consent: false, env: { CN_LLM_MODEL: 'deepseek/deepseek-chat' } });
+    expect(await enrichJob({ jobId: 'job_cn' }, FIRST, noConsent.h.deps)).toEqual({ status: 'rules_only', reason: 'no_ai_consent' });
+    expect(noConsent.indexed).toEqual([{ id: 'job_cn', market: 'cn', enrichedAt: NOW }]);
+
+    const off = withIndex(makeJob(), { budgetLimit: 0 });
+    expect(await enrichJob({ jobId: 'job_1' }, FIRST, off.h.deps)).toEqual({ status: 'rules_only', reason: 'budget_disabled' });
+    expect(off.indexed).toHaveLength(1);
+  });
+
+  it('is not called for a deferred job (it is not finished), nor for a missing or archived one', async () => {
+    const deferred = withIndex(makeJob(), { budgetAllowed: false });
+    expect(await enrichJob({ jobId: 'job_1' }, FIRST, deferred.h.deps)).toMatchObject({ status: 'deferred' });
+    expect(deferred.indexed).toHaveLength(0);
+    const archived = withIndex(makeJob({ archivedAt: new Date('2026-09-01') }));
+    await enrichJob({ jobId: 'job_1' }, FIRST, archived.h.deps);
+    await enrichJob({ jobId: 'nope' }, FIRST, archived.h.deps);
+    expect(archived.indexed).toHaveLength(0);
+  });
+
+  it('runs before the market hooks, so a failing hook cannot hold indexing back; a retry asks again with the same stamp', async () => {
+    const { h, indexed, order } = withIndex(makeJob());
+    await enrichJob({ jobId: 'job_1' }, FIRST, h.deps);
+    expect(order).toEqual(['index', 'hook']);
+    // A second delivery does nothing; a retry re-runs the hooks, and the index request carries the same stamp (one queue item).
+    await enrichJob({ jobId: 'job_1' }, FIRST, h.deps);
+    expect(indexed).toHaveLength(1);
+    await enrichJob({ jobId: 'job_1' }, { attempt: 2, maxAttempts: 5 }, h.deps);
+    expect(indexed).toHaveLength(2);
+    expect(indexed[1]).toEqual(indexed[0]);
+
+    const failing = withIndex(makeJob());
+    failing.h.deps.afterEnrich = async () => Promise.reject(new Error('hook failed'));
+    await expect(enrichJob({ jobId: 'job_1' }, FIRST, failing.h.deps)).rejects.toThrow('hook failed');
+    expect(failing.indexed).toHaveLength(1);
+  });
+
+  it('a failed enqueue does not fail the enrichment (the retrieval sweep finds the row)', async () => {
+    const h = harness(makeJob());
+    h.deps.enqueueIndex = async () => Promise.reject(new Error('queue down'));
+    expect(await enrichJob({ jobId: 'job_1' }, FIRST, h.deps)).toMatchObject({ status: 'enriched' });
+    expect(h.hooks).toHaveLength(1);
+    expect(logger.warn).toHaveBeenCalledWith('JOB_ENRICH', expect.stringContaining('could not queue the job for indexing'), expect.objectContaining({ jobId: 'job_1' }));
+  });
+
+  it('a dependency set without the index hook still enriches', async () => {
+    const h = harness(makeJob());
+    expect(h.deps.enqueueIndex).toBeUndefined();
+    expect(await enrichJob({ jobId: 'job_1' }, FIRST, h.deps)).toMatchObject({ status: 'enriched' });
+  });
+
+  it('the default hook enqueues job.index once per job and enrichment, in the brand of the job market', async () => {
+    queued.length = 0;
+    const enqueueIndex = defaultEnrichDeps().enqueueIndex!;
+    await enqueueIndex({ id: 'job_1', market: 'intl', enrichedAt: NOW });
+    await enqueueIndex({ id: 'job_cn', market: 'cn', enrichedAt: null });
+    expect(queued).toEqual([
+      { kind: 'job.index', payload: { jobIds: ['job_1'] }, options: { dedupeKey: `job.index:job_1:${NOW.getTime()}`, brand: 'roboapply' } },
+      { kind: 'job.index', payload: { jobIds: ['job_cn'] }, options: { dedupeKey: 'job.index:job_cn:0', brand: 'goapply' } },
+    ]);
   });
 });
 

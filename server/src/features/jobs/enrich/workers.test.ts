@@ -10,11 +10,12 @@ vi.mock('../../../lib/modelPricing.js', () => ({ calculateModelCost: vi.fn(() =>
 import { DeferWorkError, PermanentWorkError, createBudget, enqueue, type LeasedWorkItem, type QueueDb } from '../../../platform/queue/index.js';
 import type { Prisma } from '../../../generated/prisma/client.js';
 import { createFakePrisma } from '../../../test/fakePrisma.js';
-import { ENRICH_CONCURRENCY, jobEnrichWorker, setEnrichDepsForTests, workers } from './workers.js';
+import { ENRICH_CONCURRENCY, JOBS_ENRICH_WORK_KINDS, jobEnrichWorker, setEnrichDepsForTests, workers } from './workers.js';
 import { enqueueJobEnrich } from './index.js';
 import { enrichDedupeKey, type EnrichDeps } from './service.js';
 import { ENRICH_VERSION } from './schema.js';
 import { makeJob } from './__tests__/fixtures.js';
+import { RETRIEVAL_WORK_KINDS, retrievalWorkers } from '../../retrieval/index.js';
 
 const ctx = { budget: createBudget(60_000), leaseOwner: 'test' };
 
@@ -40,8 +41,15 @@ function deps(overrides: Partial<EnrichDeps> = {}): EnrichDeps {
 afterEach(() => setEnrichDepsForTests(null));
 
 describe('job.enrich worker', () => {
-  it('registers one job.enrich handler with concurrency 10', () => {
-    expect(workers).toEqual([jobEnrichWorker]);
+  it('registers the job.enrich handler with concurrency 10, and the retrieval kinds through the same array', () => {
+    // The queue registry imports this array, so job.index and user.embed (features/retrieval) need no registry edit.
+    expect(workers.map((w) => w.kind)).toEqual(['job.enrich', 'job.index', 'user.embed']);
+    expect(workers[0]).toBe(jobEnrichWorker);
+    expect(workers.slice(1)).toEqual(retrievalWorkers);
+    // Every registered kind is declared by this area (server/src/test/areaStubs.test.ts), with the retrieval area's own strings.
+    expect(Object.values(JOBS_ENRICH_WORK_KINDS)).toEqual(workers.map((w) => w.kind));
+    expect(JOBS_ENRICH_WORK_KINDS).toMatchObject(RETRIEVAL_WORK_KINDS);
+    expect(workers.slice(1).every((w) => w.concurrency === 4)).toBe(true);
     expect(jobEnrichWorker.kind).toBe('job.enrich');
     expect(jobEnrichWorker.concurrency).toBe(ENRICH_CONCURRENCY);
     expect(ENRICH_CONCURRENCY).toBe(10);

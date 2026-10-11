@@ -9,7 +9,7 @@ import { DeferWorkError, createBudget, type EnqueuedItem, type LeasedWorkItem } 
 import type { RateLimitResult } from '../../platform/ratelimit/index.js';
 import { SCORER_PROMPT_VERSION } from './contract.js';
 import { calibrationFor, parseCalibrationDoc, CALIBRATION_CONFIG_KEY } from './calibration.js';
-import { composeScorePrecompute, createCalibrationRefresh, createScorePrecompute, type PrecomputeDeps } from './cron.js';
+import { composeScorePrecompute, createCalibrationRefresh, createRetrievalSweepStep, createScorePrecompute, type PrecomputeDeps } from './cron.js';
 import { currentJobHash } from './jobHash.js';
 import { createMatchService } from './MatchService.js';
 import type { ScoreRecord } from './repo.js';
@@ -291,6 +291,70 @@ describe('score-precompute as the cron runs it: precompute, then the calibration
     expect(await task({ ...s.ctx, now: new Date(NOW.getTime() + 15 * 60_000) })).toMatchObject({ calibration: { skipped: 'not_due' } });
     // No model was called for any of it (this setup has no scorer at all) and nothing was queued.
     expect(s.enqueued).toHaveLength(0);
+  });
+});
+
+describe('score-precompute: the retrieval sweep is the third and last step (MKT-2H)', () => {
+  const refreshed = { skipped: 'not_due' as const };
+
+  it('runs after precompute and calibration, in that order, for the cron brand, and reports next to them', async () => {
+    const order: string[] = [];
+    const s = setup({ perUser: '2' });
+    const precompute = async (ctx: typeof s.ctx) => {
+      const r = await s.task(ctx);
+      order.push('precompute');
+      return r;
+    };
+    const calibration = createCalibrationRefresh(async () => ({
+      refreshIfDue: async () => {
+        order.push('calibration');
+        return refreshed;
+      },
+    }));
+    const sweep = vi.fn(async () => {
+      order.push('retrieval');
+      return { jobBatches: 2, jobsQueued: 100, usersQueued: 1 };
+    });
+    const result = await composeScorePrecompute(precompute, calibration, createRetrievalSweepStep(async () => ({ sweep })))(s.ctx);
+    expect(order).toEqual(['precompute', 'calibration', 'retrieval']);
+    expect(result).toMatchObject({ processed: 1, enqueued: 2, calibration: refreshed, retrieval: { jobBatches: 2, jobsQueued: 100, usersQueued: 1 } });
+    expect(sweep).toHaveBeenCalledTimes(1);
+    expect(sweep).toHaveBeenCalledWith(s.ctx);
+  });
+
+  it('still runs when precompute had nothing to do or no scorer is available (indexing needs no scorer)', async () => {
+    const sweep = vi.fn(async () => ({ jobBatches: 0 }));
+    const step = createRetrievalSweepStep(async () => ({ sweep }));
+    const calibration = createCalibrationRefresh(async () => ({ refreshIfDue: async () => refreshed }));
+    const idle = setup({ users: 0 });
+    expect(await composeScorePrecompute(idle.task, calibration, step)(idle.ctx)).toEqual({ skipped: 'no_work', processed: 0, calibration: refreshed, retrieval: { jobBatches: 0 } });
+    const noModel = setup({ routeVerdict: false });
+    expect(await composeScorePrecompute(noModel.task, calibration, step)(noModel.ctx)).toMatchObject({ skipped: 'ai_unavailable', retrieval: { jobBatches: 0 } });
+    expect(sweep).toHaveBeenCalledTimes(2);
+  });
+
+  it('is skipped when the time budget is gone, and its failure never fails the run', async () => {
+    const s = setup({ perUser: '1' });
+    const never = vi.fn(async () => ({ jobBatches: 1 }));
+    const spent = { ...s.ctx, budget: createBudget(1) };
+    await new Promise((r) => setTimeout(r, 5));
+    expect(await createRetrievalSweepStep(async () => ({ sweep: never }))(spent)).toEqual({ skipped: 'no_time' });
+    expect(never).not.toHaveBeenCalled();
+
+    const failing = createRetrievalSweepStep(async () => ({
+      sweep: async () => {
+        throw new Error('queue down');
+      },
+    }));
+    const calibration = createCalibrationRefresh(async () => ({ refreshIfDue: async () => refreshed }));
+    expect(await composeScorePrecompute(s.task, calibration, failing)(s.ctx)).toMatchObject({ enqueued: 1, calibration: refreshed, retrieval: { skipped: 'failed' } });
+  });
+
+  it('without a retrieval step the composed task is the two-step one (callers that compose their own)', async () => {
+    const s = setup({ perUser: '1' });
+    const out = await composeScorePrecompute(s.task, createCalibrationRefresh(async () => ({ refreshIfDue: async () => refreshed })))(s.ctx);
+    expect(out).toMatchObject({ enqueued: 1, calibration: refreshed });
+    expect('retrieval' in out).toBe(false);
   });
 });
 
