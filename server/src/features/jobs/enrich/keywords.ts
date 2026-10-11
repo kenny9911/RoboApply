@@ -1,18 +1,36 @@
 // server/src/features/jobs/enrich/keywords.ts
 //
-// The `RAKeywordExtraction` row (ARCHITECTURE.md §4.5 step 3): the top 30
-// keywords of a posting, from the extracted skills first (required → high,
-// preferred → medium) and then TF-IDF over the description.
+// The `RAKeywordExtraction` row (ARCHITECTURE.md §4.5 step 3; SM-6, MATCH
+// 4.6): the keywords of a posting, at most 30. A keyword is a concrete,
+// canonical term and nothing else:
+//   (a) a skill of the posting that has a canonical id and is a hard skill or
+//       a certification: importance `high` when required, `medium` otherwise.
+//       A skill whose id is a machine guess (`via: 'embedding'`) is not one:
+//       it is shown on the card from `skillsDetail`, and no keyword may answer
+//       "not in your resume" on the strength of a guess;
+//   (b) a term of the posting's own text that the vocabulary resolves to a
+//       REVIEWED hard skill or certification: importance `low`. The TF-IDF
+//       terms come first, best first; then the names those terms cannot hold,
+//       found by the vocabulary's own scan of the text: several words written
+//       once ("REST APIs"), "C++", and a Chinese name the word segmenter cuts
+//       in two (机器学习).
+// Everything else is dropped at the source: generic words ("software
+// engineering", "communication"), soft skills, a skill the vocabulary does not
+// hold, and phrases of the text with no canonical id ("shared backend
+// systems"). One skill is one keyword, whatever its spellings (`skillId`).
 //
-// One job has no corpus, so the "documents" for IDF are the posting's own
-// sentences: a term that appears in every sentence ("we", "team") scores low,
-// a term concentrated in a few sentences scores high. Score =
-// (1 + ln tf) × ln(1 + N / df). Words come from `Intl.Segmenter` (ICU word
-// boundaries, which also segments Chinese), minus stopwords and numbers;
-// Latin bigrams seen at least twice ("machine learning") compete as well.
-// Deterministic for a given text: ties break pair first, then alphabetically.
+// The terms of (b) are TF-IDF terms. One job has no corpus, so the
+// "documents" for IDF are the posting's own sentences: a term that appears in
+// every sentence ("we", "team") scores low, a term concentrated in a few
+// sentences scores high. Score = (1 + ln tf) × ln(1 + N / df). Words come from
+// `Intl.Segmenter` (ICU word boundaries, which also segments Chinese), minus
+// stopwords and numbers; Latin bigrams seen at least twice ("machine
+// learning") compete as well. Deterministic for a given text: ties break pair
+// first, then alphabetically. The vocabulary is read synchronously
+// (`idOf`): no model and no embedding call is made here.
 
 import { splitSentences } from './scamSignals.js';
+import type { SkillKind } from '../../skills/index.js';
 
 export const MAX_KEYWORDS = 30;
 
@@ -20,10 +38,13 @@ export type KeywordImportance = 'high' | 'medium' | 'low';
 
 /** `RAKeywordExtraction.keywords` entry. */
 export interface JobKeyword {
+  /** The term as the posting writes it (lower case). Readers label it from the vocabulary by `skillId`. */
   keyword: string;
   importance: KeywordImportance;
   /** Occurrences in the posting text (0 when a skill is named only in provider fields). */
   frequency: number;
+  /** The canonical skill (RASkill id). Every keyword written since ENRICH_VERSION 3 has one. */
+  skillId: string;
 }
 
 const CJK = /[㐀-鿿豈-﫿]/;
@@ -91,6 +112,20 @@ const ZH_STOPWORDS = new Set([
   '企业', '企業', '行业', '行業', '平台', '业务', '業務', '部门', '部門', '项目', '項目', '专案', '專案', '日常', '其他', '其它', '以下', '如下', '例如', '方面', '方向', '内容', '內容', '情况', '情況',
   '描述', '地点', '地點', '时间', '時間', '资格', '資格', '信息', '資訊', '考虑', '考慮', '职能', '職能', '类别', '類別', '性质', '性質', '人数', '人數', '若干',
   '沟通能力', '溝通能力', '团队合作', '團隊合作', '团队协作', '團隊協作', '责任心', '責任心', '学习能力', '學習能力', '抗压能力', '抗壓能力', '执行力', '執行力',
+  // More of the same (SM-6): requirement and preference wording, and generic qualities. None of it names a tool, a method or a certificate.
+  '相关经验', '相關經驗', '相关工作', '相關工作', '相关工作经验', '相關工作經驗', '相关领域', '相關領域', '从业经验', '從業經驗', '实际经验', '實際經驗', '项目经验', '項目經驗', '專案經驗',
+  '任职条件', '任職條件', '应聘要求', '應聘要求', '招聘要求', '基本要求', '岗位说明', '崗位說明', '职位详情', '職位詳情', '职责描述', '職責描述', '工作要求', '职位职责', '職位職責',
+  '优先条件', '優先條件', '加分条件', '加分條件', '优先录用', '優先錄用', '优先录取', '優先錄取', '者优先考虑', '者優先考慮', '尤佳', '为佳', '為佳', '更佳', '不限',
+  '我们希望', '我們希望', '我们提供', '我們提供', '我们需要', '我們需要', '你需要', '您需要', '希望你', '希望您', '如果你', '如果您', '期待', '期望',
+  '及以上', '或以上', '以上者', '左右', '至少', '不少于', '不少於', '不低于', '不低於', '若干名', '数名', '數名',
+  '团队精神', '團隊精神', '团队意识', '團隊意識', '合作精神', '协作能力', '協作能力', '协调能力', '協調能力', '沟通协调', '溝通協調', '表达能力', '表達能力', '逻辑思维', '邏輯思維',
+  '责任感', '責任感', '吃苦耐劳', '吃苦耐勞', '积极主动', '積極主動', '工作认真', '工作認真', '认真负责', '認真負責', '踏实', '踏實', '细心', '細心', '耐心', '热情', '熱情', '主动性', '主動性', '自驱', '自驅',
+  '快速学习', '快速學習', '抗压', '抗壓', '综合素质', '綜合素質', '职业素养', '職業素養', '敬业', '敬業', '诚信', '誠信', '上进心', '上進心',
+  // The word segmenter cuts most of the phrases above in two, so their halves are listed too.
+  '条件', '條件', '录用', '錄用', '录取', '錄取', '从业', '從業', '希望', '精神', '责任', '責任', '意识', '意識', '逻辑', '邏輯', '思维', '思維',
+  '吃苦', '耐劳', '耐勞', '主动', '主動', '表达', '表達', '协调', '協調', '沟通', '溝通', '合作', '协作', '協作', '素质', '素質', '素养', '素養',
+  '领域', '領域', '实际', '實際', '丰富', '豐富', '扎实', '紮實', '突出', '出色', '持有', '证书', '證書', '职业', '職業', '综合', '綜合', '快速', '学习', '學習',
+  '一年', '两年', '兩年', '二年', '三年', '四年', '五年', '六年', '八年', '十年', '多年',
 ]);
 
 const segmenters = new Map<string, Intl.Segmenter>();
@@ -210,27 +245,88 @@ export function countOccurrences(text: string, phrase: string): number {
 export interface KeywordSkillInput {
   skill: string;
   required: boolean;
+  /**
+   * The canonical id enrichment mapped the skill to; null when the vocabulary
+   * holds none. Left out (a row not yet enriched at version 3, or a pass that
+   * stopped before the mapping): the vocabulary is asked by exact alias.
+   */
+  skillId?: string | null;
+  /** The skill's kind when its id is given; else the vocabulary's. */
+  kind?: SkillKind;
+  /** How the id was found (`skillsDetail[].via`). `embedding` is a machine guess: never a keyword. */
+  via?: 'alias' | 'embedding' | 'new' | 'none';
 }
 
+/** What the keyword list reads of the vocabulary: synchronous lookups only. */
+export interface KeywordVocabulary {
+  /** The id of the skill a LISTED term names, in any spelling or script. */
+  idOf(term: string): string | null;
+  /**
+   * The skills a term taken from a SENTENCE names, by the vocabulary's own
+   * rule for running text: a name that is also an ordinary word ("go", "rest",
+   * "ML") names nothing there, and two words whose letters spell a tool are
+   * not that tool ("work day"). Default: `idOf` of the whole term. Given a
+   * whole posting it answers every skill the text names, in order of first
+   * appearance.
+   */
+  idsInText?(term: string): string[];
+  kindOf(id: string): SkillKind | null;
+  reviewed(id: string): boolean;
+  /** The skill's name in a locale ('' when it has none there). Used to write a keyword the scan of the whole text found. */
+  label?(id: string, locale: string): string;
+}
+
+const isConcrete = (kind: SkillKind | null | undefined): boolean => kind === 'hard' || kind === 'certification';
+
 /**
- * Top MAX_KEYWORDS keywords: skills first (required → high, preferred →
- * medium), then TF-IDF terms not already covered (tf ≥ 3 → medium, else low).
+ * The keywords of a posting, at most MAX_KEYWORDS: its hard skills and
+ * certifications that have a canonical id (required → high, preferred →
+ * medium), then the terms of its text that name a reviewed hard skill or
+ * certification (low). One entry per canonical skill. Without a vocabulary
+ * only skills that carry their id and kind are kept.
  */
-export function buildKeywords(text: string, skills: readonly KeywordSkillInput[], limit: number = MAX_KEYWORDS): JobKeyword[] {
+export function buildKeywords(text: string, skills: readonly KeywordSkillInput[], vocabulary: KeywordVocabulary | null = null, limit: number = MAX_KEYWORDS): JobKeyword[] {
   const out: JobKeyword[] = [];
   const seen = new Set<string>();
   const ordered = [...skills.filter((s) => s.required), ...skills.filter((s) => !s.required)];
   for (const s of ordered) {
-    const key = s.skill.normalize('NFKC').toLowerCase().trim();
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    out.push({ keyword: key, importance: s.required ? 'high' : 'medium', frequency: countOccurrences(text, key) });
+    const key = s.skill.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
+    if (!key || s.via === 'embedding') continue;
+    const skillId = s.skillId === undefined ? (vocabulary?.idOf(key) ?? null) : s.skillId;
+    if (!skillId || seen.has(skillId)) continue;
+    const kind = s.skillId === undefined ? vocabulary?.kindOf(skillId) : (s.kind ?? vocabulary?.kindOf(skillId));
+    if (!isConcrete(kind)) continue;
+    seen.add(skillId);
+    out.push({ keyword: key, importance: s.required ? 'high' : 'medium', frequency: countOccurrences(text, key), skillId });
     if (out.length >= limit) return out;
   }
+  if (!vocabulary) return out;
+  const idsOf = (term: string): string[] => {
+    if (vocabulary.idsInText) return vocabulary.idsInText(term);
+    const id = vocabulary.idOf(term);
+    return id ? [id] : [];
+  };
   for (const t of tfidfTerms(text, limit * 2)) {
-    if (seen.has(t.term)) continue;
-    seen.add(t.term);
-    out.push({ keyword: t.term, importance: t.tf >= 3 ? 'medium' : 'low', frequency: t.tf });
+    for (const skillId of idsOf(t.term)) {
+      if (seen.has(skillId)) continue;
+      if (!vocabulary.reviewed(skillId) || !isConcrete(vocabulary.kindOf(skillId))) continue;
+      seen.add(skillId);
+      // A pair of words that only contains the skill ("kafka pipelines") is listed by the word that names it.
+      const naming = t.term.includes(' ') && vocabulary.idOf(t.term) !== skillId ? (t.term.split(' ').find((w) => idsOf(w).includes(skillId)) ?? t.term) : t.term;
+      out.push({ keyword: naming, importance: 'low', frequency: countOccurrences(text, naming) || t.tf, skillId });
+      if (out.length >= limit) return out;
+    }
+  }
+  // Names the terms above cannot hold. Listed by the name the posting uses when it uses one of the skill's own.
+  if (!vocabulary.idsInText) return out;
+  for (const skillId of vocabulary.idsInText(text)) {
+    if (seen.has(skillId)) continue;
+    if (!vocabulary.reviewed(skillId) || !isConcrete(vocabulary.kindOf(skillId))) continue;
+    seen.add(skillId);
+    const names = ['zh', 'zh-TW', 'en'].map((locale) => (vocabulary.label?.(skillId, locale) ?? '').normalize('NFKC').toLowerCase().trim()).filter(Boolean);
+    const written = names.find((name) => countOccurrences(text, name) > 0);
+    const keyword = written ?? names[names.length - 1] ?? skillId;
+    out.push({ keyword, importance: 'low', frequency: Math.max(1, countOccurrences(text, keyword)), skillId });
     if (out.length >= limit) break;
   }
   return out;

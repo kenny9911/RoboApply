@@ -1,7 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { MAX_KEYWORDS, buildKeywords, countOccurrences, tfidfTerms, tokenize } from './keywords.js';
-import { CN_POSTING, INTL_POSTING } from './__tests__/fixtures.js';
+import { MAX_KEYWORDS, buildKeywords, countOccurrences, tfidfTerms, tokenize, type KeywordVocabulary } from './keywords.js';
+import { CN_POSTING, INTL_POSTING, fixtureEnrichVocabulary } from './__tests__/fixtures.js';
+
+/** The fixture vocabulary (SYNTHETIC) as the keyword list reads it. */
+const VOCABULARY = fixtureEnrichVocabulary();
 
 describe('tokenize', () => {
   it('drops stopwords, numbers and one-letter words', () => {
@@ -36,29 +39,179 @@ describe('tfidf', () => {
   });
 });
 
-describe('buildKeywords', () => {
-  it('puts required skills first (high), then preferred (medium), then TF-IDF terms, at most 30', () => {
-    const keywords = buildKeywords(INTL_POSTING, [
-      { skill: 'Kafka', required: false },
-      { skill: 'Python', required: true },
-      { skill: 'python', required: true },
+describe('buildKeywords (SM-6: concrete, canonical terms only)', () => {
+  // SYNTHETIC posting, written for this test.
+  const SENIOR_BACKEND = [
+    'Senior Backend Engineer at Acme Analytics.',
+    'You will build shared backend systems in Python, and keep our shared backend systems for billing healthy.',
+    'We are a fast-paced team and clear communication matters. Communication with product is daily work.',
+    'Requirements: 5+ years with Python, SQL and Postgres. PostgreSQL tuning is weekly work. Kafka is a plus.',
+    'You will design REST APIs and run services on Kubernetes. Kubernetes operations are shared with the platform team.',
+    'Software engineering fundamentals and distributed systems knowledge are expected. Distributed systems are what we do.',
+    'Be ready to go the extra mile; the rest is up to you.',
+  ].join('\n');
+  const SENIOR_BACKEND_SKILLS = [
+    { skill: 'Kafka', required: false, skillId: 'kafka', kind: 'hard' as const },
+    { skill: 'Python', required: true, skillId: 'python', kind: 'hard' as const },
+    { skill: 'postgres', required: true, skillId: 'postgresql', kind: 'hard' as const },
+    { skill: 'PostgreSQL', required: false, skillId: 'postgresql', kind: 'hard' as const },
+    { skill: 'SQL', required: true, skillId: 'sql', kind: 'hard' as const },
+    // A soft skill, and a generic phrase the vocabulary holds no skill for.
+    { skill: 'communication', required: true, skillId: 'communication', kind: 'soft' as const },
+    { skill: 'software engineering', required: true, skillId: null },
+  ];
+
+  it('ACCEPT: the "Senior Backend Engineer" list holds its tools and methods, each with a skillId, and none of the generic words or loose phrases', () => {
+    const keywords = buildKeywords(SENIOR_BACKEND, SENIOR_BACKEND_SKILLS, VOCABULARY);
+    expect(keywords).toEqual([
+      // (a) the posting's skills: required → high, preferred → medium.
+      { keyword: 'python', importance: 'high', frequency: 2, skillId: 'python' },
+      { keyword: 'postgres', importance: 'high', frequency: 1, skillId: 'postgresql' },
+      { keyword: 'sql', importance: 'high', frequency: 1, skillId: 'sql' },
+      { keyword: 'kafka', importance: 'medium', frequency: 1, skillId: 'kafka' },
+      // (b) terms of the text that name a reviewed hard skill: low.
+      { keyword: 'distributed systems', importance: 'low', frequency: 2, skillId: 'distributed_systems' },
+      { keyword: 'kubernetes', importance: 'low', frequency: 2, skillId: 'kubernetes' },
+      { keyword: 'rest apis', importance: 'low', frequency: 1, skillId: 'rest_apis' },
     ]);
-    expect(keywords[0]).toEqual({ keyword: 'python', importance: 'high', frequency: 1 });
-    expect(keywords[1]).toEqual({ keyword: 'kafka', importance: 'medium', frequency: 1 });
-    expect(keywords.length).toBeLessThanOrEqual(MAX_KEYWORDS);
-    expect(keywords.slice(2).every((k) => k.importance === 'low' || k.importance === 'medium')).toBe(true);
-    expect(new Set(keywords.map((k) => k.keyword)).size).toBe(keywords.length);
+    const listed = keywords.map((k) => k.keyword);
+    for (const junk of ['communication', 'shared backend systems', 'backend systems', 'fast-paced', 'software engineering', 'go', 'rest', 'billing', 'team']) expect(listed, junk).not.toContain(junk);
+    expect(keywords.every((k) => typeof k.skillId === 'string' && k.skillId.length > 0)).toBe(true);
   });
 
-  it('caps at 30 even with many skills', () => {
-    const skills = Array.from({ length: 40 }, (_, i) => ({ skill: `skill${i}`, required: i % 2 === 0 }));
-    expect(buildKeywords('text', skills)).toHaveLength(MAX_KEYWORDS);
+  it('importance: required → high, preferred → medium, a term found only in the text → low', () => {
+    const keywords = buildKeywords(INTL_POSTING, [{ skill: 'Kafka', required: false, skillId: 'kafka', kind: 'hard' }, { skill: 'Python', required: true, skillId: 'python', kind: 'hard' }], VOCABULARY);
+    expect(keywords.slice(0, 2)).toEqual([
+      { keyword: 'python', importance: 'high', frequency: 1, skillId: 'python' },
+      { keyword: 'kafka', importance: 'medium', frequency: 1, skillId: 'kafka' },
+    ]);
+    // INTL_POSTING also names SQL, PostgreSQL, Kubernetes and Terraform in its sentences.
+    const rest = keywords.slice(2);
+    expect(rest.map((k) => k.skillId).sort()).toEqual(['kubernetes', 'postgresql', 'sql', 'terraform']);
+    expect(rest.every((k) => k.importance === 'low')).toBe(true);
+    // "Go" stands in a sentence ("Python and Go"): a name that is also an ordinary word is taken from a skill list only.
+    expect(keywords.map((k) => k.skillId)).not.toContain('go');
+    expect(buildKeywords(INTL_POSTING, [{ skill: 'Go', required: true, skillId: 'go', kind: 'hard' }], VOCABULARY)[0]).toEqual({ keyword: 'go', importance: 'high', frequency: 1, skillId: 'go' });
   });
 
-  it('works on a Chinese posting', () => {
-    const keywords = buildKeywords(CN_POSTING, [{ skill: 'SQL', required: true }]);
-    expect(keywords[0]).toEqual({ keyword: 'sql', importance: 'high', frequency: 1 });
-    expect(keywords.length).toBeGreaterThan(3);
+  it('one skill is one keyword, whatever its spellings (de-duplication by id)', () => {
+    const text = 'Postgres, PostgreSQL and psql every day. We run k8s; Kubernetes knowledge helps.';
+    const keywords = buildKeywords(
+      text,
+      [
+        { skill: 'postgres', required: false, skillId: 'postgresql', kind: 'hard' },
+        { skill: 'PostgreSQL', required: true, skillId: 'postgresql', kind: 'hard' },
+        { skill: 'psql', required: false, skillId: 'postgresql', kind: 'hard' },
+      ],
+      VOCABULARY,
+    );
+    expect(keywords.filter((k) => k.skillId === 'postgresql')).toEqual([{ keyword: 'postgresql', importance: 'high', frequency: 1, skillId: 'postgresql' }]);
+    expect(keywords.filter((k) => k.skillId === 'kubernetes')).toHaveLength(1);
+    expect(new Set(keywords.map((k) => k.skillId)).size).toBe(keywords.length);
+  });
+
+  it('dropped at the source: a soft skill, a skill with no canonical id, an unreviewed term of the text; an unreviewed skill the posting lists is kept', () => {
+    const text = 'Teamwork and feature flags. You will manage a sales force of twenty and own our work day planning.';
+    const keywords = buildKeywords(
+      text,
+      [
+        { skill: 'teamwork', required: true, skillId: 'teamwork', kind: 'soft' },
+        { skill: 'stakeholder alignment', required: true, skillId: null },
+        // Listed by the posting and mapped to an unreviewed skill: shown (a reader never scores it).
+        { skill: 'feature flags', required: false, skillId: 'featureflag', kind: 'hard' },
+      ],
+      VOCABULARY,
+    );
+    expect(keywords).toEqual([{ keyword: 'feature flags', importance: 'medium', frequency: 1, skillId: 'featureflag' }]);
+    // The same unreviewed skill found only in the text is not a keyword; nor is "sales force" Salesforce.
+    expect(buildKeywords(text, [], VOCABULARY)).toEqual([]);
+    expect(buildKeywords('We use Salesforce every day.', [], VOCABULARY)).toEqual([{ keyword: 'salesforce', importance: 'low', frequency: 1, skillId: 'salesforce' }]);
+  });
+
+  it('a machine guess is never a keyword: the skill is listed only when the posting also writes a name the vocabulary knows', () => {
+    // "postgres db" was mapped to PostgreSQL by an embedding neighbour (`via: 'embedding'`): a guess, not a name.
+    const guessed = { skill: 'postgres db', required: true, skillId: 'postgresql', kind: 'hard' as const, via: 'embedding' as const };
+    expect(buildKeywords('You will look after our Postgres DB cluster. Kafka helps.', [guessed, { skill: 'kafka', required: false, skillId: 'kafka', kind: 'hard', via: 'alias' }], VOCABULARY)).toEqual([
+      { keyword: 'kafka', importance: 'medium', frequency: 1, skillId: 'kafka' },
+      // The text itself says "Postgres", a reviewed name: a keyword of the text, not of the guess.
+      { keyword: 'postgres', importance: 'low', frequency: 1, skillId: 'postgresql' },
+    ]);
+    // Nothing in the text names the skill: no keyword stands on the guess alone.
+    expect(buildKeywords('You will look after our PG-DB cluster.', [{ ...guessed, skill: 'pg-db' }], VOCABULARY)).toEqual([]);
+    // Found by its own name, or created from the posting's string, it is a keyword as before.
+    for (const via of ['alias', 'new'] as const) expect(buildKeywords('', [{ ...guessed, via }], VOCABULARY)).toHaveLength(1);
+  });
+
+  it('a row not yet enriched at version 3 (no ids on its skills) is looked up by exact alias', () => {
+    const keywords = buildKeywords('We use Kubernetes.', [{ skill: 'k8s', required: true }, { skill: 'Communication', required: true }, { skill: 'in-house rpc', required: false }], VOCABULARY);
+    expect(keywords).toEqual([{ keyword: 'k8s', importance: 'high', frequency: 0, skillId: 'kubernetes' }]);
+  });
+
+  it('without a vocabulary only skills that carry their id and kind are kept, and nothing is read from the text', () => {
+    expect(buildKeywords(INTL_POSTING, [{ skill: 'Python', required: true, skillId: 'python', kind: 'hard' }, { skill: 'SQL', required: true }])).toEqual([
+      { keyword: 'python', importance: 'high', frequency: 1, skillId: 'python' },
+    ]);
+    expect(buildKeywords(INTL_POSTING, [])).toEqual([]);
+  });
+
+  it('caps at 30, skills first', () => {
+    const records = Array.from({ length: 40 }, (_, i) => ({ skill: `skill${i}`, required: i % 2 === 0, skillId: `id${i}`, kind: 'hard' as const }));
+    const keywords = buildKeywords('text', records, VOCABULARY);
+    expect(keywords).toHaveLength(MAX_KEYWORDS);
+    expect(keywords.slice(0, 20).every((k) => k.importance === 'high')).toBe(true);
+    expect(buildKeywords('text', records, VOCABULARY, 5)).toHaveLength(5);
+  });
+
+  it('a vocabulary with no sentence rule of its own falls back to the exact name of a term', () => {
+    const plain: KeywordVocabulary = { idOf: (t) => VOCABULARY.idOf(t), kindOf: (id) => VOCABULARY.kindOf(id), reviewed: (id) => VOCABULARY.reviewed(id) };
+    expect(buildKeywords('Kafka pipelines in production. Kafka again.', [], plain)).toEqual([{ keyword: 'kafka', importance: 'low', frequency: 2, skillId: 'kafka' }]);
+  });
+
+  it('ACCEPT (Chinese): a mainland posting yields its tools and certificates and no boilerplate words', () => {
+    // SYNTHETIC posting, written for this test.
+    const zh = [
+      '岗位职责：负责数据分析与报表开发，使用SQL和Python。',
+      '任职要求：本科及以上学历，持有注册会计师证书者优先，有相关经验。',
+      '熟悉机器学习与分布式系统，沟通能力强，责任心强，团队合作意识好。',
+      '加分项：熟悉MySQL，持有教师资格证。',
+    ].join('\n');
+    const keywords = buildKeywords(
+      zh,
+      [
+        { skill: 'SQL', required: true, skillId: 'sql', kind: 'hard' },
+        { skill: '注册会计师', required: false, skillId: 'cpa', kind: 'certification' },
+        { skill: '沟通能力', required: true, skillId: 'communication', kind: 'soft' },
+        { skill: '责任心', required: true, skillId: null },
+      ],
+      VOCABULARY,
+    );
+    expect(keywords.slice(0, 2)).toEqual([
+      { keyword: 'sql', importance: 'high', frequency: 1, skillId: 'sql' },
+      { keyword: '注册会计师', importance: 'medium', frequency: 1, skillId: 'cpa' },
+    ]);
+    const rest = keywords.slice(2);
+    expect(rest.every((k) => k.importance === 'low')).toBe(true);
+    // Tools by their own names, and the Chinese names the word segmenter would cut in two, written as the posting writes them.
+    expect(Object.fromEntries(rest.map((k) => [k.skillId, k.keyword]))).toEqual({
+      python: 'python',
+      mysql: 'mysql',
+      data_analysis: '数据分析',
+      machine_learning: '机器学习',
+      distributed_systems: '分布式系统',
+      teacher_certificate: '教师资格证',
+    });
+    const listed = keywords.map((k) => k.keyword);
+    for (const junk of ['岗位职责', '任职要求', '优先', '熟悉', '负责', '相关经验', '本科', '学历', '沟通能力', '责任心', '团队合作', '加分项', '证书']) expect(listed, junk).not.toContain(junk);
+    expect(new Set(keywords.map((k) => k.skillId)).size).toBe(keywords.length);
+    // The same text in Traditional script names the same skills.
+    const tw = '熟悉機器學習與分散式系統，使用SQL。溝通能力佳。';
+    expect(buildKeywords(tw, [], VOCABULARY).map((k) => k.skillId).sort()).toEqual(['distributed_systems', 'machine_learning', 'sql']);
+  });
+
+  it('works on the shared Chinese posting fixture', () => {
+    const keywords = buildKeywords(CN_POSTING, [{ skill: 'SQL', required: true, skillId: 'sql', kind: 'hard' }], VOCABULARY);
+    expect(keywords[0]).toEqual({ keyword: 'sql', importance: 'high', frequency: 1, skillId: 'sql' });
+    expect(keywords.map((k) => k.skillId).sort()).toEqual(['data_analysis', 'python', 'sql']);
   });
 });
 
@@ -126,6 +279,15 @@ describe('FIX-3: posting boilerplate is not a keyword', () => {
     const twTerms = tokenize(tw);
     for (const junk of ['工作內容', '內容', '職位', '要求', '學歷', '專業', '薪資', '福利', '優先', '考慮']) expect(twTerms, junk).not.toContain(junk);
     expect(twTerms).toEqual(expect.arrayContaining(['go', 'mysql']));
+  });
+
+  it('SM-6: requirement and preference wording and generic qualities never reach the term list (Simplified and Traditional)', () => {
+    const zh = '任职条件：有相关经验者优先录用，三年及以上从业经验。我们希望你具备团队精神、责任感和逻辑思维，吃苦耐劳，积极主动，持有相关证书。熟悉 Kafka 与 Redis 尤佳。';
+    // Nothing but the two tools is left of the sentence (the segmenter cuts 相关经验 into 相关 and 经验: both halves are stop words).
+    expect(tokenize(zh)).toEqual(['kafka', 'redis']);
+    expect(tfidfTerms(zh, 60).map((t) => t.term).sort()).toEqual(['kafka', 'redis']);
+    const tw = '任職條件：有相關經驗者優先錄用，三年以上從業經驗。我們希望你具備團隊精神與責任感，積極主動，持有相關證書。熟悉 Kafka 尤佳。';
+    expect(tokenize(tw)).toEqual(['kafka']);
   });
 });
 

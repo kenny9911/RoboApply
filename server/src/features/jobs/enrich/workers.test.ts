@@ -14,7 +14,8 @@ import { ENRICH_CONCURRENCY, JOBS_ENRICH_WORK_KINDS, jobEnrichWorker, setEnrichD
 import { enqueueJobEnrich } from './index.js';
 import { enrichDedupeKey, type EnrichDeps } from './service.js';
 import { ENRICH_VERSION } from './schema.js';
-import { makeJob } from './__tests__/fixtures.js';
+import { fakeSkillsPort, makeJob } from './__tests__/fixtures.js';
+import type { EnrichUpdate } from './reconcile.js';
 import { RETRIEVAL_WORK_KINDS, retrievalWorkers } from '../../retrieval/index.js';
 
 const ctx = { budget: createBudget(60_000), leaseOwner: 'test' };
@@ -71,6 +72,87 @@ describe('job.enrich worker', () => {
     setEnrichDepsForTests(d);
     await expect(jobEnrichWorker.handler(item({ jobId: 'job_1' }), ctx)).resolves.toBeUndefined();
     expect(d.llm.chatWithUsage).toHaveBeenCalledTimes(1);
+  });
+
+  it('version 3: a row at version 2 is enriched by the item jobs-maintain queues (no `force`); delivered again it does nothing', async () => {
+    const row = makeJob({ skills: ['postgres', 'python'], enrichedAt: new Date('2026-09-01T00:00:00.000Z'), enrichVersion: 2, enrichModel: 'openai/gpt-cheap' });
+    const saves: EnrichUpdate[] = [];
+    const indexed: string[] = [];
+    const vocab = fakeSkillsPort();
+    const d = deps({
+      repo: {
+        loadJob: async () => ({ ...row }),
+        saveJob: async (_id, update) => {
+          saves.push(update);
+          Object.assign(row, update);
+        },
+        saveKeywords: async () => undefined,
+        logCost: async () => undefined,
+      },
+      skills: vocab.port,
+      enqueueIndex: async (ref) => {
+        indexed.push(ref.id);
+      },
+    });
+    setEnrichDepsForTests(d);
+    await expect(jobEnrichWorker.handler(item({ jobId: 'job_1' }), ctx)).resolves.toBeUndefined();
+    expect(d.llm.chatWithUsage).toHaveBeenCalledTimes(1);
+    expect(row).toMatchObject({ enrichVersion: 3, skillIds: ['postgresql', 'python'] });
+    // The request id of the work item reaches the vocabulary call (one per job).
+    expect(vocab.calls).toEqual([{ terms: ['postgres', 'python'], options: { brand: 'roboapply', write: true, requestId: 'job-enrich-w1' } }]);
+    expect(indexed).toEqual(['job_1']);
+    // The item delivered a second time: the row is at version 3.
+    await expect(jobEnrichWorker.handler(item({ jobId: 'job_1' }), ctx)).resolves.toBeUndefined();
+    expect(d.llm.chatWithUsage).toHaveBeenCalledTimes(1);
+    expect(saves).toHaveLength(1);
+    expect(indexed).toEqual(['job_1']);
+    expect(ENRICH_VERSION).toBe(3);
+    expect(enrichDedupeKey('job_1')).toBe('job.enrich:job_1:v3');
+  });
+});
+
+describe('job.enrich worker: a skills-only item', () => {
+  it('maps the skills of a row at the current version without a model call, and completes', async () => {
+    const row = makeJob({
+      skills: ['postgres', 'made-up tool'],
+      skillsDetail: [
+        { skill: 'postgres', kind: 'hard', required: true, skillId: 'postgresql', via: 'alias' },
+        { skill: 'made-up tool', kind: 'hard', required: false, skillId: null, via: 'none' },
+      ],
+      skillIds: ['postgresql'],
+      enrichedAt: new Date('2026-10-01T00:00:00.000Z'),
+      enrichVersion: ENRICH_VERSION,
+      enrichModel: 'openai/gpt-cheap',
+    });
+    const saves: EnrichUpdate[] = [];
+    const indexed: string[] = [];
+    const vocab = fakeSkillsPort();
+    const d = deps({
+      repo: {
+        loadJob: async () => ({ ...row }),
+        saveJob: async (_id, update) => {
+          saves.push(update);
+          Object.assign(row, update);
+        },
+        saveKeywords: async () => undefined,
+        logCost: async () => undefined,
+      },
+      budget: async () => Promise.reject(new Error('the budget is not read')),
+      skills: vocab.port,
+      enqueueIndex: async (ref) => {
+        indexed.push(ref.id);
+      },
+    });
+    setEnrichDepsForTests(d);
+    await expect(jobEnrichWorker.handler(item({ jobId: 'job_1', skillsOnly: true }), ctx)).resolves.toBeUndefined();
+    expect(d.llm.chatWithUsage).not.toHaveBeenCalled();
+    expect(vocab.calls).toEqual([{ terms: ['postgres', 'made-up tool'], options: { brand: 'roboapply', write: true, requestId: 'job-enrich-w1' } }]);
+    expect(row).toMatchObject({ skillIds: ['postgresql', 'madeuptool'], enrichVersion: ENRICH_VERSION, enrichModel: 'openai/gpt-cheap', enrichedAt: new Date('2026-10-01T00:00:00.000Z') });
+    expect(saves).toHaveLength(1);
+    expect(indexed).toEqual(['job_1']);
+    // The plain item for the same row still does nothing.
+    await expect(jobEnrichWorker.handler(item({ jobId: 'job_1' }), ctx)).resolves.toBeUndefined();
+    expect(saves).toHaveLength(1);
   });
 });
 

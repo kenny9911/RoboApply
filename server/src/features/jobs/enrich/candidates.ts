@@ -15,6 +15,15 @@
 //      security and network architects), so the model always sees the other
 //      reading. A head noun with dozens of roles ("engineer") adds only the
 //      connected ones; at most two thirds of the list comes from the lexicon;
+//   3a. when the title does not name its role outright (a title match under
+//      0.9, or none): up to three roles whose label is nearest to the title by
+//      embedding (`extraIds`; MATCH 4.5 point 3), so the model always sees a
+//      plausible alternative. They join AFTER step 3 and outside its two
+//      thirds, so they never push the head noun's other reading out: the
+//      lexicon stops at ten of fifteen, which always leaves them room. They
+//      are worked out by the caller (roleNeighbours.ts, in the enrichment
+//      worker): this function stays synchronous and makes no call. Without
+//      them the list is what it was;
 //   4. roles whose labels/synonyms share words with the title (weight 3) or
 //      the first part of the description (weight 1). A head noun is not such
 //      a word: "engineer" says nothing about the discipline.
@@ -32,7 +41,7 @@ import {
   type TaxonomyNode,
 } from '../taxonomy/index.js';
 import { MAX_TAXONOMY_CANDIDATES } from './schema.js';
-import { titleMatches, titleReadings } from './titleEvidence.js';
+import { titleEvidence, titleIsDecisive, titleMatches, titleReadings } from './titleEvidence.js';
 
 const CJK = /[㐀-鿿豈-﫿]/;
 /** Description characters scanned for overlap. */
@@ -87,15 +96,31 @@ function toCandidate(node: TaxonomyNode): TaxonomyCandidate {
 
 const ROLE_BY_ID = new Map(ROLES.map((r) => [r.node.id, r.node]));
 
+/** Roles added from the title's nearest labels by embedding, at most (MATCH 4.5 point 3). */
+export const MAX_NEIGHBOUR_CANDIDATES = 3;
+
+/** The roles a model may be offered (level 3 of the tree), with the labels a title is compared with. */
+export const CANDIDATE_ROLES: ReadonlyArray<{ id: string; en: string; zh: string }> = ROLES.map((r) => ({ id: r.node.id, en: r.node.en, zh: r.node.zh }));
+
+/** True when the title does not name its role outright: the model decides, and the nearest roles are worth offering. */
+export function titleIsWeak(title: string): boolean {
+  return !titleIsDecisive(titleEvidence(title));
+}
+
 /**
  * Up to `limit` (≤15) role candidates for a posting, best first. `held` is
- * the role the row already has, if any: it is always offered.
+ * the role the row already has, if any: it is always offered. `extraIds` are
+ * the roles nearest to the title by embedding, best first: the first
+ * MAX_NEIGHBOUR_CANDIDATES of them are offered when the title is weak (after
+ * the head noun's roles, before the keyword overlap), and ignored when the
+ * title names its role outright.
  */
 export function selectTaxonomyCandidates(
   title: string,
   description: string,
   limit: number = MAX_TAXONOMY_CANDIDATES,
   held: readonly (string | null | undefined)[] = [],
+  extraIds: readonly (string | null | undefined)[] = [],
 ): TaxonomyCandidate[] {
   const cap = Math.max(1, Math.min(MAX_TAXONOMY_CANDIDATES, limit));
   const picked = new Map<string, TaxonomyNode>();
@@ -116,6 +141,8 @@ export function selectTaxonomyCandidates(
     const family = headNounRoles(head).filter((id) => !picked.has(id));
     if (picked.size + family.length <= room) for (const id of family.sort()) pick(id);
   }
+  // The nearest roles by embedding, after the lexicon: they take none of its room (see 3a in the header).
+  if (extraIds.length && titleIsWeak(title)) for (const id of extraIds.slice(0, MAX_NEIGHBOUR_CANDIDATES)) pick(id);
 
   const titleTokens = tokenSet(stripLevelWords(normalizeTitle(title)));
   const descHead = description.slice(0, DESCRIPTION_SCAN_CHARS);

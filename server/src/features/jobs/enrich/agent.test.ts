@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../services/LoggerService.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -7,9 +7,9 @@ vi.mock('../../../services/LoggerService.js', () => ({
 vi.mock('../../../lib/prisma.js', () => ({ default: {} }));
 
 import { getCurrentBrandId } from '../../../lib/requestContext.js';
-import { brandForMarket, buildEnrichMessages, domesticProviderOf, resolveEnrichModel, runEnrichCall, taskModelRoute, type EnrichLlm } from './agent.js';
+import { ENRICH_MAX_OUTPUT_TOKENS, brandForMarket, buildEnrichMessages, buildSystemPrompt, domesticProviderOf, resolveEnrichModel, runEnrichCall, taskModelRoute, type EnrichLlm } from './agent.js';
 import { selectTaxonomyCandidates } from './candidates.js';
-import { ENRICH_INPUT_CHARS } from './schema.js';
+import { ENRICH_INPUT_CHARS, MAX_REQUIREMENT_CHARS, REQUIREMENT_KINDS } from './schema.js';
 import { INTL_POSTING, intlModelReply } from './__tests__/fixtures.js';
 
 /** The operator's opt-in wall: GoApply may use mainland model endpoints only. */
@@ -153,6 +153,49 @@ describe('buildEnrichMessages', () => {
     expect(system).toContain('Decide by what the job does, not by one word of the title');
   });
 
+  describe('SM-8: the posting\'s requirement lines', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+    const system = () => String(buildEnrichMessages({ title: 'Backend Engineer', companyName: 'Acme', postingText: 'Hello', market: 'intl', candidates: [] })[0]!.content);
+
+    it('asks for the lines copied verbatim: one line each, never paraphrased, shortened, joined or split', () => {
+      const text = system();
+      expect(text).toContain('"requirements": up to 12 items {"kind", "text", "importance"}');
+      expect(text).toContain(`"text" is ONE line of the posting copied EXACTLY, character for character, at most ${MAX_REQUIREMENT_CHARS} characters`);
+      expect(text).toContain('never paraphrase, never shorten, never join two lines into one, never split one line in two');
+      expect(text).toContain('a line that is not in the posting word for word is discarded');
+      expect(MAX_REQUIREMENT_CHARS).toBe(240);
+      // The five kinds of the wire type, and the reply shape.
+      for (const kind of REQUIREMENT_KINDS) expect(text).toContain(`"${kind}"`);
+      expect(text).toContain('"requirements": [{"kind": string, "text": string, "importance": "must"|"preferred"}]');
+    });
+
+    it('says what is a must and what is preferred, in English and Chinese wording', () => {
+      const text = system();
+      expect(text).toContain('"importance" is "must" when the posting marks the line required, minimum, must or essential');
+      expect(text).toContain('"preferred" for everything else');
+      expect(text).toMatch(/必须.*优先/s);
+    });
+
+    it('excludes logistics and age: location, pay, benefits, hours, visa or work authorization', () => {
+      const text = system();
+      expect(text).toContain('Leave out every line about location, pay, benefits, working hours, visa or work authorization, and every line about age.');
+    });
+
+    it('names the cap of ENRICH_REQUIREMENTS_MAX', () => {
+      vi.stubEnv('ENRICH_REQUIREMENTS_MAX', '6');
+      expect(system()).toContain('"requirements": up to 6 items');
+      expect(buildSystemPrompt(20)).toContain('"requirements": up to 20 items');
+    });
+
+    it('the system prompt is the same for every job (a provider can cache it)', () => {
+      const a = buildEnrichMessages({ title: 'A', companyName: 'X', postingText: 'one', market: 'intl', candidates: [] })[0]!.content;
+      const b = buildEnrichMessages({ title: 'B', companyName: 'Y', postingText: 'two', market: 'cn', candidates: selectTaxonomyCandidates('数据分析师', '') })[0]!.content;
+      expect(a).toBe(b);
+    });
+  });
+
   it('says so when there are no candidates', () => {
     const [, user] = buildEnrichMessages({ title: 'x', companyName: 'y', postingText: 'z', market: 'cn', candidates: [] });
     expect(String(user!.content)).toContain('(none: use null)');
@@ -176,9 +219,12 @@ describe('runEnrichCall', () => {
     expect(seen).toEqual([
       {
         brand: 'goapply',
-        options: expect.objectContaining({ task: 'enrich', model: 'deepseek/deepseek-chat', provider: 'deepseek', thinkingMode: 'disabled', responseFormat: 'json_object', carriesUserData: false }),
+        options: expect.objectContaining({ task: 'enrich', model: 'deepseek/deepseek-chat', provider: 'deepseek', thinkingMode: 'disabled', responseFormat: 'json_object', carriesUserData: false, maxTokens: ENRICH_MAX_OUTPUT_TOKENS }),
       },
     ]);
+    // Room for the requirement lines: a reply cut off in the middle is not JSON.
+    expect(ENRICH_MAX_OUTPUT_TOKENS).toBeGreaterThanOrEqual(3000);
+    expect(result.output.requirements).toEqual([]);
     expect(result.model).toBe('deepseek-chat');
     expect(result.output.taxonomyId).toBe('backend_engineer');
     expect(result.usage).toEqual({ promptTokens: 10, completionTokens: 5, totalTokens: 15 });

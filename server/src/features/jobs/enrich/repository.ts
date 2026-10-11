@@ -4,12 +4,20 @@
 // is tested without a database. Typed Prisma only (TASK_PLAN.md §2.1 rule 5).
 //   loadJob      — the RAJob columns enrichment reads (and the place and link
 //                  columns the market hooks need, so they do not re-read the row);
-//                  from ENRICH_VERSION 2 it selects `titleMatchScore`, so the
-//                  database needs the SCHEMA-7 push before this code runs;
+//                  from ENRICH_VERSION 2 it selects `titleMatchScore`, and from
+//                  version 3 `skillIds`, `requirements` and `sponsorshipSource`,
+//                  so the database needs the SCHEMA-7 push before this code runs;
 //   clearedScamRules — the scam rules an admin cleared when restoring the job
 //                  (RAJobReview, the latest 'restore'): never raised again;
-//   saveJob      — one RAJob update with the reconciled columns;
-//   saveKeywords — upsert the job's RAKeywordExtraction row (top 30);
+//   saveJob      — one RAJob update with the reconciled columns (version 3:
+//                  `skillIds` and `sponsorshipSource` among them). The requirement
+//                  list (`requirements`, SM-8) is written by a second statement
+//                  that holds only while the row's list is still what enrichment
+//                  read: the scorer stores a list when a row has none, and the
+//                  first writer wins;
+//   saveKeywords — upsert the job's RAKeywordExtraction row (top 30). A rewrite
+//                  that made no model call of its own keeps the stored model
+//                  and cost (`keepModelAndCost`);
 //   logCost      — one UsageDeductionLog row, SKU `ra_job_enrich`, under the
 //                  brand's system user (ARCH §4.5 step 4). Failures are logged,
 //                  never thrown: a lost audit row must not fail the job.
@@ -28,6 +36,13 @@ export interface KeywordRow {
   /** USD; null when no model ran. */
   tokenCost: number | null;
   generatedAt: Date;
+  /**
+   * True for a rewrite that made no model call of its own (a skills-only
+   * pass): an existing row keeps the model and the cost of the pass that paid
+   * for it, and only its keywords and date change. A row that does not exist
+   * yet is created with `modelUsed` and `tokenCost` as given.
+   */
+  keepModelAndCost?: boolean;
 }
 
 export interface EnrichCostEntry {
@@ -79,8 +94,13 @@ const JOB_SELECT = {
   educationLevel: true,
   skills: true,
   skillsDetail: true,
+  // SM-6, SM-8: the canonical ids the row holds (a skill is counted once per posting) and the stored requirement list.
+  skillIds: true,
+  requirements: true,
   sponsorship: true,
   sponsorshipEvidence: true,
+  // JI-11: who states the sponsorship value (a provider's reading is never cleared by enrichment).
+  sponsorshipSource: true,
   citizenshipRequired: true,
   clearanceRequired: true,
   employerTags: true,
@@ -101,13 +121,27 @@ const JOB_SELECT = {
   applyUrl: true,
 } as const satisfies Prisma.RAJobSelect;
 
-function json(value: unknown[] | null | undefined): Prisma.InputJsonValue | typeof Prisma.DbNull | undefined {
+function json(value: unknown[] | object | null | undefined): Prisma.InputJsonValue | typeof Prisma.DbNull | undefined {
   if (value === undefined) return undefined;
   if (value === null) return Prisma.DbNull;
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
-/** The Prisma `data` for an EnrichUpdate (absent keys stay unchanged). */
+/**
+ * The `where` of the requirement write: the row, and what its list was when
+ * enrichment read it (`requirementsWere`: null = it had none, a string = the
+ * content hash of the list it had, absent = whatever it holds).
+ */
+export function requirementsWhere(jobId: string, were: string | null | undefined): Prisma.RAJobWhereInput {
+  if (were === undefined) return { id: jobId };
+  if (were === null) return { id: jobId, requirements: { equals: Prisma.DbNull } };
+  return { id: jobId, requirements: { path: ['contentHash'], equals: were } };
+}
+
+/**
+ * The Prisma `data` for an EnrichUpdate (absent keys stay unchanged). The
+ * requirement list is not part of it: `saveJob` writes it with its own guard.
+ */
 export function toJobUpdateData(update: EnrichUpdate): Prisma.RAJobUpdateInput {
   const data: Prisma.RAJobUpdateInput = {};
   if (update.taxonomyIds !== undefined) data.taxonomyIds = { set: update.taxonomyIds };
@@ -117,8 +151,10 @@ export function toJobUpdateData(update: EnrichUpdate): Prisma.RAJobUpdateInput {
   if (update.educationLevel !== undefined) data.educationLevel = update.educationLevel;
   if (update.skills !== undefined) data.skills = { set: update.skills };
   if (update.skillsDetail !== undefined) data.skillsDetail = json(update.skillsDetail);
+  if (update.skillIds !== undefined) data.skillIds = { set: update.skillIds };
   if (update.sponsorship !== undefined) data.sponsorship = update.sponsorship;
   if (update.sponsorshipEvidence !== undefined) data.sponsorshipEvidence = update.sponsorshipEvidence;
+  if (update.sponsorshipSource !== undefined) data.sponsorshipSource = update.sponsorshipSource;
   if (update.citizenshipRequired !== undefined) data.citizenshipRequired = update.citizenshipRequired;
   if (update.clearanceRequired !== undefined) data.clearanceRequired = update.clearanceRequired;
   if (update.employerTags !== undefined) data.employerTags = { set: update.employerTags };
@@ -166,15 +202,18 @@ export function createPrismaEnrichRepository(db: EnrichDb = prisma): EnrichRepos
     },
     async saveJob(jobId, update) {
       const data = toJobUpdateData(update);
-      if (Object.keys(data).length === 0) return;
-      await db.rAJob.update({ where: { id: jobId }, data, select: { id: true } });
+      if (Object.keys(data).length > 0) await db.rAJob.update({ where: { id: jobId }, data, select: { id: true } });
+      // A list another writer stored since the row was read is left alone (no row matches).
+      if (update.requirements !== undefined) {
+        await db.rAJob.updateMany({ where: requirementsWhere(jobId, update.requirementsWere), data: { requirements: json(update.requirements) } });
+      }
     },
     async saveKeywords(jobId, row) {
       const keywords = JSON.parse(JSON.stringify(row.keywords)) as Prisma.InputJsonValue;
       await db.rAKeywordExtraction.upsert({
         where: { jobId },
         create: { jobId, keywords, modelUsed: row.modelUsed, tokenCost: row.tokenCost, generatedAt: row.generatedAt },
-        update: { keywords, modelUsed: row.modelUsed, tokenCost: row.tokenCost, generatedAt: row.generatedAt },
+        update: row.keepModelAndCost ? { keywords, generatedAt: row.generatedAt } : { keywords, modelUsed: row.modelUsed, tokenCost: row.tokenCost, generatedAt: row.generatedAt },
         select: { id: true },
       });
     },

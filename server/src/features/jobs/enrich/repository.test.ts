@@ -6,10 +6,11 @@ vi.mock('../../../services/LoggerService.js', () => ({ logger }));
 vi.mock('../../../lib/prisma.js', () => ({ default: {} }));
 
 import { Prisma } from '../../../generated/prisma/client.js';
-import { ENRICH_COST_SKU, createPrismaEnrichRepository, resetMissingCostUsersForTests, toJobUpdateData, type EnrichDb } from './repository.js';
+import { ENRICH_COST_SKU, createPrismaEnrichRepository, requirementsWhere, resetMissingCostUsersForTests, toJobUpdateData, type EnrichDb } from './repository.js';
+import type { StoredRequirements } from './reconcile.js';
 
 function fakeDb(overrides: Partial<Record<string, unknown>> = {}) {
-  const calls: Record<string, unknown[]> = { findUnique: [], update: [], upsert: [], create: [] };
+  const calls: Record<string, unknown[]> = { findUnique: [], update: [], updateMany: [], upsert: [], create: [] };
   const db = {
     rAJob: {
       findUnique: vi.fn(async (args: unknown) => {
@@ -19,6 +20,10 @@ function fakeDb(overrides: Partial<Record<string, unknown>> = {}) {
       update: vi.fn(async (args: unknown) => {
         calls.update!.push(args);
         return { id: 'j1' };
+      }),
+      updateMany: vi.fn(async (args: unknown) => {
+        calls.updateMany!.push(args);
+        return { count: 1 };
       }),
     },
     rAKeywordExtraction: {
@@ -47,7 +52,7 @@ describe('toJobUpdateData', () => {
         taxonomyIds: ['a', 'b'],
         skills: ['python'],
         employerTags: [],
-        skillsDetail: [{ skill: 'python', kind: 'hard', required: true }],
+        skillsDetail: [{ skill: 'python', kind: 'hard', required: true, skillId: 'python', via: 'alias' }],
         marketTags: null,
         fraudFlags: [{ rule: 'intl_fee_required', evidence: 'fee', at: at.toISOString() }],
         sponsorship: null,
@@ -59,7 +64,7 @@ describe('toJobUpdateData', () => {
       taxonomyIds: { set: ['a', 'b'] },
       skills: { set: ['python'] },
       employerTags: { set: [] },
-      skillsDetail: [{ skill: 'python', kind: 'hard', required: true }],
+      skillsDetail: [{ skill: 'python', kind: 'hard', required: true, skillId: 'python', via: 'alias' }],
       marketTags: Prisma.DbNull,
       fraudFlags: [{ rule: 'intl_fee_required', evidence: 'fee', at: at.toISOString() }],
       sponsorship: null,
@@ -81,6 +86,77 @@ describe('toJobUpdateData', () => {
   });
 });
 
+describe('ENRICH_VERSION 3 columns (SM-6, SM-8, JI-11)', () => {
+  const LIST: StoredRequirements = {
+    v: 1,
+    contentHash: 'hash-now',
+    model: 'openai/gpt-cheap',
+    extractedAt: '2026-10-10T12:00:00.000Z',
+    items: [{ id: 'r1', kind: 'experience', text: '5+ years building backend services', importance: 'must' }],
+  };
+
+  it('toJobUpdateData writes skillIds as a set (an empty list too) and the sponsorship source (null too)', () => {
+    expect(toJobUpdateData({ skillIds: ['postgresql', 'python'] })).toEqual({ skillIds: { set: ['postgresql', 'python'] } });
+    expect(toJobUpdateData({ skillIds: [] })).toEqual({ skillIds: { set: [] } });
+    expect(toJobUpdateData({ sponsorship: 'offered', sponsorshipEvidence: 'Visa sponsorship is available.', sponsorshipSource: 'posting_quote' })).toEqual({
+      sponsorship: 'offered',
+      sponsorshipEvidence: 'Visa sponsorship is available.',
+      sponsorshipSource: 'posting_quote',
+    });
+    expect(toJobUpdateData({ sponsorship: null, sponsorshipEvidence: null, sponsorshipSource: null })).toEqual({ sponsorship: null, sponsorshipEvidence: null, sponsorshipSource: null });
+    // The requirement list is not part of the row update: it has its own guarded statement.
+    expect(toJobUpdateData({ requirements: LIST, requirementsWere: null })).toEqual({});
+  });
+
+  it('loadJob selects the three columns', async () => {
+    const { db, calls } = fakeDb();
+    await createPrismaEnrichRepository(db).loadJob('j1');
+    expect((calls.findUnique![0] as { select: Record<string, boolean> }).select).toMatchObject({ skillIds: true, requirements: true, sponsorshipSource: true, skills: true, skillsDetail: true, sponsorshipEvidence: true });
+  });
+
+  it('saveJob writes skillIds and the sponsorship source with the row', async () => {
+    const { db, calls } = fakeDb();
+    await createPrismaEnrichRepository(db).saveJob('j1', { skillIds: ['python'], sponsorshipSource: 'posting_quote', enrichVersion: 3 });
+    expect(calls.update).toEqual([{ where: { id: 'j1' }, data: { skillIds: { set: ['python'] }, sponsorshipSource: 'posting_quote', enrichVersion: 3 }, select: { id: true } }]);
+    expect(calls.updateMany).toEqual([]);
+  });
+
+  it('saveJob writes the requirement list only while the row still holds what enrichment read (first writer wins)', async () => {
+    // The row had no list: written only if it still has none (the scorer may have stored one meanwhile).
+    const first = fakeDb();
+    await createPrismaEnrichRepository(first.db).saveJob('j1', { summary: 'S.', requirements: LIST, requirementsWere: null });
+    expect(first.calls.update).toEqual([{ where: { id: 'j1' }, data: { summary: 'S.' }, select: { id: true } }]);
+    expect(first.calls.updateMany).toEqual([{ where: { id: 'j1', requirements: { equals: Prisma.DbNull } }, data: { requirements: LIST } }]);
+
+    // The row had a list of an earlier text: replaced only if that list is still there.
+    const replace = fakeDb();
+    await createPrismaEnrichRepository(replace.db).saveJob('j1', { requirements: LIST, requirementsWere: 'hash-before' });
+    expect(replace.calls.update).toEqual([]);
+    expect(replace.calls.updateMany).toEqual([{ where: { id: 'j1', requirements: { path: ['contentHash'], equals: 'hash-before' } }, data: { requirements: LIST } }]);
+
+    // Removing a stale list (a rules-only pass on a changed posting).
+    const remove = fakeDb();
+    await createPrismaEnrichRepository(remove.db).saveJob('j1', { requirements: null, requirementsWere: 'hash-before' });
+    expect(remove.calls.updateMany).toEqual([{ where: { id: 'j1', requirements: { path: ['contentHash'], equals: 'hash-before' } }, data: { requirements: Prisma.DbNull } }]);
+
+    // Something on the row this module cannot read: no condition.
+    const plain = fakeDb();
+    await createPrismaEnrichRepository(plain.db).saveJob('j1', { requirements: LIST });
+    expect(plain.calls.updateMany).toEqual([{ where: { id: 'j1' }, data: { requirements: LIST } }]);
+
+    // No list in the update: no second statement.
+    const none = fakeDb();
+    await createPrismaEnrichRepository(none.db).saveJob('j1', { summary: 'S.' });
+    expect(none.calls.updateMany).toEqual([]);
+  });
+
+  it('requirementsWhere: none, a content hash, or whatever the row holds', () => {
+    expect(requirementsWhere('j1', null)).toEqual({ id: 'j1', requirements: { equals: Prisma.DbNull } });
+    expect(requirementsWhere('j1', 'h')).toEqual({ id: 'j1', requirements: { path: ['contentHash'], equals: 'h' } });
+    expect(requirementsWhere('j1', undefined)).toEqual({ id: 'j1' });
+  });
+});
+
 describe('prisma enrich repository', () => {
   it('loads with a select, updates only when there is data and upserts keywords', async () => {
     const { db, calls } = fakeDb();
@@ -94,12 +170,25 @@ describe('prisma enrich repository', () => {
     expect(calls.update![0]).toMatchObject({ where: { id: 'j1' }, data: { summary: 'Two sentences.' } });
 
     const generatedAt = new Date('2026-10-10T00:00:00.000Z');
-    await repo.saveKeywords('j1', { keywords: [{ keyword: 'python', importance: 'high', frequency: 2 }], modelUsed: 'm', tokenCost: 0.001, generatedAt });
+    await repo.saveKeywords('j1', { keywords: [{ keyword: 'python', importance: 'high', frequency: 2, skillId: 'python' }], modelUsed: 'm', tokenCost: 0.001, generatedAt });
     expect(calls.upsert![0]).toMatchObject({
       where: { jobId: 'j1' },
-      create: { jobId: 'j1', modelUsed: 'm', tokenCost: 0.001, generatedAt },
+      // Each keyword row carries its canonical id (SM-6).
+      create: { jobId: 'j1', keywords: [{ keyword: 'python', importance: 'high', frequency: 2, skillId: 'python' }], modelUsed: 'm', tokenCost: 0.001, generatedAt },
       update: { modelUsed: 'm', tokenCost: 0.001, generatedAt },
     });
+  });
+
+  it('a keyword rewrite that made no model call keeps the stored model and cost; a row that does not exist yet is created whole', async () => {
+    const { db, calls } = fakeDb();
+    const repo = createPrismaEnrichRepository(db);
+    const generatedAt = new Date('2026-10-12T00:00:00.000Z');
+    const keywords = [{ keyword: 'kafka', importance: 'medium' as const, frequency: 1, skillId: 'kafka' }];
+    await repo.saveKeywords('j1', { keywords, modelUsed: 'openai/gpt-cheap', tokenCost: null, generatedAt, keepModelAndCost: true });
+    const upsert = calls.upsert![0] as { create: Record<string, unknown>; update: Record<string, unknown> };
+    // Only the keywords and their date change on an existing row.
+    expect(upsert.update).toEqual({ keywords, generatedAt });
+    expect(upsert.create).toEqual({ jobId: 'j1', keywords, modelUsed: 'openai/gpt-cheap', tokenCost: null, generatedAt });
   });
 
   it('SM-2 / SM-10: loadJob selects the stored title score and the company the industry is written to; saveJob writes the score', async () => {
