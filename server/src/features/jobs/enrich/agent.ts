@@ -29,7 +29,7 @@ import { getBrand, runWithBrand, type BrandId, type ProductBrand } from '../../.
 import { getTaskModelOrDefault } from '../../../lib/llm/llmTaskSettings.js';
 import { llmDomesticOnlyApplies } from '../../../platform/llm/brandPolicy.js';
 import type { TaxonomyCandidate } from './candidates.js';
-import { ENRICH_INPUT_CHARS, MAX_ENRICH_SKILLS, parseEnrichText, type EnrichLlmOutput } from './schema.js';
+import { ENRICH_INDUSTRY_IDS, ENRICH_INPUT_CHARS, MAX_ENRICH_SKILLS, MAX_QUOTE_CHARS, parseEnrichText, type EnrichLlmOutput } from './schema.js';
 
 /** LLMService options plus the task routing fields WP-14 reads. */
 export type EnrichLlmOptions = LLMOptions & {
@@ -133,7 +133,7 @@ const SYSTEM_PROMPT = [
   'Use only what the posting states. Never guess or infer from what is missing. Unknown → null, "not_stated" or [].',
   '',
   'Fields:',
-  '- "taxonomyId": exactly one id from CANDIDATE ROLES that fits the job, or null when none fits. Never invent an id.',
+  '- "taxonomyId": exactly one id from CANDIDATE ROLES that fits the job, or null when none fits. Never invent an id. Decide by what the job does, not by one word of the title: an "architect" who designs software systems is a software role, one who designs buildings is not.',
   '- "seniority": one of "intern_newgrad", "entry", "mid", "senior", "lead_staff", "director_exec", or null.',
   '- "educationLevel": the minimum degree the posting asks for: "none", "associate", "bachelor", "master", "phd", or null when not stated.',
   `- "skills": up to ${MAX_ENRICH_SKILLS} items {"skill", "kind": "hard"|"soft", "required": true|false}. Short canonical names ("Python", "SQL", "stakeholder management"). required=true when the posting says required/must; false for preferred/nice to have.`,
@@ -141,11 +141,12 @@ const SYSTEM_PROMPT = [
   '- "citizenshipRequired" and "clearanceRequired": {"value": true|false, "quote"} only when the posting states it (e.g. "US citizens only", "active Secret clearance required"); otherwise null.',
   '- "summary": at most 2 short sentences in the SAME language as the posting, plain words, saying what the job is. No praise, no claims the posting does not make.',
   '- "employerTags": only for mainland China postings, items {"tag", "quote"} with tag "soe" (central or state-owned enterprise, 央企/国企), "bianzhi" (编制/事业编), "hukou" (落户/户口 support), "foreign" (foreign-invested company, 外企/外资). Otherwise [].',
+  `- "industry": {"value", "quote"} only when the posting itself says what the employer does (its business, product or sector). "value" is exactly one of: ${ENRICH_INDUSTRY_IDS.map((id) => `"${id}"`).join(', ')}. "quote" is the line of the posting that says it. Never decide it from the company name, the job title or the skills alone, and never from a line about a recruiter's client. Choose a value only when the quote itself names that kind of business: a bank is not "Fintech" and a hospital is not "Healthtech" unless the posting says so. When the posting does not say what the employer does, or no value fits, null.`,
   '',
-  'Every "quote" must be copied EXACTLY, character for character, from the posting (one sentence or phrase, at most 240 characters). A claim without an exact quote is discarded.',
+  `Every "quote" must be copied EXACTLY, character for character, from the posting (one sentence or phrase, at most ${MAX_QUOTE_CHARS} characters). A claim without an exact quote is discarded.`,
   '',
   'JSON shape:',
-  '{"taxonomyId": string|null, "seniority": string|null, "educationLevel": string|null, "skills": [{"skill": string, "kind": "hard"|"soft", "required": boolean}], "sponsorship": {"status": string, "quote": string|null}, "citizenshipRequired": {"value": boolean, "quote": string}|null, "clearanceRequired": {"value": boolean, "quote": string}|null, "summary": string|null, "employerTags": [{"tag": string, "quote": string}]}',
+  '{"taxonomyId": string|null, "seniority": string|null, "educationLevel": string|null, "skills": [{"skill": string, "kind": "hard"|"soft", "required": boolean}], "sponsorship": {"status": string, "quote": string|null}, "citizenshipRequired": {"value": boolean, "quote": string}|null, "clearanceRequired": {"value": boolean, "quote": string}|null, "summary": string|null, "employerTags": [{"tag": string, "quote": string}], "industry": {"value": string, "quote": string}|null}',
 ].join('\n');
 
 /** Chat messages for one job. Exported for tests and the verify script. */

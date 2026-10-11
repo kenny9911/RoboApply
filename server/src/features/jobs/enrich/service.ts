@@ -7,7 +7,8 @@
 //      cleared when restoring the job (RAJobReview.clearedRules of its latest
 //      'restore') is never raised again, however often the job is re-enriched;
 //   3. skip the model when ingest already covered taxonomy, seniority and ≥5
-//      skills and the posting has nothing only the model can cite;
+//      skills, the title names its role outright, and the posting has nothing
+//      only the model can cite;
 //      also skip it when the brand has no model (GoApply without CN config)
 //      or the job is a GoApply user's import without AI consent (aiAllowed);
 //   4. otherwise spend one unit of the market's daily budget; over budget →
@@ -18,8 +19,11 @@
 //      change nothing (RULES_CHECKED_MODEL: covered, no AI consent, the call
 //      failed on its last attempt) — jobs-maintain retries only the former;
 //   5. one structured call under the job's brand (`task: 'enrich'`);
-//   6. reconcile (quote guard, negation rule, candidate-only taxonomy), write
-//      the row, the RAKeywordExtraction row (top 30) and the cost row;
+//   6. reconcile (quote guard, negation rule, candidate-only taxonomy; the
+//      model may overrule a role whose title match is weak, SM-2), write the
+//      row, the RAKeywordExtraction row (top 30) and the cost row; when a
+//      public posting states what its employer does, pass that industry to
+//      the company row (SM-10);
 //   7. call `marketHooks.afterEnrich` (WP-41's CN classifier and others).
 // A failed or unparsable call is retried by the queue; on the last attempt
 // the job is finished rules-only so it never stays unenriched forever.
@@ -30,6 +34,7 @@ import { aiAllowed as platformAiAllowed } from '../../../platform/consent/index.
 import { brandEnv, getBrand } from '../../../platform/brand/index.js';
 import { SHARED_COST_USER_ID } from '../../../roboapply/v2/lib/raFeatureCatalog.js';
 import { afterEnrich as marketAfterEnrich, type MarketHookContext, type MarketHookJob } from '../marketHooks.js';
+import type { PostingIndustry } from '../companies/index.js';
 import { createEnrichBudget, type EnrichBudget } from './budget.js';
 import { selectTaxonomyCandidates } from './candidates.js';
 import { buildKeywords } from './keywords.js';
@@ -53,6 +58,12 @@ export interface EnrichDeps {
   /** GoApply AI consent for a user's own import (platform/consent). */
   aiAllowed: (userId: string) => Promise<boolean>;
   afterEnrich: (job: MarketHookJob, ctx: MarketHookContext) => Promise<void>;
+  /**
+   * Write the industry a posting states to its company row (SM-10,
+   * companies/service.ts). Optional so a caller's own dependency double need
+   * not model it (absent = the industry is not stored).
+   */
+  setCompanyIndustry?: (companyId: string, input: PostingIndustry) => Promise<unknown>;
   env: Record<string, string | undefined>;
   now: () => Date;
 }
@@ -64,6 +75,8 @@ export function defaultEnrichDeps(): EnrichDeps {
     budget: createEnrichBudget(),
     aiAllowed: (userId) => platformAiAllowed(userId),
     afterEnrich: (job, ctx) => marketAfterEnrich(job, ctx),
+    // Loaded on first use: the companies area (its routes included) is not part of enrichment's start-up.
+    setCompanyIndustry: async (companyId, input) => (await import('../companies/index.js')).recordPostingIndustry(companyId, input),
     env: process.env,
     now: () => new Date(),
   };
@@ -143,6 +156,8 @@ async function finishRulesOnly(
   const { update, report } = reconcile({ job, postingText: text, output: null, candidates: [], scamSignals: signals, model: null, now: deps.now() });
   update.enrichModel = rulesOnlyMarker(reason);
   if (report.staleEvidence.length) logger.info('JOB_ENRICH', 'removed evidence the posting no longer contains', { jobId: job.id, stale: report.staleEvidence });
+  // The title moves or removes a role without a model too (SM-2): it leaves the same trace as a model's override.
+  if (report.taxonomyOverridden) logger.info('JOB_ENRICH', 'role changed by the title', { jobId: job.id, reason, taxonomyOverridden: report.taxonomyOverridden });
   await deps.repo.saveJob(job.id, update);
   await writeKeywords(deps, job, text, update, RULES_ONLY_MODEL, null);
   await runHooks(deps, job, update);
@@ -208,7 +223,7 @@ export async function enrichJob(payload: EnrichPayload, attempt: EnrichAttempt, 
     return { status: 'deferred', retryAfterMs: Math.max(1, budget.retryAfterSec) * 1000 };
   }
 
-  const candidates = selectTaxonomyCandidates(job.title, text);
+  const candidates = selectTaxonomyCandidates(job.title, text, undefined, [job.primaryTaxonomyId]);
   let call: EnrichCallResult;
   try {
     call = await runEnrichCall(
@@ -235,11 +250,28 @@ export async function enrichJob(payload: EnrichPayload, attempt: EnrichAttempt, 
     return finishRulesOnly(deps, job, text, signals, 'llm_failed');
   }
 
-  const { update, report } = reconcile({ job, postingText: text, output: call.output, candidates, scamSignals: signals, model: call.model, now });
-  if (report.sponsorshipCorrected || report.droppedQuotes.length || report.droppedSkills.length || report.staleEvidence.length || report.taxonomyRejected) {
+  const { update, report, companyIndustry } = reconcile({ job, postingText: text, output: call.output, candidates, scamSignals: signals, model: call.model, now });
+  if (
+    report.sponsorshipCorrected ||
+    report.droppedQuotes.length ||
+    report.droppedSkills.length ||
+    report.staleEvidence.length ||
+    report.taxonomyRejected ||
+    report.taxonomyOverridden
+  ) {
     logger.info('JOB_ENRICH', 'model claims dropped by the quote guard', { jobId: job.id, ...report });
   }
   await deps.repo.saveJob(job.id, update);
+  // A public posting that says what its employer does fills the company's industry. A user's own
+  // import never does: its text is that user's data, and a company row is shared by everyone.
+  if (companyIndustry && job.companyId && !isUserImport && deps.setCompanyIndustry) {
+    try {
+      await deps.setCompanyIndustry(job.companyId, { industry: companyIndustry.industry, sourceUrl: job.sourceUrl ?? job.applyUrl ?? null, at: now });
+    } catch (err) {
+      // The job row is already written; a lost company fact is retried by the next posting of that employer.
+      logger.warn('JOB_ENRICH', 'could not store the industry the posting states', { jobId: job.id, companyId: job.companyId, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
 
   const costUsd = calculateModelCost(call.model, call.usage.promptTokens, call.usage.completionTokens);
   await writeKeywords(deps, job, text, update, call.model, costUsd);

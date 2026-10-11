@@ -12,9 +12,17 @@
 // this file only guarantees types and sizes.
 
 import { z } from 'zod';
+import { INDUSTRY_IDS, industryIdFor } from '../companies/contract.js';
 
-/** Bump when the prompt, schema or reconcile rules change materially; old rows re-enrich. */
-export const ENRICH_VERSION = 1;
+/**
+ * Bump when the prompt, schema or reconcile rules change materially; old rows
+ * re-enrich (jobs-maintain queues them inside the daily enrichment budget and
+ * they keep serving their old values until their turn).
+ *   2 (SM-2, SM-10): the model may overrule a role whose title match is weak;
+ *     `titleMatchScore` is stored; the employer's industry is read from a
+ *     quoted line of the posting.
+ */
+export const ENRICH_VERSION = 2;
 
 /**
  * `RAJob.enrichModel` when no model ran and a model pass is still owed: the
@@ -124,6 +132,23 @@ const employerTagsField = z
     return out;
   });
 
+/** The employer's industry ids the model may answer with (the closed list of the industries filter). */
+export const ENRICH_INDUSTRY_IDS: readonly string[] = INDUSTRY_IDS;
+
+/**
+ * The employer's industry with the line of the posting that states it. A
+ * value outside the closed list, or a missing quote, is "not stated" (null).
+ */
+const industryField = z
+  .object({ value: z.string(), quote: quoteField })
+  .nullable()
+  .optional()
+  .catch(null)
+  .transform((v) => {
+    const value = v ? industryIdFor(v.value) : null;
+    return value && v?.quote ? { value, quote: v.quote } : null;
+  });
+
 const nullableEnum = <T extends readonly [string, ...string[]]>(values: T) =>
   z
     .enum(values)
@@ -153,6 +178,7 @@ export const EnrichLlmOutputSchema = z.object({
     .catch(null)
     .transform((v) => (v && v.trim() ? v.trim() : null)),
   employerTags: employerTagsField,
+  industry: industryField,
 });
 export type EnrichLlmOutput = z.infer<typeof EnrichLlmOutputSchema>;
 

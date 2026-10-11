@@ -69,6 +69,16 @@ describe('toJobUpdateData', () => {
     });
     expect(toJobUpdateData({})).toEqual({});
   });
+
+  it('SM-2: writes the title match score, and null when the title names no role', () => {
+    expect(toJobUpdateData({ titleMatchScore: 0.85 })).toEqual({ titleMatchScore: 0.85 });
+    expect(toJobUpdateData({ titleMatchScore: null })).toEqual({ titleMatchScore: null });
+    expect(toJobUpdateData({ primaryTaxonomyId: 'software_architect', taxonomyIds: ['software_engineering', 'swe_leadership', 'software_architect'], titleMatchScore: 1 })).toEqual({
+      primaryTaxonomyId: 'software_architect',
+      taxonomyIds: { set: ['software_engineering', 'swe_leadership', 'software_architect'] },
+      titleMatchScore: 1,
+    });
+  });
 });
 
 describe('prisma enrich repository', () => {
@@ -90,6 +100,15 @@ describe('prisma enrich repository', () => {
       create: { jobId: 'j1', modelUsed: 'm', tokenCost: 0.001, generatedAt },
       update: { modelUsed: 'm', tokenCost: 0.001, generatedAt },
     });
+  });
+
+  it('SM-2 / SM-10: loadJob selects the stored title score and the company the industry is written to; saveJob writes the score', async () => {
+    const { db, calls } = fakeDb();
+    const repo = createPrismaEnrichRepository(db);
+    await repo.loadJob('j1');
+    expect((calls.findUnique![0] as { select: Record<string, boolean> }).select).toMatchObject({ titleMatchScore: true, companyId: true, title: true, primaryTaxonomyId: true });
+    await repo.saveJob('j1', { titleMatchScore: 0.883 });
+    expect(calls.update![0]).toMatchObject({ where: { id: 'j1' }, data: { titleMatchScore: 0.883 } });
   });
 
   it('loadJob also selects the place and link columns the market hooks read (no second read of the row)', async () => {

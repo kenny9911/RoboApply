@@ -1,10 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { clampSummary, deterministicCoverage, needsLlm, postingTextOf, reconcile, skillGrounded } from './reconcile.js';
+import { clampSummary, deterministicCoverage, needsLlm, postingTextOf, reconcile, roleFromTitle, skillGrounded, titleEvidence, titleIsDecisive } from './reconcile.js';
 import { selectTaxonomyCandidates } from './candidates.js';
 import { detectScamSignals } from './scamSignals.js';
 import { ENRICH_VERSION, MAX_SUMMARY_CHARS, RULES_ONLY_MODEL, parseEnrichOutput } from './schema.js';
-import { CN_POSTING, INTL_POSTING, intlModelReply, makeJob } from './__tests__/fixtures.js';
+import { CN_POSTING, INTL_BUSINESS_LINE, INTL_POSTING, INTL_POSTING_WITH_BUSINESS, intlModelReply, makeJob } from './__tests__/fixtures.js';
 
 const NOW = new Date('2026-10-10T12:00:00.000Z');
 
@@ -14,7 +14,7 @@ function run(job = makeJob(), reply: Record<string, unknown> | null = intlModelR
     job,
     postingText,
     output: reply ? parseEnrichOutput(reply) : null,
-    candidates: selectTaxonomyCandidates(job.title, postingText),
+    candidates: selectTaxonomyCandidates(job.title, postingText, undefined, [job.primaryTaxonomyId]),
     scamSignals: detectScamSignals(postingText, job.market),
     model: 'test/enrich-model',
     now: NOW,
@@ -47,6 +47,18 @@ describe('skip-LLM rule', () => {
     expect(needsLlm(makeJob({ ...covered, market: 'cn' }), CN_POSTING).reason).toBe('employer_tag_text');
     expect(needsLlm(makeJob(), plain).reason).toBe('coverage_incomplete');
   });
+
+  it('SM-2: a covered row still needs the model when its title does not name the role outright', () => {
+    const plain = 'Build APIs in Python. Benefits include dental.';
+    // "Backend Engineer" is the role by name: nothing to decide.
+    expect(titleIsDecisive(titleEvidence('Backend Engineer'))).toBe(true);
+    expect(needsLlm(makeJob({ ...covered, descriptionPlain: plain }), plain)).toEqual({ needed: false, reason: 'covered' });
+    // A role chosen by its modifiers (0.85), a partial phrase, a catch-all role by name (0.85) and no match at all are the model's to decide.
+    for (const title of ['Java Backend Architect', 'Senior Backend Engineer, Payments Platform', 'Software Engineer', 'Head of Special Projects']) {
+      expect(titleIsDecisive(titleEvidence(title)), title).toBe(false);
+      expect(needsLlm(makeJob({ ...covered, title, descriptionPlain: plain }), plain), title).toEqual({ needed: true, reason: 'weak_title_match' });
+    }
+  });
 });
 
 describe('reconcile', () => {
@@ -77,22 +89,183 @@ describe('reconcile', () => {
       { tag: 'citizenship_required', evidenceQuote: 'Applicants must be US citizens due to a government contract.', evidenceUrl: null },
     ]);
     expect(update.searchText).toBe('backend engineer acme analytics python go sql kafka');
-    expect(report).toEqual({ sponsorshipCorrected: null, droppedQuotes: [], droppedSkills: [], staleEvidence: [], taxonomyRejected: false });
+    expect(update.titleMatchScore).toBe(1);
+    expect(report).toEqual({ sponsorshipCorrected: null, droppedQuotes: [], droppedSkills: [], staleEvidence: [], taxonomyRejected: false, taxonomyOverridden: null });
   });
 
   it('only accepts a taxonomy id from the candidate list', () => {
-    const { update, report } = run(makeJob(), intlModelReply({ taxonomyId: 'nurse_practitioner_invented' }));
+    // A title that names no role: the model decides, and an id it was never offered is dropped.
+    const job = makeJob({ title: 'Head of Special Projects' });
+    const { update, report } = run(job, intlModelReply({ taxonomyId: 'nurse_practitioner_invented' }));
     expect(update.taxonomyIds).toBeUndefined();
     expect(update.primaryTaxonomyId).toBeUndefined();
+    expect(update.titleMatchScore).toBeNull();
     expect(report.taxonomyRejected).toBe(true);
+    expect(report.taxonomyOverridden).toBeNull();
+    // The same reply on a row that holds a role under a weak title match: the role stays, the id is still reported as dropped.
+    const held = run(
+      makeJob({ title: 'Registered Nurse - ICU', primaryTaxonomyId: 'nurse_practitioner', taxonomyIds: ['healthcare', 'clinical', 'nurse_practitioner'] }),
+      intlModelReply({ taxonomyId: 'nurse_practitioner_invented' }),
+    );
+    expect(held.update.primaryTaxonomyId).toBeUndefined();
+    expect(held.report).toMatchObject({ taxonomyRejected: true, taxonomyOverridden: null });
   });
 
-  it('keeps deterministic taxonomy, seniority and education from ingest', () => {
-    const job = makeJob({ primaryTaxonomyId: 'software_engineer', taxonomyIds: ['software_engineering', 'swe_backend', 'software_engineer'], seniority: 'senior', educationLevel: 'master' });
-    const { update } = run(job, intlModelReply({ educationLevel: 'bachelor' }));
+  it('keeps deterministic seniority and education from ingest, and a role the title names outright even when the model disagrees', () => {
+    const job = makeJob({ primaryTaxonomyId: 'backend_engineer', taxonomyIds: ['software_engineering', 'swe_backend', 'backend_engineer'], seniority: 'senior', educationLevel: 'master' });
+    const { update, report } = run(job, intlModelReply({ educationLevel: 'bachelor', taxonomyId: 'software_architect' }));
+    expect(selectTaxonomyCandidates(job.title, postingTextOf(job)).map((c) => c.id)).toContain('software_architect');
     expect(update.primaryTaxonomyId).toBeUndefined();
+    expect(update.taxonomyIds).toBeUndefined();
+    expect(update.titleMatchScore).toBe(1);
     expect(update.seniority).toBeUndefined();
     expect(update.educationLevel).toBeUndefined();
+    expect(report).toMatchObject({ taxonomyRejected: false, taxonomyOverridden: null });
+  });
+
+  it('SM-2: the model overrules a role whose title match is under 0.9', () => {
+    // A row filed under the building profession by the old one-word match.
+    const job = makeJob({ title: 'Java Backend Architect', primaryTaxonomyId: 'architect', taxonomyIds: ['design', 'spatial_design', 'architect'] });
+    expect(titleEvidence(job.title)!.score).toBeLessThan(0.9);
+    const { update, report } = run(job, intlModelReply({ taxonomyId: 'software_architect' }));
+    expect(update.taxonomyIds).toEqual(['software_engineering', 'swe_leadership', 'software_architect']);
+    expect(update.primaryTaxonomyId).toBe('software_architect');
+    expect(update.titleMatchScore).toBe(titleEvidence(job.title)!.score);
+    expect(report.taxonomyOverridden).toEqual({ from: 'architect', to: 'software_architect', by: 'model' });
+    expect(report.taxonomyRejected).toBe(false);
+  });
+
+  it('SM-2: the model may also overrule the weak deterministic pick itself, and silence keeps what the row holds', () => {
+    // "Software Engineer" is the catch-all role by name (0.85): the posting says which kind.
+    const job = makeJob({ title: 'Software Engineer', primaryTaxonomyId: 'software_engineer', taxonomyIds: ['software_engineering', 'swe_backend', 'software_engineer'] });
+    const picked = run(job, intlModelReply({ taxonomyId: 'backend_engineer' }));
+    expect(picked.update.primaryTaxonomyId).toBe('backend_engineer');
+    expect(picked.report.taxonomyOverridden).toEqual({ from: 'software_engineer', to: 'backend_engineer', by: 'model' });
+    const silent = run(job, intlModelReply({ taxonomyId: null }));
+    expect(silent.update.primaryTaxonomyId).toBeUndefined();
+    expect(silent.update.titleMatchScore).toBe(0.85);
+    expect(silent.report.taxonomyOverridden).toBeNull();
+    // The model confirming the held role changes nothing either.
+    expect(run(job, intlModelReply({ taxonomyId: 'software_engineer' })).update.taxonomyIds).toBeUndefined();
+  });
+
+  it('SM-2: a title that names another role outright corrects the row on any pass, the rules-only one included', () => {
+    // "Microservices Architect" is a software architect by name; the row was filed under buildings.
+    const job = makeJob({ title: 'Microservices Architect', primaryTaxonomyId: 'architect', taxonomyIds: ['design', 'spatial_design', 'architect'] });
+    for (const reply of [null, intlModelReply({ taxonomyId: 'architect' })]) {
+      const { update, report } = run(job, reply);
+      expect(update.taxonomyIds).toEqual(['software_engineering', 'swe_leadership', 'software_architect']);
+      expect(update.titleMatchScore).toBe(1);
+      expect(report.taxonomyOverridden).toEqual({ from: 'architect', to: 'software_architect', by: 'title' });
+    }
+  });
+
+  it('SM-2: every pass stores how strong the title evidence was, whoever set the role', () => {
+    expect(run(makeJob({ title: 'Backend Engineer' }), null).update.titleMatchScore).toBe(1);
+    expect(run(makeJob({ title: 'Java Backend Architect' }), null).update.titleMatchScore).toBeGreaterThanOrEqual(0.85);
+    expect(run(makeJob({ title: 'Head of Special Projects' }), null).update.titleMatchScore).toBeNull();
+    // Rules only never moves a role on a weak match alone: there is no model pick to take.
+    const weak = run(makeJob({ title: 'Registered Nurse - ICU', primaryTaxonomyId: 'nurse_practitioner', taxonomyIds: ['healthcare', 'clinical', 'nurse_practitioner'] }), null);
+    expect(weak.update.primaryTaxonomyId).toBeUndefined();
+    expect(weak.update.titleMatchScore).toBe(0.883);
+    expect(weak.report.taxonomyOverridden).toBeNull();
+  });
+
+  it('SM-2: a role that only the retired one-word match explains gives way to what the title says today, model or no model', () => {
+    // "Java Backend Architect" under the building profession: today the title says software architect (weakly).
+    const architect = makeJob({ title: 'Java Backend Architect', primaryTaxonomyId: 'architect', taxonomyIds: ['design', 'spatial_design', 'architect'] });
+    expect(roleFromTitle(architect.title, 'architect')).toMatchObject({ decisive: false, role: 'software_architect' });
+    for (const reply of [null, intlModelReply({ taxonomyId: null }), intlModelReply({ taxonomyId: 'nurse_practitioner_invented' })]) {
+      const { update, report } = run(architect, reply);
+      expect(update.taxonomyIds).toEqual(['software_engineering', 'swe_leadership', 'software_architect']);
+      expect(update.primaryTaxonomyId).toBe('software_architect');
+      expect(report.taxonomyOverridden).toEqual({ from: 'architect', to: 'software_architect', by: 'title' });
+    }
+    // The model still has the last word under 0.9: its pick among the candidates wins over the weak match.
+    const picked = run(architect, intlModelReply({ taxonomyId: 'backend_engineer' }));
+    expect(picked.update.primaryTaxonomyId).toBe('backend_engineer');
+    expect(picked.report.taxonomyOverridden).toEqual({ from: 'architect', to: 'backend_engineer', by: 'model' });
+    // It may even confirm the building profession (it is offered: the row holds it).
+    expect(run(architect, intlModelReply({ taxonomyId: 'architect' })).update.primaryTaxonomyId).toBeUndefined();
+
+    // "Principal Engineer" under school principals: the title names no role, so the honest state is unknown.
+    const principal = makeJob({ title: 'Principal Engineer', primaryTaxonomyId: 'education_administrator', taxonomyIds: ['education', 'education_support', 'education_administrator'] });
+    const cleared = run(principal, null);
+    expect(cleared.update).toMatchObject({ taxonomyIds: [], primaryTaxonomyId: null, titleMatchScore: null });
+    expect(cleared.report.taxonomyOverridden).toEqual({ from: 'education_administrator', to: null, by: 'title' });
+
+    // A word that is still the role by name retires nothing: "Senior Developer" stays a software engineer.
+    const developer = makeJob({ title: 'Senior Developer', primaryTaxonomyId: 'software_engineer', taxonomyIds: ['software_engineering', 'swe_backend', 'software_engineer'] });
+    expect(run(developer, null).update.primaryTaxonomyId).toBeUndefined();
+    // A role nothing in the title explains (a model chose it) is never retired by the title.
+    expect(roleFromTitle('Head of Special Projects', 'strategy_manager').role).toBeUndefined();
+    expect(roleFromTitle('Java Backend Architect', 'backend_engineer').role).toBeUndefined();
+  });
+
+  it('SM-10: the employer industry needs a quote from the posting that says what the employer does', () => {
+    const quote = INTL_BUSINESS_LINE;
+    const job = makeJob({ description: INTL_POSTING_WITH_BUSINESS, descriptionPlain: INTL_POSTING_WITH_BUSINESS });
+    const stated = run(job, intlModelReply({ industry: { value: 'B2B SaaS', quote } }));
+    expect(stated.companyIndustry).toEqual({ industry: 'B2B SaaS', quote });
+    expect(stated.report.droppedQuotes).toEqual([]);
+    // The industry is never a job column.
+    expect(Object.keys(stated.update)).not.toContain('industry');
+
+    const invented = run(job, intlModelReply({ industry: { value: 'Fintech', quote: 'We are a leading payments company.' } }));
+    expect(invented.companyIndustry).toBeNull();
+    expect(invented.report.droppedQuotes).toEqual(['industry']);
+
+    // The name alone is not a statement of what the company does.
+    const nameOnly = run(job, intlModelReply({ industry: { value: 'B2B SaaS', quote: 'Acme Analytics is hiring' } }));
+    expect(nameOnly.companyIndustry).toBeNull();
+    expect(nameOnly.report.droppedQuotes).toEqual(['industry:company_name_only']);
+
+    // A real line of the posting that does not say what the employer does backs no industry,
+    // and a line about one industry does not back another.
+    const hiring = run(job, intlModelReply({ industry: { value: 'B2B SaaS', quote: 'Acme Analytics is hiring a Backend Engineer to build data APIs for retail clients.' } }));
+    expect(hiring.companyIndustry).toBeNull();
+    expect(hiring.report.droppedQuotes).toEqual(['industry:off_topic']);
+    const other = run(job, intlModelReply({ industry: { value: 'Fintech', quote } }));
+    expect(other.companyIndustry).toBeNull();
+    expect(other.report.droppedQuotes).toEqual(['industry:off_topic']);
+
+    expect(run(job, intlModelReply()).companyIndustry).toBeNull();
+    expect(run(job, intlModelReply({ industry: { value: 'Space mining', quote } })).companyIndustry).toBeNull();
+    expect(run(job, null).companyIndustry).toBeNull();
+  });
+
+  it('SM-10: the industry word in the company name is not a statement of the business', () => {
+    // 某某能源集团是一家中央企业: the sentence says the employer is a state company that is hiring.
+    // "能源" stands only in its name, so no industry follows from it.
+    const job = makeJob({ market: 'cn', title: '数据分析师', companyName: '某某能源集团', description: CN_POSTING, descriptionPlain: CN_POSTING });
+    const reply = (industry: unknown) => intlModelReply({ sponsorship: null, citizenshipRequired: null, skills: [], industry });
+    const fromName = run(job, reply({ value: 'climate', quote: '某某能源集团是一家中央企业，现招聘数据分析师。' }));
+    expect(fromName.companyIndustry).toBeNull();
+    expect(fromName.report.droppedQuotes).toEqual(['industry:off_topic']);
+    const nameOnly = run(job, reply({ value: 'Climate', quote: '某某能源集团' }));
+    expect(nameOnly.companyIndustry).toBeNull();
+    expect(nameOnly.report.droppedQuotes).toEqual(['industry:company_name_only']);
+
+    // The same employer, a posting that states the business in its own words.
+    const business = '公司主营光伏与储能业务，在全国运营四十座电站。';
+    const text = `${CN_POSTING}\n${business}`;
+    const stating = makeJob({ market: 'cn', title: '数据分析师', companyName: '某某能源集团', description: text, descriptionPlain: text });
+    const ok = run(stating, reply({ value: 'climate', quote: business }));
+    expect(ok.companyIndustry).toEqual({ industry: 'Climate', quote: business });
+    expect(ok.report.droppedQuotes).toEqual([]);
+    // The short form of the name is taken out too: 某某能源是… states nothing either.
+    const shortName = `${CN_POSTING}\n某某能源是行业领先的综合服务商。`;
+    const short = makeJob({ market: 'cn', title: '数据分析师', companyName: '某某能源集团', description: shortName, descriptionPlain: shortName });
+    expect(run(short, reply({ value: 'Climate', quote: '某某能源是行业领先的综合服务商。' })).report.droppedQuotes).toEqual(['industry:off_topic']);
+  });
+
+  it('SM-10: a recruiter describing a client sets no industry for the recruiter', () => {
+    const line = 'Our client is a leading fintech building payments infrastructure for banks.';
+    const text = `${INTL_POSTING}\n${line}`;
+    const job = makeJob({ companyName: 'Northbridge Recruitment', description: text, descriptionPlain: text });
+    const out = run(job, intlModelReply({ industry: { value: 'Fintech', quote: line } }));
+    expect(out.companyIndustry).toBeNull();
+    expect(out.report.droppedQuotes).toEqual(['industry:client']);
   });
 
   it('merges provider skills before the model skills', () => {
@@ -285,6 +458,7 @@ describe('reconcile', () => {
     expect(update.summary).toBeUndefined();
     expect(update.sponsorship).toBeUndefined();
     expect(update.skills).toBeUndefined();
+    expect(update.titleMatchScore).toBe(1);
     expect(update.fraudFlags!.map((f) => f.rule)).toEqual(['intl_fee_required', 'intl_messaging_app_only']);
     for (const f of update.fraudFlags!) expect(job.descriptionPlain).toContain(f.evidence);
   });

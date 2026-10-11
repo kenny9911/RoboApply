@@ -3,13 +3,17 @@ import { describe, expect, it } from 'vitest';
 import {
   hasNegation,
   mentionsWorkAuthorization,
+  INDUSTRY_TOPIC_CUES,
+  quoteSpeaksOfClient,
   quoteSupportsEmployerTag,
+  quoteWithoutCompanyName,
+  reconcileIndustry,
   reconcileRequirement,
   reconcileSponsorship,
   verifyEmployerTagQuote,
   verifyQuote,
 } from './quotes.js';
-import { MAX_QUOTE_CHARS } from './schema.js';
+import { ENRICH_INDUSTRY_IDS, MAX_QUOTE_CHARS } from './schema.js';
 
 const POSTING = [
   'We build payment tools for small shops.',
@@ -182,5 +186,73 @@ describe('employer tag quotes (GoApply)', () => {
     expect(quoteSupportsEmployerTag('bianzhi', '无编制')).toBe(false);
     expect(quoteSupportsEmployerTag('hukou', '协助办理落户')).toBe(true);
     expect(quoteSupportsEmployerTag('unknown_tag', '落户')).toBe(false);
+  });
+});
+
+describe('the employer industry quote (SM-10)', () => {
+  const POST = [
+    'Acme Fintech Ltd is hiring a data analyst in London.',
+    'Acme Fintech builds payments infrastructure for online merchants.',
+    'Riverside General is a 400-bed teaching hospital.',
+    'We build telehealth software used by 2,000 clinics.',
+    'First Harbor is a retail bank with 120 branches.',
+    'Our client is a leading fintech in the payments space.',
+    'We are recruiting on behalf of a global games studio.',
+    'We help our clients ship faster with our CI/CD platform for developers.',
+    '某某能源集团是一家中央企业，现招聘数据分析师。',
+    '公司主营光伏与储能业务。',
+    '阳光公司专注电子商务平台运营。',
+    '某知名互联网公司招聘游戏策划。',
+  ].join('\n');
+
+  it('has a cue for every industry the model may answer with, and for nothing else', () => {
+    expect(Object.keys(INDUSTRY_TOPIC_CUES).sort()).toEqual([...ENRICH_INDUSTRY_IDS].sort());
+  });
+
+  it('keeps a claim whose quote names the industry outside the company name', () => {
+    expect(reconcileIndustry({ value: 'Fintech', quote: 'Acme Fintech builds payments infrastructure for online merchants.' }, 'Acme Fintech Ltd', POST)).toEqual({
+      value: 'Fintech',
+      quote: 'Acme Fintech builds payments infrastructure for online merchants.',
+    });
+    expect(reconcileIndustry({ value: 'Healthtech', quote: 'We build telehealth software used by 2,000 clinics.' }, 'Carewell', POST)).toMatchObject({ value: 'Healthtech' });
+    expect(reconcileIndustry({ value: 'Climate', quote: '公司主营光伏与储能业务。' }, '某某能源集团', POST)).toMatchObject({ value: 'Climate' });
+    expect(reconcileIndustry({ value: 'E-commerce', quote: '阳光公司专注电子商务平台运营。' }, '阳光电子科技有限公司', POST)).toMatchObject({ value: 'E-commerce' });
+    expect(reconcileIndustry({ value: 'Developer tools', quote: 'We help our clients ship faster with our CI/CD platform for developers.' }, 'Shipfast', POST)).toMatchObject({ value: 'Developer tools' });
+  });
+
+  it('drops a claim the company name alone would carry', () => {
+    // "Fintech" stands only in the name; the rest says the company is hiring.
+    expect(reconcileIndustry({ value: 'Fintech', quote: 'Acme Fintech Ltd is hiring a data analyst in London.' }, 'Acme Fintech Ltd', POST)).toEqual({ value: null, dropped: 'off_topic' });
+    expect(reconcileIndustry({ value: 'Climate', quote: '某某能源集团是一家中央企业，现招聘数据分析师。' }, '某某能源集团', POST)).toEqual({ value: null, dropped: 'off_topic' });
+    expect(reconcileIndustry({ value: 'Fintech', quote: 'Acme Fintech Ltd' }, 'Acme Fintech Ltd', `${POST}\nAcme Fintech Ltd`)).toEqual({ value: null, dropped: 'company_name_only' });
+  });
+
+  it('drops the nearest-fit label: a hospital is not Healthtech, a bank is not Fintech, and one industry does not back another', () => {
+    expect(reconcileIndustry({ value: 'Healthtech', quote: 'Riverside General is a 400-bed teaching hospital.' }, 'Riverside General', POST)).toEqual({ value: null, dropped: 'off_topic' });
+    expect(reconcileIndustry({ value: 'Fintech', quote: 'First Harbor is a retail bank with 120 branches.' }, 'First Harbor', POST)).toEqual({ value: null, dropped: 'off_topic' });
+    expect(reconcileIndustry({ value: 'Gaming', quote: 'We build telehealth software used by 2,000 clinics.' }, 'Carewell', POST)).toEqual({ value: null, dropped: 'off_topic' });
+    // 电子商务 is e-commerce, not electronics.
+    expect(reconcileIndustry({ value: 'Hardware', quote: '阳光公司专注电子商务平台运营。' }, '阳光电子科技有限公司', POST)).toEqual({ value: null, dropped: 'off_topic' });
+    expect(reconcileIndustry({ value: 'Space mining', quote: 'We build telehealth software used by 2,000 clinics.' }, 'Carewell', POST)).toEqual({ value: null, dropped: 'off_topic' });
+  });
+
+  it('drops a quote about a recruiter\'s client, and one that is not in the posting', () => {
+    expect(reconcileIndustry({ value: 'Fintech', quote: 'Our client is a leading fintech in the payments space.' }, 'Northbridge Recruitment', POST)).toEqual({ value: null, dropped: 'client' });
+    expect(reconcileIndustry({ value: 'Gaming', quote: 'We are recruiting on behalf of a global games studio.' }, 'Northbridge Recruitment', POST)).toEqual({ value: null, dropped: 'client' });
+    expect(reconcileIndustry({ value: 'Gaming', quote: '某知名互联网公司招聘游戏策划。' }, '北方猎头', POST)).toEqual({ value: null, dropped: 'client' });
+    expect(quoteSpeaksOfClient('We help our clients ship faster.')).toBe(false);
+    expect(quoteSpeaksOfClient('Our client-facing teams sit in Austin.')).toBe(false);
+    expect(reconcileIndustry({ value: 'Fintech', quote: 'We are a leading payments company.' }, 'Acme', POST)).toEqual({ value: null, dropped: 'quote_not_in_posting' });
+    expect(reconcileIndustry(null, 'Acme', POST)).toBeNull();
+  });
+
+  it('takes the company name out of a quote: the full name, or the leading part the quote uses', () => {
+    expect(quoteWithoutCompanyName('Acme Fintech Ltd is hiring', 'Acme Fintech Ltd').trim()).toBe('is hiring');
+    expect(quoteWithoutCompanyName('Acme Fintech is a fintech company', 'Acme Fintech Ltd').trim()).toBe('is a fintech company');
+    expect(quoteWithoutCompanyName('阳光光伏是一家制造企业', '阳光光伏科技有限公司').trim()).toBe('是一家制造企业');
+    expect(quoteWithoutCompanyName('We build payments software', 'Acme Fintech Ltd')).toBe('we build payments software');
+    // A name is matched by whole words: "Arc" is not taken out of "architecture".
+    expect(quoteWithoutCompanyName('We design architecture software', 'Arc')).toBe('we design architecture software');
+    expect(quoteWithoutCompanyName('anything', '')).toBe('anything');
   });
 });

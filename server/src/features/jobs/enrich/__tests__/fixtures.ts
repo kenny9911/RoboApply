@@ -13,6 +13,10 @@ export const INTL_POSTING = [
   'Benefits include health insurance and a learning budget.',
 ].join('\n');
 
+/** A line that says what the employer does (SM-10), and the posting with it. */
+export const INTL_BUSINESS_LINE = 'Acme Analytics builds B2B SaaS software that retailers use to forecast demand.';
+export const INTL_POSTING_WITH_BUSINESS = `${INTL_POSTING}\n${INTL_BUSINESS_LINE}`;
+
 export const CN_POSTING = [
   '某某能源集团是一家中央企业，现招聘数据分析师。',
   '岗位职责：负责业务数据分析，搭建数据报表。',

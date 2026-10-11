@@ -3,9 +3,18 @@
 // Pure step between the model's JSON and the `RAJob` update (ARCHITECTURE.md
 // §4.5): decides whether the LLM is needed at all, then turns its output into
 // column values under the honesty rules —
-//   - deterministic values from ingest (taxonomy, seniority, education) win;
-//     the model only fills what is missing, and its taxonomy id must be one of
-//     the ≤15 candidates it was offered;
+//   - deterministic seniority and education from ingest win; the model only
+//     fills what is missing;
+//   - the role (SM-2): a title that names its role outright (title match of
+//     0.9 or more: the exact phrase, or a head noun that is the whole title)
+//     decides it, whatever the row held and whatever the model says. Below
+//     that the model decides, and may overrule the role the row holds; its id
+//     must be one of the ≤15 candidates it was offered. The strength of the
+//     title evidence is stored on every pass (`titleMatchScore`);
+//   - the employer's industry (SM-10) is kept only with a verified quote that
+//     names that industry's topic outside the company's own name and is not
+//     about a recruiter's client; it is returned beside the update for the
+//     company row, never written to the job;
 //   - sponsorship / citizenship / clearance / employer tags need a verified,
 //     on-topic quote that agrees with the claim (quotes.ts); without one the
 //     signal is unknown, never a guess. A re-enrichment removes earlier
@@ -22,6 +31,7 @@ import {
   mentionsWorkAuthorization,
   normalizeForQuote,
   quoteMatchesRequirementTopic,
+  reconcileIndustry,
   reconcileRequirement,
   reconcileSponsorship,
   verifyEmployerTagQuote,
@@ -30,6 +40,7 @@ import {
 import { countOccurrences } from './keywords.js';
 import { mergeFraudFlags, toFraudFlags, type FraudFlag, type ScamSignal } from './scamSignals.js';
 import { taxonomyIdsFor, type TaxonomyCandidate } from './candidates.js';
+import { roleFromTitle, titleEvidence, titleIsDecisive } from './titleEvidence.js';
 import {
   EDUCATION_LEVELS,
   EMPLOYER_TAG_IDS,
@@ -79,6 +90,10 @@ export interface EnrichJobRecord {
   enrichVersion: number | null;
   enrichModel: string | null;
   archivedAt: Date | null;
+  /** The company row the employer's industry is written to (SM-10); absent on a job without one. */
+  companyId?: string | null;
+  /** How strong the title evidence for the role was at the last pass (not read by reconcile: it is worked out again). */
+  titleMatchScore?: number | null;
   /** Place and links, passed through to the market hooks (not read by reconcile). */
   locationCountry?: string | null;
   locations?: unknown;
@@ -102,6 +117,8 @@ export interface MarketTag {
 export interface EnrichUpdate {
   taxonomyIds?: string[];
   primaryTaxonomyId?: string | null;
+  /** Score of the deterministic title match (0.6 to 1), null when the title names no role. */
+  titleMatchScore?: number | null;
   seniority?: string | null;
   educationLevel?: string | null;
   skills?: string[];
@@ -174,14 +191,19 @@ export function deterministicCoverage(job: Pick<EnrichJobRecord, 'taxonomyIds' |
   return taxonomy && !!job.seniority && job.skills.length >= MIN_PROVIDER_SKILLS;
 }
 
+export { roleFromTitle, titleEvidence, titleIsDecisive } from './titleEvidence.js';
+
 /**
  * Does this job need the model? No when deterministic coverage is complete
- * (ARCH §4.5 step 1) AND the posting has nothing only the model can cite: no
- * work-authorization wording without a provider sponsorship value, no
- * citizenship/clearance wording, and (GoApply) no employer-tag wording.
+ * (ARCH §4.5 step 1), the title names its role outright, AND the posting has
+ * nothing only the model can cite: no work-authorization wording without a
+ * provider sponsorship value, no citizenship/clearance wording, and (GoApply)
+ * no employer-tag wording. A title that only half names a role ("Java Backend
+ * Architect" under the building profession) is the model's to decide.
  */
 export function needsLlm(job: EnrichJobRecord, postingText: string): { needed: boolean; reason: string } {
   if (!deterministicCoverage(job)) return { needed: true, reason: 'coverage_incomplete' };
+  if (!titleIsDecisive(titleEvidence(job.title))) return { needed: true, reason: 'weak_title_match' };
   if (mentionsWorkAuthorization(postingText) && job.sponsorship == null) return { needed: true, reason: 'work_authorization_text' };
   if (hasRequirementCue(postingText)) return { needed: true, reason: 'requirement_text' };
   if (job.market === 'cn' && hasEmployerTagCue(postingText)) return { needed: true, reason: 'employer_tag_text' };
@@ -329,6 +351,34 @@ export interface ReconcileReport {
   /** Evidence from an earlier enrichment that the posting no longer supports (removed). */
   staleEvidence: string[];
   taxonomyRejected: boolean;
+  /**
+   * Set when the role the row held was replaced: by the model's pick (the
+   * title match was weak) or by the title itself (it names another role
+   * outright, or the held role came from a one-word match that no longer
+   * exists; `to` is null when the title then names no role and the held one
+   * is removed). Null when the role is new or unchanged.
+   */
+  taxonomyOverridden: { from: string; to: string | null; by: 'model' | 'title' } | null;
+}
+
+/** The employer's industry as the posting states it (SM-10), for the company row. */
+export interface CompanyIndustryClaim {
+  /** One of ENRICH_INDUSTRY_IDS. */
+  industry: string;
+  /** The verified line of the posting. */
+  quote: string;
+}
+
+/**
+ * The industry claim under the quote rules of quotes.ts `reconcileIndustry`:
+ * in the posting, more than the employer's name, not about a recruiter's
+ * client, and on the topic of the industry it claims.
+ */
+function verifyIndustry(claim: EnrichLlmOutput['industry'], job: EnrichJobRecord, postingText: string): { claim: CompanyIndustryClaim | null; dropped: string | null } {
+  const verified = reconcileIndustry(claim, job.companyName ?? '', postingText);
+  if (!verified) return { claim: null, dropped: null };
+  if (verified.value === null) return { claim: null, dropped: verified.dropped === 'quote_not_in_posting' ? 'industry' : `industry:${verified.dropped}` };
+  return { claim: { industry: verified.value, quote: verified.quote }, dropped: null };
 }
 
 /** The fraud-flag part of an update (intl only; CN flags belong to WP-41). */
@@ -337,10 +387,50 @@ export function fraudFlagUpdate(job: EnrichJobRecord, signals: readonly ScamSign
   return { fraudFlags: mergeFraudFlags(job.fraudFlags, toFraudFlags(signals, now)) };
 }
 
-/** Column values for a finished enrichment (LLM or rules only). */
-export function reconcile(input: ReconcileInput): { update: EnrichUpdate; report: ReconcileReport } {
+/** The role the row holds: its primary id, else the last of its ids. */
+function storedRole(job: Pick<EnrichJobRecord, 'primaryTaxonomyId' | 'taxonomyIds'>): string | null {
+  return job.primaryTaxonomyId ?? job.taxonomyIds[job.taxonomyIds.length - 1] ?? null;
+}
+
+/**
+ * The role columns (SM-2), in this order:
+ *   1. a decisive title names the role, on every pass and whatever the model says;
+ *   2. otherwise the model's pick is taken when it is one of the candidates it was offered;
+ *   3. otherwise a held role that only a retired one-word match explains gives
+ *      way to what the title says today (a weaker match, or nothing);
+ *   4. otherwise the row keeps what it holds.
+ */
+function reconcileRole(input: Pick<ReconcileInput, 'job' | 'output' | 'candidates'>, update: EnrichUpdate, report: ReconcileReport): void {
+  const { job, output, candidates } = input;
+  const held = storedRole(job);
+  const ruling = roleFromTitle(job.title, held);
+  update.titleMatchScore = ruling.det ? ruling.det.score : null;
+  const modelPick = output?.taxonomyId ?? null;
+  const offered = !!modelPick && candidates.some((c) => c.id === modelPick);
+  // An id the model was never offered is dropped, whoever decides the role.
+  if (modelPick && !offered) report.taxonomyRejected = true;
+  let next: string | null | undefined = ruling.role;
+  let by: 'model' | 'title' = 'title';
+  if (!ruling.decisive && offered) {
+    next = modelPick;
+    by = 'model';
+  }
+  if (next === undefined || next === held) return;
+  const ids = next ? taxonomyIdsFor(next) : [];
+  if (next && !ids.length) return;
+  update.taxonomyIds = ids;
+  update.primaryTaxonomyId = next;
+  if (held) report.taxonomyOverridden = { from: held, to: next, by };
+}
+
+/**
+ * Column values for a finished enrichment (LLM or rules only), and beside
+ * them the employer's industry when the posting states it (for the company
+ * row; null on a rules-only pass).
+ */
+export function reconcile(input: ReconcileInput): { update: EnrichUpdate; report: ReconcileReport; companyIndustry: CompanyIndustryClaim | null } {
   const { job, postingText, output, candidates, scamSignals, now } = input;
-  const report: ReconcileReport = { sponsorshipCorrected: null, droppedQuotes: [], droppedSkills: [], staleEvidence: [], taxonomyRejected: false };
+  const report: ReconcileReport = { sponsorshipCorrected: null, droppedQuotes: [], droppedSkills: [], staleEvidence: [], taxonomyRejected: false, taxonomyOverridden: null };
   const wasEnriched = job.enrichedAt != null;
   const update: EnrichUpdate = {
     ...fraudFlagUpdate(job, scamSignals, now),
@@ -348,6 +438,7 @@ export function reconcile(input: ReconcileInput): { update: EnrichUpdate; report
     enrichVersion: ENRICH_VERSION,
     enrichModel: output ? (input.model ?? 'unknown') : RULES_ONLY_MODEL,
   };
+  reconcileRole(input, update, report);
 
   // Skills: provider/ingest skills first, then the model's (≤15) that the
   // posting actually names, deduped.
@@ -383,7 +474,7 @@ export function reconcile(input: ReconcileInput): { update: EnrichUpdate; report
   if (!output) {
     // Rules only. A re-enrichment still removes evidence the posting no
     // longer supports; nothing new is claimed.
-    if (!wasEnriched) return { update, report };
+    if (!wasEnriched) return { update, report, companyIndustry: null };
     if (job.sponsorship != null && job.sponsorshipEvidence && !verifyQuote(job.sponsorshipEvidence, postingText)) {
       update.sponsorship = null;
       update.sponsorshipEvidence = null;
@@ -393,21 +484,9 @@ export function reconcile(input: ReconcileInput): { update: EnrichUpdate; report
     const employerTags = job.employerTags.filter((t) => !pruned.staleEmployerTags.has(t));
     if (!sameTags(employerTags, job.employerTags)) update.employerTags = employerTags;
     if (pruned.kept.length !== priorTags.length) update.marketTags = pruned.kept.length ? pruned.kept : null;
-    return { update, report };
+    return { update, report, companyIndustry: null };
   }
 
-  // Taxonomy: deterministic match wins; the model may only pick a candidate.
-  if (!job.primaryTaxonomyId && job.taxonomyIds.length === 0 && output.taxonomyId) {
-    if (candidates.some((c) => c.id === output.taxonomyId)) {
-      const ids = taxonomyIdsFor(output.taxonomyId);
-      if (ids.length) {
-        update.taxonomyIds = ids;
-        update.primaryTaxonomyId = output.taxonomyId;
-      }
-    } else {
-      report.taxonomyRejected = true;
-    }
-  }
   if (!job.seniority && output.seniority && (SENIORITY_LEVELS as readonly string[]).includes(output.seniority)) update.seniority = output.seniority;
   if (!job.educationLevel && output.educationLevel && (EDUCATION_LEVELS as readonly string[]).includes(output.educationLevel)) {
     update.educationLevel = output.educationLevel;
@@ -472,5 +551,8 @@ export function reconcile(input: ReconcileInput): { update: EnrichUpdate; report
   const summary = clampSummary(output.summary);
   if (summary) update.summary = summary;
 
-  return { update, report };
+  const industry = verifyIndustry(output.industry, job, postingText);
+  if (industry.dropped) report.droppedQuotes.push(industry.dropped);
+
+  return { update, report, companyIndustry: industry.claim };
 }

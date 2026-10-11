@@ -4,6 +4,8 @@
 // is tested without a database. Typed Prisma only (TASK_PLAN.md §2.1 rule 5).
 //   loadJob      — the RAJob columns enrichment reads (and the place and link
 //                  columns the market hooks need, so they do not re-read the row);
+//                  from ENRICH_VERSION 2 it selects `titleMatchScore`, so the
+//                  database needs the SCHEMA-7 push before this code runs;
 //   clearedScamRules — the scam rules an admin cleared when restoring the job
 //                  (RAJobReview, the latest 'restore'): never raised again;
 //   saveJob      — one RAJob update with the reconciled columns;
@@ -89,6 +91,9 @@ const JOB_SELECT = {
   enrichVersion: true,
   enrichModel: true,
   archivedAt: true,
+  // The company row the employer's industry is written to, and the stored strength of the title match (SM-10, SM-2).
+  companyId: true,
+  titleMatchScore: true,
   // For marketHooks.afterEnrich (WP-42: is the job in Taiwan, and which link backs a quoted tag).
   locationCountry: true,
   locations: true,
@@ -107,6 +112,7 @@ export function toJobUpdateData(update: EnrichUpdate): Prisma.RAJobUpdateInput {
   const data: Prisma.RAJobUpdateInput = {};
   if (update.taxonomyIds !== undefined) data.taxonomyIds = { set: update.taxonomyIds };
   if (update.primaryTaxonomyId !== undefined) data.primaryTaxonomyId = update.primaryTaxonomyId;
+  if (update.titleMatchScore !== undefined) data.titleMatchScore = update.titleMatchScore;
   if (update.seniority !== undefined) data.seniority = update.seniority;
   if (update.educationLevel !== undefined) data.educationLevel = update.educationLevel;
   if (update.skills !== undefined) data.skills = { set: update.skills };

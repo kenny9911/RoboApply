@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { EnrichOutputError, EnrichPayloadSchema, MAX_ENRICH_SKILLS, parseEnrichOutput, parseEnrichText } from './schema.js';
+import { ENRICH_INDUSTRY_IDS, ENRICH_VERSION, EnrichOutputError, EnrichPayloadSchema, MAX_ENRICH_SKILLS, parseEnrichOutput, parseEnrichText } from './schema.js';
+import { ONBOARDING_INDUSTRIES } from '../../onboarding/contract.js';
 import { intlModelReply } from './__tests__/fixtures.js';
 
 describe('enrichment output schema', () => {
@@ -13,6 +14,26 @@ describe('enrichment output schema', () => {
     expect(out.citizenshipRequired).toEqual({ value: true, quote: 'Applicants must be US citizens due to a government contract.' });
     expect(out.clearanceRequired).toBeNull();
     expect(out.employerTags).toEqual([]);
+    expect(out.industry).toBeNull();
+  });
+
+  it('SM-2 / SM-10: the version is 2, so rows enriched before the role override and the industry field are enriched again', () => {
+    expect(ENRICH_VERSION).toBe(2);
+  });
+
+  it('SM-10: reads the employer industry only as a value of the closed list with a quote', () => {
+    expect([...ENRICH_INDUSTRY_IDS]).toEqual(ONBOARDING_INDUSTRIES.map((i) => i.id));
+    const quote = 'We build accounting software for small businesses.';
+    expect(parseEnrichOutput({ industry: { value: 'B2B SaaS', quote } }).industry).toEqual({ value: 'B2B SaaS', quote });
+    // The id in another case, or its slug, is the same value.
+    expect(parseEnrichOutput({ industry: { value: 'b2b saas', quote } }).industry).toEqual({ value: 'B2B SaaS', quote });
+    expect(parseEnrichOutput({ industry: { value: 'ai_ml', quote: `  ${quote}  ` } }).industry).toEqual({ value: 'AI / ML', quote });
+    // Anything else is "not stated": a value outside the list, no quote, a wrong shape, nothing.
+    for (const industry of [{ value: 'Space mining', quote }, { value: 'Fintech' }, { value: 'Fintech', quote: '' }, { value: 'Fintech', quote: 7 }, { quote }, 'Fintech', ['Fintech'], null, undefined]) {
+      expect(parseEnrichOutput({ industry }).industry, JSON.stringify(industry)).toBeNull();
+    }
+    // A sloppy industry never costs the rest of the reply.
+    expect(parseEnrichOutput({ ...intlModelReply(), industry: 42 }).taxonomyId).toBe('backend_engineer');
   });
 
   it('rejects anything that is not a JSON object', () => {

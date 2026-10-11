@@ -5,7 +5,7 @@
 import prisma from '../../../lib/prisma.js';
 import { getCurrentBrandOrDefault } from '../../../platform/brand/index.js';
 import type { CompanyProfile, CompanyTypeaheadItem } from './contract.js';
-import { createCompanyReadService, type CompanyReadService, type CompanyReadViewer } from './service.js';
+import { createCompanyReadService, setIndustryFromPosting, type CompanyReadService, type CompanyReadViewer, type PostingIndustry, type PostingIndustryOutcome } from './service.js';
 
 export * from './contract.js';
 export { createCompaniesRouter } from './routes.js';
@@ -13,6 +13,8 @@ export type { CompaniesRouterDeps } from './routes.js';
 export {
   COMPANY_JOBS_PAGE,
   H1B_DISCLAIMER,
+  MAX_POSTING_INDUSTRIES,
+  POSTING_INDUSTRY_SOURCE,
   companyKey,
   companyPatch,
   companyJobsOrder,
@@ -20,11 +22,12 @@ export {
   createCompanyReadService,
   escapeLike,
   liveJobWhere,
+  setIndustryFromPosting,
   toCompanyJobItem,
   toCompanyProfile,
   upsertCompanies,
 } from './service.js';
-export type { CompaniesDb, CompanyReadService, CompanyReadViewer } from './service.js';
+export type { CompaniesDb, CompanyReadService, CompanyReadViewer, PostingIndustry, PostingIndustryOutcome } from './service.js';
 
 /** Market-scoped to the current brand (request or cron context). */
 export interface CompanyService {
@@ -48,3 +51,12 @@ export const companyService: CompanyService = {
     return read().typeahead(getCurrentBrandOrDefault().market, q, limit);
   },
 };
+
+/**
+ * Store the industry a posting states for its employer, on the application
+ * database (SM-10; the rules are `setIndustryFromPosting`'s). Enrichment
+ * calls this after it has verified the posting's quote.
+ */
+export function recordPostingIndustry(companyId: string, input: PostingIndustry): Promise<PostingIndustryOutcome> {
+  return setIndustryFromPosting(prisma, companyId, input);
+}

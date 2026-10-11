@@ -139,6 +139,20 @@ describe('buildEnrichMessages', () => {
     expect(posting.length).toBe(ENRICH_INPUT_CHARS);
   });
 
+  it('SM-10: asks for the employer industry from the closed list, only from what the posting says, with a quote', () => {
+    const system = String(buildEnrichMessages({ title: 'Backend Engineer', companyName: 'Acme', postingText: 'Hello', market: 'intl', candidates: [] })[0]!.content);
+    expect(system).toContain('"industry": {"value", "quote"} only when the posting itself says what the employer does');
+    for (const id of ['Fintech', 'AI / ML', 'B2B SaaS', 'Bio / Pharma', 'Legal-tech']) expect(system).toContain(`"${id}"`);
+    expect(system).toContain('Never decide it from the company name, the job title or the skills alone');
+    expect(system).toContain('"industry": {"value": string, "quote": string}|null');
+    expect(system).toContain('at most 240 characters');
+  });
+
+  it('SM-2: tells the model to decide the role by what the job does, not by one word of the title', () => {
+    const system = String(buildEnrichMessages({ title: 'Java Backend Architect', companyName: 'Acme', postingText: 'Hello', market: 'intl', candidates: [] })[0]!.content);
+    expect(system).toContain('Decide by what the job does, not by one word of the title');
+  });
+
   it('says so when there are no candidates', () => {
     const [, user] = buildEnrichMessages({ title: 'x', companyName: 'y', postingText: 'z', market: 'cn', candidates: [] });
     expect(String(user!.content)).toContain('(none: use null)');

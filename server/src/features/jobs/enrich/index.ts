@@ -10,14 +10,19 @@
 //     ("Summary written by AI from the job post"; AiGeneratedBadge on GoApply).
 
 import { enqueue, type EnqueueOptions, type EnqueuedItem } from '../../../platform/queue/index.js';
-import { enrichDedupeKey } from './service.js';
+// agent.js before service.js, on purpose: service.js loads the market hooks, and a hook module
+// (cn/jobs/fraud/llm.ts) reads this area's CN_DOMESTIC_PROVIDERS while this file is still loading.
+// With the other order, a process whose first import is this file stops with "Cannot access
+// 'CN_DOMESTIC_PROVIDERS' before initialization" (a command-line script, for example).
 import { brandForMarket } from './agent.js';
+import { enrichDedupeKey } from './service.js';
 import { JOBS_ENRICH_WORK_KINDS } from './workers.js';
 import type { EnrichPayload } from './schema.js';
 
 export {
   EDUCATION_LEVELS,
   EMPLOYER_TAG_IDS,
+  ENRICH_INDUSTRY_IDS,
   ENRICH_VERSION,
   EnrichLlmOutputSchema,
   EnrichOutputError,
@@ -38,11 +43,43 @@ export { buildKeywords, MAX_KEYWORDS } from './keywords.js';
 export type { JobKeyword, KeywordImportance } from './keywords.js';
 export { selectTaxonomyCandidates } from './candidates.js';
 export { REQUIREMENT_TAGS, needsLlm, postingTextOf } from './reconcile.js';
+export { heldByRetiredWord, roleFromTitle, titleEvidence, titleIsDecisive, titleMatches, titleReadings } from './titleEvidence.js';
+export type { TitleRuling } from './titleEvidence.js';
+export type { CompanyIndustryClaim, ReconcileReport } from './reconcile.js';
 export { CN_DOMESTIC_PROVIDERS, brandForMarket, resolveEnrichModel, taskModelRoute, type EnrichModelRoute } from './agent.js';
 export { DEFAULT_ENRICH_DAILY_JOBS, enrichDailyLimit } from './budget.js';
 export { enrichDedupeKey, enrichJob, systemUserIdFor } from './service.js';
 export type { EnrichOutcome } from './service.js';
 export { ENRICH_CONCURRENCY, JOBS_ENRICH_WORK_KINDS } from './workers.js';
+
+/**
+ * The dedupe suffix of a forced pass queued by the role backfill
+ * (backfill/rematchRoles.ts): one per job per rematch generation. Bump it
+ * when the title matcher changes again and stored roles must be looked at anew.
+ */
+export const REMATCH_GENERATION = 'rematch-v2';
+
+/** The work-item dedupe key of the backfill's forced pass for a job. */
+export function rematchDedupeKey(jobId: string): string {
+  return `${enrichDedupeKey(jobId)}:${REMATCH_GENERATION}`;
+}
+
+/**
+ * Queue one forced enrichment for a job whose title does not decide its role
+ * (SM-2 backfill), so the model picks among the candidates. A second call for
+ * the same job in the same rematch generation is a no-op (`created: false`):
+ * the backfill can be run again without queueing the row twice.
+ */
+export function enqueueJobRematch(jobId: string, options: { market?: string } & Pick<EnqueueOptions, 'brand' | 'priority' | 'runAfter' | 'db'> = {}): Promise<EnqueuedItem> {
+  const { market, brand, ...rest } = options;
+  const payload: EnrichPayload = { jobId, force: true };
+  return enqueue(JOBS_ENRICH_WORK_KINDS.jobEnrich, payload, {
+    ...rest,
+    brand: brand ?? (market ? brandForMarket(market) : undefined),
+    dedupeKey: rematchDedupeKey(jobId),
+    onConflict: 'keep',
+  });
+}
 
 /**
  * Enqueue enrichment for a job. A new job: one item per job per version

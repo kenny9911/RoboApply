@@ -20,11 +20,18 @@ import {
   createCompaniesRouter,
   createCompanyReadService,
   escapeLike,
+  INDUSTRY_IDS,
+  industryIdFor,
+  mapIndustries,
+  MAX_POSTING_INDUSTRIES,
+  POSTING_INDUSTRY_SOURCE,
+  setIndustryFromPosting,
   toCompanyProfile,
   upsertCompanies,
   type CompaniesDb,
   type CompanyProfile,
 } from './index.js';
+import { ONBOARDING_INDUSTRIES } from '../../onboarding/contract.js';
 
 const NOW = new Date('2026-10-10T00:00:00.000Z');
 const FACT = { source: 'provider:activejobs', fetchedAt: '2026-10-01T00:00:00.000Z' };
@@ -49,6 +56,152 @@ function upsert(over: Partial<CompanyUpsert> = {}): CompanyUpsert {
     ...over,
   };
 }
+
+describe('industry vocabulary (SM-10)', () => {
+  it('is the closed list the industries filter and onboarding use', () => {
+    expect([...INDUSTRY_IDS]).toEqual(ONBOARDING_INDUSTRIES.map((i) => i.id));
+  });
+
+  it('maps a label to its id only on an exact, case-insensitive match (the id or its slug)', () => {
+    expect(industryIdFor('Fintech')).toBe('Fintech');
+    expect(industryIdFor('  fintech ')).toBe('Fintech');
+    expect(industryIdFor('AI / ML')).toBe('AI / ML');
+    expect(industryIdFor('ai_ml')).toBe('AI / ML');
+    expect(industryIdFor('B2B  SAAS')).toBe('B2B SaaS');
+    // Near matches are not matches: nothing is guessed.
+    for (const label of ['Financial technology', 'Banking', 'AI', 'Software', 'Fin tech', '金融科技', '', null, 7]) expect(industryIdFor(label), String(label)).toBeNull();
+  });
+
+  it('keeps an unmapped provider or bank value as the source wrote it, and no value twice', () => {
+    expect(mapIndustries(['fintech', 'Banking', 'Fintech', '互联网', ' ', 'banking'])).toEqual(['Fintech', 'Banking', '互联网', 'banking']);
+    expect(mapIndustries(null)).toEqual([]);
+  });
+
+  it('ingest stores a provider or bank industry through the same vocabulary', async () => {
+    const db = createFakePrisma({ uniqueFields: { rACompany: ['slug'] } });
+    const bank = { source: 'bank:gohire', fetchedAt: '2026-10-01T00:00:00.000Z' };
+    await upsertCompanies(db as unknown as Pick<CompaniesDb, 'rACompany'>, [
+      upsert({ industries: ['e-commerce', 'Retail'], facts: { industries: FACT } }),
+      upsert({ market: 'cn', displayName: '示例科技', nameNormalized: '示例科技', industries: ['互联网'], facts: { industries: bank } }),
+    ]);
+    const rows = db.$rows('rACompany');
+    expect(rows.find((r) => r.nameNormalized === 'acme')).toMatchObject({ industries: ['E-commerce', 'Retail'], facts: { industries: FACT } });
+    expect(rows.find((r) => r.nameNormalized === '示例科技')).toMatchObject({ industries: ['互联网'], facts: { industries: bank } });
+  });
+});
+
+/** One company row behind the three calls `setIndustryFromPosting` makes (the shared fake has no `isEmpty` filter). */
+function companyRow(row: { industries: string[]; facts: unknown; isAgency?: boolean | null } | null, options: { filledMeanwhile?: string[] } = {}) {
+  const state = row ? { id: 'co_1', ...row } : null;
+  const writes: Array<Record<string, unknown>> = [];
+  const selects: Array<Record<string, unknown>> = [];
+  const db = {
+    rACompany: {
+      findUnique: async ({ where, select }: { where: { id: string }; select: Record<string, unknown> }) => {
+        selects.push(select);
+        return state && where.id === state.id ? { ...state, industries: [...state.industries] } : null;
+      },
+      updateMany: async ({ where, data }: { where: { id: string; industries: { isEmpty: boolean } }; data: Record<string, unknown> }) => {
+        // Another writer (a provider's value) got there between the read and this write.
+        if (state && options.filledMeanwhile) state.industries = options.filledMeanwhile;
+        if (!state || where.id !== state.id || (where.industries.isEmpty && state.industries.length > 0)) return { count: 0 };
+        writes.push(data);
+        Object.assign(state, data);
+        return { count: 1 };
+      },
+      update: async ({ data }: { where: { id: string }; data: Record<string, unknown> }) => {
+        writes.push(data);
+        Object.assign(state!, data);
+        return state;
+      },
+    },
+  } as unknown as Pick<CompaniesDb, 'rACompany'>;
+  return { db, state, writes, selects };
+}
+
+describe('company industry from a posting (SM-10)', () => {
+  const posting = { industry: 'Fintech', sourceUrl: 'https://boards.example.com/acme/123', at: NOW };
+
+  it('a company with no industry takes the one the posting states, with provenance "posting", the link and the time', async () => {
+    const { db, state, writes } = companyRow({ industries: [], facts: { website: FACT } });
+    expect(await setIndustryFromPosting(db, 'co_1', posting)).toBe('set');
+    expect(state).toMatchObject({
+      industries: ['Fintech'],
+      facts: { website: FACT, industries: { source: 'posting', url: 'https://boards.example.com/acme/123', fetchedAt: NOW.toISOString() } },
+    });
+    expect(POSTING_INDUSTRY_SOURCE).toBe('posting');
+    expect(writes).toHaveLength(1);
+    // The profile shows it like any other sourced fact, with its link.
+    const profile = toCompanyProfile(
+      { id: 'co_1', market: 'intl', nameNormalized: 'acme', displayName: 'Acme', slug: 'acme', domain: null, logoUrl: null, website: null, sizeBand: null, hqLocation: null, foundedYear: null, description: null, industries: state!.industries, facts: state!.facts },
+      0,
+      NOW,
+    );
+    expect(profile.facts.industry).toEqual({ value: 'Fintech', source: 'posting', asOf: NOW.toISOString(), url: 'https://boards.example.com/acme/123' });
+  });
+
+  it.each([
+    ['the bank', { source: 'bank:gohire', fetchedAt: '2026-10-01T00:00:00.000Z' }],
+    ['a provider', { source: 'provider:linkedin', fetchedAt: '2026-10-01T00:00:00.000Z' }],
+    ['a user', { source: 'user', fetchedAt: '2026-10-01T00:00:00.000Z' }],
+    ['an unknown source (no provenance entry)', undefined],
+  ])('a company whose industry came from %s is not changed', async (_from, entry) => {
+    const facts = entry ? { industries: entry } : {};
+    const { db, state, writes } = companyRow({ industries: ['互联网'], facts });
+    expect(await setIndustryFromPosting(db, 'co_1', posting)).toBe('unchanged');
+    expect(state).toMatchObject({ industries: ['互联网'], facts });
+    expect(writes).toEqual([]);
+  });
+
+  it('a later posting that states another industry is appended, up to three; the first provenance stays', async () => {
+    const first = { source: 'posting', url: 'https://boards.example.com/acme/1', fetchedAt: '2026-10-01T00:00:00.000Z' };
+    const { db, state } = companyRow({ industries: ['Fintech'], facts: { industries: first } });
+    expect(await setIndustryFromPosting(db, 'co_1', { ...posting, industry: 'fintech' })).toBe('unchanged'); // the same one again
+    expect(await setIndustryFromPosting(db, 'co_1', { ...posting, industry: 'B2B SaaS' })).toBe('appended');
+    expect(await setIndustryFromPosting(db, 'co_1', { ...posting, industry: 'AI / ML' })).toBe('appended');
+    expect(await setIndustryFromPosting(db, 'co_1', { ...posting, industry: 'Cybersecurity' })).toBe('unchanged'); // a fourth is not kept
+    expect(state!.industries).toEqual(['Fintech', 'B2B SaaS', 'AI / ML']);
+    expect(state!.industries).toHaveLength(MAX_POSTING_INDUSTRIES);
+    expect(state!.facts).toEqual({ industries: first });
+  });
+
+  it('ignores a value outside the list, a company that is gone and a link that is not a web address', async () => {
+    const empty = companyRow({ industries: [], facts: {} });
+    expect(await setIndustryFromPosting(empty.db, 'co_1', { ...posting, industry: 'Space mining' })).toBe('unchanged');
+    expect(empty.writes).toEqual([]);
+    expect(await setIndustryFromPosting(companyRow(null).db, 'co_1', posting)).toBe('not_found');
+    expect(await setIndustryFromPosting(empty.db, 'co_1', { ...posting, sourceUrl: 'javascript:alert(1)' })).toBe('set');
+    expect(empty.state!.facts).toEqual({ industries: { source: 'posting', fetchedAt: NOW.toISOString() } });
+    const noLink = companyRow({ industries: [], facts: null });
+    expect(await setIndustryFromPosting(noLink.db, 'co_1', { ...posting, sourceUrl: null })).toBe('set');
+    expect(noLink.state!.facts).toEqual({ industries: { source: 'posting', fetchedAt: NOW.toISOString() } });
+  });
+
+  it('a staffing agency never takes an industry from a posting: its postings describe its clients', async () => {
+    const empty = companyRow({ industries: [], facts: {}, isAgency: true });
+    expect(await setIndustryFromPosting(empty.db, 'co_1', posting)).toBe('unchanged');
+    expect(empty.state).toMatchObject({ industries: [], facts: {} });
+    expect(empty.writes).toEqual([]);
+    expect(empty.selects[0]).toMatchObject({ isAgency: true });
+    // Nor a second value beside one an earlier posting set before the company was known to be an agency.
+    const first = { source: 'posting', url: 'https://boards.example.com/acme/1', fetchedAt: '2026-10-01T00:00:00.000Z' };
+    const held = companyRow({ industries: ['Fintech'], facts: { industries: first }, isAgency: true });
+    expect(await setIndustryFromPosting(held.db, 'co_1', { ...posting, industry: 'Gaming' })).toBe('unchanged');
+    expect(held.state!.industries).toEqual(['Fintech']);
+    // Not an agency, or not known: the posting's industry is stored as before.
+    for (const isAgency of [false, null]) {
+      const direct = companyRow({ industries: [], facts: {}, isAgency });
+      expect(await setIndustryFromPosting(direct.db, 'co_1', posting)).toBe('set');
+    }
+  });
+
+  it('never overwrites a value that arrived between the read and the write', async () => {
+    const { db, state, writes } = companyRow({ industries: [], facts: {} }, { filledMeanwhile: ['互联网'] });
+    expect(await setIndustryFromPosting(db, 'co_1', posting)).toBe('unchanged');
+    expect(state!.industries).toEqual(['互联网']);
+    expect(writes).toEqual([]);
+  });
+});
 
 describe('company upsert (ingest)', () => {
   it('slugs ASCII names and hashes CJK-only names', () => {

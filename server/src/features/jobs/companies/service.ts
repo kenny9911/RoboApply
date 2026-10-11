@@ -11,7 +11,13 @@
 //     public display (`publicDisplay`, OPS-A4 / H12: licensed provider
 //     listings and bank jobs without syndication consent stay behind a
 //     session), like every other anonymous surface (public feed, SEO, /job/*);
-//   - H-1B numbers cite the US DOL LCA disclosure file they came from.
+//   - H-1B numbers cite the US DOL LCA disclosure file they came from;
+//   - industries use one vocabulary (industryMap.ts): a provider or bank
+//     string that is exactly one of the industry labels is stored as that id,
+//     anything else as the source wrote it. A company with no industry from a
+//     provider, the bank or a user takes the one a posting states in a
+//     verified quote (`setIndustryFromPosting`, provenance 'posting' with the
+//     posting's link); none is ever inferred (SM-10).
 // Market-scoped: a company of the other market answers 404 company_not_found.
 
 import { createHash } from 'node:crypto';
@@ -20,6 +26,7 @@ import type { Market } from '../../../platform/brand/index.js';
 import { httpError, type Sourced } from '../../../platform/http.js';
 import type { FeedItem } from '../../feed/contract.js';
 import { hostOf, normalizeCompanyName, type CompanyUpsert } from '../normalize/index.js';
+import { industryIdFor, mapIndustries } from './industryMap.js';
 import {
   COMPANY_ERROR_CODES,
   type CompanyJobsResponse,
@@ -157,7 +164,8 @@ export async function upsertCompanies(db: Pick<CompaniesDb, 'rACompany'>, compan
   for (const c of companies) {
     if (!c.nameNormalized) continue;
     const m = byMarket.get(c.market) ?? new Map<string, CompanyUpsert>();
-    if (!m.has(c.nameNormalized)) m.set(c.nameNormalized, c);
+    // One industry vocabulary: an exact label becomes its id, anything else stays as the source wrote it.
+    if (!m.has(c.nameNormalized)) m.set(c.nameNormalized, { ...c, industries: mapIndustries(c.industries) });
     byMarket.set(c.market, m);
   }
   for (const [market, wanted] of byMarket) {
@@ -188,6 +196,61 @@ export async function upsertCompanies(db: Pick<CompaniesDb, 'rACompany'>, compan
     for (const [name, row] of have) ids.set(`${market}\u0000${name}`, row.id);
   }
   return ids;
+}
+
+// ── Industry from a posting (SM-10) ───────────────────────────────────────
+
+/** Provenance of an industry a posting stated (`RACompany.facts.industries.source`). */
+export const POSTING_INDUSTRY_SOURCE = 'posting';
+/** A company holds at most this many posting-sourced industries. */
+export const MAX_POSTING_INDUSTRIES = 3;
+
+export interface PostingIndustry {
+  /** An industry id (industryMap.ts). The caller has verified the posting's quote. */
+  industry: string;
+  /** The posting's link, cited as the source. */
+  sourceUrl: string | null;
+  at: Date;
+}
+
+export type PostingIndustryOutcome = 'set' | 'appended' | 'unchanged' | 'not_found';
+
+/**
+ * Store the industry a posting states for its employer.
+ *   - the company has no industry: it becomes [industry], with provenance
+ *     'posting', the posting's link and the time;
+ *   - it has industries from a provider, the bank or a user: nothing changes;
+ *   - it has posting-sourced industries and this posting states another one:
+ *     it is appended, up to three values (the provenance of the first stays);
+ *   - it is a staffing agency (`isAgency`): nothing changes, since an agency's
+ *     postings describe its clients.
+ * A value outside the industry list is ignored. The first write only happens
+ * while the row still has no industry, so a provider's value that arrives at
+ * the same moment is never overwritten.
+ */
+export async function setIndustryFromPosting(db: Pick<CompaniesDb, 'rACompany'>, companyId: string, input: PostingIndustry): Promise<PostingIndustryOutcome> {
+  const industry = industryIdFor(input.industry);
+  if (!industry) return 'unchanged';
+  const row = (await db.rACompany.findUnique({ where: { id: companyId }, select: { id: true, industries: true, facts: true, isAgency: true } })) as {
+    id: string;
+    industries: string[];
+    facts: unknown;
+    isAgency?: boolean | null;
+  } | null;
+  if (!row) return 'not_found';
+  // A staffing agency posts for its clients: what such a posting says is the client's business.
+  if (row.isAgency === true) return 'unchanged';
+  const facts = asFacts(row.facts);
+  if (row.industries.length === 0) {
+    const url = input.sourceUrl && /^https?:\/\//i.test(input.sourceUrl) ? input.sourceUrl : null;
+    facts.industries = { source: POSTING_INDUSTRY_SOURCE, ...(url ? { url } : {}), fetchedAt: input.at.toISOString() };
+    const written = await db.rACompany.updateMany({ where: { id: companyId, industries: { isEmpty: true } }, data: { industries: [industry], facts } });
+    return written.count > 0 ? 'set' : 'unchanged';
+  }
+  if (facts.industries?.source !== POSTING_INDUSTRY_SOURCE) return 'unchanged';
+  if (row.industries.some((i) => i.toLowerCase() === industry.toLowerCase()) || row.industries.length >= MAX_POSTING_INDUSTRIES) return 'unchanged';
+  await db.rACompany.update({ where: { id: companyId }, data: { industries: [...row.industries, industry] } });
+  return 'appended';
 }
 
 /** Key into the map `upsertCompanies` returns. */
