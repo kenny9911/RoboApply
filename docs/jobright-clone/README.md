@@ -1,6 +1,6 @@
 # Jobright clone: document index
 
-**Branch:** `feat/jobright-clone`. **Revised:** 2026-10-11 (owner rulings D5 and D6; the parity wave).
+**Branch:** `feat/jobright-clone`. **Revised:** 2026-10-11 (owner rulings D5 and D6; the parity wave; the market wave, section [Market wave (D6)](#market-wave-d6)).
 
 We are cloning jobright.ai (an AI job-search copilot) into one codebase that serves two brands. Every product feature and onboarding flow is in scope.
 - **RoboApply** at `roboapply.io`: the international market, **including Taiwan**.
@@ -27,6 +27,7 @@ The brand is resolved per request from the Host header. Older research notes say
 |---|---|---|
 | [`GOAPPLY_PARITY_PLAN.md`](GOAPPLY_PARITY_PLAN.md) | **The D5 specification.** How GoApply reaches the same functions as RoboApply: the env rule (`CN_X` is an optional override of `X`), capability defaults, the shared-stack fallbacks per area, the per-brand job source registry, the variables introduced (§4), the eleven implementation bundles (§5; machine-readable in [`orch/parity-bundles.json`](orch/parity-bundles.json)), every audit gap and its decision (§6), the verification steps (§7) and **what needs the owner (§8)**. It supersedes the GoApply gating rules of the three plans below. | You touch anything that behaves differently per brand, a `CN_` variable, a capability flag or a GoApply job source. |
 | [`market/MARKET_STRATEGY.md`](market/MARKET_STRATEGY.md) | **The D6 specification.** Per market: job sources and how to search, retrieve and match; the price ladders (USD and CNY); the payment rails, with the twelve "do not break" rules of the existing Alipay path (§5.2); its own owner list (§7). The research notes behind it are the other files in [`market/`](market/). | You touch a job source, a price, a plan or a payment rail. |
+| [`market/MARKET_TASK_PLAN.md`](market/MARKET_TASK_PLAN.md) and [`orch/market-bundles.json`](orch/market-bundles.json) | **The market wave's plan.** The bundles file is the executable plan (40 bundles in six phases, M0 to M5, each with its items, owned files, schema and env variables); the task plan is its readable companion (phase table, the one owner of each hot file per phase, the cross-bundle contracts, the env variables per phase, the owner-only list, the coverage of every requirement). | You work on a market bundle, or want to know which phase builds a requirement of the strategy. |
 | [`orch/parity-verify.md`](orch/parity-verify.md) | The step-by-step verification of the parity wave after its bundles are merged (commands, expected output, what counts as "not configured"). | You verify the wave, or want to see what "GoApply works by default" means in practice. |
 | [`TASK_PLAN.md`](TASK_PLAN.md) | **The executable plan.** Covers precedence and conflict rulings (§1), rules for every work package (§2), waves 0–5 and INT (§3–§9), the owner/OPS track (§10), dependencies and seams (§11), risks (§12), the coverage matrix (§13), the machine-readable WP list (Appendix A) and the Revision log. | Always. It is the plan of record for the orchestrator and every coding agent. |
 | [`PRODUCT_PLAN.md`](PRODUCT_PLAN.md) | User-facing behaviour: positioning, naming, information architecture, onboarding screens O0–O9 and G0–G7, the feature matrix with one decision per catalog ID and brand, pricing and credits, notifications, metrics, and cross-cutting product rules. | You build a screen, write copy, or need a feature's scope. |
@@ -57,13 +58,64 @@ The brand is resolved per request from the Host header. Older research notes say
 | INT | 15 | Schema reconciliation and db push #2, i18n merge plus 8 translations, final wiring, gates and build, browser verification per brand, cleanup |
 | FIX | 9 groups | Fixes from the browser-verification pass (`orch/verify-fix-groups.json`, `requests/waveFIX-carryover.md`) |
 | PAR | 11 bundles | D5 brand parity: `brandEnv` fallback and capability defaults (PAR-1, merged first), then LLM, accounts and messaging, voice, storage and disclosures, payments, GoApply job sources, feed and job detail, job search and workspace, public surfaces, docs and the verification list (`orch/parity-bundles.json`, handoffs in `orch/handoffs-par/`) |
-| Market | after PAR | D6: the requirements of `market/MARKET_STRATEGY.md` §9 that the parity bundles did not already build (listed in `TASK_PLAN.md` §14) |
+| Market | 40 bundles, phases M0 to M5, after PAR | D6: the requirements of `market/MARKET_STRATEGY.md` §9 that the parity bundles did not already build. Phase table in the next section; plan in `orch/market-bundles.json` and `market/MARKET_TASK_PLAN.md` |
+
+## Market wave (D6)
+
+The market wave builds what owner ruling D6 asks for: job sources chosen per market, one way to search, retrieve and match jobs, a price ladder per market, the complete Stripe implementation for RoboApply, and the additive mapping of GoApply's plans onto the existing Alipay rail, which keeps working exactly as it does. **The specification is [`market/MARKET_STRATEGY.md`](market/MARKET_STRATEGY.md)**: it is decisive, and where it changes an earlier number or default in `PRODUCT_PLAN.md`, `TASK_PLAN.md` or `CN_TW_LAUNCH_PLAN.md` it wins (its "Precedence" paragraph; requirement OT-1 keeps those files in line). **The executable plan is [`orch/market-bundles.json`](orch/market-bundles.json)** (40 bundles; each bundle lists its items, the files it alone owns in its phase, its schema and its env variables), **with its companion [`market/MARKET_TASK_PLAN.md`](market/MARKET_TASK_PLAN.md)** (the phase table, the hot-file owner per phase, the cross-bundle API contracts, the env variables per phase, the owner-only list and the coverage of every requirement of the strategy's §9). **The parity wave merges first** (PAR-1 to PAR-11, [`GOAPPLY_PARITY_PLAN.md`](GOAPPLY_PARITY_PLAN.md)): it already builds the requirements listed in `TASK_PLAN.md` §14.3, and the market bundles verify those instead of rebuilding them.
+
+Phases run in order, M0 to M5. The bundles of one phase run in parallel, each in its own worktree, and no path has two owners inside a phase. M0 is the additive schema alone, applied to the database branch before any other phase starts. The titles below are the bundles file's own.
+
+| Phase | Bundle | Title (from `orch/market-bundles.json`) |
+|---|---|---|
+| M0 | MKT-0 | Schema foundation: every additive model, column and index of the market wave, the vector extension file and the additive-only check |
+| M1 | MKT-1A | Stripe safety first, USD catalog defaults, catalog sync by lookup key, checkout rail (server) |
+| M1 | MKT-1B | Pricing page and plan sheet from the plans API, refund lines, free autofill 20 a day, checkout attempt key (web) |
+| M1 | MKT-1C | Taiwan pay parser (JT-1) and the contracts the source wave builds on |
+| M1 | MKT-1D | Evaluation harness, fixtures and the ten invariant specs, written first (SM-1) |
+| M1 | MKT-1E | Role taxonomy precision, enrichment override and backfill; data quality (SM-2, SM-10; query labels of SM-11) |
+| M1 | MKT-1F | Estimate v2, the fit contract (getFit / getFits / getVariantFit) and one-scale ranking input (SM-3, SM-4, core of SM-5) |
+| M1 | MKT-1G | Plan documents follow the market strategy; env examples for the Stripe safety rule, the price variables and the other M1 variables (OT-1; env docs of ST-0 and PC-1) |
+| M2 | MKT-2A | Alipay, additive only: wire parity with production and callback tolerance (rail file and origins) |
+| M2 | MKT-2B | Stripe webhook lifecycle: new events, re-read, price-first, several secrets, reconcile, portal by code, endpoint check; billing mails (server) |
+| M2 | MKT-2C | Subscription changes: switch with pending_if_incomplete, resume, idempotency keys, tax switch (server) |
+| M2 | MKT-2D | Refund engine: issueRefund, charge.refunded, disputes, pro-rata withdrawal rule, withdrawPurchase, refund mails (server) |
+| M2 | MKT-2E | Billing UI for the subscription lifecycle: reconcile on return, in-app switch, resume, payment update, GoApply link for mainland visitors (web) |
+| M2 | MKT-2F | Every consumer reads the one fit: lists, Assistant, tailoring, stored snapshots, the every-seam contract test; Similar jobs takes a vector source (rest of SM-5) |
+| M2 | MKT-2G | Canonical skill vocabulary: table access, aliases in three scripts, related-evidence graph, seed and review tooling (SM-6, foundation) |
+| M2 | MKT-2H | Search document and embeddings write path: embeddings client, CJK segmentation, searchDoc / searchTsv, job and user vectors, sweep; relevance seam (SM-7 foundation, SM-11) |
+| M3 | MKT-3A | Ingest core: monthly quota from response headers, one budget per provider, JSearch as a demand-only source |
+| M3 | MKT-3B | Planner: adapter cost model, no SEO seeds on per-request providers, demand windows, Taiwan query variants |
+| M3 | MKT-3C | Posting identity and lifecycle: atsPostingKey, canonical-row priority, JSearch link rules, expiry rules, carry-through fields |
+| M3 | MKT-3D | Employer boards: sources for both markets, discovery, bulk import, seeds, sync throughput and its own cron |
+| M3 | MKT-3E | Taiwan: 台灣就業通 open-data adapter with a resumable sweep and attribution, zh-Hant role labels, 通俗職業 map, import denylist |
+| M3 | MKT-3F | Provider health in the admin System panel: plan, remaining quota, days to reset, dead sources visible |
+| M3 | MKT-3G | Mainland deep links: nine boards, ordered by audience, built only from the user's own query |
+| M3 | MKT-3H | Runbooks and pre-flight: Alipay cut-over with the notify check, Stripe test-mode pass (documents and one script) |
+| M4 | MKT-4A | Self-service withdrawal endpoints (signed in and on the public cancel page) and consent retention after account deletion (server) |
+| M4 | MKT-4B | Admin billing server: refund action, manual CN refund record, practice-cost readout, Stripe health; invoice history with refunded marker (server) |
+| M4 | MKT-4C | Billing UI: "Withdraw from contract", admin console for refunds, CN refund record, practice cost and Stripe health; history with paging and refunded marker (web) |
+| M4 | MKT-4D | Enrichment v3: canonical skill ids at write time, honest keywords, requirements extracted once per posting (SM-6 write path, SM-8 job side) |
+| M4 | MKT-4E | Canonical skills in the estimate and a three-state keyword check; fit-card checklist UI; skills gate (SM-6 read path) |
+| M4 | MKT-4F | Feed: hybrid retrieval by reciprocal rank, the residual text as a ranking query, then the ranking refinements (SM-7, SM-9 feed part, SM-12) |
+| M4 | MKT-4G | Scorer v4: requirement checklist with anchored statuses, server-computed numbers, resume-first prompt, pinned version per market (SM-8) |
+| M4 | MKT-4H | Search surfaces outside the feed: planner relevance terms and the job-search API on both brands, Assistant job tools with cited ids (SM-9) |
+| M5 | MKT-5A | Licensed feed (Active Jobs DB): hourly window sync with the expired feed behind the quota gate; Active Jobs DB for the mainland |
+| M5 | MKT-5B | More board connectors: Workable, Recruitee, Personio, Lever EU, Greenhouse pay ranges and deadline; 北森 behind CN_ATS_BEISEN_ENABLED |
+| M5 | MKT-5C | Closure and freshness: on-demand liveness check, three date facts, mainland unseen rule, sponsorship label rule |
+| M5 | MKT-5D | New public sources: USAJobs and 事求人, and the source register document |
+| M5 | MKT-5E | GoHire bank over the syndication endpoint: hardened HTTP adapter, mirror read for live cross-bank search, the contract for the second repository |
+| M5 | MKT-5F | Taiwan extras: pay-rule note from config, district level and shift pattern with their filters, provenance and helper text |
+| M5 | MKT-5G | Sponsorship facts with source and date: USCIS H-1B Employer Data Hub and the UK Register of Licensed Sponsors next to the DOL LCA loader |
+| M5 | MKT-5H | Env examples for every variable of M2 to M5, the mainland deploy kit variables, and the final pass over the plan documents (OT-1; env docs of every later requirement) |
+
+What needs the owner (keys, purchases, counsel, the second repository) is the strategy's §7 and section 6 of `market/MARKET_TASK_PLAN.md`. The gates the orchestrator runs between phases are in section 1 of that file.
 
 ## Open owner decisions
 
 Most of these have a safe default, so the code does not wait on them.
 1. **Neon branch and pushes.** Create the clone branch and run `pg_trgm`. Then confirm db push #1, the additive push at each wave gate (SCHEMA-2…5) and push #2 (OPS-A1).
-2. **Prices** for each brand and interval, the 7-day pass, packs and the referral reward. Also whether to offer an optional "Welcome price". Decided since: D6 sets prices per market and the catalog carries real default amounts, so a plan is never "price not set" (GoApply's CNY ladder is built in this wave; RoboApply's USD defaults follow in the market wave, `market/MARKET_STRATEGY.md` §4). There is no launch offer (OPS-B1).
+2. **Prices** for each brand and interval, the 7-day pass, packs and the referral reward. Also whether to offer an optional "Welcome price". Decided since: D6 sets prices per market and the catalog carries real default amounts in code, so a plan is never "price not set" (`market/MARKET_STRATEGY.md` M-11 to M-13 and §4: GoApply's CNY ladder since the parity wave, RoboApply's USD ladder since phase M1 of the market wave; an env value is an override). There is no launch offer (OPS-B1, below).
 3. **Public display of jobs.** Decide which providers' terms allow public pages (default: none). RoboHire/GoHire also need an employer consent-to-syndicate field before any bank job goes public or is opened to AI crawlers (OPS-A4).
 4. **Recruiter opt-in in RoboHire/GoHire** for being contactable by candidates. Until it exists, hiring contacts stay as deep links only (OPS-A10).
 5. **GoHire parsing for RoboApply resumes**, which sends them to a mainland server (OD-3). Default: off.
@@ -71,7 +123,7 @@ Most of these have a safe default, so the code does not wait on them.
    - ship recording off by default;
    - sign off WP-43, WP-63a/b and WP-66.
 7. **Copy-gate additions**, including the per-locale bans and the 北森/牛客 ban (OPS-A8).
-8. **Stripe test-mode prices** for every plan key before INT (OPS-A9).
+8. **Stripe test-mode prices** for every plan key before INT (OPS-A9). *Superseded by MARKET_STRATEGY M-13 and M-15 (2026-10-11):* no price id has to be created or configured. Stripe products and prices are created from the catalog on first use, and `STRIPE_PRICE_<PLANKEY>` is only an optional pin. What browser verification needs from the owner is a Stripe **test** key (`sk_test_…`) and a `stripe listen` webhook secret in the clone `.env` (strategy §7 item 2); a live key is refused outside production.
 9. **Counsel and privacy program** (OPS-C/D):
    - EU/UK representative;
    - DPAs with every processor;
@@ -92,7 +144,7 @@ Most of these have a safe default, so the code does not wait on them.
 |---|---|
 | OPS-A1 clone database | **Neon branch** of the RoboApply project. The owner creates it and puts `DATABASE_URL` / `DIRECT_DATABASE_URL` in the clone worktree's `.env`; every additive push goes to the branch first, each diff shown to the owner. The main DB is pushed only at release. |
 | Track A recording default | **Off.** Shipped on `main` in `8278e5f` (`INTERVIEW_ENGINE_RECORDING_ENABLED` is opt-in). WP-43 adds per-session consent, WP-63a the 90-day purge. |
-| OPS-B1 prices | **Use the PRODUCT_PLAN §6.3 proposals in test mode:** RoboApply Pro $9.99/week, $24.99/month, $59.99/quarter; 7-day pass $6.99; practice packs 5 for $9.99, 15 for $24.99. GoApply non-renewing passes ¥12 week / ¥39 month / ¥99 quarter; practice packs ¥29 / ¥79. No launch offer. Amounts live in the plan catalog config; Stripe test price IDs attach via `STRIPE_PRICE_<PLANKEY>` once a `sk_test_` key is in the clone `.env` (empty today — OPS-A9). **Revised by D5 and D6 (2026-10-11):** the GoApply amounts are catalog defaults, student passes are added (¥29 month, ¥69 quarter), and GoApply plans are purchasable by default through the existing Alipay rail once its own credential (`ALIPAY_CALLBACK_SECRET`) is set. `CN_PAYMENTS_ENABLED` is no longer a prerequisite: unset means on, and `CN_PAYMENTS_ENABLED=false` is the kill switch. The RoboApply USD ladder is reviewed per market in `market/MARKET_STRATEGY.md` §4.1 (it proposes $54.99 for the quarter and $9.99 for the 7-day pass; applied in the market wave). |
+| OPS-B1 prices | **The price ladders of `market/MARKET_STRATEGY.md` §4 (decisions M-11 and M-12), as catalog defaults in code.** RoboApply (USD, Stripe): Pro $9.99/week, $24.99/month, $54.99/quarter; 7-day pass $9.99; practice packs 5 for $9.99, 15 for $24.99; student $17.49/month, $37.99/quarter. GoApply (CNY, Alipay, non-renewing passes): ¥12 week / ¥39 month / ¥99 quarter; practice packs ¥29 / ¥79; student passes ¥29 month / ¥69 quarter. No launch offer. An env value is an override, never a prerequisite (M-13): `PRICE_<PLANKEY>_USD_CENTS` for RoboApply, `CN_PRICE_<PLANKEY>_FEN` (whole yuan) for GoApply. No Stripe price id has to be configured: prices are created from the catalog on first use, and `STRIPE_PRICE_<PLANKEY>` is an optional pin. A brand can open a payment once its rail's own credential is set (M-25): RoboApply the Stripe key **and** a webhook secret, GoApply `ALIPAY_CALLBACK_SECRET`; until then it lists its plans and prices. `CN_PAYMENTS_ENABLED` is a kill switch (unset means on; `false` stops GoApply charging). *The first form of this row (2026-10-10, the PRODUCT_PLAN §6.3 proposals) had the quarter at $59.99 and the 7-day pass at $6.99; both values are superseded by MARKET_STRATEGY M-11 (2026-10-11). Its §4.1 gives the two reasons: at $59.99 the floored "Save N%" label printed 19%, not the 20% the product plan promised, and at $6.99 the non-renewing pass undercut the weekly plan that grants the same thing.* |
 | OPS-A8 copy-gate additions | **Approved as listed in TASK_PLAN R-12** (incl. `unlimited`, `guarantee` affirmative, standalone ATS/JD, per-locale auto-apply bans, zh 北森/牛客). |
 
 ## D5 — Brand parity (owner, 2026-10-11; binding, overrides TASK_PLAN R-13 / R-14 / R-15 and CN_TW gating)
@@ -161,4 +213,4 @@ Settings and decisions the other bundles raised in their handoffs (`orch/handoff
 - **Mainland China pays with Alipay — the existing implementation. It must keep working exactly as it does.** New GoApply plans are mapped onto it additively; the request, callback and verification path is not rewritten.
 - **The international brand pays with Stripe**, implemented fully (subscriptions, one-time passes and packs, webhooks, cancel, refunds, portal).
 
-**Specification and status.** [`market/MARKET_STRATEGY.md`](market/MARKET_STRATEGY.md), with its research notes in `market/`. The parity wave already builds the parts of it that D5 needs (the list is `GOAPPLY_PARITY_PLAN.md` §9 and `TASK_PLAN.md` §14): the GoApply feed on by default with a source line on every card, the GoHire bank over HTTPS, employer-board postings located in mainland China entering GoApply's index, JSearch removed from GoApply and `linkedin` from RoboApply, characterisation tests for the twelve Alipay rules, the Alipay rail opening with its callback secret alone, the CNY catalog defaults with the kill switch, and GoApply student passes. The rest of that file's requirements run in its own waves after this one. Its owner list is its §7.
+**Specification and status.** [`market/MARKET_STRATEGY.md`](market/MARKET_STRATEGY.md), with its research notes in `market/`. The parity wave already builds the parts of it that D5 needs (the list is `GOAPPLY_PARITY_PLAN.md` §9 and `TASK_PLAN.md` §14): the GoApply feed on by default with a source line on every card, the GoHire bank over HTTPS, employer-board postings located in mainland China entering GoApply's index, JSearch removed from GoApply and `linkedin` from RoboApply, characterisation tests for the twelve Alipay rules, the Alipay rail opening with its callback secret alone, the CNY catalog defaults with the kill switch, and GoApply student passes. The rest of that file's requirements are built by the market wave: six phases, M0 to M5, described in the section [Market wave (D6)](#market-wave-d6) above. Its owner list is its §7.
