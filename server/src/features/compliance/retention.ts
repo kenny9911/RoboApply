@@ -19,7 +19,12 @@
 // job-alerts): retention.test.ts runs both jobs against the published periods.
 // 'kept_minimum' rows are not deletions — the period is the least time a
 // record is kept (billing consent records, 3 years); the same test proves no
-// rule here touches them.
+// rule here touches them. Those records are kept for their period even after
+// the account is deleted: the account purge copies a minimal proof of each
+// into RABillingConsentArchive (platform/billing/consentArchive.ts: the later
+// of 3 years after consent and 1 year after the subscription ends, ST-9), and
+// the rule `billing_consent_archive` deletes an archive row once its own
+// `retainUntil` has passed.
 //
 // Deletions are brand-scoped (each cron run is inside one brand), batched,
 // and return quickly when nothing is due (cost guard, FND-3).
@@ -28,6 +33,7 @@ import prisma from '../../lib/prisma.js';
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { BrandId } from '../../platform/brand/registry.js';
 import type { Budget } from '../../platform/queue/index.js';
+import { BILLING_CONSENT_KEEP_AFTER_END_YEARS, BILLING_CONSENT_KEEP_YEARS, BILLING_CONSENT_TYPES } from '../../platform/billing/consentArchive.js';
 import { DATA_EXPORT_TTL_DAYS, type RetentionRuleView } from './contract.js';
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -52,6 +58,7 @@ export type RetentionDb = Pick<
   | 'rACoverLetter'
   | 'rATrackerEntry'
   | 'rACopilotMemory'
+  | 'rABillingConsentArchive'
 >;
 
 export interface RetentionRunContext {
@@ -219,9 +226,15 @@ export const KNOWN_DEVICE_TOKEN_KIND = 'known_device';
 /** A mark lives this long after the last sign-in from that device (TOKEN_TTL_MS.known_device; a test keeps them equal). */
 export const KNOWN_DEVICE_KEEP: Keep = { amount: 90, unit: 'days' };
 
-/** Consent types that record a purchase term the user accepted; kept at least `BILLING_CONSENT_KEEP`. */
-export const BILLING_CONSENT_TYPES: readonly string[] = ['auto_renew_ack', 'withdrawal_waiver', 'cn_pay_terms_ack'];
-export const BILLING_CONSENT_KEEP: Keep = { amount: 36, unit: 'months' };
+/**
+ * Consent types that record a purchase term the user accepted (the list the
+ * archive copies, platform/billing/consentArchive.ts); kept at least
+ * `BILLING_CONSENT_KEEP`. That is the minimum: the full rule is the later of
+ * 3 years after consent and 1 year after the subscription ends, and it holds
+ * after the account is deleted too (rule `billing_consent_archive`).
+ */
+export { BILLING_CONSENT_TYPES };
+export const BILLING_CONSENT_KEEP: Keep = { amount: BILLING_CONSENT_KEEP_YEARS * 12, unit: 'months' };
 
 /** BACKUP_RETENTION_DAYS (the provider's point-in-time history window); unset or invalid → null ("Not listed"). */
 export function backupRetentionFromEnv(env: EnvSource): RetentionRuleView['keep'] {
@@ -432,13 +445,34 @@ export const RETENTION_RULES: readonly RetentionRule[] = [
     enforcedBy: 'visitor-alerts',
   },
   // A minimum, not a deletion: nothing in this file reads or deletes
-  // SeekerConsentRecord (RetentionDb has no delegate for it). The records go
-  // only with the account (closed_accounts).
+  // SeekerConsentRecord (RetentionDb has no delegate for it). The rows go
+  // with the account (closed_accounts), and the records are kept for their
+  // period all the same: the purge first copies a minimal proof of each into
+  // RABillingConsentArchive (the next rule).
   {
     id: 'billing_consent_records',
-    covers: `SeekerConsentRecord of type ${BILLING_CONSENT_TYPES.join(' / ')} (checkout and plan switch)`,
+    covers: `SeekerConsentRecord of type ${BILLING_CONSENT_TYPES.join(' / ')} (checkout and plan switch); after the account is deleted, their proof in RABillingConsentArchive`,
     keep: BILLING_CONSENT_KEEP,
     enforcedBy: 'kept_minimum',
+  },
+  // The proof the account purge leaves behind. Each row carries its own end
+  // date (`retainUntil`: the later of 3 years after consent and 1 year after
+  // the subscription ends), so the published period is the minimum and the
+  // row is deleted by the first daily run after that date, never before.
+  {
+    id: 'billing_consent_archive',
+    covers: 'RABillingConsentArchive: proof of a checkout acknowledgement of a deleted account (no IP address, no user agent, no email in clear), until its retainUntil',
+    keep: BILLING_CONSENT_KEEP,
+    enforcedBy: 'compliance-daily',
+    run: async (ctx) => {
+      const where = { brand: ctx.brand, retainUntil: { lt: ctx.now } };
+      const deleted = await deleteInBatches(
+        ctx,
+        (take) => ctx.db.rABillingConsentArchive.findMany({ where, select: { id: true }, take }),
+        (ids) => ctx.db.rABillingConsentArchive.deleteMany({ where: { id: { in: ids } } }),
+      );
+      return { deleted };
+    },
   },
   // Data export files: deleted by compliance-daily's export sweep (dataExport.ts).
   { id: 'data_exports', covers: 'Data export files', keep: keep(DATA_EXPORT_TTL_DAYS, 'days'), enforcedBy: 'compliance-daily' },
@@ -499,7 +533,8 @@ export function retentionScheduleMarkdown(locale: 'en' | 'zh', env: EnvSource = 
     tool_results: 'Free tool results (the report and the text read from your file)',
     anon_alerts_unconfirmed: 'Job alert sign-ups you did not confirm, after the last confirmation link',
     anon_alerts_unsubscribed: 'Job alerts you unsubscribed from without an account (with the email address)',
-    billing_consent_records: 'Records that you agreed to a plan renewing automatically or to purchase terms (kept at least this long while you have an account)',
+    billing_consent_records: 'Records that you agreed to a plan renewing automatically or to purchase terms (kept at least this long while you have an account; after you delete it, see the next row)',
+    billing_consent_archive: `Proof of those records after you delete your account: your account ID, a hash of your email address, the payment customer ID, what you agreed to and when. No IP address or browser details. Kept for ${BILLING_CONSENT_KEEP_YEARS} years after you agreed, or until ${BILLING_CONSENT_KEEP_AFTER_END_YEARS} year after your plan ended if that is later`,
     data_exports: 'Data export files',
     backups: 'Database backups',
   };
@@ -520,7 +555,8 @@ export function retentionScheduleMarkdown(locale: 'en' | 'zh', env: EnvSource = 
     tool_results: '免费工具的结果（报告和从你的文件中读取的文字）',
     anon_alerts_unconfirmed: '未确认的职位提醒订阅（自最后一封确认邮件起）',
     anon_alerts_unsubscribed: '未登录时订阅、已退订的职位提醒（含邮箱地址）',
-    billing_consent_records: '你同意自动续费或购买条款的记录（账户存续期间至少保存这么久）',
+    billing_consent_records: '你同意自动续费或购买条款的记录（账户存续期间至少保存这么久；注销账户后见下一行）',
+    billing_consent_archive: `注销账户后保留的上述记录凭证：账户编号、邮箱地址的哈希值、支付客户编号、你同意的内容及时间；不含 IP 地址和浏览器信息。自同意之日起保存 ${BILLING_CONSENT_KEEP_YEARS} 年；若套餐结束后满 ${BILLING_CONSENT_KEEP_AFTER_END_YEARS} 年的日期更晚，则保存至该日`,
     data_exports: '数据导出文件',
     backups: '数据库备份',
   };

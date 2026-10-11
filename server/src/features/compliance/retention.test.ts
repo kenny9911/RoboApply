@@ -18,6 +18,7 @@ import type { ToolResultPayload } from '../tools/store.js';
 import { ANON_ALERT_CONFIRM_TTL_HOURS, ANON_ALERT_PURGE_UNSUBSCRIBED_DAYS } from '../visitor/contract.js';
 import { createAnonAlertDigestTask } from '../visitor/digest.js';
 import type { VisitorAlertsRepo } from '../visitor/repo.js';
+import { BILLING_CONSENT_KEEP_YEARS, BILLING_CONSENT_TYPES as ARCHIVED_CONSENT_TYPES } from '../../platform/billing/consentArchive.js';
 import { RETENTION_ENFORCERS } from './contract.js';
 import {
   BILLING_CONSENT_KEEP,
@@ -108,6 +109,8 @@ describe('retention schedule (published values)', () => {
       anon_alerts_unsubscribed: '30 days · visitor-alerts',
       // A minimum (3 years), not a deletion.
       billing_consent_records: '36 months · kept_minimum',
+      // The proof the account purge leaves behind: each row carries its own end date (3 years at least).
+      billing_consent_archive: '36 months · compliance-daily',
       data_exports: '7 days · compliance-daily',
       // The provider's window is not assumed: "Not listed" until ops sets it.
       backups: 'Not listed · provider',
@@ -152,6 +155,32 @@ describe('retention schedule (published values)', () => {
     expect(retentionScheduleMarkdown('en', {})).toContain('| Database backups | Not listed |');
     expect(retentionScheduleMarkdown('zh', { BACKUP_RETENTION_DAYS: '14' })).toContain('| 数据库备份 | 14 天 |');
     expect(retentionScheduleMarkdown('en', {})).toContain('| Resumes, cover letters, tracked jobs and Assistant memories you delete | 30 days |');
+  });
+
+  it('the notice says, in English and in Chinese, that the proof of a purchase acknowledgement is kept after the account is deleted, and what it holds', () => {
+    const row = (locale: 'en' | 'zh', find: string) =>
+      retentionScheduleMarkdown(locale, {})
+        .split('\n')
+        .find((line) => line.includes(find));
+    // The records themselves: a minimum while the account exists, and a pointer to the row below.
+    const recordsEn = row('en', 'Records that you agreed to a plan renewing automatically');
+    expect(recordsEn).toContain('after you delete it, see the next row');
+    expect(recordsEn).toMatch(/\| 36 months \|$/);
+    expect(row('zh', '你同意自动续费或购买条款的记录')).toMatch(/注销账户后见下一行.*\| 36 个月 \|$/);
+    // The proof that outlives the account: what it holds, what it leaves out, and the full rule.
+    const proofEn = row('en', 'Proof of those records after you delete your account');
+    expect(proofEn).toBeDefined();
+    for (const part of ['a hash of your email address', 'No IP address or browser details', '3 years after you agreed', '1 year after your plan ended']) expect(proofEn).toContain(part);
+    expect(proofEn).toMatch(/\| 36 months \|$/);
+    const proofZh = row('zh', '注销账户后保留的上述记录凭证');
+    expect(proofZh).toBeDefined();
+    for (const part of ['邮箱地址的哈希值', '不含 IP 地址和浏览器信息', '3 年', '1 年']) expect(proofZh).toContain(part);
+    expect(proofZh).toMatch(/\| 36 个月 \|$/);
+    // In the notice the proof comes right after the records it is about.
+    const ids = retentionSchedule({}).map((r) => r.id);
+    expect(ids.indexOf('billing_consent_archive')).toBe(ids.indexOf('billing_consent_records') + 1);
+    // Plain words, no dash punctuation.
+    for (const line of [recordsEn, proofEn, proofZh]) expect(line).not.toMatch(/[\u2013\u2014]/);
   });
 });
 
@@ -489,10 +518,92 @@ describe('rows enforced by another job: the job exists, is scheduled, and uses t
     ) as unknown as RetentionDb;
     for (const brand of ['roboapply', 'goapply'] as const) await runRetention({ db, brand, now: new Date('2040-01-01T00:00:00.000Z') });
     expect(touched.size).toBeGreaterThan(5);
-    expect([...touched].filter((m) => /consent/i.test(m))).toEqual([]);
+    // The consent ledger is never touched. The one consent-named table a rule reads is the archive of
+    // deleted accounts, whose rows carry their own end date (rule billing_consent_archive, below).
+    expect(touched.has('seekerConsentRecord')).toBe(false);
+    expect([...touched].filter((m) => /consent/i.test(m))).toEqual(['rABillingConsentArchive']);
     // The retention source never names the consent ledger's delegate at all.
     const source = readFileSync(fileURLToPath(new URL('./retention.ts', import.meta.url)), 'utf8');
     expect(source).not.toMatch(/seekerConsentRecord\s*\./);
+    // The published minimum is the archive's own first period, and the types are the ones it copies.
+    expect(BILLING_CONSENT_KEEP.amount).toBe(BILLING_CONSENT_KEEP_YEARS * 12);
+    expect(BILLING_CONSENT_TYPES).toBe(ARCHIVED_CONSENT_TYPES);
+  });
+
+  describe('billing_consent_archive: the proof kept after the account is deleted goes when its own period is over (ST-9)', () => {
+    const DAY = 86_400_000;
+    /** The archive as the database would answer the rule's own `where`. */
+    function archiveDb(table: Array<{ id: string; brand: string; retainUntil: Date }>) {
+      const gone: string[] = [];
+      const wheres: unknown[] = [];
+      type Where = { brand: string; retainUntil: { lt: Date } };
+      const db = {
+        rABillingConsentArchive: {
+          findMany: async ({ where, take }: { where: Where; take: number }) => {
+            wheres.push(where);
+            return table
+              .filter((r) => !gone.includes(r.id) && r.brand === where.brand && r.retainUntil < where.retainUntil.lt)
+              .slice(0, take)
+              .map((r) => ({ id: r.id }));
+          },
+          deleteMany: async ({ where }: { where: { id: { in: string[] } } }) => {
+            gone.push(...where.id.in);
+            return { count: where.id.in.length };
+          },
+        },
+      } as unknown as RetentionDb;
+      return { db, gone, wheres };
+    }
+
+    it('is a compliance-daily deletion, published with the 3-year minimum, right after the records it is about', () => {
+      expect(rule('billing_consent_archive')).toMatchObject({ keep: { amount: 36, unit: 'months' }, enforcedBy: 'compliance-daily' });
+      expect(rule('billing_consent_archive').run).toBeTypeOf('function');
+      expect(rule('billing_consent_archive').covers).toContain('RABillingConsentArchive');
+      // The records themselves stay a minimum: no rule deletes them.
+      expect(rule('billing_consent_records')).toMatchObject({ enforcedBy: 'kept_minimum' });
+      expect(rule('billing_consent_records').covers).toContain('RABillingConsentArchive');
+    });
+
+    it('a row is deleted by the daily run after its retainUntil, and not before', async () => {
+      const table = [
+        { id: 'due-yesterday', brand: 'goapply', retainUntil: new Date(NOW.getTime() - 17 * 3_600_000) },
+        { id: 'due-long-ago', brand: 'goapply', retainUntil: new Date(NOW.getTime() - 400 * DAY) },
+        { id: 'due-this-instant', brand: 'goapply', retainUntil: NOW },
+        { id: 'due-later-today', brand: 'goapply', retainUntil: new Date(NOW.getTime() + 7 * 3_600_000) },
+        { id: 'due-in-a-year', brand: 'goapply', retainUntil: new Date(NOW.getTime() + 365 * DAY) },
+        { id: 'other-brand', brand: 'roboapply', retainUntil: new Date(NOW.getTime() - 400 * DAY) },
+      ];
+      const { db, gone, wheres } = archiveDb(table);
+      expect(await rule('billing_consent_archive').run!({ db, brand: 'goapply', now: NOW })).toEqual({ deleted: 2 });
+      expect(gone.sort()).toEqual(['due-long-ago', 'due-yesterday']);
+      expect(wheres[0]).toEqual({ brand: 'goapply', retainUntil: { lt: NOW } });
+      // The next day's run takes the rows that came due since; the row of next year stays.
+      const next = new Date(NOW.getTime() + DAY);
+      expect(await rule('billing_consent_archive').run!({ db, brand: 'goapply', now: next })).toEqual({ deleted: 2 });
+      expect(gone.sort()).toEqual(['due-later-today', 'due-long-ago', 'due-this-instant', 'due-yesterday']);
+      // Each brand's run deletes its own rows only.
+      expect(await rule('billing_consent_archive').run!({ db, brand: 'roboapply', now: next })).toEqual({ deleted: 1 });
+      expect(gone).toContain('other-brand');
+      expect(gone).not.toContain('due-in-a-year');
+    });
+
+    it('deletes by id in batches, like its neighbours, and does nothing when nothing is due', async () => {
+      const { db, calls } = recorder({ rABillingConsentArchive: [{ id: 'a1' }, { id: 'a2' }] });
+      expect(await rule('billing_consent_archive').run!({ db, brand: 'roboapply', now: NOW })).toEqual({ deleted: 2 });
+      expect(firstWhere(calls, 'rABillingConsentArchive')).toEqual({ brand: 'roboapply', retainUntil: { lt: NOW } });
+      expect(calls.find((c) => c.method === 'findMany')!.args).toMatchObject({ select: { id: true }, take: RETENTION_BATCH });
+      expect(calls.find((c) => c.method === 'deleteMany')!.args).toEqual({ where: { id: { in: ['a1', 'a2'] } } });
+      const idle = recorder();
+      expect(await rule('billing_consent_archive').run!({ db: idle.db, brand: 'roboapply', now: NOW })).toEqual({ deleted: 0 });
+      expect(idle.calls.some((c) => c.method === 'deleteMany')).toBe(false);
+    });
+
+    it('a backlog larger than one batch is drained in the same run', async () => {
+      const table = Array.from({ length: RETENTION_BATCH + 3 }, (_, i) => ({ id: `r${i}`, brand: 'roboapply', retainUntil: new Date(NOW.getTime() - DAY) }));
+      const { db, gone } = archiveDb(table);
+      expect(await rule('billing_consent_archive').run!({ db, brand: 'roboapply', now: NOW })).toEqual({ deleted: RETENTION_BATCH + 3 });
+      expect(gone).toHaveLength(RETENTION_BATCH + 3);
+    });
   });
 
   it('rows already present before this bundle: content-safety checks 6 months, Assistant messages 12 months', () => {

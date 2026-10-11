@@ -18,11 +18,29 @@
 //   3. Delete the exact application files sent with applications
 //      (RAApplicationArtifact.storageKey; WP-10) through the registered
 //      artifact-storage deleter.
-//   4. Delete the user's rows that have no FK to User (WP-10, FND-1b
-//      NO_CASCADE list): RAOnboardingSession and RAWorkItem by userId, and the
-//      first-party events of the user's linked anonIds via
+//   4. End a subscription that still runs at the payment provider. Closing an
+//      account only soft-closes the profile, so a subscriber who never
+//      cancelled is still charged, and the plan row deleted in step 7 is the
+//      only pointer to that subscription: once it is gone nothing can stop
+//      the charges and no later event of that customer matches a row. The
+//      subscription is cancelled at once (Stripe `subscriptions.cancel`
+//      through the one client factory, idempotency key `purge:<subscription>`;
+//      nothing is refunded here). RoboApply accounts only: Stripe never
+//      serves GoApply (rule A11). If it cannot be ended, the account is NOT
+//      deleted on this run, exactly like a stored file that cannot be removed.
+//   5. Copy a minimal proof of the checkout acknowledgements into
+//      RABillingConsentArchive (platform/billing/consentArchive.ts; ST-9,
+//      California AB 2863: kept until the later of 3 years after consent and
+//      1 year after the subscription ends, which for a subscription ended in
+//      step 4 is now). The records themselves cascade away with the User row
+//      in step 7, which can be years short of that. No IP address, no user
+//      agent, no email in clear. If the copy fails, the account is NOT deleted
+//      on this run.
+//   6. Delete the user's rows that have no FK to User (WP-10, FND-1b
+//      NO_CASCADE list): RAOnboardingSession, RAWorkItem and RABillingRefund
+//      by userId, and the first-party events of the user's linked anonIds via
 //      growth.deleteEventsForUser() (rows with the userId cascade anyway).
-//   5. Hard-delete the User row — Prisma onDelete: Cascade takes the DB side
+//   7. Hard-delete the User row — Prisma onDelete: Cascade takes the DB side
 //      (SeekerProfile + children, InterviewSession, RAResumeVariant, Resume,
 //      sessions, every RA* user-owned table, ...).
 //
@@ -34,7 +52,8 @@
 // ORDER MATTERS: storage objects are deleted BEFORE the DB rows because the
 // rows hold the only pointers to the object keys. If any storage delete cannot
 // be confirmed the user is left in place (counted as `blocked`) and retried on
-// the next run — we never orphan objects by dropping their pointer first.
+// the next run — we never orphan objects by dropping their pointer first. The
+// same holds for a running subscription (step 4).
 //
 // Selection is guarded twice: the DB query filters deletedAt <= cutoff, and
 // the pure helpers in accountPurgeHelpers.ts (unit-tested) re-check the cutoff
@@ -55,6 +74,8 @@ import { runWithBrand } from '../../lib/requestContext.js';
 import { parseBrandId, type BrandId } from '../../platform/brand/registry.js';
 import { growthService } from '../../features/growth/index.js';
 import { purgeAuthTokens } from '../../features/auth/tokens.js';
+import { archiveBillingConsents } from '../../platform/billing/consentArchive.js';
+import { getStripe } from '../../platform/billing/stripeClient.js';
 import {
   isPurgeSafeRoleSet,
   partitionPurgeCandidates,
@@ -107,6 +128,10 @@ export interface AccountPurgeSummary {
   interviewSessionsCleaned: number;
   /** Resume original files removed from storage. */
   resumeOriginalsDeleted: number;
+  /** Checkout acknowledgements copied into RABillingConsentArchive before their accounts were deleted. */
+  billingConsentsArchived: number;
+  /** Subscriptions that still ran at the payment provider and were ended before their accounts were deleted. */
+  subscriptionsEnded: number;
   /**
    * Used or expired sign-in tokens deleted (reset/verify links, OAuth state,
    * pending OAuth sign-ups, expired known-device marks); null when that step
@@ -120,6 +145,69 @@ interface UserPurgeOutcome {
   reason?: string;
   interviewSessionsCleaned: number;
   resumeOriginalsDeleted: number;
+  /** Archive rows written by this run (0 when blocked, or when an earlier run wrote them). */
+  billingConsentsArchived: number;
+  /** This run ended a subscription that still ran at the payment provider. */
+  subscriptionEnded: boolean;
+}
+
+/** Plan row statuses after which the payment provider charges nothing more (RoboApplyBillingService `STRIPE_STATUS_MAP`). */
+const ENDED_SUBSCRIPTION_STATUSES = new Set(['canceled']);
+/** Stripe's own statuses of a subscription that is over. */
+const ENDED_AT_STRIPE = new Set(['canceled', 'incomplete_expired']);
+
+/** Stripe does not know the object (a subscription of another Stripe account or mode): nothing there can charge. */
+function isStripeMissing(err: unknown): boolean {
+  const e = err as { code?: unknown; statusCode?: unknown } | null;
+  return e?.code === 'resource_missing' || e?.statusCode === 404;
+}
+
+type SubscriptionEnd = { blocked: true; reason: string } | { blocked: false; endedNow: boolean };
+
+/**
+ * End the account's subscription at the payment provider when it may still
+ * run there (step 4). `endedNow` is true when THIS call ended it; false when
+ * there was nothing to end (no Stripe subscription, a GoApply account or plan
+ * row, a row that already says it ended, a subscription Stripe reports as
+ * over or does not know). Blocked when Stripe cannot be asked or does not
+ * confirm: the caller keeps the account for the next run.
+ *
+ * Safe to repeat: the idempotency key is the subscription's, and a
+ * subscription that is already cancelled counts as ended.
+ */
+async function endRunningSubscription(userId: string, userBrand: BrandId): Promise<SubscriptionEnd> {
+  const nothing: SubscriptionEnd = { blocked: false, endedNow: false };
+  // Rule A11: Stripe serves RoboApply accounts only, and never a plan row of another brand.
+  if (userBrand !== 'roboapply') return nothing;
+  const profile = await prisma.seekerProfile.findUnique({ where: { userId }, select: { id: true } });
+  if (!profile) return nothing;
+  const row = await prisma.seekerSubscription.findUnique({
+    where: { seekerProfileId: profile.id },
+    select: { brand: true, status: true, stripeSubscriptionId: true },
+  });
+  const subscriptionId = row?.stripeSubscriptionId ?? null;
+  if (!row || !subscriptionId || ENDED_SUBSCRIPTION_STATUSES.has(row.status)) return nothing;
+  if ((parseBrandId(row.brand) ?? 'roboapply') !== 'roboapply') return nothing;
+
+  const stripe = getStripe();
+  if (!stripe) return { blocked: true, reason: 'stripe_not_configured' };
+  try {
+    await stripe.subscriptions.cancel(subscriptionId, {}, { idempotencyKey: `purge:${subscriptionId}` });
+    return { blocked: false, endedNow: true };
+  } catch (err) {
+    if (isStripeMissing(err)) return nothing;
+    // Stripe refuses to cancel what is already cancelled: the subscription's own status decides.
+    try {
+      if (ENDED_AT_STRIPE.has((await stripe.subscriptions.retrieve(subscriptionId)).status)) return nothing;
+    } catch (readErr) {
+      if (isStripeMissing(readErr)) return nothing;
+    }
+    logger.error('RA_ACCOUNT_PURGE', 'a running subscription could not be ended at the payment provider', {
+      userId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return { blocked: true, reason: 'subscription_not_ended' };
+  }
 }
 
 /**
@@ -144,8 +232,9 @@ export function sessionArtifactBrand(session: { brand?: string | null; liveMetri
 /**
  * Purge one user's stored artifacts, then the user row. Returns blocked=true
  * (row kept, retried next run) when any storage delete cannot be confirmed.
+ * `now` dates the checkout acknowledgements that are archived on the way.
  */
-async function purgeUser(userId: string, userBrand: BrandId): Promise<UserPurgeOutcome> {
+async function purgeUser(userId: string, userBrand: BrandId, now: Date = new Date()): Promise<UserPurgeOutcome> {
   // ── 1. Interview artifacts (R2 / S3), each in its session's brand ──
   const sessions = await prisma.interviewSession.findMany({
     where: { userId },
@@ -157,7 +246,7 @@ async function purgeUser(userId: string, userBrand: BrandId): Promise<UserPurgeO
       // Can't clean what we can't reach. Deleting the rows now would orphan any
       // objects that do exist, so hold the user until that brand's storage
       // credentials are present.
-      return { blocked: true, reason: `r2_not_configured${brand === userBrand ? '' : ` (${brand})`}`, interviewSessionsCleaned: 0, resumeOriginalsDeleted: 0 };
+      return { blocked: true, reason: `r2_not_configured${brand === userBrand ? '' : ` (${brand})`}`, interviewSessionsCleaned: 0, resumeOriginalsDeleted: 0, billingConsentsArchived: 0, subscriptionEnded: false };
     }
   }
   let artifactFailures = 0;
@@ -213,18 +302,40 @@ async function purgeUser(userId: string, userBrand: BrandId): Promise<UserPurgeO
       reason: `storage_cleanup_incomplete (artifacts=${artifactFailures}, originals=${resumeOriginalFailures}, applicationFiles=${applicationFileFailures})`,
       interviewSessionsCleaned: 0,
       resumeOriginalsDeleted,
+      billingConsentsArchived: 0,
+      subscriptionEnded: false,
     };
   }
 
-  // ── 4. Rows without an FK to User (FND-1b NO_CASCADE list) and the
+  // ── 4. A subscription that still runs at the payment provider is ended
+  //      before its only pointer (the plan row) is deleted. ──
+  const subscription = await endRunningSubscription(userId, userBrand);
+  if (subscription.blocked) {
+    return { blocked: true, reason: subscription.reason, interviewSessionsCleaned: 0, resumeOriginalsDeleted, billingConsentsArchived: 0, subscriptionEnded: false };
+  }
+
+  // ── 5. Checkout acknowledgements must outlive the account (ST-9): copy
+  //      their minimal proof BEFORE anything is deleted. A throw here leaves
+  //      the user in place for the next run, and a run that repeats this
+  //      step writes each acknowledgement once (unique key). A subscription
+  //      ended in step 4 ended now: its year is counted from here. ──
+  const consents = await archiveBillingConsents(prisma, userId, now, { subscriptionEndedAt: subscription.endedNow ? now : null });
+
+  // ── 6. Rows without an FK to User (FND-1b NO_CASCADE list) and the
   //      first-party events of the user's linked anonIds. ──
   await deleteRowsWithoutUserFk(userId);
 
-  // ── 5. Hard-delete the User row; cascades take every dependent table.
+  // ── 7. Hard-delete the User row; cascades take every dependent table.
   //      deleteMany so a concurrent/duplicate run is an idempotent no-op. ──
   await prisma.user.deleteMany({ where: { id: userId } });
 
-  return { blocked: false, interviewSessionsCleaned: sessions.length, resumeOriginalsDeleted };
+  return {
+    blocked: false,
+    interviewSessionsCleaned: sessions.length,
+    resumeOriginalsDeleted,
+    billingConsentsArchived: consents.archived,
+    subscriptionEnded: subscription.endedNow,
+  };
 }
 
 /**
@@ -238,8 +349,9 @@ export async function deleteRowsWithoutUserFk(userId: string): Promise<{ onboard
   // Payment rows go with the account (AlipayOrder cascades from User); the
   // record of truth stays with Stripe and the merchant console.
   // RABillingConsentArchive is deliberately NOT here: it is the proof of a
-  // checkout acknowledgement that must outlive the account, and
-  // compliance-daily deletes it at its `retainUntil`.
+  // checkout acknowledgement that must outlive the account (written by
+  // `purgeUser` right before this runs), and compliance-daily deletes it at
+  // its `retainUntil`.
   const [onboardingSessions, workItems, billingRefunds] = await prisma.$transaction([
     prisma.rAOnboardingSession.deleteMany({ where: { userId } }),
     prisma.rAWorkItem.deleteMany({ where: { userId } }),
@@ -301,6 +413,8 @@ export async function purgeAccountNow(userId: string): Promise<{ blocked: boolea
     softDeletedAt: candidate.deletedAt?.toISOString(),
     interviewSessionsCleaned: outcome.interviewSessionsCleaned,
     resumeOriginalsDeleted: outcome.resumeOriginalsDeleted,
+    billingConsentsArchived: outcome.billingConsentsArchived,
+    subscriptionEnded: outcome.subscriptionEnded,
   });
   return { blocked: false };
 }
@@ -357,14 +471,18 @@ export async function runAccountPurgeSweep(
     failed: 0,
     interviewSessionsCleaned: 0,
     resumeOriginalsDeleted: 0,
+    billingConsentsArchived: 0,
+    subscriptionsEnded: 0,
     authTokensPurged: null,
   };
 
   for (const c of due) {
     try {
       const brand = parseBrandId(c.brand) ?? 'roboapply';
-      const outcome = await runWithBrand(brand, () => purgeUser(c.userId, brand));
+      const outcome = await runWithBrand(brand, () => purgeUser(c.userId, brand, now));
       summary.resumeOriginalsDeleted += outcome.resumeOriginalsDeleted;
+      summary.billingConsentsArchived += outcome.billingConsentsArchived;
+      if (outcome.subscriptionEnded) summary.subscriptionsEnded += 1;
       if (outcome.blocked) {
         summary.blocked += 1;
         logger.warn('RA_ACCOUNT_PURGE', 'purge blocked — user kept for retry', {
@@ -379,6 +497,8 @@ export async function runAccountPurgeSweep(
           softDeletedAt: c.deletedAt?.toISOString(),
           interviewSessionsCleaned: outcome.interviewSessionsCleaned,
           resumeOriginalsDeleted: outcome.resumeOriginalsDeleted,
+          billingConsentsArchived: outcome.billingConsentsArchived,
+          subscriptionEnded: outcome.subscriptionEnded,
         });
       }
     } catch (err) {
