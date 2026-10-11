@@ -143,7 +143,7 @@ describe('AlipayWorkerRail (GoApply passes)', () => {
     const payload = JSON.parse((ok as any).mock.calls[0][1].body);
     expect(payload).toMatchObject({ total_amount: 39, pay_channel: 'alipay', platform: 'gohire', subject: 'GoApply 会员月卡' });
     expect(payload.body).toContain('Example Collecting Co.');
-    expect(payload.out_trade_no).toMatch(/^GAORDER_20261010080000_user_123_[0-9a-f]{10}$/);
+    expect(payload.out_trade_no).toMatch(/^RAORDER_20261010080000_user_123_[0-9a-f]{10}$/);
     const notify = new URL(payload.notify_url);
     expect(notify.origin + notify.pathname).toBe('https://www.goapply.top/api/v1/roboapply/billing/alipay/callback');
     expect([...notify.searchParams]).toEqual([['cb', 'cb+secret&?']]);
@@ -162,7 +162,9 @@ describe('AlipayWorkerRail (GoApply passes)', () => {
     expect(res).toMatchObject({ kind: 'redirect', url: 'https://alipay.test/pay' });
     expect((f as any).mock.calls[0][0]).toBe('https://worker.gohire.top/payment/payment/create');
     const payload = JSON.parse((f as any).mock.calls[0][1].body);
-    expect(payload).toMatchObject({ total_amount: 39, pay_channel: 'alipay', platform: 'gohire', subject: 'GoApply 会员月卡', body: 'GoApply 会员月卡' });
+    expect(payload).toMatchObject({ total_amount: 39, pay_channel: 'alipay', platform: 'gohire', subject: 'GoApply 会员月卡' });
+    // No collecting entity is set, so no body is sent (MARKET_STRATEGY §5.3 G6).
+    expect(payload).not.toHaveProperty('body');
     expect(payload.notify_url).toBe('https://www.goapply.top/api/v1/roboapply/billing/alipay/callback?cb=only-secret');
     expect(await db.alipayOrder.findUnique({ where: { outTradeNo: payload.out_trade_no } })).toMatchObject({ tier: 'ra_pro_monthly', planKey: 'pro_monthly', brand: 'goapply', amountMinor: 3900, status: 'pending' });
   });
@@ -194,7 +196,7 @@ describe('AlipayWorkerRail (GoApply passes)', () => {
       expect(r.isConfigured(getBrand('roboapply'), {})).toBe(true);
     });
 
-    it('creates the order without an entity: the body is the subject alone and every other field is unchanged', async () => {
+    it('creates the order without an entity: no body is sent and every other field is unchanged', async () => {
       const f = vi.fn(async () => ({ status: 200, text: async () => JSON.stringify({ code: 0, data: { pay_url: 'https://alipay.test/pay' } }) })) as unknown as typeof fetch;
       const withEntity = rail(f);
       await withEntity.r.createCheckout(order('goapply', 'pro_monthly'));
@@ -203,11 +205,12 @@ describe('AlipayWorkerRail (GoApply passes)', () => {
       expect(res).toMatchObject({ kind: 'redirect', url: 'https://alipay.test/pay' });
       const [a, b] = (f as any).mock.calls.map((c: any[]) => JSON.parse(c[1].body));
       expect(a.body).toBe('GoApply 会员月卡 · Example Collecting Co.');
-      expect(b.body).toBe('GoApply 会员月卡');
+      // Without an entity the key is absent, as in production (MARKET_STRATEGY §5.3 G6).
+      expect(b).not.toHaveProperty('body');
       expect(b.subject).toBe('GoApply 会员月卡');
-      // Same fields, same values, apart from the body line and the random order number.
-      expect(Object.keys(b)).toEqual(Object.keys(a));
-      expect({ ...b, body: null, out_trade_no: null }).toEqual({ ...a, body: null, out_trade_no: null });
+      // Same fields in the same order, same values, apart from the body line and the random order number.
+      expect(Object.keys(b)).toEqual(Object.keys(a).filter((k) => k !== 'body'));
+      expect({ ...b, out_trade_no: null }).toEqual({ ...a, body: undefined, out_trade_no: null });
       const row = await without.db.alipayOrder.findUnique({ where: { outTradeNo: b.out_trade_no } });
       expect(row).toMatchObject({ tier: 'ra_pro_monthly', brand: 'goapply', amount: 39, amountMinor: 3900, status: 'pending' });
     });
@@ -233,7 +236,7 @@ describe('AlipayWorkerRail (GoApply passes)', () => {
       const env = { ...NO_ENTITY, PAYMENT_COLLECTING_ENTITY: 'RoboApply Inc.' };
       const { r } = rail(f, env as typeof ENV);
       await r.createCheckout({ ...order('goapply', 'pro_monthly'), plan: getPlan('goapply', 'pro_monthly', env)! });
-      expect(JSON.parse((f as any).mock.calls[0][1].body).body).toBe('GoApply 会员月卡');
+      expect(JSON.parse((f as any).mock.calls[0][1].body)).not.toHaveProperty('body');
       expect(collectingEntity(go, env)).toBeNull();
     });
   });

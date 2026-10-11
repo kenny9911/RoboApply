@@ -122,7 +122,9 @@ describe('GoApply checkout through the Alipay worker', () => {
     // The default worker endpoint: ALIPAY_API_URL is not required.
     expect(fetchMock.mock.calls[0][0]).toBe('https://worker.gohire.top/payment/payment/create');
     const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(payload).toMatchObject({ total_amount: 39, subject: 'GoApply 会员月卡', body: 'GoApply 会员月卡', pay_channel: 'alipay' });
+    expect(payload).toMatchObject({ total_amount: 39, subject: 'GoApply 会员月卡', pay_channel: 'alipay' });
+    // No collecting entity is set, so no body is sent (MARKET_STRATEGY §5.3 G6).
+    expect(payload).not.toHaveProperty('body');
     expect(payload.notify_url).toBe('https://www.goapply.top/api/v1/roboapply/billing/alipay/callback?cb=test-secret');
     expect(res.body.data.orderId).toBe(payload.out_trade_no);
     const orders = await fake.db.alipayOrder.findMany({});
@@ -646,5 +648,179 @@ describe('Alipay contract A11 and A12: the rails stay apart', () => {
     const res = await h.request<any>('POST', '/api/v1/roboapply/billing/alipay/callback?cb=test-secret&pay_status=TRADE_SUCCESS&out_trade_no=GAORDER_12&total_amount=39.00');
     expect([res.status, res.body]).toEqual([200, { code: 0, message: 'success' }]);
     expect(await fake.db.seekerSubscription.findUnique({ where: { seekerProfileId: 'sp_cn' } })).toMatchObject({ tier: 'pro', planKey: 'pro_monthly', interval: 'pass', rail: 'alipay', brand: 'goapply' });
+  });
+});
+
+// ── Callback tolerance at the route (MARKET_STRATEGY §5.3 G9 and G4; AL-4) ──
+// New cases only. The rail-level table (every amount form, the read counts,
+// the clock) is in platform/billing/rails/alipayWorker.callback.test.ts.
+describe('AL-4 callback tolerance: the route answers', () => {
+  const CALLBACK = '/api/v1/roboapply/billing/alipay/callback';
+  const NO = 'RAORDER_20261010080000_cn_user_0123456789';
+  const paid = (extra = '', no = NO) => `${CALLBACK}?cb=test-secret&pay_status=TRADE_SUCCESS&out_trade_no=${no}${extra}`;
+  const row = (no = NO) => fake.db.alipayOrder.findUnique({ where: { outTradeNo: no } });
+  const sub = () => fake.db.seekerSubscription.findUnique({ where: { seekerProfileId: 'sp_cn' } });
+  async function seed(over: Record<string, unknown> = {}) {
+    await fake.db.alipayOrder.create({
+      data: { id: 'o_al4', userId: 'cn_user', outTradeNo: NO, tier: 'ra_pro_monthly', planKey: 'pro_monthly', brand: 'goapply', channel: 'alipay', amount: 39, amountMinor: 3900, status: 'pending', ...over },
+    });
+  }
+  beforeEach(() => {
+    // A developer's own environment must not open or close the window under these cases.
+    vi.stubEnv('ALIPAY_SECRETLESS_UNTIL', '');
+  });
+
+  it.each([
+    ['3900 (fen)', '&total_amount=3900'],
+    ['39.00 (yuan)', '&total_amount=39.00'],
+    ['39 (yuan, whole)', '&total_amount=39'],
+    ['no amount at all', ''],
+  ])('a ¥39 order is fulfilled by total_amount %s: 200 { code: 0 }', async (_name, extra) => {
+    await seed();
+    const res = await h.request<any>('POST', paid(extra));
+    expect([res.status, res.body]).toEqual([200, { code: 0, message: 'success' }]);
+    expect((await row()).status).toBe('completed');
+    expect(await sub()).toMatchObject({ tier: 'pro', planKey: 'pro_monthly', interval: 'pass', rail: 'alipay', brand: 'goapply', currency: 'CNY', amountMinor: 3900 });
+    // A replay in the other notation changes nothing and still answers success.
+    const end = ((await sub()).currentPeriodEnd as Date).getTime();
+    for (const again of ['&total_amount=3900', '&total_amount=39.00']) {
+      const replay = await h.request<any>('GET', paid(again));
+      expect([replay.status, replay.body.code]).toEqual([200, 0]);
+    }
+    expect(((await sub()).currentPeriodEnd as Date).getTime()).toBe(end);
+  });
+
+  it.each([
+    ['40.00', '&total_amount=40.00'],
+    ['4000 (neither ¥39 nor 3900 fen)', '&total_amount=4000'],
+    ['390000 (fen of ¥3,900)', '&total_amount=390000'],
+    ['38.99', '&total_amount=38.99'],
+  ])('a real mismatch is still refused: total_amount %s answers 400 / 40004 and the order stays pending', async (_name, extra) => {
+    await seed();
+    const res = await h.request<any>('POST', paid(extra));
+    expect([res.status, res.body]).toEqual([400, { code: 40004, message: 'amount mismatch' }]);
+    expect((await row()).status).toBe('pending');
+    expect(await sub()).toBeNull();
+  });
+
+  it('a value that cannot be an amount ("abc", "-39") or is implausible is treated as not stated: fulfilled, and logged without the value', async () => {
+    const { logger } = await import('../../services/LoggerService.js');
+    for (const [i, total] of ['abc', '-39', '1000001'].entries()) {
+      const no = `${NO}_${i}`;
+      await seed({ id: `o_al4_${i}`, outTradeNo: no });
+      const res = await h.request<any>('POST', paid(`&total_amount=${total}`, no));
+      expect([res.status, res.body.code], total).toEqual([200, 0]);
+      expect((await row(no)).status).toBe('completed');
+      const logged = vi.mocked(logger.warn).mock.calls.filter((c) => String(c[1]).includes('total_amount is not usable') && (c[2] as { outTradeNo: string }).outTradeNo === no);
+      expect(logged, total).toHaveLength(1);
+      expect(logged[0]![2]).toEqual({ outTradeNo: no, reason: total === '1000001' ? 'implausible' : 'malformed', rawLength: total.length });
+    }
+  });
+
+  it('an unknown order number still answers 400 / 40002, with a fen amount too', async () => {
+    await seed();
+    for (const extra of ['&total_amount=3900', '&total_amount=39.00', '']) {
+      const res = await h.request<any>('POST', paid(extra, 'RAORDER_NOPE'));
+      expect([res.status, res.body.code], extra).toEqual([400, 40002]);
+    }
+    expect((await row()).status).toBe('pending');
+  });
+
+  it('a wrong cb is refused (403 / 40003) before the order is read, even when the amount could be fen', async () => {
+    await seed();
+    const read = vi.spyOn(fake.db.alipayOrder, 'findUnique');
+    try {
+      for (const q of ['&cb=wrong', '']) {
+        const res = await h.request<any>('POST', `${CALLBACK}?pay_status=TRADE_SUCCESS&out_trade_no=${NO}&total_amount=3900${q}`);
+        expect([res.status, res.body.code], q).toEqual([403, 40003]);
+      }
+      expect(read).not.toHaveBeenCalled();
+    } finally {
+      read.mockRestore();
+    }
+    expect((await row()).status).toBe('pending');
+  });
+
+  it('the secret-less window: a callback without cb fulfils only an order production created before ALIPAY_SECRETLESS_UNTIL, and none once 7 days have passed', async () => {
+    const DAY = 86_400_000;
+    const cutOver = new Date(Date.now() - DAY);
+    const OLD = `${NO}_old`;
+    const NEW = `${NO}_new`;
+    // Created by production two days ago (before the cut-over: a row with no brand), and one second after the cut-over.
+    await seed({ id: 'o_old', outTradeNo: OLD, tier: 'ra_starter', planKey: null, brand: null, amount: 19, amountMinor: null, createdAt: new Date(cutOver.getTime() - DAY) });
+    await seed({ id: 'o_new', outTradeNo: NEW, createdAt: new Date(cutOver.getTime() + 1000) });
+    const noCb = (no: string, extra = '') => `${CALLBACK}?pay_status=TRADE_SUCCESS&out_trade_no=${no}${extra}`;
+
+    // Variable unset: a callback without cb is refused, as before.
+    const closed = await h.request<any>('POST', noCb(OLD));
+    expect([closed.status, closed.body.code]).toEqual([403, 40003]);
+
+    vi.stubEnv('ALIPAY_SECRETLESS_UNTIL', cutOver.toISOString());
+    // The order created after the instant: refused. A wrong cb: refused, whatever the order's age.
+    const newer = await h.request<any>('POST', noCb(NEW));
+    expect([newer.status, newer.body.code]).toEqual([403, 40003]);
+    const wrong = await h.request<any>('POST', noCb(OLD, '&cb=guess'));
+    expect([wrong.status, wrong.body.code]).toEqual([403, 40003]);
+    expect((await row(OLD)).status).toBe('pending');
+    expect((await row(NEW)).status).toBe('pending');
+    // An order that does not exist: still 403, never 40002 (nothing proves the caller is the worker).
+    const unknown = await h.request<any>('POST', noCb('RAORDER_NOPE'));
+    expect([unknown.status, unknown.body.code]).toEqual([403, 40003]);
+
+    // The order created before the instant is fulfilled, once: the legacy 30-day pass.
+    const older = await h.request<any>('POST', noCb(OLD, '&total_amount=19.00'));
+    expect([older.status, older.body]).toEqual([200, { code: 0, message: 'success' }]);
+    expect((await row(OLD)).status).toBe('completed');
+    expect((await h.request<any>('POST', noCb(OLD))).status).toBe(200);
+    expect(await fake.db.alipayOrder.findMany({ where: { status: 'completed' } })).toHaveLength(1);
+    // The newer order is fulfilled the ordinary way, with the secret.
+    const withSecret = await h.request<any>('POST', paid('&total_amount=39.00', NEW));
+    expect([withSecret.status, withSecret.body.code]).toEqual([200, 0]);
+
+    // Seven days after the instant the window is closed for good, for an old pending order too.
+    const OLD_2 = `${NO}_old2`;
+    await seed({ id: 'o_old2', outTradeNo: OLD_2, tier: 'ra_starter', planKey: null, brand: null, amount: 19, amountMinor: null, createdAt: new Date(Date.now() - 30 * DAY) });
+    vi.stubEnv('ALIPAY_SECRETLESS_UNTIL', new Date(Date.now() - 7 * DAY - 1000).toISOString());
+    const late = await h.request<any>('POST', noCb(OLD_2));
+    expect([late.status, late.body.code]).toEqual([403, 40003]);
+    expect((await row(OLD_2)).status).toBe('pending');
+
+    // With no secret configured the answer is 503 / 50003, window or not.
+    vi.stubEnv('ALIPAY_SECRETLESS_UNTIL', cutOver.toISOString());
+    vi.stubEnv('ALIPAY_CALLBACK_SECRET', '');
+    const unconfigured = await h.request<any>('POST', noCb(OLD_2));
+    expect([unconfigured.status, unconfigured.body.code]).toEqual([503, 50003]);
+  });
+
+  // The window is for production's orders only. goapply.top sells on this code before roboapply.io is cut over, so
+  // at the cut-over instant the table already holds pending GoApply orders, and the checkout answer shows the buyer
+  // their order number: without this rule one unauthenticated request would activate an unpaid pass.
+  it('inside the secret-less window an order this code created stays pending without cb: 403 / 40003 (GoApply Alipay, WeChat Pay)', async () => {
+    const DAY = 86_400_000;
+    const before = new Date(Date.now() - 2 * DAY);
+    const OWN = `${NO}_own`;
+    const WX = 'GAWX_20261009080000_cn_user_0123456789';
+    await seed({ id: 'o_own', outTradeNo: OWN, createdAt: before });
+    await seed({ id: 'o_wx', outTradeNo: WX, channel: 'wechatpay', createdAt: before });
+    const noCb = (no: string, extra = '') => `${CALLBACK}?pay_status=TRADE_SUCCESS&out_trade_no=${no}${extra}`;
+
+    // The instant is yesterday (a live window), then a year from now (a mistyped year): the answer is the same.
+    for (const until of [new Date(Date.now() - DAY), new Date(Date.now() + 365 * DAY)]) {
+      vi.stubEnv('ALIPAY_SECRETLESS_UNTIL', until.toISOString());
+      for (const no of [OWN, WX]) {
+        for (const [method, extra] of [['GET', ''], ['POST', ''], ['POST', '&total_amount=39.00'], ['POST', '&total_amount=3900&trade_no=T1']] as const) {
+          const res = await h.request<any>(method, noCb(no, extra));
+          expect([res.status, res.body], `${no} ${method} ${extra}`).toEqual([403, { code: 40003, message: 'forbidden' }]);
+        }
+        expect((await row(no)).status).toBe('pending');
+      }
+      expect(await sub()).toBeNull();
+    }
+
+    // The same GoApply order with the secret is fulfilled, once, as always.
+    const paidFor = await h.request<any>('POST', paid('&total_amount=39.00', OWN));
+    expect([paidFor.status, paidFor.body]).toEqual([200, { code: 0, message: 'success' }]);
+    expect((await row(OWN)).status).toBe('completed');
+    expect((await row(WX)).status).toBe('pending');
   });
 });
