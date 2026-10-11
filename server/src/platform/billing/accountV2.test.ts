@@ -1,6 +1,6 @@
 // @vitest-environment node
 //
-// Billing V2 (WP-79): Taiwan prices from env (hidden until configured),
+// Billing V2 (WP-79): Taiwan prices from env (hidden until an amount is set),
 // student plans (computed discount; checkout only for verified students),
 // Stripe promotion codes (off by default, never on student plans), the
 // TWD-only revenue line, and the one winback email (30 days after churn,
@@ -22,11 +22,12 @@ import { acceptsPromotionCode, buildPlanViews, usesTwdPrice } from './planViews.
 import { createStripeRail } from './rails/stripe.js';
 import type { CheckoutOrder } from './rails/types.js';
 import { computeTwRevenue } from './twRevenue.js';
-import { quoteSwitch, switchPrice, type BillingAccount, type BillingDb } from './subscriptions.js';
+import { quoteSwitch, switchPriceFor, type BillingAccount, type BillingDb } from './subscriptions.js';
 import { WINBACK_TEMPLATE, createWinbackSweep, winbackEmail, winbackPrice, type WinbackDb } from './winback.js';
 
 const ENV = {
   STRIPE_SECRET_KEY: 'sk_test_x',
+  STRIPE_WEBHOOK_SECRET: 'whsec_test',
   STRIPE_PRICE_PRO_MONTHLY: 'price_m',
   STRIPE_PRICE_PRO_MONTHLY_CENTS: '2499',
   STRIPE_PRICE_PRO_MONTHLY_TWD: 'price_m_twd',
@@ -37,7 +38,7 @@ const ENV = {
   STRIPE_PRICE_PRO_QUARTERLY_TWD_CENTS: '179000',
   STRIPE_PRICE_PRO_WEEKLY: 'price_w',
   STRIPE_PRICE_PRO_WEEKLY_CENTS: '999',
-  // Weekly has a TWD id but no amount: not configured.
+  // Weekly has a TWD pin but no amount: not configured (the amount is what makes a Taiwan price).
   STRIPE_PRICE_PRO_WEEKLY_TWD: 'price_w_twd',
   STRIPE_PRICE_STUDENT_MONTHLY: 'price_sm',
   STRIPE_PRICE_STUDENT_MONTHLY_CENTS: '1749',
@@ -46,14 +47,32 @@ const ENV = {
 };
 
 describe('Taiwan prices', () => {
-  it('are hidden until both the price id and the amount are set', () => {
+  it('are hidden until a TWD amount is set; the price id is an optional pin', () => {
     expect(twdPriceFor('pro_monthly', ENV)).toEqual({ currency: 'TWD', amountMinor: 74900, stripePriceId: 'price_m_twd' });
     expect(twdPriceFor('pro_weekly', ENV)).toBeNull();
     expect(twdPriceFor('pro_monthly', {})).toBeNull();
-    // An unsellable (USD-unpriced) plan never carries a TWD price.
-    expect(getPlan('roboapply', 'pro_monthly', { STRIPE_PRICE_PRO_MONTHLY_TWD: 'x', STRIPE_PRICE_PRO_MONTHLY_TWD_CENTS: '74900' })!.twdPrice).toBeNull();
+    // The amount alone is a Taiwan price: its Stripe price is resolved by the catalog sync at checkout.
+    expect(twdPriceFor('pro_monthly', { PRICE_PRO_MONTHLY_TWD_CENTS: '74900' })).toEqual({ currency: 'TWD', amountMinor: 74900, stripePriceId: null });
+    expect(getPlan('roboapply', 'pro_monthly', { ...ENV, STRIPE_PRICE_PRO_MONTHLY_TWD: '' })!.twdPrice).toEqual({ currency: 'TWD', amountMinor: 74900, stripePriceId: null });
+    // The price list does not depend on the rail: a plan that cannot be bought now still lists its Taiwan price.
+    expect(getPlan('roboapply', 'pro_monthly', { STRIPE_PRICE_PRO_MONTHLY_TWD: 'x', STRIPE_PRICE_PRO_MONTHLY_TWD_CENTS: '74900' })).toMatchObject({
+      sellable: false,
+      unsellableReason: 'payments_disabled',
+      twdPrice: { currency: 'TWD', amountMinor: 74900, stripePriceId: 'x' },
+    });
     // GoApply never sells in TWD.
     expect(getPlanCatalog('goapply', ENV).every((p) => p.twdPrice === null)).toBe(true);
+  });
+
+  it('a TWD plan view with a null price id: the amount alone shows the Taiwan price, with savings computed in TWD', () => {
+    const env = { STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_WEBHOOK_SECRET: 'whsec_test', PRICE_PRO_MONTHLY_TWD_CENTS: '74900', PRICE_PRO_QUARTERLY_TWD_CENTS: '165000' };
+    const tw = buildPlanViews('roboapply', { env, country: 'TW' }).plans;
+    const q = tw.find((p) => p.key === 'pro_quarterly')!;
+    expect(q.twdPrice).toEqual({ currency: 'TWD', amountMinor: 165000, stripePriceId: null });
+    expect(q.localPrice).toEqual({ currency: 'TWD', amountMinor: 165000, savingsPercent: 26, monthlyEquivalentMinor: null, studentDiscountPercent: null });
+    expect(usesTwdPrice(q, 'TW')).toBe(true);
+    expect(usesTwdPrice(q, 'US')).toBe(false);
+    expect(tw.find((p) => p.key === 'pro_weekly')!.localPrice).toBeNull();
   });
 
   it('show only to Taiwan buyers, with savings computed in TWD', () => {
@@ -93,7 +112,8 @@ describe('student plans', () => {
     const catalog = getPlanCatalog('roboapply', ENV);
     expect(studentDiscountPercent(getPlan('roboapply', 'student_monthly', ENV)!, catalog)).toBe(30); // 1749 vs 2499 = 30.01%
     expect(studentDiscountPercent(getPlan('roboapply', 'student_quarterly', ENV)!, catalog)).toBeNull(); // same price: no saving claimed
-    expect(studentDiscountPercent(getPlan('roboapply', 'student_monthly', {})!, getPlanCatalog('roboapply', {}))).toBeNull();
+    // With no price variable the catalog defaults answer: 1749 vs 2499.
+    expect(studentDiscountPercent(getPlan('roboapply', 'student_monthly', {})!, getPlanCatalog('roboapply', {}))).toBe(30);
   });
 
   it('are listed only with the student capability on', () => {
@@ -224,8 +244,10 @@ describe('switching plans (V2 rules)', () => {
     const quote = await quoteSwitch(account(), getPlan('roboapply', 'pro_quarterly', ENV)!, deps(s));
     expect(quote).toMatchObject({ currency: 'TWD', newRenewalPriceMinor: 179000 });
     expect(s.invoices.createPreview.mock.calls[0]![0]).toMatchObject({ subscription_details: { items: [{ id: 'si_1', price: 'price_q_twd' }] } });
-    expect(() => switchPrice({ currency: 'twd' }, getPlan('roboapply', 'pro_weekly', ENV)!)).toThrow(/Taiwan price/);
-    expect(switchPrice({ currency: 'usd' }, getPlan('roboapply', 'pro_quarterly', ENV)!)).toEqual({ priceId: 'price_q', amountMinor: 5999 });
+    // Pinned prices: no Stripe call is made to find them.
+    await expect(switchPriceFor(s as never, { currency: 'twd' }, getPlan('roboapply', 'pro_weekly', ENV)!)).rejects.toMatchObject({ code: 'switch_not_available', message: expect.stringMatching(/Taiwan price/) });
+    await expect(switchPriceFor(s as never, { currency: 'usd' }, getPlan('roboapply', 'pro_quarterly', ENV)!)).resolves.toEqual({ priceId: 'price_q', amountMinor: 5999, currency: 'USD' });
+    await expect(switchPriceFor(s as never, { currency: 'twd' }, getPlan('roboapply', 'pro_monthly', ENV)!)).resolves.toEqual({ priceId: 'price_m_twd', amountMinor: 74900, currency: 'TWD' });
   });
 });
 

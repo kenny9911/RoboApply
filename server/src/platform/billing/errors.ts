@@ -7,7 +7,7 @@
 // error }` shape, which is the same thing.
 
 export const BILLING_ERROR_STATUS = {
-  /** The plan key is unknown on this brand, unpriced, or not sold (legacy plans). */
+  /** The plan key is unknown on this brand, not on sale now (payments closed), or not sold (legacy plans; a plan the rail cannot charge). */
   plan_not_sellable: 409,
   /** Auto-renewing plans need the unticked "renews automatically" acknowledgement. */
   auto_renew_ack_required: 422,
@@ -42,6 +42,12 @@ export const BILLING_ERROR_STATUS = {
    * quota").
    */
   student_verification_required: 409,
+  /** Resume: there is no live plan with auto-renewal turned off to turn back on. */
+  nothing_to_resume: 409,
+  /** No refund can be made for this charge (already refunded, not ours, nothing paid). */
+  refund_not_available: 409,
+  /** The statutory withdrawal is not open for this purchase (outside the region or the 14 days, or not a Stripe purchase). */
+  withdrawal_not_available: 409,
 } as const;
 
 export type BillingErrorCode = keyof typeof BILLING_ERROR_STATUS;

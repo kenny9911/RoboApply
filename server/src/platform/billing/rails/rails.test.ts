@@ -36,6 +36,7 @@ import { CallbackRejectedError, type CheckoutOrder } from './types.js';
 const NOW = new Date('2026-10-10T08:00:00.000Z');
 const ENV = {
   STRIPE_SECRET_KEY: 'sk_test_x',
+  STRIPE_WEBHOOK_SECRET: 'whsec_test',
   NEXT_PUBLIC_ROBOAPPLY_URL: 'https://app.example.test/',
   STRIPE_PRICE_PRO_MONTHLY: 'price_m',
   STRIPE_PRICE_PRO_MONTHLY_CENTS: '2499',
@@ -104,13 +105,24 @@ describe('StripeRail', () => {
     const db = createFakePrisma();
     const rail = createStripeRail({ getStripe: () => stripe as never, env: ENV, getDb: async () => db as unknown as StripeRailDb });
     await rail.createCheckout(order('roboapply', 'pro_monthly', { stripeCustomerId: null }));
-    expect(stripe.customers.create).toHaveBeenCalledWith(expect.objectContaining({ email: 'u@example.test', metadata: expect.objectContaining({ brand: 'roboapply' }) }));
+    expect(stripe.customers.create).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'u@example.test', metadata: expect.objectContaining({ brand: 'roboapply' }) }),
+      { idempotencyKey: 'customer:sp_1' },
+    );
     expect(await db.seekerSubscription.findUnique({ where: { seekerProfileId: 'sp_1' } })).toMatchObject({ stripeCustomerId: 'cus_new', tier: 'free' });
   });
 
-  it('refuses unpriced plans and a missing key', async () => {
-    const rail = createStripeRail({ getStripe: () => fakeStripe() as never, env: ENV });
-    await expect(rail.createCheckout(order('roboapply', 'pro_quarterly'))).rejects.toMatchObject({ code: 'plan_not_sellable' });
+  it('refuses a plan while the rail is not ready, and a missing key', async () => {
+    // A key without a webhook secret: the plan is listed with its amount and is not on sale (ST-0).
+    const notReady = getPlan('roboapply', 'pro_monthly', { ...ENV, STRIPE_WEBHOOK_SECRET: '' })!;
+    expect(notReady).toMatchObject({ sellable: false, unsellableReason: 'payments_disabled', amountMinor: 2499 });
+    const stripe = fakeStripe();
+    const rail = createStripeRail({ getStripe: () => stripe as never, env: ENV });
+    expect(rail.isConfigured(getBrand('roboapply'), ENV)).toBe(true);
+    expect(rail.isConfigured(getBrand('roboapply'), { ...ENV, STRIPE_WEBHOOK_SECRET: '' })).toBe(false);
+    await expect(rail.createCheckout(order('roboapply', 'pro_monthly', { plan: notReady, stripeCustomerId: null }))).rejects.toMatchObject({ code: 'plan_not_sellable' });
+    expect(stripe.customers.create).not.toHaveBeenCalled();
+    expect(stripe.checkout.sessions.create).not.toHaveBeenCalled();
     const noKey = createStripeRail({ getStripe: () => null, env: ENV });
     await expect(noKey.createCheckout(order('roboapply', 'pro_monthly'))).rejects.toMatchObject({ code: 'rail_not_configured' });
   });

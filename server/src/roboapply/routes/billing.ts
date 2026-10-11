@@ -7,6 +7,8 @@
 //   GET  /plan                      current plan, practice credits, the brand's catalog
 //   GET  /credits                   practice credit balance (+ allotment)
 //   POST /checkout                  { planKey, autoRenewAck?, withdrawalWaiver?, rail?, tradeType? } → CheckoutResponse
+//                                   Headers: `Idempotency-Key` (8 to 64 of A-Z a-z 0-9 _ -; one per checkout attempt, the
+//                                   Stripe session is keyed on it) and `X-Robo-Locale` (the payment page's language).
 //                                   (features/credits/contract.ts): { kind: 'redirect', url, orderId, rail } (Stripe, Alipay,
 //                                   WeChat Pay H5) | { kind: 'qr', qrCodeUrl, … } | { kind: 'jsapi', jsapiParams, … }.
 //                                   The buyer's country (edge header) picks the Taiwan price; WeChat Pay H5 gets `req.ip`.
@@ -48,7 +50,7 @@ import { getMockPlanCatalog } from '../../lib/mockInterviewPlans.js';
 import { renderAlipayReceiptPdf } from '../lib/invoiceReceipt.js';
 import { getCurrentBrandOrDefault } from '../../platform/brand/brandContext.js';
 import { getBrand, type ProductBrand } from '../../platform/brand/registry.js';
-import { buyerCountryFromRequest, collectingEntity, isPaymentRail } from '../../platform/billing/index.js';
+import { buyerCountryFromRequest, checkoutAttemptKey, collectingEntity, isPaymentRail } from '../../platform/billing/index.js';
 
 const router = Router();
 
@@ -169,6 +171,12 @@ async function checkout(req: Request, res: Response, forcedRail?: 'alipay') {
       userAgent: req.get('user-agent') ?? null,
       // Decides the price: read from the edge's own header (see buyerCountryFromRequest).
       country: buyerCountryFromRequest(req),
+      // One checkout attempt (the web makes a UUID each time the plan sheet
+      // opens): a well-formed `Idempotency-Key` header, else undefined and
+      // the Stripe rail falls back to a 60-second bucket.
+      attemptKey: checkoutAttemptKey(req.get('idempotency-key')),
+      // The language the buyer reads the site in; the Stripe payment page opens in it.
+      locale: req.get('x-robo-locale')?.trim().slice(0, 16) || undefined,
       // The payer's address is the one this server saw, never a body field
       // (WeChat Pay H5 refuses an order without it).
       // `termsVersion` is only what the buyer says they ticked: createCheckout

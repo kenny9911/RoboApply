@@ -15,7 +15,17 @@ import { fakeAuth, startRouteHarness, type RouteHarness } from '../../test/route
 import { setCreditCatalogConfigLoader, invalidateCreditCatalog } from '../../platform/credits/index.js';
 import { setFlagOverrideLoader } from '../../platform/flags.js';
 import { getBrand } from '../../platform/brand/registry.js';
-import { registerRail, unregisterRail } from '../../platform/billing/index.js';
+import {
+  ACCIDENTAL_RENEWAL_DAYS,
+  FIRST_PURCHASE_DAYS,
+  PACK_VALID_MONTHS,
+  PAID_ONLY_CREDIT_LIMIT,
+  REFUND_POLICY_VERSION,
+  SHORT_PLAN_HOURS,
+  WITHDRAWAL_DAYS,
+  registerRail,
+  unregisterRail,
+} from '../../platform/billing/index.js';
 import {
   CANCEL_SURVEY_LIMIT,
   CancelSurveyStoreUnavailableError,
@@ -32,12 +42,14 @@ import {
   type CreditsDb,
   type OverrideAuditEntry,
 } from './index.js';
+import { publicRefundPolicyVersion } from './service.js';
 
 const NOW = new Date('2026-10-10T08:00:00.000Z');
 const LATER = new Date('2026-10-30T08:00:00.000Z');
 const ENV = {
   NODE_ENV: 'test',
   STRIPE_SECRET_KEY: 'sk_test_x',
+  STRIPE_WEBHOOK_SECRET: 'whsec_test',
   STRIPE_PRICE_PRO_WEEKLY: 'price_w',
   STRIPE_PRICE_PRO_WEEKLY_CENTS: '999',
   STRIPE_PRICE_PRO_MONTHLY: 'price_m',
@@ -444,6 +456,166 @@ describe('GET /billing/plans', () => {
     expect(fr.plans.every((p) => p.localPrice === null)).toBe(true);
   });
 
+  describe('RoboApply (D6): USD catalog defaults, sold through Stripe once the rail is ready', () => {
+    const robo = getBrand('roboapply');
+    const roboPlans = (env: Record<string, string>, userId: string | null = null, country: string | null = null) =>
+      new CreditsAreaService({ db: async () => db as unknown as CreditsDb, env: () => env, now: () => NOW }).plans(robo, { userId, country });
+    const READY = { STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_WEBHOOK_SECRET: 'whsec_test' };
+    const PAID = [
+      ['pro_weekly', 999],
+      ['pro_monthly', 2499],
+      ['pro_quarterly', 5499],
+      ['pro_week_pass', 999],
+      ['practice_pack_5', 999],
+      ['practice_pack_15', 2499],
+    ];
+    const amounts = (plans: Array<{ key: string; kind: string; amountMinor: number | null; requiresFlag?: string }>) =>
+      plans.filter((p) => p.kind !== 'free' && !p.requiresFlag).map((p) => [p.key, p.amountMinor]);
+
+    it('with an empty env every plan lists its default amount, none is price_unset, and payments are not open', async () => {
+      const data = await roboPlans({});
+      expect(amounts(data.plans)).toEqual(PAID);
+      expect(data.plans.some((p) => p.unsellableReason === 'price_unset' || p.amountMinor === null)).toBe(false);
+      expect(data.plans.filter((p) => p.kind !== 'free').every((p) => !p.sellable && p.unsellableReason === 'payments_disabled')).toBe(true);
+      expect(data).toMatchObject({ currency: 'USD', paymentsOpen: false, defaultSelection: null });
+      expect(data.checkout.rails).toEqual([]);
+      // The computed labels are there to print even while nothing can be bought.
+      expect(data.plans.find((p) => p.key === 'pro_quarterly')?.savingsPercent).toBe(26);
+      expect(data.plans.find((p) => p.key === 'pro_weekly')?.monthlyEquivalentMinor).toBe(4329);
+    });
+
+    it('with the key alone (no webhook secret) every plan lists its amount with payments_disabled and no rail is offered', async () => {
+      const data = await roboPlans({ STRIPE_SECRET_KEY: 'sk_test_x' });
+      expect(amounts(data.plans)).toEqual(PAID);
+      expect(data.plans.filter((p) => p.kind !== 'free').every((p) => !p.sellable && p.unsellableReason === 'payments_disabled')).toBe(true);
+      expect(data.paymentsOpen).toBe(false);
+      expect(data.checkout.rails).toEqual([]);
+    });
+
+    it('a live key outside production closes payments the same way; production opens them', async () => {
+      const live = { STRIPE_SECRET_KEY: 'sk_live_example', STRIPE_WEBHOOK_SECRET: 'whsec_test' };
+      const closed = await roboPlans(live);
+      expect([closed.paymentsOpen, closed.checkout.rails]).toEqual([false, []]);
+      expect(amounts(closed.plans)).toEqual(PAID);
+      const open = await roboPlans({ ...live, VERCEL_ENV: 'production' });
+      expect([open.paymentsOpen, open.checkout.rails]).toEqual([true, ['stripe']]);
+    });
+
+    it('with a key and a webhook secret and no price variable every plan is on sale, with no price id, Monthly preselected', async () => {
+      const data = await roboPlans(READY);
+      expect(amounts(data.plans)).toEqual(PAID);
+      expect(data.plans.filter((p) => p.kind !== 'free').every((p) => p.sellable && p.unsellableReason === null && p.stripePriceId === null)).toBe(true);
+      expect(data).toMatchObject({ paymentsOpen: true, defaultSelection: 'pro_monthly' });
+      expect(data.checkout.rails).toEqual(['stripe']);
+      expect(data.plans.find((p) => p.key === 'pro_weekly')).toMatchObject({ isDefaultSelection: false, neverPreselected: true });
+    });
+
+    it('PRICE_<KEY>_USD_CENTS reaches the response and wins over the older alias', async () => {
+      const data = await roboPlans({ ...READY, PRICE_PRO_MONTHLY_USD_CENTS: '2999', STRIPE_PRICE_PRO_MONTHLY_CENTS: '2499' });
+      expect(data.plans.find((p) => p.key === 'pro_monthly')?.amountMinor).toBe(2999);
+      // 5499 vs 3 × 2999 = 8997 → 38.8 % → 38: the label follows the amounts.
+      expect(data.plans.find((p) => p.key === 'pro_quarterly')?.savingsPercent).toBe(38);
+    });
+
+    it('a Taiwan visitor sees a TWD price from PRICE_<KEY>_TWD_CENTS alone, with a null price id', async () => {
+      const env = { ...READY, PRICE_PRO_MONTHLY_TWD_CENTS: '74900' };
+      const tw = await roboPlans(env, null, 'TW');
+      expect(tw.plans.find((p) => p.key === 'pro_monthly')).toMatchObject({ twdPrice: { currency: 'TWD', amountMinor: 74900, stripePriceId: null }, localPrice: { currency: 'TWD', amountMinor: 74900 } });
+      expect(tw.plans.filter((p) => p.localPrice !== null).map((p) => p.key)).toEqual(['pro_monthly']);
+      expect((await roboPlans(env, null, 'FR')).plans.every((p) => p.localPrice === null)).toBe(true);
+      // Not a whole NT$ amount: ignored, Taiwan keeps USD.
+      expect((await roboPlans({ ...READY, PRICE_PRO_MONTHLY_TWD_CENTS: '74950' }, null, 'TW')).plans.every((p) => p.localPrice === null)).toBe(true);
+    });
+  });
+
+  describe('refundPolicy and checkout.collectingEntity (the facts /pricing prints)', () => {
+    const plansOn = (brand: 'roboapply' | 'goapply', env: Record<string, string>) =>
+      new CreditsAreaService({ db: async () => db as unknown as CreditsDb, env: () => env, now: () => NOW }).plans(getBrand(brand), { userId: null, country: null });
+
+    it('carries the numbers of the published refund rules, from the constants the refund engine uses', async () => {
+      const robo = await plansOn('roboapply', {});
+      expect(robo.refundPolicy).toEqual({
+        firstPurchaseDays: FIRST_PURCHASE_DAYS,
+        shortPlanHours: SHORT_PLAN_HOURS,
+        paidOnlyCreditLimit: PAID_ONLY_CREDIT_LIMIT,
+        accidentalRenewalDays: ACCIDENTAL_RENEWAL_DAYS,
+        withdrawalDays: WITHDRAWAL_DAYS,
+        packValidMonths: PACK_VALID_MONTHS,
+        version: REFUND_POLICY_VERSION.roboapply,
+      });
+      // The values MARKET_STRATEGY §4.4 publishes.
+      expect(robo.refundPolicy).toMatchObject({ firstPurchaseDays: 7, shortPlanHours: 48, paidOnlyCreditLimit: 5, accidentalRenewalDays: 3, withdrawalDays: 14, packValidMonths: 12 });
+      const go = await plansOn('goapply', {});
+      expect(go.refundPolicy).toEqual({ ...robo.refundPolicy, version: publicRefundPolicyVersion(REFUND_POLICY_VERSION.goapply) });
+    });
+
+    it('publishes the public label of the policy version: never the internal review note of a brand', async () => {
+      // The stored GoApply version carries a review note; the public response and the page HTML must not.
+      expect(REFUND_POLICY_VERSION.goapply).toContain('pending');
+      for (const brand of ['roboapply', 'goapply'] as const) {
+        const { version } = (await plansOn(brand, {})).refundPolicy;
+        expect(version, brand).toMatch(/^refund-v\d+-\d{4}-\d{2}$/);
+        expect(version.toLowerCase(), brand).not.toContain('pending');
+        expect(version.toLowerCase(), brand).not.toContain('counsel');
+        // The rule set's own name is kept: the label is the start of the stored version.
+        expect(REFUND_POLICY_VERSION[brand].startsWith(version), brand).toBe(true);
+      }
+      expect((await plansOn('goapply', {})).refundPolicy.version).toBe('refund-v1-2026-10');
+      expect(publicRefundPolicyVersion('refund-v1-2026-10')).toBe('refund-v1-2026-10');
+      expect(publicRefundPolicyVersion('refund-v2-2027-01-pending-counsel')).toBe('refund-v2-2027-01');
+      expect(publicRefundPolicyVersion('refund-v2-2027-01-Pending-review-by-x')).toBe('refund-v2-2027-01');
+      // The whole public response of either host says nothing of it.
+      for (const host of [RA, GO]) expect(JSON.stringify((await h.request<any>('GET', '/anon/plans', host)).body).toLowerCase()).not.toContain('pending');
+    });
+
+    it('collectingEntity is GoApply\'s configured entity, null when unset, and always null on RoboApply', async () => {
+      expect((await plansOn('goapply', {})).checkout.collectingEntity).toBeNull();
+      expect((await plansOn('goapply', { CN_PAYMENT_COLLECTING_ENTITY: '   ' })).checkout.collectingEntity).toBeNull();
+      expect((await plansOn('goapply', { CN_PAYMENT_COLLECTING_ENTITY: ' Example Collecting Co. ' })).checkout.collectingEntity).toBe('Example Collecting Co.');
+      // Brand-own: RoboApply never reads GoApply's entity, and GoApply never reads an unprefixed one.
+      expect((await plansOn('roboapply', { CN_PAYMENT_COLLECTING_ENTITY: 'Example Collecting Co.', PAYMENT_COLLECTING_ENTITY: 'Another Co.' })).checkout.collectingEntity).toBeNull();
+      expect((await plansOn('goapply', { PAYMENT_COLLECTING_ENTITY: 'Another Co.' })).checkout.collectingEntity).toBeNull();
+    });
+
+    it('studentOffer is the published student rule: what a student pays, for a caller who is not sent the student plans', async () => {
+      const students = (data: { plans: Array<{ requiresFlag?: string }> }) => data.plans.filter((p) => p.requiresFlag === 'student').length;
+      // GoApply: a visitor is sent no student PLAN, and can still read what a student pays.
+      const go = await plansOn('goapply', {});
+      expect(students(go)).toBe(0);
+      expect(go.studentOffer).toEqual([
+        { key: 'student_monthly', amountMinor: 2900, studentDiscountPercent: 25 },
+        { key: 'student_quarterly', amountMinor: 6900, studentDiscountPercent: 30 },
+      ]);
+      // An override moves the amount and the percentage together.
+      expect((await plansOn('goapply', { CN_PRICE_STUDENT_MONTHLY_FEN: '1900' })).studentOffer![0]).toEqual({ key: 'student_monthly', amountMinor: 1900, studentDiscountPercent: 51 });
+      // The same for a signed-in GoApply user who is not a verified student.
+      const svc = (verified: boolean) =>
+        new CreditsAreaService({ db: async () => db as unknown as CreditsDb, env: () => ({}), now: () => NOW, isStudentVerified: async () => verified });
+      const unverified = await svc(false).plans(getBrand('goapply'), { userId: 'u_1', country: null });
+      expect([students(unverified), unverified.studentOffer?.length]).toEqual([0, 2]);
+      // A verified student is sent the two passes themselves: there is nothing to add.
+      const verified = await svc(true).plans(getBrand('goapply'), { userId: 'u_1', country: null });
+      expect([students(verified), verified.studentOffer]).toEqual([2, null]);
+      // RoboApply lists its student plans to everyone while the capability is on: same rule, so null.
+      const robo = await plansOn('roboapply', {});
+      expect([students(robo), robo.studentOffer]).toEqual([2, null]);
+      // Capability off: no plans and no rule is published.
+      const off = await plansOn('goapply', { FLAG_GOAPPLY_STUDENT: 'false' });
+      expect([students(off), off.studentOffer]).toEqual([0, null]);
+      const roboOff = await plansOn('roboapply', { FLAG_ROBOAPPLY_STUDENT: 'false' });
+      expect([students(roboOff), roboOff.studentOffer]).toEqual([0, null]);
+    });
+
+    it('the public route answers both fields on either host', async () => {
+      const ra = await h.request<any>('GET', '/anon/plans', RA);
+      expect(ra.body.data.refundPolicy).toMatchObject({ firstPurchaseDays: 7, withdrawalDays: 14, version: REFUND_POLICY_VERSION.roboapply });
+      expect(ra.body.data.checkout.collectingEntity).toBeNull();
+      const go = await h.request<any>('GET', '/anon/plans', GO);
+      expect(go.body.data.refundPolicy).toMatchObject({ shortPlanHours: 48, packValidMonths: 12, version: publicRefundPolicyVersion(REFUND_POLICY_VERSION.goapply) });
+      expect(go.body.data.checkout).toHaveProperty('collectingEntity', null);
+    });
+  });
+
   describe('GoApply (D5, D6): CNY passes on sale by default through Alipay', () => {
     const go = getBrand('goapply');
     const plansFor = (env: Record<string, string>, userId: string | null = null) =>
@@ -521,9 +693,13 @@ describe('GET /billing/plans', () => {
     });
 
     it('Stripe credentials never open a rail on GoApply, and Alipay credentials never open one on RoboApply', async () => {
-      const data = await plansFor({ STRIPE_SECRET_KEY: 'sk_test_x' });
+      const data = await plansFor({ STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_WEBHOOK_SECRET: 'whsec_test' });
       expect(data.checkout.rails).toEqual([]);
       expect(data.paymentsOpen).toBe(false);
+      // GoApply's own plans are untouched by them: on sale at their CNY amounts.
+      expect(amounts(data.plans)).toEqual(PAID);
+      const roboAlipayOnly = await new CreditsAreaService({ db: async () => db as unknown as CreditsDb, env: () => ({ ALIPAY_CALLBACK_SECRET: 's3cret' }), now: () => NOW }).plans(getBrand('roboapply'), { userId: null, country: null });
+      expect([roboAlipayOnly.checkout.rails, roboAlipayOnly.paymentsOpen]).toEqual([[], false]);
       const robo = await new CreditsAreaService({ db: async () => db as unknown as CreditsDb, env: () => ({ ...ENV, ALIPAY_CALLBACK_SECRET: 's3cret' }), now: () => NOW }).plans(getBrand('roboapply'), { userId: null, country: null });
       expect(robo.checkout.rails).toEqual(['stripe']);
     });

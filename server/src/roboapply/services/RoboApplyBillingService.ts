@@ -18,6 +18,16 @@
 //   • checkout refuses an auto-renewing plan without the unticked
 //     acknowledgement and records it (`auto_renew_ack`, plus
 //     `withdrawal_waiver` when ticked) before the payment page opens.
+//   • a RoboApply plan needs no price variable: the Stripe rail resolves the
+//     price at checkout through the catalog sync (stripeCatalog.ts; a pin
+//     from the environment, else the price found or created under the plan's
+//     lookup key), and the webhook recognises such a price by the plan key
+//     stamped on it or by its lookup key (`planKeyForPrice`).
+//   • one checkout attempt is one Stripe idempotency key: the web's
+//     `Idempotency-Key` header reaches the rail as `attemptKey`.
+//   • event types this file does not handle itself are offered to the
+//     registry in platform/billing/stripeEvents.ts (refunds, disputes and the
+//     later lifecycle events register there).
 //   • Stripe objects carry `brand` + `planKey` metadata; the webhook is
 //     replay-safe (one claim per checkout session / failed invoice / paid
 //     switch invoice, period guards on credit grants). Renewal credits are
@@ -72,8 +82,11 @@ import {
   isPlanKey,
   isStudentPlan,
   loadBillingAccount,
+  claimBillingEvent,
+  invoiceSubscriptionId,
+  parseStripeLookupKey,
   planDefinitionFor,
-  planKeyForStripePrice,
+  planKeyForPrice,
   quoteSwitch,
   railAvailable,
   recordCheckoutAcknowledgements,
@@ -92,7 +105,9 @@ import {
   type CheckoutOrder,
   type PlanStatus,
   type PlanView,
+  type StripeEventResult,
   type SwitchQuote,
+  stripeEventHandler,
 } from '../../platform/billing/index.js';
 import { sendEmail as platformSendEmail } from '../../platform/email/index.js';
 import '../../platform/email/templates/billing/index.js';
@@ -356,6 +371,10 @@ export interface CheckoutInput {
   /** Buyer's country from the edge header; 'TW' charges the plan's Taiwan price when one is configured. */
   country?: string | null;
   context?: CheckoutOrder['context'];
+  /** The web's per-attempt key (`Idempotency-Key` header), already validated by the route; the Stripe rail keys the session on it. */
+  attemptKey?: string | null;
+  /** The buyer's app locale (`X-Robo-Locale`); the Stripe payment page opens in it. */
+  locale?: string | null;
 }
 
 /** What POST /billing/checkout answers: the shared contract type (features/credits/contract.ts). */
@@ -457,6 +476,8 @@ export async function createCheckout(input: CheckoutInput): Promise<CheckoutView
       context: input.context,
       country: input.country ?? null,
       ...(studentVerified !== undefined ? { studentVerified } : {}),
+      attemptKey: input.attemptKey ?? null,
+      locale: input.locale ?? null,
     });
     logger.info('RA_BILLING', 'checkout created', { userId: input.userId, planKey: plan.key, rail: rail.id, brand: input.brand.id });
     return { ...result, rail: rail.id };
@@ -743,27 +764,11 @@ export const STRIPE_STATUS_MAP: Record<string, string> = {
 
 /**
  * One-time claim for a webhook side effect (a checkout session, a failed
- * invoice). Rows live in the credit ledger under bucket 'billing_event'
- * (status committed, amount 0) — the unique idempotency key does the work.
+ * invoice): the shared claim of platform/billing/stripeEvents.ts, on this
+ * service's clock.
  */
-async function claimOnce(db: Pick<ExtendedPrismaClient, 'rACreditLedger'>, userId: string, key: string, refType: string): Promise<boolean> {
-  const res = await db.rACreditLedger.createMany({
-    data: [
-      {
-        userId,
-        bucket: 'billing_event',
-        amount: 0,
-        status: 'committed',
-        fromSource: 'stripe',
-        idempotencyKey: `billing:${key}`,
-        refType,
-        refId: key,
-        settledAt: deps.now(),
-      },
-    ],
-    skipDuplicates: true,
-  });
-  return res.count === 1;
+function claimOnce(db: Pick<ExtendedPrismaClient, 'rACreditLedger'>, userId: string, key: string, refType: string): Promise<boolean> {
+  return claimBillingEvent(db, userId, key, refType, deps.now());
 }
 
 interface SubHints {
@@ -781,9 +786,13 @@ interface UpsertResult {
 }
 
 function resolvePlanFromStripe(sub: Stripe.Subscription, hints: SubHints, legacyCatalog: Awaited<ReturnType<typeof getMockPlanCatalog>>) {
-  const priceId = sub.items?.data?.[0]?.price?.id ?? null;
+  const price = sub.items?.data?.[0]?.price ?? null;
+  const priceId = price?.id ?? null;
   const metaKey = (sub.metadata?.planKey as string | undefined) ?? hints.planKey;
-  const planKey = (isPlanKey(metaKey) ? metaKey : null) ?? planKeyForStripePrice(priceId);
+  // Metadata first, then the price itself: the plan key stamped on a synced
+  // price, its lookup key, or a pinned id (so a price the catalog sync
+  // created is recognised on an instance that never resolved it).
+  const planKey = (isPlanKey(metaKey) ? metaKey : null) ?? planKeyForPrice(price);
   if (planKey) return { planKey, tier: 'pro' as GrantTier, legacy: false, priceId };
   const legacy: MockPlanKey = priceIdToMockPlanKey(legacyCatalog, priceId) ?? (sub.metadata?.tier === 'growth' ? 'growth' : 'starter');
   return { planKey: legacy as string, tier: legacy as GrantTier, legacy: true, priceId };
@@ -808,12 +817,16 @@ async function upsertFromSubscription(sub: Stripe.Subscription, hints: SubHints,
   const def = plan.legacy ? null : planDefinitionFor('roboapply', plan.planKey);
   const tier = ended ? 'free' : plan.tier;
   // What is actually charged. A Taiwan subscription runs on the plan's TWD
-  // price: Stripe says so on the price; when a thin event leaves the price
-  // fields out, the configured TWD price (matched by price id) answers.
+  // price: Stripe says so on the price (currency and unit amount). When a
+  // thin event leaves those fields out, the price's lookup key answers (a
+  // synced price carries currency and amount in it), and for a pinned TWD
+  // price the configured id does.
   const twd = plan.legacy || !isPlanKey(plan.planKey) ? null : (getCatalogPlan('roboapply', plan.planKey)?.twdPrice ?? null);
-  const onTwdPrice = Boolean(twd && plan.priceId && twd.stripePriceId === plan.priceId);
-  const chargedCurrency = item?.price?.currency?.toUpperCase() ?? (onTwdPrice ? 'TWD' : undefined);
-  const chargedAmountMinor = typeof item?.price?.unit_amount === 'number' ? item.price.unit_amount : onTwdPrice ? twd!.amountMinor : undefined;
+  const fromLookupKey = parseStripeLookupKey(item?.price?.lookup_key);
+  const onPinnedTwdPrice = Boolean(twd?.stripePriceId && plan.priceId && twd.stripePriceId === plan.priceId);
+  const chargedCurrency = item?.price?.currency?.toUpperCase() ?? fromLookupKey?.currency ?? (onPinnedTwdPrice ? 'TWD' : undefined);
+  const chargedAmountMinor =
+    typeof item?.price?.unit_amount === 'number' ? item.price.unit_amount : (fromLookupKey?.amountMinor ?? (onPinnedTwdPrice ? twd!.amountMinor : undefined));
 
   await db.seekerSubscription.update({
     where: { id: row.id },
@@ -960,16 +973,10 @@ async function fulfilStripePayment(session: Stripe.Checkout.Session): Promise<{ 
   return { handled: true };
 }
 
-/** Subscription id of an invoice (top-level on old API versions, under `parent` on current ones). */
-export function invoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
-  const legacy = (invoice as unknown as { subscription?: string | { id: string } | null }).subscription;
-  if (typeof legacy === 'string') return legacy;
-  if (legacy && typeof legacy === 'object') return legacy.id;
-  const parent = (invoice as unknown as { parent?: { subscription_details?: { subscription?: string | { id: string } | null } | null } | null }).parent;
-  const s = parent?.subscription_details?.subscription;
-  if (typeof s === 'string') return s;
-  return s && typeof s === 'object' ? s.id : null;
-}
+// `invoiceSubscriptionId` and `StripeEventResult` live in platform/billing/stripeEvents.ts;
+// re-exported here for the callers that import them from this service.
+export { invoiceSubscriptionId };
+export type { StripeEventResult };
 
 async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<{ handled: boolean; duplicate?: boolean }> {
   const subId = invoiceSubscriptionId(invoice);
@@ -1002,14 +1009,6 @@ async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<{ handled: 
   }
   logger.info('RA_BILLING', 'subscription marked past_due', { subId });
   return { handled: true };
-}
-
-export interface StripeEventResult {
-  handled: boolean;
-  /** The event repeated work already done (replayed delivery); nothing changed twice. */
-  duplicate?: boolean;
-  /** Processing failed; answer 500 so Stripe retries (every step is replay-safe). */
-  failed?: boolean;
 }
 
 export async function handleRoboApplyStripeEvent(event: Stripe.Event, stripe: Stripe): Promise<StripeEventResult> {
@@ -1081,8 +1080,13 @@ export async function handleRoboApplyStripeEvent(event: Stripe.Event, stripe: St
       }
       case 'invoice.payment_failed':
         return await handlePaymentFailed(event.data.object as Stripe.Invoice);
-      default:
-        return { handled: false };
+      default: {
+        // Event types added by other billing modules (stripeEvents.ts registry).
+        // Inside this try: a handler that throws answers 500, so Stripe retries.
+        const handler = stripeEventHandler(event.type);
+        if (!handler) return { handled: false };
+        return await handler(event, { stripe, db: deps.db, now: deps.now });
+      }
     }
   } catch (err) {
     logger.error('RA_BILLING', 'webhook handling failed', { type: event.type, id: event.id, error: err instanceof Error ? err.message : String(err) });

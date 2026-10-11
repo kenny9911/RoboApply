@@ -24,6 +24,7 @@ import { logger } from '../../services/LoggerService.js';
 import { parseBrandId, type BrandId } from '../brand/registry.js';
 import { BillingError } from './errors.js';
 import { PLAN_DEFINITIONS, isLegacyPlanKey, isPlanKey, isStudentPlan, type CatalogPlan, type PlanDefinition } from './planCatalog.js';
+import { resolveStripePriceId, type StripeCatalogCurrency } from './stripeCatalog.js';
 import type { StripeClient } from './stripeClient.js';
 
 export type BillingDb = Pick<ExtendedPrismaClient, 'user' | 'seekerProfile' | 'seekerSubscription'>;
@@ -287,7 +288,9 @@ function assertSwitchable(account: BillingAccount, target: CatalogPlan, now: Dat
   const plan = describePlan(account, now);
   const sub = account.subscription;
   if (!sub || !plan.live || !sub.stripeSubscriptionId) throw new BillingError('no_subscription', 'There is no auto-renewing plan to switch');
-  if (target.kind !== 'subscription' || !target.sellable || !target.stripePriceId || target.amountMinor === null) {
+  // A sellable subscription with an amount is switchable: its Stripe price is
+  // resolved by the catalog sync (a pin is optional).
+  if (target.kind !== 'subscription' || !target.sellable || target.amountMinor === null) {
     throw new BillingError('plan_not_sellable', 'This plan is not on sale', { planKey: target.key });
   }
   if (sub.planKey === target.key) throw new BillingError('switch_not_available', 'You are already on this plan');
@@ -301,13 +304,20 @@ function assertSwitchable(account: BillingAccount, target: CatalogPlan, now: Dat
  * The target price in the running subscription's currency: a Taiwan (TWD)
  * subscription switches to the target's TWD price, or not at all (Stripe
  * cannot mix currencies on one subscription, and we never guess a price).
+ * The price id is a pin from the environment, else the price the catalog
+ * sync finds or creates (stripeCatalog.ts); the amount is the catalog's.
  */
-export function switchPrice(stripeSub: { currency?: string | null }, target: CatalogPlan): { priceId: string; amountMinor: number } {
+export async function switchPriceFor(
+  stripe: StripeClient,
+  stripeSub: { currency?: string | null },
+  target: CatalogPlan,
+): Promise<{ priceId: string; amountMinor: number; currency: StripeCatalogCurrency }> {
   if ((stripeSub.currency ?? '').toLowerCase() === 'twd') {
     if (!target.twdPrice) throw new BillingError('switch_not_available', 'This plan has no Taiwan price yet', { planKey: target.key });
-    return { priceId: target.twdPrice.stripePriceId, amountMinor: target.twdPrice.amountMinor };
+    return { priceId: await resolveStripePriceId(stripe, target, 'TWD'), amountMinor: target.twdPrice.amountMinor, currency: 'TWD' };
   }
-  return { priceId: target.stripePriceId!, amountMinor: target.amountMinor! };
+  if (target.amountMinor === null) throw new BillingError('plan_not_sellable', 'This plan is not on sale', { planKey: target.key });
+  return { priceId: await resolveStripePriceId(stripe, target, 'USD'), amountMinor: target.amountMinor, currency: 'USD' };
 }
 
 export async function quoteSwitch(account: BillingAccount, target: CatalogPlan, deps: StripeDeps): Promise<SwitchQuote> {
@@ -318,7 +328,7 @@ export async function quoteSwitch(account: BillingAccount, target: CatalogPlan, 
   const prorationDate = Math.floor(now.getTime() / 1000);
   const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId!);
   const item = itemOf(stripeSub);
-  const price = switchPrice(stripeSub, target);
+  const price = await switchPriceFor(stripe, stripeSub, target);
   const preview = await stripe.invoices.createPreview({
     customer: typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id,
     subscription: stripeSub.id,
@@ -377,7 +387,7 @@ export async function confirmSwitch(
   if (!stripe) throw new BillingError('rail_not_configured', 'Card payments are not set up', { rail: 'stripe' });
   const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId!);
   const item = itemOf(stripeSub);
-  const price = switchPrice(stripeSub, target);
+  const price = await switchPriceFor(stripe, stripeSub, target);
   await ack.record({ amountMinor: price.amountMinor, currency: (stripeSub.currency ?? '').toLowerCase() === 'twd' ? 'TWD' : target.currency });
   await stripe.subscriptions.update(stripeSub.id, {
     items: [{ id: item.id, price: price.priceId }],

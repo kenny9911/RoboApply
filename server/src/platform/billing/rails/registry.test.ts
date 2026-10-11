@@ -6,12 +6,14 @@ vi.mock('../../../lib/prisma.js', () => ({ default: {} }));
 import { getBrand } from '../../brand/registry.js';
 import { availableRails, getRegisteredRail, railAvailable, registerRail, resolveRail, unregisterRail } from './index.js';
 import type { PaymentRailImpl } from './types.js';
+import { STRIPE_WEBHOOK_TRIES_EVERY_SECRET } from '../stripeEnv.js';
 
 const robo = getBrand('roboapply');
 const go = getBrand('goapply');
 
 const ENV = {
   STRIPE_SECRET_KEY: 'sk_test_x',
+  STRIPE_WEBHOOK_SECRET: 'whsec_test',
   // The Alipay rail's own credential. No master switch and no worker URL (D5).
   ALIPAY_CALLBACK_SECRET: 's3cret',
   // WeChat Pay still needs the merchant set and an entity that matches it.
@@ -52,6 +54,36 @@ describe('rail lock (brand decides; ?region= never does)', () => {
     expect(() => resolveRail(robo, 'alipay', ENV)).toThrow(expect.objectContaining({ code: 'rail_not_allowed' }));
     expect(resolveRail(robo, null, ENV).id).toBe('stripe');
     expect(availableRails(robo, ENV)).toEqual(['stripe']);
+  });
+
+  it('the Stripe rail needs a usable key AND a webhook secret (ST-0)', () => {
+    // A key alone would take money and never fulfil: the rail is off.
+    const keyOnly = { ...ENV, STRIPE_WEBHOOK_SECRET: '' };
+    expect(railAvailable(robo, 'stripe', keyOnly)).toBe(false);
+    expect(availableRails(robo, keyOnly)).toEqual([]);
+    expect(() => resolveRail(robo, null, keyOnly)).toThrow(expect.objectContaining({ code: 'rail_not_configured' }));
+    expect(() => resolveRail(robo, 'stripe', keyOnly)).toThrow(expect.objectContaining({ code: 'rail_not_configured' }));
+    // Either variable name carries the secret.
+    expect(railAvailable(robo, 'stripe', { ...keyOnly, ROBOAPPLY_STRIPE_WEBHOOK_SECRET: 'whsec_a' })).toBe(true);
+    // A list is a rail only once the webhook route tries each secret. Until then the route verifies
+    // with the one string it reads, so every signature would fail and a payment would never be
+    // fulfilled (stripeEnv.ts STRIPE_WEBHOOK_TRIES_EVERY_SECRET; set with MKT-2B item 1).
+    const list = { ...keyOnly, ROBOAPPLY_STRIPE_WEBHOOK_SECRET: 'whsec_a, whsec_b' };
+    expect(railAvailable(robo, 'stripe', list)).toBe(STRIPE_WEBHOOK_TRIES_EVERY_SECRET);
+    expect(availableRails(robo, list)).toEqual(STRIPE_WEBHOOK_TRIES_EVERY_SECRET ? ['stripe'] : []);
+    // A key that is not a test key counts as live: refused outside production.
+    expect(railAvailable(robo, 'stripe', { ...ENV, STRIPE_SECRET_KEY: 'sk_org_live_abc' })).toBe(false);
+    // The secret alone is not a rail either.
+    expect(railAvailable(robo, 'stripe', { STRIPE_WEBHOOK_SECRET: 'whsec_test' })).toBe(false);
+    // A live key outside production is refused, secret or not; production or the explicit override allows it.
+    const live = { ...ENV, STRIPE_SECRET_KEY: 'sk_live_example' };
+    expect(railAvailable(robo, 'stripe', live)).toBe(false);
+    expect(availableRails(robo, live)).toEqual([]);
+    expect(railAvailable(robo, 'stripe', { ...live, VERCEL_ENV: 'preview' })).toBe(false);
+    expect(railAvailable(robo, 'stripe', { ...live, VERCEL_ENV: 'production' })).toBe(true);
+    expect(railAvailable(robo, 'stripe', { ...live, STRIPE_ALLOW_LIVE_KEY_OUTSIDE_PRODUCTION: 'true' })).toBe(true);
+    // None of it ever opens Stripe for GoApply.
+    expect(railAvailable(go, 'stripe', { ...live, VERCEL_ENV: 'production' })).toBe(false);
   });
 
   it('an unconfigured rail is refused (Stripe key missing; the CN kill switch; no callback secret; the entity hard gate)', () => {
