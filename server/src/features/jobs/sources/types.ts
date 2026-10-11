@@ -15,6 +15,7 @@
 
 import type { Market } from '../../../platform/brand/index.js';
 import type { NormalizeProvider, ProviderJobInput } from '../normalize/index.js';
+import type { QueryLanguage } from '../taxonomy/index.js';
 
 /**
  * Every provider ingest knows: the brand registry's JobProvider plus the
@@ -29,8 +30,11 @@ export type IngestOrigin = 'demand' | 'seo_seed' | 'manual' | 'bank_sync';
 /** `RAIngestQuery.params` (contract: `IngestQueryParamsSchema` in jobs/companies/contract.ts). */
 export interface IngestQueryParams {
   /**
-   * Role text in the query language (English, or Traditional Chinese for a
-   * Taiwan variant): a taxonomy L3 label. '' for bank syncs.
+   * Role text in the query language (English, Traditional Chinese for a
+   * Taiwan variant, Simplified Chinese for a mainland query): a taxonomy role
+   * label, or the title a user typed. '' for bank syncs. The script of the
+   * text is the only statement of its language: the params carry no language
+   * field.
    */
   q: string;
   taxonomyId?: string;
@@ -39,7 +43,15 @@ export interface IngestQueryParams {
   /** City name (English, from the city table) when the query is city-scoped. */
   city?: string;
   remote?: boolean;
-  /** 'all' | 'today' | '3days' | 'week' | 'month'. */
+  /**
+   * 'all' | 'today' | '3days' | 'week' | 'month': the window the source is
+   * really asked for. Not part of a planned query's identity: the planner
+   * widens or narrows it in place as the demand behind the query changes
+   * (ingest/planner.ts `datePostedFor`), and stores the window the adapter
+   * applies (`adapterDateWindow`), never one it would ignore: the
+   * missed-refresh rule (ingest/tracking.ts) trusts this value to know which
+   * postings the query could still return.
+   */
   datePosted: string;
   /** Cursor adapters only: where the last sync stopped. */
   cursor?: string;
@@ -145,6 +157,9 @@ export interface SourceFetchResult {
  */
 export type SourceCostModel = 'free' | 'per_job' | 'per_request';
 
+/** A language a search adapter can be asked in (the planner's query variants: taxonomy `providerQueryLabels`). */
+export type SourceQueryLanguage = QueryLanguage;
+
 export interface JobSourceAdapter {
   readonly provider: IngestProvider;
   readonly kind: 'search' | 'cursor';
@@ -152,6 +167,22 @@ export interface JobSourceAdapter {
   readonly markets: readonly Market[];
   /** What a call costs (see SourceCostModel). Absent: `adapterCostModel` decides by provider id. */
   readonly costModel?: SourceCostModel;
+  /**
+   * Search adapters: the languages a role label may be sent in. Absent:
+   * `adapterQueryLanguages` decides by provider id (English only, unless the
+   * provider is known to search other text). A title a user typed is sent as
+   * typed to every search adapter, whatever this says.
+   */
+  readonly queryLanguages?: readonly SourceQueryLanguage[];
+  /**
+   * Search adapters: the `datePosted` values the source really applies. A
+   * value outside the list is asked as the FIRST entry (the source's own
+   * window). Absent: `adapterDateWindow` decides by provider id (any value is
+   * honoured, unless the provider is known to ask one fixed window). A list
+   * that holds '3days' must hold 'week' too: a query nobody asks for any more
+   * is widened to a week in place.
+   */
+  readonly dateWindows?: readonly string[];
   /** RAJob.sourceBoard values this adapter writes (maintenance uses them). */
   readonly sourceBoards: readonly string[];
   /** Key present, kill switch off, guards closed (cheap; never throws). */
@@ -179,12 +210,49 @@ const DEFAULT_COST_MODEL: Readonly<Partial<Record<IngestProvider, SourceCostMode
   jsearch: 'per_request',
   activejobs: 'per_job',
   activejobs_feed: 'per_job',
-  linkedin: 'per_job',
 };
 
 /** The adapter's cost model: its declared value, else the default for its provider id, else 'free'. */
 export function adapterCostModel(adapter: Pick<JobSourceAdapter, 'provider' | 'costModel'>): SourceCostModel {
   return adapter.costModel ?? DEFAULT_COST_MODEL[adapter.provider] ?? 'free';
+}
+
+/**
+ * Query languages by provider id, for an adapter that declares none. JSearch
+ * reads Google's job index, which answers Traditional Chinese text for Taiwan
+ * (MARKET_STRATEGY §1.3); every other provider searches English postings.
+ */
+const DEFAULT_QUERY_LANGUAGES: Readonly<Partial<Record<IngestProvider, readonly SourceQueryLanguage[]>>> = {
+  jsearch: ['en', 'zh-TW'],
+};
+const ENGLISH_ONLY: readonly SourceQueryLanguage[] = ['en'];
+
+/** The languages a role label may be sent to the adapter in: its declared list, else the default for its provider id, else English. */
+export function adapterQueryLanguages(adapter: Pick<JobSourceAdapter, 'provider' | 'queryLanguages'>): readonly SourceQueryLanguage[] {
+  return adapter.queryLanguages ?? DEFAULT_QUERY_LANGUAGES[adapter.provider] ?? ENGLISH_ONLY;
+}
+
+/**
+ * Posting windows by provider id, for an adapter that declares none. The
+ * Active Jobs DB client asks one fixed frame whatever `datePosted` says (seven
+ * days by default: raFantasticJobs.ts `windowSuffix`), on the search route and
+ * on the feed. Every other provider honours the value it is given.
+ */
+const DEFAULT_DATE_WINDOWS: Readonly<Partial<Record<IngestProvider, readonly string[]>>> = {
+  activejobs: ['week'],
+  activejobs_feed: ['week'],
+};
+
+/**
+ * The window a query on this adapter is stored and asked with when the
+ * planner wants `wanted`: `wanted` itself when the adapter applies it (or
+ * states no list), else the adapter's own window (the first of its list).
+ * One rule for the planner and for anything that reads a stored window.
+ */
+export function adapterDateWindow(adapter: Pick<JobSourceAdapter, 'provider' | 'dateWindows'>, wanted: string): string {
+  const applied = adapter.dateWindows ?? DEFAULT_DATE_WINDOWS[adapter.provider];
+  if (!applied || applied.length === 0 || applied.includes(wanted)) return wanted;
+  return applied[0]!;
 }
 
 /**

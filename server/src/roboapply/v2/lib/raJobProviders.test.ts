@@ -4,13 +4,16 @@
 // merges enabled providers in registry order (so direct-apply sources win the
 // downstream dedup), tolerates null/throwing providers, and reports accurate
 // per-provider telemetry; enabledExternalProviders() honors the kill switches.
+// The LinkedIn feed is not a provider (MARKET_STRATEGY M-4, JI-2): it is in no
+// list and the fan-out never calls a client with that id.
 // Run: npx vitest run server/src/roboapply/v2/lib/raJobProviders.test.ts
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   searchAllProviders,
   enabledExternalProviders,
   externalProviders,
+  isDroppedProvider,
   type JobSearchProvider,
   type ExternalJobNormalized,
   type ExternalSourceBoard,
@@ -60,19 +63,13 @@ describe('searchAllProviders — merge + order + telemetry', () => {
   it('merges in the given provider order (direct-ATS first)', async () => {
     const providers = [
       fakeProvider('activejobs', async () => [job('activejobs', 'a1'), job('activejobs', 'a2')]),
-      fakeProvider('linkedin', async () => [job('linkedin', 'l1')]),
       fakeProvider('jsearch', async () => [job('jsearch', 'j1')]),
     ];
     const r = await searchAllProviders(PARAMS, { providers });
-    expect(r.jobs.map((j) => j.externalId)).toEqual([
-      'activejobs:a1',
-      'activejobs:a2',
-      'linkedin:l1',
-      'jsearch:j1',
-    ]);
-    expect(r.providersQueried).toEqual(['activejobs', 'linkedin', 'jsearch']);
-    expect(r.providersWithResults).toEqual(['activejobs', 'linkedin', 'jsearch']);
-    expect(r.countsByProvider).toEqual({ activejobs: 2, linkedin: 1, jsearch: 1 });
+    expect(r.jobs.map((j) => j.externalId)).toEqual(['activejobs:a1', 'activejobs:a2', 'jsearch:j1']);
+    expect(r.providersQueried).toEqual(['activejobs', 'jsearch']);
+    expect(r.providersWithResults).toEqual(['activejobs', 'jsearch']);
+    expect(r.countsByProvider).toEqual({ activejobs: 2, jsearch: 1 });
   });
 
   it('a provider returning null contributes nothing but is still queried', async () => {
@@ -92,17 +89,47 @@ describe('searchAllProviders — merge + order + telemetry', () => {
       fakeProvider('activejobs', async () => {
         throw new Error('boom');
       }),
-      fakeProvider('linkedin', async () => [job('linkedin', 'l1')]),
+      fakeProvider('jsearch', async () => [job('jsearch', 'j1')]),
     ];
     const r = await searchAllProviders(PARAMS, { providers });
-    expect(r.jobs.map((j) => j.externalId)).toEqual(['linkedin:l1']);
-    expect(r.providersWithResults).toEqual(['linkedin']);
+    expect(r.jobs.map((j) => j.externalId)).toEqual(['jsearch:j1']);
+    expect(r.providersQueried).toEqual(['activejobs', 'jsearch']);
+    expect(r.providersWithResults).toEqual(['jsearch']);
+  });
+});
+
+describe('the LinkedIn feed is never called (MARKET_STRATEGY M-4, JI-2)', () => {
+  it('a LinkedIn provider handed to the fan-out is not searched and not reported', async () => {
+    const linkedinSearch = vi.fn(async () => [job('linkedin', 'l1')]);
+    const linkedinEnabled = vi.fn(() => true);
+    const providers: JobSearchProvider[] = [
+      fakeProvider('activejobs', async () => [job('activejobs', 'a1')]),
+      { id: 'linkedin', isEnabled: linkedinEnabled, search: linkedinSearch },
+      fakeProvider('jsearch', async () => [job('jsearch', 'j1')]),
+    ];
+    const r = await searchAllProviders(PARAMS, { providers });
+    expect(linkedinSearch).not.toHaveBeenCalled();
+    expect(r.jobs.map((j) => j.externalId)).toEqual(['activejobs:a1', 'jsearch:j1']);
+    expect(r.providersQueried).toEqual(['activejobs', 'jsearch']);
+    expect(r.countsByProvider).toEqual({ activejobs: 1, jsearch: 1 });
+  });
+
+  it('a fan-out given only a LinkedIn provider queries nothing', async () => {
+    const search = vi.fn(async () => [job('linkedin', 'l1')]);
+    const r = await searchAllProviders(PARAMS, { providers: [{ id: 'linkedin', isEnabled: () => true, search }] });
+    expect(search).not.toHaveBeenCalled();
+    expect(r).toEqual({ jobs: [], providersQueried: [], providersWithResults: [], countsByProvider: {} });
+  });
+
+  it('names the dropped id and nothing the product runs', () => {
+    expect(isDroppedProvider('linkedin')).toBe(true);
+    for (const p of externalProviders) expect(isDroppedProvider(p.id), p.id).toBe(false);
   });
 });
 
 describe('externalProviders registry', () => {
-  it('is ordered direct-ATS → LinkedIn → aggregator', () => {
-    expect(externalProviders.map((p) => p.id)).toEqual(['activejobs', 'linkedin', 'jsearch']);
+  it('holds the two RapidAPI providers the product runs, direct-ATS before the aggregator, and no LinkedIn provider', () => {
+    expect(externalProviders.map((p) => p.id)).toEqual(['activejobs', 'jsearch']);
   });
 });
 
@@ -128,8 +155,8 @@ describe('enabledExternalProviders — kill switches', () => {
     expect(enabledExternalProviders()).toEqual([]);
   });
 
-  it('all three enabled with a key and switches off', () => {
-    expect(enabledExternalProviders().map((p) => p.id)).toEqual(['activejobs', 'linkedin', 'jsearch']);
+  it('both enabled with a key and switches off; a key never enables LinkedIn', () => {
+    expect(enabledExternalProviders().map((p) => p.id)).toEqual(['activejobs', 'jsearch']);
   });
 
   it('global kill switch disables all', () => {
@@ -139,8 +166,8 @@ describe('enabledExternalProviders — kill switches', () => {
 
   it('per-provider kill switch removes exactly one, preserving order', () => {
     process.env.RA_ONBOARDING_ACTIVEJOBS_DISABLED = 'true';
-    expect(enabledExternalProviders().map((p) => p.id)).toEqual(['linkedin', 'jsearch']);
+    expect(enabledExternalProviders().map((p) => p.id)).toEqual(['jsearch']);
     process.env.RA_ONBOARDING_JSEARCH_DISABLED = 'true';
-    expect(enabledExternalProviders().map((p) => p.id)).toEqual(['linkedin']);
+    expect(enabledExternalProviders()).toEqual([]);
   });
 });

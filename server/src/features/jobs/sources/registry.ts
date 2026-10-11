@@ -1,10 +1,12 @@
 // server/src/features/jobs/sources/registry.ts — the per-brand job source registry
-// (GOAPPLY_PARITY_PLAN.md §3.9; MARKET_STRATEGY M-6, JC-7).
+// (GOAPPLY_PARITY_PLAN.md §3.9; MARKET_STRATEGY M-3, M-4, M-6, JI-2, JC-7).
 //
-// One place answers "which sources feed this brand, how, and are they on":
+// One place answers "which sources feed this brand, how, what a call costs,
+// and are they on":
 //
 //   RoboApply (intl): activejobs → bank_robohire → jsearch (the brand registry's
-//                     order) + adapters registered for the market (ats_public)
+//                     order) + adapters registered for the market (ats_public,
+//                     the Taiwan open data)
 //   GoApply   (cn):   bank_gohire + adapters registered for the market
 //                     (ats_public: employer-board postings located in mainland
 //                     China). Never a search API: the RapidAPI adapters are
@@ -16,6 +18,12 @@
 // list; a subset only: a name the brand does not have is ignored, with one
 // warning). CN_EXTERNAL_PROVIDERS is no longer read (one warning when set).
 //
+// Each source states its cost model (`costModel`: free, per job, per request;
+// sources/types.ts `adapterCostModel`). The planner never spends a per-request
+// source on SEO seed queries, and the admin console shows the model.
+// A source is on for a brand when its adapter says so for the brand's MARKET
+// (`adapterEnabledFor`): an adapter that serves two markets may be on for one.
+//
 // The capability is the same on both brands (feed, search over our own index,
 // alerts, similar jobs); only the rows differ. Ingest (features/jobs/ingest)
 // and the admin sources panel both read this module, so they cannot disagree.
@@ -23,7 +31,8 @@
 import type { BrandId, EnvSource, JobProvider, Market, ProductBrand } from '../../../platform/brand/index.js';
 import { logger } from '../../../services/LoggerService.js';
 import { getSourceAdapter, sourceAdaptersForMarket } from './index.js';
-import type { IngestProvider, JobSourceAdapter, SourceTransport } from './types.js';
+import { adapterCostModel, adapterEnabledFor } from './types.js';
+import type { IngestProvider, JobSourceAdapter, SourceCostModel, SourceTransport } from './types.js';
 
 export type JobSourceKind = 'bank' | 'search' | 'ats' | 'import';
 
@@ -34,17 +43,35 @@ export type JobSourceKind = 'bank' | 'search' | 'ats' | 'import';
  */
 const REGISTRY_PROVIDERS: ReadonlySet<IngestProvider> = new Set<JobProvider>([
   'activejobs',
-  'linkedin',
   'jsearch',
   'bank_robohire',
   'bank_gohire',
   'user_import',
 ]);
 
+/**
+ * Provider ids that are a source of no brand, whatever a brand list names or
+ * an adapter registers: the LinkedIn feed (MARKET_STRATEGY M-4: dropped, not
+ * subscribed and not to be). Plain strings, so the rule does not depend on the
+ * id staying in the provider unions.
+ */
+const DROPPED_PROVIDERS: ReadonlySet<string> = new Set(['linkedin']);
+
+/**
+ * The kind of every provider ingest knows. A kind says how the source is fed
+ * and which panel of the admin console describes it (the web contract has
+ * these four): 'bank' a recruiter bank, 'ats' the employer boards, 'import' a
+ * user's own import, 'search' every other source read through an API (a
+ * search service, the licensed feed, a government job API or open data).
+ * How such a source is reached is its transport, below.
+ */
 const KIND: Readonly<Partial<Record<IngestProvider, JobSourceKind>>> = {
   activejobs: 'search',
-  linkedin: 'search',
+  activejobs_feed: 'search',
   jsearch: 'search',
+  usajobs: 'search',
+  tw_open_data: 'search',
+  tw_gov_jobs: 'search',
   bank_robohire: 'bank',
   bank_gohire: 'bank',
   ats_public: 'ats',
@@ -53,6 +80,28 @@ const KIND: Readonly<Partial<Record<IngestProvider, JobSourceKind>>> = {
 
 export function jobSourceKind(provider: IngestProvider): JobSourceKind {
   return KIND[provider] ?? 'search';
+}
+
+/**
+ * How a provider is reached when its adapter does not say (`transport()`):
+ * the government sources answer on their own public API, never through the
+ * search marketplace.
+ */
+const TRANSPORT: Readonly<Partial<Record<IngestProvider, SourceTransport>>> = {
+  usajobs: 'api',
+  tw_open_data: 'api',
+  tw_gov_jobs: 'api',
+  user_import: 'off',
+};
+
+/** The default transport of a provider: its own entry, else by kind (boards, bank database, search marketplace). */
+export function jobSourceTransport(provider: IngestProvider): SourceTransport {
+  const own = TRANSPORT[provider];
+  if (own) return own;
+  const kind = jobSourceKind(provider);
+  if (kind === 'ats') return 'board_api';
+  if (kind === 'bank') return 'db';
+  return 'rapidapi';
 }
 
 /** `JOB_PROVIDERS_ROBOAPPLY` / `JOB_PROVIDERS_GOAPPLY`. */
@@ -79,16 +128,16 @@ function listEnv(env: EnvSource, name: string): string[] | null {
 
 /**
  * Every provider of the brand, in order: its registry list (user_import
- * included), then the adapters registered for its market. Narrowed by
- * JOB_PROVIDERS_<BRAND> when that is set (user_import is never narrowed: it is
- * not an ingest source).
+ * included), then the adapters registered for its market; never a dropped
+ * provider. Narrowed by JOB_PROVIDERS_<BRAND> when that is set (user_import
+ * is never narrowed: it is not an ingest source).
  */
 export function sourceProvidersForBrand(brand: ProductBrand, env: EnvSource = process.env): IngestProvider[] {
   const own: IngestProvider[] = [...brand.jobProviders];
   const extra = sourceAdaptersForMarket(brand.market)
     .map((a) => a.provider)
     .filter((p) => !REGISTRY_PROVIDERS.has(p) && !own.includes(p));
-  const all = [...own, ...extra];
+  const all = [...own, ...extra].filter((p) => !DROPPED_PROVIDERS.has(p));
 
   if (typeof env.CN_EXTERNAL_PROVIDERS === 'string' && env.CN_EXTERNAL_PROVIDERS.trim()) {
     warnOnce('cn_external_providers', 'CN_EXTERNAL_PROVIDERS is no longer read: GoApply has no search provider. Remove it.', {
@@ -109,13 +158,6 @@ export function sourceProvidersForBrand(brand: ProductBrand, env: EnvSource = pr
   return all.filter((p) => p === 'user_import' || narrow.includes(p));
 }
 
-function defaultTransport(provider: IngestProvider, kind: JobSourceKind): SourceTransport {
-  if (kind === 'ats') return 'board_api';
-  if (kind === 'bank') return 'db';
-  if (provider === 'user_import') return 'off';
-  return 'rapidapi';
-}
-
 export interface JobSourceStatus {
   enabled: boolean;
   transport: SourceTransport;
@@ -131,6 +173,12 @@ export interface JobSourceDescription {
   kind: JobSourceKind;
   /** How the source is reached right now ('off' when it is not reachable at all). */
   transport: SourceTransport;
+  /**
+   * What a call to the source costs: the adapter's declared model, else the
+   * default for the provider id ('free' for a user's own import). Known for a
+   * source whose adapter is not registered too.
+   */
+  costModel: SourceCostModel;
   /** RAJob.sourceBoard values the source writes (empty for user_import). */
   sourceBoards: readonly string[];
   /** The registered adapter, when the source is an ingest source of this market. */
@@ -156,8 +204,9 @@ function describe(brand: ProductBrand, provider: IngestProvider): JobSourceDescr
     if (provider === 'user_import') return { enabled: true, transport: 'off', reason: null };
     if (!registered) return { enabled: false, transport: 'off', reason: 'not_registered' };
     if (!adapter) return { enabled: false, transport: 'off', reason: 'wrong_market' };
-    const enabled = safe(() => adapter.isEnabled(), false);
-    const transport = safe(() => adapter.transport?.() ?? defaultTransport(provider, kind), 'off' as SourceTransport);
+    // On for THIS brand's market (an adapter may serve two markets and be on for one). Never throws.
+    const enabled = adapterEnabledFor(adapter, brand.market);
+    const transport = safe(() => adapter.transport?.() ?? jobSourceTransport(provider), 'off' as SourceTransport);
     const reason = enabled ? null : safe(() => adapter.disabledReason?.() ?? null, null) ?? 'disabled';
     return { enabled, transport, reason };
   };
@@ -169,6 +218,7 @@ function describe(brand: ProductBrand, provider: IngestProvider): JobSourceDescr
     get transport() {
       return status().transport;
     },
+    costModel: adapterCostModel(registered ?? { provider }),
     sourceBoards: adapter?.sourceBoards ?? [],
     adapter,
     enabled: () => status().enabled,
