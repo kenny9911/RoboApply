@@ -1,231 +1,57 @@
 {
-  "about": "Employer boards that listed postings located in mainland China when each was read through its connector on 2026-10-11 (the parity wave, docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4: the documented public posting API answered 200 and at least one posting resolved to mainland China). Nothing here is typed from memory. companyName is the board's own metadata where the job-board system states one (Greenhouse, SmartRecruiters); Lever and Ashby state none, so the board id is used as written and an admin may correct it. A board is one source for both sites: Greenhouse, Lever and Ashby boards are read whole (countries is empty: one request lists everything and each posting lands in the market of its own location); a SmartRecruiters board is listed per country, so it names the countries it is read for. The count in each note is what was measured that day, never a live number.",
+  "about": "Employer boards that listed at least one posting located in mainland China on 2026-10-11. postings is the number of the board's postings located in mainland China that day. Greenhouse, Lever and Ashby boards are read whole (countries is empty); a SmartRecruiters board is asked per country and names CN here. Nothing here is typed from memory: a board is in this file only because its live board answered scripts/board-seeds/validate.mjs on 2026-10-11 with at least one posting and passed the name check (scripts/board-seeds/report-2026-10-11.json; method and counts: docs/jobright-clone/market/BOARD_SEEDS.md). companyName is what the answer stated (Greenhouse, SmartRecruiters); Lever and Ashby state none, so it is the employer name the board id spells or a document confirms for it, and the board id itself where nothing confirms whose board it is (the note says which). postingCountries are the ISO codes its counted postings were located in. All counts come from location fields only and are those of that day, never a live number. A deployment loads the files of the markets it serves (seeds.ts): the mainland file and no other where GoApply alone is served, the international and the Taiwan file where RoboApply alone is, all three where both are. A board is ONE source there whatever file names it: countries is what it is READ for, and empty means the whole board, each posting landing in the market of its own location.",
   "boards": [
-    {
-      "ats": "smartrecruiters",
-      "boardToken": "BoschGroup",
-      "companyName": "Bosch Group",
-      "countries": [
-        "CN"
-      ],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 1317 mainland postings listed through the connector; also docs/jobright-clone/market/MARKET_STRATEGY.md 1.1 (critic-pass probe with country=cn)",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "smartrecruiters",
-      "boardToken": "AbbVie",
-      "companyName": "AbbVie",
-      "countries": [
-        "CN"
-      ],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 149 mainland postings listed through the connector",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "lever",
-      "boardToken": "veeva",
-      "companyName": "veeva",
-      "countries": [],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 54 mainland postings listed through the connector; the system states no company name, so the board id stands in",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "smartrecruiters",
-      "boardToken": "WesternDigital",
-      "companyName": "Western Digital",
-      "countries": [
-        "CN"
-      ],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 45 mainland postings listed through the connector",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "greenhouse",
-      "boardToken": "riotgames",
-      "companyName": "Riot Games",
-      "countries": [],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 39 mainland postings listed through the connector",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "ashby",
-      "boardToken": "airwallex",
-      "companyName": "airwallex",
-      "countries": [],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 35 mainland postings listed through the connector; the system states no company name, so the board id stands in",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "greenhouse",
-      "boardToken": "flexport",
-      "companyName": "Flexport",
-      "countries": [],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 25 mainland postings listed through the connector",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "smartrecruiters",
-      "boardToken": "Continental",
-      "companyName": "Continental",
-      "countries": [
-        "CN"
-      ],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 24 mainland postings listed through the connector",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "smartrecruiters",
-      "boardToken": "NielsenIQ",
-      "companyName": "NielsenIQ",
-      "countries": [
-        "CN"
-      ],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 20 mainland postings listed through the connector",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "greenhouse",
-      "boardToken": "payoneer",
-      "companyName": "Payoneer",
-      "countries": [],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 19 mainland postings listed through the connector",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "smartrecruiters",
-      "boardToken": "Wabtec",
-      "companyName": "Wabtec",
-      "countries": [
-        "CN"
-      ],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 16 mainland postings listed through the connector",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "greenhouse",
-      "boardToken": "coupang",
-      "companyName": "Coupang",
-      "countries": [],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 13 mainland postings listed through the connector",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "smartrecruiters",
-      "boardToken": "Ubisoft2",
-      "companyName": "Ubisoft",
-      "countries": [
-        "CN"
-      ],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 13 mainland postings listed through the connector; also docs/jobright-clone/market/MARKET_STRATEGY.md 1.1 (critic-pass probe with country=cn)",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "smartrecruiters",
-      "boardToken": "Eurofins",
-      "companyName": "Eurofins",
-      "countries": [
-        "CN"
-      ],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 10 mainland postings listed through the connector",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "greenhouse",
-      "boardToken": "scopely",
-      "companyName": "Scopely",
-      "countries": [],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 7 mainland postings listed through the connector",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "smartrecruiters",
-      "boardToken": "Canva",
-      "companyName": "Canva",
-      "countries": [
-        "CN"
-      ],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 6 mainland postings listed through the connector",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "greenhouse",
-      "boardToken": "mongodb",
-      "companyName": "MongoDB",
-      "countries": [],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 5 mainland postings listed through the connector",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "greenhouse",
-      "boardToken": "agoda",
-      "companyName": "Agoda",
-      "countries": [],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 5 mainland postings listed through the connector",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "greenhouse",
-      "boardToken": "adyen",
-      "companyName": "Adyen",
-      "countries": [],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 3 mainland postings listed through the connector",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "greenhouse",
-      "boardToken": "moloco",
-      "companyName": "Moloco",
-      "countries": [],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 2 mainland postings listed through the connector",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "greenhouse",
-      "boardToken": "applovin",
-      "companyName": "AppLovin",
-      "countries": [],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 2 mainland postings listed through the connector",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "greenhouse",
-      "boardToken": "airbnb",
-      "companyName": "Airbnb",
-      "countries": [],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 2 mainland postings listed through the connector",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "greenhouse",
-      "boardToken": "databricks",
-      "companyName": "Databricks",
-      "countries": [],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 2 mainland postings listed through the connector",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "greenhouse",
-      "boardToken": "epicgames",
-      "companyName": "Epic Games",
-      "countries": [],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 2 mainland postings listed through the connector",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "lever",
-      "boardToken": "weride",
-      "companyName": "weride",
-      "countries": [],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 2 mainland postings listed through the connector; the system states no company name, so the board id stands in",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "greenhouse",
-      "boardToken": "appier",
-      "companyName": "Appier",
-      "countries": [],
-      "note": "docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 1 mainland posting listed through the connector",
-      "confirmedOn": "2026-10-11"
-    }
+    {"ats":"greenhouse","boardToken":"adyen","companyName":"Adyen","countries":[],"postings":3,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 3 mainland postings listed through the connector; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"agoda","companyName":"Agoda","countries":[],"postings":5,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 5 mainland postings listed through the connector; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"airbnb","companyName":"Airbnb","countries":[],"postings":2,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 2 mainland postings listed through the connector; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"akunacapital","companyName":"Akuna Capital","countries":[],"postings":2,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"appier","companyName":"Appier","countries":[],"postings":1,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 1 mainland posting listed through the connector; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"applovin","companyName":"AppLovin","countries":[],"postings":2,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 2 mainland postings listed through the connector; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"appsflyer","companyName":"AppsFlyer","countries":[],"postings":5,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"canonical","companyName":"Canonical","countries":[],"postings":7,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"coupang","companyName":"Coupang","countries":[],"postings":13,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 13 mainland postings listed through the connector; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"databricks","companyName":"Databricks","countries":[],"postings":2,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 2 mainland postings listed through the connector; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"duolingo","companyName":"Duolingo","countries":[],"postings":7,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"epicgames","companyName":"Epic Games","countries":[],"postings":2,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 2 mainland postings listed through the connector; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"flexport","companyName":"Flexport","countries":[],"postings":25,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 25 mainland postings listed through the connector; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"formlabs","companyName":"Formlabs","countries":[],"postings":11,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"ideo","companyName":"IDEO","countries":[],"postings":4,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"jumptrading","companyName":"Jump Trading","countries":[],"postings":4,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"liftoff","companyName":"Liftoff","countries":[],"postings":1,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"moloco","companyName":"Moloco","countries":[],"postings":2,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 2 mainland postings listed through the connector; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"mongodb","companyName":"MongoDB","countries":[],"postings":5,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 5 mainland postings listed through the connector; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"optiverus","companyName":"Optiver","countries":[],"postings":27,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"payoneer","companyName":"Payoneer","countries":[],"postings":19,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 19 mainland postings listed through the connector; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"riotgames","companyName":"Riot Games","countries":[],"postings":39,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 39 mainland postings listed through the connector; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"riskified","companyName":"Riskified","countries":[],"postings":1,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"roku","companyName":"Roku","countries":[],"postings":2,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"scopely","companyName":"Scopely","countries":[],"postings":7,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 7 mainland postings listed through the connector; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"taboola","companyName":"Taboola","countries":[],"postings":1,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"thetradedesk","companyName":"The Trade Desk","countries":[],"postings":1,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"towerresearchcapital","companyName":"Tower Research Capital","countries":[],"postings":2,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"lever","boardToken":"animocabrands","companyName":"Animoca Brands","countries":[],"postings":3,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); the system states no company name; the board id is the employer's name","confirmedOn":"2026-10-11"},
+    {"ats":"lever","boardToken":"ninjavan","companyName":"Ninja Van","countries":[],"postings":9,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); the system states no company name; the board id is the employer's name","confirmedOn":"2026-10-11"},
+    {"ats":"lever","boardToken":"octoenergy","companyName":"octoenergy","countries":[],"postings":2,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); the system states no company name and no document confirms whose board this is: the entry carries its board id as the name until someone names it","confirmedOn":"2026-10-11"},
+    {"ats":"lever","boardToken":"pattern","companyName":"Pattern","countries":[],"postings":4,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); the system states no company name; the board id is the employer's name","confirmedOn":"2026-10-11"},
+    {"ats":"lever","boardToken":"shopback-2","companyName":"ShopBack","countries":[],"postings":13,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); the system states no company name; docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5 confirms this board id for this employer","confirmedOn":"2026-10-11"},
+    {"ats":"lever","boardToken":"veeva","companyName":"Veeva","countries":[],"postings":54,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 54 mainland postings listed through the connector; the system states no company name, so the board id stands in; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); the system states no company name; the board id is the employer's name","confirmedOn":"2026-10-11"},
+    {"ats":"lever","boardToken":"weride","companyName":"WeRide","countries":[],"postings":2,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 2 mainland postings listed through the connector; the system states no company name, so the board id stands in; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); the system states no company name; the board id is the employer's name","confirmedOn":"2026-10-11"},
+    {"ats":"lever","boardToken":"yuno","companyName":"Yuno","countries":[],"postings":3,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); the system states no company name; the board id is the employer's name","confirmedOn":"2026-10-11"},
+    {"ats":"ashby","boardToken":"airwallex","companyName":"Airwallex","countries":[],"postings":37,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 35 mainland postings listed through the connector; the system states no company name, so the board id stands in; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); the system states no company name; the board id is the employer's name","confirmedOn":"2026-10-11"},
+    {"ats":"ashby","boardToken":"speak","companyName":"Speak","countries":[],"postings":2,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); the system states no company name; the board id is the employer's name","confirmedOn":"2026-10-11"},
+    {"ats":"smartrecruiters","boardToken":"AbbVie","companyName":"AbbVie","countries":["CN"],"postings":148,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 149 mainland postings listed through the connector; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"smartrecruiters","boardToken":"Believe","companyName":"Believe","countries":["CN"],"postings":1,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"smartrecruiters","boardToken":"BoschGroup","companyName":"Bosch Group","countries":["CN"],"postings":1321,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 1317 mainland postings listed through the connector; also docs/jobright-clone/market/MARKET_STRATEGY.md 1.1 (critic-pass probe with country=cn); re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"smartrecruiters","boardToken":"Canva","companyName":"Canva","countries":["CN"],"postings":6,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 6 mainland postings listed through the connector; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"smartrecruiters","boardToken":"Continental","companyName":"Continental","countries":["CN"],"postings":24,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 24 mainland postings listed through the connector; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"smartrecruiters","boardToken":"Eurofins","companyName":"Eurofins","countries":["CN"],"postings":10,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 10 mainland postings listed through the connector; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"smartrecruiters","boardToken":"HMGroup","companyName":"H&M Group","countries":["CN"],"postings":10,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"smartrecruiters","boardToken":"NBCUniversal3","companyName":"NBCUniversal","countries":["CN"],"postings":1,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"smartrecruiters","boardToken":"NielsenIQ","companyName":"NielsenIQ","countries":["CN"],"postings":9,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 20 mainland postings listed through the connector; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"smartrecruiters","boardToken":"Primark","companyName":"Primark","countries":["CN"],"postings":2,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"smartrecruiters","boardToken":"TurnerTownsend","companyName":"Turner & Townsend","countries":["CN"],"postings":66,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"smartrecruiters","boardToken":"Ubisoft2","companyName":"Ubisoft","countries":["CN"],"postings":13,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 13 mainland postings listed through the connector; also docs/jobright-clone/market/MARKET_STRATEGY.md 1.1 (critic-pass probe with country=cn); re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"smartrecruiters","boardToken":"Wabtec","companyName":"Wabtec","countries":["CN"],"postings":9,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 16 mainland postings listed through the connector; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"smartrecruiters","boardToken":"WesternDigital","companyName":"Western Digital","countries":["CN"],"postings":45,"postingCountries":["CN"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/orch/handoffs-par/PAR-7.md item 4, seed verification: 45 mainland postings listed through the connector; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"}
   ]
 }

@@ -1,119 +1,46 @@
 {
-  "about": "The 14 employer boards confirmed live with postings located in Taiwan on 2026-10-11 (docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5; MARKET_STRATEGY.md 1.3). Employer names are the note's. Greenhouse, Lever and Ashby boards are read whole (countries is empty); the SmartRecruiters board is listed per country and names TW. The count in each note is the note's keyword count of that day, never a live number.",
+  "about": "Employer boards that listed at least one posting located in Taiwan on 2026-10-11. postings is the number of the board's postings located in Taiwan that day. Greenhouse, Lever and Ashby boards are read whole (countries is empty); a SmartRecruiters board is asked per country and names TW here. Nothing here is typed from memory: a board is in this file only because its live board answered scripts/board-seeds/validate.mjs on 2026-10-11 with at least one posting and passed the name check (scripts/board-seeds/report-2026-10-11.json; method and counts: docs/jobright-clone/market/BOARD_SEEDS.md). companyName is what the answer stated (Greenhouse, SmartRecruiters); Lever and Ashby state none, so it is the employer name the board id spells or a document confirms for it, and the board id itself where nothing confirms whose board it is (the note says which). postingCountries are the ISO codes its counted postings were located in. All counts come from location fields only and are those of that day, never a live number. A deployment loads the files of the markets it serves (seeds.ts): the mainland file and no other where GoApply alone is served, the international and the Taiwan file where RoboApply alone is, all three where both are. A board is ONE source there whatever file names it: countries is what it is READ for, and empty means the whole board, each posting landing in the market of its own location.",
   "boards": [
-    {
-      "ats": "greenhouse",
-      "boardToken": "coupang",
-      "companyName": "Coupang",
-      "countries": [],
-      "note": "docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 154 postings located in Taiwan",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "greenhouse",
-      "boardToken": "ubiquiti",
-      "companyName": "Ubiquiti",
-      "countries": [],
-      "note": "docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 85 postings located in Taiwan",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "greenhouse",
-      "boardToken": "appier",
-      "companyName": "Appier",
-      "countries": [],
-      "note": "docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 41 postings located in Taiwan",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "lever",
-      "boardToken": "binance",
-      "companyName": "Binance",
-      "countries": [],
-      "note": "docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 18 postings located in Taiwan",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "greenhouse",
-      "boardToken": "canonical",
-      "companyName": "Canonical",
-      "countries": [],
-      "note": "docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 16 postings located in Taiwan",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "greenhouse",
-      "boardToken": "asteralabs",
-      "companyName": "Astera Labs",
-      "countries": [],
-      "note": "docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 13 postings located in Taiwan",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "lever",
-      "boardToken": "piccollage",
-      "companyName": "PicCollage",
-      "countries": [],
-      "note": "docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 9 postings located in Taiwan",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "greenhouse",
-      "boardToken": "stripe",
-      "companyName": "Stripe",
-      "countries": [],
-      "note": "docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 4 postings located in Taiwan",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "lever",
-      "boardToken": "shopback-2",
-      "companyName": "ShopBack",
-      "countries": [],
-      "note": "docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 4 postings located in Taiwan",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "smartrecruiters",
-      "boardToken": "BoschGroup",
-      "companyName": "Bosch",
-      "countries": [
-        "TW"
-      ],
-      "note": "docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 4 postings located in Taiwan (listed with country=tw)",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "lever",
-      "boardToken": "crypto",
-      "companyName": "Crypto.com",
-      "countries": [],
-      "note": "docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 3 postings located in Taiwan",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "greenhouse",
-      "boardToken": "okx",
-      "companyName": "OKX",
-      "countries": [],
-      "note": "docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 3 postings located in Taiwan",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "greenhouse",
-      "boardToken": "dcard",
-      "companyName": "Dcard",
-      "countries": [],
-      "note": "docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 1 posting located in Taiwan",
-      "confirmedOn": "2026-10-11"
-    },
-    {
-      "ats": "ashby",
-      "boardToken": "kraken.com",
-      "companyName": "Kraken",
-      "countries": [],
-      "note": "docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 1 posting located in Taiwan",
-      "confirmedOn": "2026-10-11"
-    }
+    {"ats":"greenhouse","boardToken":"appier","companyName":"Appier","countries":[],"postings":40,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 41 postings located in Taiwan; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"asteralabs","companyName":"Astera Labs","countries":[],"postings":13,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 13 postings located in Taiwan; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"canonical","companyName":"Canonical","countries":[],"postings":13,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 16 postings located in Taiwan; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"coupang","companyName":"Coupang","countries":[],"postings":154,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 154 postings located in Taiwan; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"cresta","companyName":"Cresta","countries":[],"postings":2,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"dcard","companyName":"Dcard","countries":[],"postings":1,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 1 posting located in Taiwan; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"flexport","companyName":"Flexport","countries":[],"postings":2,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"gomotive","companyName":"Motive","countries":[],"postings":2,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"graphcore","companyName":"Graphcore","countries":[],"postings":7,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"jfrog","companyName":"JFrog","countries":[],"postings":2,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"mongodb","companyName":"MongoDB","countries":[],"postings":1,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"okx","companyName":"OKX","countries":[],"postings":3,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 3 postings located in Taiwan; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"optiverus","companyName":"Optiver","countries":[],"postings":3,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"peloton","companyName":"Peloton","countries":[],"postings":6,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"point72","companyName":"Point72","countries":[],"postings":3,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"roku","companyName":"Roku","countries":[],"postings":3,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"stripe","companyName":"Stripe","countries":[],"postings":4,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 4 postings located in Taiwan; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"taboola","companyName":"Taboola","countries":[],"postings":2,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"tenstorrent","companyName":"Tenstorrent","countries":[],"postings":6,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"ubiquiti","companyName":"Ubiquiti","countries":[],"postings":84,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 85 postings located in Taiwan; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"verkada","companyName":"Verkada","countries":[],"postings":4,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"greenhouse","boardToken":"waymo","companyName":"Waymo","countries":[],"postings":5,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"lever","boardToken":"binance","companyName":"Binance","countries":[],"postings":18,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 18 postings located in Taiwan; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); the system states no company name; the board id is the employer's name","confirmedOn":"2026-10-11"},
+    {"ats":"lever","boardToken":"crypto","companyName":"Crypto.com","countries":[],"postings":3,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 3 postings located in Taiwan; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); the system states no company name; docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5 confirms this board id for this employer","confirmedOn":"2026-10-11"},
+    {"ats":"lever","boardToken":"lalamove","companyName":"Lalamove","countries":[],"postings":19,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); the system states no company name; the board id is the employer's name","confirmedOn":"2026-10-11"},
+    {"ats":"lever","boardToken":"piccollage","companyName":"PicCollage","countries":[],"postings":9,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 9 postings located in Taiwan; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); the system states no company name; the board id is the employer's name","confirmedOn":"2026-10-11"},
+    {"ats":"lever","boardToken":"shieldai","companyName":"Shield AI","countries":[],"postings":7,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); the system states no company name; the board id is the employer's name","confirmedOn":"2026-10-11"},
+    {"ats":"lever","boardToken":"shopback-2","companyName":"ShopBack","countries":[],"postings":4,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 4 postings located in Taiwan; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); the system states no company name; docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5 confirms this board id for this employer","confirmedOn":"2026-10-11"},
+    {"ats":"lever","boardToken":"spotify","companyName":"Spotify","countries":[],"postings":2,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); the system states no company name; the board id is the employer's name","confirmedOn":"2026-10-11"},
+    {"ats":"lever","boardToken":"veeva","companyName":"Veeva","countries":[],"postings":1,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); the system states no company name; the board id is the employer's name","confirmedOn":"2026-10-11"},
+    {"ats":"ashby","boardToken":"airwallex","companyName":"Airwallex","countries":[],"postings":1,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); the system states no company name; the board id is the employer's name","confirmedOn":"2026-10-11"},
+    {"ats":"ashby","boardToken":"elevenlabs","companyName":"ElevenLabs","countries":[],"postings":1,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); the system states no company name; the board id is the employer's name","confirmedOn":"2026-10-11"},
+    {"ats":"ashby","boardToken":"etched","companyName":"Etched","countries":[],"postings":11,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); the system states no company name; the board id is the employer's name","confirmedOn":"2026-10-11"},
+    {"ats":"ashby","boardToken":"kraken.com","companyName":"Kraken","countries":[],"postings":1,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 1 posting located in Taiwan; re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); the system states no company name; docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5 confirms this board id for this employer","confirmedOn":"2026-10-11"},
+    {"ats":"smartrecruiters","boardToken":"AbbVie","companyName":"AbbVie","countries":["TW"],"postings":18,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"smartrecruiters","boardToken":"BoschGroup","companyName":"Bosch Group","countries":["TW"],"postings":4,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/JOB_SOURCES_TW.md 3.5: confirmed live, 4 postings located in Taiwan (listed with country=tw); re-read 2026-10-11: scripts/board-seeds/report-2026-10-11.json (docs/jobright-clone/market/BOARD_SEEDS.md); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"smartrecruiters","boardToken":"Eurofins","companyName":"Eurofins","countries":["TW"],"postings":3,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"smartrecruiters","boardToken":"HMGroup","companyName":"H&M Group","countries":["TW"],"postings":5,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"smartrecruiters","boardToken":"NielsenIQ","companyName":"NielsenIQ","countries":["TW"],"postings":7,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"smartrecruiters","boardToken":"SGS","companyName":"SGS","countries":["TW"],"postings":314,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"},
+    {"ats":"smartrecruiters","boardToken":"TurnerTownsend","companyName":"Turner & Townsend","countries":["TW"],"postings":18,"postingCountries":["TW"],"verifiedOn":"2026-10-11","verifiedBy":"live board API","note":"docs/jobright-clone/market/BOARD_SEEDS.md: the live board answered on 2026-10-11 (scripts/board-seeds/report-2026-10-11.json); company name as the board states it","confirmedOn":"2026-10-11"}
   ]
 }
