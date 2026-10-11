@@ -8,7 +8,10 @@ import { describe, expect, it } from 'vitest';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { normalizeSql } from '../../test/sqlSnapshot.js';
 import { FILTER_FIELDS, type FilterField, type FilterSet } from '../search/index.js';
+import { AGE_EXPIRY_BOARDS } from '../jobs/normalize/index.js';
+import { queryTokens, toTsQuery } from '../retrieval/index.js';
 import {
+  AGE_FLOOR_BOARDS,
   ageFloorSql,
   annualFloor,
   browseTaxonomySql,
@@ -18,6 +21,8 @@ import {
   exploreCountsSql,
   filterPredicates,
   isCountryWideLocation,
+  allTokensTsQuery,
+  isShortLatinQuery,
   jobIdsSql,
   predicateFor,
   qPredicateSql,
@@ -26,6 +31,7 @@ import {
   rowsByIdSql,
   scopePredicates,
   sourcesSql,
+  wideQPredicateSql,
 } from './sql.js';
 
 const NOW = new Date('2026-10-10T12:00:00.000Z');
@@ -85,18 +91,109 @@ describe('predicates (one snapshot per FilterSet field)', () => {
     expect(show(predicateFor(field, filters, market === 'cn' ? cn : intl))).toMatchSnapshot();
   });
 
-  it('qPredicateSql is the predicate of the q field, as its own function (the hybrid legs of phase M4 reuse it)', () => {
+  it('the q field is the WIDE predicate: a search document that holds every word of the query, OR the thin searchText (MKT-4F)', () => {
     const viaField = predicateFor('q', { q: '  Data 50%  ' }, intl)!;
-    const direct = qPredicateSql('Data 50%');
-    expect(show(direct)).toEqual(show(viaField));
-    expect(direct.text).toBe(viaField.text);
-    expect(direct.values).toEqual(viaField.values);
-    // The statement itself: a substring match on searchText, or a trigram word-similarity match.
-    expect(direct.text).toBe('(j."searchText" ILIKE $1 OR $2 <% j."searchText")');
-    expect(direct.values).toEqual(['%data 50\\%%', 'data 50%']);
+    const wide = wideQPredicateSql('Data 50%');
+    expect(show(viaField)).toEqual(show(wide));
+    // A row with no document yet (`searchTsv` null) is still found through searchText, and the misspelling match stays.
+    expect(wide.text).toBe(`(j."searchTsv" @@ to_tsquery('simple', $1) OR (j."searchText" ILIKE $2 OR $3 <% j."searchText"))`);
+    expect(wide.values).toEqual(["'data'", '%data 50\\%%', 'data 50%']);
+    // The tokens are those of the function that segmented the document: a bound value, never spliced text.
+    expect(wide.values[0]).toBe(allTokensTsQuery('Data 50%'));
+    expect(show(wideQPredicateSql("'; DROP TABLE x; --"))!.text).toBe(wide.text);
     // The same on both markets, and nothing for an empty query.
-    expect(show(predicateFor('q', { q: 'Data 50%' }, cn))).toEqual(show(direct));
+    expect(show(predicateFor('q', { q: 'Data 50%' }, cn))).toEqual(show(wide));
     expect(predicateFor('q', { q: '   ' }, intl)).toBeNull();
+  });
+
+  it('a typed query is a FILTER: the search document must hold EVERY word, never just any of them', () => {
+    // "product manager" must not keep every posting that says "product" or "manager" somewhere.
+    expect(show(wideQPredicateSql('product manager'))!.values[0]).toBe("'product' & 'manager'");
+    expect(show(wideQPredicateSql('Terraform, Kubernetes'))!.values[0]).toBe("'terraform' & 'kubernetes'");
+    expect(show(predicateFor('q', { q: 'senior product manager' }, intl))!.values[0]).toBe("'senior' & 'product' & 'manager'");
+    // The same tokens as the lexical leg's query (function words, one-character CJK tokens and bare numbers left
+    // out; the Traditional form folded), joined by AND where the leg's ORDER BY joins them by OR.
+    for (const q of ['product manager', 'jobs for a data engineer in 2026', '資深 前端 工程師', 'C++ and node.js']) {
+      const all = allTokensTsQuery(q)!;
+      expect(all.split(' & '), q).toEqual(queryTokens(q).map((t) => `'${t}'`));
+      expect(all.split(' & ').join(' | '), q).toBe(toTsQuery(q));
+    }
+    expect(allTokensTsQuery('jobs for a data engineer in 2026')).toBe("'data' & 'engineer'");
+    // A query of one word is the same under AND and OR: nothing changes for it.
+    expect(allTokensTsQuery('terraform')).toBe(toTsQuery('terraform'));
+    expect(allTokensTsQuery('+++')).toBeNull();
+    expect(allTokensTsQuery(null)).toBeNull();
+    // A quote inside a token cannot end the operand (tokens are letters and digits; the quoting holds anyway).
+    expect(allTokensTsQuery("o'neil")).toBe("'o' & 'neil'");
+  });
+
+  it('every statement that filters by a typed query asks for every word: list, count, sample, alert candidates and the source header', () => {
+    const scope = { market: 'intl' as const, userId: 'u1', now: NOW };
+    const filters: FilterSet = { q: 'product manager' };
+    for (const sql of [
+      retrievalSql({ scope, filters, fields: FILTER_FIELDS, from: null, to: null, limit: 400 }),
+      countSql({ scope, filters, fields: FILTER_FIELDS, cap: 5000 }),
+      jobIdsSql({ scope, filters, fields: FILTER_FIELDS, from: null, limit: 10, orderBy: 'posted' }),
+      jobIdsSql({ scope: { ...scope, publicOnly: true }, filters, fields: FILTER_FIELDS, from: null, firstSeenAfter: NOW, limit: 10, orderBy: 'first_seen' }),
+      sourcesSql({ scope, filters, fields: FILTER_FIELDS, from: null }),
+    ]) {
+      const shown = show(sql)!;
+      expect(shown.values).toContain("'product' & 'manager'");
+      expect(shown.values).not.toContain("'product' | 'manager'");
+    }
+  });
+
+  it('qPredicateSql is its narrow half, unchanged: a substring match on searchText, or a trigram word-similarity match', () => {
+    const narrow = qPredicateSql('Data 50%');
+    expect(narrow.text).toBe('(j."searchText" ILIKE $1 OR $2 <% j."searchText")');
+    expect(narrow.values).toEqual(['%data 50\\%%', 'data 50%']);
+  });
+
+  it('a query under three Latin characters uses the narrow predicate alone; two Chinese characters are a whole word', () => {
+    for (const q of ['go', 'r', 'c#', 'AI', ' qa ']) {
+      expect(isShortLatinQuery(q), q).toBe(true);
+      expect(show(wideQPredicateSql(q.trim())), q).toEqual(show(qPredicateSql(q.trim())));
+      expect(show(predicateFor('q', { q }, intl)), q).toEqual(show(qPredicateSql(q.trim())));
+    }
+    for (const q of ['sql', 'rust', '前端', '後端', 'デザ', 'UI 设计']) expect(isShortLatinQuery(q), q).toBe(false);
+    expect(show(predicateFor('q', { q: '前端' }, cn))).toMatchInlineSnapshot(`
+      {
+        "text": "(j."searchTsv" @@ to_tsquery('simple', $1) OR (j."searchText" ILIKE $2 OR $3 <% j."searchText"))",
+        "values": [
+          "'前端'",
+          "%前端%",
+          "前端",
+        ],
+      }
+    `);
+    expect(show(predicateFor('q', { q: 'go' }, intl))).toMatchInlineSnapshot(`
+      {
+        "text": "(j."searchText" ILIKE $1 OR $2 <% j."searchText")",
+        "values": [
+          "%go%",
+          "go",
+        ],
+      }
+    `);
+    // A query with no token at all (only punctuation) has nothing to search the document with.
+    expect(show(wideQPredicateSql('+++'))).toEqual(show(qPredicateSql('+++')));
+  });
+
+  it('counts, samples and alert candidates carry the same wide predicate as the list (they find a word that is only in the description)', () => {
+    const scope = { market: 'intl' as const, userId: 'u1', now: NOW };
+    const filters: FilterSet = { q: 'terraform' };
+    const wide = show(wideQPredicateSql('terraform'))!.text.replace(/\$\d+/g, '$n');
+    for (const sql of [
+      retrievalSql({ scope, filters, fields: FILTER_FIELDS, from: null, to: null, limit: 400 }),
+      countSql({ scope, filters, fields: FILTER_FIELDS, cap: 5000 }),
+      jobIdsSql({ scope, filters, fields: FILTER_FIELDS, from: null, limit: 10, orderBy: 'posted' }),
+      jobIdsSql({ scope: { ...scope, publicOnly: true }, filters, fields: FILTER_FIELDS, from: null, firstSeenAfter: NOW, limit: 10, orderBy: 'first_seen' }),
+      sourcesSql({ scope, filters, fields: FILTER_FIELDS, from: null }),
+    ]) {
+      const shown = show(sql)!;
+      expect(shown.text.replace(/\$\d+/g, '$n')).toContain(wide);
+      expect(shown.values).toContain("'terraform'");
+    }
   });
 
   it('fitTier and preferredCompanies never become SQL (view filter / boost only)', () => {
@@ -233,16 +330,26 @@ describe('mainland apply-link rule (a public posting with no usable apply URL is
 });
 
 const AGE_FLOOR = '(j."postedAt" >= $';
-const AGE_FREE = 'OR (j."postedAt" IS NOT NULL AND (j."sourceBoard" = ANY($';
+const AGE_FREE = 'OR (j."postedAt" IS NOT NULL AND NOT (j."sourceBoard" = ANY($';
 const HELD_BANKS = 'NOT (j."fromRecruiterBank" = true AND j."sourceBoard" = ANY($';
 
-describe('posting age: the floor cuts aggregator rows only (plan §3.9: no posting-age cut-off for board or bank rows)', () => {
+describe('posting age: the floor cuts the rows whose only life is their posting date (M-22: a posting-age cut-off applies to aggregator rows only)', () => {
   const floor = new Date('2026-06-12T12:00:00Z');
 
-  it('the predicate: at or above the floor, or a dated row of a recruiter bank or a public employer board', () => {
+  it('the predicate: at or above the floor, or a dated row of a source the floor does not apply to', () => {
     const sql = show(ageFloorSql(floor))!;
-    expect(sql.text).toBe('(j."postedAt" >= $1::timestamp(3) OR (j."postedAt" IS NOT NULL AND (j."sourceBoard" = ANY($2::text[]) OR j."fromRecruiterBank" = true)))');
-    expect(sql.values).toEqual(['2026-06-12T12:00:00.000Z', ['robohire', 'gohire', 'greenhouse', 'lever', 'ashby', 'smartrecruiters']]);
+    expect(sql.text).toBe('(j."postedAt" >= $1::timestamp(3) OR (j."postedAt" IS NOT NULL AND NOT (j."sourceBoard" = ANY($2::text[]))))');
+    expect(sql.values).toEqual(['2026-06-12T12:00:00.000Z', ['activejobs', 'linkedin', 'jsearch', 'user_import', 'tw_open_data']]);
+  });
+
+  it('the floor applies to the boards ingest expires by age, to own imports and to 台灣就業通; to no bank, employer board or government board', () => {
+    // The aggregators: the very list ingest's own age rule reads, so a new aggregator needs one entry, there.
+    for (const board of AGE_EXPIRY_BOARDS) expect(AGE_FLOOR_BOARDS).toContain(board);
+    expect([...AGE_FLOOR_BOARDS].sort()).toEqual([...new Set([...AGE_EXPIRY_BOARDS, 'user_import', 'tw_open_data'])].sort());
+    // Sources that close their own rows are listed at any age, the ones added after the list was first written included.
+    for (const board of ['robohire', 'gohire', 'greenhouse', 'lever', 'ashby', 'smartrecruiters', 'ats_public', 'tw_gov_jobs', 'usajobs']) {
+      expect(AGE_FLOOR_BOARDS, board).not.toContain(board);
+    }
   });
 
   it('a window start stays a hard bound; the age floor is the exempting one, in the list, the id seams, the header and Explore', () => {

@@ -6,7 +6,16 @@
 //   • A sentence → filters: `POST /feed/nl-query` turns "remote data jobs in
 //     Berlin paying over €70k" into a filter change, shown field by field
 //     (FilterDiff) and saved to the active search only when the user confirms.
-//     The explanation is AI output: GoApply labels it (AiGeneratedBadge).
+//     What the sentence left over is said in two lines, in the person's own
+//     words (SM-9): the topics the list will be RANKED BY ("climate startups,
+//     Rust"), and the phrases that are simply not checked. Neither is claimed
+//     to be a requirement that was verified (D3). Both lines come from the
+//     planner, so GoApply labels them as AI output (AiGeneratedBadge).
+//     Applying the proposal saves the filters and hands the ranking terms to
+//     the /jobs list (hooks/feed/useExplore.ts `rankListBy`). A sentence that
+//     changes no filter (the saved search already says it) can still leave
+//     ranking terms: the page then says so and offers to rank the list by
+//     them, which saves nothing.
 //   • Kinds of work: the function categories with live counts from our index
 //     (`GET /feed/explore`, public canonical rows of this market). Picking one
 //     lists its jobs (`?category=<taxonomyId>`): a browse of that category
@@ -25,7 +34,7 @@ import { useBrand } from '../../../lib/brand/BrandProvider';
 import { useFlag } from '../../../lib/flags';
 import { apiErrorCode } from '../../../lib/api/contracts/wire';
 import type { NlQueryResponse } from '../../../lib/api/contracts/feed';
-import { useExplore, useNlQuery } from '../../../hooks/feed/useExplore';
+import { nlLines, rankListBy, useExplore, useNlQuery } from '../../../hooks/feed/useExplore';
 import { useFeed } from '../../../hooks/feed/useFeed';
 import { applyPatchPreview, isNoopPatch, opsToPatch } from '../../../hooks/feed/filterOps';
 import { FeedList } from './FeedList';
@@ -58,6 +67,7 @@ function CategoryJobs({ categoryId, label, market }: { categoryId: string; label
 export function Explore() {
   const t = useTranslations('jobs.explore');
   const tw = useTranslations('jobs.workspace');
+  const tNl = useTranslations('jobs.nl');
   const brand = useBrand();
   const feedOn = useFlag('jobs.feed');
   const router = useRouter();
@@ -68,6 +78,8 @@ export function Explore() {
   const proposal = useProposalApply();
   const [text, setText] = useState('');
   const [result, setResult] = useState<NlQueryResponse | null>(null);
+  /** A response that changes no filter but leaves words to rank by: offered apart, nothing to save. */
+  const [rankOffer, setRankOffer] = useState<NlQueryResponse | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const categories = explore.data?.categories ?? [];
@@ -79,12 +91,16 @@ export function Explore() {
     if (q.length < 2) return;
     setMessage(null);
     setResult(null);
+    setRankOffer(null);
     try {
       const res = await nl.mutateAsync(proposal.profile ? { text: q, searchProfileId: proposal.profile.id } : { text: q });
       const ops = res.diff && Array.isArray(res.diff.ops) ? res.diff.ops : [];
       const base = proposal.target(res.diff?.searchProfileId)?.filters ?? {};
-      if (ops.length === 0 || isNoopPatch(base, opsToPatch(base, ops))) setMessage(t('nlNoChange'));
-      else setResult(res);
+      if (ops.length === 0 || isNoopPatch(base, opsToPatch(base, ops))) {
+        setMessage(t('nlNoChange'));
+        // The filters stay as they are; the words that became no filter can still order the list.
+        if (nlLines(res).rankedBy.length) setRankOffer(res);
+      } else setResult(res);
     } catch (err) {
       const code = apiErrorCode(err);
       setMessage(code && UNAVAILABLE.has(code) ? t('nlUnavailable') : t('nlFailed'));
@@ -95,11 +111,23 @@ export function Explore() {
   const before = target?.filters ?? {};
   const patch = result ? opsToPatch(before, result.diff.ops) : {};
   const after = applyPatchPreview(before, patch);
+  const lines = nlLines(result ?? rankOffer ?? {});
+  const aiLabel = brand.market === 'cn' ? <AiGeneratedBadge kind="text" /> : null;
+  const offerTarget = rankOffer ? proposal.target(rankOffer.diff?.searchProfileId) : null;
+
+  /** Rank the list of the search as it is by the left-over words. Nothing is saved, so no new version follows. */
+  const rankOnly = () => {
+    if (!rankOffer || !offerTarget) return;
+    rankListBy({ searchProfileId: offerTarget.id, baseVersion: offerTarget.version, rankedBy: lines.rankedBy, saved: false });
+    router.push('/jobs');
+  };
 
   const confirm = async () => {
     if (!result) return;
     const res = await proposal.save(patch, result.diff.searchProfileId);
     if (res === 'saved') {
+      // The list of that search is ranked by the left-over topics from now on (none: back to the plain order).
+      rankListBy({ searchProfileId: target?.id ?? result.diff.searchProfileId, baseVersion: target?.version ?? result.diff.baseVersion, rankedBy: lines.rankedBy });
       toast({ message: t('nlSaved'), tone: 'ok' });
       router.push('/jobs');
     } else {
@@ -152,9 +180,14 @@ export function Explore() {
             {result ? (
               <section className={styles.prompt} aria-label={t('nlProposal')} data-testid="nl-proposal">
                 <h2 className={styles.promptTitle}>{t('nlProposal')}</h2>
-                {result.explanation ? (
-                  <p className={styles.help}>
-                    {result.explanation} {brand.market === 'cn' ? <AiGeneratedBadge kind="text" /> : null}
+                {lines.rankedBy.length ? (
+                  <p className={styles.help} data-testid="nl-ranked-by">
+                    {tNl('rankedBy', { terms: lines.rankedBy.join(', ') })} {aiLabel}
+                  </p>
+                ) : null}
+                {lines.notChecked.length ? (
+                  <p className={styles.help} data-testid="nl-not-checked">
+                    {tNl('notChecked', { items: lines.notChecked.join('; ') })} {aiLabel}
                   </p>
                 ) : null}
                 <FilterDiff before={before} after={after} filters={after} />
@@ -163,6 +196,28 @@ export function Explore() {
                     {t('nlConfirm')}
                   </Btn>
                   <Btn className={styles.actionBtn} onClick={() => setResult(null)}>
+                    {t('nlCancel')}
+                  </Btn>
+                </div>
+              </section>
+            ) : null}
+
+            {rankOffer ? (
+              <section className={styles.prompt} aria-label={tNl('rankOnlyTitle')} data-testid="nl-rank-only">
+                <h2 className={styles.promptTitle}>{tNl('rankOnlyTitle')}</h2>
+                <p className={styles.help} data-testid="nl-ranked-by">
+                  {tNl('rankedBy', { terms: lines.rankedBy.join(', ') })} {aiLabel}
+                </p>
+                {lines.notChecked.length ? (
+                  <p className={styles.help} data-testid="nl-not-checked">
+                    {tNl('notChecked', { items: lines.notChecked.join('; ') })} {aiLabel}
+                  </p>
+                ) : null}
+                <div className={styles.row}>
+                  <Btn variant="primary" className={styles.actionBtn} onClick={rankOnly} disabled={!offerTarget}>
+                    {tNl('rankOnlyApply')}
+                  </Btn>
+                  <Btn className={styles.actionBtn} onClick={() => setRankOffer(null)}>
                     {t('nlCancel')}
                   </Btn>
                 </div>

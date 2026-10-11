@@ -2,13 +2,28 @@
   "jobs": {
     "card": {
       "firstSeen": "First seen {date}",
-      "leadLabel": "{label}:"
+      "leadLabel": "{label}:",
+      "alsoIn": "Also in {count, plural, one {# more location} other {# more locations}}",
+      "alsoInList": "Other locations for {title} at {company}",
+      "alsoInMore": "{count, plural, one {# more location is not listed here.} other {# more locations are not listed here.}}"
     },
     "workspace": {
       "introByDate": "Jobs are listed by date posted, newest first. Open one to see the details."
     },
     "searchApi": {
       "keySourcesOff": "No job source is open to API keys on this site right now, so a request made with a key returns an error and no jobs. The site operator decides which sources keys can read."
+    },
+    "order": {
+      "queryMatch": "Ordered by how closely the post matches your search."
+    },
+    "nl": {
+      "rankedBy": "Ranked by closeness to: {terms}. These were not checked as requirements.",
+      "notChecked": "Not checked: {items}.",
+      "rankOnlyTitle": "Your filters stay as they are",
+      "rankOnlyApply": "Rank my list by these words",
+      "chip": "Ranked by: {terms}",
+      "chipClear": "Clear",
+      "chipClearLabel": "Stop ranking the list by these words"
     }
   }
 }

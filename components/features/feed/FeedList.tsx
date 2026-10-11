@@ -8,6 +8,9 @@
 // once. On GoApply a public posting that names no source is not shown (D3:
 // no card without a source); the server never sends one, so this only guards
 // the rule. Nothing else is filtered on the client.
+// A card whose item carries `alsoIn` (the same role at the same company in
+// other places, folded into it by the server) gets the "Also in N more
+// locations" control directly under it (AlsoInLocations.tsx).
 
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
@@ -15,6 +18,7 @@ import { useTranslations } from 'next-intl';
 import { Btn } from '../../v3/primitives';
 import type { FeedListState } from '../../../hooks/feed/useFeed';
 import { useImpressions } from '../../../hooks/feed/useImpressions';
+import { AlsoInLocations } from './AlsoInLocations';
 import { JobCard } from './JobCard';
 import { hasNamedSource } from './cardModel';
 import styles from './feed.module.css';
@@ -111,6 +115,7 @@ export function FeedList({ feed, market, activeJobId = null, onOpen, onSeen, emp
                 onHidden={(id) => setHidden((prev) => new Set(prev).add(id))}
                 observe={observe(item.jobId, index)}
               />
+              {item.alsoIn ? <AlsoInLocations alsoIn={item.alsoIn} title={item.title} company={item.company.name} onOpen={onOpen} /> : null}
             </li>
             {inline && inline.node && index === Math.min(inline.after, items.length - 1) ? <li>{inline.node}</li> : null}
           </Fragment>

@@ -7,7 +7,13 @@
 //     admin decision (RAJobReview, else the legacy `admin_review` interaction);
 //   - WP-78: publicPageIds applies the SEO pages' public predicate;
 //   - WP-35: the "Added by you" count;
-//   - SM-4: the feed has no AI-score read of its own (fits come from match `getFits`).
+//   - SM-4: the feed has no AI-score read of its own (fits come from match `getFits`);
+//   - SM-12 (MKT-4F): RAUserAffinity.titleWeights is read and written, a row
+//     without a usable value reads as an empty map; `impressionStates`; the
+//     action job carries its normalized title and canonical skill ids; the
+//     session rank entries may carry a same-role group and its folded postings,
+//     or mark a first-window row the fit-tier view hid; `recordImpressions`
+//     counts a job once per feed session.
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -26,6 +32,21 @@ describe('feed session boundary id (SR-32-4)', () => {
     expect(unpackRanks(null)).toEqual({ ranks: [], windowEndsId: null });
     expect(FeedSessionRanksSchema.safeParse({ entries, windowEndsId: null }).success).toBe(true);
     expect(FeedSessionRanksSchema.safeParse(entries).success).toBe(true);
+  });
+
+  it('a rank entry may carry its same-role group and the postings folded into the card; nothing else', () => {
+    const collapsed = [{ ...entries[0]!, g: '0123456789abcdef', also: ['j2', 'j3'] }, { jobId: 'j4', fit: null, kind: 'ai' as const, rank: 0 }];
+    expect(FeedSessionRanksSchema.safeParse(collapsed).success).toBe(true);
+    expect(unpackRanks(collapsed)).toEqual({ ranks: collapsed, windowEndsId: null });
+    expect(FeedSessionRanksSchema.safeParse([{ ...entries[0]!, also: 'j2' }]).success).toBe(false);
+    expect(FeedSessionRanksSchema.safeParse([{ ...entries[0]!, extra: 1 }]).success).toBe(false);
+  });
+
+  it('a rank entry may mark a first-window row the fit-tier view hid (not a card): `h: true`, never false', () => {
+    const withHidden = [entries[0]!, { jobId: 'j9', fit: null, kind: 'pre' as const, rank: 0, h: true as const }];
+    expect(FeedSessionRanksSchema.safeParse(withHidden).success).toBe(true);
+    expect(unpackRanks(withHidden)).toEqual({ ranks: withHidden, windowEndsId: null });
+    expect(FeedSessionRanksSchema.safeParse([{ ...entries[0]!, h: false }]).success).toBe(false);
   });
 
   it('SR-32-4: the boundary id is written to and read from RAFeedSession.windowEndsId; ranks is the bare array', async () => {
@@ -264,5 +285,159 @@ describe('the feed reads no AI score of its own (SM-4)', () => {
       expect(source(file), file).not.toMatch(/pre\s*[-−]\s*5|\bfitOf\b|minus 5/);
     }
     expect(RANKING_FACTORS.find((f) => f.key === 'fit')!.what).toBe('Fit score: the AI score when one exists, otherwise the quick estimate. Both are on the same scale. Until a market has enough scored jobs to line the two up, a job with an AI score is ranked halfway between its quick estimate and its AI score.');
+  });
+});
+
+// ── Affinity title weights, impressions, the action job (SM-12) ─────────────
+
+describe('RAUserAffinity.titleWeights (SM-12)', () => {
+  function affinityDb(row: Record<string, unknown> | null) {
+    const writes: Array<{ create: Record<string, unknown>; update: Record<string, unknown> }> = [];
+    const db = {
+      rAUserAffinity: {
+        findUnique: async () => row,
+        upsert: async (args: { create: Record<string, unknown>; update: Record<string, unknown> }) => {
+          writes.push({ create: args.create, update: args.update });
+        },
+      },
+    };
+    return { repo: createPrismaFeedRepo(async () => db as never), writes };
+  }
+  const at = new Date('2026-10-10T12:00:00Z');
+
+  it('reads the title map next to the other three', async () => {
+    const { repo } = affinityDb({ userId: 'u1', taxonomyWeights: { sales_engineer: -0.25 }, companyWeights: {}, skillWeights: { sk_sql: 0.1 }, titleWeights: { 'sales engineer': -0.25 }, updatedAt: at });
+    expect(await repo.getAffinity('u1')).toEqual({ taxonomy: { sales_engineer: -0.25 }, company: {}, skill: { sk_sql: 0.1 }, title: { 'sales engineer': -0.25 }, updatedAt: at });
+  });
+
+  it('a row with no title value (written before the column), a null or a malformed one reads as an empty map', async () => {
+    for (const titleWeights of [undefined, null, 'x', [1], 7]) {
+      const row: Record<string, unknown> = { userId: 'u1', taxonomyWeights: { a: 0.2 }, companyWeights: {}, skillWeights: {}, updatedAt: at };
+      if (titleWeights !== undefined) row.titleWeights = titleWeights;
+      const { repo } = affinityDb(row);
+      expect((await repo.getAffinity('u1'))!.title).toEqual({});
+    }
+    // Entries that are not numbers are dropped, numbers are clamped to −1..1.
+    const { repo } = affinityDb({ userId: 'u1', taxonomyWeights: {}, companyWeights: {}, skillWeights: {}, titleWeights: { a: -0.4, b: 'x', c: -9 }, updatedAt: at });
+    expect((await repo.getAffinity('u1'))!.title).toEqual({ a: -0.4, c: -1 });
+    expect(await affinityDb(null).repo.getAffinity('u1')).toBeNull();
+  });
+
+  it('writes the title map on create and on update; a state without one writes an empty map', async () => {
+    const { repo, writes } = affinityDb(null);
+    await repo.saveAffinity('u1', { taxonomy: { r: -0.25 }, company: {}, skill: {}, title: { 'sales engineer': -0.25 }, updatedAt: at });
+    await repo.saveAffinity('u1', { taxonomy: { r: 0.1 }, company: {}, skill: {}, updatedAt: at });
+    expect(writes[0]!.create).toEqual({ userId: 'u1', taxonomyWeights: { r: -0.25 }, companyWeights: {}, skillWeights: {}, titleWeights: { 'sales engineer': -0.25 } });
+    expect(writes[0]!.update).toEqual({ taxonomyWeights: { r: -0.25 }, companyWeights: {}, skillWeights: {}, titleWeights: { 'sales engineer': -0.25 } });
+    expect(writes[1]!.update).toMatchObject({ titleWeights: {} });
+  });
+});
+
+describe('recordImpressions (one impression per job and feed session)', () => {
+  const at = new Date('2026-10-10T12:00:30.000Z');
+  const sessionStartedAt = new Date('2026-10-10T12:00:00.000Z');
+
+  it('one statement: a new row counts 1; an existing row is raised only when it was last shown before the session started', async () => {
+    const calls: Array<{ text: string; values: unknown[] }> = [];
+    const db = {
+      $executeRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
+        calls.push({ text: strings.join('?').replace(/\s+/g, ' ').trim(), values });
+        return 1;
+      },
+    };
+    const repo = createPrismaFeedRepo(async () => db as never);
+    await repo.recordImpressions('u1', ['j1', 'j2'], at, sessionStartedAt);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.text).toBe(
+      'INSERT INTO "RAJobUserState" ("userId", "jobId", "impressions", "lastImpressionAt") ' +
+        'SELECT ?, j.id, 1, ?::timestamp(3) FROM unnest(?::text[]) AS j(id) ' +
+        'ON CONFLICT ("userId", "jobId") DO UPDATE ' +
+        'SET "impressions" = "RAJobUserState"."impressions" + 1, "lastImpressionAt" = EXCLUDED."lastImpressionAt" ' +
+        'WHERE "RAJobUserState"."lastImpressionAt" IS NULL OR "RAJobUserState"."lastImpressionAt" < ?::timestamp(3)',
+    );
+    expect(calls[0]!.values).toEqual(['u1', at, ['j1', 'j2'], sessionStartedAt]);
+    // No job: no statement.
+    await repo.recordImpressions('u1', [], at, sessionStartedAt);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('the stamp is never before the session\'s start, so a second batch of the same session cannot count again', async () => {
+    const values: unknown[][] = [];
+    const db = { $executeRaw: async (_s: TemplateStringsArray, ...v: unknown[]) => (values.push(v), 1) };
+    const early = new Date(sessionStartedAt.getTime() - 500);
+    await createPrismaFeedRepo(async () => db as never).recordImpressions('u1', ['j1'], early, sessionStartedAt);
+    expect(values[0]).toEqual(['u1', sessionStartedAt, ['j1'], sessionStartedAt]);
+  });
+
+  it('the in-memory repo follows the same rule: two batches of one session count once, the next session counts again', async () => {
+    const fake = new FakeFeedRepo();
+    await fake.recordImpressions('u1', ['j1', 'j2'], at, sessionStartedAt);
+    await fake.recordImpressions('u1', ['j1'], new Date(at.getTime() + 15_000), sessionStartedAt);
+    await fake.recordImpressions('u1', ['j1'], new Date(at.getTime() + 30_000), sessionStartedAt);
+    const read = async () => Object.fromEntries([...(await fake.impressionStates('u1', ['j1', 'j2']))].map(([id, st]) => [id, st.impressions]));
+    expect(await read()).toEqual({ j1: 1, j2: 1 });
+    const nextSession = new Date(at.getTime() + 3_600_000);
+    await fake.recordImpressions('u1', ['j1'], new Date(nextSession.getTime() + 5_000), nextSession);
+    expect(await read()).toEqual({ j1: 2, j2: 1 });
+    // A row that exists without an impression (a hidden or opened job) counts its first one.
+    fake.impressionRows.set('u1:j3', { impressions: 0, viewedAt: null });
+    await fake.recordImpressions('u1', ['j3'], at, sessionStartedAt);
+    expect((await fake.impressionStates('u1', ['j3'])).get('j3')).toEqual({ impressions: 1, viewedAt: null });
+    // Another person's impressions are their own.
+    expect((await fake.impressionStates('u2', ['j1'])).size).toBe(0);
+  });
+});
+
+describe('impressionStates (seen and skipped)', () => {
+  it('reads the impression counter and the opened date of the asked jobs, for this user, shown at least once', async () => {
+    const seen: Array<Record<string, unknown>> = [];
+    const opened = new Date('2026-10-09T08:00:00Z');
+    const db = {
+      rAJobUserState: {
+        findMany: async (args: Record<string, unknown>) => {
+          seen.push(args);
+          return [
+            { jobId: 'j1', impressions: 5, viewedAt: null },
+            { jobId: 'j2', impressions: 3, viewedAt: opened },
+          ];
+        },
+      },
+    };
+    const repo = createPrismaFeedRepo(async () => db as never);
+    const out = await repo.impressionStates('u1', ['j1', 'j2', 'j3']);
+    expect([...out]).toEqual([
+      ['j1', { impressions: 5, viewedAt: null }],
+      ['j2', { impressions: 3, viewedAt: opened }],
+    ]);
+    expect(seen[0]).toEqual({ where: { userId: 'u1', jobId: { in: ['j1', 'j2', 'j3'] }, impressions: { gt: 0 } }, select: { jobId: true, impressions: true, viewedAt: true } });
+    // No ids: no read.
+    expect((await repo.impressionStates('u1', [])).size).toBe(0);
+    expect(seen).toHaveLength(1);
+  });
+
+  it('the in-memory repo answers the same shape', async () => {
+    const fake = new FakeFeedRepo();
+    fake.impressionRows.set('u1:j1', { impressions: 4, viewedAt: null });
+    fake.impressionRows.set('u2:j1', { impressions: 9, viewedAt: null });
+    fake.impressionRows.set('u1:j2', { impressions: 0, viewedAt: null });
+    expect([...(await fake.impressionStates('u1', ['j1', 'j2', 'j3']))]).toEqual([['j1', { impressions: 4, viewedAt: null }]]);
+  });
+});
+
+describe('the job a hide or a save acts on', () => {
+  it('carries its normalized title and its canonical skill ids (the title-level negative and the skill keys read them)', async () => {
+    let select: Record<string, unknown> = {};
+    const db = {
+      rAJob: {
+        findUnique: async (args: { select: Record<string, unknown> }) => {
+          select = args.select;
+          return null;
+        },
+      },
+    };
+    await createPrismaFeedRepo(async () => db as never).actionJob('j1');
+    expect(select).toMatchObject({ title: true, titleNormalized: true, skills: true, skillIds: true, primaryTaxonomyId: true, companyNameNormalized: true });
+    // Never a description, the search document or the tsvector.
+    expect(Object.keys(select).some((k) => /description|searchDoc|searchTsv/.test(k))).toBe(false);
   });
 });

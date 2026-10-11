@@ -5,7 +5,25 @@
       "deadlineSort": "{deadline} lists jobs by the date their applications close, soonest first.",
       "fit": {
         "body": "Your fit score for the job, out of 100. When a full fit analysis isn't available yet, a quick estimate on the same scale is used. A job whose quick estimate has too little to go on is left out when you filter for Good fits and better or Great fits only. While we are still comparing quick estimates with full analyses, a job with a full analysis is placed halfway between its quick estimate and its analysed score, so its place in the list can differ from the number on its card."
-      }
+      },
+      "freshness": {
+        "body": "Newer posts come first. The effect is strongest in the first two days and keeps a smaller weight for about two weeks. A post that is no longer listed by its source counts as older."
+      },
+      "pointsNote": "Each job gets a ranking score out of 100 from the four factors. The rules and goals below add points to that score, take points away, or move jobs within the list.",
+      "pointsNoteRules": "Each job gets a ranking score out of 100 from the four factors. The rules below add points to that score or take points away.",
+      "upToPointsLower": "Up to {points} points lower",
+      "rules": {
+        "wrongTitle": {
+          "title": "Titles you marked as wrong",
+          "body": "If you mark a job as \"Not interested: wrong title\", the weight of that role and the weight of that title each go down by 0.25, on a scale that runs from -1 to 1. \"What you've shown interest in\" is the average of a job's role, company and skills weights, and of its title weight when that is below zero. So one mark lowers other jobs with the same role or title a little, and each further mark lowers them more. The effect fades by 2% a day. Your filters stay as they are."
+        },
+        "seenSkipped": {
+          "title": "Jobs you keep passing over",
+          "body": "A job that was in your list on three or more visits and that you never opened ranks lower: 5 points after three visits, 7.5 after four, and 10 from five on."
+        }
+      },
+      "sameRole": "When a company posts the same role in several cities, you see one card that lists the other locations, up to 10. Any further locations appear as another card.",
+      "cnNote": "On %BRAND%, if personalised recommendations are off or not chosen yet, jobs are ordered by date and your filters only. When you search with words, they are ordered by how closely each post matches those words."
     },
     "home": {
       "pricing": {

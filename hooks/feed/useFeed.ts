@@ -15,7 +15,11 @@
 //     `rate_limited`, `details.reason: feed_refresh_limited`): the list is not
 //     refetched on focus or by job actions (see keys.ts);
 //   • a next page whose server session expired (409 `conflict`,
-//     `details.reason: feed_session_expired`) restarts the list from page 1.
+//     `details.reason: feed_session_expired`) restarts the list from page 1;
+//   • `relevance` (the words a plain-language search left over, see
+//     useExplore.ts) is sent with EVERY page of the list: it is part of the
+//     server session's identity, so a page asked without it would be refused.
+//     It only orders the list; nothing is filtered by it.
 
 import { useEffect, useMemo } from 'react';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
@@ -33,6 +37,8 @@ export interface UseFeedParams {
   fitTier: FeedFitView;
   /** Query-only filters (Explore category). Never saved. */
   overrides?: Record<string, unknown> | null;
+  /** Words to rank the list by (at most 240 characters). Never a filter. */
+  relevance?: string | null;
   enabled?: boolean;
 }
 
@@ -69,6 +75,19 @@ export function flattenFeedPages(pages: readonly FeedQueryResponse[] | undefined
   return out;
 }
 
+/** The longest `relevance` the server accepts (feed contract `FEED_RELEVANCE_MAX_CHARS`). */
+export const FEED_RELEVANCE_MAX = 240;
+
+/**
+ * `relevance` as it is sent and keyed: trimmed, '' for none. A text longer
+ * than the server accepts is not sent at all (the server refuses it rather
+ * than cut it; a list ranked by half a phrase would not be what was said).
+ */
+export function feedRelevance(value: string | null | undefined): string {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return text.length > FEED_RELEVANCE_MAX ? '' : text;
+}
+
 function stableKey(value: unknown): string {
   if (!value || typeof value !== 'object') return '';
   const entries = Object.entries(value as Record<string, unknown>).filter(([, v]) => v !== undefined);
@@ -80,8 +99,9 @@ function stableKey(value: unknown): string {
 export function useFeed(params: UseFeedParams): FeedListState {
   const { searchProfileId, version, sort, fitTier, overrides } = params;
   const overridesKey = stableKey(overrides);
+  const relevance = feedRelevance(params.relevance);
   const queryClient = useQueryClient();
-  const queryKey = feedKeys.list({ searchProfileId, version, sort, fitTier, overridesKey });
+  const queryKey = feedKeys.list({ searchProfileId, version, sort, fitTier, overridesKey, relevance });
   const query = useInfiniteQuery({
     queryKey,
     queryFn: ({ pageParam, signal }) =>
@@ -91,6 +111,7 @@ export function useFeed(params: UseFeedParams): FeedListState {
           sort,
           fitTier,
           ...(overridesKey ? { overrides: overrides ?? undefined } : {}),
+          ...(relevance ? { relevance } : {}),
           ...(pageParam ? { cursor: pageParam } : {}),
         },
         { signal },

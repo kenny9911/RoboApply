@@ -8,8 +8,10 @@
 // counts. /security lists only what the code does today (bcrypt password
 // hashes, httpOnly secure cookies, new-device sign-in email, DB-backed rate
 // limits, export + delete, no third-party pixels, AI routing per brand).
-// /help/ranking prints every Recommended factor with its weight, the two
-// ordering rules and the points a career goal adds — the numbers the ranking
+// /help/ranking prints every Recommended factor with its weight, the
+// ordering rules (points they add or take away) and the points a career goal
+// adds, and under Variety the one-card rule for the same role in several
+// cities — the numbers the ranking
 // code reads (catalog.ts mirrors the feed contract; a parity test keeps them
 // equal).
 
@@ -197,7 +199,9 @@ export function RankingPage() {
   const sort = useTranslations('jobs.workspace.sort');
   const brand = useBrand();
   const tiers = FIT_TIER_FLOORS;
-  const rules = ORDERING_RULES.filter((r) => (r.markets as readonly string[]).includes(brand.market));
+  const forMarket = ORDERING_RULES.filter((r) => (r.markets as readonly string[]).includes(brand.market));
+  const rules = forMarket.filter((r) => r.block === 'rules');
+  const sameRole = forMarket.some((r) => r.block === 'variety' && r.server === 'same_role_collapse');
   // GoApply does not ask for a career goal, so its page has no goal block and its note does not mention one.
   const goals = brand.market === 'intl';
   return (
@@ -244,7 +248,9 @@ export function RankingPage() {
           {rules.map((r) => (
             <li key={r.key} className={styles.card} data-rule={r.server}>
               <h3 className={styles.h3}>{t(`rules.${r.key}.title`)}</h3>
-              {r.points !== null ? <p className={styles.stepNumber}>{t('upToPoints', { points: r.points })}</p> : null}
+              {r.points !== null ? (
+                <p className={styles.stepNumber}>{r.points < 0 ? t('upToPointsLower', { points: -r.points }) : t('upToPoints', { points: r.points })}</p>
+              ) : null}
               <p className={styles.body}>{t(`rules.${r.key}.body`)}</p>
             </li>
           ))}
@@ -270,6 +276,11 @@ export function RankingPage() {
       ) : null}
       <Block id="ranking-spread" title={t('spreadTitle')}>
         <p className={styles.body}>{t('spread', { max: COMPANY_SPREAD.max, window: COMPANY_SPREAD.window })}</p>
+        {sameRole ? (
+          <p className={`${styles.body} ${styles.spaced}`} data-ranking-same-role="">
+            {t('sameRole')}
+          </p>
+        ) : null}
       </Block>
       <Block id="ranking-never" title={t('neverTitle')}>
         <ul className={styles.list}>

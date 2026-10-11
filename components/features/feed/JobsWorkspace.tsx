@@ -14,6 +14,10 @@
 //                 opens the list in that order (the Assistant's "Show jobs
 //                 sorted this way" link); a key this market does not offer is
 //                 ignored. Picking a sort keeps the address in step.
+//   ranked by     the words a plain-language search left over (Explore →
+//                 "Apply"): the list is ordered by closeness to them until the
+//                 search changes or the person clears them. They are never a
+//                 filter and nothing is checked against them (SM-9).
 //   list          infinite, 20 per page; the rating card after 10 cards
 //   split detail  desktop `?job=<id>` renders JobDetailPanel (WP-34) beside
 //                 the list; on a phone a job opens as /jobs/[id]
@@ -27,8 +31,13 @@
 // from the response's own `sources` says where the postings come from, and a
 // thin result set shows the same search links under the list. Both read the
 // first page from the query cache (useFeedFirstPage); nothing is requested twice.
+//
+// The intro says how the list is ordered, from the response's own `order`:
+// by fit (the default), by date (GoApply with personalised ranking off), or
+// by how closely a post matches the search words (the same GoApply list when
+// it has a query text).
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -44,6 +53,7 @@ import { useBrand } from '../../../lib/brand/BrandProvider';
 import { useFlag } from '../../../lib/flags';
 import { useActiveSearchProfile } from '../../../hooks/search';
 import { useFeed } from '../../../hooks/feed/useFeed';
+import { sortUsesRelevance, useListRelevance } from '../../../hooks/feed/useExplore';
 import { feedKeys } from '../../../hooks/feed/keys';
 import { SPLIT_VIEW_QUERY, useIsDesktop } from '../../../hooks/feed/useIsDesktop';
 import { RATING_AFTER_CARDS, useCalibration, useSeenCounter, useSkillsCheckData } from '../../../hooks/feed/useCalibration';
@@ -59,6 +69,8 @@ import styles from './feed.module.css';
 
 export function JobsWorkspace() {
   const t = useTranslations('jobs.workspace');
+  const tOrder = useTranslations('jobs.order');
+  const tNl = useTranslations('jobs.nl');
   const brand = useBrand();
   const market = brand.market;
   const feedOn = useFlag('jobs.feed');
@@ -93,12 +105,23 @@ export function JobsWorkspace() {
     [params, pathname, router],
   );
   const fitTier = profile?.filters.fitTier ?? 'all';
+  // The words this search's list is ranked by (set when a plain-language search was applied in Explore).
+  const profileId = profile?.id ?? null;
+  const profileVersion = profile?.version ?? null;
+  const ranking = useListRelevance(useMemo(() => (profileId !== null && profileVersion !== null ? { id: profileId, version: profileVersion } : null), [profileId, profileVersion]));
+  const appliedSort = sortsFor(market).includes(sort) ? sort : 'recommended';
+  // The words take part in Recommended and Best fit only. A list asked for by date, pay or deadline is in that
+  // order and nothing else: the words are not sent with it and the page does not say it is ranked by them.
+  // They are kept, and apply again when the person returns to a ranked sort.
+  const rankedByWords = sortUsesRelevance(appliedSort) ? ranking.relevance : null;
+  const relevance = rankedByWords?.text ?? null;
 
   const feed = useFeed({
     searchProfileId: profile?.id ?? null,
     version: profile?.version ?? null,
-    sort: sortsFor(market).includes(sort) ? sort : 'recommended',
+    sort: appliedSort,
     fitTier,
+    relevance,
     enabled: feedOn && !profiles.isPending,
   });
 
@@ -107,14 +130,17 @@ export function JobsWorkspace() {
   const firstPage = useFeedFirstPage({
     searchProfileId: profile?.id ?? null,
     version: profile?.version ?? null,
-    sort: sortsFor(market).includes(sort) ? sort : 'recommended',
+    sort: appliedSort,
     fitTier,
+    relevance,
   });
   const cnSummary = market === 'cn' && feedOn ? cnFeedSummary(firstPage) : { header: null, thin: false };
   // Ordered by date posted (personalised ranking is off): the intro must not say "ranked by your resume".
   const byDate = feedOn && firstPage?.order === 'recency';
+  // The same list with a query text: ordered by how closely a post matches the words, still with no profile.
+  const byQuery = feedOn && firstPage?.order === 'query_match';
 
-  const listKey = `${profile?.id ?? ''}:${profile?.version ?? 0}:${sort}:${fitTier}`;
+  const listKey = `${profile?.id ?? ''}:${profile?.version ?? 0}:${sort}:${fitTier}:${relevance ?? ''}`;
   const [seenCount, markSeen] = useSeenCounter(listKey);
   const calibration = useCalibration({ seenCount, enabled: feedOn && feed.items.length > 0 });
   const skillsData = useSkillsCheckData(calibration.skills.show);
@@ -168,7 +194,9 @@ export function JobsWorkspace() {
     <div className={styles.workspace}>
       <header className={styles.head}>
         <h1 className={styles.title}>{t('title')}</h1>
-        <p className={styles.intro}>{byDate ? t('introByDate') : t('intro')}</p>
+        <p className={styles.intro} data-order={firstPage?.order ?? undefined}>
+          {byQuery ? tOrder('queryMatch') : byDate ? t('introByDate') : t('intro')}
+        </p>
         {/* GoApply only (renders nothing on RoboApply): where the postings below come from. */}
         <CnFeedSources header={cnSummary.header} />
         {reportOn && feedOn ? (
@@ -208,6 +236,15 @@ export function JobsWorkspace() {
             <div className={styles.toolbar}>
               <SortMenu value={sort} market={market} onChange={setSort} />
             </div>
+            {rankedByWords ? (
+              // The notice surface with the toolbar's layout: the words on the left, "Clear" on the right, centred.
+              <div className={`${styles.notice} ${styles.toolbar}`} role="status" data-testid="ranked-by">
+                <span>{tNl('chip', { terms: rankedByWords.terms.join(', ') })}</span>
+                <button type="button" className={styles.textBtn} onClick={ranking.clear} aria-label={tNl('chipClearLabel')}>
+                  {tNl('chipClear')}
+                </button>
+              </div>
+            ) : null}
 
             <div className={`${styles.split}${splitOpen ? ` ${styles.splitOpen}` : ''}`}>
               <div>

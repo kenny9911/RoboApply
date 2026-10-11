@@ -19,11 +19,25 @@
 //     `heldBankBoards`, the read-side twin of the bank sync's 'no_apply_target').
 //
 // Posting age: the lists' age floor (`ageFloor`, FEED_LIMITS.maxAgeDays) cuts
-// aggregator rows and the user's own imports only. A recruiter-bank row or a
-// public employer-board row is listed for as long as its source lists it
-// (`ageFloorSql`; GOAPPLY_PARITY_PLAN §3.9 "no posting-age cut-off for board
-// or bank rows"). A window start (`from`) and the user's own "posted within"
-// filter are hard bounds for every row.
+// the rows whose only life is their posting date: the aggregators' (the boards
+// ingest itself expires by age, jobs/normalize `AGE_EXPIRY_BOARDS`), the
+// user's own imports, and 台灣就業通 open data (see `AGE_FLOOR_BOARDS`). A row
+// of any other source (a recruiter bank, an employer board, a government
+// board) is listed for as long as its source lists it (`ageFloorSql`;
+// MARKET_STRATEGY M-22 "a posting-age cut-off applies to aggregator rows
+// only"). A window start (`from`) and the user's own "posted within" filter
+// are hard bounds for every row.
+//
+// The typed query `q` (MKT-4F): `wideQPredicateSql` matches the search
+// document (`searchTsv`: title, skills, summary and requirements) when it
+// holds EVERY word of the query, OR the thin `searchText` (title, company, ten
+// skills) as before, so a word that appears only in the description is found,
+// and a row that has no search document yet is still found by its title.
+// `predicateFor` returns it for the `q` field, so the list, the counts, the
+// samples and the alert candidates agree. It is a FILTER: a query of two words
+// keeps the postings that carry both. The OR of a query's words
+// (retrieval `toTsQuery`) is only ever used to ORDER the lexical leg
+// (hybridSql.ts), never to decide what a list or a count holds.
 //
 // Predicates follow FILTER_SET specs in search/filterSet.ts (ruling C15).
 // Conventions this file relies on (handoff requests to the writers):
@@ -39,11 +53,12 @@
 
 import { Prisma } from '../../generated/prisma/client.js';
 import type { Market } from '../../platform/brand/registry.js';
-import { normalizeCompanyName, normalizeJobTitle, normalizeSkills } from '../jobs/normalize/index.js';
+import { AGE_EXPIRY_BOARDS, normalizeCompanyName, normalizeJobTitle, normalizeSkills } from '../jobs/normalize/index.js';
 import { findCity, resolveCountry } from '../jobs/geo/index.js';
 import { expandTaxonomyIds, matchTitle } from '../jobs/taxonomy/index.js';
+import { queryTokens } from '../retrieval/index.js';
 import { includesUndisclosedPay, type FilterField, type FilterSet } from '../search/index.js';
-import { EMPLOYER_BOARD_SOURCES, GOHIRE_SOURCE_BOARD, NO_AGE_FLOOR_BOARDS } from './sourceLine.js';
+import { EMPLOYER_BOARD_SOURCES, GOHIRE_SOURCE_BOARD } from './sourceLine.js';
 
 export interface SqlScope {
   market: Market;
@@ -202,11 +217,62 @@ function locationSql(loc: NonNullable<FilterSet['locations']>[number]): Prisma.S
 /**
  * The typed-query predicate on `searchText`: a case-insensitive substring
  * match, or a trigram word-similarity match for a misspelt or partial word.
- * `q` is the trimmed, non-empty query. Its own function so the hybrid legs of
- * phase M4 reuse the very predicate `predicateFor` applies for the `q` field.
+ * `q` is the trimmed, non-empty query. The narrow half of `wideQPredicateSql`,
+ * which is what `predicateFor` applies for the `q` field.
  */
 export function qPredicateSql(q: string): Prisma.Sql {
   return Prisma.sql`(j."searchText" ILIKE ${`%${likeEscape(q.toLowerCase())}%`} OR ${q.toLowerCase()} <% j."searchText")`;
+}
+
+const CJK_OR_HANGUL = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+
+/**
+ * A typed query too short to search the document with: fewer than three
+ * characters and none of them Chinese, Japanese or Korean ("go", "r", "c#").
+ * Two Chinese characters are a whole word (前端) and are searched in full.
+ */
+export function isShortLatinQuery(q: string): boolean {
+  const text = q.normalize('NFKC').trim();
+  return [...text].length < 3 && !CJK_OR_HANGUL.test(text);
+}
+
+/** A token as a quoted `to_tsquery` operand (retrieval/segment.ts quotes its OR query the same way). */
+const quoteLexeme = (token: string): string => `'${token.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`;
+
+/**
+ * The search-document half of the typed-query predicate, for
+ * `to_tsquery('simple', $1)`: the AND of the query's distinct tokens, each
+ * quoted. The tokens are retrieval `queryTokens`, the function that segmented
+ * the document (function words, one-character CJK tokens and bare numbers are
+ * left out, as in the lexical leg's query). Null when the query has no token.
+ */
+export function allTokensTsQuery(q: string | null | undefined): string | null {
+  const tokens = queryTokens(q);
+  return tokens.length ? tokens.map(quoteLexeme).join(' & ') : null;
+}
+
+/**
+ * The typed-query predicate of every list, count, sample and alert:
+ *   (searchTsv @@ to_tsquery('simple', <the AND of the query's tokens>) OR qPredicateSql(q))
+ * The first half finds a posting whose search document (description and
+ * requirements included) holds every word of the query, in any order; the
+ * second keeps a row that has no search document yet (`searchTsv` null)
+ * findable by its title, company or skills, and keeps the misspelling match.
+ * A query of one word is unchanged by the AND. For a query under three Latin
+ * characters, or one with no token, it is `qPredicateSql` alone.
+ *
+ * Every word, not any word: this predicate decides what a list, a count
+ * ("Show N jobs"), an alert and the visitor list hold, so "product manager"
+ * must not keep every posting that says "product" or "manager" somewhere.
+ * Ordering by how many of the words a posting carries is the lexical leg's
+ * job (hybridSql.ts `lexicalLegSql`, the OR query of `toTsQuery`).
+ */
+export function wideQPredicateSql(q: string): Prisma.Sql {
+  const narrow = qPredicateSql(q);
+  if (isShortLatinQuery(q)) return narrow;
+  const tsQuery = allTokensTsQuery(q);
+  if (!tsQuery) return narrow;
+  return Prisma.sql`(j."searchTsv" @@ to_tsquery('simple', ${tsQuery}) OR ${narrow})`;
 }
 
 /** The SQL predicate for one FilterSet field, or null when it does not filter (absent, view-only, boost-only). */
@@ -308,7 +374,7 @@ export function predicateFor(field: FilterField, filters: FilterSet, scope: Pick
     case 'q': {
       const q = f.q?.trim();
       if (!q) return null;
-      return qPredicateSql(q);
+      return wideQPredicateSql(q);
     }
     // ── GoApply (market cn) ──
     case 'employerTags':
@@ -414,20 +480,32 @@ export function scopePredicates(scope: SqlScope): Prisma.Sql[] {
 }
 
 /**
- * The lists' posting-age floor: an aggregator row (or the user's own import)
- * must be posted on or after `floor`; a recruiter-bank row or a public
- * employer-board row passes at any age, as long as it carries a date (an
- * undated row is in no posted-date window, as before). See the header.
+ * `RAJob.sourceBoard` values the lists' posting-age floor applies to: the
+ * boards ingest itself expires by age (`AGE_EXPIRY_BOARDS`: the aggregators),
+ * a user's own import, and 台灣就業通 open data. The last is an exception kept
+ * on purpose: a 台灣就業通 row that states no deadline, in a county whose sweep
+ * hits the row cap, is never closed by ingest, so this floor is the only thing
+ * that takes a stale one off the lists (waveM3 carry-over, Owner 1). A source
+ * that is not named here closes its own rows and is listed at any age, so a
+ * new source needs no entry.
+ */
+export const AGE_FLOOR_BOARDS: readonly string[] = [...new Set<string>([...AGE_EXPIRY_BOARDS, 'user_import', 'tw_open_data'])];
+
+/**
+ * The lists' posting-age floor: a row of an `AGE_FLOOR_BOARDS` board must be
+ * posted on or after `floor`; a row of any other source passes at any age, as
+ * long as it carries a date (an undated row is in no posted-date window, as
+ * before). See the header.
  */
 export function ageFloorSql(floor: Date): Prisma.Sql {
-  return Prisma.sql`(j."postedAt" >= ${floor}::timestamp(3) OR (j."postedAt" IS NOT NULL AND (j."sourceBoard" = ANY(${[...NO_AGE_FLOOR_BOARDS]}::text[]) OR j."fromRecruiterBank" = true)))`;
+  return Prisma.sql`(j."postedAt" >= ${floor}::timestamp(3) OR (j."postedAt" IS NOT NULL AND NOT (j."sourceBoard" = ANY(${[...AGE_FLOOR_BOARDS]}::text[]))))`;
 }
 
 /**
  * Columns the feed reads (pre-score inputs + card fields), with the company
- * join. The last four RAJob columns are the market wave's (MKT-0): carried by
- * the projection now, read by later phases. Listed by name, never `j.*`:
- * RAJob.searchTsv is a tsvector the driver cannot return bare.
+ * join. The last four RAJob columns are the market wave's (MKT-0). Listed by
+ * name, never `j.*`: RAJob.searchTsv is a tsvector the driver cannot return
+ * bare (it is used in WHERE and ORDER BY only).
  */
 export const FEED_COLUMNS = Prisma.sql`j."id", j."market", j."visibility", j."ownerUserId", j."title", j."titleNormalized", j."companyName",
   j."companyNameNormalized", j."companyId", j."companyLogoUrl", j."taxonomyIds", j."primaryTaxonomyId", j."seniority", j."roleType",
@@ -454,7 +532,7 @@ export interface RetrievalSqlInput {
   fields: readonly FilterField[];
   /** postedAt ≥ from (window start): a hard bound for every row. */
   from: Date | null;
-  /** The list's age floor, for a window with no start of its own (`ageFloorSql`: board and bank rows pass at any age). */
+  /** The list's age floor, for a window with no start of its own (`ageFloorSql`: only `AGE_FLOOR_BOARDS` rows are cut). */
   ageFloor?: Date | null;
   /** Older refill boundary; null on the first window. With `toId`, a keyset `(postedAt, id) < (to, toId)`, else `postedAt < to`. */
   to: Date | null;
@@ -514,7 +592,7 @@ export interface JobIdsSqlInput {
   from: Date | null;
   /** With `from`: a posting with no date also passes (alerts for jobs we only just found). */
   allowUndated?: boolean;
-  /** The list's age floor (`ageFloorSql`: board and bank rows pass at any age). */
+  /** The list's age floor (`ageFloorSql`: only `AGE_FLOOR_BOARDS` rows are cut). */
   ageFloor?: Date | null;
   firstSeenAfter?: Date | null;
   /** `posted`: newest posting first. `first_seen`: newest in our index first (alerts). */

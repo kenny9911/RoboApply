@@ -9,7 +9,9 @@
 //                     no cursor starts a new feed session, which the server
 //                     rate-limits (20 per 10 minutes), so a Save must never
 //                     reload the list. The key carries the saved search's id
-//                     and version, so a filter change still gives a new list.
+//                     and version, so a filter change still gives a new list,
+//                     and the words the list is ranked by (useListRelevance),
+//                     so ranking by them, or clearing them, gives a new list too.
 
 import type { FeedSort } from '../../lib/api/contracts/feed';
 
@@ -22,6 +24,8 @@ export interface FeedListKeyInput {
   fitTier: FeedFitView;
   /** Stable string of query-only overrides (Explore category), '' for none. */
   overridesKey?: string;
+  /** The words the list is ranked by (never a filter), '' or absent for none: another text is another list. */
+  relevance?: string | null;
 }
 
 export const feedKeys = {
@@ -31,5 +35,5 @@ export const feedKeys = {
   skillsCheck: () => ['feed', 'skills-check'] as const,
   listRoot: ['feed-list'] as const,
   list: (k: FeedListKeyInput) =>
-    ['feed-list', k.searchProfileId ?? '', k.version ?? 0, k.sort, k.fitTier, k.overridesKey ?? ''] as const,
+    ['feed-list', k.searchProfileId ?? '', k.version ?? 0, k.sort, k.fitTier, k.overridesKey ?? '', k.relevance ?? ''] as const,
 };

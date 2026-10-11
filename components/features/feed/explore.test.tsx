@@ -1,5 +1,8 @@
 // WP-33 — Explore (F-FEED-13/17), the report sheet (F-FEED-12), the skills
 // check (F-FEED-09) and the Jobs nav badge (PRODUCT §3.3).
+// MKT-4F (SM-9): what a plain-language search left over is said in two lines
+// ("Ranked by closeness to …", "Not checked: …"), and applying the proposal
+// hands the ranking terms to the /jobs list.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, renderHook, screen, waitFor, within } from '@testing-library/react';
@@ -11,6 +14,7 @@ import { __toastStore } from '../../v3/primitives/Toast';
 import { BrandProvider, clientBrandFor } from '../../../lib/brand';
 import { capsFor } from '../../../__tests__/shell/helpers';
 import { useJobsBadge } from '../../../hooks/feed/useJobsBadge';
+import { __listRelevanceStore } from '../../../hooks/feed/useExplore';
 import { searchKeys } from '../../../hooks/search';
 import { Explore } from './Explore';
 import { JobsWorkspace } from './JobsWorkspace';
@@ -80,6 +84,7 @@ beforeEach(() => {
   nav.replace = [];
   installPopupGate();
   __toastStore.reset();
+  __listRelevanceStore.reset();
 });
 
 afterEach(() => {
@@ -118,7 +123,9 @@ describe('Explore', () => {
         [`POST ${FEED}/nl-query`]: () =>
           ok({
             diff: { searchProfileId: 'sp_main', baseVersion: 3, ops: [{ op: 'set', path: 'workModels', value: ['remote'] }, { op: 'add', path: 'skills', value: 'SQL' }], countAfter: null },
-            explanation: 'Remote data jobs.',
+            explanation: '',
+            unmatched: [],
+            rankedBy: [],
           }),
         [`PATCH ${PROFILES}/sp_main`]: () => ok(searchProfile({ version: 4 })),
       }),
@@ -127,12 +134,95 @@ describe('Explore', () => {
     fireEvent.change(screen.getByLabelText('Describe the job you want'), { target: { value: 'remote data jobs' } });
     fireEvent.click(screen.getByRole('button', { name: 'Turn into filters' }));
     const proposal = await screen.findByTestId('nl-proposal');
-    expect(within(proposal).getByText('Remote data jobs.')).toBeInTheDocument();
+    // Every part of the sentence became a filter: there is nothing to rank by and nothing left unchecked.
+    expect(within(proposal).queryByTestId('nl-ranked-by')).toBeNull();
+    expect(within(proposal).queryByTestId('nl-not-checked')).toBeNull();
     expect(net.to('PATCH', `${PROFILES}/sp_main`)).toHaveLength(0);
     fireEvent.click(within(proposal).getByRole('button', { name: 'Use these filters' }));
     await waitFor(() => expect(net.to('PATCH', `${PROFILES}/sp_main`)).toHaveLength(1));
     expect(net.to('PATCH', `${PROFILES}/sp_main`)[0].body).toEqual({ baseVersion: 3, filtersPatch: { workModels: ['remote'], skills: ['SQL'] } });
     await waitFor(() => expect(nav.push).toEqual(['/jobs']));
+    expect(__listRelevanceStore.get()).toBeNull();
+  });
+
+  it('"backend jobs at climate startups using Rust": says what the list is ranked by and what was not checked, and hands the terms to the list on Apply', async () => {
+    const net = installFetch(
+      routes({
+        [`POST ${FEED}/nl-query`]: () =>
+          ok({
+            diff: { searchProfileId: 'sp_main', baseVersion: 3, ops: [{ op: 'set', path: 'titles', value: ['Backend Engineer'] }], countAfter: 41 },
+            explanation: 'Ranked by closeness to: climate startups, Rust. Not checked as requirements: salary above 150k.',
+            unmatched: ['climate startups', 'using Rust', 'salary above 150k'],
+            rankedBy: ['climate startups', 'Rust'],
+          }),
+        [`PATCH ${PROFILES}/sp_main`]: () => ok(searchProfile({ version: 4 })),
+      }),
+    );
+    renderFeed(<Explore />);
+    fireEvent.change(screen.getByLabelText('Describe the job you want'), { target: { value: 'backend jobs at climate startups using Rust, salary above 150k' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Turn into filters' }));
+    const proposal = await screen.findByTestId('nl-proposal');
+    // Two lines, in the person's own words: ranking, never a checked requirement.
+    expect(within(proposal).getByTestId('nl-ranked-by')).toHaveTextContent('Ranked by closeness to: climate startups, Rust. These were not checked as requirements.');
+    expect(within(proposal).getByTestId('nl-not-checked')).toHaveTextContent('Not checked: salary above 150k.');
+    // The phrases the ranking terms came from are not repeated as "not checked".
+    expect(within(proposal).getByTestId('nl-not-checked')).not.toHaveTextContent(/climate|Rust/);
+    // RoboApply: no AI label; nothing is handed to the list before the person applies.
+    expect(proposal.querySelector('[data-ai-label]')).toBeNull();
+    expect(__listRelevanceStore.get()).toBeNull();
+    fireEvent.click(within(proposal).getByRole('button', { name: 'Use these filters' }));
+    await waitFor(() => expect(nav.push).toEqual(['/jobs']));
+    expect(net.to('PATCH', `${PROFILES}/sp_main`)[0].body).toEqual({ baseVersion: 3, filtersPatch: { titles: ['Backend Engineer'] } });
+    // Only filters are saved; the ranking terms go to the list state, joined by a space.
+    expect(__listRelevanceStore.get()).toEqual({ searchProfileId: 'sp_main', terms: ['climate startups', 'Rust'], text: 'climate startups Rust', baseVersion: 3, version: null });
+  });
+
+  it('cancelling a proposal, or a save that fails, hands nothing to the list; a new search with no ranking terms clears the earlier ones', async () => {
+    let patchOk = false;
+    let rankedBy: string[] = ['climate startups'];
+    installFetch(
+      routes({
+        [`POST ${FEED}/nl-query`]: () =>
+          ok({ diff: { searchProfileId: 'sp_main', baseVersion: 3, ops: [{ op: 'set', path: 'workModels', value: ['remote'] }], countAfter: null }, explanation: '', unmatched: rankedBy, rankedBy }),
+        [`PATCH ${PROFILES}/sp_main`]: () => (patchOk ? ok(searchProfile({ version: 4 })) : fail(500, 'internal_error')),
+      }),
+    );
+    renderFeed(<Explore />);
+    const ask = async () => {
+      fireEvent.change(screen.getByLabelText('Describe the job you want'), { target: { value: 'remote jobs at climate startups' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Turn into filters' }));
+      return screen.findByTestId('nl-proposal');
+    };
+    fireEvent.click(within(await ask()).getByRole('button', { name: 'Cancel' }));
+    expect(__listRelevanceStore.get()).toBeNull();
+    fireEvent.click(within(await ask()).getByRole('button', { name: 'Use these filters' }));
+    await waitFor(() => expect(__toastStore.get().length).toBeGreaterThan(0));
+    expect(__listRelevanceStore.get()).toBeNull();
+    expect(nav.push).toEqual([]);
+    patchOk = true;
+    fireEvent.click(within(await ask()).getByRole('button', { name: 'Use these filters' }));
+    await waitFor(() => expect(nav.push).toEqual(['/jobs']));
+    expect(__listRelevanceStore.get()?.text).toBe('climate startups');
+    // The next search leaves nothing to rank by: the list goes back to its plain order.
+    rankedBy = [];
+    fireEvent.click(within(await ask()).getByRole('button', { name: 'Use these filters' }));
+    await waitFor(() => expect(nav.push).toEqual(['/jobs', '/jobs']));
+    expect(__listRelevanceStore.get()).toBeNull();
+  });
+
+  it('a response without the two lists (an older server) shows no line and breaks nothing', async () => {
+    installFetch(
+      routes({
+        [`POST ${FEED}/nl-query`]: () => ok({ diff: { searchProfileId: 'sp_main', baseVersion: 3, ops: [{ op: 'set', path: 'workModels', value: ['remote'] }], countAfter: null }, explanation: 'Remote jobs.' }),
+      }),
+    );
+    renderFeed(<Explore />);
+    fireEvent.change(screen.getByLabelText('Describe the job you want'), { target: { value: 'remote jobs' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Turn into filters' }));
+    const proposal = await screen.findByTestId('nl-proposal');
+    expect(within(proposal).queryByTestId('nl-ranked-by')).toBeNull();
+    expect(within(proposal).queryByTestId('nl-not-checked')).toBeNull();
+    expect(within(proposal).getByRole('button', { name: 'Use these filters' })).toBeInTheDocument();
   });
 
   it('says plainly when the sentence search is unavailable or changes nothing', async () => {
@@ -170,17 +260,96 @@ describe('Explore', () => {
     expect(screen.queryByRole('button', { name: 'Use these filters' })).toBeNull();
   });
 
-  it('GoApply labels the explanation as AI generated', async () => {
+  it('a sentence that changes no filter but leaves topics: says so, and offers to rank the list by them without saving anything', async () => {
+    const net = installFetch(
+      routes({
+        [`POST ${FEED}/nl-query`]: () =>
+          ok({
+            // The saved search is already hybrid: the only filter the sentence names changes nothing.
+            diff: { searchProfileId: 'sp_main', baseVersion: 3, ops: [{ op: 'add', path: 'workModels', value: 'hybrid' }], countAfter: null },
+            explanation: 'Ranked by closeness to: climate startups, Rust. Not checked as requirements: salary above 150k.',
+            unmatched: ['climate startups', 'using Rust', 'salary above 150k'],
+            rankedBy: ['climate startups', 'Rust'],
+          }),
+      }),
+    );
+    const { client } = renderFeed(<Explore />);
+    await waitFor(() => expect(client.getQueryState(searchKeys.profiles())?.status).toBe('success'));
+    fireEvent.change(screen.getByLabelText('Describe the job you want'), { target: { value: 'hybrid jobs at climate startups using Rust, salary above 150k' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Turn into filters' }));
+    // No filter changes, and the page says so; there is no proposal to save.
+    expect(await screen.findByText(/doesn't change your current search/)).toBeInTheDocument();
+    expect(screen.queryByTestId('nl-proposal')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Use these filters' })).toBeNull();
+    // The words that became no filter are not thrown away.
+    const offer = screen.getByTestId('nl-rank-only');
+    expect(within(offer).getByRole('heading', { name: 'Your filters stay as they are' })).toBeInTheDocument();
+    expect(within(offer).getByTestId('nl-ranked-by')).toHaveTextContent('Ranked by closeness to: climate startups, Rust. These were not checked as requirements.');
+    expect(within(offer).getByTestId('nl-not-checked')).toHaveTextContent('Not checked: salary above 150k.');
+    expect(offer.querySelector('[data-ai-label]')).toBeNull();
+    expect(__listRelevanceStore.get()).toBeNull();
+    fireEvent.click(within(offer).getByRole('button', { name: 'Rank my list by these words' }));
+    // Nothing is saved: the terms belong to the search's version as it is (3), so its next change ends them.
+    expect(net.to('PATCH', `${PROFILES}/sp_main`)).toHaveLength(0);
+    expect(__listRelevanceStore.get()).toEqual({ searchProfileId: 'sp_main', terms: ['climate startups', 'Rust'], text: 'climate startups Rust', baseVersion: 3, version: 3 });
+    expect(nav.push).toEqual(['/jobs']);
+  });
+
+  it('the offer to rank can be dismissed, a new search replaces it, and GoApply labels its lines as AI generated', async () => {
+    let rankedBy: string[] = ['新能源', 'Rust'];
     installFetch(
       routes({
-        [`POST ${FEED}/nl-query`]: () => ok({ diff: { searchProfileId: 'sp_main', baseVersion: 3, ops: [{ op: 'set', path: 'q', value: '数据' }], countAfter: null }, explanation: '数据岗位' }),
+        [`POST ${FEED}/nl-query`]: () => ok({ diff: { searchProfileId: 'sp_main', baseVersion: 3, ops: [], countAfter: null }, explanation: '', unmatched: rankedBy, rankedBy }),
+      }),
+    );
+    renderFeed(<Explore />, { brand: 'goapply' });
+    const ask = () => {
+      fireEvent.change(screen.getByLabelText('Describe the job you want'), { target: { value: '新能源 Rust 岗位' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Turn into filters' }));
+    };
+    ask();
+    const offer = await screen.findByTestId('nl-rank-only');
+    expect(within(offer).getByTestId('nl-ranked-by').querySelector('[data-ai-label]')).not.toBeNull();
+    expect(within(offer).queryByTestId('nl-not-checked')).toBeNull();
+    fireEvent.click(within(offer).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByTestId('nl-rank-only')).toBeNull();
+    expect(__listRelevanceStore.get()).toBeNull();
+    expect(nav.push).toEqual([]);
+    // The next sentence leaves nothing to rank by: no offer.
+    rankedBy = [];
+    ask();
+    expect(await screen.findByText(/doesn't change your current search/)).toBeInTheDocument();
+    await act(async () => undefined);
+    expect(screen.queryByTestId('nl-rank-only')).toBeNull();
+  });
+
+  it('GoApply: the same two lines, each labelled as AI generated', async () => {
+    installFetch(
+      routes({
+        [`POST ${FEED}/nl-query`]: () =>
+          ok({
+            diff: { searchProfileId: 'sp_main', baseVersion: 3, ops: [{ op: 'set', path: 'q', value: '数据' }], countAfter: null },
+            explanation: 'Ranked by closeness to: 新能源, Rust. Not checked as requirements: 双休.',
+            unmatched: ['新能源', 'Rust', '双休'],
+            rankedBy: ['新能源', 'Rust'],
+          }),
+        [`PATCH ${PROFILES}/sp_main`]: () => ok(searchProfile({ version: 4 })),
       }),
     );
     renderFeed(<Explore />, { brand: 'goapply' });
     fireEvent.change(screen.getByLabelText('Describe the job you want'), { target: { value: '北京数据岗位' } });
     fireEvent.click(screen.getByRole('button', { name: 'Turn into filters' }));
     const proposal = await screen.findByTestId('nl-proposal');
-    expect(proposal.querySelector('[data-ai-label]')).not.toBeNull();
+    const ranked = within(proposal).getByTestId('nl-ranked-by');
+    expect(ranked).toHaveTextContent('Ranked by closeness to: 新能源, Rust. These were not checked as requirements.');
+    expect(ranked.querySelector('[data-ai-label]')).not.toBeNull();
+    const unchecked = within(proposal).getByTestId('nl-not-checked');
+    expect(unchecked).toHaveTextContent('Not checked: 双休.');
+    expect(unchecked.querySelector('[data-ai-label]')).not.toBeNull();
+    // The flow is the same on both brands (D5): applying hands the terms to the list.
+    fireEvent.click(within(proposal).getByRole('button', { name: 'Use these filters' }));
+    await waitFor(() => expect(nav.push).toEqual(['/jobs']));
+    expect(__listRelevanceStore.get()?.text).toBe('新能源 Rust');
   });
 
   it('no feed: Explore offers only added jobs and asks nothing', async () => {

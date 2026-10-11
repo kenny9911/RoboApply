@@ -119,7 +119,12 @@ export function extensionStoreId(brand: BrandId): string | null {
  * server/src/features/feed/contract.ts (`RANKING_FACTORS`, `ORDERING_RULES`,
  * `GOAL_ADJUSTMENTS`, `FEED_LIMITS`), which the ranking code itself reads
  * (rank = 0.55·fit + 0.20·freshness + 0.15·affinity + 0.10·sourceQuality,
- * plus the goal and skills points). The page cannot import the server module
+ * plus the goal and skills points, minus the seen-and-skipped points).
+ * Freshness is 100 × (0.7 × e^(−hours / 48) + 0.3 × e^(−hours / 336)): strongest
+ * in the first two days, a smaller weight for about two weeks, and a post its
+ * source no longer lists counts from when it was last seen
+ * (`landing.ranking.freshness.body` says so in plain words; the server's
+ * `RANKING_FACTORS` text carries the formula). The page cannot import the server module
  * (it would pull zod into every marketing bundle), so
  * __tests__/links.test.ts compares this table with the contract entry by
  * entry: a weight, a rule or a goal changed on the server fails that test
@@ -137,12 +142,19 @@ export const RANKING_FACTORS = [
 
 /**
  * Ordering rules besides the four factors (server `ORDERING_RULES`).
- * `points` null = the rule reorders or hides instead of adding points.
+ * `points`: what the rule adds to the ranking score (negative: the most it
+ * takes away); null = the rule reorders, hides or works through a factor.
  * `markets`: sponsorship is a RoboApply question (GoApply has no such filter).
+ * `block`: where /help/ranking prints the rule: the list of rules, or the
+ * Variety block (one card for the same role in several cities belongs with
+ * "no more than two jobs from one company in a row").
  */
 export const ORDERING_RULES = [
-  { key: 'sponsorshipFirst', server: 'sponsorship_first', points: null, markets: ['intl'] },
-  { key: 'skillsBoost', server: 'skills_boost', points: 10, markets: ['intl', 'cn'] },
+  { key: 'sponsorshipFirst', server: 'sponsorship_first', points: null, markets: ['intl'], block: 'rules' },
+  { key: 'skillsBoost', server: 'skills_boost', points: 10, markets: ['intl', 'cn'], block: 'rules' },
+  { key: 'wrongTitle', server: 'wrong_title', points: null, markets: ['intl', 'cn'], block: 'rules' },
+  { key: 'seenSkipped', server: 'seen_skipped', points: -10, markets: ['intl', 'cn'], block: 'rules' },
+  { key: 'sameRole', server: 'same_role_collapse', points: null, markets: ['intl', 'cn'], block: 'variety' },
 ] as const;
 
 /**
