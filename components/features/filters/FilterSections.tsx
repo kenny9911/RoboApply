@@ -43,6 +43,7 @@ import {
   TaxonomyEditor,
   TitlesEditor,
   WorkModelEditor,
+  WorkShiftEditor,
   YearsEditor,
   type EditorContext,
   type EditorProps,
@@ -70,9 +71,16 @@ export function useEditorContext(): EditorContext {
 
 type Editor = ComponentType<EditorProps>;
 
-/** Section → editors, per market. Every FilterSet v1 field has a control here, in the quick bar (q) or the fit view (fitTier). */
+/**
+ * Section → editors, per market. Every FilterSet v1 field has a control here, in the quick bar (q) or the fit view (fitTier).
+ * The two Taiwan fields (JT-7) are RoboApply's: the district picker sits inside LocationEditor, under a place that is a
+ * Taiwanese county, and WorkShiftEditor follows it; both render nothing unless the search is in Taiwan. GoApply has neither.
+ */
 export function sectionEditors(market: Market): Array<{ id: DrawerSection; editors: Editor[] }> {
-  const basic: Editor[] = [TaxonomyEditor, TitlesEditor, ExcludedTitlesEditor, JobTypeEditor, WorkModelEditor, LocationEditor, SeniorityEditor, YearsEditor, PostedEditor];
+  const basic: Editor[] =
+    market === 'cn'
+      ? [TaxonomyEditor, TitlesEditor, ExcludedTitlesEditor, JobTypeEditor, WorkModelEditor, LocationEditor, SeniorityEditor, YearsEditor, PostedEditor]
+      : [TaxonomyEditor, TitlesEditor, ExcludedTitlesEditor, JobTypeEditor, WorkModelEditor, LocationEditor, WorkShiftEditor, SeniorityEditor, YearsEditor, PostedEditor];
   const pay: Editor[] = market === 'cn' ? [PayEditor, ListedPayEditor] : [PayEditor, ListedPayEditor, SponsorshipEditor, ExcludeRequirementsEditor];
   const interests: Editor[] = [IndustriesEditor, ExcludedIndustriesEditor, SkillsEditor, ExcludedSkillsEditor, RoleTypeEditor];
   const companies: Editor[] =

@@ -1,5 +1,14 @@
 {
   "jobsTw": {
+    "negotiable": {
+      "body": "The posting does not list an amount (for example, it says 面議 or 依公司規定). Taiwan's Employment Services Act, Article 5, lets an employer leave pay unlisted only when the regular monthly wage is {amount} or more. That is the amount in the law as of {asOf}.",
+      "bodyNoAmount": "The posting does not list an amount (for example, it says 面議 or 依公司規定). Taiwan's Employment Services Act, Article 5, lets an employer leave pay unlisted only when the regular monthly wage is at or above an amount the law sets.",
+      "sourceLink": "Read the rule at its source"
+    },
+    "meta": {
+      "foundThroughGoogle": "{publisher} · found through Google job search",
+      "foundThroughGoogleOnly": "Found through Google job search"
+    },
     "admin": {
       "subtitle": "Public company job boards, read into the job list. A board that changed lately is read every 2 hours, a quiet one once or twice a day. Each posting keeps its company name and a link to the original, and lands on the site of the country it is in.",
       "offNote": "Turning a board off or removing it takes its open jobs out of the job list. Turning it back on reads the board again. A removed board is not picked up again from a posting's link. Add it again to bring it back.",
@@ -42,7 +51,10 @@
         "sources_off": "Reading job boards is switched off right now.",
         "empty_board": "The board listed no jobs when it was checked.",
         "name_mismatch": "The board belongs to a company with a different name.",
-        "name_unconfirmed": "The board does not say which company it belongs to, so it could not be confirmed. Turn it on if it is the right one."
+        "name_unconfirmed": "The board does not say which company it belongs to, so it could not be confirmed. Turn it on if it is the right one.",
+        "connector_disabled": "This job board system is switched off here, so the board is not read.",
+        "tenant_denied": "This board is on the do-not-read list. It is not read and its jobs were taken out.",
+        "tenant_floor": "This board was read less than 30 minutes ago. Try again later."
       },
       "import": {
         "title": "Add many boards",
@@ -71,7 +83,8 @@
           "too_many_countries": "too many countries",
           "company_name_too_long": "the company name is too long",
           "duplicate_in_file": "the same board is listed earlier in the file",
-          "unreadable_row": "the row could not be read"
+          "unreadable_row": "the row could not be read",
+          "connector_disabled": "this job board system is switched off here"
         }
       }
     }

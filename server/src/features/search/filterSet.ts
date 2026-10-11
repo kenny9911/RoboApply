@@ -7,6 +7,7 @@
 // predicates) build on.
 
 import type { Market } from '../../platform/brand/registry.js';
+import { isTaiwanSearch, resolveTwDistrictValue } from '../jobs/geo/index.js';
 import {
   CN_ONLY_FIELDS,
   FILTER_FIELDS,
@@ -14,6 +15,7 @@ import {
   FilterSetPatchSchema,
   FilterSetV1Schema,
   INTL_ONLY_FIELDS,
+  TAIWAN_ONLY_FIELDS,
   type FilterField,
   type FilterSet,
   type FilterSetPatch,
@@ -25,7 +27,19 @@ export interface FilterIssue {
 }
 
 export type ParseFilterSetResult =
-  | { ok: true; value: FilterSet; dropped: FilterField[] }
+  | {
+      ok: true;
+      value: FilterSet;
+      /** Fields of the OTHER market that the input held. A caller may treat one as "this site has no such filter". */
+      dropped: FilterField[];
+      /**
+       * Taiwan-only fields that were left out because the search is not in
+       * Taiwan (JT-7). Never an error and never a field of the other market:
+       * the person moved the search, and the district and the shift went with
+       * the place. A caller that shows what changed lists them as removed.
+       */
+      droppedForPlace: FilterField[];
+    }
   | { ok: false; issues: FilterIssue[] };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -64,9 +78,67 @@ function stripForMarket(fs: FilterSet, market: Market): { value: FilterSet; drop
 }
 
 /**
+ * The canonical form of a district filter (JT-7): every value resolved against
+ * the district table (`<county><district>` in the table's spelling; a bare
+ * name that one county alone has is completed), duplicates removed. `unknown`
+ * lists the values that name no district of the table, by their index.
+ */
+function canonicalDistricts(values: readonly string[]): { districts: string[]; unknown: Array<{ index: number; value: string }> } {
+  const districts: string[] = [];
+  const unknown: Array<{ index: number; value: string }> = [];
+  values.forEach((value, index) => {
+    const ref = resolveTwDistrictValue(value);
+    if (!ref) unknown.push({ index, value });
+    else if (!districts.includes(ref.value)) districts.push(ref.value);
+  });
+  return { districts, unknown };
+}
+
+/**
+ * The Taiwan rule (JT-7), the one place it is applied to a stored or submitted
+ * set: `twDistricts` and `workShifts` stay only on a search in Taiwan (its
+ * country is TW, or one of its places is in Taiwan); on any other search they
+ * are left out and reported as `forPlace`. That is NOT the report of a field
+ * of the other market: both fields exist on this site, and a search that moves
+ * out of Taiwan is a valid search that no longer has them. On a search in
+ * Taiwan the district values are put in their canonical form and a value that
+ * names no district of the table is left out (the strict parser has already
+ * refused such a value with an issue; a stored row just loses it, and when no
+ * value is left the field is reported as `invalid`).
+ */
+function stripForTaiwan(fs: FilterSet): { value: FilterSet; forPlace: FilterField[]; invalid: FilterField[] } {
+  const present = TAIWAN_ONLY_FIELDS.filter((f) => fs[f] !== undefined);
+  if (!present.length) return { value: fs, forPlace: [], invalid: [] };
+  const value: Record<string, unknown> = { ...fs };
+  if (!isTaiwanSearch(fs)) {
+    for (const f of present) delete value[f];
+    return { value: value as FilterSet, forPlace: [...present], invalid: [] };
+  }
+  const invalid: FilterField[] = [];
+  if (fs.twDistricts) {
+    const { districts } = canonicalDistricts(fs.twDistricts);
+    if (districts.length) value.twDistricts = districts;
+    else {
+      delete value.twDistricts;
+      invalid.push('twDistricts');
+    }
+  }
+  return { value: value as FilterSet, forPlace: [], invalid };
+}
+
+/** Market first (the other market's fields), then the Taiwan rule. The two reports are kept apart. */
+function stripForScope(fs: FilterSet, market: Market): { value: FilterSet; forMarket: FilterField[]; forPlace: FilterField[]; invalid: FilterField[] } {
+  const byMarket = stripForMarket(fs, market);
+  const byPlace = stripForTaiwan(byMarket.value);
+  return { value: byPlace.value, forMarket: byMarket.dropped, forPlace: byPlace.forPlace, invalid: byPlace.invalid };
+}
+
+/**
  * Strict parse for API input: unknown keys and invalid values are errors
- * (422 invalid_filters). Fields of the other market are dropped and reported.
- * The result is normalized.
+ * (422 invalid_filters). Fields of the other market are left out and reported
+ * in `dropped`; the Taiwan-only fields of a search that is not in Taiwan are
+ * left out and reported in `droppedForPlace`. A district value that names no
+ * district of the table is an invalid value. The result is normalized.
  */
 export function parseFilterSet(input: unknown, options: { market: Market }): ParseFilterSetResult {
   if (!isRecord(input)) return { ok: false, issues: [{ path: '', message: 'filters must be an object' }] };
@@ -74,17 +146,25 @@ export function parseFilterSet(input: unknown, options: { market: Market }): Par
   if (!parsed.success) {
     return { ok: false, issues: parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })) };
   }
-  const { value, dropped } = stripForMarket(normalizeFilterSet(parsed.data), options.market);
-  return { ok: true, value, dropped };
+  const normalized = normalizeFilterSet(parsed.data);
+  // Checked only where the field can apply: on GoApply and on a search outside Taiwan it is dropped below, whatever it holds.
+  if (options.market === 'intl' && normalized.twDistricts && isTaiwanSearch(normalized)) {
+    const { unknown } = canonicalDistricts(normalized.twDistricts);
+    if (unknown.length) return { ok: false, issues: unknown.map((u) => ({ path: `twDistricts.${u.index}`, message: 'not a district of Taiwan (write the county and the district, for example 新竹縣竹北市)' })) };
+  }
+  const stripped = stripForScope(normalized, options.market);
+  return { ok: true, value: stripped.value, dropped: stripped.forMarket, droppedForPlace: stripped.forPlace };
 }
 
 /**
  * Lenient read for stored JSON (older or hand-edited rows): keeps every field
  * that validates on its own and drops the rest, so one bad field never blanks
- * a user's whole search.
+ * a user's whole search. `dropped` lists what did not validate and the fields
+ * of the other market; `droppedForPlace` lists the Taiwan-only fields of a
+ * search that is not in Taiwan (the same split as `parseFilterSet`).
  */
-export function coerceFilterSet(raw: unknown, options: { market: Market }): { value: FilterSet; dropped: string[] } {
-  if (!isRecord(raw)) return { value: {}, dropped: raw === undefined || raw === null ? [] : ['<root>'] };
+export function coerceFilterSet(raw: unknown, options: { market: Market }): { value: FilterSet; dropped: string[]; droppedForPlace: FilterField[] } {
+  if (!isRecord(raw)) return { value: {}, dropped: raw === undefined || raw === null ? [] : ['<root>'], droppedForPlace: [] };
   const input = applyFilterAliases(raw);
   const out: Record<string, unknown> = {};
   const dropped: string[] = [];
@@ -99,8 +179,8 @@ export function coerceFilterSet(raw: unknown, options: { market: Market }): { va
     if (r.success && r.data !== undefined) out[k] = r.data;
     else if (!r.success) dropped.push(k);
   }
-  const stripped = stripForMarket(normalizeFilterSet(out as FilterSet), options.market);
-  return { value: stripped.value, dropped: [...dropped, ...stripped.dropped] };
+  const stripped = stripForScope(normalizeFilterSet(out as FilterSet), options.market);
+  return { value: stripped.value, dropped: [...dropped, ...stripped.forMarket, ...stripped.invalid], droppedForPlace: stripped.forPlace };
 }
 
 function dedupe<T>(items: T[]): T[] {
@@ -275,4 +355,6 @@ export const FILTER_FIELD_SPECS: Readonly<Record<FilterField, FilterFieldSpec>> 
   salaryMonthsMin: { field: 'salaryMonthsMin', section: 'cn', markets: ['cn'], predicate: 'stated months of pay a year (N薪) ≥ N; unstated passes' },
   hukouTag: { field: 'hukouTag', section: 'cn', markets: ['cn'], predicate: 'official text says 可落户 (evidence quote required)' },
   schoolTiers: { field: 'schoolTiers', section: 'cn', markets: ['cn'], predicate: 'hide postings that state a school-tier requirement the user lacks; never a ranking input' },
+  twDistricts: { field: 'twDistricts', section: 'basic', markets: ['intl'], predicate: 'Taiwan searches only: the posting is in Taiwan and its stated district is one of these; a posting with no district never passes' },
+  workShifts: { field: 'workShifts', section: 'basic', markets: ['intl'], predicate: 'Taiwan searches only: the shift the posting states is one of these; a posting that states none never passes' },
 };

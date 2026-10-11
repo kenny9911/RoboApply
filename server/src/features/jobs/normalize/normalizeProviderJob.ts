@@ -53,6 +53,49 @@ function districtOf(value: string | null | undefined): string | null {
   return text ? truncate(text, MAX_DISTRICT_CHARS) : null;
 }
 
+/**
+ * `RAJob.locationDistrict` (JT-7): the district the source itself states
+ * (`ProviderJobInput.locationDistrict`), else, for a posting whose resolved
+ * country is Taiwan, the 鄉鎮市區 its primary location text names
+ * (新竹縣竹北市 → 竹北市; geo `parseLocation`). The parsed district exists for
+ * Taiwan only, so no other country ever gets one from its text, and a text
+ * that names a county alone (台中市不限) gives none.
+ */
+function resolveDistrict(stated: string | null | undefined, primary: ParsedLocation | null, country: string | null): string | null {
+  return districtOf(stated) ?? (country === 'TW' ? districtOf(primary?.district) : null);
+}
+
+/**
+ * Statements a source itself makes about the posting, in the source's own
+ * words (who may apply, a hiring path, a staff category): `RAJob.marketTags`
+ * entries with an evidence quote (MKT-5D's two government sources; the upsert
+ * merges them by tag). Only the tags a source may state today are accepted:
+ * a tag another module owns (enrichment's requirement tags, an employer tag,
+ * the Taiwan permit tags) can never arrive this way.
+ */
+const SOURCE_TAG_RE = /^(?:usajobs_hiring_path|tw_gov_person_kind)$/;
+/** Longest evidence quote kept on a source tag. */
+export const MAX_SOURCE_TAG_QUOTE_CHARS = 300;
+
+interface SourceMarketTag {
+  tag: string;
+  evidenceQuote: string;
+  evidenceUrl: string | null;
+}
+
+/** The input's own tags (`marketTags` on the provider input): known tag, non-empty quote, one per tag, an http(s) link or none. */
+function sourceMarketTags(value: unknown): SourceMarketTag[] {
+  if (!Array.isArray(value)) return [];
+  const out: SourceMarketTag[] = [];
+  for (const entry of value) {
+    const t = (entry && typeof entry === 'object' ? entry : {}) as { tag?: unknown; evidenceQuote?: unknown; evidenceUrl?: unknown };
+    const quote = typeof t.evidenceQuote === 'string' ? cleanText(t.evidenceQuote) : '';
+    if (typeof t.tag !== 'string' || !SOURCE_TAG_RE.test(t.tag) || !quote || out.some((o) => o.tag === t.tag)) continue;
+    out.push({ tag: t.tag, evidenceQuote: truncate(quote, MAX_SOURCE_TAG_QUOTE_CHARS), evidenceUrl: safeUrl(typeof t.evidenceUrl === 'string' ? t.evidenceUrl : null) });
+  }
+  return out;
+}
+
 /** One of `WORK_SHIFTS`, exactly; anything else (free text, another language, an unknown code) is dropped. */
 function workShiftOf(value: string | null | undefined): WorkShift | null {
   const v = typeof value === 'string' ? value.trim().toLowerCase() : '';
@@ -391,6 +434,10 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
   const companyDomain =
     employerDomain(raw.companyFacts?.domain) ?? employerDomain(raw.companyFacts?.website) ?? employerDomain(ctx.companyDomains?.get(companyNameNormalized));
 
+  // The source's own statements about the posting (see `sourceMarketTags`). The input type gains the field with
+  // the two government sources (normalize/types.ts); it is read structurally so this file needs nothing from it.
+  const sourceTags = sourceMarketTags((raw as { marketTags?: unknown }).marketTags);
+
   const coverage = {
     taxonomy: !!tax.primary,
     seniority: !!seniority,
@@ -429,7 +476,7 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
     locationCity: primaryLoc?.city ?? null,
     locationRegion: primaryLoc?.region ?? null,
     locationCountry: primaryLoc?.country ?? null,
-    locationDistrict: districtOf(raw.locationDistrict),
+    locationDistrict: resolveDistrict(raw.locationDistrict, primary, primaryLoc?.country ?? null),
     locations,
     geoLat: primaryLoc?.lat ?? null,
     geoLng: primaryLoc?.lng ?? null,
@@ -478,6 +525,7 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
       logoSource: `provider:${provider}`,
       now,
     }),
+    ...(sourceTags.length ? { marketTags: sourceTags } : {}),
     fieldSources,
     coverage,
     notes,

@@ -29,7 +29,7 @@ export {
   subdivisionCountries,
 } from './countries.js';
 export type { CountryRecord, SubdivisionRecord } from './countries.js';
-export { parseLocation, parseLocations, statedWorkModel } from './parseLocation.js';
+export { parseLocation, parseLocations, statedWorkModel, twDistrictOfText } from './parseLocation.js';
 export type { LocationHint, ParsedLocation, StatedWorkModel } from './parseLocation.js';
 // Taiwan's 22 counties and their districts by 3-digit postal code (MKT-3E): the open-data sweep's
 // split table and the county / district reading of strings such as 新竹縣竹北市.
@@ -46,5 +46,9 @@ export {
   validateTwDistricts,
 } from './twDistricts.js';
 export type { TwCounty, TwDistrict, TwDistrictData, TwDistrictMatch, TwDistrictSource } from './twDistricts.js';
+// Taiwan searches and the district filter's values (MKT-5F, JT-7): "is this search in Taiwan?", the
+// canonical `<county><district>` value, and the county names a client may match a typed place against.
+export { isTaiwanPlace, isTaiwanSearch, resolveTwDistrictValue, twCountiesOfPlace, twCountyCityNames, twCountyKeys, twDistrictNameIsShared, twPlaceKey } from './twSearch.js';
+export type { SearchPlace, SearchPlaces, TwDistrictRef } from './twSearch.js';
 // buildCities.ts (the GeoNames regeneration script) is deliberately not
 // re-exported: runtime code never needs it.

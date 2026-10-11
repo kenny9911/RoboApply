@@ -21,6 +21,17 @@
 //     `degree`, `employmentType`, `internDays`, `dailyPay`, `salaryMonthsMin`
 //     (K·N薪, added by WP-20), `hukouTag`, `schoolTiers`. School tier is a user-side filter on postings that state
 //     a requirement and never a ranking input (ruling C15).
+//   - Taiwan fields (MKT-5F; MARKET_STRATEGY §9.5 JT-7): `twDistricts` and
+//     `workShifts`. RoboApply only (they are in INTL_ONLY_FIELDS, so GoApply
+//     never stores or reads them), and applied only to a search in Taiwan
+//     (TAIWAN_ONLY_FIELDS): on any other search they are dropped when the set
+//     is parsed and ignored by the feed. A district value is
+//     `<county><district>` as postings write it (新竹縣竹北市), not the bare
+//     district: eight district names belong to two or more counties (東區 to
+//     four; 中正區, 信義區 and 中山區 to both 台北市 and 基隆市), and a filter
+//     that cannot say which one it means cannot "return only that district".
+//     Neither field ever lets a posting through that does not state the
+//     district or the shift.
 
 import { z } from 'zod';
 
@@ -47,6 +58,14 @@ export const CN_DEGREES = ['dazhuan', 'bachelor', 'master', 'phd'] as const;
 export const CN_EMPLOYMENT_TYPES = ['campus', 'social', 'internship'] as const;
 /** GoApply school tiers from the official MOE lists (985 / 211 / 双一流). */
 export const SCHOOL_TIERS = ['985', '211', 'double_first_class'] as const;
+/**
+ * Shift patterns a posting can state (`RAJob.workShift`; the same five values
+ * as jobs/normalize `WORK_SHIFTS`, which a test holds equal). Only a source's
+ * own field sets one: today 台灣就業通's 工作時間.
+ */
+export const WORK_SHIFT_FILTERS = ['day', 'evening', 'night', 'rotating', 'part_time'] as const;
+/** Districts one search can name (Taiwan; `twDistricts`). */
+export const TW_DISTRICTS_MAX = 20;
 
 /** Instant-alert frequency options (per day). 100 = "as they arrive" (Pro); never called unlimited. */
 export const ALERT_INSTANT_OPTIONS = [0, 1, 2, 5, 100] as const;
@@ -144,6 +163,15 @@ export const FilterSetV1Schema = z
     hukouTag: z.boolean().optional(),
     /** The user's own school tiers: hides postings that require a tier the user lacks. */
     schoolTiers: list(z.enum(SCHOOL_TIERS), 3).optional(),
+    // RoboApply, searches in Taiwan only (JT-7)
+    /**
+     * Districts (鄉鎮市區) as `<county><district>`: 新竹縣竹北市, 台北市信義區.
+     * Only postings whose stated district is one of them. Names are data (the
+     * postal list's), stored in the table's spelling of the county (台).
+     */
+    twDistricts: list(text(40), TW_DISTRICTS_MAX).optional(),
+    /** Shift patterns: only postings that state one of these. */
+    workShifts: list(z.enum(WORK_SHIFT_FILTERS), WORK_SHIFT_FILTERS.length).optional(),
   })
   .strict();
 
@@ -167,7 +195,14 @@ export const CN_ONLY_FIELDS: readonly FilterField[] = [
   'schoolTiers',
 ];
 /** Fields that exist only on RoboApply (market `intl`); GoApply replaces sponsorship with 户口/届别. */
-export const INTL_ONLY_FIELDS: readonly FilterField[] = ['needsSponsorship', 'excludeRequirements'];
+export const INTL_ONLY_FIELDS: readonly FilterField[] = ['needsSponsorship', 'excludeRequirements', 'twDistricts', 'workShifts'];
+/**
+ * RoboApply fields that apply only to a search in Taiwan (its country is TW or
+ * one of its places is in Taiwan; jobs/geo `isTaiwanSearch`). On any other
+ * search they are dropped when the set is parsed (filterSet.ts) and the feed
+ * builds no predicate for them (feed/sql.ts).
+ */
+export const TAIWAN_ONLY_FIELDS: readonly FilterField[] = ['twDistricts', 'workShifts'];
 
 /** Task-plan shorthand → canonical ARCH name. */
 export const FILTER_SET_ALIASES: Readonly<Record<string, FilterField>> = {

@@ -88,6 +88,12 @@ export function useFilterLabels(): FilterLabels {
         case 'employmentType':
         case 'schoolTiers':
           return option(f, String(v));
+        case 'workShifts':
+          // "Shift: Rotating": the value alone ("Rotating") would not say what it is about.
+          return t('chips.shiftValue', { shift: option('workShifts', String(v)) });
+        case 'twDistricts':
+          // The district with its county, as postings write it (新竹縣竹北市): the postal list's data, not copy.
+          return String(v);
         case 'roleType':
           return option('roleType', String(v));
         case 'fitTier':

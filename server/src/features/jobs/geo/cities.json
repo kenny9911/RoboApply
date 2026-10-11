@@ -247,7 +247,7 @@
     {"id":"cn-beijing","name":"Beijing","zh":"北京","zhHant":"北京","aliases":["Peking","北京市"],"country":"CN","region":"Beijing","lat":39.9,"lng":116.41},
     {"id":"cn-shanghai","name":"Shanghai","zh":"上海","zhHant":"上海","aliases":["上海市"],"country":"CN","region":"Shanghai","lat":31.23,"lng":121.47},
     {"id":"cn-shenzhen","name":"Shenzhen","zh":"深圳","zhHant":"深圳","aliases":["深圳市"],"country":"CN","region":"Guangdong","lat":22.54,"lng":114.06},
-    {"id":"cn-guangzhou","name":"Guangzhou","zh":"广州","zhHant":"廣州","aliases":["Canton","广州市","廣州市"],"country":"CN","region":"Guangdong","lat":23.13,"lng":113.26},
+    {"id":"cn-guangzhou","name":"Guangzhou","zh":"广州","zhHant":"廣州","aliases":["广州市","廣州市"],"country":"CN","region":"Guangdong","lat":23.13,"lng":113.26},
     {"id":"cn-hangzhou","name":"Hangzhou","zh":"杭州","zhHant":"杭州","aliases":["杭州市"],"country":"CN","region":"Zhejiang","lat":30.27,"lng":120.16},
     {"id":"cn-chengdu","name":"Chengdu","zh":"成都","zhHant":"成都","aliases":["成都市"],"country":"CN","region":"Sichuan","lat":30.57,"lng":104.07},
     {"id":"cn-nanjing","name":"Nanjing","zh":"南京","zhHant":"南京","aliases":["南京市"],"country":"CN","region":"Jiangsu","lat":32.06,"lng":118.8},

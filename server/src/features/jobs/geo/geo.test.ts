@@ -16,10 +16,13 @@ import {
   parseLocation,
   parseLocations,
   resolveCountry,
+  twDistrictOfText,
   scanCjkCities,
   statedWorkModel,
   subdivision,
   subdivisionCountries,
+  TW_COUNTIES,
+  TW_DISTRICTS,
   validateCityTable,
 } from './index.js';
 import { buildCityTableFromGeoNames, GEONAMES_SOURCE } from './buildCities.js';
@@ -326,5 +329,101 @@ describe('review regressions: locations', () => {
     expect(scanCjkCities('三重')?.id).toBe('tw-new-taipei');
     expect(scanCjkCities('新北三重')?.id).toBe('tw-new-taipei');
     expect(scanCjkCities('三重奏工作室')).toBeNull();
+  });
+});
+
+describe('MKT-5F JT-7: the district of a Taiwan location', () => {
+  // The strings are the shapes the research note measured on live sources (JOB_SOURCES_TW §5.3).
+  it.each([
+    ['新竹縣竹北市', 'tw-zhubei', '竹北市'],
+    ['苗栗縣竹南鎮', 'tw-miaoli', '竹南鎮'],
+    ['台中市西屯區', 'tw-taichung', '西屯區'],
+    ['臺南市善化區', 'tw-tainan', '善化區'],
+    ['臺北市士林區 • 透過「104人力銀行」', 'tw-taipei', '士林區'],
+    ['臺北市信義區', 'tw-taipei', '信義區'],
+    ['基隆市信義區', 'tw-keelung', '信義區'],
+    ['台灣台北市內湖區', 'tw-taipei', '內湖區'],
+    ['新北市新店區, 台灣', 'tw-new-taipei', '新店區'],
+    ['Hybrid (新北市板橋區)', 'tw-new-taipei', '板橋區'],
+    ['新竹市東區', 'tw-hsinchu', '東區'],
+    ['嘉義市西區', 'tw-chiayi', '西區'],
+  ])('ACCEPT: %s resolves to its county (%s) and district %s', (text, city, district) => {
+    const p = parseLocation(text);
+    expect(p).toMatchObject({ country: 'TW', district });
+    expect(p.city?.id).toBe(city);
+  });
+
+  it('ACCEPT: 新竹縣竹北市 is county 新竹縣 and district 竹北市; the city and the region are what they were', () => {
+    expect(parseLocation('新竹縣竹北市')).toMatchObject({ cityName: 'Zhubei', region: 'Hsinchu County', country: 'TW', countrySource: 'city_table', district: '竹北市' });
+  });
+
+  it('ACCEPT: 不限 means the whole county and gives no district; neither does a county alone', () => {
+    for (const text of ['台中市不限', '桃園市不限', '臺北市不限', '台北市', '新竹縣', '新北市, 台灣']) {
+      expect(parseLocation(text), text).toMatchObject({ country: 'TW', district: null });
+    }
+  });
+
+  it('ACCEPT: a location outside Taiwan never gets a district', () => {
+    for (const text of ['上海市静安区', '北京市朝阳区', '广东省深圳市南山区', 'Austin, TX', 'London, England, United Kingdom', '香港中西區', '東京都港区', 'Remote', 'Multiple Locations', '']) {
+      const p = parseLocation(text);
+      expect(p.country, text).not.toBe('TW');
+      expect(p.district, text).toBeNull();
+    }
+  });
+
+  it('a place written in English, a district the table does not have and two places in one text give no district: nothing is guessed', () => {
+    for (const text of ['Taipei City, Taiwan', 'Zhubei, Hsinchu County, Taiwan', 'Neihu District, Taipei', '台北市某某區', '新北市, 台北市信義區']) {
+      expect(parseLocation(text), text).toMatchObject({ country: 'TW', district: null });
+    }
+  });
+
+  it('a county the city table does not hold needs the provider to say Taiwan (連江縣 is also a county of Fujian)', () => {
+    expect(parseLocation('連江縣南竿鄉')).toMatchObject({ country: null, district: null });
+    expect(parseLocation('連江縣南竿鄉', { country: 'TW' })).toMatchObject({ country: 'TW', countrySource: 'hint', district: '南竿鄉' });
+    // The same text under another country is not a Taiwanese district.
+    expect(parseLocation('連江縣南竿鄉', { country: 'CN' })).toMatchObject({ country: 'CN', district: null });
+  });
+
+  it('every district of the table parses back to itself, in the county\'s city, in both spellings of 台', () => {
+    let checked = 0;
+    for (const row of TW_DISTRICTS) {
+      const county = TW_COUNTIES.find((c) => c.code === row.countyCode)!;
+      const city = findCity(county.name, { country: 'TW' });
+      for (const name of row.districts?.length ? row.districts : [row.district]) {
+        for (const spelled of [county.name, county.nameAlt ?? county.name]) {
+          const p = parseLocation(`${spelled}${name}`, city ? {} : { country: 'TW' });
+          expect(p.district, `${spelled}${name}`).toBe(name);
+          if (city) expect(p.city?.id, `${spelled}${name}`).toBe(city.id);
+          checked += 1;
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(700);
+  });
+
+  it('twDistrictOfText reads the whole text first, then each part; the first part that names a county decides', () => {
+    expect(twDistrictOfText('新竹縣竹北市')).toBe('竹北市');
+    expect(twDistrictOfText('台灣, 新竹縣竹北市')).toBe('竹北市');
+    expect(twDistrictOfText('臺灣省臺中市西屯區')).toBe('西屯區');
+    expect(twDistrictOfText('台中市不限 / 台北市信義區')).toBeNull();
+    expect(twDistrictOfText('Hsinchu')).toBeNull();
+    expect(twDistrictOfText('')).toBeNull();
+  });
+});
+
+describe('MKT-5F: "Canton" alone is not Guangzhou (waveM4 carry-over)', () => {
+  it('a line that is only "Canton" names no place in China; with a US state it is in the United States', () => {
+    expect(parseLocation('Canton')).toMatchObject({ city: null, country: null });
+    expect(parseLocation('Canton, MA')).toMatchObject({ city: null, cityName: 'Canton', region: 'MA', country: 'US' });
+    expect(parseLocation('110 Albany Turnpike, Canton, CT 06019')).toMatchObject({ country: 'US' });
+    expect(parseLocation('Canton, Michigan, United States')).toMatchObject({ country: 'US' });
+    expect(findCity('Canton')).toBeNull();
+  });
+
+  it('China is still China when the text says so, and Guangzhou keeps every name of its own', () => {
+    expect(parseLocation('Canton, China')).toMatchObject({ city: null, cityName: 'Canton', country: 'CN', countrySource: 'text', lat: null });
+    for (const name of ['Guangzhou', '广州', '廣州', '广州市', 'Guangzhou, Guangdong, China', '广东省广州市天河区']) {
+      expect(parseLocation(name).city?.id, name).toBe('cn-guangzhou');
+    }
   });
 });

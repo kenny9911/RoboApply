@@ -81,6 +81,20 @@
 // needs that request stored with the row (handoff: schema request
 // RAJob.sourceScope).
 //
+// The shift (MKT-5F, JT-7). WKTIME（工作時間） is the source's own statement of
+// the shift pattern: one or more of a short list of values joined by 、
+// (`TW_SHIFT_VALUES`; every value seen on the live endpoint is listed in the
+// fixtures README). It maps to `ProviderJobInput.workShift`:
+//   日班 → day · 中班 → evening · 夜班 → night · 輪班… → rotating ·
+//   部份工時… → part_time
+// A row that lists several takes `rotating` when a 輪班 value is among them,
+// else the first value that maps. A value outside the list maps to nothing
+// (null), and the shift is never read out of the title or JOB_DETAIL. So that
+// nothing the source said is lost, WKTIME is appended to the description as
+// one line under the column's own label whenever it says more than the stored
+// value does (several values, the rota, the hours of a part-time job, an
+// unknown value).
+//
 // D1: the user applies on job.taiwanjobs.gov.tw (`URL_QUERY`). D3: a row
 // without EMPLOYER_ID and HIRE_ID in its URL is skipped and counted
 // (`notes.no_external_id`; `no_apply_url` when the cell is not a vacancy link
@@ -98,7 +112,7 @@ import { parse as parseCsv } from 'csv-parse/sync';
 import type { EnvSource } from '../../../platform/brand/index.js';
 import { logger } from '../../../services/LoggerService.js';
 import { TW_COUNTIES, districtsOfCounty, findTwDistrict, type TwCounty, type TwDistrict } from '../geo/index.js';
-import type { ProviderJobInput } from '../normalize/index.js';
+import type { ProviderJobInput, WorkShift } from '../normalize/index.js';
 import { TW_JOBNO_MAJORS, twRoleForJobno } from '../taxonomy/index.js';
 import type { JobSourceAdapter, SourceFetchResult } from './types.js';
 import { sourceUserAgent } from './userAgent.js';
@@ -375,6 +389,77 @@ function experienceBand(value: string): string | null {
   return null;
 }
 
+// ── WKTIME（工作時間） → the shift ───────────────────────────────────────────
+
+/** The column's own label (the header reads `WKTIME（工作時間）`): data of the source, not UI copy. */
+export const TW_WKTIME_LABEL = '工作時間';
+
+/**
+ * The values WKTIME carries and the shift each one states. Only values that
+ * were read on the live endpoint (2026-10-12, 2,000 rows of two counties;
+ * fixtures README) or that the research note names (日班, 輪班, 部份工時) are
+ * here: a value this list does not know maps to nothing.
+ *   - 中班 is the shift between the day and the night shift, so `evening`.
+ *   - 輪班 comes with its rota (輪班二班制, 輪班三班制, 輪班四班二輪制): a value
+ *     that starts with 輪班 states rotating shifts, whatever rota follows.
+ *   - 部份工時 comes with its hours (部份工時：N時N分至N時N分) or with the
+ *     empty template (部份工時：時分至時分); the dataset's pay column spells
+ *     the same word 部分工時, so both spellings are read.
+ */
+export const TW_SHIFT_VALUES: ReadonlyArray<{ value: string; shift: WorkShift; test: (token: string) => boolean }> = [
+  { value: '日班', shift: 'day', test: (t) => t === '日班' },
+  { value: '中班', shift: 'evening', test: (t) => t === '中班' },
+  { value: '夜班', shift: 'night', test: (t) => t === '夜班' },
+  { value: '輪班', shift: 'rotating', test: (t) => t.startsWith('輪班') },
+  { value: '部份工時', shift: 'part_time', test: (t) => /^部[份分]工時/.test(t) },
+];
+
+/** A WKTIME cell split into its values (the source joins them with 、). */
+function shiftTokens(raw: string): string[] {
+  return raw
+    .normalize('NFKC')
+    .split(/[、,;]/)
+    .map((t) => t.replace(/\s+/g, ''))
+    .filter(Boolean);
+}
+
+/**
+ * WKTIME → the stored shift: `rotating` when a 輪班 value is among the values,
+ * else the first value that maps, else null (an empty cell, or only values the
+ * list does not know). Pure.
+ */
+export function twWorkShift(raw: string | null | undefined): WorkShift | null {
+  if (typeof raw !== 'string') return null;
+  const mapped = shiftTokens(raw).flatMap((token) => {
+    const hit = TW_SHIFT_VALUES.find((v) => v.test(token));
+    return hit ? [hit.shift] : [];
+  });
+  return mapped.includes('rotating') ? 'rotating' : (mapped[0] ?? null);
+}
+
+/** The part-time template with no hours filled in says nothing beyond "part time". */
+const EMPTY_HOURS_RE = /^部[份分]工時(?:[:：]時分至時分)?$/;
+
+/**
+ * True when the cell says more than the stored shift does: several values, a
+ * rota, the hours of a part-time job, or a value the list does not know. A
+ * single 日班 / 中班 / 夜班, the bare part-time value and an empty cell do not.
+ */
+export function twShiftSaysMore(raw: string | null | undefined): boolean {
+  const tokens = typeof raw === 'string' ? shiftTokens(raw) : [];
+  if (!tokens.length) return false;
+  if (tokens.length > 1) return true;
+  const only = tokens[0]!;
+  return !(only === '日班' || only === '中班' || only === '夜班' || EMPTY_HOURS_RE.test(only));
+}
+
+/** JOB_DETAIL, plus WKTIME as one labelled line when it says more than the stored shift (nothing the source said is lost). */
+function descriptionWithShift(detail: string, shiftText: string): string {
+  if (!twShiftSaysMore(shiftText)) return detail;
+  const line = `${TW_WKTIME_LABEL}：${shiftText}`;
+  return detail.trim() ? `${detail.replace(/\s+$/, '')}\n\n${line}` : line;
+}
+
 const ID_PART = /^[A-Za-z0-9_-]{1,40}$/;
 const EXTERNAL_ID_PREFIX = 'tw:';
 
@@ -424,7 +509,7 @@ export function twOpenDataRowToInput(row: TwOpenDataRow, now: Date): TwRowResult
     sourceBoard: TW_OPEN_DATA_BOARD,
     title: cell(row, 'OCCU_DESC'),
     company: cell(row, 'COMPNAME'),
-    description: typeof row.JOB_DETAIL === 'string' ? row.JOB_DETAIL : '',
+    description: descriptionWithShift(typeof row.JOB_DETAIL === 'string' ? row.JOB_DETAIL : '', shift),
     // D1: the user applies on the vacancy page of job.taiwanjobs.gov.tw.
     applyUrl: link.url,
     sourceUrl: link.url,
@@ -449,7 +534,8 @@ export function twOpenDataRowToInput(row: TwOpenDataRow, now: Date): TwRowResult
     // The source's own occupation code (通俗職業 小類) → our role; an unmapped code leaves the title to decide.
     taxonomyId: twRoleForJobno(field(row, 'CJOB2_COUNT')),
     headcount: Number.isInteger(headcount) && headcount > 0 ? headcount : null,
-    workShift: shift || null,
+    // The source's own field, mapped; never read out of the title or the description (JT-7).
+    workShift: twWorkShift(shift),
   };
   return { input };
 }

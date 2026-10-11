@@ -70,6 +70,7 @@ import { createSupportRouter } from './support/routes.js';
 import { createVisitorAlertsRouter, createVisitorCopilotRouter } from './visitor/routes.js';
 import { createStudentRouter, createTwoFactorRouter } from './account-v2/routes.js';
 import { createAdminConsoleRouter } from './admin/routes.js';
+import { createTwAdminRouter, createTwRouter } from './tw/routes.js';
 
 /** Injection points for feature routers (defaults are the production chains). */
 export interface FeatureRouterDeps {
@@ -189,6 +190,11 @@ export const FEATURE_MOUNTS: readonly FeatureMount[] = [
   { id: 'cn.referrals.admin', area: 'cn/referrals', path: a('/cn/referrals'), kind: 'admin', owner: 'WP-54', build: createCnReferralsAdminRouter },
   { id: 'notify-cn', area: 'notify-cn', path: s('/notify-cn'), kind: 'seeker', owner: 'WP-73', build: createNotifyCnRouter },
   { id: 'notify-cn.webhook', area: 'notify-cn', path: hook('/wechat-mp'), kind: 'webhook', owner: 'WP-73', build: createWechatMpWebhookRouter },
+
+  // Taiwan (international brand only; 404 feature_disabled on GoApply): the pay-disclosure rule from config for
+  // the "Why is pay not listed?" note, and the county and district table for the district filter (JT-6, JT-7).
+  { id: 'tw', area: 'tw', path: s('/tw'), kind: 'public', owner: 'MKT-5F', build: createTwRouter },
+  { id: 'tw.admin', area: 'tw', path: a('/tw'), kind: 'admin', owner: 'MKT-5F', build: createTwAdminRouter },
 
   { id: 'support', area: 'support', path: s('/support'), kind: 'public', owner: 'WP-40', build: createSupportRouter },
   { id: 'visitor.copilot', area: 'visitor', path: pub('/copilot'), kind: 'public', owner: 'WP-78', build: createVisitorCopilotRouter },

@@ -82,7 +82,9 @@ describe('JobMetaTw', () => {
     expect(within(region).getByText("The posting's own words: 待遇面議（經常性薪資達4萬元或以上）")).toBeInTheDocument();
     expect(within(region).getByRole('link', { name: 'Open the original posting' })).toHaveAttribute('href', 'https://boards.greenhouse.io/formosarobotics/jobs/1');
     fireEvent.click(within(region).getByText('Why is pay not listed?'));
-    expect(within(region).getByText(/Article 5, lets an employer leave pay unlisted only when the regular monthly wage is NT\$40,000 or more/)).toBeInTheDocument();
+    // The amount comes from the server (MKT-5F, GET /tw/pay-rule; twExtras.test.tsx). This test has no API double,
+    // so the note explains the rule without an amount: never a number the page cannot vouch for.
+    expect(within(region).getByText(/Article 5, lets an employer leave pay unlisted only when the regular monthly wage is at or above an amount the law sets/)).toBeInTheDocument();
     expect(within(region).getByText(/It is not this job's pay/)).toBeInTheDocument();
     expect(within(region).getByRole('link', { name: 'Read Article 5 in the national law database' })).toHaveAttribute('href', TW_PAY_LAW_URL);
   });
