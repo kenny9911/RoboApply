@@ -40,6 +40,11 @@ export type { HtmlVisitor, ScanOptions } from './html.js';
  * scraping. `name.*` matches the name under any country domain
  * (indeed.com, uk.indeed.com, indeed.co.uk); `domain` matches it and every
  * subdomain. `lnkd.in` is LinkedIn's link shortener.
+ *
+ * Taiwan (MARKET_STRATEGY §1.6, JT-5): 104, 1111, 518, yes123, Cake, Yourator
+ * and Meet.jobs. `taiwanjobs.gov.tw` is deliberately not listed: its
+ * vacancies are open data (read through the open-data API), and a user may
+ * import one of its vacancy pages.
  */
 export const DEFAULT_IMPORT_FETCH_DENYLIST = [
   'linkedin.com',
@@ -55,6 +60,9 @@ export const DEFAULT_IMPORT_FETCH_DENYLIST = [
   '1111.com.tw',
   'cake.me',
   'yourator.co',
+  '518.com.tw',
+  'yes123.com.tw',
+  'meet.jobs',
 ] as const;
 
 const HttpUrl = z

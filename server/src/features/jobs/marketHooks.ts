@@ -10,8 +10,12 @@
 // Vercel's file tracing see them, and there is no registration-order bug.
 //   - ../cn/jobs/hooks.ts                (WP-41: GoApply)
 //   - ./sources/atsPublic/hooks.ts       (WP-42: Taiwan / public ATS boards)
-// Both start as no-op stubs. To add a market, add a hook module and list it
-// in MARKET_HOOK_SETS (an FND/INT hot-file change).
+//   - ./sources/twHooks.ts               (MKT-3E: Taiwan open-data rows, the
+//                                         licence attribution; its import also
+//                                         registers the `tw_open_data` adapter)
+// To add a market, add a hook module and list it in MARKET_HOOK_SETS (an
+// FND/INT hot-file change; features/boundary.test.ts lists the hook modules
+// this file may import).
 //
 // Error policy: afterNormalize/afterEnrich errors propagate to the caller
 // (the pipeline decides whether to retry); cardMeta never throws — a failing
@@ -20,6 +24,7 @@
 import type { BrandId, Market } from '../../platform/brand/registry.js';
 import { cnJobsHooks } from '../cn/jobs/hooks.js';
 import { atsPublicHooks } from './sources/atsPublic/hooks.js';
+import { twSourcesHooks } from './sources/twHooks.js';
 
 /** A job as the pipeline holds it. WP-16a's NormalizedJob is assignable to this shape. */
 export type MarketHookJob = Record<string, unknown> & {
@@ -48,7 +53,7 @@ export interface MarketHookSet {
 }
 
 /** Statically imported hook sets, in call order. */
-export const MARKET_HOOK_SETS: readonly MarketHookSet[] = [cnJobsHooks, atsPublicHooks];
+export const MARKET_HOOK_SETS: readonly MarketHookSet[] = [cnJobsHooks, atsPublicHooks, twSourcesHooks];
 
 function applicable(job: MarketHookJob, ctx: MarketHookContext, sets: readonly MarketHookSet[]): MarketHookSet[] {
   return sets.filter((set) => {

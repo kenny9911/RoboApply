@@ -31,5 +31,20 @@ export {
 export type { CountryRecord, SubdivisionRecord } from './countries.js';
 export { parseLocation, parseLocations, statedWorkModel } from './parseLocation.js';
 export type { LocationHint, ParsedLocation, StatedWorkModel } from './parseLocation.js';
+// Taiwan's 22 counties and their districts by 3-digit postal code (MKT-3E): the open-data sweep's
+// split table and the county / district reading of strings such as 新竹縣竹北市.
+export {
+  TW_COUNTIES,
+  TW_DISTRICTS,
+  TW_DISTRICTS_AS_OF,
+  TW_DISTRICTS_SOURCE,
+  TW_DISTRICTS_VERSION,
+  districtByZip,
+  districtsOfCounty,
+  findTwDistrict,
+  twCounty,
+  validateTwDistricts,
+} from './twDistricts.js';
+export type { TwCounty, TwDistrict, TwDistrictData, TwDistrictMatch, TwDistrictSource } from './twDistricts.js';
 // buildCities.ts (the GeoNames regeneration script) is deliberately not
 // re-exported: runtime code never needs it.

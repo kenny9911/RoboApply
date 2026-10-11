@@ -2,8 +2,9 @@
 //
 // Role taxonomy v1 (PRODUCT F-FEED-13 Explore categories, F-FILT-01
 // "function"): L1 = Explore category, L2 = role group, L3 = role. Every node
-// has an English and a Simplified Chinese label; roles carry English and
-// Chinese synonyms used by title matching and the typeahead.
+// has an English, a Simplified Chinese and a Traditional Chinese (Taiwan)
+// label; roles carry English, Simplified and Taiwan synonyms used by title
+// matching and the typeahead.
 //
 // Built from public sources (D3): O*NET-SOC 2019 codes and titles (USDOL/ETA,
 // CC BY 4.0; the SOC structure is a public-domain federal standard) plus
@@ -16,10 +17,21 @@
 // reused for a different role.
 //
 // Labels by locale: en → English; zh → Simplified Chinese; zh-TW → the
-// node's own Traditional Chinese label (`zhHant`) when it has one, else
-// English (zh-TW must never show Simplified characters); every other locale
-// falls back to English until INT translates the staging bundle. The zhHant
-// labels and synonyms are data (JT-4): they are not in v1 yet.
+// node's own Traditional Chinese label (`zhHant`; zh-TW must never show
+// Simplified characters); every other locale falls back to English until INT
+// translates the staging bundle.
+//
+// The Taiwan labels (JT-4, MKT-3E). `zhHant` and `synonyms.zhHant` are
+// translations in Taiwan usage (軟體, 資料, 網路, 程式, 專案, 行銷, 人資, 韌體,
+// 演算法), not conversions of the Simplified labels: the vocabulary differs,
+// not only the script. They ship as a DRAFT (`zhHantReview.status`): zh-TW
+// otherwise shows English role names and a Taiwan search cannot be asked in
+// the language its postings are written in. A Taiwan-native reviewer signs
+// off later by filling `zhHantReview` in the data file. Adding them changed
+// no id, no English or Simplified label and no node (ids are frozen:
+// idsFrozen.test.ts). `exportTaxonomyLabels(locale)` hands the labels to the
+// web bundle's `taxonomy` namespace, so the zh-TW bundle is filled from this
+// file instead of being machine-translated a second time.
 
 import data from './taxonomy.v1.json' with { type: 'json' };
 
@@ -31,8 +43,8 @@ export interface TaxonomyNode {
   parent: string | null;
   en: string;
   zh: string;
-  /** Traditional Chinese label as used in Taiwan (zh-TW). Optional: absent → the English label is shown. */
-  zhHant?: string;
+  /** Traditional Chinese label as used in Taiwan (zh-TW): a translation in Taiwan usage, never a conversion of `zh`. */
+  zhHant: string;
   synonyms: { en: string[]; zh: string[]; /** Taiwan titles for the role (Traditional Chinese). */ zhHant?: string[] };
   /** O*NET-SOC 2019 codes this role corresponds to (roles only). */
   soc?: string[];
@@ -49,9 +61,19 @@ export interface TaxonomySource {
   usedFor: string;
 }
 
+/** Who has read the Taiwan labels. 'draft' = written, not yet signed off by a Taiwan-native reviewer. */
+export interface TaxonomyZhHantReview {
+  status: 'draft' | 'reviewed';
+  reviewedBy: string | null;
+  /** 'YYYY-MM-DD'. */
+  reviewedOn: string | null;
+}
+
 export interface TaxonomyData {
   version: number;
   asOf: string;
+  /** State of the `zhHant` labels and synonyms (absent in a hand-built table, e.g. a test's). */
+  zhHantReview?: TaxonomyZhHantReview;
   sources: TaxonomySource[];
   nodes: TaxonomyNode[];
 }
@@ -61,6 +83,8 @@ const TAXONOMY = data as TaxonomyData;
 export const TAXONOMY_VERSION = TAXONOMY.version;
 export const TAXONOMY_AS_OF = TAXONOMY.asOf;
 export const TAXONOMY_SOURCES: readonly TaxonomySource[] = TAXONOMY.sources;
+/** Draft until a Taiwan-native reviewer signs the Traditional Chinese labels off (owner item; JT-4). */
+export const TAXONOMY_ZH_HANT_REVIEW: Readonly<TaxonomyZhHantReview> = TAXONOMY.zhHantReview ?? { status: 'draft', reviewedBy: null, reviewedOn: null };
 export const TAXONOMY_NODES: readonly TaxonomyNode[] = TAXONOMY.nodes;
 
 const byId = new Map<string, TaxonomyNode>(TAXONOMY_NODES.map((n) => [n.id, n]));
@@ -120,10 +144,10 @@ export function expandTaxonomyIds(ids: readonly string[]): string[] {
 
 /**
  * A node's display label for a locale: zh → Simplified; zh-TW → the node's
- * Traditional Chinese label when it has one, never the Simplified one;
- * everything else → English.
+ * Traditional Chinese label, never the Simplified one (a hand-built node
+ * without one shows English); everything else → English.
  */
-export function taxonomyNodeLabel(node: Pick<TaxonomyNode, 'en' | 'zh' | 'zhHant'>, locale: string): string {
+export function taxonomyNodeLabel(node: Pick<TaxonomyNode, 'en' | 'zh'> & { zhHant?: string | null }, locale: string): string {
   if (locale === 'zh') return node.zh;
   if (locale === 'zh-TW') return node.zhHant?.trim() || node.en;
   return node.en;
@@ -145,7 +169,12 @@ export function validateTaxonomy(t: TaxonomyData): string[] {
     if (!/^[a-z][a-z0-9_]*$/.test(n.id)) errors.push(`id ${n.id} is not snake_case`);
     if (!n.en?.trim()) errors.push(`${n.id} has no English label`);
     if (!n.zh?.trim()) errors.push(`${n.id} has no Chinese label`);
-    if (n.zhHant !== undefined && (typeof n.zhHant !== 'string' || !n.zhHant.trim())) errors.push(`${n.id} has an empty Traditional Chinese label`);
+    // Every node carries a Taiwan label (JT-4); a missing or blank one would show English, or nothing, in zh-TW.
+    if (typeof n.zhHant !== 'string' || !n.zhHant.trim()) errors.push(`${n.id} has no Traditional Chinese label`);
+    if (n.synonyms?.zhHant !== undefined && (!Array.isArray(n.synonyms.zhHant) || n.synonyms.zhHant.some((s) => typeof s !== 'string' || !s.trim()))) {
+      errors.push(`${n.id} has a blank Traditional Chinese synonym`);
+    }
+    if (n.level === 3 && !Array.isArray(n.synonyms?.zhHant)) errors.push(`${n.id} has no Traditional Chinese synonym list`);
   }
   for (const n of t.nodes) {
     if (n.level === 1) {
@@ -161,4 +190,28 @@ export function validateTaxonomy(t: TaxonomyData): string[] {
     if (n.level < 3 && !t.nodes.some((c) => c.parent === n.id)) errors.push(`${n.id}: has no children`);
   }
   return errors;
+}
+
+/** The web bundle's `taxonomy` namespace: one label per node, by level. */
+export interface TaxonomyLabelBundle {
+  categories: Record<string, string>;
+  groups: Record<string, string>;
+  roles: Record<string, string>;
+}
+
+/**
+ * Every node's label in a locale, in the shape of the web bundle's `taxonomy`
+ * namespace (`taxonomy.categories.<id>`, `taxonomy.groups.<id>`,
+ * `taxonomy.roles.<id>`), in data order. The locale step fills a bundle from
+ * this instead of translating role names a second time:
+ * `exportTaxonomyLabels('zh-TW')` is the Taiwan labels of the data file,
+ * `'zh'` the Simplified ones, anything else English. One entry per node.
+ */
+export function exportTaxonomyLabels(locale: string): TaxonomyLabelBundle {
+  const out: TaxonomyLabelBundle = { categories: {}, groups: {}, roles: {} };
+  for (const node of TAXONOMY_NODES) {
+    const target = node.level === 1 ? out.categories : node.level === 2 ? out.groups : out.roles;
+    target[node.id] = taxonomyNodeLabel(node, locale);
+  }
+  return out;
 }

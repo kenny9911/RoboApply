@@ -1,6 +1,7 @@
 // components/features/market/tw/meta.ts — reads `meta.ats_public` (the server's
-// TwCardMeta from marketHooks.cardMeta) defensively: a card always renders,
-// so an odd or missing value yields null instead of throwing (WP-42).
+// TwCardMeta from marketHooks.cardMeta) and `meta.tw_sources` (the open-data
+// licence attribution, MKT-3E) defensively: a card always renders, so an odd
+// or missing value yields null instead of throwing (WP-42).
 
 import type { TwCardMeta, TwPermitTag, TwPermitTagView } from '../../../../lib/api/careerSources';
 import type { MarketCardMeta } from '../types';
@@ -60,4 +61,33 @@ export function readTwMeta(meta: MarketCardMeta | null | undefined): TwCardMeta 
       board: board && board in PUBLIC_ATS_NAMES ? (board as TwCardMeta['source']['board']) : null,
     },
   };
+}
+
+/**
+ * The attribution an open-data row must carry wherever it is shown
+ * (政府資料開放授權條款 第1版: provider, year, dataset name, licence statement).
+ * The sentence is the server's data, in Traditional Chinese for every locale;
+ * `url` is the licence text, null when the server's value is not a safe link.
+ */
+export interface TwAttribution {
+  text: string;
+  url: string | null;
+}
+
+/** Longest attribution we render (the two sentences the server knows are under 80 characters). */
+const MAX_ATTRIBUTION_CHARS = 300;
+
+/**
+ * Reads `meta.tw_sources` (the server's `TwSourcesCardMeta`, hook set
+ * `tw_sources` in server/src/features/jobs/sources/twHooks.ts). Null when the
+ * row has no attribution or the value is not one: nothing is rendered then.
+ */
+export function readTwSourcesMeta(meta: MarketCardMeta | null | undefined): { attribution: TwAttribution } | null {
+  const raw = meta?.tw_sources as Record<string, unknown> | undefined;
+  if (!raw || typeof raw !== 'object') return null;
+  const attribution = raw.attribution;
+  if (!attribution || typeof attribution !== 'object' || Array.isArray(attribution)) return null;
+  const text = str((attribution as Record<string, unknown>).text);
+  if (!text || text.length > MAX_ATTRIBUTION_CHARS) return null;
+  return { attribution: { text, url: safeHref((attribution as Record<string, unknown>).url) } };
 }

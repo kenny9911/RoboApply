@@ -7,10 +7,11 @@
 // written in instead of with the English role label only.
 //
 //   intl          the English role label and up to two English synonyms
-//   intl, TW      the same, plus the Traditional Chinese label (language
-//                 'zh-TW') once the role has one. The Simplified label is
-//                 never used for Taiwan: until the Taiwan labels exist the
-//                 Taiwan query is English only.
+//   intl, TW      the same, plus the role's Traditional Chinese label
+//                 (language 'zh-TW'; a label that joins two names, 升學與職涯
+//                 顧問, gives way to the role's first Taiwan title). The
+//                 Simplified label is never used for Taiwan: a role without a
+//                 Taiwan label is asked in English only.
 //   cn            the Simplified Chinese label and up to two Chinese aliases
 //                 (前端 / 服务端 …); no English text.
 //
@@ -44,6 +45,7 @@ const HEAD_NOUN_SET: ReadonlySet<string> = new Set(HEAD_NOUNS);
 /** A label made of two names. */
 const COMPOUND_EN = /\s\/\s|\s(?:or|and)\s|,/i;
 const COMPOUND_ZH = /[与或及、/]/;
+const COMPOUND_ZH_HANT = /[與或及、/]/;
 
 function unique(texts: string[]): string[] {
   const seen = new Set<string>();
@@ -111,10 +113,21 @@ export function queryLabelsFor(node: TaxonomyNode, options: { market: 'intl' | '
   return out;
 }
 
+/**
+ * The Taiwan text to ask a provider with for a role: its Traditional Chinese
+ * label, or its first Taiwan title when the label joins two names (a provider
+ * finds no posting titled 升學與職涯顧問). Falls back to `taxonomyLabel`, which
+ * is English for a node without a Taiwan label, so nothing Chinese is asked.
+ */
+export function taiwanQueryText(node: TaxonomyNode): string | null {
+  const label = taxonomyLabel(node.id, 'zh-TW');
+  if (!label || !COMPOUND_ZH_HANT.test(label)) return label;
+  return (node.synonyms.zhHant ?? []).find((text) => CJK.test(text) && !COMPOUND_ZH_HANT.test(text)) ?? label;
+}
+
 /** The texts a search provider is asked with for a role, in the market's languages. Empty for an unknown id. */
 export function providerQueryLabels(roleId: string, options: { market: 'intl' | 'cn'; country?: string | null }): ProviderQueryLabel[] {
   const node = getTaxonomyNode(roleId);
   if (!node) return [];
-  // `taxonomyLabel(id, 'zh-TW')` is the Traditional label once the role has one, else the English label.
-  return queryLabelsFor(node, { ...options, zhHantLabel: taxonomyLabel(roleId, 'zh-TW') });
+  return queryLabelsFor(node, { ...options, zhHantLabel: taiwanQueryText(node) });
 }
