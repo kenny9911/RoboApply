@@ -7,14 +7,42 @@
 // Adapters turn raw Fantastic Jobs / JSearch / recruiter-bank rows into the
 // input shape; the existing clients' ExternalJobNormalized rows already fit it.
 
-export { asMarketHookJob, marketOfPosting, normalizeProviderJob, normalizeSkills, taxonomyIdsForTitle, MAX_SKILLS } from './normalizeProviderJob.js';
+export { asMarketHookJob, marketOfPosting, normalizeProviderJob, normalizeSkills, taxonomyIdsForTitle, MAX_DISTRICT_CHARS, MAX_SKILLS } from './normalizeProviderJob.js';
 export { inputFromBankJob, inputFromExternalJob, inputFromFantasticJob, inputFromJSearchJob } from './adapters.js';
 export type { BankJobExtras, BankJobLike } from './adapters.js';
 export { agencyFromCompanyName, resolveIsAgency } from './agency.js';
-export { atsTypeFromUrl, atsTypeFromUrls, isJobBoardHost } from './ats.js';
-export { SIZE_BANDS, buildCompanyUpsert, sizeBandFromCount, sizeBandFromText } from './company.js';
+export {
+  applyLinkKind,
+  atsPostingKeyFromBoardRow,
+  atsPostingKeyFromUrl,
+  atsPostingKeyFromUrls,
+  atsPostingKeyOf,
+  atsPostingRefFromUrl,
+  atsTypeFromUrl,
+  atsTypeFromUrls,
+  isIndeedHost,
+  isJobBoardHost,
+  pickEmployerLink,
+} from './ats.js';
+export type { ApplyLinkKind, AtsPostingKeyAts, AtsPostingRef, EmployerLinkPick } from './ats.js';
+export { SIZE_BANDS, buildCompanyUpsert, employerDomain, registrableDomain, sizeBandFromCount, sizeBandFromText } from './company.js';
 export type { SizeBand } from './company.js';
-export { DEFAULT_EXPIRY_DAYS, buildSearchText, dedupeKey, dedupePlace, resolveExpiresAt, resolvePostedAt, toDate } from './identity.js';
+export {
+  AGE_EXPIRY_BOARDS,
+  AGE_EXPIRY_PROVIDERS,
+  AGGREGATOR_BOARD_LINK_DAYS,
+  DEFAULT_EXPIRY_DAYS,
+  NO_DATE_EXPIRY_PROVIDERS,
+  buildSearchText,
+  deadlineInstant,
+  dedupeKey,
+  dedupePlace,
+  naiveOffsetMinutesFor,
+  resolveExpiresAt,
+  resolvePostedAt,
+  toDate,
+} from './identity.js';
+export type { ExpiryOptions } from './identity.js';
 export {
   educationFromLabel,
   educationFromText,
@@ -55,5 +83,8 @@ export type {
   SalaryPeriod,
   SalarySource,
   Seniority,
+  SponsorshipReading,
   WorkModel,
+  WorkShift,
 } from './types.js';
+export { WORK_SHIFTS } from './types.js';

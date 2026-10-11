@@ -37,17 +37,45 @@
 //   - a row archived because its source dropped it ('source_removed'), the
 //     bank closed it ('bank_closed') or it had no page a candidate could open
 //     ('no_apply_target': a bank row while its bank had no posting page) is
-//     revived when the source lists it again; 'expired', 'reported' and
-//     'duplicate' closures stand.
+//     revived when the source lists it again. A row archived as 'expired' is
+//     revived only when the listing says it is open again (JI-10): it now
+//     states a deadline that has not passed (a renewed or extended posting),
+//     or it states none and its source is not one whose rows end by posting
+//     age (an employer board, a bank or an open-data source that removed the
+//     deadline). An aggregator's row that ran out by age comes back with the
+//     same past expiry and stays closed. 'reported' and 'duplicate' closures
+//     always stand (`REVIVE_ON_RELIST_SQL`, mirrored by `revivesOnRelist`).
 //   - `workType` (deprecated, NOT NULL) mirrors workModel; readers use workModel.
-// Dedupe: per dedupeKey the canonical row is the lowest sourcePriority, then
-// the most recent postedAt; the others point at it (`canonicalJobId`) and stay
-// live as alternates (no closeReason).
+//   - sponsorship (D3, ruling C18): a provider's own reading is stored as
+//     `sponsorship` with `sponsorshipSource = 'provider:<provider id>'`, and
+//     only on a row that holds no posting quote. A row whose sponsorship came
+//     from the posting's own words (`sponsorshipSource = 'posting_quote'`, or
+//     a non-null `sponsorshipEvidence`: enrichment writes the quote, and from
+//     MKT-4D on the source too) is never overwritten by a reading. When the
+//     provider stops stating one and the stored source is 'provider:…', both
+//     columns go back to NULL. Anything else stored is left alone.
+//
+// Dedupe (MARKET_STRATEGY §1.5; JI-5, JC-7), always inside ONE market:
+//   1. K2 before K3. Live public rows that share an exact posting key
+//      (`atsPostingKey`, e.g. a JSearch row and the employer-board row of the
+//      same Greenhouse posting) at the same primary place are put in one
+//      group whatever their titles say: each takes the `dedupeKey` of the
+//      group's best row (lowest sourcePriority, then first seen, then id).
+//      The same posting listed in another city stays its own group, so it
+//      stays findable there (the lists match a row's primary location).
+//   2. Per `dedupeKey` the canonical row is chosen in this order: for Taiwan
+//      rows a row with disclosed pay first; then the lowest sourcePriority
+//      (GoHire bank 3, employer board 5, …); then a row whose apply link is on
+//      an employer or ATS host before a job-board link; then the most recent
+//      postedAt, first seen, id. The others point at it (`canonicalJobId`)
+//      and stay live as alternates (no closeReason), so a closed canonical
+//      hands over to the next row. A user's tracker entry keeps the id of the
+//      row the user opened; nothing here moves it (tracker/openedRow.test.ts).
 
 import { createHash } from 'node:crypto';
 import { Prisma } from '../../../generated/prisma/client.js';
 import type { Market } from '../../../platform/brand/index.js';
-import { NO_APPLICANT_COUNT_PROVIDERS, type NormalizedJob, type NormalizeProvider } from '../normalize/index.js';
+import { AGE_EXPIRY_BOARDS, NO_APPLICANT_COUNT_PROVIDERS, type NormalizedJob, type NormalizeProvider } from '../normalize/index.js';
 import type { SourceCloseReason } from '../sources/index.js';
 import { TITLE_MATCH_TRUSTED } from '../taxonomy/index.js';
 import { UPSERT_BATCH } from './config.js';
@@ -159,6 +187,18 @@ export interface JobUpsertRow {
   marketTags: string | null;
   /** 'none' | 'associate' | 'bachelor' | 'master' | 'phd' as the source or the posting states it; null = not stated. */
   educationLevel: string | null;
+  /** K2 `<ats>:<tenant>:<postingId>`, or null (JI-5). */
+  atsPostingKey: string | null;
+  /** The district as the source states it (JT-7). */
+  locationDistrict: string | null;
+  /** 'day' | 'evening' | 'night' | 'rotating' | 'part_time' from the source's own field (JT-7). */
+  workShift: string | null;
+  /** Openings the source states (招聘人数). */
+  headcount: number | null;
+  /** The PROVIDER'S reading only ('offered' | 'not_offered'); null when the provider states none. See the header. */
+  sponsorship: string | null;
+  /** 'provider:<provider id>' exactly when `sponsorship` above is set. */
+  sponsorshipSource: string | null;
 }
 
 /** Column order of every VALUES tuple (= JobUpsertRow key order); the last three columns are now(). */
@@ -174,6 +214,7 @@ export const UPSERT_COLUMNS = [
   'fromRecruiterBank', 'employerVerified', 'applicantCount', 'applicantCountSource',
   'applicantCountAt', 'postedAtEstimated', 'expiresAt', 'dedupeKey', 'sourcePriority',
   'searchText', 'publicDisplay', 'fraudFlags', 'marketTags', 'educationLevel',
+  'atsPostingKey', 'locationDistrict', 'workShift', 'headcount', 'sponsorship', 'sponsorshipSource',
 ] as const satisfies readonly (keyof JobUpsertRow)[];
 
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -208,6 +249,8 @@ export function toUpsertRow(
 ): JobUpsertRow {
   const educationFromText = job.fieldSources.educationLevel === 'posting_text';
   const noCount = (NO_APPLICANT_COUNT_PROVIDERS as readonly NormalizeProvider[]).includes(job.provider) || job.provider === 'user_import';
+  // A provider's reading, never a fact; a user's own import has no provider behind it.
+  const reading = job.provider !== 'user_import' && (job.sponsorshipProvider === 'offered' || job.sponsorshipProvider === 'not_offered') ? job.sponsorshipProvider : null;
   return {
     id,
     externalId: job.externalId,
@@ -276,6 +319,12 @@ export function toUpsertRow(
     fraudFlags: fraudFlagsJson(job.fraudFlags),
     marketTags: marketTagsJson(job.marketTags),
     educationLevel: options.keepStoredEducation && educationFromText ? null : (job.educationLevel ?? null),
+    atsPostingKey: job.atsPostingKey ?? null,
+    locationDistrict: job.locationDistrict ?? null,
+    workShift: job.workShift ?? null,
+    headcount: int(job.headcount ?? null),
+    sponsorship: reading,
+    sponsorshipSource: reading ? `${PROVIDER_SPONSORSHIP_PREFIX}${job.provider}` : null,
   };
 }
 
@@ -291,7 +340,8 @@ function valuesTuple(r: JobUpsertRow): Prisma.Sql {
     ${r.salaryText}::text, ${r.sourceUrl}::text, ${r.sourceName}::text, ${r.originalSourceName}::text, ${r.originalHost}::text, ${r.atsType}::text, ${r.isAgency}::boolean,
     ${r.fromRecruiterBank}::boolean, ${r.employerVerified}::boolean, ${r.applicantCount}::int, ${r.applicantCountSource}::text,
     ${r.applicantCountAt}::timestamp(3), ${r.postedAtEstimated}::boolean, ${r.expiresAt}::timestamp(3), ${r.dedupeKey}, ${r.sourcePriority}::int,
-    ${r.searchText}, ${r.publicDisplay}::boolean, ${r.fraudFlags}::jsonb, ${r.marketTags}::jsonb, ${r.educationLevel}::text, now(), now(), now())`;
+    ${r.searchText}, ${r.publicDisplay}::boolean, ${r.fraudFlags}::jsonb, ${r.marketTags}::jsonb, ${r.educationLevel}::text,
+    ${r.atsPostingKey}::text, ${r.locationDistrict}::text, ${r.workShift}::text, ${r.headcount}::int, ${r.sponsorship}::text, ${r.sponsorshipSource}::text, now(), now(), now())`;
 }
 
 /**
@@ -331,6 +381,69 @@ const ROLE_FROM_INGEST = Prisma.raw(
     ` OR "RAJob"."titleNormalized" IS DISTINCT FROM EXCLUDED."titleNormalized"`,
 );
 
+/** `RAJob.sponsorshipSource` of a provider's reading is this prefix + the provider id; of the posting's own words, `SPONSORSHIP_SOURCE_QUOTE`. */
+export const PROVIDER_SPONSORSHIP_PREFIX = 'provider:';
+export const SPONSORSHIP_SOURCE_QUOTE = 'posting_quote';
+
+/**
+ * ON CONFLICT value of `sponsorship` / `sponsorshipSource` (the rule in the
+ * header). EXCLUDED carries a value only for a provider's reading, so
+ * `EXCLUDED."sponsorshipSource" IS NOT NULL` means "the provider states one".
+ */
+function sponsorshipSql(column: 'sponsorship' | 'sponsorshipSource'): Prisma.Sql {
+  const col = Prisma.raw(`"${column}"`);
+  return Prisma.sql`CASE
+        WHEN "RAJob"."sponsorshipSource" = ${Prisma.raw(`'${SPONSORSHIP_SOURCE_QUOTE}'`)} OR "RAJob"."sponsorshipEvidence" IS NOT NULL THEN "RAJob".${col}
+        WHEN EXCLUDED."sponsorshipSource" IS NOT NULL THEN EXCLUDED.${col}
+        WHEN "RAJob"."sponsorshipSource" LIKE ${Prisma.raw(`'${PROVIDER_SPONSORSHIP_PREFIX}%'`)} THEN NULL
+        ELSE "RAJob".${col}
+      END`;
+}
+
+// ── A source lists a closed row again ─────────────────────────────────────
+
+/** Close reasons a new listing by the source always undoes: the source itself had closed the row. */
+export const REVIVED_CLOSE_REASONS = ['source_removed', 'bank_closed', 'no_apply_target'] as const;
+/** The close reason of the expiry step (maintain.ts `buildExpireSql`). */
+export const EXPIRED_CLOSE_REASON = 'expired';
+
+const sqlTextList = (values: readonly string[]): string => {
+  for (const v of values) if (!/^[a-z0-9_]+$/.test(v)) throw new Error(`not a plain identifier: ${v}`);
+  return values.map((v) => `'${v}'`).join(', ');
+};
+
+/**
+ * WHEN branches of the three lifecycle columns on a conflict: true when the
+ * incoming listing reopens the stored row (the rule in the header). The first
+ * branch is the source's own closures; the second an 'expired' row whose
+ * listing now carries a deadline still ahead, or none on a board that never
+ * expires by age. Both are constants of this module, so they are inlined.
+ */
+const REVIVE_ON_RELIST_SQL = Prisma.raw(
+  `WHEN "RAJob"."closeReason" IN (${sqlTextList(REVIVED_CLOSE_REASONS)}) THEN NULL ` +
+    `WHEN "RAJob"."closeReason" = '${EXPIRED_CLOSE_REASON}' AND (EXCLUDED."expiresAt" > now() ` +
+    `OR (EXCLUDED."expiresAt" IS NULL AND EXCLUDED."sourceBoard" <> ALL(ARRAY[${sqlTextList(AGE_EXPIRY_BOARDS)}]::text[]))) THEN NULL`,
+);
+
+/** What a re-listing carries, for `revivesOnRelist`. */
+export interface RelistedRow {
+  sourceBoard: string;
+  expiresAt: Date | null;
+}
+
+/**
+ * `REVIVE_ON_RELIST_SQL` as a function: does a new listing of a row closed
+ * with `closeReason` reopen it? Pure; the tests use it as the statement's
+ * stand-in.
+ */
+export function revivesOnRelist(closeReason: string | null, incoming: RelistedRow, now: Date): boolean {
+  if (closeReason === null) return false;
+  if ((REVIVED_CLOSE_REASONS as readonly string[]).includes(closeReason)) return true;
+  if (closeReason !== EXPIRED_CLOSE_REASON) return false;
+  if (incoming.expiresAt) return incoming.expiresAt.getTime() > now.getTime();
+  return !(AGE_EXPIRY_BOARDS as readonly string[]).includes(incoming.sourceBoard);
+}
+
 /** The batch statement (exported for the SQL snapshot test). */
 export function buildJobUpsertSql(rows: JobUpsertRow[]): Prisma.Sql {
   return Prisma.sql`
@@ -344,7 +457,8 @@ export function buildJobUpsertSql(rows: JobUpsertRow[]): Prisma.Sql {
       "salaryText", "sourceUrl", "sourceName", "originalSourceName", "originalHost", "atsType", "isAgency",
       "fromRecruiterBank", "employerVerified", "applicantCount", "applicantCountSource",
       "applicantCountAt", "postedAtEstimated", "expiresAt", "dedupeKey", "sourcePriority",
-      "searchText", "publicDisplay", "fraudFlags", "marketTags", "educationLevel", "firstSeenAt", "lastSeenAt", "updatedAt")
+      "searchText", "publicDisplay", "fraudFlags", "marketTags", "educationLevel",
+      "atsPostingKey", "locationDistrict", "workShift", "headcount", "sponsorship", "sponsorshipSource", "firstSeenAt", "lastSeenAt", "updatedAt")
     VALUES ${Prisma.join(rows.map(valuesTuple))}
     ON CONFLICT ("externalId", "sourceBoard") DO UPDATE SET
       "lastSeenAt" = now(),
@@ -358,6 +472,7 @@ export function buildJobUpsertSql(rows: JobUpsertRow[]): Prisma.Sql {
       "location" = EXCLUDED."location",
       "locationCity" = EXCLUDED."locationCity",
       "locationCountry" = EXCLUDED."locationCountry",
+      "locationDistrict" = EXCLUDED."locationDistrict",
       "locationRegion" = EXCLUDED."locationRegion",
       "locations" = EXCLUDED."locations",
       "geoLat" = EXCLUDED."geoLat",
@@ -365,6 +480,8 @@ export function buildJobUpsertSql(rows: JobUpsertRow[]): Prisma.Sql {
       "workType" = EXCLUDED."workType",
       "workModel" = EXCLUDED."workModel",
       "remoteScope" = EXCLUDED."remoteScope",
+      "workShift" = EXCLUDED."workShift",
+      "headcount" = EXCLUDED."headcount",
       "employmentType" = COALESCE(EXCLUDED."employmentType", "RAJob"."employmentType"),
       "salaryMin" = EXCLUDED."salaryMin",
       "salaryMax" = EXCLUDED."salaryMax",
@@ -403,6 +520,9 @@ export function buildJobUpsertSql(rows: JobUpsertRow[]): Prisma.Sql {
       "originalSourceName" = EXCLUDED."originalSourceName",
       "originalHost" = EXCLUDED."originalHost",
       "atsType" = EXCLUDED."atsType",
+      "atsPostingKey" = EXCLUDED."atsPostingKey",
+      "sponsorship" = ${sponsorshipSql('sponsorship')},
+      "sponsorshipSource" = ${sponsorshipSql('sponsorshipSource')},
       "isAgency" = COALESCE(EXCLUDED."isAgency", "RAJob"."isAgency"),
       "fromRecruiterBank" = EXCLUDED."fromRecruiterBank",
       "employerVerified" = EXCLUDED."employerVerified",
@@ -415,9 +535,9 @@ export function buildJobUpsertSql(rows: JobUpsertRow[]): Prisma.Sql {
       "publicDisplay" = EXCLUDED."publicDisplay",
       "fraudFlags" = ${mergeJsonListSql('fraudFlags', ['rule', 'evidence'])},
       "marketTags" = ${mergeJsonListSql('marketTags', ['tag'])},
-      "archivedAt" = CASE WHEN "RAJob"."closeReason" IN ('source_removed', 'bank_closed', 'no_apply_target') THEN NULL ELSE "RAJob"."archivedAt" END,
-      "closedAt" = CASE WHEN "RAJob"."closeReason" IN ('source_removed', 'bank_closed', 'no_apply_target') THEN NULL ELSE "RAJob"."closedAt" END,
-      "closeReason" = CASE WHEN "RAJob"."closeReason" IN ('source_removed', 'bank_closed', 'no_apply_target') THEN NULL ELSE "RAJob"."closeReason" END
+      "archivedAt" = CASE ${REVIVE_ON_RELIST_SQL} ELSE "RAJob"."archivedAt" END,
+      "closedAt" = CASE ${REVIVE_ON_RELIST_SQL} ELSE "RAJob"."closedAt" END,
+      "closeReason" = CASE ${REVIVE_ON_RELIST_SQL} ELSE "RAJob"."closeReason" END
     WHERE "RAJob"."visibility" = 'public'
     RETURNING "id", "externalId", "sourceBoard", (xmax = 0) AS "inserted"`;
 }
@@ -447,11 +567,27 @@ export interface DedupeCandidate {
   sourcePriority: number;
   postedAt: Date | null;
   firstSeenAt?: Date | null;
+  /** ISO country of the posting (`RAJob.locationCountry`); only 'TW' matters here. */
+  locationCountry?: string | null;
+  salaryDisclosed?: boolean | null;
+  /** `RAJob.atsType`: non-null = the apply link is on an employer or ATS host; null = a job board's. */
+  atsType?: string | null;
 }
 
-/** The canonical ordering: lowest sourcePriority, then newest postedAt (nulls last), then first seen, then id. */
+/** Taiwan twins (台灣就業通 and 104 through JSearch): the row with disclosed pay is the one to show. */
+const twPayRank = (r: DedupeCandidate): number => (r.locationCountry === 'TW' && r.salaryDisclosed === true ? 0 : 1);
+/** An apply link on the employer's site or an ATS before a job board's. */
+const employerLinkRank = (r: DedupeCandidate): number => (r.atsType != null ? 0 : 1);
+
+/**
+ * The canonical ordering, the same as `CANONICAL_ORDER_SQL`: for Taiwan rows
+ * disclosed pay first; then the lowest sourcePriority; then an employer-host
+ * apply link; then the newest postedAt (nulls last), first seen, id.
+ */
 export function compareForCanonical(a: DedupeCandidate, b: DedupeCandidate): number {
+  if (twPayRank(a) !== twPayRank(b)) return twPayRank(a) - twPayRank(b);
   if (a.sourcePriority !== b.sourcePriority) return a.sourcePriority - b.sourcePriority;
+  if (employerLinkRank(a) !== employerLinkRank(b)) return employerLinkRank(a) - employerLinkRank(b);
   const pa = a.postedAt?.getTime() ?? null;
   const pb = b.postedAt?.getTime() ?? null;
   if (pa !== pb) {
@@ -470,16 +606,140 @@ export function pickCanonical<T extends DedupeCandidate>(rows: readonly T[]): T 
   return rows.length ? [...rows].sort(compareForCanonical)[0]! : null;
 }
 
+/** ORDER BY of the ranking window; `compareForCanonical` mirrors it. */
+const CANONICAL_ORDER_SQL = Prisma.raw(
+  `(CASE WHEN "locationCountry" = 'TW' AND "salaryDisclosed" THEN 0 ELSE 1 END) ASC, "sourcePriority" ASC, ` +
+    `(CASE WHEN "atsType" IS NOT NULL THEN 0 ELSE 1 END) ASC, "postedAt" DESC NULLS LAST, "firstSeenAt" ASC, "id" ASC`,
+);
+
+// ── Step 1: exact twins share one dedupe key (K2 before K3) ───────────────
+//
+// An exact twin is the same posting (one `atsPostingKey`) AT THE SAME PRIMARY
+// PLACE (country and city). The place is part of the rule because the lists
+// show canonical rows only and match a row by its primary location
+// (feed/sql.ts `locationSql`): a posting open in Austin and Dallas reaches us
+// from an aggregator as one row per city, and collapsing the Dallas row onto
+// a canonical row whose primary city is Austin would take the posting out of
+// every Dallas search. Rows of one posting in different places stay separate
+// groups, as they always were under the fuzzy key (which contains the place).
+
+/** A row of one exact-posting group, for `alignPostingKeys` (the mirror of `buildPostingKeyAlignSql`). */
+export interface PostingKeyRow {
+  id: string;
+  atsPostingKey: string | null;
+  dedupeKey: string | null;
+  sourcePriority: number;
+  firstSeenAt?: Date | null;
+  /** `RAJob.locationCountry` and `locationCity` (the primary location); missing = not stated. */
+  locationCountry?: string | null;
+  locationCity?: string | null;
+}
+
+/** A row whose dedupe key changed: it left the group `fromKey` and joined `toKey`. */
+export interface AdoptedKey {
+  fromKey: string | null;
+  toKey: string | null;
+}
+
+/** The exact-twin group of a row: its posting key and its primary place (the city compared without case). */
+const twinGroup = (r: PostingKeyRow): string => `${r.atsPostingKey}\u0000${r.locationCountry ?? ''}\u0000${(r.locationCity ?? '').toLowerCase()}`;
+
+/**
+ * What `buildPostingKeyAlignSql` does, over rows already narrowed to the live
+ * public rows of ONE market: per posting key and primary place every row takes
+ * the `dedupeKey` of the group's best row (lowest sourcePriority, then first
+ * seen, then id). Returns the rows that change, by id. Pure; the tests use it
+ * as the statement's stand-in.
+ */
+export function alignPostingKeys(rows: readonly PostingKeyRow[]): Map<string, AdoptedKey> {
+  const best = new Map<string, PostingKeyRow>();
+  const better = (a: PostingKeyRow, b: PostingKeyRow): boolean => {
+    if (a.sourcePriority !== b.sourcePriority) return a.sourcePriority < b.sourcePriority;
+    const fa = a.firstSeenAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
+    const fb = b.firstSeenAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
+    return fa !== fb ? fa < fb : a.id < b.id;
+  };
+  for (const r of rows) {
+    if (!r.atsPostingKey || !r.dedupeKey) continue;
+    const cur = best.get(twinGroup(r));
+    if (!cur || better(r, cur)) best.set(twinGroup(r), r);
+  }
+  const moved = new Map<string, AdoptedKey>();
+  for (const r of rows) {
+    const to = r.atsPostingKey ? best.get(twinGroup(r))?.dedupeKey : undefined;
+    if (to && r.dedupeKey !== to) moved.set(r.id, { fromKey: r.dedupeKey, toKey: to });
+  }
+  return moved;
+}
+
+/** The primary place of row `j`, as two comparable values ('' = not stated). `twinGroup` mirrors them. */
+const TWIN_COUNTRY_SQL = Prisma.raw(`coalesce(j."locationCountry", '')`);
+const TWIN_CITY_SQL = Prisma.raw(`lower(coalesce(j."locationCity", ''))`);
+
+/**
+ * Step 1 as one statement. `keys` = the dedupe keys of the page just written:
+ * every exact-posting group that holds a row with one of them is aligned.
+ * `keys` null = the maintenance repair: every group with a row touched in the
+ * last two days. Every read and the write are filtered to `market`, so a
+ * posting key that exists in both markets (a board that hires in both, JC-4)
+ * stays two independent groups. Returns the keys each moved row left and
+ * joined, so step 2 can rank both groups.
+ */
+export function buildPostingKeyAlignSql(market: Market, keys: string[] | null): Prisma.Sql {
+  const touched = keys === null ? Prisma.sql`"updatedAt" > now() - interval '2 days'` : Prisma.sql`"dedupeKey" = ANY(${keys}::text[])`;
+  return Prisma.sql`
+    WITH touched AS (
+      SELECT DISTINCT "atsPostingKey"
+      FROM "RAJob"
+      WHERE "market" = ${market} AND "visibility" = 'public' AND "archivedAt" IS NULL AND "atsPostingKey" IS NOT NULL AND ${touched}
+    ), best AS (
+      SELECT DISTINCT ON (j."atsPostingKey", ${TWIN_COUNTRY_SQL}, ${TWIN_CITY_SQL})
+             j."atsPostingKey", ${TWIN_COUNTRY_SQL} AS "country", ${TWIN_CITY_SQL} AS "city", j."dedupeKey"
+      FROM "RAJob" AS j
+      JOIN touched t ON t."atsPostingKey" = j."atsPostingKey"
+      WHERE j."market" = ${market} AND j."visibility" = 'public' AND j."archivedAt" IS NULL AND j."dedupeKey" IS NOT NULL
+      ORDER BY j."atsPostingKey", ${TWIN_COUNTRY_SQL}, ${TWIN_CITY_SQL}, j."sourcePriority" ASC, j."firstSeenAt" ASC, j."id" ASC
+    ), moved AS (
+      SELECT j."id", j."dedupeKey" AS "fromKey", b."dedupeKey" AS "toKey"
+      FROM "RAJob" AS j
+      JOIN best b ON b."atsPostingKey" = j."atsPostingKey" AND b."country" = ${TWIN_COUNTRY_SQL} AND b."city" = ${TWIN_CITY_SQL}
+      WHERE j."market" = ${market} AND j."visibility" = 'public' AND j."archivedAt" IS NULL AND j."dedupeKey" IS DISTINCT FROM b."dedupeKey"
+    )
+    UPDATE "RAJob" AS j
+    SET "dedupeKey" = m."toKey"
+    FROM moved m
+    WHERE j."id" = m."id" AND j."market" = ${market}
+    RETURNING m."fromKey" AS "fromKey", m."toKey" AS "toKey"`;
+}
+
+/** Runs step 1 and returns the dedupe keys whose groups changed (the keys rows left and the keys they joined). */
+export async function alignPostingKeyGroups(db: IngestDb, market: Market, keys: string[] | null): Promise<string[]> {
+  if (keys !== null && keys.length === 0) return [];
+  const moved = await db.$queryRaw<AdoptedKey[]>(buildPostingKeyAlignSql(market, keys));
+  const changed = new Set<string>();
+  for (const m of Array.isArray(moved) ? moved : []) {
+    if (typeof m?.fromKey === 'string' && m.fromKey) changed.add(m.fromKey);
+    if (typeof m?.toKey === 'string' && m.toKey) changed.add(m.toKey);
+  }
+  return [...changed];
+}
+
+// ── Step 2: one canonical row per dedupe key ──────────────────────────────
+
 /**
  * Recomputes isCanonical / canonicalJobId for live public rows of the given
  * keys (`keys` null = every key touched in the last two days: the
- * maintenance repair). Only rows whose flags change are written.
+ * maintenance repair, plus `alsoKeys`, the groups step 1 changed). Only rows
+ * whose flags change are written. Rows of other markets are never read.
  */
-export function buildDedupeSql(market: Market, keys: string[] | null): Prisma.Sql {
+export function buildDedupeSql(market: Market, keys: string[] | null, alsoKeys: readonly string[] = []): Prisma.Sql {
+  const recent = Prisma.sql`"dedupeKey" IN (SELECT DISTINCT "dedupeKey" FROM "RAJob" WHERE "market" = ${market} AND "dedupeKey" IS NOT NULL AND "updatedAt" > now() - interval '2 days')`;
   const scope =
     keys === null
-      ? Prisma.sql`"dedupeKey" IN (SELECT DISTINCT "dedupeKey" FROM "RAJob" WHERE "market" = ${market} AND "dedupeKey" IS NOT NULL AND "updatedAt" > now() - interval '2 days')`
-      : Prisma.sql`"dedupeKey" = ANY(${keys}::text[])`;
+      ? alsoKeys.length
+        ? Prisma.sql`(${recent} OR "dedupeKey" = ANY(${[...alsoKeys]}::text[]))`
+        : recent
+      : Prisma.sql`"dedupeKey" = ANY(${[...new Set([...keys, ...alsoKeys])]}::text[])`;
   return Prisma.sql`
     WITH ranked AS (
       SELECT "id",
@@ -487,7 +747,7 @@ export function buildDedupeSql(market: Market, keys: string[] | null): Prisma.Sq
              first_value("id") OVER w AS canon
       FROM "RAJob"
       WHERE "market" = ${market} AND "visibility" = 'public' AND "archivedAt" IS NULL AND ${scope}
-      WINDOW w AS (PARTITION BY "dedupeKey" ORDER BY "sourcePriority" ASC, "postedAt" DESC NULLS LAST, "firstSeenAt" ASC, "id" ASC)
+      WINDOW w AS (PARTITION BY "dedupeKey" ORDER BY ${CANONICAL_ORDER_SQL})
     )
     UPDATE "RAJob" AS j
     SET "isCanonical" = (r.rn = 1),
@@ -498,9 +758,17 @@ export function buildDedupeSql(market: Market, keys: string[] | null): Prisma.Sq
            OR j."canonicalJobId" IS DISTINCT FROM (CASE WHEN r.rn = 1 THEN NULL ELSE r.canon END))`;
 }
 
+/**
+ * Dedupe for the rows carrying `keys` (the ingest pipeline passes the page's
+ * dedupe keys; null = the maintenance repair): step 1 aligns exact twins,
+ * step 2 ranks the given keys plus every key step 1 changed. Returns the
+ * number of rows whose canonical flags changed.
+ */
 export async function applyDedupe(db: IngestDb, market: Market, keys: string[] | null): Promise<number> {
   if (keys !== null && keys.length === 0) return 0;
-  return db.$executeRaw(buildDedupeSql(market, keys === null ? null : [...new Set(keys)]));
+  const given = keys === null ? null : [...new Set(keys)];
+  const changed = await alignPostingKeyGroups(db, market, given);
+  return db.$executeRaw(buildDedupeSql(market, given, changed));
 }
 
 /**
@@ -508,7 +776,7 @@ export async function applyDedupe(db: IngestDb, market: Market, keys: string[] |
  * unpublished or re-drafted a job ('bank_closed', the default), a public job
  * board that stopped listing one ('source_removed'), or a posting with no page
  * a candidate can open ('no_apply_target'). All three are revived by the
- * upsert if the source lists the posting again.
+ * upsert if the source lists the posting again (`REVIVED_CLOSE_REASONS`).
  */
 export async function archiveClosedBankJobs(
   db: IngestDb,

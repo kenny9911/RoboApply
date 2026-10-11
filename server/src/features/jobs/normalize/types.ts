@@ -45,7 +45,19 @@ export type AtsType =
   | 'beisen'
   | 'feishu'
   | 'dayee'
+  // MKT-3C (JI-8): classified now so a link to one of these boards is an ATS link; their connectors are MKT-5B.
+  | 'recruitee'
+  | 'personio'
+  | 'teamtailor'
+  | 'bamboohr'
   | 'other';
+
+/** `RAJob.workShift`: the shift pattern a source states in its own field (Taiwan `WKTIME`; JT-7). */
+export const WORK_SHIFTS = ['day', 'evening', 'night', 'rotating', 'part_time'] as const;
+export type WorkShift = (typeof WORK_SHIFTS)[number];
+
+/** A provider's own reading of visa / work-permit sponsorship (never a fact; MARKET_STRATEGY §1.5). */
+export type SponsorshipReading = 'offered' | 'not_offered';
 
 /** Where a derived value came from (kept for review and for WP-17's skip rule). */
 export type FieldSource =
@@ -147,12 +159,19 @@ export interface ProviderJobInput {
    * A provider's own reading of visa / work-permit sponsorship (a feed flag).
    * A reading, never a fact: it may only ever be stored and shown as "the
    * provider's reading" (MARKET_STRATEGY §1.5 "Provider fields first").
-   * Carried on the input; nothing reads it yet (MKT-3C).
+   * The ingest upsert stores it as `RAJob.sponsorship` with
+   * `sponsorshipSource = 'provider:<provider id>'`, and only on a row that
+   * holds no posting quote (MKT-3C).
    */
-  sponsorshipProvider?: 'offered' | 'not_offered' | null;
-  /** The district inside the city or county, as the source states it (Taiwan: 竹北市, 中山區; JT-7). Not read yet. */
+  sponsorshipProvider?: SponsorshipReading | null;
+  /** The district inside the city or county, as the source states it (Taiwan: 竹北市, 中山區; JT-7). Stored as posted, at most 40 characters. */
   locationDistrict?: string | null;
-  /** The shift pattern as the source states it (Taiwan `WKTIME`: 日班, 夜班, 輪班 …; JT-7). Not read yet. */
+  /**
+   * The shift pattern from the source's own field, already mapped by the
+   * adapter to one of `WORK_SHIFTS` ('day' | 'evening' | 'night' | 'rotating'
+   * | 'part_time'). Any other value is dropped: the normalizer never reads a
+   * shift out of free text (JT-7).
+   */
   workShift?: string | null;
 
   /** A provider education label ("本科", "bachelor", "associate", "不限"). */
@@ -210,10 +229,13 @@ export interface NormalizeContext {
    */
   firstSeenAt?: string | Date | null;
   /**
-   * `companyNameNormalized` → the employer's registrable domain, for sources
-   * that state one. The fuzzy dedupe key uses the domain in place of the name
-   * (MARKET_STRATEGY §1.5 K3, JI-5). Filled by the ingest pipeline (MKT-3A)
-   * and read by the dedupe key (MKT-3C); unused until then.
+   * `companyNameNormalized` → a host or domain known for that employer (as a
+   * source stated it or as `RACompany.domain` holds it; raw, unfiltered). The
+   * fuzzy dedupe key uses the employer's registrable domain in place of the
+   * name (MARKET_STRATEGY §1.5 K3, JI-5): the normalizer reduces every value
+   * with `registrableDomain` and ignores a job-board or ATS host. Filled by
+   * the ingest pipeline (MKT-3A), read by the dedupe key (MKT-3C). Absent or
+   * empty → the key is the name key, as before.
    */
   companyDomains?: ReadonlyMap<string, string>;
 }
@@ -259,7 +281,10 @@ export type NormalizedJob = {
   ownerUserId: string | null;
   externalId: string;
   sourceBoard: string;
-  /** Lower wins in dedupe (`PROVIDER_META` in ./source.ts: usajobs 8, activejobs 10, open data 12, bank 15, linkedin 20, jsearch 30, user_import 90). */
+  /**
+   * Lower wins in dedupe (`PROVIDER_META` in ./source.ts): GoHire bank 3, employer boards (ats_public) 5,
+   * usajobs 8, activejobs 10, Taiwan open data 12, RoboHire bank 15, linkedin 20, jsearch 30, user_import 90.
+   */
   sourcePriority: number;
 
   title: string;
@@ -295,6 +320,15 @@ export type NormalizedJob = {
    */
   marketTags?: unknown;
   atsType: AtsType | null;
+  /**
+   * K2, the exact posting key `<ats>:<tenant>:<postingId>` in lower case
+   * (`greenhouse:stripe:123`), parsed from the apply or source URL; for an
+   * employer-board row it is built from the row's own board and externalId.
+   * Null when no URL names a posting on a known ATS (never guessed). Dedupe
+   * aligns rows that share it (at the same primary place) before the fuzzy
+   * key, inside one market (JI-5; ingest/upsert.ts step 1).
+   */
+  atsPostingKey: string | null;
   /** true when a provider or our agency list says so; null = not known (never false by guess). */
   isAgency: boolean | null;
   fromRecruiterBank: boolean;
@@ -305,6 +339,8 @@ export type NormalizedJob = {
   locationCity: string | null;
   locationRegion: string | null;
   locationCountry: string | null;
+  /** The district as the source states it (Taiwan 鄉鎮市區, e.g. 竹北市); null = not stated (JT-7). */
+  locationDistrict: string | null;
   locations: NormalizedLocation[];
   geoLat: number | null;
   geoLng: number | null;
@@ -317,8 +353,16 @@ export type NormalizedJob = {
   educationLevel: EducationLevel | null;
   /** The posting's own words the level was read from (posting_text only; not stored on the row). */
   educationEvidence: string | null;
-  /** Openings the provider states. Carried here; `RAJob.headcount` exists since SCHEMA-8 and the ingest upsert writes it from MKT-3C on. */
+  /** Openings the provider states (`RAJob.headcount`, written by the ingest upsert and refreshed from the source like the posting's other fields). */
   headcount: number | null;
+  /** The shift pattern from the source's own field; null = not stated or not one of `WORK_SHIFTS` (JT-7). */
+  workShift: WorkShift | null;
+  /**
+   * The provider's own reading of sponsorship, carried through for the upsert
+   * (stored as `sponsorship` + `sponsorshipSource = 'provider:<provider>'`,
+   * never over a posting quote). Null = the provider states none.
+   */
+  sponsorshipProvider: SponsorshipReading | null;
 
   salaryMin: number | null;
   salaryMax: number | null;

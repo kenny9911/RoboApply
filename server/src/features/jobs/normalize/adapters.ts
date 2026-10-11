@@ -13,7 +13,8 @@
 // hiring-manager names, and any applicant / view counts.
 
 import type { ExternalJobNormalized } from '../../../roboapply/v2/lib/raExternalJobTypes.js';
-import { cleanOrNull } from './text.js';
+import { pickEmployerLink } from './ats.js';
+import { cleanOrNull, safeUrl } from './text.js';
 import type { CompanyFactsInput, ProviderJobInput } from './types.js';
 
 /** The existing RapidAPI clients' rows are already valid input (compile-time proof, identity at run time). */
@@ -105,9 +106,18 @@ export function inputFromJSearchJob(j: unknown, req: { country: string; fetchedA
   const company = str(r.employer_name);
   if (!id || !title || !company) return null;
 
+  // Where a candidate applies is decided by the link's HOST, never by `is_direct` (true on 0 of 58 probed
+  // rows; MARKET_STRATEGY M-3, JI-6): the employer's or ATS's page first, then a job board that is neither
+  // LinkedIn nor Indeed. `pickEmployerLink` is the same rule the normalizer applies, so this raw-payload
+  // path and the client path (raRapidApiJobs) agree. A row whose only links are LinkedIn's or Indeed's
+  // keeps its link here; the normalizer refuses it ('linkedin_only_link' / 'indeed_only_link').
   const options = Array.isArray(r.apply_options) ? (r.apply_options as unknown[]).map(obj).filter((o): o is Raw => !!o) : [];
-  const direct = options.find((o) => o.is_direct === true && str(o.apply_link));
-  const applyUrl = str(direct?.apply_link) ?? str(r.job_apply_link);
+  const postingLink = str(r.job_apply_link);
+  const link = pickEmployerLink([postingLink, ...options.map((o) => str(o.apply_link))]);
+  const applyUrl = link.url ?? postingLink ?? options.map((o) => str(o.apply_link)).find((u) => u) ?? null;
+  // Employer-direct by host; a provider's explicit flag on the chosen link is still honoured.
+  const flaggedDirect =
+    !!link.url && (options.some((o) => o.is_direct === true && safeUrl(str(o.apply_link)) === link.url) || (r.job_apply_is_direct === true && safeUrl(postingLink) === link.url));
   const exp = obj(r.job_required_experience);
   const months = exp?.no_experience_required === true ? 0 : numOrNull(exp?.required_experience_in_months);
   const city = str(r.job_city);
@@ -123,8 +133,8 @@ export function inputFromJSearchJob(j: unknown, req: { country: string; fetchedA
     company,
     companyLogoUrl: str(r.employer_logo),
     applyUrl,
-    sourceUrl: str(r.job_apply_link),
-    applyIsDirect: !!direct || r.job_apply_is_direct === true,
+    sourceUrl: postingLink,
+    applyIsDirect: link.direct || flaggedDirect,
     sourcePublisher: str(r.job_publisher),
     location,
     locationCity: city,

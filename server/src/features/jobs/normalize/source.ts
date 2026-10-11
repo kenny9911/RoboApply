@@ -12,7 +12,7 @@
 // taken from the 'linkedin' or 'jsearch' providers (they are LinkedIn
 // click counts, not applications).
 
-import { isJobBoardHost } from './ats.js';
+import { isJobBoardHost, isLinkedInHost } from './ats.js';
 import { cleanOrNull, hostOf, safeUrl } from './text.js';
 import type { NormalizeProvider } from './types.js';
 
@@ -37,17 +37,24 @@ export interface ProviderMeta {
  * keeps resolving the board 'activejobs' to the search provider
  * (normalizeProviderJob.test.ts pins it).
  *
- * Priorities (lower wins): usajobs 8 (the federal government's own listing),
- * activejobs / activejobs_feed / ats_public 10, the Taiwan government sources
- * 12, the recruiter banks 15, linkedin 20, jsearch 30, user_import 90.
- * A government open-data source publishes no applicant count.
+ * Priorities (lower wins; MARKET_STRATEGY §1.5 "Canonical row", JI-5, JC-7):
+ *    3  bank_gohire     mainland order is GoHire bank > employer board > aggregator
+ *    5  ats_public      the employer's own listing, with the real closure signal
+ *    8  usajobs         the federal government's own listing
+ *   10  activejobs / activejobs_feed
+ *   12  tw_open_data / tw_gov_jobs
+ *   15  bank_robohire
+ *   20  linkedin, 30 jsearch, 90 user_import
+ * Rows stored with an older number are corrected by `alignSourcePriority`
+ * (ingest/maintain.ts), which reads this table. A government open-data source
+ * publishes no applicant count.
  */
 export const PROVIDER_META: Readonly<Record<NormalizeProvider, ProviderMeta>> = {
   activejobs_feed: { sourcePriority: 10, sourceBoard: 'activejobs', aggregatorName: 'Active Jobs DB', applicantCountAllowed: true, fromRecruiterBank: false },
   activejobs: { sourcePriority: 10, sourceBoard: 'activejobs', aggregatorName: 'Active Jobs DB', applicantCountAllowed: true, fromRecruiterBank: false },
-  ats_public: { sourcePriority: 10, sourceBoard: 'ats_public', aggregatorName: null, applicantCountAllowed: true, fromRecruiterBank: false },
+  ats_public: { sourcePriority: 5, sourceBoard: 'ats_public', aggregatorName: null, applicantCountAllowed: true, fromRecruiterBank: false },
   bank_robohire: { sourcePriority: 15, sourceBoard: 'robohire', aggregatorName: 'RoboHire', applicantCountAllowed: true, fromRecruiterBank: true },
-  bank_gohire: { sourcePriority: 15, sourceBoard: 'gohire', aggregatorName: 'GoHire', applicantCountAllowed: true, fromRecruiterBank: true },
+  bank_gohire: { sourcePriority: 3, sourceBoard: 'gohire', aggregatorName: 'GoHire', applicantCountAllowed: true, fromRecruiterBank: true },
   linkedin: { sourcePriority: 20, sourceBoard: 'linkedin', aggregatorName: 'Fantastic Jobs', applicantCountAllowed: false, fromRecruiterBank: false },
   jsearch: { sourcePriority: 30, sourceBoard: 'jsearch', aggregatorName: 'JSearch', applicantCountAllowed: false, fromRecruiterBank: false },
   user_import: { sourcePriority: 90, sourceBoard: 'user_import', aggregatorName: null, applicantCountAllowed: false, fromRecruiterBank: false },
@@ -71,9 +78,8 @@ export function isLinkedInBranded(value: string | null | undefined): boolean {
   return !!value && LINKEDIN_RE.test(value);
 }
 
-export function isLinkedInHost(host: string | null): boolean {
-  return !!host && (host === 'linkedin.com' || host.endsWith('.linkedin.com') || host === 'lnkd.in');
-}
+// The host test lives with the other host rules (ats.ts); re-exported here, where its callers have always found it.
+export { isLinkedInHost };
 
 /** LinkedIn pages and its media CDN (media.licdn.com logo hotlinks). */
 export function isLinkedInAssetHost(host: string | null): boolean {
@@ -90,6 +96,10 @@ const ATS_DISPLAY: Record<string, string> = {
   workable: 'Workable',
   taleo: 'Taleo',
   successfactors: 'SuccessFactors',
+  recruitee: 'Recruitee',
+  personio: 'Personio',
+  teamtailor: 'Teamtailor',
+  bamboohr: 'BambooHR',
 };
 
 /** "greenhouse" → "Greenhouse"; free text kept as written. */

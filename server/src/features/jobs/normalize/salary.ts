@@ -99,6 +99,13 @@ export interface ParsedPay {
   negotiable: boolean;
   /** The verbatim pay phrase (≤ 80 chars). */
   text: string;
+  /**
+   * Mainland only: the text holds figures but names no unit for them (no
+   * currency, no period, no N薪, no K / 千 / 万): "薪资 35-57", "35-57人".
+   * They are words to show as posted, never pay to compare; `min` and `max`
+   * are null.
+   */
+  ambiguous?: boolean;
 }
 
 const NONE: SalaryResult = {
@@ -137,7 +144,9 @@ export function periodFromLabel(raw: string | null | undefined): SalaryPeriod | 
 
 const PERIOD_IN_TEXT: [SalaryPeriod, RegExp][] = [
   ['hour', /(?:\/|per |an |a |each )\s*(?:hour|hr|h)\b|\bhourly\b|时薪|時薪|元\s*\/\s*(?:时|時|小时|小時)|\/\s*(?:小时|小時)|每小时|每小時/i],
-  ['day', /(?:\/|per |a )\s*(?:day|diem)\b|\bdaily\b|日薪|元\s*\/\s*(?:天|日)|\/\s*(?:天|日)\b|每天|每日/i],
+  // "/天" and "/日" close a rate ("200-300/天"). No \b after them: it never holds between a CJK character and
+  // the end of the text, so the unit was not read; 日本 and 日期 are the two words a slash can stand before.
+  ['day', /(?:\/|per |a )\s*(?:day|diem)\b|\bdaily\b|日薪|元\s*\/\s*(?:天|日)|\/\s*(?:天|日)(?![本期])|每天|每日/i],
   ['week', /(?:\/|per |a )\s*(?:week|wk)\b|\bweekly\b|周薪|週薪|\/\s*(?:周|週)/i],
   ['month', /(?:\/|per |a )\s*(?:month|mo|mth)\b|\bmonthly\b|月薪|\/\s*月|每月|元\s*\/\s*月|k\s*\/\s*月|·\s*\d{2}\s*薪/i],
   ['year', /(?:\/|per |an |a )\s*(?:year|yr|annum)\b|\b(?:annual(?:ly)?|yearly)\b|\bp\.\s?a\.|年薪|\/\s*年|每年|年收入/i],
@@ -160,10 +169,13 @@ export function currencyFromText(text: string, country: string | null, market: '
   const rules: [string, RegExp][] = [
     ['TWD', /NT\$|\bNTD\b|\bTWD\b|新台幣|新臺幣|台幣|臺幣/i],
     ['HKD', /HK\$|\bHKD\b|港元|港币|港幣/i],
-    ['SGD', /S\$|\bSGD\b/i],
-    ['AUD', /A\$|AU\$|\bAUD\b/i],
-    ['CAD', /C\$|CA\$|\bCAD\b/i],
-    ['BRL', /R\$|\bBRL\b/i],
+    // A one-letter dollar prefix counts only when no letter stands before it: "US$" is not "S$" and
+    // "CA$" is not "A$" (they were read as SGD and AUD).
+    ['SGD', /(?<![A-Za-z])S\$|\bSGD\b/i],
+    ['AUD', /(?<![A-Za-z])A\$|AU\$|\bAUD\b/i],
+    ['CAD', /(?<![A-Za-z])C\$|CA\$|\bCAD\b/i],
+    ['NZD', /NZ\$|\bNZD\b/i],
+    ['BRL', /(?<![A-Za-z])R\$|\bBRL\b/i],
     ['MXN', /MX\$|\bMXN\b/i],
     ['USD', /US\$|\bUSD\b|美元|美金/i],
     ['CNY', /\bRMB\b|\bCNY\b|人民币|人民幣/i],
@@ -464,7 +476,8 @@ export function parseSalaryText(text: string | null | undefined, opts: { country
   if (!period && months != null) period = 'month';
   const hasUnit = /[kK千万萬]|[wW](?=\W|$)/.test(range?.[0] ?? scrubbed);
   const hasSymbol = new RegExp(CUR_PREFIX).test(range?.[0] ?? scrubbed);
-  let currency = currencyFromText(s, country, market);
+  const namedCurrency = currencyFromText(s, country, market);
+  let currency = namedCurrency;
   // Chinese-language pay text in a Chinese-speaking market without a symbol ("15-25K·14薪", "月薪 4萬~5萬").
   if (!currency && cjk) currency = CJK_MARKET_CURRENCY[country ?? ''] ?? (market === 'cn' ? 'CNY' : null);
   // A mainland posting's K / 千 / 万 figure that names no currency is yuan, with or without Chinese words ("15-25K").
@@ -478,6 +491,15 @@ export function parseSalaryText(text: string | null | undefined, opts: { country
   // A bare pair of numbers ("2-3") with no currency sign, unit or period is not pay.
   if (!currency && !period && !hasUnit && !hasSymbol) {
     return negotiable ? { min: null, max: null, currency: null, period: null, months: null, negotiable: true, text: verbatim } : null;
+  }
+  // Mainland: the same pair with Chinese words around it ("薪资 35-57", "35-57人") names no unit either.
+  // The yuan above is our reading of the language, not a unit the posting states, and one job-board
+  // system writes 35-57 for thousands a month where another writes 35000-60000 (JOB_SOURCES_CN §7.6):
+  // the words are kept, no amount is.
+  if (mainland && !namedCurrency && !period && !hasUnit && !hasSymbol) {
+    return negotiable
+      ? { min: null, max: null, currency: null, period: null, months: null, negotiable: true, text: verbatim }
+      : { min: null, max: null, currency: null, period: null, months: null, negotiable: false, ambiguous: true, text: verbatim };
   }
   return {
     min,
@@ -740,16 +762,33 @@ function assemble(p: { min: number | null; max: number | null; currency: string 
 }
 
 function fromParsed(parsed: ParsedPay, source: SalarySource): SalaryResult {
-  if (parsed.negotiable) return { ...NONE, salaryText: parsed.text };
+  if (parsed.negotiable || parsed.ambiguous) return { ...NONE, salaryText: parsed.text };
   return assemble(parsed, source, parsed.text);
+}
+
+/** A pay text that is nothing but one or two numbers: "35-57", "35000 ~ 60000", "8,000". */
+const BARE_FIGURES_RE = /^\d[\d,]*(?:\.\d+)?(?:\s*(?:-|–|—|~|～|〜|至|到)\s*\d[\d,]*(?:\.\d+)?)?$/;
+
+/** The two numbers of a pay field as the source gave them ("35-57", "35"), for a row that has no pay text of its own. */
+function bareFigures(min: number | null, max: number | null): string | null {
+  const parts = [min, max].filter((n): n is number => n != null).map((n) => String(n));
+  return parts.length === 2 && parts[0] === parts[1] ? parts[0]! : parts.join('-') || null;
 }
 
 /**
  * The full pay rule set: structured provider fields first, then the provider's
  * pay text, then pay lines in the description. Never estimates.
+ *
+ * Mainland rows (MARKET_STRATEGY §1.5 "Pay"; JOB_SOURCES_CN §7.6): figures
+ * that name no unit at all (no currency, no period, no N薪, no K / 千 / 万)
+ * are ambiguous: one job-board system writes "35-57" for thousands a month
+ * and another "35000-60000" for yuan. Such a pair is kept as posted in
+ * `salaryText` and is not pay we can compare: no amount is stored and
+ * `salaryDisclosed` stays false, so no filter, sort or count reads it.
  */
 export function normalizeSalary(input: SalaryInput): SalaryResult {
   const opts = { country: input.country ?? null, market: input.market ?? 'intl' };
+  const mainland = opts.market === 'cn' || opts.country?.toUpperCase() === 'CN';
   const text = typeof input.text === 'string' && input.text.trim() ? input.text.normalize('NFKC').trim() : null;
   const textParsed = text ? parseSalaryText(text, opts) : null;
 
@@ -765,6 +804,8 @@ export function normalizeSalary(input: SalaryInput): SalaryResult {
       const same = (a: number | null, b: number | null) => a == null || b == null || Math.round(a) === Math.round(b);
       if (desc && !desc.negotiable && same(desc.min, min) && same(desc.max, max)) currency = desc.currency;
     }
+    // Mainland: bare numbers with no unit of any kind are kept as posted and never compared (see above).
+    if (mainland && !currency && !period && !months) return { ...NONE, salaryText: (text ?? bareFigures(min, max))?.slice(0, 80) ?? null };
     // A single stated bound stays single ("from $150k" has no maximum; D3).
     return assemble(
       {
@@ -778,8 +819,13 @@ export function normalizeSalary(input: SalaryInput): SalaryResult {
       text ? text.slice(0, 80) : null,
     );
   }
-  if (textParsed) return fromParsed(textParsed, 'posting_text');
+  if (textParsed && !textParsed.ambiguous) return fromParsed(textParsed, 'posting_text');
+  // A pay field without a unit does not hide a pay line of the posting that has one.
   const fromDesc = payFromDescription(input.description, opts);
+  if (fromDesc && !(fromDesc.negotiable && textParsed?.ambiguous)) return fromParsed(fromDesc, 'posting_text');
+  if (textParsed?.ambiguous) return fromParsed(textParsed, 'posting_text');
+  // Mainland: the source's own pay field holds nothing but numbers ("35-57"). Its words are kept; a 0 is no pay.
+  if (mainland && text && BARE_FIGURES_RE.test(text) && /[1-9]/.test(text)) return { ...NONE, salaryText: text.slice(0, 80) };
   if (fromDesc) return fromParsed(fromDesc, 'posting_text');
   return { ...NONE };
 }
