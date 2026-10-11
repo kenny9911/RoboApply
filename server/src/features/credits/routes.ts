@@ -8,12 +8,15 @@
 //     POST /cancel      → CancelResponse   one click; survey optional; confirmation email
 //     POST /cancel/survey {reason?, note?} → 204   stores the answer only (no cancel, email or event)
 //     POST /resume      {autoRenewAck: true} → ResumeResponse   "Keep my plan": renewal back on while the period is live
+//     GET  /withdrawal  → WithdrawalResponse   the statutory withdrawals open now (EU, EEA, UK, Taiwan; 14 days per purchase)
+//     POST /withdrawal  {purchaseId, confirm: true} → WithdrawResponse   ends the subscription at once, then refunds; 3 an hour
 //   createBillingPlansRouter() at /api/v1/roboapply/billing/plans (after the legacy
 //                              /billing router, which has no /plans path)
 //     GET  /            → PlansResponse    public; signed-in users also get `current`
 //   createPublicCancelRouter() at /api/v1/public/cancel (no sign-in; §312k BGB)
 //     POST /            {email} → 204 always; emails a single-use 30-minute link
-//     POST /confirm     {token} → CancelResponse
+//     POST /preview     {token} → PublicCancelPreviewResponse   what the link can do; does not use it up
+//     POST /confirm     {token, withdraw?} → PublicCancelConfirmResponse   cancels at period end, or withdraws
 // The admin router lives in adminRoutes.ts. Checkout stays on the legacy
 // /billing/checkout route (roboapply/routes/billing.ts).
 
@@ -32,8 +35,10 @@ import {
   CancelSurveyBodySchema,
   CreditHistoryQuerySchema,
   PublicCancelConfirmBodySchema,
+  PublicCancelPreviewBodySchema,
   PublicCancelRequestBodySchema,
   ResumeSubscriptionBodySchema,
+  WithdrawBodySchema,
   type ResumeSubscriptionBody,
 } from './contract.js';
 import { CreditsAreaService, creditsAreaService } from './service.js';
@@ -112,6 +117,12 @@ export function createCreditsRouter(deps: FeatureRouterDeps & { service?: Credit
       service.resume(requireUserId(req), brandOf(req), parseResumeBody(req), { ip: clientIp(req), userAgent: req.get('user-agent') ?? null }),
     ),
   );
+  router.get('/withdrawal', ...auth, billingRoute(async (req) => service.withdrawalQuote(requireUserId(req), brandOf(req))));
+  router.post(
+    '/withdrawal',
+    ...auth,
+    billingRoute(async (req) => service.withdraw(requireUserId(req), brandOf(req), parseBody(req, WithdrawBodySchema))),
+  );
   return router;
 }
 
@@ -142,10 +153,14 @@ export function createPublicCancelRouter(deps: FeatureRouterDeps & { service?: C
     }),
   );
   router.post(
+    '/preview',
+    billingRoute(async (req) => service.previewPublicCancel(brandOf(req), parseBody(req, PublicCancelPreviewBodySchema).token)),
+  );
+  router.post(
     '/confirm',
     billingRoute(async (req) => {
-      const { token } = parseBody(req, PublicCancelConfirmBodySchema);
-      return service.confirmPublicCancel(brandOf(req), token);
+      const { token, withdraw } = parseBody(req, PublicCancelConfirmBodySchema);
+      return service.confirmPublicCancel(brandOf(req), token, { withdraw });
     }),
   );
   return router;

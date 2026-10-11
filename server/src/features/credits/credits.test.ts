@@ -1187,4 +1187,102 @@ describe('admin: refund quote', () => {
     const res = await h.request<any>('GET', '/api/v1/roboapply/admin/credits/refund-quote?userId=u_go', RA);
     expect(res.body.data).toEqual({ charge: null, facts: null, decision: null });
   });
+
+  describe('the paid period of a subscription charge goes into the quote (ST-9: the pro-rata withdrawal)', () => {
+    const DAY_S = 86_400;
+    const NOW_S = Math.floor(NOW.getTime() / 1000);
+    /** The first invoice of the monthly plan, paid `daysAgo` days ago for the 30 days from then. */
+    const invoice = (daysAgo: number, over: Record<string, unknown> = {}) => {
+      const paidAt = NOW_S - daysAgo * DAY_S;
+      return {
+        id: 'in_1',
+        amount_paid: 2499,
+        currency: 'usd',
+        created: paidAt,
+        status_transitions: { paid_at: paidAt },
+        billing_reason: 'subscription_create',
+        metadata: {},
+        parent: { subscription_details: { subscription: 'sub_1', metadata: { planKey: 'pro_monthly' } } },
+        lines: {
+          data: [
+            // A proration line is never the paid period.
+            { id: 'il_0', period: { start: paidAt - 99 * DAY_S, end: paidAt + 99 * DAY_S }, parent: { subscription_item_details: { subscription: 'sub_1', proration: true } } },
+            { id: 'il_1', period: { start: paidAt, end: paidAt + 30 * DAY_S }, parent: { subscription_item_details: { subscription: 'sub_1', proration: false } } },
+          ],
+        },
+        ...over,
+      };
+    };
+    const waiver = (daysAgo: number) =>
+      db.seekerConsentRecord.create({ data: { seekerProfileId: 'sp_1', consentType: 'withdrawal_waiver', granted: true, createdAt: new Date(NOW.getTime() - daysAgo * 86_400_000 - 60_000) } });
+    const quote = async (userId = 'u_1') => (await h.request<any>('GET', `/api/v1/roboapply/admin/credits/refund-quote?userId=${userId}`, RA)).body.data;
+
+    it('a German buyer who ticked the waiver, on day 5 of 30: the admin quote shows 25/30 of the price, as the buyer is quoted', async () => {
+      stripe.invoices.list.mockResolvedValueOnce({ data: [invoice(5)] });
+      await waiver(5);
+      const data = await quote();
+      expect(data.facts).toMatchObject({ billingCountry: 'DE', withdrawalWaiver: true });
+      expect(data.decision).toMatchObject({
+        eligible: true,
+        rule: 'withdrawal_14d_prorata',
+        amountMinor: 2082, // floor(2499 × 25 / 30)
+        prorata: { usedDays: 5, periodDays: 30 },
+        endsAccess: true,
+        withdrawalRegion: 'eu',
+      });
+      // The invoice's own line says what was paid for: the subscription is not read.
+      expect(stripe.subscriptions.retrieve).not.toHaveBeenCalled();
+    });
+
+    it('the same buyer without the waiver is quoted the full price, and a US buyer the ordinary 7-day rule', async () => {
+      stripe.invoices.list.mockResolvedValueOnce({ data: [invoice(5)] });
+      expect((await quote()).decision).toMatchObject({ eligible: true, rule: 'withdrawal_14d', amountMinor: 2499, prorata: null });
+      await db.seekerSubscription.update({ where: { id: 'row_1' }, data: { billingCountry: 'US' } });
+      await waiver(5);
+      stripe.invoices.list.mockResolvedValueOnce({ data: [invoice(5)] });
+      expect((await quote()).decision).toMatchObject({ eligible: true, rule: 'first_purchase_7d', amountMinor: 2499, prorata: null, endsAccess: false });
+    });
+
+    it('an invoice without a line: the subscription is read, and bounds of a later period never give a pro-rata amount', async () => {
+      await waiver(5);
+      // Its own period: read from the subscription.
+      stripe.invoices.list.mockResolvedValueOnce({ data: [invoice(5, { lines: { data: [] } })] });
+      stripe.subscriptions.retrieve.mockResolvedValueOnce({ id: 'sub_1', items: { data: [{ current_period_start: NOW_S - 5 * DAY_S, current_period_end: NOW_S + 25 * DAY_S }] } });
+      expect((await quote()).decision).toMatchObject({ rule: 'withdrawal_14d_prorata', amountMinor: 2082 });
+      expect(stripe.subscriptions.retrieve).toHaveBeenCalledWith('sub_1');
+      // Stripe already shows the NEXT period (the renewal is drafted, not paid): the paid one is over, so no pro-rata rule.
+      stripe.invoices.list.mockResolvedValueOnce({ data: [invoice(5, { lines: { data: [] } })] });
+      stripe.subscriptions.retrieve.mockResolvedValueOnce({ id: 'sub_1', items: { data: [{ current_period_start: NOW_S + 25 * DAY_S, current_period_end: NOW_S + 55 * DAY_S }] } });
+      expect((await quote()).decision).toMatchObject({ rule: 'first_purchase_7d', amountMinor: 2499, prorata: null });
+    });
+
+    it('a subscription that cannot be read gives the quote without the period, never an error', async () => {
+      await waiver(5);
+      stripe.invoices.list.mockResolvedValueOnce({ data: [invoice(5, { lines: { data: [] } })] });
+      stripe.subscriptions.retrieve.mockRejectedValueOnce(new Error('socket hang up'));
+      const res = await h.request<any>('GET', '/api/v1/roboapply/admin/credits/refund-quote?userId=u_1', RA);
+      expect(res.status).toBe(200);
+      expect(res.body.data.decision).toMatchObject({ eligible: true, rule: 'first_purchase_7d', prorata: null });
+    });
+
+    it('the buyer\'s country comes from the invoice when the account holds none', async () => {
+      await db.seekerSubscription.update({ where: { id: 'row_1' }, data: { billingCountry: null } });
+      stripe.invoices.list.mockResolvedValueOnce({ data: [invoice(5, { customer_address: { country: 'NO' } })] });
+      const data = await quote();
+      expect(data.facts.billingCountry).toBe('NO');
+      expect(data.decision).toMatchObject({ rule: 'withdrawal_14d', withdrawalRegion: 'eu' });
+    });
+
+    it('rule A11: an account or a plan row of the other brand never makes the server ask Stripe', async () => {
+      // A GoApply account, even one whose row carries a customer id.
+      await db.seekerSubscription.create({
+        data: { id: 'row_go', seekerProfileId: 'sp_go', tier: 'pro', status: 'active', brand: 'goapply', planKey: 'pro_monthly', stripeCustomerId: 'cus_go', currentPeriodEnd: LATER, billingCountry: 'DE' },
+      });
+      expect(await quote('u_go')).toEqual({ charge: null, facts: null, decision: null });
+      // A RoboApply account whose plan row is GoApply's.
+      await db.seekerSubscription.update({ where: { id: 'row_1' }, data: { brand: 'goapply' } });
+      expect(await quote()).toEqual({ charge: null, facts: null, decision: null });
+      expect(stripe.invoices.list).not.toHaveBeenCalled();
+    });
+  });
 });

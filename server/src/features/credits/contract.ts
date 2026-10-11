@@ -2,9 +2,11 @@
 //
 // Credits, plans, cancellation and admin caps (ARCHITECTURE.md §3.9, §7;
 // TASK_PLAN.md R-07, R-08, R-25, WP-21a/21b). Mounts:
-//   /api/v1/roboapply/credits        (seeker; incl. POST /cancel and POST /resume)
+//   /api/v1/roboapply/credits        (seeker; incl. POST /cancel, POST /resume and
+//                                     GET + POST /withdrawal, the statutory withdrawal)
 //   /api/v1/roboapply/billing/plans  (S/P; new path — legacy /billing routes untouched)
-//   /api/v1/public/cancel            (public one-click cancel flow, §312k BGB)
+//   /api/v1/public/cancel            (public one-click cancel flow, §312k BGB; the
+//                                     emailed link can also preview and withdraw)
 //   /api/v1/roboapply/admin/credits  (admin)
 //
 // Honesty: caps print as "Up to N a day" — never "unlimited"; no offers at
@@ -16,7 +18,8 @@ import { z } from 'zod';
 import type { EntitlementSummary } from '../../platform/credits/summary.js';
 import type { CreditCatalog, CreditCatalogOverride } from '../../platform/credits/catalog.js';
 import type { PlanView } from '../../platform/billing/planViews.js';
-import type { RefundDecision } from '../../platform/billing/refunds.js';
+import type { WithdrawalRegion } from '../../platform/billing/acknowledgements.js';
+import type { RefundDecision, WithdrawalRule } from '../../platform/billing/refunds.js';
 import type { CheckoutResult, PaymentRail } from '../../platform/billing/rails/types.js';
 
 /** GET /credits → the same summary `/auth/me.entitlements` carries (caps, usage, reset times, plan). */
@@ -84,6 +87,111 @@ export interface ResumeResponse {
   renewsAt: string | null;
 }
 
+// ── Statutory withdrawal (MARKET_STRATEGY §4.4 "Statutory withdrawal") ────
+
+/** A purchase that can be withdrawn from: a paid Stripe invoice that is not a renewal. */
+export interface WithdrawalPurchaseView {
+  source: 'stripe';
+  /** Send it back as `purchaseId`. */
+  id: string;
+  planKey: string;
+  /** When it was paid; the 14 days run from here. */
+  chargedAt: string;
+  /** Everything paid under the purchase so far (a weekly plan on day 10: two charges). Minor units. */
+  amountMinor: number;
+  currency: string;
+}
+
+/** What withdrawing from that purchase returns, and until when. */
+export interface WithdrawalQuoteView {
+  /** `withdrawal_14d`: everything paid goes back. `withdrawal_14d_prorata`: the unused days (the buyer asked us to start at once). */
+  rule: WithdrawalRule;
+  /** Minor units. Can be 0 on the last day of a short period: the contract still ends. */
+  refundMinor: number;
+  currency: string;
+  /**
+   * The last moment the withdrawal is open (ISO): the purchase's 14th day, or
+   * the end of the paid period when that comes first. For a withdrawal the
+   * buyer already confirmed and that failed at the payment provider it is 14
+   * days after that confirmation: until then it can be sent again and returns
+   * the amount stated here, the one quoted when it was first confirmed.
+   */
+  deadline: string;
+  /** Only for `withdrawal_14d_prorata`: whole days counted as used, and the days of the paid period. */
+  prorata: { usedDays: number; periodDays: number } | null;
+  /** A withdrawal ends the plan at once, whatever the amount. */
+  endsAccess: true;
+  region: WithdrawalRegion;
+}
+
+/** One open withdrawal: the purchase and its quote. */
+export interface WithdrawalOption {
+  purchase: WithdrawalPurchaseView;
+  quote: WithdrawalQuoteView;
+}
+
+/**
+ * GET /credits/withdrawal: what the signed-in buyer can withdraw from right
+ * now. A withdrawal is open for 14 days after each purchase (never a renewal)
+ * of a buyer whose billing country is in the EU, the EEA, the United Kingdom
+ * or Taiwan, with or without the waiver box (the amount differs).
+ *
+ * `purchases` lists EVERY open purchase, the latest first (a pack bought on
+ * day 3 of a monthly plan and the plan are two entries, each with its own
+ * amount and deadline). `purchase` and `quote` are the first entry, for a
+ * reader that shows one. `available` is false, with nulls and an empty list,
+ * outside those countries, after the 14 days, once withdrawn or refunded,
+ * where card payments are not set up, and always on GoApply (its rails have
+ * no refund call; its published rule is on /pricing).
+ *
+ * One purchase stays listed past its 14th day: a withdrawal the buyer
+ * confirmed in time that failed at the payment provider (POST answered 502).
+ * It is listed, at the amount quoted then, until 14 days after that
+ * confirmation (`quote.deadline`), so the buyer can send it again.
+ *
+ * Errors: 502 `payment_provider_error` when the purchases cannot be read.
+ */
+export interface WithdrawalResponse {
+  available: boolean;
+  purchase: WithdrawalPurchaseView | null;
+  quote: WithdrawalQuoteView | null;
+  purchases: WithdrawalOption[];
+}
+
+/**
+ * POST /credits/withdrawal: withdraw from the purchase the buyer chose. The
+ * subscription is cancelled at once, then the quoted amount is refunded and a
+ * confirmation mail goes out. `confirm: true` is the second of the two steps.
+ *
+ * Errors (the envelope's top-level `code`):
+ *   409 `withdrawal_not_available`  no withdrawal is open for this purchase
+ *                                   (a stale id, after the 14 days, already
+ *                                   withdrawn, GoApply). With `details.reason:
+ *                                   'refund_refused'` the subscription was
+ *                                   ended and the payment provider refused the
+ *                                   refund itself (it was refunded by hand
+ *                                   just before): read the plan again;
+ *   429 `rate_limited`              more than 3 in an hour (sending a request
+ *                                   that failed with 502 again is counted
+ *                                   apart, 10 in an hour);
+ *   503 `rail_not_configured`       card payments are not set up here;
+ *   502 `payment_provider_error`    Stripe failed; sending it again finishes
+ *                                   it. The moment of this first request is
+ *                                   kept for 14 days: the request sent again
+ *                                   is decided as of that moment (the same
+ *                                   amount, also after the purchase's 14th
+ *                                   day), and GET lists the purchase until then.
+ */
+export const WithdrawBodySchema = z.object({ purchaseId: z.string().trim().min(1).max(255), confirm: z.literal(true) }).strict();
+export type WithdrawBody = z.infer<typeof WithdrawBodySchema>;
+export interface WithdrawResponse {
+  status: 'withdrawn';
+  /** Minor units, as quoted. */
+  refundMinor: number;
+  currency: string;
+  accessEnded: true;
+}
+
 /**
  * POST /credits/cancel/survey — the optional "why did you cancel?" answer,
  * sent after the cancel. It only stores the answer (model RACancelSurvey): it
@@ -146,9 +254,11 @@ export interface PlansStudentOffer {
  * GET /billing/plans (public; signed-in users also get `current`).
  *
  * `checkout.collectingEntity`, `refundPolicy` and `studentOffer` were added
- * in the market wave. This server always sends them (`PlansResponseSent`);
- * they are optional here so a client reads each with a safe default and keeps
- * working against a response that predates them.
+ * in the market wave and are always sent. They are required here since M4
+ * (every plans fixture of the web carries them). The web still reads each
+ * through `plansBillingFacts` (lib/api/account.ts), which treats a missing or
+ * malformed value as "not stated", so a page served by an older deployment
+ * prints nothing instead of failing.
  */
 export interface PlansResponse {
   /**
@@ -202,10 +312,10 @@ export interface PlansResponse {
      * Null on RoboApply and whenever none is configured: the page then prints
      * no entity line (never a made-up name).
      */
-    collectingEntity?: string | null;
+    collectingEntity: string | null;
   };
-  /** The numbers of the published refund rules; /pricing hides the section while this is absent. */
-  refundPolicy?: PlansRefundPolicy;
+  /** The numbers of the published refund rules. */
+  refundPolicy: PlansRefundPolicy;
   /**
    * The published student rule: the brand's student prices with the computed
    * percentage below the regular plan, for a caller who is NOT sent the
@@ -214,7 +324,7 @@ export interface PlansResponse {
    * is on. Null when the student plans are in `plans` already, or the
    * capability is off. A price list only: nothing here can be bought with.
    */
-  studentOffer?: PlansStudentOffer[] | null;
+  studentOffer: PlansStudentOffer[] | null;
   /** TWD reference line (R-25): only when an admin rate ≤45 days old exists; null otherwise. */
   fxReference: {
     currency: 'TWD';
@@ -228,17 +338,55 @@ export interface PlansResponse {
   offers: never[];
 }
 
-/** What this server answers on GET /billing/plans: every additive field present. */
-export type PlansResponseSent = PlansResponse & {
-  checkout: PlansResponse['checkout'] & { collectingEntity: string | null };
-  refundPolicy: PlansRefundPolicy;
-  studentOffer: PlansStudentOffer[] | null;
-};
-
 /** Public cancel flow: POST /api/v1/public/cancel {email} → 204 always; emails a single-use 30-min link. */
 export const PublicCancelRequestBodySchema = z.object({ email: z.string().trim().toLowerCase().email().max(254) }).strict();
-/** POST /api/v1/public/cancel/confirm {token} → CancelResponse; sends a confirmation email. */
-export const PublicCancelConfirmBodySchema = z.object({ token: z.string().min(16).max(512) }).strict();
+
+const PublicCancelToken = z.string().min(16).max(512);
+
+/**
+ * POST /api/v1/public/cancel/preview {token}: what the emailed link can do,
+ * WITHOUT using it up (confirm still works afterwards). `withdrawal` is the
+ * statutory withdrawal open for the plan the link cancels, or null: outside
+ * the EU, the EEA, the United Kingdom and Taiwan, after the 14 days, and also
+ * when the purchase could not be read from the payment provider just now or
+ * the link was previewed more than 20 times (the ordinary cancellation never
+ * depends on that read, and confirm with `withdraw` still withdraws). A pack
+ * bought alongside is not offered here: this link is about the plan.
+ *
+ * Errors: 410 `cancel_token_invalid` for an unknown, used, expired or
+ * other-brand link, exactly as confirm answers.
+ */
+export const PublicCancelPreviewBodySchema = z.object({ token: PublicCancelToken }).strict();
+export interface PublicCancelPreviewResponse {
+  /** The plan the link cancels ('free' when nothing is live any more). */
+  planKey: string;
+  /** Where an ordinary cancellation leaves access: the end of the paid period. */
+  accessUntil: string | null;
+  withdrawal: Pick<WithdrawalQuoteView, 'refundMinor' | 'currency' | 'rule' | 'deadline'> | null;
+}
+
+/**
+ * POST /api/v1/public/cancel/confirm {token, withdraw?}. Without `withdraw`
+ * (or with false): cancels at the end of the paid period and sends the
+ * confirmation mail, as before. With `withdraw: true`: withdraws from the
+ * plan's purchase (the subscription ends at once, the quoted amount is
+ * refunded, the withdrawal mail goes out) and the answer carries
+ * `withdrawal.status: 'withdrawn'` with `accessUntil: null`. If the
+ * withdrawal is not open any more the plan is cancelled at period end instead
+ * and the answer says `withdrawal.status: 'not_available'`. A plan that a
+ * withdrawal made elsewhere already ended answers `already_cancelled` (with
+ * or without `withdraw`). A payment-provider failure answers 502 and leaves
+ * the link usable; the withdrawal it could not finish is then decided as of
+ * that first request, on this link and on the signed-in page. The one refusal after the
+ * subscription was ended (409 `withdrawal_not_available` with `details.reason:
+ * 'refund_refused'`, see POST /credits/withdrawal) is answered as that error
+ * and cancels nothing more.
+ */
+export const PublicCancelConfirmBodySchema = z.object({ token: PublicCancelToken, withdraw: z.boolean().optional() }).strict();
+export type PublicCancelConfirmResponse = CancelResponse & {
+  /** Present only when the request asked to withdraw. */
+  withdrawal?: { status: 'withdrawn' | 'not_available'; refundMinor: number | null; currency: string | null };
+};
 
 // ── Admin (/admin/credits) ───────────────────────────────────────────────
 
@@ -361,6 +509,8 @@ export const CREDITS_ERROR_CODES = {
   autoRenewAckRequired: 'auto_renew_ack_required',
   /** 410: the public cancel link is unknown, already used, for the other brand or older than 30 minutes. */
   cancelTokenInvalid: 'cancel_token_invalid',
+  /** 409: POST /credits/withdrawal for a purchase with no open withdrawal (stale id, after the 14 days, already withdrawn, GoApply). */
+  withdrawalNotAvailable: 'withdrawal_not_available',
   /** 503: the cancel-survey table is not in this database yet. */
   storageUnavailable: 'storage_unavailable',
 } as const;
