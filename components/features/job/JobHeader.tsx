@@ -11,6 +11,15 @@
 // date, "Last checked" and the source ("Added by you" for the user's own job).
 // When it does, the header leaves its own pay, date and source lines out, so
 // each fact is on the page once. "Only you can see this job" stays here.
+//
+// Dates are three separate facts (MARKET_STRATEGY 1.5): "Posted" is the
+// employer's own date and nothing else; "First seen" is when we first read the
+// posting (shown when the posting states no date, and beside a posted date
+// that is more than a day from it); "Last checked" is when a source last
+// confirmed the posting listed. "New" is the server's `isNew` (first seen by
+// us in the last 48 hours), never the posted date. A provider's sponsorship
+// reading is a badge that names the provider and is never worded as the
+// posting's own statement.
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
@@ -31,6 +40,22 @@ export interface JobHeaderProps {
   actions: ReactNode;
 }
 
+const DAY_MS = 86_400_000;
+
+/**
+ * The job's dates as the header prints them. A date we assigned
+ * (`postedAtEstimated`) is never "posted": a server from before the three-date
+ * wire sent our first-seen date as `postedAt`, so it is read as first seen.
+ * First seen is left out beside a posted date of the same day (it would say
+ * the same thing twice).
+ */
+export function headerDates(job: Pick<JobDetailResponse['job'], 'postedAt' | 'postedAtEstimated' | 'firstSeenAt' | 'lastSeenAt'>): { posted: Date | null; firstSeen: Date | null; checked: Date | null } {
+  const posted = job.postedAtEstimated ? null : validDate(job.postedAt);
+  const seen = validDate(job.firstSeenAt) ?? (job.postedAtEstimated ? validDate(job.postedAt) : null);
+  const firstSeen = seen && posted && Math.abs(seen.getTime() - posted.getTime()) <= DAY_MS ? null : seen;
+  return { posted, firstSeen, checked: validDate(job.lastSeenAt) };
+}
+
 const KNOWN_EMPLOYMENT = new Set(['full_time', 'part_time', 'contract', 'internship']);
 const KNOWN_SENIORITY = new Set(['intern_newgrad', 'entry', 'mid', 'senior', 'lead_staff', 'director_exec']);
 
@@ -45,9 +70,27 @@ export function JobHeader({ detail, mode, onClose, actions }: JobHeaderProps) {
   const pay = payLine(job.pay, locale);
   // Pay in words by the market's rule: GoApply never prints 面议 (it reads "Pay not listed").
   const payWords = marketPayWords(brand.market, job);
-  const posted = validDate(job.postedAt);
-  const checked = validDate(job.lastSeenAt);
+  const { posted, firstSeen, checked } = headerDates(job);
   const fmt = (d: Date) => format.dateTime(d, { dateStyle: 'medium' });
+  // Facts from the post (at most 3). "New" is ours and comes from `isNew`; an older server sent it in the list.
+  const facts = job.badges.filter((b) => b.kind !== 'new').slice(0, 3);
+  const isNew = job.isNew === true || (job.isNew === undefined && job.badges.some((b) => b.kind === 'new'));
+  const badgeLabel = (b: (typeof facts)[number]): string | null => {
+    switch (b.kind) {
+      case 'direct_from_employer':
+      case 'sponsorship':
+        return t(`header.badge.${b.kind}`);
+      case 'sponsorship_provider':
+        // The provider's reading, in the provider's name; without a name nothing is shown.
+        return b.provider?.trim() ? t('header.badge.sponsorship_provider', { provider: b.provider.trim() }) : null;
+      case 'market_tag':
+      case 'closing_soon':
+        return b.label;
+      default:
+        return null;
+    }
+  };
+  const shown = facts.map((b) => ({ badge: b, label: badgeLabel(b) })).filter((x): x is { badge: (typeof facts)[number]; label: string } => !!x.label);
 
   const chips: string[] = [];
   if (job.location) chips.push(job.location);
@@ -123,8 +166,9 @@ export function JobHeader({ detail, mode, onClose, actions }: JobHeaderProps) {
 
       {slotHasBasics && job.visibility !== 'private' ? null : (
         <p className={styles.meta}>
-          {!slotHasBasics && posted ? <span>{job.postedAtEstimated ? t('header.firstSeen', { date: fmt(posted) }) : t('header.posted', { date: fmt(posted) })}</span> : null}
-          {!slotHasBasics && checked ? <span>{t('header.lastChecked', { date: fmt(checked) })}</span> : null}
+          {!slotHasBasics && posted ? <span data-testid="job-posted">{t('header.posted', { date: fmt(posted) })}</span> : null}
+          {!slotHasBasics && firstSeen ? <span data-testid="job-first-seen">{t('header.firstSeen', { date: fmt(firstSeen) })}</span> : null}
+          {!slotHasBasics && checked ? <span data-testid="job-last-checked">{t('header.lastChecked', { date: fmt(checked) })}</span> : null}
           {!slotHasBasics ? <span data-testid="job-source">{sourceLine}</span> : null}
           {!slotHasBasics && job.source.originalName && job.source.originalName !== job.source.name ? (
             <span>{t('header.originalSource', { sourceName: job.source.originalName })}</span>
@@ -133,16 +177,21 @@ export function JobHeader({ detail, mode, onClose, actions }: JobHeaderProps) {
         </p>
       )}
 
-      {job.badges.length ? (
+      {isNew || shown.length ? (
         <ul className={styles.badges}>
-          {job.badges.slice(0, 3).map((b) => (
+          {isNew ? (
+            <li className={styles.badge} data-badge="new">
+              {t('header.badge.new')}
+            </li>
+          ) : null}
+          {shown.map(({ badge: b, label }) => (
             <li
               key={b.kind}
               className={cn(styles.badge, b.kind === 'direct_from_employer' && styles.badgeOk)}
               title={b.quote ? t('header.quote', { quote: b.quote }) : undefined}
               data-badge={b.kind}
             >
-              {b.kind === 'market_tag' || b.kind === 'closing_soon' ? b.label : t(`header.badge.${b.kind}`)}
+              {label}
             </li>
           ))}
         </ul>

@@ -72,8 +72,17 @@ function createDefault(): JobDetailServiceImpl {
     brand: getCurrentBrandOrDefault,
     companyProfile: async (companyId) => (await import('../companies/index.js')).companyService.profile(companyId, { publicOnly: false }),
     // THE fit (match/fit.ts): one job with no model call, and a list. The same functions every other surface reads.
-    fit: async (userId, jobId) => (await import('../../match/index.js')).getFit(userId, jobId),
-    fits: async (userId, jobIds) => (await import('../../match/index.js')).getFits(userId, jobIds),
+    // The request's language goes with both, so the skill labels on the page agree with the keyword check
+    // and a re-score of the same job (which answer in the request's language).
+    fit: async (userId, jobId, opts) => (await import('../../match/index.js')).getFit(userId, jobId, opts?.locale ? { locale: opts.locale } : undefined),
+    fits: async (userId, jobIds, opts) => (await import('../../match/index.js')).getFits(userId, jobIds, opts?.locale ? { locale: opts.locale } : undefined),
+    // Is the posting still listed on its ATS? One documented JSON read of a public posting, at most once per
+    // posting per process per 6 hours; the check writes its own answer (jobs/liveness). Off with
+    // LIVENESS_CHECK_DISABLED=true.
+    confirmListing: async (row) => (await import('../liveness/index.js')).confirmListing(row, { db: prisma, log: warn }),
+    // The reader's own answers about visa sponsorship: the same person the feed card's badges are built for
+    // (match `userContext`). Read only for a job that carries a provider's reading of sponsorship.
+    sponsorshipReader: async (userId) => (await (await import('../../match/index.js')).matchService.userContext(userId)).user,
     similarSource: (row, limit) => similarFromFeed(row, limit),
     explain: ({ market, personalized: p, fit }) => explainNow({ market, personalized: p, fit }),
     personalized,
@@ -91,11 +100,13 @@ function createDefault(): JobDetailServiceImpl {
     searchNews: (brand, name) => searchCompanyNews(brand, name),
     extensionAts: () => extensionAtsTypes,
     extensionFillsJob: () => extensionFillsJob,
-    log: (message, meta) => {
-      // eslint-disable-next-line no-console
-      console.warn(`[jobs.detail] ${message}`, meta);
-    },
+    log: warn,
   });
+}
+
+function warn(message: string, meta: Record<string, unknown>): void {
+  // eslint-disable-next-line no-console
+  console.warn(`[jobs.detail] ${message}`, meta);
 }
 
 /**

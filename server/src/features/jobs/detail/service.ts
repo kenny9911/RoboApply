@@ -28,7 +28,34 @@
 //   posting with no usable apply link is never a similar job (feed/sourceLine.ts
 //   `cnListable`), and neither is a recruiter-bank row whose bank has no
 //   posting page (`bankListableWhere`); the page of such a row carries no apply
-//   link (`applyLinkOf`)
+//   link (`applyLinkOf`). A row that owes a credit line (台灣就業通, 事求人: the
+//   licence voids itself without it) is listed only for a caller that says it
+//   prints the line (`similar(…, { creditLines: true })`), and then carries the
+//   sentence as `cardMeta.tw_sources.attribution`; for every other caller it is
+//   held out, as before
+//   still listed? (MARKET_STRATEGY 1.5 "Closure"; JI-10)
+//                 `get` and `recordApplyClick` first confirm that a public,
+//                 open posting which names a posting on an applicant tracking
+//                 system is still listed there (`deps.confirmListing`: the
+//                 jobs/liveness check, one documented JSON read, throttled).
+//                 A posting the ATS no longer lists is archived by that check
+//                 and served here as closed: the page shows "no longer
+//                 listed" with no apply link, and the apply click answers 409
+//                 `job_closed` before anything moves to Applied. When the
+//                 check is absent, off, or cannot tell, both go on exactly as
+//                 without it. A user's own import and a recruiter bank's row
+//                 are never checked (the bank closes its own rows). The page
+//                 waits for the answer for LISTING_WAIT_MS at most (a slow
+//                 ATS never holds the page: it is then served from our own
+//                 records, and the check finishes and writes its answer on its
+//                 own); the apply click waits for the whole answer, because
+//                 it is the last moment before a person is sent to the page.
+//   sponsorship   the posting's own quoted statement is shown to every reader.
+//                 A provider's reading ("{provider} lists visa sponsorship")
+//                 is shown by the feed card's rule: on an international row,
+//                 to a person who needs sponsorship in the job's country
+//                 (`deps.sponsorshipReader`, asked only for a row that carries
+//                 such a reading). Without that answer it is not shown.
 //   share         public page only with publicDisplay, else the app link
 //   companyNews   V2: the `companyNews` flag and a configured search only, on
 //                 both brands (no market term, D5)
@@ -47,7 +74,8 @@ import type { MatchFitView } from '../../match/contract.js';
 import type { Fit } from '../../match/index.js';
 import type { MatchExplanation } from '../../compliance/contract.js';
 import { cnPostingVisible } from '../../cn/jobs/index.js';
-import { bankListable, bankListableWhere, cnListableWhere, creditLineHeldWhere } from '../../feed/contract.js';
+import type { LiveResult, LivenessJob } from '../liveness/index.js';
+import { bankListable, bankListableWhere, cnListableWhere, creditLineHeld, creditLineHeldWhere, sponsorshipLabelsShown, type SponsorshipReader } from '../../feed/contract.js';
 import { OUTCOME_STATUS } from '../../tracker/contract.js';
 import {
   JOB_DETAIL_ERROR_CODES,
@@ -66,6 +94,7 @@ import {
 } from './contract.js';
 import {
   JOB_ROW_SELECT,
+  carriesProviderReading,
   isClosed,
   isFlagged,
   isPreApply,
@@ -81,6 +110,7 @@ import {
   toTrackerState,
   type CampusEventRow,
   type JobRow,
+  type ListingCheck,
   type TrackerRow,
 } from './view.js';
 
@@ -132,11 +162,31 @@ export interface JobDetailServiceDeps {
   companyProfile?: (companyId: string) => Promise<CompanyProfile>;
   /**
    * THE fit of one job (`getFit` with no model call): the stored AI score or
-   * the quick estimate. A single-job fit carries the stored prose.
+   * the quick estimate. A single-job fit carries the stored prose. `locale` is
+   * the request's UI language: skill labels are written in it, as the keyword
+   * check and a re-score of the same page write them.
    */
-  fit?: (userId: string, jobId: string) => Promise<Fit | null>;
+  fit?: (userId: string, jobId: string, opts?: FitReadOptions) => Promise<Fit | null>;
   /** THE fit of each listed job (`getFits`; never a model call). Similar jobs are ordered and badged by it. */
-  fits?: (userId: string, jobIds: string[]) => Promise<Map<string, Fit>>;
+  fits?: (userId: string, jobIds: string[], opts?: FitReadOptions) => Promise<Map<string, Fit>>;
+  /**
+   * Is the posting still listed where it was published? (jobs/liveness
+   * `confirmListing`: it asks the ATS's public posting API, at most once per
+   * posting per process per 6 hours and never for a row the ATS's own board
+   * sync saw listed in that time, and writes the answer itself: a posting
+   * found gone is archived, one found listed has its last-seen date moved.)
+   * Absent → no check. It must not throw; a throw is treated as "cannot tell".
+   */
+  confirmListing?: (row: LivenessJob) => Promise<LiveResult>;
+  /** How long `get` waits for `confirmListing` (default LISTING_WAIT_MS). The apply click always waits for the answer. */
+  listingWaitMs?: number;
+  /**
+   * The reader's own answers about visa sponsorship (the search profile's and
+   * the per-country ones), as the feed card reads them. Asked only when a row
+   * of the response carries a provider's reading of sponsorship. Absent, null
+   * or failing → that reading is not shown.
+   */
+  sponsorshipReader?: (userId: string) => Promise<SponsorshipReader | null>;
   /**
    * Postings like this one, nearest first (the job-vector read, built by the
    * retrieval area). Ids only: this service loads the rows itself and applies
@@ -177,6 +227,39 @@ export interface JobDetailServiceDeps {
 
 type JobDetailNewsItems = CompanyNewsResponse['items'];
 
+/** What a read of this service may be told about its request. */
+export interface JobReadOptions {
+  /** The request's UI language (the skill labels of the fit follow it). */
+  locale?: string;
+  /**
+   * Similar jobs only: the caller PRINTS the credit line of a row that owes
+   * one (`cardMeta.tw_sources.attribution`, the sentence of an open-data row).
+   * Then such rows are listed, each with its `cardMeta`. Absent or false: they
+   * are held out (feed/sourceLine.ts `creditLineHeld`), so no open-data row is
+   * ever shown uncredited by a caller that does not say so.
+   */
+  creditLines?: boolean;
+}
+type FitReadOptions = JobReadOptions;
+
+/**
+ * How long the job page waits for the posting check. A public posting API
+ * answers in a fraction of this; past it the page is served from our own
+ * records and the check goes on by itself.
+ */
+export const LISTING_WAIT_MS = 1_500;
+
+/** `p`, or null once `ms` have passed. `p` goes on either way; it must not reject. */
+function within<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), Math.max(0, ms));
+    void p.then((value) => {
+      clearTimeout(timer);
+      resolve(value);
+    });
+  });
+}
+
 export const SIMILAR_LIMIT = 6;
 export const SIMILAR_CANDIDATES = 40;
 /** Ids asked of the vector source (strategy 2.3: the nearest 50 by job vector). */
@@ -186,8 +269,8 @@ export const SIMILAR_SOURCE_LIMIT = 50;
 export type SimilarSourceRow = Pick<JobRow, 'id' | 'market' | 'locationCountry' | 'visibility' | 'ownerUserId'>;
 
 export interface JobDetailServiceImpl {
-  get(userId: string, jobId: string): Promise<JobDetailResponse>;
-  similar(userId: string, jobId: string): Promise<SimilarJobsResponse>;
+  get(userId: string, jobId: string, opts?: JobReadOptions): Promise<JobDetailResponse>;
+  similar(userId: string, jobId: string, opts?: JobReadOptions): Promise<SimilarJobsResponse>;
   save(userId: string, jobId: string): Promise<SaveJobResponse>;
   unsave(userId: string, jobId: string): Promise<SaveJobResponse>;
   recordApplyClick(userId: string, jobId: string): Promise<ApplyClickResponse>;
@@ -214,10 +297,11 @@ function notFound(): HttpError {
  * card reads (a single-job fit carries its prose). The match area is loaded
  * here, on first use, so mounting this service pulls it in for no other route.
  */
-async function viewOf(fit: Fit | null): Promise<MatchFitView | null> {
+async function viewOf(fit: Fit | null, locale?: string): Promise<MatchFitView | null> {
   if (!fit) return null;
   const { fitToView } = await import('../../match/index.js');
-  return fitToView(fit);
+  // With the request's language the view can say whether the stored prose was written in it.
+  return locale ? fitToView(fit, { locale }) : fitToView(fit);
 }
 
 export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailServiceImpl {
@@ -257,6 +341,49 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
     // missing job); the user's own import stays visible. Non-cn rows pass through.
     if (!cnPostingVisible(row, userId, deps.env ?? process.env)) throw notFound();
     return row;
+  }
+
+  /**
+   * Is the posting still listed? Asked only for a public, open row that names
+   * a posting on an ATS (the check itself decides which systems it can ask and
+   * how often). Returns what the page needs: the moment of an answer the ATS
+   * gave, and whether the posting is gone. The row in hand is brought in line
+   * with what the check wrote, so the view built from it is the view a fresh
+   * read would give. Never throws. `waitMs`: give up waiting after that long
+   * (the check goes on and writes its own answer; the row in hand is then left
+   * as it was read); absent → wait for the answer.
+   */
+  async function stillListed(row: JobRow, waitMs?: number): Promise<{ check: ListingCheck | null; closed: boolean }> {
+    const none = { check: null, closed: false };
+    // Never a user's own import and never a recruiter bank's row (the check refuses them too).
+    if (!deps.confirmListing || row.visibility !== 'public' || row.fromRecruiterBank || isClosed(row) || !row.atsPostingKey?.trim()) return none;
+    const asked = soft<LiveResult | null>('listing', () => deps.confirmListing!(row), null);
+    const result = waitMs === undefined ? await asked : await within(asked, waitMs);
+    if (!result || result.via !== 'ats_api' || !result.checkedAt) return none;
+    const at = new Date(result.checkedAt);
+    if (result.state === 'closed') {
+      row.archivedAt = at;
+      row.closedAt = at;
+      return { check: { checkedAt: at }, closed: true };
+    }
+    if (result.state === 'open') {
+      if (!row.lastSeenAt || row.lastSeenAt.getTime() < at.getTime()) row.lastSeenAt = at;
+      return { check: { checkedAt: at }, closed: false };
+    }
+    return none;
+  }
+
+  /**
+   * The rows of `rows` on which a provider's reading of sponsorship is shown
+   * to this person (the card's rule: feed contract `sponsorshipLabelsShown`).
+   * The person's answers are read only when a row carries such a reading, so a
+   * page without one costs nothing more. Never throws.
+   */
+  async function readingShownOn(userId: string, rows: JobRow[]): Promise<Set<string>> {
+    const carrying = rows.filter((r) => r.market === 'intl' && carriesProviderReading(r));
+    if (!carrying.length || !deps.sponsorshipReader) return new Set();
+    const reader = await soft<SponsorshipReader | null>('sponsorshipReader', () => deps.sponsorshipReader!(userId), null);
+    return new Set(carrying.filter((r) => sponsorshipLabelsShown(r, reader)).map((r) => r.id));
   }
 
   /** Run a tracker write for (userId, jobId) under its advisory lock. */
@@ -323,7 +450,7 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
    * market, public, canonical, open, not the job itself, and in the same
    * country when the job has one.
    */
-  function similarScope(row: JobRow) {
+  function similarScope(row: JobRow, creditLines = false) {
     // A recruiter-bank row whose bank has no posting page is never recommended (the feed's own rule, both markets).
     const bank = bankListableWhere((deps.env ?? process.env) as Record<string, string | undefined>);
     return {
@@ -334,15 +461,16 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
       closedAt: null,
       ...(row.locationCountry ? { locationCountry: row.locationCountry } : {}),
       // Mainland: a posting with no usable apply link is never recommended (the feed's own rule).
-      // Every market: a row that owes a credit line the similar-jobs card cannot print yet is not
-      // recommended there (feed/sourceLine.ts `creditLineHeld`; it stays on the feed and has its own page).
-      AND: [...(row.market === 'cn' ? [cnListableWhere()] : []), ...(bank ? [bank] : []), creditLineHeldWhere()],
+      // Every market: a row that owes a credit line is recommended only to a caller that prints the line
+      // (`creditLines`); for any other it is held (feed/sourceLine.ts `creditLineHeld`; it stays on the
+      // feed and has its own page).
+      AND: [...(row.market === 'cn' ? [cnListableWhere()] : []), ...(bank ? [bank] : []), ...(creditLines ? [] : [creditLineHeldWhere()])],
     };
   }
 
   /** The same-role list: the scope plus the same role (or, for an unplaced job, the same normalised title). */
-  function similarWhere(row: JobRow) {
-    const base = { ...similarScope(row), id: { not: row.id } };
+  function similarWhere(row: JobRow, creditLines = false) {
+    const base = { ...similarScope(row, creditLines), id: { not: row.id } };
     return row.primaryTaxonomyId ? { ...base, primaryTaxonomyId: row.primaryTaxonomyId } : { ...base, titleNormalized: row.titleNormalized };
   }
 
@@ -380,15 +508,15 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
    * same-role postings (newest first). Hidden and flagged postings are dropped
    * from both.
    */
-  async function similarRows(userId: string, row: JobRow): Promise<JobRow[]> {
+  async function similarRows(userId: string, row: JobRow, creditLines = false): Promise<JobRow[]> {
     const ids = await sourceIds(row);
     if (ids) {
-      const found = (await db.rAJob.findMany({ where: { ...similarScope(row), id: { in: ids } }, select: JOB_ROW_SELECT })) as JobRow[];
+      const found = (await db.rAJob.findMany({ where: { ...similarScope(row, creditLines), id: { in: ids } }, select: JOB_ROW_SELECT })) as JobRow[];
       const near = await visibleCandidates(userId, inSourceOrder(found, ids));
       if (near.length) return near;
     }
     const candidates = (await db.rAJob.findMany({
-      where: similarWhere(row),
+      where: similarWhere(row, creditLines),
       orderBy: [{ postedAt: 'desc' }, { id: 'desc' }],
       take: SIMILAR_CANDIDATES,
       select: JOB_ROW_SELECT,
@@ -419,11 +547,12 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
     return soft('personalized', () => deps.personalized!(userId, deps.brand()), false);
   }
 
-  async function rankSimilar(userId: string, row: JobRow): Promise<{ rows: JobRow[]; fits: Map<string, Fit> }> {
-    const rows = await similarRows(userId, row);
+  async function rankSimilar(userId: string, row: JobRow, opts: JobReadOptions = {}): Promise<{ rows: JobRow[]; fits: Map<string, Fit> }> {
+    const rows = await similarRows(userId, row, opts.creditLines === true);
     let fits = new Map<string, Fit>();
     if (rows.length && deps.fits && (await mayReadFits(userId))) {
-      fits = await soft('fits', () => deps.fits!(userId, rows.map((r) => r.id)), fits);
+      const ids = rows.map((r) => r.id);
+      fits = await soft('fits', () => (opts.locale ? deps.fits!(userId, ids, { locale: opts.locale }) : deps.fits!(userId, ids)), fits);
     }
     // Best fit first (unknown fit last), then the list order: vector distance, or newest for the same-role list.
     const order = rows.map((r, i) => ({ r, i, s: fits.get(r.id)?.score ?? null }));
@@ -477,10 +606,14 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
   }
 
   return {
-    async get(userId, jobId) {
+    async get(userId, jobId, opts = {}) {
       const brand = deps.brand();
       const row = await loadJob(userId, jobId);
-      const [tracker, tailored, letter, practiced, profile, fit, campus, similarIds, people, autofillOn] = await Promise.all([
+      // The posting check runs beside the page's other reads, so it adds no time unless it is the slowest of
+      // them, and then never more than the wait below.
+      const [listing, readingShown, tracker, tailored, letter, practiced, profile, fit, campus, similarIds, people, autofillOn] = await Promise.all([
+        stillListed(row, deps.listingWaitMs ?? LISTING_WAIT_MS),
+        readingShownOn(userId, [row]),
         trackerOf(userId, jobId),
         db.rAResumeVariant.findFirst({
           where: { userId, targetJobId: jobId, deletedAt: null },
@@ -490,7 +623,9 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
         db.rACoverLetter.findFirst({ where: { userId, jobId, deletedAt: null }, orderBy: { updatedAt: 'desc' }, select: { id: true } }),
         soft('practiced', () => (deps.practicedForJob ? deps.practicedForJob(userId, jobId) : Promise.resolve(null)), null),
         row.companyId && deps.companyProfile ? soft('company', () => deps.companyProfile!(row.companyId!), null) : Promise.resolve(null),
-        deps.fit ? soft('fit', async () => viewOf(await deps.fit!(userId, jobId)), null) : Promise.resolve(null),
+        deps.fit
+          ? soft('fit', async () => viewOf(await (opts.locale ? deps.fit!(userId, jobId, { locale: opts.locale }) : deps.fit!(userId, jobId)), opts.locale), null)
+          : Promise.resolve(null),
         soft('campus', () => campusFor(userId, row), null),
         soft('similar', async () => ((await flag('jobs.recommendations', userId)) ? similarIdsOf(userId, row) : []), [] as string[]),
         soft(
@@ -511,7 +646,8 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
       await touchUserState(userId, jobId, { viewedAt: now() });
       const atsType = row.atsType ?? null;
       return {
-        job: toJobDetail(row, now(), campus),
+        // `row` carries what the check found: a posting the ATS no longer lists is served closed, with no apply link to a dead page.
+        job: toJobDetail(row, now(), campus, listing.check, { providerReading: readingShown.has(row.id) }),
         company: toCompanySummary(row, profile),
         fit,
         explanation,
@@ -524,17 +660,23 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
       };
     },
 
-    async similar(userId, jobId) {
+    async similar(userId, jobId, opts = {}) {
       const row = await loadJob(userId, jobId);
       if (!(await flag('jobs.recommendations', userId))) return { items: [] };
-      const { rows, fits } = await rankSimilar(userId, row);
+      const { rows, fits } = await rankSimilar(userId, row, opts);
       if (!rows.length) return { items: [] };
       const trackers = await db.rATrackerEntry.findMany({
         where: { userId, jobId: { in: rows.map((r) => r.id) }, deletedAt: null },
         select: { jobId: true, status: true },
       });
       const byJob = new Map(trackers.map((t) => [t.jobId, { status: t.status }]));
-      return { items: rows.map((r) => toSimilarItem(r, now(), toFitBadge(fits.get(r.id)), byJob.get(r.id) ?? null)) };
+      const brand = deps.brand();
+      // A row that owes a credit line is here only because the caller prints it: it carries the sentence.
+      const creditOf = (r: JobRow) => (opts.creditLines === true && creditLineHeld(r) && deps.marketMeta ? deps.marketMeta(r, brand) : null);
+      const readingShown = await readingShownOn(userId, rows);
+      return {
+        items: rows.map((r) => toSimilarItem(r, now(), toFitBadge(fits.get(r.id)), byJob.get(r.id) ?? null, creditOf(r), { providerReading: readingShown.has(r.id) })),
+      };
     },
 
     async save(userId, jobId) {
@@ -589,6 +731,9 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
 
     async recordApplyClick(userId, jobId) {
       const row = await loadJob(userId, jobId);
+      // Asked before anything is written: a posting the ATS no longer lists is closed here, so the
+      // person is not sent to a dead page and nothing moves to Applied.
+      if (!isClosed(row)) await stillListed(row);
       if (isClosed(row)) throw new HttpError('conflict', 'This job is no longer listed.', { code: JOB_DETAIL_ERROR_CODES.closed });
       // A recruiter-bank row whose bank has no posting page has no link to open (feed/sourceLine.ts `bankListable`).
       const applyUrl = bankListable(row) ? row.applyUrl?.trim() || null : null;

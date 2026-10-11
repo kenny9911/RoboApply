@@ -5,7 +5,11 @@
 // no model client. Tests replace any of these (`createAgentService(deps)`).
 //
 // D1: none of these calls an employer endpoint. The only outbound effects are
-// our own services (tracker, tailoring, letters, credits, queue, notices).
+// our own services (tracker, tailoring, letters, credits, queue, notices), and
+// one read: `checkJobLive` asks the public job-board API of a posting's
+// applicant tracking system whether the posting is still listed (jobs/liveness:
+// one documented JSON request, never an application form). Nothing is
+// submitted, opened or filled by it.
 
 import { getCurrentBrandOrDefault } from '../../platform/brand/brandContext.js';
 import type { ProductBrand } from '../../platform/brand/registry.js';
@@ -57,6 +61,9 @@ interface ResumeServiceModule {
   registerResumeArtifactDeleters(): Promise<void>;
 }
 
+/** What `checkJobLive` answers. */
+export type JobLiveState = 'open' | 'closed' | 'unknown';
+
 export interface CreditUsageLine {
   remaining: number;
   window: 'day' | 'week' | 'month';
@@ -100,6 +107,18 @@ export interface AgentDeps {
    * without 个性化推荐) or it could not be read: rows then show none.
    */
   fitsFor(userId: string, jobIds: string[]): Promise<Map<string, QueueFit>>;
+
+  /**
+   * Is the job's posting still listed where it was published? (MARKET_STRATEGY
+   * 1.5 "Closure", JI-10.) Backed by the jobs/liveness public index: it loads
+   * the row from `db` (the database this service already holds), asks the
+   * ATS's public posting API when the row names a posting there and the ATS
+   * did not confirm it in the last 6 hours, and writes the answer itself (a
+   * posting found gone is archived). 'unknown' whenever it cannot tell: the caller
+   * then goes on as it did without the check. Typed optional so a hand-built
+   * set of seams still is an `AgentDeps`; `defaultAgentDeps()` always has it.
+   */
+  checkJobLive?(jobId: string, db: AgentDb): Promise<JobLiveState>;
 
   recordApplyClick(userId: string, jobId: string): Promise<ApplyClickResponse>;
   /** Undo the apply-click move; `reverted` is false when the tracker still says Applied (too old, or moved since). */
@@ -250,6 +269,11 @@ export function defaultAgentDeps(): AgentDeps {
       }
     },
     fitsFor: (userId, jobIds) => readyListFits(userId, jobIds),
+    async checkJobLive(jobId, agentDb) {
+      const { checkJobLive } = await import('../jobs/liveness/index.js');
+      // The client the service already holds (in tests: its in-memory one), so the check opens no other.
+      return checkJobLive(jobId, { db: agentDb, log: (message, meta) => logger.warn('AGENT', message, meta) });
+    },
     async recordApplyClick(userId, jobId) {
       const { jobDetailService } = await import('../jobs/detail/index.js');
       return jobDetailService.recordApplyClick(userId, jobId);

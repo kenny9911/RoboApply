@@ -12,9 +12,22 @@
 //   2. Missed refreshes: a job of a metered search provider that two later
 //      counted runs of the query that last returned it did not return — while
 //      it is still inside that query's datePosted window — is archived as
-//      'source_removed' (tracking.ts). This needs Schema request SR-16b-1;
-//      until its columns exist (`perQueryTracking` false) the step is skipped
-//      and nothing is archived as 'source_removed'.
+//      'source_removed' (tracking.ts). Only for a provider whose counted run
+//      is everything the query can return (tracking.ts `missedRuleApplies`):
+//      never an employer board, a recruiter bank, an open-data or government
+//      source, and never JSearch. The columns it reads (SR-16b-1) exist since
+//      the M0 push; on a database without them (`perQueryTracking` false) the
+//      step is skipped and nothing is archived as 'source_removed'.
+//   2b. Mainland, unseen (MARKET_STRATEGY §1.5 "Closure", M-22; JI-10): a
+//      public row of market `cn` that no source has confirmed listed for 45
+//      days (`lastSeenAt`, CN_UNSEEN_DAYS) is archived as 'expired', whatever
+//      its board. It is the last of the three mainland closures, after the
+//      validity a source states (step 1) and disappearance from a complete
+//      listing (the board sync's diff, the bank's tombstones): it catches the
+//      rows of a source that stopped being read at all (a board switched off,
+//      a bank job the transport no longer returns). A user's own import is
+//      never touched. It runs for market `cn` only: an international board or
+//      bank row has no age and no unseen cut-off.
 //   3. Dedupe priorities (JI-5, JC-7): live rows of a provider whose priority
 //      changed (employer boards 10 → 5, GoHire bank 15 → 3) take the number
 //      `PROVIDER_META` holds (`alignSourcePriority`; a second run writes
@@ -46,9 +59,11 @@
 //      dedupe key, then canonical flags are recomputed for every key touched
 //      in the last two days (archived canonicals hand over to the next row).
 //   6. Enrichment catch-up (WP-17 → WP-16b), at most ENRICH_REQUEUE_PER_RUN
-//      jobs a run, oldest enrichment first:
-//        a. rows enriched at an older ENRICH_VERSION are queued again (one
-//           `job.enrich` item per job per version: a second run queues nothing);
+//      jobs a run:
+//        a. rows enriched at an older ENRICH_VERSION are queued again, the
+//           newest postings first (the rows people are shown first get the
+//           new version first; one `job.enrich` item per job per version: a
+//           second run queues nothing);
 //        b. rows that still owe a model pass (`enrichModel = 'rules'`: they
 //           were finished while the brand had no usable enrich model, or
 //           with ENRICH_DAILY_JOBS=0) are queued for one once the brand has
@@ -61,8 +76,18 @@
 //           items (7 days), and settled rows never fill the oldest-first
 //           window ahead of rows that still owe a pass. The work-item key
 //           (one per job per model id) only stops a second item while the
-//           first is still queued or deferred.
-//      Items carry the brand, so the drain runs them inside that brand.
+//           first is still queued or deferred. Oldest enrichment first.
+//        c. the skills-only pass (MKT-4D request 10): a public row at the
+//           current version that still holds a skill with no canonical id
+//           (`skillsDetail[].via = 'none'`: it was enriched while the
+//           embedding step was off) is queued for `{ jobId, skillsOnly: true }`
+//           once the brand has an embedding model AND `RASkill` holds a label
+//           vector of that model. No model call and no enrichment budget; one
+//           item per job per model tag, so the same vocabulary state never
+//           queues a job twice while the item exists. Newest postings first.
+//           A user's own import is left out (it is mapped by exact alias only).
+//      The three kinds share the cap, in that order. Items carry the brand, so
+//      the drain runs them inside that brand.
 
 import { createHash } from 'node:crypto';
 import { Prisma } from '../../../generated/prisma/client.js';
@@ -70,12 +95,12 @@ import type { EnvSource, Market, ProductBrand } from '../../../platform/brand/in
 import type { EnqueueManyItem } from '../../../platform/queue/index.js';
 import { bankPublicJobUrl, bankPublicJobUrlTemplate } from '../../../roboapply/v2/lib/raCrossBankMatch.js';
 import { AGE_EXPIRY_BOARDS, PROVIDER_META, safeUrl } from '../normalize/index.js';
-import { adapterCostModel, adapterEnabledFor, type JobSourceAdapter } from '../sources/index.js';
+import { adapterEnabledFor, type JobSourceAdapter } from '../sources/index.js';
 import { PUBLIC_ATS } from '../sources/atsPublic/contract.js';
 import { MAX_AGE_DAYS } from './config.js';
 import type { IngestDb } from './db.js';
 import type { EnqueueManyFn } from './pipeline.js';
-import { buildMissedSql } from './tracking.js';
+import { buildMissedSql, missedRuleApplies } from './tracking.js';
 import { applyDedupe, archiveClosedBankJobs, archiveUnlistedJobs } from './upsert.js';
 
 /** `sourceBoard` of the two recruiter banks (the bank id). */
@@ -86,19 +111,7 @@ const BANK_MARKET: Readonly<Record<BankBoard, Market>> = { robohire: 'intl', goh
 /** The provider id of each bank's sync, which is its `RAIngestQuery.provider` (a test holds them equal to `PROVIDER_META`). */
 export const BANK_SYNC_PROVIDER: Readonly<Record<BankBoard, 'bank_robohire' | 'bank_gohire'>> = { robohire: 'bank_robohire', gohire: 'bank_gohire' };
 
-/**
- * The recruiter banks and the public ATS boards (`ats_public`: greenhouse,
- * lever, ashby, smartrecruiters): boards whose own sync closes a posting.
- * The expiry step no longer reads this list (it names the boards that DO
- * expire by age, `AGE_EXPIRY_BOARDS`, so a new source is safe by default),
- * and neither does the feed since MKT-4F (`AGE_FLOOR_BOARDS` in feed/sql.ts
- * is built from `AGE_EXPIRY_BOARDS`; its twin in feed/sourceLine.ts was
- * removed at the M4 gate). Nothing reads it now but its own test: MKT-5C
- * deletes it with that assertion (requests/waveM4-carryover.md).
- */
-export const NO_DATE_EXPIRY_BOARDS: readonly string[] = [...BANK_BOARDS, ...PUBLIC_ATS];
-
-/** Jobs queued for re-enrichment per maintenance run (both kinds together). */
+/** Jobs queued for re-enrichment per maintenance run (all kinds together). */
 export const ENRICH_REQUEUE_PER_RUN = 500;
 const ENRICH_KIND = 'job.enrich';
 
@@ -112,6 +125,35 @@ export function buildExpireSql(market: Market): Prisma.Sql {
     WHERE "market" = ${market} AND "visibility" = 'public' AND "archivedAt" IS NULL
       AND ("expiresAt" < now()
         OR ("expiresAt" IS NULL AND "sourceBoard" = ANY(${[...AGE_EXPIRY_BOARDS]}::text[]) AND "postedAt" < now() - make_interval(days => ${MAX_AGE_DAYS}::int)))`;
+}
+
+// ── Step 2b: a mainland row no source has confirmed for 45 days ───────────
+
+/** The market the unseen rule applies to (mainland China). */
+export const UNSEEN_MARKET: Market = 'cn';
+/** Days without a sighting after which a public mainland row is archived (MARKET_STRATEGY §1.5: "else 45 days unseen"). */
+export const CN_UNSEEN_DAYS = 45;
+/** `sourceBoard` of a user's own import: nobody lists it, so "unseen" says nothing about it. */
+export const USER_IMPORT_BOARD = PROVIDER_META.user_import.sourceBoard;
+
+/**
+ * Step 2b: public rows of the mainland market whose `lastSeenAt` is older than
+ * CN_UNSEEN_DAYS, of every board except a user's import, are archived as
+ * 'expired'. The market is a constant of the statement, not a parameter: the
+ * rule exists for no other market. An 'expired' row is reopened by the upsert
+ * if its source lists it again (upsert.ts `revivesOnRelist`).
+ */
+export function buildUnseenMainlandSql(): Prisma.Sql {
+  return Prisma.sql`
+    UPDATE "RAJob" SET "archivedAt" = now(), "closedAt" = COALESCE("closedAt", now()), "closeReason" = 'expired', "updatedAt" = now()
+    WHERE "market" = ${UNSEEN_MARKET} AND "visibility" = 'public' AND "archivedAt" IS NULL
+      AND "sourceBoard" <> ${USER_IMPORT_BOARD}
+      AND "lastSeenAt" < now() - make_interval(days => ${CN_UNSEEN_DAYS}::int)`;
+}
+
+/** Runs step 2b for `market`: the statement for the mainland market, nothing (0) for any other. */
+export async function archiveUnseenMainland(db: IngestDb, market: Market): Promise<number> {
+  return market === UNSEEN_MARKET ? db.$executeRaw(buildUnseenMainlandSql()) : 0;
 }
 
 // ── Step 3: dedupe priorities follow PROVIDER_META ────────────────────────
@@ -208,12 +250,16 @@ export async function archiveDeadBankLinks(db: IngestDb, market: Market, adapter
   return archived;
 }
 
-/** Live rows enriched at an older version (never-enriched rows are queued by ingest and import). */
+/**
+ * Live rows enriched at an older version (never-enriched rows are queued by
+ * ingest and import), the newest postings first: a version bump reaches the
+ * rows the lists show first before it reaches the long tail (MKT-4D item 4).
+ */
 export function buildStaleEnrichSql(market: Market, version: number, limit: number): Prisma.Sql {
   return Prisma.sql`
     SELECT "id" FROM "RAJob"
     WHERE "market" = ${market} AND "archivedAt" IS NULL AND "enrichVersion" < ${version}::int
-    ORDER BY "enrichedAt" ASC NULLS FIRST, "id" ASC
+    ORDER BY "postedAt" DESC NULLS LAST, "id" ASC
     LIMIT ${limit}::int`;
 }
 
@@ -227,6 +273,25 @@ export function buildRulesOnlySql(market: Market, version: number, rulesModel: s
     SELECT "id" FROM "RAJob"
     WHERE "market" = ${market} AND "archivedAt" IS NULL AND "enrichVersion" = ${version}::int AND "enrichModel" = ${rulesModel}
     ORDER BY "enrichedAt" ASC NULLS FIRST, "id" ASC
+    LIMIT ${limit}::int`;
+}
+
+/** Whether `RASkill` holds a label vector of the embedding model `modelTag` (the skills-only pass has something to map with). */
+export function buildSkillVectorProbeSql(modelTag: string): Prisma.Sql {
+  return Prisma.sql`SELECT 1 AS "one" FROM "RASkill" WHERE "embedding" IS NOT NULL AND "embeddingModel" = ${modelTag} LIMIT 1`;
+}
+
+/**
+ * Live public rows at the current version that still hold a skill with no
+ * canonical id (`skillsDetail` has an entry with `via: 'none'`), newest
+ * postings first. A user's own import is private and so is never selected.
+ */
+export function buildSkillRemapSql(market: Market, version: number, limit: number): Prisma.Sql {
+  return Prisma.sql`
+    SELECT "id" FROM "RAJob"
+    WHERE "market" = ${market} AND "archivedAt" IS NULL AND "visibility" = 'public'
+      AND "enrichVersion" = ${version}::int AND "skillsDetail" @> '[{"via":"none"}]'::jsonb
+    ORDER BY "postedAt" DESC NULLS LAST, "id" ASC
     LIMIT ${limit}::int`;
 }
 
@@ -270,6 +335,12 @@ export interface EnrichCatchUpOptions {
   limit?: number;
   /** The brand's enrich model (default: the enrich area's `resolveEnrichModel`). */
   enrichModel?: (brand: ProductBrand, env: EnvSource) => EnrichModelAvailability | Promise<EnrichModelAvailability>;
+  /**
+   * The tag of the brand's embedding model, null when it has none (default:
+   * platform/embeddings `resolveEmbeddingConfig(brand, env).modelTag`). The
+   * skills-only pass is queued only with a tag.
+   */
+  embeddingModelTag?: (brand: ProductBrand, env: EnvSource) => string | null | Promise<string | null>;
 }
 
 export interface EnrichCatchUpResult {
@@ -279,13 +350,22 @@ export interface EnrichCatchUpResult {
   rulesQueued: number;
   /** Whether a model pass is possible for this brand right now. */
   modelAvailable: boolean;
+  /** Jobs newly queued for a skills-only pass (step 6c); 0 while the brand has no embedding model or `RASkill` no label vector of it. */
+  skillsQueued: number;
+}
+
+/** The default of `EnrichCatchUpOptions.embeddingModelTag`, loaded when the catch-up runs. */
+async function defaultEmbeddingModelTag(brand: ProductBrand, env: EnvSource): Promise<string | null> {
+  const { resolveEmbeddingConfig } = await import('../../../platform/embeddings/index.js');
+  return resolveEmbeddingConfig(brand, env).modelTag;
 }
 
 /**
- * Step 6. Queues at most `limit` jobs: stale versions first, the rest of the
- * cap for rules-only jobs (only with a usable model and a budget above 0).
- * The counts are items actually created (an item already queued for the same
- * job and version is left alone).
+ * Step 6. Queues at most `limit` jobs: stale versions first, then rules-only
+ * jobs (only with a usable model and a budget above 0), then the skills-only
+ * pass with what is left of the cap (only with an embedding model whose label
+ * vectors `RASkill` holds). The counts are items actually created (an item
+ * already queued for the same job and version is left alone).
  */
 export async function runEnrichCatchUp(db: IngestDb, market: Market, options: EnrichCatchUpOptions): Promise<EnrichCatchUpResult> {
   const env = options.env ?? process.env;
@@ -293,7 +373,7 @@ export async function runEnrichCatchUp(db: IngestDb, market: Market, options: En
   const { ENRICH_VERSION, RULES_ONLY_MODEL, enrichDailyLimit, resolveEnrichModel } = await enrichArea();
   const route = await (options.enrichModel ?? resolveEnrichModel)(options.brand, env);
   const modelAvailable = route.available && enrichDailyLimit(env) > 0;
-  if (cap === 0) return { staleQueued: 0, rulesQueued: 0, modelAvailable };
+  if (cap === 0) return { staleQueued: 0, rulesQueued: 0, modelAvailable, skillsQueued: 0 };
   const brand = options.brand.id;
 
   const stale = await db.$queryRaw<Array<{ id: string }>>(buildStaleEnrichSql(market, ENRICH_VERSION, cap));
@@ -301,9 +381,10 @@ export async function runEnrichCatchUp(db: IngestDb, market: Market, options: En
   const staleQueued = staleItems.length ? (await options.enqueueMany(staleItems)).inserted : 0;
 
   let rulesQueued = 0;
-  const left = cap - stale.length;
+  let left = cap - stale.length;
   if (modelAvailable && left > 0) {
     const rules = await db.$queryRaw<Array<{ id: string }>>(buildRulesOnlySql(market, ENRICH_VERSION, RULES_ONLY_MODEL, left));
+    left -= rules.length;
     // `force`: the row already carries the current version, so a plain item would answer "already enriched".
     const items: EnqueueManyItem[] = rules.map((r) => ({
       kind: ENRICH_KIND,
@@ -312,12 +393,35 @@ export async function runEnrichCatchUp(db: IngestDb, market: Market, options: En
     }));
     if (items.length) rulesQueued = (await options.enqueueMany(items)).inserted;
   }
-  return { staleQueued, rulesQueued, modelAvailable };
+
+  // 6c. The skills-only pass. A failing probe (no RASkill table, no embedding settings) queues nothing and fails nothing.
+  let skillsQueued = 0;
+  if (left > 0) {
+    try {
+      const modelTag = await (options.embeddingModelTag ?? defaultEmbeddingModelTag)(options.brand, env);
+      const hasVectors = modelTag ? (await db.$queryRaw<unknown[]>(buildSkillVectorProbeSql(modelTag))).length > 0 : false;
+      if (modelTag && hasVectors) {
+        const remap = await db.$queryRaw<Array<{ id: string }>>(buildSkillRemapSql(market, ENRICH_VERSION, left));
+        const { skillRemapDedupeKey } = await enrichArea();
+        const items: EnqueueManyItem[] = remap.map((r) => ({
+          kind: ENRICH_KIND,
+          payload: { jobId: r.id, skillsOnly: true },
+          options: { dedupeKey: skillRemapDedupeKey(r.id, modelTag), brand },
+        }));
+        if (items.length) skillsQueued = (await options.enqueueMany(items)).inserted;
+      }
+    } catch {
+      skillsQueued = 0;
+    }
+  }
+  return { staleQueued, rulesQueued, modelAvailable, skillsQueued };
 }
 
 export interface MaintainResult {
   expired: number;
   missed: number;
+  /** Public mainland rows archived as 'expired' because no source confirmed them for CN_UNSEEN_DAYS (step 2b); always 0 for another market. */
+  unseenMainland: number;
   /** Live rows whose dedupe priority was brought to the `PROVIDER_META` value (0 once every row is right). */
   priorityAligned: number;
   /** Open bank rows archived as 'no_apply_target': their bank has no posting page, or their link is not that page (step 4). */
@@ -339,16 +443,13 @@ export async function runMaintenance(
   let missed = 0;
   if (options.perQueryTracking) {
     for (const a of adapters) {
-      // Only metered search providers run planned queries; banks close their own jobs.
-      if (a.kind !== 'search' || a.dailyCallLimit() === null) continue;
-      // A per-request provider (JSearch) answers the first pages of a ranked search, never the whole
-      // result, so two runs without a posting prove nothing: its rows end by `expiresAt` only (21 or
-      // 45 days, normalize/identity.ts; MARKET_STRATEGY §1.5 "JSearch: no signal"). The pipeline does
-      // not count those runs either (`complete: false`); this also covers rows stamped before that.
-      if (adapterCostModel(a) === 'per_request') continue;
+      // Metered search providers whose counted run is the query's whole answer, and no other source (tracking.ts).
+      if (!missedRuleApplies(a)) continue;
       missed += await db.$executeRaw(buildMissedSql(market, a.provider, a.sourceBoards));
     }
   }
+  // Mainland only, after stated validity (above) and disappearance (the sources' own syncs): 45 days unseen.
+  const unseenMainland = await archiveUnseenMainland(db, market);
   // Before the dedupe repair: both steps change which row of a group is the one to show.
   const priorityAligned = await alignSourcePriority(db, market);
   const deadBankLinks = await archiveDeadBankLinks(db, market, adapters, { env: options.enrich?.env, ...options.deadBankLinks });
@@ -356,7 +457,7 @@ export async function runMaintenance(
   let enrichQueued = 0;
   if (options.enrich) {
     const caught = await runEnrichCatchUp(db, market, options.enrich);
-    enrichQueued = caught.staleQueued + caught.rulesQueued;
+    enrichQueued = caught.staleQueued + caught.rulesQueued + caught.skillsQueued;
   }
-  return { expired, missed, priorityAligned, deadBankLinks, dedupeRepaired, missedRule: options.perQueryTracking, enrichQueued };
+  return { expired, missed, unseenMainland, priorityAligned, deadBankLinks, dedupeRepaired, missedRule: options.perQueryTracking, enrichQueued };
 }

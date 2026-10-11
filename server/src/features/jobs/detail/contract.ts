@@ -21,7 +21,26 @@
 //     feed card; rules in feed/sourceLine.ts): `job.apply { url, target }`,
 //     `job.source { …, original, url, lastVerifiedAt, via }` and `job.salary`
 //     (null when the posting states no pay). D1: `apply.url` is a link the
-//     user opens; nothing is submitted for them.
+//     user opens; nothing is submitted for them;
+//   - closure (MARKET_STRATEGY 1.5 "Closure"; JI-10): when a public, open
+//     posting carries the id of a posting on Greenhouse, Lever or
+//     SmartRecruiters, `GET /jobs/:id` and `POST /jobs/:id/apply-click` first
+//     ask that system's public posting API whether it is still listed
+//     (jobs/liveness: one documented JSON read, at most once per 6 hours per
+//     row). A posting the API no longer lists is archived and answered
+//     `status: 'closed'` (the click: 409 `job_closed`, and nothing moves to
+//     Applied); when the answer cannot be had the job is served as it was.
+//     `job.listing` says when and how the status was last confirmed;
+//   - dates (1.5 "Dates"): `postedAt` is the employer's date only (null when
+//     the stored date is ours), `firstSeenAt` is when we first read the
+//     posting, `lastSeenAt` when a source last confirmed it listed; `isNew`
+//     rests on `firstSeenAt` alone;
+//   - sponsorship (JI-11): a status comes with the posting's own quote;
+//     a provider's reading is its own field (`sponsorship.providerReading`),
+//     named and never worded as the posting's statement, and sent only to a
+//     reader the feed card would show it to (an international job, a person
+//     who needs sponsorship there). A company's sponsorship history is a
+//     company fact, never a line of the job.
 
 import { z } from 'zod';
 import type { Sourced } from '../../../platform/http.js';
@@ -81,8 +100,20 @@ export interface JobDetail {
   /** Verbatim sections from the posting. */
   sections: Array<{ kind: JobSectionKind; body: string }>;
   skills: Array<{ skill: string; kind: 'hard' | 'soft'; required: boolean }>;
-  /** `quote` is the posting's own words; without a quote the status is 'not_stated' (ruling C18). */
-  sponsorship: { status: 'offered' | 'not_offered' | 'not_stated'; quote: string | null };
+  /**
+   * `quote` is the posting's own words; without a quote the status is
+   * 'not_stated' (ruling C18). It is sent to every reader. `providerReading`
+   * is set only when the posting itself states nothing and a provider's own
+   * reading says the job offers sponsorship: `provider` is that provider's
+   * display name, and a reader words it as the provider's reading
+   * ("{provider} lists visa sponsorship"), never as the posting's statement.
+   * It is sent by the feed card's rule (feed contract `sponsorshipLabelsShown`):
+   * on an international job, to a person who needs sponsorship in the job's
+   * country; to nobody else, and never on GoApply. The badge
+   * `sponsorship_provider` in `badges` follows the same rule. A provider's
+   * "does not sponsor" is never sent (a negative needs the posting's words).
+   */
+  sponsorship: { status: 'offered' | 'not_offered' | 'not_stated'; quote: string | null; providerReading?: { status: 'offered'; provider: string } | null };
   /** Citizenship / clearance lines, each with the posting's own words. */
   requirements: Array<{ tag: JobRequirementTag; quote: string }>;
   applyUrl: string | null;
@@ -100,14 +131,28 @@ export interface JobDetail {
    * listed"; never 面议). Agrees with `pay` / `payText`, which stay. Always sent.
    */
   salary?: SalaryLine | null;
+  /** The posting's own date; null when the posting states none or the stored date is one we assigned (`postedAtEstimated`). */
   postedAt: string | null;
-  /** True when the posting date is our first-seen date, not the employer's. */
+  /** True when the posting's own date is not known and the stored one is ours (first sight, the day the user added it, an open-data set's update date). */
   postedAtEstimated: boolean;
-  /** "Last checked {date}". */
+  /** When we first read the posting ("First seen {date}"). Always sent. */
+  firstSeenAt?: string | null;
+  /** When a source last confirmed the posting listed: "Last checked {date}" ("last verified"). */
   lastSeenAt: string | null;
+  /** First seen by us in the last 48 hours (feed contract `isNewPosting`; never derived from `postedAt`). Always sent. */
+  isNew?: boolean;
   closedAt: string | null;
   /** 'closed' = no longer listed (expired, removed or archived). */
   status: 'open' | 'closed';
+  /**
+   * When and how `status` was last confirmed. `checkedAt`: for an open job,
+   * when it was last confirmed listed; for a closed one, when it was found
+   * closed. `via`: 'ats_api' = this request asked the applicant tracking
+   * system's public posting API (or this server did under 10 minutes ago);
+   * 'sync' = our regular reads of the source. Both null for a job nobody
+   * lists (the user's own import). Always sent.
+   */
+  listing?: JobListing;
   /**
    * Where we got the posting; `kind` drives the source line. `original` (the
    * original publisher: the employer for an employer-board row), `url` (the
@@ -124,6 +169,11 @@ export interface JobDetail {
   badges: FeedItem['badges'];
   /** GoApply: the employer's campus programme (官方网申 window and 届别), from a staff-verified record. */
   campus?: JobCampusInfo | null;
+}
+
+export interface JobListing {
+  checkedAt: string | null;
+  via: 'ats_api' | 'sync' | null;
 }
 
 export interface JobCampusInfo {
@@ -230,7 +280,11 @@ export interface SimilarJobItem extends Omit<FeedItem, 'pay'> {
  * GET /jobs/:id/similar — same role family and country, excluding hidden and
  * flagged jobs; best fit first. Empty while `jobs.recommendations` is off
  * (GoApply with CN_RECRUITMENT_INFO_MODE=off; on by default). On GoApply a
- * public posting with no usable apply link is never listed.
+ * public posting with no usable apply link is never listed. A row that owes
+ * an open-data credit line (台灣就業通, 事求人) is not listed by this route: the
+ * card of this list does not print the line yet. A caller of the service
+ * whose card does print it asks with `creditLines: true` and gets those rows
+ * with the sentence in `cardMeta.tw_sources.attribution`.
  */
 export interface SimilarJobsResponse {
   items: SimilarJobItem[];
@@ -242,7 +296,8 @@ export interface SaveJobResponse {
 }
 
 /**
- * POST /jobs/:id/apply-click. 409 `job_closed` for a closed job and 409
+ * POST /jobs/:id/apply-click. 409 `job_closed` for a closed job (also one the
+ * posting check finds gone at this click: nothing moves to Applied) and 409
  * `no_apply_link` when the job has no employer link (use "I applied" then).
  */
 export interface ApplyClickResponse {

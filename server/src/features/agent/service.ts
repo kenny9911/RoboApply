@@ -11,6 +11,23 @@
 // and moves the tracker entry exactly like "Apply on company site"
 // (`jobDetailService.recordApplyClick`), with "Undo · I didn't apply".
 // `userMarkedSubmitted` is set only by the extension when the user says so.
+//
+// Still listed? (MARKET_STRATEGY 1.5 "Closure"; JI-10.) A job enters the list
+// (`addToQueue`, the weekly `generateList`) only while its posting is still
+// listed, and a kit is prepared only while it still is: `deps.checkJobLive`
+// asks the public job-board API of the posting's applicant tracking system
+// (one documented JSON read; never an application form, so D1 is unchanged).
+// A posting found gone follows the existing job_closed path: adding it is
+// refused (410 `gone`, reason `job_closed`; the weekly list takes the next
+// candidate), and a kit whose job closed after it was started expires with
+// `job_closed` and its `ready_kits` reservation is released before any
+// tailoring or letter. A row that is closed already is treated the same at the
+// entrance. The refusal is `gone`, not `conflict`: until this check the only
+// 409 of POST /agent/queue was `queue_full`, and callers word every `conflict`
+// of that route as "your list is full", which a closed job is not. The reason
+// (`details.reason`) is what a caller reads to say the job closed. "Cannot
+// tell" (no key, another ATS, a timeout, the check off) changes nothing.
+// Reading the list never asks.
 // D3: lists come from the user's own saved search and real fit scores; a job
 // without a score never counts as "Good fit". AI steps run only when
 // `aiAllowed(user)` and the brand's text model allow them; otherwise a kit is
@@ -119,6 +136,10 @@ const ANSWER_SELECT = { id: true, questionKey: true, questionText: true, answer:
 const EXPIRABLE: readonly QueueState[] = ['picked', 'ready_for_review', 'approved', 'failed'];
 const LIST_LIMIT = 200;
 const PREVIEW_LIMIT = 50;
+/** Posting checks (`deps.checkJobLive`) that run at once when jobs enter the list. */
+const LIVE_CHECKS_AT_ONCE = 5;
+/** How long a list waits for those checks in all; a job not checked by then enters as it did before the check existed. */
+export const LIVE_CHECK_BUDGET_MS = 8_000;
 /** A kit still `preparing` after this long is swept to `failed` (the worker died or its work item went dead). */
 export const PREPARE_STALE_AFTER_MS = 30 * 60_000;
 const SWEEP_BATCH = 200;
@@ -267,6 +288,41 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     const mine = rows.filter((j) => j.market === market && (j.visibility !== 'private' || j.ownerUserId === userId) && cnListable(j) && bankListable(j));
     const visible = await deps.visibleJobs(mine, userId);
     return new Map(visible.map((j) => [j.id, j]));
+  }
+
+  /**
+   * Is the job's posting gone from where it was published? (JI-10; D1 is
+   * unchanged: this reads one public posting and touches no application form.)
+   * True only for a definite "closed"; "unknown", a missing seam and a failing
+   * check are all false, so the flow goes on exactly as before the check.
+   */
+  async function postingGone(db: AgentDb, jobId: string): Promise<boolean> {
+    if (!deps.checkJobLive) return false;
+    try {
+      return (await deps.checkJobLive(jobId, db)) === 'closed';
+    } catch (err) {
+      logger.debug('AGENT', 'posting check failed; the job is treated as before', { jobId, error: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+  }
+
+  /**
+   * The first `want` of `jobIds`, in order, whose posting is not gone: the
+   * gate at the entrance of the list. A few checks run at once, and the whole
+   * gate has a time budget; a job it could not check in time passes, as a job
+   * with no answer does.
+   */
+  async function stillListed(db: AgentDb, jobIds: readonly string[], want: number): Promise<string[]> {
+    const listed: string[] = [];
+    const until = Date.now() + LIVE_CHECK_BUDGET_MS;
+    for (let i = 0; i < jobIds.length && listed.length < want; i += LIVE_CHECKS_AT_ONCE) {
+      const chunk = jobIds.slice(i, i + LIVE_CHECKS_AT_ONCE);
+      const gone = deps.checkJobLive && Date.now() < until ? await Promise.all(chunk.map((id) => postingGone(db, id))) : chunk.map(() => false);
+      chunk.forEach((id, k) => {
+        if (!gone[k]) listed.push(id);
+      });
+    }
+    return listed.slice(0, want);
   }
 
   async function views(db: AgentDb, userId: string, rows: QueueRow[]): Promise<QueueItemView[]> {
@@ -630,17 +686,19 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     const ex = await excludedJobIds(db, userId, row);
     const dislikes = await dislikesOf(db, row);
     const preview = await deps.feedPreview(userId, { filters: overrides as never, sort: 'best_fit', limit: PREVIEW_LIMIT });
-    const picks = applyDislikes(
+    const candidates = applyDislikes(
       preview
         .filter((j) => j.fit && meetsMinTier(j.fit.tier, settings.minTier))
         .filter((j) => !ex.queued.has(j.jobId) && !ex.down.has(j.jobId))
         .filter((j) => !j.tracker || j.tracker.status === 'bookmarked'),
       dislikes,
-    ).slice(0, want);
+    );
+    // A posting its ATS no longer lists does not enter the list; the next candidate takes its place.
+    const picks = await stillListed(db, candidates.map((j) => j.jobId), want);
 
     const created: QueueRow[] = [];
-    for (const job of picks) {
-      const r = await insertItem(db, userId, job.jobId, weekKey, 'weekly', options.source === 'cron' ? 'system' : 'user');
+    for (const jobId of picks) {
+      const r = await insertItem(db, userId, jobId, weekKey, 'weekly', options.source === 'cron' ? 'system' : 'user');
       if (r) created.push(r);
     }
     // A list the user just asked for needs no "your list is ready" notice: record it as handled.
@@ -748,7 +806,15 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     if (!jobs.size) throw new HttpError('not_found', 'Job not found.', { reason: AGENT_ERROR_CODES.jobNotFound });
     const existing = (await db.rAAgentQueueItem.findMany({ where: { userId, jobId: { in: [...jobs.keys()] } }, select: QUEUE_SELECT })) as QueueRow[];
     const have = new Set(existing.map((e) => e.jobId));
-    const toAdd = [...jobs.keys()].filter((id) => !have.has(id));
+    const wanted = [...jobs.keys()].filter((id) => !have.has(id));
+    // A closed post does not enter the list: one whose row is closed, and one whose ATS no longer lists it
+    // (asked now, before anything is added, so no kit and no credit is ever spent on it).
+    const open = wanted.filter((id) => !isJobClosed(jobs.get(id)!));
+    const toAdd = await stillListed(db, open, open.length);
+    if (!toAdd.length && !existing.length && wanted.length) {
+      // `gone`, never `conflict`: a 409 of this route means "the list is full" to its callers (see the header).
+      throw new HttpError('gone', 'This job is no longer listed.', { reason: KIT_ERROR_CODES.jobClosed });
+    }
     const room = MAX_ACTIVE_QUEUE_ITEMS - (await activeCount(db, userId));
     if (toAdd.length > room) {
       throw new HttpError('conflict', `Your list holds up to ${MAX_ACTIVE_QUEUE_ITEMS} jobs at a time. Remove some first.`, {
@@ -1043,7 +1109,8 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
     };
 
     if (!job) return fail(AGENT_ERROR_CODES.jobNotFound);
-    if (isJobClosed(job)) {
+    // Asked once more before any work: a posting its ATS dropped since the job was queued is closed here.
+    if (isJobClosed(job) || (await postingGone(db, item.jobId))) {
       // The post closed after confirm: no tailoring or letter credits are spent on it.
       try {
         await transitionItem(db, item, 'expired', {

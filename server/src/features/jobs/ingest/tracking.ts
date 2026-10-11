@@ -2,22 +2,45 @@
 //
 // The `jobs-maintain` rule "archive after 2 missed refreshes" needs to know
 // WHICH query last returned a job and how many successful runs that query has
-// made since. That needs three columns that do not exist yet (SR-16b-1):
+// made since. Three columns hold that (Schema request SR-16b-1):
 //
 //   RAIngestQuery.runCount      Int     @default(0)
 //   RAJob.lastSeenQueryId       String?
 //   RAJob.lastSeenRun           Int?
 //
-// This module is the narrow adapter over them. `perQueryTrackingAvailable`
-// probes information_schema (cached for an hour); until all three columns
-// exist, ingest writes nothing extra and maintenance archives nothing as
-// 'source_removed' (expiry and the 45-day rule still run). A provider-level
-// proxy ("unseen for N hours while the provider ran elsewhere") is NOT used:
-// with ~6,000 queries sharing a few hundred calls a day, and searches limited
-// to recent postings, it archived live jobs within days.
+// They are in the schema (server/prisma/schema/ra-jobs.prisma) and on every
+// database that took the M0 push, so `perQueryTrackingAvailable` answers true
+// there. The probe stays (information_schema, cached for an hour) for a
+// database that has not been pushed yet: on such a database ingest writes
+// nothing extra and maintenance archives nothing as 'source_removed' (the
+// expiry step and, on the mainland, the 45-days-unseen step still run). A
+// provider-level proxy ("unseen for N hours while the provider ran
+// elsewhere") is NOT used: with ~6,000 queries sharing a few hundred calls a
+// day, and searches limited to recent postings, it archived live jobs within
+// days.
 //
-// The rule, once the columns exist (`buildMissedSql`, mirrored by the pure
-// `isMissedTwice`):
+// Which sources the rule is for (`missedRuleApplies`; MARKET_STRATEGY §1.5
+// "Closure", JI-10): a METERED SEARCH provider whose counted run is everything
+// the query can return. Nothing else:
+//   - an employer board (`ats_public`) closes a posting by its listing diff;
+//   - a recruiter bank by its tombstones;
+//   - the open-data, government and feed sources (`tw_open_data`,
+//     `tw_gov_jobs`, `usajobs`, `activejobs_feed`) are cursor sources with
+//     their own closure (a sweep's absence, a stated close date, the vendor's
+//     expired feed) and run no planned query;
+//   - JSearch is a search provider, but a call answers the first pages of a
+//     ranked search (`per_request`), so two runs without a posting prove
+//     nothing: its rows end by `expiresAt`.
+// A row of any of those is never selected: the statement is built only for an
+// adapter the predicate accepts, and it names that adapter's own boards and
+// provider.
+//
+// `RAIngestQuery.runCount` is not "runs ever": the planner sets it back to 0
+// when it widens a query's window or changes its text (ingest/planner.ts), and
+// the rows that query stamped keep their older `lastSeenRun`. The rule reads
+// the stored `params.datePosted`, which is the window the adapter applies.
+//
+// The rule (`buildMissedSql`, mirrored by the pure `isMissedTwice`):
 //   - a run counts only when it succeeded AND returned at least one posting
 //     (an empty page from a flaky API is inconclusive) AND the answer was
 //     everything the query can return (`SourceFetchResult.complete !== false`).
@@ -36,6 +59,7 @@
 
 import { Prisma } from '../../../generated/prisma/client.js';
 import type { Market } from '../../../platform/brand/index.js';
+import { adapterCostModel, type JobSourceAdapter } from '../sources/index.js';
 import type { IngestDb } from './db.js';
 
 /** Days a provider `datePosted` filter reaches back ('all' and unknown → no window). */
@@ -43,6 +67,18 @@ export const DATE_POSTED_WINDOW_DAYS: Readonly<Record<string, number>> = { today
 
 /** Counted runs without the job after which it is archived. */
 export const MISSED_RUNS = 2;
+
+/**
+ * Does the "missed twice" archive run for this adapter's rows? Only for a
+ * metered search provider (it runs planned queries against a daily limit)
+ * whose answer is complete: not a cursor source of any kind (boards, banks,
+ * open data, government, the licensed feed), not an unmetered source, and not
+ * a per-request provider (JSearch), whose runs the pipeline never counts.
+ */
+export function missedRuleApplies(adapter: Pick<JobSourceAdapter, 'provider' | 'kind' | 'costModel' | 'dailyCallLimit'>): boolean {
+  if (adapter.kind !== 'search' || adapter.dailyCallLimit() === null) return false;
+  return adapterCostModel(adapter) !== 'per_request';
+}
 
 const PROBE_TTL_MS = 60 * 60_000;
 let cache: { at: number; value: boolean } | null = null;

@@ -17,9 +17,24 @@
 // the posting states no pay); the query response carries `sources { gohire,
 // employerBoards }` on GoApply and `thin`. The rules are in feed/sourceLine.ts.
 // D1: `apply.url` is a link the user opens; nothing is submitted for them.
+//
+// Dates (MARKET_STRATEGY 1.5 "Dates"; JI-10): three separate facts travel on
+// every item. `postedAt` is the EMPLOYER'S date and nothing else: it is null
+// whenever the stored date is one we assigned (`postedAtEstimated`), so no
+// reader can print an estimate as "posted". `firstSeenAt` is when we first
+// read the posting and `lastSeenAt` when a source last confirmed it listed
+// ("last verified"). `isNew` rests on `firstSeenAt` only (`isNewPosting`).
+//
+// Sponsorship (JI-11): a job-level badge rests on the posting's own quote, or
+// is the labelled reading of a provider that is named (`sponsorshipSignalOf`).
+// Who sees a label that is ours to choose is one rule for the card and the job
+// page (`sponsorshipLabelsShown`): an international row, a person who needs
+// sponsorship in the job's country. A company's sponsorship history is a
+// company fact and never a job badge.
 
 import { z } from 'zod';
 import type { MatchExplanation } from '../compliance/contract.js';
+import { PROVIDER_META } from '../jobs/normalize/index.js';
 import type { FilterSet, FilterSetPatch } from '../search/contract.js';
 import type { ApplyLink, SalaryLine, SourceFacts } from './sourceLine.js';
 
@@ -134,15 +149,37 @@ export interface FeedItem {
   pay: { min: number | null; max: number | null; currency: string; period: 'year' | 'month' | 'week' | 'day' | 'hour'; text: string | null } | null;
   /** CN "N薪" when the posting states it. */
   payMonths?: number | null;
+  /**
+   * The posting's own date as the employer or its source states it. Null when
+   * the posting states none, and null when the stored date is one we assigned
+   * (`postedAtEstimated`): an estimate never travels under this name.
+   */
   postedAt: string | null;
   /**
-   * True when `postedAt` is not the posting's own date but the day we first
-   * saw the job (or the user added it): the card says "First seen {date}",
-   * as the job page does, never "Posted {date}".
+   * True when the posting's own date is not known and the stored one is ours
+   * (the day we first saw the job, the day the user added it, an open-data
+   * set's update date). The card then says when we first saw the job and when
+   * it was last checked, never "Posted {date}".
    */
   postedAtEstimated?: boolean;
-  /** "Last checked {date}" from lastSeenAt. */
+  /**
+   * When we first read this posting (ours, never the employer's). "New" rests
+   * on it. Always sent by the server (typed optional so an object built
+   * elsewhere is still a FeedItem).
+   */
+  firstSeenAt?: string | null;
+  /** When a source last confirmed the posting listed: "Last checked {date}" / "last verified". */
   lastSeenAt: string | null;
+  /**
+   * First seen by us since the viewer's previous visit to the list, or, where
+   * no such visit is known, in the last NEW_WINDOW_HOURS hours
+   * (`isNewPosting`). Never derived from `postedAt`: a posting an employer
+   * published months ago and we read for the first time today is new here,
+   * and its card still shows its true posted date. A field of its own, not a
+   * badge of `badges` (that list is facts from the post, capped at three).
+   * Always sent by the server.
+   */
+  isNew?: boolean;
   /**
    * Source line, e.g. aggregator + original host, or `{sourceName}`, with the
    * facts every mainland card shows (来源 / 原始链接 / 最后核验): `original`
@@ -175,7 +212,9 @@ export interface FeedItem {
    * At most 3, fixed priority, only from real fields (PRODUCT F-FEED-05/07).
    * `label` is a stable key the UI translates (for `market_tag` the tag id,
    * e.g. 'soe'); `quote` is the posting's own words where the badge rests on
-   * one. `new` and `closing_soon` are reserved and never emitted (no urgency).
+   * one. `sponsorship_provider` carries no quote: it is a provider's reading
+   * and names that provider (`provider`). `new` and `closing_soon` are
+   * reserved and never emitted here (no urgency; "New" is the field `isNew`).
    */
   badges: FeedBadge[];
   /** Null when nothing could be compared, or (GoApply) when personalisation is off. */
@@ -229,6 +268,8 @@ export type MarketCardMeta = Record<string, Record<string, unknown>>;
 export const FEED_BADGE_KINDS = [
   'direct_from_employer',
   'sponsorship',
+  /** A provider's own reading that the job offers visa sponsorship: labelled as such, with the provider's name and no quote. */
+  'sponsorship_provider',
   'no_sponsorship',
   'clearance_required',
   'citizens_only',
@@ -245,6 +286,94 @@ export interface FeedBadge {
   kind: FeedBadgeKind;
   label: string;
   quote?: string;
+  /** `sponsorship_provider` only: the display name of the provider whose reading this is ("Active Jobs DB"). */
+  provider?: string;
+}
+
+// ── "New" and the sponsorship signal: one rule for the card and the job page ──
+
+/** Without a known previous visit, a posting first seen within this many hours is new. */
+export const NEW_WINDOW_HOURS = 48;
+
+/**
+ * Is this posting new to the viewer? `firstSeenAt` (when we first read it) is
+ * after `newSince` (the viewer's previous visit to the list) when the caller
+ * knows one, else within the last NEW_WINDOW_HOURS hours. The employer's
+ * posted date plays no part. A missing or future first-seen date is not new.
+ */
+export function isNewPosting(firstSeenAt: Date | string | null | undefined, now: Date, newSince?: Date | null): boolean {
+  if (!firstSeenAt) return false;
+  const seen = new Date(firstSeenAt).getTime();
+  if (!Number.isFinite(seen) || seen > now.getTime()) return false;
+  const since = newSince instanceof Date && Number.isFinite(newSince.getTime()) ? newSince.getTime() : now.getTime() - NEW_WINDOW_HOURS * 3_600_000;
+  return seen > since;
+}
+
+/** `RAJob.sponsorshipSource` of a provider's reading is this prefix + the provider id (ingest writes it; MARKET_TASK_PLAN "Sponsorship source"). */
+export const PROVIDER_SPONSORSHIP_PREFIX = 'provider:';
+
+/** What a job says about visa sponsorship, and on whose word. */
+export type SponsorshipSignal =
+  /** The posting's own words. */
+  | { basis: 'quote'; status: 'offered' | 'not_offered'; quote: string }
+  /** A provider's reading that the job offers sponsorship; `provider` is that provider's display name. */
+  | { basis: 'provider'; status: 'offered'; provider: string };
+
+/** The display name of the provider a `sponsorshipSource` names; null for anything else (a raw id is never shown). */
+export function sponsorshipProviderName(sponsorshipSource: string | null | undefined): string | null {
+  if (typeof sponsorshipSource !== 'string' || !sponsorshipSource.startsWith(PROVIDER_SPONSORSHIP_PREFIX)) return null;
+  const id = sponsorshipSource.slice(PROVIDER_SPONSORSHIP_PREFIX.length).trim();
+  const meta = Object.prototype.hasOwnProperty.call(PROVIDER_META, id) ? PROVIDER_META[id as keyof typeof PROVIDER_META] : null;
+  return meta?.aggregatorName?.trim() || null;
+}
+
+/**
+ * The one rule for a job-level sponsorship label (JI-11), for every surface:
+ *   (a) a status with the posting's own quote → that status, quoted;
+ *   (b) 'offered' with no quote, stored as a provider's reading whose provider
+ *       has a display name → the provider's reading, named, never worded as (a);
+ *   (c) a provider's 'not_offered' alone → nothing (a negative needs the
+ *       posting's words);
+ *   (d) anything else → nothing.
+ * A company's sponsorship history is never an input here.
+ */
+export function sponsorshipSignalOf(row: { sponsorship?: string | null; sponsorshipEvidence?: string | null; sponsorshipSource?: string | null }): SponsorshipSignal | null {
+  const quote = typeof row.sponsorshipEvidence === 'string' ? row.sponsorshipEvidence.trim() : '';
+  if (quote) return row.sponsorship === 'offered' || row.sponsorship === 'not_offered' ? { basis: 'quote', status: row.sponsorship, quote } : null;
+  if (row.sponsorship !== 'offered') return null;
+  const provider = sponsorshipProviderName(row.sponsorshipSource);
+  return provider ? { basis: 'provider', status: 'offered', provider } : null;
+}
+
+/**
+ * A person's own answers about visa sponsorship: the search-profile answer
+ * and the per-country work-authorization answers (the match area's
+ * `MatchUser` carries both under these names).
+ */
+export interface SponsorshipReader {
+  needsSponsorship: boolean | null;
+  workAuth: ReadonlyArray<{ country: string; sponsorship: 'now' | 'later' | 'no' | null }>;
+}
+
+/** Does this person need sponsorship for a job in `country`? (The per-country answer wins over the search-profile answer.) */
+export function needsSponsorshipFor(reader: SponsorshipReader | null, country: string | null): boolean {
+  if (!reader) return false;
+  const entry = country ? reader.workAuth.find((w) => w.country === country) : undefined;
+  if (entry && entry.sponsorship) return entry.sponsorship === 'now' || entry.sponsorship === 'later';
+  return reader.needsSponsorship === true;
+}
+
+/**
+ * Is a sponsorship label that is OURS to choose shown on this row to this
+ * reader? One rule for the card and the job page: only on an international
+ * row, and only to a person who needs sponsorship in the job's country. The
+ * card applies it to every sponsorship badge; the job page applies it to the
+ * provider's reading (the posting's own quoted statement is a fact of the
+ * posting and stays on the page for every reader, as before). GoApply rows
+ * (market cn) never carry one.
+ */
+export function sponsorshipLabelsShown(row: { market: string; locationCountry?: string | null }, reader: SponsorshipReader | null): boolean {
+  return row.market === 'intl' && needsSponsorshipFor(reader, row.locationCountry ?? null);
 }
 
 export interface FeedQueryResponse {
@@ -285,6 +414,16 @@ export interface FeedQueryResponse {
    * Always sent.
    */
   thin?: boolean;
+  /**
+   * Sent on the FIRST page of a query that carried `relevance`, and nowhere
+   * else: whether that text took part in choosing and ordering the list (a
+   * lexical or dense leg was asked with it and returned rows). False when no
+   * posting matched the words, for a list that runs no legs (Newest, Highest
+   * pay, Deadline) and with FEED_HYBRID=off. A reader that says "Ranked by …"
+   * leaves the line out when this is false; absent means "not told" (a later
+   * page, a query with no such text).
+   */
+  relevanceApplied?: boolean;
 }
 
 export interface FeedSources {

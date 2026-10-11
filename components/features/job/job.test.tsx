@@ -4,6 +4,11 @@
 // the one-time apply intercept, People search links, the Company tab
 // (sourced facts, "Not listed", our own open-job count), split mode and the
 // CommandPalette deep link.
+// MKT-5C (JI-10, JI-11): a posting the employer's board no longer lists
+// arrives closed and the page says so with when it was last listed and no
+// apply button; an apply click that finds it gone reads the page again; three
+// date facts in the header; "New" from first seen; a provider's sponsorship
+// reading as a badge that names the provider.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
@@ -68,6 +73,7 @@ import type { MatchFitView } from '../../../lib/api/contracts/match';
 import { renderWithBrand } from '../../../__tests__/shell/helpers';
 import { jobHref } from '../../v3/shell/destinations';
 import { JobDetailPanel } from './index';
+import { headerDates } from './JobHeader';
 import { payLine } from './format';
 import { shouldAskBeforeApply } from '../../../hooks/job';
 
@@ -270,7 +276,10 @@ describe('states', () => {
     render();
     const closed = await screen.findByTestId('job-closed');
     expect(closed).toHaveTextContent('This job is no longer listed');
-    expect(closed).toHaveTextContent(/Last seen Oct 5, 2026/);
+    // When it was last listed, from the last sighting (never the closing date).
+    expect(within(closed).getByTestId('job-last-listed')).toHaveTextContent('We last saw it listed on Oct 5, 2026.');
+    // Closed by our regular reads: no claim that the board was checked for this page.
+    expect(within(closed).queryByTestId('job-closed-checked')).toBeNull();
     expect(closed).toHaveTextContent('Anything you saved for it stays in Applications.');
     expect(screen.queryByTestId('apply-button')).toBeNull();
     expect(await screen.findByRole('heading', { name: 'Similar jobs you can still apply to' })).toBeInTheDocument();
@@ -341,6 +350,194 @@ describe('states', () => {
 });
 
 // INT-06 (wave3 WP-93 #15 and #7, wave5 WP-93 #24).
+describe('MKT-5C: a posting the employer\'s board no longer lists (JI-10)', () => {
+  it('ACCEPT: the page shows the closed line, when the job was last listed, and no apply button or link to the dead page', async () => {
+    api.getJob.mockResolvedValue(
+      detail({}, { status: 'closed', closedAt: NOW, lastSeenAt: '2026-10-09T03:00:00.000Z', listing: { checkedAt: NOW, via: 'ats_api' }, applyUrl: 'https://boards.example.com/acme/1' }),
+    );
+    render();
+    const closed = await screen.findByTestId('job-closed');
+    expect(closed).toHaveTextContent('This job is no longer listed');
+    expect(within(closed).getByTestId('job-closed-checked')).toHaveTextContent("We checked the employer's job board when you opened this page. It no longer lists this job.");
+    expect(within(closed).getByTestId('job-last-listed')).toHaveTextContent('We last saw it listed on Oct 9, 2026.');
+    expect(screen.queryByTestId('apply-button')).toBeNull();
+    expect(screen.queryByTestId('apply-hint')).toBeNull();
+    expect(screen.queryByTestId('i-applied-button')).toBeNull();
+    // Nothing on the page links to the posting that is gone.
+    expect(document.querySelector('a[href="https://boards.example.com/acme/1"]')).toBeNull();
+    expect(screen.getByTestId('job-detail')).toHaveAttribute('data-job-status', 'closed');
+  });
+
+  it('the same on GoApply (D5), in the mainland wording of the page around it', async () => {
+    api.getJob.mockResolvedValue(detail({}, { status: 'closed', closedAt: NOW, lastSeenAt: '2026-10-09T03:00:00.000Z', listing: { checkedAt: NOW, via: 'ats_api' } }));
+    render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: { ...BASE_FLAGS } });
+    const closed = await screen.findByTestId('job-closed');
+    expect(within(closed).getByTestId('job-closed-checked')).toBeInTheDocument();
+    expect(within(closed).getByTestId('job-last-listed')).toBeInTheDocument();
+    expect(screen.queryByTestId('apply-button')).toBeNull();
+  });
+
+  it('an open job that the check confirmed is the page as before: apply button, no closed notice', async () => {
+    api.getJob.mockResolvedValue(detail({}, { listing: { checkedAt: NOW, via: 'ats_api' } }));
+    render();
+    await screen.findByTestId('job-detail');
+    expect(screen.getByTestId('apply-button')).toBeInTheDocument();
+    expect(screen.queryByTestId('job-closed')).toBeNull();
+  });
+
+  it('an apply click that finds the posting gone (409 job_closed) reads the page again, which now says closed; no generic error, no Undo', async () => {
+    api.getUiState.mockResolvedValue({ ...EMPTY_UI, state: { ...EMPTY_UI.state, values: { 'applyIntercept.never': true } } });
+    // Listed until the click; the server archives the row when the click finds it gone, so the next read is closed.
+    let gone = false;
+    api.getJob.mockImplementation(async () =>
+      gone ? detail({}, { status: 'closed', closedAt: NOW, lastSeenAt: '2026-10-09T03:00:00.000Z', listing: { checkedAt: NOW, via: 'ats_api' } }) : detail(),
+    );
+    api.applyClick.mockImplementation(async () => {
+      gone = true;
+      throw new RoboApiError('This job is no longer listed.', { code: 'conflict', status: 409, payload: { success: false, code: 'conflict', details: { code: 'job_closed' } } });
+    });
+    // The tab the click opens: empty until the server answers.
+    const tab = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+    openSpy.mockImplementation(() => tab);
+    render();
+    await screen.findByTestId('job-detail');
+    await waitFor(() => expect(api.getUiState).toHaveBeenCalled());
+    await act(async () => {});
+    const readsBefore = api.getJob.mock.calls.length;
+    fireEvent.click(screen.getByTestId('apply-button'));
+    await waitFor(() => expect(api.applyClick).toHaveBeenCalledWith('j1'));
+    expect(await screen.findByTestId('job-closed')).toBeInTheDocument();
+    // Read again once for this answer, not in a loop.
+    await act(async () => {});
+    expect(api.getJob.mock.calls.length).toBe(readsBefore + 1);
+    expect(screen.queryByText("That didn't work. Try again.")).toBeNull();
+    expect(screen.queryByTestId('undo-bar')).toBeNull();
+    expect(screen.queryByTestId('apply-button')).toBeNull();
+    // Nobody was sent to the dead page: the only tab opened was the empty one, it never went to the
+    // employer's link (the page had it: `job.applyUrl`), and it was closed.
+    expect(openSpy.mock.calls).toEqual([['about:blank', '_blank']]);
+    expect(tab.location.href).toBe('');
+    expect(tab.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('the apply tab follows the server\'s answer: empty inside the click, then the link the server answered with', async () => {
+    api.getUiState.mockResolvedValue({ ...EMPTY_UI, state: { ...EMPTY_UI.state, values: { 'applyIntercept.never': true } } });
+    const tab = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+    openSpy.mockImplementation(() => tab);
+    let answer: (v: unknown) => void = () => {};
+    api.applyClick.mockImplementation(() => new Promise((resolve) => (answer = resolve)));
+    render();
+    await screen.findByTestId('job-detail');
+    await waitFor(() => expect(api.getUiState).toHaveBeenCalled());
+    await act(async () => {});
+    fireEvent.click(screen.getByTestId('apply-button'));
+    // Inside the click: an empty tab, and not yet the employer's page.
+    expect(openSpy.mock.calls).toEqual([['about:blank', '_blank']]);
+    expect(tab.location.href).toBe('');
+    await act(async () => answer({ applyUrl: 'https://boards.example.com/acme/1?from=server', atsType: null, extensionSupported: false, trackerEntryId: 't1' }));
+    await waitFor(() => expect(tab.location.href).toBe('https://boards.example.com/acme/1?from=server'));
+    // The employer's page gets no handle on ours.
+    expect(tab.opener).toBeNull();
+    expect(tab.close).not.toHaveBeenCalled();
+    expect(openSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('any other failed click keeps the plain error and does not read the page again', async () => {
+    api.getUiState.mockResolvedValue({ ...EMPTY_UI, state: { ...EMPTY_UI.state, values: { 'applyIntercept.never': true } } });
+    api.applyClick.mockRejectedValue(new RoboApiError('nope', { code: 'conflict', status: 409, payload: { success: false, code: 'conflict', details: { code: 'no_apply_link' } } }));
+    render();
+    await screen.findByTestId('job-detail');
+    await waitFor(() => expect(api.getUiState).toHaveBeenCalled());
+    await act(async () => {});
+    const readsBefore = api.getJob.mock.calls.length;
+    fireEvent.click(screen.getByTestId('apply-button'));
+    expect(await screen.findByText("That didn't work. Try again.")).toBeInTheDocument();
+    await act(async () => {});
+    expect(api.getJob.mock.calls.length).toBe(readsBefore);
+  });
+});
+
+describe('MKT-5C: three date facts, "New" from first seen, and a provider\'s sponsorship reading in the header', () => {
+  it('a real posted date: "Posted", when we first saw it (another day), and "Last checked"', async () => {
+    api.getJob.mockResolvedValue(detail({}, { postedAt: '2025-12-14T00:00:00.000Z', postedAtEstimated: false, firstSeenAt: '2026-10-10T11:00:00.000Z', lastSeenAt: NOW, isNew: true }));
+    render();
+    const header = await screen.findByTestId('job-header');
+    // ACCEPT: published about 300 days ago, first seen an hour ago: its true posted date and the New badge.
+    expect(within(header).getByTestId('job-posted')).toHaveTextContent('Posted Dec 14, 2025');
+    expect(within(header).getByTestId('job-first-seen')).toHaveTextContent('First seen Oct 10, 2026');
+    expect(within(header).getByTestId('job-last-checked')).toHaveTextContent('Last checked Oct 10, 2026');
+    expect(header.querySelector('[data-badge="new"]')).toHaveTextContent('New');
+  });
+
+  it('posted and first seen on the same day: one date, not the same thing twice', async () => {
+    api.getJob.mockResolvedValue(detail({}, { postedAt: '2026-10-08T00:00:00.000Z', firstSeenAt: '2026-10-08T06:00:00.000Z' }));
+    render();
+    const header = await screen.findByTestId('job-header');
+    expect(within(header).getByTestId('job-posted')).toBeInTheDocument();
+    expect(within(header).queryByTestId('job-first-seen')).toBeNull();
+  });
+
+  it('ACCEPT: an estimated date (an open-data row) never says "Posted": first seen and last checked, each from its own field', async () => {
+    api.getJob.mockResolvedValue(detail({}, { postedAt: null, postedAtEstimated: true, firstSeenAt: '2026-10-09T03:00:00.000Z', lastSeenAt: NOW }));
+    render();
+    const header = await screen.findByTestId('job-header');
+    expect(within(header).queryByTestId('job-posted')).toBeNull();
+    expect(header).not.toHaveTextContent(/Posted/);
+    expect(within(header).getByTestId('job-first-seen')).toHaveTextContent('First seen Oct 9, 2026');
+    expect(within(header).getByTestId('job-last-checked')).toHaveTextContent('Last checked Oct 10, 2026');
+  });
+
+  it('the dates rule on its own: an estimate is never posted, even from a server that still sends it as `postedAt`', () => {
+    const d = (iso: string | null) => (iso ? new Date(iso) : null);
+    expect(headerDates({ postedAt: '2026-06-10T00:00:00.000Z', postedAtEstimated: false, firstSeenAt: '2026-10-09T00:00:00.000Z', lastSeenAt: NOW })).toEqual({
+      posted: d('2026-06-10T00:00:00.000Z'),
+      firstSeen: d('2026-10-09T00:00:00.000Z'),
+      checked: d(NOW),
+    });
+    // The older wire: our first-seen date arrived as an estimated `postedAt`.
+    expect(headerDates({ postedAt: '2026-10-09T00:00:00.000Z', postedAtEstimated: true, lastSeenAt: null })).toEqual({ posted: null, firstSeen: d('2026-10-09T00:00:00.000Z'), checked: null });
+    expect(headerDates({ postedAt: null, postedAtEstimated: false, firstSeenAt: null, lastSeenAt: 'not a date' })).toEqual({ posted: null, firstSeen: null, checked: null });
+  });
+
+  it('"New" follows `isNew` only: a job posted today that we have known for days is not new', async () => {
+    api.getJob.mockResolvedValue(detail({}, { postedAt: NOW, firstSeenAt: '2026-10-01T00:00:00.000Z', isNew: false }));
+    render();
+    const header = await screen.findByTestId('job-header');
+    expect(header.querySelector('[data-badge="new"]')).toBeNull();
+  });
+
+  it('a provider\'s sponsorship reading is a badge that names the provider, with no quote and not the posting\'s wording', async () => {
+    api.getJob.mockResolvedValue(
+      detail(
+        {},
+        {
+          sponsorship: { status: 'not_stated', quote: null, providerReading: { status: 'offered', provider: 'Active Jobs DB' } },
+          badges: [{ kind: 'sponsorship_provider', label: 'sponsorship_provider', provider: 'Active Jobs DB' }],
+        },
+      ),
+    );
+    render();
+    const header = await screen.findByTestId('job-header');
+    const badge = header.querySelector('[data-badge="sponsorship_provider"]');
+    expect(badge).toHaveTextContent('Active Jobs DB lists visa sponsorship');
+    expect(badge).not.toHaveAttribute('title');
+    expect(header.querySelector('[data-badge="sponsorship"]')).toBeNull();
+    // The work-authorization block states only what the posting states: nothing here.
+    expect(screen.queryByTestId('job-work-auth')?.textContent ?? '').not.toContain('Visa sponsorship offered');
+  });
+
+  it('a badge with no copy of its own, or a provider badge with no name, is not printed (never a raw key)', async () => {
+    api.getJob.mockResolvedValue(
+      detail({}, { badges: [{ kind: 'sponsorship_provider', label: 'sponsorship_provider' }, { kind: 'pay_listed', label: 'pay_listed' }, { kind: 'sponsorship', label: 'offered', quote: 'We sponsor H-1B visas.' }] }),
+    );
+    render();
+    const header = await screen.findByTestId('job-header');
+    expect(header.querySelectorAll('[data-badge]')).toHaveLength(1);
+    expect(header.querySelector('[data-badge="sponsorship"]')).toHaveAttribute('title', 'The post says: “We sponsor H-1B visas.”');
+    expect(header).not.toHaveTextContent('header.badge');
+  });
+});
+
 describe('a job the user added', () => {
   const imported = (job: Partial<JobDetailResponse['job']> = {}) =>
     detail({}, { source: { name: '', kind: 'user_import', originalName: null }, visibility: 'private', applyUrl: '', ...job });
@@ -648,7 +845,8 @@ describe('apply flow (D1, R1/C11)', () => {
     expect(api.dismiss).toHaveBeenCalledWith(['applyIntercept:j1']);
     fireEvent.click(within(sheet).getByRole('button', { name: 'Apply with my current resume' }));
     await waitFor(() => expect(api.applyClick).toHaveBeenCalledWith('j1'));
-    expect(openSpy).toHaveBeenCalledWith('https://boards.example.com/acme/1', '_blank', 'noopener,noreferrer');
+    // The link the server answered with (a browser that hands back no tab handle gets it opened then).
+    await waitFor(() => expect(openSpy).toHaveBeenCalledWith('https://boards.example.com/acme/1', '_blank', 'noopener,noreferrer'));
     const undo = await screen.findByTestId('undo-bar');
     expect(undo).toHaveTextContent('Moved to Applications.');
     fireEvent.click(within(undo).getByRole('button', { name: "Undo · I didn't apply" }));

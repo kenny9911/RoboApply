@@ -2,10 +2,18 @@
 //
 // No I/O here: rows in, wire views out, so every honesty rule is unit-tested.
 //   - pay: only what the posting (or provider) states; never 0, never estimated;
-//   - sponsorship / requirement lines: only with the posting's own words (C18, H36);
+//   - sponsorship / requirement lines: only with the posting's own words (C18,
+//     H36). A provider's reading that the job sponsors is its own field and
+//     its own badge kind, named after the provider, never worded as the
+//     posting's statement; a provider's "does not sponsor" alone is nothing
+//     (feed contract `sponsorshipSignalOf`, JI-11);
 //   - badges: at most 3, from real fields; "Direct from employer" only when the
 //     job came from our recruiter bank, the bank verified the employer and it
-//     is not an agency (D3);
+//     is not an agency (D3). "New" is not one of them: it is the field `isNew`;
+//   - dates (JI-10): three separate facts. `postedAt` is the employer's date
+//     or null (a date we assigned never travels under that name),
+//     `firstSeenAt` is ours, `lastSeenAt` is when a source last confirmed the
+//     posting listed; `isNew` rests on `firstSeenAt` alone;
 //   - share: the public page only when the provider licence allows public
 //     display (`publicDisplay`), else the app link;
 //   - People: LinkedIn search links the user opens themselves; we fetch nothing;
@@ -17,10 +25,22 @@
 
 import type { ProductBrand } from '../../../platform/brand/registry.js';
 import { cnSalary } from '../../cn/jobs/contract.js';
-import { applyLinkOf, bankListable, hasPayFigure, salaryLineOf, sourceFactsOf, sourceKindOf, type FeedItem, type FitBadge, type SalaryLine } from '../../feed/contract.js';
+import {
+  applyLinkOf,
+  bankListable,
+  hasPayFigure,
+  isNewPosting,
+  salaryLineOf,
+  sourceFactsOf,
+  sourceKindOf,
+  sponsorshipSignalOf,
+  type FeedItem,
+  type FitBadge,
+  type SalaryLine,
+} from '../../feed/contract.js';
 import { toWireKind } from '../../match/contract.js';
 import type { Fit } from '../../match/index.js';
-import { displayPostedAt, payPlausible, statesAmount } from '../normalize/index.js';
+import { payPlausible, statesAmount } from '../normalize/index.js';
 import { bestTaxonomyMatch, taxonomyLabel } from '../taxonomy/index.js';
 import { findCity, resolveCountry } from '../geo/index.js';
 import {
@@ -30,6 +50,7 @@ import {
   type JobCampusInfo,
   type JobChecklist,
   type JobDetail,
+  type JobListing,
   type JobPay,
   type JobRequirementTag,
   type JobTrackerState,
@@ -65,6 +86,8 @@ export const JOB_ROW_SELECT = {
   skillsDetail: true,
   sponsorship: true,
   sponsorshipEvidence: true,
+  // 'posting_quote' or 'provider:<provider id>': whose word a stored sponsorship value is (JI-11).
+  sponsorshipSource: true,
   marketTags: true,
   fraudFlags: true,
   applyUrl: true,
@@ -96,6 +119,9 @@ export const JOB_ROW_SELECT = {
   descriptionPlain: true,
   salaryMonths: true,
   expiresAt: true,
+  // Read by the posting check only (jobs/liveness): the posting's id on its ATS, and a board row's own id.
+  atsPostingKey: true,
+  externalId: true,
 } as const;
 
 export interface JobRow {
@@ -124,6 +150,8 @@ export interface JobRow {
   skillsDetail: unknown;
   sponsorship: string | null;
   sponsorshipEvidence: string | null;
+  /** Whose word `sponsorship` is: 'posting_quote', 'provider:<id>', or null (absent on rows built by older callers and fixtures). */
+  sponsorshipSource?: string | null;
   marketTags: unknown;
   fraudFlags: unknown;
   applyUrl: string;
@@ -154,6 +182,9 @@ export interface JobRow {
   descriptionPlain?: string | null;
   salaryMonths?: number | null;
   expiresAt?: Date | null;
+  /** `<ats>:<tenant>:<postingId>` when one of the posting's links names a posting on an ATS (ingest writes it). */
+  atsPostingKey?: string | null;
+  externalId?: string | null;
 }
 
 /** Same market as the brand; a private (imported) job only for its owner. */
@@ -185,10 +216,12 @@ export function toPay(row: Pick<JobRow, 'salaryMin' | 'salaryMax' | 'salaryCurre
  * to show and the words carry an amount. "Competitive pay and benefits" and
  * 面議 are not pay a reader can use, so they render "Pay not listed".
  */
-export function toPayText(row: Pick<JobRow, 'salaryText'>, pay: JobPay | null): string | null {
+export function toPayText(row: Pick<JobRow, 'salaryText'> & Partial<Pick<JobRow, 'locationCountry' | 'market'>>, pay: JobPay | null): string | null {
   if (pay) return null;
   const text = clean(row.salaryText);
-  return text && statesAmount(text) ? text : null;
+  // The row's own country and market decide which clauses are a statutory line and no amount (Taiwan's threshold).
+  const market = row.market === 'cn' ? 'cn' : row.market === 'intl' ? 'intl' : undefined;
+  return text && statesAmount(text, { country: row.locationCountry ?? null, ...(market ? { market } : {}) }) ? text : null;
 }
 
 function clean(s: string | null | undefined): string | null {
@@ -210,11 +243,37 @@ export function toSections(row: Pick<JobRow, 'responsibilities' | 'qualification
   return out;
 }
 
-/** Sponsorship with the posting's quote; a status without a quote is "not stated" (C18). */
-export function toSponsorship(row: Pick<JobRow, 'sponsorship' | 'sponsorshipEvidence'>): JobDetail['sponsorship'] {
-  const quote = clean(row.sponsorshipEvidence);
-  if ((row.sponsorship === 'offered' || row.sponsorship === 'not_offered') && quote) return { status: row.sponsorship, quote };
+/**
+ * Who the view is built for. `providerReading`: a provider's reading of
+ * sponsorship is shown to this reader on this row (feed contract
+ * `sponsorshipLabelsShown`: an international row, and a person who needs
+ * sponsorship in the job's country). Absent → not shown: a caller that does
+ * not know the reader never prints one.
+ */
+export interface ViewReader {
+  providerReading?: boolean;
+}
+
+/**
+ * Sponsorship with the posting's quote; a status without a quote is "not
+ * stated" (C18). Where the posting states nothing and a provider's reading
+ * says the job sponsors, that reading rides beside it under the provider's
+ * name (`providerReading`), for a reader it is shown to (`ViewReader`); the
+ * status stays 'not_stated', because the posting did not state it. One rule
+ * with the feed card (`sponsorshipSignalOf`, `sponsorshipLabelsShown`).
+ */
+export function toSponsorship(row: Pick<JobRow, 'sponsorship' | 'sponsorshipEvidence' | 'sponsorshipSource'>, reader: ViewReader = {}): JobDetail['sponsorship'] {
+  const signal = sponsorshipSignalOf(row);
+  if (signal?.basis === 'quote') return { status: signal.status, quote: signal.quote };
+  if (signal?.basis === 'provider' && reader.providerReading === true) {
+    return { status: 'not_stated', quote: null, providerReading: { status: 'offered', provider: signal.provider } };
+  }
   return { status: 'not_stated', quote: null };
+}
+
+/** Does the row carry a provider's reading of sponsorship at all (whoever reads it)? The service asks who the reader is only then. */
+export function carriesProviderReading(row: Pick<JobRow, 'sponsorship' | 'sponsorshipEvidence' | 'sponsorshipSource'>): boolean {
+  return sponsorshipSignalOf(row)?.basis === 'provider';
 }
 
 function asArray(v: unknown): Array<Record<string, unknown>> {
@@ -295,24 +354,56 @@ export function toSalary(row: Pick<JobRow, 'market' | 'salaryMin' | 'salaryMax' 
   return hasPayFigure(pay) ? salaryLineOf(pay, pay?.text ?? payText, row.salaryMonths ?? null) : null;
 }
 
-/** Badge rules shared with the feed card (WP-33): ≤3, real fields only. */
+/**
+ * Badge rules shared with the feed card (WP-33): ≤3, real fields only. "New"
+ * is not a badge of this list: it is the field `isNew`, which rests on when
+ * we first saw the posting and never on its posted date. The posting's own
+ * quoted statement is a badge for every reader (as it always was on this
+ * page); a provider's reading only for a reader it is shown to (`ViewReader`:
+ * the card's rule, so the page and the card agree).
+ */
 export function toBadges(
-  row: Pick<JobRow, 'fromRecruiterBank' | 'employerVerified' | 'isAgency' | 'sponsorship' | 'sponsorshipEvidence' | 'postedAt' | 'postedAtEstimated'>,
-  now: Date,
+  row: Pick<JobRow, 'fromRecruiterBank' | 'employerVerified' | 'isAgency' | 'sponsorship' | 'sponsorshipEvidence' | 'sponsorshipSource'>,
+  _now?: Date,
+  reader: ViewReader = {},
 ): FeedItem['badges'] {
   const out: FeedItem['badges'] = [];
   if (row.fromRecruiterBank && row.employerVerified && row.isAgency !== true) out.push({ kind: 'direct_from_employer', label: 'direct_from_employer' });
-  const sp = toSponsorship(row);
-  if (sp.status === 'offered' && sp.quote) out.push({ kind: 'sponsorship', label: 'offered', quote: sp.quote });
-  if (row.postedAt && !row.postedAtEstimated && now.getTime() - row.postedAt.getTime() <= 3 * 86_400_000 && row.postedAt.getTime() <= now.getTime()) {
-    out.push({ kind: 'new', label: 'new' });
-  }
+  const signal = sponsorshipSignalOf(row);
+  if (signal?.basis === 'quote' && signal.status === 'offered') out.push({ kind: 'sponsorship', label: 'offered', quote: signal.quote });
+  // A provider's reading: its own kind, the provider named, no quote.
+  else if (signal?.basis === 'provider' && reader.providerReading === true) out.push({ kind: 'sponsorship_provider', label: 'sponsorship_provider', provider: signal.provider });
   return out.slice(0, 3);
+}
+
+const isoOf = (d: Date | null | undefined): string | null => (d ? new Date(d).toISOString() : null);
+
+/** The employer's own date on the wire: null when the stored date is one we assigned. */
+export function toPostedAt(row: Pick<JobRow, 'postedAt' | 'postedAtEstimated'>): string | null {
+  return row.postedAtEstimated ? null : isoOf(row.postedAt);
+}
+
+/** What the posting check found in this request, when it asked the ATS's posting API. */
+export interface ListingCheck {
+  checkedAt: Date;
+}
+
+/**
+ * `job.listing`: when and how the status was last confirmed. A job nobody
+ * lists (the user's own import) has neither. With the answer of this
+ * request's posting check: that moment, 'ats_api'. Otherwise our own records:
+ * the last sighting of an open job, the closing of a closed one.
+ */
+export function toListing(row: Pick<JobRow, 'visibility' | 'sourceBoard' | 'lastSeenAt' | 'closedAt' | 'archivedAt'>, check: ListingCheck | null = null): JobListing {
+  if (row.visibility !== 'public' || row.sourceBoard === 'user_import') return { checkedAt: null, via: null };
+  if (check) return { checkedAt: check.checkedAt.toISOString(), via: 'ats_api' };
+  const at = isClosed(row) ? (row.closedAt ?? row.archivedAt) : row.lastSeenAt;
+  return at ? { checkedAt: new Date(at).toISOString(), via: 'sync' } : { checkedAt: null, via: null };
 }
 
 const WORK_MODELS = new Set(['remote', 'hybrid', 'onsite']);
 
-export function toJobDetail(row: JobRow, now: Date, campus: JobCampusInfo | null = null): JobDetail {
+export function toJobDetail(row: JobRow, now: Date, campus: JobCampusInfo | null = null, check: ListingCheck | null = null, reader: ViewReader = {}): JobDetail {
   const pay = toPay(row);
   const payText = toPayText(row, pay);
   const summary = clean(row.summary);
@@ -330,23 +421,26 @@ export function toJobDetail(row: JobRow, now: Date, campus: JobCampusInfo | null
     summary: summary ? { text: summary, aiWritten: true } : null,
     sections: toSections(row),
     skills: toSkills(row.skillsDetail),
-    sponsorship: toSponsorship(row),
+    sponsorship: toSponsorship(row, reader),
     requirements: toRequirements(row.marketTags),
     // A recruiter-bank row whose bank has no posting page hands out no link at all (the stored one is "Page not found").
     applyUrl: bankListable(row) ? clean(row.applyUrl) : null,
     apply: applyOf(row),
-    // Never an estimated date that is not our first sight of the row, under "First seen" (displayPostedAt).
-    postedAt: displayPostedAt(row)?.toISOString() ?? null,
+    // Three date facts, each under its own name: the employer's date (never one we assigned), our first sight, the last sighting.
+    postedAt: toPostedAt(row),
     postedAtEstimated: row.postedAtEstimated,
-    lastSeenAt: row.lastSeenAt ? row.lastSeenAt.toISOString() : null,
+    firstSeenAt: isoOf(row.firstSeenAt),
+    lastSeenAt: isoOf(row.lastSeenAt),
+    isNew: isNewPosting(row.firstSeenAt, now),
     closedAt: (row.closedAt ?? row.archivedAt)?.toISOString() ?? null,
     status: isClosed(row) ? 'closed' : 'open',
+    listing: toListing(row, check),
     source: sourceOf(row),
     fromRecruiterBank: row.fromRecruiterBank,
     employerVerified: row.employerVerified,
     isAgency: row.isAgency === true,
     visibility: row.visibility === 'private' ? 'private' : 'public',
-    badges: toBadges(row, now),
+    badges: toBadges(row, now, reader),
     campus,
   };
 }
@@ -386,12 +480,24 @@ export function toFitBadge(fit: Fit | null | undefined): FitBadge | null {
   };
 }
 
-/** A similar job as a feed card; pay keeps the posting's own period (weekly too) and its words-only text. */
-export function toSimilarItem(row: JobRow, now: Date, fit: FitBadge | null, tracker: { status: string } | null): SimilarJobItem {
+/**
+ * A similar job as a feed card; pay keeps the posting's own period (weekly
+ * too) and its words-only text. `cardMeta` is the market card lines of a row
+ * that owes a credit line, for a caller that prints it (left off otherwise).
+ */
+export function toSimilarItem(
+  row: JobRow,
+  now: Date,
+  fit: FitBadge | null,
+  tracker: { status: string } | null,
+  cardMeta: Record<string, Record<string, unknown>> | null = null,
+  reader: ViewReader = {},
+): SimilarJobItem {
   const pay = toPay(row);
   const payText = toPayText(row, pay);
   const source = sourceOf(row);
   return {
+    ...(cardMeta && Object.keys(cardMeta).length ? { cardMeta } : {}),
     jobId: row.id,
     title: row.title,
     company: { id: row.companyId, name: row.companyName, logoUrl: row.companyLogoUrl },
@@ -402,14 +508,17 @@ export function toSimilarItem(row: JobRow, now: Date, fit: FitBadge | null, trac
     pay,
     payText,
     salary: toSalary(row, pay, payText),
-    postedAt: displayPostedAt(row)?.toISOString() ?? null,
-    lastSeenAt: row.lastSeenAt ? row.lastSeenAt.toISOString() : null,
+    postedAt: toPostedAt(row),
+    postedAtEstimated: row.postedAtEstimated,
+    firstSeenAt: isoOf(row.firstSeenAt),
+    lastSeenAt: isoOf(row.lastSeenAt),
+    isNew: isNewPosting(row.firstSeenAt, now),
     source: { name: source.name, kind: source.kind, original: source.original, url: source.url, lastVerifiedAt: source.lastVerifiedAt, ...(source.via ? { via: source.via } : {}) },
     apply: applyOf(row),
     fromRecruiterBank: row.fromRecruiterBank,
     employerVerified: row.employerVerified,
     isAgency: row.isAgency === true,
-    badges: toBadges(row, now),
+    badges: toBadges(row, now, reader),
     fit,
     tracker,
   };

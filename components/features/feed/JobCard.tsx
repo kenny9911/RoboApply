@@ -9,7 +9,7 @@
 //   "This is not your chance of getting hired." (under every score)
 //   one past-tense line about the work done (C38)
 //   logo · company · title (link) · location · work model · type · level · pay
-//   posted · last checked · source line · ≤3 badges · market slot
+//   posted (or first seen) · last checked · source line · New · ≤3 badges · market slot
 //   Save for later · Apply on company site · Tailor resume · Ask about this job · …
 //
 // GoApply: the market slot (JobMetaCn) prints the pay as the post states it,
@@ -20,7 +20,25 @@
 //
 // D1: "Apply on company site" opens the employer's page; the user submits
 // there. The job moves to Applied at once with an inline Undo (R-19).
+//
+// Where the tab goes is the server's answer to the click, never the link the
+// card was sent: the click first asks whether the posting is still listed
+// (MARKET_STRATEGY 1.5 "Closure"), and a posting that is gone answers 409
+// `job_closed`. So the card hands useJobActions no link: the hook opens an
+// empty tab inside the click (pop-up blockers allow that), points it at the
+// answered link, and closes it when the click is refused. A person is never
+// sent to a dead page; the card then says the job is no longer listed and
+// offers no apply button. In a browser with one window (WeChat's and other
+// apps' built-in browsers) no empty tab is opened; the page goes to the
+// answered link itself (cardModel `applyTabOpener`).
 // D3: unknown pay is "Pay not listed", unknown score "—", nothing invented.
+//
+// Dates (cardModel `cardDates`): "Posted {date}" only for the employer's own
+// date; a job whose posting states none says when we first saw it; "Last
+// checked" is when a source last confirmed it listed. "New" means first seen
+// by us since the last visit (the server's `isNew`): a posting an employer
+// published months ago and we read for the first time today is new, and its
+// card still shows its true posted date.
 
 import { useEffect, useId, useRef, useState, type MouseEvent } from 'react';
 import Link from 'next/link';
@@ -36,8 +54,9 @@ import { WhyThisJob } from '../compliance';
 import { useJobActions } from '../../../hooks/shared/useJobActions';
 import { useFlag } from '../../../lib/flags';
 import { track } from '../../../lib/analytics';
+import { apiErrorDetails } from '../../../lib/api/contracts/wire';
 import type { FeedItem } from '../../../lib/api/contracts/feed';
-import { cardBadges, companyInitial, itemExtras, payText, shortDate, sourceLine, type CardBadge } from './cardModel';
+import { applyTabOpener, cardBadges, cardDates, cardIsNew, companyInitial, itemExtras, payText, shortDate, sourceLine, type CardBadge } from './cardModel';
 import { NotInterestedSheet } from './NotInterestedSheet';
 import { ReportSheet } from './ReportSheet';
 import styles from './feed.module.css';
@@ -82,13 +101,15 @@ const CN_EMPLOYER_TAG_COPY = new Set(['soe', 'bianzhi', 'hukou', 'foreign']);
 function BadgeView({ badge, locale }: { badge: CardBadge; locale: string }) {
   const t = useTranslations('jobs.card.badge');
   const tCn = useTranslations('jobsCn.tags');
+  const tDetail = useTranslations('jobDetail.header.badge');
   switch (badge.kind) {
     case 'direct':
       return <span className={`${styles.badge} ${styles.badgeDirect}`}>{t('direct')}</span>;
     case 'agency':
       return <span className={styles.badge}>{t('agency')}</span>;
-    case 'new':
-      return <span className={styles.badge}>{t('new')}</span>;
+    case 'sponsorship_provider':
+      // The provider's reading, in the provider's name: the job page's own sentence, and never the quoted badge's.
+      return <span className={styles.badge}>{tDetail('sponsorship_provider', { provider: badge.provider })}</span>;
     case 'market':
       // GoApply employer tags have copy; an id without copy is never shown raw.
       if (!CN_EMPLOYER_TAG_COPY.has(badge.label)) return null;
@@ -113,17 +134,21 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
   const tOpt = useTranslations('filters.options');
   const locale = useLocale();
   const tCn = useTranslations('jobsCn');
+  const tBadge = useTranslations('jobs.card.badge');
+  const tClosed = useTranslations('jobDetail.closed');
   const copilotOn = useFlag('copilot');
   // The posting's own source and apply link (the contract's `source` / `apply`;
   // null where the server sent none, and the card then behaves as before).
   const listing = { source: listingSource(item), apply: listingApply(item) };
-  // With the link in hand the new tab opens inside the click itself.
-  const actions = useJobActions(item.jobId, { source: 'job_card', applyUrl: listing.apply.url });
+  // No link is handed over: the tab follows the server's answer to the click (see the header).
+  const actions = useJobActions(item.jobId, { source: 'job_card', opener: applyTabOpener });
   // GoApply: the button says where it leads (the employer's careers site, or the bank's page).
   const applyCopy = market === 'cn' ? cnApplyCopy(listing) : null;
   const status = item.tracker?.status ?? null;
   const [saved, setSaved] = useState(status ? SAVED_STATUSES.has(status) : false);
   const [appliedNote, setAppliedNote] = useState<'apply' | 'mark' | null>(null);
+  // The apply click found the posting gone (409 job_closed): the card says so and offers no apply button.
+  const [closed, setClosed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [sheet, setSheet] = useState<'hide' | 'report' | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -146,8 +171,11 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
     from: (amount) => t('payFrom', { amount }),
     upTo: (amount) => t('payUpTo', { amount }),
   });
-  const posted = shortDate(item.postedAt, locale);
-  const checked = shortDate(item.lastSeenAt, locale);
+  // Three date facts: the employer's posted date (or, without one, when we first saw the job) and the last check.
+  const dates = cardDates(item);
+  const lead = dates.lead ? shortDate(dates.lead.at, locale) : null;
+  const checked = dates.verified ? shortDate(dates.verified.at, locale) : null;
+  const isNew = cardIsNew(item);
   const alreadyApplied = status ? APPLIED_STATUSES.has(status) : false;
 
   // Close the … menu on Escape and on a click outside it.
@@ -200,6 +228,13 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
     if (op === 'save') setSaved(false);
     else if (op === 'unsave') setSaved(true);
     if (op === 'hide' || op === 'share' || op === null) return;
+    // The posting is gone: nothing moved to Applied and no tab went to the employer. Said on the card, in
+    // plain words, in place of "That didn't work. Try again." (trying again cannot help).
+    if (op === 'apply' && apiErrorDetails<{ code?: string }>(actions.error)?.code === 'job_closed') {
+      setAppliedNote(null);
+      setClosed(true);
+      return;
+    }
     toast({ message: t('actions.failed'), tone: 'warn' });
   }, [actions.error, t]);
 
@@ -362,8 +397,8 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
 
       {slotHasBasics ? null : (
         <div className={styles.meta} data-testid="card-meta">
-          {/* A date we assigned (first seen, or the day the user added the job) is not called the posting date. */}
-          <span>{posted ? (item.postedAtEstimated ? t('firstSeen', { date: posted }) : t('posted', { date: posted })) : t('postedUnknown')}</span>
+          {/* "Posted" only for the employer's own date; without one the card says when we first saw the job. */}
+          <span>{lead && dates.lead ? (dates.lead.kind === 'posted' ? t('posted', { date: lead }) : t('firstSeen', { date: lead })) : t('postedUnknown')}</span>
           {checked ? <span>{t('lastChecked', { date: checked })}</span> : null}
           {source ? (
             <span data-testid="source-line">
@@ -377,14 +412,24 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
         </div>
       )}
 
-      {badges.length > 0 ? (
-        <ul className={styles.badges} aria-label={t('badges')}>
-          {badges.map((b) => (
-            <li key={b.kind === 'market' ? `market:${b.label}` : b.kind}>
-              <BadgeView badge={b} locale={locale} />
-            </li>
-          ))}
-        </ul>
+      {isNew || badges.length > 0 ? (
+        <div className={styles.badges}>
+          {/* "New" is ours (first seen since the last visit), not a fact from the post: it sits beside that list, not in it. */}
+          {isNew ? (
+            <span className={styles.badge} data-testid="job-card-new">
+              {tBadge('new')}
+            </span>
+          ) : null}
+          {badges.length > 0 ? (
+            <ul className={styles.badges} aria-label={t('badges')}>
+              {badges.map((b) => (
+                <li key={b.kind === 'market' ? `market:${b.label}` : b.kind}>
+                  <BadgeView badge={b} locale={locale} />
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
       ) : null}
 
       <MarketJobMeta jobId={item.jobId} meta={withListing(withOwnImport(extras.cardMeta, source?.key === 'user_import'), listing)} variant="card" />
@@ -394,6 +439,12 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
           <summary>{t('whyThisJob')}</summary>
           <WhyThisJob explanation={extras.explanation} />
         </details>
+      ) : null}
+
+      {closed && !showApplied ? (
+        <p className={styles.inlineStatus} role="status" data-testid="job-card-closed">
+          <span>{tClosed('title')}</span>
+        </p>
       ) : null}
 
       {showApplied ? (
@@ -409,7 +460,7 @@ export function JobCard({ item, position, market, active = false, onOpen, onHidd
         <Btn className={styles.actionBtn} onClick={() => void toggleSave()} aria-pressed={saved} disabled={actions.pending === 'save' || actions.pending === 'unsave'}>
           {saved ? t('actions.saved') : t('actions.save')}
         </Btn>
-        {!showApplied && !alreadyApplied ? (
+        {!showApplied && !alreadyApplied && !closed ? (
           <Btn variant="primary" className={styles.actionBtn} onClick={() => void apply()} disabled={actions.pending === 'apply'}>
             {actions.pending === 'apply' ? t('actions.applyPending') : applyCopy ? tCn(applyCopy.labelKey, { name: applyCopy.name }) : t('actions.apply')}
           </Btn>

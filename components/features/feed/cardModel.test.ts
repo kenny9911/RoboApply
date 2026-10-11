@@ -1,8 +1,11 @@
 // WP-33 — pure card rules (PRODUCT F-FEED-05/07, F-SAL-01; D3).
+// MKT-5C (JI-10, JI-11): the date line from three separate facts, "New" from
+// `isNew` only, a provider's sponsorship reading as its own badge, and how
+// the apply tab is opened (never an empty tab in a browser with one window).
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { cardBadges, companyInitial, isDirectFromEmployer, itemExtras, payText, shortDate, sourceLine, MAX_BADGES } from './cardModel';
+import { cardBadges, cardDates, cardIsNew, companyInitial, createApplyTabOpener, isDirectFromEmployer, isOneWindowBrowser, itemExtras, payText, shortDate, sourceLine, MAX_BADGES } from './cardModel';
 import { feedItem } from './feed.testkit';
 import type { FeedItem } from '../../../lib/api/contracts/feed';
 
@@ -94,6 +97,7 @@ describe('badges', () => {
       employerVerified: true,
       isAgency: false,
       badges: [
+        // A reserved entry of the list: ignored ("New" is the field `isNew`).
         { kind: 'new', label: 'New' },
         { kind: 'market_tag', label: 'SOE' },
         { kind: 'market_tag', label: 'SOE' },
@@ -108,6 +112,88 @@ describe('badges', () => {
 
   it('marks agency posts', () => {
     expect(cardBadges(feedItem(1, { isAgency: true }))).toEqual([{ kind: 'agency' }]);
+  });
+
+  describe('a provider\'s sponsorship reading (JI-11)', () => {
+    const reading = (provider?: string) => ({ kind: 'sponsorship_provider', label: 'sponsorship_provider', ...(provider !== undefined ? { provider } : {}) }) as FeedItem['badges'][number];
+
+    it('is its own badge that names the provider: no quote, and never the quoted badge', () => {
+      const badges = cardBadges(feedItem(1, { badges: [reading(' Active Jobs DB ')] }));
+      expect(badges).toEqual([{ kind: 'sponsorship_provider', provider: 'Active Jobs DB' }]);
+      expect(badges.some((b) => b.kind === 'sponsorship')).toBe(false);
+    });
+
+    it('without a provider name it is dropped: an unnamed reading is nobody\'s word', () => {
+      expect(cardBadges(feedItem(1, { badges: [reading()] }))).toEqual([]);
+      expect(cardBadges(feedItem(1, { badges: [reading('   ')] }))).toEqual([]);
+    });
+
+    it('a quote on it is ignored: only the posting\'s own badge carries a quote', () => {
+      const odd = { ...reading('Active Jobs DB'), quote: 'We sponsor H-1B visas.' } as FeedItem['badges'][number];
+      expect(cardBadges(feedItem(1, { badges: [odd] }))).toEqual([{ kind: 'sponsorship_provider', provider: 'Active Jobs DB' }]);
+    });
+
+    it('it takes the sponsorship place in the fixed order and counts toward the three', () => {
+      const item = feedItem(1, { fromRecruiterBank: true, employerVerified: true, badges: [{ kind: 'market_tag', label: 'soe', quote: 'q' }, reading('Active Jobs DB'), { kind: 'market_tag', label: 'hukou', quote: 'q' }] });
+      expect(cardBadges(item).map((b) => b.kind)).toEqual(['direct', 'sponsorship_provider', 'market']);
+    });
+  });
+});
+
+describe('"New" comes from `isNew` only (JI-10)', () => {
+  it('true only when the server says the posting is new to this viewer', () => {
+    expect(cardIsNew(feedItem(1, { isNew: true }))).toBe(true);
+    expect(cardIsNew(feedItem(1, { isNew: false }))).toBe(false);
+    expect(cardIsNew(feedItem(1))).toBe(false);
+  });
+
+  it('never from the posted date, and never from a badge of the list', () => {
+    const postedNow = feedItem(1, { postedAt: new Date().toISOString(), isNew: false, badges: [{ kind: 'new', label: 'New' }] });
+    expect(cardIsNew(postedNow)).toBe(false);
+    // The reserved list entry is ignored: it is not one of the card's fact badges either.
+    expect(cardBadges(postedNow)).toEqual([]);
+  });
+
+  it('ACCEPT: a posting published 300 days ago and first seen an hour ago shows its true posted date and is new', () => {
+    const posted = new Date(Date.now() - 300 * 86_400_000).toISOString();
+    const item = feedItem(1, { postedAt: posted, postedAtEstimated: false, firstSeenAt: new Date(Date.now() - 3_600_000).toISOString(), isNew: true });
+    expect(cardDates(item).lead).toEqual({ kind: 'posted', at: posted });
+    expect(cardIsNew(item)).toBe(true);
+    // "New" is beside the fact badges, not one of them: a card with three facts keeps all three.
+    const full = feedItem(1, { isNew: true, fromRecruiterBank: true, employerVerified: true, badges: [sponsorship('We sponsor.', 'offered'), { kind: 'market_tag', label: 'soe', quote: 'q' }] });
+    expect(cardBadges(full)).toHaveLength(MAX_BADGES);
+    expect(cardIsNew(full)).toBe(true);
+  });
+});
+
+describe('the date line: three separate facts (JI-10)', () => {
+  const SEEN = '2026-10-09T03:00:00.000Z';
+  const CHECKED = '2026-10-12T05:00:00.000Z';
+
+  it('a real posted date leads as "posted"; last verified is its own fact', () => {
+    expect(cardDates(feedItem(1, { postedAt: '2026-06-10T00:00:00.000Z', postedAtEstimated: false, firstSeenAt: SEEN, lastSeenAt: CHECKED }))).toEqual({
+      lead: { kind: 'posted', at: '2026-06-10T00:00:00.000Z' },
+      verified: { kind: 'last_verified', at: CHECKED },
+    });
+  });
+
+  it('ACCEPT: an estimated date (an open-data row) is never "posted": the card says when we first saw it and when it was last verified', () => {
+    // As the server sends it: no posting date at all, our two facts in their own fields.
+    const wire = cardDates(feedItem(1, { postedAt: null, postedAtEstimated: true, firstSeenAt: SEEN, lastSeenAt: CHECKED }));
+    expect(wire).toEqual({ lead: { kind: 'first_seen', at: SEEN }, verified: { kind: 'last_verified', at: CHECKED } });
+    // Even if a date still arrives under `postedAt` with the flag (an older server), it is not a posted date.
+    const legacy = cardDates(feedItem(1, { postedAt: '2026-06-10T00:00:00.000Z', postedAtEstimated: true, lastSeenAt: CHECKED }));
+    expect(legacy.lead).toEqual({ kind: 'first_seen', at: '2026-06-10T00:00:00.000Z' });
+    // With our own first-seen date on the wire, that is the one shown, never the estimate.
+    const both = cardDates(feedItem(1, { postedAt: '2026-06-10T00:00:00.000Z', postedAtEstimated: true, firstSeenAt: SEEN, lastSeenAt: CHECKED }));
+    expect(both.lead).toEqual({ kind: 'first_seen', at: SEEN });
+    for (const d of [wire, legacy, both]) expect(d.lead?.kind).not.toBe('posted');
+  });
+
+  it('a posting with no date at all: first seen when we know it, otherwise nothing leads ("Posting date not listed"); last verified stands', () => {
+    expect(cardDates(feedItem(1, { postedAt: null, firstSeenAt: SEEN, lastSeenAt: CHECKED }))).toEqual({ lead: { kind: 'first_seen', at: SEEN }, verified: { kind: 'last_verified', at: CHECKED } });
+    expect(cardDates(feedItem(1, { postedAt: null, lastSeenAt: CHECKED }))).toEqual({ lead: null, verified: { kind: 'last_verified', at: CHECKED } });
+    expect(cardDates(feedItem(1, { postedAt: 'not a date', firstSeenAt: 'nope', lastSeenAt: null }))).toEqual({ lead: null, verified: null });
   });
 });
 
@@ -162,5 +248,54 @@ describe('source line, dates, extras', () => {
     expect(companyInitial('acme')).toBe('A');
     expect(companyInitial('  ')).toBe('·');
     expect(companyInitial('字节跳动')).toBe('字');
+  });
+});
+
+describe('the apply tab (MKT-5C; the card and the job page share it)', () => {
+  // User agents of the shapes the browsers send; nothing here identifies a person or a device.
+  const UA = {
+    chromeDesktop: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+    safariIphone: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+    chromeIphone: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/140.0.0.0 Mobile/15E148 Safari/604.1',
+    chromeAndroid: 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36',
+    wechatIphone: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.50(0x18003237) NetType/WIFI Language/zh_CN',
+    wechatAndroid: 'Mozilla/5.0 (Linux; Android 15; Pixel 9 Build/AP3A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.0.0 Mobile Safari/537.36 XWEB/1300001 MMWEBSDK/20240404 MicroMessenger/8.0.50 WeChat/arm64',
+    linkedinIphone: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [LinkedInApp]/9.30.100',
+    androidWebView: 'Mozilla/5.0 (Linux; Android 15; Pixel 9 Build/AP3A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.0.0 Mobile Safari/537.36',
+    iosWebView: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+  };
+
+  it('a browser with tabs, and a browser with one window', () => {
+    for (const ua of [UA.chromeDesktop, UA.safariIphone, UA.chromeIphone, UA.chromeAndroid, '', null, undefined]) expect(isOneWindowBrowser(ua)).toBe(false);
+    for (const ua of [UA.wechatIphone, UA.wechatAndroid, UA.linkedinIphone, UA.androidWebView, UA.iosWebView]) expect(isOneWindowBrowser(ua)).toBe(true);
+  });
+
+  const browser = (userAgent: string) => {
+    const tab = { location: { href: '' } } as unknown as Window;
+    const open = vi.fn((_url: string, _target: string, _features?: string) => tab);
+    const go = vi.fn();
+    return { opener: createApplyTabOpener({ userAgent: () => userAgent, open, go }), open, go, tab };
+  };
+
+  it('with tabs: an empty tab inside the click, and a link opened without a handle on our page', () => {
+    const b = browser(UA.chromeDesktop);
+    expect(b.opener.blank()).toBe(b.tab);
+    expect(b.open.mock.calls).toEqual([['about:blank', '_blank']]);
+    b.opener.open('https://boards.example.com/acme/1');
+    expect(b.open).toHaveBeenLastCalledWith('https://boards.example.com/acme/1', '_blank', 'noopener,noreferrer');
+    expect(b.go).not.toHaveBeenCalled();
+  });
+
+  it('with one window: no empty tab is ever opened (it would replace the page); the page goes to the answered link itself', () => {
+    for (const ua of [UA.wechatIphone, UA.wechatAndroid, UA.androidWebView, UA.iosWebView]) {
+      const b = browser(ua);
+      // Inside the click: nothing is opened, and the hook is told there is no tab to point.
+      expect(b.opener.blank()).toBeNull();
+      expect(b.open).not.toHaveBeenCalled();
+      // When the server has answered with the link: the page goes there.
+      b.opener.open('https://careers.example-tech.cn/jobs/1');
+      expect(b.go.mock.calls).toEqual([['https://careers.example-tech.cn/jobs/1']]);
+      expect(b.open).not.toHaveBeenCalled();
+    }
   });
 });

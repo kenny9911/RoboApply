@@ -4,6 +4,10 @@
 // idempotent, undoable), save (+ growth checklist), share (public only with
 // publicDisplay), similar jobs (hidden/flagged excluded, best fit first),
 // People search links, GoApply campus window, company news (dark), routes.
+// MKT-5C (JI-10, JI-11): opening a job confirms its posting is still listed
+// (a faked check: closed, open, cannot tell, never for a private import or a
+// bank row), the apply click refuses a posting that is gone, three date facts
+// and `isNew` on the wire, the provider-reading sponsorship line.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../lib/prisma.js', () => ({ default: {}, prisma: {} }));
@@ -21,10 +25,11 @@ import { LOGISTICS_BY_FILTERS_REF } from '../../match/preScore.js';
 import { fitBadge } from '../../feed/ranking.js';
 import { REQUIREMENT_TAGS } from '../enrich/reconcile.js';
 import { cardMeta } from '../marketHooks.js';
+import { confirmListing, resetLivenessForTests, type LiveResult, type LivenessDb, type LivenessFetch, type LivenessJob } from '../liveness/index.js';
 import { JOB_REQUIREMENT_TAGS, type JobDetailResponse } from './contract.js';
 import { createJobDetailRouter } from './routes.js';
 import { explainNow, practicedForJobFrom, similarFromFeed } from './defaultService.js';
-import { SIMILAR_LIMIT, SIMILAR_SOURCE_LIMIT, createJobDetailService, trackerEntryLockKey, type JobDetailDb, type JobDetailServiceDeps } from './service.js';
+import { LISTING_WAIT_MS, SIMILAR_LIMIT, SIMILAR_SOURCE_LIMIT, createJobDetailService, trackerEntryLockKey, type JobDetailDb, type JobDetailServiceDeps } from './service.js';
 import { NEWS_CACHE_MAX, clearNewsCache, newsCacheSize, searchCompanyNews, toNewsItems } from './newsSearch.js';
 import {
   classYearsOf,
@@ -41,7 +46,10 @@ import {
   toJobDetail,
   toSections,
   toFitBadge,
+  toListing,
+  toPostedAt,
   toSponsorship,
+  JOB_ROW_SELECT,
   type JobRow,
 } from './view.js';
 
@@ -224,6 +232,127 @@ describe('view rules (D3)', () => {
     expect(toSponsorship({ sponsorship: null, sponsorshipEvidence: 'x' })).toEqual({ status: 'not_stated', quote: null });
   });
 
+  describe('JI-11: the job page\'s sponsorship line follows the card\'s rule', () => {
+    const FEED = 'provider:activejobs_feed';
+
+    it('(a) the posting\'s quote: the status with its quote, and no provider reading beside it', () => {
+      expect(toSponsorship({ sponsorship: 'offered', sponsorshipEvidence: 'We sponsor.', sponsorshipSource: 'posting_quote' })).toEqual({ status: 'offered', quote: 'We sponsor.' });
+      // A quoted row stays quoted even when a provider also flagged it.
+      expect(toSponsorship({ sponsorship: 'offered', sponsorshipEvidence: 'We sponsor.', sponsorshipSource: FEED })).toEqual({ status: 'offered', quote: 'We sponsor.' });
+      expect(toSponsorship({ sponsorship: 'not_offered', sponsorshipEvidence: 'We cannot sponsor visas.', sponsorshipSource: null })).toEqual({ status: 'not_offered', quote: 'We cannot sponsor visas.' });
+    });
+
+    const SHOWN = { providerReading: true };
+
+    it('(b) only the provider\'s flag: the posting states nothing, and the reading is carried under the provider\'s name, for a reader it is shown to', () => {
+      const row = { sponsorship: 'offered', sponsorshipEvidence: null, sponsorshipSource: FEED };
+      expect(toSponsorship(row, SHOWN)).toEqual({
+        status: 'not_stated',
+        quote: null,
+        providerReading: { status: 'offered', provider: 'Active Jobs DB' },
+      });
+      const badges = toBadges({ fromRecruiterBank: false, employerVerified: false, isAgency: null, ...row }, NOW, SHOWN);
+      expect(badges).toEqual([{ kind: 'sponsorship_provider', label: 'sponsorship_provider', provider: 'Active Jobs DB' }]);
+      expect(badges[0]).not.toHaveProperty('quote');
+      // A caller that does not say who reads (or says the reading is not for this reader) prints none.
+      for (const reader of [undefined, {}, { providerReading: false }]) {
+        expect(toSponsorship(row, reader)).toEqual({ status: 'not_stated', quote: null });
+        expect(toBadges({ fromRecruiterBank: false, employerVerified: false, isAgency: null, ...row }, NOW, reader)).toEqual([]);
+      }
+      // The posting's own quoted statement does not depend on the reader.
+      const quoted = { sponsorship: 'offered', sponsorshipEvidence: 'We sponsor.', sponsorshipSource: 'posting_quote' };
+      expect(toBadges({ fromRecruiterBank: false, employerVerified: false, isAgency: null, ...quoted })).toEqual([{ kind: 'sponsorship', label: 'offered', quote: 'We sponsor.' }]);
+    });
+
+    it('(c) a provider\'s "not offered" alone, and (d) anything else: not stated, no reading, no badge', () => {
+      for (const row of [
+        { sponsorship: 'not_offered', sponsorshipEvidence: null, sponsorshipSource: FEED },
+        { sponsorship: 'offered', sponsorshipEvidence: null, sponsorshipSource: null },
+        { sponsorship: 'offered', sponsorshipEvidence: null },
+        { sponsorship: 'offered', sponsorshipEvidence: null, sponsorshipSource: 'provider:unknown' },
+        { sponsorship: 'offered', sponsorshipEvidence: '  ', sponsorshipSource: 'posting_quote' },
+        { sponsorship: null, sponsorshipEvidence: null, sponsorshipSource: FEED },
+      ]) {
+        expect(toSponsorship(row, SHOWN)).toEqual({ status: 'not_stated', quote: null });
+        expect(toBadges({ fromRecruiterBank: false, employerVerified: false, isAgency: null, ...row }, NOW, SHOWN)).toEqual([]);
+      }
+    });
+
+    const NEEDS = { needsSponsorship: true, workAuth: [] };
+    const reading = (over: Record<string, unknown> = {}) => job({ sponsorship: 'offered', sponsorshipEvidence: null, sponsorshipSource: FEED, ...over });
+    const NO_READING = { status: 'not_stated', quote: null };
+    const sponsorshipBadges = (badges: Array<{ kind: string }>) => badges.filter((b) => /sponsorship/.test(b.kind));
+
+    it('ACCEPT: the page shows a provider\'s reading by the card\'s rule: to a person who needs sponsorship in the job\'s country, and to nobody else', async () => {
+      // Needs sponsorship (the search-profile answer): shown.
+      const yes = await setup({ jobs: [reading()], deps: { sponsorshipReader: async () => NEEDS } }).service.get('u1', 'j1');
+      expect(yes.job.sponsorship).toEqual({ ...NO_READING, providerReading: { status: 'offered', provider: 'Active Jobs DB' } });
+      expect(yes.job.badges).toEqual([{ kind: 'sponsorship_provider', label: 'sponsorship_provider', provider: 'Active Jobs DB' }]);
+      // Does not need it, said nothing, has no profile, the answer cannot be read, or the service has no such seam: not shown.
+      for (const sponsorshipReader of [
+        async () => ({ needsSponsorship: false, workAuth: [] }),
+        async () => ({ needsSponsorship: null, workAuth: [] }),
+        async () => null,
+        async () => Promise.reject(new Error('profile down')),
+        undefined,
+      ]) {
+        const no = await setup({ jobs: [reading()], deps: { sponsorshipReader } }).service.get('u1', 'j1');
+        expect(no.job.sponsorship).toEqual(NO_READING);
+        expect(sponsorshipBadges(no.job.badges)).toEqual([]);
+      }
+      // The per-country answer wins over the search-profile answer, as on the card (the job is in the US).
+      const authorised = await setup({ jobs: [reading()], deps: { sponsorshipReader: async () => ({ needsSponsorship: true, workAuth: [{ country: 'US', sponsorship: 'no' }] }) } }).service.get('u1', 'j1');
+      expect(authorised.job.sponsorship).toEqual(NO_READING);
+      const later = await setup({ jobs: [reading()], deps: { sponsorshipReader: async () => ({ needsSponsorship: false, workAuth: [{ country: 'US', sponsorship: 'later' }] }) } }).service.get('u1', 'j1');
+      expect(later.job.sponsorship.providerReading).toEqual({ status: 'offered', provider: 'Active Jobs DB' });
+    });
+
+    it('GoApply shows none: a mainland row that carries a provider\'s flag has no reading and no badge, and nobody is asked', async () => {
+      const sponsorshipReader = vi.fn(async () => NEEDS);
+      const { service } = setup({ jobs: [reading({ market: 'cn', locationCountry: 'CN' })], brand: cn, deps: { sponsorshipReader } });
+      const res = await service.get('u1', 'j1');
+      expect(res.job.sponsorship).toEqual(NO_READING);
+      expect(sponsorshipBadges(res.job.badges)).toEqual([]);
+      expect(sponsorshipReader).not.toHaveBeenCalled();
+    });
+
+    it('the reader is asked only for a job that carries a provider\'s reading; the posting\'s own quote is shown to everyone', async () => {
+      const sponsorshipReader = vi.fn(async () => ({ needsSponsorship: false, workAuth: [] }));
+      // The default row holds the posting's quote.
+      const quoted = await setup({ deps: { sponsorshipReader } }).service.get('u1', 'j1');
+      expect(quoted.job.sponsorship).toEqual({ status: 'offered', quote: 'We sponsor H-1B visas.' });
+      expect(quoted.job.badges).toContainEqual({ kind: 'sponsorship', label: 'offered', quote: 'We sponsor H-1B visas.' });
+      await setup({ jobs: [job({ sponsorship: null, sponsorshipEvidence: null, sponsorshipSource: null })], deps: { sponsorshipReader } }).service.get('u1', 'j1');
+      expect(sponsorshipReader).not.toHaveBeenCalled();
+      await setup({ jobs: [reading()], deps: { sponsorshipReader } }).service.get('u1', 'j1');
+      expect(sponsorshipReader).toHaveBeenCalledTimes(1);
+      expect(sponsorshipReader).toHaveBeenCalledWith('u1');
+    });
+
+    it('Similar jobs follow the same rule: the reading badge only for a reader who needs sponsorship', async () => {
+      const jobs = [job(), reading({ id: 'j2', externalId: 'x2' }), job({ id: 'j3', externalId: 'x3' })];
+      const badgesOf = async (sponsorshipReader?: () => Promise<{ needsSponsorship: boolean | null; workAuth: [] } | null>) => {
+        const res = await setup({ jobs, deps: { sponsorshipReader } }).service.similar('u1', 'j1');
+        return res.items.find((i) => i.jobId === 'j2')!.badges;
+      };
+      expect(await badgesOf(async () => NEEDS)).toEqual([{ kind: 'sponsorship_provider', label: 'sponsorship_provider', provider: 'Active Jobs DB' }]);
+      expect(await badgesOf(async () => ({ needsSponsorship: false, workAuth: [] }))).toEqual([]);
+      expect(await badgesOf()).toEqual([]);
+    });
+
+    it('the page reads the column; a company\'s history is no input', async () => {
+      expect(JOB_ROW_SELECT).toMatchObject({ sponsorship: true, sponsorshipEvidence: true, sponsorshipSource: true });
+      // A job with no word on sponsorship at a company whose profile holds sponsorship facts: still nothing on the job.
+      const withHistory = setup({
+        jobs: [job({ sponsorship: null, sponsorshipEvidence: null, sponsorshipSource: null })],
+        deps: { companyProfile: async () => ({ ...PROFILE, facts: { ...PROFILE.facts, h1b: { value: '420 approvals in 2025', source: 'uscis', asOf: '2026-10-01T00:00:00.000Z' } } }) as CompanyProfile },
+      });
+      const plain = await withHistory.service.get('u1', 'j1');
+      expect(plain.job.sponsorship).toEqual({ status: 'not_stated', quote: null });
+      expect(plain.job.badges.filter((b) => /sponsorship/.test(b.kind))).toEqual([]);
+    });
+  });
+
   it('requirement lines carry their quote; unknown tags and empty quotes are dropped', () => {
     expect(
       toRequirements([
@@ -240,13 +369,13 @@ describe('view rules (D3)', () => {
     expect([...JOB_REQUIREMENT_TAGS]).toEqual([...REQUIREMENT_TAGS]);
   });
 
-  it('"Direct from employer" only for verified, non-agency recruiter-bank jobs; at most 3 badges', () => {
+  it('"Direct from employer" only for verified, non-agency recruiter-bank jobs; at most 3 badges; "New" is never one of them', () => {
     const row = { fromRecruiterBank: true, employerVerified: true, isAgency: false, sponsorship: 'offered', sponsorshipEvidence: 'We sponsor.', postedAt: new Date(NOW.getTime() - DAY), postedAtEstimated: false };
-    expect(toBadges(row, NOW).map((b) => b.kind)).toEqual(['direct_from_employer', 'sponsorship', 'new']);
+    // Posted yesterday: still no "new" badge (the field `isNew` says so, from first seen).
+    expect(toBadges(row, NOW).map((b) => b.kind)).toEqual(['direct_from_employer', 'sponsorship']);
     expect(toBadges({ ...row, employerVerified: false }, NOW).map((b) => b.kind)).not.toContain('direct_from_employer');
     expect(toBadges({ ...row, isAgency: true }, NOW).map((b) => b.kind)).not.toContain('direct_from_employer');
     expect(toBadges({ ...row, fromRecruiterBank: false }, NOW).map((b) => b.kind)).not.toContain('direct_from_employer');
-    expect(toBadges({ ...row, postedAtEstimated: true }, NOW).map((b) => b.kind)).not.toContain('new');
     expect(toBadges(row, NOW).find((b) => b.kind === 'sponsorship')?.quote).toBe('We sponsor.');
   });
 
@@ -912,26 +1041,53 @@ describe('save, share, similar, company news', () => {
     expect(items.find((i) => i.jobId === 'jt')).toMatchObject({ pay: null, payText: '月薪四萬元以上' });
   });
 
-  it('a 台灣就業通 row is not labelled "First seen" with the dataset\'s update date: the job page and similar jobs get no posting date (MARKET_STRATEGY 1.5)', async () => {
+  it('three date facts (MARKET_STRATEGY 1.5): a date we assigned is never sent as the posting date; first seen and last verified have their own fields', async () => {
     const firstSeenAt = new Date(NOW.getTime() - 2 * 3_600_000);
+    const lastSeenAt = new Date(NOW.getTime() - 3_600_000);
     const { service } = setup({
       jobs: [
-        job(),
+        job({ firstSeenAt: new Date(NOW.getTime() - 5 * DAY) }),
         // TRANDATE four months before our first sight, stored as an estimated postedAt.
-        job({ id: 'tw', sourceBoard: 'tw_open_data', postedAt: new Date(NOW.getTime() - 124 * DAY), postedAtEstimated: true, firstSeenAt, lastSeenAt: firstSeenAt }),
-        // An undated row of another source: the estimate is our first sight.
-        job({ id: 'und', postedAt: firstSeenAt, postedAtEstimated: true, firstSeenAt, lastSeenAt: firstSeenAt }),
+        job({ id: 'tw', sourceBoard: 'tw_open_data', postedAt: new Date(NOW.getTime() - 124 * DAY), postedAtEstimated: true, firstSeenAt, lastSeenAt }),
+        // An undated row of another source: the estimate is our first sight, and still no posting date.
+        job({ id: 'und', postedAt: firstSeenAt, postedAtEstimated: true, firstSeenAt, lastSeenAt }),
       ],
     });
-    expect((await service.get('u1', 'tw')).job).toMatchObject({ postedAt: null, postedAtEstimated: true, lastSeenAt: firstSeenAt.toISOString() });
-    expect((await service.get('u1', 'und')).job).toMatchObject({ postedAt: firstSeenAt.toISOString(), postedAtEstimated: true });
-    const items = (await service.similar('u1', 'j1')).items;
-    expect(items.find((i) => i.jobId === 'und')).toMatchObject({ postedAt: firstSeenAt.toISOString() });
-    // The same rule on a similar-jobs card (an estimated date far from our first sight, whatever the source).
-    expect(toSimilarItem({ ...(job({ id: 'far', postedAt: new Date(NOW.getTime() - 124 * DAY), postedAtEstimated: true, firstSeenAt, lastSeenAt: firstSeenAt }) as unknown as JobRow) }, NOW, null, null)).toMatchObject({
-      postedAt: null,
-      lastSeenAt: firstSeenAt.toISOString(),
+    const tw = (await service.get('u1', 'tw')).job;
+    expect(tw).toMatchObject({ postedAt: null, postedAtEstimated: true, firstSeenAt: firstSeenAt.toISOString(), lastSeenAt: lastSeenAt.toISOString(), isNew: true });
+    expect(JSON.stringify({ postedAt: tw.postedAt, firstSeenAt: tw.firstSeenAt, lastSeenAt: tw.lastSeenAt })).not.toContain(new Date(NOW.getTime() - 124 * DAY).toISOString());
+    expect((await service.get('u1', 'und')).job).toMatchObject({ postedAt: null, postedAtEstimated: true, firstSeenAt: firstSeenAt.toISOString() });
+    // A stated posting date travels as it is, beside the other two.
+    expect((await service.get('u1', 'j1')).job).toMatchObject({
+      postedAt: new Date(NOW.getTime() - DAY).toISOString(),
+      postedAtEstimated: false,
+      firstSeenAt: new Date(NOW.getTime() - 5 * DAY).toISOString(),
+      lastSeenAt: NOW.toISOString(),
+      // Posted yesterday, first seen five days ago: not new. "New" never follows the posted date.
+      isNew: false,
     });
+    const items = (await service.similar('u1', 'j1')).items;
+    expect(items.find((i) => i.jobId === 'und')).toMatchObject({ postedAt: null, postedAtEstimated: true, firstSeenAt: firstSeenAt.toISOString(), isNew: true });
+    // The same rule on a similar-jobs card.
+    expect(toSimilarItem({ ...(job({ id: 'far', postedAt: new Date(NOW.getTime() - 124 * DAY), postedAtEstimated: true, firstSeenAt, lastSeenAt }) as unknown as JobRow) }, NOW, null, null)).toMatchObject({
+      postedAt: null,
+      firstSeenAt: firstSeenAt.toISOString(),
+      lastSeenAt: lastSeenAt.toISOString(),
+    });
+    expect(toPostedAt({ postedAt: NOW, postedAtEstimated: true })).toBeNull();
+    expect(toPostedAt({ postedAt: NOW, postedAtEstimated: false })).toBe(NOW.toISOString());
+    expect(toPostedAt({ postedAt: null, postedAtEstimated: false })).toBeNull();
+  });
+
+  it('ACCEPT: a board posting published 300 days ago and first seen an hour ago keeps its posted date and is new on the job page', async () => {
+    const posted = new Date(NOW.getTime() - 300 * DAY);
+    const { service } = setup({ jobs: [job({ sourceBoard: 'greenhouse', postedAt: posted, postedAtEstimated: false, firstSeenAt: new Date(NOW.getTime() - 3_600_000) })] });
+    const res = await service.get('u1', 'j1');
+    expect(res.job).toMatchObject({ postedAt: posted.toISOString(), isNew: true });
+    expect(res.job.badges.some((b) => b.kind === 'new')).toBe(false);
+    // First seen 49 hours ago is past the window, whatever the posted date.
+    const stale = setup({ jobs: [job({ postedAt: NOW, firstSeenAt: new Date(NOW.getTime() - 49 * 3_600_000) })] });
+    expect((await stale.service.get('u1', 'j1')).job.isNew).toBe(false);
   });
 
   it('similar jobs never recommend a row whose credit line the card cannot print yet (a 台灣就業通 open-data row); its own page still opens (MARKET_STRATEGY 1.3)', async () => {
@@ -943,6 +1099,29 @@ describe('save, share, similar, company news', () => {
     expect(ids).not.toContain('tw');
     expect(ids).not.toContain('gov');
     expect((await service.get('u1', 'tw')).job.id).toBe('tw');
+    // The ids the page itself is handed (`similarIds`) hold them out too.
+    expect((await service.get('u1', 'j1')).similarIds).toEqual(['ok']);
+  });
+
+  it('MKT-5C: a caller that prints the credit line gets those rows, each with the sentence in `cardMeta`; no other row gains a `cardMeta`', async () => {
+    const attribution = { text: 'SYNTHETIC attribution sentence', url: 'https://data.gov.tw/license' };
+    const { service } = setup({
+      jobs: [job(), job({ id: 'tw', sourceBoard: 'tw_open_data' }), job({ id: 'gov', sourceBoard: 'tw_gov_jobs' }), job({ id: 'ok', sourceBoard: 'greenhouse' })],
+      // The market card lines as the feed card gets them: an open-data row carries its sentence, a board row its own block.
+      deps: { marketMeta: (row) => (row.sourceBoard === 'tw_open_data' || row.sourceBoard === 'tw_gov_jobs' ? { tw_sources: { attribution } } : { ats_public: { country: 'US' } }) },
+    });
+    const items = (await service.similar('u1', 'j1', { creditLines: true })).items;
+    expect(items.map((i) => i.jobId).sort()).toEqual(['gov', 'ok', 'tw']);
+    expect(items.find((i) => i.jobId === 'tw')!.cardMeta).toEqual({ tw_sources: { attribution } });
+    expect(items.find((i) => i.jobId === 'gov')!.cardMeta).toEqual({ tw_sources: { attribution } });
+    // A row that owes no line is the item it always was.
+    expect(items.find((i) => i.jobId === 'ok')).not.toHaveProperty('cardMeta');
+    // The default, and an explicit false: held out, and no item carries a `cardMeta`.
+    for (const opts of [undefined, {}, { creditLines: false }]) {
+      const held = (await service.similar('u1', 'j1', opts)).items;
+      expect(held.map((i) => i.jobId)).toEqual(['ok']);
+      expect(held[0]).not.toHaveProperty('cardMeta');
+    }
   });
 
   it('the Taiwan statutory threshold is never a job\'s pay: similar jobs and the job page say "not listed" for the no-figure sentence (MARKET_STRATEGY 1.5; JT-1, JT-6)', async () => {
@@ -1591,5 +1770,330 @@ describe('practice link (SR-34-1)', () => {
     const res = await service.get('u1', 'j1');
     expect(res.job.id).toBe('j1');
     expect(res.checklist.practiced).toBeNull();
+  });
+});
+
+// ── MKT-5C (JI-10): opening a job confirms its posting is still listed ────
+
+describe('MKT-5C JI-10: opening a job confirms it is still listed and shows "closed" instead of a dead link', () => {
+  const HOUR = 3_600_000;
+  const SEEN = new Date(NOW.getTime() - 30 * HOUR);
+  /** A public row that names a posting on Greenhouse and was last seen listed 30 hours ago. SYNTHETIC. */
+  const keyed = (over: Record<string, unknown> = {}) => job({ sourceBoard: 'jsearch', atsPostingKey: 'greenhouse:acme:1', lastSeenAt: SEEN, firstSeenAt: new Date(NOW.getTime() - 10 * DAY), ...over });
+  const answer = (state: LiveResult['state'], via: LiveResult['via'] = 'ats_api'): LiveResult => ({ state, checkedAt: state === 'unknown' ? null : NOW, via: state === 'unknown' ? null : via, reason: 'test', requested: via === 'ats_api' });
+  /** A faked check: records the rows it was asked about and answers `result`. */
+  const checker = (result: LiveResult | (() => Promise<LiveResult>)) => {
+    const asked: LivenessJob[] = [];
+    const confirm = vi.fn(async (row: LivenessJob) => {
+      asked.push({ ...row });
+      return typeof result === 'function' ? result() : result;
+    });
+    return { confirm, asked };
+  };
+
+  describe('GET /jobs/:id', () => {
+    it('closed: the posting its ATS no longer lists is served closed, with no apply link, and the check moment', async () => {
+      const c = checker(answer('closed'));
+      const { service } = setup({ jobs: [keyed()], deps: { confirmListing: c.confirm } });
+      const res = await service.get('u1', 'j1');
+      expect(res.job).toMatchObject({ status: 'closed', closedAt: NOW.toISOString(), listing: { checkedAt: NOW.toISOString(), via: 'ats_api' } });
+      // When it was last seen listed is kept, for the "last listed" sentence.
+      expect(res.job.lastSeenAt).toBe(SEEN.toISOString());
+      // The check was handed the row's own identifiers and nothing personal.
+      expect(c.asked).toHaveLength(1);
+      expect(c.asked[0]).toMatchObject({ id: 'j1', atsPostingKey: 'greenhouse:acme:1', sourceBoard: 'jsearch', visibility: 'public', market: 'intl' });
+    });
+
+    it('open: the page is the page as before, with the last-seen date moved to the check', async () => {
+      const c = checker(answer('open'));
+      const { service } = setup({ jobs: [keyed()], deps: { confirmListing: c.confirm } });
+      const res = await service.get('u1', 'j1');
+      expect(res.job).toMatchObject({ status: 'open', closedAt: null, lastSeenAt: NOW.toISOString(), listing: { checkedAt: NOW.toISOString(), via: 'ats_api' }, applyUrl: 'https://boards.greenhouse.io/acme/jobs/1' });
+    });
+
+    it('cannot tell (unknown, a row answered from our own records, a check that throws): the job opens exactly as without the check', async () => {
+      const plain = (await setup({ jobs: [keyed()] }).service.get('u1', 'j1')).job;
+      expect(plain).toMatchObject({ status: 'open', listing: { checkedAt: SEEN.toISOString(), via: 'sync' } });
+      for (const result of [answer('unknown'), answer('open', 'sync'), () => Promise.reject(new Error('check down'))] as const) {
+        const c = checker(result as LiveResult);
+        const res = await setup({ jobs: [keyed()], deps: { confirmListing: c.confirm } }).service.get('u1', 'j1');
+        expect(res.job).toEqual(plain);
+        expect(c.confirm).toHaveBeenCalledTimes(1);
+      }
+    });
+
+    it('a slow ATS never holds the page: past the wait it is served from our own records, and the late answer does not rewrite it', async () => {
+      vi.useFakeTimers();
+      let finish: (r: LiveResult) => void = () => {};
+      const slow = vi.fn(() => new Promise<LiveResult>((resolve) => (finish = resolve)));
+      const { service } = setup({ jobs: [keyed()], deps: { confirmListing: slow, listingWaitMs: 5 } });
+      let res: Awaited<ReturnType<typeof service.get>> | null = null;
+      const pending = service.get('u1', 'j1').then((r) => (res = r));
+      // Just short of the wait the page is still waiting for the ATS…
+      await vi.advanceTimersByTimeAsync(4);
+      expect(res).toBeNull();
+      // …and at the wait it is served as our records have it: open, last seen 30 hours ago, nothing claimed about the ATS.
+      await vi.advanceTimersByTimeAsync(1);
+      await pending;
+      expect(res!.job).toMatchObject({ status: 'open', closedAt: null, lastSeenAt: SEEN.toISOString(), listing: { checkedAt: SEEN.toISOString(), via: 'sync' } });
+      expect(slow).toHaveBeenCalledTimes(1);
+      const sent = JSON.stringify(res);
+      // The check finishes afterwards (it writes its own answer to the database); what was served stays as served.
+      finish(answer('closed'));
+      await vi.advanceTimersByTimeAsync(1);
+      expect(JSON.stringify(res)).toBe(sent);
+    });
+
+    it('an answer inside the wait is used, and the default wait is a second and a half', async () => {
+      vi.useFakeTimers();
+      expect(LISTING_WAIT_MS).toBe(1_500);
+      const quick = vi.fn(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1_400));
+        return answer('closed');
+      });
+      // No wait given: the default.
+      const { service } = setup({ jobs: [keyed()], deps: { confirmListing: quick } });
+      const pending = service.get('u1', 'j1');
+      await vi.advanceTimersByTimeAsync(1_400);
+      expect((await pending).job).toMatchObject({ status: 'closed', listing: { via: 'ats_api' } });
+      // One that takes longer than the default is not waited for.
+      const late = vi.fn(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1_600));
+        return answer('closed');
+      });
+      const other = setup({ jobs: [keyed()], deps: { confirmListing: late } });
+      const second = other.service.get('u1', 'j1');
+      await vi.advanceTimersByTimeAsync(1_500);
+      expect((await second).job).toMatchObject({ status: 'open', listing: { via: 'sync' } });
+      await vi.advanceTimersByTimeAsync(200);
+    });
+
+    it('never asked: a private import, a bank row, a closed row, a row with no posting key', async () => {
+      const c = checker(answer('closed'));
+      const { service } = setup({
+        jobs: [
+          keyed({ id: 'imp', visibility: 'private', ownerUserId: 'u1', sourceBoard: 'user_import' }),
+          keyed({ id: 'bank', fromRecruiterBank: true, sourceBoard: 'robohire', applyUrl: 'https://example.test/r/bank' }),
+          keyed({ id: 'gone', closedAt: new Date(NOW.getTime() - DAY), archivedAt: new Date(NOW.getTime() - DAY) }),
+          keyed({ id: 'nokey', atsPostingKey: null }),
+          keyed({ id: 'blank', atsPostingKey: '   ' }),
+        ],
+        deps: { confirmListing: c.confirm },
+      });
+      for (const [k, v] of Object.entries({ ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE: 'https://example.test/r/{id}' })) vi.stubEnv(k, v);
+      try {
+        const imp = await service.get('u1', 'imp');
+        // The user's own import is untouched: open, and nobody lists it.
+        expect(imp.job).toMatchObject({ status: 'open', visibility: 'private', listing: { checkedAt: null, via: null } });
+        expect((await service.get('u1', 'bank')).job.status).toBe('open');
+        expect((await service.get('u1', 'gone')).job).toMatchObject({ status: 'closed', listing: { checkedAt: new Date(NOW.getTime() - DAY).toISOString(), via: 'sync' } });
+        expect((await service.get('u1', 'nokey')).job.status).toBe('open');
+        expect((await service.get('u1', 'blank')).job.status).toBe('open');
+      } finally {
+        vi.unstubAllEnvs();
+      }
+      expect(c.confirm).not.toHaveBeenCalled();
+    });
+
+    it('the listing view on its own: our records for an open and a closed row, nothing for a job nobody lists', () => {
+      const open = { visibility: 'public', sourceBoard: 'greenhouse', lastSeenAt: SEEN, closedAt: null, archivedAt: null };
+      expect(toListing(open)).toEqual({ checkedAt: SEEN.toISOString(), via: 'sync' });
+      expect(toListing({ ...open, archivedAt: NOW })).toEqual({ checkedAt: NOW.toISOString(), via: 'sync' });
+      expect(toListing(open, { checkedAt: NOW })).toEqual({ checkedAt: NOW.toISOString(), via: 'ats_api' });
+      expect(toListing({ ...open, visibility: 'private' }, { checkedAt: NOW })).toEqual({ checkedAt: null, via: null });
+      expect(toListing({ ...open, sourceBoard: 'user_import' })).toEqual({ checkedAt: null, via: null });
+    });
+  });
+
+  describe('POST /jobs/:id/apply-click', () => {
+    it('ACCEPT: a posting that is gone answers 409 job_closed and nothing moves to Applied', async () => {
+      const c = checker(answer('closed'));
+      const { service, db } = setup({ jobs: [keyed()], deps: { confirmListing: c.confirm } });
+      await expect(service.recordApplyClick('u1', 'j1')).rejects.toMatchObject({ code: 'conflict', details: { code: 'job_closed' } });
+      expect(await db.rATrackerEntry.findMany({})).toEqual([]);
+      expect(await db.rATrackerEvent.findMany({})).toEqual([]);
+      expect(await db.rAJobInteraction.findMany({})).toEqual([]);
+    });
+
+    it('open and "cannot tell": the click goes through as before', async () => {
+      for (const result of [answer('open'), answer('unknown'), () => Promise.reject(new Error('check down'))] as const) {
+        const c = checker(result as LiveResult);
+        const { service, db } = setup({ jobs: [keyed()], deps: { confirmListing: c.confirm } });
+        const res = await service.recordApplyClick('u1', 'j1');
+        expect(res).toMatchObject({ applyUrl: 'https://boards.greenhouse.io/acme/jobs/1', alreadyApplied: false });
+        expect(await db.rATrackerEntry.findMany({})).toHaveLength(1);
+        expect(c.confirm).toHaveBeenCalledTimes(1);
+      }
+    });
+
+    it('the click waits for the whole answer, however long the page would have waited: a posting found gone late is still a 409', async () => {
+      vi.useFakeTimers();
+      const slow = vi.fn(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 3_000));
+        return answer('closed');
+      });
+      const { service, db } = setup({ jobs: [keyed()], deps: { confirmListing: slow } });
+      // The page gave up waiting after a second and a half and showed the job open…
+      const page = service.get('u1', 'j1');
+      await vi.advanceTimersByTimeAsync(1_500);
+      expect((await page).job.status).toBe('open');
+      // …the click does not give up: three seconds later the answer is in, and nobody is sent to the dead page.
+      let outcome: unknown = 'pending';
+      const click = service.recordApplyClick('u1', 'j1').then(
+        (r) => (outcome = r),
+        (e) => (outcome = e),
+      );
+      await vi.advanceTimersByTimeAsync(2_999);
+      expect(outcome).toBe('pending');
+      await vi.advanceTimersByTimeAsync(1);
+      await click;
+      expect(outcome).toMatchObject({ code: 'conflict', details: { code: 'job_closed' } });
+      expect(await db.rATrackerEntry.findMany({})).toEqual([]);
+    });
+
+    it("a user's own import is never checked: the click is the click it always was", async () => {
+      const c = checker(answer('closed'));
+      const { service } = setup({
+        jobs: [keyed({ visibility: 'private', ownerUserId: 'u1', sourceBoard: 'user_import' })],
+        deps: { confirmListing: c.confirm },
+      });
+      await expect(service.recordApplyClick('u1', 'j1')).resolves.toMatchObject({ alreadyApplied: false });
+      expect(c.confirm).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('with the real check and a faked ATS (no network: the fetch is a recording fake)', () => {
+    beforeEach(() => resetLivenessForTests());
+
+    const ats = (status: number, body: unknown) => {
+      const calls: string[] = [];
+      const fetch: LivenessFetch = async (url) => {
+        calls.push(url);
+        return { status, text: async () => JSON.stringify(body) };
+      };
+      return { fetch, calls };
+    };
+    const wired = (fake: ReturnType<typeof ats>, jobs: Record<string, unknown>[] = [keyed()]) => {
+      const s = setup({ jobs });
+      const repaired: Array<[string, string[]]> = [];
+      const real = (row: LivenessJob) =>
+        confirmListing(row, { db: s.db as unknown as LivenessDb, fetch: fake.fetch, env: {}, now: () => NOW, repairDedupe: async (market, keys) => void repaired.push([market, keys]) });
+      return { ...s, repaired, service: createJobDetailService({ ...s.deps, confirmListing: real }) };
+    };
+
+    it('ACCEPT (JI-10): opening a job whose ATS endpoint answers 404 shows it closed and archives it; a second open makes no request', async () => {
+      const fake = ats(404, { status: 404, error: 'Job not found' });
+      const { service, db, repaired } = wired(fake, [keyed({ dedupeKey: 'dk1' })]);
+      const first = await service.get('u1', 'j1');
+      expect(fake.calls).toEqual(['https://boards-api.greenhouse.io/v1/boards/acme/jobs/1']);
+      expect(first.job).toMatchObject({ status: 'closed', listing: { via: 'ats_api' } });
+      // An aggregator's row: closed with the reason no re-listing by the aggregator undoes.
+      expect(await db.rAJob.findUnique({ where: { id: 'j1' } })).toMatchObject({ archivedAt: NOW, closedAt: NOW, closeReason: 'ats_removed' });
+      expect(repaired).toEqual([['intl', ['dk1']]]);
+      // The row is archived now: no second request, from this process or any other.
+      resetLivenessForTests();
+      const second = await service.get('u1', 'j1');
+      expect(second.job).toMatchObject({ status: 'closed', listing: { checkedAt: NOW.toISOString(), via: 'sync' } });
+      expect(fake.calls).toHaveLength(1);
+      // And the apply click on it is the existing 409.
+      await expect(service.recordApplyClick('u1', 'j1')).rejects.toMatchObject({ details: { code: 'job_closed' } });
+      expect(await db.rATrackerEntry.findMany({})).toEqual([]);
+    });
+
+    it('200 keeps the job open and writes the confirmation; a second open within six hours makes no request', async () => {
+      const fake = ats(200, { id: 1, title: 'SYNTHETIC' });
+      const { service, db } = wired(fake);
+      expect((await service.get('u1', 'j1')).job).toMatchObject({ status: 'open', lastSeenAt: NOW.toISOString(), listing: { via: 'ats_api' } });
+      expect((await db.rAJob.findUnique({ where: { id: 'j1' } }))?.lastSeenAt).toEqual(NOW);
+      // The same process: the ATS's answer is reused, for the page and for the apply click.
+      expect((await service.get('u1', 'j1')).job).toMatchObject({ status: 'open', listing: { checkedAt: NOW.toISOString(), via: 'ats_api' } });
+      await expect(service.recordApplyClick('u1', 'j1')).resolves.toMatchObject({ alreadyApplied: false });
+      expect(fake.calls).toHaveLength(1);
+    });
+
+    it("whose sighting counts: the ATS's own board row is answered from its last sighting in any process; an aggregator's row is asked", async () => {
+      const fake = ats(200, { id: 1, title: 'SYNTHETIC' });
+      const hourAgo = new Date(NOW.getTime() - HOUR);
+      // The row of our own sync of that Greenhouse board, seen listed an hour ago: no request.
+      const board = wired(fake, [keyed({ sourceBoard: 'greenhouse', externalId: 'acme:1', lastSeenAt: hourAgo })]);
+      expect((await board.service.get('u1', 'j1')).job).toMatchObject({ status: 'open', listing: { checkedAt: hourAgo.toISOString(), via: 'sync' } });
+      expect(fake.calls).toEqual([]);
+      // A JSearch row "seen" an hour ago (the aggregator's index, not the ATS): the ATS is asked, and a 404 closes it.
+      resetLivenessForTests();
+      const gone = ats(404, { status: 404, error: 'Job not found' });
+      const agg = wired(gone, [keyed({ lastSeenAt: hourAgo })]);
+      expect((await agg.service.get('u1', 'j1')).job).toMatchObject({ status: 'closed', listing: { via: 'ats_api' } });
+      expect(gone.calls).toHaveLength(1);
+    });
+
+    it('a 500 (and the kill switch) leaves the job open and the row untouched', async () => {
+      const fake = ats(500, { error: 'oops' });
+      const { service, db } = wired(fake);
+      const before = await db.rAJob.findUnique({ where: { id: 'j1' } });
+      expect((await service.get('u1', 'j1')).job).toMatchObject({ status: 'open', listing: { checkedAt: SEEN.toISOString(), via: 'sync' } });
+      expect(await db.rAJob.findUnique({ where: { id: 'j1' } })).toEqual(before);
+      // Off: no request at all.
+      const off = ats(404, { status: 404, error: 'Job not found' });
+      const s = setup({ jobs: [keyed()] });
+      const svc = createJobDetailService({ ...s.deps, confirmListing: (row) => confirmListing(row, { db: s.db as unknown as LivenessDb, fetch: off.fetch, env: { LIVENESS_CHECK_DISABLED: 'true' }, now: () => NOW, repairDedupe: null }) });
+      expect((await svc.get('u1', 'j1')).job.status).toBe('open');
+      expect(off.calls).toEqual([]);
+    });
+
+    it('a Workday-keyed row makes no request and opens as before', async () => {
+      const fake = ats(404, { status: 404 });
+      const { service } = wired(fake, [keyed({ atsPostingKey: 'workday:acme:R-123', applyUrl: 'https://acme.wd5.myworkdayjobs.com/en-US/careers/job/Austin/Engineer_R-123' })]);
+      expect((await service.get('u1', 'j1')).job.status).toBe('open');
+      expect(fake.calls).toEqual([]);
+    });
+  });
+
+  it('the row select carries what the check reads: the posting key and the board row\'s own id', () => {
+    expect(JOB_ROW_SELECT).toMatchObject({ atsPostingKey: true, externalId: true, lastSeenAt: true, archivedAt: true, closedAt: true, sourceUrl: true, applyUrl: true });
+  });
+});
+
+describe('MKT-5C: the request language reaches the fits of the job page (skill labels follow it)', () => {
+  it('get and similar hand `locale` to the fit seams when the caller gives one, and call them as before when not', async () => {
+    const fit = vi.fn(async () => pageFit());
+    const fits = vi.fn(listFits);
+    const { service } = setup({ jobs: [job(), job({ id: 'j2' })], deps: { fit, fits } });
+    await service.get('u1', 'j1');
+    expect(fit).toHaveBeenLastCalledWith('u1', 'j1');
+    await service.get('u1', 'j1', { locale: 'zh' });
+    expect(fit).toHaveBeenLastCalledWith('u1', 'j1', { locale: 'zh' });
+    await service.similar('u1', 'j1');
+    expect(fits).toHaveBeenLastCalledWith('u1', ['j2']);
+    await service.similar('u1', 'j1', { locale: 'zh-TW' });
+    expect(fits).toHaveBeenLastCalledWith('u1', ['j2'], { locale: 'zh-TW' });
+  });
+
+  it('the routes pass the request\'s language (the x-robo-locale header, as MATCH\'s routes read it)', async () => {
+    const seen: Array<[string, unknown]> = [];
+    const base = setup({ jobs: [job(), job({ id: 'j2' })] }).service;
+    const service = {
+      ...base,
+      get: async (userId: string, jobId: string, opts?: { locale?: string }) => {
+        seen.push(['get', opts?.locale]);
+        return base.get(userId, jobId, opts);
+      },
+      similar: async (userId: string, jobId: string, opts?: { locale?: string }) => {
+        seen.push(['similar', opts?.locale]);
+        return base.similar(userId, jobId, opts);
+      },
+    };
+    const userOf = (req: { headers: Record<string, unknown> }) => (req.headers['x-test-user'] ? { id: String(req.headers['x-test-user']) } : null);
+    const h = await startRouteHarness({ mounts: [['/api/v1/roboapply/jobs', createJobDetailRouter({ service, seekerAuth: [fakeAuth(userOf)], scoreHandler: (_req, res) => void res.json({}), env: {} })]] });
+    try {
+      const headers = { 'x-test-user': 'u1', 'x-robo-locale': 'zh-TW' };
+      expect((await h.request('GET', '/api/v1/roboapply/jobs/j1', { headers })).status).toBe(200);
+      expect((await h.request('GET', '/api/v1/roboapply/jobs/j1/similar', { headers })).status).toBe(200);
+      expect(seen).toEqual([
+        ['get', 'zh-TW'],
+        ['similar', 'zh-TW'],
+      ]);
+    } finally {
+      await h.close();
+    }
   });
 });

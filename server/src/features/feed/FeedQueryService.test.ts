@@ -26,7 +26,7 @@ import { DEFAULT_MATCH_PRIORS, DEFAULT_MATCH_TIERS, DEFAULT_MATCH_WEIGHTS, build
 import { EMPTY_AFFINITY } from './affinity.js';
 import type { FilterSet, SearchProfileWire } from '../search/index.js';
 import { SearchProfileNotFoundError } from '../search/index.js';
-import { ALSO_IN_MAX, createFeedQueryService, profileQueryText, uncheckedPhrases, type FeedEmbeddings, type FeedRetrieval, type FeedServiceDeps } from './FeedQueryService.js';
+import { ALSO_IN_MAX, createFeedQueryService, previousVisit, profileQueryText, sponsorshipSourceSql, uncheckedPhrases, type FeedEmbeddings, type FeedRetrieval, type FeedServiceDeps } from './FeedQueryService.js';
 import type { PlannerPlan } from './filterDiff.js';
 import { recommendedRank } from './ranking.js';
 import { BANK_PAGES_ENV, FAKE_VECTOR_MODEL, FakeFeedRepo, fakeFeedMatch, feedRow, testVector, type FakeFeedMatch, type FakeFeedMatchOptions } from './testkit.js';
@@ -2461,5 +2461,243 @@ describe('a thin list for a saved search queues one targeted ingest', () => {
   it('with no requestIngest dependency nothing is asked', async () => {
     seed(3);
     await expect(service().query(ctx(), { sort: 'recommended' })).resolves.toMatchObject({ endOfFeed: true });
+  });
+});
+
+// ── MKT-5C: "New" from first seen, the three dates, the provider-reading badge, the visitor list's age floor ──
+
+describe('"New" means first seen by us since the previous visit (JI-10)', () => {
+  const HOUR = 3_600_000;
+  const hoursAgo = (h: number) => new Date(NOW.getTime() - h * HOUR);
+  /** Rows posted in the order of their index (newest first), each with its own first-seen time. */
+  function seedSeen(firstSeenHoursAgo: number[], postedDaysAgo: (i: number) => number = (i) => i / 100) {
+    firstSeenHoursAgo.forEach((h, i) => {
+      const id = `n${String(i).padStart(3, '0')}`;
+      repo.rows.push(feedRow({ id, postedAt: new Date(daysAgo(postedDaysAgo(i)).getTime() - i * 1000), firstSeenAt: hoursAgo(h), companyName: `Co ${id}`, companyNameNormalized: `co-${id}` }));
+    });
+  }
+  const newIds = (items: Array<{ jobId: string; isNew?: boolean }>) => items.filter((i) => i.isNew).map((i) => i.jobId);
+
+  it('ACCEPT: after a visit, only rows first seen after that visit are new, whatever their posted date', async () => {
+    // The previous visit was 10 hours ago. n000 and n002 were first seen after it; n001 and n003 before it
+    // (n001 well inside 48 hours, n003 outside).
+    seedSeen([2, 20, 9, 200]);
+    repo.visits.set('u1', hoursAgo(10));
+    const res = await service().query(ctx(), { sort: 'newest' });
+    expect(newIds(res.items)).toEqual(['n000', 'n002']);
+    // Each card carries the three dates as ISO strings.
+    const first = res.items.find((i) => i.jobId === 'n000')!;
+    expect(first).toMatchObject({ postedAt: expect.stringMatching(/Z$/), firstSeenAt: hoursAgo(2).toISOString(), lastSeenAt: expect.stringMatching(/Z$/), isNew: true });
+    // The visit is stamped only after it was read.
+    expect(repo.visits.get('u1')).toEqual(NOW);
+  });
+
+  it('ACCEPT: a posting published 300 days ago by an employer board and first seen an hour ago is new and keeps its posted date', async () => {
+    repo.rows.push(feedRow({ id: 'old', sourceBoard: 'greenhouse', postedAt: daysAgo(300), postedAtEstimated: false, firstSeenAt: hoursAgo(1) }));
+    repo.rows.push(feedRow({ id: 'fresh', sourceBoard: 'greenhouse', postedAt: daysAgo(1), postedAtEstimated: false, firstSeenAt: hoursAgo(90) }));
+    repo.visits.set('u1', hoursAgo(30));
+    const res = await service().query(ctx(), { sort: 'newest' });
+    const old = res.items.find((i) => i.jobId === 'old')!;
+    expect(old).toMatchObject({ isNew: true, postedAt: daysAgo(300).toISOString() });
+    // Posted yesterday, first seen before the visit: not new.
+    expect(res.items.find((i) => i.jobId === 'fresh')!.isNew).toBe(false);
+  });
+
+  it('without a visit: first seen in the last 48 hours', async () => {
+    seedSeen([2, 47, 49, 200]);
+    const res = await service().query(ctx(), { sort: 'newest' });
+    expect(repo.visits.has('u1')).toBe(true); // stamped by this request, and not read back as a previous visit
+    expect(newIds(res.items)).toEqual(['n000', 'n001']);
+  });
+
+  it('a stamp younger than a feed session is this sitting\'s own (a refresh, another sort), not a previous visit: the 48-hour rule', async () => {
+    seedSeen([2, 20, 9, 200]);
+    repo.visits.set('u1', hoursAgo(10));
+    const s = service();
+    const first = await s.query(ctx(), { sort: 'newest' });
+    expect(newIds(first.items)).toEqual(['n000', 'n002']);
+    // The same person asks again a moment later, under another sort: the stamp is now "just now".
+    const again = await s.query(ctx(), { sort: 'recommended' });
+    expect(newIds(again.items).sort()).toEqual(['n000', 'n001', 'n002']);
+    expect(previousVisit(NOW, NOW)).toBeNull();
+    expect(previousVisit(new Date(NOW.getTime() - 29 * 60_000), NOW)).toBeNull();
+    expect(previousVisit(new Date(NOW.getTime() - 30 * 60_000), NOW)).toEqual(new Date(NOW.getTime() - 30 * 60_000));
+    expect(previousVisit(new Date(NOW.getTime() + 60_000), NOW)).toBeNull();
+    expect(previousVisit(null, NOW)).toBeNull();
+    expect(previousVisit(new Date('nope'), NOW)).toBeNull();
+  });
+
+  it('every page of one list judges "New" against the same visit: the instant travels in the cursor', async () => {
+    // 45 rows; the visit was 10 hours ago; every third row was first seen after it.
+    seedSeen(Array.from({ length: 45 }, (_, i) => (i % 3 === 0 ? 3 : 30)));
+    const visit = hoursAgo(10);
+    repo.visits.set('u1', visit);
+    const s = service();
+    const p1 = await s.query(ctx(), { sort: 'newest' });
+    expect(p1.cursor).toBe(`${p1.sessionId}:20:${visit.getTime().toString(36)}`);
+    // The first page stamped the visit: read back now it would say "nothing is new".
+    expect(repo.visits.get('u1')).toEqual(NOW);
+    const p2 = await s.query(ctx(), { sort: 'newest', cursor: p1.cursor! });
+    const p3 = await s.query(ctx(), { sort: 'newest', cursor: p2.cursor! });
+    const all = [...p1.items, ...p2.items, ...p3.items];
+    expect(all).toHaveLength(45);
+    expect(newIds(all)).toEqual(all.filter((_, i) => i % 3 === 0).map((i) => i.jobId));
+    expect(newIds(p2.items).length).toBeGreaterThan(0);
+    expect(p3.cursor).toBeNull();
+  });
+
+  it('a cursor of a list opened with no known visit has no instant, and its later pages keep the 48-hour rule', async () => {
+    seedSeen(Array.from({ length: 30 }, (_, i) => (i < 25 ? 3 : 100)));
+    const s = service();
+    const p1 = await s.query(ctx(), { sort: 'newest' });
+    expect(p1.cursor).toBe(`${p1.sessionId}:20`);
+    const p2 = await s.query(ctx(), { sort: 'newest', cursor: p1.cursor! });
+    expect(newIds(p2.items)).toEqual(['n020', 'n021', 'n022', 'n023', 'n024']);
+    // A cursor that is not one is still refused.
+    await expectHttp(s.query(ctx(), { sort: 'newest', cursor: `${p1.sessionId}:20:NOT-BASE-36` }), 'invalid_request');
+    await expectHttp(s.query(ctx(), { sort: 'newest', cursor: `${p1.sessionId}:20:abc:def` }), 'invalid_request');
+  });
+
+  it('a list with no session (the Assistant preview, the visitor list) uses the 48-hour rule and never reads or stamps a visit', async () => {
+    seedSeen([2, 60]);
+    repo.visits.set('u1', hoursAgo(1000));
+    const s = service();
+    const preview = await s.preview(ctx(), { limit: 5, sort: 'newest' });
+    expect(newIds(preview)).toEqual(['n000']);
+    const visitor = await s.publicList({ market: 'intl', now: NOW }, { limit: 5 });
+    expect(newIds(visitor)).toEqual(['n000']);
+    expect(repo.visits.get('u1')).toEqual(hoursAgo(1000));
+  });
+
+  it('a failing read of the visit is "no known visit": the list still answers', async () => {
+    seedSeen([2, 60]);
+    repo.lastFeedVisit = async () => Promise.reject(new Error('ui state unavailable'));
+    const res = await service().query(ctx(), { sort: 'newest' });
+    expect(newIds(res.items)).toEqual(['n000']);
+  });
+
+  it('an estimated date is never sent as the posting date on a card of the list', async () => {
+    repo.rows.push(feedRow({ id: 'tw', sourceBoard: 'tw_open_data', postedAt: daysAgo(100), postedAtEstimated: true, firstSeenAt: hoursAgo(5), lastSeenAt: hoursAgo(1) }));
+    const res = await service().query(ctx(), { sort: 'newest' });
+    expect(res.items[0]).toMatchObject({ jobId: 'tw', postedAt: null, postedAtEstimated: true, firstSeenAt: hoursAgo(5).toISOString(), lastSeenAt: hoursAgo(1).toISOString(), isNew: true });
+  });
+});
+
+describe('the provider-reading sponsorship badge on a page of the list (JI-11)', () => {
+  const needing = (userId: string) => {
+    const p = person(userId);
+    return { ...p, user: { ...p.user, needsSponsorship: true } };
+  };
+  const flagged = (id: string, over: Parameters<typeof feedRow>[0] | Record<string, unknown> = {}) =>
+    feedRow({ id, sponsorship: 'offered', sponsorshipEvidence: null, postedAt: daysAgo(1), companyName: `Co ${id}`, companyNameNormalized: `co-${id}`, ...(over as object) } as Parameters<typeof feedRow>[0]);
+  const sourceReads = () => repo.queries.filter((q) => /SELECT j\."id", j\."sponsorshipSource" FROM "RAJob" j/.test(q.text));
+
+  it('a row whose only signal is the provider\'s flag shows the reading under the provider\'s name, with no quote', async () => {
+    personOf = needing;
+    repo.rows.push(flagged('feed'), flagged('quiet'), feedRow({ id: 'quoted', sponsorship: 'offered', sponsorshipEvidence: 'We sponsor H-1B visas.', postedAt: daysAgo(2) }));
+    repo.cardExtras.set('feed', { sponsorshipSource: 'provider:activejobs_feed' });
+    const res = await service().query(ctx(), { sort: 'newest' });
+    const badges = (id: string) => res.items.find((i) => i.jobId === id)!.badges.filter((b) => /sponsorship/.test(b.kind));
+    expect(badges('feed')).toEqual([{ kind: 'sponsorship_provider', label: 'sponsorship_provider', provider: 'Active Jobs DB' }]);
+    // 'offered' with no quote and no provider behind it is no badge at all.
+    expect(badges('quiet')).toEqual([]);
+    expect(badges('quoted')).toEqual([{ kind: 'sponsorship', label: 'sponsorship', quote: 'We sponsor H-1B visas.' }]);
+    // One small read for the page, and only for the rows that could carry the badge.
+    expect(sourceReads()).toHaveLength(1);
+    expect([...(sourceReads()[0]!.values[0] as string[])].sort()).toEqual(['feed', 'quiet']);
+    expect(sponsorshipSourceSql(['a', 'b']).values).toEqual([['a', 'b']]);
+  });
+
+  it('nothing is read for a person who does not need sponsorship, for GoApply, or once the row carries the column itself', async () => {
+    repo.rows.push(flagged('feed'));
+    repo.cardExtras.set('feed', { sponsorshipSource: 'provider:activejobs_feed' });
+    const plain = await service().query(ctx(), { sort: 'newest' });
+    expect(plain.items[0]!.badges.filter((b) => /sponsorship/.test(b.kind))).toEqual([]);
+    expect(sourceReads()).toHaveLength(0);
+
+    // The list projection selects the column (after the sql.ts change): no second read, same badge.
+    personOf = needing;
+    repo.rows.length = 0;
+    repo.rows.push(flagged('feed', { sponsorshipSource: 'provider:activejobs' }), flagged('none', { sponsorshipSource: null }));
+    const res = await service().query(ctx({ userId: 'u2' }), { sort: 'newest' });
+    expect(sourceReads()).toHaveLength(0);
+    expect(res.items.find((i) => i.jobId === 'feed')!.badges[0]).toEqual({ kind: 'sponsorship_provider', label: 'sponsorship_provider', provider: 'Active Jobs DB' });
+    expect(res.items.find((i) => i.jobId === 'none')!.badges.filter((b) => /sponsorship/.test(b.kind))).toEqual([]);
+  });
+
+  it('a failing read shows no provider badge and the page still answers', async () => {
+    personOf = needing;
+    repo.rows.push(flagged('feed'));
+    const real = repo.queryCardExtras.bind(repo);
+    repo.queryCardExtras = async (sql) => (/sponsorshipSource/.test(sql.text) ? Promise.reject(new Error('column missing')) : real(sql));
+    const res = await service().query(ctx(), { sort: 'newest' });
+    expect(res.items).toHaveLength(1);
+    expect(res.items[0]!.badges.filter((b) => /sponsorship/.test(b.kind))).toEqual([]);
+  });
+});
+
+describe('the visitor list has the feed\'s age floor, not a 45-day window of its own (JI-10; PAR carry-over 7a)', () => {
+  it('a board posting published 300 days ago and still listed is in the visitor list; an aggregator row of that age is not', async () => {
+    repo.rows.push(
+      feedRow({ id: 'board_old', sourceBoard: 'greenhouse', postedAt: daysAgo(300) }),
+      feedRow({ id: 'bank_old', sourceBoard: 'robohire', fromRecruiterBank: true, postedAt: daysAgo(200) }),
+      feedRow({ id: 'agg_old', sourceBoard: 'activejobs', postedAt: daysAgo(300) }),
+      feedRow({ id: 'agg_100', sourceBoard: 'activejobs', postedAt: daysAgo(100) }),
+      feedRow({ id: 'agg_fresh', sourceBoard: 'activejobs', postedAt: daysAgo(2) }),
+    );
+    for (const [k, v] of Object.entries(BANK_PAGES_ENV)) vi.stubEnv(k, v);
+    // The boards whose rows may be shown on public pages (the SEO scope's own list): the employer board is one of them here.
+    repo.allowedBoards = [...new Set([...repo.allowedBoards, 'greenhouse', 'activejobs'])];
+    try {
+      const items = await service().publicList({ market: 'intl', now: NOW }, { limit: 50 });
+      // Newest first; the aggregator row past the 120-day floor is the only one left out.
+      expect(items.map((i) => i.jobId)).toEqual(['agg_fresh', 'agg_100', 'bank_old', 'board_old']);
+      const sql = repo.queries.at(-1)!;
+      expect(sql.text).toContain('j."publicDisplay" = true');
+      // No hard posted-at window: the floor form only.
+      expect(sql.values).not.toContainEqual(daysAgo(45));
+      expect(sql.values).toContainEqual(daysAgo(120));
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});
+
+describe('the request language reaches the fits of a list (skill labels follow it)', () => {
+  it('query and preview hand `locale` to getFits when the caller gives one, and nothing otherwise', async () => {
+    seed(3);
+    const seen: Array<string | undefined> = [];
+    const s = service();
+    const real = match.getFits;
+    match.getFits = async (userId, jobIds, o) => {
+      seen.push(o?.locale);
+      return real(userId, jobIds, o);
+    };
+    await s.query(ctx(), { sort: 'newest' });
+    await s.query(ctx(), { sort: 'newest', locale: 'zh-TW' });
+    await s.preview(ctx(), { limit: 2, locale: 'ja' });
+    expect(seen).toEqual([undefined, 'zh-TW', 'ja']);
+    // The language is no part of the list's identity: the same session hash with and without it.
+    const hashes = [...repo.sessions.values()].map((x) => x.queryHash);
+    expect(new Set(hashes).size).toBe(1);
+  });
+});
+
+describe('the first page says whether the text to rank by took part in the list', () => {
+  it('true when a leg asked with the text returned rows, false when no posting matched the words; absent with no text and on later pages', async () => {
+    seed(45);
+    // One posting whose search document holds the word; the others have none.
+    repo.searchDocs.set('j003', 'backend engineer kafka streaming');
+    const s = service();
+    const plain = await s.query(ctx(), { sort: 'recommended' });
+    expect(plain).not.toHaveProperty('relevanceApplied');
+    const matched = await s.query(ctx(), { sort: 'recommended', relevance: 'kafka' });
+    expect(matched.relevanceApplied).toBe(true);
+    const unmatched = await s.query(ctx(), { sort: 'recommended', relevance: 'zeppelin' });
+    expect(unmatched.relevanceApplied).toBe(false);
+    // A list asked for by date runs no legs: the text orders nothing there.
+    expect((await s.query(ctx(), { sort: 'newest', relevance: 'kafka' })).relevanceApplied).toBe(false);
+    const next = await s.query(ctx(), { sort: 'recommended', relevance: 'kafka', cursor: matched.cursor! });
+    expect(next).not.toHaveProperty('relevanceApplied');
   });
 });
