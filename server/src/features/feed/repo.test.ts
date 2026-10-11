@@ -263,6 +263,6 @@ describe('the feed reads no AI score of its own (SM-4)', () => {
     for (const file of ['ranking.ts', 'FeedQueryService.ts', 'contract.ts', 'items.ts', 'testkit.ts']) {
       expect(source(file), file).not.toMatch(/pre\s*[-−]\s*5|\bfitOf\b|minus 5/);
     }
-    expect(RANKING_FACTORS.find((f) => f.key === 'fit')!.what).toBe('Fit score: the AI score when one exists, otherwise the quick estimate. Both are on the same scale.');
+    expect(RANKING_FACTORS.find((f) => f.key === 'fit')!.what).toBe('Fit score: the AI score when one exists, otherwise the quick estimate. Both are on the same scale. Until a market has enough scored jobs to line the two up, a job with an AI score is ranked halfway between its quick estimate and its AI score.');
   });
 });

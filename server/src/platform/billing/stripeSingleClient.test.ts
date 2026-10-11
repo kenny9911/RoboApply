@@ -2,8 +2,11 @@
 //
 // ST-0: there is ONE place that builds a Stripe client (stripeClient.ts
 // `getStripe`), because that is where the live-key guard lives. A second
-// `new Stripe(` anywhere in the server, the Vercel entry or the scripts would
-// be a way around the guard. This test reads the source tree; it calls nothing.
+// `new Stripe(` anywhere in the server, the Vercel entry, the scripts, the
+// Next.js app (`stripe` is a dependency of the root package, so a route
+// handler under app/, a module under lib/ or proxy.ts could import it), the
+// interview agent or the extension would be a way around the guard. This test
+// reads the source tree; it calls nothing.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,7 +14,9 @@ import { describe, expect, it } from 'vitest';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../../../..');
-const ROOTS = ['server/src', 'api', 'scripts'];
+const ROOTS = ['server/src', 'api', 'scripts', 'app', 'lib', 'components', 'hooks', 'interview-agent', 'extension/src'];
+/** Source files at the repository root (proxy.ts, next.config.mjs, …): read by name pattern, never recursed. */
+const ROOT_FILES = readdirSync(repoRoot).filter((name) => /\.(ts|tsx|mts|cts|js|mjs|cjs)$/.test(name) && statSync(join(repoRoot, name)).isFile());
 const THE_FACTORY = ['server', 'src', 'platform', 'billing', 'stripeClient.ts'].join('/');
 const SKIP_DIRS = new Set(['node_modules', 'generated', 'dist', '.next', '.turbo']);
 const SOURCE = /\.(ts|tsx|mts|cts|js|mjs|cjs)$/;
@@ -36,16 +41,24 @@ function walk(dir: string, out: string[]): string[] {
   return out;
 }
 
-const files = ROOTS.flatMap((root) => walk(join(repoRoot, root), []));
+const files = [...ROOTS.flatMap((root) => walk(join(repoRoot, root), [])), ...ROOT_FILES.map((name) => join(repoRoot, name))];
 const rel = (file: string) => relative(repoRoot, file).split(sep).join('/');
 
 describe('one Stripe client factory', () => {
   it('finds the source tree (a wrong root would pass by scanning nothing)', () => {
     expect(files.length).toBeGreaterThan(200);
     expect(files.map(rel)).toContain(THE_FACTORY);
+    // Every root is really read: the Next.js server code, the root files, the agent and the extension.
+    const scanned = files.map(rel);
+    for (const prefix of ['app/', 'lib/', 'components/', 'hooks/', 'api/', 'scripts/', 'interview-agent/src/', 'extension/src/']) {
+      expect(scanned.some((f) => f.startsWith(prefix)), prefix).toBe(true);
+    }
+    expect(scanned).toContain('proxy.ts');
+    expect(scanned).toContain('next.config.mjs');
+    expect(scanned.some((f) => f.includes('node_modules/') || f.includes('/dist/') || f.includes('/generated/'))).toBe(false);
   });
 
-  it('no file under server/src, api/ or scripts/ other than stripeClient.ts contains "new Stripe("', () => {
+  it('no file of the server, the Vercel entry, the scripts, the Next.js app, the agent or the extension other than stripeClient.ts contains "new Stripe("', () => {
     const offenders = files.filter((f) => CONSTRUCTS.test(readFileSync(f, 'utf8'))).map(rel);
     expect(offenders).toEqual([THE_FACTORY]);
   });

@@ -50,12 +50,19 @@ export function normalizeSkills(skills: readonly string[] | null | undefined): s
   return out;
 }
 
-/** [L1, L2, L3] ids for a title (empty when no role matches well enough; enrichment decides then). */
-export function taxonomyIdsForTitle(title: string): { ids: string[]; primary: string | null } {
-  // Taiwan titles (資料分析師) are folded to mainland vocabulary for the match only.
-  const match = bestTaxonomyMatch(title) ?? (/[\u3400-\u9fff]/.test(title) ? bestTaxonomyMatch(foldTwToCn(title)) : null);
-  if (!match) return { ids: [], primary: null };
-  return { ids: taxonomyAncestors(match.id).map((n) => n.id).reverse(), primary: match.id };
+/**
+ * [L1, L2, L3] ids for a title (empty when no role matches well enough; enrichment decides then), with the
+ * score of the match (null when there is none). Taiwan titles (資料分析師) are also read in mainland
+ * vocabulary, for the match only, and the better of the two readings counts: 前端工程師 scores 0.7 as written
+ * and 1.0 folded. This is the reading enrichment uses (enrich/titleEvidence.ts), so ingest and enrichment
+ * agree on whether a title is decisive.
+ */
+export function taxonomyIdsForTitle(title: string): { ids: string[]; primary: string | null; score: number | null } {
+  const raw = bestTaxonomyMatch(title);
+  const folded = /[\u3400-\u9fff]/.test(title) ? bestTaxonomyMatch(foldTwToCn(title)) : null;
+  const match = folded && (!raw || folded.score > raw.score) ? folded : raw;
+  if (!match) return { ids: [], primary: null, score: null };
+  return { ids: taxonomyAncestors(match.id).map((n) => n.id).reverse(), primary: match.id, score: match.score };
 }
 
 /**
@@ -276,7 +283,8 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
   // ── Taxonomy and skills ──
   // The source's own role (provider fields first, MARKET_STRATEGY §1.5), else the title dictionary.
   const statedRole = taxonomyIdsForProviderRole(raw.taxonomyId);
-  const tax = statedRole ?? taxonomyIdsForTitle(title);
+  const titleRole = taxonomyIdsForTitle(title);
+  const tax = statedRole ?? titleRole;
   if (tax.primary) fieldSources.taxonomy = statedRole ? 'provider' : 'title';
   const skills = normalizeSkills(raw.skills);
   if (skills.length) fieldSources.skills = 'provider';
@@ -391,6 +399,7 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
 
     taxonomyIds: tax.ids,
     primaryTaxonomyId: tax.primary,
+    titleMatchScore: titleRole.score,
     seniority,
     roleType,
     minYears: years?.min ?? null,

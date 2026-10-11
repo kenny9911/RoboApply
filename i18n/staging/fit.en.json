@@ -10,6 +10,12 @@
       "rewrite": "Rewrite them in this language",
       "rewriting": "Rewriting…",
       "failed": "We couldn't rewrite it. Try again."
+    },
+    "compared": {
+      "notCompared": "Not enough to compare.",
+      "evidence": {
+        "logistics_by_your_filters": "These already match the filters you set, so they do not change the score: {text}"
+      }
     }
   }
 }

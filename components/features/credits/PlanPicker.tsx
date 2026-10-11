@@ -54,9 +54,11 @@
 //     is never used as an image address. Every other rail answers a payment
 //     page to open.
 //   - A one-time pass says so on its row, with its day count. Student plans
-//     are listed only for a verified student, on either brand: the server
-//     sends them to nobody else, so the list is asked for again once the
-//     buyer verifies on this page.
+//     are offered only to a verified student, on either brand. GoApply's
+//     server sends them to nobody else, so the list is asked for again once
+//     the buyer verifies on this page; RoboApply's server lists them for
+//     every caller, so this sheet filters them out itself (`visiblePlans`)
+//     until the buyer is verified. Do not drop that filter.
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';

@@ -360,6 +360,8 @@ export function requirementsMet(key: FlagKey, brand: ProductBrand, env: EnvSourc
       return brand.authMethods.includes('email_password') && emailConfigured(brand, env);
     // ── payments (brand-locked rails; D6) ───────────────────────────────
     case 'pay.stripe':
+      // A rail is available only when it can charge AND fulfil (MARKET_STRATEGY M-25): a usable key (a live
+      // key only in production) and a webhook secret the webhook route can verify with (billing/stripeEnv.ts).
       return brand.paymentRails.includes('stripe') && stripeRailReady(env);
     case 'pay.alipay':
       // The rail's own credential is the callback secret, the equal of

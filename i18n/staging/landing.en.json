@@ -4,7 +4,12 @@
       "otherSorts": "{newest}, {bestFit} and {highestPay} each sort by that one thing only.",
       "deadlineSort": "{deadline} lists jobs by the date their applications close, soonest first.",
       "fit": {
-        "body": "Your fit score for the job, out of 100. When a full fit analysis isn't available yet, a quick estimate on the same scale is used. A job whose quick estimate has too little to go on is left out when you filter for Good fits and better or Great fits only."
+        "body": "Your fit score for the job, out of 100. When a full fit analysis isn't available yet, a quick estimate on the same scale is used. A job whose quick estimate has too little to go on is left out when you filter for Good fits and better or Great fits only. While we are still comparing quick estimates with full analyses, a job with a full analysis is placed halfway between its quick estimate and its analysed score, so its place in the list can differ from the number on its card."
+      }
+    },
+    "home": {
+      "pricing": {
+        "notOpen": "Paid plans can't be bought yet."
       }
     },
     "cnHome": {

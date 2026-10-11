@@ -162,6 +162,11 @@ describe('/pricing, RoboApply: every amount and label from GET /billing/plans (�
     expect(within(card('student_quarterly')).getByText('$37.99 / 3 months')).toBeInTheDocument();
     expect(card('student_quarterly').querySelector('[data-student-discount]')).toHaveTextContent('30% below the regular price');
     expect(container.querySelectorAll('[data-student-discount]')).toHaveLength(2);
+    // One label per student plan (MARKET_STRATEGY 4.1): "Save N%" stays on Pro Quarterly alone.
+    expect(card('student_quarterly').querySelector('[data-savings]')).toBeNull();
+    expect(card('student_monthly').querySelector('[data-savings]')).toBeNull();
+    expect(container.querySelectorAll('[data-savings]')).toHaveLength(1);
+    expect(card('pro_quarterly').querySelector('[data-savings]')).toHaveTextContent('Save 26%');
     // The percentage is the response's, in the currency shown: another value prints another number.
     cleanup();
     const view = withBillingFacts(studentPlansView('roboapply'));
@@ -309,6 +314,9 @@ describe('/pricing, GoApply: every amount and label from GET /billing/plans (§4
     expect(within(card('student_quarterly')).getByText('¥69, paid once')).toBeInTheDocument();
     expect(card('student_quarterly').querySelector('[data-student-discount]')).toHaveTextContent('30% below the regular price');
     expect(card('student_quarterly').querySelector('[data-pass-note]')).toHaveTextContent('90 days of Pro. One-time payment.');
+    // 学生季卡 is a 90-day pass, and still carries no "Save N%" (MARKET_STRATEGY 4.2).
+    expect(card('student_quarterly').querySelector('[data-savings]')).toBeNull();
+    expect(card('pro_quarterly').querySelector('[data-savings]')).toHaveTextContent('Save 15%');
   });
 
   it('"Not open yet" follows paymentsOpen only, with the prices still printed', async () => {

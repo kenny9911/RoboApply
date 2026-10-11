@@ -54,6 +54,8 @@
 
 **D5 conflict to resolve.** `CN_RECRUITMENT_INFO_MODE` defaults to `off`, which hides every third-party posting on GoApply. D5 says a capability that is on for RoboApply is on for GoApply. The default should become `partner_deeplink` (GoHire bank shown under GoHire's licence line, apply opens the GoHire page) once the bank is reachable, with non-bank sources shown as "来源：{sourceName}" plus a link out. See §5 for why the licence line matters.
 
+*As built (2026-10-11, MARKET_STRATEGY M-7, finding C18):* the default is `licensed` (the parity plan's ruling), and a bank row is listed only when `GOHIRE_PUBLIC_JOB_URL_TEMPLATE` is set; until then it is synced, counted and held. "Apply opens the GoHire page" is true only once that page exists.
+
 ### 2.2 Does GoHire's HTTP API expose jobs?
 
 No. GoHire is the RoboHire backend running with `APP_NAME=gohire` (`/Users/kenny/code/RoboHire/backend`; `server/src/lib/databaseUrl.ts` documents the white-label). Every job route is `requireAuth` and scoped to the caller's own jobs or delegations:
@@ -297,7 +299,7 @@ Rules: filter and sort on **monthly** pay for the mainland; show the source's ow
 
 1. **Identity and dedupe.** Key = normalised company + normalised title + city. Company normalisation: strip 有限公司 / 有限责任公司 / 股份有限公司 / 集团 / bracketed region such as （上海） / 分公司; map brand to legal name through a curated alias table (字节跳动 = 北京抖音信息服务有限公司, and so on); use the 统一社会信用代码 when a source provides it. Add a JD text fingerprint for cross-source twins. Preference when twins collide: GoHire bank > employer board > aggregator.
 2. **Source and attribution** (five-ministry notice). Always store `sourceName` (the original publisher), `sourceUrl`, `fetchedAt`, `lastSeenAt`. An aggregator's label is never the source: for a LinkedIn row that says 「该职位来源于猎聘」 the original publisher is 猎聘.
-3. **Apply link.** A mainland posting with no usable apply URL is not shown in the feed. Bank jobs open the GoHire page (`https://www.gohire.top/jobs/{id}`); board jobs open the employer's own page.
+3. **Apply link.** A mainland posting with no usable apply URL is not shown in the feed. Bank jobs open the GoHire page (`https://www.gohire.top/jobs/{id}`); board jobs open the employer's own page. A bank row is listed only when `GOHIRE_PUBLIC_JOB_URL_TEMPLATE` is set; until then it is synced, counted and held (MARKET_STRATEGY M-7, finding C18). The URL shape in this rule is the research note's example, not a default in code: the template has none.
 4. **Dates.** Sources publish naive Beijing time: store UTC, treat as UTC+8. 北森 serialises "no date" as year 0001: store null. Without a posted date, show "最后核验 {date}", never "发布于".
 5. **Expiry.** Use the source's validity when stated; otherwise close when the posting disappears from a complete board listing, and archive after 45 days unseen.
 6. **Text.** Convert HTML to text, collapse whitespace, strip slogans (急聘 / 高薪 / 直招; the regex is already in `normalize/text.ts`), remove recruiter phone numbers, WeChat ids and QR-code fields (北森 returns `WorkWeChatQrCode`: do not store it).

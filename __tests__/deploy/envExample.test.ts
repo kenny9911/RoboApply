@@ -12,6 +12,11 @@
 // docs/jobright-clone/orch/market-bundles.json; they are not read from that
 // file at run time. MKT-5H extends the lists with the variables of M2 to M5.
 //
+// M1 gate: the text was brought in line with the merged code of MKT-1A, MKT-1C,
+// MKT-1D and MKT-1F (their handoffs' "Env variables added or redefined"): the
+// test-key rule, a webhook secret list keeps the rail closed until the route
+// tries each secret, the per-brand source contact, EVAL_LIVE as a shell switch.
+//
 // __tests__/deploy/deployKit.test.ts keeps the older rules of the same files
 // (each active name once, no off switch shipped, the mainland kit).
 
@@ -70,16 +75,19 @@ const M1_LITERAL_NAMES = [
   'STRIPE_WEBHOOK_SECRET',
   'ROBOAPPLY_STRIPE_WEBHOOK_SECRET',
   'STRIPE_ALLOW_LIVE_KEY_OUTSIDE_PRODUCTION',
-  // MKT-1C: job sources
+  // MKT-1C: job sources (each brand reads its own name)
   'JOB_SOURCES_CONTACT',
-  // MKT-1D: evaluation harness
-  'EVAL_LIVE',
+  'CN_JOB_SOURCES_CONTACT',
+  // MKT-1D: evaluation harness (EVAL_LIVE is a shell switch: named in prose, see M1_SHELL_ONLY_NAMES)
   'EVAL_JUDGE_MODEL',
   // MKT-1F: estimate v2
   'MATCH_PRIORS',
   'CN_MATCH_PRIORS',
   'MATCH_CALIBRATION_MIN_PAIRS',
 ];
+
+/** Read from the shell only, never from an env file: documented in prose, with no `NAME=` entry (MKT-1D). */
+const M1_SHELL_ONLY_NAMES = ['EVAL_LIVE'];
 
 /** Names with a placeholder, in their documented pattern form (MKT-1A, PC-1). */
 const M1_PATTERN_NAMES = [
@@ -114,12 +122,14 @@ const SECRET_SHAPES: Array<[string, RegExp]> = [
 
 describe('env examples: the variables of market wave phase M1', () => {
   it('names every literal variable of the M1 bundles in .env.example', () => {
-    for (const name of M1_LITERAL_NAMES) expect(mentions(root, name), name).toBe(true);
+    for (const name of [...M1_LITERAL_NAMES, ...M1_SHELL_ONLY_NAMES]) expect(mentions(root, name), name).toBe(true);
   });
 
   it('gives every literal variable an entry of its own (NAME= or # NAME=), not only a mention in prose', () => {
     const listed = entries(root);
     for (const name of M1_LITERAL_NAMES) expect(listed.has(name), name).toBe(true);
+    // A shell-only switch has no entry: a line in an env file would suggest the file is read for it.
+    for (const name of M1_SHELL_ONLY_NAMES) for (const [file, text] of FILES) expect(entries(text).has(name), `${file}: ${name}`).toBe(false);
   });
 
   it('documents every per-plan variable in its pattern form', () => {
@@ -170,23 +180,29 @@ describe('.env.example: the Stripe safety rule (ST-0, M-25)', () => {
     expect(mentions(stripe, 'ROBOAPPLY_STRIPE_WEBHOOK_SECRET')).toBe(true);
   });
 
-  it('says the webhook secret accepts a comma-separated list for a rotation', () => {
+  it('says the webhook secret is read as a comma-separated list for a rotation', () => {
     expectHas(text, /comma-separated list/);
     expectHas(text, /rotation/);
   });
 
-  // Interim, phase M1 only. The rail's readiness check (MKT-1A, stripeEnv.ts)
-  // reads both names as lists, but the webhook route verifies a signature with
-  // one raw string until MKT-2B (phase M2) makes it try each secret. A list set
-  // before then opens checkout and fails every webhook, the failure M-25 is
-  // there to prevent. MKT-5H removes these sentences and this test once MKT-2B
-  // has merged.
-  it('warns that until phase M2 the webhook is verified with one value, and which name wins', () => {
+  // Interim, phase M1 only. The webhook route verifies a signature with one raw
+  // string until MKT-2B (phase M2) makes it try each secret, so MKT-1A keeps
+  // the rail CLOSED on a list (stripeEnv.ts `STRIPE_WEBHOOK_TRIES_EVERY_SECRET`
+  // is false): a rail that opened on it would take money and never fulfil, the
+  // failure M-25 is there to prevent. MKT-5H removes these sentences and this
+  // test once MKT-2B has merged and the constant is true.
+  it('warns that until phase M2 the webhook is verified with one value, that a list keeps payments closed, and which name wins', () => {
     const list = commentAbove(stripe, 'STRIPE_WEBHOOK_SECRET=');
     expectHas(list, /Until phase M2 of the market wave \(MKT-2B\) is merged the webhook route verifies with a single value: set one secret, not a list/);
-    expectHas(list, /a list set before then lets checkout open while every webhook is rejected and nothing is fulfilled/);
+    expectHas(list, /Until then a list keeps Stripe payments closed \(plans and prices are listed, no payment can be opened, and one warning line in the log names the cause\)/);
+    // The same for whitespace around the one secret (stripeEnv.ts `stripeWebhookCanVerify`): the SDK does not trim it.
+    expectHas(list, /No space or line break in the value\. Until then a trailing newline \(what `echo \.\.\. \| vercel env add` stores\) keeps Stripe payments closed/);
+    // The earlier wording described a rail that opened on a list; the merged code never does.
+    expectLacks(text, /lets checkout open/);
     const second = commentAbove(stripe, '# ROBOAPPLY_STRIPE_WEBHOOK_SECRET=');
+    expectHas(second, /Read first, before the name above/);
     expectHas(second, /Until then, when both names are set only ROBOAPPLY_STRIPE_WEBHOOK_SECRET is used to verify/);
+    expectHas(second, /never leave it blank in front of a real STRIPE_WEBHOOK_SECRET/);
   });
 
   it('says a live key is refused outside production and names the test key and the stripe listen secret', () => {
@@ -196,12 +212,19 @@ describe('.env.example: the Stripe safety rule (ST-0, M-25)', () => {
     expectHas(text, /whsec_\.\.\./);
   });
 
+  it('says which keys are test keys: only sk_test_ and rk_test_, every other key is treated as a live key', () => {
+    expectHas(text, /Only a key that starts with sk_test_ or rk_test_ counts as a test key; every other key, a format the code does not know included, is treated as a live key/);
+  });
+
   it('shows the override as a commented line with its warning, never as an active line', () => {
     expectHas(stripe, /^# STRIPE_ALLOW_LIVE_KEY_OUTSIDE_PRODUCTION=true$/m);
     expect(activeLines(root).map(([n]) => n)).not.toContain('STRIPE_ALLOW_LIVE_KEY_OUTSIDE_PRODUCTION');
     const warning = commentAbove(stripe, '# STRIPE_ALLOW_LIVE_KEY_OUTSIDE_PRODUCTION=true');
     expectHas(warning, /Warning: true lets a development machine act on the live Stripe account/);
     expectHas(warning, /default unset = a live key is refused outside production/);
+    // VERCEL_ENV is the one production signal, so a production elsewhere needs the override.
+    expectHas(warning, /VERCEL_ENV=production is the only production signal the code reads/);
+    expectHas(warning, /a RoboApply production that does not run on Vercel must set this/);
   });
 
   it('does not document a variable no code reads', () => {
@@ -232,6 +255,8 @@ describe('.env.example: plan prices are catalog defaults, env values are overrid
     expectHas(text, /STRIPE_PRICE_<PLANKEY>_CENTS[^.]*alias/);
     expectHas(text, /STRIPE_PRICE_<PLANKEY> [^.]*pin/);
     expectHas(text, /pin alone is ignored and logged/);
+    expectHas(text, /when both amount variables are set and differ, the pin is ignored and logged too/);
+    expectHas(text, /PRICE_<PLANKEY>_USD_CENTS overrides a default: a positive integer, in cents\. Any other value is ignored and logged once, and the default stays/);
     expectHas(text, /catalog sync on first use/);
     expectHas(text, /PRICE_<PLANKEY>_TWD_CENTS[^.]*multiple of 100/);
     expectHas(text, /[Uu]nset[^.]*Taiwan pays USD with the reference line/);
@@ -266,21 +291,29 @@ describe('.env.example: the other M1 variables, each with its meaning and defaul
     // adapters send it from phase M3 (MKT-3D, MKT-3E). MKT-5H drops the sentence
     // and this line once M3 has merged.
     expectHas(note, /Sent by the job-source adapters from phase M3 of the market wave; before that the variable has no effect/);
+    // The contact is identity and never crosses brands (MKT-1C review; sources/userAgent.ts reads brandOwnEnv).
+    expectHas(note, /RoboApply reads JOB_SOURCES_CONTACT only and GoApply reads CN_JOB_SOURCES_CONTACT only/);
+    expectHas(commentAbove(root, '# CN_JOB_SOURCES_CONTACT='), /GoApply's own contact \(never the value above\); unset = https:\/\/www\.goapply\.top/);
   });
 
-  it('EVAL_LIVE and EVAL_JUDGE_MODEL: off unless set, and the judge differs from the scorer', () => {
-    const live = commentAbove(root, '# EVAL_LIVE=');
-    expectHas(live, /1 allows `npm run eval:match -- --live` to read the database \(read-only\) and to call models/);
-    expectHas(live, /any other value, or unset, refuses/);
-    const judge = commentAbove(root, '# EVAL_JUDGE_MODEL=');
-    expectHas(judge, /must differ from the resolved LLM_MATCHING_MODEL/);
-    expectHas(judge, /unset = --live refuses to judge/);
+  it('EVAL_LIVE and EVAL_JUDGE_MODEL: off unless set, a shell switch, and the judge differs from the scorer', () => {
+    // EVAL_LIVE has no entry (it is not read from an env file); its note sits above the judge model's entry.
+    const note = commentAbove(root, '# EVAL_JUDGE_MODEL=');
+    expectHas(note, /EVAL_LIVE is a shell switch, not an entry of this file/);
+    expectHas(note, /EVAL_LIVE=1 allows `npm run eval:match -- --live` to read the database \(read-only\) and to call models/);
+    expectHas(note, /any other value, or unset, refuses/);
+    expectHas(note, /It is not read from this file/);
+    expectHas(note, /must differ from the resolved LLM_MATCHING_MODEL of the market being judged/);
+    expectHas(note, /unset = --live refuses to judge/);
   });
 
   it('MATCH_PRIORS, CN_MATCH_PRIORS and MATCH_CALIBRATION_MIN_PAIRS: defaults 44 / 39 / 24 / 50 / 45 and 500', () => {
     const priors = commentAbove(root, '# MATCH_PRIORS=');
     expectHas(priors, /title_level \/ skills \/ industry \/ logistics \/ career_path; defaults 44 \/ 39 \/ 24 \/ 50 \/ 45/);
     expectHas(priors, /malformed value keeps the defaults/);
+    // A data-derived prior replaces the setting for four components; logistics always follows it (MKT-1F).
+    expectHas(priors, /Once a market has 200 model-scored values of a component, that component's prior is the market's own mean/);
+    expectHas(priors, /the logistics prior is never taken from data and always follows this setting/);
     // The GoApply name is an optional override that falls back to the shared value (D5).
     expectHas(commentAbove(root, '# CN_MATCH_PRIORS='), /OPTIONAL override; unset = MATCH_PRIORS, then the defaults/);
     // The default is written next to the switch, as the commented-out value.
@@ -296,6 +329,14 @@ describe('deploy/cn/cn.env.example: the mainland kit', () => {
     expectHas(above, /Optional: unset = MATCH_PRIORS, then the defaults in code/);
     // Its section is labelled like every other China-specific section of the kit.
     expectHas(kit, /^# ── Optional override: job matching ──$/m);
+  });
+
+  it('offers CN_JOB_SOURCES_CONTACT as a commented optional line: GoApply never reads the unprefixed name', () => {
+    expectHas(kit, /^# CN_JOB_SOURCES_CONTACT=$/m);
+    expect(entries(kit).has('JOB_SOURCES_CONTACT')).toBe(false);
+    const above = commentAbove(kit, '# CN_JOB_SOURCES_CONTACT=');
+    expectHas(above, /Optional: unset = https:\/\/www\.goapply\.top/);
+    expectHas(above, /GoApply never reads the unprefixed JOB_SOURCES_CONTACT/);
   });
 
   it('lists no Stripe or USD price variable: a GoApply plan never reaches Stripe (rule A11)', () => {

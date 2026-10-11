@@ -625,6 +625,34 @@ describe('computed numbers (PRODUCT §6.1 rule 2): labels come from the catalog 
     expect(views.find((p) => p.key === 'pro_quarterly')).toMatchObject({ amountMinor: 5499, savingsPercent: 26 });
   });
 
+  // MARKET_STRATEGY 4.1 / 4.2: a student plan has ONE computed label (the
+  // student percentage). "Save N%" compares with 3 x the REGULAR monthly
+  // price, which a student never pays: 49% on RoboApply and 41% on GoApply,
+  // where the student's own saving is 27% and 20% (PRODUCT 6.1 rule 2: the
+  // claim is never larger than the real saving).
+  it('a student plan never carries "Save N%": on either brand, and at the Taiwan price', () => {
+    for (const brand of ['roboapply', 'goapply'] as const) {
+      const catalog = getPlanCatalog(brand, {});
+      const monthly = catalog.find((p) => p.key === 'pro_monthly')!;
+      expect(savingsPercent(catalog.find((p) => p.key === 'student_quarterly')!, monthly), brand).toBeNull();
+      expect(savingsPercent(catalog.find((p) => p.key === 'student_monthly')!, monthly), brand).toBeNull();
+      const views = buildPlanViews(brand, { env: {}, studentEnabled: true }).plans;
+      expect(views.find((p) => p.key === 'student_quarterly'), brand).toMatchObject({ savingsPercent: null, studentDiscountPercent: 30 });
+      expect(views.find((p) => p.key === 'student_monthly')!.savingsPercent, brand).toBeNull();
+      // The regular quarterly plan keeps its label.
+      expect(views.find((p) => p.key === 'pro_quarterly')!.savingsPercent, brand).toBe(brand === 'roboapply' ? 26 : 15);
+    }
+    const twEnv = {
+      PRICE_PRO_MONTHLY_TWD_CENTS: '74900',
+      PRICE_PRO_QUARTERLY_TWD_CENTS: '165000',
+      PRICE_STUDENT_MONTHLY_TWD_CENTS: '51900',
+      PRICE_STUDENT_QUARTERLY_TWD_CENTS: '115000',
+    };
+    const tw = buildPlanViews('roboapply', { env: twEnv, studentEnabled: true, country: 'TW' }).plans;
+    expect(tw.find((p) => p.key === 'pro_quarterly')!.localPrice).toMatchObject({ amountMinor: 165000, savingsPercent: 26 });
+    expect(tw.find((p) => p.key === 'student_quarterly')!.localPrice).toMatchObject({ amountMinor: 115000, savingsPercent: null, studentDiscountPercent: 30 });
+  });
+
   it('the weekly plan is "about $43 a month": 999 × 52 / 12 = 4329', () => {
     const weekly = getPlan('roboapply', 'pro_weekly', {})!;
     expect(monthlyEquivalentMinor(weekly)).toBe(4329);

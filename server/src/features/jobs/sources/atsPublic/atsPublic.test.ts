@@ -1023,6 +1023,32 @@ describe('ats_public market hooks', () => {
     expect(twNegotiableCardText('面議，月薪4萬~5萬以上')).toBe('面議，月薪4萬~5萬以上');
   });
 
+  // Review finding (high, M1 gate): the clause with a period marker ("4萬/月含以上"), an unbracketed 含 or
+  // no 以上 stayed on the card, so a negotiable posting printed the statutory threshold.
+  it.each([
+    ['面議（經常性薪資4萬/月含以上）', '面議'],
+    ['面議（經常性薪資5萬/月含以上）', '面議'],
+    ['依公司規定（經常性薪資4萬/月含以上）', '依公司規定'],
+    ['面議（經常性薪資達4萬元/月以上）', '面議'],
+    ['待遇面議（經常性薪資達40,000元／月（含）以上）', '待遇面議'],
+    ['面議（經常性薪資達4萬元）', '面議'],
+  ])('JT-1: the clause with a period marker, an unbracketed 含 or no 以上 leaves the card: %s', (posted, words) => {
+    expect(twNegotiableCardText(posted)).toBe(words);
+    expect(twCardMeta({ ...TW_JOB, salaryText: posted })!.pay).toEqual({ text: words, posted, disclosed: false, negotiable: true });
+    // The parser agrees: no figure for the same words.
+    expect(parseSalaryText(posted, { country: 'TW' })).toMatchObject({ min: null, max: null, negotiable: true });
+  });
+
+  it('JT-1: the statute term with an amount and no 以上 is "pay not listed" only next to the wording', () => {
+    expect(isTwNegotiable('經常性薪資4萬/月含以上', false)).toBe(true);
+    expect(twNegotiableCardText('經常性薪資4萬/月含以上')).toBeNull();
+    // An amount the posting states (no 以上, no 面議): not negotiable, and the card keeps the words.
+    expect(isTwNegotiable('經常性薪資5萬元', false)).toBe(false);
+    expect(twCardMeta({ ...TW_JOB, salaryText: '經常性薪資5萬元' })!.pay).toMatchObject({ text: '經常性薪資5萬元', negotiable: false });
+    // A range that starts like the threshold stays on the card.
+    expect(twNegotiableCardText('面議，經常性薪資4萬~6萬')).toBe('面議，經常性薪資4萬~6萬');
+  });
+
   // Review finding: an amount in another currency or for another period is not the clause (a month's regular
   // wage in Taiwan dollars): the card keeps the posting's words, as the parser keeps the figure.
   it('JT-1: an amount in another currency or for another period stays in the card text', () => {

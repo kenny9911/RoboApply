@@ -100,6 +100,7 @@ function explainNow(input: { market: 'intl' | 'cn'; personalized: boolean; fit: 
     market: input.market,
     personalized: input.personalized,
     score: input.fit.score,
+    tier: input.fit.tier,
     kind: input.fit.kind,
     dimensions: input.fit.dimensions,
     skills: { aligned: input.fit.skills.aligned, missing: input.fit.skills.missing },

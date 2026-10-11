@@ -148,6 +148,10 @@ describe('until the webhook tries every secret, the rail needs the one string th
     ['a list in the RoboApply variable in front of a single secret', { ROBOAPPLY_STRIPE_WEBHOOK_SECRET: 'whsec_a,whsec_b', STRIPE_WEBHOOK_SECRET: 'whsec_c' }],
     ['a trailing comma', { STRIPE_WEBHOOK_SECRET: 'whsec_a,' }],
     ['a whitespace-only RoboApply variable in front of a real secret (the route reads the blank one)', { ROBOAPPLY_STRIPE_WEBHOOK_SECRET: '  ', STRIPE_WEBHOOK_SECRET: 'whsec_b' }],
+    // The route passes the raw string to constructEvent and the SDK does not trim it.
+    ['a trailing newline after a real secret (what `echo … | vercel env add` stores)', { STRIPE_WEBHOOK_SECRET: 'whsec_a\n' }],
+    ['a leading space before a real secret', { STRIPE_WEBHOOK_SECRET: ' whsec_a' }],
+    ['a trailing space in the RoboApply variable', { ROBOAPPLY_STRIPE_WEBHOOK_SECRET: 'whsec_a ' }],
   ];
 
   it('the route does not try every secret yet (flip this with the route change, MKT-2B item 1)', () => {
@@ -165,6 +169,15 @@ describe('until the webhook tries every secret, the rail needs the one string th
     expect(stripeRailBlocker(env)).toBe(STRIPE_WEBHOOK_TRIES_EVERY_SECRET ? null : 'webhook_secret_unverifiable');
     // In production with a live key too: this is about fulfilment, not about the key.
     expect(stripeRailReady({ ...secrets, STRIPE_SECRET_KEY: LIVE_KEY, VERCEL_ENV: 'production' })).toBe(STRIPE_WEBHOOK_TRIES_EVERY_SECRET);
+  });
+
+  it('a secret with whitespace inside it verifies neither way: no trim repairs it, so the rail stays closed before and after the route change', () => {
+    const env = { ...KEY, STRIPE_WEBHOOK_SECRET: 'whsec_a whsec_b' };
+    expect(stripeWebhookSecrets(env)).toEqual(['whsec_a whsec_b']);
+    for (const tries of [false, true]) expect(stripeWebhookCanVerify(env, tries)).toBe(false);
+    expect(stripeRailBlocker(env)).toBe('webhook_secret_unverifiable');
+    // Next to a clean secret the looping route still verifies with the clean one.
+    expect(stripeWebhookCanVerify({ STRIPE_WEBHOOK_SECRET: 'whsec_a whsec_b,whsec_c' }, true)).toBe(true);
   });
 
   it('a single secret verifies either way: in either variable, and an empty RoboApply variable falls through to the other', () => {

@@ -182,6 +182,8 @@ export interface PricedPlanLike {
   amountMinor: number | null;
   currency: string;
   passDays?: number | null;
+  /** 'student' on a student plan (the API's `requiresFlag`). */
+  requiresFlag?: string | null;
   localPrice?: {
     currency: string;
     amountMinor: number;
@@ -192,19 +194,31 @@ export interface PricedPlanLike {
   studentDiscountPercent?: number | null;
 }
 
+/**
+ * A student plan (`student_monthly`, `student_quarterly`; 学生月卡 / 学生季卡 on
+ * GoApply). It carries ONE computed label, the student percentage
+ * (MARKET_STRATEGY §4.1 / §4.2), and never "Save N%": that line compares with
+ * the REGULAR monthly price, which a student does not pay, so it would state a
+ * saving larger than the buyer's own.
+ */
+export function isStudentPricedPlan(plan: Pick<PricedPlanLike, 'key' | 'requiresFlag'>): boolean {
+  return plan.requiresFlag === 'student' || plan.key.startsWith('student_');
+}
+
 export function displayPrice(plan: PricedPlanLike, monthly: PricedPlanLike | null | undefined): DisplayPrice {
+  const student = isStudentPricedPlan(plan);
   if (plan.localPrice) {
     return {
       amountMinor: plan.localPrice.amountMinor,
       currency: plan.localPrice.currency,
-      savingsPercent: plan.localPrice.savingsPercent,
+      savingsPercent: student ? null : plan.localPrice.savingsPercent,
       // "About … a month" is a whole amount in every currency: computed from the amount shown.
       monthlyEquivalentMinor: plan.interval === 'week' ? monthlyEquivalentMinor(plan.localPrice.amountMinor) : null,
       local: true,
       studentDiscountPercent: plan.localPrice.studentDiscountPercent ?? null,
     };
   }
-  const months = plan.key === 'pro_quarterly' || plan.key === 'student_quarterly' || plan.passDays === 90 ? 3 : 0;
+  const months = !student && (plan.key === 'pro_quarterly' || plan.passDays === 90) ? 3 : 0;
   return {
     amountMinor: plan.amountMinor,
     currency: plan.currency,

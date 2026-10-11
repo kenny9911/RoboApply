@@ -31,7 +31,7 @@ export const freeSummary = {
     rewrite: day(5, 0),
     outreach: day(2, 0),
     assistant: day(10, 3),
-    autofill: day(5, 0),
+    autofill: day(20, 0),
     ai_answer: day(5, 0),
     job_import: day(5, 0),
     // What Pro would give, from the catalog (only where it is more).

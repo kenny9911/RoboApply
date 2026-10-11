@@ -514,10 +514,16 @@ export function entitlementProfileFor(input: { planKey?: string | null; tier?: s
  * "Save N%" for a plan against the brand's monthly price, computed from our
  * own prices and rounded down. Null when either price is unknown, the plan is
  * not multi-month, or there is no saving.
+ *
+ * Always null for a student plan (MARKET_STRATEGY §4.1 / §4.2 give it one
+ * computed label, `studentDiscountPercent`): `monthly` is the REGULAR monthly
+ * plan, which a student does not pay, so the comparison would print a saving
+ * larger than the buyer's own (49% where a student saves 27%).
  */
 export function savingsPercent(plan: CatalogPlan, monthly: CatalogPlan | null | undefined): number | null {
+  if (isStudentPlan(plan)) return null;
   if (!monthly || monthly.amountMinor === null || plan.amountMinor === null) return null;
-  const months = plan.key === 'pro_quarterly' || plan.key === 'student_quarterly' ? 3 : plan.passDays === 90 ? 3 : 0;
+  const months = plan.key === 'pro_quarterly' || plan.passDays === 90 ? 3 : 0;
   if (!months) return null;
   const reference = monthly.amountMinor * months;
   if (reference <= 0 || plan.amountMinor >= reference) return null;

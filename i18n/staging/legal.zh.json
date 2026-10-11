@@ -17,7 +17,12 @@
     },
     "explain": {
       "quoteFromPosting": "来自职位描述：“{evidence}”",
-      "quoteFromResume": "来自你的简历：“{evidence}”"
+      "quoteFromResume": "来自你的简历：“{evidence}”",
+      "notCompared": {
+        "title_level": "信息不足，无法比较职位和级别。",
+        "industry": "信息不足，无法比较行业。",
+        "logistics": "信息不足，无法比较工作地点、薪资或工作方式。"
+      }
     }
   }
 }

@@ -68,6 +68,9 @@ export const BRAND_OWN_ENV: ReadonlySet<string> = new Set([
   'CONTENT_SAFETY_PROVIDER',
   'CONTENT_SAFETY_TIMEOUT_MS',
   'SAFETY_KEYWORDS_URL',
+  // The contact in the job-source User-Agent (features/jobs/sources/userAgent.ts, MKT-1C): identity, so
+  // GoApply never sends RoboApply's contact to a mainland board.
+  'JOB_SOURCES_CONTACT',
 ]);
 
 export type BrandEnvGroupId = 'voice' | 'speech' | 'storage' | 'push';

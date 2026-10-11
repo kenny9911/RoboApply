@@ -1,12 +1,12 @@
 {
-  "_generatedBy": "npx tsx server/src/features/match/eval/baselineBeforeFit.ts",
-  "writtenAt": "2026-10-11T02:24:02.855Z",
-  "source": "the list read before the fit contract (MatchService.preScoreMany: the stored AI score, else the quick estimate) on the committed fixtures, measured on a checkout without features/match/fit.ts",
+  "_generatedBy": "npm run eval:match -- --write-baseline",
+  "writtenAt": "2026-10-11T02:43:14.773Z",
+  "source": "the fit order of this checkout (getFits) on the committed fixtures",
   "fixturesHash": "5b4aa710cea809c726ff77a7b79394b969a62ea5493dc69c304011435d5f8da4",
   "values": {
-    "ranking/ndcg_at_10/cn/all": 0.939621,
-    "ranking/ndcg_at_10/intl/all": 0.942745,
-    "ranking/ndcg_at_20/cn/all": 0.951689,
-    "ranking/ndcg_at_20/intl/all": 0.953438
+    "ranking/ndcg_at_10/cn/all": 0.941762,
+    "ranking/ndcg_at_10/intl/all": 0.951479,
+    "ranking/ndcg_at_20/cn/all": 0.959775,
+    "ranking/ndcg_at_20/intl/all": 0.963831
   }
 }

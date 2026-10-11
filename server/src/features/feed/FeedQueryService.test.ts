@@ -326,7 +326,8 @@ describe('ranking in the feed', () => {
       // The session ranks.
       expect(ranks.find((r) => r.jobId === item.jobId), item.jobId).toMatchObject({ fit: fit.score, kind: wire });
       // "Why this job": the components and the skill split of that fit (the AI's for the AI score, the estimate's otherwise).
-      expect(explained[i], item.jobId).toMatchObject({ personalized: true, score: fit.score, kind: wire, dimensions: fit.dimensions, skills: { aligned: fit.skills.aligned, missing: fit.skills.missing } });
+      // The tier too: the headline names the tier on the card, which is not always the score's own (hysteresis, admin thresholds).
+      expect(explained[i], item.jobId).toMatchObject({ personalized: true, score: fit.score, tier: fit.tier, kind: wire, dimensions: fit.dimensions, skills: { aligned: fit.skills.aligned, missing: fit.skills.missing } });
     }
     expect(fits.get('j002')!.dimensions.map((d) => d.score)).toEqual([72, 72]);
   });

@@ -30,6 +30,10 @@ export {
 export type { EducationFromText, YearsRange } from './level.js';
 export { annualize, currencyFromText, normalizeSalary, parseSalaryText, payFromDescription, payPlausible, periodFromLabel, periodFromText, statesAmount, withoutPayLabel } from './salary.js';
 export type { ParsedPay, SalaryInput, SalaryResult } from './salary.js';
+// MKT-1C (JT-1): the "pay not listed" wording and the Art. 5 floor clause as regular-expression sources.
+// The Taiwan card hook (sources/atsPublic/hooks.ts) holds character-for-character copies today; with these
+// exported it can import them instead (MKT-3D). Exported at the M1 gate.
+export { CJK_NEGOTIABLE_SOURCE, TW_FLOOR_CLAUSE_SOURCE, TW_FLOOR_OTHER_PAY_BEFORE_SOURCE, TW_FLOOR_STATUTE_SOURCE } from './salary.js';
 export { NO_APPLICANT_COUNT_PROVIDERS, PROVIDER_META, applicantCountAllowed, isLinkedInAssetHost, isLinkedInBranded, isLinkedInHost, sourceFields } from './source.js';
 export type { ProviderMeta, SourceFields } from './source.js';
 export { foldTwToCn } from './zhVariants.js';

@@ -186,6 +186,38 @@ describe('RoboApply home', () => {
     expect(screen.getByRole('heading', { name: 'Pro Monthly' })).toBeInTheDocument();
   });
 
+  // D5: GoApply's home says "Paid passes can't be bought yet." while payments are closed; RoboApply's
+  // listed the Pro price and said nothing (the state of any deployment without a usable Stripe key and
+  // webhook secret: every plan `payments_disabled`, `paymentsOpen: false`, `defaultSelection: null`).
+  it('says paid plans cannot be bought only while /billing/plans says so, and still shows the price', async () => {
+    const closed = () => {
+      const view = plansView('roboapply');
+      return {
+        ...view,
+        paymentsOpen: false,
+        defaultSelection: null,
+        plans: view.plans.map((p) => (p.kind === 'free' ? p : { ...p, sellable: false, unsellableReason: 'payments_disabled' as const, isDefaultSelection: false })),
+      };
+    };
+    api.getPlans.mockImplementation(async () => closed());
+    const shut = renderWithBrand(<RoboApplyHome />);
+    await waitFor(() => expect(screen.getByText("Paid plans can't be bought yet.")).toBeInTheDocument());
+    expect(shut.container.querySelector('[data-pricing-summary] [data-payments-closed]')).toHaveTextContent("Paid plans can't be bought yet.");
+    expect(screen.getByText('$24.99 / month')).toBeInTheDocument();
+    cleanup();
+    // Open: no note.
+    api.getPlans.mockImplementation(async () => ({ ...plansView('roboapply'), paymentsOpen: true }));
+    renderWithBrand(<RoboApplyHome />);
+    await waitFor(() => expect(screen.getByText('$24.99 / month')).toBeInTheDocument());
+    expect(screen.queryByText("Paid plans can't be bought yet.")).toBeNull();
+    // Unknown (first paint, a failed read): nothing claims payments are closed.
+    cleanup();
+    api.getPlans.mockRejectedValue(new Error('down'));
+    renderWithBrand(<RoboApplyHome />);
+    await waitFor(() => expect(api.getPlans).toHaveBeenCalled());
+    expect(screen.queryByText("Paid plans can't be bought yet.")).toBeNull();
+  });
+
   it('the footer carries /cancel, the legal footer and pages; gated features stay hidden', () => {
     const { container } = renderWithBrand(<RoboApplyHome />, { flags: { agent: false, copilot: false } });
     expect(screen.getByTestId('cancel-footer-link')).toHaveAttribute('href', '/cancel');
@@ -487,7 +519,7 @@ describe('GoApply home', () => {
     expect(screen.queryByText("Paid passes can't be bought yet.")).toBeNull();
   });
 
-  it('never says "Price not set yet" before the plans answer or when the request fails; only for a plan that really has no amount', async () => {
+  it('never says "Price not set yet": not before the plans answer, not when the request fails, not for a response without an amount (M-13)', async () => {
     // Before the answer (the server HTML and the first paint): the paid card is named, no price is claimed.
     let release: (v: unknown) => void = () => undefined;
     api.getPlans.mockImplementation(() => new Promise((resolve) => (release = resolve)));
@@ -508,7 +540,8 @@ describe('GoApply home', () => {
     await waitFor(() => expect(api.getPlans).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 0));
     expect(failed.container.querySelector('[data-pricing-summary]')!.textContent).not.toContain('Price not set yet');
-    // The sentence is for a plan the API lists with no amount (RoboApply before its prices are set).
+    // Every plan has a catalog amount since market wave M1, so no plan is "not set". A response that still
+    // carries no amount (an older server) names the plan and prints no price line, as /pricing leaves it out.
     cleanup();
     api.getPlans.mockReset();
     api.getPlans.mockImplementation(async () => {
@@ -516,8 +549,12 @@ describe('GoApply home', () => {
       return { ...view, plans: view.plans.map((p) => (p.kind === 'free' ? p : { ...p, amountMinor: null })) };
     });
     const unset = renderWithBrand(<RoboApplyHome />);
-    await waitFor(() => expect(unset.container.querySelector('[data-pricing-summary] [data-price-unset]')).not.toBeNull());
-    expect(unset.container.querySelector('[data-pricing-summary] [data-price-unset]')!.textContent).toBe('Price not set yet');
+    await waitFor(() => expect(api.getPlans).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
+    const summary = unset.container.querySelector('[data-pricing-summary]') as HTMLElement;
+    expect(summary.querySelector('[data-price-unset]')).toBeNull();
+    expect(summary.textContent).not.toContain('Price not set yet');
+    expect(summary.querySelector('a[href="/pricing"]')).not.toBeNull();
   });
 
   // D5: the free tools run on GoApply, so its chrome links them like RoboApply's, without asking the API.

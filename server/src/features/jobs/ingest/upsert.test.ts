@@ -8,6 +8,7 @@ vi.mock('../../../lib/prisma.js', () => ({ default: {}, prisma: {} }));
 import { toRecordedSql } from '../../../test/sqlSnapshot.js';
 import { createFakePrisma } from '../../../test/fakePrisma.js';
 import { normalizeProviderJob, type ProviderJobInput } from '../normalize/index.js';
+import { TITLE_MATCH_TRUSTED } from '../taxonomy/index.js';
 import type { IngestDb } from './db.js';
 import { newId } from './db.js';
 import {
@@ -59,8 +60,30 @@ describe('batch upsert SQL (snapshot)', () => {
     const updateSet = recorded.text.split('DO UPDATE SET')[1]!.split(' WHERE "RAJob"."visibility"')[0]!;
     expect(updateSet).not.toContain('"firstSeenAt" =');
     expect(updateSet).not.toContain('"visibility" =');
-    expect(updateSet).toContain(`"taxonomyIds" = CASE WHEN cardinality(EXCLUDED."taxonomyIds") > 0`);
+    // An empty incoming role never blanks the stored one.
+    expect(updateSet).toContain(`"taxonomyIds" = CASE WHEN cardinality(EXCLUDED."taxonomyIds") = 0 THEN "RAJob"."taxonomyIds"`);
+    expect(updateSet).toContain(`"primaryTaxonomyId" = CASE WHEN EXCLUDED."primaryTaxonomyId" IS NULL THEN "RAJob"."primaryTaxonomyId"`);
     expect(updateSet).toContain(`"seniority" = COALESCE(EXCLUDED."seniority", "RAJob"."seniority")`);
+  });
+
+  it('MKT-1E request 1: a refresh replaces the role of an enriched row only on a decisive title or a changed title; the score is always written', () => {
+    const updateSet = recorded.text.split('DO UPDATE SET')[1]!.split(' WHERE "RAJob"."visibility"')[0]!;
+    // One rule for both role columns: never enriched, no stored role, a decisive title (a 4-byte float, so ::real), or another title.
+    const rule =
+      `"RAJob"."enrichedAt" IS NULL OR cardinality("RAJob"."taxonomyIds") = 0` +
+      ` OR EXCLUDED."titleMatchScore" >= ${TITLE_MATCH_TRUSTED}::real` +
+      ` OR "RAJob"."titleNormalized" IS DISTINCT FROM EXCLUDED."titleNormalized"`;
+    expect(TITLE_MATCH_TRUSTED).toBe(0.9);
+    expect(updateSet).toContain(`WHEN ${rule} THEN EXCLUDED."taxonomyIds" ELSE "RAJob"."taxonomyIds" END`);
+    expect(updateSet).toContain(`WHEN ${rule} THEN EXCLUDED."primaryTaxonomyId" ELSE "RAJob"."primaryTaxonomyId" END`);
+    expect(updateSet).not.toMatch(/"titleMatchScore" >= 0\.9(?!::real)/);
+    expect(updateSet).toContain(`"titleMatchScore" = EXCLUDED."titleMatchScore"`);
+    // The score is the title's, cast for a NULL: an exact role phrase is decisive, an unknown title has none.
+    expect(UPSERT_COLUMNS).toContain('titleMatchScore');
+    expect(recorded.text).toContain('::real');
+    expect(row.titleMatchScore).toBeGreaterThanOrEqual(TITLE_MATCH_TRUSTED);
+    const unknown = toUpsertRow(normalizeProviderJob(input({ title: 'Zzyzx Qwfp' }), 'activejobs', { now: NOW }), 'co1', 'cjobid000000000000000001');
+    expect(unknown).toMatchObject({ taxonomyIds: [], primaryTaxonomyId: null, titleMatchScore: null });
   });
 
   it('revives only rows the source had dropped, the bank had closed, or that had no apply target', () => {

@@ -106,13 +106,19 @@ export const STRIPE_WEBHOOK_TRIES_EVERY_SECRET: boolean = false;
 /**
  * The webhook can verify a signature with what the environment holds: at
  * least one secret, and (until the route tries every secret) the one string
- * the route reads is a single secret, not a list and not blank.
+ * the route reads is exactly one clean secret: not a list, not blank, and with
+ * no whitespace anywhere. The route hands the RAW string to `constructEvent`,
+ * and the Stripe SDK does not trim a secret: a trailing newline (what
+ * `echo … | vercel env add` stores) fails every signature. Once the route
+ * loops over `stripeWebhookSecrets()`, which trims, that shape verifies again.
  */
 export function stripeWebhookCanVerify(env: EnvSource = process.env, triesEverySecret: boolean = STRIPE_WEBHOOK_TRIES_EVERY_SECRET): boolean {
-  if (stripeWebhookSecrets(env).length === 0) return false;
-  if (triesEverySecret) return true;
+  const secrets = stripeWebhookSecrets(env);
+  if (secrets.length === 0) return false;
+  // A secret with whitespace inside it never matches a signature, looped over or not.
+  if (triesEverySecret) return secrets.some((secret) => !/\s/.test(secret));
   const read = env.ROBOAPPLY_STRIPE_WEBHOOK_SECRET || env.STRIPE_WEBHOOK_SECRET || '';
-  return read.trim() !== '' && !read.includes(',');
+  return read !== '' && !/[\s,]/.test(read);
 }
 
 /** Why the Stripe rail is closed; null when it is ready. */

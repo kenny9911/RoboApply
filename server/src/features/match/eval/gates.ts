@@ -16,8 +16,10 @@
 // judge (model and prompt version), hold at least JUDGE_TRUST_MIN_PAIRS graded
 // pairs, and hold pairs of the market the value is reported for
 // (`judgeDistrust`). Constructed labels (written by the fixture generator
-// from how a posting was built) and human labels do not need the audit; a
-// report always says which kind it used.
+// from how a posting was built), authored labels (written by hand by the
+// engineer of the code under test, as the labelled title sets are) and human
+// labels (graded by a recruiter) do not need the audit; a report always says
+// which kind it used, and never calls authored labels human (D3).
 
 export type GateLayer = 'retrieval' | 'ranking' | 'estimate_vs_ai' | 'scorer' | 'taxonomy' | 'skills' | 'language' | 'latency';
 
@@ -27,7 +29,7 @@ export const GATE_LAYERS: readonly GateLayer[] = ['retrieval', 'ranking', 'estim
 export type GateStatus = 'pass' | 'fail' | 'no_fixture' | 'not_built' | 'untrusted' | 'skipped_offline';
 
 /** Where the labels behind a value came from. Never mixed inside one value. */
-export type LabelKind = 'constructed' | 'judged' | 'human' | 'none';
+export type LabelKind = 'constructed' | 'authored' | 'judged' | 'human' | 'none';
 
 export type GateRule =
   /** value ≥ threshold */

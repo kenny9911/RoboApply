@@ -64,6 +64,7 @@ describe('the name lists (GOAPPLY_PARITY_PLAN §3.1)', () => {
         'CONTENT_SAFETY_PROVIDER',
         'CONTENT_SAFETY_TIMEOUT_MS',
         'SAFETY_KEYWORDS_URL',
+        'JOB_SOURCES_CONTACT',
       ].sort(),
     );
   });

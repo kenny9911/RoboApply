@@ -113,6 +113,15 @@ describe('lib/pricing', () => {
     expect(savingsPercent(5499, 2499, 1)).toBeNull();
     const monthly = { key: 'pro_monthly', interval: 'month', amountMinor: 2499, currency: 'USD' };
     expect(displayPrice({ key: 'pro_quarterly', interval: 'quarter', amountMinor: 5499, currency: 'USD' }, monthly).savingsPercent).toBe(26);
+    // A student plan never prints "Save N%": the reference is the REGULAR monthly price, which a
+    // student does not pay (3799 against 3 × 2499 would print 49%; the student's own saving is 27%).
+    // Not from the base amounts, and not from a local price an older server still computed one for.
+    const studentQuarterly = { key: 'student_quarterly', interval: 'quarter', amountMinor: 3799, currency: 'USD', requiresFlag: 'student', studentDiscountPercent: 30 };
+    expect(displayPrice(studentQuarterly, monthly)).toMatchObject({ savingsPercent: null, studentDiscountPercent: 30 });
+    expect(displayPrice({ key: 'student_quarterly', interval: null, amountMinor: 6900, currency: 'CNY', passDays: 90 }, { ...monthly, amountMinor: 3900, currency: 'CNY' }).savingsPercent).toBeNull();
+    expect(
+      displayPrice({ ...studentQuarterly, localPrice: { currency: 'TWD', amountMinor: 115000, savingsPercent: 48, monthlyEquivalentMinor: null, studentDiscountPercent: 30 } }, monthly),
+    ).toMatchObject({ amountMinor: 115000, savingsPercent: null, studentDiscountPercent: 30, local: true });
     // The student percentage is the server's own computation, passed through in the currency shown.
     expect(displayPrice({ key: 'student_monthly', interval: 'month', amountMinor: 1749, currency: 'USD', studentDiscountPercent: 30 }, monthly).studentDiscountPercent).toBe(30);
   });

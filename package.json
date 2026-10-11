@@ -28,6 +28,8 @@
     "verify:llm": "tsx scripts/verify-llm-brand.ts",
     "smoke:ingest": "tsx server/src/features/jobs/ingest/smoke.ts",
     "eval:match": "tsx server/src/features/match/eval/run.ts",
+    "backfill:roles": "tsx server/src/features/jobs/backfill/run.ts rematch-roles",
+    "backfill:pay": "tsx server/src/features/jobs/backfill/run.ts clear-implausible-pay",
     "check:api-boundary": "node scripts/check-api-boundary.mjs",
     "check:extension": "node scripts/check-extension-no-submit.mjs",
     "check:zh-variants": "node scripts/check-zh-variants.mjs",

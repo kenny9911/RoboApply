@@ -145,6 +145,9 @@ describe('judge trust and row status', () => {
     // Constructed and human labels do not wait for the audit.
     expect(rowStatus(g, { value: 0.9, labels: 'constructed' }, { live: false, audit: null })).toBe('pass');
     expect(rowStatus(g, { value: 0.9, labels: 'human' }, { live: false, audit: null })).toBe('pass');
+    // Authored labels (written by the engineer of the code under test) are named as such and gate like constructed ones.
+    expect(rowStatus(g, { value: 0.9, labels: 'authored' }, { live: false, audit: null })).toBe('pass');
+    expect(rowStatus(g, { value: 0.2, labels: 'authored' }, { live: false, audit: null })).toBe('fail');
   });
 
   it('career changers are outside the ranking gates; language gates read their three subsets only', () => {

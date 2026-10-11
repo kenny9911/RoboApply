@@ -20,15 +20,16 @@
 // A title is matched the way ingest, enrichment and the backfill match it:
 // as written and, for a Taiwan title, in its mainland reading (the taxonomy's
 // Chinese phrases are Simplified; enrich/titleEvidence.ts). The gate also
-// holds for the matcher called on the raw title alone, which is how the
-// evaluation harness of the match area calls it.
+// holds for the matcher called on the raw title alone, and for ingest's own
+// function (normalize `taxonomyIdsForTitle`), which is what the evaluation
+// harness of the match area calls.
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { titleEvidence } from '../enrich/titleEvidence.js';
-import { foldTwToCn } from '../normalize/index.js';
+import { taxonomyIdsForTitle } from '../normalize/index.js';
 import { CJK_HEAD_WORDS, HEAD_NOUNS, bestTaxonomyMatch } from './match.js';
 import { getTaxonomyNode, taxonomyAncestors } from './taxonomy.js';
 
@@ -68,10 +69,10 @@ function filedRaw(title: string): Filed {
   return m ? { roleId: m.id, categoryId: categoryOf(m.id), score: m.score } : null;
 }
 
-/** Ingest's order (normalize `taxonomyIdsForTitle`, and the harness suite): the raw title, and only when that names no role its mainland reading. */
+/** Ingest's own reading (normalize `taxonomyIdsForTitle`, which the harness suite calls too): the better of the title as written and its mainland reading. */
 function filedAsIngest(title: string): Filed {
-  const m = bestTaxonomyMatch(title) ?? (/[㐀-鿿]/.test(title) ? bestTaxonomyMatch(foldTwToCn(title)) : null);
-  return m ? { roleId: m.id, categoryId: categoryOf(m.id), score: m.score } : null;
+  const m = taxonomyIdsForTitle(title);
+  return m.primary && m.score !== null ? { roleId: m.primary, categoryId: categoryOf(m.primary), score: m.score } : null;
 }
 
 /**
@@ -127,7 +128,7 @@ describe.each(MARKETS)('labelled titles: %s', (market) => {
 
   it.each([
     ['on the raw title alone, without the mainland reading', filedRaw],
-    ['in the order ingest and the evaluation harness use (raw title, else its mainland reading)', filedAsIngest],
+    ['by the function ingest and the evaluation harness call (the better of the raw title and its mainland reading)', filedAsIngest],
   ] as const)('holds the same 95%% when the matcher is called %s', (_how, file) => {
     const got = rows.map((r) => ({ r, got: file(r.title) })).filter(({ got }) => got);
     const misses = got.filter(({ r, got }) => got!.categoryId !== r.categoryId).map(({ r, got }) => `${r.title} → ${got!.roleId} (${got!.categoryId}); labelled ${r.categoryId ?? 'unknown'}`);

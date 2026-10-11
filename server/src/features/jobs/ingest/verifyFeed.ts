@@ -42,7 +42,11 @@ export const SAMPLES_PER_SOURCE = 5;
 export const ACCEPTANCE = { minBoardRows: 300, minBoards: 10 } as const;
 
 const BOARD_PROVIDER: ReadonlyMap<string, NormalizeProvider> = new Map([
-  ...(Object.entries(PROVIDER_META) as Array<[NormalizeProvider, { sourceBoard: string }]>).map(([provider, meta]) => [meta.sourceBoard, provider] as const),
+  // `activejobs_feed` (the licensed feed, MKT-5A) writes the same board as the `activejobs` search provider;
+  // the board resolves to the search provider by rule, not by the order of PROVIDER_META (MKT-1C R4).
+  ...(Object.entries(PROVIDER_META) as Array<[NormalizeProvider, { sourceBoard: string }]>)
+    .filter(([provider]) => provider !== 'activejobs_feed')
+    .map(([provider, meta]) => [meta.sourceBoard, provider] as const),
   ...EMPLOYER_BOARDS.map((board) => [board, 'ats_public'] as const),
 ]);
 

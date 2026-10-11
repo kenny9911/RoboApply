@@ -9,8 +9,8 @@
 //
 // Honesty: caps print as "Up to N a day" — never "unlimited"; no offers at
 // launch, no struck-through anchors, weekly never preselected; plan prices
-// only from `getPlanCatalog` (GoApply: catalog defaults in fen with optional
-// overrides; RoboApply: env-configured), never from copy.
+// only from `getPlanCatalog` (catalog defaults with optional overrides on
+// both brands: GoApply in fen, RoboApply in cents), never from copy.
 
 import { z } from 'zod';
 import type { EntitlementSummary } from '../../platform/credits/summary.js';
@@ -134,9 +134,17 @@ export interface PlansResponse {
    * switch is thrown; a RoboApply plan is sellable while the Stripe rail is
    * ready (a usable key and a webhook secret). Otherwise
    * `unsellableReason: 'payments_disabled'`, with the amount still listed.
-   * Student plans (`requiresFlag: 'student'`) are in the list only for a
-   * signed-in, verified student while the `student` capability is on; a
-   * visitor and an unverified user never receive them.
+   * Student plans (`requiresFlag: 'student'`), while the `student` capability
+   * is on (never without it):
+   *   - GoApply: in the list only for a signed-in, verified student; everyone
+   *     else reads the prices in `studentOffer`;
+   *   - RoboApply: in the list for EVERY caller, a visitor included
+   *     (`studentOffer` is always null there). Being listed is not being
+   *     allowed to buy: checkout refuses a student plan without a confirmed
+   *     school email (`student_verification_required`). A client that offers
+   *     plans to choose from must leave them out for a buyer who is not
+   *     verified (the plan sheet's `visiblePlans` does).
+   * One listing rule for both brands is an owner decision (service.ts, P7).
    */
   plans: PlanView[];
   /** Never a weekly plan or the 7-day pass. */

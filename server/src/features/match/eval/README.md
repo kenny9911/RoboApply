@@ -165,8 +165,9 @@ The same seed gives byte-identical files. `fixtures.test.ts` fails when a commit
 **Labels are named by where they come from and never mixed in one value:**
 
 - `constructed`: recorded by the generator from how a posting was written (same role 3, same role group 2, same category 1, otherwise 0, then adjusted for level distance, internships, thin postings, required skills shown, sponsorship, class year and degree). The exact rule is in the header of `fixtures/build.ts`.
+- `authored`: written by hand by the engineer of the code under test. The labelled title sets of the taxonomy gate (`jobs/taxonomy/__fixtures__/labelledTitles.<market>.json`, 300 titles per market) are of this kind: synthetic titles with the role and category their author expects, not a recruiter's grading. They gate like constructed labels; the report prints `authored labels`.
 - `judged`: graded by the LLM judge in a live run.
-- `human`: graded by a person.
+- `human`: graded by a recruiter (the audit CSV of a live run). Never used for labels the team wrote itself.
 
 The 15 role groups are the 15 largest of taxonomy v1 by number of roles. The offline harness has no index counts to rank them by.
 

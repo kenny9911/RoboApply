@@ -197,7 +197,7 @@ describe('explainMatch', () => {
     expect(e.headline).toEqual({ key: 'legal.explain.headline.personalized', params: { tier: 'great' } });
     expect(e.reasons.map((r) => r.key)).toEqual(['legal.explain.reason.title_level', 'legal.explain.reason.skills', 'legal.explain.reason.career_path']);
     expect(String(e.reasons[2]!.params!.evidence).length).toBeLessThanOrEqual(120);
-    expect(e.gaps.map((g) => g.key)).toEqual(['legal.explain.gap.industry', 'legal.explain.notStated.logistics', 'legal.explain.gap.skillsMissing']);
+    expect(e.gaps.map((g) => g.key)).toEqual(['legal.explain.gap.industry', 'legal.explain.notCompared.logistics', 'legal.explain.gap.skillsMissing']);
     expect(e.gaps[2]!.params).toEqual({ skills: 'dbt, Airflow, Looker' });
     expect(e.notices.map((n) => n.key)).toEqual([
       'legal.explain.notice.notHiringChance',
@@ -215,13 +215,69 @@ describe('explainMatch', () => {
     expect(e.notices[0]!.key).toBe('legal.explain.notice.notHiringChance');
   });
 
+  // Review finding (M1 gate): the headline computed its own tier from the score with the DEFAULT thresholds,
+  // while the card shows the tier of the fit (kept by hysteresis for a recomputed AI row, or cut at the
+  // admin's thresholds). A card "78 / Great fit" then opened to "Why this job: a good fit".
+  it('the headline names the tier the card shows when the caller passes it, and computes one only without it', () => {
+    const base = { market: 'intl' as const, personalized: true, kind: 'ai' as const, dimensions: dims };
+    expect(explainMatch({ ...base, score: 78 }).headline).toEqual({ key: 'legal.explain.headline.personalized', params: { tier: 'good' } });
+    expect(explainMatch({ ...base, score: 78, tier: 'great' }).headline).toEqual({ key: 'legal.explain.headline.personalized', params: { tier: 'great' } });
+    expect(explainMatch({ ...base, score: 81, tier: 'good' }).headline.params).toEqual({ tier: 'good' });
+    // No tier known (null) falls back to the score; no score and no tier is the no-score headline.
+    expect(explainMatch({ ...base, score: 81, tier: null }).headline.params).toEqual({ tier: 'great' });
+    expect(explainMatch({ ...base, tier: 'great' }).headline.key).toBe('legal.explain.headline.personalizedNoScore');
+  });
+
   it('emits only known keys (all present in the legal bundle)', async () => {
-    // The `legal` strings are in the English web bundle (WP-91 merged them out of i18n/staging).
+    // The `legal` strings are in the English web bundle (WP-91 merged them out of i18n/staging); a key
+    // added since (`legal.explain.notCompared.*`, M1 gate) is in i18n/staging/legal.en.json until the i18n pass.
     const { default: bundle } = await import('../../../../i18n/messages/en.json', { with: { type: 'json' } });
-    const get = (path: string) => path.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown> | undefined)?.[k], bundle);
+    const { default: staged } = await import('../../../../i18n/staging/legal.en.json', { with: { type: 'json' } });
+    const read = (o: unknown, path: string) => path.split('.').reduce<unknown>((x, k) => (x as Record<string, unknown> | undefined)?.[k], o);
+    const get = (path: string) => read(staged, path) ?? read(bundle, path);
     for (const key of EXPLAIN_KEYS) expect(typeof get(key), key).toBe('string');
     const e = explainMatch({ market: 'cn', personalized: true, score: 50, kind: 'ai', dimensions: dims, skills: { aligned: ['a'], missing: ['b'] } });
     for (const l of [e.headline, ...e.reasons, ...e.gaps, ...e.notices]) expect(EXPLAIN_KEYS).toContain(l.key);
+  });
+
+  // Estimate v2: a part is `not_stated` as often because the PERSON's side is missing (no role
+  // evidence gives title_level null for a student on every card) as because the posting's is.
+  // explainMatch does not know which side, so the sentence may not blame the posting (D3; on
+  // GoApply this text is the PIPL Art. 24 explanation). The three parts get keys of their own
+  // (`notCompared`): rewording the old keys in staging would change English only, and the
+  // translated bundles would keep "the posting does not say" until the i18n pass. `skills` stays:
+  // that part is not stated only when the posting lists no skill.
+  it('a not-compared role, industry or logistics part never says "the posting does not say" (the missing side may be the person\'s)', async () => {
+    const load = async (file: string) => (await import(`../../../../i18n/${file}`, { with: { type: 'json' } })).default as Record<string, unknown>;
+    const at = (o: unknown, path: string) => path.split('.').reduce<unknown>((x, k) => (x as Record<string, unknown> | undefined)?.[k], o);
+    const [en, zh, stagedEn, stagedZh] = await Promise.all([load('messages/en.json'), load('messages/zh.json'), load('staging/legal.en.json'), load('staging/legal.zh.json')]);
+    for (const part of ['title_level', 'industry', 'logistics']) {
+      const key = `legal.explain.notCompared.${part}`;
+      const english = (at(stagedEn, key) ?? at(en, key)) as string;
+      const chinese = (at(stagedZh, key) ?? at(zh, key)) as string;
+      expect(english, key).toMatch(/^Not enough to compare /);
+      expect(english, key).not.toMatch(/posting|does not say/i);
+      expect(chinese, key).toMatch(/^信息不足，无法比较/);
+      expect(chinese, key).not.toMatch(/职位描述|没有说明/);
+      expect(EXPLAIN_KEYS).toContain(key);
+      // The old key says "The posting does not say …" in every translated bundle: never emitted for these parts.
+      expect(EXPLAIN_KEYS).not.toContain(`legal.explain.notStated.${part}`);
+    }
+    expect(EXPLAIN_KEYS).toContain('legal.explain.notStated.skills');
+    // The case: a person with no role evidence against a posting that states its level, industry and location.
+    const e = explainMatch({
+      market: 'cn',
+      personalized: true,
+      score: 60,
+      kind: 'pre',
+      dimensions: [
+        { key: 'title_level', weight: 0.25, score: null, status: 'not_stated' },
+        { key: 'skills', weight: 0.3, score: 100, status: 'scored' },
+        { key: 'industry', weight: 0.15, score: null, status: 'not_stated' },
+        { key: 'logistics', weight: 0.15, score: null, status: 'not_stated' },
+      ] as ExplainDimension[],
+    });
+    expect(e.gaps.map((g) => g.key)).toEqual(['legal.explain.notCompared.title_level', 'legal.explain.notCompared.industry', 'legal.explain.notCompared.logistics']);
   });
 });
 

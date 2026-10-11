@@ -51,6 +51,23 @@ describe('formula', () => {
     expect(RANKING_FACTORS.reduce((a, f) => a + f.weight, 0)).toBeCloseTo(1);
   });
 
+  // Review finding (M1 gate): until a market has its calibration map the order under "Best fit" is not
+  // the order of the numbers on the cards (strategy 2.4 prescribes the blend), and the help page said
+  // it was. The page and the published factor text now state the blend.
+  it('the published text says a job with an AI score is ranked between its two numbers, as the code does', () => {
+    // A card showing 78 (AI) with an estimate of 50 ranks on 64, below an unscored card showing 66.
+    expect(fitForRank({ ai: 78, estimate: 50 })).toBe(64);
+    expect(fitForRank({ estimate: 66 })).toBe(66);
+    const what = RANKING_FACTORS.find((f) => f.key === 'fit')!.what;
+    expect(what).toMatch(/halfway between its quick estimate and its AI score/);
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const staged = JSON.parse(readFileSync(path.resolve(here, '../../../../i18n/staging/landing.en.json'), 'utf8')) as { landing: { ranking: { fit: { body: string } } } };
+    expect(staged.landing.ranking.fit.body).toMatch(/halfway between its quick estimate and its analysed score/);
+    expect(staged.landing.ranking.fit.body).toMatch(/can differ from the number on its card/);
+    // "Halfway" is the constant, not a figure of speech.
+    expect(RANK_BLEND_AI_SHARE).toBe(0.5);
+  });
+
   it('fit input without a calibration map: the estimate, plus half of (AI − estimate) for a scored row', () => {
     expect(RANK_BLEND_AI_SHARE).toBe(0.5);
     // An AI score of 70 next to an estimate of 60 ranks on 65.

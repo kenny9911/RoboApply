@@ -65,7 +65,10 @@ export function DimensionList({ dimensions, withHeading = true }: DimensionListP
                   <span className={styles.fill} style={{ width: `${d.score}%` }} />
                 </div>
               ) : (
-                <p className={styles.muted}>{t('notStated')}</p>
+                // `notCompared`, not the older `notStated` ("…so it doesn't count toward the score"): under
+                // estimate v2 a part that cannot be compared counts at the market's typical value, so the old
+                // sentence is true only for an AI fit. A new key, so no translated bundle keeps saying it.
+                <p className={styles.muted}>{t('notCompared')}</p>
               )}
               {d.evidence.length ? (
                 <ul className={styles.evidence}>

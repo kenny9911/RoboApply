@@ -65,6 +65,8 @@ export const SEAMS = {
   taxonomyAncestors: 'server/src/features/jobs/taxonomy/index.ts#taxonomyAncestors',
   payPlausible: 'server/src/features/jobs/normalize/index.ts#payPlausible',
   foldTwToCn: 'server/src/features/jobs/normalize/index.ts#foldTwToCn',
+  // Ingest's own reading of a title (the better of the title as written and its mainland reading).
+  taxonomyIdsForTitle: 'server/src/features/jobs/normalize/index.ts#taxonomyIdsForTitle',
   // Brand registry (read, never under test).
   getBrand: 'server/src/platform/brand/registry.ts#getBrand',
   // Embeddings client test seam (built by MKT-2H; optional until then).

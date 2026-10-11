@@ -240,6 +240,18 @@ export const TW_FLOOR_STATUTE_SOURCE = '經常性|经常性';
 /** A Taiwan-dollar marker in front of the amount. */
 export const TW_FLOOR_TWD_SOURCE = String.raw`新台幣|新臺幣|新台币|台幣|臺幣|台币|NT\$|NTD|TWD`;
 
+/** What may stand between the pay word and the amount: the clause's verb and a Taiwan-dollar marker. */
+const TW_FLOOR_LEAD = String.raw`\s*(?:達到|达到|達|达|為|为|[:：])?\s*(?:${TW_FLOOR_TWD_SOURCE})?\s*`;
+/** The amount: a round number of ten thousands (4萬 to 9萬), with 元 and a month marker ("4萬/月", "40,000元／月"). */
+const TW_FLOOR_AMOUNT =
+  String.raw`(?:${TW_FLOOR_NOT_RANGE_TOP}(?<![\d０-９.,，〇一二三四五六七八九十百千])[4-9４-９四五六七八九]\s*[萬万]` +
+  String.raw`|${TW_FLOOR_NOT_RANGE_TOP}(?<![\d０-９.,，])[4-9４-９][0０][,，]?[0０]{3})` +
+  String.raw`\s*元?\s*(?:[/／]\s*月)?`;
+/** "… or more": 以上, 或以上, (含)以上, 含以上. */
+const TW_FLOOR_ABOVE = String.raw`\s*(?:[(（]?含[)）]?)?\s*(?:或)?\s*以上`;
+/** Without 以上: the amount must end there, not run on as a longer number ("4萬5千") or a range ("4萬~6萬"). */
+const TW_FLOOR_NOT_LONGER = String.raw`(?!\s*[\d０-９〇一二三四五六七八九千百])(?!\s*[-–—~～〜至到]\s*[\d０-９〇一二三四五六七八九])`;
+
 /**
  * The Employment Services Act Art. 5 clause a "pay not listed" posting repeats
  * ("經常性薪資達4萬元或以上", "每月經常性薪資達4萬元以上", "月薪 NT$50,000 以上"),
@@ -249,6 +261,13 @@ export const TW_FLOOR_TWD_SOURCE = String.raw`新台幣|新臺幣|新台币|台�
  * pattern in jobs/sources/atsPublic/hooks.ts, kept in step by
  * atsPublic.test.ts).
  *
+ * Two forms:
+ *   - with the statute's own term (經常性薪資), 以上 may be missing and a month
+ *     marker or an unbracketed 含 may stand before it, as job boards print it:
+ *     "經常性薪資4萬/月含以上", "經常性薪資達4萬元/月以上", "經常性薪資達4萬元";
+ *   - without that term, 以上 is required ("月薪 NT$50,000 以上", "4萬元/月以上"):
+ *     "月薪4萬" alone is a figure.
+ *
  * Threshold-agnostic: the statutory threshold is a round amount of ten
  * thousands (the ministry has announced a higher one than today's; not
  * passed), so any of 4萬 to 9萬 is recognised and no amount is hard-coded.
@@ -256,14 +275,15 @@ export const TW_FLOOR_TWD_SOURCE = String.raw`新台幣|新臺幣|新台币|台�
  * brackets). Guards:
  *   - digit look-behinds keep "104萬以上" / "140,000以上" / "4.5萬以上" (real
  *     figures) out of it;
- *   - the top of a stated range ("4萬~5萬以上", "3萬至5萬以上") is a figure.
+ *   - the top of a stated range ("4萬~5萬以上", "3萬至5萬以上") is a figure;
+ *   - without 以上 the amount must end there ("經常性薪資4萬~6萬" and
+ *     "4萬5千" are figures).
  * No capturing group (callers read match[0] and the match offset).
  */
 export const TW_FLOOR_CLAUSE_SOURCE =
-  String.raw`(?:每月)?(?:${TW_FLOOR_STATUTE_SOURCE})?(?:薪資|薪资|月薪)?\s*(?:達到|达到|達|达|為|为|[:：])?\s*(?:${TW_FLOOR_TWD_SOURCE})?\s*` +
-  String.raw`(?:${TW_FLOOR_NOT_RANGE_TOP}(?<![\d０-９.,，〇一二三四五六七八九十百千])[4-9４-９四五六七八九]\s*[萬万]` +
-  String.raw`|${TW_FLOOR_NOT_RANGE_TOP}(?<![\d０-９.,，])[4-9４-９][0０][,，]?[0０]{3})` +
-  String.raw`\s*元?\s*(?:[(（]含[)）])?\s*(?:或)?\s*以上`;
+  String.raw`(?:每月)?(?:` +
+  String.raw`(?:${TW_FLOOR_STATUTE_SOURCE})(?:薪資|薪资|月薪)?${TW_FLOOR_LEAD}${TW_FLOOR_AMOUNT}(?:${TW_FLOOR_ABOVE}|${TW_FLOOR_NOT_LONGER})` +
+  String.raw`|(?:薪資|薪资|月薪)?${TW_FLOOR_LEAD}${TW_FLOOR_AMOUNT}${TW_FLOOR_ABOVE})`;
 /** The shape of the statutory-threshold clause (first match; see `floorClauses` for the rule). */
 export const TW_FLOOR_RE = new RegExp(TW_FLOOR_CLAUSE_SOURCE);
 
@@ -285,11 +305,13 @@ const TW_FLOOR_OTHER_PAY_BEFORE_RE = new RegExp(TW_FLOOR_OTHER_PAY_BEFORE_SOURCE
 
 /**
  * How a clause-shaped match names its amount:
- *   statute  with the statute's own term (經常性薪資達4萬元以上);
- *   twd      with a Taiwan-dollar marker (月薪 NT$40,000 以上);
- *   bare     neither (月薪5萬以上, 4萬元以上).
+ *   statute       with the statute's own term and 以上 (經常性薪資達4萬元以上,
+ *                 經常性薪資4萬/月含以上);
+ *   statute_open  with the statute's term and no 以上 (經常性薪資達4萬元);
+ *   twd           with a Taiwan-dollar marker (月薪 NT$40,000 以上);
+ *   bare          neither (月薪5萬以上, 4萬元以上).
  */
-type FloorClauseKind = 'statute' | 'twd' | 'bare';
+type FloorClauseKind = 'statute' | 'statute_open' | 'twd' | 'bare';
 interface FloorClauseMatch {
   index: number;
   text: string;
@@ -309,7 +331,13 @@ function floorClauses(s: string): FloorClauseMatch[] {
   for (const m of s.matchAll(TW_FLOOR_ALL_RE)) {
     const index = m.index ?? 0;
     if (TW_FLOOR_OTHER_PAY_BEFORE_RE.test(s.slice(0, index))) continue;
-    const kind: FloorClauseKind = TW_FLOOR_STATUTE_RE.test(m[0]) ? 'statute' : TW_FLOOR_TWD_RE.test(m[0]) ? 'twd' : 'bare';
+    const kind: FloorClauseKind = TW_FLOOR_STATUTE_RE.test(m[0])
+      ? /以上$/.test(m[0])
+        ? 'statute'
+        : 'statute_open'
+      : TW_FLOOR_TWD_RE.test(m[0])
+        ? 'twd'
+        : 'bare';
     out.push({ index, text: m[0], kind });
   }
   return out;
@@ -321,6 +349,9 @@ function floorClauses(s: string): FloorClauseMatch[] {
  *   statute  always. No posting uses the statute's term for anything else, in
  *            any market: a GoHire or licensed-feed row for a job in Taipei
  *            carries the same sentence.
+ *   statute_open  next to "pay not listed" wording, in any market: "面議
+ *            （經常性薪資達4萬元）" repeats the threshold. Alone ("經常性薪資
+ *            5萬元") it is an amount the posting states, and stays one.
  *   twd      next to "pay not listed" wording, in any market.
  *   bare     next to such wording, for a job in Taiwan, or on an international
  *            row whose country is unknown. Never for a job known to be
@@ -330,7 +361,7 @@ function floorClauses(s: string): FloorClauseMatch[] {
 function isFloorClause(kind: FloorClauseKind, where: FloorClauseWhere): boolean {
   if (kind === 'statute') return true;
   if (!where.negotiable) return false;
-  if (kind === 'twd') return true;
+  if (kind === 'twd' || kind === 'statute_open') return true;
   const country = where.country?.toUpperCase() || null;
   return country === 'TW' || (country === null && (where.market ?? 'intl') === 'intl');
 }

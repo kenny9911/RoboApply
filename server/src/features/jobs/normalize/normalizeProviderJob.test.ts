@@ -464,9 +464,22 @@ describe('helpers', () => {
   });
 
   it('maps titles to [L1, L2, L3] taxonomy ids, folding Taiwan vocabulary for the match', () => {
-    expect(taxonomyIdsForTitle('Senior Backend Engineer')).toEqual({ ids: ['software_engineering', 'swe_backend', 'backend_engineer'], primary: 'backend_engineer' });
+    expect(taxonomyIdsForTitle('Senior Backend Engineer')).toEqual({ ids: ['software_engineering', 'swe_backend', 'backend_engineer'], primary: 'backend_engineer', score: 1 });
     expect(taxonomyIdsForTitle('資料分析師').primary).toBe('data_analyst');
-    expect(taxonomyIdsForTitle('Chief Vibes Officer')).toEqual({ ids: [], primary: null });
+    expect(taxonomyIdsForTitle('Chief Vibes Officer')).toEqual({ ids: [], primary: null, score: null });
+    // M1 gate (MKT-1E request 1): the score of the title match is carried, and of the title as written and its
+    // mainland reading the better one counts, as in enrichment (enrich/titleEvidence.ts). 前端工程師 matches only
+    // 前端 (0.7) as written and the whole role phrase (1) folded.
+    expect(taxonomyIdsForTitle('前端工程師')).toEqual({ ids: ['software_engineering', 'swe_frontend', 'frontend_engineer'], primary: 'frontend_engineer', score: 1 });
+    const weak = taxonomyIdsForTitle('Java Backend Architect');
+    expect(weak.primary).toBe('software_architect');
+    expect(weak.score).toBeGreaterThan(0.6);
+    expect(weak.score).toBeLessThan(0.9);
+    // The normalized job carries the title's score whoever names the role: a source's own occupation code leaves it as the title's evidence.
+    const base = { externalId: 'x-score', company: 'Acme', applyUrl: 'https://example.com/jobs/9' };
+    expect(normalizeProviderJob({ ...base, title: 'Senior Backend Engineer' }, 'activejobs', { now }).titleMatchScore).toBe(1);
+    expect(normalizeProviderJob({ ...base, title: 'Chief Vibes Officer' }, 'activejobs', { now }).titleMatchScore).toBeNull();
+    expect(normalizeProviderJob({ ...base, title: 'Chief Vibes Officer', taxonomyId: 'backend_engineer' }, 'tw_open_data', { now })).toMatchObject({ primaryTaxonomyId: 'backend_engineer', titleMatchScore: null });
   });
 });
 

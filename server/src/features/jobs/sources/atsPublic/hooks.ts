@@ -104,21 +104,34 @@ export const TW_FLOOR_STATUTE_SOURCE = '經常性|经常性';
 /** A Taiwan-dollar marker in front of the amount (the parser's `TW_FLOOR_TWD_SOURCE`). */
 const TW_FLOOR_TWD_SOURCE = String.raw`新台幣|新臺幣|新台币|台幣|臺幣|台币|NT\$|NTD|TWD`;
 
+/** What may stand between the pay word and the amount: the clause's verb and a Taiwan-dollar marker. */
+const TW_FLOOR_LEAD = String.raw`\s*(?:達到|达到|達|达|為|为|[:：])?\s*(?:${TW_FLOOR_TWD_SOURCE})?\s*`;
+/** The amount: a round number of ten thousands (4萬 to 9萬), with 元 and a month marker ("4萬/月", "40,000元／月"). */
+const TW_FLOOR_AMOUNT =
+  String.raw`(?:${TW_FLOOR_NOT_RANGE_TOP}(?<![\d０-９.,，〇一二三四五六七八九十百千])[4-9４-９四五六七八九]\s*[萬万]` +
+  String.raw`|${TW_FLOOR_NOT_RANGE_TOP}(?<![\d０-９.,，])[4-9４-９][0０][,，]?[0０]{3})` +
+  String.raw`\s*元?\s*(?:[/／]\s*月)?`;
+/** "… or more": 以上, 或以上, (含)以上, 含以上. */
+const TW_FLOOR_ABOVE = String.raw`\s*(?:[(（]?含[)）]?)?\s*(?:或)?\s*以上`;
+/** Without 以上: the amount must end there, not run on as a longer number ("4萬5千") or a range ("4萬~6萬"). */
+const TW_FLOOR_NOT_LONGER = String.raw`(?!\s*[\d０-９〇一二三四五六七八九千百])(?!\s*[-–—~～〜至到]\s*[\d０-９〇一二三四五六七八九])`;
+
 /**
  * The Employment Services Act Art. 5 clause such a posting repeats
  * ("經常性薪資達4萬元或以上", "每月經常性薪資達4萬元以上", "月薪 NT$50,000 以上"),
  * as a regular-expression source: the pay parser's pattern, character for
- * character (`TW_FLOOR_CLAUSE_SOURCE` there). Threshold-agnostic: any round
+ * character (`TW_FLOOR_CLAUSE_SOURCE` there). With the statute's term
+ * (經常性薪資) a month marker or 含 may stand before 以上, and 以上 may be missing
+ * ("經常性薪資4萬/月含以上", "經常性薪資達4萬元"). Threshold-agnostic: any round
  * amount of 4萬 to 9萬, in half-width or full-width digits or Chinese
  * numerals, so no amount is hard-coded. Its look-behinds keep a real figure
  * such as "104萬以上" or "140,000以上", and the top of a stated range
  * ("4萬~5萬以上"), out of it. No capturing group.
  */
 export const TW_FLOOR_CLAUSE_SOURCE =
-  String.raw`(?:每月)?(?:${TW_FLOOR_STATUTE_SOURCE})?(?:薪資|薪资|月薪)?\s*(?:達到|达到|達|达|為|为|[:：])?\s*(?:${TW_FLOOR_TWD_SOURCE})?\s*` +
-  String.raw`(?:${TW_FLOOR_NOT_RANGE_TOP}(?<![\d０-９.,，〇一二三四五六七八九十百千])[4-9４-９四五六七八九]\s*[萬万]` +
-  String.raw`|${TW_FLOOR_NOT_RANGE_TOP}(?<![\d０-９.,，])[4-9４-９][0０][,，]?[0０]{3})` +
-  String.raw`\s*元?\s*(?:[(（]含[)）])?\s*(?:或)?\s*以上`;
+  String.raw`(?:每月)?(?:` +
+  String.raw`(?:${TW_FLOOR_STATUTE_SOURCE})(?:薪資|薪资|月薪)?${TW_FLOOR_LEAD}${TW_FLOOR_AMOUNT}(?:${TW_FLOOR_ABOVE}|${TW_FLOOR_NOT_LONGER})` +
+  String.raw`|(?:薪資|薪资|月薪)?${TW_FLOOR_LEAD}${TW_FLOOR_AMOUNT}${TW_FLOOR_ABOVE})`;
 
 /**
  * Text that ends by naming another currency or another pay period: the amount
@@ -142,10 +155,14 @@ function otherPayBefore(text: string, offset: number): boolean {
   return TW_FLOOR_OTHER_PAY_BEFORE_RE.test(text.slice(0, offset));
 }
 
-/** The pay text carries the statute's own clause ("每月經常性薪資達4萬元以上"): by itself "pay not listed". */
+/**
+ * The pay text carries the statute's own clause ("每月經常性薪資達4萬元以上"): by
+ * itself "pay not listed". The form without 以上 ("經常性薪資5萬元") is not: alone
+ * it is an amount the posting states (the parser's kind `statute_open`).
+ */
 function hasStatuteClause(text: string): boolean {
   for (const m of text.matchAll(TW_FLOOR_CLAUSE_RE)) {
-    if (TW_FLOOR_STATUTE_RE.test(m[0]) && !otherPayBefore(text, m.index ?? 0)) return true;
+    if (TW_FLOOR_STATUTE_RE.test(m[0]) && /以上$/.test(m[0]) && !otherPayBefore(text, m.index ?? 0)) return true;
   }
   return false;
 }

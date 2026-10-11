@@ -610,6 +610,43 @@ describe('JT-1: the Art. 5 floor clause is recognised at any threshold', () => {
     expect(payFromDescription('月薪：NT$ 45,000 ~ 60,000\n（經常性薪資達4萬元以上）', { country: 'TW' })).toMatchObject({ min: 45000, max: 60000, negotiable: false });
   });
 
+  // Review finding (high, M1 gate): the clause was recognised only when 以上 followed the amount directly. A
+  // job board's negotiable wording with a period marker ("4萬/月含以上"), an unbracketed 含, or no 以上 at all
+  // was stored as a disclosed NT$40,000 minimum (salaryAnnualMin 480,000): the claim JT-1 forbids.
+  it.each([
+    ['面議（經常性薪資4萬/月含以上）', '面議(經常性薪資4萬/月含以上)'],
+    ['面議（經常性薪資5萬/月含以上）', '面議(經常性薪資5萬/月含以上)'],
+    ['依公司規定（經常性薪資4萬/月含以上）', '依公司規定(經常性薪資4萬/月含以上)'],
+    ['面議（經常性薪資達4萬元/月以上）', '面議(經常性薪資達4萬元/月以上)'],
+    ['待遇面議（經常性薪資達40,000元／月（含）以上）', '待遇面議(經常性薪資達40,000元/月(含)以上)'],
+    ['面議（經常性薪資達4萬元）', '面議(經常性薪資達4萬元)'],
+    ['面議（經常性薪資達 40,000 元）', '面議(經常性薪資達 40,000 元)'],
+  ])('the clause with a period marker, an unbracketed 含 or no 以上 is never a figure: %s', (text, words) => {
+    for (const opts of [{ country: 'TW', market: 'intl' as const }, { country: 'TW', market: 'cn' as const }, { country: null, market: 'intl' as const }, { market: 'cn' as const }]) {
+      expect(parseSalaryText(text, opts), JSON.stringify(opts)).toMatchObject({ min: null, max: null, currency: null, period: null, negotiable: true });
+      expect(normalizeSalary({ text, ...opts }), JSON.stringify(opts)).toMatchObject({ ...NO_PAY, salaryText: words });
+      expect(normalizeSalary({ description: `工作內容：開發\n【薪資待遇】${text}`, ...opts }), JSON.stringify(opts)).toMatchObject(NO_PAY);
+      expect(payFromDescription(`【薪資待遇】${text}`, opts), JSON.stringify(opts)).toMatchObject({ min: null, max: null, negotiable: true });
+    }
+  });
+
+  it('the statute\'s clause with a period marker stands alone as "pay not listed"; without 以上 it needs the wording beside it', () => {
+    for (const text of ['經常性薪資4萬/月含以上', '每月經常性薪資達4萬元/月以上', '經常性薪資5萬元含以上']) {
+      expect(parseSalaryText(text, { country: 'TW' }), text).toMatchObject({ min: null, max: null, negotiable: true });
+      expect(normalizeSalary({ text, market: 'cn' }), text).toMatchObject(NO_PAY);
+    }
+    // No 以上 and no "pay not listed" wording: the posting states an amount, and it stays one.
+    expect(parseSalaryText('經常性薪資5萬元', { country: 'TW' })).toMatchObject({ min: 50000, max: 50000, currency: 'TWD', negotiable: false });
+    expect(parseSalaryText('每月經常性薪資 40,000 元', { country: 'TW' })).toMatchObject({ min: 40000, currency: 'TWD', negotiable: false });
+    // A range or a longer amount that only starts like the threshold is a figure, with or without the wording.
+    expect(parseSalaryText('面議，經常性薪資4萬~6萬', { country: 'TW' })).toMatchObject({ min: 40000, max: 60000, negotiable: false });
+    expect(parseSalaryText('面議，經常性薪資 40,000~60,000 元', { country: 'TW' })).toMatchObject({ min: 40000, max: 60000, negotiable: false });
+    expect(parseSalaryText('經常性薪資4萬至5萬元/月', { country: 'TW' })).toMatchObject({ min: 40000, max: 50000, negotiable: false });
+    // "月薪4萬" with no 以上 and no statute term was never the clause and is not now.
+    expect(parseSalaryText('面議，月薪4萬', { country: 'TW' })).toMatchObject({ min: 40000, negotiable: false });
+    expect(parseSalaryText('面議，月薪4萬/月', { country: 'TW' })).toMatchObject({ min: 40000, negotiable: false });
+  });
+
   // Review finding (high): the clause is decided by where the job is and by its own words, not by the market.
   // A GoHire row (market cn) for a job in Taipei, and a mainland row of unknown country, carried NT$40,000
   // (or ¥40,000 a month) as disclosed pay.

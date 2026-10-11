@@ -333,6 +333,12 @@ export type NormalizedJob = {
 
   taxonomyIds: string[];
   primaryTaxonomyId: string | null;
+  /**
+   * How strongly the TITLE names a role (0..1; null when it names none), whoever set the role above
+   * (a source's own occupation code leaves it as the title's evidence). Ingest stores it so a refresh
+   * replaces an enriched row's role only when the title is decisive (`TITLE_MATCH_TRUSTED`, 0.9).
+   */
+  titleMatchScore: number | null;
   seniority: Seniority | null;
   roleType: RoleType | null;
   minYears: number | null;

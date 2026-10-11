@@ -17,7 +17,12 @@
     },
     "explain": {
       "quoteFromPosting": "From the posting: “{evidence}”",
-      "quoteFromResume": "From your resume: “{evidence}”"
+      "quoteFromResume": "From your resume: “{evidence}”",
+      "notCompared": {
+        "title_level": "Not enough to compare the role and level.",
+        "industry": "Not enough to compare the industry.",
+        "logistics": "Not enough to compare the location, pay or work setup."
+      }
     }
   }
 }

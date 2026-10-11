@@ -28,6 +28,10 @@
 //     keeps its original record, and only new entries are added. Entries the
 //     posting no longer supports are removed by enrichment's own reconcile
 //     (a changed posting is re-enriched), never blanked here;
+//   - the role (`taxonomyIds`, `primaryTaxonomyId`) of a row enrichment has already ruled on is replaced
+//     only by a decisive title (`titleMatchScore` >= 0.9) or after the title changed (`ROLE_FROM_INGEST`),
+//     so a model's override of a weak title match survives the next listing; `titleMatchScore` itself is
+//     always the incoming title's score;
 //   - `visibility` and `firstSeenAt` never change; a private row (a user's own
 //     import) is never touched (`WHERE "RAJob"."visibility" = 'public'`);
 //   - a row archived because its source dropped it ('source_removed'), the
@@ -45,6 +49,7 @@ import { Prisma } from '../../../generated/prisma/client.js';
 import type { Market } from '../../../platform/brand/index.js';
 import { NO_APPLICANT_COUNT_PROVIDERS, type NormalizedJob, type NormalizeProvider } from '../normalize/index.js';
 import type { SourceCloseReason } from '../sources/index.js';
+import { TITLE_MATCH_TRUSTED } from '../taxonomy/index.js';
 import { UPSERT_BATCH } from './config.js';
 import { newId, type IngestDb } from './db.js';
 
@@ -112,6 +117,7 @@ export interface JobUpsertRow {
   companyId: string | null;
   taxonomyIds: string[];
   primaryTaxonomyId: string | null;
+  titleMatchScore: number | null;
   seniority: string | null;
   roleType: string | null;
   minYears: number | null;
@@ -160,7 +166,7 @@ export const UPSERT_COLUMNS = [
   'id', 'externalId', 'sourceBoard', 'applyUrl', 'title', 'titleNormalized', 'companyName', 'companyNameNormalized',
   'companyLogoUrl', 'location', 'locationCity', 'locationCountry', 'workType', 'employmentType',
   'salaryMin', 'salaryMax', 'salaryCurrency', 'salaryPeriod', 'description', 'descriptionPlain',
-  'postedAt', 'market', 'visibility', 'companyId', 'taxonomyIds', 'primaryTaxonomyId',
+  'postedAt', 'market', 'visibility', 'companyId', 'taxonomyIds', 'primaryTaxonomyId', 'titleMatchScore',
   'seniority', 'roleType', 'minYears', 'maxYears', 'skills', 'workModel',
   'remoteScope', 'locationRegion', 'locations', 'geoLat', 'geoLng',
   'salarySource', 'salaryAnnualMin', 'salaryAnnualMax', 'salaryMonths', 'salaryDisclosed',
@@ -230,6 +236,7 @@ export function toUpsertRow(
     companyId,
     taxonomyIds: job.taxonomyIds,
     primaryTaxonomyId: job.primaryTaxonomyId,
+    titleMatchScore: typeof job.titleMatchScore === 'number' && Number.isFinite(job.titleMatchScore) ? job.titleMatchScore : null,
     seniority: job.seniority,
     roleType: job.roleType,
     minYears: int(job.minYears),
@@ -277,7 +284,7 @@ function valuesTuple(r: JobUpsertRow): Prisma.Sql {
   return Prisma.sql`(${r.id}, ${r.externalId}, ${r.sourceBoard}, ${r.applyUrl}, ${r.title}, ${r.titleNormalized}, ${r.companyName}, ${r.companyNameNormalized},
     ${r.companyLogoUrl}::text, ${r.location}::text, ${r.locationCity}::text, ${r.locationCountry}::text, ${r.workType}, ${r.employmentType}::text,
     ${r.salaryMin}::int, ${r.salaryMax}::int, ${r.salaryCurrency}::text, ${r.salaryPeriod}::text, ${r.description}, ${r.descriptionPlain},
-    ${r.postedAt}::timestamp(3), ${r.market}, ${r.visibility}, ${r.companyId}::text, ${r.taxonomyIds}::text[], ${r.primaryTaxonomyId}::text,
+    ${r.postedAt}::timestamp(3), ${r.market}, ${r.visibility}, ${r.companyId}::text, ${r.taxonomyIds}::text[], ${r.primaryTaxonomyId}::text, ${r.titleMatchScore}::real,
     ${r.seniority}::text, ${r.roleType}::text, ${r.minYears}::int, ${r.maxYears}::int, ${r.skills}::text[], ${r.workModel}::text,
     ${r.remoteScope}::text, ${r.locationRegion}::text, ${r.locations}::jsonb, ${r.geoLat}::double precision, ${r.geoLng}::double precision,
     ${r.salarySource}::text, ${r.salaryAnnualMin}::int, ${r.salaryAnnualMax}::int, ${r.salaryMonths}::int, ${r.salaryDisclosed}::boolean,
@@ -306,13 +313,31 @@ function mergeJsonListSql(column: 'fraudFlags' | 'marketTags', keys: readonly st
       END`;
 }
 
+/**
+ * When a refresh may replace the role a stored row holds (MKT-1E request 1, applied at the M1 gate).
+ * Enrichment may give a row a role the title alone does not decide (a title match under
+ * `TITLE_MATCH_TRUSTED`); the row is not enriched again at the same version, so a refresh that rewrote the
+ * role from the same weak match would undo the model's decision each time the provider lists the posting.
+ * Ingest's role therefore replaces the stored one only when one of these holds:
+ *   - the row was never enriched, or holds no role;
+ *   - the title is decisive (score >= 0.9: enrichment itself lets a decisive title win);
+ *   - the title changed since the row was stored (the stored role was decided for another title).
+ * The column is a 4-byte float: compare with `::real`, never a bare 0.9 (a stored 0.9 reads back as
+ * 0.89999998). In ON CONFLICT ... SET, "RAJob".<column> is the stored value before this update.
+ */
+const ROLE_FROM_INGEST = Prisma.raw(
+  `"RAJob"."enrichedAt" IS NULL OR cardinality("RAJob"."taxonomyIds") = 0` +
+    ` OR EXCLUDED."titleMatchScore" >= ${TITLE_MATCH_TRUSTED}::real` +
+    ` OR "RAJob"."titleNormalized" IS DISTINCT FROM EXCLUDED."titleNormalized"`,
+);
+
 /** The batch statement (exported for the SQL snapshot test). */
 export function buildJobUpsertSql(rows: JobUpsertRow[]): Prisma.Sql {
   return Prisma.sql`
     INSERT INTO "RAJob" ("id", "externalId", "sourceBoard", "applyUrl", "title", "titleNormalized", "companyName", "companyNameNormalized",
       "companyLogoUrl", "location", "locationCity", "locationCountry", "workType", "employmentType",
       "salaryMin", "salaryMax", "salaryCurrency", "salaryPeriod", "description", "descriptionPlain",
-      "postedAt", "market", "visibility", "companyId", "taxonomyIds", "primaryTaxonomyId",
+      "postedAt", "market", "visibility", "companyId", "taxonomyIds", "primaryTaxonomyId", "titleMatchScore",
       "seniority", "roleType", "minYears", "maxYears", "skills", "workModel",
       "remoteScope", "locationRegion", "locations", "geoLat", "geoLng",
       "salarySource", "salaryAnnualMin", "salaryAnnualMax", "salaryMonths", "salaryDisclosed",
@@ -358,8 +383,15 @@ export function buildJobUpsertSql(rows: JobUpsertRow[]): Prisma.Sql {
       "expiresAt" = EXCLUDED."expiresAt",
       "market" = EXCLUDED."market",
       "companyId" = COALESCE(EXCLUDED."companyId", "RAJob"."companyId"),
-      "taxonomyIds" = CASE WHEN cardinality(EXCLUDED."taxonomyIds") > 0 THEN EXCLUDED."taxonomyIds" ELSE "RAJob"."taxonomyIds" END,
-      "primaryTaxonomyId" = COALESCE(EXCLUDED."primaryTaxonomyId", "RAJob"."primaryTaxonomyId"),
+      "taxonomyIds" = CASE
+        WHEN cardinality(EXCLUDED."taxonomyIds") = 0 THEN "RAJob"."taxonomyIds"
+        WHEN ${ROLE_FROM_INGEST} THEN EXCLUDED."taxonomyIds"
+        ELSE "RAJob"."taxonomyIds" END,
+      "primaryTaxonomyId" = CASE
+        WHEN EXCLUDED."primaryTaxonomyId" IS NULL THEN "RAJob"."primaryTaxonomyId"
+        WHEN ${ROLE_FROM_INGEST} THEN EXCLUDED."primaryTaxonomyId"
+        ELSE "RAJob"."primaryTaxonomyId" END,
+      "titleMatchScore" = EXCLUDED."titleMatchScore",
       "seniority" = COALESCE(EXCLUDED."seniority", "RAJob"."seniority"),
       "roleType" = COALESCE(EXCLUDED."roleType", "RAJob"."roleType"),
       "minYears" = COALESCE(EXCLUDED."minYears", "RAJob"."minYears"),

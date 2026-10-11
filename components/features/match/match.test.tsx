@@ -143,8 +143,27 @@ describe('DimensionList — "What we compared"', () => {
     expect(within(parts[2]!).getByText('“Built payment APIs”')).toBeInTheDocument();
     expect(within(parts[2]!).getByText('From your resume')).toBeInTheDocument();
     expect(within(parts[3]!).getByText('The listed pay is below your minimum: EUR 70000–90000')).toBeInTheDocument();
-    expect(within(parts[4]!).getByText("Not enough to compare, so it doesn't count toward the score.")).toBeInTheDocument();
+    // Estimate v2: a part that cannot be compared counts at the market's typical value in a quick estimate
+    // (and is left out only in an AI fit), so the line makes no claim about the score.
+    expect(within(parts[4]!).getByText('Not enough to compare.')).toBeInTheDocument();
+    expect(within(parts[4]!).queryByText(/count toward the score/)).not.toBeInTheDocument();
     expect(within(parts[4]!).queryByRole('meter')).not.toBeInTheDocument();
+  });
+
+  // MKT-1F: a quick estimate does not compare a logistics part that only repeats the person's own filters. The
+  // server sends it as not stated (no number) with one line under the ref `logistics_by_your_filters`.
+  it('a logistics part that only repeats your filters shows no number and says why, with the post\'s own words', () => {
+    const byFilters: MatchDimension[] = [
+      { key: 'logistics', weight: 10, score: null, status: 'not_stated', evidence: [{ text: 'Austin, TX · USD 120,000–150,000 a year', source: 'posting', ref: 'logistics_by_your_filters' }] },
+    ];
+    renderWithProviders(<DimensionList dimensions={byFilters} />);
+    const part = screen.getAllByRole('listitem').find((li) => li.getAttribute('data-part') === 'logistics')!;
+    expect(within(part).getByText('These already match the filters you set, so they do not change the score: Austin, TX · USD 120,000–150,000 a year')).toBeInTheDocument();
+    expect(within(part).queryByRole('meter')).not.toBeInTheDocument();
+    expect(within(part).getByText('Not enough to compare.')).toBeInTheDocument();
+    expect(within(part).queryByText(/count toward the score/)).not.toBeInTheDocument();
+    // Never the plain-quote fallback for this ref.
+    expect(within(part).queryByText('“Austin, TX · USD 120,000–150,000 a year”')).not.toBeInTheDocument();
   });
 });
 

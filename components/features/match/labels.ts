@@ -22,6 +22,9 @@ const EVIDENCE_REFS = new Set([
   'pay_not_met',
   'visa_offered',
   'visa_not_offered',
+  // A quick estimate's logistics part that only repeats the person's own filters (server: match/preScore.ts
+  // `LOGISTICS_BY_FILTERS_REF`): it is not compared, and this line says why, quoting the post's place and pay words.
+  'logistics_by_your_filters',
 ]);
 const DEGREES = new Set(['none', 'associate', 'bachelor', 'master', 'phd']);
 const LEVELS = new Set(['intern_newgrad', 'entry', 'mid', 'senior', 'lead_staff', 'director_exec']);

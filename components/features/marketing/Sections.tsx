@@ -328,7 +328,11 @@ export interface PricingSummaryProps {
   ns?: 'landing.home.pricing' | 'landing.cnHome.pricing';
   /** Anchor id of the section. */
   id?: string;
-  /** A line under the heading (e.g. "Paid plans are not open yet", only while the plans API says so). */
+  /**
+   * A line under the heading, in place of the section's own. Without it the
+   * section says `notOpen` of its namespace by itself while the plans API
+   * answers `paymentsOpen: false`, on either brand (D5).
+   */
   note?: ReactNode;
 }
 
@@ -336,11 +340,12 @@ export interface PricingSummaryProps {
  * Free + the preselected paid plan, priced from GET /billing/plans. A plan
  * name with no translation yet falls back to the catalog's own label.
  *
- * "Price not set yet" is a statement about the plan, so it is printed only
- * when the plans API has answered and that plan carries no amount. Before the
- * answer (the server HTML, the first paint, a failed request) the paid card
+ * Every plan of either catalog has an amount (MARKET_STRATEGY M-13: prices are
+ * catalog defaults, no plan is ever "price not set"), so the card never says a
+ * price is missing. Before the answer (the server HTML, the first paint, a
+ * failed request), and for a response that carries no amount, the paid card
  * shows its name and no price line: nothing is said about a price that is not
- * known yet (D3; a GoApply plan is never unpriced, plan §3.8).
+ * known (D3). `/pricing` follows the same rule (PricingPage leaves such a plan out).
  */
 export function PricingSummary({ from, ns = 'landing.home.pricing', id = 'pricing', note = null }: PricingSummaryProps) {
   const t = useTranslations(ns);
@@ -358,6 +363,9 @@ export function PricingSummary({ from, ns = 'landing.home.pricing', id = 'pricin
           price: formatMoney(locale, pro.amountMinor, pro.currency),
         })
       : null;
+  // The price is listed and nothing can be bought (no rail is ready, or the kill switch): say so, as /pricing
+  // and the plan sheet do. Only on the API's own `false`: before the answer or after a failed read, nothing is claimed.
+  const closedNote = note ?? (data?.paymentsOpen === false ? t('notOpen') : null);
   return (
     <section className={styles.sectionAlt} id={id} aria-labelledby="home-pricing-title" data-pricing-summary="">
       <div className={styles.wrap}>
@@ -367,7 +375,11 @@ export function PricingSummary({ from, ns = 'landing.home.pricing', id = 'pricin
             {t('title')}
           </h2>
           <p className={styles.body}>{t('sub')}</p>
-          {note ? <p className={styles.body}>{note}</p> : null}
+          {closedNote ? (
+            <p className={styles.body} data-payments-closed="">
+              {closedNote}
+            </p>
+          ) : null}
         </div>
         <div className={styles.grid2}>
           <article className={styles.card}>
@@ -380,13 +392,7 @@ export function PricingSummary({ from, ns = 'landing.home.pricing', id = 'pricin
           </article>
           <article className={`${styles.card} ${styles.cardFeatured}`}>
             <h3 className={styles.h3}>{tc.has(`plans.${brand.id}.${proKey}`) ? tc(`plans.${brand.id}.${proKey}`) : (pro?.defaultLabel ?? '—')}</h3>
-            {proPrice ? (
-              <p className={styles.price}>{proPrice}</p>
-            ) : pro ? (
-              <p className={styles.price} data-price-unset="">
-                {t('notSet')}
-              </p>
-            ) : null}
+            {proPrice ? <p className={styles.price}>{proPrice}</p> : null}
             <p className={styles.body}>{t('proNote')}</p>
             <a className={styles.inlineLink} href="/pricing">
               {t('seeAll')}

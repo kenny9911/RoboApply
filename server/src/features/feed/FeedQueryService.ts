@@ -460,7 +460,8 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
       if (!c.badge || !c.dimensions) return undefined;
       // A logistics part met only through the person's own filters says nothing about the job: it is neither a reason nor a gap.
       const dimensions = c.dimensions.filter((d) => !isByFilters(d));
-      return deps.explain({ market, personalized: true, score: c.badge.score, kind: c.badge.kind, dimensions, skills: c.skills ?? { aligned: [], missing: [] } });
+      // The badge's own tier: the headline never names another tier than the card.
+      return deps.explain({ market, personalized: true, score: c.badge.score, tier: c.badge.tier, kind: c.badge.kind, dimensions, skills: c.skills ?? { aligned: [], missing: [] } });
     } catch (err) {
       logger.warn('FEED', 'explanation failed for a job', { jobId: c.row.id, error: err instanceof Error ? err.message : String(err) });
       return undefined;

@@ -40,6 +40,14 @@ export interface ExplainMatchInput {
   /** False when the user turned personalisation off or has not chosen (GoApply). */
   personalized: boolean;
   score?: number | null;
+  /**
+   * The tier the card shows for this fit (`Fit.tier`, the feed badge's tier).
+   * Pass it wherever there is one: the headline then names the same tier as
+   * the card. A fit's tier is not always `tierForScore(score)` with the
+   * default thresholds (a recomputed AI row keeps its tier by hysteresis, and
+   * the thresholds are an admin setting). Absent or null → computed from the score.
+   */
+  tier?: FitTierKey | null;
   kind?: 'pre' | 'ai';
   dimensions?: ExplainDimension[];
   skills?: { aligned: string[]; missing: string[] };
@@ -68,6 +76,22 @@ function skillList(skills: string[]): string {
 function line(key: string, params?: Record<string, string | number>): ExplainLine {
   return params ? { key, params } : { key };
 }
+
+/**
+ * Parts that are `not_stated` as often because the PERSON's side is missing
+ * as because the posting's is: under estimate v2 the role part is null for
+ * anyone with no role evidence (a student with no work history, on every
+ * card), and industry and logistics likewise. This function is not told which
+ * side is missing, so for these parts it says "Not enough to compare …"
+ * (`legal.explain.notCompared.*`) and never "The posting does not say …",
+ * which would be a false statement about a posting (D3; on GoApply this text
+ * is the PIPL Art. 24 explanation). New keys, not new wording under the old
+ * ones: a changed English string leaves the eight translated bundles saying
+ * the old sentence until the i18n pass. `skills` keeps `notStated` (that part
+ * is not stated only when the posting lists no skill), and `career_path` was
+ * always worded neutrally.
+ */
+const NOT_COMPARED_KEYS: ReadonlySet<MatchDimensionKey> = new Set<MatchDimensionKey>(['title_level', 'industry', 'logistics']);
 
 export function explainMatch(input: ExplainMatchInput): MatchExplanation {
   const notices: ExplainLine[] = [];
@@ -102,13 +126,13 @@ export function explainMatch(input: ExplainMatchInput): MatchExplanation {
   }
 
   for (const d of dims) {
-    if (d.status === 'not_stated') gaps.push(line(`legal.explain.notStated.${d.key}`));
+    if (d.status === 'not_stated') gaps.push(line(`legal.explain.${NOT_COMPARED_KEYS.has(d.key) ? 'notCompared' : 'notStated'}.${d.key}`));
     else if (typeof d.score === 'number' && d.score < GAP_MAX_SCORE) gaps.push(line(`legal.explain.gap.${d.key}`));
   }
   const missing = skillList(input.skills?.missing ?? []);
   if (missing) gaps.push(line('legal.explain.gap.skillsMissing', { skills: missing }));
 
-  const tier: FitTierKey | null = typeof input.score === 'number' ? tierForScore(input.score) : null;
+  const tier: FitTierKey | null = typeof input.score === 'number' ? (input.tier ?? tierForScore(input.score)) : null;
   const headline = tier ? line('legal.explain.headline.personalized', { tier }) : line('legal.explain.headline.personalizedNoScore');
 
   notices.push(line('legal.explain.notice.notHiringChance'));
@@ -136,6 +160,6 @@ export const EXPLAIN_KEYS: readonly string[] = (() => {
     'legal.explain.notice.turnOn',
     ...dims.map((d) => `legal.explain.reason.${d}`),
     ...dims.map((d) => `legal.explain.gap.${d}`),
-    ...dims.map((d) => `legal.explain.notStated.${d}`),
+    ...dims.map((d) => `legal.explain.${NOT_COMPARED_KEYS.has(d) ? 'notCompared' : 'notStated'}.${d}`),
   ];
 })();

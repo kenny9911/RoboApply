@@ -12,9 +12,14 @@
 // with no deterministic match is outside the denominator (enrichment decides
 // it); the share that did match is printed beside the precision.
 //
-// The title goes through the same steps as ingest: the match, and for a title
-// with Han characters a second try after folding Taiwan vocabulary to mainland
-// forms (normalize/zhVariants.ts).
+// The title is filed by ingest's own function (normalize `taxonomyIdsForTitle`:
+// the better of the title as written and, for a title with Han characters, its
+// mainland reading), so the gate measures what ingest and the estimate run and
+// cannot drift from them.
+//
+// Labels: `authored`. The two labelled sets were written by the engineer of
+// the matcher from the role tree (MKT-1E), not graded by a recruiter, and the
+// report says so. `human` is kept for labels a recruiter graded.
 
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -47,8 +52,8 @@ export function readLabelledTitles(raw: unknown): LabelledTitle[] {
     }));
 }
 
-type MatchTitle = (title: string, options?: { limit?: number }) => Array<{ id: string; score: number }>;
-type Ancestors = (id: string) => Array<{ id: string; level: number }>;
+/** normalize `taxonomyIdsForTitle`: [L1, L2, L3] ids, empty when no role matches well enough. */
+type TaxonomyIdsForTitle = (title: string) => { ids: string[]; primary: string | null; score: number | null };
 
 export interface PrecisionResult {
   precision: number | null;
@@ -82,14 +87,9 @@ export async function run(ctx: SuiteContext): Promise<SuiteMeasure[]> {
     }
     try {
       const rows = readLabelledTitles(JSON.parse(readFileSync(file, 'utf8')));
-      const matchTitle = await loadSeam<MatchTitle>(SEAMS.matchTitle);
-      const ancestors = await loadSeam<Ancestors>(SEAMS.taxonomyAncestors);
-      const fold = await loadSeam<(s: string) => string>(SEAMS.foldTwToCn);
-      const categoryOf = (title: string): string | null => {
-        const best = matchTitle(title, { limit: 1 })[0] ?? (/[㐀-鿿]/.test(title) ? matchTitle(fold(title), { limit: 1 })[0] : undefined);
-        if (!best) return null;
-        return ancestors(best.id).find((n) => n.level === 1)?.id ?? null;
-      };
+      const idsForTitle = await loadSeam<TaxonomyIdsForTitle>(SEAMS.taxonomyIdsForTitle);
+      // ids[0] is the category (level 1) of the role ingest files the title under.
+      const categoryOf = (title: string): string | null => idsForTitle(title).ids[0] ?? null;
       const r = categoryPrecision(rows, categoryOf);
       const worst = r.misses.slice(0, 5).map((m) => `"${m.title}" → ${m.got} (labelled ${m.expected ?? 'unknown'})`);
       out.push({
@@ -97,10 +97,10 @@ export async function run(ctx: SuiteContext): Promise<SuiteMeasure[]> {
         market,
         value: r.precision,
         n: r.matched,
-        labels: 'human',
+        labels: 'authored',
         note: `${r.correct} of ${r.matched} matched titles correct; ${r.matched} of ${r.total} titles got a deterministic category${worst.length ? `; misses: ${worst.join('; ')}` : ''}`,
       });
-      out.push({ metric: 'deterministic_match_share', market, value: r.total ? r.matched / r.total : null, n: r.total, labels: 'human' });
+      out.push({ metric: 'deterministic_match_share', market, value: r.total ? r.matched / r.total : null, n: r.total, labels: 'authored' });
     } catch (err) {
       out.push(notBuiltOrThrow('category_precision', err, { market }));
     }

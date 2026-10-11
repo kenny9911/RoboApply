@@ -2132,6 +2132,15 @@ Drained as `job.enrich` work items by `queue-drain` (every 5 minutes), plus `wai
 3. Write the fields, `enrichedAt`, `enrichVersion`, `enrichModel`, and the `RAKeywordExtraction` row (top 30 keywords from skills plus TF-IDF over the description).
 4. Log cost to `UsageDeductionLog` with SKU `ra_job_enrich` and `userId` = the system user for the brand (`RA_SYSTEM_USER_ID_<BRAND>`).
 
+**Market wave (2026-10), as merged in phase M1 (MKT-1E; strategy 2.3, requirements SM-2 and SM-10).** The steps above are the design-time text; three rules changed.
+
+- **The title decides the role only when it is decisive.** `matchTitle` scores a title against the role tree (`features/jobs/taxonomy/match.ts`: head nouns, a modifier lexicon, whole-title-only words). A score of `TITLE_MATCH_TRUSTED` (0.9) or more names the role on every pass, the model's answer included. Under 0.9 the model's `taxonomyId` wins when it is one of the offered candidates (the deterministic matches, the role the row holds, the roles the lexicon connects to the title, then keyword overlap; at most 15). `RAJob.titleMatchScore` (a 4-byte float: compare with `>= 0.9::real` in SQL) is written by enrichment and, since the M1 gate, by ingest (`normalize/normalizeProviderJob.ts` `taxonomyIdsForTitle`: the better of the title as written and its mainland reading, the reading `enrich/titleEvidence.ts` uses).
+- **The skip rule has a fourth condition.** `needsLlm` also answers true with reason `weak_title_match` when the title is not decisive, a title with no match included. `ENRICH_VERSION` is 2, so live rows are re-enriched once inside the daily budget.
+- **A refresh does not undo the model.** `ingest/upsert.ts` replaces the role of a row enrichment has already ruled on only when the incoming title is decisive or the title changed (`ROLE_FROM_INGEST`); a row never enriched, or one that holds no role, takes ingest's role as before.
+- **Company industry.** The enrichment output carries `industry: { value, quote } | null`. The value must be an id of the closed onboarding list and the quote must be in the posting, say more than the employer's name, not describe a recruiter's client, and name the claimed industry's topic outside the employer's name (`enrich/quotes.ts` `reconcileIndustry`); anything else is dropped and logged. `companies/service.ts` `setIndustryFromPosting` writes it once per company, never for a staffing agency and never from a user's own import.
+
+Backfills (dry run by default; `--apply` writes): `npm run backfill:roles -- --market intl|cn` and `npm run backfill:pay -- --market intl|cn` (`features/jobs/backfill/run.ts`).
+
 ### 4.6 Scheduling on Vercel (limits honoured)
 
 - Vercel Cron runs at most once per minute per entry, may deliver a call twice, and each call is bounded by `maxDuration` (300 s here). Every handler is therefore **idempotent**, **lease-based** and **time-boxed at 240 s** through `server/src/platform/queue/runForBudget.ts`.

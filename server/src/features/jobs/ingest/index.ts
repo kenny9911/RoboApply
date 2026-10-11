@@ -31,6 +31,10 @@ export { bankPublicPageState, readBankEmployerSignals, isSyncableBankJob } from 
 export { adaptersForBrand, ingestProvidersForBrand, sourcesForBrand } from './providers.js';
 export { readSourceStatuses, sourceStatusKey } from './status.js';
 export type { SourceRunStatus, SourceStatusDoc } from './status.js';
+// MKT-1C: the provider quota snapshot contract (AppConfig `jobs.providerQuota.v1`). Types, constants and
+// pure functions only; the writer is MKT-3A and the admin reader MKT-3F. Exported at the M1 gate.
+export { PROVIDER_QUOTA_CONFIG_KEY, PROVIDER_QUOTA_STATES, PROVIDER_QUOTA_VERSION, daysToReset, parseProviderQuota, serializeProviderQuota, usageKey } from './quotaContract.js';
+export type { ProviderQuotaDocument, ProviderQuotaSnapshot, ProviderQuotaState } from './quotaContract.js';
 export { registerSourceAdapter, getSourceAdapter } from '../sources/index.js';
 export type { JobSourceAdapter, JobSourceDescription, IngestProvider, IngestQueryParams, SourceQuery, SourceFetchResult } from '../sources/index.js';
 export type { TargetedIngestResult } from './run.js';

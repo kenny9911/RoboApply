@@ -180,6 +180,10 @@ describe('`upgradable` follows what can be paid for now, not the catalog alone (
     'CN_PAYMENT_COLLECTING_ENTITY',
     'CN_PRICE_PRO_MONTHLY_FEN',
     'STRIPE_SECRET_KEY',
+    'STRIPE_WEBHOOK_SECRET',
+    'ROBOAPPLY_STRIPE_WEBHOOK_SECRET',
+    'VERCEL_ENV',
+    'STRIPE_ALLOW_LIVE_KEY_OUTSIDE_PRODUCTION',
     'STRIPE_PRICE_PRO_MONTHLY',
     'STRIPE_PRICE_PRO_MONTHLY_CENTS',
     'STRIPE_PRICE_PRO_WEEKLY',
@@ -218,14 +222,19 @@ describe('`upgradable` follows what can be paid for now, not the catalog alone (
     expect(await upgradableOn('goapply', { STRIPE_SECRET_KEY: 'sk_test_x' })).toBe(false);
   });
 
-  it('RoboApply with a configured price and a Stripe key is unchanged (upgradable); without a price or without the key it is not', async () => {
-    const PRICE = { STRIPE_PRICE_PRO_MONTHLY: 'price_monthly_x', STRIPE_PRICE_PRO_MONTHLY_CENTS: '2499' };
-    expect(hasSellableProPlan('roboapply', PRICE)).toBe(true);
-    expect(await upgradableOn('roboapply', { STRIPE_SECRET_KEY: 'sk_test_x', ...PRICE })).toBe(true);
+  // Market wave M1 (MARKET_STRATEGY M-13, M-25, section 4.3): a RoboApply plan always has a catalog amount and is
+  // sellable only while the Stripe rail can both charge and fulfil (a usable key AND a webhook secret).
+  it('RoboApply: "Get Pro" needs the Stripe rail ready (a usable key and a webhook secret); no price variable is needed', async () => {
+    const READY = { STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_WEBHOOK_SECRET: 'whsec_test' };
+    expect(hasSellableProPlan('roboapply', READY)).toBe(true);
+    expect(hasSellableProPlan('roboapply', {})).toBe(false);
+    expect(await upgradableOn('roboapply', READY)).toBe(true);
     expect(await upgradableOn('roboapply', { STRIPE_SECRET_KEY: 'sk_test_x' })).toBe(false);
-    expect(await upgradableOn('roboapply', PRICE)).toBe(false);
+    expect(await upgradableOn('roboapply', { STRIPE_WEBHOOK_SECRET: 'whsec_test' })).toBe(false);
+    // A live key outside production is refused by the one client factory, so nothing can be paid for.
+    expect(await upgradableOn('roboapply', { ...READY, STRIPE_SECRET_KEY: 'sk_live_example' })).toBe(false);
     // Alipay credentials never open RoboApply.
-    expect(await upgradableOn('roboapply', { ALIPAY_CALLBACK_SECRET: 'cb-secret', ...PRICE })).toBe(false);
+    expect(await upgradableOn('roboapply', { ALIPAY_CALLBACK_SECRET: 'cb-secret' })).toBe(false);
   });
 });
 

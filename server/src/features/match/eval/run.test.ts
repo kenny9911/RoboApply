@@ -36,7 +36,7 @@ import {
   type InvariantResult,
   type SuiteRun,
 } from './run.js';
-import { EVAL_DIR, REPO_ROOT, SeamMissing, setFitModuleForTests } from './seams.js';
+import { EVAL_DIR, REPO_ROOT, SEAMS, SeamMissing, setFitModuleForTests } from './seams.js';
 import type { SuiteContext } from './suite.js';
 import { categoryPrecision, readLabelledTitles } from './suites/taxonomy.suite.js';
 
@@ -444,6 +444,34 @@ describe('the offline guard', () => {
 });
 
 describe('the shipped suites', () => {
+  // Review finding (M1 gate): the report printed "human labels" for the two labelled-title sets, which the
+  // engineer of the matcher wrote (MKT-1E handoff: "SYNTHETIC … The labels are mine, not a recruiter's").
+  // A report never states a source the labels do not have (D3).
+  it('the taxonomy suite says its labels are authored, never human, and files a title the way ingest does', async () => {
+    const [taxonomy] = await runSuites(discoverSuites(SUITES_DIR).filter((f) => f.includes('taxonomy')), ctx());
+    expect(taxonomy!.error).toBeNull();
+    const measured = taxonomy!.measures.filter((m) => m.value !== null);
+    expect(measured.map((m) => [m.metric, m.market])).toEqual([
+      ['category_precision', 'intl'],
+      ['deterministic_match_share', 'intl'],
+      ['category_precision', 'cn'],
+      ['deterministic_match_share', 'cn'],
+    ]);
+    for (const m of measured) expect(m.labels, `${m.metric} ${m.market}`).toBe('authored');
+    const rows = report({ suites: [taxonomy!] }).rows;
+    for (const row of rows.filter((r) => r.layer === 'taxonomy')) {
+      expect(row.value).toContain('authored labels');
+      expect(row.value).not.toContain('human');
+    }
+    // The gate still reads the value: authored labels do not wait for the judge audit.
+    expect(rows.find((r) => r.metric === 'category_precision [intl]')!.status).toBe('pass');
+    // The suite files a title through ingest's own function, not through a copy of its order.
+    expect(SEAMS.taxonomyIdsForTitle).toBe('server/src/features/jobs/normalize/index.ts#taxonomyIdsForTitle');
+    const source = readFileSync(path.join(SUITES_DIR, 'taxonomy.suite.ts'), 'utf8');
+    expect(source).toContain('SEAMS.taxonomyIdsForTitle');
+    expect(source).not.toContain('SEAMS.foldTwToCn');
+  });
+
   it('ranking and language are not_built while the fit seam is missing', async () => {
     setFitModuleForTests(path.join(EVAL_DIR, 'testdata', 'noSuchFitModule.ts'));
     const runs = await runSuites(discoverSuites(SUITES_DIR).filter((f) => !f.includes('taxonomy')), ctx({ fixturesDir: path.join(FIXTURES_DIR) }));

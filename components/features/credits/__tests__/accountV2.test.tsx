@@ -160,6 +160,10 @@ describe('PlanPicker V2', () => {
     renderUi(<PlanPicker navigate={vi.fn()} />, { flags: { student: true } });
     await waitFor(() => expect(option('student_monthly')).not.toBeNull());
     expect(option('student_monthly')!.textContent).toContain('30% below the regular price');
+    // One label on a student row: the student percentage, never "Save N%" against the regular monthly price.
+    expect(option('student_quarterly')!.textContent).toContain('30% below the regular price');
+    expect(option('student_quarterly')!.textContent).not.toMatch(/Save \d+%/);
+    expect(option('pro_quarterly')!.textContent).toMatch(/Save \d+%/);
     expect(radio('student_monthly')!.checked).toBe(false);
   });
 
