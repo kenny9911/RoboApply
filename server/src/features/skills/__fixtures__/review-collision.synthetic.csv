@@ -1,0 +1,2 @@
+id,kind,labelEn,labelZh,labelZhHant,aliases,parentId,decision,mentions,note
+pg_tool,hard,PG tool,,,postgres | pgtool,,keep,1,new

@@ -1,0 +1,6 @@
+id,kind,labelEn,labelZh,labelZhHant,aliases,parentId,decision,mentions,note
+supabase,hard,Supabase,,,supabase db | key:supabaseio,postgresql,keep,9,new
+datapipeline,hard,Data pipelines,数据管道,,data pipeline | etl pipelines,,keep,4,new
+postgressql,hard,Postgressql,,,,,merge-into:postgresql,2,new
+fastpacedenvironment,soft,Fast-paced environment,,,fast paced,,drop,31,new
+vitess,hard,Vitess,,,,,,3,new
