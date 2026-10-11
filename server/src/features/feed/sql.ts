@@ -39,6 +39,22 @@
 // (retrieval `toTsQuery`) is only ever used to ORDER the lexical leg
 // (hybridSql.ts), never to decide what a list or a count holds.
 //
+// Taiwan district and shift (MKT-5F; MARKET_STRATEGY §9.5 JT-7): `twDistricts`
+// and `workShifts` filter only a search in Taiwan (jobs/geo `isTaiwanSearch`;
+// the filter contract drops them from any other search, and `predicateFor`
+// builds nothing for them either). Both are plain filters under the same scope
+// as every other field, so the list, the count, the samples and the alerts
+// agree, and neither has a pass-through: a posting that states no district, or
+// no shift, never matches an active district or shift filter (unlike "years"
+// or "company size", where unknown passes). A remote posting is no exception.
+//   district  j."locationCountry" = 'TW' AND j."locationDistrict" = ANY(…)
+//             (the M0 index on market, locationCountry, locationDistrict).
+//             A job row stores the bare district (信義區). Eight district names
+//             belong to two or more counties, so for those the row's city must
+//             be the county's too (`twDistrictSql`): 台北市信義區 never returns
+//             a posting in 基隆市信義區, 20 km away and inside a 40 km search.
+//   shift     j."workShift" = ANY(…): only what the source's own field said.
+//
 // Predicates follow FILTER_SET specs in search/filterSet.ts (ruling C15).
 // Conventions this file relies on (handoff requests to the writers):
 //   The GoApply tags below are written by cn/jobs/card.ts (`extractPostingTags`),
@@ -54,7 +70,7 @@
 import { Prisma } from '../../generated/prisma/client.js';
 import type { Market } from '../../platform/brand/registry.js';
 import { AGE_EXPIRY_BOARDS, normalizeCompanyName, normalizeJobTitle, normalizeSkills } from '../jobs/normalize/index.js';
-import { findCity, resolveCountry } from '../jobs/geo/index.js';
+import { findCity, isTaiwanSearch, resolveCountry, resolveTwDistrictValue, twCountyCityNames, twDistrictNameIsShared } from '../jobs/geo/index.js';
 import { expandTaxonomyIds, matchTitle } from '../jobs/taxonomy/index.js';
 import { filterTokens } from '../retrieval/index.js';
 import { includesUndisclosedPay, type FilterField, type FilterSet } from '../search/index.js';
@@ -279,6 +295,40 @@ export function wideQPredicateSql(q: string): Prisma.Sql {
   return Prisma.sql`(j."searchTsv" @@ to_tsquery('simple', ${tsQuery}) OR ${narrow})`;
 }
 
+/**
+ * The district predicate of a search in Taiwan (JT-7), or null when no value
+ * names a district of the table. Each value is `<county><district>`
+ * (search/filterSet.ts stores it so); the row holds the bare district.
+ *   - A name only one county has (竹北市) is matched on the district alone.
+ *   - A name several counties have (東區, 信義區 …) is matched together with
+ *     the city the county's rows are stored under, so it means that county's
+ *     district and no other.
+ * Always with `locationCountry = 'TW'`: a posting outside Taiwan, and a
+ * posting with no stated district, never matches.
+ */
+export function twDistrictSql(values: readonly string[]): Prisma.Sql | null {
+  const plain: string[] = [];
+  /** County code → the shared-name districts chosen in it. */
+  const paired = new Map<string, string[]>();
+  for (const value of values) {
+    const ref = resolveTwDistrictValue(value);
+    if (!ref) continue;
+    if (twDistrictNameIsShared(ref.district) && twCountyCityNames(ref.countyCode).length) {
+      const list = paired.get(ref.countyCode) ?? [];
+      if (!list.includes(ref.district)) list.push(ref.district);
+      paired.set(ref.countyCode, list);
+    } else if (!plain.includes(ref.district)) plain.push(ref.district);
+  }
+  const parts: Prisma.Sql[] = [];
+  if (plain.length) parts.push(Prisma.sql`j."locationDistrict" = ANY(${plain}::text[])`);
+  for (const [countyCode, districts] of paired) {
+    parts.push(Prisma.sql`(j."locationDistrict" = ANY(${districts}::text[]) AND lower(j."locationCity") = ANY(${twCountyCityNames(countyCode)}::text[]))`);
+  }
+  if (!parts.length) return null;
+  const district = parts.length === 1 ? parts[0]! : Prisma.sql`(${Prisma.join(parts, ' OR ')})`;
+  return Prisma.sql`(j."locationCountry" = 'TW' AND ${district})`;
+}
+
 /** The SQL predicate for one FilterSet field, or null when it does not filter (absent, view-only, boost-only). */
 export function predicateFor(field: FilterField, filters: FilterSet, scope: Pick<SqlScope, 'market' | 'now'>): Prisma.Sql | null {
   const f = filters;
@@ -431,6 +481,11 @@ export function predicateFor(field: FilterField, filters: FilterSet, scope: Pick
       const mine = f.schoolTiers.map((t) => `school_tier:${t}`);
       return Prisma.sql`(NOT ${hasTagPrefix('school_tier:')} OR ${hasTagIn(mine)})`;
     }
+    // ── RoboApply, a search in Taiwan (JT-7): no pass-through for a posting that states neither ──
+    case 'twDistricts':
+      return intl && f.twDistricts?.length && isTaiwanSearch(f) ? twDistrictSql(f.twDistricts) : null;
+    case 'workShifts':
+      return intl && f.workShifts?.length && isTaiwanSearch(f) ? Prisma.sql`j."workShift" = ANY(${[...f.workShifts]}::text[])` : null;
     // View / ranking only: never SQL.
     case 'fitTier':
     case 'preferredCompanies':
@@ -516,7 +571,7 @@ export const FEED_COLUMNS = Prisma.sql`j."id", j."market", j."visibility", j."ow
   j."minYears", j."maxYears", j."educationLevel", j."skills", j."skillsDetail", j."workModel", j."remoteScope", j."location",
   j."locationCity", j."locationCountry", j."geoLat", j."geoLng", j."employmentType", j."salaryMin", j."salaryMax",
   j."salaryCurrency", j."salaryPeriod", j."salaryAnnualMin", j."salaryAnnualMax", j."salaryDisclosed", j."salaryText",
-  j."salaryMonths", j."sponsorship", j."sponsorshipEvidence", j."citizenshipRequired", j."clearanceRequired", j."employerTags",
+  j."salaryMonths", j."sponsorship", j."sponsorshipEvidence", j."sponsorshipSource", j."citizenshipRequired", j."clearanceRequired", j."employerTags",
   j."marketTags", j."postedAt", j."postedAtEstimated", j."firstSeenAt", j."lastSeenAt", j."expiresAt", j."sourceBoard",
   j."sourceName", j."originalSourceName", j."applyUrl", j."sourceUrl", j."atsType", j."isAgency", j."fromRecruiterBank", j."employerVerified",
   j."sourcePriority", j."archivedAt", (j."benefits" IS NOT NULL AND length(j."benefits") > 0) AS "hasBenefits",

@@ -2,7 +2,8 @@
 //
 // Taiwan open-data rows: the OGDL attribution (MKT-3E; JT-2, MARKET_STRATEGY
 // §1.3). The licence voids itself without it, so the sentence is pinned word
-// for word. Pure: no network, no database.
+// for word. And the provenance of Taiwan rows read out of Google's job index
+// (MKT-5F; JT-8, §1.5 "Source label"). Pure: no network, no database.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,7 +12,21 @@ import { describe, expect, it } from 'vitest';
 import { MARKET_HOOK_SETS, afterNormalize, cardMeta, type MarketHookContext, type MarketHookJob } from '../marketHooks.js';
 import { normalizeProviderJob, asMarketHookJob } from '../normalize/index.js';
 import { parseTwOpenDataCsv, twOpenDataRowToInput, TW_OPEN_DATA_DATASET } from './twOpenData.js';
-import { TW_OGDL_LICENCE_URL, TW_OPEN_DATA_ATTRIBUTIONS, TW_OPEN_DATA_SOURCE_NAMES, createTwSourcesHooks, taipeiYear, twAttribution, twSourcesHooks, withOpenDataSourceName } from './twHooks.js';
+import inputs from '../normalize/__fixtures__/jsearch.json' with { type: 'json' };
+import { inputFromJSearchJob } from '../normalize/index.js';
+import {
+  TW_GOOGLE_JOBS_BOARD,
+  TW_OGDL_LICENCE_URL,
+  TW_OPEN_DATA_ATTRIBUTIONS,
+  TW_OPEN_DATA_SOURCE_NAMES,
+  createTwSourcesHooks,
+  isTwGoogleJobsRow,
+  taipeiYear,
+  twAttribution,
+  twGoogleJobsProvenance,
+  twSourcesHooks,
+  withOpenDataSourceName,
+} from './twHooks.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CARD: MarketHookContext = { brand: 'roboapply', market: 'intl', stage: 'card' };
@@ -82,9 +97,12 @@ describe('tw_sources: the attribution sentence', () => {
     expect(meta.tw_sources).toBeUndefined();
     // The Taiwan pay / permit block of the employer boards is still there for it.
     expect(meta.ats_public).toMatchObject({ country: 'TW' });
-    for (const other of ['jsearch', 'activejobs', 'bank_robohire', 'user_import', 'linkedin', '', 'tw_open_data_copy']) {
+    for (const other of ['activejobs', 'bank_robohire', 'user_import', 'linkedin', '', 'tw_open_data_copy']) {
       expect(cardMeta(row({ provider: other, sourceBoard: other }), CARD).tw_sources, other).toBeUndefined();
     }
+    // A row found through Google's job index says so (JT-8, below), and that is not an attribution.
+    expect(cardMeta(row({ provider: 'jsearch', sourceBoard: 'jsearch' }), CARD).tw_sources).not.toHaveProperty('attribution');
+    expect(twAttribution(row({ provider: 'jsearch', sourceBoard: 'jsearch' }))).toBeNull();
     expect(cardMeta(row({ sourceBoard: undefined }), CARD).tw_sources).toBeUndefined();
     expect(twAttribution(row({ sourceBoard: 42 }))).toBeNull();
   });
@@ -121,10 +139,92 @@ describe('tw_sources: the source name', () => {
   });
 
   it('leaves every other row exactly as it was', async () => {
-    const greenhouse = row({ provider: 'jsearch', sourceBoard: 'jsearch', sourceName: 'Google for Jobs', originalSourceName: '104人力銀行' });
-    expect(withOpenDataSourceName(greenhouse)).toBe(greenhouse);
-    expect(twSourcesHooks.appliesTo(greenhouse, INGEST)).toBe(false);
-    expect(await afterNormalize(greenhouse, INGEST)).toMatchObject({ sourceName: 'Google for Jobs', originalSourceName: '104人力銀行' });
+    const searched = row({ provider: 'jsearch', sourceBoard: 'jsearch', sourceName: 'JSearch', originalSourceName: '104人力銀行' });
+    expect(withOpenDataSourceName(searched)).toBe(searched);
+    // The set applies to it (it has a card line, below), but ingest changes nothing on the row.
+    expect(twSourcesHooks.afterNormalize!(searched, INGEST)).toBe(searched);
+    expect(await afterNormalize(searched, INGEST)).toMatchObject({ sourceName: 'JSearch', originalSourceName: '104人力銀行' });
+    const board = row({ provider: 'ats_public', sourceBoard: 'greenhouse', sourceName: 'Appier · Greenhouse' });
+    expect(twSourcesHooks.appliesTo(board, INGEST)).toBe(false);
+  });
+});
+
+describe('tw_sources: a Taiwan row found through Google\'s job index (JT-8)', () => {
+  const NOW = new Date('2026-10-11T04:00:00.000Z');
+  const searched = (over: Partial<MarketHookJob> = {}): MarketHookJob =>
+    row({ provider: 'jsearch', sourceBoard: 'jsearch', sourceName: 'JSearch', originalSourceName: '104人力銀行', sourceUrl: 'https://www.104.com.tw/job/abc12', applyUrl: 'https://www.104.com.tw/job/abc12', ...over });
+
+  it('ACCEPT: a JSearch row whose publisher is 104人力銀行 says via Google\'s job search, names the publisher and links to the original posting', () => {
+    expect(TW_GOOGLE_JOBS_BOARD).toBe('jsearch');
+    expect(cardMeta(searched(), CARD).tw_sources).toEqual({ via: 'google_jobs', publisher: '104人力銀行', url: 'https://www.104.com.tw/job/abc12' });
+    expect(twGoogleJobsProvenance(searched({ originalSourceName: ' 1111人力銀行 ' }))).toEqual({ via: 'google_jobs', publisher: '1111人力銀行', url: 'https://www.104.com.tw/job/abc12' });
+  });
+
+  it('ACCEPT: a row with no publisher names only the search', () => {
+    for (const none of [null, undefined, '', '   ', 42]) {
+      expect(cardMeta(searched({ originalSourceName: none }), CARD).tw_sources, String(none)).toEqual({ via: 'google_jobs', publisher: null, url: 'https://www.104.com.tw/job/abc12' });
+    }
+    // The aggregator's own name is not a publisher.
+    expect(twGoogleJobsProvenance(searched({ originalSourceName: 'JSearch' }))!.publisher).toBeNull();
+    expect(twGoogleJobsProvenance(searched({ originalSourceName: 'jsearch' }))!.publisher).toBeNull();
+  });
+
+  it('ACCEPT: no LinkedIn name and no LinkedIn link ever appears', () => {
+    for (const name of ['LinkedIn', 'linkedin.com', 'Linked In', '領英', '领英', 'LinkedIn Taiwan']) {
+      const meta = cardMeta(searched({ originalSourceName: name, sourceUrl: 'https://tw.linkedin.com/jobs/view/1', applyUrl: 'https://www.linkedin.com/jobs/view/1' }), CARD).tw_sources;
+      expect(meta, name).toEqual({ via: 'google_jobs', publisher: null, url: null });
+      expect(JSON.stringify(meta)).not.toMatch(/linked\s*-?\s*in|領英|领英/i);
+    }
+    // A LinkedIn source link next to a real apply link: the real one is the original posting.
+    expect(twGoogleJobsProvenance(searched({ sourceUrl: 'https://www.linkedin.com/jobs/view/1', applyUrl: 'https://careers.example.com.tw/jobs/9' }))!.url).toBe('https://careers.example.com.tw/jobs/9');
+  });
+
+  it('the link is the original posting: the source link first, then the apply link, http(s) only', () => {
+    expect(twGoogleJobsProvenance(searched({ sourceUrl: 'https://www.104.com.tw/job/s', applyUrl: 'https://www.104.com.tw/job/a' }))!.url).toBe('https://www.104.com.tw/job/s');
+    expect(twGoogleJobsProvenance(searched({ sourceUrl: null, applyUrl: 'https://www.104.com.tw/job/a' }))!.url).toBe('https://www.104.com.tw/job/a');
+    for (const bad of ['javascript:alert(1)', 'data:text/html,x', '/job/1', '', null, 7]) {
+      expect(twGoogleJobsProvenance(searched({ sourceUrl: bad, applyUrl: bad }))!.url, String(bad)).toBeNull();
+    }
+  });
+
+  it('only JSearch rows of the international market that are located in Taiwan carry it', () => {
+    expect(isTwGoogleJobsRow(searched())).toBe(true);
+    expect(isTwGoogleJobsRow(searched({ sourceBoard: ' JSearch ', locationCountry: 'tw' }))).toBe(true);
+    // The same source in another country, another source in Taiwan, and the mainland market: none.
+    for (const other of [searched({ locationCountry: 'US' }), searched({ locationCountry: null }), searched({ locationCountry: undefined }), searched({ market: 'cn' }), searched({ sourceBoard: 'activejobs' }), searched({ sourceBoard: 'greenhouse' }), searched({ sourceBoard: 'linkedin' }), searched({ sourceBoard: 'user_import' })]) {
+      expect(isTwGoogleJobsRow(other)).toBe(false);
+      expect(twGoogleJobsProvenance(other)).toBeNull();
+      expect(cardMeta(other, { brand: other.market === 'cn' ? 'goapply' : 'roboapply', market: other.market, stage: 'card' }).tw_sources?.via).toBeUndefined();
+    }
+  });
+
+  it('a row is one or the other: an open-data row keeps its attribution and never says "found through a search"', () => {
+    expect(cardMeta(row({ originalSourceName: '104人力銀行' }), CARD).tw_sources).toEqual({ attribution: { text: SENTENCE_2026, url: 'https://data.gov.tw/license' } });
+    expect(Object.keys(cardMeta(searched(), CARD).tw_sources!).sort()).toEqual(['publisher', 'url', 'via']);
+  });
+
+  it('an employer-board row in Taiwan keeps its "company · job board" line and gets nothing from this set', () => {
+    const meta = cardMeta(row({ provider: 'ats_public', sourceBoard: 'greenhouse', atsType: 'greenhouse', sourceName: 'Appier · Greenhouse', sourceUrl: 'https://boards.greenhouse.io/appier/jobs/1' }), CARD);
+    expect(meta.tw_sources).toBeUndefined();
+    expect(meta.ats_public).toMatchObject({ source: { name: 'Appier · Greenhouse' } });
+  });
+
+  it('the wording names a search, never a partnership: the meta holds a code, a publisher name and a link, nothing else', () => {
+    const meta = cardMeta(searched(), CARD).tw_sources!;
+    expect(meta.via).toBe('google_jobs');
+    expect(JSON.stringify(meta)).not.toMatch(/partner|合作|official|官方|logo|\.png|\.svg/i);
+  });
+
+  it('end to end: the committed JSearch fixture row of a 104 posting, normalized, then the card meta', async () => {
+    const input = inputFromJSearchJob(inputs.tw_zhTW, { country: 'tw', fetchedAt: NOW })!;
+    const job = await afterNormalize(asMarketHookJob(normalizeProviderJob(input, 'jsearch', { now: NOW, countryHint: 'TW' })), INGEST);
+    expect(job).toMatchObject({ market: 'intl', sourceBoard: 'jsearch', locationCountry: 'TW', sourceName: 'JSearch', originalSourceName: '104人力銀行' });
+    const meta = cardMeta({ ...job, lastSeenAt: NOW }, CARD).tw_sources!;
+    expect(meta).toMatchObject({ via: 'google_jobs', publisher: '104人力銀行' });
+    expect(new URL(String(meta.url)).hostname).toMatch(/(^|\.)104\.com\.tw$/);
+    // The US row of the same provider says nothing of the kind.
+    const us = normalizeProviderJob(inputFromJSearchJob(inputs.us_en, { country: 'us', fetchedAt: NOW })!, 'jsearch', { now: NOW });
+    expect(cardMeta(asMarketHookJob(us), CARD).tw_sources).toBeUndefined();
   });
 });
 

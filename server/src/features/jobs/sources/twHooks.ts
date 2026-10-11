@@ -1,7 +1,9 @@
-// server/src/features/jobs/sources/twHooks.ts — Taiwan open-data rows: the
-// licence attribution (MKT-3E; MARKET_STRATEGY §1.3, JT-2). Statically
-// imported by features/jobs/marketHooks.ts.
+// server/src/features/jobs/sources/twHooks.ts — where a Taiwan row came from:
+// the licence attribution of the open-data rows (MKT-3E; MARKET_STRATEGY §1.3,
+// JT-2) and the provenance of rows read out of Google's job index (MKT-5F;
+// §1.5 "Source label", JT-8). Statically imported by features/jobs/marketHooks.ts.
 //
+// Open data.
 // The 政府資料開放授權條款 第1版 (OGDL v1) grants reuse only WITH attribution
 // and voids itself without it. Its Exhibit asks for the provider, the year,
 // the dataset's full name and the statement that the data is released under
@@ -23,10 +25,32 @@
 // PUBLIC_DISPLAY_PROVIDERS (owner decision OPS-A4); this module only
 // guarantees the attribution wherever a row is shown.
 //
+// Google's job index (JT-8). In Taiwan the JSearch provider is our window onto
+// the postings 104, 1111 and other boards publish as job structured data: we
+// do not read those boards, and we have no agreement with any of them. So a
+// JSearch row located in Taiwan says exactly that, under the same set id:
+//
+//   cardMeta        { via: 'google_jobs', publisher, url }
+//                   publisher  the original publisher as the row stores it
+//                              (`originalSourceName`: 104人力銀行), null when
+//                              none is known: the line then names only the
+//                              search. Never a LinkedIn name (the normalizer
+//                              drops it at ingest; it is checked again here),
+//                              and never the aggregator's own name.
+//                   url        the original posting (http or https, never a
+//                              LinkedIn link), null when the row has none.
+//
+// The web prints "{publisher} · found through Google job search" from it
+// (JobMetaTw). Nothing here names a partnership, and no board's logo is used.
+// A row is one or the other: an open-data row never carries `via`, a JSearch
+// row never carries an attribution. An employer-board row carries neither and
+// keeps its "company · job board" line (sources/atsPublic/hooks.ts).
+//
 // Importing this module also registers the `tw_open_data` ingest adapter
 // (./register.ts), because marketHooks is the module the pipeline always loads.
 
 import type { MarketHookJob, MarketHookSet } from '../marketHooks.js';
+import { PROVIDER_META, hostOf, isLinkedInBranded, isLinkedInHost, safeUrl } from '../normalize/index.js';
 import './register.js';
 
 /** 政府資料開放授權條款 第1版, the licence text every attribution links to. */
@@ -49,9 +73,22 @@ export const TW_OPEN_DATA_SOURCE_NAMES: Readonly<Record<string, string>> = {
   tw_gov_jobs: '事求人',
 };
 
-/** What `cardMeta` returns under the set id (the web reads it defensively: components/features/market/tw/meta.ts). */
+/** `RAJob.sourceBoard` of the rows read out of Google's job index (the JSearch provider). */
+export const TW_GOOGLE_JOBS_BOARD = PROVIDER_META.jsearch.sourceBoard;
+
+/**
+ * What `cardMeta` returns under the set id (the web reads it defensively:
+ * components/features/market/tw). An open-data row carries `attribution`; a
+ * row found through Google's job index carries `via` with its publisher and
+ * the original posting's link. Never both.
+ */
 export interface TwSourcesCardMeta {
-  attribution: { text: string; url: string };
+  attribution?: { text: string; url: string };
+  via?: 'google_jobs';
+  /** The original publisher (104人力銀行); null when the row names none. */
+  publisher?: string | null;
+  /** The original posting; null when the row has no usable link. */
+  url?: string | null;
 }
 
 const TAIPEI_OFFSET_MS = 8 * 3_600_000;
@@ -90,6 +127,33 @@ export function withOpenDataSourceName(job: MarketHookJob): MarketHookJob {
   return { ...job, sourceName: TW_OPEN_DATA_SOURCE_NAMES[board] ?? job.sourceName, originalSourceName: null };
 }
 
+const text = (value: unknown): string | null => (typeof value === 'string' && value.trim() ? value.trim() : null);
+
+/** True for a row of the international market, located in Taiwan, that was read out of Google's job index. */
+export function isTwGoogleJobsRow(job: MarketHookJob): boolean {
+  return job.market === 'intl' && text(job.sourceBoard)?.toLowerCase() === TW_GOOGLE_JOBS_BOARD && text(job.locationCountry)?.toUpperCase() === 'TW';
+}
+
+/** An http(s) link that is not LinkedIn's, or null. */
+function originalLink(value: unknown): string | null {
+  const url = safeUrl(text(value));
+  return url && !isLinkedInHost(hostOf(url)) ? url : null;
+}
+
+/**
+ * The provenance of a Taiwan row found through Google's job index; null for
+ * every other row. `publisher` is the stored original publisher, unless it is
+ * LinkedIn-branded or only repeats the aggregator's name: then the line names
+ * the search alone (null). Pure.
+ */
+export function twGoogleJobsProvenance(job: MarketHookJob): Required<Pick<TwSourcesCardMeta, 'via' | 'publisher' | 'url'>> | null {
+  if (!isTwGoogleJobsRow(job)) return null;
+  const named = text(job.originalSourceName);
+  const aggregator = PROVIDER_META.jsearch.aggregatorName?.toLowerCase() ?? '';
+  const publisher = named && !isLinkedInBranded(named) && named.toLowerCase() !== aggregator ? named : null;
+  return { via: 'google_jobs', publisher, url: originalLink(job.sourceUrl) ?? originalLink(job.applyUrl) };
+}
+
 export interface TwSourcesHookDeps {
   now?: () => Date;
 }
@@ -97,11 +161,13 @@ export interface TwSourcesHookDeps {
 export function createTwSourcesHooks(deps: TwSourcesHookDeps = {}): MarketHookSet {
   return {
     id: 'tw_sources',
-    appliesTo: (job) => job.market === 'intl' && boardOf(job) !== null,
+    appliesTo: (job) => job.market === 'intl' && (boardOf(job) !== null || isTwGoogleJobsRow(job)),
+    // Only an open-data row gets a source name here; every other row is returned as it came.
     afterNormalize: (job) => withOpenDataSourceName(job),
     cardMeta: (job) => {
       const attribution = twAttribution(job, deps.now?.() ?? new Date());
-      return attribution ? ({ attribution } satisfies TwSourcesCardMeta) : null;
+      if (attribution) return { attribution } satisfies TwSourcesCardMeta;
+      return twGoogleJobsProvenance(job) satisfies TwSourcesCardMeta | null;
     },
   };
 }

@@ -22,9 +22,16 @@
 //   - "<subdivision>, <country>" ("Washington, United States", "Texas, US") is
 //     a state-level location: region set, city null — except for the
 //     subdivisions that are themselves cities (Beijing, Shanghai, Delhi …).
+//   - District (MKT-5F, JT-7): only for a location in Taiwan, and only the
+//     鄉鎮市區 the text itself names after one of the 22 county names
+//     (新竹縣竹北市 → 竹北市, 臺北市士林區 • 透過「104人力銀行」 → 士林區). 不限
+//     means the whole county: no district. Every other country: null. The
+//     district table is geo/twDistricts (中華郵政's published list); nothing is
+//     guessed from a city name, a postal code or coordinates.
 
 import { CJK_COUNTRY_NAMES, countryByCode, countryByName, geoKey, resolveCountry, subdivision, subdivisionCountries, type CountryRecord } from './countries.js';
 import { citiesNamed, findCity, scanCjkCities, type CityRecord } from './cities.js';
+import { findTwDistrict } from './twDistricts.js';
 
 export type StatedWorkModel = 'remote' | 'hybrid' | 'onsite';
 
@@ -37,6 +44,12 @@ export interface ParsedLocation {
   cityName: string | null;
   /** Subdivision as stored on RAJob.locationRegion (US "TX", CN "Guangdong"). */
   region: string | null;
+  /**
+   * Taiwan only: the 鄉鎮市區 the text names, as the postal list writes it and
+   * without its county (竹北市, 士林區). Null when the text names the county
+   * alone (台中市不限), a district the table does not have, or any other country.
+   */
+  district: string | null;
   /** ISO 3166-1 alpha-2. */
   country: string | null;
   /** Where `country` came from. */
@@ -87,7 +100,25 @@ const NOISE_CJK = /^(远程|遠端|遠距|居家办公|居家辦公|在家办公
 const SEPARATORS = /\s*(?:[,，、;；|/()（）[\]【】·•]|\s[-–—]\s|^[-–—]\s*|\s*[-–—]$)\s*/;
 
 function emptyResult(raw: string): ParsedLocation {
-  return { raw, city: null, cityName: null, region: null, country: null, countrySource: null, lat: null, lng: null, workModel: null, remoteScope: null };
+  return { raw, city: null, cityName: null, region: null, district: null, country: null, countrySource: null, lat: null, lng: null, workModel: null, remoteScope: null };
+}
+
+/** "台灣新竹縣竹北市" / "臺灣省…" / "中華民國…": the country written in front of the county, without a separator. */
+const TW_COUNTRY_PREFIX_RE = /^(?:台灣|臺灣|中華民國)省?/;
+
+/**
+ * The district a Taiwan location text names. The whole text is read first
+ * (CITYNAME of the open data is `<county><district>`), then each part between
+ * separators ("台灣, 新竹縣竹北市"); the first part that starts with a county
+ * name decides, also when it names no district (台中市不限 → null). Pure.
+ */
+export function twDistrictOfText(raw: string): string | null {
+  const parts = [raw, ...raw.split(SEPARATORS)].map((p) => p.trim().replace(TW_COUNTRY_PREFIX_RE, '')).filter(Boolean);
+  for (const part of parts) {
+    const hit = findTwDistrict(part);
+    if (hit) return hit.district;
+  }
+  return null;
 }
 
 /** Work model stated in a short text (title or location), or null when none / conflicting. */
@@ -279,6 +310,9 @@ export function parseLocation(text: string | null | undefined, hint: LocationHin
     const first = tokens.find((t, i) => !consumed.has(i) && !(out.country && subdivision(out.country, t)) && !namedCountry(t) && !twoLetter.some((c) => c.token === t));
     out.cityName = first && first !== cityToken ? cleanPlaceToken(first) || null : null;
   }
+
+  // The district level exists for Taiwan only, and only when the text itself names it.
+  out.district = out.country === 'TW' ? twDistrictOfText(raw) : null;
 
   if (out.workModel === 'remote') {
     // A named country scopes the role ("Anywhere in the US" is US-only); 'global' only when none is named.

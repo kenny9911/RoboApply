@@ -44,7 +44,11 @@ import {
   twOpenDataUrl,
   twSweepFinished,
   twSweepRequest,
+  twShiftSaysMore,
   twVacancyLink,
+  twWorkShift,
+  TW_SHIFT_VALUES,
+  TW_WKTIME_LABEL,
   type TwClosureRow,
   type TwFetchLike,
   type TwOpenDataDb,
@@ -419,7 +423,8 @@ describe('tw_open_data: a row becomes a posting', () => {
       educationLevel: 'bachelor',
       taxonomyId: 'software_engineer',
       headcount: 2,
-      workShift: '日班',
+      // WKTIME 日班: the source's own shift value, mapped (JT-7).
+      workShift: 'day',
     });
   });
 
@@ -582,6 +587,152 @@ describe('tw_open_data: a row becomes a posting', () => {
     expect(fixtureInput(1)).toMatchObject({ location: '台中市不限', locationDistrict: null });
     expect(fixtureInput(2).locationDistrict).toBe('中山區');
     expect(fixtureInput(5)).toMatchObject({ location: '臺南市善化區', locationDistrict: '善化區' });
+  });
+
+  it('JT-7: the adapter passes the district of CITYNAME itself, and the stored row carries it with the county as its city', () => {
+    for (const [index, district, city] of [[0, '竹北市', 'Zhubei'], [2, '中山區', 'Taipei'], [5, '善化區', 'Tainan'], [6, '大安區', 'Taipei']] as const) {
+      expect(fixtureInput(index).locationDistrict, String(index)).toBe(district);
+      expect(normalized(fixtureInput(index)), String(index)).toMatchObject({ locationCountry: 'TW', locationCity: city, locationDistrict: district });
+    }
+    // 台中市不限: the whole county, so no district on the input and none on the row.
+    expect(normalized(fixtureInput(1))).toMatchObject({ locationCity: 'Taichung', locationDistrict: null });
+    // The adapter's own value is what is stored: the normalizer does not replace it with its own reading.
+    expect(normalized({ ...fixtureInput(0), locationDistrict: '湖口鄉' }).locationDistrict).toBe('湖口鄉');
+  });
+});
+
+// ── WKTIME（工作時間） → the shift ───────────────────────────────────────────
+
+describe('tw_open_data: the shift comes from WKTIME, the source\'s own field (JT-7)', () => {
+  const withShift = (wktime: string, over: Partial<TwOpenDataRow> = {}): ProviderJobInput => {
+    const mapped = twOpenDataRowToInput({ ...fixtureRows()[0]!, WKTIME: wktime, ...over }, NOW);
+    if (!('input' in mapped)) throw new Error('skipped');
+    return mapped.input;
+  };
+
+  it('ACCEPT: the fixture rows: 日班 is day, a row that lists 輪班 is rotating, 部份工時 is part_time, an empty cell is null', () => {
+    // The fixture's cells are shapes read on the live endpoint; between them they hold every value of the table.
+    expect(fixtureRows().map((row) => row.WKTIME)).toEqual(['日班', '日班、夜班、輪班二班制', '部份工時：時分至時分', '日班', '', '日班、中班', '部份工時：9時0分至13時0分', '夜班、輪班四班二輪制']);
+    for (const { value } of TW_SHIFT_VALUES) expect(fixtureRows().some((row) => row.WKTIME.includes(value)), value).toBe(true);
+    expect(fixtureInput(0).workShift).toBe('day');
+    expect(fixtureInput(1).workShift).toBe('rotating');
+    expect(fixtureInput(2).workShift).toBe('part_time');
+    expect(fixtureInput(4).workShift).toBeNull();
+    // Several values without 輪班: the first that maps. The hours of a part-time job: part_time.
+    expect(fixtureInput(5).workShift).toBe('day');
+    expect(fixtureInput(6).workShift).toBe('part_time');
+    // Through the normalizer the value reaches the row unchanged.
+    expect(normalized(fixtureInput(0)).workShift).toBe('day');
+    expect(normalized(fixtureInput(1)).workShift).toBe('rotating');
+    expect(normalized(fixtureInput(2)).workShift).toBe('part_time');
+    expect(normalized(fixtureInput(4)).workShift).toBeNull();
+    expect(normalized(fixtureInput(5)).workShift).toBe('day');
+    expect(normalized(fixtureInput(6)).workShift).toBe('part_time');
+  });
+
+  // Every value read on the live endpoint (fixtures README), each alone.
+  it.each([
+    ['日班', 'day'],
+    ['中班', 'evening'],
+    ['夜班', 'night'],
+    ['輪班二班制', 'rotating'],
+    ['輪班三班制', 'rotating'],
+    ['輪班四班二輪制', 'rotating'],
+    ['輪班', 'rotating'],
+    ['部份工時：8時0分至12時0分', 'part_time'],
+    ['部份工時：時分至時分', 'part_time'],
+    ['部份工時', 'part_time'],
+    ['部分工時', 'part_time'],
+  ] as const)('the mapping table: %s is %s', (wktime, shift) => {
+    expect(twWorkShift(wktime)).toBe(shift);
+    expect(withShift(wktime).workShift).toBe(shift);
+    expect(normalized(withShift(wktime)).workShift).toBe(shift);
+  });
+
+  it('the mapping table holds five values, one per shift, and nothing else', () => {
+    expect(TW_SHIFT_VALUES.map((v) => [v.value, v.shift])).toEqual([
+      ['日班', 'day'],
+      ['中班', 'evening'],
+      ['夜班', 'night'],
+      ['輪班', 'rotating'],
+      ['部份工時', 'part_time'],
+    ]);
+  });
+
+  it.each(['彈性排班', '排班制', '早班', '大夜班', '責任制', 'day', 'night shift', '日', '班', '   ', ''])('ACCEPT: an unknown value (%s) stores null', (wktime) => {
+    expect(twWorkShift(wktime)).toBeNull();
+    expect(withShift(wktime).workShift).toBeNull();
+    expect(normalized(withShift(wktime)).workShift).toBeNull();
+  });
+
+  it('a value that is not text is no shift', () => {
+    for (const value of [null, undefined, 3 as unknown as string]) expect(twWorkShift(value)).toBeNull();
+    expect(twOpenDataRowToInput({ ...fixtureRows()[0]!, WKTIME: undefined as unknown as string }, NOW)).toMatchObject({ input: { workShift: null } });
+  });
+
+  // The combinations read on the live endpoint, and the rule for a row that lists several values.
+  it.each([
+    ['日班、夜班', 'day'],
+    ['日班、中班', 'day'],
+    ['夜班、中班', 'night'],
+    ['日班、夜班、中班', 'day'],
+    ['日班、夜班、輪班三班制、中班', 'rotating'],
+    ['日班、夜班、輪班四班二輪制', 'rotating'],
+    ['夜班、輪班四班二輪制', 'rotating'],
+    ['日班、輪班二班制、中班', 'rotating'],
+    ['日班、部份工時：8時0分至12時0分', 'day'],
+    ['輪班三班制、部份工時：時分至時分', 'rotating'],
+    ['夜班、部份工時：18時0分至22時0分', 'night'],
+    ['部份工時：8時0分至12時0分、日班', 'part_time'],
+    ['彈性排班、夜班', 'night'],
+    ['彈性排班、排班制', null],
+  ] as const)('several values: %s stores %s (rotating when 輪班 is among them, else the first that maps)', (wktime, shift) => {
+    expect(twWorkShift(wktime)).toBe(shift);
+    expect(normalized(withShift(wktime)).workShift).toBe(shift);
+  });
+
+  it('reads the cell whatever its width or spacing, and only the separators the source uses', () => {
+    expect(twWorkShift(' 日班 ')).toBe('day');
+    expect(twWorkShift('日班 、 輪班三班制')).toBe('rotating');
+    expect(twWorkShift('部份工時:8時0分至12時0分')).toBe('part_time');
+    // A value glued to other words is not one of the values.
+    expect(twWorkShift('非輪班')).toBeNull();
+    expect(twWorkShift('可配合日班')).toBeNull();
+  });
+
+  it('nothing the source said is lost: WKTIME is appended to the description when it says more than the stored value', () => {
+    const detail = fixtureRows()[0]!.JOB_DETAIL;
+    expect(TW_WKTIME_LABEL).toBe('工作時間');
+    // One plain value: the stored shift says it all, the description is the posting's own text.
+    for (const plain of ['日班', '中班', '夜班', '部份工時：時分至時分', '部份工時', '']) {
+      expect(twShiftSaysMore(plain), plain).toBe(false);
+      expect(withShift(plain).description, plain).toBe(detail);
+    }
+    // Several values, a rota, the hours of a part-time job, an unknown value: one line under the column's own label.
+    for (const more of ['日班、夜班、輪班二班制', '輪班三班制', '部份工時：8時0分至12時0分', '彈性排班', '日班、夜班']) {
+      expect(twShiftSaysMore(more), more).toBe(true);
+      expect(withShift(more).description, more).toBe(`${detail}\n\n工作時間：${more}`);
+    }
+    // With no JOB_DETAIL the line stands alone; with neither there is no description.
+    expect(withShift('輪班三班制', { JOB_DETAIL: '' }).description).toBe('工作時間：輪班三班制');
+    expect(withShift('', { JOB_DETAIL: '' }).description).toBe('');
+    // The fixture's own rows.
+    expect(fixtureInput(1).description).toBe('SYNTHETIC 範例職缺內容：協助日常照顧。\n\n工作時間：日班、夜班、輪班二班制');
+    expect(fixtureInput(2).description).toBe('SYNTHETIC 範例職缺內容：門市銷售與收銀。');
+    expect(fixtureInput(5).description).toBe('SYNTHETIC 範例職缺內容：工地施工。\n\n工作時間：日班、中班');
+    expect(fixtureInput(6).description).toBe('SYNTHETIC 範例職缺內容：協助研究計畫。\n\n工作時間：部份工時：9時0分至13時0分');
+  });
+
+  it('the shift is never read out of the title or the description, and the appended line never becomes pay, years or a work model', () => {
+    const wordy = withShift('', { OCCU_DESC: '夜班作業員（輪班）', JOB_DETAIL: '需配合輪班三班制與夜班，部份工時亦可。' });
+    expect(wordy.workShift).toBeNull();
+    expect(normalized(wordy).workShift).toBeNull();
+    const plain = normalized(withShift('日班'));
+    const lined = normalized(withShift('日班、夜班、輪班三班制、中班'));
+    expect(lined.workShift).toBe('rotating');
+    for (const key of ['salaryMin', 'salaryMax', 'salaryPeriod', 'salaryDisclosed', 'minYears', 'maxYears', 'workModel', 'employmentType', 'seniority', 'primaryTaxonomyId', 'locationDistrict'] as const) {
+      expect(lined[key], key).toEqual(plain[key]);
+    }
   });
 });
 

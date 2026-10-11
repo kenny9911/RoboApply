@@ -12,6 +12,7 @@ import { afterNormalize, type MarketHookSet } from '../marketHooks.js';
 import { providerOfBoard } from '../ingest/verifyFeed.js';
 import { getTaxonomyNode, taxonomyAncestors } from '../taxonomy/index.js';
 import { externalIdFor } from '../sources/atsPublic/shared.js';
+import { MAX_SOURCE_TAG_QUOTE_CHARS } from './normalizeProviderJob.js';
 import {
   asMarketHookJob,
   atsPostingKeyFromUrl,
@@ -776,7 +777,8 @@ describe('MKT-1C: a role the source states (ProviderJobInput.taxonomyId)', () =>
   it('MKT-3C: without the other optional inputs the row is what it always was (they are all optional)', () => {
     const plain = normalizeProviderJob(base, 'tw_open_data', { now });
     expect(normalizeProviderJob({ ...base, sponsorshipProvider: null, locationDistrict: null, workShift: null }, 'tw_open_data', { now, companyDomains: new Map() })).toEqual(plain);
-    expect(plain).toMatchObject({ sponsorshipProvider: null, locationDistrict: null, workShift: null, atsPostingKey: null });
+    // The district is the one the location text itself names (MKT-5F, JT-7): 台北市中山區 → 中山區.
+    expect(plain).toMatchObject({ sponsorshipProvider: null, locationDistrict: '中山區', workShift: null, atsPostingKey: null });
   });
 });
 
@@ -1331,9 +1333,10 @@ describe('MKT-3C JI-7 / JT-7: provider sponsorship reading, district and shift r
     const job = normalizeProviderJob({ ...base, sponsorshipProvider: 'offered', locationDistrict: ' 竹北市 ', workShift: 'rotating' }, 'tw_open_data', { now });
     expect(job).toMatchObject({ sponsorshipProvider: 'offered', locationDistrict: '竹北市', workShift: 'rotating' });
     expect(normalizeProviderJob({ ...base, sponsorshipProvider: 'not_offered' }, 'activejobs_feed', { now }).sponsorshipProvider).toBe('not_offered');
-    // Carrying them changes nothing else on the row.
+    // Carrying them changes nothing else on the row (the plain row reads the same district from its location text).
     const plain = normalizeProviderJob(base, 'tw_open_data', { now });
-    expect({ ...job, sponsorshipProvider: null, locationDistrict: null, workShift: null }).toEqual(plain);
+    expect(plain.locationDistrict).toBe('竹北市');
+    expect({ ...job, sponsorshipProvider: null, workShift: null }).toEqual(plain);
   });
 
   it.each(['day', 'evening', 'night', 'rotating', 'part_time'])('shift %s is kept', (shift) => {
@@ -1351,12 +1354,138 @@ describe('MKT-3C JI-7 / JT-7: provider sponsorship reading, district and shift r
     const kept = normalizeProviderJob({ ...base, locationDistrict: long }, 'tw_open_data', { now }).locationDistrict!;
     expect([...kept].length).toBeLessThanOrEqual(40);
     expect(long.startsWith(kept.replace(/…$/, ''))).toBe(true);
-    for (const blank of ['', '   ', null, undefined]) expect(normalizeProviderJob({ ...base, locationDistrict: blank }, 'tw_open_data', { now }).locationDistrict).toBeNull();
-    // Never derived from the location text: only the source's own field.
-    expect(normalizeProviderJob(base, 'tw_open_data', { now }).locationDistrict).toBeNull();
+    // A blank is not a statement by the source: the location text decides then (next block).
+    const elsewhere = { ...base, location: 'Austin, TX', locationCountry: 'US' };
+    for (const blank of ['', '   ', null, undefined]) expect(normalizeProviderJob({ ...elsewhere, locationDistrict: blank }, 'activejobs_feed', { now }).locationDistrict).toBeNull();
   });
 
   it.each(['yes', 'true', 'sponsored', 'OFFERED', '', null, undefined, true as unknown as string])('a sponsorship value that is not a reading (%s) is no reading', (value) => {
     expect(normalizeProviderJob({ ...base, sponsorshipProvider: value as ProviderJobInput['sponsorshipProvider'] }, 'activejobs_feed', { now }).sponsorshipProvider).toBeNull();
+  });
+});
+
+describe('MKT-5F JT-7: the district of a posting in Taiwan, from its own location text', () => {
+  // SYNTHETIC rows: the place strings are the shapes the research note measured on live sources.
+  const row = (location: string, over: Partial<ProviderJobInput> = {}): ProviderJobInput => ({ externalId: 'd:1', title: '門市人員', company: 'Formosa Example Co', location, applyUrl: 'https://example.com/jobs/1', ...over });
+  const district = (location: string, provider: NormalizeProvider = 'jsearch', over: Partial<ProviderJobInput> = {}, countryHint?: string) =>
+    normalizeProviderJob(row(location, over), provider, { now, ...(countryHint ? { countryHint } : {}) }).locationDistrict;
+
+  it('ACCEPT: 新竹縣竹北市 stores 竹北市, and the county stays the row\'s city and region as before', () => {
+    const job = normalizeProviderJob(row('新竹縣竹北市'), 'tw_open_data', { now });
+    expect(job).toMatchObject({ locationDistrict: '竹北市', locationCity: 'Zhubei', locationRegion: 'Hsinchu County', locationCountry: 'TW', location: '新竹縣竹北市' });
+  });
+
+  it('ACCEPT: 臺北市士林區 • 透過「104人力銀行」 stores 士林區 (the 臺 spelling and the search index\'s suffix)', () => {
+    expect(district('臺北市士林區 • 透過「104人力銀行」', 'jsearch', {}, 'TW')).toBe('士林區');
+    expect(district('台北市士林區')).toBe('士林區');
+  });
+
+  it.each([
+    ['苗栗縣竹南鎮', '竹南鎮'],
+    ['台中市西屯區', '西屯區'],
+    ['臺南市善化區', '善化區'],
+    ['高雄市楠梓區', '楠梓區'],
+    ['新北市新店區, 台灣', '新店區'],
+    ['台灣新竹市東區', '東區'],
+  ])('%s stores %s', (location, expected) => {
+    expect(district(location)).toBe(expected);
+  });
+
+  it('ACCEPT: 不限 means the whole county: 台中市不限 stores no district, and a county alone stores none', () => {
+    for (const location of ['台中市不限', '桃園市不限', '台北市', '新竹縣']) {
+      const job = normalizeProviderJob(row(location), 'tw_open_data', { now });
+      expect(job.locationCountry, location).toBe('TW');
+      expect(job.locationDistrict, location).toBeNull();
+    }
+  });
+
+  it('ACCEPT: a location outside Taiwan never gets a district from its text', () => {
+    for (const [location, over] of [
+      ['上海市静安区', {}],
+      ['北京市朝阳区', {}],
+      ['Austin, TX', {}],
+      ['Shibuya, Tokyo, Japan', {}],
+      ['香港中西區', {}],
+      ['Remote', {}],
+      ['', { locationCountry: 'US' }],
+    ] as Array<[string, Partial<ProviderJobInput>]>) {
+      const job = normalizeProviderJob(row(location, over), 'activejobs_feed', { now });
+      expect(job.locationCountry, location).not.toBe('TW');
+      expect(job.locationDistrict, location).toBeNull();
+    }
+    // A Taiwanese place name in English names no district of the table: nothing is guessed.
+    for (const location of ['Taipei, Taiwan', 'Zhubei, Hsinchu County, Taiwan', 'Neihu District, Taipei City']) {
+      const job = normalizeProviderJob(row(location), 'ats_public', { now });
+      expect(job.locationCountry, location).toBe('TW');
+      expect(job.locationDistrict, location).toBeNull();
+    }
+  });
+
+  it('a county the city table does not hold (連江縣) gets its district once the source says the posting is in Taiwan', () => {
+    expect(normalizeProviderJob(row('連江縣南竿鄉', { locationCountry: 'TW' }), 'tw_open_data', { now })).toMatchObject({ locationCountry: 'TW', locationDistrict: '南竿鄉' });
+    // With no country from the source the text alone does not place it (連江縣 is also a county of Fujian): no district.
+    expect(normalizeProviderJob(row('連江縣南竿鄉'), 'jsearch', { now })).toMatchObject({ locationCountry: null, locationDistrict: null });
+  });
+
+  it('the source\'s own district wins over the text; a multi-location posting takes its primary location\'s district', () => {
+    expect(district('新竹縣竹北市', 'tw_open_data', { locationDistrict: '湖口鄉' })).toBe('湖口鄉');
+    expect(normalizeProviderJob(row('', { location: null, locations: ['台北市內湖區', '新竹縣竹北市'] }), 'ats_public', { now })).toMatchObject({ locationCity: 'Taipei', locationDistrict: '內湖區' });
+  });
+
+  it('an employer-board row in Taiwan gets its district the same way, and its market stays intl', () => {
+    const job = normalizeProviderJob(row('新竹縣竹北市', { sourceBoard: 'greenhouse', externalId: 'acme:1' }), 'ats_public', { now });
+    expect(job).toMatchObject({ market: 'intl', locationCountry: 'TW', locationDistrict: '竹北市' });
+  });
+
+  it('ACCEPT: an ats_public row always has workShift null: the shift is never read out of a title or a description', () => {
+    const wordy = row('新竹縣竹北市', { sourceBoard: 'greenhouse', externalId: 'acme:2', title: '夜班作業員（輪班）', description: '工作時間：日班、夜班、輪班三班制。Night shift, rotating shifts, part-time hours.' });
+    for (const provider of ['ats_public', 'jsearch', 'activejobs_feed', 'tw_open_data'] as NormalizeProvider[]) {
+      expect(normalizeProviderJob(wordy, provider, { now }).workShift, provider).toBeNull();
+    }
+  });
+});
+
+describe('MKT-5D request: a source\'s own statements reach the row as market tags', () => {
+  // SYNTHETIC rows. `marketTags` joins ProviderJobInput with the two government sources; until then the input is widened here.
+  type Tagged = ProviderJobInput & { marketTags?: unknown };
+  const base: Tagged = { externalId: 'usajobs:900000002', title: 'Program Analyst', company: 'Example Agency', location: 'Washington, DC', locationCountry: 'US', applyUrl: 'https://www.usajobs.gov/GetJob/ViewDetails/900000002' };
+  const tagsOf = (input: Tagged, provider: NormalizeProvider = 'usajobs') => normalizeProviderJob(input, provider, { now }).marketTags;
+
+  it('a known tag with its quote comes out as given, with its link', () => {
+    const tag = { tag: 'usajobs_hiring_path', evidenceQuote: 'Agency Employees Only', evidenceUrl: 'https://www.usajobs.gov/GetJob/ViewDetails/900000002' };
+    expect(tagsOf({ ...base, marketTags: [tag] })).toEqual([tag]);
+    expect(tagsOf({ ...base, marketTags: [{ tag: 'tw_gov_person_kind', evidenceQuote: ' 約僱人員 ' }] }, 'tw_gov_jobs')).toEqual([{ tag: 'tw_gov_person_kind', evidenceQuote: '約僱人員', evidenceUrl: null }]);
+  });
+
+  it('a tag outside the list, a tag with no quote, a second tag of the same name and a link that is not http(s) are dropped', () => {
+    const tags = tagsOf({
+      ...base,
+      marketTags: [
+        { tag: 'tw_work_permit_support', evidenceQuote: 'We sponsor work permits.' },
+        { tag: 'class_year:2027', evidenceQuote: '2027届' },
+        { tag: 'soe', evidenceQuote: 'state-owned' },
+        { tag: 'usajobs_hiring_path', evidenceQuote: '   ' },
+        { tag: 'usajobs_hiring_path', evidenceQuote: 'Open to the public', evidenceUrl: 'javascript:alert(1)' },
+        { tag: 'usajobs_hiring_path', evidenceQuote: 'Veterans' },
+        { tag: 7, evidenceQuote: 'x' },
+        null,
+        'usajobs_hiring_path',
+      ],
+    });
+    expect(tags).toEqual([{ tag: 'usajobs_hiring_path', evidenceQuote: 'Open to the public', evidenceUrl: null }]);
+  });
+
+  it('with no tags the row is what it always was: no `marketTags` key at all', () => {
+    const plain = normalizeProviderJob(base, 'usajobs', { now });
+    expect('marketTags' in plain).toBe(false);
+    for (const none of [undefined, null, [], 'usajobs_hiring_path', { tag: 'usajobs_hiring_path', evidenceQuote: 'x' }, [{ tag: 'not_a_source_tag', evidenceQuote: 'x' }]]) {
+      expect(normalizeProviderJob({ ...base, marketTags: none } as Tagged, 'usajobs', { now })).toEqual(plain);
+    }
+  });
+
+  it('a long quote is cut to 300 characters', () => {
+    const [tag] = tagsOf({ ...base, marketTags: [{ tag: 'usajobs_hiring_path', evidenceQuote: 'x'.repeat(900) }] }) as Array<{ evidenceQuote: string }>;
+    expect(MAX_SOURCE_TAG_QUOTE_CHARS).toBe(300);
+    expect([...tag!.evidenceQuote].length).toBeLessThanOrEqual(300);
   });
 });

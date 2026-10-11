@@ -4,7 +4,29 @@
       "anywhereIn": "Anywhere in {country}",
       "sponsorshipNotNeeded": "No sponsorship needed",
       "cleared": "Filters cleared.",
-      "undo": "Undo"
+      "undo": "Undo",
+      "shiftValue": "Shift: {shift}"
+    },
+    "fields": {
+      "twDistricts": "Districts",
+      "twDistrictsOf": "Districts in {county}",
+      "workShifts": "Shift"
+    },
+    "help": {
+      "twDistricts": "Shows only jobs whose posting says which district it is in. Jobs that name no district are left out.",
+      "twDistrictsFull": "You can pick up to {max} districts. Take one off to add another.",
+      "twDistrictsOnly": "Only the districts you picked are shown. Jobs in your other places are left out.",
+      "workShifts": "Shows only jobs whose posting states the shift. Most of those come from 台灣就業通, so the list gets shorter.",
+      "twPay": "In Taiwan, most postings that state pay come from 台灣就業通. Postings found through job search rarely state it, so they are left out when “Only jobs that list pay” is on. Monthly pay is shown as the posting states it."
+    },
+    "options": {
+      "workShifts": {
+        "day": "Day",
+        "evening": "Evening",
+        "night": "Night",
+        "rotating": "Rotating",
+        "part_time": "Part-time hours"
+      }
     }
   }
 }

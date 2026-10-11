@@ -10,6 +10,7 @@ import { normalizeSql } from '../../test/sqlSnapshot.js';
 import { FILTER_FIELDS, type FilterField, type FilterSet } from '../search/index.js';
 import { AGE_EXPIRY_BOARDS } from '../jobs/normalize/index.js';
 import { filterTokens, queryTokens, toTsQuery } from '../retrieval/index.js';
+import { EMPLOYER_BOARD_SOURCES } from './sourceLine.js';
 import {
   AGE_FLOOR_BOARDS,
   ageFloorSql,
@@ -31,6 +32,7 @@ import {
   rowsByIdSql,
   scopePredicates,
   sourcesSql,
+  twDistrictSql,
   wideQPredicateSql,
 } from './sql.js';
 
@@ -79,6 +81,9 @@ const SAMPLES: Array<[FilterField, FilterSet, 'intl' | 'cn']> = [
   ['salaryMonthsMin', { salaryMonthsMin: 13 }, 'cn'],
   ['hukouTag', { hukouTag: true }, 'cn'],
   ['schoolTiers', { schoolTiers: ['985', '211'] }, 'cn'],
+  // RoboApply, a search in Taiwan (JT-7): both need the search to be in Taiwan.
+  ['twDistricts', { country: 'TW', twDistricts: ['新竹縣竹北市'] }, 'intl'],
+  ['workShifts', { country: 'TW', workShifts: ['rotating', 'night'] }, 'intl'],
 ];
 
 describe('predicates (one snapshot per FilterSet field)', () => {
@@ -423,7 +428,11 @@ describe('recruiter-bank rows of a bank with no posting page are held out of eve
 describe('feed header facts (sourcesSql)', () => {
   it('one aggregate over the public rows the query can reach: any GoHire bank row, and distinct employer boards', () => {
     const sql = show(sourcesSql({ scope: { market: 'cn', userId: 'u1', now: NOW }, filters: { workModels: ['onsite'] }, fields: FILTER_FIELDS, from: new Date('2026-06-12T12:00:00Z') }))!;
-    expect(sql).toMatchSnapshot();
+    // The employer boards are the one list the card and the header share (sourceLine.ts `EMPLOYER_BOARD_SOURCES`).
+    // The snapshot holds the list's place, not its members: a new board system changes that constant and no snapshot.
+    const boardsAt = sql.values.findIndex((v) => Array.isArray(v) && v.includes('smartrecruiters'));
+    expect(sql.values[boardsAt]).toEqual([...EMPLOYER_BOARD_SOURCES]);
+    expect({ ...sql, values: sql.values.map((v, i) => (i === boardsAt ? '<EMPLOYER_BOARD_SOURCES>' : v)) }).toMatchSnapshot();
     // Public rows only, whoever asks: the user's own imports are not a source of the index.
     expect(sql.text).toContain(`j."visibility" = 'public'`);
     expect(sql.text).not.toContain('j."ownerUserId" =');
@@ -587,5 +596,144 @@ describe('statements', () => {
     for (const [, f, market] of SAMPLES) {
       expect(() => filterPredicates(f, market === 'cn' ? cn : intl, FILTER_FIELDS)).not.toThrow();
     }
+  });
+});
+
+describe('the list projection (FEED_COLUMNS)', () => {
+  it('carries the sponsorship reading with its source, so the provider badge needs no second read (MKT-5C F-1)', () => {
+    const sql = show(retrievalSql({ scope: { market: 'intl', userId: 'u1', now: NOW }, filters: {}, fields: FILTER_FIELDS, from: null, to: null, limit: 400 }))!;
+    expect(sql.text).toContain('j."sponsorship", j."sponsorshipEvidence", j."sponsorshipSource", j."citizenshipRequired"');
+    expect(show(rowsByIdSql({ market: 'intl', userId: 'u1', now: NOW }, ['j1']))!.text).toContain('j."sponsorshipSource"');
+    // Columns are named one by one: never `j.*`, never the search vector (the driver cannot return it bare).
+    expect(sql.text).not.toMatch(/j\.\*|SELECT \*/);
+    expect(sql.text.split(' FROM "RAJob"')[0]).not.toContain('searchTsv');
+  });
+});
+
+describe('MKT-5F JT-7: district and shift filters of a search in Taiwan', () => {
+  const scope = { market: 'intl' as const, userId: 'u1', now: NOW };
+  const DISTRICT = `(j."locationCountry" = 'TW' AND j."locationDistrict" = ANY($1::text[]))`;
+  const SHIFT = 'j."workShift" = ANY($1::text[])';
+  const renumber = (text: string) => text.replace(/\$\d+/g, '$n');
+
+  it('ACCEPT: district 竹北市 is the posting\'s country and its stored district, and nothing else', () => {
+    const p = show(predicateFor('twDistricts', { country: 'TW', twDistricts: ['新竹縣竹北市'] }, intl))!;
+    expect(p.text).toBe(DISTRICT);
+    // The row stores the bare district; the county is part of the filter value only.
+    expect(p.values).toEqual([['竹北市']]);
+    // Several districts whose names one county alone has: one list, in the user's order.
+    expect(show(predicateFor('twDistricts', { country: 'TW', twDistricts: ['新竹縣竹北市', '台中市西屯區', '台北市內湖區'] }, intl))).toEqual({ text: DISTRICT, values: [['竹北市', '西屯區', '內湖區']] });
+  });
+
+  it('ACCEPT: shift rotating narrows to the rows that state it', () => {
+    expect(show(predicateFor('workShifts', { country: 'TW', workShifts: ['rotating'] }, intl))).toEqual({ text: SHIFT, values: [['rotating']] });
+    expect(show(predicateFor('workShifts', { country: 'TW', workShifts: ['day', 'part_time'] }, intl))).toEqual({ text: SHIFT, values: [['day', 'part_time']] });
+  });
+
+  it('neither has a pass-through: no IS NULL, no OR for remote jobs, no COALESCE (a posting that states no district or shift never matches)', () => {
+    for (const p of [
+      predicateFor('twDistricts', { country: 'TW', twDistricts: ['新竹縣竹北市', '台北市信義區'] }, intl),
+      predicateFor('workShifts', { country: 'TW', workShifts: ['rotating'] }, intl),
+    ]) {
+      const text = show(p)!.text;
+      expect(text).not.toMatch(/IS NULL|COALESCE|remote|IS NOT TRUE|IS DISTINCT/i);
+    }
+  });
+
+  it('a district name two or more counties have is matched with its county\'s city, so 台北市信義區 never returns 基隆市信義區', () => {
+    const taipei = show(twDistrictSql(['台北市信義區']))!;
+    expect(taipei.text).toBe(`(j."locationCountry" = 'TW' AND (j."locationDistrict" = ANY($1::text[]) AND lower(j."locationCity") = ANY($2::text[])))`);
+    expect(taipei.values[0]).toEqual(['信義區']);
+    expect(taipei.values[1]).toEqual(expect.arrayContaining(['taipei', '台北', '臺北']));
+    expect(taipei.values[1]).not.toEqual(expect.arrayContaining(['keelung']));
+    const keelung = show(twDistrictSql(['基隆市信義區']))!;
+    expect(keelung.values[1]).toEqual(expect.arrayContaining(['keelung', '基隆']));
+    expect(keelung.values[1]).not.toEqual(expect.arrayContaining(['taipei']));
+    // 東區 belongs to four counties; choosing two of them names exactly those two.
+    const east = show(twDistrictSql(['新竹市東區', '台南市東區']))!;
+    expect(east.text).toBe(
+      `(j."locationCountry" = 'TW' AND ((j."locationDistrict" = ANY($1::text[]) AND lower(j."locationCity") = ANY($2::text[])) OR (j."locationDistrict" = ANY($3::text[]) AND lower(j."locationCity") = ANY($4::text[]))))`,
+    );
+    expect(east.values[1]).toEqual(expect.arrayContaining(['hsinchu']));
+    expect(east.values[3]).toEqual(expect.arrayContaining(['tainan']));
+    // Mixed: the names only one county has stay one plain list beside the pairs.
+    const mixed = show(twDistrictSql(['新竹縣竹北市', '台北市信義區', '台北市中山區', '台北市內湖區']))!;
+    expect(mixed.text).toBe(
+      `(j."locationCountry" = 'TW' AND (j."locationDistrict" = ANY($1::text[]) OR (j."locationDistrict" = ANY($2::text[]) AND lower(j."locationCity") = ANY($3::text[]))))`,
+    );
+    expect(mixed.values[0]).toEqual(['竹北市', '內湖區']);
+    expect(mixed.values[1]).toEqual(['信義區', '中山區']);
+  });
+
+  it('values are bound, never spliced, and a value that names no district builds nothing', () => {
+    expect(twDistrictSql([])).toBeNull();
+    expect(twDistrictSql(['東區', 'Neihu', "x'; DROP TABLE \"RAJob\"; --", '台中市不限'])).toBeNull();
+    expect(predicateFor('twDistricts', { country: 'TW', twDistricts: ["x'; DROP TABLE \"RAJob\"; --"] }, intl)).toBeNull();
+    const p = show(twDistrictSql(["x'; DROP TABLE \"RAJob\"; --", '新竹縣竹北市']))!;
+    expect(p).toEqual({ text: DISTRICT, values: [['竹北市']] });
+  });
+
+  it('ACCEPT: ignored unless the search is in Taiwan, and never built for GoApply', () => {
+    const tw = { twDistricts: ['新竹縣竹北市'], workShifts: ['rotating' as const] };
+    // A United States search, a search with no place, a place that states another country.
+    for (const search of [{ country: 'US' }, {}, { locations: [{ label: 'Austin, TX', city: 'Austin', country: 'US', radiusKm: 40 as const }] }, { locations: [{ label: 'Taipei', country: 'US', radiusKm: 0 as const }] }]) {
+      expect(predicateFor('twDistricts', { ...search, ...tw }, intl), JSON.stringify(search)).toBeNull();
+      expect(predicateFor('workShifts', { ...search, ...tw }, intl), JSON.stringify(search)).toBeNull();
+    }
+    // In Taiwan by a place alone (no country set).
+    for (const location of [{ label: '新竹縣', radiusKm: 40 as const }, { label: 'Taipei', city: 'Taipei', radiusKm: 40 as const }, { label: 'x', country: 'TW', radiusKm: 0 as const }]) {
+      expect(predicateFor('twDistricts', { locations: [location], ...tw }, intl), location.label).not.toBeNull();
+      expect(predicateFor('workShifts', { locations: [location], ...tw }, intl), location.label).not.toBeNull();
+    }
+    // GoApply: nothing, whatever the search says.
+    expect(predicateFor('twDistricts', { country: 'TW', ...tw }, cn)).toBeNull();
+    expect(predicateFor('workShifts', { country: 'TW', ...tw }, cn)).toBeNull();
+  });
+
+  it('ACCEPT: the list and the count carry the same two predicates, so the count matches the list; so do samples, alerts and the source header', () => {
+    const filters: FilterSet = { locations: [{ label: '新竹縣', city: '新竹縣', radiusKm: 0 }], twDistricts: ['新竹縣竹北市'], workShifts: ['rotating'] };
+    const statements = [
+      retrievalSql({ scope, filters, fields: FILTER_FIELDS, from: null, to: null, limit: 400 }),
+      countSql({ scope, filters, fields: FILTER_FIELDS, cap: 5000 }),
+      jobIdsSql({ scope, filters, fields: FILTER_FIELDS, from: null, limit: 10, orderBy: 'posted' }),
+      jobIdsSql({ scope: { ...scope, publicOnly: true }, filters, fields: FILTER_FIELDS, from: null, firstSeenAfter: NOW, limit: 10, orderBy: 'first_seen' }),
+      sourcesSql({ scope, filters, fields: FILTER_FIELDS, from: null }),
+    ];
+    for (const sql of statements) {
+      const shown = show(sql)!;
+      expect(renumber(shown.text)).toContain(`AND ${renumber(DISTRICT)}`);
+      expect(renumber(shown.text)).toContain(`AND ${renumber(SHIFT)}`);
+      expect(shown.values).toContainEqual(['竹北市']);
+      expect(shown.values).toContainEqual(['rotating']);
+      // Under the same scope as every other filter.
+      expect(shown.text).toMatch(/j\."market" = \$\d+ AND j\."isCanonical" = true/);
+    }
+    // The location predicate still lets a remote job through; the district predicate is ANDed after it, so
+    // a remote job with no district is not in the list.
+    const list = show(statements[0]!)!.text;
+    expect(list.indexOf(`(j."workModel" = 'remote' OR`)).toBeGreaterThan(-1);
+    expect(list.indexOf(`j."locationDistrict" = ANY`)).toBeGreaterThan(list.indexOf(`(j."workModel" = 'remote' OR`));
+  });
+
+  it('ACCEPT: nothing else changed: without the two fields a statement is exactly what it was, and with them only two AND parts are added', () => {
+    const base: FilterSet = { country: 'TW', jobTypes: ['full_time'], q: 'engineer' };
+    const without = show(retrievalSql({ scope, filters: base, fields: FILTER_FIELDS, from: null, to: null, limit: 400 }))!;
+    const withBoth = show(retrievalSql({ scope, filters: { ...base, twDistricts: ['新竹縣竹北市'], workShifts: ['rotating'] }, fields: FILTER_FIELDS, from: null, to: null, limit: 400 }))!;
+    const added = `AND ${renumber(DISTRICT)} AND ${renumber(SHIFT)} `;
+    expect(renumber(withBoth.text)).toContain(added);
+    expect(renumber(withBoth.text).replace(added, '')).toBe(renumber(without.text));
+    expect(withBoth.values.filter((v) => !without.values.some((w) => JSON.stringify(w) === JSON.stringify(v)))).toEqual([['竹北市'], ['rotating']]);
+    // A search outside Taiwan that still carries the fields (a stored row from before a rule change) builds the old statement.
+    const us = show(retrievalSql({ scope, filters: { country: 'US', jobTypes: ['full_time'], twDistricts: ['新竹縣竹北市'], workShifts: ['rotating'] }, fields: FILTER_FIELDS, from: null, to: null, limit: 400 }))!;
+    expect(us.text).not.toMatch(/locationDistrict|workShift/);
+    // The columns the list reads did not change: the district and the shift are filters, not card fields.
+    expect(without.text).not.toMatch(/locationDistrict|workShift/);
+  });
+
+  it('the district predicate can use the index on (market, locationCountry, locationDistrict): both columns are compared plainly', () => {
+    const text = show(twDistrictSql(['新竹縣竹北市']))!.text;
+    expect(text).toContain(`j."locationCountry" = 'TW'`);
+    expect(text).toContain('j."locationDistrict" = ANY(');
+    expect(text).not.toMatch(/lower\(j\."locationDistrict"\)|j\."locationDistrict" (I?LIKE|~)/);
   });
 });

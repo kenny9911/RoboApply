@@ -60,8 +60,10 @@ export const FIELD_SECTIONS: Readonly<Record<FilterField, 'basic' | 'pay' | 'int
   excludedTitles: 'basic',
   jobTypes: 'basic',
   workModels: 'basic',
+  workShifts: 'basic',
   country: 'basic',
   locations: 'basic',
+  twDistricts: 'basic',
   seniority: 'basic',
   yearsRange: 'basic',
   postedWithinDays: 'basic',
@@ -97,7 +99,7 @@ export const FIELD_SECTIONS: Readonly<Record<FilterField, 'basic' | 'pay' | 'int
 export const FIELD_ORDER = Object.keys(FIELD_SECTIONS) as FilterField[];
 
 export const CN_ONLY_FIELDS: readonly FilterField[] = FIELD_ORDER.filter((f) => FIELD_SECTIONS[f] === 'cn');
-export const INTL_ONLY_FIELDS: readonly FilterField[] = ['needsSponsorship', 'excludeRequirements'];
+export const INTL_ONLY_FIELDS: readonly FilterField[] = ['needsSponsorship', 'excludeRequirements', 'twDistricts', 'workShifts'];
 
 export type Market = 'intl' | 'cn';
 
