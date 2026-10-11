@@ -167,7 +167,8 @@ describe('source line (H9: no LinkedIn branding)', () => {
   });
 
   it('never allows applicant counts from linkedin or jsearch', () => {
-    expect(NO_APPLICANT_COUNT_PROVIDERS).toEqual(['linkedin', 'jsearch']);
+    // MKT-1C: the government open-data sources publish no count either (PROVIDER_META.applicantCountAllowed).
+    expect(NO_APPLICANT_COUNT_PROVIDERS).toEqual(['linkedin', 'jsearch', 'tw_open_data', 'tw_gov_jobs', 'usajobs']);
     expect(applicantCountAllowed('linkedin')).toBe(false);
     expect(applicantCountAllowed('jsearch')).toBe(false);
     expect(applicantCountAllowed('activejobs')).toBe(true);

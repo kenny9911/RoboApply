@@ -9,8 +9,19 @@
 
 import type { JobProvider, Market } from '../../../platform/brand/index.js';
 
-/** Every job source the normalizers know. `ats_public` = WP-42's public ATS boards. */
-export type NormalizeProvider = JobProvider | 'ats_public';
+/**
+ * Every job source the normalizers know: the brand registry's `JobProvider`
+ * plus the sources that join a brand through their market, not through the
+ * brand's provider list (MARKET_STRATEGY §1.2 to §1.4):
+ *   ats_public       public employer boards (WP-42);
+ *   tw_open_data     台灣就業通 open data (dataset 44062, OGDL v1; JT-2);
+ *   tw_gov_jobs      事求人 public-sector vacancies (dataset 7229; JT-9);
+ *   usajobs          USAJOBS, US federal roles (JI-9);
+ *   activejobs_feed  the licensed Active Jobs DB window feed (JI-7). It writes
+ *                    the same `sourceBoard` as the `activejobs` search
+ *                    provider, so both address the same rows.
+ */
+export type NormalizeProvider = JobProvider | 'ats_public' | 'tw_open_data' | 'tw_gov_jobs' | 'usajobs' | 'activejobs_feed';
 
 export type WorkModel = 'remote' | 'hybrid' | 'onsite';
 export type Seniority = 'intern_newgrad' | 'entry' | 'mid' | 'senior' | 'lead_staff' | 'director_exec';
@@ -124,6 +135,25 @@ export interface ProviderJobInput {
   experienceMonths?: number | null;
   /** Provider-extracted skills (lower-cased, de-duplicated, max 25 kept). */
   skills?: readonly string[] | null;
+  /**
+   * The source's own occupation code, already mapped to a taxonomy L3 (role)
+   * id by the adapter (台灣就業通 通俗職業 小類 → role, JT-4). A valid role id
+   * becomes the job's primary taxonomy id with source 'provider'; anything
+   * else is ignored and the title dictionary decides as before.
+   */
+  taxonomyId?: string | null;
+
+  /**
+   * A provider's own reading of visa / work-permit sponsorship (a feed flag).
+   * A reading, never a fact: it may only ever be stored and shown as "the
+   * provider's reading" (MARKET_STRATEGY §1.5 "Provider fields first").
+   * Carried on the input; nothing reads it yet (MKT-3C).
+   */
+  sponsorshipProvider?: 'offered' | 'not_offered' | null;
+  /** The district inside the city or county, as the source states it (Taiwan: 竹北市, 中山區; JT-7). Not read yet. */
+  locationDistrict?: string | null;
+  /** The shift pattern as the source states it (Taiwan `WKTIME`: 日班, 夜班, 輪班 …; JT-7). Not read yet. */
+  workShift?: string | null;
 
   /** A provider education label ("本科", "bachelor", "associate", "不限"). */
   educationLevel?: string | null;
@@ -179,6 +209,13 @@ export interface NormalizeContext {
    * moving to the fetch time on every run.
    */
   firstSeenAt?: string | Date | null;
+  /**
+   * `companyNameNormalized` → the employer's registrable domain, for sources
+   * that state one. The fuzzy dedupe key uses the domain in place of the name
+   * (MARKET_STRATEGY §1.5 K3, JI-5). Filled by the ingest pipeline (MKT-3A)
+   * and read by the dedupe key (MKT-3C); unused until then.
+   */
+  companyDomains?: ReadonlyMap<string, string>;
 }
 
 export interface NormalizedLocation {
@@ -222,7 +259,7 @@ export type NormalizedJob = {
   ownerUserId: string | null;
   externalId: string;
   sourceBoard: string;
-  /** Lower wins in dedupe (activejobs 10, bank 15, linkedin 20, jsearch 30, user_import 90). */
+  /** Lower wins in dedupe (`PROVIDER_META` in ./source.ts: usajobs 8, activejobs 10, open data 12, bank 15, linkedin 20, jsearch 30, user_import 90). */
   sourcePriority: number;
 
   title: string;
@@ -280,7 +317,7 @@ export type NormalizedJob = {
   educationLevel: EducationLevel | null;
   /** The posting's own words the level was read from (posting_text only; not stored on the row). */
   educationEvidence: string | null;
-  /** Openings the provider states. Carried, not stored: RAJob has no column for it yet (schema request). */
+  /** Openings the provider states. Carried here; `RAJob.headcount` exists since SCHEMA-8 and the ingest upsert writes it from MKT-3C on. */
   headcount: number | null;
 
   salaryMin: number | null;

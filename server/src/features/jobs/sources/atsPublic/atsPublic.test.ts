@@ -30,7 +30,27 @@ import { ensureSeedCareerSources, parseSeedFile, SEED_MIN_MAINLAND_POSTINGS, see
 import { BACKLOG_INTERVAL_MS, MAX_LISTED_PER_BOARD_CN, MAX_POSTINGS_PER_BOARD, SYNC_INTERVAL_MS } from './shared.js';
 import { createAtsPublicAdapter, parseBacklogCursor } from './adapter.js';
 import { API_HOSTS, assertApiHost, BoardFetchError, getJson, type FetchLike } from './http.js';
-import { createAtsPublicHooks, isTaiwanJob, mergePermitTags, twCardMeta, twNegotiableCardText, withAtsSourceName } from './hooks.js';
+import {
+  createAtsPublicHooks,
+  isTaiwanJob,
+  isTwNegotiable,
+  mergePermitTags,
+  TW_FLOOR_CLAUSE_SOURCE,
+  TW_FLOOR_OTHER_PAY_BEFORE_SOURCE,
+  TW_FLOOR_STATUTE_SOURCE,
+  TW_NEGOTIABLE_SOURCE,
+  twCardMeta,
+  twNegotiableCardText,
+  withAtsSourceName,
+} from './hooks.js';
+import {
+  CJK_NEGOTIABLE_SOURCE,
+  normalizeSalary,
+  parseSalaryText,
+  TW_FLOOR_CLAUSE_SOURCE as PARSER_FLOOR_CLAUSE_SOURCE,
+  TW_FLOOR_OTHER_PAY_BEFORE_SOURCE as PARSER_FLOOR_OTHER_PAY_BEFORE_SOURCE,
+  TW_FLOOR_STATUTE_SOURCE as PARSER_FLOOR_STATUTE_SOURCE,
+} from '../../normalize/salary.js';
 import { extractPermitTags, MAX_QUOTE_CHARS, quoteInPosting } from './permitTags.js';
 import { atsSourceName, decodeEntities, externalIdFor } from './shared.js';
 import { marketOfPosting } from '../../normalize/index.js';
@@ -918,6 +938,149 @@ describe('ats_public market hooks', () => {
     }
     // A real figure is not a floor clause.
     expect(twNegotiableCardText('面議，年薪104萬以上')).toBe('面議，年薪104萬以上');
+  });
+
+  it('JT-1: the 台灣就業通 no-figure sentence is negotiable pay on the card, with no amount in the card text', () => {
+    const AMOUNT = /\d|[０-９]|[一二三四五六七八九十百千]\s*[萬万]|以上/;
+    for (const posted of ['依學經歷、證照核薪(每月經常性薪資達4萬元以上)', '依學經歷、證照核薪（每月經常性薪資達4萬元以上）', '依學經歷、證照核薪(每月經常性薪資達5萬元以上)']) {
+      const pay = twCardMeta({ ...TW_JOB, provider: 'tw_open_data', sourceBoard: 'tw_open_data', atsType: null, salaryText: posted })!.pay;
+      expect(pay, posted).toEqual({ text: '依學經歷、證照核薪', posted, disclosed: false, negotiable: true });
+      expect(pay.text, posted).not.toMatch(AMOUNT);
+    }
+    // The wording alone, in each form the parser accepts.
+    for (const posted of ['依學經歷、證照核薪', '依學經歷', '核薪', '依學經歷核薪', '依学经历', '按公司規定']) {
+      expect(twCardMeta({ ...TW_JOB, salaryText: posted })!.pay, posted).toEqual({ text: posted, posted, disclosed: false, negotiable: true });
+    }
+    // A row with a real figure is disclosed pay: the wording next to it changes nothing.
+    expect(twCardMeta({ ...TW_JOB, salaryText: '月薪 45,000~60,000，依學經歷核薪', salaryDisclosed: true })!.pay).toEqual({
+      text: '月薪 45,000~60,000，依學經歷核薪',
+      posted: '月薪 45,000~60,000，依學經歷核薪',
+      disclosed: true,
+      negotiable: false,
+    });
+    // 核薪 inside another word (a field label, payroll work, "reviewing pay") is not wording about this job's pay.
+    for (const salaryText of ['核薪方式：月薪', '經人事審核薪資後通知', '負責員工核薪作業與薪資計算', '主管負責部門人員考核薪酬調整', '審核薪水', '核薪人員']) {
+      expect(twCardMeta({ ...TW_JOB, salaryText })!.pay.negotiable, salaryText).toBe(false);
+    }
+  });
+
+  // Review finding: a Taiwan posting whose description lists 核薪 as a duty and states no pay got the pill
+  // "pay as posted: 核薪". The normalizer now stores no pay text for it, so the card has nothing to show.
+  it('JT-1: a posting that only lists payroll duties gets no pay text and no pay pill (D3)', () => {
+    for (const description of ['1. 負責每月薪資核算、核薪、勞健保加退保', '負責員工核薪作業與薪資計算', '主管負責部門人員考核薪酬調整。', '人資將審核薪水並核薪']) {
+      const stored = normalizeSalary({ description, country: 'TW', market: 'intl' });
+      expect(stored, description).toMatchObject({ salaryText: null, salaryDisclosed: false });
+      const pay = twCardMeta({ ...TW_JOB, provider: 'ats_public', salaryText: stored.salaryText, salaryDisclosed: stored.salaryDisclosed, descriptionPlain: description })!.pay;
+      expect(pay, description).toEqual({ text: null, posted: null, disclosed: false, negotiable: false });
+    }
+    // The whole pipeline: an ats_public posting in Taiwan with a duties-only description.
+    const job = asMarketHookJob(
+      normalizeProviderJob(
+        { externalId: 'greenhouse:SYNTHETIC-HR', sourceBoard: 'greenhouse', title: '人資專員', company: 'Formosa Robotics', location: '台北市', locationCountry: 'TW', applyUrl: 'https://boards.greenhouse.io/formosarobotics/jobs/1', description: '工作內容：\n1. 負責每月薪資核算、核薪、勞健保加退保\n2. 人資將審核薪水並核薪' },
+        'ats_public',
+        { market: 'intl', now: NOW },
+      ),
+    );
+    expect(twCardMeta(job)!.pay).toEqual({ text: null, posted: null, disclosed: false, negotiable: false });
+  });
+
+  it('JT-1: the statute\'s own clause standing alone is "pay not listed" and leaves nothing for the card', () => {
+    for (const posted of ['每月經常性薪資達4萬元以上', '（每月經常性薪資達4萬元以上）', '經常性薪資達5萬元或以上', '經常性薪資：4萬元以上']) {
+      expect(isTwNegotiable(posted, false), posted).toBe(true);
+      expect(twNegotiableCardText(posted), posted).toBeNull();
+      expect(twCardMeta({ ...TW_JOB, salaryText: posted })!.pay, posted).toEqual({ text: null, posted, disclosed: false, negotiable: true });
+    }
+    expect(isTwNegotiable('每月經常性薪資達4萬元以上', true)).toBe(false);
+  });
+
+  it('JT-1: the Art. 5 clause leaves the card text at any threshold', () => {
+    expect(twNegotiableCardText('待遇面議（經常性薪資達4萬元或以上）')).toBe('待遇面議');
+    expect(twNegotiableCardText('待遇面議（經常性薪資達5萬元或以上）')).toBe('待遇面議');
+    expect(twNegotiableCardText('待遇面議')).toBe('待遇面議');
+    expect(twNegotiableCardText('依公司規定')).toBe('依公司規定');
+    const ANY_THRESHOLD = /[4-9４-９四五六七八九]\s*[萬万]|[4-9４-９][0０][,，]?[0０]{3}|以上/;
+    for (const amount of ['4萬', '5萬', '6萬', '9萬', '5万', '四萬', '五萬', '40,000', '50,000', '50000', '90,000', '５萬', '５０，０００', '５００００']) {
+      for (const posted of [
+        `待遇面議（經常性薪資達${amount}元或以上）`,
+        `面議，經常性薪資達 ${amount} 元以上`,
+        `待遇面議 (月薪NT$${amount}以上)`,
+        `依公司規定；經常性薪資${amount}元（含）以上`,
+        `依學經歷、證照核薪(每月經常性薪資達${amount}元以上)`,
+      ]) {
+        const card = twCardMeta({ ...TW_JOB, salaryText: posted })!.pay;
+        expect(card.negotiable, posted).toBe(true);
+        expect(card.disclosed, posted).toBe(false);
+        expect(card.text, posted).not.toMatch(ANY_THRESHOLD);
+        expect(card.text, posted).toMatch(/^(?:待遇面議|面議|依公司規定|依學經歷、證照核薪)$/);
+        expect(card.posted, posted).toBe(posted);
+      }
+    }
+    // Real figures that only end like a threshold, and the top of a range, stay in the text.
+    expect(twNegotiableCardText('面議，年薪104萬以上')).toBe('面議，年薪104萬以上');
+    expect(twNegotiableCardText('面議，年薪105萬以上')).toBe('面議，年薪105萬以上');
+    expect(twNegotiableCardText('面議，月薪150,000以上')).toBe('面議，月薪150,000以上');
+    expect(twNegotiableCardText('面議，月薪4.5萬以上')).toBe('面議，月薪4.5萬以上');
+    expect(twNegotiableCardText('面議，月薪4萬~5萬以上')).toBe('面議，月薪4萬~5萬以上');
+  });
+
+  // Review finding: an amount in another currency or for another period is not the clause (a month's regular
+  // wage in Taiwan dollars): the card keeps the posting's words, as the parser keeps the figure.
+  it('JT-1: an amount in another currency or for another period stays in the card text', () => {
+    for (const posted of [
+      '面議，年薪 USD 60,000 以上',
+      '薪金面議，月薪 HK$40,000 以上',
+      '面議，月薪 US$ 5萬以上',
+      '面議，月薪 RMB 40,000 以上',
+      '面議，月薪美金4萬以上',
+      '面議，年薪 90,000 以上',
+      '面議，時薪 90,000以上',
+      '面議，月薪 ￥40,000 以上',
+    ]) {
+      expect(twNegotiableCardText(posted), posted).toBe(posted);
+    }
+    // Taiwan dollars, a month: the clause.
+    expect(twNegotiableCardText('面議，月薪 NT$50,000 以上')).toBe('面議');
+    expect(twNegotiableCardText('面議，月薪台幣5萬以上')).toBe('面議');
+    expect(twNegotiableCardText('時薪面議，月薪4萬以上')).toBe('時薪面議');
+  });
+
+  it('JT-1: the card and the pay parser read the same wording and the same clause (one rule, kept in step)', () => {
+    // The hook's patterns are the parser's, character for character (an area may not import another
+    // area's internals, so they are copied): change one file and this fails until the other follows.
+    expect(TW_NEGOTIABLE_SOURCE).toBe(CJK_NEGOTIABLE_SOURCE);
+    expect(TW_FLOOR_CLAUSE_SOURCE).toBe(PARSER_FLOOR_CLAUSE_SOURCE);
+    expect(TW_FLOOR_STATUTE_SOURCE).toBe(PARSER_FLOOR_STATUTE_SOURCE);
+    expect(TW_FLOOR_OTHER_PAY_BEFORE_SOURCE).toBe(PARSER_FLOOR_OTHER_PAY_BEFORE_SOURCE);
+    // And they agree on real text: "no figure" for the parser is "negotiable" on the card.
+    for (const posted of [
+      '待遇面議',
+      '待遇面議（經常性薪資達4萬元或以上）',
+      '待遇面議（經常性薪資達5萬元或以上）',
+      '依學經歷、證照核薪(每月經常性薪資達4萬元以上)',
+      '依公司規定；經常性薪資四萬元（含）以上',
+      '面議，年薪104萬以上',
+      '月薪 45,000~60,000，依學經歷核薪',
+      '月薪 5萬以上',
+      '核薪方式：月薪',
+      '面議，月薪5萬以上',
+      '面議，月薪 NT$50,000 以上',
+      '面議，年薪 USD 60,000 以上',
+      '薪金面議，月薪 HK$40,000 以上',
+      '面議，年薪 90,000 以上',
+      '每月經常性薪資達4萬元以上',
+      '（每月經常性薪資達5萬元以上）',
+      '負責員工核薪作業與薪資計算',
+      '主管負責部門人員考核薪酬調整',
+    ]) {
+      const parsed = parseSalaryText(posted, { country: 'TW' });
+      const disclosed = !!parsed && !parsed.negotiable;
+      const card = twCardMeta({ ...TW_JOB, salaryText: posted, salaryDisclosed: disclosed })!.pay;
+      expect(card.negotiable, posted).toBe(parsed?.negotiable === true);
+      // What the card shows of a "pay not listed" posting carries no figure for the parser either.
+      if (card.negotiable && card.text) expect(parseSalaryText(card.text, { country: 'TW' }), posted).toMatchObject({ min: null, max: null, negotiable: true });
+      // A figure the parser keeps is a figure the card text keeps.
+      if (disclosed) expect(card.text, posted).toBe(posted);
+    }
   });
 
   it('cardMeta: English "competitive salary" / DOE is not 面議 and gets no pay pill', () => {

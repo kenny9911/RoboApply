@@ -12,8 +12,10 @@ import {
   taxonomyAncestors,
   taxonomyCategories,
   taxonomyLabel,
+  taxonomyNodeLabel,
   taxonomyRolesUnder,
   validateTaxonomy,
+  type TaxonomyNode,
 } from './taxonomy.js';
 import { normalizeTitle } from './match.js';
 
@@ -83,6 +85,32 @@ describe('navigation helpers', () => {
     expect(taxonomyLabel('product_manager', 'zh-TW')).toBe('Product manager');
     expect(taxonomyLabel('product_manager', 'ja')).toBe('Product manager');
     expect(taxonomyLabel('missing', 'en')).toBeNull();
+  });
+
+  it('MKT-1C / JT-4: zh-TW shows a node\'s Traditional Chinese label when it has one, else English, never Simplified', () => {
+    // SYNTHETIC node: the zhHant data arrives with MKT-3E (generated, reviewed by a Taiwan-native reader).
+    const withHant: TaxonomyNode = { id: 'fixture_role', level: 3, parent: 'fixture_group', en: 'Software engineer', zh: '软件工程师', zhHant: '軟體工程師', synonyms: { en: [], zh: [], zhHant: ['軟體開發工程師'] } };
+    const without: TaxonomyNode = { id: 'fixture_role_2', level: 3, parent: 'fixture_group', en: 'Data analyst', zh: '数据分析师', synonyms: { en: [], zh: [] } };
+    expect(taxonomyNodeLabel(withHant, 'zh-TW')).toBe('軟體工程師');
+    expect(taxonomyNodeLabel(withHant, 'zh')).toBe('软件工程师');
+    expect(taxonomyNodeLabel(withHant, 'en')).toBe('Software engineer');
+    expect(taxonomyNodeLabel(withHant, 'ja')).toBe('Software engineer');
+    expect(taxonomyNodeLabel(without, 'zh-TW')).toBe('Data analyst');
+    expect(taxonomyNodeLabel({ ...without, zhHant: '  ' }, 'zh-TW')).toBe('Data analyst');
+    // Every id of the data as it is: zh-TW is the zhHant label when the node has one, else the English label.
+    for (const n of TAXONOMY_NODES) expect(taxonomyLabel(n.id, 'zh-TW'), n.id).toBe(n.zhHant?.trim() || n.en);
+  });
+
+  it('MKT-1C / JT-4: a zhHant label is optional, but never blank', () => {
+    const base = { version: 1, asOf: '', sources: [] };
+    const nodes = (role: Partial<TaxonomyNode>): TaxonomyNode[] => [
+      { id: 'cat', level: 1, parent: null, en: 'Category', zh: '类别', synonyms: { en: [], zh: [] } },
+      { id: 'grp', level: 2, parent: 'cat', en: 'Group', zh: '组', synonyms: { en: [], zh: [] } },
+      { id: 'role', level: 3, parent: 'grp', en: 'Role', zh: '角色', synonyms: { en: [], zh: [] }, ...role },
+    ];
+    expect(validateTaxonomy({ ...base, nodes: nodes({}) })).toEqual([]);
+    expect(validateTaxonomy({ ...base, nodes: nodes({ zhHant: '角色', synonyms: { en: [], zh: [], zhHant: ['職位'] } }) })).toEqual([]);
+    expect(validateTaxonomy({ ...base, nodes: nodes({ zhHant: ' ' }) })).toEqual(['role has an empty Traditional Chinese label']);
   });
 });
 

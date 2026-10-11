@@ -8,7 +8,7 @@
 
 import type { Market } from '../../../platform/brand/index.js';
 import type { MarketHookJob } from '../marketHooks.js';
-import { bestTaxonomyMatch, taxonomyAncestors } from '../taxonomy/index.js';
+import { bestTaxonomyMatch, getTaxonomyNode, taxonomyAncestors } from '../taxonomy/index.js';
 import { parseLocation, resolveCountry, type ParsedLocation } from '../geo/index.js';
 import { resolveIsAgency } from './agency.js';
 import { atsTypeFromUrls } from './ats.js';
@@ -56,6 +56,18 @@ export function taxonomyIdsForTitle(title: string): { ids: string[]; primary: st
   const match = bestTaxonomyMatch(title) ?? (/[\u3400-\u9fff]/.test(title) ? bestTaxonomyMatch(foldTwToCn(title)) : null);
   if (!match) return { ids: [], primary: null };
   return { ids: taxonomyAncestors(match.id).map((n) => n.id).reverse(), primary: match.id };
+}
+
+/**
+ * [L1, L2, L3] ids for a role the SOURCE states (`ProviderJobInput.taxonomyId`:
+ * the adapter already mapped the source's own occupation code to a role).
+ * Null unless it is a role (L3) id of the taxonomy: a category, a group or an
+ * unknown id is not a role, and the title dictionary decides instead.
+ */
+export function taxonomyIdsForProviderRole(taxonomyId: string | null | undefined): { ids: string[]; primary: string } | null {
+  const node = typeof taxonomyId === 'string' ? getTaxonomyNode(taxonomyId.trim()) : null;
+  if (!node || node.level !== 3) return null;
+  return { ids: taxonomyAncestors(node.id).map((n) => n.id).reverse(), primary: node.id };
 }
 
 function defaultMarket(provider: NormalizeProvider): Market {
@@ -262,8 +274,10 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
   if (roleType) fieldSources.roleType = 'title';
 
   // ── Taxonomy and skills ──
-  const tax = taxonomyIdsForTitle(title);
-  if (tax.primary) fieldSources.taxonomy = 'title';
+  // The source's own role (provider fields first, MARKET_STRATEGY §1.5), else the title dictionary.
+  const statedRole = taxonomyIdsForProviderRole(raw.taxonomyId);
+  const tax = statedRole ?? taxonomyIdsForTitle(title);
+  if (tax.primary) fieldSources.taxonomy = statedRole ? 'provider' : 'title';
   const skills = normalizeSkills(raw.skills);
   if (skills.length) fieldSources.skills = 'provider';
 

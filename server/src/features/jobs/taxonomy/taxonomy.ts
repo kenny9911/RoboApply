@@ -15,9 +15,11 @@
 // new file (`taxonomy.v2.json`) and a migration of stored ids; ids are never
 // reused for a different role.
 //
-// Labels by locale: en → English; zh → Simplified Chinese; every other
-// locale (zh-TW included, which must never show Simplified characters)
-// falls back to English until INT translates the staging bundle.
+// Labels by locale: en → English; zh → Simplified Chinese; zh-TW → the
+// node's own Traditional Chinese label (`zhHant`) when it has one, else
+// English (zh-TW must never show Simplified characters); every other locale
+// falls back to English until INT translates the staging bundle. The zhHant
+// labels and synonyms are data (JT-4): they are not in v1 yet.
 
 import data from './taxonomy.v1.json' with { type: 'json' };
 
@@ -29,7 +31,9 @@ export interface TaxonomyNode {
   parent: string | null;
   en: string;
   zh: string;
-  synonyms: { en: string[]; zh: string[] };
+  /** Traditional Chinese label as used in Taiwan (zh-TW). Optional: absent → the English label is shown. */
+  zhHant?: string;
+  synonyms: { en: string[]; zh: string[]; /** Taiwan titles for the role (Traditional Chinese). */ zhHant?: string[] };
   /** O*NET-SOC 2019 codes this role corresponds to (roles only). */
   soc?: string[];
   /** A catch-all role (e.g. "Software engineer"): loses ties to a specific role in title matching. */
@@ -114,11 +118,21 @@ export function expandTaxonomyIds(ids: readonly string[]): string[] {
   return [...out];
 }
 
-/** Display label for a locale (zh → Simplified; everything else → English for now). */
+/**
+ * A node's display label for a locale: zh → Simplified; zh-TW → the node's
+ * Traditional Chinese label when it has one, never the Simplified one;
+ * everything else → English.
+ */
+export function taxonomyNodeLabel(node: Pick<TaxonomyNode, 'en' | 'zh' | 'zhHant'>, locale: string): string {
+  if (locale === 'zh') return node.zh;
+  if (locale === 'zh-TW') return node.zhHant?.trim() || node.en;
+  return node.en;
+}
+
+/** Display label of a taxonomy id for a locale (see taxonomyNodeLabel); null for an unknown id. */
 export function taxonomyLabel(id: string, locale: string): string | null {
   const node = byId.get(id);
-  if (!node) return null;
-  return locale === 'zh' ? node.zh : node.en;
+  return node ? taxonomyNodeLabel(node, locale) : null;
 }
 
 /** Structural problems in a taxonomy (empty when valid). Used by tests and the version-bump script. */
@@ -131,6 +145,7 @@ export function validateTaxonomy(t: TaxonomyData): string[] {
     if (!/^[a-z][a-z0-9_]*$/.test(n.id)) errors.push(`id ${n.id} is not snake_case`);
     if (!n.en?.trim()) errors.push(`${n.id} has no English label`);
     if (!n.zh?.trim()) errors.push(`${n.id} has no Chinese label`);
+    if (n.zhHant !== undefined && (typeof n.zhHant !== 'string' || !n.zhHant.trim())) errors.push(`${n.id} has an empty Traditional Chinese label`);
   }
   for (const n of t.nodes) {
     if (n.level === 1) {

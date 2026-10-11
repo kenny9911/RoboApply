@@ -15,11 +15,20 @@
 //                   posting's words (面議 wording kept, never an amount we
 //                   made up), the quoted permit tags and the source line.
 //
-// Honesty (TW-03): a 面議 posting is "pay not listed". Nothing here claims or
-// implies that such a job pays NT$40,000 or more: the Art. 5 floor clause many
-// 面議 postings repeat ("經常性薪資達4萬元或以上") is removed from the card
-// text and kept only as `pay.posted`, which the job page shows as the
-// posting's own words next to the note explaining that rule.
+// Honesty (TW-03, JT-1): a 面議 posting, and a 台灣就業通 row that says
+// 依學經歷、證照核薪, is "pay not listed". Nothing here claims or implies that
+// such a job pays the statutory threshold or more: the Art. 5 clause many of
+// these postings repeat ("經常性薪資達4萬元或以上", at whatever amount the
+// threshold stands) is removed from the card text and kept only as
+// `pay.posted`, which the job page shows as the posting's own words next to
+// the note explaining that rule. An amount in another currency or for another
+// period ("年薪 USD 60,000 以上") is not that clause and stays. The wording
+// list, the clause pattern and its two guards are the pay parser's
+// (normalize/salary.ts `CJK_NEGOTIABLE_SOURCE`, `TW_FLOOR_CLAUSE_SOURCE`,
+// `TW_FLOOR_STATUTE_SOURCE`, `TW_FLOOR_OTHER_PAY_BEFORE_SOURCE`), copied below
+// because an area may only import another area's index.ts
+// (features/boundary.test.ts) and normalize/index.ts does not export them
+// yet; atsPublic.test.ts fails when the copies differ.
 //
 // Importing this module also registers the `ats_public` ingest adapter
 // (./register.ts), because marketHooks is the module the pipeline always loads.
@@ -71,32 +80,98 @@ export function readMarketTags(v: unknown): MarketTag[] {
 
 const OWNED = new Set<string>(TW_PERMIT_TAGS);
 
-/** Taiwan "pay not listed" wording. English "competitive salary" / "DOE" are not 面議 and get no note. */
-const TW_NEGOTIABLE_RE = /待遇面議|薪資面議|薪资面议|薪酬面议|面議|面议|依公司規定|依公司规定|按公司規定|按公司规定/;
+/** 核薪 as wording of its own, not inside 核薪方式 / 核薪作業 / 審核薪資 / 考核薪酬 (the parser's HE_XIN). */
+const HE_XIN = '(?<![審审考稽查複复覆])核薪(?!方式|資|资|酬|水|作業|作业|人員|人员)';
 
 /**
- * The Employment Services Act Art. 5 floor clause a 面議 posting repeats
- * ("經常性薪資達4萬元或以上", "月薪 NT$40,000 以上"). Digit look-behinds keep a
- * real figure such as "104萬以上" or "140,000以上" out of it.
+ * Taiwan "pay not listed" wording (面議, 依公司規定, 依學經歷、證照核薪 …), as a
+ * regular-expression source: the pay parser's Chinese list, character for
+ * character (`CJK_NEGOTIABLE_SOURCE`). English "competitive salary" / "DOE"
+ * are not 面議 and get no note.
  */
-const TW_FLOOR_CLAUSE_RE = new RegExp(
-  String.raw`(?:經常性|经常性)?(?:薪資|薪资|月薪)?\s*(?:達|达)?\s*(?:新台幣|新臺幣|新台币|NT\$|NTD)?\s*` +
-    String.raw`(?:(?<![\d０-９.,，〇一二三四五六七八九十百千])[4４四]\s*[萬万]|(?<![\d０-９.,，])[4４][0０][,，]?[0０]{3})` +
-    String.raw`\s*元?\s*(?:[(（]含[)）])?\s*(?:或)?\s*以上`,
-  'g',
-);
+export const TW_NEGOTIABLE_SOURCE =
+  '待遇面議|薪資面議|薪资面议|薪酬面议|面議|面议' +
+  '|依公司規定|依公司规定|按公司規定|按公司规定' +
+  `|依學經歷[、,，]?\\s*(?:證照)?\\s*${HE_XIN}|依学经历[、,，]?\\s*(?:证照)?\\s*${HE_XIN}|依學經歷|依学经历` +
+  `|${HE_XIN}`;
+const TW_NEGOTIABLE_RE = new RegExp(TW_NEGOTIABLE_SOURCE);
+
+/** Not the top of a stated range ("4萬~5萬以上", "3萬至5萬以上"): that is a figure. */
+const TW_FLOOR_NOT_RANGE_TOP = String.raw`(?<![\d０-９萬万元kK]\s*[-–—~～〜至到]\s*)`;
+
+/** The statute's own term for the wage the threshold is about (the parser's `TW_FLOOR_STATUTE_SOURCE`). */
+export const TW_FLOOR_STATUTE_SOURCE = '經常性|经常性';
+/** A Taiwan-dollar marker in front of the amount (the parser's `TW_FLOOR_TWD_SOURCE`). */
+const TW_FLOOR_TWD_SOURCE = String.raw`新台幣|新臺幣|新台币|台幣|臺幣|台币|NT\$|NTD|TWD`;
+
+/**
+ * The Employment Services Act Art. 5 clause such a posting repeats
+ * ("經常性薪資達4萬元或以上", "每月經常性薪資達4萬元以上", "月薪 NT$50,000 以上"),
+ * as a regular-expression source: the pay parser's pattern, character for
+ * character (`TW_FLOOR_CLAUSE_SOURCE` there). Threshold-agnostic: any round
+ * amount of 4萬 to 9萬, in half-width or full-width digits or Chinese
+ * numerals, so no amount is hard-coded. Its look-behinds keep a real figure
+ * such as "104萬以上" or "140,000以上", and the top of a stated range
+ * ("4萬~5萬以上"), out of it. No capturing group.
+ */
+export const TW_FLOOR_CLAUSE_SOURCE =
+  String.raw`(?:每月)?(?:${TW_FLOOR_STATUTE_SOURCE})?(?:薪資|薪资|月薪)?\s*(?:達到|达到|達|达|為|为|[:：])?\s*(?:${TW_FLOOR_TWD_SOURCE})?\s*` +
+  String.raw`(?:${TW_FLOOR_NOT_RANGE_TOP}(?<![\d０-９.,，〇一二三四五六七八九十百千])[4-9４-９四五六七八九]\s*[萬万]` +
+  String.raw`|${TW_FLOOR_NOT_RANGE_TOP}(?<![\d０-９.,，])[4-9４-９][0０][,，]?[0０]{3})` +
+  String.raw`\s*元?\s*(?:[(（]含[)）])?\s*(?:或)?\s*以上`;
+
+/**
+ * Text that ends by naming another currency or another pay period: the amount
+ * after it ("HK$40,000 以上", "年薪 USD 60,000 以上") is not the clause, which
+ * is about a month's regular wage in Taiwan dollars (the parser's
+ * `TW_FLOOR_OTHER_PAY_BEFORE_SOURCE`).
+ */
+export const TW_FLOOR_OTHER_PAY_BEFORE_SOURCE =
+  String.raw`(?:US\$|HK\$|S\$|A\$|AU\$|C\$|CA\$|R\$|MX\$|JP¥|USD|HKD|SGD|AUD|CAD|CNY|RMB|JPY|GBP|EUR|INR|KRW|CHF|MOP|MYR|[¥￥£€₹₩]` +
+  String.raw`|美元|美金|港幣|港币|港元|澳門幣|澳门币|人民幣|人民币|日圓|日元|歐元|欧元|英鎊|英镑|新加坡幣|新加坡币` +
+  String.raw`|年薪|年收入|年收|時薪|时薪|日薪|週薪|周薪)\s*(?:約|约|為|为|達到|达到|達|达|[:：])?\s*$`;
+
+const TW_FLOOR_CLAUSE_RE = new RegExp(TW_FLOOR_CLAUSE_SOURCE, 'g');
+const TW_FLOOR_STATUTE_RE = new RegExp(TW_FLOOR_STATUTE_SOURCE);
+const TW_FLOOR_OTHER_PAY_BEFORE_RE = new RegExp(TW_FLOOR_OTHER_PAY_BEFORE_SOURCE, 'i');
 const EMPTY_BRACKETS_RE = /[(（【\[]\s*[)）】\]]/g;
 const EDGE_PUNCT_RE = /^[\s，,、;；:：\-–—/|]+|[\s，,、;；:：\-–—/|]+$/g;
 
-/** Card pay text for a 面議 posting: the posting's words without the Art. 5 floor clause (null when nothing is left). */
+/** Is a clause-shaped match at `offset` an amount in another currency or for another period (so not the clause)? */
+function otherPayBefore(text: string, offset: number): boolean {
+  return TW_FLOOR_OTHER_PAY_BEFORE_RE.test(text.slice(0, offset));
+}
+
+/** The pay text carries the statute's own clause ("每月經常性薪資達4萬元以上"): by itself "pay not listed". */
+function hasStatuteClause(text: string): boolean {
+  for (const m of text.matchAll(TW_FLOOR_CLAUSE_RE)) {
+    if (TW_FLOOR_STATUTE_RE.test(m[0]) && !otherPayBefore(text, m.index ?? 0)) return true;
+  }
+  return false;
+}
+
+/**
+ * Card pay text for a "pay not listed" posting of a job in Taiwan: the
+ * posting's words without the Art. 5 clause (null when nothing is left).
+ */
 export function twNegotiableCardText(text: string): string | null {
-  const out = text.replace(TW_FLOOR_CLAUSE_RE, '').replace(EMPTY_BRACKETS_RE, '').replace(/\s{2,}/g, ' ').replace(EDGE_PUNCT_RE, '');
+  const out = text
+    .replace(TW_FLOOR_CLAUSE_RE, (clause: string, offset: number, whole: string) => (otherPayBefore(whole, offset) ? clause : ''))
+    .replace(EMPTY_BRACKETS_RE, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(EDGE_PUNCT_RE, '');
   return out.trim() || null;
 }
 
-/** True when the pay text says 面議 / 依公司規定 (Taiwan wording) and the posting lists no amount. */
+/**
+ * True when the posting lists no amount and its pay text says 面議 /
+ * 依公司規定 / 依學經歷、證照核薪 (Taiwan wording), or is the statute's own
+ * clause standing alone.
+ */
 export function isTwNegotiable(text: string | null, disclosed: boolean): boolean {
-  return !disclosed && !!text && TW_NEGOTIABLE_RE.test(text.normalize('NFKC'));
+  if (disclosed || !text) return false;
+  const s = text.normalize('NFKC');
+  return TW_NEGOTIABLE_RE.test(s) || hasStatuteClause(s);
 }
 
 /** The job's market tags with this module's permit tags replaced by `fresh`. */
