@@ -13,11 +13,17 @@
 //                factory (stripeClient.ts) · Products and Prices by lookup key
 //                (stripeCatalog.ts) · webhook claims and the event handler
 //                registry (stripeEvents.ts)
+//   Refunds      issueRefund · withdrawalQuote · withdrawPurchase · the
+//                charge.refunded and charge.dispute.created handlers · the
+//                pack and pass reversal helpers (stripeRefunds.ts) ·
+//                WITHDRAWAL_COUNTRIES (acknowledgements.ts)
 //
 // One bundle per phase owns this file. A module added by another bundle of the
 // same phase is imported by its file path until the next owner exports it here.
 //
-// Importing this module registers the built-in Stripe and Alipay rails.
+// Importing this module registers the built-in Stripe and Alipay rails, and
+// (through stripeRefunds.ts) the Stripe event handlers for refunds and
+// disputes and the two refund mail templates.
 
 export * from './planCatalog.js';
 export * from './errors.js';
@@ -29,6 +35,7 @@ export type { GrantPackInput } from './packs.js';
 export {
   CHECKOUT_ACK_PROSE_VERSION,
   EU_COUNTRIES,
+  WITHDRAWAL_COUNTRIES,
   WITHDRAWAL_WAIVER_SENTENCE,
   autoRenewAckSentence,
   proseHash,
@@ -36,7 +43,7 @@ export {
   showsWithdrawalWaiver,
   withdrawalRegion,
 } from './acknowledgements.js';
-export type { CheckoutAcknowledgementInput, RecordedAcknowledgements, WithdrawalRegion } from './acknowledgements.js';
+export type { CheckoutAcknowledgementInput, RecordedAcknowledgements, WithdrawalCountry, WithdrawalRegion } from './acknowledgements.js';
 export {
   QUOTE_TTL_SEC,
   cancelSubscription,
@@ -55,14 +62,16 @@ export {
   FIRST_PURCHASE_DAYS,
   PACK_VALID_MONTHS,
   PAID_ONLY_CREDIT_LIMIT,
+  PRORATA_WITHDRAWAL_PLANS,
   REFUND_POLICY_VERSION,
   SHORT_PLAN_HOURS,
   WITHDRAWAL_DAYS,
   computeRefund,
   isPackPlan,
+  isWithdrawalRule,
   paidOnlyCreditsUsed,
 } from './refunds.js';
-export type { RefundBlocker, RefundDecision, RefundInput, RefundRule } from './refunds.js';
+export type { RefundBlocker, RefundDecision, RefundInput, RefundRule, WithdrawalRule } from './refunds.js';
 export { OFFERS_SHIPPED, activeOffers, offerViolations } from './offers.js';
 export type { Offer, OfferContext } from './offers.js';
 export {
@@ -124,6 +133,33 @@ export type {
   StripeEventHandler,
   StripeEventResult,
 } from './stripeEvents.js';
+// The refund engine. This import is also what registers its two Stripe event
+// handlers (charge.refunded, charge.dispute.created) at boot.
+export {
+  STRIPE_REFUND_EVENT_TYPES,
+  issueRefund,
+  reversePackGrant,
+  reversePassPeriod,
+  setStripeRefundDepsForTests,
+  withdrawPurchase,
+  withdrawalQuote,
+} from './stripeRefunds.js';
+export type {
+  IssueRefundInput,
+  IssuedRefund,
+  RefundDb,
+  RefundEmailInput,
+  RefundKind,
+  RefundTarget,
+  ReversalOutcome,
+  ReversePackInput,
+  ReversePassInput,
+  StripeRefundDeps,
+  WithdrawPurchaseInput,
+  WithdrawalPurchase,
+  WithdrawalQuote,
+  WithdrawalResult,
+} from './stripeRefunds.js';
 export {
   CHECKOUT_ATTEMPT_BUCKET_MS,
   CHECKOUT_ATTEMPT_KEY_PATTERN,

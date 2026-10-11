@@ -30,6 +30,16 @@ export const EU_COUNTRIES = [
 /** EEA states outside the EU follow the same consumer-rights directive. */
 const EEA_EXTRA = ['IS', 'LI', 'NO'] as const;
 
+/**
+ * Every billing country with a statutory right of withdrawal that we honour
+ * (MARKET_STRATEGY.md §4.4): the EU 27, the three EEA states outside it, the
+ * United Kingdom and Taiwan. The one list: the plan sheet shows the waiver
+ * box for these countries, the refund rules read them through
+ * `withdrawalRegion`, and the web keeps its copy equal to this.
+ */
+export const WITHDRAWAL_COUNTRIES = [...EU_COUNTRIES, ...EEA_EXTRA, 'GB', 'TW'] as const;
+export type WithdrawalCountry = (typeof WITHDRAWAL_COUNTRIES)[number];
+
 export type WithdrawalRegion = 'eu' | 'uk' | 'tw';
 
 /** The withdrawal-right region for a billing country, or null when none applies. */
