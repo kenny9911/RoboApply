@@ -78,9 +78,11 @@ export const FeedQueryBodySchema = z
     fitTier: z.enum(['all', 'good', 'great']).optional(),
     /**
      * Free text the list may be ORDERED by ("climate startups Rust"). It is
-     * never a filter and nothing is claimed to be checked against it. Accepted
-     * and part of the session's identity from this phase; it changes the order
-     * from phase M4 (hybrid retrieval).
+     * never a filter and nothing is claimed to be checked against it. It is
+     * part of the query text of the lexical and dense retrieval legs (beside a
+     * typed `q`, which alone filters), and part of the session's identity. The
+     * legs run for Recommended and Best fit; Newest, Highest pay and Deadline
+     * accept the text and do not use it.
      */
     relevance: FeedRelevanceSchema,
   })
@@ -89,8 +91,10 @@ export const FeedQueryBodySchema = z
 /**
  * How the list was ordered. `recency` = date posted + filters only: GoApply
  * users who turned 个性化推荐 off or have not chosen yet (PIPL Art. 24), where
- * no fit score is used or shown. `query_match` = closeness to the typed query
- * (lexical and dense legs); reserved for phase M4 and never sent before it.
+ * no fit score is used or shown. `query_match` = the same users with a typed
+ * query or a text to rank by: the list is in the fused order of the recency
+ * and lexical legs (how closely a posting matches the words), still with no
+ * profile, no user vector and no fit.
  */
 export type FeedOrder = 'personalized' | 'recency' | 'query_match';
 
@@ -199,9 +203,13 @@ export interface FeedItem {
   explanation?: FeedExplanation;
   /**
    * The same role at the same company posted for other places, collapsed into
-   * this card ("also in N locations"): how many other postings, their places
-   * and their job ids. Reserved for phase M4 (same-role collapse); never sent
-   * before it. A reader treats a missing value as "no other postings".
+   * this card ("also in N more locations"). `count` is how many other places
+   * (one posting each, every place different from this card's and from each
+   * other). `jobIds` holds them, at most 10, and `locations[i]` is the place
+   * of `jobIds[i]`, so each can be opened by name. A card holds at most 10
+   * other postings: a further place of the role is a card of its own, so
+   * `count` equals `jobIds.length`. Left off when there is none; a reader
+   * treats a missing value as "no other postings".
    */
   alsoIn?: { count: number; locations: string[]; jobIds: string[] };
 }
@@ -246,9 +254,16 @@ export interface FeedQueryResponse {
   /** Jobs hidden by the fit-tier view filter: "Hiding {n} weaker fits." */
   hiddenByTier: number;
   sessionId: string;
-  /** `recency` when personalisation is off (GoApply): sorted by date posted and filters only. Always sent by WP-32. */
+  /**
+   * `recency` when personalisation is off (GoApply): sorted by date posted and filters only; `query_match`
+   * when such a list has a typed query or a text to rank by (see `FeedOrder`). Always sent.
+   */
   order?: FeedOrder;
-  /** The sort actually applied (`recommended`/`best_fit` fall back to `newest` when `order` is `recency`). Always sent by WP-32. */
+  /**
+   * The sort actually applied (`recommended`/`best_fit` fall back to `newest` when `order` is `recency`). For a
+   * `query_match` list it is `newest` too: its first window is in the fused order of its query, the older
+   * windows that follow are by date. Always sent.
+   */
   sort?: FeedSort;
   /**
    * Where the postings this query can reach come from, for the feed header
@@ -359,7 +374,11 @@ export interface ExploreResponse {
 export const NlQueryBodySchema = z.object({ text: z.string().trim().min(2).max(500), searchProfileId: Id.optional() }).strict();
 export interface NlQueryResponse {
   diff: FilterDiffProposal;
-  /** The request parts that were not turned into filters, in the user's words (nothing is claimed to be checked). */
+  /**
+   * One English sentence pair built from `rankedBy` and `unmatched` ("Ranked by closeness to: … . Not checked as
+   * requirements: … ."), in the user's words; nothing is claimed to be checked. Empty when both are empty. A
+   * client that translates builds its own lines from the two lists.
+   */
   explanation: string;
   unmatched: string[];
   /**
@@ -367,7 +386,9 @@ export interface NlQueryResponse {
    * "Rust"): at most 5, each at most 60 characters. Never a filter, and never
    * a phrase about pay, visa, benefits, hours, time zone or commute (those stay
    * in `unmatched` only). The client sends them back as `relevance` on
-   * `POST /feed/query`; they change the order from phase M4.
+   * `POST /feed/query`, where they are part of the query text of the lexical
+   * and dense legs. Those legs run for the Recommended and Best fit orders; a
+   * list asked for by date, pay or deadline is not ordered by them.
    */
   rankedBy: string[];
 }
@@ -415,9 +436,25 @@ export interface PublicFeedResponse {
 
 // ── Documented JSON columns (ra-feed.prisma) ─────────────────────────────
 
-const FeedSessionRankEntrySchema = z.object({ jobId: z.string(), fit: z.number().nullable(), kind: z.enum(['pre', 'ai']), rank: z.number() }).strict();
+const FeedSessionRankEntrySchema = z
+  .object({
+    jobId: z.string(),
+    fit: z.number().nullable(),
+    kind: z.enum(['pre', 'ai']),
+    rank: z.number(),
+    /** Same-role collapse: the key of the card's (company, title) group, when it has one. */
+    g: z.string().optional(),
+    /** Same-role collapse: ids of the postings folded into this card (other places). */
+    also: z.array(z.string()).optional(),
+    /**
+     * Not a card: a row of the hybrid first window the fit-tier view hid, kept so a later window does not
+     * read and count it again. Such an entry is never in `jobIds`.
+     */
+    h: z.literal(true).optional(),
+  })
+  .strict();
 /**
- * `RAFeedSession.ranks`: `[{ jobId, fit, kind: 'pre'|'ai', rank }]`. The
+ * `RAFeedSession.ranks`: `[{ jobId, fit, kind: 'pre'|'ai', rank, g?, also?, h? }]`. The
  * refill keyset id lives in its own column, `RAFeedSession.windowEndsId`
  * (SCHEMA-3, SR-32-4). Sessions written before that column stored the
  * envelope `{ entries, windowEndsId }` here (30-minute TTL); it is still read.
@@ -472,9 +509,9 @@ export const FEED_THIN_BELOW = 60;
 export const FEED_LIMITS = {
   pageSize: 20,
   retrievalLimit: 400,
-  /** Rows each retrieval leg (recency, lexical, dense) contributes before fusion. Not read until phase M4. */
+  /** Rows each retrieval leg (recency, lexical, dense) contributes before fusion. */
   legLimit: 200,
-  /** The constant k of reciprocal rank fusion: a row scores Σ 1 / (k + rank) over the legs. Not read until phase M4. */
+  /** The constant k of reciprocal rank fusion: a row scores Σ 1 / (k + rank) over the legs. */
   rrfK: 60,
   firstWindowDays: 14,
   widenWindowDays: 45,
@@ -484,7 +521,6 @@ export const FEED_LIMITS = {
   countCap: 5000,
   companyMaxPerWindow: 2,
   companyWindow: 20,
-  freshnessHalfLifeHours: 72,
   reportCloseThreshold: 3,
   skillsCheckTop: 5,
   skillsCheckList: 50,

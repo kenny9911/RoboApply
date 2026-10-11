@@ -9,6 +9,9 @@
 //   - cardMeta / explanation on FeedItem (WP-33, WP-41, WP-42, WP-13)
 //   - GoApply: the seams return postings by default (D5); with the
 //     recruitment-info mode set to off every seam answers empty
+//   - MKT-4F: hybrid retrieval changes no seam's shape. The preview reads the
+//     list's own (fused) first window; counts, samples and alert candidates
+//     keep one statement and gain only the wide typed-query predicate.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -20,7 +23,7 @@ import { cardMeta } from '../jobs/marketHooks.js';
 import { buildMatchUser } from '../match/index.js';
 import type { FilterSet, SearchProfileWire } from '../search/index.js';
 import { createFeedQueryService, type FeedServiceDeps } from './FeedQueryService.js';
-import { BANK_PAGES_ENV, FakeFeedRepo, fakeFeedMatch, feedRow } from './testkit.js';
+import { BANK_PAGES_ENV, FAKE_VECTOR_MODEL, FakeFeedRepo, fakeFeedMatch, feedRow, testVector } from './testkit.js';
 import type { FeedCtx } from './types.js';
 
 const NOW = new Date('2026-10-10T12:00:00.000Z');
@@ -504,5 +507,50 @@ describe('GoApply: the seams return postings by default, and answer empty with C
     expect((await svc.preview(cnCtx(), { limit: 10, sort: 'newest' })).map((i) => i.jobId)).toEqual(['j000', 'j001', 'j002']);
     repo.rows.forEach((r) => (r.market = 'intl'));
     expect(await service(off).sampleForFilters(ctx(), {}, { limit: 400 })).toEqual(['j000', 'j001', 'j002']);
+  });
+});
+
+describe('hybrid retrieval leaves the seams in shape (MKT-4F)', () => {
+  const hybridDeps = (): Partial<FeedServiceDeps> => ({
+    embeddings: { embedTexts: async () => ({ vectors: [testVector(1, 0)], model: FAKE_VECTOR_MODEL }) },
+    retrieval: { currentModelTag: async () => FAKE_VECTOR_MODEL, userVector: async () => testVector(1, 0) },
+  });
+
+  it('preview: FeedItem[] with the same fields as before, no session; the text to rank by is optional', async () => {
+    seed(6);
+    repo.searchDocs.set('j004', 'backend engineer kafka');
+    repo.vectors.set('j005', testVector(1, 0));
+    const before = await service({ env: { FEED_HYBRID: 'off' } }).preview(ctx(), { limit: 6, sort: 'recommended' });
+    const after = await service(hybridDeps()).preview(ctx(), { limit: 6, sort: 'recommended' });
+    expect(after.map((i) => Object.keys(i).sort())).toEqual(before.map((i) => Object.keys(i).sort()));
+    expect(after.map((i) => i.jobId).sort()).toEqual(before.map((i) => i.jobId).sort());
+    expect(after.every((i) => i.position === null && i.fit?.kind === 'pre')).toBe(true);
+    const ranked = await service(hybridDeps()).preview(ctx(), { limit: 6, sort: 'recommended', relevance: 'kafka' });
+    expect(ranked.map((i) => i.jobId).sort()).toEqual(before.map((i) => i.jobId).sort());
+    expect(repo.sessions.size).toBe(0);
+  });
+
+  it('alertCandidates, sampleForFilters and the counts: one statement each, `{ ids, truncated }`, ids and `{ count, capped }` as before', async () => {
+    seed(4);
+    profileFilters = { q: 'backend' };
+    repo.countFromRows = true;
+    const svc = service(hybridDeps());
+    const alert = await svc.alertCandidates({ market: 'intl', now: NOW }, 'sp1', { since: daysAgo(3), limit: 3 });
+    expect(alert).toEqual({ ids: ['j000', 'j001', 'j002'], truncated: true });
+    expect(await svc.sampleForFilters(ctx(), { q: 'backend' }, { limit: 2 })).toEqual(['j000', 'j001']);
+    expect(await svc.countForFilters(ctx(), { q: 'backend' })).toEqual({ count: 4, capped: false });
+    // None of them runs a lexical or a dense leg, asks for a vector, or reads a profile.
+    expect(repo.queries.some((q) => /ts_rank_cd|RAJobEmbedding/.test(q.text))).toBe(false);
+    expect(userContextCalls).toBe(0);
+    // The typed q they apply is the wide predicate: the search document OR the thin searchText.
+    for (const q of repo.queries) expect(q.text).toContain(`(j."searchTsv" @@ to_tsquery('simple', $`);
+  });
+
+  it('a public list for visitors is one statement too, and never personalised', async () => {
+    seed(3);
+    const items = await service(hybridDeps()).publicList({ market: 'intl', now: NOW }, { role: 'engineer', limit: 20 });
+    expect(items).toHaveLength(3);
+    expect(repo.queries.some((q) => /ts_rank_cd|RAJobEmbedding/.test(q.text))).toBe(false);
+    expect(userContextCalls).toBe(0);
   });
 });

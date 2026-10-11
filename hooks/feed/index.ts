@@ -3,7 +3,7 @@
 // `noteAssistantFilterChange()` after the user confirmed a filter change.
 
 export { feedKeys, type FeedFitView, type FeedListKeyInput } from './keys';
-export { useFeed, flattenFeedPages, type FeedListState, type UseFeedParams } from './useFeed';
+export { useFeed, flattenFeedPages, feedRelevance, FEED_RELEVANCE_MAX, type FeedListState, type UseFeedParams } from './useFeed';
 export { useJobsBadge, jobsBadgeFrom } from './useJobsBadge';
 export { useImpressions, IMPRESSION_BATCH, IMPRESSION_FLUSH_MS } from './useImpressions';
 export { useIsDesktop, SPLIT_VIEW_QUERY } from './useIsDesktop';
@@ -23,5 +23,5 @@ export {
   type AssistantFilterChange,
   type CalibrationState,
 } from './useCalibration';
-export { useExplore, useNlQuery } from './useExplore';
+export { useExplore, useNlQuery, nlLines, rankListBy, clearListRelevance, relevanceFor, sortUsesRelevance, useListRelevance, type ListRelevance } from './useExplore';
 export { opsToPatch, applyPatchPreview, relaxPatch, type FilterOp } from './filterOps';

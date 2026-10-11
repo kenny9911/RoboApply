@@ -6,20 +6,30 @@
 // counts with the low-confidence rule, company scatter, GoApply non-personalised
 // order, hide/unhide with filter diffs, report thresholds, impressions, daily
 // rating, Explore cache, NL query (aiAllowed), new-count, skills-check, counts.
+//
+// MKT-4F: hybrid retrieval (three legs fused by reciprocal rank, the three
+// sources of the query text, the query-vector cache and timeout, every consent
+// case, FEED_HYBRID=off, refills), the text to rank by, the same-role collapse,
+// "wrong title" as a title-level negative, seen and skipped, and the one
+// targeted ingest a thin saved search asks for. The legs are answered by the
+// in-memory repo from `searchDocs` and `vectors`; the embeddings client and the
+// stored vectors are counting fakes.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
 
 import { HttpError } from '../../platform/http.js';
+import { logger } from '../../services/LoggerService.js';
+import { toTsQuery } from '../retrieval/index.js';
 import { DEFAULT_MATCH_PRIORS, DEFAULT_MATCH_TIERS, DEFAULT_MATCH_WEIGHTS, buildMatchUser } from '../match/index.js';
 import { EMPTY_AFFINITY } from './affinity.js';
 import type { FilterSet, SearchProfileWire } from '../search/index.js';
 import { SearchProfileNotFoundError } from '../search/index.js';
-import { createFeedQueryService, type FeedServiceDeps } from './FeedQueryService.js';
+import { ALSO_IN_MAX, createFeedQueryService, profileQueryText, uncheckedPhrases, type FeedEmbeddings, type FeedRetrieval, type FeedServiceDeps } from './FeedQueryService.js';
 import type { PlannerPlan } from './filterDiff.js';
 import { recommendedRank } from './ranking.js';
-import { BANK_PAGES_ENV, FakeFeedRepo, fakeFeedMatch, feedRow, type FakeFeedMatch, type FakeFeedMatchOptions } from './testkit.js';
+import { BANK_PAGES_ENV, FAKE_VECTOR_MODEL, FakeFeedRepo, fakeFeedMatch, feedRow, testVector, type FakeFeedMatch, type FakeFeedMatchOptions } from './testkit.js';
 import type { FeedCtx } from './types.js';
 
 const NOW = new Date('2026-10-10T12:00:00.000Z');
@@ -177,12 +187,12 @@ describe('POST /feed/query — sessions and pagination', () => {
     expect(repo.visits.get('u1')).toEqual(NOW);
   });
 
-  it('relevance is accepted and part of the session identity, and does not change the order in this phase', async () => {
+  it('relevance is part of the session identity; with no search document to match, the list is the one it is without the text', async () => {
     seed(70);
     const s = service();
     const plain = await s.query(ctx(), { sort: 'recommended' });
     const ranked = await s.query(ctx(), { sort: 'recommended', relevance: 'climate startups Rust' });
-    // Same list, same order: nothing reads the text for ordering before phase M4.
+    // No row has a search document or a vector here, so the lexical and dense legs find nothing: the same list.
     expect(ranked.items.map((i) => i.jobId)).toEqual(plain.items.map((i) => i.jobId));
     expect(ranked.order).toBe(plain.order);
     // A different session hash: a cursor of one query is not a cursor of the other.
@@ -205,7 +215,7 @@ describe('POST /feed/query — sessions and pagination', () => {
     seed(5);
     await expectHttp(service().query(ctx(), { sort: 'newest', relevance: 'x'.repeat(241) }), 'invalid_request', 'relevance_too_long');
     await expectHttp(service().preview(ctx(), { limit: 5, relevance: 'x'.repeat(241) }), 'invalid_request', 'relevance_too_long');
-    // The preview accepts the field and answers the list it answers without it.
+    // The preview accepts the field; with no search document to match it answers the list it answers without it.
     const without = await service().preview(ctx(), { limit: 5, sort: 'newest' });
     const withText = await service().preview(ctx(), { limit: 5, sort: 'newest', relevance: 'climate startups' });
     expect(withText.map((i) => i.jobId)).toEqual(without.map((i) => i.jobId));
@@ -635,6 +645,35 @@ describe('impressions and rating', () => {
     await expectHttp(s.impressions(ctx({ userId: 'u2' }), { sessionId: p.sessionId, positions: [{ jobId: 'j000', position: 0, ms: 1 }] }), 'not_found');
   });
 
+  it('a job counts once per feed session, however often its card scrolls past; a new session counts again', async () => {
+    seed(3);
+    let clock = NOW;
+    const s = service({ now: () => clock });
+    const at = () => ctx({ now: clock });
+    const shown = (id: string) => repo.impressionRows.get(`u1:${id}`)?.impressions ?? 0;
+    const first = await s.query(at(), { sort: 'newest' });
+    // Down, back up and down again in one sitting: three batches name j000, two name j001.
+    clock = new Date(NOW.getTime() + 10_000);
+    await s.impressions(at(), { sessionId: first.sessionId, positions: [{ jobId: 'j000', position: 0, ms: 900 }, { jobId: 'j001', position: 1, ms: 900 }] });
+    clock = new Date(NOW.getTime() + 25_000);
+    await s.impressions(at(), { sessionId: first.sessionId, positions: [{ jobId: 'j000', position: 0, ms: 400 }, { jobId: 'j002', position: 2, ms: 400 }] });
+    clock = new Date(NOW.getTime() + 40_000);
+    await s.impressions(at(), { sessionId: first.sessionId, positions: [{ jobId: 'j000', position: 0, ms: 400 }, { jobId: 'j001', position: 1, ms: 400 }] });
+    expect([shown('j000'), shown('j001'), shown('j002')]).toEqual([1, 1, 1]);
+    // The next visit (a new list) counts each job it shows once more.
+    clock = new Date(NOW.getTime() + 3_600_000);
+    const second = await s.query(at(), { sort: 'newest' });
+    clock = new Date(NOW.getTime() + 3_610_000);
+    await s.impressions(at(), { sessionId: second.sessionId, positions: [{ jobId: 'j000', position: 0, ms: 900 }] });
+    await s.impressions(at(), { sessionId: second.sessionId, positions: [{ jobId: 'j000', position: 0, ms: 900 }] });
+    expect([shown('j000'), shown('j001'), shown('j002')]).toEqual([2, 1, 1]);
+    // A late batch of the first session adds nothing: the job was shown since that session began.
+    await s.impressions(at(), { sessionId: first.sessionId, positions: [{ jobId: 'j000', position: 0, ms: 900 }, { jobId: 'j001', position: 1, ms: 900 }] });
+    expect([shown('j000'), shown('j001')]).toEqual([2, 1]);
+    // So five scroll passes are not "five visits": the seen-and-skipped rule needs three sessions.
+    expect(repo.impressions).toHaveLength(6);
+  });
+
   it('one rating a day; reasons kept only under 8', async () => {
     const s = service();
     await s.rating(ctx(), { score: 9, reasons: ['jobs_old'] });
@@ -678,23 +717,51 @@ describe('NL query', () => {
     expect(res.diff.patch).toMatchObject({ titles: ['Data Analyst'], workModels: ['remote'], salaryMin: { amount: 70000, currency: 'EUR', period: 'year' } });
     expect(res.diff.countAfter).toBe(17);
     expect(res.unmatched).toEqual(['great culture']);
-    expect(res.explanation).toBe('great culture');
+    // "great culture" is a topic the list can be ranked by; nothing else stayed unmatched.
+    expect(res.rankedBy).toEqual(['great culture']);
+    expect(res.explanation).toBe('Ranked by closeness to: great culture.');
   });
 
-  it('returns rankedBy next to the diff: the topics of the request, never a pay phrase; explanation and unmatched are as before', async () => {
+  it('returns rankedBy next to the diff: the topics of the request, never a pay phrase; the explanation says what is ranked by and what was not checked', async () => {
     repo.countResponder = () => 9;
     plannerImpl = async () => ({ queries: ['Backend Engineer'], unverifiedPreferences: ['climate startups', 'using Rust', 'salary above 150k'] });
     const res = await service().nlQuery(ctx(), { text: 'backend jobs at climate startups using Rust, salary above 150k' }, 'en');
     expect(res.rankedBy).toEqual(['climate startups', 'Rust']);
     expect(res.unmatched).toEqual(['climate startups', 'using Rust', 'salary above 150k']);
-    expect(res.explanation).toBe('climate startups; using Rust; salary above 150k');
+    // In the user's words; the phrases the ranking terms came from are not repeated as "not checked".
+    expect(res.explanation).toBe('Ranked by closeness to: climate startups, Rust. Not checked as requirements: salary above 150k.');
+    expect(res.explanation).not.toMatch(/verified|confirmed|match(es|ed)/i);
     expect(res.diff.patch).toMatchObject({ titles: ['Backend Engineer'] });
     // The planner's own terms win when it gives them.
     plannerImpl = async () => ({ queries: ['Backend Engineer'], unverifiedPreferences: ['salary above 150k'], relevanceTerms: ['climate tech', 'Rust'] }) as never;
     expect((await service().nlQuery(ctx(), { text: 'backend jobs' }, 'en')).rankedBy).toEqual(['climate tech', 'Rust']);
-    // Nothing left over: an empty list, never undefined.
+    // Nothing left over: an empty list, never undefined, and nothing to explain.
     plannerImpl = async () => ({ queries: ['Data Analyst'], unverifiedPreferences: [] });
-    expect((await service().nlQuery(ctx(), { text: 'data analyst' }, 'en')).rankedBy).toEqual([]);
+    const none = await service().nlQuery(ctx(), { text: 'data analyst' }, 'en');
+    expect(none.rankedBy).toEqual([]);
+    expect(none.explanation).toBe('');
+    // Only requirements were left over: nothing is ranked by, and they are named as not checked.
+    plannerImpl = async () => ({ queries: ['Data Analyst'], unverifiedPreferences: ['a 4-day week', 'health insurance'] });
+    const only = await service().nlQuery(ctx(), { text: 'data analyst, a 4-day week, health insurance' }, 'en');
+    expect(only.rankedBy).toEqual([]);
+    expect(only.explanation).toBe(`Not checked as requirements: ${only.unmatched.join('; ')}.`);
+  });
+
+  it('uncheckedPhrases: what stayed unmatched and is not a ranking term', () => {
+    expect(uncheckedPhrases(['climate startups', 'Rust'], ['climate startups', 'using Rust', 'salary above 150k'])).toEqual(['salary above 150k']);
+    expect(uncheckedPhrases([], ['salary above 150k'])).toEqual(['salary above 150k']);
+    expect(uncheckedPhrases(['climate tech'], [])).toEqual([]);
+    // Case, width and spacing do not make a phrase new.
+    expect(uncheckedPhrases(['Ｒust'], ['using  RUST'])).toEqual([]);
+  });
+
+  it('GoApply: the same planner path with the AI consent; refused without it', async () => {
+    plannerImpl = async () => ({ queries: ['后端开发工程师'], unverifiedPreferences: ['新能源 创业公司', '使用 Rust'] });
+    const res = await service().nlQuery(ctx({ market: 'cn', brandId: 'goapply' }), { text: '新能源创业公司的后端岗位，使用 Rust' }, 'zh');
+    expect(res.rankedBy.length).toBeGreaterThan(0);
+    expect(res.explanation.startsWith('Ranked by closeness to: ')).toBe(true);
+    aiOk = false;
+    await expectHttp(service().nlQuery(ctx({ market: 'cn', brandId: 'goapply' }), { text: '后端' }, 'zh'), 'ai_unavailable', 'ai_off');
   });
 
   it('a request with no role is 422; a planner failure is 503', async () => {
@@ -1089,5 +1156,1234 @@ describe('GoApply: where postings come from, thin results, and no posting withou
     const res = await service().query(ctx(), { sort: 'newest' });
     expect(res.items).toHaveLength(2);
     expect(repo.queries.every((q) => !q.text.includes('"applyUrl" ~*'))).toBe(true);
+  });
+});
+
+// ── Hybrid retrieval (MKT-4F; MARKET_STRATEGY 2.1 point 3, 2.5 "Consent") ──────────────────────────
+
+/** A counting embeddings client: `answer(text)` is the vector, or 'unavailable', or an error to throw. */
+function embedFake(answer: (text: string) => number[] | 'unavailable' | Error | Promise<number[]> = () => testVector(1, 0)) {
+  const calls: Array<{ brand: string; text: string; options: { purpose: string; carriesUserData: boolean; userId?: string | null } }> = [];
+  const client: FeedEmbeddings = {
+    async embedTexts(brand, texts, options) {
+      calls.push({ brand, text: texts[0]!, options });
+      const out = await answer(texts[0]!);
+      if (out === 'unavailable') return { unavailable: 'no_key' };
+      if (out instanceof Error) throw out;
+      return { vectors: [out], model: FAKE_VECTOR_MODEL };
+    },
+  };
+  return Object.assign(client, { calls });
+}
+
+/** Counting stored vectors: `vectors[userId]` is the person's own vector. */
+function retrievalFake(vectors: Record<string, number[]> = {}, tag: string | null = FAKE_VECTOR_MODEL) {
+  const reads: Array<{ userId: string; market: string; modelTag: string }> = [];
+  const retrieval: FeedRetrieval = {
+    currentModelTag: async () => tag,
+    userVector: async (userId, market, modelTag) => {
+      reads.push({ userId, market, modelTag });
+      return vectors[userId] ?? null;
+    },
+    queryModelTag: () => tag,
+  };
+  return Object.assign(retrieval, { reads });
+}
+
+const POSTED = new Date(NOW.getTime() - 2 * 86_400_000);
+/** A row like every other of its test: same date, same fit, its own company. Only the legs can tell such rows apart. */
+function twin(id: string, over: Partial<Parameters<typeof feedRow>[0]> = {}) {
+  const row = feedRow({ id, postedAt: POSTED, firstSeenAt: POSTED, ...over });
+  repo.rows.push(row);
+  return row;
+}
+
+const legStatements = (leg: 'recency' | 'lexical' | 'dense') => repo.queries.filter((q) => FakeFeedRepo.legOf(q) === leg);
+/** The kinds of list statement run so far, each once (a recency statement is also what widens a window and what refills a session). */
+const legsUsed = () => [...new Set(repo.legsRun())].sort();
+/** The lexical query a leg-B statement carries (the parameter of its ORDER BY). */
+const lexicalQueryOf = (q: { text: string; values: unknown[] }) => q.values[Number(q.text.match(/ORDER BY ts_rank_cd\(j\."searchTsv", to_tsquery\('simple', \$(\d+)\)\)/)![1]) - 1] as string;
+const limitOf = (q: { values: unknown[] }) => q.values[q.values.length - 1];
+const cnCtx = () => ctx({ market: 'cn', brandId: 'goapply' });
+const mocked = (fn: unknown) => fn as ReturnType<typeof vi.fn>;
+
+describe('hybrid retrieval: three legs fused by reciprocal rank', () => {
+  beforeEach(() => {
+    for (const fn of [logger.info, logger.warn, logger.error]) mocked(fn).mockClear();
+  });
+
+  it('Recommended runs the recency, lexical and dense legs together, 200 rows each, and lists the union in the fused order when everything else ties', async () => {
+    for (const id of ['r1', 'r2', 'r3', 'r4', 'r5', 'r6']) twin(id);
+    // Lexical: r1 names the words three times, r2 once. Dense: r2 is the query's direction, r3 near it.
+    repo.searchDocs.set('r1', 'climate rust rust');
+    repo.searchDocs.set('r2', 'rust services');
+    repo.vectors.set('r2', testVector(1, 0));
+    repo.vectors.set('r3', testVector(1, 1));
+    const embeddings = embedFake(() => testVector(1, 0));
+    const res = await service({ embeddings, retrieval: retrievalFake() }).query(ctx(), { sort: 'recommended', relevance: 'climate rust' });
+    expect(legsUsed()).toEqual(['dense', 'lexical', 'recency']);
+    for (const leg of ['recency', 'lexical', 'dense'] as const) expect(limitOf(legStatements(leg)[0]!)).toBe(200);
+    // A (same date, id descending): r6 r5 r4 r3 r2 r1. B: r1 r2. C: r2 r3.
+    // r2 is in all three legs, r3 and r1 in two, the rest in one: 1/65+1/62+1/61 > 1/64+1/62 > 1/66+1/61 > 1/61 > 1/62 > 1/63.
+    expect(res.items.map((i) => i.jobId)).toEqual(['r2', 'r3', 'r1', 'r6', 'r5', 'r4']);
+    expect(res.order).toBe('personalized');
+    // Ranking itself is unchanged: every row carries its fit, and the rank is the Recommended rank.
+    expect(res.items.every((i) => i.fit?.kind === 'pre')).toBe(true);
+    const ranks = repo.sessions.get(res.sessionId)!.ranks as Array<{ jobId: string; rank: number }>;
+    expect(new Set(ranks.map((r) => r.rank)).size).toBe(1);
+    expect(repo.sessions.get(res.sessionId)!.jobIds).toEqual(['r2', 'r3', 'r1', 'r6', 'r5', 'r4']);
+    // The same filters without the text: no leg tells the rows apart, so it is today's order.
+    repo.queries.length = 0;
+    const plain = await service({ embeddings: embedFake(), retrieval: retrievalFake() }).query(ctx(), { sort: 'recommended' });
+    expect(plain.items.map((i) => i.jobId)).toEqual(['r6', 'r5', 'r4', 'r3', 'r2', 'r1']);
+  });
+
+  it('the fused position only breaks ties: a better fit or a newer posting still comes first', async () => {
+    twin('match', { skills: ['cobol'] });
+    twin('fit');
+    repo.searchDocs.set('match', 'climate rust');
+    const res = await service().query(ctx(), { sort: 'recommended', relevance: 'climate rust' });
+    // `fit` asks for the person's own skills; `match` only matches the text.
+    expect(res.items.map((i) => i.jobId)).toEqual(['fit', 'match']);
+    expect(res.items[0]!.fit!.score).toBeGreaterThan(res.items[1]!.fit!.score);
+  });
+
+  it('caps the union at 400, keeps what several legs agree on, and loses no row: later windows read on from leg A', async () => {
+    seed(250, { prefix: 'n' }); // the newest: leg A takes 200 of them
+    for (let i = 0; i < 200; i++) {
+      const l = feedRow({ id: `l${String(i).padStart(3, '0')}`, postedAt: new Date(daysAgo(30).getTime() - i * 3_600_000), companyNameNormalized: `lco-${i}`, companyName: `LCo ${i}` });
+      const d = feedRow({ id: `d${String(i).padStart(3, '0')}`, postedAt: new Date(daysAgo(60).getTime() - i * 3_600_000), companyNameNormalized: `dco-${i}`, companyName: `DCo ${i}` });
+      repo.rows.push(l, d);
+      repo.searchDocs.set(l.id, 'kafka streaming');
+      repo.vectors.set(d.id, testVector(1, i / 1000));
+    }
+    const s = service({ embeddings: embedFake(() => testVector(1, 0)), retrieval: retrievalFake() });
+    let res = await s.query(ctx(), { sort: 'recommended', relevance: 'kafka' });
+    const session = () => repo.sessions.get(res.sessionId)!;
+    // 200 + 200 + 200 disjoint rows: the union is cut at 400.
+    expect(session().jobIds).toHaveLength(400);
+    expect(session().totalEstimate).toBe(400);
+    const first = new Set(session().jobIds);
+    for (const p of ['n', 'l', 'd']) expect([...first].filter((id) => id.startsWith(p)).length, p).toBeGreaterThan(120);
+    // The best of each leg is in; the last of each leg is what the cut dropped.
+    for (const id of ['n000', 'l000', 'd000']) expect(first.has(id), id).toBe(true);
+    for (const id of ['n199', 'l199', 'd199']) expect(first.has(id), id).toBe(false);
+    // Page to the end: every row inside the age floor is listed exactly once.
+    const seen = res.items.map((i) => i.jobId);
+    for (let guard = 0; res.cursor && guard < 60; guard++) {
+      res = await s.query(ctx(), { sort: 'recommended', relevance: 'kafka', cursor: res.cursor });
+      seen.push(...res.items.map((i) => i.jobId));
+    }
+    expect(res.endOfFeed).toBe(true);
+    expect(seen).toHaveLength(650);
+    expect(new Set(seen).size).toBe(650);
+    // The refill is recency-keyed: the statements after the first window are plain windows, never a leg B or C.
+    expect(legStatements('lexical')).toHaveLength(1);
+    expect(legStatements('dense')).toHaveLength(1);
+  });
+
+  it('refills skip jobs the lexical leg already brought in from an older window', async () => {
+    seed(25, { prefix: 'r' });
+    seed(30, { prefix: 'o', startDaysAgo: 50 });
+    for (const id of ['o003', 'o007']) repo.searchDocs.set(id, 'kafka');
+    const s = service();
+    const p1 = await s.query(ctx(), { sort: 'recommended', relevance: 'kafka' });
+    // The two old matches are in the first window, among 25 recent rows.
+    const firstWindow = repo.sessions.get(p1.sessionId)!.jobIds;
+    expect(firstWindow).toHaveLength(27);
+    expect(firstWindow.filter((id) => id === 'o003' || id === 'o007')).toHaveLength(2);
+    // Paging on reads the older window by date; it does not list the two a second time.
+    const seen = p1.items.map((i) => i.jobId);
+    let res = p1;
+    for (let guard = 0; res.cursor && guard < 10; guard++) {
+      res = await s.query(ctx(), { sort: 'recommended', relevance: 'kafka', cursor: res.cursor });
+      seen.push(...res.items.map((i) => i.jobId));
+    }
+    expect(seen).toHaveLength(55);
+    expect(new Set(seen).size).toBe(55);
+    expect(seen.filter((id) => id === 'o003' || id === 'o007')).toHaveLength(2);
+  });
+
+  it('"Hiding N weaker fits" counts a row once: a later window does not judge again what the first window\'s view hid', async () => {
+    profileFilters = { taxonomyIds: ['backend_engineer'], fitTier: 'great' };
+    const build = (withDocs: boolean) => {
+      repo = new FakeFeedRepo();
+      for (let i = 0; i < 5; i++) {
+        repo.rows.push(feedRow({ id: `great${i}`, postedAt: new Date(NOW.getTime() - (i + 1) * 3_600_000), companyName: `G ${i}`, companyNameNormalized: `g-${i}` }));
+        repo.ai.set(`great${i}`, { score: 90, tier: 'great' });
+      }
+      // Ten postings 50 days old (below the recency leg's 45-day window) that score Unlikely.
+      for (let i = 0; i < 10; i++) {
+        repo.rows.push(feedRow({ id: `weak${i}`, postedAt: new Date(daysAgo(50).getTime() - i * 3_600_000), companyName: `W ${i}`, companyNameNormalized: `w-${i}` }));
+        repo.ai.set(`weak${i}`, { score: 30, tier: 'unlikely' });
+        // With a search document they match the lexical leg (the person's titles and skills): the first window holds them.
+        if (withDocs) repo.searchDocs.set(`weak${i}`, 'backend engineer python sql');
+      }
+    };
+    build(false);
+    const plain = await service().query(ctx(), { sort: 'recommended' });
+    expect(plain.items).toHaveLength(5);
+    expect(plain.hiddenByTier).toBe(10);
+
+    build(true);
+    const res = await service().query(ctx(), { sort: 'recommended' });
+    expect(repo.legsRun()).toContain('lexical');
+    expect(res.items.map((i) => i.jobId).sort()).toEqual(['great0', 'great1', 'great2', 'great3', 'great4']);
+    // The first page needs 21 cards and has 5, so it reads the next older window: the ten rows the lexical leg
+    // already brought in, and the view already hid. They are counted once.
+    expect(res.hiddenByTier).toBe(10);
+    const session = repo.sessions.get(res.sessionId)!;
+    expect(session.totalEstimate).toBe(15);
+    expect(session.jobIds).toHaveLength(5);
+    // They are remembered on the session as entries that are not cards, and are never served.
+    const hidden = (session.ranks as Array<{ jobId: string; h?: true }>).filter((r) => r.h);
+    expect(hidden.map((r) => r.jobId).sort()).toEqual(Array.from({ length: 10 }, (_, i) => `weak${i}`));
+    expect(hidden.every((r) => !session.jobIds.includes(r.jobId))).toBe(true);
+    expect(res.endOfFeed).toBe(true);
+    // Paging the same session again changes nothing.
+    const again = await service().query(ctx(), { sort: 'recommended' });
+    expect(again.hiddenByTier).toBe(10);
+    // A row the view hid ABOVE the refill boundary is never read again, so it is not stored.
+    build(true);
+    repo.rows.push(feedRow({ id: 'weak-recent', postedAt: new Date(NOW.getTime() - 7_200_000), companyName: 'WR', companyNameNormalized: 'wr' }));
+    repo.ai.set('weak-recent', { score: 30, tier: 'unlikely' });
+    const mixed = await service().query(ctx(), { sort: 'recommended' });
+    expect(mixed.hiddenByTier).toBe(11);
+    const stored = (repo.sessions.get(mixed.sessionId)!.ranks as Array<{ jobId: string; h?: true }>).filter((r) => r.h).map((r) => r.jobId);
+    expect(stored).not.toContain('weak-recent');
+    expect(stored).toHaveLength(10);
+  });
+
+  it('the query text of the legs: what the user wrote (the typed q and the text to rank by, together), else the person\'s recent titles and top skills with their own vector', async () => {
+    seed(5);
+    const embeddings = embedFake();
+    const retrieval = retrievalFake({ u1: testVector(0, 1) });
+    const s = service({ embeddings, retrieval });
+
+    // 1. A typed q and a text to rank by are one query text, for both legs. Only q filters: the predicate binds
+    //    the q's own word, the leg's order the words of both.
+    await s.query(ctx(), { sort: 'recommended', q: 'engineer', relevance: 'climate rust' });
+    const both = legStatements('lexical')[0]!;
+    expect(lexicalQueryOf(both)).toBe("'engineer' | 'climate' | 'rust'");
+    expect(lexicalQueryOf(both)).toBe(toTsQuery('engineer climate rust'));
+    expect(both.values.filter((v) => v === "'engineer'")).toHaveLength(1);
+    expect(legStatements('recency')[0]!.values).toContain("'engineer'");
+    expect(legStatements('recency')[0]!.values.some((v) => typeof v === 'string' && /climate|rust/.test(v))).toBe(false);
+    expect(embeddings.calls.map((c) => c.text)).toEqual(['engineer climate rust']);
+    expect(embeddings.calls[0]).toMatchObject({ brand: 'roboapply', options: { purpose: 'query', carriesUserData: true, userId: 'u1' } });
+    expect(retrieval.reads).toEqual([]);
+
+    // 1b. A typed q alone.
+    repo.queries.length = 0;
+    await s.query(ctx(), { sort: 'recommended', q: 'engineer' });
+    expect(lexicalQueryOf(legStatements('lexical')[0]!)).toBe(toTsQuery('engineer'));
+    expect(embeddings.calls.map((c) => c.text)).toEqual(['engineer climate rust', 'engineer']);
+
+    // 2. No q: the text to rank by.
+    repo.queries.length = 0;
+    await s.query(ctx(), { sort: 'recommended', relevance: 'climate rust' });
+    expect(lexicalQueryOf(legStatements('lexical')[0]!)).toBe("'climate' | 'rust'");
+    expect(embeddings.calls.map((c) => c.text)).toEqual(['engineer climate rust', 'engineer', 'climate rust']);
+    expect(retrieval.reads).toEqual([]);
+
+    // 3. Neither: the profile. No embedding call; the stored vector of the market's query tag is read.
+    repo.queries.length = 0;
+    await s.query(ctx(), { sort: 'recommended' });
+    const profileQuery = lexicalQueryOf(legStatements('lexical')[0]!);
+    expect(profileQuery).toBe(toTsQuery(profileQueryText(person('u1').user, 'intl')));
+    for (const token of ["'backend'", "'engineer'", "'python'", "'sql'"]) expect(profileQuery).toContain(token);
+    expect(embeddings.calls).toHaveLength(3);
+    expect(retrieval.reads).toEqual([{ userId: 'u1', market: 'intl', modelTag: FAKE_VECTOR_MODEL }]);
+    expect(legStatements('dense')).toHaveLength(1);
+    expect(legStatements('dense')[0]!.values).toContain(FAKE_VECTOR_MODEL);
+  });
+
+  it('the profile query: the recent title and role names first, then at most eight skills; nothing for a person with neither', () => {
+    const text = profileQueryText({ recentTitle: 'Backend Engineer', evidenceRoleIds: ['backend_engineer', 'data_engineer', 'ignored_third'], skills: ['Go', 'Rust', 'SQL', 'Kafka', 'gRPC', 'AWS', 'Docker', 'Redis', 'Ninth'] }, 'intl')!;
+    expect(text.startsWith('Backend Engineer')).toBe(true);
+    expect(text.toLowerCase()).toContain('data engineer');
+    expect(text).toContain('Redis');
+    expect(text).not.toContain('Ninth');
+    expect(toTsQuery(text)!.split(' | ').length).toBeLessThanOrEqual(24);
+    // GoApply reads the Chinese role name first.
+    expect(profileQueryText({ recentTitle: null, evidenceRoleIds: ['backend_engineer'], skills: [] }, 'cn')).toMatch(/[一-鿿]/);
+    expect(profileQueryText({ recentTitle: null, evidenceRoleIds: [], skills: [] }, 'intl')).toBeNull();
+    expect(profileQueryText(null, 'intl')).toBeNull();
+  });
+
+  it('one embedding call per query text in ten minutes; the model tag is the vector\'s own', async () => {
+    seed(5);
+    repo.vectors.set('j000', testVector(1, 0));
+    let clock = NOW;
+    const embeddings = embedFake();
+    const s = service({ embeddings, retrieval: retrievalFake(), now: () => clock });
+    await s.query(ctx(), { sort: 'recommended', relevance: 'climate rust' });
+    await s.query(ctx(), { sort: 'best_fit', relevance: 'climate rust' });
+    await s.preview(ctx(), { limit: 5, relevance: 'climate rust' });
+    expect(embeddings.calls).toHaveLength(1);
+    expect(legStatements('dense')).toHaveLength(3);
+    for (const q of legStatements('dense')) expect(q.values[0]).toBe(FAKE_VECTOR_MODEL);
+    await s.query(ctx(), { sort: 'recommended', relevance: 'fintech go' });
+    expect(embeddings.calls).toHaveLength(2);
+    clock = new Date(NOW.getTime() + 11 * 60_000);
+    await s.query(ctx({ now: clock }), { sort: 'recommended', relevance: 'climate rust' });
+    expect(embeddings.calls).toHaveLength(3);
+  });
+
+  it('a slow embedding call is not waited for past FEED_QUERY_EMBED_TIMEOUT_MS: the list runs without the dense leg, and the vector is there for the next request', async () => {
+    seed(5);
+    repo.vectors.set('j000', testVector(1, 0));
+    const embeddings = embedFake(() => new Promise((resolve) => setTimeout(() => resolve(testVector(1, 0)), 60)));
+    const s = service({ embeddings, retrieval: retrievalFake(), env: { FEED_QUERY_EMBED_TIMEOUT_MS: '10' } });
+    const res = await s.query(ctx(), { sort: 'recommended', relevance: 'climate rust' });
+    expect(res.items).toHaveLength(5);
+    expect(legsUsed()).toEqual(['lexical', 'recency']);
+    expect(logger.warn).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
+    await new Promise((resolve) => setTimeout(resolve, 90));
+    repo.queries.length = 0;
+    await s.query(ctx(), { sort: 'recommended', relevance: 'climate rust' });
+    expect(legsUsed()).toEqual(['dense', 'lexical', 'recency']);
+    expect(embeddings.calls).toHaveLength(1);
+  });
+
+  it('with the embeddings client unavailable the list is the fusion of legs A and B, and nothing is logged above info', async () => {
+    for (const id of ['r1', 'r2', 'r3', 'r4']) twin(id);
+    repo.searchDocs.set('r1', 'climate rust');
+    repo.vectors.set('r4', testVector(1, 0));
+    const input = { sort: 'recommended' as const, relevance: 'climate rust' };
+    const twoLegs = (await service().query(ctx(), input)).items.map((i) => i.jobId);
+    expect(twoLegs).toEqual(['r1', 'r4', 'r3', 'r2']);
+    const failed = Object.assign(new Error('The embeddings endpoint answered 503.'), { name: 'EmbeddingsError', code: 'http' });
+    for (const answer of [() => 'unavailable' as const, () => failed]) {
+      repo.queries.length = 0;
+      const embeddings = embedFake(answer);
+      const s = service({ embeddings, retrieval: retrievalFake() });
+      expect((await s.query(ctx(), input)).items.map((i) => i.jobId)).toEqual(twoLegs);
+      expect(embeddings.calls).toHaveLength(1);
+      expect(legsUsed()).toEqual(['lexical', 'recency']);
+      // "No vector now" is not remembered: the next request asks again.
+      await s.query(ctx(), input);
+      expect(embeddings.calls).toHaveLength(2);
+    }
+    expect(logger.warn).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalled();
+    // No embedding key for the brand: nothing is asked at all.
+    const unasked = embedFake();
+    await service({ embeddings: unasked, retrieval: retrievalFake({}, null) }).query(ctx(), input);
+    expect(unasked.calls).toHaveLength(0);
+    // A vector of zeros is no embedding: never used as a query.
+    repo.queries.length = 0;
+    await service({ embeddings: embedFake(() => testVector()), retrieval: retrievalFake() }).query(ctx(), input);
+    expect(repo.legsRun()).not.toContain('dense');
+  });
+
+  it('a leg whose statement fails is left out; the list is built from the others', async () => {
+    for (const id of ['r1', 'r2', 'r3']) twin(id);
+    repo.searchDocs.set('r1', 'climate rust');
+    repo.vectors.set('r2', testVector(1, 0));
+    const deps = () => ({ embeddings: embedFake(), retrieval: retrievalFake() });
+    repo.failLeg = 'lexical';
+    expect((await service(deps()).query(ctx(), { sort: 'recommended', relevance: 'climate rust' })).items.map((i) => i.jobId)).toEqual(['r2', 'r3', 'r1']);
+    repo.failLeg = 'dense';
+    expect((await service(deps()).query(ctx(), { sort: 'recommended', relevance: 'climate rust' })).items.map((i) => i.jobId)).toEqual(['r1', 'r3', 'r2']);
+    expect(logger.warn).toHaveBeenCalledTimes(2);
+    // Without the recency leg there is no list to answer with.
+    repo.failLeg = 'recency';
+    await expect(service(deps()).query(ctx(), { sort: 'recommended', relevance: 'climate rust' })).rejects.toThrow('recency leg unavailable');
+  });
+
+  it('the stored user vector is of the market\'s query tag; a market with no tag, or a person with no vector, runs without the dense leg', async () => {
+    seed(5);
+    repo.vectors.set('j000', testVector(0, 1));
+    await service({ embeddings: embedFake(), retrieval: retrievalFake({ u1: testVector(0, 1) }) }).query(ctx(), { sort: 'recommended' });
+    expect(repo.legsRun()).toContain('dense');
+    for (const retrieval of [retrievalFake({}), retrievalFake({ u1: testVector(0, 1) }, null)]) {
+      repo.queries.length = 0;
+      const res = await service({ embeddings: embedFake(), retrieval }).query(ctx(), { sort: 'recommended' });
+      expect(res.items).toHaveLength(5);
+      expect(legsUsed()).toEqual(['lexical', 'recency']);
+    }
+  });
+
+  it('FEED_HYBRID=off: the recency leg alone, 400 rows, as before; no vector is asked for or read', async () => {
+    for (let i = 0; i < 450; i++) {
+      const id = `m${String(i).padStart(3, '0')}`;
+      repo.rows.push(feedRow({ id, postedAt: new Date(NOW.getTime() - (i + 1) * 60_000), companyName: `Co ${id}`, companyNameNormalized: `co-${id}` }));
+    }
+    const embeddings = embedFake();
+    const retrieval = retrievalFake({ u1: testVector(0, 1) });
+    const off = await service({ embeddings, retrieval, env: { FEED_HYBRID: 'off' } }).query(ctx(), { sort: 'recommended', relevance: 'climate rust' });
+    expect(legsUsed()).toEqual(['recency']);
+    expect(limitOf(legStatements('recency')[0]!)).toBe(400);
+    expect(repo.sessions.get(off.sessionId)!.jobIds).toHaveLength(400);
+    expect(embeddings.calls).toHaveLength(0);
+    expect(retrieval.reads).toHaveLength(0);
+    // On (the default, and any other value): leg A is 200 rows of the three.
+    for (const env of [{}, { FEED_HYBRID: 'on' }, { FEED_HYBRID: ' OFF ' }]) {
+      repo.queries.length = 0;
+      const res = await service({ env }).query(ctx(), { sort: 'recommended' });
+      const hybrid = (env as { FEED_HYBRID?: string }).FEED_HYBRID?.trim().toLowerCase() !== 'off';
+      expect(limitOf(legStatements('recency')[0]!)).toBe(hybrid ? 200 : 400);
+      expect(repo.sessions.get(res.sessionId)!.jobIds).toHaveLength(hybrid ? 200 : 400);
+    }
+  });
+
+  it('Newest, Highest pay, a browse and GoApply\'s deadline keep their single statement, with or without a query text', async () => {
+    seed(30);
+    repo.rows.push(...Array.from({ length: 5 }, (_, i) => feedRow({ id: `c${i}`, market: 'cn', postedAt: POSTED })));
+    const embeddings = embedFake();
+    const retrieval = retrievalFake({ u1: testVector(0, 1) });
+    const s = service({ embeddings, retrieval });
+    const legsOf = async (run: () => Promise<unknown>) => {
+      repo.queries.length = 0;
+      await run();
+      return legsUsed();
+    };
+    expect(await legsOf(() => s.query(ctx(), { sort: 'newest' }))).toEqual(['recency']);
+    expect(await legsOf(() => s.query(ctx(), { sort: 'newest', relevance: 'kafka' }))).toEqual(['recency']);
+    expect(await legsOf(() => s.query(ctx(), { sort: 'newest', q: 'backend' }))).toEqual(['recency']);
+    expect(await legsOf(() => s.query(ctx(), { sort: 'highest_pay', relevance: 'kafka' }))).toEqual(['recency']);
+    expect(await legsOf(() => s.query(ctx(), { sort: 'recommended', overrides: { taxonomyIds: ['software_engineering'] } }))).toEqual(['recency']);
+    expect(await legsOf(() => s.query(cnCtx(), { sort: 'deadline', relevance: 'kafka' }))).toEqual([]);
+    // None of them asks for a vector or reads one, and each is the old 400-row window.
+    expect(embeddings.calls).toHaveLength(0);
+    expect(retrieval.reads).toHaveLength(0);
+    repo.queries.length = 0;
+    await s.query(ctx(), { sort: 'newest', q: 'backend', relevance: 'kafka' });
+    expect(limitOf(legStatements('recency')[0]!)).toBe(400);
+    // Recommended and Best fit are the lists that run the legs.
+    expect(await legsOf(() => s.query(ctx(), { sort: 'best_fit' }))).toEqual(['dense', 'lexical', 'recency']);
+    expect(await legsOf(() => s.query(ctx(), { sort: 'recommended', q: 'backend' }))).toEqual(['dense', 'lexical', 'recency']);
+  });
+
+  it('a list asked for by date is in date order from its first row to its last, also with a query text', async () => {
+    seed(25, { prefix: 'r' });
+    seed(30, { prefix: 'o', startDaysAgo: 50 });
+    // Two old postings match the words, and one old posting is the nearest in meaning: under Recommended the
+    // lexical and dense legs bring them into the first window. Under Newest they wait for their place by date.
+    for (const id of ['o003', 'o007']) repo.searchDocs.set(id, 'kafka');
+    repo.vectors.set('o011', testVector(1, 0));
+    const s = service({ embeddings: embedFake(() => testVector(1, 0)), retrieval: retrievalFake() });
+    const pagesOf = async (input: { sort: 'newest'; relevance?: string; q?: string }) => {
+      let res = await s.query(ctx(), input);
+      const out = [...res.items];
+      for (let guard = 0; res.cursor && guard < 10; guard++) {
+        res = await s.query(ctx(), { ...input, cursor: res.cursor });
+        out.push(...res.items);
+      }
+      return out;
+    };
+    const ranked = await pagesOf({ sort: 'newest', relevance: 'kafka' });
+    expect(ranked).toHaveLength(55);
+    const dates = ranked.map((i) => Date.parse(i.postedAt!));
+    // postedAt never increases along the pages.
+    for (let i = 1; i < dates.length; i++) expect(dates[i]!, `${ranked[i - 1]!.jobId} then ${ranked[i]!.jobId}`).toBeLessThanOrEqual(dates[i - 1]!);
+    expect(ranked.map((i) => i.jobId)).toEqual((await pagesOf({ sort: 'newest' })).map((i) => i.jobId));
+    // With a typed q the list holds the postings that carry the word and nothing else, newest first.
+    repo.searchDocs.set('r004', 'backend engineer kafka');
+    const typed = await pagesOf({ sort: 'newest', q: 'kafka' });
+    expect(typed.map((i) => i.jobId)).toEqual(['r004', 'o003', 'o007']);
+  });
+
+  it('counts, limiting filters, samples and alert candidates keep their single statement', async () => {
+    seed(5);
+    repo.countFromRows = true;
+    const s = service({ embeddings: embedFake(), retrieval: retrievalFake({ u1: testVector(0, 1) }), search: { getActive: async () => profile(), get: async () => profile(), findById: async () => ({ ...profile(), userId: 'u1' }) } as never });
+    await s.countForFilters(ctx(), { q: 'backend' });
+    await s.sampleForFilters(ctx(), { q: 'backend' }, { limit: 10 });
+    await s.alertCandidates({ market: 'intl', now: NOW }, 'sp1', { since: daysAgo(30), limit: 10 });
+    expect(repo.legsRun().filter((l) => l !== 'recency')).toEqual([]);
+    expect(repo.queries.some((q) => /ts_rank_cd|RAJobEmbedding/.test(q.text))).toBe(false);
+  });
+
+  it('the Assistant\'s preview and the precompute pick read the same fused first window', async () => {
+    for (const id of ['r1', 'r2', 'r3', 'r4']) twin(id);
+    repo.searchDocs.set('r1', 'climate rust');
+    const embeddings = embedFake();
+    const items = await service({ embeddings, retrieval: retrievalFake() }).preview(ctx(), { limit: 3, relevance: 'climate rust' });
+    expect(legsUsed()).toEqual(['dense', 'lexical', 'recency']);
+    expect(items.map((i) => i.jobId)).toEqual(['r1', 'r4', 'r3']);
+    expect(repo.sessions.size).toBe(0);
+    // No text: the profile legs, the same top as the list's own.
+    const listed = (await service().query(ctx(), { sort: 'recommended' })).items.slice(0, 3).map((i) => i.jobId);
+    expect((await service().preview(ctx(), { limit: 3 })).map((i) => i.jobId)).toEqual(listed);
+  });
+});
+
+describe('hybrid retrieval: the typed query finds a word that is only in the description', () => {
+  beforeEach(() => {
+    repo.rows.push(
+      feedRow({ id: 'title', title: 'Terraform Engineer', titleNormalized: 'terraform engineer' }),
+      feedRow({ id: 'body', title: 'Platform Engineer', titleNormalized: 'platform engineer' }),
+      feedRow({ id: 'unindexed', title: 'Terraform Specialist', titleNormalized: 'terraform specialist' }),
+      feedRow({ id: 'other', title: 'Data Analyst', titleNormalized: 'data analyst' }),
+    );
+    // `body` names Terraform in its description only; `unindexed` has no search document yet.
+    repo.searchDocs.set('title', 'terraform engineer infrastructure');
+    repo.searchDocs.set('body', 'platform engineer you will manage our cloud with terraform and kubernetes');
+    repo.searchDocs.set('other', 'data analyst sql dashboards');
+    repo.countFromRows = true;
+  });
+
+  it('the list returns the description-only job once it has a search document, and still finds an unindexed row by its title', async () => {
+    const res = await service().query(ctx(), { sort: 'recommended', q: 'terraform' });
+    expect(res.items.map((i) => i.jobId).sort()).toEqual(['body', 'title', 'unindexed']);
+    // Before its search document exists, the description-only job is not found (nothing is guessed).
+    repo.searchDocs.delete('body');
+    const before = await service().query(ctx(), { sort: 'recommended', q: 'terraform' });
+    expect(before.items.map((i) => i.jobId).sort()).toEqual(['title', 'unindexed']);
+  });
+
+  it('the count, a sample and the alert candidates include the same description-only job', async () => {
+    profileFilters = { q: 'terraform' };
+    const s = service({ search: { getActive: async () => profile(), get: async () => profile(), findById: async () => ({ ...profile(), userId: 'u1' }) } as never });
+    expect(await s.countForFilters(ctx(), { q: 'terraform' })).toEqual({ count: 3, capped: false });
+    expect((await s.sampleForFilters(ctx(), { q: 'terraform' }, { limit: 10 })).sort()).toEqual(['body', 'title', 'unindexed']);
+    const alert = await s.alertCandidates({ market: 'intl', now: NOW }, 'sp1', { since: daysAgo(30), limit: 10 });
+    expect(alert.ids.sort()).toEqual(['body', 'title', 'unindexed']);
+    expect((await s.counts(ctx())).forYou).toBe(3);
+  });
+
+  it('a typed query of two words keeps the postings that carry BOTH, on every surface that filters by it', async () => {
+    repo.rows = [];
+    repo.searchDocs.clear();
+    const add = (id: string, title: string, doc: string | null, hoursAgo: number) => {
+      repo.rows.push(feedRow({ id, title, titleNormalized: title.toLowerCase(), postedAt: new Date(NOW.getTime() - hoursAgo * 3_600_000), firstSeenAt: new Date(NOW.getTime() - hoursAgo * 3_600_000), skills: [] }));
+      if (doc) repo.searchDocs.set(id, doc);
+    };
+    add('pm-title', 'Product Manager', 'product manager roadmap', 5);
+    // Both words, apart and in the description only.
+    add('pm-body', 'Growth Lead', 'growth lead you manage the product as its manager', 4);
+    // One of the words each: newer than both matches, and far more of them.
+    for (let i = 0; i < 30; i++) add(`product${i}`, 'Product Designer', 'product designer figma', 1 + i / 100);
+    for (let i = 0; i < 30; i++) add(`manager${i}`, 'Engineering Manager', 'engineering manager people', 2 + i / 100);
+    // No search document yet: found by the phrase in its title, as before.
+    add('pm-unindexed', 'Senior Product Manager', null, 6);
+    const both = ['pm-body', 'pm-title', 'pm-unindexed'];
+    profileFilters = { q: 'product manager' };
+    const s = service({ search: { getActive: async () => profile(), get: async () => profile(), findById: async () => ({ ...profile(), userId: 'u1' }) } as never });
+
+    // The count ("Show N jobs", For you) and the lists agree.
+    expect(await s.countForFilters(ctx(), { q: 'product manager' })).toEqual({ count: 3, capped: false });
+    expect((await s.counts(ctx())).forYou).toBe(3);
+    for (const sort of ['recommended', 'best_fit', 'newest', 'highest_pay'] as const) {
+      const res = await s.query(ctx(), { sort });
+      expect(res.items.map((i) => i.jobId).sort(), sort).toEqual(both);
+      expect(res.endOfFeed, sort).toBe(true);
+    }
+    // Newest is by date among them, not the newest rows that say either word.
+    expect((await s.query(ctx(), { sort: 'newest' })).items.map((i) => i.jobId)).toEqual(['pm-body', 'pm-title', 'pm-unindexed']);
+    // Samples, alert candidates, the Assistant's preview and the visitor list.
+    expect((await s.sampleForFilters(ctx(), { q: 'product manager' }, { limit: 50 })).sort()).toEqual(both);
+    expect((await s.alertCandidates({ market: 'intl', now: NOW }, 'sp1', { since: daysAgo(30), limit: 50 })).ids.sort()).toEqual(both);
+    expect((await s.preview(ctx(), { q: 'product manager', limit: 50 })).map((i) => i.jobId).sort()).toEqual(both);
+    expect((await s.publicList({ market: 'intl', now: NOW }, { role: 'product manager', limit: 50 })).map((i) => i.jobId).sort()).toEqual(both);
+    // One word is unchanged: every posting that carries it.
+    expect((await s.countForFilters(ctx(), { q: 'product' })).count).toBe(33);
+    // The lexical leg still ORDERS by any word of its text; the filter beside it holds every word.
+    repo.queries.length = 0;
+    await s.query(ctx(), { sort: 'recommended' });
+    const lexical = legStatements('lexical')[0]!;
+    expect(lexicalQueryOf(lexical)).toBe("'product' | 'manager'");
+    expect(lexical.values).toContain("'product' & 'manager'");
+    expect(legStatements('recency')[0]!.values).toContain("'product' & 'manager'");
+  });
+
+  it('the dense leg does not apply the typed q: it may add a job that says it another way', async () => {
+    repo.vectors.set('other', testVector(1, 0));
+    const res = await service({ embeddings: embedFake(() => testVector(1, 0)), retrieval: retrievalFake() }).query(ctx(), { sort: 'recommended', q: 'terraform' });
+    expect(res.items.map((i) => i.jobId).sort()).toEqual(['body', 'other', 'title', 'unindexed']);
+    // Legs A and B carry the q rule, leg C does not.
+    expect(legStatements('recency')[0]!.text).toContain('j."searchText" ILIKE');
+    expect(legStatements('lexical')[0]!.text).toContain('j."searchText" ILIKE');
+    expect(legStatements('dense')[0]!.text).not.toContain('searchText');
+  });
+});
+
+describe('hybrid retrieval: GoApply consent (PIPL Art. 24; invariant I8)', () => {
+  const cnRows = (n: number) => {
+    for (let i = 0; i < n; i++) twin(`c${i}`, { market: 'cn', title: '后端开发工程师', titleNormalized: '后端开发工程师', postedAt: new Date(POSTED.getTime() - i * 3_600_000) });
+  };
+  beforeEach(() => {
+    for (const fn of [logger.info, logger.warn, logger.error]) mocked(fn).mockClear();
+  });
+
+  it('without 个性化推荐 and with a query text: legs A and B only, in their fused order (query_match); no profile, no vector, no fit', async () => {
+    personalized = false;
+    cnRows(6);
+    repo.searchDocs.set('c4', '后端 开发 kafka kafka');
+    repo.searchDocs.set('c2', '后端 开发 kafka');
+    repo.vectors.set('c5', testVector(1, 0));
+    const embeddings = embedFake();
+    const retrieval = retrievalFake({ u1: testVector(1, 0) });
+    const res = await service({ embeddings, retrieval }).query(cnCtx(), { sort: 'recommended', relevance: 'kafka' });
+    expect(legsUsed()).toEqual(['lexical', 'recency']);
+    expect(res.order).toBe('query_match');
+    expect(res.sort).toBe('newest');
+    // A (newest first): c0 c1 c2 c3 c4 c5. B: c4 c2. Fused: c2 (1/63 + 1/62), c4 (1/65 + 1/61), then c0 c1 c3 c5.
+    expect(res.items.map((i) => i.jobId)).toEqual(['c2', 'c4', 'c0', 'c1', 'c3', 'c5']);
+    expect(res.items.every((i) => i.fit === null)).toBe(true);
+    expect(userContextCalls).toBe(0);
+    expect(match.calls.getFits).toEqual([]);
+    expect(embeddings.calls).toHaveLength(0);
+    expect(retrieval.reads).toHaveLength(0);
+    // The cursor of a query_match list pages on.
+    expect(repo.sessions.get(res.sessionId)!.sort).toBe('newest');
+  });
+
+  it('without 个性化推荐: a typed q is the query too; with no query text the list is by date from one statement, as before', async () => {
+    personalized = false;
+    cnRows(6);
+    repo.searchDocs.set('c5', '后端 开发 工程师 资深');
+    const typed = await service({ embeddings: embedFake(), retrieval: retrievalFake() }).query(cnCtx(), { sort: 'best_fit', q: '后端' });
+    expect(typed.order).toBe('query_match');
+    expect(legsUsed()).toEqual(['lexical', 'recency']);
+    // c5 is the only row both legs return.
+    expect(typed.items[0]!.jobId).toBe('c5');
+    repo.queries.length = 0;
+    const plain = await service({ embeddings: embedFake(), retrieval: retrievalFake() }).query(cnCtx(), { sort: 'recommended' });
+    expect(plain.order).toBe('recency');
+    expect(legsUsed()).toEqual(['recency']);
+    expect(limitOf(legStatements('recency')[0]!)).toBe(400);
+    expect(plain.items.map((i) => i.jobId)).toEqual(['c0', 'c1', 'c2', 'c3', 'c4', 'c5']);
+  });
+
+  it('without 个性化推荐: choosing Newest keeps the date order even with a query text', async () => {
+    personalized = false;
+    cnRows(4);
+    repo.searchDocs.set('c3', 'kafka');
+    const res = await service().query(cnCtx(), { sort: 'newest', relevance: 'kafka' });
+    expect(res.order).toBe('recency');
+    expect(res.items.map((i) => i.jobId)).toEqual(['c0', 'c1', 'c2', 'c3']);
+  });
+
+  it('a list in query order carries no "sorted by date" line on its cards; a list by date does', async () => {
+    personalized = false;
+    cnRows(3);
+    repo.searchDocs.set('c1', 'kafka');
+    const explain = vi.fn(() => ({ mode: 'non_personalized' as const, headline: 'Sorted by date posted and your filters', reasons: [], gaps: [], notices: [] }));
+    const s = service({ explain: explain as never });
+    const byQuery = await s.query(cnCtx(), { sort: 'recommended', relevance: 'kafka' });
+    expect(byQuery.items.every((i) => i.explanation === undefined)).toBe(true);
+    const byDate = await s.query(cnCtx(), { sort: 'recommended' });
+    expect(byDate.items.every((i) => i.explanation?.mode === 'non_personalized')).toBe(true);
+  });
+
+  it('personalised but without the AI consent: no embedding call for a query text and no user vector read; legs A and B answer', async () => {
+    aiOk = false;
+    cnRows(5);
+    repo.vectors.set('c0', testVector(1, 0));
+    const embeddings = embedFake();
+    const retrieval = retrievalFake({ u1: testVector(1, 0) });
+    const s = service({ embeddings, retrieval });
+    for (const input of [{ sort: 'recommended' as const, relevance: 'kafka' }, { sort: 'recommended' as const, q: '后端' }, { sort: 'recommended' as const }]) {
+      repo.queries.length = 0;
+      const res = await s.query(cnCtx(), input);
+      expect(res.order).toBe('personalized');
+      expect(res.items.length).toBeGreaterThan(0);
+      expect(repo.legsRun()).not.toContain('dense');
+    }
+    await s.preview(cnCtx(), { limit: 5, relevance: 'kafka' });
+    expect(embeddings.calls).toHaveLength(0);
+    expect(retrieval.reads).toHaveLength(0);
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('with both consents GoApply runs the same three legs as RoboApply (D5), inside its own market', async () => {
+    cnRows(5);
+    repo.rows.push(feedRow({ id: 'intl-twin', market: 'intl', postedAt: POSTED }));
+    repo.searchDocs.set('c3', 'kafka');
+    repo.searchDocs.set('intl-twin', 'kafka');
+    repo.vectors.set('c4', testVector(1, 0));
+    repo.vectors.set('intl-twin', testVector(1, 0));
+    const embeddings = embedFake();
+    const retrieval = retrievalFake({ u1: testVector(1, 0) });
+    const s = service({ embeddings, retrieval });
+    const res = await s.query(cnCtx(), { sort: 'recommended', relevance: 'kafka' });
+    expect(legsUsed()).toEqual(['dense', 'lexical', 'recency']);
+    expect(embeddings.calls).toEqual([{ brand: 'goapply', text: 'kafka', options: { purpose: 'query', carriesUserData: true, userId: 'u1' } }]);
+    expect(res.items.map((i) => i.jobId)).not.toContain('intl-twin');
+    expect(legStatements('dense')[0]!.values.slice(0, 2)).toEqual([FAKE_VECTOR_MODEL, 'cn']);
+    // No query text: the stored vector, read for the mainland market only.
+    await s.query(cnCtx(), { sort: 'recommended' });
+    expect(retrieval.reads).toEqual([{ userId: 'u1', market: 'cn', modelTag: FAKE_VECTOR_MODEL }]);
+    expect(embeddings.calls).toHaveLength(1);
+  });
+
+  it('RoboApply reads its stored user vector without an AI-consent question (it has none), and never asks for one on a list with a query text', async () => {
+    aiOk = false;
+    seed(5);
+    const retrieval = retrievalFake({ u1: testVector(1, 0) });
+    const embeddings = embedFake();
+    const s = service({ embeddings, retrieval });
+    await s.query(ctx(), { sort: 'recommended' });
+    expect(retrieval.reads).toHaveLength(1);
+    await s.query(ctx(), { sort: 'recommended', relevance: 'kafka' });
+    expect(embeddings.calls).toHaveLength(0);
+    expect(retrieval.reads).toHaveLength(1);
+  });
+});
+
+// ── The text to rank by (SM-9) ────────────────────────────────────────────────────────────────────
+
+describe('natural-language search: the residual text ranks the list and is never a predicate', () => {
+  it('"backend jobs at climate startups using Rust": the posting that mentions them comes before an equally fresh one that does not', async () => {
+    profileFilters = { taxonomyIds: ['backend_engineer'] };
+    twin('plain-b');
+    twin('mentions');
+    twin('plain-a');
+    repo.searchDocs.set('mentions', 'backend engineer at a climate startup our services are written in rust');
+    repo.searchDocs.set('plain-a', 'backend engineer payments java');
+    repo.searchDocs.set('plain-b', 'backend engineer logistics go');
+    const s = service();
+    const ranked = await s.query(ctx(), { sort: 'recommended', relevance: 'climate startups Rust' });
+    expect(ranked.items.map((i) => i.jobId)).toEqual(['mentions', 'plain-b', 'plain-a']);
+    // Without the text the order is today's.
+    const plain = await s.query(ctx(), { sort: 'recommended' });
+    expect(plain.items.map((i) => i.jobId)).toEqual(['plain-b', 'plain-a', 'mentions']);
+    // Never a predicate: the list still holds every posting the filters allow, and no statement filters on the text.
+    expect(ranked.items).toHaveLength(3);
+    for (const q of repo.queries) expect(q.text).not.toContain('searchText');
+    const lexical = legStatements('lexical');
+    expect(lexical.some((q) => lexicalQueryOf(q) === "'climate' | 'startups' | 'rust'")).toBe(true);
+  });
+
+  it('a typed q and the text to rank by work together: q filters, both order; the preview seam says when the text took part', async () => {
+    // Three equally fresh postings that all match the typed q; only `a` mentions the topics.
+    for (const id of ['c', 'b', 'a']) twin(id);
+    repo.searchDocs.set('c', 'backend engineer');
+    repo.searchDocs.set('b', 'backend engineer');
+    repo.searchDocs.set('a', 'backend engineer climate rust');
+    repo.rows.push(feedRow({ id: 'off-topic', title: 'Data Analyst', titleNormalized: 'data analyst', postedAt: POSTED, firstSeenAt: POSTED }));
+    repo.searchDocs.set('off-topic', 'data analyst climate rust');
+    const s = service();
+    // Without the text: the recency order of equal rows (id descending).
+    const plain = await s.previewOrdered(ctx(), { q: 'backend', limit: 10 });
+    expect(plain.items.map((i) => i.jobId)).toEqual(['c', 'b', 'a']);
+    expect(plain.relevanceApplied).toBe(false);
+    // With it: A is c b a, B is a c b; fused c (1/61 + 1/62) > a (1/63 + 1/61) > b (1/62 + 1/63). `a` now precedes `b`.
+    const ranked = await s.previewOrdered(ctx(), { q: 'backend', relevance: 'climate rust', limit: 10 });
+    expect(ranked.items.map((i) => i.jobId)).toEqual(['c', 'a', 'b']);
+    expect(ranked.relevanceApplied).toBe(true);
+    // Never a predicate: the posting that mentions the topics but not the typed word is not listed.
+    expect(ranked.items.map((i) => i.jobId)).not.toContain('off-topic');
+    // `preview` is the same rows; the list itself orders the same way.
+    expect((await s.preview(ctx(), { q: 'backend', relevance: 'climate rust', limit: 10 })).map((i) => i.jobId)).toEqual(['c', 'a', 'b']);
+    expect((await s.query(ctx(), { sort: 'recommended', q: 'backend', relevance: 'climate rust' })).items.map((i) => i.jobId)).toEqual(['c', 'a', 'b']);
+    // The report is per read, never assumed: no leg answered, the legs are off, or the list is by date.
+    repo.searchDocs.clear();
+    expect((await s.previewOrdered(ctx(), { q: 'backend', relevance: 'climate rust', limit: 10 })).relevanceApplied).toBe(false);
+    repo.searchDocs.set('a', 'backend engineer climate rust');
+    expect((await service({ env: { FEED_HYBRID: 'off' } }).previewOrdered(ctx(), { q: 'backend', relevance: 'climate rust', limit: 10 })).relevanceApplied).toBe(false);
+    expect((await s.previewOrdered(ctx(), { q: 'backend', relevance: 'climate rust', sort: 'newest', limit: 10 })).relevanceApplied).toBe(false);
+    expect((await s.previewOrdered(ctx(), { relevance: 'climate rust', limit: 10 })).relevanceApplied).toBe(true);
+    // GoApply without 个性化推荐: legs A and B in their fused order, so the text decides the order outright.
+    personalized = false;
+    repo.rows.forEach((r) => (r.market = 'cn'));
+    const cn = await s.previewOrdered(cnCtx(), { q: 'backend', relevance: 'climate rust', limit: 10 });
+    expect(cn.relevanceApplied).toBe(true);
+    expect(cn.items[0]!.jobId).toBe('a');
+    // Recruitment-info mode off: nothing is listed and nothing is claimed.
+    expect(await service({ postingsAllowed: () => false }).previewOrdered(cnCtx(), { q: 'backend', relevance: 'climate rust', limit: 10 })).toEqual({ items: [], relevanceApplied: false });
+  });
+
+  it('the job-search API\'s read (MKT-4H): a GoApply reader without 个性化推荐, the role as q and the topics as relevance', async () => {
+    // The fixture of job-search/index-feed.gate.test.ts: three equally recent rows that all match the query; by
+    // date and id alone the only row that mentions the topics is LAST.
+    personalized = false;
+    aiOk = false;
+    for (const [id, title, doc] of [
+      ['c_plain', 'Backend Engineer', 'backend engineer payments'],
+      ['b_plain', 'Backend Engineer, Platform', 'backend engineer platform'],
+      ['a_topical', 'Backend Engineer (Rust), climate', 'backend engineer rust climate'],
+    ] as const) {
+      twin(id, { market: 'cn', title, titleNormalized: title.toLowerCase(), location: '上海', locationCountry: 'CN', remoteScope: null });
+      repo.searchDocs.set(id, doc);
+    }
+    const embeddings = embedFake();
+    const s = service({ embeddings, retrieval: retrievalFake() });
+    const plain = await s.previewOrdered(cnCtx(), { q: 'backend engineer', limit: 50 });
+    expect(plain).toMatchObject({ relevanceApplied: false });
+    expect(plain.items.map((i) => i.jobId)).toEqual(['c_plain', 'b_plain', 'a_topical']);
+    const ordered = await s.previewOrdered(cnCtx(), { q: 'backend engineer', relevance: 'climate Rust', limit: 50 });
+    expect(ordered.relevanceApplied).toBe(true);
+    // The row that mentions the topics now precedes the equally recent row that came before it.
+    expect(ordered.items.map((i) => i.jobId)).toEqual(['c_plain', 'a_topical', 'b_plain']);
+    // No profile, no fit, no vector and no model call for this reader (invariant I8).
+    expect(ordered.items.every((i) => i.fit === null)).toBe(true);
+    expect(userContextCalls).toBe(0);
+    expect(embeddings.calls).toHaveLength(0);
+    expect(repo.legsRun()).not.toContain('dense');
+  });
+
+  it('the count of a search does not move with the text to rank by', async () => {
+    seed(8);
+    repo.countFromRows = true;
+    const s = service();
+    const before = await s.countForFilters(ctx(), profileFilters);
+    await s.query(ctx(), { sort: 'recommended', relevance: 'climate startups Rust' });
+    expect(await s.countForFilters(ctx(), profileFilters)).toEqual(before);
+    expect(before.count).toBe(8);
+  });
+
+  it('the same flow on GoApply with the consents given', async () => {
+    for (const id of ['g1', 'g2', 'g3']) twin(id, { market: 'cn', title: '后端开发工程师', titleNormalized: '后端开发工程师' });
+    repo.searchDocs.set('g1', '后端 开发 新能源 创业 公司 rust');
+    const res = await service({ embeddings: embedFake(), retrieval: retrievalFake() }).query(cnCtx(), { sort: 'recommended', relevance: '新能源 Rust' });
+    expect(res.order).toBe('personalized');
+    expect(res.items.map((i) => i.jobId)).toEqual(['g1', 'g3', 'g2']);
+    expect(res.items.every((i) => i.fit !== null)).toBe(true);
+  });
+});
+
+// ── The same role in several places (SM-12) ───────────────────────────────────────────────────────
+
+describe('the same role in several cities collapses into one card', () => {
+  const role = (id: string, location: string, over: Partial<Parameters<typeof feedRow>[0]> = {}) =>
+    repo.rows.push(
+      feedRow({ id, title: 'Sales Engineer', titleNormalized: 'sales engineer', companyName: 'Acme', companyNameNormalized: 'acme', location, workModel: 'onsite', remoteScope: null, postedAt: POSTED, ...over }),
+    );
+
+  it('three rows of one company and title in three cities: one card that names the two other places', async () => {
+    role('austin', 'Austin, TX');
+    role('denver', 'Denver, CO');
+    role('seattle', 'Seattle, WA');
+    repo.rows.push(feedRow({ id: 'elsewhere', title: 'Sales Engineer', titleNormalized: 'sales engineer', companyName: 'Globex', companyNameNormalized: 'globex', postedAt: POSTED }));
+    const res = await service().query(ctx(), { sort: 'recommended' });
+    const cards = res.items.filter((i) => i.company.name === 'Acme');
+    expect(cards).toHaveLength(1);
+    expect(cards[0]!.jobId).toBe('seattle');
+    expect(cards[0]!.alsoIn).toEqual({ count: 2, locations: ['Denver, CO', 'Austin, TX'], jobIds: ['denver', 'austin'] });
+    // The same title at another company stays its own card, with nothing folded into it.
+    const other = res.items.find((i) => i.jobId === 'elsewhere')!;
+    expect(other.alsoIn).toBeUndefined();
+    // The session lists cards; the folded postings are remembered on the card's entry.
+    const session = repo.sessions.get(res.sessionId)!;
+    expect(session.jobIds.sort()).toEqual(['elsewhere', 'seattle']);
+    expect((session.ranks as Array<{ jobId: string; also?: string[] }>).find((r) => r.jobId === 'seattle')!.also).toEqual(['denver', 'austin']);
+    // Cards are what is counted: nothing is "hidden by tier" because it was folded.
+    expect(session.totalEstimate).toBe(2);
+    expect(res.hiddenByTier).toBe(0);
+  });
+
+  it('the page size stays 20 cards, and a later page reads its cards\' other places from the session', async () => {
+    seed(19);
+    for (let i = 0; i < 11; i++) {
+      role(`a${i}`, `City ${i}, TX`, { postedAt: new Date(daysAgo(4).getTime() - i * 60_000) });
+      role(`b${i}`, `Town ${i}, CA`, { postedAt: new Date(daysAgo(5).getTime() - i * 60_000), title: 'Account Manager', titleNormalized: 'account manager', companyName: 'Globex', companyNameNormalized: 'globex' });
+    }
+    const s = service();
+    const p1 = await s.query(ctx(), { sort: 'newest' });
+    expect(p1.items).toHaveLength(20);
+    const acme = p1.items[19]!;
+    expect(acme.jobId).toBe('a0');
+    // Ten other places: all counted, all named and linked, each name beside its own job id.
+    expect(acme.alsoIn!.count).toBe(ALSO_IN_MAX);
+    expect(acme.alsoIn!.jobIds).toEqual(Array.from({ length: 10 }, (_, i) => `a${i + 1}`));
+    for (const [i, id] of acme.alsoIn!.jobIds.entries()) expect(acme.alsoIn!.locations[i]).toBe(repo.rows.find((r) => r.id === id)!.location);
+    const p2 = await s.query(ctx(), { sort: 'newest', cursor: p1.cursor! });
+    expect(p2.items).toHaveLength(1);
+    expect(p2.items[0]!.jobId).toBe('b0');
+    expect(p2.items[0]!.alsoIn!.count).toBe(10);
+    expect(p2.endOfFeed).toBe(true);
+    expect(repo.sessions.get(p1.sessionId)!.jobIds).toHaveLength(21);
+  });
+
+  it('a card names at most ten other places: the twelfth posting of a role is a card of its own, so every posting can be opened from a card', async () => {
+    for (let i = 0; i < 25; i++) role(`a${String(i).padStart(2, '0')}`, `City ${i}, TX`, { postedAt: new Date(daysAgo(4).getTime() - i * 60_000) });
+    const res = await service().query(ctx(), { sort: 'newest' });
+    // 25 postings: a00 names a01 to a10, a11 names a12 to a21, a22 names a23 and a24.
+    expect(res.items.map((i) => i.jobId)).toEqual(['a00', 'a11', 'a22']);
+    expect(res.items.map((i) => i.alsoIn!.count)).toEqual([10, 10, 2]);
+    for (const item of res.items) {
+      expect(item.alsoIn!.jobIds).toHaveLength(item.alsoIn!.count);
+      expect(item.alsoIn!.locations).toHaveLength(item.alsoIn!.count);
+    }
+    const reachable = res.items.flatMap((i) => [i.jobId, ...i.alsoIn!.jobIds]);
+    expect(reachable).toHaveLength(25);
+    expect(new Set(reachable).size).toBe(25);
+    expect(repo.sessions.get(res.sessionId)!.totalEstimate).toBe(3);
+  });
+
+  it('hiding the card hides that posting only: on the next load the next posting of the role is the card', async () => {
+    role('austin', 'Austin, TX');
+    role('denver', 'Denver, CO');
+    role('seattle', 'Seattle, WA');
+    const s = service();
+    const before = await s.query(ctx(), { sort: 'recommended' });
+    expect(before.items.map((i) => i.jobId)).toEqual(['seattle']);
+    await s.hide(ctx(), 'seattle', { reasonCode: 'already_applied' });
+    const after = await s.query(ctx(), { sort: 'recommended' });
+    expect(after.items.map((i) => i.jobId)).toEqual(['denver']);
+    expect(after.items[0]!.alsoIn).toEqual({ count: 1, locations: ['Austin, TX'], jobIds: ['austin'] });
+    // A folded posting hidden since the session started drops out of the card on a later read of that page.
+    repo.hidden.set('u1:austin', { at: NOW, reason: 'other' });
+    const again = await service().query(ctx(), { sort: 'recommended' });
+    expect(again.items[0]!.alsoIn).toBeUndefined();
+  });
+
+  it('a posting for the same city, a user\'s own import, and a posting that mentions sponsorship when you need it are never folded away', async () => {
+    role('austin-1', 'Austin, TX');
+    role('austin-2', 'Austin, TX');
+    role('mine', 'Reno, NV', { visibility: 'private', ownerUserId: 'u1', sourceBoard: 'user_import' });
+    const res = await service().query(ctx(), { sort: 'recommended' });
+    expect(res.items.map((i) => i.jobId).sort()).toEqual(['austin-1', 'austin-2', 'mine']);
+    expect(res.items.every((i) => i.alsoIn === undefined)).toBe(true);
+    // "I need visa sponsorship": the posting that mentions it leads, and is not folded into one that does not.
+    repo.rows = [];
+    profileFilters = { needsSponsorship: true };
+    role('zz-plain', 'Austin, TX');
+    role('aa-sponsor', 'Denver, CO', { sponsorship: 'offered', sponsorshipEvidence: 'We sponsor H-1B visas.' });
+    // By rank alone `zz-plain` would be the card (the id breaks the tie). The posting that mentions sponsorship
+    // leads instead and is the card; the other place is folded into it, never the other way round.
+    const sponsored = await service().query(ctx(), { sort: 'recommended' });
+    expect(sponsored.items.map((i) => i.jobId)).toEqual(['aa-sponsor']);
+    expect(sponsored.items[0]!.alsoIn).toEqual({ count: 1, locations: ['Austin, TX'], jobIds: ['zz-plain'] });
+    profileFilters = {};
+    const plain = await service().query(ctx(), { sort: 'recommended' });
+    expect(plain.items.map((i) => i.jobId)).toEqual(['zz-plain']);
+  });
+
+  it('the "Great" view hides weak fits first; what it hides is counted, what is folded is not', async () => {
+    profileFilters = { taxonomyIds: ['backend_engineer'], fitTier: 'great' };
+    role('austin', 'Austin, TX');
+    role('denver', 'Denver, CO');
+    role('weak', 'Boise, ID', { title: 'Receptionist', titleNormalized: 'receptionist', companyNameNormalized: 'other', companyName: 'Other' });
+    for (const id of ['austin', 'denver']) repo.ai.set(id, { score: 90, tier: 'great' });
+    repo.ai.set('weak', { score: 30, tier: 'unlikely' });
+    const res = await service().query(ctx(), { sort: 'recommended' });
+    expect(res.items.map((i) => i.jobId)).toEqual(['denver']);
+    expect(res.items[0]!.alsoIn!.count).toBe(1);
+    expect(res.hiddenByTier).toBe(1);
+  });
+
+  /** Every page of a list, with the cards each page delivered. */
+  const pagesOf = async (s: ReturnType<typeof service>, sort: 'newest' | 'recommended' = 'newest') => {
+    let res = await s.query(ctx(), { sort });
+    const pages = [res.items];
+    for (let guard = 0; res.cursor && guard < 10; guard++) {
+      res = await s.query(ctx(), { sort, cursor: res.cursor });
+      pages.push(res.items);
+    }
+    return { pages, sessionId: res.sessionId };
+  };
+
+  /**
+   * Every posting the session folded away is named, with its place, by a card
+   * on a page that was delivered: nothing is folded into a card the client
+   * already held. Also: no job is listed twice, as a card or as a place.
+   */
+  const expectEveryFoldReachable = (pages: Array<Awaited<ReturnType<ReturnType<typeof service>['query']>>['items']>, sessionId: string) => {
+    const ranks = repo.sessions.get(sessionId)!.ranks as Array<{ jobId: string; also?: string[] }>;
+    const delivered = new Map(pages.flat().map((i) => [i.jobId, i]));
+    for (const entry of ranks) {
+      for (const folded of entry.also ?? []) {
+        const card = delivered.get(entry.jobId);
+        expect(card, `${folded} was folded into ${entry.jobId}, which no page delivered`).toBeDefined();
+        expect(card!.alsoIn?.jobIds ?? [], `${entry.jobId} was delivered without naming ${folded}`).toContain(folded);
+      }
+    }
+    const cards = pages.flat().map((i) => i.jobId);
+    const places = pages.flat().flatMap((i) => i.alsoIn?.jobIds ?? []);
+    expect(new Set([...cards, ...places]).size).toBe(cards.length + places.length);
+  };
+
+  it('a later window folds another place of a role into a card that is still to be sent; a place the card already names stays a card', async () => {
+    seed(5);
+    role('recent', 'Austin, TX', { postedAt: daysAgo(1) });
+    // Older than the first window (45 days once it is widened): the first page reads them from the next window.
+    role('old-denver', 'Denver, CO', { postedAt: daysAgo(60) });
+    role('old-austin', 'Austin, TX', { postedAt: daysAgo(61) });
+    const { pages, sessionId } = await pagesOf(service());
+    expect(pages).toHaveLength(1);
+    const recent = pages[0]!.find((i) => i.jobId === 'recent')!;
+    // Denver joined the recent card, which this very page delivers; the older Austin posting names the card's own city and stays a card.
+    expect(recent.alsoIn).toEqual({ count: 1, locations: ['Denver, CO'], jobIds: ['old-denver'] });
+    expect(pages[0]!.map((i) => i.jobId).filter((id) => ['recent', 'old-denver', 'old-austin'].includes(id))).toEqual(['recent', 'old-austin']);
+    expectEveryFoldReachable(pages, sessionId);
+  });
+
+  it('a posting whose role already has a card on a page the client holds is never folded into it: it is a card of its own, and reachable', async () => {
+    seed(60); // enough recent rows that the first window is not widened, and three full pages come before any refill
+    role('recent', 'Austin, TX', { postedAt: daysAgo(1) });
+    role('old-denver', 'Denver, CO', { postedAt: daysAgo(30) });
+    role('old-boston', 'Boston, MA', { postedAt: daysAgo(31) });
+    const { pages, sessionId } = await pagesOf(service());
+    // `recent` went out on page 2; the window that brings the two old postings is read for page 4.
+    expect(pages[1]!.map((i) => i.jobId)).toContain('recent');
+    expect(pages[1]!.find((i) => i.jobId === 'recent')!.alsoIn).toBeUndefined();
+    const last = pages[pages.length - 1]!;
+    // The role gets a second card there: the newer of the two, which names the other one's place.
+    const denver = last.find((i) => i.jobId === 'old-denver')!;
+    expect(denver).toBeDefined();
+    expect(denver.alsoIn).toEqual({ count: 1, locations: ['Boston, MA'], jobIds: ['old-boston'] });
+    expect(pages.flat().map((i) => i.jobId)).not.toContain('old-boston');
+    const ranks = repo.sessions.get(sessionId)!.ranks as Array<{ jobId: string; also?: string[] }>;
+    expect(ranks.find((r) => r.jobId === 'recent')!.also).toBeUndefined();
+    expectEveryFoldReachable(pages, sessionId);
+  });
+
+  it('the same holds under Recommended with the legs, page after page', async () => {
+    seed(45);
+    for (let i = 0; i < 6; i++) {
+      role(`near${i}`, `City ${i}, TX`, { postedAt: daysAgo(3 + i) });
+      role(`far${i}`, `Town ${i}, CA`, { postedAt: daysAgo(50 + i) });
+    }
+    const { pages, sessionId } = await pagesOf(service(), 'recommended');
+    expect(pages.length).toBeGreaterThan(1);
+    expectEveryFoldReachable(pages, sessionId);
+    // Every one of the twelve postings is a card or a named place of one.
+    const all = [...pages.flat().map((i) => i.jobId), ...pages.flat().flatMap((i) => i.alsoIn?.jobIds ?? [])];
+    for (let i = 0; i < 6; i++) for (const id of [`near${i}`, `far${i}`]) expect(all, id).toContain(id);
+  });
+
+  it('"I need visa sponsorship": a later window never folds a posting that mentions it into an earlier card that does not', async () => {
+    profileFilters = { needsSponsorship: true };
+    seed(5);
+    role('plain', 'Austin, TX', { postedAt: daysAgo(1) });
+    role('old-sponsor', 'Denver, CO', { postedAt: daysAgo(60), sponsorship: 'offered', sponsorshipEvidence: 'We sponsor H-1B visas.' });
+    role('old-plain', 'Reno, NV', { postedAt: daysAgo(61) });
+    const { pages, sessionId } = await pagesOf(service());
+    const cards = pages.flat();
+    // Both postings are cards: the one that mentions sponsorship is not hidden behind the one that does not.
+    expect(cards.find((i) => i.jobId === 'plain')!.alsoIn).toBeUndefined();
+    const sponsor = cards.find((i) => i.jobId === 'old-sponsor')!;
+    expect(sponsor).toBeDefined();
+    // From then on the card that mentions sponsorship stands for the role: the other old place joins it.
+    expect(sponsor.alsoIn).toEqual({ count: 1, locations: ['Reno, NV'], jobIds: ['old-plain'] });
+    expectEveryFoldReachable(pages, sessionId);
+    // Without the need, the same rows fold into the recent card as usual.
+    profileFilters = {};
+    const usual = await pagesOf(service());
+    expect(usual.pages.flat().find((i) => i.jobId === 'plain')!.alsoIn).toEqual({ count: 2, locations: ['Denver, CO', 'Reno, NV'], jobIds: ['old-sponsor', 'old-plain'] });
+    expectEveryFoldReachable(usual.pages, usual.sessionId);
+  });
+
+  it('the Assistant\'s preview carries the other places too', async () => {
+    role('austin', 'Austin, TX');
+    role('denver', 'Denver, CO');
+    const items = await service().preview(ctx(), { limit: 5 });
+    expect(items).toHaveLength(1);
+    expect(items[0]!.alsoIn).toEqual({ count: 1, locations: ['Austin, TX'], jobIds: ['austin'] });
+  });
+});
+
+// ── "Not interested: wrong title", seen and skipped (SM-12) ───────────────────────────────────────
+
+describe('"Not interested: wrong title" is a title-level negative', () => {
+  const sales = (id: string, over: Partial<Parameters<typeof feedRow>[0]> = {}) =>
+    repo.rows.push(feedRow({ id, title: 'Sales Engineer', titleNormalized: 'sales engineer', primaryTaxonomyId: 'sales_engineer', taxonomyIds: ['sales', 'sales_engineer'], postedAt: POSTED, ...over }));
+
+  it('lowers the role and the title by 0.25, leaves the company and the skills alone, and still proposes the filter change', async () => {
+    sales('s1');
+    repo.countResponder = () => 12;
+    const res = await service().hide(ctx(), 's1', { reasonCode: 'wrong_title' });
+    const affinity = repo.affinity.get('u1')!;
+    expect(affinity.taxonomy).toEqual({ sales_engineer: -0.25 });
+    expect(affinity.title).toEqual({ 'sales engineer': -0.25 });
+    expect(affinity.company).toEqual({});
+    expect(affinity.skill).toEqual({});
+    // The proposal is unchanged: the person may decline it, and the saved filters are untouched either way.
+    expect(res.proposedFilterDiff).toMatchObject({ ops: [{ op: 'add', path: 'excludedTitles', value: 'Sales Engineer' }], countAfter: 12 });
+    expect(profileFilters).toEqual({ taxonomyIds: ['backend_engineer'] });
+  });
+
+  it('other "Sales Engineer" postings rank lower in Recommended while the role filter is unchanged; the weight fades with time', async () => {
+    profileFilters = {};
+    sales('hidden');
+    sales('same-title', { companyNameNormalized: 'globex', companyName: 'Globex' });
+    repo.rows.push(feedRow({ id: 'other-title', postedAt: POSTED, skills: ['salesforce'] }));
+    const s = service();
+    const rankOf = async (svc: ReturnType<typeof service>, at = NOW) => {
+      const res = await svc.query(ctx({ now: at }), { sort: 'recommended' });
+      return Object.fromEntries((repo.sessions.get(res.sessionId)!.ranks as Array<{ jobId: string; rank: number }>).map((r) => [r.jobId, r.rank]));
+    };
+    const before = await rankOf(s);
+    await s.hide(ctx(), 'hidden', { reasonCode: 'wrong_title' });
+    const after = await rankOf(s);
+    // Affinity is 15% of the rank: 50 → 43.75 for the same role and title.
+    expect(before['same-title']! - after['same-title']!).toBeCloseTo(0.15 * 6.25, 2);
+    expect(after['other-title']).toBe(before['other-title']);
+    expect(after.hidden).toBeUndefined();
+    // Sixty days on the weight has faded to under a third of what it was.
+    const later = new Date(NOW.getTime() + 60 * 86_400_000);
+    const faded = await rankOf(service({ now: () => later }), later);
+    repo.affinity.delete('u1');
+    const lateClean = await rankOf(service({ now: () => later }), later);
+    const lost = lateClean['same-title']! - faded['same-title']!;
+    expect(lost).toBeGreaterThan(0);
+    expect(lost).toBeLessThan((before['same-title']! - after['same-title']!) / 3);
+  });
+
+  it('a GoApply user without 个性化推荐 stores nothing; every other reason with a specific meaning stores nothing either', async () => {
+    sales('s1', { market: 'cn' });
+    sales('s2', { market: 'cn' });
+    personalized = false;
+    await service().hide(cnCtx(), 's1', { reasonCode: 'wrong_title' });
+    expect(repo.hidden.has('u1:s1')).toBe(true);
+    expect(repo.affinity.has('u1')).toBe(false);
+    personalized = true;
+    for (const reasonCode of ['wrong_level', 'wrong_location', 'pay_too_low', 'company', 'already_applied'] as const) await service().hide(cnCtx(), 's2', { reasonCode });
+    expect(repo.affinity.has('u1')).toBe(false);
+    await service().hide(cnCtx(), 's2', { reasonCode: 'wrong_title' });
+    expect(repo.affinity.get('u1')!.title).toEqual({ 'sales engineer': -0.25 });
+  });
+
+  it('skill affinity is keyed by canonical skill ids when the job has them', async () => {
+    repo.rows.push(feedRow({ id: 'canon', skills: ['Postgres', 'k8s'], skillIds: ['sk_postgresql', 'sk_kubernetes'] }), feedRow({ id: 'plain', skills: ['Python', 'SQL'] }));
+    const s = service();
+    await s.recordInteraction(ctx(), 'canon', 'save');
+    expect(repo.affinity.get('u1')!.skill).toEqual({ sk_postgresql: 0.1, sk_kubernetes: 0.1 });
+    await s.recordInteraction(ctx(), 'plain', 'save');
+    expect(repo.affinity.get('u1')!.skill).toMatchObject({ python: 0.1, sql: 0.1 });
+    expect(repo.affinity.get('u1')!.title).toEqual({});
+  });
+});
+
+describe('seen and skipped', () => {
+  const ranksOfQuery = async (svc: ReturnType<typeof service>, sort: 'recommended' | 'best_fit' = 'recommended') => {
+    const res = await svc.query(ctx(), { sort });
+    return Object.fromEntries((repo.sessions.get(res.sessionId)!.ranks as Array<{ jobId: string; rank: number }>).map((r) => [r.jobId, r.rank]));
+  };
+
+  it('a job shown five times and never opened ranks 10 points lower; three times 5, four times 7.5; an opened job loses nothing', async () => {
+    for (const id of ['five', 'four', 'three', 'two', 'opened', 'fresh']) twin(id);
+    const base = await ranksOfQuery(service());
+    repo.impressionRows.set('u1:five', { impressions: 5, viewedAt: null });
+    repo.impressionRows.set('u1:four', { impressions: 4, viewedAt: null });
+    repo.impressionRows.set('u1:three', { impressions: 3, viewedAt: null });
+    repo.impressionRows.set('u1:two', { impressions: 2, viewedAt: null });
+    repo.impressionRows.set('u1:opened', { impressions: 9, viewedAt: daysAgo(1) });
+    repo.impressionRows.set('u2:fresh', { impressions: 9, viewedAt: null });
+    const after = await ranksOfQuery(service());
+    expect(base.five! - after.five!).toBeCloseTo(10, 3);
+    expect(base.four! - after.four!).toBeCloseTo(7.5, 3);
+    expect(base.three! - after.three!).toBeCloseTo(5, 3);
+    for (const id of ['two', 'opened', 'fresh']) expect(after[id], id).toBe(base[id]);
+    // The list order follows.
+    const res = await service().query(ctx(), { sort: 'recommended' });
+    expect(res.items.map((i) => i.jobId).slice(-3)).toEqual(['three', 'four', 'five']);
+  });
+
+  it('applies to the Recommended order of a personalised list only, and a failing read takes nothing away', async () => {
+    for (const id of ['a', 'b']) twin(id);
+    repo.impressionRows.set('u1:a', { impressions: 9, viewedAt: null });
+    const spy = vi.spyOn(repo, 'impressionStates');
+    const bestFit = await service().query(ctx(), { sort: 'best_fit' });
+    expect(bestFit.items.map((i) => i.jobId)).toEqual(['b', 'a']);
+    await service().query(ctx(), { sort: 'newest' });
+    expect(spy).not.toHaveBeenCalled();
+    personalized = false;
+    repo.rows.forEach((r) => (r.market = 'cn'));
+    await service().query(cnCtx(), { sort: 'recommended' });
+    expect(spy).not.toHaveBeenCalled();
+    personalized = true;
+    repo.rows.forEach((r) => (r.market = 'intl'));
+    spy.mockRejectedValueOnce(new Error('down'));
+    const res = await service().query(ctx(), { sort: 'recommended' });
+    expect(res.items.map((i) => i.jobId)).toEqual(['b', 'a']);
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── A thin saved search asks for one targeted ingest (SM-9) ───────────────────────────────────────
+
+describe('a thin list for a saved search queues one targeted ingest', () => {
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it('under 60 rows: exactly one request for that profile version, none on the next page, refresh or another sort', async () => {
+    seed(25);
+    const asked: string[] = [];
+    const s = service({ requestIngest: async (id) => void asked.push(id) });
+    const p1 = await s.query(ctx(), { sort: 'recommended' });
+    await settle();
+    expect(asked).toEqual(['sp1']);
+    await s.query(ctx(), { sort: 'recommended', cursor: p1.cursor! });
+    await s.query(ctx(), { sort: 'recommended' });
+    await s.query(ctx(), { sort: 'newest' });
+    await settle();
+    expect(asked).toEqual(['sp1']);
+    // A changed search is a new version: one more request.
+    profileVersion = 2;
+    await s.query(ctx(), { sort: 'recommended' });
+    await settle();
+    expect(asked).toEqual(['sp1', 'sp1']);
+  });
+
+  it('remembered for six hours per profile version', async () => {
+    seed(12);
+    let clock = NOW;
+    const asked: string[] = [];
+    const s = service({ requestIngest: (id) => void asked.push(id), now: () => clock });
+    await s.query(ctx(), { sort: 'recommended' });
+    clock = new Date(NOW.getTime() + 5 * 3_600_000);
+    await s.query(ctx({ now: clock }), { sort: 'recommended' });
+    await settle();
+    expect(asked).toHaveLength(1);
+    clock = new Date(NOW.getTime() + 6 * 3_600_000 + 1000);
+    await s.query(ctx({ now: clock }), { sort: 'recommended' });
+    await settle();
+    expect(asked).toHaveLength(2);
+  });
+
+  it('not for a list of 60 rows or more, a browse, a one-off override or a typed query', async () => {
+    seed(60);
+    const asked: string[] = [];
+    const s = service({ requestIngest: (id) => void asked.push(id) });
+    await s.query(ctx(), { sort: 'recommended' });
+    await s.query(ctx(), { sort: 'recommended', overrides: { taxonomyIds: ['software_engineering'] } });
+    await s.query(ctx(), { sort: 'recommended', searchProfileId: 'sp1', overrides: { workModels: ['onsite'] } });
+    await s.query(ctx(), { sort: 'recommended', q: 'nothing matches this' });
+    await s.preview(ctx(), { limit: 5, q: 'nothing matches this' });
+    await settle();
+    expect(asked).toEqual([]);
+  });
+
+  it('a failing request never fails the feed, and is logged', async () => {
+    seed(3);
+    mocked(logger.warn).mockClear();
+    const res = await service({
+      requestIngest: async () => {
+        throw new Error('queue down');
+      },
+    }).query(ctx(), { sort: 'recommended' });
+    expect(res.items).toHaveLength(3);
+    await settle();
+    expect(mocked(logger.warn).mock.calls.some((c) => String(c[1]).includes('targeted ingest'))).toBe(true);
+    // A request that throws at once is swallowed too.
+    const sync = await service({
+      requestIngest: () => {
+        throw new Error('sync');
+      },
+    }).query(ctx(), { sort: 'recommended' });
+    expect(sync.items).toHaveLength(3);
+    await settle();
+  });
+
+  it('GoApply asks in the same way (its own pipeline reaches no search provider); the response never waits for it', async () => {
+    seed(4);
+    repo.rows.forEach((r) => (r.market = 'cn'));
+    let release: () => void = () => undefined;
+    const asked: string[] = [];
+    const s = service({
+      requestIngest: (id) =>
+        new Promise<void>((resolve) => {
+          asked.push(id);
+          release = resolve;
+        }),
+    });
+    const res = await s.query(cnCtx(), { sort: 'recommended' });
+    expect(res.items).toHaveLength(4);
+    expect(res).not.toHaveProperty('ingest');
+    await settle();
+    expect(asked).toEqual(['sp1']);
+    release();
+  });
+
+  it('with no requestIngest dependency nothing is asked', async () => {
+    seed(3);
+    await expect(service().query(ctx(), { sort: 'recommended' })).resolves.toMatchObject({ endOfFeed: true });
   });
 });

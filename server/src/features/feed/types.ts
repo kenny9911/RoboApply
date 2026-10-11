@@ -72,8 +72,8 @@ export interface FeedJobRow {
   companyFacts: unknown;
   companyDisplayName: string | null;
   companyLogo: string | null;
-  // ── Market wave columns (MKT-0), carried by the list projection so later phases need not edit it. Not read yet. ──
-  /** RASkill ids of the posting's skills (canonical vocabulary). */
+  // ── Market wave columns (MKT-0), carried by the list projection. ──
+  /** RASkill ids of the posting's skills (canonical vocabulary), required ones first. The skill keys of the affinity factor when present. */
   skillIds: string[];
   /** RAJob.contentHash: the content hash stored with the search document; null until it is written. */
   contentHash: string | null;

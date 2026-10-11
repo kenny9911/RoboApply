@@ -1,7 +1,8 @@
 {
   "landing": {
     "ranking": {
-      "deadlineSort": "“{deadline}”按网申截止日期排序，最早截止的排在最前。"
+      "deadlineSort": "“{deadline}”按网申截止日期排序，最早截止的排在最前。",
+      "cnNote": "在 %BRAND% 上，如果个性化推荐已关闭或尚未选择，职位只按日期和你的筛选条件排序。用文字搜索时，则按每个职位与这些文字的吻合程度排序。"
     },
     "cnHome": {
       "search": {

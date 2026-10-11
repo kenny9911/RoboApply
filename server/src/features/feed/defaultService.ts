@@ -1,15 +1,17 @@
 // server/src/features/feed/defaultService.ts — the process-wide feed service with production deps (WP-32).
 //
 // Everything heavy is imported lazily (Prisma, the LLM layer, the job-search
-// planner), so importing the feed area opens no pool and loads no model client.
+// planner, the embeddings client, the ingest pipeline), so importing the feed
+// area opens no pool and loads no model client.
 
 import type { Market } from '../../platform/brand/registry.js';
+import { resolveEmbeddingConfig } from '../../platform/embeddings/index.js';
 import { logger } from '../../services/LoggerService.js';
 import { explainMatch } from '../compliance/index.js';
 import type { MarketHookContext, MarketHookJob } from '../jobs/marketHooks.js';
 import { getFits, matchService } from '../match/index.js';
 import { searchProfileService } from '../search/index.js';
-import { createFeedQueryService, type FeedServiceDeps } from './FeedQueryService.js';
+import { createFeedQueryService, type FeedEmbeddings, type FeedRetrieval, type FeedServiceDeps } from './FeedQueryService.js';
 import type { PlannerPlan } from './filterDiff.js';
 import { createPrismaFeedRepo } from './repo.js';
 
@@ -62,6 +64,49 @@ async function defaultCardMeta(job: MarketHookJob, ctx: MarketHookContext): Prom
   return cardMeta(job, ctx);
 }
 
+/**
+ * The embeddings client for the vector of a query text (platform/embeddings).
+ * `{ unavailable }` when the brand has no key, its route policy refuses the
+ * endpoint or the day's budget is spent: the list then runs without the dense
+ * leg. A failed call throws; the feed catches it and does the same.
+ */
+export const defaultFeedEmbeddings: FeedEmbeddings = {
+  async embedTexts(brand, texts, options) {
+    const { embedTexts } = await import('../../platform/embeddings/index.js');
+    return embedTexts(brand, texts, options);
+  },
+};
+
+/** The stored vectors of features/retrieval, and the tag a new query vector of a brand carries (null: no key). */
+export const defaultFeedRetrieval: FeedRetrieval = {
+  async currentModelTag(market) {
+    const { currentModelTag } = await import('../retrieval/index.js');
+    return currentModelTag(market);
+  },
+  async userVector(userId, market, modelTag) {
+    const { userVector } = await import('../retrieval/index.js');
+    return userVector(userId, market, modelTag);
+  },
+  queryModelTag(brandId) {
+    try {
+      return resolveEmbeddingConfig(brandId === 'goapply' ? 'goapply' : 'roboapply').modelTag;
+    } catch {
+      return null;
+    }
+  },
+};
+
+/**
+ * One targeted ingest for a saved search whose list came back thin: the
+ * profile's queries are planned and queued (budget 0: nothing runs inside the
+ * request). The pipeline honours every provider budget and the brand's own
+ * provider list, so a GoApply request reaches no search provider.
+ */
+export async function defaultRequestIngest(searchProfileId: string): Promise<void> {
+  const { ingestForProfile } = await import('../jobs/ingest/index.js');
+  await ingestForProfile(searchProfileId, 0);
+}
+
 export function defaultFeedDeps(): FeedServiceDeps {
   return {
     repo: createPrismaFeedRepo(),
@@ -79,6 +124,9 @@ export function defaultFeedDeps(): FeedServiceDeps {
     planner: defaultPlanner,
     cardMeta: defaultCardMeta,
     explain: (input) => explainMatch(input),
+    embeddings: defaultFeedEmbeddings,
+    retrieval: defaultFeedRetrieval,
+    requestIngest: defaultRequestIngest,
   };
 }
 

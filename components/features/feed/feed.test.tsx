@@ -3,6 +3,9 @@
 // the diff, the rating card after 10 cards through the popup gate, the
 // zero-results relax buttons with counts, the tier view's hidden count, the
 // mobile layout, no client-side filtering and no per-card score requests.
+// MKT-4F: the "Also in N more locations" control under a card (SM-12), the
+// "Ranked by" chip and the relevance text sent with every page (SM-9), and the
+// intro line of a list ordered by its search words (GoApply, SM-7).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
@@ -10,7 +13,10 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { __setPopupGate } from '../../../lib/ui/popupGate';
 import { __toastStore } from '../../v3/primitives/Toast';
 import { __assistantChangeStore, noteAssistantFilterChange } from '../../../hooks/feed/useCalibration';
+import { __listRelevanceStore, rankListBy } from '../../../hooks/feed/useExplore';
 import { feedKeys } from '../../../hooks/feed/keys';
+import { searchKeys } from '../../../hooks/search';
+import { AlsoInLocations, alsoInEntries } from './AlsoInLocations';
 import { JobsWorkspace } from './JobsWorkspace';
 import {
   EMPTY_UI_STATE,
@@ -96,6 +102,7 @@ beforeEach(() => {
   installPopupGate();
   __toastStore.reset();
   __assistantChangeStore.reset();
+  __listRelevanceStore.reset();
 });
 
 afterEach(() => {
@@ -648,5 +655,212 @@ describe('/jobs workspace', () => {
     await waitFor(() => expect(net.to('PATCH', `${PROFILES}/sp_main`)).toHaveLength(1));
     expect(net.to('PATCH', `${PROFILES}/sp_main`)[0].body).toEqual({ baseVersion: 3, filters: { q: 'data' } });
     await waitFor(() => expect(screen.queryByTestId('after-change')).toBeNull());
+  });
+});
+
+// ── The same role in several cities: one card, the other places under it (SM-12) ──
+
+describe('"Also in N more locations" under a card', () => {
+  const alsoIn = { count: 2, locations: ['Denver, CO', 'Austin, TX'], jobIds: ['job_denver', 'job_austin'] };
+
+  it('renders under the card that carries alsoIn, and under no other; each place opens its own job page', async () => {
+    installFetch(baseRoutes({ [`POST ${FEED}/query`]: () => ok(page([feedItem(1, { alsoIn }), feedItem(2)])) }));
+    renderFeed(<JobsWorkspace />);
+    const cards = await screen.findAllByTestId('job-card');
+    expect(cards).toHaveLength(2);
+    const controls = screen.getAllByTestId('also-in');
+    expect(controls).toHaveLength(1);
+    // Directly under the first card, inside the same list item.
+    expect(cards[0].closest('li')).toBe(controls[0].closest('li'));
+    expect(cards[0].contains(controls[0])).toBe(false);
+    expect(within(controls[0]).getByText('Also in 2 more locations')).toBeInTheDocument();
+    const list = within(controls[0]).getByRole('list', { name: 'Other locations for Backend engineer 1 at Example Co 1' });
+    const links = within(list).getAllByRole('link');
+    expect(links.map((l) => [l.textContent, l.getAttribute('href')])).toEqual([
+      ['Denver, CO', '/jobs/job_denver'],
+      ['Austin, TX', '/jobs/job_austin'],
+    ]);
+    // Phone: a place opens that posting's own page (no split view).
+    fireEvent.click(links[0]);
+    expect(nav.replace).toEqual([]);
+  });
+
+  it('desktop: a place opens that posting in the split view', async () => {
+    setDesktop(true);
+    installFetch(baseRoutes({ [`POST ${FEED}/query`]: () => ok(page([feedItem(1, { alsoIn })])) }));
+    renderFeed(<JobsWorkspace />);
+    const control = await screen.findByTestId('also-in');
+    fireEvent.click(within(control).getByRole('link', { name: 'Austin, TX' }));
+    expect(nav.replace).toEqual(['/jobs?job=job_austin']);
+  });
+
+  it('says one location in the singular, and how many more are not listed when the server names only ten', () => {
+    const one = renderFeed(<AlsoInLocations alsoIn={{ count: 1, locations: ['Leeds'], jobIds: ['j1'] }} title="Nurse" company="Example Co" />);
+    expect(screen.getByText('Also in 1 more location')).toBeInTheDocument();
+    expect(screen.queryByText(/not listed here/)).toBeNull();
+    one.unmount();
+    const ids = Array.from({ length: 10 }, (_, i) => `j${i}`);
+    const many = renderFeed(<AlsoInLocations alsoIn={{ count: 13, locations: ids.map((id) => `City ${id}`), jobIds: ids }} title="Nurse" company="Example Co" />);
+    expect(screen.getByText('Also in 13 more locations')).toBeInTheDocument();
+    expect(screen.getAllByRole('link')).toHaveLength(10);
+    expect(screen.getByText('3 more locations are not listed here.')).toBeInTheDocument();
+    many.unmount();
+    renderFeed(<AlsoInLocations alsoIn={{ count: 11, locations: ids.map((id) => `City ${id}`), jobIds: ids }} title="Nurse" company="Example Co" />);
+    expect(screen.getByText('1 more location is not listed here.')).toBeInTheDocument();
+  });
+
+  it('names only places that can be opened, and renders nothing when there is none', () => {
+    expect(alsoInEntries({ count: 3, locations: ['Leeds', '  ', 'York'], jobIds: ['a', 'b', 'c', 'd'] })).toEqual([
+      { jobId: 'a', location: 'Leeds' },
+      { jobId: 'c', location: 'York' },
+    ]);
+    expect(alsoInEntries({ count: 2, locations: ['Leeds'], jobIds: [] })).toEqual([]);
+    const view = renderFeed(<AlsoInLocations alsoIn={{ count: 2, locations: [], jobIds: [] }} title="Nurse" company="Example Co" />);
+    expect(view.container.querySelector('[data-testid="also-in"]')).toBeNull();
+    view.unmount();
+    // The number said is never smaller than the places listed.
+    renderFeed(<AlsoInLocations alsoIn={{ count: 0, locations: ['Leeds', 'York'], jobIds: ['a', 'c'] }} title="Nurse" company="Example Co" />);
+    expect(screen.getByText('Also in 2 more locations')).toBeInTheDocument();
+  });
+});
+
+// ── The words a plain-language search left over rank the list (SM-9) ──────────────
+
+describe('"Ranked by" on /jobs', () => {
+  const bodies = (net: ReturnType<typeof installFetch>) => net.to('POST', `${FEED}/query`).map((c) => c.body as { relevance?: string; cursor?: string });
+
+  it('no terms: no chip, and no relevance is sent', async () => {
+    const net = installFetch(baseRoutes());
+    renderFeed(<JobsWorkspace />);
+    await screen.findAllByTestId('job-card');
+    expect(screen.queryByTestId('ranked-by')).toBeNull();
+    expect(bodies(net).every((b) => !('relevance' in b))).toBe(true);
+  });
+
+  it('shows the chip and sends the terms as relevance with page 1 and with page 2', async () => {
+    // The proposal was made against version 3; the applied change is version 4.
+    rankListBy({ searchProfileId: 'sp_main', baseVersion: 3, rankedBy: ['climate startups', 'Rust'] });
+    const net = installFetch(
+      baseRoutes({
+        [`GET ${PROFILES}`]: () => ok(profileList([searchProfile({ version: 4 })])),
+        [`POST ${FEED}/query`]: (c) =>
+          (c.body as { cursor?: string }).cursor === 'fs_1:20' ? ok(page(items(21, 5), { endOfFeed: true })) : ok(page(items(1, 20), { cursor: 'fs_1:20', endOfFeed: false })),
+      }),
+    );
+    renderFeed(<JobsWorkspace />);
+    await waitFor(() => expect(screen.getAllByTestId('job-card')).toHaveLength(20));
+    const chip = screen.getByTestId('ranked-by');
+    expect(chip).toHaveTextContent('Ranked by: climate startups, Rust');
+    expect(within(chip).getByRole('button', { name: 'Stop ranking the list by these words' })).toHaveTextContent('Clear');
+    fireEvent.click(screen.getByRole('button', { name: 'Show more jobs' }));
+    await waitFor(() => expect(screen.getAllByTestId('job-card')).toHaveLength(25));
+    // The same text with every page of that list: it is part of the server session's identity.
+    expect(bodies(net)).toEqual([
+      { searchProfileId: 'sp_main', sort: 'recommended', fitTier: 'all', relevance: 'climate startups Rust' },
+      { searchProfileId: 'sp_main', sort: 'recommended', fitTier: 'all', relevance: 'climate startups Rust', cursor: 'fs_1:20' },
+    ]);
+  });
+
+  it('clearing the chip restores the plain order: a new list is asked for without the text', async () => {
+    rankListBy({ searchProfileId: 'sp_main', baseVersion: 3, rankedBy: ['climate startups', 'Rust'] });
+    const net = installFetch(baseRoutes({ [`GET ${PROFILES}`]: () => ok(profileList([searchProfile({ version: 4 })])) }));
+    renderFeed(<JobsWorkspace />);
+    const chip = await screen.findByTestId('ranked-by');
+    await screen.findAllByTestId('job-card');
+    fireEvent.click(within(chip).getByRole('button', { name: 'Stop ranking the list by these words' }));
+    await waitFor(() => expect(screen.queryByTestId('ranked-by')).toBeNull());
+    await waitFor(() => expect(bodies(net)).toHaveLength(2));
+    expect(bodies(net)[0].relevance).toBe('climate startups Rust');
+    expect('relevance' in bodies(net)[1]).toBe(false);
+    expect(__listRelevanceStore.get()).toBeNull();
+  });
+
+  it('a later change to the search clears the terms; the terms of another search are never used', async () => {
+    rankListBy({ searchProfileId: 'sp_main', baseVersion: 3, rankedBy: ['Rust'] });
+    const net = installFetch(baseRoutes({ [`GET ${PROFILES}`]: () => ok(profileList([searchProfile({ version: 4 })])) }));
+    const { client } = renderFeed(<JobsWorkspace />);
+    await screen.findByTestId('ranked-by');
+    // /jobs adopted version 4 as the applied change.
+    await waitFor(() => expect(__listRelevanceStore.get()?.version).toBe(4));
+    // The person edits a filter: version 5.
+    act(() => client.setQueryData(searchKeys.profiles(), profileList([searchProfile({ version: 5 })])));
+    await waitFor(() => expect(screen.queryByTestId('ranked-by')).toBeNull());
+    expect(__listRelevanceStore.get()).toBeNull();
+    await waitFor(() => expect('relevance' in bodies(net).at(-1)!).toBe(false));
+  });
+
+  it('terms chosen without saving anything belong to the search as it is, and end at its next change (they do not survive one)', async () => {
+    // The request changed no filter: nothing was saved, so no new version follows the one on screen (3).
+    rankListBy({ searchProfileId: 'sp_main', baseVersion: 3, rankedBy: ['climate startups', 'Rust'], saved: false });
+    expect(__listRelevanceStore.get()?.version).toBe(3);
+    const net = installFetch(baseRoutes());
+    const { client } = renderFeed(<JobsWorkspace />);
+    const chip = await screen.findByTestId('ranked-by');
+    expect(chip).toHaveTextContent('Ranked by: climate startups, Rust');
+    await screen.findAllByTestId('job-card');
+    expect(bodies(net)[0]).toEqual({ searchProfileId: 'sp_main', sort: 'recommended', fitTier: 'all', relevance: 'climate startups Rust' });
+    // The very next change of the search (version 4) ends them.
+    act(() => client.setQueryData(searchKeys.profiles(), profileList([searchProfile({ version: 4 })])));
+    await waitFor(() => expect(screen.queryByTestId('ranked-by')).toBeNull());
+    expect(__listRelevanceStore.get()).toBeNull();
+    await waitFor(() => expect('relevance' in bodies(net).at(-1)!).toBe(false));
+  });
+
+  it('a list asked for by date is not ranked by the words: no chip and no relevance under Newest; both return with Recommended', async () => {
+    rankListBy({ searchProfileId: 'sp_main', baseVersion: 3, rankedBy: ['climate startups', 'Rust'] });
+    nav.search = 'sort=newest';
+    const net = installFetch(baseRoutes({ [`GET ${PROFILES}`]: () => ok(profileList([searchProfile({ version: 4 })])) }));
+    const view = renderFeed(<JobsWorkspace />);
+    await screen.findAllByTestId('job-card');
+    expect(screen.queryByTestId('ranked-by')).toBeNull();
+    expect(bodies(net).at(-1)).toEqual({ searchProfileId: 'sp_main', sort: 'newest', fitTier: 'all' });
+    // The words are kept for the search: back on Recommended the list is ranked by them again, and says so.
+    expect(__listRelevanceStore.get()?.text).toBe('climate startups Rust');
+    view.unmount();
+    nav.search = '';
+    renderFeed(<JobsWorkspace />);
+    expect(await screen.findByTestId('ranked-by')).toHaveTextContent('Ranked by: climate startups, Rust');
+    await waitFor(() => expect(bodies(net).at(-1)).toEqual({ searchProfileId: 'sp_main', sort: 'recommended', fitTier: 'all', relevance: 'climate startups Rust' }));
+  });
+
+  it('terms stored for another saved search show no chip here and are dropped', async () => {
+    rankListBy({ searchProfileId: 'sp_other', baseVersion: 1, rankedBy: ['Rust'] });
+    const net = installFetch(baseRoutes());
+    renderFeed(<JobsWorkspace />);
+    await screen.findAllByTestId('job-card');
+    expect(screen.queryByTestId('ranked-by')).toBeNull();
+    expect(bodies(net).every((b) => !('relevance' in b))).toBe(true);
+    await waitFor(() => expect(__listRelevanceStore.get()).toBeNull());
+  });
+
+  it('terms too long to send are not stored at all (the server refuses, it never cuts)', () => {
+    rankListBy({ searchProfileId: 'sp_main', baseVersion: 3, rankedBy: ['x'.repeat(150), 'y'.repeat(150)] });
+    expect(__listRelevanceStore.get()).toBeNull();
+  });
+});
+
+// ── How the list says it is ordered (GoApply without personalised ranking) ──────────
+
+describe('the intro says how the list is ordered', () => {
+  it('ordered by the search words (order query_match): says so, never "ranked by your resume" or "by date"', async () => {
+    installFetch(baseRoutes({ [`POST ${FEED}/query`]: () => ok(page(items(1, 3).map((i) => ({ ...i, fit: null })), { order: 'query_match', sort: 'newest' })) }));
+    renderFeed(<JobsWorkspace />, { brand: 'goapply' });
+    await screen.findAllByTestId('job-card');
+    expect(await screen.findByText('Ordered by how closely the post matches your search.')).toBeInTheDocument();
+    expect(screen.queryByText(/ranked by how well your resume/)).toBeNull();
+    expect(screen.queryByText(/listed by date posted/)).toBeNull();
+  });
+
+  it('by date (order recency) and by fit (personalised) keep their own lines', async () => {
+    installFetch(baseRoutes({ [`POST ${FEED}/query`]: () => ok(page(items(1, 3), { order: 'recency', sort: 'newest' })) }));
+    const byDate = renderFeed(<JobsWorkspace />, { brand: 'goapply' });
+    expect(await screen.findByText(/listed by date posted, newest first/)).toBeInTheDocument();
+    expect(screen.queryByText(/how closely the post matches/)).toBeNull();
+    byDate.unmount();
+    installFetch(baseRoutes({ [`POST ${FEED}/query`]: () => ok(page(items(1, 3), { order: 'personalized', sort: 'recommended' })) }));
+    renderFeed(<JobsWorkspace />);
+    await screen.findAllByTestId('job-card');
+    expect(screen.getByText(/ranked by how well your resume lines up/)).toBeInTheDocument();
+    expect(screen.queryByText(/how closely the post matches/)).toBeNull();
   });
 });

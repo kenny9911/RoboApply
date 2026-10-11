@@ -481,9 +481,10 @@ describe('/help/ranking', () => {
     expect(screen.queryByText(/personalised recommendations are off/)).toBeNull();
   });
 
-  it('GoApply adds the non-personalised order note', () => {
+  it('GoApply adds the non-personalised order note: by date, or by the search words when there are any', () => {
     renderMarketing(<RankingPage />, { brand: 'goapply' });
     expect(screen.getByText(/On GoApply, if personalised recommendations are off/)).toBeInTheDocument();
+    expect(screen.getByText(/When you search with words, they are ordered by how closely each post matches those words\./)).toBeInTheDocument();
   });
 
   // FIX-7 carry-over: GoApply's sort menu has a fourth sort; the page names it with the menu's own label.
@@ -499,35 +500,65 @@ describe('/help/ranking', () => {
   });
 
   // INT-06 (wave3 WP-93 #17): the rules and goal points the ranking code applies.
-  it('shows the two ordering rules and the points each career goal adds (the contract numbers)', () => {
+  // MKT-4F (SM-12): two more rules (titles marked wrong, jobs passed over), each with its numbers.
+  it('shows the ordering rules and the points each career goal adds (the contract numbers)', () => {
     const { container } = renderMarketing(<RankingPage />);
     const rule = (key: string) => container.querySelector(`[data-rule="${key}"]`) as HTMLElement;
     expect(within(rule('sponsorship_first')).getByRole('heading', { name: 'Visa sponsorship first' })).toBeInTheDocument();
     expect(rule('sponsorship_first')).not.toHaveTextContent(/points/);
     expect(within(rule('skills_boost')).getByText('Up to 10 points')).toBeInTheDocument();
+    expect(within(rule('wrong_title')).getByRole('heading', { name: 'Titles you marked as wrong' })).toBeInTheDocument();
+    // The number is the change of each weight, and the page says how the factor is built from the weights:
+    // it never says the factor (or a job's score) moves by 0.25.
+    expect(rule('wrong_title')).toHaveTextContent('the weight of that role and the weight of that title each go down by 0.25, on a scale that runs from -1 to 1');
+    expect(rule('wrong_title')).toHaveTextContent("is the average of a job's role, company and skills weights, and of its title weight when that is below zero");
+    expect(rule('wrong_title')).not.toHaveTextContent('0.25 lower each time');
+    expect(rule('wrong_title')).toHaveTextContent('fades by 2% a day');
+    expect(rule('wrong_title')).toHaveTextContent('Your filters stay as they are.');
+    expect(within(rule('seen_skipped')).getByRole('heading', { name: 'Jobs you keep passing over' })).toBeInTheDocument();
+    expect(within(rule('seen_skipped')).getByText('Up to 10 points lower')).toBeInTheDocument();
+    expect(rule('seen_skipped')).toHaveTextContent('5 points after three visits, 7.5 after four, and 10 from five on.');
     const goal = (key: string) => container.querySelector(`[data-goal="${key}"]`) as HTMLElement;
     for (const [key, points] of [['more_senior', 6], ['management', 6], ['higher_pay', 6], ['flexibility', 4]] as const) {
       expect(within(goal(key)).getByText(`+${points} points`)).toBeInTheDocument();
     }
     expect(container.querySelectorAll('[data-goal]')).toHaveLength(4);
     expect(screen.getByText('Other goals do not change the order.')).toBeInTheDocument();
-    // The heading and the note match what is on the page: two rules, and goals.
-    expect(container.querySelectorAll('[data-rule]')).toHaveLength(2);
+    // The heading and the note match what is on the page: four rules, and goals.
+    expect(container.querySelectorAll('[data-rule]')).toHaveLength(4);
     expect(screen.getByRole('heading', { name: 'More rules' })).toBeInTheDocument();
-    expect(screen.getByText(/The rules and goals below add points/)).toBeInTheDocument();
+    expect(screen.getByText(/The rules and goals below add points to that score, take points away, or move jobs within the list\./)).toBeInTheDocument();
+    // The exploration slot is not built and is not on the page.
+    expect(container.textContent).not.toMatch(/explor/i);
   });
 
-  it('GoApply: no sponsorship rule and no career-goal block (neither is asked there); the skills rule stays', () => {
+  // MKT-4F (SM-12): freshness with a slow tail, and one card for the same role in several cities.
+  it('says how freshness fades, and that the same role in several cities is one card (under Variety)', () => {
+    const { container } = renderMarketing(<RankingPage />);
+    const fresh = container.querySelector('[data-factor="freshness"]') as HTMLElement;
+    expect(fresh).toHaveTextContent(
+      'Newer posts come first. The effect is strongest in the first two days and keeps a smaller weight for about two weeks. A post that is no longer listed by its source counts as older.',
+    );
+    expect(fresh).not.toHaveTextContent(/three days/);
+    const variety = container.querySelector('[aria-labelledby="ranking-spread"]') as HTMLElement;
+    expect(within(variety).getByText('When a company posts the same role in several cities, you see one card that lists the other locations, up to 10. Any further locations appear as another card.')).toBeInTheDocument();
+    expect(container.querySelector('[data-ranking-same-role]')).not.toBeNull();
+    // It is a Variety line, not a card in the list of rules.
+    expect(container.querySelector('[data-rule="same_role_collapse"]')).toBeNull();
+  });
+
+  it('GoApply: no sponsorship rule and no career-goal block (neither is asked there); the other rules stay (D5)', () => {
     const { container } = renderMarketing(<RankingPage />, { brand: 'goapply' });
     expect(container.querySelector('[data-rule="sponsorship_first"]')).toBeNull();
-    expect(container.querySelector('[data-rule="skills_boost"]')).not.toBeNull();
+    for (const key of ['skills_boost', 'wrong_title', 'seen_skipped']) expect(container.querySelector(`[data-rule="${key}"]`), key).not.toBeNull();
+    expect(container.querySelector('[data-ranking-same-role]')).not.toBeNull();
     expect(container.querySelectorAll('[data-goal]')).toHaveLength(0);
     expect(screen.queryByText(/career goal/)).toBeNull();
-    // One rule on the page: the heading says one, and the note mentions no goals.
-    expect(container.querySelectorAll('[data-rule]')).toHaveLength(1);
-    expect(screen.getByRole('heading', { name: 'One more rule' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: /Two more rules|More rules/ })).toBeNull();
-    expect(screen.getByText('Each job gets a ranking score out of 100 from the four factors. The rule below adds points to that score.')).toBeInTheDocument();
+    // Three rules on the page: the heading is plural, and the note mentions no goals.
+    expect(container.querySelectorAll('[data-rule]')).toHaveLength(3);
+    expect(screen.getByRole('heading', { name: 'More rules' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'One more rule' })).toBeNull();
+    expect(screen.getByText('Each job gets a ranking score out of 100 from the four factors. The rules below add points to that score or take points away.')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/goals? below/);
   });
 });

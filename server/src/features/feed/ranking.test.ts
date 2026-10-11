@@ -1,9 +1,11 @@
 // @vitest-environment node
 //
 // WP-32 acceptance: ranking formula (the fit input on one scale for scored and
-// unscored rows, SM-4; freshness decay 72 h; 0.55/0.20/0.15/0.10), no
-// recruiter-bank boost, the goal-adjustment table per goal option, ≤2 per
+// unscored rows, SM-4; freshness with a slow tail, SM-12; 0.55/0.20/0.15/0.10),
+// no recruiter-bank boost, the goal-adjustment table per goal option, ≤2 per
 // company per 20, sorts and the fit-tier view filter.
+// MKT-4F: seen and skipped, the fused retrieval position as a tie-break,
+// reciprocal rank fusion, and the same-role collapse.
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -16,16 +18,21 @@ import { EMPTY_AFFINITY } from './affinity.js';
 import { GOAL_ADJUSTMENTS, ORDERING_RULES, RANKING_FACTORS } from './contract.js';
 import {
   RANK_BLEND_AI_SHARE,
+  collapseSameRole,
   fitBadge,
   fitForRank,
+  fuseByReciprocalRank,
   rankFitOf,
   annualPay,
   freshness,
   goalAdjustment,
   passesTier,
+  placeOf,
   recommendedRank,
   mentionsSponsorship,
+  sameRoleKey,
   scatterByCompany,
+  seenSkippedPenalty,
   skillsBoost,
   sortCandidates,
   sourceQuality,
@@ -134,11 +141,59 @@ describe('formula', () => {
     expect(rankFitOf(null)).toBeNull();
   });
 
-  it('freshness = 100·e^(−h/72): 100 now, 1/e after 72 h; undated jobs count from first seen', () => {
+  const curve = (h: number) => 100 * (0.7 * Math.exp(-h / 48) + 0.3 * Math.exp(-h / 336));
+
+  it('freshness = 100·(0.7·e^(−h/48) + 0.3·e^(−h/336)): the values at 0, 48, 240 and 960 hours', () => {
     expect(freshness(NOW, null, NOW)).toBe(100);
-    expect(freshness(hoursAgo(72), null, NOW)).toBeCloseTo(100 / Math.E, 6);
-    expect(freshness(null, hoursAgo(72), NOW)).toBeCloseTo(100 / Math.E, 6);
+    expect(freshness(hoursAgo(48), null, NOW)).toBeCloseTo(51.76, 2);
+    expect(freshness(hoursAgo(240), null, NOW)).toBeCloseTo(15.16, 2);
+    expect(freshness(hoursAgo(960), null, NOW)).toBeCloseTo(1.72, 2);
+    for (const h of [0, 48, 240, 960]) expect(freshness(hoursAgo(h), null, NOW)).toBeCloseTo(curve(h), 10);
+    // Undated jobs count from when we first saw them; a job with neither date has no freshness.
+    expect(freshness(null, hoursAgo(72), NOW)).toBeCloseTo(curve(72), 10);
     expect(freshness(null, null, NOW)).toBe(0);
+    // A date in the future is "now", never above 100.
+    expect(freshness(new Date(NOW.getTime() + 3_600_000), null, NOW)).toBe(100);
+  });
+
+  it('a 10-day-old job still outranks a 40-day-old one on freshness (the old curve tied them at zero)', () => {
+    const ten = freshness(hoursAgo(10 * 24), null, NOW);
+    const forty = freshness(hoursAgo(40 * 24), null, NOW);
+    expect(Math.round(ten)).toBe(15);
+    expect(Math.round(forty)).toBe(2);
+    // With every other factor equal the 10-day-old job ranks first.
+    const row = (id: string, days: number) => feedRow({ id, postedAt: hoursAgo(days * 24), firstSeenAt: hoursAgo(days * 24), lastSeenAt: hoursAgo(1) });
+    const cands: Candidate[] = [row('forty', 40), row('ten', 10)].map((r) => ({ row: r, badge: null, fit: 70, rank: recommendedRank(r, 70, rc()) }));
+    expect(cands[1]!.rank - cands[0]!.rank).toBeCloseTo(0.2 * (ten - forty), 2);
+    expect(sortCandidates(cands, 'recommended').map((c) => c.row.id)).toEqual(['ten', 'forty']);
+  });
+
+  it('freshness only ever falls with age', () => {
+    let previous = Number.POSITIVE_INFINITY;
+    for (let h = 0; h <= 24 * 130; h += 6) {
+      const f = freshness(hoursAgo(h), null, NOW);
+      expect(f, `${h} h`).toBeLessThan(previous);
+      expect(f).toBeGreaterThan(0);
+      previous = f;
+    }
+  });
+
+  it('a post its source stopped listing counts from when it was last seen', () => {
+    const day = 24;
+    // Posted yesterday, last seen 20 days ago: it scores as 20 days old.
+    expect(freshness(hoursAgo(day), null, NOW, hoursAgo(20 * day))).toBeCloseTo(curve(20 * day), 10);
+    expect(freshness(hoursAgo(day), null, NOW, hoursAgo(20 * day))).toBeLessThan(freshness(hoursAgo(day), null, NOW));
+    // Still listed (seen within 48 hours): the posting date alone.
+    expect(freshness(hoursAgo(day), null, NOW, hoursAgo(47))).toBeCloseTo(curve(day), 10);
+    expect(freshness(hoursAgo(day), null, NOW, hoursAgo(1))).toBeCloseTo(curve(day), 10);
+    // The larger of the two: last seen 3 days ago never makes a 30-day-old post fresher.
+    expect(freshness(hoursAgo(30 * day), null, NOW, hoursAgo(3 * day))).toBeCloseTo(curve(30 * day), 10);
+    // No last-seen date: the posting date.
+    expect(freshness(hoursAgo(day), null, NOW, null)).toBeCloseTo(curve(day), 10);
+    // The rank reads the row's own lastSeenAt.
+    const listed = feedRow({ id: 'listed', postedAt: hoursAgo(day), lastSeenAt: hoursAgo(2) });
+    const gone = feedRow({ id: 'gone', postedAt: hoursAgo(day), lastSeenAt: hoursAgo(20 * day) });
+    expect(recommendedRank(listed, 70, rc()) - recommendedRank(gone, 70, rc())).toBeCloseTo(0.2 * (curve(day) - curve(20 * day)), 2);
   });
 
   it('source quality is posting completeness (25 each), nothing about where it came from', () => {
@@ -148,7 +203,7 @@ describe('formula', () => {
 
   it('rank = 0.55·fit + 0.20·freshness + 0.15·affinity + 0.10·quality (+ goal)', () => {
     const row = feedRow({ id: 'r', postedAt: hoursAgo(72), salaryDisclosed: false, atsType: 'greenhouse', descriptionLength: 1000 });
-    const expected = 0.55 * 80 + 0.2 * (100 / Math.E) + 0.15 * 50 + 0.1 * 75;
+    const expected = 0.55 * 80 + 0.2 * curve(72) + 0.15 * 50 + 0.1 * 75;
     expect(recommendedRank(row, 80, rc())).toBeCloseTo(expected, 2);
     expect(recommendedRank(row, null, rc())).toBeCloseTo(expected - 44, 2);
   });
@@ -359,8 +414,30 @@ describe('sorts and the tier view', () => {
 
 describe('ordering rules (ORDERING_RULES, listed on /help/ranking)', () => {
   it('are documented with their trigger', () => {
-    expect(ORDERING_RULES.map((r) => r.key)).toEqual(['sponsorship_first', 'skills_boost']);
+    expect(ORDERING_RULES.map((r) => r.key)).toEqual(['sponsorship_first', 'skills_boost', 'wrong_title', 'seen_skipped', 'same_role_collapse']);
     expect(ORDERING_RULES.find((r) => r.key === 'skills_boost')!.points).toBe(10);
+    for (const r of ORDERING_RULES) {
+      expect(r.when.length, r.key).toBeGreaterThan(10);
+      expect(r.what.length, r.key).toBeGreaterThan(10);
+    }
+  });
+
+  it('seen and skipped: 5 points at three impressions, 7.5 at four, 10 from five on, only for a job never opened', () => {
+    expect([0, 1, 2, 3, 4, 5, 6, 99].map((n) => seenSkippedPenalty(n))).toEqual([0, 0, 0, 5, 7.5, 10, 10, 10]);
+    expect(seenSkippedPenalty(null)).toBe(0);
+    expect(seenSkippedPenalty(undefined)).toBe(0);
+    expect(seenSkippedPenalty(Number.NaN)).toBe(0);
+    const row = feedRow({ id: 'seen' });
+    const plain = recommendedRank(row, 70, rc());
+    // The service lists only jobs the person never opened in `seenSkipped`.
+    expect(plain - recommendedRank(row, 70, rc({ seenSkipped: new Map([['seen', 3]]) }))).toBeCloseTo(5, 3);
+    expect(plain - recommendedRank(row, 70, rc({ seenSkipped: new Map([['seen', 4]]) }))).toBeCloseTo(7.5, 3);
+    expect(plain - recommendedRank(row, 70, rc({ seenSkipped: new Map([['seen', 5]]) }))).toBeCloseTo(10, 3);
+    expect(plain - recommendedRank(row, 70, rc({ seenSkipped: new Map([['seen', 12]]) }))).toBeCloseTo(10, 3);
+    // Another job's impressions, two impressions, or no map: nothing is taken away.
+    expect(recommendedRank(row, 70, rc({ seenSkipped: new Map([['other', 9]]) }))).toBe(plain);
+    expect(recommendedRank(row, 70, rc({ seenSkipped: new Map([['seen', 2]]) }))).toBe(plain);
+    expect(recommendedRank(row, 70, rc({ seenSkipped: null }))).toBe(plain);
   });
 
   it('sponsorship first: jobs that mention sponsorship (offered, with a quote) lead; order within groups kept', () => {
@@ -383,5 +460,160 @@ describe('ordering rules (ORDERING_RULES, listed on /help/ranking)', () => {
     expect(skillsBoost(feedRow({ id: 'd', skills: ['python'] }), null)).toBe(0);
     const row = feedRow({ id: 'e', skills: ['python', 'kubernetes'] });
     expect(recommendedRank(row, 70, rc({ skillsBoost: chosen })) - recommendedRank(row, 70, rc())).toBeCloseTo(10, 3);
+  });
+});
+
+describe('the fused retrieval position breaks ties, after the date and before the id', () => {
+  const same = hoursAgo(5);
+  const cand = (id: string, over: Partial<Candidate> = {}): Candidate => ({ row: feedRow({ id, postedAt: same }), badge: null, fit: 70, rank: 60, ...over });
+
+  it('equal rank and equal date: the row the legs placed higher comes first, under every sort', () => {
+    for (const sort of ['recommended', 'best_fit', 'newest', 'highest_pay', 'deadline'] as const) {
+      const cands = [cand('z', { retrievalRank: 7 }), cand('a', { retrievalRank: 2 }), cand('m', { retrievalRank: 4 })];
+      expect(sortCandidates(cands, sort).map((c) => c.row.id), sort).toEqual(['a', 'm', 'z']);
+    }
+  });
+
+  it('never outranks the sort key or the date; a row without a position follows those that have one; then the id', () => {
+    // A better rank wins whatever the retrieval position.
+    expect(sortCandidates([cand('a', { retrievalRank: 0, rank: 50 }), cand('b', { retrievalRank: 300, rank: 51 })], 'recommended').map((c) => c.row.id)).toEqual(['b', 'a']);
+    // A newer posting wins over a better retrieval position.
+    const newer: Candidate = { ...cand('n', { retrievalRank: 300 }), row: feedRow({ id: 'n', postedAt: hoursAgo(1) }) };
+    expect(sortCandidates([cand('o', { retrievalRank: 0 }), newer], 'recommended').map((c) => c.row.id)).toEqual(['n', 'o']);
+    // A row of an older refill window has no position.
+    expect(sortCandidates([cand('late'), cand('placed', { retrievalRank: 399 })], 'recommended').map((c) => c.row.id)).toEqual(['placed', 'late']);
+    // Neither has one: the id, descending, as before.
+    expect(sortCandidates([cand('a'), cand('b')], 'newest').map((c) => c.row.id)).toEqual(['b', 'a']);
+  });
+});
+
+describe('reciprocal rank fusion of the retrieval legs', () => {
+  const ids = (rows: Array<{ id: string }>) => rows.map((r) => r.id);
+
+  it('scores a row Σ 1 / (60 + rank) over the legs that returned it', () => {
+    const fused = fuseByReciprocalRank([['a', 'b', 'c'], ['b', 'd'], ['c', 'b']]);
+    const score = Object.fromEntries(fused.map((f) => [f.id, f.score]));
+    expect(score.a).toBeCloseTo(1 / 61, 12);
+    expect(score.b).toBeCloseTo(1 / 62 + 1 / 61 + 1 / 62, 12);
+    expect(score.c).toBeCloseTo(1 / 63 + 1 / 61, 12);
+    expect(score.d).toBeCloseTo(1 / 62, 12);
+    expect(ids(fused)).toEqual(['b', 'c', 'a', 'd']);
+  });
+
+  it('a job in two legs outranks a job in one leg at the same positions', () => {
+    const fused = fuseByReciprocalRank([['one', 'both'], ['x', 'both'], []]);
+    expect(ids(fused).indexOf('both')).toBeLessThan(ids(fused).indexOf('one'));
+    // Even the best single-leg position (1/61) loses to two modest ones (2/100).
+    const deep = Array.from({ length: 39 }, (_, i) => `f${i}`);
+    expect(ids(fuseByReciprocalRank([['top'], [...deep, 'twice'], [...deep.map((d) => `g${d}`), 'twice']]))[0]).toBe('twice');
+  });
+
+  it('disjoint legs interleave by position; ties go to the newer row, then to the id', () => {
+    const posted: Record<string, number> = { a1: 3, b1: 9, c1: 5, a2: 1, b2: 1, c2: 1 };
+    const fused = fuseByReciprocalRank([['a1', 'a2'], ['b1', 'b2'], ['c1', 'c2']], { newer: (x, y) => posted[y]! - posted[x]! });
+    // Rank 1 of each leg ties on 1/61: newest first. Rank 2 ties on 1/62 and on the date: id descending.
+    expect(ids(fused)).toEqual(['b1', 'c1', 'a1', 'c2', 'b2', 'a2']);
+  });
+
+  it('caps the union (400 by default) and keeps the best', () => {
+    const leg = (p: string) => Array.from({ length: 200 }, (_, i) => `${p}${String(i).padStart(3, '0')}`);
+    const fused = fuseByReciprocalRank([leg('a'), leg('b'), leg('c')]);
+    expect(fused).toHaveLength(400);
+    // 600 distinct rows: each leg keeps its best 133 or 134, never its last.
+    expect(ids(fused)).toContain('a000');
+    expect(ids(fused)).not.toContain('a199');
+    expect(ids(fused)).not.toContain('c199');
+    expect(fuseByReciprocalRank([leg('a'), leg('b')], { cap: 10 })).toHaveLength(10);
+    // Overlapping legs: the union is what it is, below the cap.
+    expect(fuseByReciprocalRank([leg('a'), leg('a'), leg('a')])).toHaveLength(200);
+  });
+
+  it('a missing or empty leg is left out: the result is the fusion of the others', () => {
+    const two = fuseByReciprocalRank([['a', 'b'], ['b', 'c']]);
+    expect(fuseByReciprocalRank([['a', 'b'], ['b', 'c'], []])).toEqual(two);
+    expect(fuseByReciprocalRank([['a', 'b'], ['b', 'c'], null])).toEqual(two);
+    expect(fuseByReciprocalRank([['a', 'b'], ['b', 'c'], undefined])).toEqual(two);
+    expect(ids(fuseByReciprocalRank([['a', 'b'], null, null]))).toEqual(['a', 'b']);
+    expect(fuseByReciprocalRank([])).toEqual([]);
+    // A leg that names a row twice counts its first position.
+    expect(fuseByReciprocalRank([['a', 'a', 'b']])).toEqual(fuseByReciprocalRank([['a', 'b']]));
+  });
+});
+
+describe('the same role in several places collapses into one card', () => {
+  const at = (id: string, location: string | null, over: Record<string, unknown> = {}) => ({
+    row: feedRow({ id, title: 'Sales Engineer', titleNormalized: 'sales engineer', companyName: 'Acme', companyNameNormalized: 'acme', location, locationCity: null, ...over }),
+  });
+  const cardIds = (out: { cards: Array<{ row: { id: string } }> }) => out.cards.map((c) => c.row.id);
+  const folded = (out: { also: Map<string, Array<{ row: { id: string } }>> }) => Object.fromEntries([...out.also].map(([k, v]) => [k, v.map((c) => c.row.id)]));
+
+  it('three rows of one company and title in three cities: the best ranked is the card, the other two are folded into it', () => {
+    const out = collapseSameRole([at('austin', 'Austin, TX'), at('denver', 'Denver, CO'), at('seattle', 'Seattle, WA')]);
+    expect(cardIds(out)).toEqual(['austin']);
+    expect(folded(out)).toEqual({ austin: ['denver', 'seattle'] });
+  });
+
+  it('the same title at another company, or another title at the same company, stays a card', () => {
+    const out = collapseSameRole([
+      at('a', 'Austin, TX'),
+      at('other-co', 'Denver, CO', { companyName: 'Globex', companyNameNormalized: 'globex' }),
+      at('other-title', 'Denver, CO', { title: 'Sales Manager', titleNormalized: 'sales manager' }),
+      at('b', 'Boston, MA'),
+    ]);
+    expect(cardIds(out)).toEqual(['a', 'other-co', 'other-title']);
+    expect(folded(out)).toEqual({ a: ['b'] });
+  });
+
+  it('a posting for the same place, or with no place, stays a card: "N more locations" never counts a city twice', () => {
+    const out = collapseSameRole([at('a', 'Austin, TX'), at('a-again', ' austin,  tx '), at('b', 'Boston, MA'), at('b-again', 'Boston, MA'), at('nowhere', null)]);
+    expect(cardIds(out)).toEqual(['a', 'a-again', 'b-again', 'nowhere']);
+    expect(folded(out)).toEqual({ a: ['b'] });
+    expect(placeOf(feedRow({ id: 'x', location: null, locationCity: 'Taipei' }))).toBe('Taipei');
+    expect(placeOf(feedRow({ id: 'x', location: '  ', locationCity: null }))).toBeNull();
+  });
+
+  it('never folds a private import, a row with no company or title key, or rows of two markets', () => {
+    expect(sameRoleKey(feedRow({ id: 'p', visibility: 'private', ownerUserId: 'u1' }))).toBeNull();
+    expect(sameRoleKey(feedRow({ id: 'c', companyNameNormalized: '' }))).toBeNull();
+    expect(sameRoleKey(feedRow({ id: 't', titleNormalized: '  ' }))).toBeNull();
+    expect(sameRoleKey(feedRow({ id: 'i', market: 'intl' }))).not.toBe(sameRoleKey(feedRow({ id: 'i', market: 'cn' })));
+    const out = collapseSameRole([
+      at('public', 'Austin, TX'),
+      at('mine', 'Denver, CO', { visibility: 'private', ownerUserId: 'u1', sourceBoard: 'user_import' }),
+      at('cn', '上海', { market: 'cn' }),
+      at('no-company', 'Reno, NV', { companyNameNormalized: '' }),
+    ]);
+    expect(cardIds(out)).toEqual(['public', 'mine', 'cn', 'no-company']);
+    expect(out.also.size).toBe(0);
+  });
+
+  it('a later window folds into the card the session already has, and skips the places it already covers', () => {
+    const first = collapseSameRole([at('austin', 'Austin, TX'), at('denver', 'Denver, CO')]);
+    expect(cardIds(first)).toEqual(['austin']);
+    const taken = new Map([[sameRoleKey(at('austin', 'Austin, TX').row)!, { cardId: 'austin', places: new Set(['austin, tx', 'denver, co']) }]]);
+    const refill = collapseSameRole([at('reno', 'Reno, NV'), at('denver-old', 'Denver, CO'), at('other', 'Miami, FL', { companyNameNormalized: 'globex' })], taken);
+    expect(cardIds(refill)).toEqual(['denver-old', 'other']);
+    expect(folded(refill)).toEqual({ austin: ['reno'] });
+  });
+
+  it('a card holds at most `maxFolded` other places: the next place is a card of its own and takes the places after it', () => {
+    const rows = Array.from({ length: 8 }, (_, i) => at(`p${i}`, `City ${i}, TX`));
+    const out = collapseSameRole(rows, new Map(), 3);
+    // p0 names p1 p2 p3; p4 starts the next card and names p5 p6 p7. Every posting is a card or a named place.
+    expect(cardIds(out)).toEqual(['p0', 'p4']);
+    expect(folded(out)).toEqual({ p0: ['p1', 'p2', 'p3'], p4: ['p5', 'p6', 'p7'] });
+    // No limit given: one card, as before.
+    expect(cardIds(collapseSameRole(rows))).toEqual(['p0']);
+    // A card an earlier window filled takes no more: the fresh place is a card.
+    const key = sameRoleKey(rows[0]!.row)!;
+    const full = new Map([[key, { cardId: 'p0', places: new Set(['city 0, tx', 'city 1, tx', 'city 2, tx', 'city 3, tx']), folded: 3 }]]);
+    const refill = collapseSameRole([at('p8', 'City 8, TX'), at('p9', 'City 9, TX')], full, 3);
+    expect(cardIds(refill)).toEqual(['p8']);
+    expect(folded(refill)).toEqual({ p8: ['p9'] });
+    // One with room left takes what fits.
+    const room = new Map([[key, { cardId: 'p0', places: new Set(['city 0, tx', 'city 1, tx', 'city 2, tx']), folded: 2 }]]);
+    const more = collapseSameRole([at('p8', 'City 8, TX'), at('p9', 'City 9, TX')], room, 3);
+    expect(cardIds(more)).toEqual(['p9']);
+    expect(folded(more)).toEqual({ p0: ['p8'] });
   });
 });

@@ -10,6 +10,13 @@
 // list is ordered by date posted and filters only, no fit is computed or
 // shown, and the profile is not read for ranking.
 //
+// Hybrid retrieval (MKT-4F; MARKET_STRATEGY 2.5 row "Consent", invariant I8):
+// without the grant the list is legs A and B with the typed words only: no
+// profile text, no user vector, no query vector, no fit. With a query text it
+// is in the fused order of those two legs and says so (`order` 'query_match').
+// Without the AI consent no embedding call is made on any list, and no stored
+// user vector is read.
+//
 // Real router, real FeedQueryService and the real consent rule over a fake
 // consent store and an in-memory repo: no database, no network, no model.
 
@@ -30,7 +37,7 @@ import { defaultPersonalized } from './defaultService.js';
 import { createFeedQueryService } from './FeedQueryService.js';
 import { isFeedPersonalized } from './index.js';
 import { createFeedRouter } from './routes.js';
-import { FakeFeedRepo, fakeFeedMatch, feedRow } from './testkit.js';
+import { FAKE_VECTOR_MODEL, FakeFeedRepo, fakeFeedMatch, feedRow, testVector } from './testkit.js';
 
 const NOW = new Date('2026-10-10T12:00:00.000Z');
 const P = '/api/v1/roboapply/feed';
@@ -46,6 +53,11 @@ const repo = new FakeFeedRepo();
 let records: ConsentRecordLike[] = [];
 let userContextCalls = 0;
 let affinityReads = 0;
+/** The "Use AI" consent (platform `aiAllowed`). */
+let aiConsent = true;
+/** Calls of the counting embeddings client (`<brand>:<text>`) and reads of a stored user vector (`<user>:<market>`). */
+let embedCalls: string[] = [];
+let vectorReads: string[] = [];
 
 const profile = (): SearchProfileWire => ({
   id: 'sp1',
@@ -90,9 +102,22 @@ const service = createFeedQueryService({
   // The production rule, not a stub: this is what the test is about.
   personalized: defaultPersonalized,
   consumeRefresh: async () => ({ allowed: true, retryAfterSec: 0 }),
-  aiAllowed: async () => true,
+  aiAllowed: async () => aiConsent,
   planner: async () => ({ queries: [], unverifiedPreferences: [] }),
   explain: explainMatch,
+  embeddings: {
+    async embedTexts(brand, texts) {
+      embedCalls.push(`${brand}:${texts[0]}`);
+      return { vectors: [testVector(1, 0)], model: FAKE_VECTOR_MODEL };
+    },
+  },
+  retrieval: {
+    currentModelTag: async () => FAKE_VECTOR_MODEL,
+    userVector: async (userId, market) => {
+      vectorReads.push(`${userId}:${market}`);
+      return testVector(1, 0);
+    },
+  },
   env: ENV,
   now: () => NOW,
 });
@@ -144,6 +169,9 @@ beforeEach(() => {
   records = [];
   userContextCalls = 0;
   affinityReads = 0;
+  aiConsent = true;
+  embedCalls = [];
+  vectorReads = [];
 });
 
 const query = (body: Record<string, unknown> = {}) => h.request<Env<QueryData>>('POST', `${P}/query`, { host: GOAPPLY, body });
@@ -222,5 +250,88 @@ describe('GoApply feed without a personalized_recommendation record', () => {
     } finally {
       setConsentLookup(async (_userId, types) => records.filter((r) => (types as string[]).includes(r.consentType)).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0] ?? null);
     }
+  });
+});
+
+describe('GoApply hybrid retrieval and consent (MKT-4F; invariant I8)', () => {
+  const legs = () => [...new Set(repo.legsRun())].sort();
+  beforeEach(() => {
+    // j3 and j1 name the search word in their search documents; j4 is the nearest by vector.
+    repo.searchDocs.set('j3', '后端 开发 kafka kafka');
+    repo.searchDocs.set('j1', '后端 开发 kafka');
+    repo.vectors.set('j4', testVector(1, 0));
+  });
+
+  it('no record: a text to rank by orders the list by the recency and lexical legs only, and the response says so', async () => {
+    const res = await query({ sort: 'recommended', relevance: 'kafka' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.order).toBe('query_match');
+    expect(res.body.data.sort).toBe('newest');
+    // A (newest first): j0 j1 j2 j3 j4. B: j3 j1. Fused: j1 (1/62 + 1/62), j3 (1/64 + 1/61), then j0 j2 j4.
+    expect(res.body.data.items.map((i) => i.jobId)).toEqual(['j1', 'j3', 'j0', 'j2', 'j4']);
+    expect(legs()).toEqual(['lexical', 'recency']);
+    // Nothing about the person: no fit, no profile, no stored preference, no vector of any kind.
+    expect(res.body.data.items.every((i) => i.fit === null)).toBe(true);
+    expect(userContextCalls).toBe(0);
+    expect(affinityReads).toBe(0);
+    expect(embedCalls).toEqual([]);
+    expect(vectorReads).toEqual([]);
+    // The cards do not say "sorted by date": that would be false for this list.
+    expect(res.body.data.items.every((i) => i.explanation === undefined)).toBe(true);
+  });
+
+  it('no record: a typed q is the query of the same two legs; the list holds only what matches it', async () => {
+    const res = await query({ sort: 'recommended', q: 'kafka' });
+    expect(res.body.data.order).toBe('query_match');
+    expect(res.body.data.items.map((i) => i.jobId).sort()).toEqual(['j1', 'j3']);
+    expect(legs()).toEqual(['lexical', 'recency']);
+    expect(embedCalls).toEqual([]);
+    expect(vectorReads).toEqual([]);
+    expect(userContextCalls).toBe(0);
+  });
+
+  it('no record and no query text: date order from one statement, exactly as before', async () => {
+    const res = await query({ sort: 'recommended' });
+    expect(res.body.data.order).toBe('recency');
+    expect(res.body.data.items.map((i) => i.jobId)).toEqual(['j0', 'j1', 'j2', 'j3', 'j4']);
+    expect(legs()).toEqual(['recency']);
+    expect(embedCalls).toEqual([]);
+    expect(vectorReads).toEqual([]);
+  });
+
+  it('a withdrawn grant: the next request reads no user vector and asks for no query vector', async () => {
+    records = [consent(true, '2026-10-01T00:00:00Z'), consent(false, '2026-10-09T00:00:00Z')];
+    await query({ sort: 'recommended' });
+    await query({ sort: 'best_fit', relevance: 'kafka' });
+    expect(embedCalls).toEqual([]);
+    expect(vectorReads).toEqual([]);
+    expect(userContextCalls).toBe(0);
+  });
+
+  it('a grant but no AI consent: fit and the lexical leg, zero embedding calls, no stored vector read', async () => {
+    records = [consent(true, '2026-10-01T00:00:00Z')];
+    aiConsent = false;
+    for (const body of [{ sort: 'recommended' }, { sort: 'recommended', relevance: 'kafka' }, { sort: 'best_fit', q: '后端' }, { sort: 'newest', relevance: 'kafka' }]) {
+      const res = await query(body);
+      expect(res.body.data.order, JSON.stringify(body)).toBe('personalized');
+      expect(res.body.data.items.length, JSON.stringify(body)).toBeGreaterThan(0);
+    }
+    expect(legs()).toEqual(['lexical', 'recency']);
+    expect(embedCalls).toEqual([]);
+    expect(vectorReads).toEqual([]);
+  });
+
+  it('control: with both consents the same requests use the three legs, inside the mainland market', async () => {
+    records = [consent(true, '2026-10-01T00:00:00Z')];
+    const profileList = await query({ sort: 'recommended' });
+    expect(profileList.body.data.order).toBe('personalized');
+    expect(vectorReads).toEqual(['u1:cn']);
+    expect(embedCalls).toEqual([]);
+    const ranked = await query({ sort: 'recommended', relevance: 'kafka' });
+    expect(ranked.body.data.order).toBe('personalized');
+    expect(embedCalls).toEqual(['goapply:kafka']);
+    expect(vectorReads).toEqual(['u1:cn']);
+    expect(legs()).toEqual(['dense', 'lexical', 'recency']);
+    expect(ranked.body.data.items.every((i) => i.fit !== null)).toBe(true);
   });
 });

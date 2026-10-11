@@ -56,11 +56,15 @@ export interface ActionJob {
   visibility: string;
   ownerUserId: string | null;
   title: string;
+  /** The key of the title-level negative ("Not interested: wrong title"). */
+  titleNormalized: string;
   companyName: string;
   companyNameNormalized: string;
   primaryTaxonomyId: string | null;
   taxonomyIds: string[];
   skills: string[];
+  /** RASkill ids of the posting's skills (the affinity keys when present). */
+  skillIds: string[];
   seniority: string | null;
   salaryDisclosed: boolean;
   salaryMin: number | null;
@@ -128,7 +132,23 @@ export interface FeedRepo {
   distinctReporters(jobId: string, reasons: readonly string[]): Promise<number>;
   /** Close a public job as reported (no-op when already closed). True when this call closed it. */
   closeAsReported(jobId: string, at: Date): Promise<boolean>;
-  recordImpressions(userId: string, jobIds: string[], at: Date): Promise<void>;
+  /**
+   * The person was shown `jobIds` in the feed session that started at
+   * `sessionStartedAt`. A job counts ONCE per session: the client reports a
+   * card every time it leaves the screen, in batches, so scrolling down and
+   * back up names a job several times; only the first report of a session
+   * raises `RAJobUserState.impressions`. The counter is therefore "visits on
+   * which this job was in the list", which is what the "seen and skipped" rule
+   * publishes (ORDERING_RULES `seen_skipped`). Nothing else reads it.
+   */
+  recordImpressions(userId: string, jobIds: string[], at: Date, sessionStartedAt: Date): Promise<void>;
+  /**
+   * Of `jobIds`, the jobs this person was shown at least once: on how many
+   * visits (see `recordImpressions`), and when they opened the job (null:
+   * never). Jobs with no impression are left out. Read by the "seen and
+   * skipped" rule of the Recommended order.
+   */
+  impressionStates(userId: string, jobIds: string[]): Promise<Map<string, { impressions: number; viewedAt: Date | null }>>;
   /** Insert the day's rating; false when one exists for (user, dayKey). */
   createRating(row: { userId: string; dayKey: string; score: number; reasons: string[]; note: string | null; feedSessionId: string | null }): Promise<boolean>;
   getAffinity(userId: string): Promise<AffinityState | null>;
@@ -277,11 +297,13 @@ export function createPrismaFeedRepo(getDb: () => Promise<Db> = db): FeedRepo {
           visibility: true,
           ownerUserId: true,
           title: true,
+          titleNormalized: true,
           companyName: true,
           companyNameNormalized: true,
           primaryTaxonomyId: true,
           taxonomyIds: true,
           skills: true,
+          skillIds: true,
           seniority: true,
           salaryDisclosed: true,
           salaryMin: true,
@@ -345,15 +367,32 @@ export function createPrismaFeedRepo(getDb: () => Promise<Db> = db): FeedRepo {
       return count > 0;
     },
 
-    async recordImpressions(userId, jobIds, at) {
+    async recordImpressions(userId, jobIds, at, sessionStartedAt) {
       if (!jobIds.length) return;
       const p = await getDb();
-      // One statement: insert missing (user, job) rows, bump the counter on the rest.
+      // The stamp is never before the session's start, so a second batch of the same session finds
+      // `lastImpressionAt` at or after it and counts nothing (also when the two clocks differ slightly).
+      const stamp = at.getTime() >= sessionStartedAt.getTime() ? at : sessionStartedAt;
+      // One statement: insert missing (user, job) rows; on the rest, bump the counter only when the job was
+      // last shown BEFORE this session started (one impression per job and session).
       await p.$executeRaw`
         INSERT INTO "RAJobUserState" ("userId", "jobId", "impressions", "lastImpressionAt")
-        SELECT ${userId}, j.id, 1, ${at}::timestamp(3) FROM unnest(${jobIds}::text[]) AS j(id)
+        SELECT ${userId}, j.id, 1, ${stamp}::timestamp(3) FROM unnest(${jobIds}::text[]) AS j(id)
         ON CONFLICT ("userId", "jobId") DO UPDATE
-          SET "impressions" = "RAJobUserState"."impressions" + 1, "lastImpressionAt" = EXCLUDED."lastImpressionAt"`;
+          SET "impressions" = "RAJobUserState"."impressions" + 1, "lastImpressionAt" = EXCLUDED."lastImpressionAt"
+          WHERE "RAJobUserState"."lastImpressionAt" IS NULL OR "RAJobUserState"."lastImpressionAt" < ${sessionStartedAt}::timestamp(3)`;
+    },
+
+    async impressionStates(userId, jobIds) {
+      const out = new Map<string, { impressions: number; viewedAt: Date | null }>();
+      if (!jobIds.length) return out;
+      const p = await getDb();
+      const rows = await p.rAJobUserState.findMany({
+        where: { userId, jobId: { in: jobIds }, impressions: { gt: 0 } },
+        select: { jobId: true, impressions: true, viewedAt: true },
+      });
+      for (const r of rows) out.set(r.jobId, { impressions: r.impressions, viewedAt: r.viewedAt });
+      return out;
     },
 
     async createRating(row) {
@@ -375,13 +414,15 @@ export function createPrismaFeedRepo(getDb: () => Promise<Db> = db): FeedRepo {
         taxonomy: readWeights(row.taxonomyWeights),
         company: readWeights(row.companyWeights),
         skill: readWeights(row.skillWeights),
+        // A row written before the column existed carries its default (`{}`); anything unreadable is an empty map.
+        title: readWeights((row as { titleWeights?: unknown }).titleWeights),
         updatedAt: row.updatedAt,
       };
     },
 
     async saveAffinity(userId, state) {
       const p = await getDb();
-      const data = { taxonomyWeights: state.taxonomy, companyWeights: state.company, skillWeights: state.skill };
+      const data = { taxonomyWeights: state.taxonomy, companyWeights: state.company, skillWeights: state.skill, titleWeights: state.title ?? {} };
       await p.rAUserAffinity.upsert({ where: { userId }, create: { userId, ...data }, update: data });
     },
 
