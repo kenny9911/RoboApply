@@ -25,8 +25,9 @@
 //      answers 500 without a secret), so plans list with their amounts and
 //      `payments_disabled` instead.
 //   3. The secret must be one the webhook route can verify with (strategy
-//      M-25: a rail is available only when it can charge AND fulfil). See
-//      `STRIPE_WEBHOOK_TRIES_EVERY_SECRET` below.
+//      M-25: a rail is available only when it can charge AND fulfil). The
+//      route tries every configured secret, so a comma-separated list is
+//      fine; see `STRIPE_WEBHOOK_TRIES_EVERY_SECRET` below.
 
 import { parseBoolEnv, type EnvSource } from '../brand/brandEnv.js';
 
@@ -89,28 +90,27 @@ export function stripeWebhookSecrets(env: EnvSource = process.env): string[] {
 /**
  * Whether the webhook route tries every secret of `stripeWebhookSecrets`.
  *
- * FALSE in this phase: `roboapply/routes/stripeWebhook.ts` still reads
- * `ROBOAPPLY_STRIPE_WEBHOOK_SECRET || STRIPE_WEBHOOK_SECRET` and hands that
- * whole string to `constructEvent` as ONE secret. A comma-separated list (or
- * a blank first variable in front of a real second one) therefore fails every
- * signature, and a rail that opened on it would take money and never fulfil:
- * the case ST-0 exists to close. While this is false the rail is ready only
- * when the string the route reads is a single secret.
+ * TRUE since MKT-2B item 1: `roboapply/routes/stripeWebhook.ts` loops over
+ * `stripeWebhookSecrets()` (trimmed, both variables, comma-separated lists)
+ * and the first secret that verifies wins. A list is therefore a rail that
+ * can fulfil, and so is a secret with a stray space or newline around it.
  *
- * Set it to true in the SAME change that makes the route loop over
- * `stripeWebhookSecrets()` (MKT-2B item 1), and flip the cases named
- * "until the webhook tries every secret" in stripeEnv.test.ts.
+ * This constant and that loop are ONE change: never set it back to false
+ * without making the route read a single string again, and never make the
+ * route read a single string while this is true (a rail that opens on a list
+ * the webhook cannot verify takes money and never fulfils: the case ST-0
+ * exists to close).
  */
-export const STRIPE_WEBHOOK_TRIES_EVERY_SECRET: boolean = false;
+export const STRIPE_WEBHOOK_TRIES_EVERY_SECRET: boolean = true;
 
 /**
  * The webhook can verify a signature with what the environment holds: at
- * least one secret, and (until the route tries every secret) the one string
- * the route reads is exactly one clean secret: not a list, not blank, and with
- * no whitespace anywhere. The route hands the RAW string to `constructEvent`,
- * and the Stripe SDK does not trim a secret: a trailing newline (what
- * `echo … | vercel env add` stores) fails every signature. Once the route
- * loops over `stripeWebhookSecrets()`, which trims, that shape verifies again.
+ * least one secret without whitespace inside it (the route loops over
+ * `stripeWebhookSecrets()`, which trims each one; the Stripe SDK itself does
+ * not trim). `triesEverySecret = false` answers for a route that hands the one
+ * RAW string it reads to `constructEvent`: then a list, a blank first
+ * variable, or whitespace anywhere (a trailing newline is what
+ * `echo … | vercel env add` stores) fails every signature.
  */
 export function stripeWebhookCanVerify(env: EnvSource = process.env, triesEverySecret: boolean = STRIPE_WEBHOOK_TRIES_EVERY_SECRET): boolean {
   const secrets = stripeWebhookSecrets(env);

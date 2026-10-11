@@ -8,6 +8,10 @@
 // sync, one checkout attempt is one Stripe idempotency key, a synced price is
 // recognised by the webhook without metadata or pins, and event types the
 // service does not handle are offered to the handler registry.
+// Market wave (ST-3, ST-5): every subscription event re-reads the subscription
+// before it syncs (tests hand Stripe's current copy to the fake through
+// `subscriptionEvent`), the plan comes from the price first, and a switch
+// whose payment still needs the buyer is passed through, not reported as done.
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -79,6 +83,27 @@ async function defaultRetrieve(id: string) {
   return stripeSub(id, 'price_m', { metadata: { planKey: 'pro_monthly' } });
 }
 
+/**
+ * A `customer.subscription.*` event, with Stripe's CURRENT copy of that
+ * subscription set on the fake (the webhook re-reads before it syncs). The
+ * current copy is the event's own object unless a test says the event is stale.
+ */
+function subscriptionEvent(id: string, type: string, object: Record<string, any>, current: Record<string, any> = object) {
+  stripe.subscriptions.retrieve.mockImplementation(async () => current as never);
+  return { id, type, data: { object } };
+}
+
+/**
+ * The one `subscriptions.update` call of a plan switch, as [subscription id,
+ * parameters]. Request options behind them (the idempotency key of the switch,
+ * platform/billing/subscriptions.ts) are that module's own tests' business.
+ */
+function switchUpdate(): [unknown, unknown] {
+  expect(stripe.subscriptions.update).toHaveBeenCalledTimes(1);
+  const call = stripe.subscriptions.update.mock.calls[0] as unknown as unknown[];
+  return [call[0], call[1]];
+}
+
 /** The prices the fake Stripe account holds under a lookup key (what the catalog sync finds or creates). */
 const synced = { prices: [] as Array<Record<string, any>>, seq: 0 };
 
@@ -113,6 +138,7 @@ const grantIfNewPeriod = vi.fn(async (p: { force?: boolean; periodStart: Date | 
 });
 const grantPack = vi.fn(async () => ({}));
 const sendEmail = vi.fn(async () => ({ status: 'sent' as const }));
+const invalidate = vi.fn();
 const student = { enabled: true, verified: false, lookupFails: false };
 const studentEnabled = vi.fn(async () => student.enabled);
 const isStudentVerified = vi.fn(async () => {
@@ -141,7 +167,13 @@ beforeEach(() => {
   for (const t of ['seekerSubscription', 'seekerConsentRecord', 'rACreditLedger', 'user', 'seekerProfile', 'alipayOrder']) fake.db[t].deleteMany({});
   fake.db.user.create({ data: { id: 'u_1', email: 'u_1@example.test', name: 'U', brand: 'roboapply' } });
   fake.db.seekerProfile.create({ data: { id: 'sp_1', userId: 'u_1', locale: 'en', deletedAt: null } });
-  setBillingServiceDepsForTests({
+  setBillingServiceDepsForTests(testDeps());
+  Object.assign(student, { enabled: true, verified: false, lookupFails: false });
+});
+
+/** The service's dependencies for this file; a test adds its own on top. */
+function testDeps(over: Parameters<typeof setBillingServiceDepsForTests>[0] = {}): NonNullable<Parameters<typeof setBillingServiceDepsForTests>[0]> {
+  return {
     db: fake.db as never,
     getStripe: () => stripe as never,
     now: () => NOW,
@@ -149,12 +181,12 @@ beforeEach(() => {
     grantPack,
     sendEmail,
     getBalance: async () => ({ credits: 0, tier: 'free', periodAllotment: 1, renewedAt: null, currentPeriodEnd: null, ephemeral: false }),
-    invalidate: () => {},
+    invalidate,
     studentEnabled,
     isStudentVerified,
-  });
-  Object.assign(student, { enabled: true, verified: false, lookupFails: false });
-});
+    ...over,
+  };
+}
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -466,7 +498,7 @@ describe('Account V2: student plans (capability on + a live school-email verific
       expect(quote.body.data.quote).toMatchObject({ planKey: 'student_monthly', newRenewalPriceMinor: 1499 });
       const confirm = await h.request<any>('POST', '/api/v1/roboapply/billing/switch', { ...AS_USER, body: { planKey: 'student_monthly', confirm: true, prorationDate: NOW_S, autoRenewAck: true } });
       expect(confirm.body.data).toEqual({ switched: true, planKey: 'student_monthly' });
-      expect(stripe.subscriptions.update).toHaveBeenCalledWith('sub_old', expect.objectContaining({ items: [expect.objectContaining({ price: 'price_sm' })] }));
+      expect(switchUpdate()).toEqual(['sub_old', expect.objectContaining({ items: [expect.objectContaining({ price: 'price_sm' })] })]);
     });
   });
 });
@@ -638,7 +670,7 @@ describe('legacy switch never charges without confirm', () => {
     });
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual({ switched: true, planKey: 'pro_monthly' });
-    expect(stripe.subscriptions.update).toHaveBeenCalledWith('sub_old', expect.objectContaining({ proration_date: NOW_S, proration_behavior: 'always_invoice' }));
+    expect(switchUpdate()).toEqual(['sub_old', expect.objectContaining({ proration_date: NOW_S, proration_behavior: 'always_invoice' })]);
     const records = await fake.db.seekerConsentRecord.findMany({});
     expect(records).toEqual([
       expect.objectContaining({
@@ -659,9 +691,98 @@ describe('legacy switch never charges without confirm', () => {
       body: { planKey: 'pro_monthly', confirm: true, prorationDate: NOW_S, autoRenewAck: true },
     });
     expect(res.status).toBe(200);
-    expect(stripe.subscriptions.update).toHaveBeenCalledWith('sub_old', expect.objectContaining({ items: [expect.objectContaining({ price: 'price_m_twd' })] }));
+    expect(switchUpdate()).toEqual(['sub_old', expect.objectContaining({ items: [expect.objectContaining({ price: 'price_m_twd' })] })]);
     const records = await fake.db.seekerConsentRecord.findMany({});
     expect(records.map((r: any) => r.proseHash)).toEqual([proseHash(autoRenewAckSentence({ interval: 'month', amountMinor: 74900, currency: 'TWD' }))]);
+  });
+
+  // ST-5 seam (MARKET_STRATEGY §5.1 "Switch"): the Stripe call is
+  // `confirmSwitch` (platform/billing/subscriptions.ts). When the payment for
+  // the switch still needs the buyer, its result says so and the route must
+  // pass that through instead of reporting a switch.
+  describe('"payment needs action" is passed through instead of reported as a switch', () => {
+    const confirmBody = { planKey: 'pro_monthly', confirm: true, prorationDate: NOW_S, autoRenewAck: true };
+    const post = (body: Record<string, unknown>) => h.request<any>('POST', '/api/v1/roboapply/billing/switch', { ...AS_USER, body });
+
+    it('a confirmSwitch that reports requiresAction answers switched false with the hosted invoice URL and HTTP 200', async () => {
+      const confirmSwitch = vi.fn(async () => ({ planKey: 'pro_monthly', stripeSubscriptionId: 'sub_old', requiresAction: true, hostedInvoiceUrl: 'https://invoice.stripe.test/i/acct_1/in_sw' }));
+      setBillingServiceDepsForTests(testDeps({ confirmSwitch: confirmSwitch as never }));
+      const res = await post(confirmBody);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        success: true,
+        data: { switched: false, requiresAction: true, hostedInvoiceUrl: 'https://invoice.stripe.test/i/acct_1/in_sw', planKey: 'pro_monthly' },
+      });
+      // The injected function got the account, the target plan, the quoted date, the Stripe deps and the acknowledgement.
+      expect(confirmSwitch).toHaveBeenCalledTimes(1);
+      const [account, target, prorationDate, stripeDeps, ack] = confirmSwitch.mock.calls[0] as unknown as [any, any, number, any, any];
+      expect(account).toMatchObject({ userId: 'u_1', seekerProfileId: 'sp_1' });
+      expect(target.key).toBe('pro_monthly');
+      expect(prorationDate).toBe(NOW_S);
+      expect(stripeDeps.getStripe()).toBe(stripe);
+      expect(ack.autoRenewAck).toBe(true);
+      expect(invalidate).toHaveBeenCalledWith('u_1');
+    });
+
+    it('requiresAction without a URL answers hostedInvoiceUrl null (never undefined, never an empty string)', async () => {
+      for (const hostedInvoiceUrl of [undefined, null, '']) {
+        setBillingServiceDepsForTests(testDeps({ confirmSwitch: (async () => ({ planKey: 'pro_monthly', stripeSubscriptionId: 'sub_old', requiresAction: true, hostedInvoiceUrl })) as never }));
+        const res = await post(confirmBody);
+        expect(res.status).toBe(200);
+        expect(res.body.data).toEqual({ switched: false, requiresAction: true, hostedInvoiceUrl: null, planKey: 'pro_monthly' });
+      }
+    });
+
+    it('today\'s result, and a result that says requiresAction false, answer exactly what the route answers today', async () => {
+      for (const result of [
+        { planKey: 'pro_monthly', stripeSubscriptionId: 'sub_old' },
+        { planKey: 'pro_monthly', stripeSubscriptionId: 'sub_old', requiresAction: false, hostedInvoiceUrl: null },
+        { planKey: 'pro_monthly', stripeSubscriptionId: 'sub_old', requiresAction: false, hostedInvoiceUrl: 'https://invoice.stripe.test/i/acct_1/in_paid' },
+      ]) {
+        setBillingServiceDepsForTests(testDeps({ confirmSwitch: (async () => result) as never }));
+        const res = await post(confirmBody);
+        expect(res.status).toBe(200);
+        expect(res.body.data).toEqual({ switched: true, planKey: 'pro_monthly' });
+      }
+    });
+
+    it('the acknowledgement record is written by the callback confirmSwitch is handed, with the price it reports', async () => {
+      setBillingServiceDepsForTests(
+        testDeps({
+          confirmSwitch: (async (_account: unknown, _target: unknown, _date: number, _deps: unknown, ack: { record: (c: { amountMinor: number; currency: string }) => Promise<unknown> }) => {
+            await ack.record({ amountMinor: 2499, currency: 'USD' });
+            return { planKey: 'pro_monthly', stripeSubscriptionId: 'sub_old', requiresAction: true, hostedInvoiceUrl: null };
+          }) as never,
+        }),
+      );
+      await post(confirmBody);
+      const records = await fake.db.seekerConsentRecord.findMany({});
+      expect(records.map((r: any) => [r.consentType, r.proseHash])).toEqual([['auto_renew_ack', proseHash(autoRenewAckSentence({ interval: 'month', amountMinor: 2499, currency: 'USD' }))]]);
+    });
+
+    it('a quote request is unchanged and goes through the injected quoteSwitch', async () => {
+      const quote = { planKey: 'pro_monthly', currency: 'USD', amountDueTodayMinor: 1500, newRenewalPriceMinor: 2499, nextRenewalDate: new Date(PERIOD_END_S * 1000).toISOString(), prorationDate: NOW_S };
+      const quoteSwitch = vi.fn(async () => quote);
+      const confirmSwitch = vi.fn();
+      setBillingServiceDepsForTests(testDeps({ quoteSwitch: quoteSwitch as never, confirmSwitch: confirmSwitch as never }));
+      const res = await post({ planKey: 'pro_monthly' });
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual({ quote });
+      expect(confirmSwitch).not.toHaveBeenCalled();
+    });
+
+    it('a refusal from confirmSwitch keeps its code and status', async () => {
+      const { BillingError } = await import('../errors.js');
+      setBillingServiceDepsForTests(
+        testDeps({
+          confirmSwitch: (async () => {
+            throw new BillingError('quote_expired', 'The quote is out of date. Review the new amount and confirm again.');
+          }) as never,
+        }),
+      );
+      const res = await post(confirmBody);
+      expect([res.status, res.body.code]).toEqual([409, 'quote_expired']);
+    });
   });
 
   it('the plan view shows the legacy plan as legacy and Pro plans as the catalog', async () => {
@@ -757,7 +878,7 @@ describe('Stripe webhook idempotency', () => {
       });
     // Stripe advances the period when it drafts the invoice; the charge then fails.
     for (const status of ['active', 'past_due']) {
-      const updated = { id: `evt_u_${status}`, type: 'customer.subscription.updated', data: { object: renewed(status) } };
+      const updated = subscriptionEvent(`evt_u_${status}`, 'customer.subscription.updated', renewed(status));
       expect(await handleRoboApplyStripeEvent(updated as never, stripe as never)).toEqual({ handled: true });
     }
     expect(grantIfNewPeriod).not.toHaveBeenCalled();
@@ -778,7 +899,7 @@ describe('Stripe webhook idempotency', () => {
     credits.renewedAt = NOW;
     const switched = stripeSub('sub_old', 'price_m', { metadata: { planKey: 'pro_monthly' } });
     stripe.subscriptions.retrieve.mockImplementation(async () => switched as never);
-    await handleRoboApplyStripeEvent({ id: 'evt_s1', type: 'customer.subscription.updated', data: { object: switched } } as never, stripe as never);
+    await handleRoboApplyStripeEvent(subscriptionEvent('evt_s1', 'customer.subscription.updated', switched) as never, stripe as never);
     expect((await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).tier).toBe('pro');
     expect(grantIfNewPeriod).not.toHaveBeenCalled();
     const paid = { id: 'evt_s2', type: 'invoice.paid', data: { object: { id: 'in_sw', billing_reason: 'subscription_update', parent: { subscription_details: { subscription: 'sub_old' } } } } };
@@ -790,7 +911,9 @@ describe('Stripe webhook idempotency', () => {
 
   it('a failed renewal marks past_due and emails once', async () => {
     await fake.db.seekerSubscription.create({ data: { id: 'row_1', seekerProfileId: 'sp_1', tier: 'pro', status: 'active', planKey: 'pro_monthly', stripeSubscriptionId: 'sub_1', amountMinor: 2499, currency: 'USD' } });
-    const event = { id: 'evt_4', type: 'invoice.payment_failed', data: { object: { id: 'in_1', amount_due: 2499, currency: 'usd', parent: { subscription_details: { subscription: 'sub_1' } } } } };
+    const event = { id: 'evt_4', type: 'invoice.payment_failed', data: { object: { id: 'in_1', amount_due: 2499, currency: 'usd', billing_reason: 'subscription_cycle', parent: { subscription_details: { subscription: 'sub_1' } } } } };
+    // The row follows Stripe's current copy of the subscription, never the event alone.
+    stripe.subscriptions.retrieve.mockImplementation(async () => stripeSub('sub_1', 'price_m', { status: 'past_due', metadata: { planKey: 'pro_monthly' } }) as never);
     expect(await handleRoboApplyStripeEvent(event as never, stripe as never)).toEqual({ handled: true });
     expect(await handleRoboApplyStripeEvent(event as never, stripe as never)).toEqual({ handled: true, duplicate: true });
     expect((await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).status).toBe('past_due');
@@ -798,11 +921,34 @@ describe('Stripe webhook idempotency', () => {
     expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ template: 'billing.payment_failed', brand: 'roboapply', to: 'u_1@example.test' }));
   });
 
+  it('a declined first payment leaves the buyer free to try again: no Pro, no mail, and checkout is not refused', async () => {
+    // The row as checkout leaves it; Stripe made the subscription `incomplete` and the card was declined.
+    await fake.db.seekerSubscription.create({ data: { id: 'row_1', seekerProfileId: 'sp_1', tier: 'free', status: 'active', brand: 'roboapply', stripeCustomerId: 'cus_1' } });
+    const incomplete = stripeSub('sub_1', 'price_m', { status: 'incomplete', metadata: { product: 'roboapply', brand: 'roboapply', planKey: 'pro_monthly', userId: 'u_1', seekerProfileId: 'sp_1' } });
+    expect(await handleRoboApplyStripeEvent(subscriptionEvent('evt_c', 'customer.subscription.created', incomplete) as never, stripe as never)).toEqual({ handled: true });
+    const failed = { id: 'evt_f', type: 'invoice.payment_failed', data: { object: { id: 'in_first', customer: 'cus_1', amount_due: 2499, currency: 'usd', billing_reason: 'subscription_create', parent: { subscription_details: { subscription: 'sub_1' } } } } };
+    expect(await handleRoboApplyStripeEvent(failed as never, stripe as never)).toEqual({ handled: false });
+    expect(await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).toMatchObject({ tier: 'free', status: 'active' });
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(grantIfNewPeriod).not.toHaveBeenCalled();
+
+    const plan = await h.request<any>('GET', '/api/v1/roboapply/billing/plan', AS_USER);
+    expect(plan.status).toBe(200);
+    expect(JSON.stringify(plan.body)).not.toMatch(/past_due|"paymentFailed":true/);
+    // Another plan, the same plan again, the pass: none is refused with already_subscribed.
+    for (const body of [{ planKey: 'pro_weekly', autoRenewAck: true }, { planKey: 'pro_monthly', autoRenewAck: true }, { planKey: 'pro_week_pass' }]) {
+      const res = await h.request<any>('POST', '/api/v1/roboapply/billing/checkout', { ...AS_USER, body });
+      expect([body.planKey, res.status, res.body.code ?? null]).toEqual([body.planKey, 200, null]);
+    }
+  });
+
   it('ignores events for a subscription the row no longer tracks (replaced by a pass)', async () => {
     await fake.db.seekerSubscription.create({ data: { id: 'row_1', seekerProfileId: 'sp_1', tier: 'pro', status: 'active', planKey: 'pro_week_pass', stripeSubscriptionId: null, stripeCustomerId: 'cus_1', currentPeriodEnd: new Date(PERIOD_END_S * 1000) } });
     const deleted = { id: 'evt_5', type: 'customer.subscription.deleted', data: { object: stripeSub('sub_old', 'price_m', { status: 'canceled' }) } };
     expect(await handleRoboApplyStripeEvent(deleted as never, stripe as never)).toEqual({ handled: false });
     expect((await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).tier).toBe('pro');
+    // Not on a row and not stamped as ours: Stripe is not even asked.
+    expect(stripe.subscriptions.retrieve).not.toHaveBeenCalled();
   });
 
   // Alipay contract rule A11 (MARKET_STRATEGY.md §5.2): characterisation, do not relax.
@@ -847,7 +993,7 @@ describe('webhook: a synced price is recognised without metadata or pins', () =>
 
   it('subscription.updated with empty metadata records the plan key, interval and price from the price the sync created', async () => {
     const price = { id: 'price_synced_q', lookup_key: 'ra_pro_quarterly_usd_5499_incl', currency: 'usd', unit_amount: 5499, metadata: { product: 'roboapply', planKey: 'pro_quarterly' } };
-    const event = { id: 'evt_q', type: 'customer.subscription.updated', data: { object: subOn(price) } };
+    const event = subscriptionEvent('evt_q', 'customer.subscription.updated', subOn(price));
     expect(await handleRoboApplyStripeEvent(event as never, stripe as never)).toEqual({ handled: true });
     expect(await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).toMatchObject({
       tier: 'pro',
@@ -878,34 +1024,41 @@ describe('webhook: a synced price is recognised without metadata or pins', () =>
   it('a synced TWD price is stored as TWD at its amount, from the price fields or, on a thin event, from the lookup key', async () => {
     vi.stubEnv('PRICE_PRO_MONTHLY_TWD_CENTS', '74900');
     const full = { id: 'price_synced_tw', lookup_key: 'ra_pro_monthly_twd_74900_incl', currency: 'twd', unit_amount: 74900, metadata: { product: 'roboapply', planKey: 'pro_monthly' } };
-    await handleRoboApplyStripeEvent({ id: 'evt_tw1', type: 'customer.subscription.updated', data: { object: subOn(full) } } as never, stripe as never);
+    await handleRoboApplyStripeEvent(subscriptionEvent('evt_tw1', 'customer.subscription.updated', subOn(full)) as never, stripe as never);
     expect(await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).toMatchObject({ planKey: 'pro_monthly', currency: 'TWD', amountMinor: 74900, stripePriceId: 'price_synced_tw' });
 
     await fake.db.seekerSubscription.update({ where: { id: 'row_1' }, data: { currency: null, amountMinor: null } });
     const thin = { id: 'price_synced_tw', lookup_key: 'ra_pro_monthly_twd_74900_incl' };
-    await handleRoboApplyStripeEvent({ id: 'evt_tw2', type: 'customer.subscription.updated', data: { object: subOn(thin) } } as never, stripe as never);
+    await handleRoboApplyStripeEvent(subscriptionEvent('evt_tw2', 'customer.subscription.updated', subOn(thin)) as never, stripe as never);
     expect(await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).toMatchObject({ planKey: 'pro_monthly', currency: 'TWD', amountMinor: 74900 });
 
     // The same for a thin USD event: the lookup key carries currency and amount.
     await fake.db.seekerSubscription.update({ where: { id: 'row_1' }, data: { currency: null, amountMinor: null } });
-    await handleRoboApplyStripeEvent({ id: 'evt_us', type: 'customer.subscription.updated', data: { object: subOn({ id: 'price_synced_q', lookup_key: 'ra_pro_quarterly_usd_5499_incl' }) } } as never, stripe as never);
+    await handleRoboApplyStripeEvent(subscriptionEvent('evt_us', 'customer.subscription.updated', subOn({ id: 'price_synced_q', lookup_key: 'ra_pro_quarterly_usd_5499_incl' })) as never, stripe as never);
     expect(await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).toMatchObject({ planKey: 'pro_quarterly', interval: 'quarter', currency: 'USD', amountMinor: 5499 });
   });
 
-  it('subscription metadata still wins over the price (price-first is a later requirement), and a pinned id still resolves', async () => {
+  // ST-3: the price is what Stripe charges, so it answers first. A price changed
+  // outside the app (the Dashboard, a pending update) leaves stale metadata behind.
+  it('the price wins over subscription metadata; metadata still answers for a price we cannot read; a pinned id still resolves', async () => {
     const price = { id: 'price_synced_q', lookup_key: 'ra_pro_quarterly_usd_5499_incl', currency: 'usd', unit_amount: 5499, metadata: { product: 'roboapply', planKey: 'pro_quarterly' } };
-    await handleRoboApplyStripeEvent({ id: 'evt_m', type: 'customer.subscription.updated', data: { object: subOn(price, { metadata: { planKey: 'pro_monthly' } }) } } as never, stripe as never);
-    expect((await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).planKey).toBe('pro_monthly');
+    await handleRoboApplyStripeEvent(subscriptionEvent('evt_m', 'customer.subscription.updated', subOn(price, { metadata: { planKey: 'pro_monthly' } })) as never, stripe as never);
+    expect(await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).toMatchObject({ planKey: 'pro_quarterly', interval: 'quarter', amountMinor: 5499 });
 
-    vi.stubEnv('STRIPE_PRICE_PRO_WEEKLY', 'price_w');
-    vi.stubEnv('STRIPE_PRICE_PRO_WEEKLY_CENTS', '999');
-    await handleRoboApplyStripeEvent({ id: 'evt_p', type: 'customer.subscription.updated', data: { object: subOn({ id: 'price_w', currency: 'usd', unit_amount: 999 }) } } as never, stripe as never);
+    // A price that names no plan of ours (a pin that is no longer honoured): metadata is the second source.
+    const unknown = { id: 'price_old_pin', currency: 'usd', unit_amount: 999 };
+    await handleRoboApplyStripeEvent(subscriptionEvent('evt_m2', 'customer.subscription.updated', subOn(unknown, { metadata: { planKey: 'pro_weekly' } })) as never, stripe as never);
     expect(await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).toMatchObject({ planKey: 'pro_weekly', interval: 'week' });
+
+    vi.stubEnv('STRIPE_PRICE_PRO_MONTHLY', 'price_m');
+    vi.stubEnv('STRIPE_PRICE_PRO_MONTHLY_CENTS', '2499');
+    await handleRoboApplyStripeEvent(subscriptionEvent('evt_p', 'customer.subscription.updated', subOn({ id: 'price_m', currency: 'usd', unit_amount: 2499 })) as never, stripe as never);
+    expect(await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).toMatchObject({ planKey: 'pro_monthly', interval: 'month' });
   });
 
   it('a price of another product on the same Stripe account is not read as one of our plans', async () => {
     const foreign = { id: 'price_other', lookup_key: 'rh_team_usd_9900', currency: 'usd', unit_amount: 9900, metadata: { product: 'robohire', planKey: 'pro_quarterly' } };
-    await handleRoboApplyStripeEvent({ id: 'evt_f', type: 'customer.subscription.updated', data: { object: subOn(foreign) } } as never, stripe as never);
+    await handleRoboApplyStripeEvent(subscriptionEvent('evt_f', 'customer.subscription.updated', subOn(foreign)) as never, stripe as never);
     // Falls to the legacy practice-plan mapping, exactly as an unknown price did before.
     expect((await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).planKey).not.toBe('pro_quarterly');
   });

@@ -155,7 +155,7 @@ describe('until the webhook tries every secret, the rail needs the one string th
   ];
 
   it('the route does not try every secret yet (flip this with the route change, MKT-2B item 1)', () => {
-    expect(STRIPE_WEBHOOK_TRIES_EVERY_SECRET).toBe(false);
+    expect(STRIPE_WEBHOOK_TRIES_EVERY_SECRET).toBe(true);
   });
 
   it.each(notOne)('%s: the secrets are listed, a one-secret webhook cannot verify, and the rail follows the route', (_name, secrets) => {

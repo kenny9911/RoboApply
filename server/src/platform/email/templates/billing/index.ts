@@ -14,7 +14,18 @@
 //   billing.cancel_none        public /cancel: nothing to cancel on this address
 //   billing.cancel_confirmed   after any cancellation (§312k BGB confirmation)
 //   billing.payment_failed     a renewal charge failed; Stripe retries
+//   billing.payment_action_required
+//                              the bank wants the buyer to confirm a payment
+//                              (3-D Secure): one link to Stripe's hosted
+//                              invoice page, where they finish it
+//
+// The old RoboApply ¥-passes (starter / growth, paid in CNY through Alipay)
+// can no longer be bought in RMB on RoboApply. Their "ends soon" reminder
+// therefore also names the other brand's pricing page, where RMB and Alipay
+// are (MARKET_STRATEGY.md §5.3 G12). It is a link: nobody is redirected and
+// no account moves between brands. The address comes from the brand registry.
 
+import { getBrand } from '../../../brand/registry.js';
 import { button, heading, paragraph } from '../_shell.js';
 import { defineEmailTemplate, type TemplateContext } from '../registry.js';
 import type { EmailTranslator } from '../../i18n.js';
@@ -117,11 +128,20 @@ export const renewalReminderEmail = defineEmailTemplate<RenewalReminderParams>({
       const subject = t('billing.renewalReminder.subjectManual', { date });
       const body = t(legacy ? 'billing.renewalReminder.bodyManualLegacy' : 'billing.renewalReminder.bodyManual', { plan, date });
       const cta = t(legacy ? 'billing.renewalReminder.ctaManualLegacy' : 'billing.renewalReminder.ctaManual');
+      // A legacy pass that was paid in RMB on RoboApply: RMB and Alipay are on the other brand now.
+      const otherBrandPricing = legacy && t.brand.id === 'roboapply' && (params.currency ?? '').toUpperCase() === 'CNY' ? `${getBrand(t.brand.otherBrand).canonicalOrigin}/pricing` : null;
+      const otherLine = otherBrandPricing ? t('billing.renewalReminder.goapplyLine') : '';
+      const otherCta = otherBrandPricing ? t('billing.renewalReminder.ctaGoapply') : '';
       return {
         subject,
         preheader: body,
-        bodyHtml: heading(t('billing.renewalReminder.headingManual')) + paragraph(body) + button(cta, url),
-        bodyText: `${t('billing.renewalReminder.headingManual')}\n\n${body}\n\n${cta}: ${url}`,
+        bodyHtml:
+          heading(t('billing.renewalReminder.headingManual')) +
+          paragraph(body) +
+          button(cta, url) +
+          (otherBrandPricing ? paragraph(otherLine) + button(otherCta, otherBrandPricing) : ''),
+        bodyText:
+          `${t('billing.renewalReminder.headingManual')}\n\n${body}\n\n${cta}: ${url}` + (otherBrandPricing ? `\n\n${otherLine}\n${otherCta}: ${otherBrandPricing}` : ''),
         reasonText: t('billing.footer'),
       };
     }
@@ -273,6 +293,36 @@ export const paymentFailedEmail = defineEmailTemplate<PaymentFailedParams>({
   },
 });
 
+// ── Payment needs the buyer (3-D Secure) ─────────────────────────────────
+
+export interface PaymentActionRequiredParams {
+  /** The plan the payment is for; null when it is not known (the mail then names no plan, never the free one). */
+  planKey: string | null;
+  amountMinor: number | null;
+  currency: string | null;
+  /** Stripe's hosted invoice page, where the buyer confirms the payment. */
+  hostedInvoiceUrl: string;
+}
+
+export const paymentActionRequiredEmail = defineEmailTemplate<PaymentActionRequiredParams>({
+  key: 'billing.payment_action_required',
+  category: 'transactional',
+  render(ctx) {
+    const { t, params } = ctx;
+    const price = formatPrice(params.amountMinor, params.currency, t);
+    const named = params.planKey && params.planKey !== 'free' ? params.planKey : null;
+    const body = named ? t('billing.paymentActionRequired.body', { plan: planName(t, named), price }) : t('billing.paymentActionRequired.bodyNoPlan', { price });
+    const cta = t('billing.paymentActionRequired.cta');
+    return {
+      subject: t('billing.paymentActionRequired.subject'),
+      preheader: body,
+      bodyHtml: heading(t('billing.paymentActionRequired.heading')) + paragraph(body) + button(cta, params.hostedInvoiceUrl),
+      bodyText: `${t('billing.paymentActionRequired.heading')}\n\n${body}\n\n${cta}: ${params.hostedInvoiceUrl}`,
+      reasonText: t('billing.footer'),
+    };
+  },
+});
+
 export const BILLING_EMAIL_TEMPLATES = [
   renewalReminderEmail.key,
   annualReminderEmail.key,
@@ -280,4 +330,5 @@ export const BILLING_EMAIL_TEMPLATES = [
   cancelNoneEmail.key,
   cancelConfirmedEmail.key,
   paymentFailedEmail.key,
+  paymentActionRequiredEmail.key,
 ] as const;
