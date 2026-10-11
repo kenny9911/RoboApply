@@ -11,7 +11,13 @@
 //     public display (`publicDisplay`, OPS-A4 / H12: licensed provider
 //     listings and bank jobs without syndication consent stay behind a
 //     session), like every other anonymous surface (public feed, SEO, /job/*);
-//   - H-1B numbers cite the US DOL LCA disclosure file they came from;
+//   - the job list and the open-job count are one predicate (`liveJobWhere`),
+//     so they always agree; it holds a recruiter-bank row whose bank has no
+//     posting page (as the feed does) and a row that owes a credit line unless
+//     the caller prints the line, in which case each such item carries it;
+//   - H-1B numbers cite the US DOL LCA disclosure file they came from (the
+//     other sponsorship records, with every source and date, are
+//     sponsorship/service.ts);
 //   - industries use one vocabulary (industryMap.ts): a provider or bank
 //     string that is exactly one of the industry labels is stored as that id,
 //     anything else as the source wrote it. A company with no industry from a
@@ -22,9 +28,11 @@
 
 import { createHash } from 'node:crypto';
 import type prisma from '../../../lib/prisma.js';
-import type { Market } from '../../../platform/brand/index.js';
+import { getCurrentBrandOrDefault, type Market } from '../../../platform/brand/index.js';
 import { httpError, type Sourced } from '../../../platform/http.js';
-import { creditLineHeldWhere, sourceKindOf, type FeedItem } from '../../feed/contract.js';
+import { bankListableWhere, creditLineHeldWhere, sourceKindOf, type FeedItem, type MarketCardMeta } from '../../feed/contract.js';
+import { DOL_LCA_URL } from '../data/index.js';
+import type { MarketHookContext, MarketHookJob } from '../marketHooks.js';
 import { hostOf, normalizeCompanyName, type CompanyUpsert } from '../normalize/index.js';
 import { industryIdFor, mapIndustries } from './industryMap.js';
 import {
@@ -265,6 +273,8 @@ export function escapeLike(s: string): string {
   return s.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
+type EnvLike = Record<string, string | undefined>;
+
 /** Who is reading: a signed-in viewer, or anyone (anonymous visitors and crawlers). */
 export interface CompanyReadViewer {
   /** True when there is no session: only `publicDisplay` jobs are listed or counted. */
@@ -276,18 +286,35 @@ export interface CompanyReadViewer {
    * (R-14; WP-41 R41-1, applied at the Wave 3 gate).
    */
   restrict?: Record<string, unknown>;
+  /**
+   * True when the caller's surface prints the credit line a row owes: it reads
+   * `cardMeta.tw_sources.attribution` of each item of the list and shows the
+   * sentence with its link (strategy 1.3). Such rows are then listed, each
+   * with that field, and counted. Default false: they are held out of the
+   * list and of the count, because a row may be shown only where its credit
+   * line is printed.
+   */
+  printsCreditLine?: boolean;
+  /**
+   * The environment the two bank posting-page settings are read from (default
+   * `process.env`). A router built for a test passes its own.
+   */
+  env?: EnvLike;
 }
 
 /**
  * Public, live, canonical, this market (TASK_PLAN §2.2 count rule); `publicOnly` adds publicDisplay (OPS-A4).
+ * One predicate for the list and for the open-job count, so the two always agree. Two holds, for every caller:
  *
- * A row that owes a credit line (the Taiwan open-data sources) is held out of
- * the list and of the count: the list is the Company tab's "other jobs at this
- * company" and carries no `cardMeta` to print the line with (strategy 1.3:
- * attribution on every open-data row; feed/sourceLine.ts `creditLineHeld`).
- * Remove the hold in the change that carries `cardMeta.tw_sources` here.
+ *   - A row that owes a credit line (the Taiwan open-data sources) is held unless the caller prints the line
+ *     (`viewer.printsCreditLine`; feed/sourceLine.ts `creditLineHeld`). The list is the Company tab's "other
+ *     jobs at this company", which shows a title and a place only.
+ *   - A recruiter-bank row whose bank has no candidate-facing posting page is held (`bankListableWhere`: the link
+ *     such a row stores is the bank site's "Page not found"), as in the feed, alerts and similar jobs. Both
+ *     markets (strategy M-7, C18).
  */
 export function liveJobWhere(market: Market, companyId: string, viewer: CompanyReadViewer = { publicOnly: true }) {
+  const bank = bankListableWhere(viewer.env ?? process.env);
   return {
     companyId,
     market,
@@ -295,7 +322,7 @@ export function liveJobWhere(market: Market, companyId: string, viewer: CompanyR
     isCanonical: true,
     archivedAt: null,
     ...(viewer.publicOnly ? { publicDisplay: true } : {}),
-    AND: [creditLineHeldWhere(), ...(viewer.restrict ? [viewer.restrict] : [])],
+    AND: [...(viewer.printsCreditLine ? [] : [creditLineHeldWhere()]), ...(bank ? [bank] : []), ...(viewer.restrict ? [viewer.restrict] : [])],
   };
 }
 
@@ -304,7 +331,7 @@ export function companyJobsOrder() {
   return [{ postedAt: { sort: 'desc' as const, nulls: 'last' as const } }, { id: 'desc' as const }];
 }
 
-interface CompanyRow {
+export interface CompanyRow {
   id: string;
   market: string;
   nameNormalized: string;
@@ -380,8 +407,24 @@ interface JobListRow {
 
 const PAY_PERIODS = new Set(['year', 'month', 'day', 'hour']);
 
-/** Pure: a live job row → the feed card shape (no fit, no badges derived here). */
-export function toCompanyJobItem(r: JobListRow): FeedItem {
+/** The set id of the credit line in `cardMeta` (jobs/sources/twHooks.ts). */
+const CREDIT_LINE_SET = 'tw_sources';
+
+/**
+ * The credit line a row owes, as the feed card carries it (`cardMeta.tw_sources`), or undefined. Only that
+ * set is taken from the hook's answer: the other sets read columns this list does not select (market tags,
+ * the posting text), so their lines would be partial here.
+ */
+export function creditLineMeta(meta: MarketCardMeta | null | undefined): MarketCardMeta | undefined {
+  const line = meta?.[CREDIT_LINE_SET];
+  return line && typeof line === 'object' && Object.keys(line).length ? { [CREDIT_LINE_SET]: line } : undefined;
+}
+
+/**
+ * Pure: a live job row → the feed card shape (no fit, no badges derived here). `cardMeta` is the row's
+ * credit line (`creditLineMeta`) for a caller that prints it; left off otherwise.
+ */
+export function toCompanyJobItem(r: JobListRow, cardMeta?: MarketCardMeta): FeedItem {
   const hasPay = r.salaryDisclosed && (r.salaryMin != null || r.salaryMax != null) && !!r.salaryCurrency && PAY_PERIODS.has(r.salaryPeriod ?? '');
   // The feed's own rule (feed/sourceLine.ts): an employer board is claimed only for a known board source. Before,
   // every row that was not a bank's or one of three aggregators' was called an employer board (D3).
@@ -406,6 +449,7 @@ export function toCompanyJobItem(r: JobListRow): FeedItem {
     badges: [],
     fit: null,
     tracker: null,
+    ...(cardMeta ? { cardMeta } : {}),
   };
 }
 
@@ -455,8 +499,8 @@ const JOB_LIST_SELECT = {
 
 export const COMPANY_JOBS_PAGE = 20;
 
-/** US DOL OFLC performance data page (the LCA disclosure files' home). */
-export const DOL_LCA_URL = 'https://www.dol.gov/agencies/eta/foreign-labor/performance';
+/** US DOL OFLC performance data page (the LCA disclosure files' home); defined with the other sponsorship sources in jobs/data. */
+export { DOL_LCA_URL };
 export const H1B_DISCLAIMER =
   'Counts of certified Labor Condition Applications from US Department of Labor public disclosure files. A certified application is not a visa approval or a hire.';
 
@@ -468,14 +512,43 @@ export interface CompanyReadService {
   h1b(market: Market, id: string): Promise<H1bHistoryResponse>;
 }
 
-export function createCompanyReadService(db: CompaniesDb, now: () => Date = () => new Date()): CompanyReadService {
-  async function findCompany(market: Market, idOrSlug: string): Promise<CompanyRow> {
-    const row = (await db.rACompany.findFirst({
-      where: { market, OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
-      select: COMPANY_SELECT,
-    })) as CompanyRow | null;
-    if (!row) throw httpError('not_found', 'Company not found.', { code: COMPANY_ERROR_CODES.notFound });
-    return row;
+export interface CompanyReadDeps {
+  /**
+   * `marketHooks.cardMeta`, for the credit line of a listed row (asked only for a viewer whose surface prints
+   * it). Default: the registered hooks, loaded on the first such list.
+   */
+  cardMeta?: (job: MarketHookJob, ctx: MarketHookContext) => MarketCardMeta | Promise<MarketCardMeta>;
+}
+
+/** `marketHooks.cardMeta`, loaded on first use: the hook modules bring the source adapters with them. */
+async function defaultCardMeta(job: MarketHookJob, ctx: MarketHookContext): Promise<MarketCardMeta> {
+  const { cardMeta } = await import('../marketHooks.js');
+  return cardMeta(job, ctx);
+}
+
+/** The company of this market by id or slug; 404 `company_not_found` for none (another market's company included). */
+export async function findCompanyRow(db: Pick<CompaniesDb, 'rACompany'>, market: Market, idOrSlug: string): Promise<CompanyRow> {
+  const row = (await db.rACompany.findFirst({
+    where: { market, OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
+    select: COMPANY_SELECT,
+  })) as CompanyRow | null;
+  if (!row) throw httpError('not_found', 'Company not found.', { code: COMPANY_ERROR_CODES.notFound });
+  return row;
+}
+
+export function createCompanyReadService(db: CompaniesDb, now: () => Date = () => new Date(), deps: CompanyReadDeps = {}): CompanyReadService {
+  const findCompany = (market: Market, idOrSlug: string) => findCompanyRow(db, market, idOrSlug);
+  const cardMeta = deps.cardMeta ?? defaultCardMeta;
+
+  /** The credit line of each row that owes one, by job id (the only market lines this list carries). */
+  async function creditLines(market: Market, rows: JobListRow[]): Promise<Map<string, MarketCardMeta>> {
+    const out = new Map<string, MarketCardMeta>();
+    const ctx: MarketHookContext = { brand: getCurrentBrandOrDefault().id, market, stage: 'card' };
+    for (const row of rows) {
+      const line = creditLineMeta(await cardMeta({ ...row, market } as MarketHookJob, ctx));
+      if (line) out.set(row.id, line);
+    }
+    return out;
   }
 
   return {
@@ -511,7 +584,9 @@ export function createCompanyReadService(db: CompaniesDb, now: () => Date = () =
         select: JOB_LIST_SELECT,
       })) as JobListRow[];
       const page = rows.slice(0, COMPANY_JOBS_PAGE);
-      return { items: page.map(toCompanyJobItem), cursor: rows.length > COMPANY_JOBS_PAGE ? String(offset + COMPANY_JOBS_PAGE) : null };
+      // Rows that owe a credit line are in the page only for a viewer whose surface prints it: carry the line.
+      const lines = viewer.printsCreditLine ? await creditLines(market, page) : new Map<string, MarketCardMeta>();
+      return { items: page.map((r) => toCompanyJobItem(r, lines.get(r.id))), cursor: rows.length > COMPANY_JOBS_PAGE ? String(offset + COMPANY_JOBS_PAGE) : null };
     },
 
     async h1b(market, id) {

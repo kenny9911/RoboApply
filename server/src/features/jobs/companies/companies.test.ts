@@ -2,6 +2,9 @@
 // WP-16b: companies — ingest upsert with per-field provenance, typeahead
 // (trigram + prefix, market-scoped), profile with sourced facts only,
 // company jobs, H-1B (flag + DOL source), routes incl. auth and 404s.
+// MKT-5G: the job list's two holds (a bank row without a posting page, a row
+// that owes a credit line unless the caller prints it) and the sponsorship
+// facts route (mount, flag, what it hands the service).
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../lib/prisma.js', () => ({ default: {}, prisma: {} }));
@@ -10,6 +13,9 @@ vi.mock('../../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), 
 import type { RequestHandler } from 'express';
 import { createFakePrisma } from '../../../test/fakePrisma.js';
 import { fakeAuth, startRouteHarness, type RouteHarness } from '../../../test/routeHarness.js';
+import { itemOwesCreditLine } from '../../feed/contract.js';
+import { BANK_PAGES_ENV } from '../../feed/testkit.js';
+import { twSourcesHooks, TW_OGDL_LICENCE_URL } from '../sources/twHooks.js';
 import type { CompanyUpsert } from '../normalize/index.js';
 import {
   COMPANY_JOBS_PAGE,
@@ -19,6 +25,7 @@ import {
   companySlug,
   createCompaniesRouter,
   createCompanyReadService,
+  creditLineMeta,
   escapeLike,
   INDUSTRY_IDS,
   industryIdFor,
@@ -27,12 +34,18 @@ import {
   MAX_POSTING_INDUSTRIES,
   POSTING_INDUSTRY_SOURCE,
   setIndustryFromPosting,
+  SPONSORSHIP_DISCLAIMER,
   toCompanyProfile,
   upsertCompanies,
   type CompaniesDb,
   type CompanyProfile,
+  type CompanySponsorshipResponse,
+  type SponsorshipService,
 } from './index.js';
 import { ONBOARDING_INDUSTRIES } from '../../onboarding/contract.js';
+import { flagEnvName } from '../../../platform/flags.js';
+import { DOL_LCA_URL, USCIS_H1B_HUB_URL } from '../data/index.js';
+import { createSponsorshipService, type SponsorshipDb } from './sponsorship/service.js';
 
 const NOW = new Date('2026-10-10T00:00:00.000Z');
 const FACT = { source: 'provider:activejobs', fetchedAt: '2026-10-01T00:00:00.000Z' };
@@ -310,9 +323,9 @@ describe('read service SQL', () => {
   });
 });
 
-describe('the company\'s job list: sources (M4 cross-review)', () => {
+describe('the company\'s job list: sources (M4 cross-review; the bank rule and the credit line, MKT-5G)', () => {
   // The list is the Company tab's "other jobs at this company" (components/features/company/CompanyTab.tsx) and
-  // the API's `GET /companies/:id/jobs`. It carries no `cardMeta`, so it cannot print a credit line.
+  // the API's `GET /companies/:id/jobs`. The tab shows a title and a place, so it cannot print a credit line.
   const row = (id: string, sourceBoard: string, over: Record<string, unknown> = {}) => ({
     id,
     companyId: 'c1',
@@ -355,27 +368,83 @@ describe('the company\'s job list: sources (M4 cross-review)', () => {
         row('unknown', 'some_new_source'),
         row('aggregator', 'jsearch'),
         row('bank', 'robohire', { fromRecruiterBank: true }),
+        row('bank_go', 'gohire', { fromRecruiterBank: true }),
       ],
       rAH1bEmployerStat: [],
     },
   });
-  const service = createCompanyReadService(db as unknown as CompaniesDb, () => NOW);
+  // The credit line as the registered hook writes it (jobs/sources/twHooks.ts), without loading every hook module.
+  const cardMeta = vi.fn((job: Parameters<NonNullable<typeof twSourcesHooks.cardMeta>>[0], ctx: Parameters<NonNullable<typeof twSourcesHooks.cardMeta>>[1]) => {
+    const line = twSourcesHooks.appliesTo(job, ctx) ? twSourcesHooks.cardMeta!(job, ctx) : null;
+    // A second set stands in for the other market hooks: its lines must not reach this list.
+    return { ...(line ? { tw_sources: line } : {}), ats_public: { permitTags: ['from another hook set'] } };
+  });
+  const service = createCompanyReadService(db as unknown as CompaniesDb, () => NOW, { cardMeta });
+  // Both banks have a candidate-facing posting page.
+  const pages = { env: BANK_PAGES_ENV };
+  const HELD_LINES = { NOT: { sourceBoard: { in: ['tw_open_data', 'tw_gov_jobs'] } } };
 
   it('a row that owes a credit line is neither listed nor counted: the list cannot print the line', async () => {
-    for (const viewer of [{ publicOnly: true }, { publicOnly: false }]) {
+    for (const viewer of [{ publicOnly: true, ...pages }, { publicOnly: false, ...pages }]) {
       const list = await service.jobs('intl', 'c1', undefined, viewer);
-      expect(list.items.map((i) => i.jobId).sort()).toEqual(['aggregator', 'bank', 'board', 'unknown']);
-      expect((await service.profile('intl', 'c1', viewer)).openJobs).toMatchObject({ value: 4 });
+      expect(list.items.map((i) => i.jobId).sort()).toEqual(['aggregator', 'bank', 'bank_go', 'board', 'unknown']);
+      expect(list.items.some((i) => 'cardMeta' in i)).toBe(false);
+      expect((await service.profile('intl', 'c1', viewer)).openJobs).toMatchObject({ value: 5 });
     }
+    expect(cardMeta).not.toHaveBeenCalled();
     // The hold is in the one predicate the list and the count share, next to a caller's own restriction.
-    expect(liveJobWhere('intl', 'c1').AND).toEqual([{ NOT: { sourceBoard: { in: ['tw_open_data', 'tw_gov_jobs'] } } }]);
-    expect(liveJobWhere('cn', 'c1', { publicOnly: false, restrict: { fromRecruiterBank: false } }).AND).toEqual([{ NOT: { sourceBoard: { in: ['tw_open_data', 'tw_gov_jobs'] } } }, { fromRecruiterBank: false }]);
+    expect(liveJobWhere('intl', 'c1', { publicOnly: true, ...pages }).AND).toEqual([HELD_LINES]);
+    expect(liveJobWhere('cn', 'c1', { publicOnly: false, restrict: { fromRecruiterBank: false }, ...pages }).AND).toEqual([HELD_LINES, { fromRecruiterBank: false }]);
+  });
+
+  it('a caller whose surface prints the line gets those rows, each with its line as the feed card carries it, and counts them', async () => {
+    const viewer = { publicOnly: false, printsCreditLine: true, ...pages };
+    const list = await service.jobs('intl', 'c1', undefined, viewer);
+    expect(list.items.map((i) => i.jobId).sort()).toEqual(['aggregator', 'bank', 'bank_go', 'board', 'gov', 'open_data', 'unknown']);
+    expect((await service.profile('intl', 'c1', viewer)).openJobs).toMatchObject({ value: 7 });
+    const byId = Object.fromEntries(list.items.map((i) => [i.jobId, i]));
+    // Exactly the rows that owe a line carry one, and it is the licence's sentence with its link (2026 in Taipei).
+    expect(list.items.filter(itemOwesCreditLine).map((i) => i.jobId).sort()).toEqual(['gov', 'open_data']);
+    expect(byId.open_data!.cardMeta).toEqual({
+      tw_sources: { attribution: { text: '資料來源：勞動部勞動力發展署 2026「台灣就業通網站職缺清單」，依政府資料開放授權條款第1版公開釋出', url: TW_OGDL_LICENCE_URL } },
+    });
+    expect((byId.gov!.cardMeta as { tw_sources: { attribution: { text: string } } }).tw_sources.attribution.text).toMatch(/^資料來源：行政院人事行政總處 2026/);
+    // Only the credit line is carried: the other hook sets read columns this list does not select.
+    for (const id of ['board', 'aggregator', 'bank', 'unknown']) expect(byId[id]).not.toHaveProperty('cardMeta');
+    expect(liveJobWhere('intl', 'c1', viewer).AND).toEqual([]);
+    expect(creditLineMeta({ ats_public: { x: 1 } })).toBeUndefined();
+    expect(creditLineMeta({ tw_sources: {} })).toBeUndefined();
+    expect(creditLineMeta(null)).toBeUndefined();
+  });
+
+  it('a recruiter-bank row whose bank has no posting page is neither listed nor counted, as in the feed (strategy M-7)', async () => {
+    const ids = async (env: Record<string, string>) => {
+      const viewer = { publicOnly: false, env };
+      const list = (await service.jobs('intl', 'c1', undefined, viewer)).items.map((i) => i.jobId).sort();
+      // The count and the list are one predicate.
+      expect((await service.profile('intl', 'c1', viewer)).openJobs.value).toBe(list.length);
+      return list;
+    };
+    // Neither bank has a page: its rows link to "Page not found" and are held.
+    expect(await ids({})).toEqual(['aggregator', 'board', 'unknown']);
+    expect(await ids({ GOHIRE_PUBLIC_JOB_URL_TEMPLATE: BANK_PAGES_ENV.GOHIRE_PUBLIC_JOB_URL_TEMPLATE! })).toEqual(['aggregator', 'bank_go', 'board', 'unknown']);
+    expect(await ids({ ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE: BANK_PAGES_ENV.ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE! })).toEqual(['aggregator', 'bank', 'board', 'unknown']);
+    expect(await ids({ ...BANK_PAGES_ENV })).toEqual(['aggregator', 'bank', 'bank_go', 'board', 'unknown']);
+    expect(liveJobWhere('intl', 'c1', { publicOnly: false, env: {} }).AND).toEqual([HELD_LINES, { NOT: { fromRecruiterBank: true, sourceBoard: { in: ['robohire', 'gohire'] } } }]);
+    // A caller that names no environment reads the process's own (the job page's count, the Assistant).
+    vi.stubEnv('GOHIRE_PUBLIC_JOB_URL_TEMPLATE', '');
+    vi.stubEnv('ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE', BANK_PAGES_ENV.ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE!);
+    try {
+      expect((await service.jobs('intl', 'c1', undefined, { publicOnly: false })).items.map((i) => i.jobId).sort()).toEqual(['aggregator', 'bank', 'board', 'unknown']);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('an employer board is claimed only for a known board source; anything else is a provider, never "read from the employer"', async () => {
-    const kinds = Object.fromEntries((await service.jobs('intl', 'c1', undefined, { publicOnly: false })).items.map((i) => [i.jobId, i.source.kind]));
+    const kinds = Object.fromEntries((await service.jobs('intl', 'c1', undefined, { publicOnly: false, ...pages })).items.map((i) => [i.jobId, i.source.kind]));
     // Before: every row that was not a bank's or one of three aggregators' was labelled `ats_public` (D3).
-    expect(kinds).toEqual({ board: 'ats_public', unknown: 'provider', aggregator: 'provider', bank: 'bank' });
+    expect(kinds).toEqual({ board: 'ats_public', unknown: 'provider', aggregator: 'provider', bank: 'bank', bank_go: 'bank' });
   });
 });
 
@@ -447,8 +516,26 @@ describe('routes', () => {
     },
   ];
 
+  // The facts route hands the service the market, the company, the viewer and the job page it is shown on.
+  const FACTS: CompanySponsorshipResponse = {
+    facts: [
+      {
+        kind: 'uscis_h1b_hub',
+        fiscalYear: 2023,
+        approvals: 11,
+        denials: 2,
+        employerName: 'EXAMPLE EMPLOYER LLC',
+        source: { name: 'US Citizenship and Immigration Services, H-1B Employer Data Hub', url: USCIS_H1B_HUB_URL, sourceFile: 'h1b_datahubexport-2023.csv', asOf: '2025-07-01T00:00:00.000Z', dated: 'published' },
+      },
+    ],
+    disclaimer: SPONSORSHIP_DISCLAIMER,
+    viewerNeedsSponsorship: true,
+  };
+  const facts = vi.fn<SponsorshipService['facts']>(async () => FACTS);
+  const sponsorship: SponsorshipService = { facts };
+
   beforeAll(async () => {
-    h = await startRouteHarness({ mounts: [['/api/v1/roboapply/companies', createCompaniesRouter({ service, seekerAuth: auth, optionalAuth: optional, env: {} })]] });
+    h = await startRouteHarness({ mounts: [['/api/v1/roboapply/companies', createCompaniesRouter({ service, sponsorship, seekerAuth: auth, optionalAuth: optional, env: {} })]] });
   });
   afterAll(() => h.close());
 
@@ -507,6 +594,143 @@ describe('routes', () => {
     expect(second.body.data.items.map((i) => i.jobId)).toEqual(['j20', 'j23']);
     expect(second.body.data.items[1]!.postedAt).toBeNull();
     expect(second.body.data.cursor).toBeNull();
+  });
+
+  it('sponsorship facts: mounted next to /h1b, open to anyone on RoboApply, with the viewer and the job page passed on', async () => {
+    const path = '/api/v1/roboapply/companies/c1/sponsorship';
+    const anon = await h.request<{ data: CompanySponsorshipResponse }>('GET', path);
+    expect(anon.status).toBe(200);
+    expect(anon.body.data).toEqual(FACTS);
+    expect(facts).toHaveBeenLastCalledWith('intl', 'c1', { userId: null, jobId: null });
+    const signedIn = await h.request('GET', `${path}?jobId=j00`, user);
+    expect(signedIn.status).toBe(200);
+    expect(facts).toHaveBeenLastCalledWith('intl', 'c1', { userId: 'u1', jobId: 'j00' });
+    // A job id is an id: nothing longer reaches the service.
+    const calls = facts.mock.calls.length;
+    expect((await h.request('GET', `${path}?jobId=${'x'.repeat(65)}`, user)).status).toBe(422);
+    expect(facts.mock.calls.length).toBe(calls);
+  });
+
+  it('sponsorship facts: the h1bHistory flag gates the route; GoApply answers feature_disabled and the service is never asked', async () => {
+    const calls = facts.mock.calls.length;
+    const go = await h.request<{ code: string }>('GET', '/api/v1/roboapply/companies/c2/sponsorship', { host: 'goapply.localhost:3621' });
+    expect(go.status).toBe(404);
+    expect(go.body.code).toBe('feature_disabled');
+    // RoboApply with the capability switched off: the same answer.
+    const off = { [flagEnvName('roboapply', 'h1bHistory')]: 'false' };
+    const offHarness = await startRouteHarness({ env: off, mounts: [['/api/v1/roboapply/companies', createCompaniesRouter({ service, sponsorship, seekerAuth: auth, optionalAuth: optional, env: off })]] });
+    try {
+      const res = await offHarness.request<{ code: string }>('GET', '/api/v1/roboapply/companies/c1/sponsorship', user);
+      expect(res.status).toBe(404);
+      expect(res.body.code).toBe('feature_disabled');
+      // The older route shares the flag.
+      expect((await offHarness.request<{ code: string }>('GET', '/api/v1/roboapply/companies/c1/h1b')).body.code).toBe('feature_disabled');
+    } finally {
+      await offHarness.close();
+    }
+    expect(facts.mock.calls.length).toBe(calls);
+  });
+
+  it('sponsorship facts through the real service: the company\'s rows with year, count, source and date; an unknown company is 404', async () => {
+    const asOf = new Date('2025-07-01T00:00:00.000Z');
+    const store = createFakePrisma({
+      seed: {
+        rACompany: db.$rows('rACompany').map((r) => ({ ...r })),
+        rAH1bEmployerStat: db.$rows('rAH1bEmployerStat').map((r) => ({ ...r })),
+        rASponsorRegisterEntry: [
+          { id: 'r1', source: 'uscis_h1b_hub', country: 'US', employerNameNormalized: 'acme', employerName: 'ACME PLACEHOLDER INC', period: 'FY2023', approvals: 11, denials: 2, town: null, rating: null, routes: [], sourceFile: 'h1b_datahubexport-2023.csv', sourceUrl: USCIS_H1B_HUB_URL, asOf, importedAt: NOW },
+        ],
+        rAJob: [],
+      },
+    });
+    const real = await startRouteHarness({
+      mounts: [['/api/v1/roboapply/companies', createCompaniesRouter({ service, sponsorship: createSponsorshipService(store as unknown as SponsorshipDb), seekerAuth: auth, optionalAuth: optional, env: {} })]],
+    });
+    try {
+      const res = await real.request<{ data: CompanySponsorshipResponse }>('GET', '/api/v1/roboapply/companies/c1/sponsorship');
+      expect(res.status).toBe(200);
+      expect(res.body.data.facts).toEqual([
+        { kind: 'dol_lca', fiscalYear: 2025, certifiedCount: 40, source: { name: 'US Department of Labor, LCA disclosure data', url: DOL_LCA_URL, sourceFile: 'LCA_Disclosure_Data_FY2025_Q4.xlsx', asOf: NOW.toISOString(), dated: 'imported' } },
+        {
+          kind: 'uscis_h1b_hub',
+          fiscalYear: 2023,
+          approvals: 11,
+          denials: 2,
+          employerName: 'ACME PLACEHOLDER INC',
+          source: { name: 'US Citizenship and Immigration Services, H-1B Employer Data Hub', url: USCIS_H1B_HUB_URL, sourceFile: 'h1b_datahubexport-2023.csv', asOf: asOf.toISOString(), dated: 'published' },
+        },
+      ]);
+      expect(res.body.data.disclaimer).toBe(SPONSORSHIP_DISCLAIMER);
+      expect(res.body.data.viewerNeedsSponsorship).toBe(false);
+      // The other market's company does not exist here.
+      const other = await real.request<{ details: { code: string } }>('GET', '/api/v1/roboapply/companies/c2/sponsorship');
+      expect(other.status).toBe(404);
+      expect(other.body.details.code).toBe('company_not_found');
+    } finally {
+      await real.close();
+    }
+  });
+
+  it('GoApply: the route reads the bank posting-page settings of its own environment; a GoHire row is listed and counted once that page exists', async () => {
+    const cnJob = (id: string, over: Record<string, unknown>) => ({
+      id,
+      companyId: 'c2',
+      market: 'cn',
+      visibility: 'public',
+      ownerUserId: null,
+      isCanonical: true,
+      archivedAt: null,
+      publicDisplay: true,
+      title: `岗位 ${id}`,
+      companyName: '示例',
+      companyLogoUrl: null,
+      location: '上海',
+      workModel: null,
+      employmentType: null,
+      seniority: null,
+      salaryMin: null,
+      salaryMax: null,
+      salaryCurrency: null,
+      salaryPeriod: null,
+      salaryText: null,
+      salaryDisclosed: false,
+      postedAt: NOW,
+      lastSeenAt: NOW,
+      sourceName: null,
+      originalSourceName: null,
+      sourceUrl: null,
+      employerVerified: false,
+      isAgency: null,
+      ...over,
+    });
+    const store = createFakePrisma({
+      seed: {
+        rACompany: db.$rows('rACompany').map((r) => ({ ...r })),
+        rAJob: [cnJob('gh', { sourceBoard: 'gohire', sourceName: 'GoHire', fromRecruiterBank: true }), cnJob('board', { sourceBoard: 'greenhouse', fromRecruiterBank: false })],
+      },
+    });
+    const read = async (env: Record<string, string>) => {
+      const harness = await startRouteHarness({
+        env,
+        mounts: [['/api/v1/roboapply/companies', createCompaniesRouter({ service: createCompanyReadService(store as unknown as CompaniesDb, () => NOW), sponsorship, seekerAuth: auth, optionalAuth: optional, env })]],
+      });
+      try {
+        const go = { host: 'goapply.localhost:3621', ...user };
+        const jobs = await harness.request<{ data: { items: Array<{ jobId: string }> } }>('GET', '/api/v1/roboapply/companies/c2/jobs', go);
+        const profile = await harness.request<{ data: CompanyProfile }>('GET', '/api/v1/roboapply/companies/c2', go);
+        expect(jobs.status).toBe(200);
+        return { listed: jobs.body.data.items.map((i) => i.jobId).sort(), counted: profile.body.data.openJobs.value };
+      } finally {
+        await harness.close();
+      }
+    };
+    // No posting page for the GoHire bank: its row is held, the employer-board row is not.
+    expect(await read({})).toEqual({ listed: ['board'], counted: 1 });
+    expect(await read({ CN_RECRUITMENT_INFO_MODE: 'partner_deeplink' })).toEqual({ listed: ['board'], counted: 1 });
+    // With the page (the settings a GoApply control case needs for a GoHire fixture row): listed and counted.
+    expect(await read({ CN_RECRUITMENT_INFO_MODE: 'partner_deeplink', ...BANK_PAGES_ENV })).toEqual({ listed: ['board', 'gh'], counted: 2 });
+    // Recruitment-info mode off still lists no third-party posting, whatever the bank settings.
+    expect(await read({ CN_RECRUITMENT_INFO_MODE: 'off', ...BANK_PAGES_ENV })).toEqual({ listed: [], counted: 0 });
   });
 
   it('H-1B history cites the DOL file; off for GoApply (feature_disabled)', async () => {
