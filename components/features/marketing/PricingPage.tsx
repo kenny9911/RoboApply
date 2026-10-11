@@ -1,12 +1,18 @@
 'use client';
 
-// /pricing (both brands) — F-BILL-02, PRODUCT §6.1–§6.5.
+// /pricing (both brands) — F-BILL-02, PRODUCT §6.1–§6.5; MARKET_STRATEGY §4.
 //
-// Every price comes from GET /billing/plans (the plan catalog config), every
-// cap from GET /support/credit-caps (the credit catalog), never from copy.
-// "Save N%" is the server's own computation against our monthly price. A plan
-// without a configured price shows "Price not set yet". Pro caps are printed
-// ("Up to N a day"), never "unlimited". No competitor prices.
+// Every amount comes from GET /billing/plans (the plan catalog: defaults in
+// code, env values as overrides), every cap from GET /support/credit-caps (the
+// credit catalog), every number of the refund rules from that same plans
+// response (`refundPolicy`). Nothing on this page is a number written in copy
+// or in code (D3, D6). The labels beside a price ("Save N%", "about $43 a
+// month", the student percentage, "same price as weekly billing") are computed
+// by `displayPrice` / `samePriceAsWeeklyBilling` (lib/pricing.ts), the same
+// functions the plan sheet uses, so the two surfaces print the same thing. A
+// plan the API sends with no amount is not rendered: the page never says a
+// price is missing. Pro caps are printed ("Up to N a day"), never "unlimited".
+// No competitor prices and no competitor names.
 //
 // The page follows the plans API on both brands (D5, D6): GoApply lists its
 // CNY passes and packs with their amounts exactly as RoboApply lists its USD
@@ -15,9 +21,12 @@
 // that can be bought carries its button: checkout for a signed-in visitor,
 // sign-up otherwise.
 //
-// What follows from the payment rail (legitimately different): RoboApply's
-// plans renew, so it prints the renewal and cancel rules; GoApply sells
-// one-time passes only, so it prints that they never renew (`brandPlansRenew`).
+// What follows from the payment rail and the market (legitimately different):
+// RoboApply's plans renew, so it prints the renewal and cancel rules and the
+// four refund lines; GoApply sells one-time passes only, so each pass carries
+// 一次性付款 · 到期不自动续费 with its own day count, the refund lines are the
+// pass rules, and the collecting entity is printed when (and only when) the
+// API names one (`brandPlansRenew`).
 //
 // Nothing here lists a feature the visitor can't use (R-04, D3): job-list
 // rows and copy need `jobs.feed`, alert rows `jobs.alerts` and a working mail
@@ -27,12 +36,13 @@
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 
-import { usePlans } from '../../../hooks/credits/usePlans';
+import { monthlyPlan, usePlans } from '../../../hooks/credits/usePlans';
 import { useAuth } from '../../../lib/auth/useAuth';
+import { plansBillingFacts, type RefundPolicyFacts, type StudentOfferRow } from '../../../lib/api/account';
 import type { CatalogPlan } from '../../../lib/api/credits';
 import type { CreditCapsResponse } from '../../../lib/api/contracts/support';
 import { useBrand } from '../../../lib/brand';
-import { formatMoney } from '../../../lib/pricing';
+import { displayPrice, formatMoney, samePriceAsWeeklyBilling } from '../../../lib/pricing';
 import { CancelFooterLink } from '../credits';
 import { PriceReference } from '../market';
 import { PRICING_FAQ_KEYS, brandPlansRenew, extensionStoreId } from './catalog';
@@ -40,7 +50,6 @@ import { useCreditCaps, useMarketingFlag } from './hooks';
 import { Faq } from './Sections';
 import { SignupLink } from './SignupLink';
 import styles from './marketing.module.css';
-
 
 type Period = 'week' | 'month' | 'quarter' | 'once';
 function periodOf(plan: CatalogPlan): Period {
@@ -54,42 +63,78 @@ export function checkoutHref(planKey: string): string {
 }
 
 interface PlanCardProps {
-  plan: CatalogPlan & { savingsPercent?: number | null; monthlyEquivalentMinor?: number | null };
+  plan: CatalogPlan;
+  /** The brand's monthly plan, the reference of "Save N%". */
+  monthly: CatalogPlan | null;
+  /** The 7-day pass costs exactly what weekly billing costs (computed from the API amounts). */
+  samePriceAsWeekly: boolean;
   /** GET /billing/plans said no plan can be bought right now. */
   notOpen: boolean;
   signedIn: boolean;
 }
 
-function PlanCard({ plan, notOpen, signedIn }: PlanCardProps) {
+function PlanCard({ plan, monthly, samePriceAsWeekly, notOpen, signedIn }: PlanCardProps) {
   const t = useTranslations('landing.pricingPage');
   const tc = useTranslations('credits');
+  const tv = useTranslations('accountV2');
+  const tb = useTranslations('billingCn');
   const locale = useLocale();
   const brand = useBrand();
   const period = periodOf(plan);
-  const price = plan.amountMinor !== null ? tc(`price.${period}`, { price: formatMoney(locale, plan.amountMinor, plan.currency) }) : null;
+  // One computation for the page and the plan sheet (lib/pricing.ts).
+  const shown = displayPrice(plan, monthly);
+  // A plan of the catalog always has an amount; one without is not printed at all.
+  if (shown.amountMinor === null) return null;
   const nameKey = `plans.${brand.id}.${plan.key}`;
   // A plan the bundle has no name for yet shows the catalog's own label, never a key.
   const name = tc.has(nameKey) ? tc(nameKey) : plan.defaultLabel;
   const buyable = !notOpen && plan.sellable;
+  const oneTimeMarket = !brandPlansRenew(brand);
   return (
     <article className={`${styles.card} ${plan.isDefaultSelection ? styles.cardFeatured : ''}`} data-plan={plan.key}>
       <h3 className={styles.h3}>{name}</h3>
       {notOpen ? <span className={styles.badge}>{t('notOpen')}</span> : null}
-      <p className={styles.price}>{price ?? t('notSet')}</p>
-      {plan.amountMinor !== null && plan.currency === 'USD' ? <PriceReference amountMinor={plan.amountMinor} currency="USD" /> : null}
-      {plan.monthlyEquivalentMinor ? (
-        <p className={styles.muted}>{tc('monthlyEquivalent', { price: formatMoney(locale, plan.monthlyEquivalentMinor, plan.currency) })}</p>
+      <p className={styles.price}>{tc(`price.${period}`, { price: formatMoney(locale, shown.amountMinor, shown.currency) })}</p>
+      {shown.local ? <p className={styles.muted}>{tv('plans.localPrice')}</p> : null}
+      {!shown.local && plan.currency === 'USD' && plan.amountMinor !== null ? <PriceReference amountMinor={plan.amountMinor} currency="USD" /> : null}
+      {shown.monthlyEquivalentMinor !== null ? (
+        <p className={styles.muted} data-monthly-equivalent="">
+          {tc('monthlyEquivalent', { price: formatMoney(locale, shown.monthlyEquivalentMinor, shown.currency) })}
+        </p>
       ) : null}
-      {plan.savingsPercent ? <p className={styles.body}>{tc('save', { pct: plan.savingsPercent })}</p> : null}
+      {shown.savingsPercent !== null ? (
+        <p className={styles.body} data-savings="">
+          {tc('save', { pct: shown.savingsPercent })}
+        </p>
+      ) : null}
+      {shown.studentDiscountPercent !== null ? (
+        <p className={styles.body} data-student-discount="">
+          {tv('plans.studentTag', { pct: shown.studentDiscountPercent })}
+        </p>
+      ) : null}
       {plan.autoRenews && plan.interval && plan.interval !== 'pass' ? (
         <p className={styles.muted}>{tc('renewsNote', { period: plan.interval })}</p>
       ) : null}
-      {plan.kind === 'pass' && plan.passDays ? <p className={styles.muted}>{tc('passNote', { days: plan.passDays })}</p> : null}
-      {plan.kind === 'pack' && plan.practice ? (
-        <p className={styles.muted}>{tc('packNote', { credits: plan.practice.credits, months: plan.practice.validMonths ?? 12 })}</p>
+      {plan.kind === 'pass' && plan.passDays ? (
+        <p className={styles.muted} data-pass-note="">
+          {oneTimeMarket ? tb('pricing.passNote', { days: plan.passDays }) : tc('passNote', { days: plan.passDays })}
+        </p>
+      ) : null}
+      {samePriceAsWeekly ? (
+        <p className={styles.muted} data-same-price-as-weekly="">
+          {tc('pricing.samePriceAsWeekly')}
+        </p>
+      ) : null}
+      {/* The pack's own validity, as the API states it; no month count lives in the page. */}
+      {plan.kind === 'pack' && plan.practice && plan.practice.validMonths ? (
+        <p className={styles.muted}>{tc('packNote', { credits: plan.practice.credits, months: plan.practice.validMonths })}</p>
       ) : null}
       {plan.kind !== 'pack' && plan.practice ? (
-        <p className={styles.muted}>{t('practiceCredits', { count: plan.practice.credits, per: plan.practice.per })}</p>
+        <p className={styles.muted} data-practice-allowance="">
+          {oneTimeMarket && plan.practice.per === 'month'
+            ? tb('pricing.practicePerMonth', { count: plan.practice.credits })
+            : t('practiceCredits', { count: plan.practice.credits, per: plan.practice.per })}
+        </p>
       ) : null}
       {buyable ? (
         signedIn ? (
@@ -103,6 +148,106 @@ function PlanCard({ plan, notOpen, signedIn }: PlanCardProps) {
         )
       ) : null}
     </article>
+  );
+}
+
+/** The whole numbers of a list, joined the way the locale writes a list ("7, 30 and 90"). */
+function listOfNumbers(locale: string, values: readonly number[]): string {
+  const parts = values.map((v) => String(v));
+  try {
+    return new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' }).format(parts);
+  } catch {
+    return parts.join(', ');
+  }
+}
+
+interface RefundRulesProps {
+  policy: RefundPolicyFacts;
+  /** GoApply: the entity the API names as the one collecting the payment; null → no line. */
+  collectingEntity: string | null;
+  /** The day counts of the passes the API lists, ascending. */
+  passDays: readonly number[];
+}
+
+/**
+ * The refund rules in plain words (MARKET_STRATEGY §4.4 "Printed on
+ * /pricing"). Every number is an argument filled from `refundPolicy` of the
+ * plans response; the strings carry none.
+ */
+function RefundRules({ policy, collectingEntity, passDays }: RefundRulesProps) {
+  const t = useTranslations('landing.pricingPage');
+  const tr = useTranslations('credits.pricing.refund');
+  const tb = useTranslations('billingCn.pricing.refund');
+  const locale = useLocale();
+  const brand = useBrand();
+  const renews = brandPlansRenew(brand);
+  return (
+    <div data-refund-rules="" data-refund-policy-version={policy.version || undefined}>
+      <h2 className={styles.h2} id="pricing-refund-title">
+        {t('refundTitle')}
+      </h2>
+      {renews ? (
+        <>
+          <ul className={styles.list}>
+            <li data-refund-line="first">
+              {tr('first', { days: policy.firstPurchaseDays, hours: policy.shortPlanHours, limit: policy.paidOnlyCreditLimit })}
+            </li>
+            <li data-refund-line="renewal">{tr('renewal', { days: policy.accidentalRenewalDays })}</li>
+            <li data-refund-line="packs">{tr('packs', { months: policy.packValidMonths })}</li>
+            <li data-refund-line="withdrawal">{tr('withdrawal', { days: policy.withdrawalDays })}</li>
+          </ul>
+          <p className={styles.spaced}>
+            <a className={styles.inlineLink} href="/legal/refunds">
+              {t('refundLink')}
+            </a>
+          </p>
+        </>
+      ) : (
+        <>
+          <ul className={styles.list} data-pass-refunds="">
+            <li data-refund-line="first">
+              {tb('first', { days: policy.firstPurchaseDays, hours: policy.shortPlanHours, limit: policy.paidOnlyCreditLimit })}
+            </li>
+            <li data-refund-line="packs">{tb('packs', { months: policy.packValidMonths })}</li>
+            {passDays.length > 0 ? <li data-refund-line="oneTime">{tb('oneTime', { days: listOfNumbers(locale, passDays) })}</li> : null}
+            {collectingEntity ? <li data-refund-line="entity">{tb('entity', { entity: collectingEntity })}</li> : null}
+          </ul>
+          <p className={styles.spaced}>
+            <a className={styles.inlineLink} href="/help">
+              {t('passRefundHow')}
+            </a>
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The published student price for a visitor who is not sent the student
+ * plans (they are listed only for a verified student). Shown only when the
+ * API publishes the prices (`studentOffer`); the plan name is the bundle's.
+ */
+function StudentOffer({ offers, currency }: { offers: readonly StudentOfferRow[]; currency: string }) {
+  const tc = useTranslations('credits');
+  const tv = useTranslations('accountV2');
+  const locale = useLocale();
+  const brand = useBrand();
+  const rows = offers.filter((o) => tc.has(`plans.${brand.id}.${o.key}`));
+  if (rows.length === 0) return null;
+  return (
+    <div className={styles.spaced} data-student-offer="">
+      <h3 className={styles.h3}>{tc('pricing.studentOffer.title')}</h3>
+      <ul className={styles.list}>
+        {rows.map((o) => (
+          <li key={o.key} data-student-offer-row={o.key}>
+            {tc('pricing.studentOffer.row', { name: tc(`plans.${brand.id}.${o.key}`), price: formatMoney(locale, o.amountMinor, currency) })}
+            {o.studentDiscountPercent !== null ? ` ${tv('plans.studentTag', { pct: o.studentDiscountPercent })}` : null}
+          </li>
+        ))}
+      </ul>
+      <p className={styles.muted}>{tc('pricing.studentOffer.how')}</p>
+    </div>
   );
 }
 
@@ -183,7 +328,14 @@ export function PricingPage() {
   const campus = useMarketingFlag('jobs.campusCalendar');
   // Only the plans API can say that nothing can be bought; unknown is not "closed".
   const notOpen = plans.data?.paymentsOpen === false;
-  const paid = (plans.data?.plans ?? []).filter((p) => p.kind !== 'free');
+  const all = plans.data?.plans ?? [];
+  // A plan with no amount is not printed (the catalog gives every plan one).
+  const paid = all.filter((p) => p.kind !== 'free' && p.amountMinor !== null);
+  const monthly = monthlyPlan(all);
+  const facts = plansBillingFacts(plans.data);
+  const passDays = Array.from(new Set(paid.filter((p) => p.kind === 'pass' && !!p.passDays).map((p) => p.passDays as number))).sort((a, b) => a - b);
+  // The student prices are published separately only while the list itself carries no student plan.
+  const studentOffer = paid.some((p) => p.requiresFlag === 'student') ? [] : facts.studentOffer;
   return (
     <>
       <section className={styles.intro} aria-labelledby="pricing-title">
@@ -221,9 +373,17 @@ export function PricingPage() {
               </SignupLink>
             </article>
             {paid.map((p) => (
-              <PlanCard key={p.key} plan={p} notOpen={notOpen} signedIn={status === 'authenticated'} />
+              <PlanCard
+                key={p.key}
+                plan={p}
+                monthly={monthly}
+                samePriceAsWeekly={samePriceAsWeeklyBilling(p, all)}
+                notOpen={notOpen}
+                signedIn={status === 'authenticated'}
+              />
             ))}
           </div>
+          {studentOffer.length > 0 ? <StudentOffer offers={studentOffer} currency={plans.data?.currency ?? brand.currency} /> : null}
         </div>
       </section>
 
@@ -244,42 +404,14 @@ export function PricingPage() {
         </div>
       </section>
 
-      <section className={styles.section} aria-labelledby="pricing-refund-title">
+      {/* The refund lines wait for the plans response: their numbers come from it, and without it nothing is printed. */}
+      <section className={styles.section} aria-labelledby={facts.refundPolicy ? 'pricing-refund-title' : 'pricing-renew-title'}>
         <div className={`${styles.wrap} ${styles.grid2}`}>
+          {facts.refundPolicy ? <RefundRules policy={facts.refundPolicy} collectingEntity={facts.collectingEntity} passDays={passDays} /> : null}
           <div>
-            <h2 className={styles.h2} id="pricing-refund-title">
-              {t('refundTitle')}
+            <h2 className={styles.h2} id="pricing-renew-title">
+              {t('renewTitle')}
             </h2>
-            {renews ? (
-              <>
-                <ul className={styles.list}>
-                  <li>{t('refund1')}</li>
-                  <li>{t('refund2')}</li>
-                  <li>{t('refund3')}</li>
-                  <li>{t('refund4')}</li>
-                </ul>
-                <p className={styles.spaced}>
-                  <a className={styles.inlineLink} href="/legal/refunds">
-                    {t('refundLink')}
-                  </a>
-                </p>
-              </>
-            ) : (
-              <>
-                <ul className={styles.list} data-pass-refunds="">
-                  <li>{t('passRefund1')}</li>
-                  <li>{t('passRefund2')}</li>
-                </ul>
-                <p className={styles.spaced}>
-                  <a className={styles.inlineLink} href="/help">
-                    {t('passRefundHow')}
-                  </a>
-                </p>
-              </>
-            )}
-          </div>
-          <div>
-            <h2 className={styles.h2}>{t('renewTitle')}</h2>
             {renews ? (
               <>
                 <ul className={styles.list}>

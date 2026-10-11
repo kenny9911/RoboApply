@@ -3,7 +3,9 @@
 // CREDIT_CATALOG: buckets, windows and caps per brand × plan profile
 // (PRODUCT_PLAN.md §6.2 is canonical; bucket names per TASK_PLAN.md R-07 and
 // §4.1.f; ARCHITECTURE.md §7.1 for the buckets PRODUCT does not list:
-// `ai_answer`, `competitiveness`, `contact_lookup`).
+// `ai_answer`, `competitiveness`, `contact_lookup`). Where the market strategy
+// changes a number, MARKET_STRATEGY.md §3 wins: free `autofill` is 20 a day on
+// both brands (M-14).
 //
 // Every plan has a cap, Pro included (fair-use caps, R-07). UI copy prints the
 // cap ("Up to 50 a day"), never "unlimited".
@@ -97,7 +99,8 @@ function buildCatalog(brand: BrandId): CreditCatalog {
     rewrite: def('rewrite', day(20), day(300), 'ra_resume_fix'),
     outreach: def('outreach', day(3), day(50), 'ra_outreach_draft'),
     assistant: def('assistant', day(30), day(300), 'ra_copilot_turn'),
-    autofill: def('autofill', day(5), day(100), null),
+    // MARKET_STRATEGY §3, M-14: 20 a day on both brands (a deterministic fill costs no model call).
+    autofill: def('autofill', day(20), day(100), null),
     ai_answer: def('ai_answer', day(10), day(200), 'ra_ext_answer'),
     job_import: def('job_import', day(10), day(50), 'ra_job_import'),
     ready_kits: def('ready_kits', week(3), week(30), null),

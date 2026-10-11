@@ -20,7 +20,7 @@ import { checkoutRedirectUrl } from '../../../../hooks/credits/useBillingActions
 import { applyDraft, draftFromOverride, invalidCells, parseOverrideValue, revenueShare } from '../adminCatalog';
 import { bucketLabelKey, calendarDaysUntil, knownTimeZone, planMonths, planNameKey, pricePeriod, refillLabel } from '../labels';
 import en from '../../../../i18n/messages/en.json';
-import { creditsResponse, GA_ENV, plansView, RA_ENV } from './fixtures';
+import { creditsResponse, GA_ENV, plansView, RA_ENV, railNotReadyPlansView, unpricedPlansView } from './fixtures';
 import type { BillingPlanResponse } from '../../../../lib/api/account';
 
 describe('pricing math (derived from server prices only)', () => {
@@ -31,7 +31,8 @@ describe('pricing math (derived from server prices only)', () => {
   });
 
   it('"Save N%" is computed from our own monthly price and rounded down', () => {
-    // 3 × 24.99 = 74.97; 59.99 saves 19.98 % → 19, never rounded up to 20.
+    // 3 × 24.99 = 74.97; 54.99 saves 26.65 % → 26. And 59.99 would save 19.98 % → 19, never rounded up to 20.
+    expect(savingsPercent(5499, 2499, 3)).toBe(26);
     expect(savingsPercent(5999, 2499, 3)).toBe(19);
     expect(savingsPercent(9900, 3900, 3)).toBe(15);
     expect(savingsPercent(8000, 2499, 3)).toBeNull();
@@ -84,13 +85,36 @@ describe('plan selection rules', () => {
   });
 
   it('nothing is preselected when no default-eligible plan is sellable', () => {
-    expect(initialSelection(plansView('roboapply', {}))).toBeNull();
+    expect(initialSelection(unpricedPlansView())).toBeNull();
+    // The card rail not ready: every plan has its amount, none is on sale, so none is preselected,
+    // whatever default the response names.
+    expect(initialSelection(railNotReadyPlansView())).toBeNull();
+    expect(initialSelection({ ...railNotReadyPlansView(), defaultSelection: 'pro_monthly' })).toBeNull();
   });
 
-  it('visiblePlans hides free, unpriced and V2 student plans', () => {
+  it('visiblePlans hides free and V2 student plans, and a plan the API sends with no amount', () => {
     const keys = visiblePlans(plansView().plans).map((p) => p.key);
     expect(keys).toEqual(['pro_weekly', 'pro_monthly', 'pro_quarterly', 'pro_week_pass', 'practice_pack_5', 'practice_pack_15']);
-    expect(visiblePlans(plansView('roboapply', {}).plans)).toEqual([]);
+    expect(visiblePlans(unpricedPlansView().plans)).toEqual([]);
+  });
+
+  it('the default fixtures are the MARKET_STRATEGY §4 catalog, in the wire shape', () => {
+    expect(visiblePlans(plansView().plans).map((p) => [p.key, p.amountMinor, p.currency, p.sellable])).toEqual([
+      ['pro_weekly', 999, 'USD', true],
+      ['pro_monthly', 2499, 'USD', true],
+      ['pro_quarterly', 5499, 'USD', true],
+      ['pro_week_pass', 999, 'USD', true],
+      ['practice_pack_5', 999, 'USD', true],
+      ['practice_pack_15', 2499, 'USD', true],
+    ]);
+    expect(plansView().plans.some((p) => p.unsellableReason === 'price_unset')).toBe(false);
+    expect(plansView().defaultSelection).toBe('pro_monthly');
+    // The card rail not ready: the same amounts, none on sale, and the reason is never a missing price.
+    const closed = railNotReadyPlansView();
+    expect(visiblePlans(closed.plans).map((p) => [p.key, p.amountMinor])).toEqual(visiblePlans(plansView().plans).map((p) => [p.key, p.amountMinor]));
+    expect(visiblePlans(closed.plans).every((p) => !p.sellable && p.unsellableReason === 'payments_disabled')).toBe(true);
+    expect(closed.paymentsOpen).toBe(false);
+    expect(closed.checkout.rails).toEqual([]);
   });
 
   it('GoApply passes are listed at their catalog prices and on sale with an empty env; the 30-day pass is preselected', () => {
@@ -147,7 +171,7 @@ describe('plan selection rules', () => {
 
   it('monthlyPlan finds the priced monthly plan', () => {
     expect(monthlyPlan(plansView().plans)?.amountMinor).toBe(2499);
-    expect(monthlyPlan(plansView('roboapply', {}).plans)).toBeNull();
+    expect(monthlyPlan(unpricedPlansView().plans)).toBeNull();
   });
 });
 

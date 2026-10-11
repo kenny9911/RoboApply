@@ -13,6 +13,16 @@
     },
     "errors": {
       "studentRequired": "请先验证学校邮箱，才能享受学生价。未扣款。"
+    },
+    "pricing": {
+      "passNote": "{days} 天会员。一次性付款 · 到期不自动续费",
+      "practicePerMonth": "会员有效期内，每个自然月 {count} 场练习面试",
+      "refund": {
+        "first": "首次购买会员卡：{days} 天内可退款（周卡：{hours} 小时内），前提是使用的会员专属功能少于 {limit} 次。",
+        "packs": "面试练习包：包内练习面试一次都未使用时可退款。练习包自购买起 {months} 个月内有效。",
+        "oneTime": "一次性付款 · 到期不自动续费。会员卡时长：{days} 天。",
+        "entity": "收款主体：{entity}"
+      }
     }
   }
 }

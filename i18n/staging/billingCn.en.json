@@ -13,6 +13,16 @@
     },
     "errors": {
       "studentRequired": "Confirm your school email first to get the student price. Nothing was charged."
+    },
+    "pricing": {
+      "passNote": "{days, plural, one {# day} other {# days}} of Pro. One-time payment. It does not renew automatically when it ends.",
+      "practicePerMonth": "{count, plural, one {# practice interview} other {# practice interviews}} each calendar month while the pass is active",
+      "refund": {
+        "first": "First pass: you can get a refund within {days, plural, one {# day} other {# days}} (week pass: within {hours, plural, one {# hour} other {# hours}}) if you used fewer than {limit} actions that need a paid pass.",
+        "packs": "Practice packs: you can get a refund while no interview from the pack has been used. A pack stays valid for {months, plural, one {# month} other {# months}}.",
+        "oneTime": "One-time payment. A pass does not renew automatically when it ends. Passes last {days} days.",
+        "entity": "Payment is collected by: {entity}"
+      }
     }
   }
 }

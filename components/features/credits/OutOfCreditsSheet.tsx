@@ -81,11 +81,11 @@ export function OutOfCreditsSheet(_props: OutOfCreditsSheetProps = {}) {
   const when = resets
     ? refillLabel({ at: resets, now: new Date(), locale, timeZone: knownTimeZone(data?.summary?.timezone, appTimeZone) })
     : null;
-  // Practice: a pack that can be bought right now. A pack is "on sale" by its
-  // price alone; a payment also needs a rail that can charge, which the plans
-  // response reports as `paymentsOpen` (false without the rail's credential
-  // and under the GoApply kill switch). Else Pro, only when the server says
-  // it helps.
+  // Practice: a pack that can be bought right now. Every pack arrives with
+  // its amount; "can be bought" is the pack's own `sellable` flag AND a rail
+  // that can charge, which the plans response reports as `paymentsOpen`
+  // (false while a brand's rail is not ready, on either brand, and under the
+  // GoApply kill switch). Else Pro, only when the server says it helps.
   const pack =
     isPractice && plansQ.data?.paymentsOpen !== false
       ? (visiblePlans(plansQ.data?.plans, { studentEnabled }).find((p) => p.kind === 'pack' && p.sellable) ?? null)
