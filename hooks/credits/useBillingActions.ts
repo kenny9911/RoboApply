@@ -14,35 +14,60 @@
 //                            request changes, after a failed call and each
 //                            time the plan sheet opens
 //   useSwitchQuote()         POST /billing/switch without `confirm` (nothing charged)
-//   useConfirmSwitch()       POST /billing/switch with `confirm` (charges now)
+//   useConfirmSwitch()       POST /billing/switch with `confirm` (charges now, or answers
+//                            "confirm with your bank": the plan has not changed then)
+//   useResumeSubscription()  POST /credits/resume — "Keep my plan" for a cancelled
+//                            subscription whose paid period is still running
+//   usePaymentPortal()       POST /billing/portal, optionally straight on the
+//                            payment-method step (`{ flow: 'payment_method_update' }`)
 //
 // Every success invalidates the credit summary and the legacy plan so the
 // page shows the server's new state (never an optimistic plan change).
 
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 
 import {
   accountApi,
   type PlanCheckoutBody,
   type PlanCheckoutResponse,
+  type PortalBody,
+  type ResumeSubscriptionResponse,
   type SwitchConfirmBody,
   type SwitchConfirmResponse,
   type SwitchQuote,
   type SwitchQuoteBody,
 } from '../../lib/api/account';
 import { cancelSubscription, sendCancelSurvey } from '../../lib/api/credits';
+import { apiErrorCode } from '../../lib/api/contracts/wire';
 import type { CancelResponse, CancelSurveyReason } from '../../lib/api/contracts/credits';
 import { CREDITS_QUERY_KEY } from '../shared/useCredits';
 import { PLANS_QUERY_KEY } from './usePlans';
 
-function useInvalidateBilling(): () => void {
+/**
+ * Read the billing state again: the summary, the plans, the billing plan and
+ * the profile. Resolves when the queries on screen have answered (a failed
+ * read resolves too: the page then keeps what it had).
+ */
+function useRereadBilling(): () => Promise<void> {
   const qc = useQueryClient();
+  return () =>
+    Promise.all([
+      qc.invalidateQueries({ queryKey: CREDITS_QUERY_KEY }),
+      qc.invalidateQueries({ queryKey: PLANS_QUERY_KEY }),
+      qc.invalidateQueries({ queryKey: ['account', 'plan'] }),
+      qc.invalidateQueries({ queryKey: ['account', 'profile'] }),
+    ]).then(
+      () => undefined,
+      () => undefined,
+    );
+}
+
+/** The same, without waiting: a call's answer is shown at once and the page catches up. */
+function useInvalidateBilling(): () => void {
+  const reread = useRereadBilling();
   return () => {
-    void qc.invalidateQueries({ queryKey: CREDITS_QUERY_KEY });
-    void qc.invalidateQueries({ queryKey: PLANS_QUERY_KEY });
-    void qc.invalidateQueries({ queryKey: ['account', 'plan'] });
-    void qc.invalidateQueries({ queryKey: ['account', 'profile'] });
+    void reread();
   };
 }
 
@@ -117,6 +142,12 @@ export interface CheckoutAttempt {
  * "Idempotency keys"). The key is made when the sheet mounts, so reopening
  * the sheet is a new attempt; the sheet calls `renew` when the buyer changes
  * the plan or an acknowledgement box, and after a checkout call fails.
+ *
+ * A page the browser restores from its back-forward cache (the buyer went to
+ * the payment page and pressed Back) is not mounted again, so it would keep
+ * the key of the attempt that already left for the payment page: a second,
+ * intended purchase would be answered with the first, finished session. Such
+ * a restore (`pageshow` with `persisted`) therefore starts a new attempt too.
  */
 export function useCheckoutAttempt(): CheckoutAttempt {
   const state = useRef<{ key: string; content: string | null } | null>(null);
@@ -124,6 +155,13 @@ export function useCheckoutAttempt(): CheckoutAttempt {
   const renew = useCallback(() => {
     state.current = { key: newAttemptKey(), content: null };
   }, []);
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) renew();
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, [renew]);
   const keyFor = useCallback((content: unknown) => {
     const serialised = JSON.stringify(content ?? null);
     const current = state.current!;
@@ -160,6 +198,53 @@ export function useConfirmSwitch(): UseMutationResult<SwitchConfirmResponse, Err
   });
 }
 
-export function usePaymentPortal(): UseMutationResult<{ url: string }, Error, void> {
-  return useMutation({ mutationFn: () => accountApi.portal() });
+/** The server's code for "there is no cancelled, running subscription to keep" (409). */
+export const RESUME_NOTHING_CODE = 'nothing_to_resume';
+
+/** How long a refused resume waits for the billing state to be read again before it shows its answer. */
+export const RESUME_REREAD_WAIT_MS = 5000;
+
+/** `work`, or nothing after `ms`, whichever comes first. Never rejects. */
+function waitAtMost(work: Promise<void>, ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    const done = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    work.then(done, done);
+  });
+}
+
+/**
+ * "Keep my plan": turns renewal back on. Invalidates what cancel invalidates,
+ * so the card reads "Renews on {date}" from the server's new state.
+ */
+export function useResumeSubscription(): UseMutationResult<ResumeSubscriptionResponse, Error, void> {
+  const reread = useRereadBilling();
+  return useMutation({
+    mutationFn: () => accountApi.resumeSubscription(),
+    onSuccess: () => {
+      void reread();
+    },
+    // A refusal usually means the page is behind the server: read the state
+    // again either way. For "nothing to resume" the call stays pending until
+    // that read has answered (or `RESUME_REREAD_WAIT_MS` passed), because the
+    // code alone does not say whether the plan ended or already renews again:
+    // the page words the refusal from the state it then holds.
+    onError: (err) => {
+      const read = reread();
+      if (apiErrorCode(err) !== RESUME_NOTHING_CODE) return undefined;
+      return waitAtMost(read, RESUME_REREAD_WAIT_MS);
+    },
+  });
+}
+
+/** Where the portal opens: nothing = its home page; `payment_method_update` = straight on the payment method. */
+export type PaymentPortalVars = PortalBody | void;
+
+export function usePaymentPortal(): UseMutationResult<{ url: string }, Error, PaymentPortalVars> {
+  return useMutation({
+    mutationFn: (vars: PaymentPortalVars) => (vars && vars.flow ? accountApi.portal({ flow: vars.flow }) : accountApi.portal()),
+  });
 }

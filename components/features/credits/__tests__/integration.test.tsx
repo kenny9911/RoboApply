@@ -8,6 +8,10 @@
 //     live, and a `weixin://` code is never used as an image address;
 //   - GoApply: 续费 only for a pass that is still running, with WeChat Pay live;
 //   - the return page checks the order named by `?order=` until it settles.
+// Market wave M2 (MKT-2E), across the billing view:
+//   - a switch that the bank must confirm leaves the card on the old plan;
+//   - GoApply (passes, Alipay) never gets a switch, "Keep my plan", the
+//     portal line or a reconcile call (D6: no Stripe path on a mainland page).
 
 import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -29,7 +33,16 @@ const api = vi.hoisted(() => ({
   requestPublicCancel: vi.fn(),
   confirmPublicCancel: vi.fn(),
 }));
-const account = vi.hoisted(() => ({ plan: vi.fn(), checkoutPlan: vi.fn(), alipayCheckoutPlan: vi.fn(), switchQuote: vi.fn(), switchConfirm: vi.fn(), portal: vi.fn() }));
+const account = vi.hoisted(() => ({
+  plan: vi.fn(),
+  checkoutPlan: vi.fn(),
+  alipayCheckoutPlan: vi.fn(),
+  switchQuote: vi.fn(),
+  switchConfirm: vi.fn(),
+  portal: vi.fn(),
+  reconcileCheckout: vi.fn(),
+  resumeSubscription: vi.fn(),
+}));
 const cn = vi.hoisted(() => ({ createWechatPayOrder: vi.fn(), getWechatPayOrder: vi.fn() }));
 const compliance = vi.hoisted(() => ({ getLegalDoc: vi.fn() }));
 const v2 = vi.hoisted(() => ({ getStudentStatus: vi.fn(), getUiState: vi.fn(), patchUiState: vi.fn() }));
@@ -774,6 +787,97 @@ describe('BillingView on GoApply: 续费 for a pass that is still running', () =
     const card = await screen.findByTestId('current-plan');
     expect(await within(card).findByRole('link', { name: 'Buy another pass' })).toBeInTheDocument();
     expect(within(card).queryByRole('button', { name: 'Renew' })).toBeNull();
+  });
+});
+
+describe('BillingView: a plan change from the plan sheet (ST-5)', () => {
+  const QUOTE = { quoteId: 'pro_quarterly:1791590400', planKey: 'pro_quarterly', currency: 'USD', amountDueTodayMinor: 3711, renewalAmountMinor: 5499, nextRenewalAt: '2027-01-08T00:00:00Z' };
+  const monthly = (over: Record<string, unknown> = {}) => creditsResponse({ planKey: 'pro_monthly', planProfile: 'pro', interval: 'month', periodEnd: IN_10_DAYS, upgradable: false, ...over });
+
+  async function confirmQuarterly() {
+    await waitFor(() => expect(radio('pro_quarterly')).toBeEnabled());
+    fireEvent.click(radio('pro_quarterly'));
+    fireEvent.click(screen.getByRole('button', { name: /see what switching costs/i }));
+    await screen.findByTestId('switch-quote');
+    fireEvent.click(screen.getByRole('checkbox', { name: /renews automatically every 3 months/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirm and pay/i }));
+  }
+
+  it('the switch goes through: the card and the sheet show the new plan from the server', async () => {
+    api.getCredits.mockResolvedValue(monthly());
+    account.plan.mockResolvedValue(legacyPlan({ hasStripeCustomer: true }));
+    account.switchQuote.mockResolvedValue(QUOTE);
+    account.switchConfirm.mockImplementation(async () => {
+      api.getCredits.mockResolvedValue(creditsResponse({ planKey: 'pro_quarterly', planProfile: 'pro', interval: 'quarter', periodEnd: IN_10_DAYS, upgradable: false }));
+      return { status: 'switched', planKey: 'pro_quarterly', nextRenewalAt: null };
+    });
+    renderUi(<BillingView navigate={vi.fn()} />);
+    const card = await screen.findByTestId('current-plan');
+    await waitFor(() => expect(within(card).getByText('Pro Monthly')).toBeInTheDocument());
+    await confirmQuarterly();
+    expect(await screen.findByText("You're on Pro Quarterly.")).toBeInTheDocument();
+    await waitFor(() => expect(within(card).getByText('Pro Quarterly')).toBeInTheDocument());
+    await waitFor(() => expect(document.querySelector('[data-plan="pro_quarterly"]')).toHaveTextContent('Your plan'));
+    expect(account.checkoutPlan).not.toHaveBeenCalled();
+    expect(account.portal).not.toHaveBeenCalled();
+  });
+
+  it('the bank must confirm first: the card keeps the old plan and its renewal line, the sheet links to the invoice page', async () => {
+    api.getCredits.mockResolvedValue(monthly());
+    account.plan.mockResolvedValue(legacyPlan({ hasStripeCustomer: true }));
+    account.switchQuote.mockResolvedValue(QUOTE);
+    account.switchConfirm.mockResolvedValue({ status: 'requires_action', planKey: 'pro_quarterly', hostedInvoiceUrl: 'https://invoice.stripe.test/i/acct_1/inv_9' });
+    const navigate = vi.fn();
+    renderUi(<BillingView navigate={navigate} />);
+    const card = await screen.findByTestId('current-plan');
+    await confirmQuarterly();
+    const notice = await screen.findByTestId('switch-requires-action');
+    expect(within(notice).getByRole('link', { name: 'Confirm the payment' })).toHaveAttribute('href', 'https://invoice.stripe.test/i/acct_1/inv_9');
+    // The summary was read again after the answer and still says monthly.
+    await waitFor(() => expect(api.getCredits.mock.calls.length).toBeGreaterThan(1));
+    expect(within(card).getByText('Pro Monthly')).toBeInTheDocument();
+    expect(card).toHaveTextContent('Renews on');
+    expect(document.querySelector('[data-plan="pro_monthly"]')).toHaveTextContent('Your plan');
+    expect(screen.queryByText(/You're on/)).toBeNull();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+});
+
+describe('GoApply has no subscription to switch, keep or reconcile (D6)', () => {
+  const pass = (periodEnd: string) => creditsResponse({ planKey: 'pro_monthly', planProfile: 'pro', interval: 'pass', periodEnd, upgradable: false });
+
+  it('a pass holder: every pass stays buyable through Alipay; no switch, no "Keep my plan", no portal line, no line about the other brand', async () => {
+    api.getPlans.mockResolvedValue(plansView('goapply', GA_ENV, { paymentsOpen: true, checkout: checkoutOf(['alipay'], { country: 'CN' }) }));
+    api.getCredits.mockResolvedValue(pass(IN_10_DAYS));
+    account.alipayCheckoutPlan.mockResolvedValue({ kind: 'redirect', url: 'https://payments.example.com/pay', orderId: null, rail: 'alipay' });
+    const navigate = vi.fn();
+    renderUi(<BillingView navigate={navigate} requestedPlan="pro_quarterly" />, { brand: 'goapply' });
+    await waitFor(() => expect(radio('pro_quarterly')).toBeChecked());
+    for (const key of ['pro_week_pass', 'pro_monthly', 'pro_quarterly']) {
+      expect(radio(key), key).toBeEnabled();
+      expect(document.querySelector(`[data-plan="${key}"]`), key).not.toHaveTextContent('Your plan');
+    }
+    expect(screen.queryByTestId('portal-scope')).toBeNull();
+    expect(screen.queryByTestId('resume-subscription')).toBeNull();
+    expect(screen.queryByTestId('cn-visitor-note')).toBeNull();
+    expect(screen.queryByRole('button', { name: /see what switching costs/i })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /continue to payment/i }));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('https://payments.example.com/pay'));
+    expect(account.alipayCheckoutPlan).toHaveBeenCalledWith(expect.objectContaining({ planKey: 'pro_quarterly' }), anAttempt());
+    for (const fn of [account.switchQuote, account.switchConfirm, account.resumeSubscription, account.reconcileCheckout, account.checkoutPlan, account.portal]) expect(fn).not.toHaveBeenCalled();
+  });
+
+  it('the return page with a session id in the address makes no reconcile call on GoApply, with or without WeChat Pay', async () => {
+    api.getPlans.mockResolvedValue(goPlans(['alipay']));
+    nav.search = 'billing=success&session_id=cs_test_a1B2c3D4e5F6g7H8';
+    const first = renderUi(<CheckoutReturn outcome="success" planKey="pro_monthly" sessionId="cs_test_a1B2c3D4e5F6g7H8" pollMs={5} />, { brand: 'goapply' });
+    await screen.findByText(/Your plan updates within a minute/);
+    await waitFor(() => expect(api.getCredits.mock.calls.length).toBeGreaterThan(2));
+    expect(account.reconcileCheckout).not.toHaveBeenCalled();
+    first.unmount();
+    renderUi(<CheckoutReturn outcome="success" planKey="pro_monthly" sessionId="cs_test_a1B2c3D4e5F6g7H8" pollMs={5} />, { brand: 'goapply', flags: WECHAT_ON });
+    await waitFor(() => expect(api.getCredits.mock.calls.length).toBeGreaterThan(4));
+    expect(account.reconcileCheckout).not.toHaveBeenCalled();
   });
 });
 

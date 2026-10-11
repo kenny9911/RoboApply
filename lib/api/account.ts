@@ -6,7 +6,8 @@
 // failure. The two backend bases:
 //
 //   /api/v1/roboapply/account   profile · password · sign-out-all · usage · delete · wipe-data
-//   /api/v1/roboapply/billing   plan · checkout · portal · cancel
+//   /api/v1/roboapply/billing   plan · checkout · checkout/reconcile · portal · cancel · switch
+//   /api/v1/roboapply/credits   resume (the one call of that base made here; see below)
 //
 // Stripe-redirect endpoints (checkout / portal) return `{ url }`; the caller
 // is responsible for `window.location.href = url`.
@@ -354,10 +355,111 @@ export interface SwitchConfirmBody {
   withdrawalWaiver?: boolean;
 }
 
-export interface SwitchConfirmResponse {
-  status: 'switched';
-  planKey: string;
-  nextRenewalAt: string | null;
+/**
+ * What a confirmed switch answers. Either the plan changed, or the bank asks
+ * the buyer to confirm the payment first and the plan has NOT changed
+ * (`requires_action`; MARKET_STRATEGY §5.1 "Switch"). `hostedInvoiceUrl` is
+ * the payment provider's page for that confirmation, or null when the server
+ * has none (the buyer then goes through Manage payment).
+ */
+export type SwitchConfirmResponse =
+  | { status: 'switched'; planKey: string; nextRenewalAt: string | null }
+  | { status: 'requires_action'; planKey: string; hostedInvoiceUrl: string | null };
+
+// ─────────────────────────────────────────────────────────────────────
+// Subscription lifecycle (market wave M2: ST-3, ST-5, ST-6, ST-7 web halves).
+//
+// The server routes are built in parallel, so every type below is written by
+// hand from the cross-bundle contract (MARKET_TASK_PLAN.md §3.1) and every
+// answer is read through a normaliser with a safe default: this file works
+// before and after the server half merges. Error codes are read by the
+// callers with `apiErrorCode` (lib/api/contracts/wire.ts).
+//
+//   POST /billing/checkout/reconcile { sessionId }
+//     -> { status: 'fulfilled' | 'already_fulfilled' | 'pending',
+//          mode: 'payment' | 'subscription', planKey: string | null }
+//     errors 403 forbidden · 404 not_found · 422 invalid_request ·
+//            429 rate_limited · 503 stripe_not_configured · 502 payment_provider_error
+//   POST /billing/portal { flow?: 'payment_method_update' } -> { url }
+//     errors 409 no_customer · 503 stripe_not_configured · 502 payment_provider_error
+//   POST /billing/switch { planKey, confirm: true, prorationDate, autoRenewAck, withdrawalWaiver? }
+//     -> { switched: true, planKey }
+//      | { switched: false, requiresAction: true, hostedInvoiceUrl: string | null, planKey }
+//   POST /credits/resume { autoRenewAck: true }
+//     -> { status: 'resumed', planKey: string, renewsAt: string | null }
+//     errors 409 nothing_to_resume · 422 auto_renew_ack_required ·
+//            503 rail_not_configured · 502 payment_provider_error
+// ─────────────────────────────────────────────────────────────────────
+
+/** A Stripe Checkout Session id as the success URL carries it (`?session_id=`). */
+export const CHECKOUT_SESSION_ID_PATTERN = /^cs_[A-Za-z0-9_]{8,200}$/;
+
+/** `value` when it is a Checkout Session id, else null (the return page reads the query through this). */
+export function checkoutSessionId(value: unknown): string | null {
+  return typeof value === 'string' && CHECKOUT_SESSION_ID_PATTERN.test(value) ? value : null;
+}
+
+/**
+ * The answer of the return-page reconcile. `pending`: the payment is not
+ * settled yet, ask again later. `fulfilled` / `already_fulfilled`: the server
+ * has run the purchase's fulfilment (now, or earlier through the webhook). It
+ * is never shown as "done" by itself: the page still waits for the credit
+ * summary to say so.
+ */
+export interface ReconcileCheckoutResponse {
+  status: 'fulfilled' | 'already_fulfilled' | 'pending';
+  mode: 'payment' | 'subscription' | null;
+  planKey: string | null;
+}
+
+/** An answer in any other shape reads as `pending` (nothing is claimed from it). */
+export function normaliseReconcile(raw: unknown): ReconcileCheckoutResponse {
+  const r = isRecord(raw) ? raw : {};
+  const status = r.status === 'fulfilled' || r.status === 'already_fulfilled' ? r.status : 'pending';
+  const mode = r.mode === 'payment' || r.mode === 'subscription' ? r.mode : null;
+  return { status, mode, planKey: typeof r.planKey === 'string' && r.planKey ? r.planKey : null };
+}
+
+/** `POST /billing/portal` body. Without `flow` the portal opens on its home page. */
+export interface PortalBody {
+  /** Open straight on "update payment method" (the failed-payment banner). */
+  flow?: 'payment_method_update';
+}
+
+/** `POST /credits/resume` answer: renewal is back on. */
+export interface ResumeSubscriptionResponse {
+  status: 'resumed';
+  planKey: string | null;
+  /** ISO time of the next renewal, when the server states it. */
+  renewsAt: string | null;
+}
+
+export function normaliseResume(raw: unknown): ResumeSubscriptionResponse {
+  const r = isRecord(raw) ? raw : {};
+  return {
+    status: 'resumed',
+    planKey: typeof r.planKey === 'string' && r.planKey ? r.planKey : null,
+    renewsAt: typeof r.renewsAt === 'string' && r.renewsAt ? r.renewsAt : null,
+  };
+}
+
+/** A page address the browser may open (http or https), or null. */
+function pageUrl(value: unknown): string | null {
+  return typeof value === 'string' && /^https?:\/\//i.test(value.trim()) ? value.trim() : null;
+}
+
+/**
+ * The server's switch answer in the UI's shape. `{ switched: true }` is a
+ * changed plan; `{ requiresAction: true }` is "confirm with your bank, nothing
+ * changed yet". Anything else is not an answer this client may call a switch,
+ * so it throws and the sheet shows its "did not go through" line.
+ */
+export function fromServerSwitch(raw: unknown, askedPlanKey: string): SwitchConfirmResponse {
+  const r = isRecord(raw) ? raw : {};
+  const planKey = typeof r.planKey === 'string' && r.planKey ? r.planKey : askedPlanKey;
+  if (r.switched === true) return { status: 'switched', planKey, nextRenewalAt: null };
+  if (r.requiresAction === true) return { status: 'requires_action', planKey, hostedInvoiceUrl: pageUrl(r.hostedInvoiceUrl) };
+  throw new Error('Unexpected switch answer');
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -398,6 +500,10 @@ export function parseQuoteId(quoteId: string): { planKey: string; prorationDate:
 
 const ACCOUNT_BASE = '/api/v1/roboapply/account';
 const BILLING_BASE = '/api/v1/roboapply/billing';
+// The credits area's own wrappers live in lib/api/credits.ts (one per
+// documented route). `resume` is added here, hand-typed, because its route is
+// built in the same phase by another work package.
+const CREDITS_BASE = '/api/v1/roboapply/credits';
 
 function usageQuery(params?: AccountUsageParams): string {
   if (!params) return '';
@@ -435,7 +541,15 @@ export const accountApi = {
     roboApi.post<StripeRedirect>(`${BILLING_BASE}/checkout`, { tier, next, cancelNext }),
   alipayCheckout: (tier: PurchasableTier, next?: string) =>
     roboApi.post<StripeRedirect>(`${BILLING_BASE}/alipay`, { tier, next }),
-  portal: () => roboApi.post<StripeRedirect>(`${BILLING_BASE}/portal`),
+  /**
+   * The payment portal (payment method, invoices, billing details, cancel;
+   * plan changes are made in the app). `{ flow: 'payment_method_update' }`
+   * opens it on the payment-method step; with no flow nothing is sent.
+   */
+  portal: (body?: PortalBody) =>
+    body?.flow === 'payment_method_update'
+      ? roboApi.post<StripeRedirect>(`${BILLING_BASE}/portal`, { flow: body.flow })
+      : roboApi.post<StripeRedirect>(`${BILLING_BASE}/portal`),
   cancel: () => roboApi.post<CancelPlanResponse>(`${BILLING_BASE}/cancel`),
   history: () => roboApi.get<BillingHistoryResponse>(`${BILLING_BASE}/history`),
   /** Clone plan checkout (Stripe, RoboApply). */
@@ -449,23 +563,47 @@ export const accountApi = {
    */
   alipayCheckoutPlan: (body: PlanCheckoutBody, opts?: CheckoutCallOptions) =>
     roboApi.post<PlanCheckoutResponse>(`${BILLING_BASE}/alipay`, body, checkoutRequestOptions(opts)),
-  /** Legacy practice plan → Pro: a quote first; nothing is charged (POST /billing/switch without `confirm`). */
+  /** A switch quote (legacy practice plan → Pro, or Pro → Pro); nothing is charged (POST /billing/switch without `confirm`). */
   switchQuote: async (body: SwitchQuoteBody): Promise<SwitchQuote> => {
     const { quote } = await roboApi.post<{ quote: ServerSwitchQuote }>(`${BILLING_BASE}/switch`, { planKey: body.planKey });
     return fromServerQuote(quote);
   },
-  /** Legacy practice plan → Pro: charges the quoted amount (POST /billing/switch with `confirm`). */
+  /**
+   * Charges the quoted amount (POST /billing/switch with `confirm`): a legacy
+   * practice plan → Pro, or one Pro subscription → another. The answer is
+   * `switched`, or `requires_action` when the bank wants the buyer to confirm
+   * the payment and the plan has not changed.
+   */
   switchConfirm: async (body: SwitchConfirmBody): Promise<SwitchConfirmResponse> => {
     const { planKey, prorationDate } = parseQuoteId(body.quoteId);
-    const res = await roboApi.post<{ switched: true; planKey: string }>(`${BILLING_BASE}/switch`, {
+    const res = await roboApi.post<unknown>(`${BILLING_BASE}/switch`, {
       planKey,
       confirm: true,
       prorationDate,
       autoRenewAck: body.autoRenewAck,
       ...(body.withdrawalWaiver !== undefined ? { withdrawalWaiver: body.withdrawalWaiver } : {}),
     });
-    return { status: 'switched', planKey: res.planKey, nextRenewalAt: null };
+    return fromServerSwitch(res, planKey);
   },
+  /**
+   * Back from the payment page: ask the server to settle this Checkout
+   * Session now instead of waiting for the webhook (a one-time payment has no
+   * second event). Card payments only, so only the international brand's
+   * return page calls it. Refuses anything that is not a session id without
+   * a request.
+   */
+  reconcileCheckout: async (sessionId: string): Promise<ReconcileCheckoutResponse> => {
+    const id = checkoutSessionId(sessionId);
+    if (!id) throw new Error('Invalid checkout session id');
+    return normaliseReconcile(await roboApi.post<unknown>(`${BILLING_BASE}/checkout/reconcile`, { sessionId: id }));
+  },
+  /**
+   * "Keep my plan": turn renewal back on for a cancelled subscription whose
+   * paid period is still running. The acknowledgement is always sent as true:
+   * the caller offers this only after the buyer ticked the renewal box.
+   */
+  resumeSubscription: async (): Promise<ResumeSubscriptionResponse> =>
+    normaliseResume(await roboApi.post<unknown>(`${CREDITS_BASE}/resume`, { autoRenewAck: true })),
   /** Absolute URL the browser opens directly — Stripe 302s to its hosted PDF,
    *  Alipay streams a generated receipt. Carries the session cookie. */
   invoiceDownloadUrl: (id: string) =>

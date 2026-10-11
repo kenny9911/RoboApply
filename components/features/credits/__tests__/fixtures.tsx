@@ -116,8 +116,10 @@ export function checkoutOf(
 
 /**
  * A plans response as the server sends it: the plans, the rails, and the
- * facts the pricing page prints (`refundPolicy`; `checkout.collectingEntity`,
- * null here).
+ * facts the pricing page prints (`refundPolicy`; `checkout.collectingEntity`
+ * and `studentOffer`, both null here). Every response built in this file
+ * carries all three, so the server contract may make them required members
+ * (waveM1-carryover MKT-2E.1).
  *
  * `plansView('goapply')` is a GoApply deployment with NO rail credential: the
  * plans list with prices and are on sale, but no rail can charge, so payments
@@ -136,6 +138,9 @@ export function plansView(brand: BrandId = 'roboapply', env: Record<string, stri
     fxReference: null,
     offers: [],
     refundPolicy: refundPolicyFor(brand),
+    // No student price is published on this response (the server sends the
+    // prices here only to a caller who is not sent the student plans).
+    studentOffer: null,
     ...extras,
   } as PlansView;
 }

@@ -19,7 +19,9 @@
         "alipay": "You pay on the Alipay page.",
         "wechatpay": "You scan a code, or pay inside WeChat.",
         "stripe": "You pay on the card payment page."
-      }
+      },
+      "portalScope": "Manage payment is for your payment method, invoices and billing details. To change your plan, choose another one here.",
+      "cnVisitor": "In mainland China? <link>You can pay in RMB with Alipay on %OTHER_BRAND%.</link>"
     },
     "usage": {
       "usedPractice": "{n, plural, one {# practice credit used} other {# practice credits used}}"
@@ -37,6 +39,17 @@
         "row": "{name}: {price}.",
         "how": "The student price is for students who confirm a school email in Settings. The student plans are listed there once the email is confirmed."
       }
+    },
+    "quote": {
+      "requiresAction": "Your bank needs you to confirm this payment. Your plan has not changed yet.",
+      "requiresActionCta": "Confirm the payment"
+    },
+    "resume": {
+      "button": "Keep my plan",
+      "pending": "Turning renewal back on…",
+      "done": "Renewal is back on.",
+      "ended": "This plan has already ended. Choose a plan below.",
+      "error": "We couldn't turn renewal back on. Try again."
     }
   }
 }

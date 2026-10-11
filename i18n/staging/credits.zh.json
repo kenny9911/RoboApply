@@ -19,7 +19,8 @@
         "alipay": "跳转到支付宝页面付款。",
         "wechatpay": "扫码支付，或在微信内付款。",
         "stripe": "跳转到银行卡支付页面付款。"
-      }
+      },
+      "cnVisitor": "在中国大陆？<link>可在 %OTHER_BRAND% 用支付宝以人民币付款。</link>"
     },
     "usage": {
       "usedPractice": "已用 {n} 个练习额度"
