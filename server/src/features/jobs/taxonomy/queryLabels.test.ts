@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 // The Simplified/Traditional variant guard of `npm run check` (its glossary lists mainland terms banned in zh-TW text).
 import { checkBundle, loadGlossary } from '../../../../../scripts/check-zh-variants.mjs';
-import { MAX_QUERY_SYNONYMS, providerQueryLabels, queryLabelsFor, type ProviderQueryLabel } from './queryLabels.js';
+import { MAX_QUERY_SYNONYMS, providerQueryLabels, queryLabelsFor, taiwanQueryText, type ProviderQueryLabel } from './queryLabels.js';
 import { ALONE_ONLY_PHRASES, normalizeTitle } from './match.js';
 import { TAXONOMY_NODES, getTaxonomyNode, taxonomyLabel } from './taxonomy.js';
 import * as taxonomy from './index.js';
@@ -93,16 +93,21 @@ describe('providerQueryLabels (SM-11)', () => {
     }
   });
 
-  it('Taiwan: English only until the role has a Traditional label, and never the Simplified one', () => {
+  it('Taiwan: the English texts plus exactly one Traditional Chinese text per role, never the Simplified label', () => {
     const glossary = loadGlossary(repoRoot);
     for (const role of ROLES) {
       const tw = providerQueryLabels(role.id, { market: 'intl', country: 'TW' });
       const english = providerQueryLabels(role.id, { market: 'intl' });
       const zhHant = taxonomyLabel(role.id, 'zh-TW');
       const hasTraditional = !!zhHant && CJK.test(zhHant);
-      // Before the Taiwan labels exist `taxonomyLabel(id, 'zh-TW')` is the English label: nothing is added.
+      // Every role has a Taiwan label since MKT-3E (JT-4), so every Taiwan query has its zh-TW text.
+      expect(hasTraditional, role.id).toBe(true);
       expect(tw.filter((l) => l.language === 'en'), role.id).toEqual(english);
-      expect(tw.filter((l) => l.language === 'zh-TW').length, role.id).toBe(hasTraditional ? 1 : 0);
+      expect(tw.filter((l) => l.language === 'zh-TW').length, role.id).toBe(1);
+      expect(tw.at(-1), role.id).toEqual({ text: taiwanQueryText(role), language: 'zh-TW' });
+      // The Taiwan text is the role's own Taiwan label or title, never read from the Simplified fields
+      // (行政助理 and 文案 are written the same in both scripts).
+      expect([role.zhHant, ...(role.synonyms.zhHant ?? [])], role.id).toContain(tw.at(-1)!.text);
       for (const l of tw) {
         expect(l.language === 'zh-CN', role.id).toBe(false);
         if (l.language !== 'zh-TW') continue;
@@ -115,7 +120,21 @@ describe('providerQueryLabels (SM-11)', () => {
     expect(providerQueryLabels('backend_engineer', { market: 'intl', country: 'HK' }).every((l) => l.language === 'en')).toBe(true);
   });
 
-  it('Taiwan: one zh-TW item once a Traditional label exists', () => {
+  it('JT-4: a Taiwan query is asked in Taiwan wording', () => {
+    expect(providerQueryLabels('software_engineer', { market: 'intl', country: 'TW' }).at(-1)).toEqual({ text: '軟體工程師', language: 'zh-TW' });
+    expect(providerQueryLabels('backend_engineer', { market: 'intl', country: 'TW' }).at(-1)).toEqual({ text: '後端工程師', language: 'zh-TW' });
+    expect(providerQueryLabels('product_manager', { market: 'intl', country: 'TW' }).at(-1)).toEqual({ text: '產品經理', language: 'zh-TW' });
+    expect(providerQueryLabels('marketing_specialist', { market: 'intl', country: 'TW' }).at(-1)).toEqual({ text: '行銷專員', language: 'zh-TW' });
+    // A label that joins two names is not a title to search for: the role's first Taiwan title stands in.
+    expect(taxonomyLabel('academic_advisor', 'zh-TW')).toBe('升學與職涯顧問');
+    expect(providerQueryLabels('academic_advisor', { market: 'intl', country: 'TW' }).at(-1)).toEqual({ text: '留學顧問', language: 'zh-TW' });
+    expect(taiwanQueryText(getTaxonomyNode('recsys_engineer')!)).toBe('推薦系統工程師');
+    for (const role of ROLES) expect(taiwanQueryText(role), role.id).not.toMatch(/[與或及、/]/);
+    // The mainland market is never asked in Taiwan wording.
+    expect(providerQueryLabels('software_engineer', { market: 'cn', country: 'TW' }).every((l) => l.language === 'zh-CN')).toBe(true);
+  });
+
+  it('Taiwan: one zh-TW item for a Traditional label, none for the English fallback', () => {
     const node = getTaxonomyNode('backend_engineer')!;
     const glossary = loadGlossary(repoRoot);
     const withLabel = queryLabelsFor(node, { market: 'intl', country: 'TW', zhHantLabel: '後端工程師' });

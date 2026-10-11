@@ -1,6 +1,11 @@
 {
   "version": 1,
-  "asOf": "2026-10-10",
+  "asOf": "2026-10-11",
+  "zhHantReview": {
+    "status": "draft",
+    "reviewedBy": null,
+    "reviewedOn": null
+  },
   "sources": [
     {
       "id": "onet_soc_2019",
@@ -17,6 +22,14 @@
       "url": null,
       "license": "Original work.",
       "usedFor": "Role groups, technology titles not covered by SOC, synonyms and Chinese labels."
+    },
+    {
+      "id": "zh_hant_labels",
+      "name": "Traditional Chinese (Taiwan) role labels and titles, compiled by the RoboApply team",
+      "publisher": "RoboApply",
+      "url": null,
+      "license": "Original work.",
+      "usedFor": "The `zhHant` labels and `synonyms.zhHant`: translations in Taiwan usage (軟體, 資料, 網路, 程式, 專案, 行銷, 人資, 韌體, 演算法), not conversions of the Simplified labels. Draft until a Taiwan-native reviewer signs off (`zhHantReview`)."
     }
   ],
   "nodes": [
@@ -26,9 +39,11 @@
       "parent": null,
       "en": "Software engineering",
       "zh": "软件开发",
+      "zhHant": "軟體工程",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -37,9 +52,11 @@
       "parent": "software_engineering",
       "en": "Backend and platform",
       "zh": "后端与平台",
+      "zhHant": "後端與平台",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -48,6 +65,7 @@
       "parent": "swe_backend",
       "en": "Software engineer",
       "zh": "软件工程师",
+      "zhHant": "軟體工程師",
       "synonyms": {
         "en": [
           "software developer",
@@ -67,6 +85,13 @@
           "研发工程师",
           "程序设计师",
           "软件设计师"
+        ],
+        "zhHant": [
+          "軟體開發工程師",
+          "程式設計師",
+          "軟體設計工程師",
+          "軟體研發工程師",
+          "程式開發工程師"
         ]
       },
       "soc": [
@@ -80,6 +105,7 @@
       "parent": "swe_backend",
       "en": "Backend engineer",
       "zh": "后端开发工程师",
+      "zhHant": "後端工程師",
       "synonyms": {
         "en": [
           "backend developer",
@@ -123,6 +149,19 @@
           "dotnet开发工程师",
           "csharp开发工程师",
           "nodejs开发工程师"
+        ],
+        "zhHant": [
+          "後端開發工程師",
+          "後端程式設計師",
+          "後端軟體工程師",
+          "Java工程師",
+          "Java開發工程師",
+          "Python工程師",
+          "PHP工程師",
+          "Golang工程師",
+          ".NET工程師",
+          "Node.js工程師",
+          "伺服器端工程師"
         ]
       },
       "soc": [
@@ -135,6 +174,7 @@
       "parent": "swe_backend",
       "en": "Full-stack engineer",
       "zh": "全栈工程师",
+      "zhHant": "全端工程師",
       "synonyms": {
         "en": [
           "full stack engineer",
@@ -145,6 +185,10 @@
         "zh": [
           "全栈开发工程师",
           "全栈开发"
+        ],
+        "zhHant": [
+          "全端開發工程師",
+          "全端軟體工程師"
         ]
       },
       "soc": [
@@ -157,6 +201,7 @@
       "parent": "swe_backend",
       "en": "Platform engineer",
       "zh": "平台开发工程师",
+      "zhHant": "平台工程師",
       "synonyms": {
         "en": [
           "developer platform engineer",
@@ -167,6 +212,10 @@
           "中台开发工程师",
           "基础平台开发工程师",
           "工具链开发工程师"
+        ],
+        "zhHant": [
+          "平台開發工程師",
+          "開發工具工程師"
         ]
       }
     },
@@ -176,6 +225,7 @@
       "parent": "swe_backend",
       "en": "Blockchain engineer",
       "zh": "区块链工程师",
+      "zhHant": "區塊鏈工程師",
       "synonyms": {
         "en": [
           "blockchain developer",
@@ -189,6 +239,11 @@
           "区块链开发工程师",
           "智能合约工程师",
           "智能合约开发"
+        ],
+        "zhHant": [
+          "區塊鏈開發工程師",
+          "智慧合約工程師",
+          "智慧合約開發工程師"
         ]
       }
     },
@@ -198,9 +253,11 @@
       "parent": "software_engineering",
       "en": "Frontend and mobile",
       "zh": "前端与移动端",
+      "zhHant": "前端與行動應用",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -209,6 +266,7 @@
       "parent": "swe_frontend",
       "en": "Frontend engineer",
       "zh": "前端开发工程师",
+      "zhHant": "前端工程師",
       "synonyms": {
         "en": [
           "frontend developer",
@@ -234,6 +292,13 @@
           "fe工程师",
           "web前端工程师",
           "h5前端"
+        ],
+        "zhHant": [
+          "前端開發工程師",
+          "網頁前端工程師",
+          "Web前端工程師",
+          "前端軟體工程師",
+          "F2E工程師"
         ]
       },
       "soc": [
@@ -246,6 +311,7 @@
       "parent": "swe_frontend",
       "en": "Web developer",
       "zh": "网站开发工程师",
+      "zhHant": "網站開發工程師",
       "synonyms": {
         "en": [
           "website developer",
@@ -257,6 +323,12 @@
           "网站开发",
           "网页开发工程师",
           "建站工程师"
+        ],
+        "zhHant": [
+          "網頁程式設計師",
+          "網頁開發工程師",
+          "網站程式設計師",
+          "網站工程師"
         ]
       },
       "soc": [
@@ -269,6 +341,7 @@
       "parent": "swe_frontend",
       "en": "iOS engineer",
       "zh": "iOS开发工程师",
+      "zhHant": "iOS工程師",
       "synonyms": {
         "en": [
           "ios developer",
@@ -280,6 +353,10 @@
           "ios工程师",
           "ios开发",
           "苹果开发工程师"
+        ],
+        "zhHant": [
+          "iOS開發工程師",
+          "iOS App工程師"
         ]
       }
     },
@@ -289,6 +366,7 @@
       "parent": "swe_frontend",
       "en": "Android engineer",
       "zh": "Android开发工程师",
+      "zhHant": "Android工程師",
       "synonyms": {
         "en": [
           "android developer",
@@ -300,6 +378,10 @@
           "android工程师",
           "安卓开发",
           "android开发"
+        ],
+        "zhHant": [
+          "Android開發工程師",
+          "Android App工程師"
         ]
       }
     },
@@ -309,6 +391,7 @@
       "parent": "swe_frontend",
       "en": "Mobile engineer",
       "zh": "移动端开发工程师",
+      "zhHant": "行動應用程式工程師",
       "synonyms": {
         "en": [
           "mobile developer",
@@ -324,6 +407,13 @@
           "客户端开发工程师",
           "小程序开发工程师",
           "鸿蒙开发工程师"
+        ],
+        "zhHant": [
+          "App工程師",
+          "App開發工程師",
+          "行動裝置工程師",
+          "手機App工程師",
+          "行動開發工程師"
         ]
       }
     },
@@ -333,6 +423,7 @@
       "parent": "swe_frontend",
       "en": "Game developer",
       "zh": "游戏开发工程师",
+      "zhHant": "遊戲程式設計師",
       "synonyms": {
         "en": [
           "game programmer",
@@ -350,6 +441,12 @@
           "u3d开发工程师",
           "ue4开发工程师",
           "游戏服务端开发"
+        ],
+        "zhHant": [
+          "遊戲開發工程師",
+          "遊戲工程師",
+          "Unity工程師",
+          "遊戲程式"
         ]
       }
     },
@@ -359,9 +456,11 @@
       "parent": "software_engineering",
       "en": "Quality and testing",
       "zh": "测试与质量",
+      "zhHant": "品質與測試",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -370,6 +469,7 @@
       "parent": "swe_quality",
       "en": "QA engineer",
       "zh": "软件测试工程师",
+      "zhHant": "軟體測試工程師",
       "synonyms": {
         "en": [
           "quality assurance engineer",
@@ -387,6 +487,12 @@
           "功能测试工程师",
           "软件测试",
           "游戏测试"
+        ],
+        "zhHant": [
+          "測試工程師",
+          "QA工程師",
+          "軟體品保工程師",
+          "軟體測試人員"
         ]
       },
       "soc": [
@@ -399,6 +505,7 @@
       "parent": "swe_quality",
       "en": "Test automation engineer",
       "zh": "测试开发工程师",
+      "zhHant": "自動化測試工程師",
       "synonyms": {
         "en": [
           "sdet",
@@ -412,6 +519,11 @@
           "自动化测试工程师",
           "测试开发",
           "性能测试工程师"
+        ],
+        "zhHant": [
+          "測試開發工程師",
+          "測試自動化工程師",
+          "效能測試工程師"
         ]
       },
       "soc": [
@@ -424,9 +536,11 @@
       "parent": "software_engineering",
       "en": "Embedded and systems software",
       "zh": "嵌入式与系统软件",
+      "zhHant": "嵌入式與系統軟體",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -435,6 +549,7 @@
       "parent": "swe_systems",
       "en": "Embedded software engineer",
       "zh": "嵌入式软件工程师",
+      "zhHant": "韌體工程師",
       "synonyms": {
         "en": [
           "embedded engineer",
@@ -451,6 +566,14 @@
           "固件开发工程师",
           "单片机开发工程师",
           "bsp工程师"
+        ],
+        "zhHant": [
+          "嵌入式軟體工程師",
+          "嵌入式系統工程師",
+          "韌體開發工程師",
+          "嵌入式工程師",
+          "BSP工程師",
+          "驅動程式工程師"
         ]
       }
     },
@@ -460,6 +583,7 @@
       "parent": "swe_systems",
       "en": "Systems software engineer",
       "zh": "系统软件工程师",
+      "zhHant": "系統軟體工程師",
       "synonyms": {
         "en": [
           "kernel engineer",
@@ -479,6 +603,12 @@
           "数据库内核开发",
           "gpu软件工程师",
           "高性能计算工程师"
+        ],
+        "zhHant": [
+          "作業系統工程師",
+          "核心開發工程師",
+          "編譯器工程師",
+          "高效能運算工程師"
         ]
       }
     },
@@ -488,9 +618,11 @@
       "parent": "software_engineering",
       "en": "Engineering leadership and architecture",
       "zh": "技术管理与架构",
+      "zhHant": "工程領導與架構",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -499,6 +631,7 @@
       "parent": "swe_leadership",
       "en": "Tech lead",
       "zh": "技术负责人",
+      "zhHant": "技術主管",
       "synonyms": {
         "en": [
           "technical lead",
@@ -510,6 +643,12 @@
           "技术组长",
           "开发组长",
           "技术主管"
+        ],
+        "zhHant": [
+          "技術負責人",
+          "開發組長",
+          "技術組長",
+          "軟體技術主管"
         ]
       }
     },
@@ -519,6 +658,7 @@
       "parent": "swe_leadership",
       "en": "Engineering manager",
       "zh": "研发经理",
+      "zhHant": "研發經理",
       "synonyms": {
         "en": [
           "software engineering manager",
@@ -530,6 +670,11 @@
           "技术经理",
           "研发主管",
           "开发经理"
+        ],
+        "zhHant": [
+          "軟體研發主管",
+          "研發主管",
+          "軟體開發經理"
         ]
       },
       "soc": [
@@ -542,6 +687,7 @@
       "parent": "swe_leadership",
       "en": "Director of engineering / CTO",
       "zh": "技术总监",
+      "zhHant": "技術總監",
       "synonyms": {
         "en": [
           "vp of engineering",
@@ -558,6 +704,13 @@
           "研发总监",
           "技术vp",
           "技术副总裁"
+        ],
+        "zhHant": [
+          "技術長",
+          "研發總監",
+          "研發處長",
+          "研發副總",
+          "工程處長"
         ]
       },
       "soc": [
@@ -570,6 +723,7 @@
       "parent": "swe_leadership",
       "en": "Software architect",
       "zh": "软件架构师",
+      "zhHant": "軟體架構師",
       "synonyms": {
         "en": [
           "system architect",
@@ -591,6 +745,11 @@
           "系统架构师",
           "技术架构师",
           "应用架构师"
+        ],
+        "zhHant": [
+          "系統架構師",
+          "技術架構師",
+          "應用程式架構師"
         ]
       },
       "soc": [
@@ -603,9 +762,11 @@
       "parent": null,
       "en": "Data and AI",
       "zh": "数据与人工智能",
+      "zhHant": "資料與 AI",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -614,9 +775,11 @@
       "parent": "data_ai",
       "en": "Data science and analytics",
       "zh": "数据科学与分析",
+      "zhHant": "資料科學與分析",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -625,6 +788,7 @@
       "parent": "data_analytics",
       "en": "Data scientist",
       "zh": "数据科学家",
+      "zhHant": "資料科學家",
       "synonyms": {
         "en": [
           "data science",
@@ -635,6 +799,11 @@
           "数据科学工程师",
           "数据挖掘工程师",
           "数据挖掘"
+        ],
+        "zhHant": [
+          "資料科學工程師",
+          "資料探勘工程師",
+          "資料探勘"
         ]
       },
       "soc": [
@@ -647,6 +816,7 @@
       "parent": "data_analytics",
       "en": "Data analyst",
       "zh": "数据分析师",
+      "zhHant": "資料分析師",
       "synonyms": {
         "en": [
           "data analytics analyst",
@@ -661,6 +831,11 @@
           "数据分析专员",
           "商业数据分析师",
           "数据运营"
+        ],
+        "zhHant": [
+          "資料分析人員",
+          "商業資料分析師",
+          "資料分析專員"
         ]
       }
     },
@@ -670,6 +845,7 @@
       "parent": "data_analytics",
       "en": "Product analyst",
       "zh": "产品数据分析师",
+      "zhHant": "產品分析師",
       "synonyms": {
         "en": [
           "product data analyst",
@@ -679,6 +855,10 @@
         "zh": [
           "产品分析师",
           "用户行为分析师"
+        ],
+        "zhHant": [
+          "產品資料分析師",
+          "使用者行為分析師"
         ]
       }
     },
@@ -688,6 +868,7 @@
       "parent": "data_analytics",
       "en": "Business intelligence analyst",
       "zh": "商业智能分析师",
+      "zhHant": "商業智慧分析師",
       "synonyms": {
         "en": [
           "bi analyst",
@@ -704,6 +885,11 @@
           "bi工程师",
           "bi开发工程师",
           "报表开发工程师"
+        ],
+        "zhHant": [
+          "BI分析師",
+          "BI工程師",
+          "報表開發工程師"
         ]
       },
       "soc": [
@@ -716,6 +902,7 @@
       "parent": "data_analytics",
       "en": "Statistician",
       "zh": "统计分析师",
+      "zhHant": "統計分析師",
       "synonyms": {
         "en": [
           "biostatistician",
@@ -727,6 +914,11 @@
           "统计师",
           "生物统计师",
           "统计编程师"
+        ],
+        "zhHant": [
+          "統計人員",
+          "生物統計師",
+          "統計程式設計師"
         ]
       },
       "soc": [
@@ -739,9 +931,11 @@
       "parent": "data_ai",
       "en": "Data engineering",
       "zh": "数据工程",
+      "zhHant": "資料工程",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -750,6 +944,7 @@
       "parent": "data_engineering",
       "en": "Data engineer",
       "zh": "数据开发工程师",
+      "zhHant": "資料工程師",
       "synonyms": {
         "en": [
           "big data engineer",
@@ -768,6 +963,12 @@
           "数仓开发工程师",
           "数据仓库工程师",
           "数仓工程师"
+        ],
+        "zhHant": [
+          "巨量資料工程師",
+          "ETL工程師",
+          "資料倉儲工程師",
+          "資料平台工程師"
         ]
       }
     },
@@ -777,6 +978,7 @@
       "parent": "data_engineering",
       "en": "Analytics engineer",
       "zh": "分析工程师",
+      "zhHant": "分析工程師",
       "synonyms": {
         "en": [
           "dbt developer",
@@ -784,6 +986,9 @@
         ],
         "zh": [
           "数据建模工程师"
+        ],
+        "zhHant": [
+          "資料模型工程師"
         ]
       }
     },
@@ -793,6 +998,7 @@
       "parent": "data_engineering",
       "en": "Database administrator",
       "zh": "数据库管理员",
+      "zhHant": "資料庫管理師",
       "synonyms": {
         "en": [
           "dba",
@@ -809,6 +1015,12 @@
           "dba工程师",
           "数据库工程师",
           "数据库运维工程师"
+        ],
+        "zhHant": [
+          "資料庫管理員",
+          "DBA工程師",
+          "資料庫工程師",
+          "資料庫管理人員"
         ]
       },
       "soc": [
@@ -821,6 +1033,7 @@
       "parent": "data_engineering",
       "en": "Data architect",
       "zh": "数据架构师",
+      "zhHant": "資料架構師",
       "synonyms": {
         "en": [
           "database architect",
@@ -831,6 +1044,10 @@
         "zh": [
           "数据库架构师",
           "数仓架构师"
+        ],
+        "zhHant": [
+          "資料庫架構師",
+          "資料倉儲架構師"
         ]
       },
       "soc": [
@@ -843,9 +1060,11 @@
       "parent": "data_ai",
       "en": "Machine learning and AI",
       "zh": "机器学习与人工智能",
+      "zhHant": "機器學習與 AI",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -854,6 +1073,7 @@
       "parent": "ml_ai",
       "en": "Machine learning engineer",
       "zh": "机器学习工程师",
+      "zhHant": "機器學習工程師",
       "synonyms": {
         "en": [
           "ml engineer",
@@ -875,6 +1095,14 @@
           "人工智能工程师",
           "ai算法工程师",
           "深度学习算法工程师"
+        ],
+        "zhHant": [
+          "演算法工程師",
+          "AI工程師",
+          "人工智慧工程師",
+          "深度學習工程師",
+          "AI演算法工程師",
+          "演算法開發工程師"
         ]
       }
     },
@@ -884,6 +1112,7 @@
       "parent": "ml_ai",
       "en": "AI research scientist",
       "zh": "AI研究科学家",
+      "zhHant": "AI研究科學家",
       "synonyms": {
         "en": [
           "research scientist machine learning",
@@ -900,6 +1129,12 @@
           "ai研究员",
           "人工智能研究员",
           "机器学习研究员"
+        ],
+        "zhHant": [
+          "AI研究員",
+          "人工智慧研究員",
+          "機器學習研究員",
+          "演算法研究員"
         ]
       },
       "soc": [
@@ -912,6 +1147,7 @@
       "parent": "ml_ai",
       "en": "NLP and LLM engineer",
       "zh": "大模型算法工程师",
+      "zhHant": "自然語言處理工程師",
       "synonyms": {
         "en": [
           "nlp engineer",
@@ -930,6 +1166,13 @@
           "自然语言处理工程师",
           "大模型应用开发工程师",
           "提示词工程师"
+        ],
+        "zhHant": [
+          "NLP工程師",
+          "大型語言模型工程師",
+          "LLM工程師",
+          "生成式AI工程師",
+          "提示工程師"
         ]
       }
     },
@@ -939,6 +1182,7 @@
       "parent": "ml_ai",
       "en": "Computer vision engineer",
       "zh": "计算机视觉工程师",
+      "zhHant": "電腦視覺工程師",
       "synonyms": {
         "en": [
           "cv engineer",
@@ -951,6 +1195,11 @@
           "视觉算法工程师",
           "图像算法工程师",
           "图像处理工程师"
+        ],
+        "zhHant": [
+          "影像處理工程師",
+          "影像演算法工程師",
+          "視覺演算法工程師"
         ]
       }
     },
@@ -960,6 +1209,7 @@
       "parent": "ml_ai",
       "en": "Search and recommendation engineer",
       "zh": "搜索推荐算法工程师",
+      "zhHant": "搜尋與推薦工程師",
       "synonyms": {
         "en": [
           "recommendation engineer",
@@ -975,6 +1225,12 @@
           "搜索算法工程师",
           "广告算法工程师",
           "推荐系统工程师"
+        ],
+        "zhHant": [
+          "推薦系統工程師",
+          "搜尋引擎工程師",
+          "推薦演算法工程師",
+          "廣告演算法工程師"
         ]
       }
     },
@@ -984,6 +1240,7 @@
       "parent": "ml_ai",
       "en": "MLOps engineer",
       "zh": "MLOps工程师",
+      "zhHant": "MLOps工程師",
       "synonyms": {
         "en": [
           "machine learning operations engineer",
@@ -997,6 +1254,11 @@
           "ai平台工程师",
           "ai基础设施工程师",
           "大模型训练平台工程师"
+        ],
+        "zhHant": [
+          "機器學習平台工程師",
+          "AI平台工程師",
+          "AI基礎架構工程師"
         ]
       }
     },
@@ -1006,6 +1268,7 @@
       "parent": "ml_ai",
       "en": "Data annotation specialist",
       "zh": "数据标注员",
+      "zhHant": "資料標註員",
       "synonyms": {
         "en": [
           "data labeler",
@@ -1021,6 +1284,12 @@
           "标注员",
           "ai训练师",
           "数据标注专员"
+        ],
+        "zhHant": [
+          "資料標記人員",
+          "AI訓練師",
+          "資料標註專員",
+          "標註人員"
         ]
       }
     },
@@ -1030,9 +1299,11 @@
       "parent": null,
       "en": "IT and infrastructure",
       "zh": "IT与基础架构",
+      "zhHant": "IT 與基礎架構",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -1041,9 +1312,11 @@
       "parent": "it_infrastructure",
       "en": "DevOps and cloud",
       "zh": "运维开发与云计算",
+      "zhHant": "DevOps 與雲端",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -1052,6 +1325,7 @@
       "parent": "devops_cloud",
       "en": "DevOps engineer",
       "zh": "DevOps工程师",
+      "zhHant": "DevOps工程師",
       "synonyms": {
         "en": [
           "devops",
@@ -1065,6 +1339,11 @@
           "运维开发工程师",
           "devops开发工程师",
           "持续集成工程师"
+        ],
+        "zhHant": [
+          "維運開發工程師",
+          "持續整合工程師",
+          "CI/CD工程師"
         ]
       }
     },
@@ -1074,6 +1353,7 @@
       "parent": "devops_cloud",
       "en": "Site reliability engineer",
       "zh": "SRE工程师",
+      "zhHant": "網站可靠性工程師",
       "synonyms": {
         "en": [
           "sre",
@@ -1085,6 +1365,11 @@
           "网站可靠性工程师",
           "稳定性工程师",
           "可靠性运维工程师"
+        ],
+        "zhHant": [
+          "SRE工程師",
+          "系統可靠性工程師",
+          "服務可靠性工程師"
         ]
       }
     },
@@ -1094,6 +1379,7 @@
       "parent": "devops_cloud",
       "en": "Cloud engineer",
       "zh": "云计算工程师",
+      "zhHant": "雲端工程師",
       "synonyms": {
         "en": [
           "cloud architect",
@@ -1112,6 +1398,12 @@
           "云平台工程师",
           "云运维工程师",
           "云原生工程师"
+        ],
+        "zhHant": [
+          "雲端架構師",
+          "雲端平台工程師",
+          "雲端維運工程師",
+          "雲端系統工程師"
         ]
       }
     },
@@ -1121,6 +1413,7 @@
       "parent": "devops_cloud",
       "en": "Infrastructure engineer",
       "zh": "基础架构工程师",
+      "zhHant": "基礎架構工程師",
       "synonyms": {
         "en": [
           "infrastructure software engineer",
@@ -1133,6 +1426,11 @@
           "基础设施工程师",
           "分布式存储工程师",
           "分布式系统工程师"
+        ],
+        "zhHant": [
+          "基礎設施工程師",
+          "分散式系統工程師",
+          "儲存系統工程師"
         ]
       }
     },
@@ -1142,9 +1440,11 @@
       "parent": "it_infrastructure",
       "en": "IT operations and support",
       "zh": "IT运维与支持",
+      "zhHant": "IT 維運與支援",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -1153,6 +1453,7 @@
       "parent": "it_ops",
       "en": "Systems administrator",
       "zh": "系统管理员",
+      "zhHant": "系統管理員",
       "synonyms": {
         "en": [
           "system administrator",
@@ -1167,6 +1468,12 @@
           "运维工程师",
           "linux运维工程师",
           "系统运维"
+        ],
+        "zhHant": [
+          "系統維運工程師",
+          "維運工程師",
+          "Linux系統工程師",
+          "系統管理師"
         ]
       },
       "soc": [
@@ -1179,6 +1486,7 @@
       "parent": "it_ops",
       "en": "Network engineer",
       "zh": "网络工程师",
+      "zhHant": "網路工程師",
       "synonyms": {
         "en": [
           "network administrator",
@@ -1191,6 +1499,12 @@
           "网络运维工程师",
           "网络管理员",
           "网络架构师"
+        ],
+        "zhHant": [
+          "網路管理工程師",
+          "網管工程師",
+          "網路架構師",
+          "網路維運工程師"
         ]
       },
       "soc": [
@@ -1203,6 +1517,7 @@
       "parent": "it_ops",
       "en": "IT support specialist",
       "zh": "IT支持工程师",
+      "zhHant": "IT支援工程師",
       "synonyms": {
         "en": [
           "help desk technician",
@@ -1221,6 +1536,16 @@
           "网管",
           "it专员",
           "桌面支持工程师"
+        ],
+        "zhHant": [
+          "MIS工程師",
+          "資訊支援工程師",
+          "IT支援人員",
+          "資訊人員",
+          "MIS人員",
+          "電腦維修工程師",
+          "IT專員",
+          "網管人員"
         ]
       },
       "soc": [
@@ -1233,6 +1558,7 @@
       "parent": "it_ops",
       "en": "IT manager",
       "zh": "IT经理",
+      "zhHant": "資訊經理",
       "synonyms": {
         "en": [
           "information technology manager",
@@ -1248,6 +1574,14 @@
           "信息化经理",
           "信息中心主任",
           "it总监"
+        ],
+        "zhHant": [
+          "資訊主管",
+          "IT經理",
+          "MIS主管",
+          "資訊部經理",
+          "資訊長",
+          "資訊管理主管"
         ]
       },
       "soc": [
@@ -1260,6 +1594,7 @@
       "parent": "it_ops",
       "en": "IT project manager",
       "zh": "IT项目经理",
+      "zhHant": "資訊專案經理",
       "synonyms": {
         "en": [
           "technical project manager",
@@ -1270,6 +1605,12 @@
           "软件项目经理",
           "技术项目经理",
           "信息化项目经理"
+        ],
+        "zhHant": [
+          "IT專案經理",
+          "軟體專案經理",
+          "技術專案經理",
+          "系統導入專案經理"
         ]
       },
       "soc": [
@@ -1282,6 +1623,7 @@
       "parent": "it_ops",
       "en": "Systems analyst",
       "zh": "系统分析师",
+      "zhHant": "系統分析師",
       "synonyms": {
         "en": [
           "computer systems analyst",
@@ -1292,6 +1634,10 @@
         "zh": [
           "系统分析员",
           "it业务分析师"
+        ],
+        "zhHant": [
+          "系統分析人員",
+          "系統分析工程師"
         ]
       },
       "soc": [
@@ -1304,6 +1650,7 @@
       "parent": "it_ops",
       "en": "ERP consultant",
       "zh": "ERP实施顾问",
+      "zhHant": "ERP顧問",
       "synonyms": {
         "en": [
           "sap consultant",
@@ -1321,6 +1668,12 @@
           "实施工程师",
           "实施顾问",
           "erp实施工程师"
+        ],
+        "zhHant": [
+          "SAP顧問",
+          "ERP導入顧問",
+          "系統導入顧問",
+          "ERP工程師"
         ]
       }
     },
@@ -1330,9 +1683,11 @@
       "parent": null,
       "en": "Security",
       "zh": "网络安全",
+      "zhHant": "資訊安全",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -1341,9 +1696,11 @@
       "parent": "security",
       "en": "Security engineering",
       "zh": "安全工程",
+      "zhHant": "資安工程",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -1352,6 +1709,7 @@
       "parent": "security_engineering",
       "en": "Security engineer",
       "zh": "安全工程师",
+      "zhHant": "資安工程師",
       "synonyms": {
         "en": [
           "cybersecurity engineer",
@@ -1368,6 +1726,12 @@
           "信息安全工程师",
           "应用安全工程师",
           "安全开发工程师"
+        ],
+        "zhHant": [
+          "資訊安全工程師",
+          "網路安全工程師",
+          "應用程式安全工程師",
+          "資安開發工程師"
         ]
       }
     },
@@ -1377,6 +1741,7 @@
       "parent": "security_engineering",
       "en": "Penetration tester",
       "zh": "渗透测试工程师",
+      "zhHant": "滲透測試工程師",
       "synonyms": {
         "en": [
           "pentester",
@@ -1393,6 +1758,13 @@
           "红队工程师",
           "安全研究员",
           "漏洞挖掘工程师"
+        ],
+        "zhHant": [
+          "滲透測試人員",
+          "白帽駭客",
+          "紅隊工程師",
+          "資安研究員",
+          "弱點分析工程師"
         ]
       }
     },
@@ -1402,6 +1774,7 @@
       "parent": "security_engineering",
       "en": "Security analyst",
       "zh": "安全分析师",
+      "zhHant": "資安分析師",
       "synonyms": {
         "en": [
           "information security analyst",
@@ -1423,6 +1796,12 @@
           "安全运营工程师",
           "安全运维工程师",
           "应急响应工程师"
+        ],
+        "zhHant": [
+          "資訊安全分析師",
+          "資安監控工程師",
+          "資安事件應變工程師",
+          "SOC分析師"
         ]
       },
       "soc": [
@@ -1435,9 +1814,11 @@
       "parent": "security",
       "en": "Security governance and leadership",
       "zh": "安全治理与管理",
+      "zhHant": "資安治理與領導",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -1446,6 +1827,7 @@
       "parent": "security_governance",
       "en": "Security architect",
       "zh": "安全架构师",
+      "zhHant": "資安架構師",
       "synonyms": {
         "en": [
           "cybersecurity architect",
@@ -1455,6 +1837,10 @@
         "zh": [
           "网络安全架构师",
           "信息安全架构师"
+        ],
+        "zhHant": [
+          "資訊安全架構師",
+          "網路安全架構師"
         ]
       }
     },
@@ -1464,6 +1850,7 @@
       "parent": "security_governance",
       "en": "Security compliance analyst",
       "zh": "安全合规专员",
+      "zhHant": "資安法遵專員",
       "synonyms": {
         "en": [
           "grc analyst",
@@ -1477,6 +1864,12 @@
           "等保测评工程师",
           "it审计",
           "安全合规工程师"
+        ],
+        "zhHant": [
+          "資安稽核人員",
+          "資訊安全管理師",
+          "ISO 27001稽核員",
+          "資安合規工程師"
         ]
       }
     },
@@ -1486,6 +1879,7 @@
       "parent": "security_governance",
       "en": "Head of security / CISO",
       "zh": "安全总监",
+      "zhHant": "資安長",
       "synonyms": {
         "en": [
           "ciso",
@@ -1500,6 +1894,12 @@
           "信息安全总监",
           "安全经理",
           "信息安全经理"
+        ],
+        "zhHant": [
+          "資安主管",
+          "資訊安全長",
+          "資安經理",
+          "資訊安全經理"
         ]
       }
     },
@@ -1509,9 +1909,11 @@
       "parent": null,
       "en": "Product and program management",
       "zh": "产品与项目管理",
+      "zhHant": "產品與計畫管理",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -1520,9 +1922,11 @@
       "parent": "product",
       "en": "Product management",
       "zh": "产品管理",
+      "zhHant": "產品管理",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -1531,6 +1935,7 @@
       "parent": "product_management",
       "en": "Product manager",
       "zh": "产品经理",
+      "zhHant": "產品經理",
       "synonyms": {
         "en": [
           "pm",
@@ -1548,6 +1953,13 @@
           "产品主管",
           "b端产品经理",
           "c端产品经理"
+        ],
+        "zhHant": [
+          "產品企劃",
+          "產品專員",
+          "產品負責人",
+          "產品主管",
+          "產品管理師"
         ]
       }
     },
@@ -1557,6 +1969,7 @@
       "parent": "product_management",
       "en": "Technical product manager",
       "zh": "技术产品经理",
+      "zhHant": "技術產品經理",
       "synonyms": {
         "en": [
           "platform product manager",
@@ -1569,6 +1982,11 @@
           "后台产品经理",
           "技术型产品经理",
           "数据产品经理"
+        ],
+        "zhHant": [
+          "平台產品經理",
+          "資料產品經理",
+          "技術型產品經理"
         ]
       }
     },
@@ -1578,6 +1996,7 @@
       "parent": "product_management",
       "en": "AI product manager",
       "zh": "AI产品经理",
+      "zhHant": "AI產品經理",
       "synonyms": {
         "en": [
           "ml product manager",
@@ -1589,6 +2008,10 @@
           "人工智能产品经理",
           "大模型产品经理",
           "算法产品经理"
+        ],
+        "zhHant": [
+          "人工智慧產品經理",
+          "演算法產品經理"
         ]
       }
     },
@@ -1598,6 +2021,7 @@
       "parent": "product_management",
       "en": "Head of product",
       "zh": "产品总监",
+      "zhHant": "產品總監",
       "synonyms": {
         "en": [
           "vp of product",
@@ -1611,6 +2035,11 @@
           "首席产品官",
           "产品副总裁",
           "产品vp"
+        ],
+        "zhHant": [
+          "產品長",
+          "產品副總",
+          "產品處長"
         ]
       }
     },
@@ -1620,9 +2049,11 @@
       "parent": "product",
       "en": "Program and project management",
       "zh": "项目管理",
+      "zhHant": "計畫與專案管理",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -1631,6 +2062,7 @@
       "parent": "program_management",
       "en": "Program manager",
       "zh": "项目群经理",
+      "zhHant": "專案群經理",
       "synonyms": {
         "en": [
           "technical program manager",
@@ -1641,6 +2073,11 @@
         "zh": [
           "项目集经理",
           "技术项目群经理"
+        ],
+        "zhHant": [
+          "專案集經理",
+          "技術專案群經理",
+          "大型專案經理"
         ]
       }
     },
@@ -1650,6 +2087,7 @@
       "parent": "program_management",
       "en": "Project manager",
       "zh": "项目经理",
+      "zhHant": "專案經理",
       "synonyms": {
         "en": [
           "project coordinator",
@@ -1664,6 +2102,13 @@
           "项目主管",
           "pmo",
           "项目管理师"
+        ],
+        "zhHant": [
+          "專案管理師",
+          "專案專員",
+          "專案助理",
+          "專案主管",
+          "專案管理人員"
         ]
       },
       "soc": [
@@ -1676,6 +2121,7 @@
       "parent": "program_management",
       "en": "Scrum master",
       "zh": "敏捷教练",
+      "zhHant": "敏捷教練",
       "synonyms": {
         "en": [
           "agile coach",
@@ -1686,6 +2132,10 @@
         "zh": [
           "scrum master",
           "敏捷项目经理"
+        ],
+        "zhHant": [
+          "Scrum Master",
+          "敏捷專案經理"
         ]
       }
     },
@@ -1695,9 +2145,11 @@
       "parent": null,
       "en": "Design",
       "zh": "设计",
+      "zhHant": "設計",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -1706,9 +2158,11 @@
       "parent": "design",
       "en": "Product and UX design",
       "zh": "产品与体验设计",
+      "zhHant": "產品與 UX 設計",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -1717,6 +2171,7 @@
       "parent": "product_design",
       "en": "Product designer",
       "zh": "产品设计师",
+      "zhHant": "產品設計師",
       "synonyms": {
         "en": [
           "digital product designer",
@@ -1728,6 +2183,11 @@
           "ui ux设计师",
           "ux ui设计师",
           "数字产品设计师"
+        ],
+        "zhHant": [
+          "UI/UX設計師",
+          "UX/UI設計師",
+          "數位產品設計師"
         ]
       }
     },
@@ -1737,6 +2197,7 @@
       "parent": "product_design",
       "en": "UX designer",
       "zh": "交互设计师",
+      "zhHant": "使用者體驗設計師",
       "synonyms": {
         "en": [
           "user experience designer",
@@ -1751,6 +2212,11 @@
           "ux设计师",
           "交互设计",
           "体验设计师"
+        ],
+        "zhHant": [
+          "UX設計師",
+          "互動設計師",
+          "體驗設計師"
         ]
       }
     },
@@ -1760,6 +2226,7 @@
       "parent": "product_design",
       "en": "UI designer",
       "zh": "UI设计师",
+      "zhHant": "UI設計師",
       "synonyms": {
         "en": [
           "user interface designer",
@@ -1771,6 +2238,12 @@
           "界面设计师",
           "网页设计师",
           "ui设计"
+        ],
+        "zhHant": [
+          "使用者介面設計師",
+          "介面設計師",
+          "網頁設計師",
+          "網頁視覺設計師"
         ]
       },
       "soc": [
@@ -1783,6 +2256,7 @@
       "parent": "product_design",
       "en": "UX researcher",
       "zh": "用户研究员",
+      "zhHant": "使用者研究員",
       "synonyms": {
         "en": [
           "user researcher",
@@ -1795,6 +2269,11 @@
           "用研",
           "用户体验研究员",
           "用户研究专员"
+        ],
+        "zhHant": [
+          "UX研究員",
+          "使用者體驗研究員",
+          "使用者研究專員"
         ]
       }
     },
@@ -1804,6 +2283,7 @@
       "parent": "product_design",
       "en": "Design manager",
       "zh": "设计经理",
+      "zhHant": "設計經理",
       "synonyms": {
         "en": [
           "head of design",
@@ -1816,6 +2296,11 @@
           "设计总监",
           "设计主管",
           "创意总监"
+        ],
+        "zhHant": [
+          "設計總監",
+          "設計主管",
+          "創意總監"
         ]
       }
     },
@@ -1825,9 +2310,11 @@
       "parent": "design",
       "en": "Visual, brand and game art",
       "zh": "视觉、品牌与游戏美术",
+      "zhHant": "視覺、品牌與遊戲美術",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -1836,6 +2323,7 @@
       "parent": "visual_design",
       "en": "Graphic designer",
       "zh": "平面设计师",
+      "zhHant": "平面設計師",
       "synonyms": {
         "en": [
           "visual designer",
@@ -1851,6 +2339,14 @@
           "美工",
           "电商美工",
           "包装设计师"
+        ],
+        "zhHant": [
+          "視覺設計師",
+          "美術設計",
+          "品牌設計師",
+          "美編",
+          "包裝設計師",
+          "美術編輯"
         ]
       },
       "soc": [
@@ -1863,6 +2359,7 @@
       "parent": "visual_design",
       "en": "Motion designer and animator",
       "zh": "动效设计师",
+      "zhHant": "動態設計師",
       "synonyms": {
         "en": [
           "motion graphics designer",
@@ -1879,6 +2376,12 @@
           "mg动画设计师",
           "特效师",
           "影视特效师"
+        ],
+        "zhHant": [
+          "動畫師",
+          "動畫設計師",
+          "特效師",
+          "影視特效師"
         ]
       },
       "soc": [
@@ -1891,6 +2394,7 @@
       "parent": "visual_design",
       "en": "Illustrator",
       "zh": "插画师",
+      "zhHant": "插畫家",
       "synonyms": {
         "en": [
           "illustration artist",
@@ -1900,6 +2404,11 @@
         "zh": [
           "插画设计师",
           "分镜师"
+        ],
+        "zhHant": [
+          "插畫師",
+          "插畫設計師",
+          "分鏡師"
         ]
       }
     },
@@ -1909,6 +2418,7 @@
       "parent": "visual_design",
       "en": "Game artist",
       "zh": "游戏美术",
+      "zhHant": "遊戲美術",
       "synonyms": {
         "en": [
           "3d artist",
@@ -1927,6 +2437,14 @@
           "角色原画",
           "场景原画",
           "技术美术"
+        ],
+        "zhHant": [
+          "遊戲美術設計師",
+          "遊戲原畫師",
+          "3D美術設計師",
+          "角色設計師",
+          "場景設計師",
+          "技術美術"
         ]
       }
     },
@@ -1936,6 +2454,7 @@
       "parent": "visual_design",
       "en": "Game designer",
       "zh": "游戏策划",
+      "zhHant": "遊戲企劃",
       "synonyms": {
         "en": [
           "level designer",
@@ -1950,6 +2469,13 @@
           "数值策划",
           "系统策划",
           "剧情策划"
+        ],
+        "zhHant": [
+          "遊戲企劃師",
+          "關卡設計師",
+          "數值企劃",
+          "系統企劃",
+          "劇情企劃"
         ]
       }
     },
@@ -1959,9 +2485,11 @@
       "parent": "design",
       "en": "Industrial, interior and architecture",
       "zh": "工业、室内与建筑设计",
+      "zhHant": "工業、室內與建築設計",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -1970,6 +2498,7 @@
       "parent": "spatial_design",
       "en": "Industrial designer",
       "zh": "工业设计师",
+      "zhHant": "工業設計師",
       "synonyms": {
         "en": [
           "product industrial designer",
@@ -1980,6 +2509,11 @@
           "产品外观设计师",
           "id设计师",
           "工业设计"
+        ],
+        "zhHant": [
+          "產品外觀設計師",
+          "ID設計師",
+          "工業設計"
         ]
       },
       "soc": [
@@ -1992,6 +2526,7 @@
       "parent": "spatial_design",
       "en": "Interior designer",
       "zh": "室内设计师",
+      "zhHant": "室內設計師",
       "synonyms": {
         "en": [
           "space designer",
@@ -2002,6 +2537,11 @@
           "空间设计师",
           "软装设计师",
           "家装设计师"
+        ],
+        "zhHant": [
+          "空間設計師",
+          "軟裝設計師",
+          "室內裝修設計師"
         ]
       },
       "soc": [
@@ -2014,6 +2554,7 @@
       "parent": "spatial_design",
       "en": "Architect",
       "zh": "建筑师",
+      "zhHant": "建築師",
       "synonyms": {
         "en": [
           "building architect",
@@ -2027,6 +2568,11 @@
           "注册建筑师",
           "景观设计师",
           "规划设计师"
+        ],
+        "zhHant": [
+          "建築設計師",
+          "景觀設計師",
+          "都市計畫師"
         ]
       },
       "soc": [
@@ -2039,9 +2585,11 @@
       "parent": null,
       "en": "Hardware and electronics",
       "zh": "硬件与电子",
+      "zhHant": "硬體與電子",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -2050,9 +2598,11 @@
       "parent": "hardware",
       "en": "Hardware design",
       "zh": "硬件设计",
+      "zhHant": "硬體設計",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -2061,6 +2611,7 @@
       "parent": "hardware_design",
       "en": "Hardware engineer",
       "zh": "硬件工程师",
+      "zhHant": "硬體工程師",
       "synonyms": {
         "en": [
           "computer hardware engineer",
@@ -2076,6 +2627,14 @@
           "电路设计工程师",
           "pcb工程师",
           "layout工程师"
+        ],
+        "zhHant": [
+          "硬體研發工程師",
+          "硬體開發工程師",
+          "PCB設計工程師",
+          "電路設計工程師",
+          "Layout工程師",
+          "PCB工程師"
         ]
       },
       "soc": [
@@ -2088,6 +2647,7 @@
       "parent": "hardware_design",
       "en": "Electrical engineer",
       "zh": "电气工程师",
+      "zhHant": "電機工程師",
       "synonyms": {
         "en": [
           "electrical design engineer",
@@ -2100,6 +2660,12 @@
           "电力工程师",
           "强电工程师",
           "电力系统工程师"
+        ],
+        "zhHant": [
+          "電機設計工程師",
+          "電力工程師",
+          "電力系統工程師",
+          "電氣工程師"
         ]
       },
       "soc": [
@@ -2112,6 +2678,7 @@
       "parent": "hardware_design",
       "en": "Electronics engineer",
       "zh": "电子工程师",
+      "zhHant": "電子工程師",
       "synonyms": {
         "en": [
           "rf engineer",
@@ -2127,6 +2694,14 @@
           "电子电路工程师",
           "电源工程师",
           "天线工程师"
+        ],
+        "zhHant": [
+          "射頻工程師",
+          "RF工程師",
+          "類比電路工程師",
+          "電源工程師",
+          "天線工程師",
+          "電子電路工程師"
         ]
       },
       "soc": [
@@ -2139,9 +2714,11 @@
       "parent": "hardware",
       "en": "Semiconductors",
       "zh": "半导体与芯片",
+      "zhHant": "半導體",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -2150,6 +2727,7 @@
       "parent": "semiconductors",
       "en": "Chip design engineer",
       "zh": "芯片设计工程师",
+      "zhHant": "IC設計工程師",
       "synonyms": {
         "en": [
           "asic design engineer",
@@ -2171,6 +2749,13 @@
           "数字前端设计工程师",
           "数字后端工程师",
           "版图工程师"
+        ],
+        "zhHant": [
+          "晶片設計工程師",
+          "數位IC設計工程師",
+          "類比IC設計工程師",
+          "FPGA工程師",
+          "IC佈局工程師"
         ]
       }
     },
@@ -2180,6 +2765,7 @@
       "parent": "semiconductors",
       "en": "Chip verification engineer",
       "zh": "芯片验证工程师",
+      "zhHant": "IC驗證工程師",
       "synonyms": {
         "en": [
           "design verification engineer",
@@ -2191,6 +2777,11 @@
           "ic验证工程师",
           "数字验证工程师",
           "验证工程师"
+        ],
+        "zhHant": [
+          "晶片驗證工程師",
+          "數位驗證工程師",
+          "設計驗證工程師"
         ]
       }
     },
@@ -2200,6 +2791,7 @@
       "parent": "semiconductors",
       "en": "Semiconductor process engineer",
       "zh": "半导体工艺工程师",
+      "zhHant": "半導體製程工程師",
       "synonyms": {
         "en": [
           "process integration engineer",
@@ -2217,6 +2809,14 @@
           "良率工程师",
           "封装工程师",
           "刻蚀工程师"
+        ],
+        "zhHant": [
+          "製程整合工程師",
+          "黃光製程工程師",
+          "良率工程師",
+          "封裝工程師",
+          "蝕刻製程工程師",
+          "薄膜製程工程師"
         ]
       }
     },
@@ -2226,9 +2826,11 @@
       "parent": "hardware",
       "en": "Robotics and autonomy",
       "zh": "机器人与自动驾驶",
+      "zhHant": "機器人與自主系統",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -2237,6 +2839,7 @@
       "parent": "robotics",
       "en": "Robotics engineer",
       "zh": "机器人工程师",
+      "zhHant": "機器人工程師",
       "synonyms": {
         "en": [
           "robotics software engineer",
@@ -2250,6 +2853,12 @@
           "机器人开发工程师",
           "机器人软件工程师",
           "运动控制工程师"
+        ],
+        "zhHant": [
+          "機器人演算法工程師",
+          "機器人軟體工程師",
+          "運動控制工程師",
+          "機器人開發工程師"
         ]
       }
     },
@@ -2259,6 +2868,7 @@
       "parent": "robotics",
       "en": "Controls and automation engineer",
       "zh": "自动化工程师",
+      "zhHant": "自動化工程師",
       "synonyms": {
         "en": [
           "controls engineer",
@@ -2273,6 +2883,12 @@
           "plc工程师",
           "自控工程师",
           "仪表工程师"
+        ],
+        "zhHant": [
+          "自動控制工程師",
+          "PLC工程師",
+          "電機自動化工程師",
+          "儀控工程師"
         ]
       }
     },
@@ -2282,6 +2898,7 @@
       "parent": "robotics",
       "en": "Autonomous driving engineer",
       "zh": "自动驾驶工程师",
+      "zhHant": "自動駕駛工程師",
       "synonyms": {
         "en": [
           "self driving engineer",
@@ -2297,6 +2914,13 @@
           "规划控制算法工程师",
           "slam算法工程师",
           "智能驾驶工程师"
+        ],
+        "zhHant": [
+          "自駕車工程師",
+          "自動駕駛演算法工程師",
+          "感知演算法工程師",
+          "SLAM演算法工程師",
+          "ADAS工程師"
         ]
       }
     },
@@ -2306,9 +2930,11 @@
       "parent": null,
       "en": "Engineering",
       "zh": "工程技术",
+      "zhHant": "工程",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -2317,9 +2943,11 @@
       "parent": "engineering",
       "en": "Mechanical and manufacturing",
       "zh": "机械与制造工程",
+      "zhHant": "機械與製造",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -2328,6 +2956,7 @@
       "parent": "mechanical_manufacturing",
       "en": "Mechanical engineer",
       "zh": "机械工程师",
+      "zhHant": "機械工程師",
       "synonyms": {
         "en": [
           "mechanical design engineer",
@@ -2340,6 +2969,13 @@
           "结构设计工程师",
           "热设计工程师",
           "机构工程师"
+        ],
+        "zhHant": [
+          "機構工程師",
+          "機械設計工程師",
+          "機構設計工程師",
+          "熱傳工程師",
+          "散熱工程師"
         ]
       },
       "soc": [
@@ -2352,6 +2988,7 @@
       "parent": "mechanical_manufacturing",
       "en": "Manufacturing engineer",
       "zh": "制造工程师",
+      "zhHant": "製造工程師",
       "synonyms": {
         "en": [
           "production engineer",
@@ -2365,6 +3002,12 @@
           "工艺工程师",
           "npi工程师",
           "制造工艺工程师"
+        ],
+        "zhHant": [
+          "生產工程師",
+          "生產技術工程師",
+          "NPI工程師",
+          "製造技術工程師"
         ]
       }
     },
@@ -2374,6 +3017,7 @@
       "parent": "mechanical_manufacturing",
       "en": "Industrial engineer",
       "zh": "工业工程师",
+      "zhHant": "工業工程師",
       "synonyms": {
         "en": [
           "ie engineer",
@@ -2384,6 +3028,11 @@
           "ie工程师",
           "精益工程师",
           "精益生产工程师"
+        ],
+        "zhHant": [
+          "IE工程師",
+          "精實生產工程師",
+          "工業工程人員"
         ]
       },
       "soc": [
@@ -2396,6 +3045,7 @@
       "parent": "mechanical_manufacturing",
       "en": "Quality engineer",
       "zh": "质量工程师",
+      "zhHant": "品質工程師",
       "synonyms": {
         "en": [
           "supplier quality engineer",
@@ -2411,6 +3061,14 @@
           "可靠性工程师",
           "质量保证工程师",
           "品保工程师"
+        ],
+        "zhHant": [
+          "品保工程師",
+          "品管工程師",
+          "供應商品質工程師",
+          "SQE工程師",
+          "可靠度工程師",
+          "品質管理工程師"
         ]
       }
     },
@@ -2420,9 +3078,11 @@
       "parent": "engineering",
       "en": "Civil and construction",
       "zh": "土木与建筑工程",
+      "zhHant": "土木與營建",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -2431,6 +3091,7 @@
       "parent": "civil_construction",
       "en": "Civil engineer",
       "zh": "土木工程师",
+      "zhHant": "土木工程師",
       "synonyms": {
         "en": [
           "structural engineer",
@@ -2445,6 +3106,13 @@
           "道路桥梁工程师",
           "施工员",
           "现场工程师"
+        ],
+        "zhHant": [
+          "結構工程師",
+          "大地工程師",
+          "土木技師",
+          "工地工程師",
+          "道路橋梁工程師"
         ]
       },
       "soc": [
@@ -2457,6 +3125,7 @@
       "parent": "civil_construction",
       "en": "Construction manager",
       "zh": "施工经理",
+      "zhHant": "工地主任",
       "synonyms": {
         "en": [
           "site manager",
@@ -2468,6 +3137,13 @@
           "施工项目经理",
           "工程经理",
           "项目工程经理"
+        ],
+        "zhHant": [
+          "營建經理",
+          "工程專案經理",
+          "工務經理",
+          "營造專案經理",
+          "工地經理"
         ]
       },
       "soc": [
@@ -2480,6 +3156,7 @@
       "parent": "civil_construction",
       "en": "MEP engineer",
       "zh": "机电工程师",
+      "zhHant": "機電工程師",
       "synonyms": {
         "en": [
           "building services engineer",
@@ -2491,6 +3168,12 @@
           "暖通工程师",
           "给排水工程师",
           "建筑机电工程师"
+        ],
+        "zhHant": [
+          "水電工程師",
+          "空調工程師",
+          "建築機電工程師",
+          "給排水工程師"
         ]
       }
     },
@@ -2500,6 +3183,7 @@
       "parent": "civil_construction",
       "en": "Cost estimator / quantity surveyor",
       "zh": "造价工程师",
+      "zhHant": "估算工程師",
       "synonyms": {
         "en": [
           "quantity surveyor",
@@ -2512,6 +3196,12 @@
           "预算员",
           "造价员",
           "工程造价"
+        ],
+        "zhHant": [
+          "工程估價人員",
+          "預算工程師",
+          "估價工程師",
+          "工程估算師"
         ]
       },
       "soc": [
@@ -2524,9 +3214,11 @@
       "parent": "engineering",
       "en": "Chemical, energy and environment",
       "zh": "化工、能源与环境",
+      "zhHant": "化工、能源與環境",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -2535,6 +3227,7 @@
       "parent": "process_energy",
       "en": "Chemical engineer",
       "zh": "化工工程师",
+      "zhHant": "化工工程師",
       "synonyms": {
         "en": [
           "process chemical engineer",
@@ -2543,6 +3236,10 @@
         "zh": [
           "化学工程师",
           "化工工艺工程师"
+        ],
+        "zhHant": [
+          "化學工程師",
+          "化工製程工程師"
         ]
       },
       "soc": [
@@ -2555,6 +3252,7 @@
       "parent": "process_energy",
       "en": "Energy engineer",
       "zh": "新能源工程师",
+      "zhHant": "能源工程師",
       "synonyms": {
         "en": [
           "renewable energy engineer",
@@ -2571,6 +3269,14 @@
           "储能工程师",
           "风电工程师",
           "电池研发工程师"
+        ],
+        "zhHant": [
+          "綠能工程師",
+          "太陽能工程師",
+          "電池工程師",
+          "儲能工程師",
+          "風電工程師",
+          "電池研發工程師"
         ]
       }
     },
@@ -2580,6 +3286,7 @@
       "parent": "process_energy",
       "en": "Environmental and EHS engineer",
       "zh": "环境工程师",
+      "zhHant": "環境工程師",
       "synonyms": {
         "en": [
           "ehs engineer",
@@ -2593,6 +3300,13 @@
           "环保工程师",
           "ehs工程师",
           "安全环保工程师"
+        ],
+        "zhHant": [
+          "環安衛工程師",
+          "環保工程師",
+          "職業安全衛生管理師",
+          "工安工程師",
+          "環安人員"
         ]
       },
       "soc": [
@@ -2605,6 +3319,7 @@
       "parent": "process_energy",
       "en": "Materials engineer",
       "zh": "材料工程师",
+      "zhHant": "材料工程師",
       "synonyms": {
         "en": [
           "materials scientist",
@@ -2615,6 +3330,11 @@
           "材料研发工程师",
           "冶金工程师",
           "高分子材料工程师"
+        ],
+        "zhHant": [
+          "材料研發工程師",
+          "冶金工程師",
+          "高分子材料工程師"
         ]
       },
       "soc": [
@@ -2627,9 +3347,11 @@
       "parent": "engineering",
       "en": "Aerospace and automotive",
       "zh": "航空航天与汽车",
+      "zhHant": "航太與汽車",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -2638,6 +3360,7 @@
       "parent": "aero_auto",
       "en": "Aerospace engineer",
       "zh": "航空航天工程师",
+      "zhHant": "航太工程師",
       "synonyms": {
         "en": [
           "aeronautical engineer",
@@ -2651,6 +3374,12 @@
           "航电工程师",
           "航空工程师",
           "航天工程师"
+        ],
+        "zhHant": [
+          "航空工程師",
+          "飛行器設計工程師",
+          "航電工程師",
+          "太空工程師"
         ]
       },
       "soc": [
@@ -2663,6 +3392,7 @@
       "parent": "aero_auto",
       "en": "Automotive engineer",
       "zh": "汽车工程师",
+      "zhHant": "車輛工程師",
       "synonyms": {
         "en": [
           "vehicle engineer",
@@ -2678,6 +3408,13 @@
           "底盘工程师",
           "新能源汽车工程师",
           "三电工程师"
+        ],
+        "zhHant": [
+          "汽車工程師",
+          "車用電子工程師",
+          "底盤工程師",
+          "電動車工程師",
+          "動力系統工程師"
         ]
       }
     },
@@ -2687,9 +3424,11 @@
       "parent": null,
       "en": "Marketing and growth",
       "zh": "市场营销与运营",
+      "zhHant": "行銷與成長",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -2698,9 +3437,11 @@
       "parent": "marketing",
       "en": "Marketing and brand",
       "zh": "市场与品牌",
+      "zhHant": "行銷與品牌",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -2709,6 +3450,7 @@
       "parent": "marketing_brand",
       "en": "Marketing manager",
       "zh": "市场经理",
+      "zhHant": "行銷經理",
       "synonyms": {
         "en": [
           "marketing lead",
@@ -2724,6 +3466,12 @@
           "市场主管",
           "营销总监",
           "首席营销官"
+        ],
+        "zhHant": [
+          "行銷總監",
+          "行銷主管",
+          "行銷長",
+          "市場行銷經理"
         ]
       },
       "soc": [
@@ -2736,6 +3484,7 @@
       "parent": "marketing_brand",
       "en": "Marketing specialist",
       "zh": "市场专员",
+      "zhHant": "行銷專員",
       "synonyms": {
         "en": [
           "marketing coordinator",
@@ -2750,6 +3499,14 @@
           "市场助理",
           "市场推广专员",
           "市场营销专员"
+        ],
+        "zhHant": [
+          "行銷企劃",
+          "行銷企劃專員",
+          "行銷人員",
+          "行銷助理",
+          "市場行銷專員",
+          "行銷企劃人員"
         ]
       },
       "soc": [
@@ -2762,6 +3519,7 @@
       "parent": "marketing_brand",
       "en": "Brand manager",
       "zh": "品牌经理",
+      "zhHant": "品牌經理",
       "synonyms": {
         "en": [
           "brand marketing manager",
@@ -2772,6 +3530,11 @@
           "品牌专员",
           "品牌策划",
           "品牌营销经理"
+        ],
+        "zhHant": [
+          "品牌行銷經理",
+          "品牌企劃",
+          "品牌專員"
         ]
       }
     },
@@ -2781,6 +3544,7 @@
       "parent": "marketing_brand",
       "en": "Product marketing manager",
       "zh": "产品市场经理",
+      "zhHant": "產品行銷經理",
       "synonyms": {
         "en": [
           "pmm",
@@ -2790,6 +3554,10 @@
         "zh": [
           "产品营销经理",
           "产品市场专员"
+        ],
+        "zhHant": [
+          "產品行銷專員",
+          "產品行銷企劃"
         ]
       }
     },
@@ -2799,6 +3567,7 @@
       "parent": "marketing_brand",
       "en": "Market research analyst",
       "zh": "市场研究分析师",
+      "zhHant": "市場研究分析師",
       "synonyms": {
         "en": [
           "market researcher",
@@ -2811,6 +3580,12 @@
           "消费者洞察",
           "市场研究员",
           "用户洞察分析师"
+        ],
+        "zhHant": [
+          "市場調查人員",
+          "市調專員",
+          "市場研究員",
+          "消費者洞察分析師"
         ]
       },
       "soc": [
@@ -2823,6 +3598,7 @@
       "parent": "marketing_brand",
       "en": "Communications and PR specialist",
       "zh": "公关专员",
+      "zhHant": "公關專員",
       "synonyms": {
         "en": [
           "public relations specialist",
@@ -2837,6 +3613,13 @@
           "品牌公关",
           "媒介经理",
           "媒介专员"
+        ],
+        "zhHant": [
+          "公關經理",
+          "公關人員",
+          "媒體公關",
+          "公共關係專員",
+          "媒體關係專員"
         ]
       },
       "soc": [
@@ -2849,6 +3632,7 @@
       "parent": "marketing_brand",
       "en": "Event planner",
       "zh": "活动策划",
+      "zhHant": "活動企劃",
       "synonyms": {
         "en": [
           "event coordinator",
@@ -2860,6 +3644,12 @@
           "活动策划经理",
           "会展策划",
           "活动执行"
+        ],
+        "zhHant": [
+          "活動企劃人員",
+          "活動專員",
+          "會展企劃",
+          "活動執行人員"
         ]
       },
       "soc": [
@@ -2872,9 +3662,11 @@
       "parent": "marketing",
       "en": "Digital and growth marketing",
       "zh": "数字营销与增长",
+      "zhHant": "數位與成長行銷",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -2883,6 +3675,7 @@
       "parent": "digital_marketing",
       "en": "Digital marketing manager",
       "zh": "数字营销经理",
+      "zhHant": "數位行銷經理",
       "synonyms": {
         "en": [
           "online marketing manager",
@@ -2900,6 +3693,14 @@
           "投放专员",
           "广告优化师",
           "投放优化师"
+        ],
+        "zhHant": [
+          "數位行銷專員",
+          "網路行銷專員",
+          "廣告投放專員",
+          "數位廣告優化師",
+          "網路行銷人員",
+          "廣告投手"
         ]
       }
     },
@@ -2909,6 +3710,7 @@
       "parent": "digital_marketing",
       "en": "SEO specialist",
       "zh": "SEO专员",
+      "zhHant": "SEO專員",
       "synonyms": {
         "en": [
           "search engine optimization specialist",
@@ -2921,6 +3723,12 @@
           "搜索引擎优化专员",
           "sem专员",
           "seo优化师"
+        ],
+        "zhHant": [
+          "SEO優化師",
+          "搜尋引擎最佳化專員",
+          "SEM專員",
+          "關鍵字廣告專員"
         ]
       }
     },
@@ -2930,6 +3738,7 @@
       "parent": "digital_marketing",
       "en": "Growth marketer",
       "zh": "增长经理",
+      "zhHant": "成長行銷經理",
       "synonyms": {
         "en": [
           "growth manager",
@@ -2944,6 +3753,11 @@
           "增长运营",
           "拉新专员",
           "用户增长经理"
+        ],
+        "zhHant": [
+          "成長駭客",
+          "使用者成長經理",
+          "成長行銷專員"
         ]
       }
     },
@@ -2953,6 +3767,7 @@
       "parent": "digital_marketing",
       "en": "Content marketing manager",
       "zh": "内容营销经理",
+      "zhHant": "內容行銷經理",
       "synonyms": {
         "en": [
           "content marketer",
@@ -2963,6 +3778,11 @@
           "内容营销",
           "内容策划",
           "内容营销专员"
+        ],
+        "zhHant": [
+          "內容行銷專員",
+          "內容企劃",
+          "內容行銷企劃"
         ]
       }
     },
@@ -2972,6 +3792,7 @@
       "parent": "digital_marketing",
       "en": "Social media manager",
       "zh": "新媒体运营",
+      "zhHant": "社群經理",
       "synonyms": {
         "en": [
           "social media specialist",
@@ -2994,6 +3815,15 @@
           "微博运营",
           "自媒体运营",
           "b站运营"
+        ],
+        "zhHant": [
+          "社群小編",
+          "社群行銷專員",
+          "社群經營專員",
+          "社群編輯",
+          "粉絲團小編",
+          "社群媒體經理",
+          "社群行銷人員"
         ]
       }
     },
@@ -3003,6 +3833,7 @@
       "parent": "digital_marketing",
       "en": "E-commerce manager",
       "zh": "电商运营",
+      "zhHant": "電商營運經理",
       "synonyms": {
         "en": [
           "ecommerce manager",
@@ -3021,6 +3852,15 @@
           "京东运营",
           "店铺运营",
           "网店运营"
+        ],
+        "zhHant": [
+          "電商營運專員",
+          "電子商務專員",
+          "電商經理",
+          "跨境電商營運",
+          "網路商店營運",
+          "蝦皮營運專員",
+          "電商企劃"
         ]
       }
     },
@@ -3030,9 +3870,11 @@
       "parent": "marketing",
       "en": "Online operations",
       "zh": "互联网运营",
+      "zhHant": "線上營運",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -3041,6 +3883,7 @@
       "parent": "online_operations",
       "en": "User operations specialist",
       "zh": "用户运营",
+      "zhHant": "會員營運專員",
       "synonyms": {
         "en": [
           "user operations",
@@ -3050,6 +3893,11 @@
         "zh": [
           "用户运营专员",
           "会员运营"
+        ],
+        "zhHant": [
+          "會員經營專員",
+          "使用者營運專員",
+          "會員行銷專員"
         ]
       }
     },
@@ -3059,6 +3907,7 @@
       "parent": "online_operations",
       "en": "Content operations specialist",
       "zh": "内容运营",
+      "zhHant": "內容營運專員",
       "synonyms": {
         "en": [
           "content operations",
@@ -3067,6 +3916,10 @@
         "zh": [
           "内容运营专员",
           "编辑运营"
+        ],
+        "zhHant": [
+          "內容營運",
+          "內容經營專員"
         ]
       }
     },
@@ -3076,6 +3929,7 @@
       "parent": "online_operations",
       "en": "Product operations specialist",
       "zh": "产品运营",
+      "zhHant": "產品營運專員",
       "synonyms": {
         "en": [
           "product operations manager",
@@ -3090,6 +3944,13 @@
           "平台运营",
           "网站运营",
           "app运营"
+        ],
+        "zhHant": [
+          "產品營運",
+          "平台營運專員",
+          "網站營運專員",
+          "App營運專員",
+          "活動營運專員"
         ]
       }
     },
@@ -3099,6 +3960,7 @@
       "parent": "online_operations",
       "en": "Live commerce operations specialist",
       "zh": "直播运营",
+      "zhHant": "直播電商營運",
       "synonyms": {
         "en": [
           "livestream operations",
@@ -3109,6 +3971,11 @@
           "直播运营专员",
           "主播运营",
           "直播电商运营"
+        ],
+        "zhHant": [
+          "直播營運專員",
+          "直播企劃",
+          "直播電商專員"
         ]
       }
     },
@@ -3118,6 +3985,7 @@
       "parent": "online_operations",
       "en": "Content moderator",
       "zh": "内容审核",
+      "zhHant": "內容審核員",
       "synonyms": {
         "en": [
           "trust and safety analyst",
@@ -3128,6 +3996,11 @@
           "内容审核员",
           "审核专员",
           "内容安全审核"
+        ],
+        "zhHant": [
+          "內容審核專員",
+          "內容審查員",
+          "網路內容審核人員"
         ]
       }
     },
@@ -3137,9 +4010,11 @@
       "parent": null,
       "en": "Sales and business development",
       "zh": "销售与商务拓展",
+      "zhHant": "業務與商務開發",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -3148,9 +4023,11 @@
       "parent": "sales",
       "en": "Sales",
       "zh": "销售业务",
+      "zhHant": "業務",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -3159,6 +4036,7 @@
       "parent": "sales_roles",
       "en": "Account executive",
       "zh": "销售代表",
+      "zhHant": "業務專員",
       "synonyms": {
         "en": [
           "ae",
@@ -3179,6 +4057,15 @@
           "业务专员",
           "销售业务员",
           "客户代表"
+        ],
+        "zhHant": [
+          "業務代表",
+          "業務人員",
+          "銷售專員",
+          "業務員",
+          "銷售代表",
+          "大客戶業務",
+          "銷售顧問"
         ]
       },
       "soc": [
@@ -3191,6 +4078,7 @@
       "parent": "sales_roles",
       "en": "Sales development representative",
       "zh": "销售开发代表",
+      "zhHant": "業務開發代表",
       "synonyms": {
         "en": [
           "sdr",
@@ -3205,6 +4093,13 @@
           "销售线索专员",
           "网络销售",
           "电话销售代表"
+        ],
+        "zhHant": [
+          "電話行銷人員",
+          "電銷人員",
+          "業務開發專員",
+          "電話銷售人員",
+          "陌生開發業務"
         ]
       }
     },
@@ -3214,6 +4109,7 @@
       "parent": "sales_roles",
       "en": "Account manager",
       "zh": "客户经理",
+      "zhHant": "客戶經理",
       "synonyms": {
         "en": [
           "key account manager",
@@ -3225,6 +4121,11 @@
           "大客户经理",
           "ka经理",
           "渠道客户经理"
+        ],
+        "zhHant": [
+          "大客戶經理",
+          "重點客戶經理",
+          "KA經理"
         ]
       }
     },
@@ -3234,6 +4135,7 @@
       "parent": "sales_roles",
       "en": "Sales manager",
       "zh": "销售经理",
+      "zhHant": "業務經理",
       "synonyms": {
         "en": [
           "head of sales",
@@ -3249,6 +4151,13 @@
           "区域销售经理",
           "销售主管",
           "大区经理"
+        ],
+        "zhHant": [
+          "業務主管",
+          "銷售經理",
+          "區域業務經理",
+          "業務總監",
+          "業務副理"
         ]
       },
       "soc": [
@@ -3261,6 +4170,7 @@
       "parent": "sales_roles",
       "en": "Sales engineer",
       "zh": "售前工程师",
+      "zhHant": "業務工程師",
       "synonyms": {
         "en": [
           "solutions engineer",
@@ -3276,6 +4186,14 @@
           "技术销售",
           "解决方案架构师",
           "销售工程师"
+        ],
+        "zhHant": [
+          "售前工程師",
+          "售前顧問",
+          "解決方案工程師",
+          "技術業務",
+          "解決方案架構師",
+          "銷售工程師"
         ]
       },
       "soc": [
@@ -3288,6 +4206,7 @@
       "parent": "sales_roles",
       "en": "Retail sales associate",
       "zh": "门店销售",
+      "zhHant": "門市人員",
       "synonyms": {
         "en": [
           "retail associate",
@@ -3302,6 +4221,14 @@
           "店员",
           "收银员",
           "门店导购"
+        ],
+        "zhHant": [
+          "門市銷售人員",
+          "門市店員",
+          "專櫃人員",
+          "收銀員",
+          "銷售店員",
+          "賣場人員"
         ]
       },
       "soc": [
@@ -3314,6 +4241,7 @@
       "parent": "sales_roles",
       "en": "Store manager",
       "zh": "店长",
+      "zhHant": "店長",
       "synonyms": {
         "en": [
           "retail store manager",
@@ -3325,6 +4253,12 @@
           "门店经理",
           "店铺经理",
           "门店店长"
+        ],
+        "zhHant": [
+          "門市店長",
+          "門市經理",
+          "門市主管",
+          "分店店長"
         ]
       }
     },
@@ -3334,6 +4268,7 @@
       "parent": "sales_roles",
       "en": "Real estate agent",
       "zh": "房产经纪人",
+      "zhHant": "不動產經紀人",
       "synonyms": {
         "en": [
           "realtor",
@@ -3347,6 +4282,13 @@
           "置业顾问",
           "房地产经纪人",
           "租赁顾问"
+        ],
+        "zhHant": [
+          "房仲業務",
+          "房屋仲介",
+          "不動產營業員",
+          "房仲經紀人",
+          "置產顧問"
         ]
       },
       "soc": [
@@ -3359,6 +4301,7 @@
       "parent": "sales_roles",
       "en": "Insurance agent",
       "zh": "保险代理人",
+      "zhHant": "保險業務員",
       "synonyms": {
         "en": [
           "insurance broker",
@@ -3370,6 +4313,12 @@
           "保险顾问",
           "保险经纪人",
           "保险销售"
+        ],
+        "zhHant": [
+          "保險顧問",
+          "保險經紀人",
+          "壽險業務員",
+          "保險業務"
         ]
       },
       "soc": [
@@ -3382,9 +4331,11 @@
       "parent": "sales",
       "en": "Business development and partnerships",
       "zh": "商务拓展与合作",
+      "zhHant": "商務開發與合作夥伴",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -3393,6 +4344,7 @@
       "parent": "business_development",
       "en": "Business development manager",
       "zh": "商务拓展经理",
+      "zhHant": "商務開發經理",
       "synonyms": {
         "en": [
           "bd manager",
@@ -3407,6 +4359,14 @@
           "商务拓展",
           "bd专员",
           "商务专员"
+        ],
+        "zhHant": [
+          "BD經理",
+          "商務開發專員",
+          "商務經理",
+          "BD專員",
+          "業務開發經理",
+          "商務專員"
         ]
       }
     },
@@ -3416,6 +4376,7 @@
       "parent": "business_development",
       "en": "Partnerships and channel manager",
       "zh": "渠道经理",
+      "zhHant": "通路經理",
       "synonyms": {
         "en": [
           "partnerships manager",
@@ -3429,6 +4390,13 @@
           "合作伙伴经理",
           "渠道专员",
           "生态合作经理"
+        ],
+        "zhHant": [
+          "通路業務",
+          "合作夥伴經理",
+          "通路開發專員",
+          "策略合作經理",
+          "通路專員"
         ]
       }
     },
@@ -3438,9 +4406,11 @@
       "parent": null,
       "en": "Customer support and success",
       "zh": "客户服务与成功",
+      "zhHant": "客戶支援與客戶成功",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -3449,9 +4419,11 @@
       "parent": "customer",
       "en": "Customer service and support",
       "zh": "客户服务与技术支持",
+      "zhHant": "客戶服務與支援",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -3460,6 +4432,7 @@
       "parent": "customer_service",
       "en": "Customer service representative",
       "zh": "客服专员",
+      "zhHant": "客服專員",
       "synonyms": {
         "en": [
           "customer service agent",
@@ -3478,6 +4451,14 @@
           "售后客服",
           "客户服务",
           "客服代表"
+        ],
+        "zhHant": [
+          "客服人員",
+          "線上客服",
+          "電話客服",
+          "客戶服務專員",
+          "售後客服",
+          "客服代表"
         ]
       },
       "soc": [
@@ -3490,6 +4471,7 @@
       "parent": "customer_service",
       "en": "Technical support engineer",
       "zh": "技术支持工程师",
+      "zhHant": "技術支援工程師",
       "synonyms": {
         "en": [
           "support engineer",
@@ -3505,6 +4487,14 @@
           "售后工程师",
           "现场应用工程师",
           "fae"
+        ],
+        "zhHant": [
+          "技術支援人員",
+          "客服工程師",
+          "應用工程師",
+          "FAE工程師",
+          "售後服務工程師",
+          "技術客服"
         ]
       }
     },
@@ -3514,6 +4504,7 @@
       "parent": "customer_service",
       "en": "Customer service manager",
       "zh": "客服经理",
+      "zhHant": "客服經理",
       "synonyms": {
         "en": [
           "support manager",
@@ -3527,6 +4518,12 @@
           "客服组长",
           "客户服务经理",
           "客户服务主管"
+        ],
+        "zhHant": [
+          "客服主管",
+          "客服組長",
+          "客戶服務經理",
+          "客戶服務主管"
         ]
       }
     },
@@ -3536,9 +4533,11 @@
       "parent": "customer",
       "en": "Customer success",
       "zh": "客户成功",
+      "zhHant": "客戶成功",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -3547,6 +4546,7 @@
       "parent": "customer_success",
       "en": "Customer success manager",
       "zh": "客户成功经理",
+      "zhHant": "客戶成功經理",
       "synonyms": {
         "en": [
           "csm",
@@ -3558,6 +4558,9 @@
         ],
         "zh": [
           "客户成功专员"
+        ],
+        "zhHant": [
+          "客戶成功專員"
         ]
       }
     },
@@ -3567,6 +4570,7 @@
       "parent": "customer_success",
       "en": "Customer onboarding specialist",
       "zh": "客户上线专员",
+      "zhHant": "客戶導入專員",
       "synonyms": {
         "en": [
           "onboarding specialist",
@@ -3576,6 +4580,11 @@
         "zh": [
           "客户培训专员",
           "客户上线经理"
+        ],
+        "zhHant": [
+          "客戶教育訓練專員",
+          "客戶導入經理",
+          "導入顧問"
         ]
       }
     },
@@ -3585,9 +4594,11 @@
       "parent": null,
       "en": "Finance and accounting",
       "zh": "财务与金融",
+      "zhHant": "財務與會計",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -3596,9 +4607,11 @@
       "parent": "finance",
       "en": "Accounting and audit",
       "zh": "会计与审计",
+      "zhHant": "會計與審計",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -3607,6 +4620,7 @@
       "parent": "accounting",
       "en": "Accountant",
       "zh": "会计",
+      "zhHant": "會計",
       "synonyms": {
         "en": [
           "staff accountant",
@@ -3623,6 +4637,14 @@
           "成本会计",
           "注册会计师",
           "主办会计"
+        ],
+        "zhHant": [
+          "會計人員",
+          "會計師",
+          "總帳會計",
+          "成本會計",
+          "主辦會計",
+          "會計專員"
         ]
       },
       "soc": [
@@ -3635,6 +4657,7 @@
       "parent": "accounting",
       "en": "Auditor",
       "zh": "审计师",
+      "zhHant": "稽核人員",
       "synonyms": {
         "en": [
           "internal auditor",
@@ -3652,6 +4675,13 @@
           "内审",
           "审计专员",
           "内部审计"
+        ],
+        "zhHant": [
+          "審計員",
+          "內部稽核",
+          "稽核專員",
+          "查帳員",
+          "內稽人員"
         ]
       },
       "soc": [
@@ -3664,6 +4694,7 @@
       "parent": "accounting",
       "en": "Bookkeeper and AP/AR specialist",
       "zh": "出纳",
+      "zhHant": "出納",
       "synonyms": {
         "en": [
           "bookkeeper",
@@ -3681,6 +4712,14 @@
           "应收会计",
           "财务助理",
           "财务专员"
+        ],
+        "zhHant": [
+          "出納人員",
+          "應付會計",
+          "應收會計",
+          "財務助理",
+          "記帳人員",
+          "會計助理"
         ]
       },
       "soc": [
@@ -3693,6 +4732,7 @@
       "parent": "accounting",
       "en": "Tax specialist",
       "zh": "税务专员",
+      "zhHant": "稅務專員",
       "synonyms": {
         "en": [
           "tax accountant",
@@ -3705,6 +4745,12 @@
           "税务经理",
           "税务会计",
           "税务顾问"
+        ],
+        "zhHant": [
+          "稅務經理",
+          "稅務會計",
+          "稅務顧問",
+          "稅務人員"
         ]
       }
     },
@@ -3714,6 +4760,7 @@
       "parent": "accounting",
       "en": "Finance manager / controller",
       "zh": "财务经理",
+      "zhHant": "財務經理",
       "synonyms": {
         "en": [
           "financial controller",
@@ -3733,6 +4780,13 @@
           "财务总监",
           "首席财务官",
           "财务主管"
+        ],
+        "zhHant": [
+          "財務長",
+          "財務主管",
+          "財會主管",
+          "財務總監",
+          "會計主管"
         ]
       },
       "soc": [
@@ -3745,9 +4799,11 @@
       "parent": "finance",
       "en": "Financial analysis and investment",
       "zh": "财务分析与投资",
+      "zhHant": "財務分析與投資",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -3756,6 +4812,7 @@
       "parent": "financial_analysis",
       "en": "Financial analyst",
       "zh": "财务分析师",
+      "zhHant": "財務分析師",
       "synonyms": {
         "en": [
           "fpa analyst",
@@ -3774,6 +4831,12 @@
           "fpa",
           "经营分析师",
           "预算分析师"
+        ],
+        "zhHant": [
+          "財務分析人員",
+          "FP&A分析師",
+          "經營分析師",
+          "預算分析師"
         ]
       },
       "soc": [
@@ -3786,6 +4849,7 @@
       "parent": "financial_analysis",
       "en": "Investment analyst",
       "zh": "投资分析师",
+      "zhHant": "投資分析師",
       "synonyms": {
         "en": [
           "equity research analyst",
@@ -3803,6 +4867,14 @@
           "投资助理",
           "基金研究员",
           "行业分析师"
+        ],
+        "zhHant": [
+          "產業研究員",
+          "投資研究員",
+          "投資經理",
+          "股票研究員",
+          "基金研究員",
+          "產業分析師"
         ]
       },
       "soc": [
@@ -3815,6 +4887,7 @@
       "parent": "financial_analysis",
       "en": "Investment banking analyst",
       "zh": "投行分析师",
+      "zhHant": "投資銀行分析師",
       "synonyms": {
         "en": [
           "investment banker",
@@ -3827,6 +4900,11 @@
           "并购分析师",
           "投行",
           "投行经理"
+        ],
+        "zhHant": [
+          "投資銀行專員",
+          "併購分析師",
+          "承銷人員"
         ]
       }
     },
@@ -3836,6 +4914,7 @@
       "parent": "financial_analysis",
       "en": "Quantitative analyst",
       "zh": "量化研究员",
+      "zhHant": "量化分析師",
       "synonyms": {
         "en": [
           "quant",
@@ -3850,6 +4929,12 @@
           "量化开发工程师",
           "量化交易员",
           "量化策略研究员"
+        ],
+        "zhHant": [
+          "量化研究員",
+          "計量分析師",
+          "量化交易員",
+          "量化策略研究員"
         ]
       },
       "soc": [
@@ -3862,6 +4947,7 @@
       "parent": "financial_analysis",
       "en": "Risk and credit analyst",
       "zh": "风控分析师",
+      "zhHant": "風險分析師",
       "synonyms": {
         "en": [
           "risk analyst",
@@ -3879,6 +4965,14 @@
           "信用分析师",
           "反欺诈分析师",
           "风控策略分析师"
+        ],
+        "zhHant": [
+          "風險管理人員",
+          "授信審查人員",
+          "信用分析師",
+          "風控專員",
+          "徵信人員",
+          "反詐欺分析師"
         ]
       },
       "soc": [
@@ -3891,6 +4985,7 @@
       "parent": "financial_analysis",
       "en": "Actuary",
       "zh": "精算师",
+      "zhHant": "精算師",
       "synonyms": {
         "en": [
           "actuarial analyst",
@@ -3899,6 +4994,10 @@
         "zh": [
           "精算分析师",
           "精算专员"
+        ],
+        "zhHant": [
+          "精算人員",
+          "精算分析師"
         ]
       },
       "soc": [
@@ -3911,9 +5010,11 @@
       "parent": "finance",
       "en": "Banking and wealth",
       "zh": "银行与财富管理",
+      "zhHant": "銀行與財富管理",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -3922,6 +5023,7 @@
       "parent": "banking",
       "en": "Financial advisor",
       "zh": "理财顾问",
+      "zhHant": "理財專員",
       "synonyms": {
         "en": [
           "wealth manager",
@@ -3935,6 +5037,12 @@
           "财富顾问",
           "私人银行家",
           "客户关系经理"
+        ],
+        "zhHant": [
+          "理財顧問",
+          "財富管理顧問",
+          "私人銀行專員",
+          "理財規劃顧問"
         ]
       },
       "soc": [
@@ -3947,6 +5055,7 @@
       "parent": "banking",
       "en": "Loan officer",
       "zh": "信贷员",
+      "zhHant": "貸款專員",
       "synonyms": {
         "en": [
           "mortgage loan officer",
@@ -3958,6 +5067,12 @@
           "信贷经理",
           "贷款专员",
           "按揭专员"
+        ],
+        "zhHant": [
+          "放款專員",
+          "授信人員",
+          "房貸專員",
+          "授信專員"
         ]
       },
       "soc": [
@@ -3970,6 +5085,7 @@
       "parent": "banking",
       "en": "Bank teller",
       "zh": "银行柜员",
+      "zhHant": "銀行櫃員",
       "synonyms": {
         "en": [
           "teller",
@@ -3980,6 +5096,12 @@
           "柜员",
           "银行大堂经理",
           "综合柜员"
+        ],
+        "zhHant": [
+          "櫃員",
+          "銀行行員",
+          "櫃檯行員",
+          "銀行櫃檯人員"
         ]
       },
       "soc": [
@@ -3992,6 +5114,7 @@
       "parent": "banking",
       "en": "Trader",
       "zh": "交易员",
+      "zhHant": "交易員",
       "synonyms": {
         "en": [
           "securities trader",
@@ -4004,6 +5127,11 @@
           "证券交易员",
           "期货交易员",
           "外汇交易员"
+        ],
+        "zhHant": [
+          "證券交易員",
+          "期貨交易員",
+          "外匯交易員"
         ]
       },
       "soc": [
@@ -4016,9 +5144,11 @@
       "parent": null,
       "en": "Operations and supply chain",
       "zh": "运营管理与供应链",
+      "zhHant": "營運與供應鏈",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -4027,9 +5157,11 @@
       "parent": "operations",
       "en": "Business operations",
       "zh": "业务运营与管理",
+      "zhHant": "商業營運",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -4038,6 +5170,7 @@
       "parent": "business_operations",
       "en": "Operations manager",
       "zh": "运营管理经理",
+      "zhHant": "營運經理",
       "synonyms": {
         "en": [
           "general manager",
@@ -4053,6 +5186,12 @@
           "首席运营官",
           "运营总监",
           "营运经理"
+        ],
+        "zhHant": [
+          "總經理",
+          "營運長",
+          "營運總監",
+          "營運主管"
         ]
       },
       "soc": [
@@ -4065,6 +5204,7 @@
       "parent": "business_operations",
       "en": "Operations analyst",
       "zh": "运营分析专员",
+      "zhHant": "營運分析師",
       "synonyms": {
         "en": [
           "business operations analyst",
@@ -4075,6 +5215,10 @@
         "zh": [
           "运营分析师",
           "经营分析专员"
+        ],
+        "zhHant": [
+          "營運分析專員",
+          "經營分析專員"
         ]
       }
     },
@@ -4084,6 +5228,7 @@
       "parent": "business_operations",
       "en": "Facilities manager",
       "zh": "设施经理",
+      "zhHant": "廠務經理",
       "synonyms": {
         "en": [
           "facility manager",
@@ -4094,6 +5239,12 @@
           "物业经理",
           "厂务经理",
           "设施管理"
+        ],
+        "zhHant": [
+          "設施經理",
+          "物業經理",
+          "總務主管",
+          "廠務主管"
         ]
       },
       "soc": [
@@ -4106,9 +5257,11 @@
       "parent": "operations",
       "en": "Supply chain and logistics",
       "zh": "供应链与物流",
+      "zhHant": "供應鏈與物流",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -4117,6 +5270,7 @@
       "parent": "supply_chain",
       "en": "Supply chain manager",
       "zh": "供应链经理",
+      "zhHant": "供應鏈經理",
       "synonyms": {
         "en": [
           "supply chain planner",
@@ -4133,6 +5287,14 @@
           "生产计划",
           "pmc",
           "物料计划"
+        ],
+        "zhHant": [
+          "供應鏈專員",
+          "生管人員",
+          "生產管理人員",
+          "物料管理人員",
+          "生管主管",
+          "需求規劃專員"
         ]
       },
       "soc": [
@@ -4145,6 +5307,7 @@
       "parent": "supply_chain",
       "en": "Logistics coordinator",
       "zh": "物流专员",
+      "zhHant": "物流專員",
       "synonyms": {
         "en": [
           "logistician",
@@ -4162,6 +5325,14 @@
           "国际物流",
           "跨境物流",
           "物流调度"
+        ],
+        "zhHant": [
+          "物流人員",
+          "物流經理",
+          "貨運承攬人員",
+          "國際物流專員",
+          "物流調度人員",
+          "船務人員"
         ]
       },
       "soc": [
@@ -4174,6 +5345,7 @@
       "parent": "supply_chain",
       "en": "Buyer and procurement specialist",
       "zh": "采购专员",
+      "zhHant": "採購專員",
       "synonyms": {
         "en": [
           "buyer",
@@ -4190,6 +5362,14 @@
           "寻源经理",
           "采购工程师",
           "品类经理"
+        ],
+        "zhHant": [
+          "採購人員",
+          "採購",
+          "採購經理",
+          "採購工程師",
+          "採購主管",
+          "採購助理"
         ]
       },
       "soc": [
@@ -4202,6 +5382,7 @@
       "parent": "supply_chain",
       "en": "Warehouse manager",
       "zh": "仓储经理",
+      "zhHant": "倉儲經理",
       "synonyms": {
         "en": [
           "warehouse supervisor",
@@ -4215,6 +5396,13 @@
           "仓管员",
           "库管",
           "仓库管理员"
+        ],
+        "zhHant": [
+          "倉管人員",
+          "倉儲主管",
+          "倉庫管理員",
+          "倉儲人員",
+          "倉管"
         ]
       }
     },
@@ -4224,6 +5412,7 @@
       "parent": "supply_chain",
       "en": "Import and export specialist",
       "zh": "外贸专员",
+      "zhHant": "國貿人員",
       "synonyms": {
         "en": [
           "trade compliance specialist",
@@ -4242,6 +5431,14 @@
           "关务专员",
           "外贸跟单",
           "单证员"
+        ],
+        "zhHant": [
+          "進出口專員",
+          "國貿業務",
+          "報關人員",
+          "進出口人員",
+          "押匯人員",
+          "國際貿易專員"
         ]
       }
     },
@@ -4251,9 +5448,11 @@
       "parent": null,
       "en": "People and HR",
       "zh": "人力资源",
+      "zhHant": "人才與 HR",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -4262,9 +5461,11 @@
       "parent": "people",
       "en": "Human resources",
       "zh": "人力资源管理",
+      "zhHant": "人力資源",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -4273,6 +5474,7 @@
       "parent": "human_resources",
       "en": "HR generalist",
       "zh": "人事专员",
+      "zhHant": "人資專員",
       "synonyms": {
         "en": [
           "hr specialist",
@@ -4289,6 +5491,14 @@
           "hr专员",
           "人事行政专员",
           "人事"
+        ],
+        "zhHant": [
+          "人力資源專員",
+          "人事專員",
+          "人資助理",
+          "人事行政專員",
+          "人資人員",
+          "人事人員"
         ]
       },
       "soc": [
@@ -4301,6 +5511,7 @@
       "parent": "human_resources",
       "en": "HR business partner",
       "zh": "HRBP",
+      "zhHant": "人資業務夥伴",
       "synonyms": {
         "en": [
           "hrbp",
@@ -4310,6 +5521,11 @@
         "zh": [
           "人力资源业务伙伴",
           "hr业务伙伴"
+        ],
+        "zhHant": [
+          "HRBP",
+          "人力資源業務夥伴",
+          "人資夥伴"
         ]
       }
     },
@@ -4319,6 +5535,7 @@
       "parent": "human_resources",
       "en": "HR manager",
       "zh": "人力资源经理",
+      "zhHant": "人資經理",
       "synonyms": {
         "en": [
           "hr director",
@@ -4335,6 +5552,14 @@
           "hr经理",
           "hrd",
           "人事总监"
+        ],
+        "zhHant": [
+          "人力資源經理",
+          "人資主管",
+          "人資長",
+          "人力資源主管",
+          "人事經理",
+          "人資總監"
         ]
       },
       "soc": [
@@ -4347,6 +5572,7 @@
       "parent": "human_resources",
       "en": "Compensation and benefits specialist",
       "zh": "薪酬福利专员",
+      "zhHant": "薪酬福利專員",
       "synonyms": {
         "en": [
           "compensation analyst",
@@ -4365,6 +5591,13 @@
           "薪资专员",
           "薪酬福利经理",
           "绩效专员"
+        ],
+        "zhHant": [
+          "薪資管理師",
+          "薪酬專員",
+          "薪資專員",
+          "薪酬福利經理",
+          "績效管理專員"
         ]
       },
       "soc": [
@@ -4377,6 +5610,7 @@
       "parent": "human_resources",
       "en": "Learning and development specialist",
       "zh": "培训专员",
+      "zhHant": "教育訓練專員",
       "synonyms": {
         "en": [
           "training specialist",
@@ -4395,6 +5629,14 @@
           "企业讲师",
           "内训师",
           "培训讲师"
+        ],
+        "zhHant": [
+          "訓練專員",
+          "企業講師",
+          "內部講師",
+          "人才發展專員",
+          "教育訓練經理",
+          "訓練發展專員"
         ]
       },
       "soc": [
@@ -4407,6 +5649,7 @@
       "parent": "human_resources",
       "en": "Employee relations specialist",
       "zh": "员工关系专员",
+      "zhHant": "員工關係專員",
       "synonyms": {
         "en": [
           "employee relations manager",
@@ -4415,6 +5658,10 @@
         "zh": [
           "员工关系",
           "劳动关系专员"
+        ],
+        "zhHant": [
+          "勞資關係專員",
+          "員工關係人員"
         ]
       }
     },
@@ -4424,9 +5671,11 @@
       "parent": "people",
       "en": "Recruiting",
       "zh": "招聘",
+      "zhHant": "招募",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -4435,6 +5684,7 @@
       "parent": "recruiting",
       "en": "Recruiter",
       "zh": "招聘专员",
+      "zhHant": "招募專員",
       "synonyms": {
         "en": [
           "technical recruiter",
@@ -4452,6 +5702,14 @@
           "hr招聘",
           "招聘助理",
           "招聘顾问"
+        ],
+        "zhHant": [
+          "招募人員",
+          "獵才顧問",
+          "獵頭顧問",
+          "人才招募專員",
+          "招募助理",
+          "獵才專員"
         ]
       }
     },
@@ -4461,6 +5719,7 @@
       "parent": "recruiting",
       "en": "Talent acquisition manager",
       "zh": "招聘经理",
+      "zhHant": "招募經理",
       "synonyms": {
         "en": [
           "head of talent acquisition",
@@ -4472,6 +5731,11 @@
         "zh": [
           "招聘主管",
           "招聘总监"
+        ],
+        "zhHant": [
+          "招募主管",
+          "人才招募經理",
+          "招募總監"
         ]
       }
     },
@@ -4481,9 +5745,11 @@
       "parent": null,
       "en": "Legal and compliance",
       "zh": "法务与合规",
+      "zhHant": "法務與法遵",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -4492,9 +5758,11 @@
       "parent": "legal",
       "en": "Legal",
       "zh": "法律",
+      "zhHant": "法務",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -4503,6 +5771,7 @@
       "parent": "legal_roles",
       "en": "Lawyer",
       "zh": "律师",
+      "zhHant": "律師",
       "synonyms": {
         "en": [
           "attorney",
@@ -4516,6 +5785,11 @@
           "执业律师",
           "诉讼律师",
           "非诉律师"
+        ],
+        "zhHant": [
+          "執業律師",
+          "訴訟律師",
+          "受僱律師"
         ]
       },
       "soc": [
@@ -4528,6 +5802,7 @@
       "parent": "legal_roles",
       "en": "In-house counsel",
       "zh": "法务专员",
+      "zhHant": "法務專員",
       "synonyms": {
         "en": [
           "legal counsel",
@@ -4543,6 +5818,14 @@
           "企业法务",
           "法务总监",
           "法律顾问"
+        ],
+        "zhHant": [
+          "法務人員",
+          "法務",
+          "法務經理",
+          "企業法務",
+          "法務長",
+          "法務主管"
         ]
       }
     },
@@ -4552,6 +5835,7 @@
       "parent": "legal_roles",
       "en": "Paralegal",
       "zh": "律师助理",
+      "zhHant": "法務助理",
       "synonyms": {
         "en": [
           "legal assistant",
@@ -4562,6 +5846,10 @@
         "zh": [
           "法务助理",
           "律所助理"
+        ],
+        "zhHant": [
+          "律師助理",
+          "法律事務所助理"
         ]
       },
       "soc": [
@@ -4574,6 +5862,7 @@
       "parent": "legal_roles",
       "en": "Intellectual property specialist",
       "zh": "知识产权专员",
+      "zhHant": "智慧財產權專員",
       "synonyms": {
         "en": [
           "patent agent",
@@ -4587,6 +5876,13 @@
           "专利工程师",
           "商标代理人",
           "知识产权顾问"
+        ],
+        "zhHant": [
+          "智財專員",
+          "專利工程師",
+          "專利師",
+          "商標專員",
+          "智財工程師"
         ]
       }
     },
@@ -4596,9 +5892,11 @@
       "parent": "legal",
       "en": "Compliance and regulatory",
       "zh": "合规与法规事务",
+      "zhHant": "法遵與法規",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -4607,6 +5905,7 @@
       "parent": "compliance",
       "en": "Compliance officer",
       "zh": "合规专员",
+      "zhHant": "法遵專員",
       "synonyms": {
         "en": [
           "compliance analyst",
@@ -4620,6 +5919,13 @@
           "合规经理",
           "反洗钱专员",
           "合规官"
+        ],
+        "zhHant": [
+          "法令遵循人員",
+          "法遵人員",
+          "洗錢防制專員",
+          "法遵主管",
+          "法令遵循專員"
         ]
       },
       "soc": [
@@ -4632,6 +5938,7 @@
       "parent": "compliance",
       "en": "Regulatory affairs specialist",
       "zh": "注册专员",
+      "zhHant": "法規事務專員",
       "synonyms": {
         "en": [
           "regulatory affairs manager",
@@ -4643,6 +5950,12 @@
           "法规事务专员",
           "药品注册专员",
           "医疗器械注册专员"
+        ],
+        "zhHant": [
+          "法規專員",
+          "藥品查驗登記專員",
+          "醫療器材法規專員",
+          "RA專員"
         ]
       }
     },
@@ -4652,6 +5965,7 @@
       "parent": "compliance",
       "en": "Privacy specialist",
       "zh": "数据合规专员",
+      "zhHant": "個資保護專員",
       "synonyms": {
         "en": [
           "data protection officer",
@@ -4664,6 +5978,11 @@
           "数据保护官",
           "隐私合规专员",
           "个人信息保护专员"
+        ],
+        "zhHant": [
+          "隱私保護專員",
+          "個人資料保護專員",
+          "資料保護長"
         ]
       }
     },
@@ -4673,9 +5992,11 @@
       "parent": null,
       "en": "Healthcare and life sciences",
       "zh": "医疗健康与生命科学",
+      "zhHant": "醫療保健與生命科學",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -4684,9 +6005,11 @@
       "parent": "healthcare",
       "en": "Clinical care",
       "zh": "临床医疗",
+      "zhHant": "臨床照護",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -4695,6 +6018,7 @@
       "parent": "clinical",
       "en": "Physician",
       "zh": "医生",
+      "zhHant": "醫師",
       "synonyms": {
         "en": [
           "doctor",
@@ -4713,6 +6037,13 @@
           "主治医师",
           "住院医师",
           "外科医生"
+        ],
+        "zhHant": [
+          "臨床醫師",
+          "主治醫師",
+          "住院醫師",
+          "家醫科醫師",
+          "外科醫師"
         ]
       }
     },
@@ -4722,6 +6053,7 @@
       "parent": "clinical",
       "en": "Registered nurse",
       "zh": "护士",
+      "zhHant": "護理師",
       "synonyms": {
         "en": [
           "rn",
@@ -4737,6 +6069,13 @@
           "护师",
           "临床护士",
           "护理"
+        ],
+        "zhHant": [
+          "護士",
+          "臨床護理師",
+          "護理人員",
+          "病房護理師",
+          "門診護理師"
         ]
       },
       "soc": [
@@ -4749,6 +6088,7 @@
       "parent": "clinical",
       "en": "Nurse practitioner",
       "zh": "执业护师",
+      "zhHant": "專科護理師",
       "synonyms": {
         "en": [
           "np",
@@ -4758,6 +6098,9 @@
         ],
         "zh": [
           "高级执业护士"
+        ],
+        "zhHant": [
+          "進階執業護理師"
         ]
       },
       "soc": [
@@ -4770,6 +6113,7 @@
       "parent": "clinical",
       "en": "Pharmacist",
       "zh": "药剂师",
+      "zhHant": "藥師",
       "synonyms": {
         "en": [
           "clinical pharmacist",
@@ -4781,6 +6125,11 @@
           "药师",
           "执业药师",
           "临床药师"
+        ],
+        "zhHant": [
+          "臨床藥師",
+          "藥局藥師",
+          "藥劑師"
         ]
       },
       "soc": [
@@ -4793,6 +6142,7 @@
       "parent": "clinical",
       "en": "Physical or occupational therapist",
       "zh": "康复治疗师",
+      "zhHant": "物理治療師",
       "synonyms": {
         "en": [
           "physical therapist",
@@ -4807,6 +6157,11 @@
           "康复师",
           "作业治疗师",
           "言语治疗师"
+        ],
+        "zhHant": [
+          "職能治療師",
+          "復健治療師",
+          "語言治療師"
         ]
       },
       "soc": [
@@ -4819,6 +6174,7 @@
       "parent": "clinical",
       "en": "Dentist",
       "zh": "牙医",
+      "zhHant": "牙醫師",
       "synonyms": {
         "en": [
           "dental surgeon",
@@ -4829,6 +6185,10 @@
           "口腔医生",
           "牙科医生",
           "口腔医师"
+        ],
+        "zhHant": [
+          "牙醫",
+          "牙科醫師"
         ]
       },
       "soc": [
@@ -4841,6 +6201,7 @@
       "parent": "clinical",
       "en": "Medical lab and imaging technologist",
       "zh": "医学检验技师",
+      "zhHant": "醫事檢驗師",
       "synonyms": {
         "en": [
           "medical laboratory technologist",
@@ -4858,6 +6219,12 @@
           "影像技师",
           "检验科技师",
           "放射技师"
+        ],
+        "zhHant": [
+          "醫檢師",
+          "放射師",
+          "醫事放射師",
+          "檢驗技術人員"
         ]
       },
       "soc": [
@@ -4870,6 +6237,7 @@
       "parent": "clinical",
       "en": "Psychologist or therapist",
       "zh": "心理咨询师",
+      "zhHant": "心理師",
       "synonyms": {
         "en": [
           "psychologist",
@@ -4883,6 +6251,11 @@
           "心理治疗师",
           "心理医生",
           "心理咨询"
+        ],
+        "zhHant": [
+          "諮商心理師",
+          "臨床心理師",
+          "心理諮商師"
         ]
       },
       "soc": [
@@ -4895,9 +6268,11 @@
       "parent": "healthcare",
       "en": "Healthcare administration and clinical research",
       "zh": "医疗管理与临床研究",
+      "zhHant": "醫療行政與臨床研究",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -4906,6 +6281,7 @@
       "parent": "health_admin",
       "en": "Healthcare administrator",
       "zh": "医疗管理",
+      "zhHant": "醫務管理人員",
       "synonyms": {
         "en": [
           "hospital administrator",
@@ -4918,6 +6294,12 @@
           "医院管理人员",
           "诊所经理",
           "医务管理"
+        ],
+        "zhHant": [
+          "醫務行政人員",
+          "醫院行政管理人員",
+          "診所經理",
+          "醫務管理"
         ]
       },
       "soc": [
@@ -4930,6 +6312,7 @@
       "parent": "health_admin",
       "en": "Medical coder and biller",
       "zh": "病案编码员",
+      "zhHant": "疾病分類人員",
       "synonyms": {
         "en": [
           "medical coder",
@@ -4941,6 +6324,11 @@
         "zh": [
           "病案管理员",
           "病案编码"
+        ],
+        "zhHant": [
+          "疾病分類師",
+          "病歷管理人員",
+          "病歷管理員"
         ]
       }
     },
@@ -4950,6 +6338,7 @@
       "parent": "health_admin",
       "en": "Medical sales representative",
       "zh": "医药代表",
+      "zhHant": "醫藥業務代表",
       "synonyms": {
         "en": [
           "pharmaceutical sales representative",
@@ -4963,6 +6352,13 @@
           "医药代表专员",
           "医药销售代表",
           "医疗器械销售代表"
+        ],
+        "zhHant": [
+          "藥廠業務代表",
+          "醫療器材業務",
+          "藥品業務",
+          "醫藥業務",
+          "醫材業務代表"
         ]
       }
     },
@@ -4972,6 +6368,7 @@
       "parent": "health_admin",
       "en": "Clinical research associate",
       "zh": "临床监查员",
+      "zhHant": "臨床研究專員",
       "synonyms": {
         "en": [
           "cra",
@@ -4985,6 +6382,12 @@
           "临床项目经理",
           "临床协调员",
           "临床监查"
+        ],
+        "zhHant": [
+          "臨床試驗專員",
+          "臨床研究護理師",
+          "臨床研究協調員",
+          "臨床試驗監測員"
         ]
       }
     },
@@ -4994,9 +6397,11 @@
       "parent": "healthcare",
       "en": "Life sciences research",
       "zh": "生命科学研发",
+      "zhHant": "生命科學研究",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -5005,6 +6410,7 @@
       "parent": "life_sciences",
       "en": "Biomedical research scientist",
       "zh": "生物医药研究员",
+      "zhHant": "生醫研究員",
       "synonyms": {
         "en": [
           "medical scientist",
@@ -5020,6 +6426,13 @@
           "药物研发工程师",
           "分子生物学研究员",
           "生物医药研发"
+        ],
+        "zhHant": [
+          "生物醫學研究員",
+          "生技研發人員",
+          "藥物研發研究員",
+          "分子生物研究員",
+          "生技研究員"
         ]
       },
       "soc": [
@@ -5032,6 +6445,7 @@
       "parent": "life_sciences",
       "en": "Chemist",
       "zh": "化学研究员",
+      "zhHant": "化學研究員",
       "synonyms": {
         "en": [
           "analytical chemist",
@@ -5044,6 +6458,13 @@
           "药物化学研究员",
           "分析化学工程师",
           "制剂研究员"
+        ],
+        "zhHant": [
+          "化學分析人員",
+          "化驗員",
+          "藥物化學研究員",
+          "分析化學人員",
+          "製劑研究員"
         ]
       },
       "soc": [
@@ -5056,6 +6477,7 @@
       "parent": "life_sciences",
       "en": "Biomedical engineer",
       "zh": "生物医学工程师",
+      "zhHant": "醫學工程師",
       "synonyms": {
         "en": [
           "medical device engineer",
@@ -5065,6 +6487,11 @@
         "zh": [
           "医疗器械研发工程师",
           "医疗器械工程师"
+        ],
+        "zhHant": [
+          "生醫工程師",
+          "醫療器材研發工程師",
+          "醫療器材工程師"
         ]
       },
       "soc": [
@@ -5077,6 +6504,7 @@
       "parent": "life_sciences",
       "en": "Bioinformatics scientist",
       "zh": "生物信息分析师",
+      "zhHant": "生物資訊分析師",
       "synonyms": {
         "en": [
           "bioinformatician",
@@ -5088,6 +6516,11 @@
           "生物信息工程师",
           "生信分析",
           "生信工程师"
+        ],
+        "zhHant": [
+          "生物資訊工程師",
+          "生資分析師",
+          "生物資訊人員"
         ]
       }
     },
@@ -5097,9 +6530,11 @@
       "parent": null,
       "en": "Education and research",
       "zh": "教育与科研",
+      "zhHant": "教育與研究",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -5108,9 +6543,11 @@
       "parent": "education",
       "en": "Teaching",
       "zh": "教学",
+      "zhHant": "教學",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -5119,6 +6556,7 @@
       "parent": "teaching",
       "en": "School teacher",
       "zh": "中小学教师",
+      "zhHant": "中小學教師",
       "synonyms": {
         "en": [
           "teacher",
@@ -5139,6 +6577,15 @@
           "小学老师",
           "班主任",
           "数学老师"
+        ],
+        "zhHant": [
+          "教師",
+          "老師",
+          "國小教師",
+          "國中教師",
+          "高中教師",
+          "班級導師",
+          "代理教師"
         ]
       },
       "soc": [
@@ -5151,6 +6598,7 @@
       "parent": "teaching",
       "en": "Tutor",
       "zh": "辅导老师",
+      "zhHant": "課輔老師",
       "synonyms": {
         "en": [
           "private tutor",
@@ -5162,6 +6610,13 @@
           "家教",
           "课外辅导老师",
           "学科辅导老师"
+        ],
+        "zhHant": [
+          "家教老師",
+          "家教",
+          "補習班老師",
+          "安親班老師",
+          "課後輔導老師"
         ]
       }
     },
@@ -5171,6 +6626,7 @@
       "parent": "teaching",
       "en": "Language teacher",
       "zh": "语言教师",
+      "zhHant": "語言教師",
       "synonyms": {
         "en": [
           "esl teacher",
@@ -5187,6 +6643,14 @@
           "对外汉语教师",
           "雅思老师",
           "中文老师"
+        ],
+        "zhHant": [
+          "英文老師",
+          "英語教師",
+          "華語教師",
+          "外語教師",
+          "美語老師",
+          "日文老師"
         ]
       }
     },
@@ -5196,6 +6660,7 @@
       "parent": "teaching",
       "en": "Early childhood teacher",
       "zh": "幼儿教师",
+      "zhHant": "幼教老師",
       "synonyms": {
         "en": [
           "preschool teacher",
@@ -5207,6 +6672,12 @@
           "幼师",
           "幼儿园老师",
           "早教老师"
+        ],
+        "zhHant": [
+          "教保員",
+          "幼兒園教師",
+          "幼兒園老師",
+          "托育人員"
         ]
       },
       "soc": [
@@ -5219,6 +6690,7 @@
       "parent": "teaching",
       "en": "Professor or lecturer",
       "zh": "高校教师",
+      "zhHant": "大學教師",
       "synonyms": {
         "en": [
           "professor",
@@ -5235,6 +6707,13 @@
           "副教授",
           "大学老师",
           "大学教师"
+        ],
+        "zhHant": [
+          "教授",
+          "副教授",
+          "助理教授",
+          "大學講師",
+          "大專教師"
         ]
       }
     },
@@ -5244,6 +6723,7 @@
       "parent": "teaching",
       "en": "Special education teacher",
       "zh": "特殊教育教师",
+      "zhHant": "特教老師",
       "synonyms": {
         "en": [
           "special needs teacher",
@@ -5253,6 +6733,10 @@
         "zh": [
           "特教老师",
           "特殊教育老师"
+        ],
+        "zhHant": [
+          "特殊教育教師",
+          "特教教師"
         ]
       }
     },
@@ -5262,9 +6746,11 @@
       "parent": "education",
       "en": "Curriculum, advising and administration",
       "zh": "教研、升学与教务",
+      "zhHant": "課程、輔導與行政",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -5273,6 +6759,7 @@
       "parent": "education_support",
       "en": "Instructional designer",
       "zh": "课程设计师",
+      "zhHant": "課程設計師",
       "synonyms": {
         "en": [
           "curriculum developer",
@@ -5286,6 +6773,12 @@
           "教研员",
           "教学设计师",
           "课程研发专员"
+        ],
+        "zhHant": [
+          "教材研發人員",
+          "課程研發專員",
+          "教學設計師",
+          "課程企劃"
         ]
       },
       "soc": [
@@ -5298,6 +6791,7 @@
       "parent": "education_support",
       "en": "Academic or career advisor",
       "zh": "升学与职业顾问",
+      "zhHant": "升學與職涯顧問",
       "synonyms": {
         "en": [
           "academic advisor",
@@ -5314,6 +6808,14 @@
           "职业规划师",
           "招生顾问",
           "课程顾问"
+        ],
+        "zhHant": [
+          "留學顧問",
+          "升學顧問",
+          "職涯顧問",
+          "招生顧問",
+          "課程顧問",
+          "職涯諮詢師"
         ]
       },
       "soc": [
@@ -5326,6 +6828,7 @@
       "parent": "education_support",
       "en": "Education administrator",
       "zh": "教务管理",
+      "zhHant": "教務行政人員",
       "synonyms": {
         "en": [
           "principal",
@@ -5345,6 +6848,13 @@
           "教务主任",
           "教务专员",
           "学术主管"
+        ],
+        "zhHant": [
+          "校長",
+          "教務主任",
+          "教務人員",
+          "學務人員",
+          "教務專員"
         ]
       }
     },
@@ -5354,9 +6864,11 @@
       "parent": "education",
       "en": "Research",
       "zh": "科研",
+      "zhHant": "研究",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -5365,6 +6877,7 @@
       "parent": "research",
       "en": "Postdoctoral researcher",
       "zh": "博士后",
+      "zhHant": "博士後研究員",
       "synonyms": {
         "en": [
           "postdoctoral fellow",
@@ -5374,6 +6887,9 @@
         ],
         "zh": [
           "博士后研究员"
+        ],
+        "zhHant": [
+          "博士後研究人員"
         ]
       }
     },
@@ -5383,6 +6899,7 @@
       "parent": "research",
       "en": "Research assistant",
       "zh": "科研助理",
+      "zhHant": "研究助理",
       "synonyms": {
         "en": [
           "research technician",
@@ -5395,6 +6912,12 @@
           "研究助理",
           "实验室助理",
           "实验员"
+        ],
+        "zhHant": [
+          "專任研究助理",
+          "實驗室助理",
+          "實驗助理",
+          "研究人員助理"
         ]
       }
     },
@@ -5404,6 +6927,7 @@
       "parent": "research",
       "en": "Economist or policy researcher",
       "zh": "经济研究员",
+      "zhHant": "經濟研究員",
       "synonyms": {
         "en": [
           "economist",
@@ -5415,6 +6939,11 @@
           "经济分析师",
           "宏观研究员",
           "经济学研究员"
+        ],
+        "zhHant": [
+          "經濟分析師",
+          "總體經濟研究員",
+          "經濟學研究員"
         ]
       },
       "soc": [
@@ -5427,9 +6956,11 @@
       "parent": null,
       "en": "Consulting, strategy and public sector",
       "zh": "咨询、战略与公共部门",
+      "zhHant": "顧問、策略與公部門",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -5438,9 +6969,11 @@
       "parent": "consulting",
       "en": "Consulting and strategy",
       "zh": "咨询与战略",
+      "zhHant": "顧問與策略",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -5449,6 +6982,7 @@
       "parent": "consulting_roles",
       "en": "Management consultant",
       "zh": "管理咨询顾问",
+      "zhHant": "管理顧問",
       "synonyms": {
         "en": [
           "consultant",
@@ -5463,6 +6997,12 @@
           "战略咨询顾问",
           "咨询师",
           "管理咨询"
+        ],
+        "zhHant": [
+          "企管顧問",
+          "策略顧問",
+          "企業管理顧問",
+          "企管顧問師"
         ]
       },
       "soc": [
@@ -5476,6 +7016,7 @@
       "parent": "consulting_roles",
       "en": "Business analyst",
       "zh": "业务分析师",
+      "zhHant": "商業分析師",
       "synonyms": {
         "en": [
           "ba",
@@ -5487,6 +7028,11 @@
           "需求分析师",
           "商业分析师",
           "业务分析"
+        ],
+        "zhHant": [
+          "需求分析師",
+          "業務分析師",
+          "商業分析人員"
         ]
       },
       "soc": [
@@ -5499,6 +7045,7 @@
       "parent": "consulting_roles",
       "en": "Strategy manager",
       "zh": "战略经理",
+      "zhHant": "策略經理",
       "synonyms": {
         "en": [
           "corporate strategy manager",
@@ -5512,6 +7059,12 @@
           "战略投资经理",
           "幕僚长",
           "战略规划经理"
+        ],
+        "zhHant": [
+          "策略分析師",
+          "策略規劃經理",
+          "策略投資經理",
+          "幕僚長"
         ]
       }
     },
@@ -5521,9 +7074,11 @@
       "parent": "consulting",
       "en": "Government and nonprofit",
       "zh": "政府与非营利",
+      "zhHant": "政府與非營利組織",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -5532,6 +7087,7 @@
       "parent": "public_sector",
       "en": "Policy and public affairs",
       "zh": "政策分析师",
+      "zhHant": "政策分析師",
       "synonyms": {
         "en": [
           "policy analyst",
@@ -5545,6 +7101,12 @@
           "政府关系",
           "政策研究员",
           "公共事务经理"
+        ],
+        "zhHant": [
+          "公共事務經理",
+          "政府關係經理",
+          "政策研究員",
+          "公共政策研究員"
         ]
       }
     },
@@ -5554,6 +7116,7 @@
       "parent": "public_sector",
       "en": "Civil servant",
       "zh": "公务员",
+      "zhHant": "公務人員",
       "synonyms": {
         "en": [
           "government officer",
@@ -5564,6 +7127,12 @@
           "事业单位工作人员",
           "选调生",
           "机关工作人员"
+        ],
+        "zhHant": [
+          "公務員",
+          "約聘人員",
+          "約僱人員",
+          "公職人員"
         ]
       }
     },
@@ -5573,6 +7142,7 @@
       "parent": "public_sector",
       "en": "Nonprofit program manager",
       "zh": "公益项目经理",
+      "zhHant": "非營利組織專案經理",
       "synonyms": {
         "en": [
           "program officer",
@@ -5588,6 +7158,12 @@
           "筹款经理",
           "ngo项目官员",
           "基金会项目官员"
+        ],
+        "zhHant": [
+          "公益專案經理",
+          "募款專員",
+          "NGO專案人員",
+          "基金會專案人員"
         ]
       }
     },
@@ -5597,6 +7173,7 @@
       "parent": "public_sector",
       "en": "Social worker",
       "zh": "社会工作者",
+      "zhHant": "社工人員",
       "synonyms": {
         "en": [
           "case manager",
@@ -5608,6 +7185,13 @@
           "社工",
           "个案管理员",
           "社会工作师"
+        ],
+        "zhHant": [
+          "社工",
+          "社會工作師",
+          "社工員",
+          "個案管理師",
+          "社會工作人員"
         ]
       },
       "soc": [
@@ -5620,9 +7204,11 @@
       "parent": null,
       "en": "Administration",
       "zh": "行政与文职",
+      "zhHant": "行政",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -5631,9 +7217,11 @@
       "parent": "administration",
       "en": "Administrative and office",
       "zh": "行政与办公室",
+      "zhHant": "行政與辦公室事務",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -5642,6 +7230,7 @@
       "parent": "admin_roles",
       "en": "Administrative assistant",
       "zh": "行政助理",
+      "zhHant": "行政助理",
       "synonyms": {
         "en": [
           "admin assistant",
@@ -5657,6 +7246,14 @@
           "秘书",
           "行政文员",
           "行政"
+        ],
+        "zhHant": [
+          "行政人員",
+          "行政專員",
+          "秘書",
+          "文書人員",
+          "行政事務人員",
+          "行政總務人員"
         ]
       },
       "soc": [
@@ -5669,6 +7266,7 @@
       "parent": "admin_roles",
       "en": "Executive assistant",
       "zh": "总裁助理",
+      "zhHant": "高階主管特助",
       "synonyms": {
         "en": [
           "ea",
@@ -5685,6 +7283,15 @@
           "特别助理",
           "总裁特助",
           "董事长特助"
+        ],
+        "zhHant": [
+          "特別助理",
+          "總經理特助",
+          "董事長特助",
+          "總經理秘書",
+          "董事長秘書",
+          "主管秘書",
+          "執行長特助"
         ]
       },
       "soc": [
@@ -5697,6 +7304,7 @@
       "parent": "admin_roles",
       "en": "Office manager",
       "zh": "行政经理",
+      "zhHant": "行政經理",
       "synonyms": {
         "en": [
           "administrative manager",
@@ -5708,6 +7316,12 @@
           "行政主管",
           "办公室主任",
           "行政总监"
+        ],
+        "zhHant": [
+          "行政主管",
+          "總務主任",
+          "行政總監",
+          "管理部經理"
         ]
       }
     },
@@ -5717,6 +7331,7 @@
       "parent": "admin_roles",
       "en": "Receptionist",
       "zh": "前台",
+      "zhHant": "櫃檯接待人員",
       "synonyms": {
         "en": [
           "front desk receptionist",
@@ -5728,6 +7343,13 @@
           "前台接待",
           "前台文员",
           "前台行政"
+        ],
+        "zhHant": [
+          "櫃檯人員",
+          "總機人員",
+          "接待人員",
+          "櫃台人員",
+          "總機"
         ]
       },
       "soc": [
@@ -5740,6 +7362,7 @@
       "parent": "admin_roles",
       "en": "Data entry and office clerk",
       "zh": "数据录入员",
+      "zhHant": "資料輸入人員",
       "synonyms": {
         "en": [
           "data entry clerk",
@@ -5758,6 +7381,13 @@
           "录入员",
           "资料员",
           "档案管理员"
+        ],
+        "zhHant": [
+          "資料建檔人員",
+          "文書處理人員",
+          "檔案管理人員",
+          "資料處理人員",
+          "Key-in人員"
         ]
       },
       "soc": [
@@ -5770,9 +7400,11 @@
       "parent": null,
       "en": "Media and content",
       "zh": "媒体与内容",
+      "zhHant": "媒體與內容",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -5781,9 +7413,11 @@
       "parent": "media",
       "en": "Writing, editorial and translation",
       "zh": "写作、编辑与翻译",
+      "zhHant": "寫作、編輯與翻譯",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -5792,6 +7426,7 @@
       "parent": "writing_editorial",
       "en": "Copywriter",
       "zh": "文案",
+      "zhHant": "文案",
       "synonyms": {
         "en": [
           "creative copywriter",
@@ -5814,6 +7449,13 @@
           "广告文案",
           "文案编辑",
           "撰稿人"
+        ],
+        "zhHant": [
+          "文案企劃",
+          "廣告文案",
+          "文案寫手",
+          "文案人員",
+          "撰稿人"
         ]
       },
       "soc": [
@@ -5826,6 +7468,7 @@
       "parent": "writing_editorial",
       "en": "Technical writer",
       "zh": "技术文档工程师",
+      "zhHant": "技術文件工程師",
       "synonyms": {
         "en": [
           "documentation specialist",
@@ -5837,6 +7480,11 @@
           "技术写作",
           "文档工程师",
           "技术文档"
+        ],
+        "zhHant": [
+          "技術寫手",
+          "技術文件撰寫人員",
+          "文件工程師"
         ]
       },
       "soc": [
@@ -5849,6 +7497,7 @@
       "parent": "writing_editorial",
       "en": "Editor",
       "zh": "编辑",
+      "zhHant": "編輯",
       "synonyms": {
         "en": [
           "content editor",
@@ -5864,6 +7513,14 @@
           "文字编辑",
           "主编",
           "校对"
+        ],
+        "zhHant": [
+          "文字編輯",
+          "內容編輯",
+          "主編",
+          "網站編輯",
+          "校對人員",
+          "採訪編輯"
         ]
       },
       "soc": [
@@ -5876,6 +7533,7 @@
       "parent": "writing_editorial",
       "en": "Journalist",
       "zh": "记者",
+      "zhHant": "記者",
       "synonyms": {
         "en": [
           "reporter",
@@ -5889,6 +7547,12 @@
           "新闻记者",
           "采编",
           "记者编辑"
+        ],
+        "zhHant": [
+          "新聞記者",
+          "採訪記者",
+          "文字記者",
+          "新聞採訪記者"
         ]
       },
       "soc": [
@@ -5901,6 +7565,7 @@
       "parent": "writing_editorial",
       "en": "Translator or interpreter",
       "zh": "翻译",
+      "zhHant": "翻譯人員",
       "synonyms": {
         "en": [
           "translator",
@@ -5915,6 +7580,14 @@
           "翻译员",
           "本地化专员",
           "同声传译"
+        ],
+        "zhHant": [
+          "翻譯",
+          "筆譯人員",
+          "口譯人員",
+          "譯者",
+          "在地化專員",
+          "同步口譯"
         ]
       },
       "soc": [
@@ -5927,9 +7600,11 @@
       "parent": "media",
       "en": "Video, photo and creators",
       "zh": "视频、摄影与创作者",
+      "zhHant": "影片、攝影與創作者",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -5938,6 +7613,7 @@
       "parent": "video_production",
       "en": "Video editor",
       "zh": "视频剪辑师",
+      "zhHant": "影片剪輯師",
       "synonyms": {
         "en": [
           "film editor",
@@ -5949,6 +7625,13 @@
           "后期剪辑",
           "视频后期",
           "短视频剪辑"
+        ],
+        "zhHant": [
+          "剪輯師",
+          "影片剪輯人員",
+          "後製剪輯師",
+          "影音剪輯",
+          "短影音剪輯師"
         ]
       },
       "soc": [
@@ -5961,6 +7644,7 @@
       "parent": "video_production",
       "en": "Photographer or videographer",
       "zh": "摄影师",
+      "zhHant": "攝影師",
       "synonyms": {
         "en": [
           "photographer",
@@ -5973,6 +7657,12 @@
           "摄像师",
           "摄影摄像",
           "修图师"
+        ],
+        "zhHant": [
+          "攝影人員",
+          "動態攝影師",
+          "平面攝影師",
+          "修圖師"
         ]
       },
       "soc": [
@@ -5985,6 +7675,7 @@
       "parent": "video_production",
       "en": "Content creator",
       "zh": "内容创作者",
+      "zhHant": "內容創作者",
       "synonyms": {
         "en": [
           "youtuber",
@@ -6001,6 +7692,14 @@
           "达人",
           "博主",
           "短视频运营"
+        ],
+        "zhHant": [
+          "直播主",
+          "YouTuber",
+          "網紅",
+          "短影音創作者",
+          "部落客",
+          "影音創作者"
         ]
       }
     },
@@ -6010,6 +7709,7 @@
       "parent": "video_production",
       "en": "Producer",
       "zh": "制片人",
+      "zhHant": "製作人",
       "synonyms": {
         "en": [
           "tv producer",
@@ -6029,6 +7729,13 @@
           "编导",
           "导演",
           "视频编导"
+        ],
+        "zhHant": [
+          "製片",
+          "節目製作人",
+          "影片製作人",
+          "編導",
+          "導演"
         ]
       }
     },
@@ -6038,9 +7745,11 @@
       "parent": null,
       "en": "Manufacturing and skilled trades",
       "zh": "生产制造与技工",
+      "zhHant": "製造與技術工",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -6049,9 +7758,11 @@
       "parent": "manufacturing",
       "en": "Production",
       "zh": "生产",
+      "zhHant": "生產",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -6060,6 +7771,7 @@
       "parent": "production",
       "en": "Production supervisor",
       "zh": "生产主管",
+      "zhHant": "生產主管",
       "synonyms": {
         "en": [
           "production manager",
@@ -6075,6 +7787,14 @@
           "厂长",
           "班组长",
           "生产厂长"
+        ],
+        "zhHant": [
+          "生產課長",
+          "生產經理",
+          "產線組長",
+          "廠長",
+          "生產組長",
+          "現場主管"
         ]
       },
       "soc": [
@@ -6087,6 +7807,7 @@
       "parent": "production",
       "en": "Machine operator",
       "zh": "操作工",
+      "zhHant": "作業員",
       "synonyms": {
         "en": [
           "production operator",
@@ -6103,6 +7824,14 @@
           "装配工",
           "包装工",
           "流水线工人"
+        ],
+        "zhHant": [
+          "生產作業員",
+          "產線作業員",
+          "包裝作業員",
+          "組裝作業員",
+          "機台操作員",
+          "操作員"
         ]
       }
     },
@@ -6112,6 +7841,7 @@
       "parent": "production",
       "en": "Quality inspector",
       "zh": "质检员",
+      "zhHant": "品檢人員",
       "synonyms": {
         "en": [
           "qc inspector",
@@ -6125,6 +7855,13 @@
           "qc",
           "品质检验员",
           "检验员"
+        ],
+        "zhHant": [
+          "品檢員",
+          "品管員",
+          "品管檢驗人員",
+          "QC人員",
+          "檢驗員"
         ]
       },
       "soc": [
@@ -6137,6 +7874,7 @@
       "parent": "production",
       "en": "CNC machinist",
       "zh": "数控机床操作员",
+      "zhHant": "CNC技術員",
       "synonyms": {
         "en": [
           "machinist",
@@ -6150,6 +7888,14 @@
           "车工",
           "铣工",
           "模具工"
+        ],
+        "zhHant": [
+          "CNC操作員",
+          "CNC車床人員",
+          "CNC程式設計人員",
+          "車床技術員",
+          "銑床技術員",
+          "模具技術員"
         ]
       },
       "soc": [
@@ -6162,9 +7908,11 @@
       "parent": "manufacturing",
       "en": "Skilled trades and transport",
       "zh": "技工、维修与运输",
+      "zhHant": "技術工與運輸",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -6173,6 +7921,7 @@
       "parent": "trades",
       "en": "Electrician",
       "zh": "电工",
+      "zhHant": "水電工",
       "synonyms": {
         "en": [
           "journeyman electrician",
@@ -6184,6 +7933,14 @@
           "维修电工",
           "电工技师",
           "高压电工"
+        ],
+        "zhHant": [
+          "水電技術員",
+          "電氣技術員",
+          "配電技術員",
+          "水電配線技術員",
+          "室內配線技術員",
+          "電工技術員"
         ]
       },
       "soc": [
@@ -6196,6 +7953,7 @@
       "parent": "trades",
       "en": "Maintenance technician",
       "zh": "设备维修技术员",
+      "zhHant": "設備維修技術員",
       "synonyms": {
         "en": [
           "maintenance mechanic",
@@ -6211,6 +7969,13 @@
           "维修技工",
           "设备技术员",
           "暖通技工"
+        ],
+        "zhHant": [
+          "設備維護人員",
+          "維修技術員",
+          "機台維修人員",
+          "設備技術員",
+          "設備維修人員"
         ]
       },
       "soc": [
@@ -6223,6 +7988,7 @@
       "parent": "trades",
       "en": "Welder",
       "zh": "焊工",
+      "zhHant": "焊接技術員",
       "synonyms": {
         "en": [
           "welding technician",
@@ -6234,6 +8000,12 @@
           "电焊工",
           "焊接技术员",
           "氩弧焊工"
+        ],
+        "zhHant": [
+          "焊工",
+          "電焊工",
+          "氬焊人員",
+          "焊接人員"
         ]
       },
       "soc": [
@@ -6246,6 +8018,7 @@
       "parent": "trades",
       "en": "Driver and courier",
       "zh": "司机",
+      "zhHant": "司機",
       "synonyms": {
         "en": [
           "truck driver",
@@ -6266,6 +8039,15 @@
           "快递员",
           "配送员",
           "驾驶员"
+        ],
+        "zhHant": [
+          "貨車司機",
+          "物流士",
+          "外送員",
+          "快遞人員",
+          "大貨車司機",
+          "送貨司機",
+          "配送員"
         ]
       },
       "soc": [
@@ -6278,9 +8060,11 @@
       "parent": null,
       "en": "Hospitality and travel",
       "zh": "酒店、餐饮与旅游",
+      "zhHant": "餐旅與旅遊",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -6289,9 +8073,11 @@
       "parent": "hospitality",
       "en": "Food service",
       "zh": "餐饮",
+      "zhHant": "餐飲服務",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -6300,6 +8086,7 @@
       "parent": "food_service",
       "en": "Chef or cook",
       "zh": "厨师",
+      "zhHant": "廚師",
       "synonyms": {
         "en": [
           "chef",
@@ -6315,6 +8102,15 @@
           "面点师",
           "烘焙师",
           "西点师"
+        ],
+        "zhHant": [
+          "主廚",
+          "西點師傅",
+          "麵包師傅",
+          "烘焙師",
+          "中餐廚師",
+          "西餐廚師",
+          "廚助"
         ]
       },
       "soc": [
@@ -6327,6 +8123,7 @@
       "parent": "food_service",
       "en": "Restaurant manager",
       "zh": "餐厅经理",
+      "zhHant": "餐廳經理",
       "synonyms": {
         "en": [
           "food service manager",
@@ -6338,6 +8135,12 @@
           "餐饮经理",
           "餐厅店长",
           "餐饮店长"
+        ],
+        "zhHant": [
+          "餐廳店長",
+          "餐飲經理",
+          "餐飲店長",
+          "餐廳主管"
         ]
       },
       "soc": [
@@ -6350,6 +8153,7 @@
       "parent": "food_service",
       "en": "Server, barista or bartender",
       "zh": "餐厅服务员",
+      "zhHant": "餐飲服務人員",
       "synonyms": {
         "en": [
           "waiter",
@@ -6367,6 +8171,18 @@
           "服务员",
           "咖啡师",
           "调酒师"
+        ],
+        "zhHant": [
+          "餐飲服務生",
+          "外場服務人員",
+          "餐廳服務生",
+          "餐廳服務員",
+          "餐飲服務員",
+          "外場服務員",
+          "咖啡師",
+          "調酒師",
+          "吧檯人員",
+          "服務生"
         ]
       },
       "soc": [
@@ -6379,9 +8195,11 @@
       "parent": "hospitality",
       "en": "Hotels and travel",
       "zh": "酒店与旅游",
+      "zhHant": "飯店與旅遊",
       "synonyms": {
         "en": [],
-        "zh": []
+        "zh": [],
+        "zhHant": []
       }
     },
     {
@@ -6390,6 +8208,7 @@
       "parent": "hotel_travel",
       "en": "Hotel manager",
       "zh": "酒店经理",
+      "zhHant": "飯店經理",
       "synonyms": {
         "en": [
           "front office manager",
@@ -6400,6 +8219,12 @@
           "酒店前厅经理",
           "酒店总经理",
           "前厅经理"
+        ],
+        "zhHant": [
+          "飯店總經理",
+          "客務經理",
+          "旅館經理",
+          "櫃檯經理"
         ]
       },
       "soc": [
@@ -6412,6 +8237,7 @@
       "parent": "hotel_travel",
       "en": "Travel consultant",
       "zh": "旅游顾问",
+      "zhHant": "旅遊顧問",
       "synonyms": {
         "en": [
           "travel agent",
@@ -6424,6 +8250,14 @@
           "导游",
           "旅行定制师",
           "旅行顾问"
+        ],
+        "zhHant": [
+          "旅行社業務",
+          "導遊",
+          "領隊",
+          "旅遊業務",
+          "旅遊規劃師",
+          "票務人員"
         ]
       },
       "soc": [
@@ -6436,6 +8270,7 @@
       "parent": "hotel_travel",
       "en": "Flight attendant",
       "zh": "空乘",
+      "zhHant": "空服員",
       "synonyms": {
         "en": [
           "cabin crew",
@@ -6446,6 +8281,11 @@
         "zh": [
           "空中乘务员",
           "乘务员",
+          "空姐"
+        ],
+        "zhHant": [
+          "空中服務員",
+          "客艙組員",
           "空姐"
         ]
       },

@@ -8,7 +8,7 @@ import { checkImportUrl, hostMatchesPattern, importDenylist, isDeniedHost } from
 
 describe('IMPORT_FETCH_DENYLIST', () => {
   it('lists every board the plan names, plus LinkedIn’s shortener', () => {
-    for (const p of ['linkedin.com', 'indeed.*', 'glassdoor.*', 'zhipin.com', 'zhaopin.com', 'liepin.com', '51job.com', 'maimai.cn', '104.com.tw', '1111.com.tw', 'cake.me', 'yourator.co', 'lnkd.in']) {
+    for (const p of ['linkedin.com', 'indeed.*', 'glassdoor.*', 'zhipin.com', 'zhaopin.com', 'liepin.com', '51job.com', 'maimai.cn', '104.com.tw', '1111.com.tw', 'cake.me', 'yourator.co', 'lnkd.in', '518.com.tw', 'yes123.com.tw', 'meet.jobs']) {
       expect(DEFAULT_IMPORT_FETCH_DENYLIST).toContain(p);
     }
   });
@@ -29,6 +29,21 @@ describe('IMPORT_FETCH_DENYLIST', () => {
     ['www.104.com.tw', true],
     ['www.cake.me', true],
     ['www.yourator.co', true],
+    // JT-5: the three Taiwan boards added with the open-data adapter (MARKET_STRATEGY §1.6).
+    ['518.com.tw', true],
+    ['www.518.com.tw', true],
+    ['yes123.com.tw', true],
+    ['www.yes123.com.tw', true],
+    ['meet.jobs', true],
+    ['www.meet.jobs', true],
+    // A look-alike host is not the board.
+    ['my518.com.tw', false],
+    ['meet.jobs.example.org', false],
+    ['notmeet.jobs', false],
+    // 台灣就業通 is open data and its vacancy pages may be imported.
+    ['job.taiwanjobs.gov.tw', false],
+    ['www.taiwanjobs.gov.tw', false],
+    ['free.taiwanjobs.gov.tw', false],
     ['boards.greenhouse.io', false],
     ['jobs.lever.co', false],
     ['indeedish.com', false],
@@ -90,6 +105,25 @@ describe('checkImportUrl (SSRF guard: only public http(s) pages go to Firecrawl)
   it('refuses denylisted boards as blocked_site (the user pastes the text instead)', () => {
     const r = checkImportUrl('https://www.linkedin.com/jobs/view/123', {});
     expect(r).toMatchObject({ ok: false, reason: 'blocked_site', host: 'www.linkedin.com' });
+  });
+
+  it.each([
+    ['https://www.518.com.tw/job-AbCdEf.html', 'www.518.com.tw'],
+    ['https://518.com.tw/job-AbCdEf.html', '518.com.tw'],
+    ['https://www.yes123.com.tw/wk_index/job.asp?p_id=1', 'www.yes123.com.tw'],
+    ['https://yes123.com.tw/wk_index/job.asp?p_id=1', 'yes123.com.tw'],
+    ['https://meet.jobs/zh-TW/jobs/1-example', 'meet.jobs'],
+    ['https://www.meet.jobs/zh-TW/jobs/1-example', 'www.meet.jobs'],
+  ])('JT-5: refuses %s before any fetch, with the existing reason', (raw, host) => {
+    // `checkImportUrl` runs before any reader is called; the refusal is the same code every other
+    // denylisted board gets, so the web shows the existing "paste the text" message.
+    expect(checkImportUrl(raw, {})).toMatchObject({ ok: false, reason: 'blocked_site', host });
+  });
+
+  it('JT-5: a 台灣就業通 vacancy page is not refused by the denylist', () => {
+    const r = checkImportUrl('https://job.taiwanjobs.gov.tw/Internet/jobwanted/JobDetail.aspx?EMPLOYER_ID=1&HIRE_ID=2', {});
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.host).toBe('job.taiwanjobs.gov.tw');
   });
 
   it('allows the default ports', () => {

@@ -340,9 +340,8 @@ describe('Chinese titles: mainland aliases, filler words, Taiwan forms and mixed
     for (const title of ['管培生', '2027届管培生', '管理培训生', '储备干部', foldTwToCn('儲備幹部'), '实习生']) expect(bestTaxonomyMatch(title), title).toBeNull();
   });
 
-  it('the phrases are Simplified: a Taiwan title matches in the mainland reading its caller makes', () => {
-    // This area imports no other, so it does not fold; ingest, enrichment and the backfill do (enrich/titleEvidence.ts).
-    expect(bestTaxonomyMatch('資深後端工程師')).toBeNull();
+  it('a Taiwan title also matches in the mainland reading its caller makes', () => {
+    // Ingest, enrichment and the backfill read a Taiwan title both ways (enrich/titleEvidence.ts) and take the better.
     for (const [title, id] of [
       ['資深後端工程師', 'backend_engineer'],
       ['資料分析師', 'data_analyst'],
@@ -353,6 +352,103 @@ describe('Chinese titles: mainland aliases, filler words, Taiwan forms and mixed
     ] as const) {
       expect(bestTaxonomyMatch(foldTwToCn(title))?.id ?? null, title).toBe(id);
     }
+  });
+
+  it('JT-4: a Traditional Chinese title is matched as written, in Taiwan wording', () => {
+    // No conversion: the role's own Taiwan label and titles are in the index.
+    expect(bestTaxonomyMatch('資深軟體工程師')).toMatchObject({ id: 'software_engineer', matched: '軟體工程師' });
+    expect(bestTaxonomyMatch('軟體工程師')).toMatchObject({ id: 'software_engineer', score: 0.85 });
+    expect(bestTaxonomyMatch('資深後端工程師')).toMatchObject({ id: 'backend_engineer', score: 1 });
+    for (const [title, id] of [
+      ['後端工程師', 'backend_engineer'],
+      ['前端工程師', 'frontend_engineer'],
+      ['全端工程師', 'fullstack_engineer'],
+      ['韌體工程師', 'embedded_software_engineer'],
+      ['資深韌體工程師', 'embedded_software_engineer'],
+      ['演算法工程師', 'ml_engineer'],
+      ['資料分析師', 'data_analyst'],
+      ['資料工程師', 'data_engineer'],
+      ['網路工程師', 'network_engineer'],
+      ['資安工程師', 'security_engineer'],
+      ['MIS工程師', 'it_support'],
+      ['專案經理', 'project_manager'],
+      ['產品經理', 'product_manager'],
+      ['程式設計師', 'software_engineer'],
+      ['行銷專員', 'marketing_specialist'],
+      ['行銷企劃', 'marketing_specialist'],
+      ['社群小編', 'social_media_manager'],
+      ['人資專員', 'hr_generalist'],
+      ['招募專員', 'recruiter'],
+      ['業務代表', 'account_executive'],
+      ['業務專員', 'account_executive'],
+      ['業務經理', 'sales_manager'],
+      ['業務工程師', 'sales_engineer'],
+      ['客服專員', 'customer_service_rep'],
+      ['會計', 'accountant'],
+      ['護理師', 'registered_nurse'],
+      ['專科護理師', 'nurse_practitioner'],
+      ['行政助理', 'administrative_assistant'],
+      ['總經理特助', 'executive_assistant'],
+      ['門市人員', 'retail_sales'],
+      ['作業員', 'machine_operator'],
+      ['IC設計工程師', 'chip_design_engineer'],
+      ['半導體製程工程師', 'semiconductor_process_engineer'],
+      ['機構工程師', 'mechanical_engineer'],
+      ['品保工程師', 'quality_engineer'],
+      ['國貿人員', 'import_export'],
+      ['空服員', 'flight_attendant'],
+    ] as const) {
+      expect(bestTaxonomyMatch(title)?.id ?? null, title).toBe(id);
+    }
+  });
+
+  it('JT-4: Taiwan level words, head words and filler work like the mainland ones', () => {
+    expect(stripLevelWords('資深軟體工程師')).toBe('軟體工程師');
+    expect(stripLevelWords('高階產品經理')).toBe('產品經理');
+    expect(stripLevelWords('2027屆業務儲備幹部')).toBe('業務');
+    expect(stripLevelWords('行銷工讀生')).toBe('行銷');
+    // The harness persona's title (carry-over M1, MKT-3E.2): 初階 is a level, 業務代表 the role.
+    expect(bestTaxonomyMatch('初階業務代表')).toMatchObject({ id: 'account_executive', score: 1 });
+    expect(bestTaxonomyMatch('實習軟體工程師')?.id).toBe('software_engineer');
+    // 開發 and 研發 before 工程師 are filler in Taiwan titles too; a role named with the word keeps its exact name.
+    expect(bestTaxonomyMatch('前端開發工程師')).toMatchObject({ id: 'frontend_engineer', score: 1 });
+    expect(bestTaxonomyMatch('後端研發工程師')?.id).toBe('backend_engineer');
+    expect(bestTaxonomyMatch('測試開發工程師')).toMatchObject({ id: 'sdet', score: 1 });
+    // A bare head word, and the entry tracks, name no role.
+    for (const title of ['工程師', '設計師', '專員', '經理', '顧問', '分析師', '資深工程師', '研發工程師', '儲備幹部', '工讀生', '實習生', '2027屆儲備幹部']) expect(bestTaxonomyMatch(title), title).toBeNull();
+    // A Chinese title ends on its role in either script: the phrase before another role's phrase is its modifier.
+    expect(bestTaxonomyMatch('資料分析產品經理')?.id).toBe('product_manager');
+    expect(bestTaxonomyMatch('保險業務員')?.id).toBe('insurance_agent');
+    expect(bestTaxonomyMatch('律師助理')?.id).toBe('paralegal');
+  });
+
+  it('JT-4: Taiwan wording does not leak into mainland matching, and the two scripts of one role agree', () => {
+    // Mainland titles read exactly as before.
+    expect(bestTaxonomyMatch('高级后端开发工程师')).toMatchObject({ id: 'backend_engineer', score: 1 });
+    expect(bestTaxonomyMatch('软件工程师')).toMatchObject({ id: 'software_engineer', score: 0.85 });
+    // 電工 inside an engineer's title is not an electrician: the Taiwan phrases do not hold the bare word.
+    for (const title of ['光電工程師', '弱電工程師']) expect(bestTaxonomyMatch(title)?.id ?? null, title).not.toBe('electrician');
+    expect(bestTaxonomyMatch('機電工程師')?.id).toBe('mep_engineer');
+    expect(bestTaxonomyMatch('水電工')?.id).toBe('electrician');
+    // A two-character abbreviation that hides inside other titles is not a phrase (理專 in 管理專員).
+    expect(bestTaxonomyMatch('管理專員')?.id ?? null).not.toBe('financial_advisor');
+    // Every role is found by its own Taiwan label, and by each of its Taiwan titles.
+    for (const n of TAXONOMY_NODES.filter((x) => x.level === 3)) {
+      for (const text of [n.zhHant, ...(n.synonyms.zhHant ?? [])]) {
+        const ranked = matchTitle(text, { limit: 5, minScore: 0 });
+        expect(ranked[0]?.id, `${n.id}: ${text}`).toBe(n.id);
+      }
+    }
+  });
+
+  it('JT-4: the typeahead finds a role by its Taiwan label and shows it in zh-TW', () => {
+    expect(searchTaxonomy('軟體工程師', { locale: 'zh-TW', levels: [3] })[0]).toMatchObject({ id: 'software_engineer', label: '軟體工程師', context: '後端與平台 · 軟體工程' });
+    expect(searchTaxonomy('行銷', { locale: 'zh-TW', levels: [3], limit: 30 }).map((s) => s.id)).toEqual(expect.arrayContaining(['marketing_manager', 'marketing_specialist']));
+    expect(searchTaxonomy('韌體', { locale: 'zh-TW' })[0]).toMatchObject({ id: 'embedded_software_engineer', label: '韌體工程師' });
+    // The same role in the other two languages.
+    expect(searchTaxonomy('软件工程师', { locale: 'zh', levels: [3] })[0]).toMatchObject({ id: 'software_engineer', label: '软件工程师' });
+    expect(searchTaxonomy('software engineer', { locale: 'en', levels: [3] })[0]).toMatchObject({ id: 'software_engineer', label: 'Software engineer' });
+    for (const s of searchTaxonomy('工程師', { locale: 'zh-TW', limit: 50 })) expect(s.label, s.id).toMatch(/[㐀-鿿]|^[A-Za-z]/);
   });
 
   it('an English phrase in a mixed-language title needs its whole words', () => {
@@ -635,5 +731,65 @@ describe('searchTaxonomy (typeahead)', () => {
   it('returns Chinese labels for zh', () => {
     const [first] = searchTaxonomy('产品经理', { locale: 'zh' });
     expect(first).toMatchObject({ id: 'product_manager', label: '产品经理', context: '产品管理 · 产品与项目管理' });
+  });
+
+  it('GoApply (zh) is not answered from the Taiwan vocabulary; every other locale is', () => {
+    // The lists the Simplified typeahead gave before the Taiwan titles existed (commit 48a5e56). A Taiwan
+    // title written with characters both scripts share (主管秘書, 助理教授) must not reorder them.
+    expect(searchTaxonomy('主管', { locale: 'zh' }).map((s) => s.id)).toEqual([
+      'customer_service_manager', 'design_manager', 'education_administrator', 'engineering_manager', 'finance_leader',
+      'it_manager', 'marketing_manager', 'office_manager', 'product_manager', 'production_supervisor',
+    ]);
+    expect(searchTaxonomy('助理', { locale: 'zh' }).map((s) => s.id)).toEqual([
+      'administrative_assistant', 'bookkeeper', 'executive_assistant', 'hr_generalist', 'investment_analyst',
+      'marketing_specialist', 'paralegal', 'product_manager', 'product_operations', 'project_manager',
+    ]);
+    expect(searchTaxonomy('房', { locale: 'zh' }).map((s) => s.id)).toEqual(['real_estate_agent']);
+    expect(searchTaxonomy('主管秘書', { locale: 'zh' })).toEqual([]);
+    expect(searchTaxonomy('助理教授', { locale: 'zh' }).map((s) => s.id)).not.toContain('professor');
+    // A text both vocabularies write the same way stays in the Simplified one.
+    expect(searchTaxonomy('研究助理', { locale: 'zh' }).map((s) => s.id)).toEqual(['research_assistant']);
+    // Nothing shown to GoApply is Traditional, whatever was typed.
+    for (const q of ['主管', '助理', '工程', '经理', '設計']) {
+      for (const hit of searchTaxonomy(q, { locale: 'zh', limit: 50 })) expect(TAXONOMY_NODES.find((n) => n.id === hit.id)!.zh, `${q}: ${hit.id}`).toBe(hit.label);
+    }
+    // Taiwan, and every other locale, still searches the Taiwan titles.
+    expect(searchTaxonomy('主管秘書', { locale: 'zh-TW' }).map((s) => s.id)).toEqual(['executive_assistant']);
+    expect(searchTaxonomy('助理教授', { locale: 'zh-TW' }).map((s) => s.id)).toContain('professor');
+    expect(searchTaxonomy('主管秘書', { locale: 'en' }).map((s) => s.id)).toEqual(['executive_assistant']);
+    expect(searchTaxonomy('主管秘書').map((s) => s.id)).toEqual(['executive_assistant']);
+  });
+});
+
+describe('服务员 names restaurant staff only as the whole title (JT-2: care workers are not servers)', () => {
+  /** What ingest does with a title: as written, then folded to its mainland reading; the better of the two. */
+  const role = (title: string): string | null => {
+    const raw = bestTaxonomyMatch(title);
+    const folded = bestTaxonomyMatch(foldTwToCn(title));
+    return (folded && (!raw || folded.score > raw.score) ? folded : raw)?.id ?? null;
+  };
+
+  it.each(['照顧服務員', '居家照顧服務員', '長照服務員', '機構照顧服務員', '加油站服務員', '停車場服務員', '客房服務員', '門市服務員', '照顾服务员', '客房服务员', '加油站服务员'])(
+    '%s is not filed under restaurant staff',
+    (title) => {
+      expect(bestTaxonomyMatch(title)).toBeNull();
+      expect(bestTaxonomyMatch(foldTwToCn(title))).toBeNull();
+      expect(role(title)).toBeNull();
+    },
+  );
+
+  it.each(['餐廳服務生', '服務生', '餐厅服务员', '餐廳服務員', '日式餐廳服務員', '餐飲服務員', '外場服務人員', '咖啡師', '服务员', '服務員', '資深服務員'])('%s is restaurant staff', (title) => {
+    expect(role(title)).toBe('server');
+  });
+
+  it('the bare word is an ambiguous one: its role, under the trusted score, so enrichment may overrule it', () => {
+    expect(Object.hasOwn(ALONE_ONLY_PHRASES, '服务员')).toBe(true);
+    expect(bestTaxonomyMatch('服务员')).toMatchObject({ id: 'server', score: MODIFIER_MATCH_SCORE });
+    expect(MODIFIER_MATCH_SCORE).toBeLessThan(TITLE_MATCH_TRUSTED);
+    // The label keeps naming the role outright.
+    expect(bestTaxonomyMatch('餐厅服务员')).toMatchObject({ id: 'server', score: 1 });
+    // A row that holds `server` only through the retired suffix rule is recognisable as such.
+    expect(oneWordRolesIn('照顾服务员')).toEqual(['server']);
+    expect(oneWordRolesIn('服务员')).toEqual([]);
   });
 });

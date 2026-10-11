@@ -62,10 +62,23 @@
 // discipline). 管培生 and 储备干部
 // are entry tracks, removed like level words. A mixed-language title that
 // closes on a Chinese head word ("Machine Learning 工程師") is also read with
-// the English head noun. The taxonomy's Chinese phrases are Simplified: a
-// Taiwan title is matched in its mainland reading, which the caller makes
-// (normalize `foldTwToCn`; ingest, enrichment and the backfill all do), since
-// this area imports no other.
+// the English head noun. 服务员 is restaurant staff only as the whole title
+// (`ALONE_ONLY_PHRASES`): as a last word it also closes 照顾服务员 (a care
+// worker), 客房服务员 and 加油站服务员, which the tree has no role for.
+//
+// Two scripts, two vocabularies (JT-4). Every role carries its Simplified
+// phrases (`zh`, `synonyms.zh`) AND its Taiwan phrases (`zhHant`,
+// `synonyms.zhHant`: 軟體工程師, 韌體工程師, 行銷專員, 業務代表), indexed side by
+// side, so a Traditional title is matched as written: 資深軟體工程師 names the
+// software engineer without any conversion. The Chinese machinery knows both
+// scripts too: the level words (資深, 高階, 儲備幹部, 工讀生), the head words
+// (工程師, 設計師, 顧問, 專員, 經理, 分析師) and the filler (開發 / 研發 before
+// 工程師). Callers that also read a Taiwan title in its mainland reading
+// (normalize `foldTwToCn`: ingest, enrichment, the backfill) keep doing so and
+// take the better of the two readings; that reading still catches a title
+// whose Taiwan wording the data does not list yet. The typeahead for locale
+// 'zh' (GoApply) leaves the Taiwan phrases out, so mainland suggestions are
+// ranked by mainland vocabulary only (`searchTaxonomy`).
 //
 // Results are kept for the last few thousand titles: one posting is matched
 // for many readers, and the function is pure.
@@ -120,12 +133,22 @@ const LEVEL_TOKENS = new Set([
  * bare 管培生 names no role, so it stays unknown rather than being filed
  * under a category it does not state (D3).
  */
-const CJK_LEVEL_WORDS = [
+const CJK_LEVEL_WORDS_HANS = [
   '管理培训生', '应届毕业生', '储备干部', '校园招聘', '管培生', '助理级', '实习生', '应届生', '毕业生',
   '高级', '资深', '初级', '中级', '实习', '校招', '社招', '秋招', '春招', '应届', '储备', '急招', '兼职', '全职',
 ];
-/** A class year in a campus title: "2027届", "27届". */
-const CJK_CLASS_YEAR = /\d{2,4}\s*届/g;
+/**
+ * The same in Taiwan wording and Traditional characters: 儲備幹部 is the
+ * entry track there, 工讀生 a student worker, 高階 / 中階 / 初階 the levels,
+ * 正職 / 兼職 / 約聘 the kind of contract.
+ */
+const CJK_LEVEL_WORDS_HANT = [
+  '應屆畢業生', '管理培訓生', '儲備幹部', '校園徵才', '應屆生', '畢業生', '實習生', '工讀生', '助理級',
+  '高級', '資深', '初級', '中級', '高階', '中階', '初階', '實習', '應屆', '儲備', '急徵', '兼職', '全職', '正職', '工讀',
+];
+const CJK_LEVEL_WORDS = [...new Set([...CJK_LEVEL_WORDS_HANS, ...CJK_LEVEL_WORDS_HANT])].sort((a, b) => b.length - a.length);
+/** A class year in a campus title: "2027届", "27届" (屆 in Traditional characters). */
+const CJK_CLASS_YEAR = /\d{2,4}\s*[届屆]/g;
 
 /** Lower-case, full-width → half-width, bracketed notes removed, tech spellings joined, punctuation → spaces. */
 export function normalizeTitle(input: string): string {
@@ -157,11 +180,13 @@ export const MODIFIER_MATCH_SCORE = 0.85;
 
 /** Head nouns: the word alone names no discipline (SM-2). */
 export const HEAD_NOUNS = ['architect', 'designer', 'developer', 'engineer', 'analyst', 'consultant', 'manager', 'specialist', 'technician'] as const;
-/** The Chinese head words, in mainland characters (a Taiwan title is folded before matching). */
+/** The Chinese head words, in mainland characters. */
 export const CJK_HEAD_WORDS = ['设计师', '工程师', '顾问', '专员', '经理', '分析师'] as const;
+/** The same six words in Traditional characters, in the same order. */
+export const CJK_HEAD_WORDS_HANT = ['設計師', '工程師', '顧問', '專員', '經理', '分析師'] as const;
 
 const HEAD_NOUN_SET: ReadonlySet<string> = new Set(HEAD_NOUNS);
-const CJK_HEAD_WORD_SET: ReadonlySet<string> = new Set(CJK_HEAD_WORDS);
+const CJK_HEAD_WORD_SET: ReadonlySet<string> = new Set<string>([...CJK_HEAD_WORDS, ...CJK_HEAD_WORDS_HANT]);
 
 /**
  * One-word role phrases that mean something else in many titles. Like a head
@@ -207,6 +232,7 @@ export const ALONE_ONLY_PHRASES: Readonly<Record<string, string>> = {
   客户服务: 'customer service, or the department in 客户服务工程师 and 客户服务经理',
   运营专员: 'operations of any department: 物流运营专员, 门店运营专员, 产品运营专员',
   运营助理: 'operations of any department, like 运营专员',
+  服务员: 'restaurant staff, or the last word of 照顾服务员 (a care worker), 客房服务员 (housekeeping), 加油站服务员, 停车场服务员',
 };
 
 /**
@@ -224,7 +250,7 @@ const ALONE_ONLY_SINCE_SM2: ReadonlySet<string> = new Set(['fe', '行政', '人�
  * 开发工程师 is different: "development engineer" inside a longer title is a
  * software title far more often than not, so it keeps a weak vote there.
  */
-const CJK_CROSS_DISCIPLINE: ReadonlySet<string> = new Set(['研发工程师']);
+const CJK_CROSS_DISCIPLINE: ReadonlySet<string> = new Set(['研发工程师', '研發工程師']);
 
 /**
  * 开发 and 研发 before 工程师 are filler in most mainland titles: 前端研发工程师
@@ -232,7 +258,7 @@ const CJK_CROSS_DISCIPLINE: ReadonlySet<string> = new Set(['研发工程师']);
  * so that a role whose name carries the word (测试开发工程师, 运维开发工程师)
  * still wins on its exact name.
  */
-const CJK_FILLER = /(?:开发|研发)(?=工程师)/g;
+const CJK_FILLER = /(?:开发|研发)(?=工程师)|(?:開發|研發)(?=工程師)/g;
 const FILLER_DISCOUNT = 0.95;
 
 function withoutFiller(compact: string): string {
@@ -242,6 +268,11 @@ function withoutFiller(compact: string): string {
 interface Phrase {
   nodeId: string;
   text: string;
+  /**
+   * The vocabulary the phrase comes from: English, the Simplified (mainland)
+   * one, or the Taiwan one. A text that two of them share keeps the first.
+   */
+  script: 'en' | 'zh' | 'zhHant';
   tokens: string[];
   cjk: boolean;
   /** The text without spaces, and without the filler (Chinese comparison). */
@@ -258,9 +289,19 @@ interface Phrase {
 function buildPhrases(nodes: readonly TaxonomyNode[]): Phrase[] {
   const out: Phrase[] = [];
   for (const n of nodes) {
-    const raw = [n.en, n.zh, ...n.synonyms.en, ...n.synonyms.zh];
+    // The Taiwan label and titles stand beside the Simplified ones (JT-4): a Traditional title is matched as written.
+    // English and Simplified first: a text the Taiwan vocabulary shares with them (研究助理) stays theirs.
+    const raw: Array<[unknown, Phrase['script']]> = [
+      [n.en, 'en'],
+      [n.zh, 'zh'],
+      ...n.synonyms.en.map((t): [string, Phrase['script']] => [t, 'en']),
+      ...n.synonyms.zh.map((t): [string, Phrase['script']] => [t, 'zh']),
+      [n.zhHant, 'zhHant'],
+      ...(n.synonyms.zhHant ?? []).map((t): [string, Phrase['script']] => [t, 'zhHant']),
+    ];
     const seen = new Set<string>();
-    for (const r of raw) {
+    for (const [r, script] of raw) {
+      if (typeof r !== 'string') continue;
       const text = normalizeTitle(r);
       if (!text || seen.has(text)) continue;
       seen.add(text);
@@ -269,7 +310,7 @@ function buildPhrases(nodes: readonly TaxonomyNode[]): Phrase[] {
       const ambiguous = Object.hasOwn(ALONE_ONLY_PHRASES, text);
       const aloneOnly = HEAD_NOUN_SET.has(text) || CJK_HEAD_WORD_SET.has(compact) || CJK_CROSS_DISCIPLINE.has(compact) || ambiguous;
       const fillerMatch = !CJK_HEAD_WORD_SET.has(plain);
-      out.push({ nodeId: n.id, text, tokens: text.split(' '), cjk: CJK.test(text), compact, plain, aloneOnly, fillerMatch, exact: ambiguous ? MODIFIER_MATCH_SCORE : 1 });
+      out.push({ nodeId: n.id, text, script, tokens: text.split(' '), cjk: CJK.test(text), compact, plain, aloneOnly, fillerMatch, exact: ambiguous ? MODIFIER_MATCH_SCORE : 1 });
     }
   }
   return out;
@@ -730,6 +771,13 @@ export interface TaxonomySuggestion {
  * Typeahead over categories, groups and roles. Needs 2+ characters (1 for
  * Chinese). Ranking: exact > label prefix > synonym prefix > word prefix >
  * contains.
+ *
+ * Locale 'zh' (GoApply, Simplified) is not answered from the Taiwan
+ * vocabulary: a Taiwan title written only with characters both scripts share
+ * (主管秘書 holds 主管, 助理教授 holds 助理) would otherwise reorder mainland
+ * suggestions by words mainland postings do not use. Every other locale
+ * searches all three vocabularies. (Title MATCHING reads all of them for
+ * every market: a posting is matched as it is written.)
  */
 export function searchTaxonomy(q: string, options: { locale?: string; limit?: number; levels?: TaxonomyLevel[] } = {}): TaxonomySuggestion[] {
   const query = normalizeTitle(q);
@@ -739,9 +787,10 @@ export function searchTaxonomy(q: string, options: { locale?: string; limit?: nu
   const levels = new Set(options.levels ?? [1, 2, 3]);
   const scored = new Map<string, { score: number; matched: string }>();
   for (const phrase of ALL_PHRASES) {
+    if (phrase.script === 'zhHant' && locale === 'zh') continue;
     const node = NODE_BY_ID.get(phrase.nodeId)!;
     if (!levels.has(node.level)) continue;
-    const isLabel = phrase.text === normalizeTitle(node.en) || phrase.text === normalizeTitle(node.zh);
+    const isLabel = phrase.text === normalizeTitle(node.en) || phrase.text === normalizeTitle(node.zh) || (locale !== 'zh' && phrase.text === normalizeTitle(node.zhHant ?? ''));
     let score = 0;
     if (phrase.text === query) score = 1;
     else if (phrase.text.startsWith(query)) score = isLabel ? 0.9 : 0.8;
