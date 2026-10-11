@@ -228,6 +228,8 @@ model RAJob {
   // ── Market wave (MKT-0; MARKET_STRATEGY 2.3 and 7 item 11). Additive. ──
   /// K2 exact dedupe key '{ats}:{tenant}:{postingId}' parsed from the apply or source URL. JI-5.
   atsPostingKey     String?
+  /// Openings (招聘人数) as stated by the source: a recruiter bank or an employer board. Null when not stated; never inferred (D3). SCHEMA-8, PAR-7.
+  headcount         Int?
   /// Who states RAJob.sponsorship: 'posting_quote' | 'provider:<provider id>' (a provider's reading, labelled as such). JI-7, JI-11.
   sponsorshipSource String?
   /// Taiwan 鄉鎮市區 as posted, e.g. '竹北市'. JT-7.

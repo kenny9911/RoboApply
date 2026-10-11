@@ -2,10 +2,16 @@
 
 Work the orchestrator owes at a gate because no running bundle owns the file. Remove a line when it is done.
 
-## At the parity-wave (PAR) gate
+## After each market phase (M1 … M5)
 
-- Merge `i18n/staging` (dry run first), translate the delta into the eight other locales, `npm run check`. The key lists and the keys to remove afterwards are in `requests/wavePAR-carryover.md`, section "i18n merge and translate".
-- Neon branch data: archive any `market = 'cn'` row whose `sourceBoard` is a RapidAPI aggregator (read paths already exclude them).
+- Gate with `orch/workflows/wave-gate.js`; after M1 run `npm run eval:match -- --enforce M1` (must exit 0), after M2 `--enforce M2`, and so on (market-bundles note on the harness).
+- Read the phase's `Schema requests`; additive ones are applied by the orchestrator (`prisma validate`, `check-schema-additive.mjs --sql`, `prisma db execute`, second diff empty).
+
+## After the last market phase
+
+- Merge `i18n/staging` once (`node scripts/i18n-merge-staging.mjs`, dry run first), translate the delta into the eight other locales, QA per locale, `npm run check`. `_pending-translation.json` is cumulative and stale: compute the real gap per locale (keys of `en.json` missing from the locale bundle). The key lists and the keys to remove are in `requests/wavePAR-carryover.md`, section "i18n merge and translate".
+- Neon branch data: archive any `market = 'cn'` row whose `sourceBoard` is a RapidAPI aggregator (read paths already exclude them); delete the `claude-verify-*` test users.
+- Production build in a separate worktree, with the `/legal` file-trace check; browser verification of both brands (`orch/parity-verify.md` first); PR.
 
 ## Before `feat/jobright-clone` reaches production (owner)
 

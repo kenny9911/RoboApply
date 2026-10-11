@@ -1,0 +1,1 @@
+ALTER TABLE "RAJob" ADD COLUMN     "headcount" INTEGER;

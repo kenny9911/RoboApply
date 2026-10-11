@@ -456,6 +456,7 @@ const ALIPAY_ORDER_AT_BASE = [
 
 const RAJOB_ADDED: Field[] = [
   ['atsPostingKey', 'String?'],
+  ['headcount', 'Int?'], // SCHEMA-8 (parity gate): the bank's 招聘人数
   ['sponsorshipSource', 'String?'],
   ['locationDistrict', 'String?'],
   ['workShift', 'String?'],
@@ -631,10 +632,10 @@ describe('MKT-0 item 1: RAJob, RACareerSiteSource and the sponsor register (ra-j
   const job = parseModel('ra-jobs.prisma', 'RAJob');
   const source = parseModel('ra-jobs.prisma', 'RACareerSiteSource');
 
-  it('RAJob has the twelve new fields, each with its type and default', () => {
+  it('RAJob has the twelve new fields of MKT-0 plus headcount (SCHEMA-8), each with its type and default', () => {
     const byName = new Map(job.fields);
     for (const [name, type] of RAJOB_ADDED) expect(byName.get(name), name).toBe(type);
-    expect(RAJOB_ADDED).toHaveLength(12);
+    expect(RAJOB_ADDED).toHaveLength(13);
   });
 
   it('the new block sits directly above the relation line userStates, under its header comment, and nothing else moved', () => {
