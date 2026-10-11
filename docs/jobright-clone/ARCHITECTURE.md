@@ -371,9 +371,15 @@ server/prisma/
     ra-seo.prisma         RASeoPage                                                                         (SEO)
     ra-cn.prisma          RAPhoneOtp, RACampusEvent                                                         (CN/AUTH)
     ra-mock.prisma        RAMockSession, RAIntegration (moved; RAIntegration deprecated)                    (Wave 0 / CLEAN)
+    ra-skills.prisma      RASkill                                                                           (market wave, MKT-0)
+    ra-retrieval.prisma   RAJobEmbedding, RAUserEmbedding                                                   (market wave, MKT-0)
   sql/
     000_extensions.sql    CREATE EXTENSION IF NOT EXISTS pg_trgm;   (owner runs once, before db push #1)
+    001_vector.sql        CREATE EXTENSION IF NOT EXISTS vector;    (owner runs once per database, before the market-wave push)
+    README.md             what each file does and the order of the market-wave push
 ```
+
+**Market wave (2026-10), schema as merged by MKT-0 (phase M0).** Two files joined the folder: `ra-skills.prisma` (the canonical skill vocabulary, `RASkill`) and `ra-retrieval.prisma` (the embedding side tables `RAJobEmbedding` and `RAUserEmbedding`, columns of type `Unsupported("halfvec(1024)")`, read and written with raw SQL only). `sql/001_vector.sql` installs the `vector` extension and nothing else; it runs once per database before the push, in the order `server/prisma/sql/README.md` gives. Existing files gained additive models and columns only: `RASponsorRegisterEntry` and the new `RAJob` and `RACareerSiteSource` columns in `ra-jobs.prisma` (among them `RAJob.searchTsv`, an `Unsupported("tsvector")` column that the application writes in the same statement as `searchDoc`), `RABillingRefund` and `RABillingConsentArchive` in `ra-credits.prisma`, two columns on `RAJobMatchScore`, one on `RAUserAffinity` and one on `RATailorSession`. The full list is `market/MARKET_TASK_PLAN.md` §4. `RAJob.headcount` (the bank's stated openings, nullable) was added separately as SCHEMA-8 at the parity gate; it is not part of MKT-0. Raw SQL on `RAJob` lists its columns: never `SELECT *`, and never `searchTsv` bare. The rules below are unchanged for the market wave: no bundle after M0 edits a `*.prisma` file or runs a push.
 
 **Generator path.** The generator lives in `schema/_datasource.prisma`, so `output` becomes `"../../src/generated/prisma"`. Everything else in the generator block stays: `moduleFormat = "esm"`, `importFileExtension = "js"`.
 
@@ -2071,6 +2077,15 @@ Bank ingestion reuses `raBankProviders.searchBank` but **without** the LLM explo
 3. Upsert `RAIngestQuery` per provider that supports the country. Refresh interval = 6 h when `demandScore ≥ 5`, 12 h when ≥1, 24 h for seeds. `consecutiveEmpty ≥ 4` doubles the interval up to 7 days.
 4. Disable queries for taxonomy/location pairs nobody has used in 30 days (except seeds).
 
+**Market wave (2026-10).** The target design for providers, the planner and closure is `market/MARKET_STRATEGY.md` §1 (§1.2 international, §1.3 Taiwan, §1.4 mainland China, §1.5 dedupe, closure and normalisation, §1.6 the forbidden list). In short: public employer boards read through their documented APIs are the backbone and get their own sync and cron; JSearch becomes a demand-only source (no SEO seed queries on a provider that is paid per request); each provider has one budget, metered from the monthly quota its responses report; a licensed feed (Active Jobs DB) is read as an hourly window sync once a paid plan exists; Taiwan adds the 台灣就業通 open data; the GoHire bank moves to an HTTPS syndication endpoint; a posting is identified by its ATS posting key before the fuzzy key; and a posting-age cut-off applies to aggregator rows only. The descriptions in §4.2 to §4.4 are the system before that wave. Modules the wave adds, with the phase of `orch/market-bundles.json` that builds each:
+
+- `server/src/features/jobs/ingest/quota.ts` (planned, phase M3): the monthly quota read from response headers, stored in `AppConfig`, one budget per provider.
+- `server/src/features/jobs/ingest/boards.ts` (planned, phase M3): the employer-board sync engine behind its own cron.
+- `server/src/features/jobs/sources/twOpenData.ts` (planned, phase M3): the 台灣就業通 adapter with a resumable sweep and the attribution line; the file exists today as the stub of WP-42.
+- `server/src/features/jobs/ingest/adapters/fantasticFeed.ts` (planned, phase M5): the licensed feed's window sync with the vendor's expired feed, behind the quota gate.
+- `server/src/features/jobs/ingest/adapters/syndication.ts` (planned, phase M5): the GoHire bank over the syndication endpoint.
+- `server/src/features/jobs/liveness/` (planned, phase M5): the on-demand check of a posting against its ATS before the user opens or applies.
+
 ### 4.4 Fetch → normalize → upsert (deterministic)
 
 `jobs-ingest` cron, every 10 minutes:
@@ -2161,6 +2176,12 @@ Removed by CLEAN: `daily-matcher`, `digest`, `submitter`, `catchup`, `cache-clea
 
 Dimensions with `not_stated` drop out, and the remaining weights are renormalized. The UI shows "Not stated in the posting" for each one.
 
+**Market wave (2026-10).** The target design for the fit is `market/MARKET_STRATEGY.md` §2.2 (the fit contract, one source of truth), §2.4 (estimate v2 in numbers) and §2.6 (the evaluation harness and its gates). Two things described in this section change: the estimate stops renormalising over the stated dimensions and gives a not-stated component its per-market prior instead (it never reads filter chips), and every surface reads one fit per user and job from one function, so a card, the job page, the Assistant and tailoring can no longer show different numbers. The ranking input of §4.8 (`fit = ai ?? (pre - 5)`) goes with it: ranking never mixes two score scales. The harness and its invariant specs are written first, to fail on the code described here, and gate every later change. Modules the wave adds:
+
+- `server/src/features/match/fit.ts` (planned, phase M1): `getFit`, `getFits` and `getVariantFit`, the only readers of a fit.
+- `server/src/features/match/eval/` (planned, phase M1): the evaluation harness, its synthetic fixtures and the invariant specs (`npm run eval:match`).
+- `server/src/features/skills/` (planned, phase M2): the canonical skill vocabulary that the estimate and the keyword check read from phase M4 on.
+
 **AI score — scorer v3** (`RAJobMatchScorerAgent`, MATCH rewrites its prompt and schema; model `getTaskModel('matching')`):
 - Input: resume markdown (PII-stripped: name, email, phone and address removed), job fields, the **pre-computed logistics dimension**, and the user's targets.
 - Output: `{ dimensions: { title_level, skills, industry, career_path }: {score 0-100, evidence:[{text, source:'resume'|'posting'}] (≤3)}, strengths ≤5, gaps ≤5, keywordsMatched ≤10, keywordsMissing ≤10, summary ≤400 chars, second person, no number }`.
@@ -2195,6 +2216,12 @@ Dimensions with `not_stated` drop out, and the remaining weights are renormalize
    - When the session is exhausted, the server runs retrieval for the next older window and appends to the session ("infinite" scroll). A final page returns `endOfFeed: true`.
 4. **Counts.** `POST /search-profiles/:id/count` runs the retrieval predicates as `SELECT count(*)` capped at 5,000 (`{count, capped}`). It powers the drawer's "Show N jobs" and onboarding's "We found N roles".
 5. **Item shape** (`FeedItem`): job card fields (`salaryPeriod`, `employmentType` and `workModel` included, fixing C37), company mini (logo, name, size band, `Sourced` facts), `fit{tier, score, kind, topGap, topOverlap}` (ruling R2: the card leads with the gap), badges (`directFromEmployer` only when `fromRecruiterBank && employerVerified && !isAgency`, `agency`, `sponsorship` only for users who need it and with its quote, `autofillSupported` from `atsType`; no applicant count), tracker state, and `feedSessionId` + `position` for feedback.
+
+**Market wave (2026-10).** The target design for retrieval is `market/MARKET_STRATEGY.md` §2.1 (target design) and §2.3 (the changes in build order, with the stack constraints), and §2.5 for per-market and multilingual handling. The single recency query of step 1 becomes three legs fused by reciprocal rank: recency, a lexical leg over a search document the application writes (`RAJob.searchDoc` with its `tsvector`, Chinese segmented in the application), and a dense leg over embeddings kept in side tables. Vectors never cross markets, and without an embedding key the first two legs still answer. The part of a natural-language search that no filter captures becomes the lexical and dense query: it changes the order and is labelled as ranking, not as a checked requirement. Modules the wave adds:
+
+- `server/src/platform/embeddings/` (planned, phase M2): the embeddings client; no key means unavailable, never an error and never a made-up vector.
+- `server/src/features/retrieval/` (planned, phase M2): the search document, the job and user vectors, and the nearest-neighbour reads.
+- `server/src/features/feed/hybridSql.ts` (planned, phase M4): the fused retrieval statement of the feed.
 
 ### 4.9 Feedback loop
 
@@ -2430,6 +2457,17 @@ Feature entitlements (not counters): `savedProfilesMax` (free 1, Pro 10), `alert
 - GoApply: `free`, `pro_week`, `pro_month`, `pro_quarter` (CNY one-time passes; amounts from env `RA_CN_PRO_{WEEK,MONTH,QUARTER}_FEN`).
 
 Display names come from i18n and must not reuse Jobright's plan names. Prices are owner decisions; the code ships with env-required values and refuses to sell a plan whose price is unset. Legacy `starter`/`growth` subscribers keep their interview credits and map to the `pro` entitlement profile until renewal (grandfathering). Interview packs remain purchasable as one-time `interview_pack` products.
+
+**Market wave (2026-10).** The target design for prices and rails is `market/MARKET_STRATEGY.md` §4 (the two price ladders and the catalog rules of §4.3) and §5 (§5.1 Stripe for RoboApply, §5.2 the twelve rules that keep the Alipay path as it is, §5.3 the additive mapping of GoApply's plans). Three statements above no longer hold as the target. "Refuses to sell a plan whose price is unset": every plan has a default amount in code and an env value is an override (M-13), for RoboApply as it already is for GoApply. A Stripe price id per plan in the environment: Stripe products and prices are created from the catalog by lookup key on first use, in place of both an env price id and Checkout `price_data` (M-15); `STRIPE_PRICE_<PLANKEY>` stays as an optional pin. The rail being available with the secret key alone: it needs the key and a webhook secret, and a live key is refused outside production (M-25, ST-0). Free `autofill` is 20 a day on both brands (M-14; the table above is the design-time list). Modules the wave adds, all under `server/src/platform/billing/`:
+
+- `server/src/platform/billing/stripeEnv.ts` (planned, phase M1): which key is set, whether it may be used in this runtime, the webhook secrets, and whether the rail is ready.
+- `server/src/platform/billing/stripeCatalog.ts` (planned, phase M1): the catalog sync by lookup key.
+- `server/src/platform/billing/stripeEvents.ts` (planned, phase M1): the registry of webhook event handlers and the claim that makes each effect happen once.
+- `server/src/platform/billing/stripePortal.ts` (planned, phase M2): the billing portal configuration created by code.
+- `server/src/platform/billing/stripeRefunds.ts` (planned, phase M2): refunds, disputes and the withdrawal that ends a subscription.
+- `server/src/platform/billing/stripeHealth.ts` (planned, phase M2): the read-only check of the webhook endpoint's subscribed events.
+
+The Alipay rail, `fulfilPass` and the callback route are changed by none of these (§7.4).
 
 ### 7.2 Entitlement resolution
 
@@ -2845,6 +2883,8 @@ i18n/staging/<namespace>.en.json
 
 > **As built (INT-13 audit; revised for D5 on 2026-10-11).** The catalogue of record is the repository-root `.env.example`: every name the API or the web app reads, each with its purpose and default, per-brand names as `NAME` / `CN_NAME` (which replaced the `*_ROBOAPPLY` / `*_GOAPPLY` suffixes used in the table below). Since D5 `CN_NAME` is an optional override of `NAME` (§1.6.1), not a separate setting with no fallback. The variables D5 introduced or redefined are listed in `GOAPPLY_PARITY_PLAN.md` §4: `CN_LLM_DOMESTIC_ONLY`, `CN_RESIDENCY_STRICT`, `CN_STORAGE_MODE`, `CN_INTERVIEW_CAMERA_PUBLISH`, `CN_PAYMENT_REQUIRE_ENTITY`, `GOHIRE_BANK_TRANSPORT`, `GOHIRE_SYNDICATION_URL`, `GOHIRE_PUBLIC_JOB_URL_TEMPLATE`, `ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE`, `JOB_PROVIDERS_<BRAND>`, and the new defaults of `CN_RECRUITMENT_INFO_MODE` (`licensed`), `CN_SIGNUP_MODE` (`open`), `CN_PAYMENTS_ENABLED` (on), `CN_EMAIL_TRANSPORT` (`resend`), `CN_CAMPUS_CALENDAR_ENABLED` (on) and `ALLOWED_BRANDS` (both brands). Removed: `CN_EXTERNAL_PROVIDERS`, `GOHIRE_PUBLIC_JOB_BASE_URL`, `ROBOHIRE_PUBLIC_JOB_BASE_URL`, and `CN_LLM_ALLOW_OFFSHORE` (never built; the shared stack is the default now). The table is kept as the design-time list; several of its names were renamed under R-03, and two groups name seams no code reads yet, so they are not in `.env.example`: `CONTACT_EMAIL_PROVIDER` / `CONTACT_EMAIL_PROVIDER_KEY` (no lookup adapter) and `ROBOHIRE_INVITE_SECRET` (no invitation webhook route).
 
+> **Market wave (2026-10).** The variables the market wave introduces or redefines are listed per phase in `market/MARKET_TASK_PLAN.md` §5. Those of phase M1 are documented in `.env.example`: the Stripe safety rule (`STRIPE_WEBHOOK_SECRET` / `ROBOAPPLY_STRIPE_WEBHOOK_SECRET` now required for the rail, `STRIPE_ALLOW_LIVE_KEY_OUTSIDE_PRODUCTION`), the price overrides (`PRICE_<PLANKEY>_USD_CENTS`, `PRICE_<PLANKEY>_TWD_CENTS`, with the `STRIPE_PRICE_<PLANKEY>…` names as aliases and optional pins), `JOB_SOURCES_CONTACT`, `EVAL_LIVE`, `EVAL_JUDGE_MODEL`, `MATCH_PRIORS`, `CN_MATCH_PRIORS` and `MATCH_CALIBRATION_MIN_PAIRS`. The variables of the later phases are added to `.env.example` at the end of the wave (MKT-5H). In the table below, the Billing row's `STRIPE_RA_PRO_*_PRICE_ID` and `RA_CN_PRO_*_FEN` names were design-time names; no price variable is required any more (`market/MARKET_STRATEGY.md` M-13).
+
 | Group | Names |
 |---|---|
 | Brand | `BRAND_HOST_MAP`, `BRAND_FORCE`, `BRAND_LOCK`, `COOKIE_DOMAIN_ROBOAPPLY`, `COOKIE_DOMAIN_GOAPPLY`, `EMAIL_FROM_ROBOAPPLY`, `EMAIL_FROM_GOAPPLY`, `GOAPPLY_ICP_NUMBER`, `GOAPPLY_PSB_NUMBER`, `BAIDU_SITE_VERIFICATION`, `BAIDU_PUSH_TOKEN`, `FLAG_<BRAND>_<FLAG>`, `INTERNAL_API_ORIGIN`, `INTERNAL_API_SECRET`, `RA_SYSTEM_USER_ID_ROBOAPPLY`, `RA_SYSTEM_USER_ID_GOAPPLY` |
@@ -2862,7 +2902,7 @@ Superseded (2026-10-11): the fix once asked for here, `GOHIRE_PUBLIC_JOB_BASE_UR
 ## Appendix B. Owner confirmations this plan needs (nothing proceeds silently)
 
 1. Run `server/prisma/sql/000_extensions.sql` (pg_trgm), then **db push #1** (FND) and **db push #2** (INT) against the RoboApply Neon project, plus a Neon branch for INT's SQL smoke tests.
-2. Pro plan prices per brand and interval; Stripe price ids; CNY amounts; referral reward size.
+2. Pro plan prices per brand and interval; Stripe price ids; CNY amounts; referral reward size. *Superseded in part by MARKET_STRATEGY M-11 to M-13 and M-15 (2026-10-11): both price ladders are catalog defaults in code and no Stripe price id is needed. What the Stripe rail needs from the owner is a key and a webhook secret (strategy §7 item 2).*
 3. Providers allowed on public SEO pages (`PUBLIC_DISPLAY_PROVIDERS`).
 4. Resend sending domains `mail.roboapply.io` and `mail.goapply.top`; Google OAuth client; LINE channel; WeChat Open Platform apps; Aliyun SMS signature; WeChat Pay merchant (or GoHire worker WeChat channel).
 5. DOL LCA disclosure files to import (US public data; ADMIN runs `server/scripts/import-dol-lca.ts`).
