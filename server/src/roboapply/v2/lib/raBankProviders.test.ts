@@ -116,7 +116,7 @@ describe('the synced mirror of a bank with no database client', () => {
   it('the mirror WHERE reads only open, public, canonical rows of the bank in its own market, fresh and inside their validity, with the same recall signals', () => {
     const now = new Date('2026-06-20T00:00:00.000Z');
     const where = buildMirrorJobWhere('gohire', intent, now) as Record<string, any>;
-    expect(where).toMatchObject({ sourceBoard: 'gohire', market: 'cn', visibility: 'public', archivedAt: null, isCanonical: true, postedAt: { not: null, gte: cutoff } });
+    expect(where).toMatchObject({ sourceBoard: 'gohire', market: 'cn', visibility: 'public', archivedAt: null, closedAt: null, isCanonical: true, postedAt: { not: null, gte: cutoff } });
     // A validity the bank stated and that has passed is out at once (maintenance archives the row later).
     expect(where.AND).toEqual([{ OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }]);
     // The freshness bound is the live bank search's own (the same cutoff on the posting date).
@@ -152,6 +152,19 @@ describe('the synced mirror of a bank with no database client', () => {
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ sourceBoard: 'gohire', market: 'cn' }), orderBy: { postedAt: 'desc' } }));
     const failing = { rAJob: { findMany: vi.fn(async () => { throw new Error('db down'); }) } };
     expect(await searchBankMirror('gohire', intent, {}, failing as never)).toBeNull();
+  });
+
+  it('a mirrored row the fraud rules flagged is not a candidate: the feed hides it, so the search does too (strategy 1.5)', async () => {
+    const row = (externalId: string, fraudFlags: unknown) => ({ externalId, title: '后端工程师', companyName: '某某科技', postedAt: new Date('2026-06-10T00:00:00Z'), skills: [], fraudFlags });
+    // The feed's rule (feed/sql.ts `scopePredicates`): shown when the column is null, not an array, or an empty array.
+    const findMany = vi.fn(async () => [row('flagged', ['fee_keyword']), row('clean_null', null), row('clean_empty', []), row('blacklisted', [{ code: 'blacklist' }]), row('not_a_list', { note: 'x' })]);
+    const rows = await searchBankMirror('gohire', intent, {}, { rAJob: { findMany } } as never);
+    expect(rows!.map((r) => r.job.id)).toEqual(['clean_null', 'clean_empty', 'not_a_list']);
+    // The flags are read to decide, and a closed row is never asked for.
+    expect(MIRROR_SELECT).toMatchObject({ fraudFlags: true });
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ archivedAt: null, closedAt: null }) }));
+    // The flags never reach the pre-matcher's row.
+    expect(JSON.stringify(rows)).not.toContain('fraudFlags');
   });
 
   it('searchBank: no client and no HTTPS transport → null (the bank degrades, as before)', async () => {

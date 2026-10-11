@@ -52,7 +52,10 @@
 // itself (this process's, see below) spares the request.
 //
 // Throttles, in this order:
-//   - LIVENESS_CHECK_DISABLED=true: never a request;
+//   - LIVENESS_CHECK_DISABLED=true: never a request. Neither with
+//     ATS_PUBLIC_SOURCES_DISABLED=true: that switch promises "no read of a
+//     public job board", and this is one (an operator who pulled it because a
+//     vendor complained must not go on calling that vendor);
 //   - the ATS's own board row was seen listed (`lastSeenAt`) under
 //     LIVENESS_RECHECK_HOURS ago (default 6): answered from the row;
 //   - this process has the ATS's answer for the same key: "listed" is reused
@@ -65,7 +68,11 @@
 //     row (a timeout, a 5xx, no connection). No request goes to that host for
 //     60 seconds (longer when its `Retry-After` says so, 15 minutes at most);
 //   - at most LIVENESS_MAX_IN_FLIGHT requests are open at once in a process:
-//     a call beyond that is "unknown" (the ATS is never queued up against).
+//     a call beyond that is "unknown" (the ATS is never queued up against);
+//   - at most LIVENESS_HOST_REQUESTS_PER_MINUTE new requests go to one host
+//     in any 60 seconds from one process, whoever asks (one account walking
+//     the job list, a cron): a call beyond that is "unknown" and is not
+//     remembered, so the posting is asked about once there is room.
 // At most one request per call.
 //
 // `applyLiveness(db, job, result, opts)` is the one place the answer is
@@ -98,6 +105,8 @@ import { atsPostingKeyFromBoardRow, atsPostingKeyOf, atsPostingRefFromUrl } from
 import { POSTING_ENDPOINTS, TENANT_RE, isLivenessAts, requestPosting, type FetchLike, type LivenessAts, type PostingAnswer } from './postingApi.js';
 
 export const LIVENESS_KILL_SWITCH = 'LIVENESS_CHECK_DISABLED';
+/** The board sync's kill switch (sources/atsPublic `ATS_PUBLIC_KILL_SWITCH`; named here so this module does not load the connectors). It stops this read too. */
+export const LIVENESS_BOARD_KILL_SWITCH = 'ATS_PUBLIC_SOURCES_DISABLED';
 export const LIVENESS_RECHECK_ENV = 'LIVENESS_RECHECK_HOURS';
 /** A row confirmed listed within this many hours is not asked about again. */
 export const LIVENESS_RECHECK_HOURS = 6;
@@ -110,6 +119,9 @@ export const LIVENESS_CACHE_MS = 10 * 60_000;
 const LIVENESS_CACHE_MAX = 2_000;
 /** Requests open at once in one process. */
 export const LIVENESS_MAX_IN_FLIGHT = 8;
+/** New requests one process sends to one host in any 60 seconds. */
+export const LIVENESS_HOST_REQUESTS_PER_MINUTE = 60;
+const HOST_BUDGET_WINDOW_MS = 60_000;
 /**
  * `closeReason` of the ATS's own board row the check closed. The row's source
  * IS the ATS's listing, so the ingest upsert reopens it when the board lists
@@ -256,8 +268,9 @@ export function postingTargetOf(job: LivenessJob): TargetOutcome {
 
 // ── Settings ──────────────────────────────────────────────────────────────
 
+/** Off with its own switch, and with the switch that stops every read of a public job board. */
 export function livenessEnabled(env: EnvSource = process.env): boolean {
-  return !parseBoolEnv(env[LIVENESS_KILL_SWITCH]);
+  return !parseBoolEnv(env[LIVENESS_KILL_SWITCH]) && !parseBoolEnv(env[LIVENESS_BOARD_KILL_SWITCH]);
 }
 
 /** LIVENESS_RECHECK_HOURS: a whole or decimal number of hours, 0 to 720 (0 = ask every time the cache allows); anything else is the default. */
@@ -327,10 +340,13 @@ export function createLivenessCache(ttlMs: number = LIVENESS_CACHE_MS, max: numb
  * LIVENESS_HOST_PAUSE_MS (or its `Retry-After`, capped); so is a host that
  * failed LIVENESS_HOST_FAILURES_TO_PAUSE times in a row. Any answer that shows
  * the host working (a posting, its own 404, another 4xx) clears the count.
+ * It also holds each host's budget of new requests (`admit`).
  */
 export interface LivenessHosts {
   /** The moment until which `host` gets no request (0 = not paused). */
   pausedUntil(host: string, now: number): number;
+  /** May one more request go to `host` now? True counts it: at most `perMinute` in any 60 seconds. */
+  admit(host: string, now: number): boolean;
   record(host: string, answer: PostingAnswer, now: number): void;
   clear(): void;
 }
@@ -338,12 +354,21 @@ export interface LivenessHosts {
 /** Did the host fail to answer at all (as opposed to answering something we cannot use)? */
 const isHostFailure = (reason: string): boolean => reason === 'timeout' || reason === 'network' || /^http_5\d\d$/.test(reason);
 
-export function createLivenessHosts(): LivenessHosts {
+export function createLivenessHosts(perMinute: number = LIVENESS_HOST_REQUESTS_PER_MINUTE): LivenessHosts {
   const state = new Map<string, { failures: number; until: number }>();
+  /** The moments of the requests sent to each host within the last window. */
+  const sent = new Map<string, number[]>();
   return {
     pausedUntil(host, now) {
       const s = state.get(host);
       return s && s.until > now ? s.until : 0;
+    },
+    admit(host, now) {
+      const recent = (sent.get(host) ?? []).filter((at) => at <= now && now - at < HOST_BUDGET_WINDOW_MS);
+      const room = recent.length < perMinute;
+      if (room) recent.push(now);
+      sent.set(host, recent);
+      return room;
     },
     record(host, answer, now) {
       const s = state.get(host) ?? { failures: 0, until: 0 };
@@ -364,6 +389,7 @@ export function createLivenessHosts(): LivenessHosts {
     },
     clear() {
       state.clear();
+      sent.clear();
     },
   };
 }
@@ -464,6 +490,8 @@ export async function checkPostingLive(job: LivenessJob, deps: LivenessDeps = {}
   // The host said to slow down, or stopped answering: it is left alone, and this posting is asked about after the pause.
   if (hosts.pausedUntil(host, nowMs) > nowMs) return unknown('host_paused');
   if (inFlight.size >= (deps.maxInFlight ?? LIVENESS_MAX_IN_FLIGHT)) return unknown('busy');
+  // One process sends a host a bounded number of new requests a minute, whoever asks. Not remembered: asked again once there is room.
+  if (!hosts.admit(host, nowMs)) return unknown('host_budget');
 
   const market: Market = job.market === 'cn' ? 'cn' : 'intl';
   const pending = requestPosting(target.url, { fetch: deps.fetch, timeoutMs: deps.timeoutMs, market, env, now: clock })

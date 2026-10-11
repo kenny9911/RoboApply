@@ -181,6 +181,14 @@ export interface JobDetailServiceDeps {
   /** How long `get` waits for `confirmListing` (default LISTING_WAIT_MS). The apply click always waits for the answer. */
   listingWaitMs?: number;
   /**
+   * Called with a posting check the page stopped waiting for, so the work can
+   * outlive the response (on Vercel: `waitUntil`; a function is otherwise
+   * frozen once it has answered, and the check's answer, a posting found gone
+   * included, would never be written). Absent → the promise simply runs on. A
+   * throw is ignored.
+   */
+  keepAlive?: (work: Promise<unknown>) => void;
+  /**
    * The reader's own answers about visa sponsorship (the search profile's and
    * the per-country ones), as the feed card reads them. Asked only when a row
    * of the response carries a provider's reading of sponsorship. Absent, null
@@ -249,10 +257,17 @@ type FitReadOptions = JobReadOptions;
  */
 export const LISTING_WAIT_MS = 1_500;
 
-/** `p`, or null once `ms` have passed. `p` goes on either way; it must not reject. */
-function within<T>(p: Promise<T>, ms: number): Promise<T | null> {
+/** `p`, or null once `ms` have passed. `p` goes on either way; it must not reject. `onGiveUp` runs when the wait ran out before `p` settled. */
+function within<T>(p: Promise<T>, ms: number, onGiveUp?: () => void): Promise<T | null> {
   return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(null), Math.max(0, ms));
+    const timer = setTimeout(() => {
+      try {
+        onGiveUp?.();
+      } catch {
+        // Keeping the work alive is best effort: the page is served either way.
+      }
+      resolve(null);
+    }, Math.max(0, ms));
     void p.then((value) => {
       clearTimeout(timer);
       resolve(value);
@@ -358,7 +373,8 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
     // Never a user's own import and never a recruiter bank's row (the check refuses them too).
     if (!deps.confirmListing || row.visibility !== 'public' || row.fromRecruiterBank || isClosed(row) || !row.atsPostingKey?.trim()) return none;
     const asked = soft<LiveResult | null>('listing', () => deps.confirmListing!(row), null);
-    const result = waitMs === undefined ? await asked : await within(asked, waitMs);
+    // Past the wait the check goes on by itself: it is handed to the keep-alive seam so that its answer is still written.
+    const result = waitMs === undefined ? await asked : await within(asked, waitMs, () => deps.keepAlive?.(asked));
     if (!result || result.via !== 'ats_api' || !result.checkedAt) return none;
     const at = new Date(result.checkedAt);
     if (result.state === 'closed') {

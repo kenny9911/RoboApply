@@ -144,7 +144,7 @@ describe('job sources per brand (the admin sources panel)', () => {
     expect(asked).toEqual(['roboapply', 'roboapply']);
   });
 
-  it('each brand gets its own sources from the registry: RoboApply never lists the GoHire bank and GoApply never lists a search API', async () => {
+  it('each brand gets its own sources from the registry: RoboApply never lists the GoHire bank; GoApply never lists JSearch and lists Active Jobs DB only behind the plan gate', async () => {
     const s = await buildSystemStatus(fakeSystemStore(), { brands: ['roboapply', 'goapply'], brandsServed: ['roboapply', 'goapply'], now: NOW, env: {} });
     const of = (brand: string) => s.brands.find((b) => b.brand === brand)!.sources.map((x) => x.provider);
     expect(of('roboapply')).toEqual(expect.arrayContaining(['activejobs', 'bank_robohire', 'jsearch', 'user_import']));
@@ -152,7 +152,12 @@ describe('job sources per brand (the admin sources panel)', () => {
     expect(of('roboapply')).not.toContain('linkedin');
     expect(of('goapply')[0]).toBe('bank_gohire');
     expect(of('goapply')).toContain('user_import');
-    for (const p of ['jsearch', 'activejobs', 'linkedin', 'bank_robohire']) expect(of('goapply')).not.toContain(p);
+    for (const p of ['jsearch', 'linkedin', 'bank_robohire']) expect(of('goapply')).not.toContain(p);
+    // JC-6 (MKT-5A): Active Jobs DB and its feed are GoApply sources, off until a paid plan exists
+    // (here nothing states the plan's size: no stored reading, no FANTASTIC_MONTHLY_JOBS).
+    for (const p of ['activejobs', 'activejobs_feed']) {
+      expect(s.brands.find((b) => b.brand === 'goapply')!.sources.find((x) => x.provider === p), p).toMatchObject({ enabled: false, reason: 'plan_unknown' });
+    }
     // The RoboHire bank names its own page setting.
     expect(s.brands.find((b) => b.brand === 'roboapply')!.sources.find((x) => x.provider === 'bank_robohire')!.publicPage).toEqual({ configured: false, variable: 'ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE' });
   });
@@ -771,14 +776,18 @@ describe('createPrismaSystemStore.careerSourceCounts', () => {
       { market: 'intl', countries: ['TW', 'CN'], enabled: true, lastError: null }, // both
       { market: 'cn', countries: ['US'], enabled: false, lastError: null }, // international only, added on the mainland console
       { market: 'intl', countries: ['SG'], enabled: true, lastError: 'board_not_found' }, // international only
+      // MKT-5B O-11: a board of a mainland-only system feeds the mainland site alone, whatever its countries say …
+      { market: 'cn', ats: 'beisen', countries: [], enabled: true, lastError: null },
+      // … and a board that was passed over (its system is switched off here) is not a failing board.
+      { market: 'intl', ats: 'workable', countries: [], enabled: true, lastError: 'connector_disabled' },
     ];
     const seen: unknown[] = [];
     const db = { rACareerSiteSource: { findMany: async (args: unknown) => (seen.push(args), rows) } };
     const store = createPrismaSystemStore(db as never);
-    expect(await store.careerSourceCounts('cn')).toEqual({ total: 3, enabled: 3, failing: 1 });
-    expect(await store.careerSourceCounts('intl')).toEqual({ total: 4, enabled: 3, failing: 1 });
+    expect(await store.careerSourceCounts('cn')).toEqual({ total: 5, enabled: 5, failing: 1 });
+    expect(await store.careerSourceCounts('intl')).toEqual({ total: 5, enabled: 4, failing: 1 });
     // One bounded read, no filter on the display column.
-    expect(seen[0]).toEqual({ select: { countries: true, enabled: true, lastError: true }, take: 20_000 });
+    expect(seen[0]).toEqual({ select: { ats: true, countries: true, enabled: true, lastError: true }, take: 20_000 });
   });
 });
 

@@ -16,8 +16,10 @@
 // database client is asked for: while the sync runs over HTTPS a search never
 // opens the bank's database, whatever database URL is configured (MARKET_STRATEGY
 // §1.4, JC-2). The mirror holds only rows that are listable (published, named
-// employer, a real posting page, inside their stated validity), so it can never
-// surface a job the feed would not show. How fresh the mirror is goes into the
+// employer, a real posting page, inside their stated validity), and the read
+// applies the feed's own lifecycle and fraud scope on top (open, not closed,
+// no fraud flag: feed/sql.ts `scopePredicates`; the mainland fraud rules flag
+// bank rows too), so it does not surface a job the feed hides. How fresh the mirror is goes into the
 // search telemetry (`bankMirrorSyncAge`), so a mirror that has stopped moving
 // is visible instead of looking like a quiet bank.
 
@@ -196,9 +198,12 @@ export const BANK_PROVIDERS: Record<BankId, BankJobProvider> = {
 
 /**
  * WHERE over our RAJob mirror of a bank: the bank's rows in its own market
- * that are open, public and canonical, inside their stated validity, as fresh
- * as the live bank search asks (the same bound on the posting date), and an OR
- * of the same title / description / skills signals.
+ * that are open (neither archived nor closed), public and canonical, inside
+ * their stated validity, as fresh as the live bank search asks (the same bound
+ * on the posting date), and an OR of the same title / description / skills
+ * signals. The fraud scope is applied to the rows read (`mirrorRowListable`):
+ * `fraudFlags` is a Json column, and "null, not a list or an empty list" is
+ * not one Prisma filter.
  */
 export function buildMirrorJobWhere(bank: BankId, intent: BankSearchIntent, now: Date = new Date()): Record<string, unknown> {
   const titles = dedupeStrings(intent.titles).slice(0, 14);
@@ -213,6 +218,7 @@ export function buildMirrorJobWhere(bank: BankId, intent: BankSearchIntent, now:
     market: bankMarket(bank),
     visibility: 'public',
     archivedAt: null,
+    closedAt: null,
     isCanonical: true,
     postedAt: { not: null, gte: intent.freshnessCutoff },
     // A validity the bank stated and that has passed: the feed hides such a row at once, maintenance archives it later.
@@ -238,7 +244,14 @@ const MIRROR_SELECT = {
   postedAt: true,
   companyName: true,
   companyLogoUrl: true,
+  // Read to decide (`mirrorRowListable`); never handed on.
+  fraudFlags: true,
 } as const;
+
+/** The feed's fraud scope for one mirrored row: listed unless `fraudFlags` is a non-empty list (feed/sql.ts `scopePredicates`). */
+export function mirrorRowListable(raw: { fraudFlags?: unknown }): boolean {
+  return !(Array.isArray(raw.fraudFlags) && raw.fraudFlags.length > 0);
+}
 
 /** One mirrored RAJob row → the BankJobRow the pre-matcher reads. Fields the mirror does not hold stay empty (never guessed). */
 function mirrorRowToBankJobRow(bank: BankId, raw: Record<string, unknown>): BankJobRow {
@@ -295,7 +308,7 @@ export async function searchBankMirror(
       orderBy: { postedAt: 'desc' },
       take: Math.min(intent.take || PER_BANK_QUERY_TAKE, PER_BANK_QUERY_TAKE),
     });
-    return rows.slice(0, PER_BANK_CANDIDATE_CAP).map((raw) => mirrorRowToBankJobRow(bank, raw));
+    return rows.filter(mirrorRowListable).slice(0, PER_BANK_CANDIDATE_CAP).map((raw) => mirrorRowToBankJobRow(bank, raw));
   } catch (err) {
     logger.error(TAG, `bank ${bank} mirror retrieval failed`, { error: err instanceof Error ? err.message : String(err) }, ctx?.requestId);
     return null; // degrade — never throw

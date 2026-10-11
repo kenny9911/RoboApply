@@ -46,6 +46,11 @@ export interface FeedListState {
   items: FeedItem[];
   /** "Hiding {n} weaker fits" from the first page; null until it loads. */
   hiddenByTier: number | null;
+  /**
+   * The first page's `relevanceApplied`: false when the server says the ranking words took no part in
+   * choosing or ordering this list; null when it was not told (no words sent, or the page has not loaded).
+   */
+  relevanceApplied: boolean | null;
   /** The newest page's session id (impressions, rating). */
   sessionId: string | null;
   endOfFeed: boolean;
@@ -141,6 +146,7 @@ export function useFeed(params: UseFeedParams): FeedListState {
   return {
     items,
     hiddenByTier: first ? (Number.isFinite(first.hiddenByTier) ? first.hiddenByTier : null) : null,
+    relevanceApplied: typeof first?.relevanceApplied === 'boolean' ? first.relevanceApplied : null,
     sessionId: last?.sessionId ?? null,
     endOfFeed: !!last && (last.endOfFeed || !last.cursor),
     isPending: query.isPending,

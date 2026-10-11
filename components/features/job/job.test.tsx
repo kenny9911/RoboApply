@@ -297,6 +297,38 @@ describe('states', () => {
     expect(api.push).toHaveBeenCalledWith('/jobs/j9');
   });
 
+  it('M5 gate (JT-8, MKT-5F Request 6): a Taiwan job found through Google job search names its publisher in the Taiwan block, never the aggregator in the header', async () => {
+    api.getJob.mockResolvedValue(
+      detail(
+        { marketMeta: { tw_sources: { via: 'google_jobs', publisher: '104人力銀行', url: 'https://www.104.com.tw/job/abc12' } } },
+        { source: { name: 'JSearch', kind: 'provider', originalName: '104人力銀行' } } as never,
+      ),
+    );
+    render();
+    const header = await screen.findByTestId('job-header');
+    expect(within(header).queryByTestId('job-source')).toBeNull();
+    expect(header).not.toHaveTextContent('JSearch');
+    expect(header).not.toHaveTextContent('First published by');
+  });
+
+  it('M5 gate (MKT-5C O-5): a similar job that owes an open-data credit line prints it under its card, outside the card link; no other card gets one', async () => {
+    api.getJob.mockResolvedValue(detail());
+    api.getSimilarJobs.mockResolvedValue({
+      items: [
+        similarItem({ jobId: 'tw1', title: '資料分析師', cardMeta: { tw_sources: { attribution: { text: 'SYNTHETIC 資料來源說明', url: 'https://data.gov.tw/license' } } } }),
+        similarItem({ jobId: 'j9' }),
+      ],
+    });
+    render();
+    const similar = await screen.findByTestId('similar-jobs');
+    const credit = await within(similar).findByText('SYNTHETIC 資料來源說明');
+    expect(credit.closest('[data-tw-attribution]')).toHaveAttribute('data-job-id', 'tw1');
+    expect(credit.closest('a')).toHaveAttribute('href', 'https://data.gov.tw/license');
+    // Not inside the card's own link (a link in a link is invalid), and one line only.
+    expect(within(similar).getByText('資料分析師').closest('a')).not.toContainElement(credit);
+    expect(similar.querySelectorAll('[data-tw-attribution]')).toHaveLength(1);
+  });
+
   it('jobs.recommendations off (GoApply, recruitment info off): no similar jobs section and no request', async () => {
     render(<JobDetailPanel jobId="j1" mode="page" />, { brand: 'goapply', flags: { 'ai.text': true } });
     await screen.findByTestId('job-detail');
@@ -1005,6 +1037,24 @@ describe('GoApply parity on the job page', () => {
     render(<JobDetailPanel jobId="j1" mode="page" />, { flags: { ...BASE_FLAGS, hiringContacts: 'off' } });
     await screen.findByTestId('job-detail');
     expect(screen.queryByRole('tab', { name: 'People' })).toBeNull();
+  });
+
+  it('M5 gate (MKT-5G O-2): a company job that owes an open-data credit line prints it under its row, outside the row link', async () => {
+    api.getCompanyJobs.mockResolvedValue({
+      items: [
+        similarItem({ jobId: 'tw9', title: '行政助理', cardMeta: { tw_sources: { attribution: { text: 'SYNTHETIC 資料來源說明', url: 'https://data.gov.tw/license' } } } }),
+        similarItem({ jobId: 'j9' }),
+      ],
+      cursor: null,
+    });
+    render();
+    await screen.findByTestId('job-detail');
+    fireEvent.click(screen.getByRole('tab', { name: 'Company' }));
+    const tab = await screen.findByTestId('company-tab');
+    const credit = await within(tab).findByText('SYNTHETIC 資料來源說明');
+    expect(credit.closest('[data-tw-attribution]')).toHaveAttribute('data-job-id', 'tw9');
+    expect(within(tab).getByText('行政助理').closest('a')).not.toContainElement(credit);
+    expect(tab.querySelectorAll('[data-tw-attribution]')).toHaveLength(1);
   });
 
   it('company news follows its flag only: on GoApply with the flag on the Company tab asks for it', async () => {

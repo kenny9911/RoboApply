@@ -333,7 +333,7 @@ Keep per-effect claims (they also cover Stripe sending the same fact as two even
 | `hooks/credits/useBillingActions.ts`, `lib/api/account.ts`, `lib/api/credits.ts`, `lib/api/contracts/credits.ts` | `useResumeSubscription`, switch `requiresAction`, portal flow |
 | `components/v3/account/billingHistory.tsx` | refunded marker |
 | `i18n/staging/*.en.json` → all locales | new strings (use the `i18n-locale-sync` skill; run `npm run check`) |
-| `.env.example` | document `PRICE_*`, `STRIPE_TAX_ENABLED`, multi-secret webhook, `STRIPE_TEST_CLOCK_ID` (test keys only) |
+| `.env.example` | document `PRICE_*`, `STRIPE_TAX_ENABLED`, multi-secret webhook, `STRIPE_TEST_CLOCK_ID` (test keys only; built at the M3 gate: with a test key a NEW customer is created under the clock; ignored with a live key and for a customer that already exists) |
 
 No schema change is required.
 
@@ -359,7 +359,7 @@ The owner runs the two steps that authenticate or touch the Stripe account; ever
 3. Open `http://localhost:3621/settings/billing`. With the catalog sync in place the plans show $9.99 / $24.99 / $59.99, pass $6.99, packs $9.99 / $24.99 with no further setup.
 4. Cards (<https://docs.stripe.com/testing> `[confirmed]`): success `4242 4242 4242 4242`; 3-D Secure every time `4000 0027 6000 3184`; 3-D Secure until set up `4000 0025 0000 3155`; insufficient funds `4000 0000 0000 9995`; generic decline `4000 0000 0000 0002`; attaches, then fails on the next charge `4000 0000 0000 0341` (use it to produce a failed renewal).
 5. Scenarios: buy monthly → return page turns Pro within one poll; cancel → mail, `cancelAtPeriodEnd`; resume; switch to quarterly → quote equals the charge; buy the 7-day pass after cancelling; buy a pack → practice balance rises; replay any event with `stripe events resend <evt_id>` → response carries `duplicate: true`, nothing changes twice.
-6. Renewals and dunning: create a test clock, attach the test customer to it (`STRIPE_TEST_CLOCK_ID`, honoured only with a test key), advance it past the period end; with card `…0341` the row goes `past_due`, the mail is sent once, the banner shows.
+6. Renewals and dunning: create a test clock, attach the test customer to it (`STRIPE_TEST_CLOCK_ID`, honoured only with a test key; built at the M3 gate: a NEW customer is created under the clock, a customer that already exists is not moved), advance it past the period end; with card `…0341` the row goes `past_due`, the mail is sent once, the banner shows.
 7. Refund: `stripe refunds create --payment-intent <pi_…>` → `charge.refunded` reverses the entitlement once.
 8. Signature path only: `stripe trigger invoice.payment_failed` (fixture objects are not ours: expect `handled: false`, HTTP 200).
 

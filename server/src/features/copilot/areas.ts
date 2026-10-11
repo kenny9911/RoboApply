@@ -83,7 +83,7 @@ export interface DefaultAreasOptions {
  * production always reads that list. It stays optional here for a seam handed
  * in without it; see `similarJobs` below.
  */
-export type JobDetailSeam = Pick<JobDetailService, 'get'> & { similar?: (userId: string, jobId: string) => Promise<SimilarJobsResponse> };
+export type JobDetailSeam = Pick<JobDetailService, 'get'> & { similar?: (userId: string, jobId: string, opts?: { creditLines?: boolean }) => Promise<SimilarJobsResponse> };
 
 /** Rows asked of the feed for the title search that stands in for Similar jobs (one more than a list shows: the job itself may be among them). */
 const SIMILAR_BY_TITLE_ROWS = 9;
@@ -164,7 +164,8 @@ export function createDefaultAreas(options: DefaultAreasOptions): CopilotAreas {
     // (`by: 'title'`). That branch is not reached in production; removing it is in requests/waveM4-carryover.md.
     async similarJobs(userId, jobId) {
       const detail = await jobDetail();
-      if (typeof detail.similar === 'function') return { items: (await detail.similar(userId, jobId)).items, by: 'similar' };
+      // The Assistant's job-list card prints the open-data credit line (JobListCard.tsx), so rows that owe one are listed with it.
+      if (typeof detail.similar === 'function') return { items: (await detail.similar(userId, jobId, { creditLines: true })).items, by: 'similar' };
       const { job } = await detail.get(userId, jobId);
       const items = await preview(userId, { q: job.title, limit: SIMILAR_BY_TITLE_ROWS });
       return { items: items.filter((item) => item.jobId !== jobId), by: 'title' };

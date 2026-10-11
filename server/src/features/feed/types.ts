@@ -43,6 +43,12 @@ export interface FeedJobRow {
   salaryMonths: number | null;
   sponsorship: string | null;
   sponsorshipEvidence: string | null;
+  /**
+   * `'posting_quote'` or `'provider:<provider id>'` (MARKET_TASK_PLAN "Sponsorship source"). The list
+   * projection selects it since MKT-5F (sql.ts FEED_COLUMNS). Optional: a row built without the column
+   * (a test's, an older cached page) is read once by FeedQueryService `withSponsorshipSource`.
+   */
+  sponsorshipSource?: string | null;
   citizenshipRequired: boolean | null;
   clearanceRequired: boolean | null;
   employerTags: string[];

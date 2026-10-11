@@ -425,7 +425,12 @@ export function normalizeProviderJob(raw: ProviderJobInput, provider: NormalizeP
   const isBank = meta.fromRecruiterBank;
   const visibility = provider === 'user_import' ? 'private' : 'public';
   // A provider the operator lists may be shown publicly, except the ones that never may (JSearch, LinkedIn: M-3, M-4).
-  const listedPublic = (ctx.publicDisplayProviders ?? []).includes(provider) && !NEVER_PUBLIC_DISPLAY_PROVIDERS.includes(provider);
+  // The licensed feed writes the same rows as the `activejobs` search under the same licence (same board, same id, and
+  // the upsert overwrites the flag), so `activejobs` in the list covers it: otherwise the feed would turn a public row
+  // private each time it lists it. The feed's own id stays a narrower grant (the feed alone).
+  const displayList = ctx.publicDisplayProviders ?? [];
+  const listedPublic =
+    (displayList.includes(provider) || (provider === 'activejobs_feed' && displayList.includes('activejobs'))) && !NEVER_PUBLIC_DISPLAY_PROVIDERS.includes(provider);
   const publicDisplay = provider === 'user_import' ? false : isBank ? raw.syndicationConsent === true : listedPublic;
 
   const place = { cityId: primaryLoc?.cityId ?? null, city: primary?.city?.name ?? primary?.cityName ?? null, remoteScope, country: primaryLoc?.country ?? null };

@@ -58,6 +58,7 @@ export function practiceQuestionsHref(company: { slug: string | null; name: stri
 export function GetReadyChecklist({ detail, flags, pending, onSave, onTailor, onPractice, onApply, onIApplied, onPeople }: GetReadyChecklistProps) {
   const t = useTranslations('jobDetail.checklist');
   const ta = useTranslations('jobDetail.actions');
+  const tr = useTranslations('ready');
   const { job, company, checklist } = detail;
   const credits = useCredits();
   const summary = credits.data?.summary ?? null;
@@ -138,6 +139,7 @@ export function GetReadyChecklist({ detail, flags, pending, onSave, onTailor, on
                 </button>
               ) : null}
               {ready.status === 'full' ? <p className={styles.alert}>{t('readyFull')}</p> : null}
+              {ready.status === 'closed' ? <p className={styles.alert}>{tr('review.errors.closed')}</p> : null}
               {ready.status === 'error' ? <p className={styles.alert}>{t('readyError')}</p> : null}
               {flags.extension && open ? <FillWithExtensionButton jobId={job.id} applyUrl={job.applyUrl} /> : null}
               {open && job.applyUrl ? (

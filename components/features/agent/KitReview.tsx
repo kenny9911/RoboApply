@@ -80,7 +80,7 @@ function NotOnList({ jobId }: { jobId: string }) {
   return (
     <EmptyState
       title={t('review.notOnList.title')}
-      sub={status === 'full' ? t('review.notOnList.full') : status === 'error' ? t('review.notOnList.failed') : t('review.notOnList.sub')}
+      sub={status === 'full' ? t('review.notOnList.full') : status === 'closed' ? t('review.errors.closed') : status === 'error' ? t('review.notOnList.failed') : t('review.notOnList.sub')}
       action={
         <div className={styles.row}>
           <Btn variant="primary" onClick={() => void add()} disabled={status === 'adding' || status === 'added'}>

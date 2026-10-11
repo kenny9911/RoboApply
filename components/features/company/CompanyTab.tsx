@@ -11,6 +11,8 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 
 import { SourceNote } from '../common';
+import { TwAttributionLine } from '../market/tw/JobMetaTw';
+import { readTwSourcesMeta } from '../market/tw/meta';
 import { useCompanyJobs } from '../../../hooks/job';
 import type { CompanySummary } from '../../../lib/api/contracts/jobs/detail';
 import { CompanyNews } from './CompanyNews';
@@ -89,23 +91,28 @@ export function CompanyTab({ jobId, company, showNews, onOpenJob }: CompanyTabPr
           {jobs.isSuccess && !others.length ? <p className={styles.muted}>{t('jobsEmpty')}</p> : null}
           {others.length ? (
             <ul className={styles.jobs}>
-              {others.map((j) => (
-                <li key={j.jobId}>
-                  <Link
-                    className={styles.jobLink}
-                    href={`/jobs/${encodeURIComponent(j.jobId)}`}
-                    onClick={(e) => {
-                      if (onOpenJob && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) {
-                        e.preventDefault();
-                        onOpenJob(j.jobId);
-                      }
-                    }}
-                  >
-                    <span className={styles.jobTitle}>{j.title}</span>
-                    {j.location ? <span className={styles.muted}>{j.location}</span> : null}
-                  </Link>
-                </li>
-              ))}
+              {others.map((j) => {
+                // A job that owes an open-data credit line (台灣就業通, 事求人) carries the sentence; it is printed under the row.
+                const credit = readTwSourcesMeta(j.cardMeta)?.attribution ?? null;
+                return (
+                  <li key={j.jobId}>
+                    <Link
+                      className={styles.jobLink}
+                      href={`/jobs/${encodeURIComponent(j.jobId)}`}
+                      onClick={(e) => {
+                        if (onOpenJob && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) {
+                          e.preventDefault();
+                          onOpenJob(j.jobId);
+                        }
+                      }}
+                    >
+                      <span className={styles.jobTitle}>{j.title}</span>
+                      {j.location ? <span className={styles.muted}>{j.location}</span> : null}
+                    </Link>
+                    {credit ? <TwAttributionLine attribution={credit} jobId={j.jobId} /> : null}
+                  </li>
+                );
+              })}
             </ul>
           ) : null}
         </section>

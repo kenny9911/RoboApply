@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { externalProviders } from '../roboapply/v2/lib/raJobProviders.js';
+import { fantasticKeyPresent } from '../roboapply/v2/lib/raFantasticJobs.js';
 import type { ExternalSearchParams } from '../roboapply/v2/lib/raExternalJobTypes.js';
 import type { ProviderInfo, ProviderStatus, SearchInput, SearchJob, SearchResult } from './types.js';
 import { deduplicateJobs, matchesFilters, normalizeJob, type ProviderJob } from './normalization.js';
@@ -145,7 +146,8 @@ export function createJobSearchService(deps: {
       }
       if (config.JOB_SEARCH_DISABLED === 'true' || config.RA_ONBOARDING_EXTERNAL_JOBS_DISABLED === 'true'
         || !allowed.has(adapter.id) || config[DISABLED_ENV[adapter.id]] === 'true') return { ...base, enabled: false, reason: 'disabled' };
-      if (!config.RAPID_API_KEY?.trim()) return { ...base, enabled: false, reason: 'missing_credentials' };
+      // Active Jobs DB follows its chosen transport (FANTASTIC_TRANSPORT): on `direct` its key is FANTASTIC_API_KEY, not the marketplace key.
+      if (!(adapter.id === 'activejobs' ? fantasticKeyPresent(config) : config.RAPID_API_KEY?.trim())) return { ...base, enabled: false, reason: 'missing_credentials' };
       try {
         return adapter.isEnabled() ? { ...base, enabled: true } : { ...base, enabled: false, reason: 'budget_or_circuit' };
       } catch { return { ...base, enabled: false, reason: 'budget_or_circuit' }; }
@@ -253,7 +255,8 @@ export function createJobSearchService(deps: {
     const defaults = audience === 'api' && audienceDefaults.size === 0 ? configured : audienceDefaults;
     const selected = available.filter((info) => input.providers ? input.providers.includes(info.id)
       : defaults.has(info.id));
-    const credentialVersion = createHash('sha256').update(env().RAPID_API_KEY ?? '').digest('hex').slice(0, 12);
+    // A changed key of either transport, or a changed transport, is a new cache version.
+    const credentialVersion = createHash('sha256').update([env().RAPID_API_KEY ?? '', env().FANTASTIC_TRANSPORT ?? '', env().FANTASTIC_API_KEY ?? ''].join('\u0000')).digest('hex').slice(0, 12);
     // A source that reads as the user (our own index) is cached per reader.
     const reader = selected.some((info) => adapters.find((adapter) => adapter.id === info.id)?.perUser) ? opts.userId ?? '' : null;
     // The topics count (for the sources and for the cache) only when a selected source can order by them:

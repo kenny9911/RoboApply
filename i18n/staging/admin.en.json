@@ -20,6 +20,9 @@
           "linkedin": "LinkedIn job search",
           "user_import": "Jobs people add themselves",
           "tw_open_data": "Taiwan government open data",
+          "activejobs_feed": "Active Jobs DB feed",
+          "tw_gov_jobs": "Taiwan public-sector vacancies",
+          "usajobs": "USAJOBS",
           "other": "{provider}"
         },
         "about": {
@@ -30,6 +33,9 @@
           "linkedin": "A job search service that is no longer used.",
           "user_import": "A person pastes a link or a posting. Only that person sees it.",
           "tw_open_data": "Vacancies from the open data set of Taiwan's public employment service. Each one shows the credit line its licence asks for.",
+          "activejobs_feed": "New postings from employer career sites, read every hour. Runs by itself once a paid plan exists.",
+          "tw_gov_jobs": "Vacancies of government agencies and schools from Taiwan's open data. Each one shows the credit line its licence asks for. No contact details of officials are kept.",
+          "usajobs": "United States federal vacancies from the government's own job site. Each one links to the official announcement.",
           "other": "A job source."
         },
         "state": {
@@ -57,6 +63,9 @@
           "disabled": "Turned off, or its key is missing.",
           "url_invalid": "The address set for it is not one we accept, so it is not read.",
           "quota": "Paused: its plan's quota for this period is used up, was refused, or is kept for people's own searches.",
+          "no_key": "No key is set for it.",
+          "plan_too_small": "Off until the plan allows at least 20,000 postings a month.",
+          "plan_unknown": "Off. The size of the plan is not known yet: set FANTASTIC_MONTHLY_JOBS, or wait for the provider's first answer.",
           "other": "Off ({code})."
         },
         "facts": {
@@ -88,6 +97,9 @@
           "bank_closed": "Closed by the recruiter: {count}",
           "bank_page_cap": "Checks that stopped at the page limit: {count}",
           "bank_pass_cut_short": "Checks that ran out of time: {count}",
+          "bank_validity_ended": "Past the end date the recruiter set: {count}",
+          "bank_time_without_zone": "Times sent without a time zone, read as China time: {count}",
+          "bank_reread_started": "Full re-reads of the source started: {count}",
           "wrong_market_cn": "Located outside mainland China: {count}",
           "wrong_market_intl": "Located in mainland China, so not for this site: {count}",
           "no_apply_url": "No link to apply: {count}",
@@ -98,6 +110,7 @@
           "boards_read": "Boards checked: {count}",
           "board_errors": "Boards that could not be read: {count}",
           "board_backlog": "Postings still to read: {count}",
+          "country_not_selected": "Located in a country this board is not read for: {count}",
           "linkedin_only_link": "Left out because the only link was to LinkedIn: {count}",
           "indeed_only_link": "Left out because the only link was to Indeed: {count}",
           "tw_sweep_finished": "Daily reads finished: {count}",

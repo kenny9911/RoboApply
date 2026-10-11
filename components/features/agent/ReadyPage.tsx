@@ -26,7 +26,7 @@ import { useTranslations } from 'next-intl';
 
 import { Btn, EmptyState, FitTierLabel, HonestyLine, PageHeader, Tabs, tabPanelProps, toast } from '../../v3/primitives';
 import { useCapabilities, useFlag } from '../../../lib/flags';
-import { apiErrorCode } from '../../../lib/api/contracts/wire';
+import { apiErrorCode, apiErrorReason } from '../../../lib/api/contracts/wire';
 import {
   READY_TABS,
   canPrepare,
@@ -263,7 +263,9 @@ function Suggestions() {
       setAdded((s) => new Set(s).add(jobId));
     } catch (err) {
       const code = apiErrorCode(err);
-      toast({ message: code === 'conflict' || code === 'queue_full' ? t('suggestions.full') : t('suggestions.failed'), tone: 'warn' });
+      // A job that closed is said as closed (410 `gone`, reason `job_closed`), never as a full list or a retry.
+      const closed = apiErrorReason(err) === 'job_closed';
+      toast({ message: closed ? t('review.errors.closed') : code === 'conflict' || code === 'queue_full' ? t('suggestions.full') : t('suggestions.failed'), tone: 'warn' });
     }
   };
 

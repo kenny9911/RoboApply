@@ -139,23 +139,22 @@ export const CREDIT_LINE_BOARDS: readonly string[] = ['tw_open_data', 'tw_gov_jo
  * through `JobMetaTw`). A surface that CANNOT print it yet holds the row out
  * with this predicate, so no open-data row is shown uncredited:
  *   - job alerts, in the app and by e-mail (alerts/repo.ts, alerts/service.ts);
- *   - similar jobs (jobs/detail/service.ts `similarScope`), on the job page
- *     and, since the M4 gate, in the Assistant's `similar_jobs`, which reads
- *     that same list;
  *   - the Ready to apply suggestions and picks (agent/deps.ts), through
  *     `itemOwesCreditLine`;
  *   - the tailoring tip (`tips_first_tailor`, in the app and by e-mail), which
  *     names the person's best-fit job by title and company
  *     (lifecycle/repo.ts `topFitJob`; M4 cross-review);
- *   - a company's job list (jobs/companies/service.ts `liveJobWhere`: the
- *     Company tab's "other jobs" and `GET /companies/:id/jobs`, with its
- *     open-job count; M4 cross-review).
- * The Assistant's own job lists print the line since MKT-4H (the cited card
- * and the fallback card read `cardMeta.tw_sources`), so they hold nothing.
- * Remove a use when its surface carries the line: similar jobs with
- * MKT-5C.3, the company list with MKT-5G, alerts, Ready to apply and the tip
- * with Orchestrator 3 (requests/waveM3-carryover.md). Tracker rows are the
- * person's own saved jobs and are not held (Orchestrator 3 there).
+ *   - a caller of the similar-jobs list or of a company's job list that does
+ *     not say its surface prints the line (jobs/detail/service.ts
+ *     `similarScope` without `creditLines`; jobs/companies/service.ts
+ *     `liveJobWhere` without `printsCreditLine`: the Assistant's company card).
+ * Since the M5 gate these surfaces print the line and hold nothing: Similar
+ * jobs on the job page (SimilarJobs.tsx) and in the Assistant's
+ * `similar_jobs`, and the Company tab's job list with its open-job count
+ * (CompanyTab.tsx, `GET /companies/:id/jobs`). The Assistant's own job lists
+ * print it since MKT-4H. Still held, with no owner: alerts, Ready to apply
+ * and the tip (requests/waveM5-carryover.md). Tracker rows are the person's
+ * own saved jobs and are not held.
  */
 export function creditLineHeld(row: { sourceBoard?: unknown }): boolean {
   return typeof row.sourceBoard === 'string' && CREDIT_LINE_BOARDS.includes(row.sourceBoard);

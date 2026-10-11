@@ -80,7 +80,8 @@ export function createJobDetailRouter(deps: JobDetailRouterDeps = {}): Router {
     route(async (req) => {
       const userId = requireUserId(req);
       const jobId = id(req);
-      return (await service()).similar(userId, jobId, { locale: await requestLocale(req) });
+      // The list's card prints the open-data credit line (SimilarJobs.tsx), so rows that owe one are listed with it.
+      return (await service()).similar(userId, jobId, { locale: await requestLocale(req), creditLines: true });
     }),
   );
   router.post('/:id/save', ...auth, route(async (req) => (await service()).save(requireUserId(req), id(req))));

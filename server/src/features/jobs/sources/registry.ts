@@ -5,12 +5,16 @@
 // and are they on":
 //
 //   RoboApply (intl): activejobs → bank_robohire → jsearch (the brand registry's
-//                     order) + adapters registered for the market (ats_public,
-//                     the Taiwan open data)
-//   GoApply   (cn):   bank_gohire + adapters registered for the market
-//                     (ats_public: employer-board postings located in mainland
-//                     China). Never a search API: the RapidAPI adapters are
-//                     international-only, so JSearch can never serve market cn.
+//                     order) + adapters registered for the market: ats_public,
+//                     the Taiwan open data (tw_open_data, tw_gov_jobs), usajobs
+//                     and the licensed feed activejobs_feed (behind its plan
+//                     gate)
+//   GoApply   (cn):   bank_gohire + adapters registered for the market:
+//                     ats_public (employer-board postings located in mainland
+//                     China), and Active Jobs DB as a search (activejobs) and
+//                     as the licensed feed (activejobs_feed), both behind the
+//                     plan gate (JC-6; the rule is ingest/providers.ts). JSearch
+//                     and LinkedIn never serve market cn.
 //   both:             user_import (a user's own import; not an ingest source)
 //
 // The provider list is `brand.jobProviders` plus the adapters registered for

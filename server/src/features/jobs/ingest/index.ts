@@ -27,6 +27,8 @@ import { hydrateProviderQuota } from './quota.js';
 export { runJobsIngest, runJobsMaintain, runJobsPlan, ingestAllowed } from './cron.js';
 /** A provider's daily call limit from env (admin "Limits" page reads it here, never from a copy). */
 export { dailyCallLimit, effectiveDailyLimit, effectiveDailyLimitFor, quotaDailyCap, quotaReserve } from './config.js';
+// The licensed feed's plan gate and its daily posting budget (MKT-5A): one definition, read by the admin area.
+export { FEED_MIN_MONTHLY_JOBS, feedDailyJobs, feedDailyJobsFor, feedJobsReserve, feedQuotaDailyJobs } from './config.js';
 export type { QuotaReading } from './config.js';
 // One budget per metered provider (MKT-3A): the plan's quota as the provider states it, and what it allows.
 export {
@@ -41,11 +43,17 @@ export {
   quotaSnapshot,
   recordQuotaObservation,
   registerQuotaListeners,
+  FEED_PLAN_PROVIDER,
+  feedGate,
+  feedGateForMarket,
+  providerJobsToday,
 } from './quota.js';
+// The dedupe repair of a group after one of its rows was archived (read at run time by jobs/liveness).
+export { applyDedupe } from './upsert.js';
 export { JOBS_INGEST_WORK_KINDS, workers } from './workers.js';
 export { rapidApiCountry, rapidApiSearchParams } from './adapters/rapidApi.js';
 export { bankPublicPageState, readBankEmployerSignals, isSyncableBankJob } from './adapters/bank.js';
-export { adaptersForBrand, ingestProvidersForBrand, listEnabledAdaptersFor, sourcesForBrand } from './providers.js';
+export { adaptersForBrand, ingestProvidersForBrand, knownIngestProvidersForBrand, listEnabledAdaptersFor, sourcesForBrand } from './providers.js';
 export { readSourceStatuses, sourceStatusKey } from './status.js';
 export type { SourceRunStatus, SourceStatusDoc } from './status.js';
 // MKT-1C: the provider quota snapshot contract (AppConfig `jobs.providerQuota.v1`). Types, constants and
@@ -59,7 +67,7 @@ export type { TargetedIngestResult } from './run.js';
 /**
  * The recruiter-bank client seam (read-only Prisma clients for RoboHire /
  * GoHire). Honors the kill switches, the cross-tenant guard and the GoHire
- * TLS rule. A bank read over HTTPS (`bankTransport` 'api') has no client:
+ * TLS rule. A bank read over HTTPS (`bankTransport` 'api' or 'syndication') has no client:
  * `getBankClient` answers null for it. WP-54 must still read consent only
  * from the bank's opt-in records.
  */

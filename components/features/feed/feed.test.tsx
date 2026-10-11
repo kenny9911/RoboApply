@@ -761,6 +761,26 @@ describe('"Ranked by" on /jobs', () => {
     ]);
   });
 
+  it('M5 gate (MKT-5C O-7): the chip is left out when the first page says the words took no part in the order, and shown when it says they did', async () => {
+    rankListBy({ searchProfileId: 'sp_main', baseVersion: 3, rankedBy: ['climate startups', 'Rust'] });
+    let applied = false;
+    const net = installFetch(
+      baseRoutes({
+        [`GET ${PROFILES}`]: () => ok(profileList([searchProfile({ version: 4 })])),
+        [`POST ${FEED}/query`]: () => ok(page(items(1, 3), { relevanceApplied: applied })),
+      }),
+    );
+    const first = renderFeed(<JobsWorkspace />);
+    await waitFor(() => expect(screen.getAllByTestId('job-card')).toHaveLength(3));
+    // The words were still sent; the page just does not claim an order the server did not apply.
+    expect(bodies(net)[0].relevance).toBe('climate startups Rust');
+    expect(screen.queryByTestId('ranked-by')).toBeNull();
+    first.unmount();
+    applied = true;
+    renderFeed(<JobsWorkspace />);
+    expect(await screen.findByTestId('ranked-by')).toHaveTextContent('Ranked by: climate startups, Rust');
+  });
+
   it('clearing the chip restores the plain order: a new list is asked for without the text', async () => {
     rankListBy({ searchProfileId: 'sp_main', baseVersion: 3, rankedBy: ['climate startups', 'Rust'] });
     const net = installFetch(baseRoutes({ [`GET ${PROFILES}`]: () => ok(profileList([searchProfile({ version: 4 })])) }));

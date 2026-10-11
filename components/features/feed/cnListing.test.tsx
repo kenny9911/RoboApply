@@ -182,14 +182,18 @@ describe('GoApply card with the listing contract', () => {
     expect(el).not.toHaveTextContent(/we apply|apply for you|auto-?apply/i);
   });
 
-  it('the apply button opens apply.url in a new tab inside the click, and records the click', async () => {
+  // MKT-5C (JI-10): the click-time check can find the posting gone, so the employer link is never opened before
+  // the server has answered. An empty tab is opened inside the click and goes to the link the server answers with.
+  it('the apply button opens an empty tab inside the click, sends it to the link the server answers with, and records the click', async () => {
     const net = installFetch({ 'POST /api/v1/roboapply/jobs/job_fixture_cn_board_1/apply-click': () => ok({ applyUrl: 'https://careers.example-tech.cn/jobs/744000012345678', tracker: { status: 'applied' }, undoToken: 'u1' }) });
-    const open = vi.fn();
+    const tab = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+    const open = vi.fn(() => tab);
     vi.stubGlobal('open', open);
     renderFeed(card(board), { brand: 'goapply' });
     fireEvent.click(screen.getByRole('button', { name: "Apply on the employer's careers site" }));
-    expect(open).toHaveBeenCalledWith('https://careers.example-tech.cn/jobs/744000012345678', '_blank', 'noopener,noreferrer');
-    await waitFor(() => expect(net.to('POST', '/api/v1/roboapply/jobs/job_fixture_cn_board_1/apply-click')).toHaveLength(1));
+    expect(open.mock.calls).toEqual([['about:blank', '_blank']]);
+    await waitFor(() => expect(tab.location.href).toBe('https://careers.example-tech.cn/jobs/744000012345678'));
+    expect(net.to('POST', '/api/v1/roboapply/jobs/job_fixture_cn_board_1/apply-click')).toHaveLength(1);
   });
 
   it('a bank row says the bank’s page and keeps the bank as its source', () => {

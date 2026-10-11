@@ -1868,6 +1868,53 @@ describe('MKT-5C JI-10: opening a job confirms it is still listed and shows "clo
       await vi.advanceTimersByTimeAsync(200);
     });
 
+    it('a check the page stopped waiting for is handed to the keep-alive seam, so its answer is still written after the response; one that answered in time, and the apply click, are not', async () => {
+      vi.useFakeTimers();
+      let finish: (r: LiveResult) => void = () => {};
+      const slow = vi.fn(() => new Promise<LiveResult>((resolve) => (finish = resolve)));
+      const kept: Array<Promise<unknown>> = [];
+      const keepAlive = vi.fn((work: Promise<unknown>) => void kept.push(work));
+      const { service } = setup({ jobs: [keyed()], deps: { confirmListing: slow, listingWaitMs: 5, keepAlive } });
+      const page = service.get('u1', 'j1');
+      await vi.advanceTimersByTimeAsync(4);
+      // Still inside the wait: nothing to keep alive yet.
+      expect(keepAlive).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect((await page).job.status).toBe('open');
+      // The wait ran out: the pending check itself is handed over, once, and it resolves with the check's answer.
+      expect(keepAlive).toHaveBeenCalledTimes(1);
+      let late: unknown = 'pending';
+      void kept[0]!.then((r) => (late = r));
+      await vi.advanceTimersByTimeAsync(1);
+      expect(late).toBe('pending');
+      finish(answer('closed'));
+      await vi.advanceTimersByTimeAsync(1);
+      expect(late).toMatchObject({ state: 'closed', via: 'ats_api' });
+
+      // An answer inside the wait: nothing outlives the response.
+      const quick = setup({ jobs: [keyed()], deps: { confirmListing: checker(answer('open')).confirm, listingWaitMs: 5, keepAlive } });
+      expect((await quick.service.get('u1', 'j1')).job.status).toBe('open');
+      // The apply click waits for the whole answer, so it has nothing to hand over either.
+      const click = setup({ jobs: [keyed()], deps: { confirmListing: checker(answer('open')).confirm, keepAlive } });
+      await click.service.recordApplyClick('u1', 'j1');
+      expect(keepAlive).toHaveBeenCalledTimes(1);
+
+      // A seam that throws (no request context) never fails the page.
+      const throwing = setup({
+        jobs: [keyed()],
+        deps: {
+          confirmListing: () => new Promise<LiveResult>(() => {}),
+          listingWaitMs: 5,
+          keepAlive: () => {
+            throw new Error('no request context');
+          },
+        },
+      });
+      const served = throwing.service.get('u1', 'j1');
+      await vi.advanceTimersByTimeAsync(5);
+      expect((await served).job.status).toBe('open');
+    });
+
     it('never asked: a private import, a bank row, a closed row, a row with no posting key', async () => {
       const c = checker(answer('closed'));
       const { service } = setup({

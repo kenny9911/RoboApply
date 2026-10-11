@@ -64,7 +64,12 @@ const searchBank = vi.fn(async (bank: 'robohire' | 'gohire') => {
 });
 /** The mirror's sync age, read beside the sweep for a bank that is searched in our own index. */
 const bankMirrorSyncAge = vi.fn(async (_bank: string): Promise<Record<string, unknown> | null> => null);
-vi.mock('../lib/raBankProviders.js', () => ({ searchBank: (...a: any[]) => searchBank(...a), bankMirrorSyncAge: (b: string) => bankMirrorSyncAge(b) }));
+vi.mock('../lib/raBankProviders.js', async (importOriginal) => ({
+  // The real fraud scope of a mirrored row (one rule, the provider's); the two reads are fakes.
+  mirrorRowListable: (await importOriginal<typeof import('../lib/raBankProviders.js')>()).mirrorRowListable,
+  searchBank: (...a: any[]) => searchBank(...a),
+  bankMirrorSyncAge: (b: string) => bankMirrorSyncAge(b),
+}));
 
 const explorerRun = vi.fn(async () => ({
   primaryTitles: ['Backend Engineer', 'Senior Backend Engineer'], adjacentTitles: ['Platform Engineer'],
@@ -228,9 +233,15 @@ describe('RACrossBankSearchService.run (integration)', () => {
     );
     const res = await runOnGoApply();
     expect(upsertRAJob).not.toHaveBeenCalled();
-    expect(findManyRAJob).toHaveBeenCalledWith(expect.objectContaining({ where: { sourceBoard: 'gohire', externalId: { in: ['gh1'] }, archivedAt: null, visibility: 'public' } }));
+    expect(findManyRAJob).toHaveBeenCalledWith(expect.objectContaining({ where: { sourceBoard: 'gohire', externalId: { in: ['gh1'] }, archivedAt: null, closedAt: null, visibility: 'public' } }));
     const gohire = [...res.recommended, ...res.explore].find((c) => c.source === 'gohire');
     expect(gohire).toMatchObject({ id: 'mirror_gh1', applyUrl: 'https://example.test/p/gh1' });
+    // A mirrored row the fraud rules flagged since it was retrieved is hidden from the feed, and so from this list.
+    findManyRAJob.mockImplementation(async (args: any) =>
+      args.where.sourceBoard === 'gohire' ? args.where.externalId.in.map((externalId: string) => ({ id: `mirror_${externalId}`, externalId, fraudFlags: ['fee_keyword'] })) : [],
+    );
+    const flagged = await runOnGoApply();
+    expect([...flagged.recommended, ...flagged.explore].some((c) => c.source === 'gohire')).toBe(false);
     // A mirrored row that is no longer open (archived since) is simply not shown.
     findManyRAJob.mockResolvedValue([]);
     const gone = await runOnGoApply();

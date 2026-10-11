@@ -60,14 +60,18 @@ describe('cost model per source (JI-2)', () => {
     const roboSources = sourcesForBrand(robo, {});
     expect(roboSources.map((s) => [s.provider, s.costModel])).toEqual([
       ['activejobs', 'per_job'],
+      ['activejobs_feed', 'per_job'],
       ['bank_robohire', 'free'],
       ['jsearch', 'per_request'],
       ['ats_public', 'free'],
       ['user_import', 'free'],
     ]);
+    // JC-6 (MKT-5A): Active Jobs DB and its licensed feed are listed for the mainland too, behind the plan gate.
     const goSources = sourcesForBrand(go, {});
     expect(goSources.map((s) => [s.provider, s.costModel])).toEqual([
       ['bank_gohire', 'free'],
+      ['activejobs', 'per_job'],
+      ['activejobs_feed', 'per_job'],
       ['ats_public', 'free'],
       ['user_import', 'free'],
     ]);
@@ -79,7 +83,11 @@ describe('cost model per source (JI-2)', () => {
     }
     // The only source billed per request is the one that must never get an SEO seed query.
     expect(roboSources.filter((s) => s.costModel === 'per_request').map((s) => s.provider)).toEqual(['jsearch']);
-    expect(goSources.filter((s) => s.costModel !== 'free')).toEqual([]);
+    // Every metered GoApply source is off without a paid plan: nothing is spent for the mainland by default.
+    expect(goSources.filter((s) => s.costModel !== 'free').map((s) => [s.provider, s.status().enabled])).toEqual([
+      ['activejobs', false],
+      ['activejobs_feed', false],
+    ]);
   });
 
   it('is known for a source whose adapter is not registered (the provider id decides)', () => {

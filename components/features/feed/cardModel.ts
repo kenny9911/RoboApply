@@ -186,6 +186,16 @@ export type SourceLine =
   | null;
 
 /** The source line under the facts. A verified direct post needs none (its badge says it). */
+/**
+ * A row found through Google's job index (a JSearch row located in Taiwan: `cardMeta.tw_sources.via`,
+ * server twHooks.ts). The Taiwan slot names the original publisher with the link (JobMetaTw); the
+ * aggregator is not the source and is not named beside it (JT-8; MARKET_STRATEGY 1.5).
+ */
+export function foundThroughJobSearch(meta: Readonly<Record<string, unknown>> | null | undefined): boolean {
+  const set = meta?.tw_sources;
+  return !!set && typeof set === 'object' && (set as { via?: unknown }).via === 'google_jobs';
+}
+
 export function sourceLine(item: FeedItem): SourceLine {
   const name = item.source?.name?.trim() ?? '';
   switch (item.source?.kind) {
@@ -197,6 +207,7 @@ export function sourceLine(item: FeedItem): SourceLine {
     case 'user_import':
       return { key: 'user_import' };
     case 'provider':
+      if (foundThroughJobSearch(itemExtras(item).cardMeta)) return null;
       return name ? { key: 'provider', name } : null;
     default:
       return null;

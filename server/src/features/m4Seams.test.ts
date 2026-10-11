@@ -301,7 +301,8 @@ describe('4. the consumer is wired to the real producer (MKT-4F and job detail t
     const feedPreview = vi.fn(async () => []);
     const areas = createDefaultAreas({ store: {} as never, jobDetail: seam as never, feedPreview });
     expect(await areas.similarJobs('u1', 'job_1')).toEqual({ items: [{ jobId: 'near_1' }, { jobId: 'near_2' }], by: 'similar' });
-    expect(seam.similar).toHaveBeenCalledWith('u1', 'job_1');
+    // Since the M5 gate the Assistant asks for the rows that owe an open-data credit line too: its card prints the line.
+    expect(seam.similar).toHaveBeenCalledWith('u1', 'job_1', { creditLines: true });
     expect(feedPreview).not.toHaveBeenCalled();
   });
 });

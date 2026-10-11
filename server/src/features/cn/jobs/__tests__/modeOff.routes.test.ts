@@ -62,7 +62,7 @@ import { createExtensionRouter } from '../../../extension/routes.js';
 import { createExtensionService, type ExtensionDeps } from '../../../extension/service.js';
 import type { ExtJobRow } from '../../../extension/repository.js';
 import { createFeedQueryService } from '../../../feed/FeedQueryService.js';
-import { FakeFeedRepo, feedRow } from '../../../feed/testkit.js';
+import { BANK_PAGES_ENV, FakeFeedRepo, feedRow } from '../../../feed/testkit.js';
 import { createMatchService } from '../../../match/MatchService.js';
 import { createMatchRouter } from '../../../match/routes.js';
 import { createMemoryRepo as createMatchMemoryRepo, jobRecord } from '../../../match/testkit.js';
@@ -821,7 +821,9 @@ async function readCompany(h: RouteHarness) {
 
 describe('jobs.companies on GoApply (signed-in viewer)', () => {
   it('control: with postings allowed, the fixture posting is listed and counted (the scan below is not vacuous)', async () => {
-    const h = await companiesHarness(MODE_ON);
+    // The fixture is a GoHire bank row: since MKT-5G (carry-over 2c) a company's list holds a bank row
+    // back until the bank has a posting page, exactly as the feed does. The control sets the page.
+    const h = await companiesHarness({ ...MODE_ON, ...BANK_PAGES_ENV });
     try {
       const { profile, jobs } = await readCompany(h);
       expect(profile.status).toBe(200);

@@ -24,7 +24,13 @@ postings and links out to the employer's own page.
 | 北森 (`beisen`) | `POST {tenant}.zhiye.com/api/Jobad/GetJobAdPageList` | **No, and not verified by us** | sub-domain label, lower case | **off** unless `CN_ATS_BEISEN_ENABLED=true` |
 
 Every switch above is one environment variable; `ATS_PUBLIC_SOURCES_DISABLED=true`
-stops every board read at once.
+stops every board read at once: the sync, "Check now", validation, discovery
+and the on-demand posting check (the single-posting read on
+`boards-api.greenhouse.io`, `api.lever.co` and `api.smartrecruiters.com` that
+runs when a person opens a job, clicks apply or uses Ready to apply; its own
+switch is `LIVENESS_CHECK_DISABLED=true`). It takes no stored posting down,
+with one exception: on GoApply a stored mainland posting that no read has confirmed for 45 days is closed by the daily maintenance (`jobs-maintain`) and returns when its board is read again, so a switch held longer than that empties GoApply's board
+postings step by step.
 
 Rows are written with `sourceBoard` = the system id and `sourceName` =
 `<company> · <system name>` (both Lever instances read "Lever"; a 北森 row reads
@@ -115,7 +121,7 @@ ATS_WORKABLE_DISABLED=true
 ```
 
 Workable sources are then passed over (`connector_disabled`), no request is
-made, and their postings are left as they are. To take the postings out as
+made, and their postings are left as they are. On GoApply a stored mainland posting that no read has confirmed for 45 days is closed by the daily maintenance (`jobs-maintain`) and returns when its board is read again. To take the postings out as
 well, switch the sources off in the sources console.
 
 ## 5. 北森 tenant boards
@@ -127,7 +133,10 @@ well, switch the sources off in the sources console.
 - a 北森 source cannot be added or imported (`connector_disabled`);
 - no host rule for `zhiye.com` exists, so no request to that domain can be built;
 - no connector object exists (`connectorFor('beisen')` throws);
-- a source that exists is passed over and its postings are left as they are.
+- a source that exists is passed over and its postings are left as they are
+  (the mainland's 45-day rule still applies: a posting no read has confirmed
+  for 45 days is closed by the daily maintenance, so the postings of a tenant
+  whose flag was turned back off are gone after 45 days).
 
 Nobody has called a 北森 board from this repository, by hand or by code. The
 wire shape in `connectors/beisen.ts` comes from one third-party source (the
@@ -246,7 +255,9 @@ already saved stays in that user's own tracker.
 
 | Variable | Meaning | Default |
 |---|---|---|
-| `ATS_PUBLIC_SOURCES_DISABLED` | `true` stops every employer-board read | off |
+| `ATS_PUBLIC_SOURCES_DISABLED` | `true` stops every employer-board read, the on-demand posting check included | off |
+| `LIVENESS_CHECK_DISABLED` | `true` stops the on-demand posting check alone (one GET of a single posting on Greenhouse, Lever or SmartRecruiters when a job is opened, on the apply click and for Ready to apply) | off (the check runs) |
+| `LIVENESS_RECHECK_HOURS` | a posting confirmed listed within this many hours is not asked about again (0 to 720) | 6 |
 | `ATS_BOARDS_CONCURRENCY` | boards read in flight (4 to 8) | 6 |
 | `ATS_SR_DETAILS_PER_RUN` | SmartRecruiters posting texts per board and run | 100 |
 | `ATS_DISCOVERY_VALIDATIONS_PER_RUN` | candidate boards checked per run | 20 |

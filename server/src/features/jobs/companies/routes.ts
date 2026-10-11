@@ -51,15 +51,15 @@ export function createCompaniesRouter(deps: CompaniesRouterDeps = {}): Router {
   // GoApply: the recruitment-info mode decides whether third-party postings
   // are listed or counted at all (R-14; WP-41 R41-1, Wave 3 gate). `env` is
   // where the service reads the bank posting-page settings from.
-  // `printsCreditLine` stays off: the Company tab lists a title and a place
-  // and cannot print a credit line (components/features/company/CompanyTab.tsx).
-  // Turn it on in the change that makes that list print
-  // `cardMeta.tw_sources.attribution` of each item.
+  // `printsCreditLine`: the Company tab prints `cardMeta.tw_sources.attribution`
+  // under each row that carries it (components/features/company/CompanyTab.tsx,
+  // M5 gate), so rows that owe an open-data credit line are listed and counted.
   const viewer = (req: Request): CompanyReadViewer => {
     const user = userOf(req);
     return {
       publicOnly: !user,
       env: env(),
+      printsCreditLine: true,
       ...(market() === 'cn' ? { restrict: cnPostingsWhere(user?.id ?? null, env()) } : {}),
     };
   };

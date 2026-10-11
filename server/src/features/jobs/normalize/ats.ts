@@ -266,7 +266,7 @@ export function atsPostingKeyFromUrls(applyUrl: string | null | undefined, sourc
  * (`PUBLIC_ATS` in sources/atsPublic/contract.ts; ats.test.ts fails when a
  * system is added there without a key rule here).
  */
-const BOARD_KEY_ATS: ReadonlySet<string> = new Set(['greenhouse', 'lever', 'ashby', 'smartrecruiters']);
+const BOARD_KEY_ATS: ReadonlySet<string> = new Set(['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'workable', 'recruitee', 'personio', 'lever_eu', 'beisen']);
 
 /**
  * K2 of an employer-board row, from the row's own identity: its board (the

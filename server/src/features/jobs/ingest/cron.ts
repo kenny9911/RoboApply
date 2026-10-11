@@ -61,10 +61,12 @@ const env = (): EnvSource => deps.env ?? process.env;
 /** jobs-plan (02:00 UTC daily): the demand-driven query planner (ARCH §4.3). */
 export const runJobsPlan: CronTask = async (ctx): Promise<CronResult> => {
   if (!ingestAllowed(ctx.brand, env())) return { skipped: 'disabled' };
+  // What the providers last said about their plans, so a provider that is out of quota is not planned.
+  // Loaded BEFORE the adapters are listed: a source behind a plan (the licensed feed, the mainland's
+  // Active Jobs DB) answers its gate from the reading this process holds (MKT-5A, review finding 1).
+  await hydrateProviderQuota(db());
   const adapters = adaptersForBrand(ctx.brand, env());
   if (adapters.length === 0) return { skipped: 'no_providers' };
-  // What the providers last said about their plans, so a provider that is out of quota is not planned.
-  await hydrateProviderQuota(db());
   // The market's verified seed list of employer boards, registered once per seed version.
   let seed: SeedResult | null = null;
   if (adapters.some((a) => a.provider === 'ats_public' && adapterEnabledFor(a, ctx.brand.market))) {
@@ -85,9 +87,10 @@ export const runJobsPlan: CronTask = async (ctx): Promise<CronResult> => {
 /** jobs-ingest (every 10 min): fetch → normalize → upsert per brand (ARCH §4.4). */
 export const runJobsIngest: CronTask = async (ctx): Promise<CronResult> => {
   if (!ingestAllowed(ctx.brand, env())) return { skipped: 'disabled' };
-  const adapters = adaptersForBrand(ctx.brand, env());
   // What the providers last said about their plans (one AppConfig read; another process may have made the call).
+  // Before the adapters are listed, as in jobs-plan: a new instance holds no reading until this ran.
   await hydrateProviderQuota(db());
+  const adapters = adaptersForBrand(ctx.brand, env());
   if (!adapters.some((a) => adapterRunsInTick(a, ctx.brand.market, ctx.now, env()))) return { skipped: 'no_providers' };
   const tally = await runIngestTick({ db: db(), brand: ctx.brand, adapters, budgetMs: ctx.budget.remainingMs(), env: env(), enqueueMany: deps.enqueueMany, perQueryTracking: deps.perQueryTracking });
   if (tally.queries === 0) return { skipped: 'no_work' };
@@ -104,11 +107,13 @@ export const runJobsIngest: CronTask = async (ctx): Promise<CronResult> => {
  * queues carry that brand.
  */
 export const runJobsMaintain: CronTask = async (ctx): Promise<CronResult> => {
+  // The plan-gated sources are part of the list only once the stored quota reading is loaded (as above).
+  await hydrateProviderQuota(db());
   const adapters = adaptersForBrand(ctx.brand, env());
   const perQueryTracking = deps.perQueryTracking ?? (await perQueryTrackingAvailable(db()));
   const enqueueMany: EnqueueManyFn = deps.enqueueMany ?? ((items) => platformEnqueueMany(items));
   const result = await runMaintenance(db(), ctx.brand.market, adapters, { perQueryTracking, enrich: { brand: ctx.brand, enqueueMany, env: env() } });
   if (result.enrichQueued > 0) (deps.kick ?? kickDrain)([ENRICH_KIND]);
   logger.info(TAG, 'jobs-maintain', { brand: ctx.brand.id, ...result });
-  return { processed: result.expired + result.missed + result.dedupeRepaired + result.enrichQueued, ...result };
+  return { processed: result.expired + result.missed + result.unseenMainland + result.dedupeRepaired + result.enrichQueued, ...result };
 };

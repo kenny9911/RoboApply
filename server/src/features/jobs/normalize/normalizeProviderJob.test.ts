@@ -274,6 +274,21 @@ describe('fixtures: recruiter banks (zh, en)', () => {
     expect(normalizeProviderJob({ ...input, externalId: 'activejobs:pd1' }, 'activejobs', { now, publicDisplayProviders: ['activejobs'] }).publicDisplay).toBe(true);
   });
 
+  it('PUBLIC_DISPLAY_PROVIDERS=activejobs covers the licensed feed: one licence, the same rows, so the feed does not turn a public row private again', () => {
+    const input = { externalId: 'activejobs:pd2', title: 'Data Analyst', company: 'Acme', applyUrl: 'https://careers.acme.example/9', description: 'Analyse data.' };
+    const viaSearch = normalizeProviderJob(input, 'activejobs', { now, publicDisplayProviders: ['activejobs'] });
+    const viaFeed = normalizeProviderJob(input, 'activejobs_feed', { now, publicDisplayProviders: ['activejobs'] });
+    // The two adapters write one row (same board, same id), and the upsert overwrites the flag: they must agree.
+    expect([viaFeed.sourceBoard, viaFeed.externalId]).toEqual([viaSearch.sourceBoard, viaSearch.externalId]);
+    expect(viaSearch.publicDisplay).toBe(true);
+    expect(viaFeed.publicDisplay).toBe(true);
+    // Naming the feed's own id still works; with neither named, neither is public.
+    expect(normalizeProviderJob(input, 'activejobs_feed', { now, publicDisplayProviders: ['activejobs_feed'] }).publicDisplay).toBe(true);
+    for (const provider of ['activejobs', 'activejobs_feed'] as const) expect(normalizeProviderJob(input, provider, { now, publicDisplayProviders: ['ats_public'] }).publicDisplay, provider).toBe(false);
+    // The feed's id names the feed alone: it is a narrower grant, never a wider one.
+    expect(normalizeProviderJob(input, 'activejobs', { now, publicDisplayProviders: ['activejobs_feed'] }).publicDisplay).toBe(false);
+  });
+
   it('a bank job without syndication consent is not publicly displayed', () => {
     const job = normalizeProviderJob(inputFromBankJob(bank.robohire_en, 'robohire', { applyUrl: 'https://robohire.example/jobs/x' })!, 'bank_robohire', { now });
     expect(job.publicDisplay).toBe(false);
@@ -1005,10 +1020,15 @@ describe('MKT-3C JI-5: atsPostingKey, the exact posting key', () => {
     expect(normalizeProviderJob({ ...base, externalId: `${externalIdFor(token, postingId)}#cn`, sourceBoard: board, applyUrl: url }, 'ats_public', { now }).atsPostingKey).toBe(job.atsPostingKey);
   });
 
-  it('an employer-board row of a system with no key rule yet falls back to what its links name', () => {
+  // Since the M5 gate every board system the connectors read has a key rule (normalize/ats.ts BOARD_KEY_ATS;
+  // MKT-5B added Workable, Recruitee, Personio, Lever EU and 北森), so a Workable row takes its key from its own
+  // board and id like the first four, also when its link names no tenant.
+  it('a row of a board system added in M5 takes its key from its own board and externalId; a system with no key rule falls back to what its links name', () => {
     const job = normalizeProviderJob({ ...base, externalId: 'acme:1A2B3C4D5E', sourceBoard: 'workable', applyUrl: 'https://apply.workable.com/acme/j/1A2B3C4D5E' }, 'ats_public', { now });
     expect(job.atsPostingKey).toBe('workable:acme:1a2b3c4d5e');
-    expect(normalizeProviderJob({ ...base, externalId: 'acme:1', sourceBoard: 'workable', applyUrl: 'https://careers.acme.example/1' }, 'ats_public', { now }).atsPostingKey).toBeNull();
+    expect(normalizeProviderJob({ ...base, externalId: 'acme:1', sourceBoard: 'workable', applyUrl: 'https://careers.acme.example/1' }, 'ats_public', { now }).atsPostingKey).toBe('workable:acme:1');
+    // A board system the connectors do not read (no key rule): the links decide, and these name no posting.
+    expect(normalizeProviderJob({ ...base, externalId: 'acme:1', sourceBoard: 'futureats', applyUrl: 'https://careers.acme.example/1' }, 'ats_public', { now }).atsPostingKey).toBeNull();
   });
 });
 

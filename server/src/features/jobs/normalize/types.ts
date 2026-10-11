@@ -181,6 +181,13 @@ export interface ProviderJobInput {
    * shift out of free text (JT-7).
    */
   workShift?: string | null;
+  /**
+   * Statements the source itself makes about the posting (who may apply, a hiring path, a staff category),
+   * each with the source's own words. Stored in `RAJob.marketTags` and merged by tag on re-ingest. Only the
+   * tags the normalizer knows are kept (`usajobs_hiring_path`, `tw_gov_person_kind`; a quote is required); a
+   * tag another module owns (enrichment's requirement tags, an employer tag) is not accepted here.
+   */
+  marketTags?: readonly { tag: string; evidenceQuote: string; evidenceUrl?: string | null }[] | null;
 
   /** A provider education label ("本科", "bachelor", "associate", "不限"). */
   educationLevel?: string | null;

@@ -159,12 +159,12 @@ describe('the gate: the mainland only with a paid plan', () => {
     const cn: DemandTuple = { market: 'cn', taxonomyId: 'product_manager', q: 'Product manager', country: 'CN', origin: 'demand', users: 4 };
     expect(planQueries([cn], [adapter])).toEqual([]);
     expect(plannableAdapters([adapter], 'cn')).toEqual({ open: [], skipped: ['activejobs'] });
-    // No plan stated at all (no response read, FANTASTIC_MONTHLY_JOBS unset): off too. The gate has a reason of its
-    // own for it; the registry reports the plan gate's one code, which the System panel shows as 'gated'.
+    // No plan stated at all (no response read, FANTASTIC_MONTHLY_JOBS unset): off too, with a reason of its own,
+    // which the System panel shows as 'gated' like the other plan-gate code.
     plan('none');
     expect(adapterEnabledFor(adapter, 'cn')).toBe(false);
     expect(feedGateForMarket('cn').reason).toBe('plan_unknown');
-    expect(runWithBrand('goapply', () => adapter.disabledReason!())).toBe('plan_too_small');
+    expect(runWithBrand('goapply', () => adapter.disabledReason!())).toBe('plan_unknown');
     expect(planQueries([cn], [adapter])).toEqual([]);
   });
 

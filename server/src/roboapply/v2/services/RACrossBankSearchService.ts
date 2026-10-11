@@ -32,7 +32,7 @@ import { raCrossBankExplorerAgent } from '../agents/RACrossBankExplorerAgent.js'
 import { raCrossBankInsightAgent } from '../agents/RACrossBankInsightAgent.js';
 import { evaluateCachedScore } from './RAOnboardingRecommendService.js';
 import { bankReadsMirror, listEnabledBanks } from '../lib/raBankClients.js';
-import { bankMirrorSyncAge, searchBank, type BankMirrorSyncAge } from '../lib/raBankProviders.js';
+import { bankMirrorSyncAge, mirrorRowListable, searchBank, type BankMirrorSyncAge } from '../lib/raBankProviders.js';
 import { RA_DEFAULT_LOCALE } from '../lib/raLocale.js';
 import {
   deriveCandidateSignals,
@@ -227,11 +227,12 @@ export class RACrossBankSearchService {
       for (const bank of new Set(mirrored.map((c) => c.bank))) {
         const ids = mirrored.filter((c) => c.bank === bank).map((c) => c.job.id);
         try {
-          const found: Array<{ id: string; externalId: string }> = await p.rAJob.findMany({
-            where: { sourceBoard: bank, externalId: { in: ids }, archivedAt: null, visibility: 'public' },
-            select: { id: true, externalId: true },
+          // The feed's lifecycle and fraud scope once more: a row closed or flagged since it was retrieved is not shown.
+          const found: Array<{ id: string; externalId: string; fraudFlags?: unknown }> = await p.rAJob.findMany({
+            where: { sourceBoard: bank, externalId: { in: ids }, archivedAt: null, closedAt: null, visibility: 'public' },
+            select: { id: true, externalId: true, fraudFlags: true },
           });
-          for (const row of found) raJobIdByKey.set(`${bank}:${row.externalId}`, row.id);
+          for (const row of found) if (mirrorRowListable(row)) raJobIdByKey.set(`${bank}:${row.externalId}`, row.id);
         } catch (err) {
           logger.error(TAG, 'mirror id lookup failed', { bank, error: err instanceof Error ? err.message : String(err) }, input.requestId);
         }

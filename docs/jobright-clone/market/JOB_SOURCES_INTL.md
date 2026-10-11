@@ -240,6 +240,8 @@ Filters that keep the bill down, all documented parameters:
 
 `GET data.usajobs.gov/api/Search` with `DatePosted=1` daily (and `=7` on first run), `ResultsPerPage=500`, paging until exhausted. Store `ApplicationCloseDate` as `expiresAt`, pay range as stated, and the hiring path (public / federal employees only) as an eligibility tag.
 
+*As confirmed when the adapter was built (MKT-5D, the developer site read on 2026-10-12; the API itself was not called):* the request carries three headers, `Host: data.usajobs.gov`, `User-Agent` (the e-mail address the key was requested with) and `Authorization-Key`. The API's terms of service state that the search data is public data under an open licence (store, publish, redistribute, commercial use, no approval), that attribution is encouraged and not required, and that nobody may imply that OPM runs or endorses the product (`docs/job-search/SOURCE_REGISTER.md`, row `usajobs`). The developer site states a limit of 10,000 rows a query.
+
 ### 6.5 Role taxonomy × location × date window, in general
 
 | Dimension | Board sync | Feed sync | Search providers |

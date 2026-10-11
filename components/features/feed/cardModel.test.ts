@@ -229,6 +229,12 @@ describe('source line, dates, extras', () => {
     expect(sourceLine(feedItem(1, { source: { name: 'Greenhouse', kind: 'ats_public' } }))).toEqual({ key: 'ats_public', name: 'Greenhouse' });
     expect(sourceLine(feedItem(1, { source: { name: '', kind: 'user_import' } }))).toEqual({ key: 'user_import' });
     expect(sourceLine(feedItem(1, { source: { name: '  ', kind: 'provider' } }))).toBeNull();
+    // JT-8 (M5 gate, MKT-5F Request 6): a Taiwan row found through Google's job index does not name the aggregator;
+    // the Taiwan slot prints "{publisher} · found through Google job search" instead (twExtras.test.tsx).
+    const viaGoogle = { ...feedItem(1, { source: { name: 'JSearch', kind: 'provider' } }), cardMeta: { tw_sources: { via: 'google_jobs', publisher: '104人力銀行', url: 'https://www.104.com.tw/job/abc12' } } };
+    expect(sourceLine(viaGoogle as never)).toBeNull();
+    // An open-data row (an attribution, no `via`) and any other provider row keep their source line.
+    expect(sourceLine({ ...feedItem(1), cardMeta: { tw_sources: { attribution: { text: 'x', url: null } } } } as never)).toEqual({ key: 'provider', name: 'Example Jobs API' });
   });
 
   it('formats dates and rejects broken ones', () => {

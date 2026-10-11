@@ -41,7 +41,9 @@ describe('adapterCostModel', () => {
     expect(adapterCostModel(getSourceAdapter('ats_public')!)).toBe('free');
     expect(adapterCostModel(getSourceAdapter('bank_robohire')!)).toBe('free');
     expect(adapterCostModel(getSourceAdapter('bank_gohire')!)).toBe('free');
-    expect(registeredSourceAdapters().map((a) => a.provider).sort()).toEqual(['activejobs', 'ats_public', 'bank_gohire', 'bank_robohire', 'jsearch']);
+    // The licensed feed is a built-in adapter since MKT-5A (registered on or off; its gate decides whether it runs).
+    expect(adapterCostModel(getSourceAdapter('activejobs_feed')!)).toBe('per_job');
+    expect(registeredSourceAdapters().map((a) => a.provider).sort()).toEqual(['activejobs', 'activejobs_feed', 'ats_public', 'bank_gohire', 'bank_robohire', 'jsearch']);
     // JI-2: the only source billed per request is the one that must never get an SEO seed query.
     expect(registeredSourceAdapters().filter((a) => adapterCostModel(a) === 'per_request').map((a) => a.provider)).toEqual(['jsearch']);
   });
@@ -76,14 +78,15 @@ describe('adapterCostModel: providers that are not a source', () => {
 });
 
 describe('adapterQueryLanguages', () => {
-  it('JSearch reads English and Traditional Chinese role labels; every other provider English only', () => {
+  it('JSearch reads English and Traditional Chinese role labels, Active Jobs DB English and Simplified Chinese (JC-6); every other provider English only', () => {
     expect(adapterQueryLanguages(createRapidApiAdapter('jsearch'))).toEqual(['en', 'zh-TW']);
-    expect(adapterQueryLanguages(createRapidApiAdapter('activejobs'))).toEqual(['en']);
+    // The adapter declares it (MKT-5A: it serves the mainland behind the plan gate); the provider id alone still defaults to English.
+    expect(adapterQueryLanguages(createRapidApiAdapter('activejobs'))).toEqual(['en', 'zh-CN']);
     for (const provider of ['activejobs', 'activejobs_feed', 'usajobs', 'tw_open_data', 'tw_gov_jobs', 'ats_public', 'bank_robohire', 'bank_gohire'] as IngestProvider[]) {
       expect(adapterQueryLanguages({ provider }), provider).toEqual(['en']);
     }
-    // No provider is asked in Simplified Chinese unless its adapter says it reads it.
-    for (const adapter of [createRapidApiAdapter('jsearch'), createRapidApiAdapter('activejobs')]) expect(adapterQueryLanguages(adapter)).not.toContain('zh-CN');
+    // No provider is asked in Simplified Chinese unless its adapter says it reads it: JSearch never does.
+    expect(adapterQueryLanguages(createRapidApiAdapter('jsearch'))).not.toContain('zh-CN');
   });
 
   it('a declared list wins over the default for the provider id', () => {

@@ -9,6 +9,8 @@
 // GoApply a line that only says 面议 states no pay (market `marketPayWords`).
 // The caller renders this only while `jobs.recommendations` is on (on by default on both
 // brands; GoApply's off switch is CN_RECRUITMENT_INFO_MODE=off).
+// A row that owes an open-data credit line (台灣就業通, 事求人) carries the sentence in
+// `cardMeta.tw_sources.attribution`; it is printed under the card, outside the card's link.
 
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
@@ -16,6 +18,8 @@ import { useLocale, useTranslations } from 'next-intl';
 import { HonestyLine } from '../../v3/primitives';
 import { useBrand } from '../../../lib/brand';
 import { marketPayWords } from '../market';
+import { TwAttributionLine } from '../market/tw/JobMetaTw';
+import { readTwSourcesMeta } from '../market/tw/meta';
 import { useSimilarJobs } from '../../../hooks/job';
 import type { SimilarJobItem } from '../../../lib/api/contracts/jobs/detail';
 import { jobDetailHref, payLine } from './format';
@@ -45,6 +49,7 @@ function SimilarCard({ item, onOpen }: { item: SimilarJobItem; onOpen?: (jobId: 
   const fit = item.fit
     ? `${t('similar.fit', { tier: item.fit.tier, score: item.fit.score })}${item.fit.kind === 'pre' ? ` · ${t('similar.quickEstimate')}` : ''}`
     : t('similar.noScore');
+  const credit = readTwSourcesMeta(item.cardMeta)?.attribution ?? null;
   return (
     <li>
       <Link
@@ -67,6 +72,7 @@ function SimilarCard({ item, onOpen }: { item: SimilarJobItem; onOpen?: (jobId: 
         <span className={styles.cardMeta}>{fit}</span>
         {item.tracker ? <span className={styles.cardMeta}>{t('similar.inApplications')}</span> : null}
       </Link>
+      {credit ? <TwAttributionLine attribution={credit} jobId={item.jobId} /> : null}
     </li>
   );
 }

@@ -160,6 +160,8 @@ const M5_LITERAL_NAMES = [
   // MKT-5A: licensed feed (JI-7), Active Jobs DB for the mainland (JC-6)
   'FANTASTIC_MONTHLY_JOBS',
   'FANTASTIC_FEED_DISABLED',
+  // Added in MKT-5A's review round, after MKT-5H had read its handoff (M5 gate).
+  'FANTASTIC_FEED_SLICE_CHECK_DISABLED',
   'FANTASTIC_TRANSPORT',
   'FANTASTIC_API_KEY',
   'FANTASTIC_API_KEY_HEADER',
@@ -771,6 +773,10 @@ describe('.env.example: the licensed feed and USAJobs (M5; JI-7, JC-6, JI-9)', (
 
   it('budgets, countries and the GoApply switch, each with its default', () => {
     expectHas(commentAbove(feed, '# FANTASTIC_MONTHLY_JOBS='), /When the responses state it too, the larger number counts\. Default unset/);
+    // M5 gate (MKT-5A Request 8, review finding 5): the two sentences an operator needs before and after buying a plan.
+    expectHas(commentAbove(feed, '# FANTASTIC_MONTHLY_JOBS='), /Required on a deployment that serves only GoApply/);
+    expectHas(commentAbove(feed, '# FANTASTIC_FEED_SLICE_CHECK_DISABLED='), /mostly indexed outside the time slice it asked for[\s\S]*Default false/);
+    expectHas(commentAbove(root, '# INGEST_QUOTA_RECHECK_HOURS=0'), /after buying or changing a plan in the middle of its period/);
     const day = commentAbove(feed, '# INGEST_FEED_DAILY_JOBS=');
     expectHas(day, /the feed and the search of both markets together/);
     expectHas(day, /Default: the monthly jobs \/ 31/);
@@ -813,10 +819,11 @@ describe('.env.example: the GoHire bank over the syndication endpoint (M5; JC-2)
   });
 
   // As built by MKT-5E (adapters/bank.ts `bankResyncDays`); not in the bundles file.
-  it('INGEST_BANK_RESYNC_DAYS: a cursor sync is read again from the beginning, 1 to 30 days, default 7', () => {
+  it('INGEST_BANK_RESYNC_DAYS: the GoHire cursor sync is read again from the beginning, 1 to 30 days, default 7; never RoboHire (MKT-5E review)', () => {
     const note = commentAbove(root, '# INGEST_BANK_RESYNC_DAYS=7');
-    expectHas(note, /read by cursor \(its database, or the GoHire syndication endpoint\) is read again from the beginning/);
+    expectHas(note, /the GoHire bank, when it is read by cursor \(the syndication endpoint or its database\), is read again from the beginning/);
     expectHas(note, /a whole number from 1 to 30; anything else means the default\. Default 7/);
+    expectHas(note, /RoboHire's sync is never re-read for its age/);
   });
 });
 

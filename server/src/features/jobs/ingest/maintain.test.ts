@@ -416,8 +416,9 @@ describe('MKT-5C JI-10: a mainland row no source has confirmed for 45 days is ar
 
 describe('MKT-3C JI-5 / JC-7: stored dedupe priorities follow PROVIDER_META (alignSourcePriority)', () => {
   it('the targets are the two providers whose number changed, read from PROVIDER_META', () => {
+    // Every board system the connectors read (nine since MKT-5B), not a literal list that goes stale.
     expect(priorityTargets()).toEqual([
-      { boards: ['greenhouse', 'lever', 'ashby', 'smartrecruiters'], priority: 5 },
+      { boards: [...PUBLIC_ATS], priority: 5 },
       { boards: ['gohire'], priority: 3 },
     ]);
     expect(priorityTargets()[0]).toEqual({ boards: [...PUBLIC_ATS], priority: PROVIDER_META.ats_public.sourcePriority });
@@ -444,10 +445,10 @@ describe('MKT-3C JI-5 / JC-7: stored dedupe priorities follow PROVIDER_META (ali
       row({ id: 'intl_robohire', market: 'intl', sourceBoard: 'robohire', sourcePriority: 15 }),
     ];
     const { db, sql } = tableDb(rows);
-    expect(await alignSourcePriority(db, 'cn')).toBe(6);
+    expect(await alignSourcePriority(db, 'cn')).toBe(PUBLIC_ATS.length + 2);
     expect(sql).toHaveLength(2); // one UPDATE per provider
     const live = rows.filter((r) => r.market === 'cn' && !r.archivedAt);
-    expect(live.filter((r) => (PUBLIC_ATS as readonly string[]).includes(r.sourceBoard)).map((r) => r.sourcePriority)).toEqual([5, 5, 5, 5]);
+    expect(live.filter((r) => (PUBLIC_ATS as readonly string[]).includes(r.sourceBoard)).map((r) => r.sourcePriority)).toEqual(PUBLIC_ATS.map(() => 5));
     expect(live.filter((r) => r.sourceBoard === 'gohire').map((r) => r.sourcePriority)).toEqual([3, 3, 3]);
     // Not touched: another provider, an archived row (the upsert writes the number when it comes back), the other market.
     expect(rows.find((r) => r.id === 'cn_feed')!.sourcePriority).toBe(10);

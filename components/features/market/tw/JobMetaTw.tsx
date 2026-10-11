@@ -76,7 +76,7 @@ export function readTwProvenance(meta: MarketCardMeta | null | undefined): TwPro
  * licence text (plain text when the server sent no safe link). `lang` marks
  * it as Traditional Chinese in every locale.
  */
-function Attribution({ attribution, jobId }: { attribution: TwAttribution; jobId: string }) {
+export function TwAttributionLine({ attribution, jobId }: { attribution: TwAttribution; jobId: string }) {
   return (
     <p className={styles.source} lang="zh-Hant" data-tw-attribution="" data-job-id={jobId}>
       {attribution.url ? (
@@ -127,7 +127,7 @@ export function JobMetaTw({ jobId, meta, variant }: MarketJobMetaSlotProps) {
     return (
       <>
         {provenance ? <Provenance provenance={provenance} jobId={jobId} /> : null}
-        {attribution ? <Attribution attribution={attribution} jobId={jobId} /> : null}
+        {attribution ? <TwAttributionLine attribution={attribution} jobId={jobId} /> : null}
       </>
     );
   }
@@ -149,7 +149,7 @@ export function JobMetaTw({ jobId, meta, variant }: MarketJobMetaSlotProps) {
           ))}
         </ul>
         {provenance ? <Provenance provenance={provenance} jobId={jobId} /> : null}
-        {attribution ? <Attribution attribution={attribution} jobId={jobId} /> : null}
+        {attribution ? <TwAttributionLine attribution={attribution} jobId={jobId} /> : null}
       </>
     );
   }
@@ -195,7 +195,7 @@ export function JobMetaTw({ jobId, meta, variant }: MarketJobMetaSlotProps) {
           ) : null}
         </p>
       ) : null}
-      {attribution ? <Attribution attribution={attribution} jobId={jobId} /> : null}
+      {attribution ? <TwAttributionLine attribution={attribution} jobId={jobId} /> : null}
     </section>
   );
 }

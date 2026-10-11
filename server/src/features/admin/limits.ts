@@ -36,11 +36,10 @@ export { dailyCallLimit } from '../jobs/ingest/index.js';
 /**
  * Postings a month the licensed feed's plan must allow before the feed sync
  * turns itself on (MARKET_STRATEGY M-2). The System panel shows a feed source
- * on a smaller plan as 'gated'. The feed itself is built in a later phase
- * (JI-7); when its quota gate exports this number from the ingest area,
- * re-export it here instead (one definition per limit, as above).
+ * on a smaller plan as 'gated'. One definition: the feed's own quota gate
+ * (jobs/ingest/config.ts, MKT-5A).
  */
-export const FEED_MIN_MONTHLY_JOBS = 20_000;
+export { FEED_MIN_MONTHLY_JOBS } from '../jobs/ingest/index.js';
 
 // The daily limit ingest enforces is not the configured bound alone: ingest
 // spreads what is left of the plan's monthly quota over the days to its reset,

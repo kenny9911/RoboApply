@@ -28,6 +28,7 @@ import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import { cn } from '../../../lib/utils';
 import { useBrand } from '../../../lib/brand';
 import { marketMetaCoversBasics, marketPayWords } from '../market';
+import { foundThroughJobSearch } from '../feed/cardModel';
 import type { JobDetailResponse } from '../../../lib/api/contracts/jobs/detail';
 import { initialOf, jobDetailHref, payLine, validDate } from './format';
 import styles from './job.module.css';
@@ -98,6 +99,8 @@ export function JobHeader({ detail, mode, onClose, actions }: JobHeaderProps) {
   if (job.employmentType && KNOWN_EMPLOYMENT.has(job.employmentType)) chips.push(t(`header.employmentType.${job.employmentType}`));
   if (job.seniority && KNOWN_SENIORITY.has(job.seniority)) chips.push(t(`header.seniority.${job.seniority}`));
 
+  // Found through Google's job index (Taiwan): the page's Taiwan block names the publisher with its link; the aggregator is not named (JT-8).
+  const foundThroughSearch = !ownImport && foundThroughJobSearch(detail.marketMeta);
   const sourceLine = ownImport
     ? t('header.source.user_import')
     : job.source.name
@@ -169,8 +172,8 @@ export function JobHeader({ detail, mode, onClose, actions }: JobHeaderProps) {
           {!slotHasBasics && posted ? <span data-testid="job-posted">{t('header.posted', { date: fmt(posted) })}</span> : null}
           {!slotHasBasics && firstSeen ? <span data-testid="job-first-seen">{t('header.firstSeen', { date: fmt(firstSeen) })}</span> : null}
           {!slotHasBasics && checked ? <span data-testid="job-last-checked">{t('header.lastChecked', { date: fmt(checked) })}</span> : null}
-          {!slotHasBasics ? <span data-testid="job-source">{sourceLine}</span> : null}
-          {!slotHasBasics && job.source.originalName && job.source.originalName !== job.source.name ? (
+          {!slotHasBasics && !foundThroughSearch ? <span data-testid="job-source">{sourceLine}</span> : null}
+          {!slotHasBasics && !foundThroughSearch && job.source.originalName && job.source.originalName !== job.source.name ? (
             <span>{t('header.originalSource', { sourceName: job.source.originalName })}</span>
           ) : null}
           {job.visibility === 'private' ? <span>{t('header.private')}</span> : null}

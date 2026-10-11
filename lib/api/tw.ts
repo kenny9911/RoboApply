@@ -2,8 +2,8 @@
 //
 // Thin typed wrappers over the area contract, plus the few pure helpers the
 // note and the filters share (no React here). Owner: MKT-5F.
-// Types are the contract's own (server/src/features/tw/contract.ts, type-only
-// import: nothing of the server reaches the browser bundle).
+// Types are the contract's own, through its mirror (lib/api/contracts/tw.ts, type-only:
+// nothing of the server reaches the browser bundle).
 //
 // Endpoints (every one answers 404 feature_disabled on GoApply, so GoApply
 // screens never call them):
@@ -13,9 +13,9 @@
 //   PUT /api/v1/roboapply/admin/tw/pay-rule
 
 import { call, type CallOptions, type In } from './contracts/wire';
-import type * as TW from '../../server/src/features/tw/contract';
+import type * as TW from './contracts/tw';
 
-export type { TwCountyView, TwDistrictView, TwDistrictsResponse, TwPayRuleAdminView, TwPayRuleView } from '../../server/src/features/tw/contract';
+export type { TwCountyView, TwDistrictView, TwDistrictsResponse, TwPayRuleAdminView, TwPayRuleView } from './contracts/tw';
 
 /** Body of PUT /admin/tw/pay-rule (contract `PutTwPayRuleBodySchema`). */
 export type PutTwPayRuleBody = In<typeof TW.PutTwPayRuleBodySchema>;

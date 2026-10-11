@@ -42,14 +42,11 @@ export const PUBLIC_ATS = ['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'w
 /** A job-board system: any entry of PUBLIC_ATS. */
 export type BoardAts = (typeof PUBLIC_ATS)[number];
 /**
- * The four systems read since WP-42. KEPT NARROW ON PURPOSE (MKT-5B):
- * components/v3/admin/SourcesConsole.tsx keys a `Record` by this type and
- * indexes it with `CareerSourceView.ats`, and that file has no owner in M5, so
- * widening the type would break the web type-check there. Server code uses
- * `BoardAts`. Once that console reads its list from the contract mirror
- * (handoff MKT-5B, Requests), this alias becomes `BoardAts` and goes.
+ * The older name of `BoardAts` (WP-42). An alias since the M5 gate: both admin
+ * consoles read their list of systems from the contract mirror
+ * (components/features/market/tw/meta.ts), so nothing keys a record by four systems any more.
  */
-export type PublicAts = Extract<BoardAts, 'greenhouse' | 'lever' | 'ashby' | 'smartrecruiters'>;
+export type PublicAts = BoardAts;
 
 /** A board id as the job-board system writes it in its URLs. */
 export const BOARD_TOKEN_PATTERN = /^[A-Za-z0-9_.-]{1,120}$/;
@@ -139,13 +136,8 @@ export interface CareerSourceView {
   id: string;
   /** The console that added the board. Display only. */
   market: 'intl' | 'cn';
-  /**
-   * The board's system. Sent as stored: ANY entry of PUBLIC_ATS (`BoardAts`).
-   * The static type is still the four systems of WP-42 only because of the
-   * console named at `PublicAts`; a reader must not assume the value is one of
-   * the four (both consoles already fall back to the raw id).
-   */
-  ats: PublicAts;
+  /** The board's system. Sent as stored: any entry of PUBLIC_ATS (both consoles fall back to the raw id for a value they do not know). */
+  ats: BoardAts;
   boardToken: string;
   companyName: string;
   companyId: string | null;

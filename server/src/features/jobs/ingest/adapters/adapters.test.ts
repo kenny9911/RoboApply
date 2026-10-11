@@ -41,7 +41,7 @@ import { resetBankPublicJobUrlWarningsForTests } from '../../../../roboapply/v2/
 import { normalizeFantasticJob } from '../../../../roboapply/v2/lib/raFantasticJobs.js';
 import { normalizeJSearchJob } from '../../../../roboapply/v2/lib/raRapidApiJobs.js';
 import { getBrand, runWithBrand } from '../../../../platform/brand/index.js';
-import { getSourceAdapter, jobSourcesForBrand, registerSourceAdapter, resetJobSourceWarningsForTests, resetSourceAdaptersForTests } from '../../sources/index.js';
+import { adapterEnabledFor, getSourceAdapter, jobSourcesForBrand, registerSourceAdapter, resetJobSourceWarningsForTests, resetSourceAdaptersForTests } from '../../sources/index.js';
 import type { JobSourceAdapter, SourceQuery } from '../../sources/index.js';
 import { normalizeProviderJob } from '../../normalize/index.js';
 import { adaptersForBrand, ingestProvidersForBrand, resetBuiltinAdaptersForTests, sourcesForBrand } from '../providers.js';
@@ -1275,8 +1275,11 @@ describe('providers per brand and the source registry', () => {
     expect(adaptersForBrand(getBrand('goapply'), { CN_EXTERNAL_PROVIDERS: 'jsearch' }).map((a) => a.provider)).toEqual(['bank_gohire', 'ats_public']);
   });
 
-  it('no RapidAPI adapter serves market cn', () => {
-    for (const id of ['jsearch', 'activejobs', 'linkedin'] as const) expect(createRapidApiAdapter(id).markets).toEqual(['intl']);
+  it('JSearch never serves market cn; Active Jobs DB does, and is off there without a paid plan (JC-6)', () => {
+    for (const id of ['jsearch', 'linkedin'] as const) expect(createRapidApiAdapter(id).markets).toEqual(['intl']);
+    const activejobs = createRapidApiAdapter('activejobs');
+    expect(activejobs.markets).toEqual(['intl', 'cn']);
+    expect(adapterEnabledFor(activejobs, 'cn')).toBe(false);
   });
 
   it('JOB_PROVIDERS_<BRAND> narrows a brand to a subset and never adds a source', () => {
@@ -1299,14 +1302,16 @@ describe('providers per brand and the source registry', () => {
     const go = sourcesForBrand(getBrand('goapply'), {});
     expect(go.map((s) => [s.provider, s.kind, s.market])).toEqual([
       ['bank_gohire', 'bank', 'cn'],
+      ['activejobs', 'search', 'cn'],
+      ['activejobs_feed', 'search', 'cn'],
       ['ats_public', 'ats', 'cn'],
       ['user_import', 'import', 'cn'],
     ]);
     expect(go.find((s) => s.provider === 'ats_public')!.status()).toEqual({ enabled: true, transport: 'board_api', reason: null });
     expect(go.find((s) => s.provider === 'user_import')!.adapter).toBeNull();
     const robo = sourcesForBrand(getBrand('roboapply'), {});
-    expect(robo.map((s) => s.provider)).toEqual(['activejobs', 'bank_robohire', 'jsearch', 'ats_public', 'user_import']);
-    expect(robo.map((s) => s.kind)).toEqual(['search', 'bank', 'search', 'ats', 'import']);
+    expect(robo.map((s) => s.provider)).toEqual(['activejobs', 'activejobs_feed', 'bank_robohire', 'jsearch', 'ats_public', 'user_import']);
+    expect(robo.map((s) => s.kind)).toEqual(['search', 'search', 'bank', 'search', 'ats', 'import']);
     // Without the built-in adapters registered a source reads as not registered, never as on.
     resetSourceAdaptersForTests();
     resetBuiltinAdaptersForTests();

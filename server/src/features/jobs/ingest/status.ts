@@ -57,10 +57,15 @@ export const SOURCE_STATUS_NOTES = [
   'bank_closed',
   'bank_page_cap',
   'bank_pass_cut_short',
-  // Employer boards.
+  // The GoHire syndication transport and the weekly re-read (MKT-5E).
+  'bank_validity_ended',
+  'bank_time_without_zone',
+  'bank_reread_started',
+  // Employer boards. `country_not_selected`: postings of a board read for some countries only (MKT-5B).
   'boards_read',
   'board_errors',
   'board_backlog',
+  'country_not_selected',
   // Why the pipeline left a posting out.
   'wrong_market',
   'no_apply_url',

@@ -1051,6 +1051,35 @@ describe('the two transports on the wire (fetch mocked): search and feedRequest'
     expect(await feedRequest('active', FEED_PARAMS)).toEqual({ ok: false, error: 'timeout', status: null, called: true });
   });
 
+  it('a redirect is never followed, on either transport and on the retry after a burst limit: the key would travel with it', async () => {
+    for (const direct of [false, true]) {
+      __test.reset();
+      if (direct) useDirect();
+      const fn = mockReplies({ status: 200, body: [atsRow()] });
+      await feedRequest('active', FEED_PARAMS);
+      await searchFantasticJobs('activejobs', { query: `engineer ${direct}`, country: 'us' });
+      expect(fn).toHaveBeenCalledTimes(2);
+      for (const call of fn.mock.calls) expect((call[1] as { redirect?: string }).redirect, String(call[0]).slice(0, 60)).toBe('error');
+      // The second request of a burst-limited call is the same request.
+      __test.reset();
+      if (direct) useDirect();
+      const burst = mockReplies({ status: 429, body: { message: 'Too many requests' } }, { status: 200, body: [] });
+      await feedRequest('active', FEED_PARAMS);
+      expect(burst).toHaveBeenCalledTimes(2);
+      for (const call of burst.mock.calls) expect((call[1] as { redirect?: string }).redirect).toBe('error');
+    }
+    // What fetch throws for a redirect it was told not to follow is a short code of its own, not "network".
+    __test.reset();
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      throw new TypeError('fetch failed', { cause: new Error('unexpected redirect') });
+    }));
+    expect(await feedRequest('active', FEED_PARAMS)).toEqual({ ok: false, error: 'redirect', status: null, called: true });
+    // A fetch that ignores the option and hands back the 3xx: still not followed and not read as an answer.
+    __test.reset();
+    mockReplies({ status: 302, body: '', headers: { location: 'https://elsewhere.example/steal' } });
+    expect(await feedRequest('active', FEED_PARAMS)).toEqual({ ok: false, error: 'http_302', status: 302, called: true });
+  });
+
   it('no key value appears in a result, a log line or an error text, on either transport', async () => {
     const results: unknown[] = [];
     for (const direct of [false, true]) {

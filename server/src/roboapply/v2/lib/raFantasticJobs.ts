@@ -661,8 +661,11 @@ type UpstreamAnswer =
  * One GET with the provider's guards: a monthly-quota 429 and a 401 / 403
  * open the breaker; a burst 429 gets one jittered retry (a second upstream
  * call, so the gate is asked again); every upstream response is reported to
- * the quota listener. Throws only what `fetch` throws (network, abort): the
- * caller's own catch turns that into its "unavailable" answer.
+ * the quota listener. Throws only what `fetch` throws (network, abort, a
+ * redirect): the caller's own catch turns that into its "unavailable" answer.
+ * A redirect is never followed (`redirect: 'error'`): on a redirect to another
+ * origin fetch drops only `Authorization`, so the marketplace key header, or a
+ * direct key under a FANTASTIC_API_KEY_HEADER override, would travel with it.
  *
  * One exception, by route. A 401 / 403 on the EXPIRED route is a refusal of
  * that route, not of the key: the marketplace answers 403 for a part of the
@@ -683,7 +686,7 @@ async function getUpstream(
   requestId?: string,
   route: FantasticRoute = 'active',
 ): Promise<UpstreamAnswer> {
-  let response = await fetch(url, { method: 'GET', headers, signal });
+  let response = await fetch(url, { method: 'GET', headers, signal, redirect: 'error' });
 
   if (response.status === 429) {
     const bodyText = await response.text().catch(() => '');
@@ -695,7 +698,7 @@ async function getUpstream(
     // Per-second burst: one jittered retry (a second upstream call, so the gate is asked again).
     await jitteredDelay(300 + Math.random() * 500, signal);
     if (!gateAllows(board, purpose, false)) return { ok: false, reason: 'gate', status: null };
-    response = await fetch(url, { method: 'GET', headers, signal });
+    response = await fetch(url, { method: 'GET', headers, signal, redirect: 'error' });
     if (response.status === 429) {
       const retryText = await response.text().catch(() => '');
       await reportQuota(board, response, retryText, purpose);
@@ -958,7 +961,10 @@ export const feedRequest: FeedRequestFn = async (route, params, opts) => {
   } catch (err) {
     const name = (err as { name?: unknown } | null)?.name;
     logger.warn('RA_V2_FANTASTIC_FAILED', 'Fantastic Jobs feed request failed', { requestId: opts?.requestId, board, route, errorType: typeof name === 'string' ? name.slice(0, 40) : 'UnknownError' });
-    return { ok: false, error: (err as { name?: unknown } | null)?.name === 'AbortError' ? 'timeout' : 'network', status: null, called: true };
+    if ((err as { name?: unknown } | null)?.name === 'AbortError') return { ok: false, error: 'timeout', status: null, called: true };
+    // What fetch throws for a redirect it was told not to follow (the message, or its cause, names it).
+    const refusedRedirect = err instanceof TypeError && /redirect/i.test(`${err.message} ${String((err as { cause?: unknown }).cause ?? '')}`);
+    return { ok: false, error: refusedRedirect ? 'redirect' : 'network', status: null, called: true };
   } finally {
     release();
   }

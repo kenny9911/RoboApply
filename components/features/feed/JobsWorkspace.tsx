@@ -236,7 +236,9 @@ export function JobsWorkspace() {
             <div className={styles.toolbar}>
               <SortMenu value={sort} market={market} onChange={setSort} />
             </div>
-            {rankedByWords ? (
+            {rankedByWords && feed.relevanceApplied !== false ? (
+              // Left out when the first page says the words took no part in the order (no posting matched them, or
+              // hybrid retrieval is off): the page never says "ranked by" for a list that was not (MKT-5C O-7).
               // The notice surface with the toolbar's layout: the words on the left, "Clear" on the right, centred.
               <div className={`${styles.notice} ${styles.toolbar}`} role="status" data-testid="ranked-by">
                 <span>{tNl('chip', { terms: rankedByWords.terms.join(', ') })}</span>

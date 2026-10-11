@@ -21,6 +21,8 @@ import { call, type CallOptions, type In, type Items, seg, withQuery } from './c
 import type * as CS from './contracts/jobs/sources/atsPublic';
 
 export type {
+  BoardAts,
+  CareerSourceListResult,
   CareerSourceOrigin,
   CareerSourceRunResult,
   CareerSourceState,
@@ -34,8 +36,8 @@ export type {
 } from './contracts/jobs/sources/atsPublic';
 
 /** `careerSources.list` — GET /api/v1/roboapply/admin/career-sources */
-export function adminListCareerSources(query?: In<typeof CS.ListCareerSourcesQuerySchema>, opts?: CallOptions): Promise<Items<CS.CareerSourceView>> {
-  return call<Items<CS.CareerSourceView>>('GET', withQuery(`/api/v1/roboapply/admin/career-sources`, query), opts);
+export function adminListCareerSources(query?: In<typeof CS.ListCareerSourcesQuerySchema>, opts?: CallOptions): Promise<CS.CareerSourceListResult> {
+  return call<CS.CareerSourceListResult>('GET', withQuery(`/api/v1/roboapply/admin/career-sources`, query), opts);
 }
 
 /** `careerSources.create` — POST /api/v1/roboapply/admin/career-sources */

@@ -54,7 +54,7 @@
         "name_unconfirmed": "The board does not say which company it belongs to, so it could not be confirmed. Turn it on if it is the right one.",
         "connector_disabled": "This job board system is switched off here, so the board is not read.",
         "tenant_denied": "This board is on the do-not-read list. It is not read and its jobs were taken out.",
-        "tenant_floor": "This board was read less than 30 minutes ago. Try again later."
+        "tenant_floor": "This board was asked less than 30 minutes ago. Try again later."
       },
       "import": {
         "title": "Add many boards",

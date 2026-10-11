@@ -97,7 +97,8 @@ export function createFeedRouter(deps: FeedRouterDeps = {}): Router {
     route(async (req) => {
       const body = parseBody(req, FeedQueryBodySchema);
       const { ctx, service } = await ctxOf(req);
-      return service.query(ctx, body);
+      // The request language, so the skill labels of a card's fit follow it (MKT-5C O-6).
+      return service.query(ctx, { ...body, locale: localeOf(req, ctx.market) });
     }),
   );
 

@@ -3,6 +3,7 @@
 // loaded lazily so importing the router (features/index.ts mounts it at
 // boot) pulls in no LLM, queue or growth module until a request needs one.
 
+import { waitUntil } from '@vercel/functions';
 import prisma from '../../../lib/prisma.js';
 import { getCurrentBrandOrDefault } from '../../../platform/brand/index.js';
 import type { ProductBrand } from '../../../platform/brand/registry.js';
@@ -80,6 +81,9 @@ function createDefault(): JobDetailServiceImpl {
     // posting per process per 6 hours; the check writes its own answer (jobs/liveness). Off with
     // LIVENESS_CHECK_DISABLED=true.
     confirmListing: async (row) => (await import('../liveness/index.js')).confirmListing(row, { db: prisma, log: warn }),
+    // A check the page stopped waiting for (LISTING_WAIT_MS) still has to write its answer: on Vercel the function is
+    // kept alive for it; outside a Vercel request `waitUntil` throws or does nothing, and the promise runs on by itself.
+    keepAlive: (work) => waitUntil(work),
     // The reader's own answers about visa sponsorship: the same person the feed card's badges are built for
     // (match `userContext`). Read only for a job that carries a provider's reading of sponsorship.
     sponsorshipReader: async (userId) => (await (await import('../../match/index.js')).matchService.userContext(userId)).user,

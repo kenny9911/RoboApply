@@ -286,8 +286,12 @@ const LICENSED_FEED_PROVIDER = 'activejobs_feed';
  * quota: the licensed feed and the Active Jobs DB search are one subscription.
  */
 const QUOTA_ACCOUNT: Readonly<Record<string, string>> = { [LICENSED_FEED_PROVIDER]: 'activejobs' };
-/** The reason code an adapter gives when it is off until a larger plan exists. */
-const PLAN_GATE_REASON = 'plan_too_small';
+/**
+ * The reason codes an adapter gives when it is off until a plan allows it: the plan is too small, or
+ * nothing states its size yet (ingest/config.ts FEED_GATE_REASON_CODE). Both read as 'gated', never as
+ * 'exhausted': a source that never ran raises no quota alert.
+ */
+const PLAN_GATE_REASONS: ReadonlySet<string> = new Set(['plan_too_small', 'plan_unknown']);
 /** The reason code an adapter gives when it is off because the plan's quota does not allow an ingest call now. */
 const QUOTA_REASON = 'quota';
 /** The registry's code for an adapter that is off and gave no reason of its own. */
@@ -468,7 +472,7 @@ export function providerState(input: {
   // The key itself is refused: nothing else about the plan matters until that is fixed.
   if (reading && CLOSED_BY_KEY.has(reading.state)) return reading.state as ProviderState;
   // Off until a larger plan exists (M-2): the adapter says so, or the licensed feed's stated plan is under the gate.
-  if (off && (source.reason === PLAN_GATE_REASON || (input.provider === LICENSED_FEED_PROVIDER && input.planJobsLimit !== null && input.planJobsLimit < FEED_MIN_MONTHLY_JOBS))) {
+  if (off && (PLAN_GATE_REASONS.has(source.reason ?? '') || (input.provider === LICENSED_FEED_PROVIDER && input.planJobsLimit !== null && input.planJobsLimit < FEED_MIN_MONTHLY_JOBS))) {
     return 'gated';
   }
   if (reading && isUsedUp(reading)) return 'exhausted';
@@ -745,11 +749,13 @@ export function createPrismaSystemStore(db: Db = prisma): SystemStore {
       // A board is one row for both sites since MKT-3D (JC-4): the countries it is read for decide which site
       // it feeds (`sourceFeedsMarket`), and the `market` column only keeps the console that added it. Counting
       // by that column gave both brands wrong numbers for every shared board.
-      const { sourceFeedsMarket } = await import('../jobs/sources/atsPublic/index.js');
-      const rows = await db.rACareerSiteSource.findMany({ select: { countries: true, enabled: true, lastError: true }, take: CAREER_SOURCE_SCAN });
+      // `ats` too: a board of a mainland-only system (北森) feeds the mainland site alone (MKT-5B O-11).
+      const { SKIPPED_BOARD_ERRORS, sourceFeedsMarket } = await import('../jobs/sources/atsPublic/index.js');
+      const rows = await db.rACareerSiteSource.findMany({ select: { ats: true, countries: true, enabled: true, lastError: true }, take: CAREER_SOURCE_SCAN });
       const feeds = rows.filter((r) => sourceFeedsMarket(r, market === 'cn' ? 'cn' : 'intl'));
       const enabled = feeds.filter((r) => r.enabled);
-      return { total: feeds.length, enabled: enabled.length, failing: enabled.filter((r) => r.lastError !== null).length };
+      // A board that was passed over (its system is switched off here, or it is on the do-not-read list) did not fail.
+      return { total: feeds.length, enabled: enabled.length, failing: enabled.filter((r) => r.lastError !== null && !SKIPPED_BOARD_ERRORS.includes(r.lastError)).length };
     },
     async creditExhaustion(brand, range) {
       const ever = await db.$queryRaw<Array<{ one: number }>>`

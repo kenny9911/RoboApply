@@ -31,10 +31,12 @@ import {
   adminListCareerSources,
   adminRunCareerSource,
   adminUpdateCareerSource,
+  type BoardAts,
   type CareerSourceRunResult,
   type CareerSourceView,
-  type PublicAts,
 } from '../../../lib/api/careerSources';
+import { offeredSystems } from '../../features/market/tw/CareerSourcesPanel';
+import { PUBLIC_ATS_NAMES, boardSystemLabel } from '../../features/market/tw/meta';
 import { apiErrorCode, apiErrorReason } from '../../../lib/api/contracts/wire';
 import { Btn } from '../primitives/Btn';
 import { PageHeader } from '../primitives/PageHeader';
@@ -47,11 +49,14 @@ import styles from './console.module.css';
 
 type T = ReturnType<typeof useTranslations>;
 
-/** Job-board systems the server can read (vendor names are data, not copy). */
-export const BOARD_SYSTEMS: Readonly<Record<PublicAts, string>> = { greenhouse: 'Greenhouse', lever: 'Lever', ashby: 'Ashby', smartrecruiters: 'SmartRecruiters' };
+/**
+ * Job-board systems the server can read (vendor names are data, not copy): the contract mirror both
+ * consoles share (MKT-5B O-2), so GoApply's console offers the same systems as RoboApply's (D5).
+ */
+export const BOARD_SYSTEMS: Readonly<Record<BoardAts, string>> = PUBLIC_ATS_NAMES;
 
-const KNOWN_SOURCES = new Set(['ats_public', 'activejobs', 'jsearch', 'linkedin', 'tw_open_data', 'user_import']);
-const KNOWN_REASONS = new Set(['kill_switch', 'transport_off', 'tls_required', 'tls_required_no_api_key', 'no_api_key', 'not_configured', 'cross_tenant_unconfirmed', 'not_registered', 'wrong_market', 'url_invalid', 'quota', 'disabled']);
+const KNOWN_SOURCES = new Set(['ats_public', 'activejobs', 'activejobs_feed', 'jsearch', 'linkedin', 'tw_open_data', 'tw_gov_jobs', 'usajobs', 'user_import']);
+const KNOWN_REASONS = new Set(['kill_switch', 'transport_off', 'tls_required', 'tls_required_no_api_key', 'no_api_key', 'no_key', 'not_configured', 'cross_tenant_unconfirmed', 'not_registered', 'wrong_market', 'url_invalid', 'quota', 'disabled', 'plan_too_small', 'plan_unknown']);
 const KNOWN_TRANSPORTS = new Set(['db', 'api', 'syndication', 'board_api', 'rapidapi', 'off']);
 /**
  * Tallies shown, in this order; `wrong_market` reads differently on each site.
@@ -69,6 +74,7 @@ export const TALLY_ORDER = [
   'boards_read',
   'board_errors',
   'board_backlog',
+  'country_not_selected',
   'wrong_market',
   'no_apply_url',
   'missing_title_or_company',
@@ -79,6 +85,9 @@ export const TALLY_ORDER = [
   'indeed_only_link',
   'bank_page_cap',
   'bank_pass_cut_short',
+  'bank_validity_ended',
+  'bank_time_without_zone',
+  'bank_reread_started',
   // The Taiwan open-data sweep (sources/twOpenData.ts): what it finished, what failed, what it could not reach.
   'tw_sweep_finished',
   'tw_sweep_incomplete',
@@ -236,7 +245,6 @@ function CurrentBrandSources() {
 
 // ── Company job boards (GoApply) ─────────────────────────────────────────
 
-const SYSTEMS = Object.keys(BOARD_SYSTEMS) as PublicAts[];
 const BOARDS_KEY = ['admin', 'careerSources'] as const;
 
 /** Plain-language key for a stored board error code (the server's BoardFetchError codes). */
@@ -256,7 +264,7 @@ export function CareerBoardsPanel({ market }: { market: 'intl' | 'cn' }) {
   const tp = useTranslations('jobsTw.admin');
   const locale = useLocale();
   const qc = useQueryClient();
-  const [ats, setAts] = useState<PublicAts>('greenhouse');
+  const [chosenAts, setAts] = useState<BoardAts>('greenhouse');
   const [boardToken, setBoardToken] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
@@ -264,6 +272,10 @@ export function CareerBoardsPanel({ market }: { market: 'intl' | 'cn' }) {
   const [confirming, setConfirming] = useState<string | null>(null);
 
   const list = useQuery({ queryKey: [...BOARDS_KEY, market], queryFn: () => adminListCareerSources({ market }) });
+  // Only systems this deployment can read are offered (the list answer's `systems`); a system behind a flag is
+  // not named before the answer is there. A choice that is no longer offered falls back to the first.
+  const SYSTEMS = offeredSystems(list.data);
+  const ats: BoardAts = SYSTEMS.includes(chosenAts) ? chosenAts : SYSTEMS[0]!;
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: BOARDS_KEY });
     void qc.invalidateQueries({ queryKey: ['admin', 'console', 'system'] });
@@ -333,11 +345,11 @@ export function CareerBoardsPanel({ market }: { market: 'intl' | 'cn' }) {
 
       <form className={styles.filters} onSubmit={onSubmit} noValidate aria-labelledby="career-boards-add">
         <h3 id="career-boards-add" className={`${styles.factsTitle} ${styles.full}`}>{t('add.title')}</h3>
-        <p className={`${styles.muted} ${styles.full}`}>{t('systems', { names: SYSTEMS.map((s) => BOARD_SYSTEMS[s]).join(', ') })}</p>
+        <p className={`${styles.muted} ${styles.full}`}>{t('systems', { names: SYSTEMS.map(boardSystemLabel).join(', ') })}</p>
         <label className={styles.field}>
           {t('add.system')}
-          <select value={ats} onChange={(e) => setAts(e.target.value as PublicAts)}>
-            {SYSTEMS.map((s) => <option key={s} value={s}>{BOARD_SYSTEMS[s]}</option>)}
+          <select value={ats} onChange={(e) => setAts(e.target.value as BoardAts)}>
+            {SYSTEMS.map((s) => <option key={s} value={s}>{boardSystemLabel(s)}</option>)}
           </select>
         </label>
         <label className={styles.field}>
@@ -389,7 +401,7 @@ export function CareerBoardsPanel({ market }: { market: 'intl' | 'cn' }) {
                 return (
                   <tr key={row.id}>
                     <th scope="row">{row.companyName}</th>
-                    <td>{BOARD_SYSTEMS[row.ats] ?? row.ats}</td>
+                    <td>{BOARD_SYSTEMS[row.ats] ? boardSystemLabel(row.ats) : row.ats}</td>
                     <td><span className={styles.code}>{row.boardToken}</span></td>
                     <td>{t(row.enabled ? 'list.on' : 'list.off')}</td>
                     <td>{row.lastSyncedAt ? fmtLongDate(row.lastSyncedAt, locale) : t('list.never')}</td>

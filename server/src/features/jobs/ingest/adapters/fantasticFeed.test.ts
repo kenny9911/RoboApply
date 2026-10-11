@@ -251,9 +251,9 @@ describe('behind the quota gate', () => {
 
   it('each closed reason reads as the code the admin panels know', () => {
     const codes: Array<[FeedGate['reason'], string]> = [
-      // Nothing states the plan's size: the gate has a reason of its own; the registry reports it under the one code the
-      // System panel knows for a plan gate (any other code on a used-up plan reads there as 'exhausted' and raises an alert).
-      ['plan_unknown', 'plan_too_small'],
+      // Nothing states the plan's size: a code of its own since the M5 gate. The System panel reads both plan-gate codes
+      // as 'gated' (admin/system.ts PLAN_GATE_REASONS), so a used-up reading raises no alert for a source that never ran.
+      ['plan_unknown', 'plan_unknown'],
       ['plan_too_small', 'plan_too_small'],
       ['no_key', 'no_api_key'],
       ['disabled', 'kill_switch'],
@@ -282,9 +282,9 @@ describe('behind the quota gate', () => {
     const KEY = { RAPID_API_KEY: 'synthetic-rapidapi-key-0004' };
     const response = (headers: Record<string, string>) => ({ status: 200, headers: { get: (k: string) => headers[k.toLowerCase()] ?? null } });
     setQuotaDepsForTests({ db: createFakePrisma() as never, now: () => T0, env: KEY });
-    // Before any response was read nothing states the plan's size: the gate says so, the registry code is the plan gate's.
+    // Before any response was read nothing states the plan's size: the gate says so, and so does the registry code.
     expect(feedGateForMarket('intl', KEY, T0)).toEqual({ open: false, reason: 'plan_unknown', monthlyJobs: null });
-    expect(createFantasticFeedAdapter({ env: KEY, now: () => T0 }).disabledReason!()).toBe('plan_too_small');
+    expect(createFantasticFeedAdapter({ env: KEY, now: () => T0 }).disabledReason!()).toBe('plan_unknown');
     recordQuotaObservation(quotaObservationFrom('activejobs', response({ 'x-ratelimit-requests-limit': '25', 'x-ratelimit-requests-remaining': '20', 'x-ratelimit-requests-reset': '864000', 'x-ratelimit-jobs-limit': '250', 'x-ratelimit-jobs-remaining': '200' }), '', T0));
     const free = createFantasticFeedAdapter({ env: KEY, now: () => T0 });
     expect([adapterEnabledFor(free, 'intl'), adapterEnabledFor(free, 'cn'), free.disabledReason!()]).toEqual([false, false, 'plan_too_small']);
@@ -1441,10 +1441,10 @@ describe('the feed in the brand lists (providers.ts)', () => {
   it("closed (today's plan): the feed is described as off for both brands, and is no ingest adapter of either", () => {
     const described = sourcesForBrand(robo, {}).find((s) => s.provider === FEED_PROVIDER)!;
     expect(described).toMatchObject({ provider: 'activejobs_feed', kind: 'search', market: 'intl', costModel: 'per_job', sourceBoards: ['activejobs'] });
-    // No response was read in this process and no plan size is set: the gate's own reason says so; the registry
-    // reports the plan gate's one code either way (the System panel turns it into 'gated').
+    // No response was read in this process and no plan size is set: the gate's own reason says so, and the registry
+    // reports it as it is (the System panel turns either plan-gate code into 'gated').
     expect(feedGateForMarket('intl').reason).toBe('plan_unknown');
-    expect(described.status()).toEqual({ enabled: false, transport: 'rapidapi', reason: 'plan_too_small' });
+    expect(described.status()).toEqual({ enabled: false, transport: 'rapidapi', reason: 'plan_unknown' });
     recordQuotaObservation({ provider: 'activejobs', status: 200, requestsLimit: 25, requestsRemaining: 20, resetSeconds: 864_000, jobsLimit: 250, jobsRemaining: 112, plan: null, reason: null, at: new Date() });
     expect(feedGateForMarket('intl').reason).toBe('plan_too_small');
     expect(described.status()).toEqual({ enabled: false, transport: 'rapidapi', reason: 'plan_too_small' });

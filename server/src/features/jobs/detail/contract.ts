@@ -281,10 +281,10 @@ export interface SimilarJobItem extends Omit<FeedItem, 'pay'> {
  * flagged jobs; best fit first. Empty while `jobs.recommendations` is off
  * (GoApply with CN_RECRUITMENT_INFO_MODE=off; on by default). On GoApply a
  * public posting with no usable apply link is never listed. A row that owes
- * an open-data credit line (台灣就業通, 事求人) is not listed by this route: the
- * card of this list does not print the line yet. A caller of the service
- * whose card does print it asks with `creditLines: true` and gets those rows
- * with the sentence in `cardMeta.tw_sources.attribution`.
+ * an open-data credit line (台灣就業通, 事求人) is listed only for a caller
+ * whose card prints the line: it asks with `creditLines: true` and gets those
+ * rows with the sentence in `cardMeta.tw_sources.attribution`. This route and
+ * the Assistant's `similar_jobs` both do since the M5 gate.
  */
 export interface SimilarJobsResponse {
   items: SimilarJobItem[];

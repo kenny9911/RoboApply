@@ -1039,7 +1039,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     return { count: named.length, locations: listed.map((x) => x.place), jobIds: listed.map((x) => x.id) };
   }
 
-  /** A list row once the page knows its `RAJob.sponsorshipSource` (the list projection does not select it yet). */
+  /** A list row once the page knows its `RAJob.sponsorshipSource` (the list projection selects it; only a row built without the column, the test kit's, lacks it). */
   type SourcedRow = FeedJobRow & { sponsorshipSource?: string | null };
 
   /**

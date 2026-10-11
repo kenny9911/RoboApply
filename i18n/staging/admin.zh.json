@@ -20,6 +20,9 @@
           "linkedin": "LinkedIn 职位搜索",
           "user_import": "用户自己添加的职位",
           "tw_open_data": "台湾官方开放数据",
+          "activejobs_feed": "Active Jobs DB 数据源",
+          "tw_gov_jobs": "台湾公部门职缺",
+          "usajobs": "USAJOBS",
           "other": "{provider}"
         },
         "about": {
@@ -30,6 +33,9 @@
           "linkedin": "已不再使用的职位搜索服务。",
           "user_import": "用户粘贴链接或职位描述，只有本人可见。",
           "tw_open_data": "来自台湾公共就业服务开放数据集的职缺，每条都显示其授权条款要求的来源说明。",
+          "activejobs_feed": "来自企业招聘官网的新职位，每小时读取一次。购买付费套餐后会自动运行。",
+          "tw_gov_jobs": "来自台湾开放数据的机关与学校职缺，每条都显示其授权条款要求的来源说明，不保留承办人员的联系方式。",
+          "usajobs": "来自美国政府官方求职网站的联邦职位，每个职位都链接到官方公告。",
           "other": "职位来源。"
         },
         "state": {
@@ -57,6 +63,9 @@
           "disabled": "已关闭，或缺少密钥。",
           "url_invalid": "为它设置的地址不是我们接受的地址，因此不会读取。",
           "quota": "已暂停：其套餐本期配额已用完、被拒绝，或留给用户自己的搜索。",
+          "no_key": "尚未设置密钥。",
+          "plan_too_small": "已关闭：套餐每月至少支持 20,000 个职位后才会开启。",
+          "plan_unknown": "已关闭：尚不清楚套餐的额度。请设置 FANTASTIC_MONTHLY_JOBS，或等待服务商的首次响应。",
           "other": "已关闭（{code}）。"
         },
         "facts": {
@@ -88,6 +97,9 @@
           "bank_closed": "招聘方已关闭：{count}",
           "bank_page_cap": "因页数上限而停止的检查：{count}",
           "bank_pass_cut_short": "因超时而中断的检查：{count}",
+          "bank_validity_ended": "已过招聘方设置的截止日期：{count}",
+          "bank_time_without_zone": "发送的时间未带时区，按北京时间读取：{count}",
+          "bank_reread_started": "已开始的全量重新读取：{count}",
           "wrong_market_cn": "工作地点不在中国大陆：{count}",
           "wrong_market_intl": "工作地点在中国大陆，不属于本站：{count}",
           "no_apply_url": "没有投递链接：{count}",
@@ -98,6 +110,7 @@
           "boards_read": "已检查的招聘页面：{count}",
           "board_errors": "无法读取的招聘页面：{count}",
           "board_backlog": "尚待读取的职位：{count}",
+          "country_not_selected": "工作地点所在国家不在此招聘官网的读取范围内：{count}",
           "linkedin_only_link": "因唯一链接指向 LinkedIn 而未收录：{count}",
           "indeed_only_link": "因唯一链接指向 Indeed 而未收录：{count}",
           "tw_sweep_finished": "已完成的每日读取：{count}",

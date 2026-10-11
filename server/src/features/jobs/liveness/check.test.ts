@@ -17,12 +17,14 @@ import {
   LIVENESS_HOSTS,
   LIVENESS_HOST_PAUSE_MAX_MS,
   LIVENESS_HOST_PAUSE_MS,
+  LIVENESS_HOST_REQUESTS_PER_MINUTE,
   LIVENESS_JOB_SELECT,
   applyLiveness,
   checkJobLive,
   checkPostingLive,
   confirmListing,
   createLivenessCache,
+  createLivenessHosts,
   ingestDedupeRepair,
   isBoardRowOfKey,
   livenessRecheckHours,
@@ -322,6 +324,26 @@ describe('which rows are asked about', () => {
     const on = fakeAts(() => listed(1));
     expect((await checkPostingLive(job(), { fetch: on.fetch, env: { LIVENESS_CHECK_DISABLED: 'false' }, now: () => NOW })).state).toBe('open');
   });
+
+  it('the switch that stops every read of a public job board stops this read too: no request, for a board row and for an aggregator\'s copy', async () => {
+    const ats = never();
+    // A board row whose sighting is older than the recheck window (the sync is stopped, so it stays old) is not asked either.
+    for (const row of [job(), boardRow({ lastSeenAt: hoursAgo(30) }), boardRow({ id: 'cn', market: 'cn', externalId: 'acme:1#cn', lastSeenAt: hoursAgo(30) })]) {
+      for (const value of ['true', '1', 'yes', 'on']) {
+        const res = await checkPostingLive(row, { fetch: ats.fetch, env: { ATS_PUBLIC_SOURCES_DISABLED: value }, now: () => NOW });
+        expect(res).toEqual({ state: 'unknown', checkedAt: null, via: null, reason: 'disabled', requested: false });
+      }
+    }
+    expect(ats.calls).toEqual([]);
+    // Nothing is written for such an answer, so no posting is closed while the switch is on.
+    const db = createFakePrisma({ seed: { rAJob: [{ ...job(), dedupeKey: 'k1' }] } });
+    const res = await checkPostingLive(job(), { fetch: ats.fetch, env: { ATS_PUBLIC_SOURCES_DISABLED: 'true' }, now: () => NOW });
+    expect(await applyLiveness(db as unknown as LivenessDb, job(), res)).toEqual({ archived: 0, refreshed: false });
+    expect(await db.rAJob.findMany({ where: { archivedAt: { not: null } } })).toEqual([]);
+    // Off or unset: the check runs.
+    const on = fakeAts(() => listed(1));
+    expect((await checkPostingLive(job(), { fetch: on.fetch, env: { ATS_PUBLIC_SOURCES_DISABLED: 'false' }, now: () => NOW })).state).toBe('open');
+  });
 });
 
 describe('throttles', () => {
@@ -481,6 +503,39 @@ describe('throttles', () => {
     await Promise.resolve();
     releases[2]?.();
     expect((await later).requested).toBe(true);
+  });
+
+  it('one host is sent a bounded number of new requests a minute by one process: beyond it a call is unknown, asks nothing and is not remembered', async () => {
+    expect(LIVENESS_HOST_REQUESTS_PER_MINUTE).toBe(60);
+    const ats = fakeAts((url) => listed(url.split('/').pop()!));
+    let at = NOW;
+    const deps = { fetch: ats.fetch, env: {}, now: () => at, hosts: createLivenessHosts(3) };
+    const gh = (n: number) => job({ id: `g${n}`, atsPostingKey: `greenhouse:acme:${n}`, applyUrl: null });
+    // One account walking the job list: three postings of one host are asked, the fourth and fifth are not.
+    for (const n of [1, 2, 3]) expect(await checkPostingLive(gh(n), deps)).toMatchObject({ state: 'open', requested: true });
+    for (const n of [4, 5]) expect(await checkPostingLive(gh(n), deps)).toEqual({ state: 'unknown', checkedAt: null, via: null, reason: 'host_budget', requested: false });
+    expect(ats.calls).toHaveLength(3);
+    // An answer this process already has costs nothing and is still given.
+    expect(await checkPostingLive(gh(1), deps)).toMatchObject({ state: 'open', requested: false, reason: 'cached' });
+    // Another host has its own budget.
+    const leverId = UUID;
+    expect((await checkPostingLive(job({ id: 'l1', atsPostingKey: `lever:acme:${leverId}`, applyUrl: `https://jobs.lever.co/acme/${leverId}` }), deps)).requested).toBe(true);
+    expect(ats.calls).toHaveLength(4);
+    // Half a minute later the host is still full; a minute after the first requests there is room, and the posting held back is asked.
+    at = new Date(NOW.getTime() + 30_000);
+    expect((await checkPostingLive(gh(4), deps)).reason).toBe('host_budget');
+    at = new Date(NOW.getTime() + 60_000);
+    expect(await checkPostingLive(gh(4), deps)).toMatchObject({ state: 'open', requested: true });
+    expect(ats.calls).toHaveLength(5);
+  });
+
+  it('the process\'s own budget is the default: the 61st new posting of one host inside a minute is not asked', async () => {
+    const ats = fakeAts((url) => listed(url.split('/').pop()!));
+    const deps = { fetch: ats.fetch, env: {}, now: () => NOW };
+    const gh = (n: number) => job({ id: `g${n}`, atsPostingKey: `greenhouse:acme:${n}`, applyUrl: null });
+    for (let n = 1; n <= LIVENESS_HOST_REQUESTS_PER_MINUTE; n += 1) expect((await checkPostingLive(gh(n), deps)).requested).toBe(true);
+    expect(await checkPostingLive(gh(61), deps)).toMatchObject({ state: 'unknown', reason: 'host_budget', requested: false });
+    expect(ats.calls).toHaveLength(LIVENESS_HOST_REQUESTS_PER_MINUTE);
   });
 
   it('the cache forgets its oldest answer past its size', () => {

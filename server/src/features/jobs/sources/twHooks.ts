@@ -60,7 +60,7 @@ export const TW_OGDL_LICENCE_URL = 'https://data.gov.tw/license';
  * The attribution sentence per open-data source, keyed by `RAJob.sourceBoard`:
  * provider, year, the dataset's full name, the licence statement.
  *   tw_open_data  dataset 44062, 勞動部勞動力發展署 (the 台灣就業通 sweep);
- *   tw_gov_jobs   dataset 7229, 行政院人事行政總處 (事求人; no adapter writes it yet).
+ *   tw_gov_jobs   dataset 7229, 行政院人事行政總處 (事求人; written by sources/twGovJobs.ts).
  */
 export const TW_OPEN_DATA_ATTRIBUTIONS: Readonly<Record<string, (year: number) => string>> = {
   tw_open_data: (year) => `資料來源：勞動部勞動力發展署 ${year}「台灣就業通網站職缺清單」，依政府資料開放授權條款第1版公開釋出`,

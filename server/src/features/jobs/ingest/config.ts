@@ -386,17 +386,16 @@ export function feedMonthlyJobsEnv(env: EnvSource = process.env): number | null 
  * adapter and for Active Jobs DB's mainland search, which stand behind the
  * same gate.
  *
- * 'plan_unknown' is reported under the code of 'plan_too_small' for now. The
- * admin System panel knows ONE code for "off until a plan allows it"
- * (admin/system.ts `PLAN_GATE_REASON`, which gives the row the state
- * 'gated'). Any other code on a row whose quota reading is used up reads
- * there as 'exhausted' and raises a provider alert (and a line in the daily
- * health e-mail) for a source that never ran. The gate itself and the log
- * tell the two apart (`FeedGate.reason`, quota.ts `hydrateProviderQuota`);
- * the day the panel accepts the code 'plan_unknown', this entry names it.
+ * 'plan_unknown' and 'plan_too_small' are the two codes for "off until a plan
+ * allows it". The admin System panel gives a row with either the state
+ * 'gated' (admin/system.ts `PLAN_GATE_REASONS`): any other code on a row
+ * whose quota reading is used up would read there as 'exhausted' and raise a
+ * provider alert (and a line in the daily health e-mail) for a source that
+ * never ran. A code added here for a plan gate must be added there too
+ * (rapidApi.cn.test.ts "a used-up plan that never stated its postings").
  */
 export const FEED_GATE_REASON_CODE: Readonly<Record<Exclude<FeedGateReason, 'ok'>, string>> = {
-  plan_unknown: 'plan_too_small',
+  plan_unknown: 'plan_unknown',
   plan_too_small: 'plan_too_small',
   no_key: 'no_api_key',
   disabled: 'kill_switch',

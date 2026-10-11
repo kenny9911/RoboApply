@@ -2152,13 +2152,13 @@ describe('MKT-5B (carry-over M4.4, M3.3): one reading of the deployment\'s brand
     expect(careerSeedBoards(['intl', 'cn']).length).toBeGreaterThan(mainland.length);
   });
 
-  it('copies left out because of the source\'s countries are counted by the run; the reason reaches the status once ingest/status.ts lists it', async () => {
+  it('copies left out because of the source\'s countries are counted by the run, and the reason is in the status (ingest/status.ts lists it since the M5 gate)', async () => {
     const h = harness({ sources: [sourceRow({ countries: ['TW'] })] });
     const w = world({ greenhouse: { globalco: [ghJob('globalco', 1, 'Taipei, Taiwan'), ghJob('globalco', 2, 'Dublin, Ireland'), ghJob('globalco', 3, '上海')] } });
     const tally = await run(h, w, { process: recorder().process });
     expect(tally).toMatchObject({ received: 1, countryNotSelected: 2 });
     const status = parseStatusDoc(String(h.fake.$rows('appConfig').find((r) => r.key === sourceStatusKey('intl', 'ats_public'))!.value))!.last;
-    // Not a listed reason yet (handoff MKT-5B, Requests): nothing unknown is ever written into the status.
-    expect(Object.keys(status!.notes)).not.toContain('country_not_selected');
+    // A listed reason (MKT-5B O-3): the international site's status says how many copies its countries left out.
+    expect(status!.notes.country_not_selected).toBeGreaterThan(0);
   });
 });

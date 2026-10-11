@@ -448,7 +448,8 @@ describe('MKT-5B: a system whose connector is switched off', () => {
     fireEvent.change(screen.getByLabelText('Board id'), { target: { value: 'tidewater' } });
     fireEvent.change(screen.getByLabelText('Company name'), { target: { value: 'Tidewater' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add board' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('This job board system is not supported.');
+    // The sentence of its own (staged by MKT-5F in jobsTw.admin.problem); before it existed the panel fell back to "not supported".
+    expect(await screen.findByRole('alert')).toHaveTextContent('This job board system is switched off here, so the board is not read.');
     expect(screen.queryByText('Check the fields and try again.')).not.toBeInTheDocument();
   });
 
@@ -459,11 +460,11 @@ describe('MKT-5B: a system whose connector is switched off', () => {
     });
     api.adminImportCareerSources.mockResolvedValue({ total: 2, created: 1, merged: 0, invalid: [{ line: 1, reason: 'connector_disabled' }], invalidCount: 1 });
     renderWithBrand(<CareerSourcesPanel />);
-    expect(within(await row(/Tidewater/)).getByText('This job board system is not supported.')).toBeInTheDocument();
+    expect(within(await row(/Tidewater/)).getByText('This job board system is switched off here, so the board is not read.')).toBeInTheDocument();
     expect(within(await row(/Alpenwerk/)).getByText('The board sent something other than job data.')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('List of boards'), { target: { value: '[{"ats":"beisen","boardToken":"shili"},{"ats":"recruitee","boardToken":"polder"}]' } });
     fireEvent.click(screen.getByRole('button', { name: 'Import' }));
-    expect(await screen.findByText('Row 1: this job board system is not supported')).toBeInTheDocument();
+    expect(await screen.findByText('Row 1: this job board system is switched off here')).toBeInTheDocument();
     expect(screen.queryByText(/connector_disabled|not_xml|import\.reason|problem\./)).toBeNull();
   });
 

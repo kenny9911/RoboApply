@@ -673,7 +673,8 @@ describe('MKT-4H: similar_jobs (the job page\'s Similar jobs list where job deta
     const feedPreview = vi.fn(async () => [feedItem({ jobId: 'job_1' }), feedItem({ jobId: 'title_1' })]);
     const withList = createDefaultAreas({ store: {} as never, jobDetail: { get, similar }, feedPreview });
     expect(await withList.similarJobs('u1', 'job_1')).toEqual({ items: [expect.objectContaining({ jobId: 'near_1' }), expect.objectContaining({ jobId: 'near_2' })], by: 'similar' });
-    expect(similar).toHaveBeenCalledWith('u1', 'job_1');
+    // With the credit lines: the Assistant's card prints the open-data attribution (M5 gate, MKT-5C O-4).
+    expect(similar).toHaveBeenCalledWith('u1', 'job_1', { creditLines: true });
     expect(get).not.toHaveBeenCalled();
     expect(feedPreview).not.toHaveBeenCalled();
     // A job-detail seam without `similar` (the public surface has it since the M4 gate: features/m4Seams.test.ts):

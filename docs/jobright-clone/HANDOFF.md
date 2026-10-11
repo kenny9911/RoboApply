@@ -18,10 +18,10 @@ Owner rulings that bind every change (full text in `docs/jobright-clone/README.m
 
 ## 2. Where to work
 
-- Worktree: `/Users/kenny/code/RoboApply/.claude/worktrees/jobright-clone`, branch `feat/jobright-clone`, pushed to `origin`. Nothing from this work is on `main`. Do not merge to `main` or deploy without the owner's confirmation.
+- Worktree: `/Users/kenny/code/RoboApply/.claude/worktrees/jobright-clone`, branch `feat/jobright-clone`, pushed to `origin` up to the commit section 3 names; the M5 gate's own changes are in the working tree until they are committed (section 3 says how to tell). Nothing from this work is on `main`. Do not merge to `main` or deploy without the owner's confirmation.
 - Its `.env` points at the Neon **branch** database `jobright-clone` (endpoint `ep-quiet-king-a6psbfbe`), never production (`ep-empty-snow-a6mdqwbe`). Check with `grep -E '^(DATABASE_URL|DIRECT_DATABASE_URL)=' .env | sed -E 's#://[^@]*@#://<redacted>@#'` before any database command.
 - Dev stack: `scripts/dev-clone.sh` (API 4621, web 3621). RoboApply at `http://localhost:3621`, GoApply at `http://goapply.localhost:3621`.
-- Never print or commit secrets. The `.env` holds a **live** Stripe key; the code refuses to use it outside production, and no command or test may call Stripe or any other paid provider.
+- Never print or commit secrets. The `.env` holds a **live** Stripe key; the code refuses to use it outside production, and no command or test may call Stripe or any other paid provider. One exception is deliberate and bounded: the job crons of step 5 call the job sources this `.env` has keys for (the step lists them and names the switch that avoids every metered call).
 
 ## 3. State (2026-10-12)
 
@@ -36,11 +36,13 @@ Merged, gated and pushed, in order:
 | Market phase M2 | `48a5e56` | Stripe webhook lifecycle, switch, resume, refunds; Alipay wire parity (additive); skills; embeddings |
 | Market phase M3 | `55e7177` | Job sources per market: quota, planner, posting identity, employer boards, Taiwan open data, deep links |
 | Market phase M4 | `df4aaf2` | Hybrid retrieval, scorer v4, withdrawal and admin billing, validated board seeds (505 intl / 41 TW / 52 CN) |
-| Market phase M5 (merged, **gate pending**) | `198ee6b` | Licensed feed behind its quota gate, more board connectors, closure and liveness check, USAJobs and 事求人, GoHire syndication adapter, Taiwan extras, sponsorship facts, env examples |
+| Market phase M5 (merged; **gate done 2026-10-12**) | `198ee6b`, then the gate's own commit | Licensed feed behind its quota gate, more board connectors, closure and liveness check, USAJobs and 事求人, GoHire syndication adapter, Taiwan extras, sponsorship facts, env examples. Gate, after its cross-review fix pass: 779 test files / 20,853 tests passed (1 skipped, 10 todo), both typechecks, `npm run check`, extension 710 tests, `npm run eval:match -- --enforce M4` |
 
-Last full gate run (M4): 758 test files / 19,637 tests, both typechecks, `npm run check`, extension 710 tests, `npm run eval:match -- --enforce M4`.
+Last full gate run (M5, 2026-10-12, after the cross-review fix pass): `npx prisma validate`, `npm run db:generate`, `npm run gen:brand` (no diff), both typechecks, 779 test files / 20,853 tests passed (1 skipped, 10 todo, 0 failed), `npm run check` (six checks clean), extension typecheck and 710 tests (36 files), `npm run eval:match -- --enforce M4` exit 0 with the ranking baseline untouched. `interview-agent/` did not change in M5 and was not run. Nothing was run against a database, a browser or a provider.
 
-**M5 is merged and pushed (step 1 below is done).** On the merged tree both typechecks and `npm run check` pass and `npm run eval:match -- --enforce M4` exits 0; 13 tests fail in 9 files at the seams between bundles (`jobs/sources/types.test.ts`, `jobs/ingest/maintain.test.ts`, `jobs/ingest/adapters/adapters.test.ts`, `market/tw/__tests__/careerSourcesPanel.test.tsx`, `jobs/sources/registry.test.ts`, `jobs/normalize/ats.test.ts`, `cn/jobs/__tests__/modeOff.routes.test.ts`, `admin/__tests__/services.test.ts`, `components/features/feed/cnListing.test.tsx`). **Start at step 2** unless a later line says the M5 gate is committed.
+**The M5 gate is done (steps 1 and 2 below).** The 13 tests that were red at the seams between bundles are green: one was fixed in code (`normalize/ats.ts`: the posting-key rule covers the nine board systems), twelve on the test side (they pinned the tree before M5). The gate also applied the small requests the bundles addressed to the orchestrator, added `server/src/features/m5Seams.test.ts`, and wrote what stays open to `requests/waveM5-carryover.md`, by who must act. The gate's cross-review (three medium and nine low findings) is resolved as well: what was fixed and what was carried is in `requests/waveM5-carryover.md` ("Applied after the cross-review of the gate", fix package X1 to X4).
+
+The gate session did not commit. If `git status --short` still shows changes, commit and push them first: at the end of the gate it showed 84 paths (80 modified, 4 new: `docs/jobright-clone/requests/waveM5-carryover.md`, `hooks/job/useAddToReady.test.tsx`, `lib/api/contracts/tw.ts`, `server/src/features/m5Seams.test.ts`), and all 84 are the gate's (67 from the gate, 17 more from its cross-review fix pass). They are listed one per line at the end of `requests/waveM5-carryover.md` ("Paths the gate left uncommitted"): stage exactly those, by path. A path `git status` shows that is not on that list is another session's work: leave it. **Start at step 3** (merge and translate the staged strings).
 
 ## 4. What remains, in order
 
@@ -61,7 +63,7 @@ WAVE_BASE=jobright-m5-base bash docs/jobright-clone/orch/wave-cleanup.sh MKT-5A 
 
 Delete any `.vitest/` directory in a worktree before committing. **Never** remove a worktree by hand: an earlier cleanup deleted nine worktrees of uncommitted work because "branch is an ancestor of HEAD" is also true for a branch with no commits.
 
-### Step 2. Gate M5 (make the merged tree green)
+### Step 2. Gate M5 (make the merged tree green): done 2026-10-12
 
 Run all gates; fix what is red at the seams between bundles (decide from `market/MARKET_STRATEGY.md` which side is right):
 
@@ -75,11 +77,11 @@ npm --prefix extension run typecheck && npm --prefix extension test
 npm run eval:match -- --enforce M4          # exit 0; never edit the ranking baseline by hand
 ```
 
-Then read the "Requests" sections of `orch/handoffs-mkt/MKT-5*.md` and apply those addressed to the orchestrator; write what stays open to `requests/waveM5-carryover.md`. Commit, push.
+Then read the "Requests" sections of `orch/handoffs-mkt/MKT-5*.md` and apply those addressed to the orchestrator; write what stays open to `requests/waveM5-carryover.md`. Commit, push. (Done, except the commit and push: see section 3. The same commands are the gate to run again after step 3.)
 
 ### Step 3. Merge and translate the staged strings (one pass)
 
-New strings since the parity wave live in `i18n/staging/*.json` (1,117 new and 29 changed keys before M5; GoApply Chinese is staged too).
+New strings since the parity wave live in `i18n/staging/*.json` (1,171 new and 30 changed keys at the end of the M5 gate, by the script's dry run; GoApply Chinese is staged too). What M5 added, the key to remove and the zh-TW wording to start from: `requests/waveM5-carryover.md`, "Orchestrator" item 1.
 
 ```bash
 node scripts/i18n-merge-staging.mjs --dry-run     # read the plan
@@ -91,7 +93,7 @@ npm run check                                      # now reports missing keys in
 - Locales: `zh`, `zh-TW`, `ja`, `ko`, `es`, `fr`, `pt`, `de`. Keys under `authCn`, `billingCn`, `jobsCn`, `onboardingCn`, `practiceCn`, `notifyCn`, `campus`, `landing.cnHome` are required only in `en` and `zh`.
 - Translate into a scratch folder, then apply with `node docs/jobright-clone/orch/apply-translations.mjs "$PWD" <chunksDir>` (layout and rules in the file header: same key structure, same ICU arguments, same `%BRAND%` count, no literal brand names).
 - Register per locale, Taiwan vocabulary rules and banned words: `scripts/check-copy.mjs`, `scripts/check-zh-variants.mjs`, `CN_TW_LAUNCH_PLAN.md` §9. The product never applies for the user; no translation may say it does.
-- Key removals and special cases collected by the gates: `requests/wavePAR-carryover.md` ("i18n merge and translate") and the `i18n` entries in `requests/waveM1…M4-carryover.md`.
+- Key removals and special cases collected by the gates: `requests/wavePAR-carryover.md` ("i18n merge and translate") and the `i18n` entries in `requests/waveM1…M5-carryover.md`.
 - Done when `npm run check` and the full test suite are green. Commit, push.
 
 ### Step 4. Production build
@@ -99,20 +101,26 @@ npm run check                                      # now reports missing keys in
 Never build in the worktree the dev server runs from (they fight over `.next`). Use a separate worktree:
 
 ```bash
-git worktree add /Users/kenny/code/RoboApply/.claude/worktrees/jobright-build feat/jobright-clone   # or reuse and fast-forward
+# --detach is required: the branch is checked out in the dev worktree, and git refuses to check it out twice
+# ("fatal: 'feat/jobright-clone' is already used by worktree at …"). Never use --force for this.
+git worktree add --detach /Users/kenny/code/RoboApply/.claude/worktrees/jobright-build feat/jobright-clone
+# a later rebuild in the same worktree: move it to the branch's newest commit
+git -C /Users/kenny/code/RoboApply/.claude/worktrees/jobright-build checkout --detach feat/jobright-clone
 # link node_modules and copy .env / .env.local as docs/jobright-clone/orch/wave-setup.sh does, then:
 npm run build
 ```
+
+The build worktree is at a detached commit: commit nothing there. A fix found by the build is made in the dev worktree, committed on the branch, and the build worktree is moved again.
 
 Also confirm the `/legal` pages can read their files in the serverless bundle: the route's `.nft.json` trace under `.next/server/app/legal/` must list `content/legal/**`.
 
 ### Step 5. Browser verification of both brands
 
-Start with `docs/jobright-clone/orch/parity-verify.md` (exact commands and expected results). Cover on both hosts: signed-out pages, sign-up with email and password, resume upload, feed and job detail, natural-language job search, the Assistant, tailoring, practice (text; voice if the worker is running), pricing and the plan sheet, settings. For the job feed first trigger the crons on the dev stack (`/api/v1/cron/jobs-plan`, `jobs-boards`, `jobs-ingest`, `queue-drain`, `score-precompute`, with `Authorization: Bearer $CRON_SECRET` on port 4621) so the seeded boards are read. Do not start a real payment. Fix what is broken; note what could not be checked.
+Start with `docs/jobright-clone/orch/parity-verify.md` (exact commands and expected results). Cover on both hosts: signed-out pages, sign-up with email and password, resume upload, feed and job detail, natural-language job search, the Assistant, tailoring, practice (text; voice if the worker is running), pricing and the plan sheet, settings. For the job feed first trigger the crons on the dev stack (`/api/v1/cron/jobs-plan`, `jobs-boards`, `jobs-ingest`, `queue-drain`, `score-precompute`, with `Authorization: Bearer $CRON_SECRET` on port 4621) so the seeded boards are read. Know what those crons call from this `.env` (it has a RapidAPI key and the bank settings, and no kill switch is set): JSearch and Active Jobs DB on the RapidAPI plan, within their daily call budgets (Active Jobs DB is on the free plan and answers 429 once its month is used up); the RoboHire and GoHire banks (the GoHire bank is read once from its beginning); the public APIs of the 512 seeded employer boards; 台灣就業通 and the 事求人 file; and every job opened in the browser asks its ATS whether the posting is still listed. To verify without any metered call set `RA_ONBOARDING_EXTERNAL_JOBS_DISABLED=true` in `.env` for the run (the boards, the banks and the Taiwan open data still fill the feed); `ATS_PUBLIC_SOURCES_DISABLED=true` stops the board reads and the posting check. Do not start a real payment. Fix what is broken; note what could not be checked.
 
 ### Step 6. Clean up and open the PR
 
-- Delete throwaway `claude-verify-*` test users on the Neon branch; archive `market = 'cn'` rows whose `sourceBoard` is a RapidAPI aggregator.
+- Delete throwaway `claude-verify-*` test users on the Neon branch. Archive `market = 'cn'` rows whose `sourceBoard` is `'jsearch'` or `'linkedin'` (neither is ever a GoApply source). Rows with `sourceBoard = 'activejobs'` are different since M5: Active Jobs DB is a source of both markets once a paid plan opens its gate, so archive mainland `'activejobs'` rows only on a database where no paid Active Jobs DB plan was ever active (true for the Neon branch today); on any other database they are GoApply's inventory, and the feed does not list a row again once its window has passed.
 - Open a PR for `feat/jobright-clone` into `main`. Do not merge it. The description should list the owner items of section 6.
 
 ## 5. Rules that have already cost time
@@ -132,7 +140,7 @@ Start with `docs/jobright-clone/orch/parity-verify.md` (exact commands and expec
 - Alipay: `ALIPAY_CALLBACK_SECRET` in the GoApply environment; one supervised ¥12 order (`market/ALIPAY_CUTOVER.md`).
 - Recruiter-bank jobs (RoboHire, GoHire) are synced but not listed until the bank has a candidate-facing posting page: set `ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE` / `GOHIRE_PUBLIC_JOB_URL_TEMPLATE` when it exists (work in the RoboHire repository).
 - Rotate `OPENROUTER_API_KEY` (dead) and top up the Anthropic account; host the interview worker; a paid Active Jobs DB plan if the licensed feed is wanted.
-- The decisions each gate left open, numbered, are under "Owner" in `requests/wavePAR-carryover.md` and `requests/waveM1…M4-carryover.md`.
+- The decisions each gate left open, numbered, are under "Owner" in `requests/wavePAR-carryover.md` and `requests/waveM1…M5-carryover.md`. Before the first deploy read `requests/waveM5-carryover.md`, "Owner" 1 to 5 and "What the first runs after this merge do" (Workable, the daily 事求人 read, the GoHire bank's one re-read, the on-demand liveness check).
 
 ## 7. Map of the documents
 
