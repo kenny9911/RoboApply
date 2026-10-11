@@ -5,6 +5,13 @@
 // Parity wave (PAR-7): the per-brand source registry, the GoHire bank over
 // HTTPS (whitelist, published-first pass, listing diff, tombstones), the
 // posting-page rule for bank rows, and bank 学历 / 代招.
+// Market wave (MKT-5E): the syndication endpoint is the GoHire transport
+// whenever GOHIRE_SYNDICATION_URL is set (the wire contract and the HTTP
+// rules are tested in syndication.test.ts); a stated validity closes a row;
+// the mainland bank's cursor sync reads the bank again from the beginning
+// every 7 days, so a job it still lists is seen again (RoboHire's sync is the
+// parity wave's, unchanged); a verified employer's job is stated as not an
+// agency posting, so a stored 代招 is overwritten.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../../lib/prisma.js', () => ({
@@ -23,6 +30,8 @@ import {
   bankDisabledReason,
   bankForMarket,
   bankMarket,
+  bankReadsMirror,
+  bankSyndicationConfig,
   bankTlsSatisfied,
   bankTransport,
   getBankClient,
@@ -39,8 +48,12 @@ import { adaptersForBrand, ingestProvidersForBrand, resetBuiltinAdaptersForTests
 import {
   BANK_API_MAX_PAGES,
   BANK_API_PASS_BUDGET_MS,
+  BANK_RESYNC_DAYS,
   BANK_SYNC_SELECT,
+  bankCursorPassStart,
   bankCursorWhere,
+  bankRereads,
+  bankResyncDays,
   classifyBankRow,
   createBankAdapter,
   bankCursorMark,
@@ -387,6 +400,8 @@ const bankQuery = (cursor?: string): SourceQuery => ({
 const TEMPLATE = { GOHIRE_PUBLIC_JOB_URL_TEMPLATE: 'https://example.test/p/{id}' };
 /** The mark of a cursor written while that template was set. */
 const PAGE_MARK = bankPageMark(TEMPLATE.GOHIRE_PUBLIC_JOB_URL_TEMPLATE);
+/** A stored cursor as the sync writes it: the position, the posting-page mark, and when its pass began. */
+const storedAt = (position: string, mark: string = PAGE_MARK, passStart: Date = NOW): string => `${position}|${mark}|${passStart.toISOString()}`;
 
 function row(id: string, over: Record<string, unknown> = {}) {
   return { id, status: 'open', publishedAt: NOW, updatedAt: new Date(`2026-10-0${(Number(id.replace(/\D/g, '')) % 9) + 1}T00:00:00Z`), title: '后端工程师', companyName: '某某科技', ...over } as never;
@@ -403,6 +418,10 @@ describe('bank row rules (one rule for every transport)', () => {
     for (const title of ['测试', '測試', 'test 123', 'Test', 'Demo 2', 'demo', '内部测试职位', '测试岗位请勿投递', '测试数据-01', '测试职位（勿投）', 'TEST JOB - please ignore']) {
       expect(isBankTestPosting(title), title).toBe(true);
     }
+    // The test posting the research note records in the GoHire bank (JOB_SOURCES_CN.md 2.3): a recruiter trying resume matching.
+    for (const title of ['测试简历匹配', '简历匹配测试', '測試簡歷匹配 2']) expect(isBankTestPosting(title), title).toBe(true);
+    // The same words inside a title that names a job stay a job.
+    for (const title of ['阻抗匹配测试工程师', '简历筛选专员', '人岗匹配算法工程师']) expect(isBankTestPosting(title), title).toBe(false);
     // 测试 is also the word for testing work: a real job is never dropped as a recruiter's test posting.
     for (const title of ['软件测试工程师', '高级测试开发工程师', '自动化测试', '测试经理', 'Test Engineer', 'QA Tester', 'Latest Demo Engineer']) {
       expect(isBankTestPosting(title), title).toBe(false);
@@ -416,6 +435,23 @@ describe('bank row rules (one rule for every transport)', () => {
     expect(isBankTestPosting(null)).toBe(false);
   });
 
+  it('a stated validity that has passed closes the row; a row that states none never closes by date (MKT-5E)', () => {
+    const past = new Date(NOW.getTime() - 1);
+    const future = new Date(NOW.getTime() + 86_400_000);
+    expect(classifyBankRow(row('j1', { validUntil: past }), NOW)).toBe('validity_ended');
+    expect(classifyBankRow(row('j1', { validUntil: NOW }), NOW)).toBe('validity_ended');
+    expect(classifyBankRow(row('j1', { validUntil: future }), NOW)).toBe('ok');
+    expect(classifyBankRow(row('j1', { validUntil: null }), NOW)).toBe('ok');
+    // 400 days old and no validity: a bank row is never dropped for its age.
+    expect(classifyBankRow(row('j1', { publishedAt: new Date(NOW.getTime() - 400 * 86_400_000) }), NOW)).toBe('ok');
+    // The bank's own status still comes first, and the validity becomes the row's stated deadline.
+    expect(classifyBankRow(row('j1', { status: 'closed', validUntil: past }), NOW)).toBe('closed');
+    const input = inputFromBankSyncRow('gohire', row('g1', { validUntil: future }), NOW, { publicJobUrl: () => 'https://example.test/p/g1' })!;
+    expect(input.expiresAt).toEqual(future);
+    expect(normalizeProviderJob(input, 'bank_gohire', { market: 'cn', now: NOW }).expiresAt).toEqual(future);
+    expect(inputFromBankSyncRow('gohire', row('g2'), NOW, { publicJobUrl: () => 'https://example.test/p/g2' })!.expiresAt).toBeUndefined();
+  });
+
   it('GoHire rows are agency postings (代招) unless the bank says the employer is verified; the employer itself is not marked an agency', () => {
     const unverified = inputFromBankSyncRow('gohire', row('g1'), NOW, { publicJobUrl: () => 'https://example.test/p/g1' })!;
     expect(unverified.agencyPosting).toBe(true);
@@ -424,9 +460,24 @@ describe('bank row rules (one rule for every transport)', () => {
     expect(job.company.isAgency).toBeNull();
     const verified = inputFromBankSyncRow('gohire', row('g2', { employerVerified: true }), NOW, { publicJobUrl: () => 'https://example.test/p/g2' })!;
     expect(verified.agencyPosting).toBe(false);
-    expect(normalizeProviderJob(verified, 'bank_gohire', { market: 'cn', now: NOW })).toMatchObject({ isAgency: null, employerVerified: true });
-    // RoboHire rows keep today's rule (no blanket agency label).
+    // The bank's verified-employer record is a statement: "not an agency posting" is false, never null (MKT-5E review).
+    // The upsert keeps a stored isAgency when the incoming one is null, so a null here would leave a row that was
+    // first stored as 代招 labelled 代招 for ever.
+    expect(verified.isAgency).toBe(false);
+    expect(normalizeProviderJob(verified, 'bank_gohire', { market: 'cn', now: NOW })).toMatchObject({ isAgency: false, employerVerified: true });
+    // An unverified row makes no statement about the employer itself.
+    expect(unverified.isAgency).toBeUndefined();
+    // Verified, but the employer named is a staffing firm: our own name rule still marks the job and the company.
+    const firm = inputFromBankSyncRow('gohire', row('g3', { employerVerified: true, companyName: '样例人力资源服务有限公司' }), NOW, { publicJobUrl: () => 'https://example.test/p/g3' })!;
+    const firmJob = normalizeProviderJob(firm, 'bank_gohire', { market: 'cn', now: NOW });
+    expect(firmJob).toMatchObject({ isAgency: true, employerVerified: true });
+    expect(firmJob.company.isAgency).toBe(true);
+    // RoboHire rows keep today's rule (no blanket agency label, and no statement either way, verified or not).
     expect(inputFromBankSyncRow('robohire', row('r1'), NOW, { publicJobUrl: () => 'https://example.test/p/r1' })!.agencyPosting).toBeNull();
+    const roboVerified = inputFromBankSyncRow('robohire', row('r2', { employerVerified: true }), NOW, { publicJobUrl: () => 'https://example.test/p/r2' })!;
+    expect(roboVerified.agencyPosting).toBeNull();
+    expect(roboVerified.isAgency).toBeUndefined();
+    expect(normalizeProviderJob(roboVerified, 'bank_robohire', { market: 'intl', now: NOW })).toMatchObject({ isAgency: null, employerVerified: true });
   });
 
   it('maps the bank 学历 field (本科, bachelor, associate) and carries headcount', () => {
@@ -482,8 +533,8 @@ describe('database transport: held rows and the posting-page rule', () => {
     });
     const first = await adapter.fetch(bankQuery('2026-10-05T00:00:00.000Z|j9|nopage'), { now: NOW });
     expect(seen[0]).toBeNull();
-    // The cursor it writes names the page it ran with, and the next sync continues from it.
-    expect(first.cursor).toBe(`${formatBankCursor(row('j1'))}|${PAGE_MARK}`);
+    // The cursor it writes names the page it ran with and when its pass began, and the next sync continues from it.
+    expect(first.cursor).toBe(storedAt(formatBankCursor(row('j1'))));
     await adapter.fetch(bankQuery(first.cursor!), { now: NOW });
     expect(seen[1]).toEqual(parseBankCursor(first.cursor));
     expect(seen[1]).not.toBeNull();
@@ -510,26 +561,182 @@ describe('database transport: held rows and the posting-page rule', () => {
     expect(seen[1]).not.toBeNull();
   });
 
-  it('a changed template restarts once too; with no template an unmarked cursor is continued and marked nopage', async () => {
+  it('a changed template restarts once too; with no template a cursor of the current pass is continued and marked nopage', async () => {
     const seen: Array<unknown> = [];
     const read = async (_bank: unknown, cursor: unknown) => {
       seen.push(cursor);
       return [row('j1')];
     };
     const other = createBankAdapter('gohire', { env: { GOHIRE_PUBLIC_JOB_URL_TEMPLATE: 'https://other.example.test/jobs/{id}' }, read: read as never });
-    const moved = await other.fetch(bankQuery(`2026-10-05T00:00:00.000Z|j9|${PAGE_MARK}`), { now: NOW });
+    const moved = await other.fetch(bankQuery(storedAt('2026-10-05T00:00:00.000Z|j9')), { now: NOW });
     expect(seen[0]).toBeNull();
     expect(moved.jobs[0]!.applyUrl).toBe('https://other.example.test/jobs/j1');
     expect(bankCursorMark(moved.cursor)).not.toBe(PAGE_MARK);
 
-    const held = await createBankAdapter('gohire', { env: {}, read: read as never }).fetch(bankQuery('2026-10-05T00:00:00.000Z|j9'), { now: NOW });
+    const held = await createBankAdapter('gohire', { env: {}, read: read as never }).fetch(bankQuery(storedAt('2026-10-05T00:00:00.000Z|j9', 'nopage')), { now: NOW });
     expect(seen[1]).toEqual({ updatedAt: new Date('2026-10-05T00:00:00.000Z'), id: 'j9' });
     expect(cursorWrittenWithoutPage(held.cursor)).toBe(true);
-    // Marks: only the three forms parse.
+    // Marks: only the three forms parse, with or without the pass start after them.
     expect(bankCursorMark('2026-10-05T00:00:00.000Z|j9')).toBeNull();
     expect(bankCursorMark('2026-10-05T00:00:00.000Z|j9|nopage')).toBe('nopage');
+    expect(bankCursorMark(storedAt('2026-10-05T00:00:00.000Z|j9'))).toBe(PAGE_MARK);
     expect(parseBankCursor('2026-10-05T00:00:00.000Z|j9|page')).toBeNull();
     expect(parseBankCursor(`2026-10-05T00:00:00.000Z|j9|${PAGE_MARK}`)).toEqual({ updatedAt: new Date('2026-10-05T00:00:00.000Z'), id: 'j9' });
+    expect(parseBankCursor(storedAt('2026-10-05T00:00:00.000Z|j9'))).toEqual({ updatedAt: new Date('2026-10-05T00:00:00.000Z'), id: 'j9' });
+  });
+});
+
+describe('the mainland bank\'s cursor sync sees its bank again: the whole listing is read from the beginning every 7 days (MKT-5E)', () => {
+  afterEach(() => resetBankPublicJobUrlWarningsForTests());
+
+  const DAY = 86_400_000;
+  const POSITION = '2026-10-05T00:00:00.000Z|j9';
+  /** A reader that records the cursor it was asked for and answers one row. */
+  const recording = () => {
+    const seen: Array<unknown> = [];
+    const read = async (_bank: unknown, cursor: unknown) => {
+      seen.push(cursor);
+      return [row('j1')];
+    };
+    return { seen, read: read as never };
+  };
+
+  it('inside the interval the stored position is continued and the pass keeps its start; at 7 days the bank is read from the beginning and a new pass starts', async () => {
+    const passStart = new Date(NOW.getTime() - 3 * DAY);
+    const { seen, read } = recording();
+    const adapter = createBankAdapter('gohire', { env: TEMPLATE, read });
+    const inside = await adapter.fetch(bankQuery(storedAt(POSITION, PAGE_MARK, passStart)), { now: NOW });
+    expect(seen[0]).toEqual({ updatedAt: new Date('2026-10-05T00:00:00.000Z'), id: 'j9' });
+    expect(bankCursorPassStart(inside.cursor)).toEqual(passStart);
+    expect(inside.notes).toEqual({ bank_synced: 1 });
+
+    // One millisecond short of 7 days: still the same pass.
+    await adapter.fetch(bankQuery(storedAt(POSITION, PAGE_MARK, new Date(NOW.getTime() - BANK_RESYNC_DAYS * DAY + 1))), { now: NOW });
+    expect(seen[1]).not.toBeNull();
+
+    // 7 days: every job the bank still lists is read (and so written and seen) again.
+    const due = await adapter.fetch(bankQuery(storedAt(POSITION, PAGE_MARK, new Date(NOW.getTime() - BANK_RESYNC_DAYS * DAY))), { now: NOW });
+    expect(seen[2]).toBeNull();
+    expect(due.jobs.map((j) => j.externalId)).toEqual(['j1']);
+    expect(bankCursorPassStart(due.cursor)).toEqual(NOW);
+    expect(bankCursorMark(due.cursor)).toBe(PAGE_MARK);
+    expect(due.notes).toEqual({ bank_synced: 1, bank_reread_started: 1 });
+    // The new pass is continued by the next sync, not restarted again.
+    await adapter.fetch(bankQuery(due.cursor!), { now: new Date(NOW.getTime() + 600_000) });
+    expect(seen[3]).toEqual(parseBankCursor(due.cursor));
+  });
+
+  it('a GoHire cursor written before passes were dated restarts once, with or without a posting page', async () => {
+    expect(bankRereads('gohire')).toBe(true);
+    for (const [env, cursor] of [
+      [TEMPLATE, `${POSITION}|${PAGE_MARK}`],
+      [{}, `${POSITION}|nopage`],
+      [{}, POSITION],
+    ] as const) {
+      const { seen, read } = recording();
+      const adapter = createBankAdapter('gohire', { env, read });
+      const first = await adapter.fetch(bankQuery(cursor), { now: NOW });
+      expect(seen, cursor).toEqual([null]);
+      expect(bankCursorPassStart(first.cursor)).toEqual(NOW);
+      expect(first.notes).toMatchObject({ bank_reread_started: 1 });
+      await adapter.fetch(bankQuery(first.cursor!), { now: NOW });
+      expect(seen[1], cursor).toEqual(parseBankCursor(first.cursor));
+    }
+    // No stored cursor is a first sync: read from the beginning, and nothing is "started again".
+    const { seen, read } = recording();
+    const out = await createBankAdapter('gohire', { env: TEMPLATE, read }).fetch(bankQuery(), { now: NOW });
+    expect(seen).toEqual([null]);
+    expect(out.notes).toEqual({ bank_synced: 1 });
+    expect(bankCursorPassStart(out.cursor)).toEqual(NOW);
+  });
+
+  it('INGEST_BANK_RESYNC_DAYS sets the interval: a whole number from 1 to 30 (well inside the 45 days of the mainland unseen rule), else 7', async () => {
+    expect(BANK_RESYNC_DAYS).toBe(7);
+    expect(bankResyncDays({})).toBe(7);
+    expect(bankResyncDays({ INGEST_BANK_RESYNC_DAYS: '1' })).toBe(1);
+    expect(bankResyncDays({ INGEST_BANK_RESYNC_DAYS: ' 30 ' })).toBe(30);
+    for (const bad of ['0', '31', '45', '-1', '2.5', 'weekly', '']) expect(bankResyncDays({ INGEST_BANK_RESYNC_DAYS: bad }), bad).toBe(7);
+    const { seen, read } = recording();
+    const adapter = createBankAdapter('gohire', { env: { ...TEMPLATE, INGEST_BANK_RESYNC_DAYS: '2' }, read });
+    await adapter.fetch(bankQuery(storedAt(POSITION, PAGE_MARK, new Date(NOW.getTime() - 1 * DAY))), { now: NOW });
+    await adapter.fetch(bankQuery(storedAt(POSITION, PAGE_MARK, new Date(NOW.getTime() - 2 * DAY))), { now: NOW });
+    expect(seen[0]).not.toBeNull();
+    expect(seen[1]).toBeNull();
+    // The pass start is read only from a cursor that is one.
+    expect(bankCursorPassStart(null)).toBeNull();
+    expect(bankCursorPassStart('garbage')).toBeNull();
+    expect(bankCursorPassStart(`${POSITION}|${PAGE_MARK}|not a time`)).toBeNull();
+    expect(bankCursorPassStart(`${POSITION}|bad-mark|${NOW.toISOString()}`)).toBeNull();
+  });
+
+  it('the list transport is unchanged: each of its passes reads the whole listing, and its own cursor has no pass to restart', () => {
+    expect(bankCursorPassStart(formatApiCursor(NOW, 3))).toBeNull();
+    expect(parseApiCursor(formatApiCursor(NOW, 3))).toEqual({ passStart: NOW, page: 3 });
+  });
+});
+
+describe('RoboHire\'s database sync is the parity wave\'s, unchanged: no pass start, no re-read for age (MARKET_STRATEGY 1.2; MKT-5E review)', () => {
+  afterEach(() => resetBankPublicJobUrlWarningsForTests());
+
+  const DAY = 86_400_000;
+  const POSITION = '2026-10-05T00:00:00.000Z|j9';
+  const ROBO_TEMPLATE = 'https://jobs.example.test/p/{id}';
+  const ROBO_ENV = { ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE: ROBO_TEMPLATE };
+  const ROBO_MARK = bankPageMark(ROBO_TEMPLATE);
+  const roboQuery = (cursor?: string): SourceQuery => ({ ...bankQuery(cursor), provider: 'bank_robohire', market: 'intl' });
+  const recording = () => {
+    const seen: Array<unknown> = [];
+    const read = async (_bank: unknown, cursor: unknown) => {
+      seen.push(cursor);
+      return [row('j1')];
+    };
+    return { seen, read: read as never };
+  };
+
+  it('the rule is the mainland market\'s: the international bank is never read again for its age', () => {
+    // jobs-maintain archives a row unseen for 45 days in market cn only; no rule reads an international row's lastSeenAt.
+    expect(bankMarket('robohire')).toBe('intl');
+    expect(bankRereads('robohire')).toBe(false);
+    expect(bankMarket('gohire')).toBe('cn');
+    expect(bankRereads('gohire')).toBe(true);
+  });
+
+  it('the cursor it writes is the parity form "<ISO>|<id>|<mark>", and a cursor of that form is continued: no restart at the first sync after the merge', async () => {
+    const { seen, read } = recording();
+    const adapter = createBankAdapter('robohire', { env: ROBO_ENV, read });
+    // A cursor as the parity wave stored it (three parts, no pass start), under the current template.
+    const out = await adapter.fetch(roboQuery(`${POSITION}|${ROBO_MARK}`), { now: NOW });
+    expect(seen[0]).toEqual({ updatedAt: new Date('2026-10-05T00:00:00.000Z'), id: 'j9' });
+    expect(out.cursor).toBe(`${formatBankCursor(row('j1'))}|${ROBO_MARK}`);
+    expect(bankCursorPassStart(out.cursor)).toBeNull();
+    expect(out.notes).toEqual({ bank_synced: 1 });
+    // The first sync of all: from the beginning, and the cursor is still the three-part one.
+    const first = await adapter.fetch(roboQuery(), { now: NOW });
+    expect(seen[1]).toBeNull();
+    expect(first.cursor).toBe(`${formatBankCursor(row('j1'))}|${ROBO_MARK}`);
+  });
+
+  it('with no template an unmarked cursor is continued and marked nopage (the parity assertion)', async () => {
+    const { seen, read } = recording();
+    const held = await createBankAdapter('robohire', { env: {}, read }).fetch(roboQuery(POSITION), { now: NOW });
+    expect(seen[0]).toEqual({ updatedAt: new Date('2026-10-05T00:00:00.000Z'), id: 'j9' });
+    expect(cursorWrittenWithoutPage(held.cursor)).toBe(true);
+    expect(held.cursor).toBe(`${formatBankCursor(row('j1'))}|nopage`);
+    expect(held.notes).toEqual({ bank_synced: 1, bank_no_public_page: 1 });
+  });
+
+  it('age never restarts it: no interval applies, whatever INGEST_BANK_RESYNC_DAYS says, and a dated cursor is continued and written back undated', async () => {
+    const { seen, read } = recording();
+    const adapter = createBankAdapter('robohire', { env: { ...ROBO_ENV, INGEST_BANK_RESYNC_DAYS: '1' }, read });
+    // The same three-part cursor, synced 400 days later: continued.
+    const later = await adapter.fetch(roboQuery(`${POSITION}|${ROBO_MARK}`), { now: new Date(NOW.getTime() + 400 * DAY) });
+    expect(seen[0]).not.toBeNull();
+    expect(later.notes).toEqual({ bank_synced: 1 });
+    // A cursor that carries a pass start (none is ever written for this bank) is read for its position only.
+    const dated = await adapter.fetch(roboQuery(`${POSITION}|${ROBO_MARK}|${new Date(NOW.getTime() - 400 * DAY).toISOString()}`), { now: NOW });
+    expect(seen[1]).toEqual({ updatedAt: new Date('2026-10-05T00:00:00.000Z'), id: 'j9' });
+    expect(dated.cursor).toBe(`${formatBankCursor(row('j1'))}|${ROBO_MARK}`);
+    expect(dated.notes).toEqual({ bank_synced: 1 });
   });
 });
 
@@ -740,26 +947,105 @@ describe('GoHire bank over HTTPS (interim list reader)', () => {
 });
 
 describe('GoHire syndication endpoint (cursor + tombstones)', () => {
+  afterEach(() => resetBankPublicJobUrlWarningsForTests());
+
+  /** A job as the syndication endpoint sends it (the contract of syndication.ts), plus fields the schema must strip. */
+  const syndicated = (id: string, over: Record<string, unknown> = {}) => ({
+    ...apiRow(id),
+    employerVerified: false,
+    syndicationConsentAt: null,
+    validFrom: null,
+    validUntil: null,
+    ...over,
+  });
+  const SYNDICATION_ENV = { ...TEMPLATE, GOHIRE_API_KEY: 'rh_test_key_never_logged', GOHIRE_SYNDICATION_URL: 'https://api.gohire.test/api/v1/syndication/jobs' };
+
   it('a cursor sync upserts rows and a tombstone closes one', async () => {
+    const calls: Array<{ url: string; headers: Record<string, string> | undefined; redirect: string | undefined }> = [];
+    const fetch: BankFetchLike = async (url, init) => {
+      calls.push({ url, headers: init.headers, redirect: init.redirect });
+      const body = {
+        items: [
+          syndicated('s1', {
+            updatedAt: '2026-10-06T00:00:00.000Z',
+            employerVerified: true,
+            syndicationConsentAt: '2026-09-01T00:00:00.000Z',
+            company: { id: 'c1', name: '某某科技', website: 'https://example.cn', internalNotes: 'COMPANY-SECRET' },
+          }),
+        ],
+        tombstones: [{ id: 's2', updatedAt: '2026-10-07T00:00:00.000Z', reason: 'closed', closedBy: 'RECRUITER-SECRET' }],
+        nextCursor: '2026-10-07T00:00:00.000Z|s2',
+        hasMore: false,
+      };
+      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+    };
+    // No `transport` override: the URL alone makes the syndication endpoint the transport.
+    const adapter = createBankAdapter('gohire', { env: SYNDICATION_ENV, fetch, pageSize: () => 200 });
+    expect(adapter.transport?.()).toBe('syndication');
+    const out = await adapter.fetch(bankQuery(storedAt('2026-10-05T00:00:00.000Z|j9')), { now: NOW });
+    // The endpoint is sent the position only, never our mark or pass start; the key travels in the header, and no redirect is followed.
+    expect(calls.map((c) => c.url)).toEqual(['https://api.gohire.test/api/v1/syndication/jobs?cursor=2026-10-05T00%3A00%3A00.000Z%7Cj9&limit=200']);
+    expect(calls[0]!.headers).toMatchObject({ 'X-API-Key': 'rh_test_key_never_logged' });
+    expect(calls[0]!.redirect).toBe('error');
+    expect(out.error).toBeUndefined();
+    expect(out.jobs).toHaveLength(1);
+    expect(out.jobs[0]).toMatchObject({ externalId: 's1', sourceBoard: 'gohire', applyUrl: 'https://example.test/p/s1', employerVerified: true, syndicationConsent: true, agencyPosting: false, bankCompanyRef: 'gohire:c1' });
+    expect(out.closedExternalIds).toEqual(['s2']);
+    expect(out.notes).toMatchObject({ bank_synced: 1, bank_closed: 1 });
+    expect(out.cursor).toBe(storedAt('2026-10-07T00:00:00.000Z|s2'));
+    expect(out.exhausted).toBe(true);
+    expect(out.listing).toBeNull();
+    expect(JSON.stringify(out)).not.toMatch(/SECRET|rh_test_key/);
+  });
+
+  it('with no stored cursor the endpoint is read from the beginning; hasMore, not the page size, says whether more follows', async () => {
     const calls: string[] = [];
     const fetch: BankFetchLike = async (url) => {
       calls.push(url);
-      const data = [
-        { ...apiRow('s1'), updatedAt: '2026-10-06T00:00:00.000Z', employerVerified: true, syndicationConsentAt: '2026-09-01T00:00:00.000Z', company: { id: 'c1', name: '某某科技', website: 'https://example.cn', internalNotes: 'COMPANY-SECRET' } },
-        { id: 's2', updatedAt: '2026-10-07T00:00:00.000Z', deleted: true },
-      ];
-      return { ok: true, status: 200, text: async () => JSON.stringify({ data }) };
+      return { ok: true, status: 200, text: async () => JSON.stringify({ items: [syndicated('s1')], tombstones: [], nextCursor: '2026-10-02T00:00:00.000Z|s1', hasMore: true }) };
     };
-    const env = { ...API_ENV, GOHIRE_SYNDICATION_URL: 'https://api.gohire.test/api/v1/syndication/jobs' };
-    const adapter = createBankAdapter('gohire', { env, transport: () => 'syndication', fetch, pageSize: () => 200 });
-    const out = await adapter.fetch(bankQuery(`2026-10-05T00:00:00.000Z|j9|${PAGE_MARK}`), { now: NOW });
-    // The endpoint is sent the position only, never our mark.
-    expect(calls).toEqual(['https://api.gohire.test/api/v1/syndication/jobs?cursor=2026-10-05T00%3A00%3A00.000Z%7Cj9&limit=200']);
-    expect(out.jobs).toHaveLength(1);
-    expect(out.jobs[0]).toMatchObject({ externalId: 's1', employerVerified: true, syndicationConsent: true, agencyPosting: false, bankCompanyRef: 'gohire:c1' });
-    expect(out.closedExternalIds).toEqual(['s2']);
-    expect(out.cursor).toBe(`2026-10-07T00:00:00.000Z|s2|${PAGE_MARK}`);
-    expect(JSON.stringify(out)).not.toMatch(/SECRET/);
+    const out = await createBankAdapter('gohire', { env: SYNDICATION_ENV, fetch, pageSize: () => 500 }).fetch(bankQuery(), { now: NOW });
+    // No cursor parameter at all, and the limit never exceeds the endpoint's 200.
+    expect(calls).toEqual(['https://api.gohire.test/api/v1/syndication/jobs?limit=200']);
+    expect(out.exhausted).toBe(false);
+    expect(out.cursor).toBe(storedAt('2026-10-02T00:00:00.000Z|s1'));
+  });
+
+  it('the row gates are the shared ones: an empty company, a test posting and a passed validity are closed and counted, a testing job is kept', async () => {
+    const items = [
+      syndicated('ok1', { title: '软件测试工程师' }),
+      syndicated('nocompany', { companyName: '' }),
+      syndicated('test1', { title: '测试岗位请勿投递' }),
+      syndicated('test2', { title: '测试简历匹配' }),
+      syndicated('ended', { validUntil: '2026-10-09T23:59:59+08:00' }),
+      syndicated('notopen', { status: 'paused' }),
+    ];
+    const fetch: BankFetchLike = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ items, tombstones: [], nextCursor: '2026-10-02T00:00:00.000Z|test2', hasMore: false }) });
+    const out = await createBankAdapter('gohire', { env: SYNDICATION_ENV, fetch }).fetch(bankQuery(), { now: NOW });
+    expect(out.jobs.map((j) => j.externalId)).toEqual(['ok1']);
+    expect(out.closedExternalIds).toEqual(['nocompany', 'test1', 'test2', 'ended', 'notopen']);
+    expect(out.notes).toEqual({ bank_synced: 1, bank_no_company: 1, bank_test_posting: 2, bank_validity_ended: 1, bank_closed: 1 });
+  });
+
+  it('with no posting page the syndicated rows are held like any other bank row', async () => {
+    const fetch: BankFetchLike = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ items: [syndicated('s1')], tombstones: [], nextCursor: '2026-10-02T00:00:00.000Z|s1', hasMore: false }) });
+    const env = { GOHIRE_API_KEY: 'k', GOHIRE_SYNDICATION_URL: SYNDICATION_ENV.GOHIRE_SYNDICATION_URL };
+    const out = await createBankAdapter('gohire', { env, fetch }).fetch(bankQuery(), { now: NOW });
+    expect(out.jobs).toEqual([]);
+    expect(out.closures).toEqual([{ externalIds: ['s1'], reason: 'no_apply_target' }]);
+    expect(out.listing).toEqual({ externalIds: [], reason: 'no_apply_target' });
+    expect(cursorWrittenWithoutPage(out.cursor)).toBe(true);
+  });
+
+  it('a plain-http endpoint on a public host is refused before any request; the answer is the error the operator sees', async () => {
+    const fetch = vi.fn<BankFetchLike>();
+    const env = { ...SYNDICATION_ENV, GOHIRE_SYNDICATION_URL: 'http://api.gohire.test/api/v1/syndication/jobs?token=URL-QUERY-SECRET' };
+    const adapter = createBankAdapter('gohire', { env, fetch });
+    // The wrong setting does not fall back to another transport: it is an error, not a silent switch.
+    expect(adapter.transport?.()).toBe('syndication');
+    const out = await adapter.fetch(bankQuery(), { now: NOW });
+    expect(out).toEqual({ jobs: [], calls: 0, error: 'syndication_url_not_https' });
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
 
@@ -811,14 +1097,93 @@ describe('bank clients: TLS, markets, guards', () => {
     expect(bankTransport('robohire', key)).toBe('off');
   });
 
-  it('the API is HTTPS only; the syndication URL is optional', () => {
-    expect(bankApiConfig('gohire', { GOHIRE_API_KEY: 'k' })).toEqual({ base: 'https://api.gohire.top', key: 'k', syndicationUrl: null });
+  it('GOHIRE_SYNDICATION_URL: the syndication endpoint is the transport whenever it is set, with no database URL needed; only `off` still disables the bank (MKT-5E)', () => {
+    const plain = 'postgresql://u:p@db.gohire.example/gh';
+    const tls = `${plain}?sslmode=require`;
+    const url = { GOHIRE_SYNDICATION_URL: 'https://api.gohire.test/api/v1/syndication/jobs' };
+    const scoped = { GOHIRE_SYNDICATION_KEY: 'syn' };
+    // The URL and a key are enough: the scoped key, or the general GoHire key as its fallback.
+    expect(bankTransport('gohire', { ...url, ...scoped })).toBe('syndication');
+    expect(bankTransport('gohire', { ...url, GOHIRE_API_KEY: 'k' })).toBe('syndication');
+    // It wins over a database that satisfies TLS, over the list endpoint, and over a `db` or `api` request.
+    expect(bankTransport('gohire', { ...url, ...scoped, DATABASE_URL_GOHIRE: tls })).toBe('syndication');
+    expect(bankTransport('gohire', { ...url, ...scoped, DATABASE_URL_GOHIRE: plain, GOHIRE_API_KEY: 'k' })).toBe('syndication');
+    expect(bankTransport('gohire', { ...url, ...scoped, DATABASE_URL_GOHIRE: tls, GOHIRE_BANK_TRANSPORT: 'db' })).toBe('syndication');
+    expect(bankTransport('gohire', { ...url, ...scoped, GOHIRE_API_KEY: 'k', GOHIRE_BANK_TRANSPORT: 'api' })).toBe('syndication');
+    // `off` still switches the bank off.
+    expect(bankTransport('gohire', { ...url, ...scoped, DATABASE_URL_GOHIRE: tls, GOHIRE_BANK_TRANSPORT: 'off' })).toBe('off');
+    expect(bankDisabledReason('gohire', { ...url, ...scoped, GOHIRE_BANK_TRANSPORT: 'off' })).toBe('transport_off');
+    // The URL without any key is off, and never silently the database instead.
+    expect(bankTransport('gohire', { ...url, DATABASE_URL_GOHIRE: tls })).toBe('off');
+    expect(bankDisabledReason('gohire', { ...url, DATABASE_URL_GOHIRE: tls })).toBe('no_api_key');
+    // An empty URL is no URL: the parity wave's rule decides, as before.
+    expect(bankTransport('gohire', { GOHIRE_SYNDICATION_URL: '  ', DATABASE_URL_GOHIRE: tls })).toBe('db');
+    expect(bankTransport('gohire', { GOHIRE_SYNDICATION_URL: '', GOHIRE_API_KEY: 'k' })).toBe('api');
+    // RoboHire has no syndication endpoint.
+    expect(bankTransport('robohire', { ...url, ...scoped })).toBe('off');
+    expect(bankSyndicationConfig('robohire', { ...url, ...scoped })).toBeNull();
+    // Both HTTPS transports are searched in the mirror; the database transport is not.
+    expect(bankReadsMirror('gohire', { ...url, ...scoped, DATABASE_URL_GOHIRE: tls })).toBe(true);
+    expect(bankReadsMirror('gohire', { GOHIRE_API_KEY: 'k' })).toBe(true);
+    expect(bankReadsMirror('gohire', { DATABASE_URL_GOHIRE: tls })).toBe(false);
+    expect(bankReadsMirror('gohire', {})).toBe(false);
+  });
+
+  it('the list endpoint is HTTPS only; the syndication endpoint has its own key, falling back to the GoHire key', () => {
+    expect(bankApiConfig('gohire', { GOHIRE_API_KEY: 'k' })).toEqual({ base: 'https://api.gohire.top', key: 'k' });
     expect(bankApiConfig('gohire', { GOHIRE_API_KEY: 'k', GOHIRE_API_BASE: 'https://api.example.test/' })).toMatchObject({ base: 'https://api.example.test' });
     expect(bankApiConfig('gohire', { GOHIRE_API_KEY: 'k', GOHIRE_API_BASE: 'http://api.example.test' })).toBeNull();
-    expect(bankApiConfig('gohire', { GOHIRE_API_KEY: 'k', GOHIRE_SYNDICATION_URL: 'http://api.example.test/s' })).toBeNull();
-    expect(bankApiConfig('gohire', { GOHIRE_API_KEY: 'k', GOHIRE_SYNDICATION_URL: 'https://api.example.test/s' })).toMatchObject({ syndicationUrl: 'https://api.example.test/s' });
     expect(bankApiConfig('gohire', {})).toBeNull();
     expect(bankApiConfig('robohire', { GOHIRE_API_KEY: 'k' })).toBeNull();
+    // The list endpoint never takes the scoped syndication key.
+    expect(bankApiConfig('gohire', { GOHIRE_SYNDICATION_KEY: 'syn' })).toBeNull();
+    const url = 'https://api.example.test/s';
+    expect(bankSyndicationConfig('gohire', { GOHIRE_SYNDICATION_URL: url, GOHIRE_SYNDICATION_KEY: 'syn', GOHIRE_API_KEY: 'k' })).toEqual({ url, key: 'syn' });
+    expect(bankSyndicationConfig('gohire', { GOHIRE_SYNDICATION_URL: ` ${url} `, GOHIRE_API_KEY: 'k' })).toEqual({ url, key: 'k' });
+    expect(bankSyndicationConfig('gohire', { GOHIRE_SYNDICATION_URL: url })).toBeNull();
+    expect(bankSyndicationConfig('gohire', { GOHIRE_SYNDICATION_KEY: 'syn' })).toBeNull();
+    // A URL that is not https is kept as set: the reader refuses it before any request (syndication_url_not_https).
+    expect(bankSyndicationConfig('gohire', { GOHIRE_SYNDICATION_URL: 'http://api.example.test/s', GOHIRE_API_KEY: 'k' })).toEqual({ url: 'http://api.example.test/s', key: 'k' });
+  });
+
+  it('with only the syndication URL and its key the GoHire bank is enabled: no database URL, no pool, and a `db` request is reported once as ignored', () => {
+    bankClientTest.resetCache();
+    const warn = vi.mocked(logger.warn);
+    warn.mockClear();
+    vi.stubEnv('DATABASE_URL_GOHIRE', '');
+    vi.stubEnv('DATABASE_URL_LIGHTARK', '');
+    vi.stubEnv('GOHIRE_API_KEY', '');
+    vi.stubEnv('GOHIRE_BANK_TRANSPORT', '');
+    vi.stubEnv('GOHIRE_SYNDICATION_URL', 'https://api.gohire.test/api/v1/syndication/jobs');
+    vi.stubEnv('GOHIRE_SYNDICATION_KEY', 'syn_key_never_logged');
+    vi.stubEnv('RA_CROSSBANK_CROSS_TENANT_CONFIRMED', 'true');
+    expect(bankTransport('gohire')).toBe('syndication');
+    expect(isBankEnabled('gohire')).toBe(true);
+    expect(getBankClient('gohire')).toBeNull();
+    const adapter = createBankAdapter('gohire');
+    expect(adapter.isEnabled()).toBe(true);
+    expect(adapter.transport?.()).toBe('syndication');
+    expect(adapter.disabledReason?.()).toBeNull();
+    expect(warn).not.toHaveBeenCalled();
+    // The legacy cross-tenant guard and the kill switches are unchanged on this transport.
+    vi.stubEnv('RA_CROSSBANK_CROSS_TENANT_CONFIRMED', 'false');
+    expect(isBankEnabled('gohire')).toBe(false);
+    expect(bankDisabledReason('gohire')).toBe('cross_tenant_unconfirmed');
+    vi.stubEnv('RA_CROSSBANK_CROSS_TENANT_CONFIRMED', 'true');
+    vi.stubEnv('RA_CROSSBANK_GOHIRE_DISABLED', 'true');
+    expect(isBankEnabled('gohire')).toBe(false);
+    vi.stubEnv('RA_CROSSBANK_GOHIRE_DISABLED', '');
+    // A configured database that the operator asked for is not read while the URL is set, and that is said once.
+    vi.stubEnv('DATABASE_URL_GOHIRE', 'postgresql://u:secret@db.gohire.example/gh?sslmode=require');
+    vi.stubEnv('GOHIRE_BANK_TRANSPORT', 'db');
+    expect(isBankEnabled('gohire')).toBe(true);
+    expect(isBankEnabled('gohire')).toBe(true);
+    expect(getBankClient('gohire')).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]![1])).toMatch(/GOHIRE_BANK_TRANSPORT is ignored/);
+    expect(JSON.stringify(warn.mock.calls)).not.toMatch(/secret|syn_key|api\.gohire\.test/);
+    bankClientTest.resetCache();
+    vi.unstubAllEnvs();
   });
 
   it('with the current env (non-TLS database URL, API key) the GoHire adapter is enabled over HTTPS and no database pool is opened', () => {
