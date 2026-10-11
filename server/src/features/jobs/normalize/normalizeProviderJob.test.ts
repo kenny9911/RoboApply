@@ -8,6 +8,8 @@ import bank from './__fixtures__/bank.json' with { type: 'json' };
 import fantastic from './__fixtures__/fantastic.json' with { type: 'json' };
 import jsearch from './__fixtures__/jsearch.json' with { type: 'json' };
 import { afterNormalize, type MarketHookSet } from '../marketHooks.js';
+import { providerOfBoard } from '../ingest/verifyFeed.js';
+import { getTaxonomyNode, taxonomyAncestors } from '../taxonomy/index.js';
 import {
   asMarketHookJob,
   inputFromBankJob,
@@ -18,6 +20,7 @@ import {
   marketOfPosting,
   normalizeProviderJob,
   normalizeSkills,
+  PROVIDER_META,
   taxonomyIdsForTitle,
   type NormalizedJob,
   type NormalizeProvider,
@@ -693,5 +696,219 @@ describe('PAR-7: mainland normalisation and the market of an employer-board post
     const firm = normalizeProviderJob(board({ sourceBoard: 'gohire', company: '某某人力资源服务有限公司' }), 'bank_gohire', { now });
     expect(firm.isAgency).toBe(true);
     expect(firm.company.isAgency).toBe(true);
+  });
+});
+
+// ── MKT-1C: the contracts the source wave builds on (MARKET_STRATEGY §1.2 to §1.5; MARKET_TASK_PLAN "Provider ids and adapter options") ──
+
+describe('MKT-1C: a role the source states (ProviderJobInput.taxonomyId)', () => {
+  // SYNTHETIC rows. The title names no role of the taxonomy (or another one), so only the source's own code can place it.
+  const base: ProviderJobInput = { externalId: 'tw:1', title: '儲備幹部', company: 'Formosa Example Co', location: '台北市中山區', applyUrl: 'https://example.com/jobs/1' };
+  const chain = (id: string) => taxonomyAncestors(id).map((n) => n.id).reverse();
+
+  it('a valid role (L3) id becomes the primary taxonomy id with its ancestors, source provider', () => {
+    expect(taxonomyIdsForTitle(base.title).primary).toBeNull();
+    const job = normalizeProviderJob({ ...base, taxonomyId: 'software_engineer' }, 'tw_open_data', { now });
+    expect(job.primaryTaxonomyId).toBe('software_engineer');
+    expect(job.taxonomyIds).toEqual(chain('software_engineer'));
+    expect(job.taxonomyIds).toHaveLength(3);
+    expect(job.fieldSources.taxonomy).toBe('provider');
+    expect(job.coverage.taxonomy).toBe(true);
+  });
+
+  it('the source\'s role wins over an unrelated title, for any provider', () => {
+    const titled = { ...base, title: 'Senior Product Manager' };
+    expect(normalizeProviderJob(titled, 'tw_open_data', { now })).toMatchObject({ primaryTaxonomyId: 'product_manager', fieldSources: { taxonomy: 'title' } });
+    for (const provider of ['tw_open_data', 'activejobs_feed', 'usajobs', 'ats_public'] as NormalizeProvider[]) {
+      const job = normalizeProviderJob({ ...titled, taxonomyId: ' software_engineer ' }, provider, { now });
+      expect(job.primaryTaxonomyId, provider).toBe('software_engineer');
+      expect(job.fieldSources.taxonomy, provider).toBe('provider');
+    }
+  });
+
+  it.each([
+    ['an unknown id', 'not_a_role_id'],
+    ['a group (L2) id', 'swe_backend'],
+    ['a category (L1) id', 'software_engineering'],
+    ['an empty string', ''],
+    ['null', null],
+    ['absent', undefined],
+  ])('%s is ignored: the title dictionary decides as before', (_label, taxonomyId) => {
+    if (typeof taxonomyId === 'string' && taxonomyId) expect(getTaxonomyNode(taxonomyId)?.level ?? 0).not.toBe(3);
+    const titled = { ...base, title: 'Senior Product Manager' };
+    const withId = normalizeProviderJob({ ...titled, taxonomyId }, 'tw_open_data', { now });
+    expect(withId).toEqual(normalizeProviderJob(titled, 'tw_open_data', { now }));
+    expect(withId).toMatchObject({ primaryTaxonomyId: 'product_manager', taxonomyIds: chain('product_manager'), fieldSources: { taxonomy: 'title' } });
+    // No title match either: no role at all (enrichment decides), never a guess.
+    const none = normalizeProviderJob({ ...base, taxonomyId }, 'tw_open_data', { now });
+    expect(none).toMatchObject({ primaryTaxonomyId: null, taxonomyIds: [], coverage: { taxonomy: false } });
+    expect(none.fieldSources.taxonomy).toBeUndefined();
+  });
+
+  it('the other new input fields are carried on the input only: nothing reads them yet', () => {
+    const plain = normalizeProviderJob(base, 'tw_open_data', { now });
+    const extra = normalizeProviderJob({ ...base, sponsorshipProvider: 'offered', locationDistrict: '中山區', workShift: '日班' }, 'tw_open_data', {
+      now,
+      companyDomains: new Map([[plain.companyNameNormalized, 'example.com']]),
+    });
+    expect(extra).toEqual(plain);
+  });
+});
+
+describe('MKT-1C: the four new providers', () => {
+  const minimal: ProviderJobInput = { externalId: 'x:1', title: 'Accountant', company: 'Example Works', applyUrl: 'https://example.com/jobs/1' };
+
+  it.each([
+    ['tw_open_data', { sourceBoard: 'tw_open_data', sourcePriority: 12, sourceName: '台灣就業通' }],
+    ['tw_gov_jobs', { sourceBoard: 'tw_gov_jobs', sourcePriority: 12, sourceName: '事求人' }],
+    ['usajobs', { sourceBoard: 'usajobs', sourcePriority: 8, sourceName: 'USAJOBS' }],
+    ['activejobs_feed', { sourceBoard: 'activejobs', sourcePriority: 10, sourceName: 'Active Jobs DB' }],
+  ] as Array<[NormalizeProvider, { sourceBoard: string; sourcePriority: number; sourceName: string }]>)('%s normalises a minimal input', (provider, expected) => {
+    const job = normalizeProviderJob(minimal, provider, { now });
+    expect(job).toMatchObject({
+      provider,
+      market: 'intl',
+      visibility: 'public',
+      ownerUserId: null,
+      externalId: 'x:1',
+      ...expected,
+      fromRecruiterBank: false,
+      employerVerified: false,
+      publicDisplay: false,
+      applyUrl: 'https://example.com/jobs/1',
+      originalHost: 'example.com',
+      salaryDisclosed: false,
+      salaryMin: null,
+      workModel: null,
+    });
+    expect(job.notes).toEqual([]);
+    // Deterministic, and a MarketHookJob like every other provider's row.
+    expect(normalizeProviderJob(minimal, provider, { now })).toEqual(job);
+    expect(asMarketHookJob(job).provider).toBe(provider);
+  });
+
+  it('the feed and the search provider write the same board, priority and source line: one posting, one row', () => {
+    const feed = normalizeProviderJob(minimal, 'activejobs_feed', { now });
+    const search = normalizeProviderJob(minimal, 'activejobs', { now });
+    expect({ ...feed, provider: 'activejobs', company: { ...feed.company, facts: search.company.facts } }).toEqual(search);
+    expect(feed.dedupeKey).toBe(search.dedupeKey);
+  });
+
+  it("the board 'activejobs' still resolves to the search provider in the feed check's reverse lookup", () => {
+    expect(providerOfBoard('activejobs')).toBe('activejobs');
+    expect(providerOfBoard('tw_open_data')).toBe('tw_open_data');
+    expect(providerOfBoard('tw_gov_jobs')).toBe('tw_gov_jobs');
+    expect(providerOfBoard('usajobs')).toBe('usajobs');
+    expect(providerOfBoard('jsearch')).toBe('jsearch');
+    expect(providerOfBoard('greenhouse')).toBe('ats_public');
+    // The rule that keeps it so: only the feed shares a board, and its entry comes before the search provider's.
+    const keys = Object.keys(PROVIDER_META);
+    expect(keys.indexOf('activejobs_feed')).toBeLessThan(keys.indexOf('activejobs'));
+    const boards = Object.entries(PROVIDER_META).filter(([p]) => p !== 'activejobs_feed').map(([, m]) => m.sourceBoard);
+    expect(new Set(boards).size).toBe(boards.length);
+  });
+
+  it('existing providers keep their priority, board and source name', () => {
+    expect(Object.fromEntries(Object.entries(PROVIDER_META).map(([p, m]) => [p, [m.sourcePriority, m.sourceBoard, m.aggregatorName, m.applicantCountAllowed, m.fromRecruiterBank]]))).toMatchObject({
+      activejobs: [10, 'activejobs', 'Active Jobs DB', true, false],
+      ats_public: [10, 'ats_public', null, true, false],
+      bank_robohire: [15, 'robohire', 'RoboHire', true, true],
+      bank_gohire: [15, 'gohire', 'GoHire', true, true],
+      linkedin: [20, 'linkedin', 'Fantastic Jobs', false, false],
+      jsearch: [30, 'jsearch', 'JSearch', false, false],
+      user_import: [90, 'user_import', null, false, false],
+    });
+    expect(Object.keys(PROVIDER_META).sort()).toEqual(
+      ['activejobs', 'activejobs_feed', 'ats_public', 'bank_gohire', 'bank_robohire', 'jsearch', 'linkedin', 'tw_gov_jobs', 'tw_open_data', 'usajobs', 'user_import'].sort(),
+    );
+  });
+
+  it('a government source carries no applicant count; the licensed feed may, with a citable source', () => {
+    const counted = { ...minimal, applicantCount: 12, applicantCountSource: 'Example ATS' };
+    for (const provider of ['tw_open_data', 'tw_gov_jobs', 'usajobs'] as NormalizeProvider[]) {
+      const job = normalizeProviderJob(counted, provider, { now });
+      expect(job, provider).toMatchObject({ applicantCount: null, applicantCountSource: null, applicantCountAt: null });
+      expect(job.notes, provider).toContain(`applicant_count_dropped:${provider}`);
+    }
+    expect(normalizeProviderJob(counted, 'activejobs_feed', { now })).toMatchObject({ applicantCount: 12, applicantCountSource: 'Example ATS' });
+  });
+
+  it('JT-1 end to end: a 台灣就業通 row with the no-figure sentence has no pay; numeric fields are the only figures', () => {
+    // SYNTHETIC row in the shape MKT-3E's adapter will hand over: SALARYCD as salaryText when NT_L / NT_U are '-'.
+    const row: ProviderJobInput = {
+      externalId: 'tw_open_data:SYNTHETIC-1',
+      title: '門市人員',
+      company: 'Formosa Example Co',
+      location: '台北市中山區',
+      locationCountry: 'TW',
+      applyUrl: 'https://example.com/tw/jobs/1',
+      salaryText: '依學經歷、證照核薪(每月經常性薪資達4萬元以上)',
+    };
+    const job = normalizeProviderJob(row, 'tw_open_data', { now });
+    expect(job).toMatchObject({
+      locationCountry: 'TW',
+      salaryDisclosed: false,
+      salaryMin: null,
+      salaryMax: null,
+      salaryAnnualMin: null,
+      salaryAnnualMax: null,
+      salaryCurrency: null,
+      salaryPeriod: null,
+      salarySource: null,
+      salaryText: '依學經歷、證照核薪(每月經常性薪資達4萬元以上)',
+    });
+    expect(job.fieldSources.salary).toBeUndefined();
+    expect(normalizeProviderJob({ ...row, salaryMin: 32000, salaryMax: 38000, salaryCurrency: 'TWD', salaryPeriod: 'month', salaryText: '月薪' }, 'tw_open_data', { now })).toMatchObject({
+      salaryDisclosed: true,
+      salaryMin: 32000,
+      salaryMax: 38000,
+      salaryCurrency: 'TWD',
+      salaryPeriod: 'month',
+      salarySource: 'provider',
+      salaryAnnualMin: 384000,
+    });
+  });
+
+  // Review finding (high): a recruiter-bank row is market cn whatever its location, and the licensed feed will
+  // serve the mainland too. A job in Taipei on such a row carried NT$40,000 as disclosed pay.
+  it('JT-1 end to end: a GoApply (market cn) row for a job in Taiwan never stores the threshold as pay', () => {
+    for (const salaryText of ['待遇面議（經常性薪資達4萬元或以上）', '依學經歷、證照核薪(每月經常性薪資達4萬元以上)', '面議，月薪5萬以上']) {
+      const row: ProviderJobInput = { externalId: 'bank:SYNTHETIC-TW-1', title: '後端工程師', company: 'Formosa Example Co', location: '台北市', locationCountry: 'TW', applyUrl: 'https://example.com/tw/jobs/2', salaryText };
+      for (const provider of ['bank_gohire', 'bank_robohire', 'activejobs_feed'] as NormalizeProvider[]) {
+        const job = normalizeProviderJob(row, provider, { now, market: 'cn' });
+        expect(job, `${provider} ${salaryText}`).toMatchObject({
+          market: 'cn',
+          locationCountry: 'TW',
+          salaryDisclosed: false,
+          salaryMin: null,
+          salaryMax: null,
+          salaryAnnualMin: null,
+          salaryCurrency: null,
+          salaryPeriod: null,
+          salaryText: salaryText.normalize('NFKC'),
+        });
+      }
+      // The clause in the description only, wording on one line and the clause on the next.
+      const inDescription = normalizeProviderJob({ ...row, salaryText: null, description: '工作內容：後端開發\n薪資：依學經歷、證照核薪\n（每月經常性薪資達4萬元以上）' }, 'bank_gohire', { now, market: 'cn' });
+      expect(inDescription).toMatchObject({ salaryDisclosed: false, salaryMin: null, salaryAnnualMin: null, salaryText: '依學經歷、證照核薪' });
+    }
+    // The statute's wording on a mainland row whose location is unknown: never ¥40,000 a month.
+    const unknown = normalizeProviderJob({ externalId: 'bank:SYNTHETIC-TW-2', title: '后端工程师', company: 'Example Co', applyUrl: 'https://example.com/jobs/3', salaryText: '待遇面議（經常性薪資達4萬元或以上）' }, 'bank_gohire', { now, market: 'cn' });
+    expect(unknown).toMatchObject({ market: 'cn', salaryDisclosed: false, salaryMin: null, salaryCurrency: null });
+    // A mainland posting's own minimum next to 面议 is unchanged.
+    const mainland = normalizeProviderJob({ externalId: 'bank:SYNTHETIC-CN-1', title: '后端工程师', company: 'Example Co', location: '上海', locationCountry: 'CN', applyUrl: 'https://example.com/jobs/4', salaryText: '薪资面议，月薪5万以上' }, 'bank_gohire', { now, market: 'cn' });
+    expect(mainland).toMatchObject({ market: 'cn', salaryDisclosed: true, salaryMin: 50000, salaryMax: null, salaryCurrency: 'CNY', salaryPeriod: 'month' });
+  });
+
+  // Review finding: a posting whose description lists payroll work (核薪) and states no pay stores no pay text.
+  it('a description that lists 核薪 as a duty stores no pay text (D3)', () => {
+    for (const [market, country, location] of [['intl', 'TW', '台北市'], ['cn', 'CN', '上海']] as const) {
+      const job = normalizeProviderJob(
+        { externalId: `ats:SYNTHETIC-HR-${market}`, sourceBoard: 'greenhouse', title: '人資專員', company: 'Formosa Example Co', location, locationCountry: country, applyUrl: 'https://example.com/jobs/5', description: '工作內容：\n1. 負責每月薪資核算、核薪、勞健保加退保\n2. 负责公司绩效考核薪酬体系搭建\n3. 人資將審核薪水並核薪' },
+        'ats_public',
+        { now, market },
+      );
+      expect(job, market).toMatchObject({ salaryDisclosed: false, salaryMin: null, salaryMax: null, salaryText: null, salarySource: null });
+    }
   });
 });

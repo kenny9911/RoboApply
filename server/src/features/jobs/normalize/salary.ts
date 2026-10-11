@@ -8,11 +8,26 @@
 //     year × 1. No period stated → no annual figures.
 //   - Pay parsed from text sets salarySource = 'posting_text'; structured
 //     provider fields set 'provider'.
-//   - Taiwan (TW-03): 面議 / 待遇面議 / 依公司規定 means pay is NOT disclosed.
-//     The legal floor sentence that comes with it ("經常性薪資達4萬元或以上")
-//     is not a figure for this job: no amount is stored and the verbatim text
-//     is kept in salaryText. A real figure or range in the same posting is
-//     parsed as usual.
+//   - Taiwan (TW-03, JT-1): 面議 / 待遇面議 / 依公司規定 and the open-data
+//     wording 依學經歷、證照核薪 (台灣就業通's own words for "no figure") mean
+//     pay is NOT disclosed. The Employment Services Act Art. 5 clause that
+//     comes with them ("經常性薪資達4萬元或以上") restates the statutory
+//     threshold; it is not a figure for this job: no amount is stored and the
+//     verbatim text is kept in salaryText. The clause is recognised at any
+//     threshold (the ministry has announced a higher one). Which words are
+//     the clause is decided in one place (`floorClauses` / `isFloorClause`):
+//       · with the statute's own term (經常性薪資達4萬元以上) it is the clause
+//         wherever it stands, in any market, with or without 面議 beside it,
+//         on its own line of a description too: it is itself "pay not listed";
+//       · with a Taiwan-dollar marker (月薪 NT$40,000 以上) it is the clause
+//         next to "pay not listed" wording, in any market;
+//       · bare (月薪5萬以上) it is the clause next to such wording only for a
+//         job in Taiwan, or an international row whose country is unknown.
+//         "月薪 5萬以上" on its own is a stated minimum, and so is a mainland
+//         or Hong Kong posting's "面议，月薪5万以上";
+//       · an amount in another currency or for another period (HK$40,000,
+//         年薪 USD 60,000) is never the clause.
+//     A real figure or range in the same posting is parsed as usual.
 //   - Mainland China: "15-25K·14薪" → monthly 15000–25000 CNY, salaryMonths 14;
 //     "200-300元/天" → daily; "30-50万/年" → yearly; "面议" → not disclosed.
 //     A K / 万 figure with no period is a month's pay by the market's
@@ -39,7 +54,10 @@
 //     that say so (not the rest of the sentence: "Competitive Pay and
 //     Benefits, including medical…" is not pay text). `statesAmount` tells a
 //     reader whether a pay text carries a figure worth showing as "Pay as
-//     stated".
+//     stated". The two short Taiwan forms count in a description only where
+//     the line is about pay: bare 核薪 on a labelled pay line ("薪資：核薪";
+//     "負責薪資核算、核薪" is a payroll duty), bare 依學經歷 when its own
+//     clause names pay. A duties line never becomes pay text (D3).
 
 import type { SalaryPeriod, SalarySource } from './types.js';
 
@@ -170,11 +188,164 @@ export function currencyFromText(text: string, country: string | null, market: '
 
 // ── Amounts ────────────────────────────────────────────────────────────────
 
-export const NEGOTIABLE_RE = /待遇面議|薪資面議|薪资面议|薪酬面议|面議|面议|依公司規定|依公司规定|按公司规定|\bnegotiable\b|\bcompetitive (?:salary|pay|compensation)\b|\bDOE\b|depending on experience|commensurate with experience/i;
-/** TW legal floor sentence accompanying 面議 (Employment Services Act Art. 5). */
-// The digit lookbehinds keep "104萬以上" / "140,000以上" (real figures) out of the scrub.
-export const TW_FLOOR_RE =
-  /(?:經常性)?(?:薪資|薪资|月薪)?\s*(?:達|达)?\s*(?:新台幣|NT\$)?\s*(?<![\d.,，〇一二三四五六七八九十百千])(?:4|四)\s*萬(?:元)?\s*(?:或)?以上|(?:經常性)?薪資達\s*(?<![\d.,，])40,?000\s*元?\s*(?:或)?以上/;
+/**
+ * 核薪 ("pay is set by …") as wording of its own. Not inside 核薪方式 (a field
+ * label), 核薪作業 / 核薪人員 (payroll work), or 審核薪資 / 考核薪酬 / 審核薪水
+ * (reviewing pay): those say nothing about this job's pay.
+ */
+const HE_XIN = '(?<![審审考稽查複复覆])核薪(?!方式|資|资|酬|水|作業|作业|人員|人员)';
+
+/** 台灣就業通's phrase in full: 依學經歷、證照核薪 (with or without the comma and 證照). */
+const BY_EDUCATION_PAY = `依學經歷[、,，]?\\s*(?:證照)?\\s*${HE_XIN}|依学经历[、,，]?\\s*(?:证照)?\\s*${HE_XIN}`;
+
+/**
+ * The Chinese "pay not listed" wording that says so wherever it stands in a
+ * sentence: everything in `CJK_NEGOTIABLE_SOURCE` except its two short forms,
+ * bare 依學經歷 and bare 核薪. In running text those are also about other
+ * things ("依學經歷分派職務", "負責薪資核算、核薪"); see `saysPayNotListed`.
+ */
+const CJK_NEGOTIABLE_FIRM =
+  '待遇面議|薪資面議|薪资面议|薪酬面议|面議|面议' +
+  '|依公司規定|依公司规定|按公司規定|按公司规定' +
+  `|${BY_EDUCATION_PAY}`;
+
+/**
+ * Chinese wording for "pay is not stated as a figure" (Taiwan and mainland
+ * forms), as a regular-expression source. The pay parser below builds on it;
+ * the Taiwan card text (jobs/sources/atsPublic/hooks.ts `TW_NEGOTIABLE_SOURCE`)
+ * holds the same list, and atsPublic.test.ts fails when the two differ.
+ * Longest alternatives first, so a match is the whole phrase.
+ *   面議 family           the posting says pay is negotiable;
+ *   依公司規定 family     pay follows the company's rules;
+ *   依學經歷、證照核薪    台灣就業通's open-data wording when a row carries no
+ *                         figure (pay set by education, experience and
+ *                         certificates), with 依學經歷 and 核薪 on their own.
+ *                         Not 核薪 inside other words (see HE_XIN). The two
+ *                         short forms count in a pay field; in a job
+ *                         description they count only where the line is
+ *                         about pay (see `saysPayNotListed`).
+ */
+export const CJK_NEGOTIABLE_SOURCE = `${CJK_NEGOTIABLE_FIRM}|依學經歷|依学经历|${HE_XIN}`;
+
+const NEGOTIABLE_EN = String.raw`\bnegotiable\b|\bcompetitive (?:salary|pay|compensation)\b|\bDOE\b|depending on experience|commensurate with experience`;
+export const NEGOTIABLE_RE = new RegExp(`${CJK_NEGOTIABLE_SOURCE}|${NEGOTIABLE_EN}`, 'i');
+/** The same without the two short forms: wording that says "pay not listed" anywhere in a description. */
+const NEGOTIABLE_FIRM_RE = new RegExp(`${CJK_NEGOTIABLE_FIRM}|${NEGOTIABLE_EN}`, 'i');
+
+/** Not the top of a stated range ("4萬~5萬以上", "3萬至5萬以上"): that is a figure. */
+const TW_FLOOR_NOT_RANGE_TOP = String.raw`(?<![\d０-９萬万元kK]\s*[-–—~～〜至到]\s*)`;
+
+/** The statute's own term for the wage the threshold is about (經常性薪資, "regular wage"). */
+export const TW_FLOOR_STATUTE_SOURCE = '經常性|经常性';
+/** A Taiwan-dollar marker in front of the amount. */
+export const TW_FLOOR_TWD_SOURCE = String.raw`新台幣|新臺幣|新台币|台幣|臺幣|台币|NT\$|NTD|TWD`;
+
+/**
+ * The Employment Services Act Art. 5 clause a "pay not listed" posting repeats
+ * ("經常性薪資達4萬元或以上", "每月經常性薪資達4萬元以上", "月薪 NT$50,000 以上"),
+ * as a regular-expression source: the SHAPE of the clause. Whether a match is
+ * the clause for a given job is `isFloorClause` below. The pay parser scrubs
+ * it before reading figures and the Taiwan card text removes it (the same
+ * pattern in jobs/sources/atsPublic/hooks.ts, kept in step by
+ * atsPublic.test.ts).
+ *
+ * Threshold-agnostic: the statutory threshold is a round amount of ten
+ * thousands (the ministry has announced a higher one than today's; not
+ * passed), so any of 4萬 to 9萬 is recognised and no amount is hard-coded.
+ * Written for text before or after NFKC (full-width digits, commas and
+ * brackets). Guards:
+ *   - digit look-behinds keep "104萬以上" / "140,000以上" / "4.5萬以上" (real
+ *     figures) out of it;
+ *   - the top of a stated range ("4萬~5萬以上", "3萬至5萬以上") is a figure.
+ * No capturing group (callers read match[0] and the match offset).
+ */
+export const TW_FLOOR_CLAUSE_SOURCE =
+  String.raw`(?:每月)?(?:${TW_FLOOR_STATUTE_SOURCE})?(?:薪資|薪资|月薪)?\s*(?:達到|达到|達|达|為|为|[:：])?\s*(?:${TW_FLOOR_TWD_SOURCE})?\s*` +
+  String.raw`(?:${TW_FLOOR_NOT_RANGE_TOP}(?<![\d０-９.,，〇一二三四五六七八九十百千])[4-9４-９四五六七八九]\s*[萬万]` +
+  String.raw`|${TW_FLOOR_NOT_RANGE_TOP}(?<![\d０-９.,，])[4-9４-９][0０][,，]?[0０]{3})` +
+  String.raw`\s*元?\s*(?:[(（]含[)）])?\s*(?:或)?\s*以上`;
+/** The shape of the statutory-threshold clause (first match; see `floorClauses` for the rule). */
+export const TW_FLOOR_RE = new RegExp(TW_FLOOR_CLAUSE_SOURCE);
+
+/**
+ * Text that ends by naming another currency or another pay period: an amount
+ * that follows it ("HK$40,000 以上", "年薪 USD 60,000 以上", "時薪 …") is not
+ * the clause, which is about a month's regular wage in Taiwan dollars. Tested
+ * on the text in front of a clause-shaped match, case-insensitively.
+ */
+export const TW_FLOOR_OTHER_PAY_BEFORE_SOURCE =
+  String.raw`(?:US\$|HK\$|S\$|A\$|AU\$|C\$|CA\$|R\$|MX\$|JP¥|USD|HKD|SGD|AUD|CAD|CNY|RMB|JPY|GBP|EUR|INR|KRW|CHF|MOP|MYR|[¥￥£€₹₩]` +
+  String.raw`|美元|美金|港幣|港币|港元|澳門幣|澳门币|人民幣|人民币|日圓|日元|歐元|欧元|英鎊|英镑|新加坡幣|新加坡币` +
+  String.raw`|年薪|年收入|年收|時薪|时薪|日薪|週薪|周薪)\s*(?:約|约|為|为|達到|达到|達|达|[:：])?\s*$`;
+
+const TW_FLOOR_ALL_RE = new RegExp(TW_FLOOR_CLAUSE_SOURCE, 'g');
+const TW_FLOOR_STATUTE_RE = new RegExp(TW_FLOOR_STATUTE_SOURCE);
+const TW_FLOOR_TWD_RE = new RegExp(TW_FLOOR_TWD_SOURCE);
+const TW_FLOOR_OTHER_PAY_BEFORE_RE = new RegExp(TW_FLOOR_OTHER_PAY_BEFORE_SOURCE, 'i');
+
+/**
+ * How a clause-shaped match names its amount:
+ *   statute  with the statute's own term (經常性薪資達4萬元以上);
+ *   twd      with a Taiwan-dollar marker (月薪 NT$40,000 以上);
+ *   bare     neither (月薪5萬以上, 4萬元以上).
+ */
+type FloorClauseKind = 'statute' | 'twd' | 'bare';
+interface FloorClauseMatch {
+  index: number;
+  text: string;
+  kind: FloorClauseKind;
+}
+
+/** Where a job is, and whether its pay wording says "not listed". */
+interface FloorClauseWhere {
+  country?: string | null;
+  market?: 'intl' | 'cn';
+  negotiable: boolean;
+}
+
+/** Every clause-shaped match in the text, minus amounts in another currency or for another period. */
+function floorClauses(s: string): FloorClauseMatch[] {
+  const out: FloorClauseMatch[] = [];
+  for (const m of s.matchAll(TW_FLOOR_ALL_RE)) {
+    const index = m.index ?? 0;
+    if (TW_FLOOR_OTHER_PAY_BEFORE_RE.test(s.slice(0, index))) continue;
+    const kind: FloorClauseKind = TW_FLOOR_STATUTE_RE.test(m[0]) ? 'statute' : TW_FLOOR_TWD_RE.test(m[0]) ? 'twd' : 'bare';
+    out.push({ index, text: m[0], kind });
+  }
+  return out;
+}
+
+/**
+ * THE rule: is this clause-shaped match the statutory clause for this job (and
+ * so never a figure for it)?
+ *   statute  always. No posting uses the statute's term for anything else, in
+ *            any market: a GoHire or licensed-feed row for a job in Taipei
+ *            carries the same sentence.
+ *   twd      next to "pay not listed" wording, in any market.
+ *   bare     next to such wording, for a job in Taiwan, or on an international
+ *            row whose country is unknown. Never for a job known to be
+ *            elsewhere, and never on a mainland row of unknown country: there
+ *            "面议，月薪5万以上" states a real minimum.
+ */
+function isFloorClause(kind: FloorClauseKind, where: FloorClauseWhere): boolean {
+  if (kind === 'statute') return true;
+  if (!where.negotiable) return false;
+  if (kind === 'twd') return true;
+  const country = where.country?.toUpperCase() || null;
+  return country === 'TW' || (country === null && (where.market ?? 'intl') === 'intl');
+}
+
+/** The text with its statutory clauses blanked out (by `isFloorClause`). */
+function withoutFloorClauses(s: string, clauses: readonly FloorClauseMatch[], where: FloorClauseWhere): string {
+  let out = '';
+  let at = 0;
+  for (const c of clauses) {
+    if (!isFloorClause(c.kind, where)) continue;
+    out += `${s.slice(at, c.index)} `;
+    at = c.index + c.text.length;
+  }
+  return at === 0 ? s : out + s.slice(at);
+}
 
 const CUR_PREFIX = String.raw`(?:US\$|NT\$|HK\$|S\$|A\$|AU\$|C\$|CA\$|R\$|MX\$|JP¥|USD|TWD|NTD|CNY|RMB|HKD|SGD|GBP|EUR|CAD|AUD|INR|JPY|[$£€¥￥₹₩])`;
 const NUM = String.raw`(\d{1,3}(?:[,，]\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)`;
@@ -214,9 +385,12 @@ export function parseSalaryText(text: string | null | undefined, opts: { country
   const market = opts.market ?? 'intl';
   const verbatim = s.slice(0, 80);
 
-  const negotiable = NEGOTIABLE_RE.test(s);
-  // TW 面議 + the legal floor sentence: not a figure for this job (TW-03).
-  const scrubbed = negotiable ? s.replace(TW_FLOOR_RE, ' ') : s;
+  const mainland = market === 'cn' || country === 'CN';
+  const floors = floorClauses(s);
+  // "Pay not listed": the wording, or the statute's own clause standing alone (it is the same statement).
+  const negotiable = NEGOTIABLE_RE.test(s) || floors.some((f) => f.kind === 'statute');
+  // The statutory-threshold clause is not a figure for this job (TW-03, JT-1): see `isFloorClause`.
+  const scrubbed = withoutFloorClauses(s, floors, { country, market, negotiable });
 
   let min: number | null = null;
   let max: number | null = null;
@@ -259,7 +433,6 @@ export function parseSalaryText(text: string | null | undefined, opts: { country
   if (!period && months != null) period = 'month';
   const hasUnit = /[kK千万萬]|[wW](?=\W|$)/.test(range?.[0] ?? scrubbed);
   const hasSymbol = new RegExp(CUR_PREFIX).test(range?.[0] ?? scrubbed);
-  const mainland = market === 'cn' || country === 'CN';
   let currency = currencyFromText(s, country, market);
   // Chinese-language pay text in a Chinese-speaking market without a symbol ("15-25K·14薪", "月薪 4萬~5萬").
   if (!currency && cjk) currency = CJK_MARKET_CURRENCY[country ?? ''] ?? (market === 'cn' ? 'CNY' : null);
@@ -289,6 +462,12 @@ export function parseSalaryText(text: string | null | undefined, opts: { country
 // ── Description pay lines ──────────────────────────────────────────────────
 
 const PAY_WORD_RE = /\b(salary|salaries|pay|pay range|pay rate|base pay|compensation|wage|wages|hourly rate|ote|remuneration)\b|薪资|薪資|待遇|月薪|年薪|时薪|時薪|日薪|薪酬|工资|工資|薪水/i;
+/**
+ * A description line worth reading for pay: it names pay, or it is the
+ * 台灣就業通 phrase 依學經歷…核薪, which says "pay not listed" with no other pay
+ * word beside it. Bare 核薪 does not open a line: it is also a payroll duty.
+ */
+const PAY_LINE_RE = new RegExp(`${PAY_WORD_RE.source}|${BY_EDUCATION_PAY}`, 'i');
 const CJK_PAY_WORD_RE = /薪资|薪資|待遇|月薪|年薪|时薪|時薪|日薪|薪酬|工资|工資|薪水/;
 /** Clauses about something other than base pay. */
 const NOT_BASE_PAY_RE =
@@ -328,23 +507,55 @@ function isPayClause(clause: string): boolean {
 
 /**
  * The words of a description line that say pay is negotiable, with the TW
- * legal-floor sentence when it comes with them ("待遇面議（經常性薪資達4萬元
- * 或以上）"). A verbatim slice of the line, never the whole sentence.
+ * statutory-threshold clause when it comes with them ("待遇面議（經常性薪資達
+ * 4萬元或以上）", "依學經歷、證照核薪(每月經常性薪資達4萬元以上)"). A verbatim
+ * slice of the line, never the whole sentence.
  */
-function negotiablePhrase(line: string): string | null {
+function negotiablePhrase(line: string, where: Omit<FloorClauseWhere, 'negotiable'>): string | null {
   const s = line.normalize('NFKC').replace(/\s+/g, ' ').trim();
-  const m = s.match(NEGOTIABLE_RE);
-  if (!m || m.index == null) return null;
-  let start = m.index;
-  let end = m.index + m[0].length;
-  const floor = s.match(TW_FLOOR_RE);
-  if (floor && floor.index != null) {
+  // A firm phrase first: in "協助核薪，待遇面議" the words that say it are 待遇面議.
+  const m = s.match(NEGOTIABLE_FIRM_RE) ?? s.match(NEGOTIABLE_RE);
+  const floor = floorClauses(s).find((f) => isFloorClause(f.kind, { ...where, negotiable: true }));
+  if ((!m || m.index == null) && !floor) return null;
+  // The clause alone (the statute's own words on a line of their own) is the phrase.
+  let start = m?.index ?? floor!.index;
+  let end = m?.index != null ? m.index + m[0].length : floor!.index + floor!.text.length;
+  if (floor) {
     start = Math.min(start, floor.index);
-    end = Math.max(end, floor.index + floor[0].length);
+    end = Math.max(end, floor.index + floor.text.length);
   }
-  // A bracket the floor sentence sits in closes with it.
-  if (/^[)）]/.test(s.slice(end))) end += 1;
+  // A bracket the floor sentence sits in closes with it (and opens with it when the clause stands alone).
+  if (/^[)）]/.test(s.slice(end))) {
+    end += 1;
+    if (floor && start === floor.index && /[(（]$/.test(s.slice(0, start))) start -= 1;
+  }
   return s.slice(start, end).trim().slice(0, 80) || null;
+}
+
+const LINE_LEAD_RE = /^[\s\-–—•●○◆■□▪*·>]+|^\s*[(（]?\d{1,2}[.、)）]\s*/;
+
+/** Bare 依學經歷 is about pay when its own clause names pay ("薪資依學經歷而定", "依學經歷敘薪"). */
+const BY_EDUCATION_RE = /依學經歷|依学经历/;
+const PAY_TIE_RE = new RegExp(`${CJK_PAY_WORD_RE.source}|敘薪|叙薪|起薪|議薪|议薪|給薪|给薪|計薪|计薪`);
+
+/**
+ * Does a description line that reads as "pay not listed" really say so? Yes
+ * for the firm phrases (面議, 依公司規定, 依學經歷…核薪, "competitive salary"),
+ * for the statute's own clause, and for any wording on a labelled pay line
+ * ("薪資：核薪", "待遇：依學經歷"). The two short forms need more than a pay
+ * word somewhere on the line (D3: never a pay statement the posting did not
+ * make):
+ *   bare 依學經歷  counts when its own clause names pay ("本公司薪資依學經歷
+ *                  而定"), not in "熟悉薪資作業，依學經歷分派職務";
+ *   bare 核薪      counts only on a labelled pay line: "負責薪資核算、核薪、
+ *                  勞健保" is a payroll duty.
+ */
+function saysPayNotListed(line: string): boolean {
+  const s = line.normalize('NFKC');
+  if (NEGOTIABLE_FIRM_RE.test(s)) return true;
+  if (floorClauses(s).some((f) => f.kind === 'statute')) return true;
+  if (PAY_LABEL_RE.test(s.replace(LINE_LEAD_RE, ''))) return true;
+  return s.split(/[,，、;；。]/).some((clause) => BY_EDUCATION_RE.test(clause) && PAY_TIE_RE.test(clause));
 }
 
 /**
@@ -357,22 +568,38 @@ export function withoutPayLabel(text: string): string {
   return stripped || text;
 }
 
-/** The first pay statement in the description's pay clauses (a range or an explicit period), else null. */
+/**
+ * The first pay statement in the description's pay clauses (a range or an
+ * explicit period), else the words that say pay is not listed, else null.
+ *
+ * A description is read as one posting: when any of its pay lines says "pay
+ * not listed", the statutory clause is the clause on every other line too
+ * ("待遇：面議" and, a line below, "月薪達5萬元以上"), by the same rule as in
+ * a pay field (`isFloorClause`). The statute's own wording ("每月經常性薪資達
+ * 4萬元以上") is never a figure wherever it stands.
+ */
 export function payFromDescription(description: string | null | undefined, opts: { country?: string | null; market?: 'intl' | 'cn' } = {}): ParsedPay | null {
   if (!description) return null;
   const lines = description.normalize('NFKC').split(/\n|(?<=[.。;；])\s+/);
+  const where = { country: opts.country ?? null, market: opts.market ?? 'intl' };
   let negotiable: ParsedPay | null = null;
+  const figureLines: string[] = [];
   for (const line of lines) {
-    if (!PAY_WORD_RE.test(line)) continue;
-    // "待遇面議（經常性薪資達4萬元或以上）": a TW negotiable statement is read on the whole line.
+    if (!PAY_LINE_RE.test(line)) continue;
+    // "待遇面議（經常性薪資達4萬元或以上）", "依學經歷、證照核薪(…)": a TW negotiable statement is read on the whole line.
     // Benefit-plan names ("401k") are not figures and must not hide the statement.
     const whole = parseSalaryText(line.replace(PLAN_TOKEN_RE, ' '), opts);
     if (whole?.negotiable) {
       // Keep the words that say it, not the rest of the sentence around them.
-      negotiable ??= { ...whole, text: negotiablePhrase(line) ?? whole.text };
+      if (saysPayNotListed(line)) negotiable ??= { ...whole, text: negotiablePhrase(line, where) ?? whole.text };
       continue;
     }
-    for (const clause of payClauses(line)) {
+    figureLines.push(line);
+  }
+  for (const line of figureLines) {
+    for (const raw of payClauses(line)) {
+      // The posting says "pay not listed" on another line: the clause here is the statute's, not a figure.
+      const clause = negotiable ? withoutFloorClauses(raw, floorClauses(raw), { ...where, negotiable: true }) : raw;
       if (!isPayClause(clause)) continue;
       const parsed = parseSalaryText(clause, opts);
       if (!parsed || parsed.negotiable) continue;

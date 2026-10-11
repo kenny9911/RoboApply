@@ -16,7 +16,11 @@
 import type { Market } from '../../../platform/brand/index.js';
 import type { NormalizeProvider, ProviderJobInput } from '../normalize/index.js';
 
-/** Every provider ingest knows: the brand registry's JobProvider plus WP-42's `ats_public`. */
+/**
+ * Every provider ingest knows: the brand registry's JobProvider plus the
+ * sources that join a brand through their market (`ats_public`,
+ * `tw_open_data`, `tw_gov_jobs`, `usajobs`, `activejobs_feed`).
+ */
 export type IngestProvider = NormalizeProvider;
 
 /** `RAIngestQuery.origin`. */
@@ -24,7 +28,10 @@ export type IngestOrigin = 'demand' | 'seo_seed' | 'manual' | 'bank_sync';
 
 /** `RAIngestQuery.params` (contract: `IngestQueryParamsSchema` in jobs/companies/contract.ts). */
 export interface IngestQueryParams {
-  /** Role text in English (taxonomy L3 label) — '' for bank syncs. */
+  /**
+   * Role text in the query language (English, or Traditional Chinese for a
+   * Taiwan variant): a taxonomy L3 label. '' for bank syncs.
+   */
   q: string;
   taxonomyId?: string;
   /** ISO 3166-1 alpha-2 upper case, or '*' (bank syncs span countries). */
@@ -128,15 +135,33 @@ export interface SourceFetchResult {
   error?: string | null;
 }
 
+/**
+ * What a call to the source costs us (MARKET_STRATEGY §1.2, JI-2):
+ *   'free'         no metered plan (our own bank databases, public employer
+ *                  boards, government open data);
+ *   'per_job'      the plan counts the postings returned (Active Jobs DB);
+ *   'per_request'  the plan counts requests (JSearch): never spent on SEO
+ *                  seed queries, only on a user's own demand.
+ */
+export type SourceCostModel = 'free' | 'per_job' | 'per_request';
+
 export interface JobSourceAdapter {
   readonly provider: IngestProvider;
   readonly kind: 'search' | 'cursor';
   /** Markets whose ingest may use this adapter. */
   readonly markets: readonly Market[];
+  /** What a call costs (see SourceCostModel). Absent: `adapterCostModel` decides by provider id. */
+  readonly costModel?: SourceCostModel;
   /** RAJob.sourceBoard values this adapter writes (maintenance uses them). */
   readonly sourceBoards: readonly string[];
   /** Key present, kill switch off, guards closed (cheap; never throws). */
   isEnabled(): boolean;
+  /**
+   * The same question for one market, for an adapter that serves several and
+   * is on for some of them only (a quota gate or a flag per market). Absent:
+   * `isEnabled()` answers for every market. Read through `adapterEnabledFor`.
+   */
+  isEnabledFor?(market: Market): boolean;
   /** Search adapters: can this source search the country (ISO alpha-2)? */
   supportsCountry(country: string): boolean;
   /** Daily outbound-call budget (RAProviderUsage); null = not metered (our own bank DBs). */
@@ -147,4 +172,31 @@ export interface JobSourceAdapter {
   disabledReason?(): string | null;
   /** Never throws: failures come back as `{ jobs: [], calls, error }`. */
   fetch(query: SourceQuery, ctx: SourceFetchContext): Promise<SourceFetchResult>;
+}
+
+/** Cost model by provider id, for an adapter that declares none. Every other provider is free. */
+const DEFAULT_COST_MODEL: Readonly<Partial<Record<IngestProvider, SourceCostModel>>> = {
+  jsearch: 'per_request',
+  activejobs: 'per_job',
+  activejobs_feed: 'per_job',
+  linkedin: 'per_job',
+};
+
+/** The adapter's cost model: its declared value, else the default for its provider id, else 'free'. */
+export function adapterCostModel(adapter: Pick<JobSourceAdapter, 'provider' | 'costModel'>): SourceCostModel {
+  return adapter.costModel ?? DEFAULT_COST_MODEL[adapter.provider] ?? 'free';
+}
+
+/**
+ * Is the adapter on for this market right now? `isEnabledFor(market)` when the
+ * adapter has it, else `isEnabled()`. Never throws: an adapter that throws
+ * while answering is off. Whether the adapter serves the market at all is
+ * `adapter.markets` (the source registry's rule), not this function's.
+ */
+export function adapterEnabledFor(adapter: Pick<JobSourceAdapter, 'isEnabled' | 'isEnabledFor'>, market: Market): boolean {
+  try {
+    return (adapter.isEnabledFor ? adapter.isEnabledFor(market) : adapter.isEnabled()) === true;
+  } catch {
+    return false;
+  }
 }

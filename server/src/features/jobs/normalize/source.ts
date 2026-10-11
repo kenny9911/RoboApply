@@ -28,7 +28,22 @@ export interface ProviderMeta {
   fromRecruiterBank: boolean;
 }
 
+/**
+ * One entry per provider. `activejobs_feed` (the licensed window feed, JI-7)
+ * writes the same `sourceBoard` as the `activejobs` search provider, so both
+ * address the same rows. KEY ORDER MATTERS for that pair: the feed's entry
+ * sits BEFORE `activejobs`, so a reader that builds a board → provider map
+ * from this object in key order (`providerOfBoard` in ingest/verifyFeed.ts)
+ * keeps resolving the board 'activejobs' to the search provider
+ * (normalizeProviderJob.test.ts pins it).
+ *
+ * Priorities (lower wins): usajobs 8 (the federal government's own listing),
+ * activejobs / activejobs_feed / ats_public 10, the Taiwan government sources
+ * 12, the recruiter banks 15, linkedin 20, jsearch 30, user_import 90.
+ * A government open-data source publishes no applicant count.
+ */
 export const PROVIDER_META: Readonly<Record<NormalizeProvider, ProviderMeta>> = {
+  activejobs_feed: { sourcePriority: 10, sourceBoard: 'activejobs', aggregatorName: 'Active Jobs DB', applicantCountAllowed: true, fromRecruiterBank: false },
   activejobs: { sourcePriority: 10, sourceBoard: 'activejobs', aggregatorName: 'Active Jobs DB', applicantCountAllowed: true, fromRecruiterBank: false },
   ats_public: { sourcePriority: 10, sourceBoard: 'ats_public', aggregatorName: null, applicantCountAllowed: true, fromRecruiterBank: false },
   bank_robohire: { sourcePriority: 15, sourceBoard: 'robohire', aggregatorName: 'RoboHire', applicantCountAllowed: true, fromRecruiterBank: true },
@@ -36,9 +51,16 @@ export const PROVIDER_META: Readonly<Record<NormalizeProvider, ProviderMeta>> = 
   linkedin: { sourcePriority: 20, sourceBoard: 'linkedin', aggregatorName: 'Fantastic Jobs', applicantCountAllowed: false, fromRecruiterBank: false },
   jsearch: { sourcePriority: 30, sourceBoard: 'jsearch', aggregatorName: 'JSearch', applicantCountAllowed: false, fromRecruiterBank: false },
   user_import: { sourcePriority: 90, sourceBoard: 'user_import', aggregatorName: null, applicantCountAllowed: false, fromRecruiterBank: false },
+  tw_open_data: { sourcePriority: 12, sourceBoard: 'tw_open_data', aggregatorName: '台灣就業通', applicantCountAllowed: false, fromRecruiterBank: false },
+  tw_gov_jobs: { sourcePriority: 12, sourceBoard: 'tw_gov_jobs', aggregatorName: '事求人', applicantCountAllowed: false, fromRecruiterBank: false },
+  usajobs: { sourcePriority: 8, sourceBoard: 'usajobs', aggregatorName: 'USAJOBS', applicantCountAllowed: false, fromRecruiterBank: false },
 };
 
-/** Providers whose applicant counts are never stored (LinkedIn-derived). */
+/**
+ * Providers whose applicant counts are never stored: LinkedIn-derived click
+ * counts (linkedin, jsearch) and sources that publish no count at all (the
+ * government open-data sources).
+ */
 export const NO_APPLICANT_COUNT_PROVIDERS: readonly NormalizeProvider[] = (Object.keys(PROVIDER_META) as NormalizeProvider[]).filter(
   (p) => !PROVIDER_META[p].applicantCountAllowed && p !== 'user_import',
 );
