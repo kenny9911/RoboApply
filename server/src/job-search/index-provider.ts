@@ -11,6 +11,20 @@
 // recruitment-info mode and the user's own hidden jobs apply. The user's saved
 // search filters do NOT apply: a keyword search states its own filters.
 //
+// One retrieval pipeline (MARKET_STRATEGY §2.3 step 8; SEARCH_RETRIEVE_MATCH
+// §4.10): the request's query goes to the feed as `q` and the planner's
+// relevance terms as `relevance`, so an API search and an in-app search of the
+// same words run the same legs and the same fusion. Nothing here ranks: the
+// rows are handed on in the order the feed returned them.
+//
+// Whether the terms took part in that order is the FEED's to say, per read
+// (`previewOrdered` → `relevanceApplied`; see `orderedPreview`). This provider
+// passes the answer on and never assumes it: a feed that does not report (its
+// plain `preview`, which answers rows only) is taken as "not applied", so the
+// API never names an order nobody applied (D3). The feed applies `relevance`
+// only where its retrieval reads it; with a typed `q` that is the feed's rule
+// to state, not this file's.
+//
 // Contract fields (PAR-11): `apply.url`, `apply.target`, `source.original`,
 // `source.url`, `source.lastVerifiedAt`, `source.via`. Each is read with a
 // safe default. A row with no apply link is dropped by `normalizeJob`, as on
@@ -46,10 +60,53 @@ export interface IndexFeedItem {
   apply?: { url?: string | null; target?: string | null } | null;
 }
 
-export type IndexPreview = (
-  userId: string,
-  input: { q?: string; filters?: Record<string, unknown>; limit: number },
-) => Promise<IndexFeedItem[]>;
+/** What one read of the index asks of the feed. `relevance`: free text the list may be ordered by, never a filter (feed `FeedPreviewInput.relevance`). */
+export interface IndexPreviewInput {
+  q?: string;
+  filters?: Record<string, unknown>;
+  limit: number;
+  relevance?: string;
+}
+
+/** The rows of one read, and whether `relevance` took part in their order. */
+export interface OrderedPreview {
+  items: IndexFeedItem[];
+  relevanceApplied: boolean;
+}
+
+/**
+ * The read function. It answers the rows alone (nothing is then known about
+ * the order: taken as "relevance not applied") or the rows with the feed's own
+ * statement about the order.
+ */
+export type IndexPreview = (userId: string, input: IndexPreviewInput) => Promise<IndexFeedItem[] | { items: IndexFeedItem[]; relevanceApplied?: boolean }>;
+
+/**
+ * The feed's preview seam as this provider reads it. `previewOrdered` is the
+ * contract by which the feed says whether `relevance` took part in the order
+ * of the rows it returned (requested of the feed's owner in the MKT-4H
+ * handoff). It is optional here so the read works before and after the feed
+ * offers it.
+ */
+export interface PreviewSeam<Reader> {
+  preview(reader: Reader, input: never): Promise<unknown>;
+  previewOrdered?: (reader: Reader, input: never) => Promise<{ items: unknown; relevanceApplied?: unknown }>;
+}
+
+/**
+ * One read of the feed's preview seam: through `previewOrdered` when the feed
+ * offers it, else through `preview`. The order is claimed only on the feed's
+ * explicit `relevanceApplied: true`; a feed that says nothing did not apply it.
+ */
+export async function orderedPreview<Reader>(feed: PreviewSeam<Reader>, reader: Reader, input: IndexPreviewInput): Promise<OrderedPreview> {
+  if (typeof feed.previewOrdered === 'function') {
+    const answer = await feed.previewOrdered(reader, input as never);
+    // An answer that is not rows is no rows, and says nothing about an order.
+    if (!Array.isArray(answer?.items)) return { items: [], relevanceApplied: false };
+    return { items: answer.items as IndexFeedItem[], relevanceApplied: answer.relevanceApplied === true };
+  }
+  return { items: (await feed.preview(reader, input as never)) as IndexFeedItem[], relevanceApplied: false };
+}
 
 export interface IndexProviderDeps {
   /** Default: `feedService.preview` run for GoApply. */
@@ -66,9 +123,7 @@ const defaultPreview: IndexPreview = async (userId, input) => {
     import('../lib/requestContext.js'),
   ]);
   // The index is GoApply's source: read it as GoApply whatever the caller's context.
-  return runWithBrand('goapply', () =>
-    feedService.preview(userId, input as Parameters<typeof feedService.preview>[1]),
-  ) as unknown as Promise<IndexFeedItem[]>;
+  return runWithBrand('goapply', () => orderedPreview(feedService as PreviewSeam<string>, userId, input));
 };
 
 const defaultFilterFields = async (): Promise<readonly string[]> =>
@@ -133,22 +188,35 @@ export function createIndexProvider(deps: IndexProviderDeps = {}) {
     id: INDEX_PROVIDER_ID,
     /** Results depend on the reader (hidden jobs, mode, visibility). */
     perUser: true,
+    /**
+     * The feed can order the rows by closeness to `opts.relevance` (its lexical
+     * and dense legs), so this source is handed the text. Whether a search WAS
+     * ordered by it is answered per search, from the feed's own report.
+     */
+    readsRelevance: true,
     isEnabled: () => true,
     async search(
       params: ExternalSearchParams,
-      opts: { requestId?: string; signal?: AbortSignal; userId?: string; input?: SearchInput } = {},
-    ): Promise<ProviderJob[] | null> {
+      opts: { requestId?: string; signal?: AbortSignal; userId?: string; input?: SearchInput; relevance?: string } = {},
+    ): Promise<{ jobs: ProviderJob[]; rankedByRelevance: boolean } | null> {
       // No reader, no visibility rules: fail closed rather than read as nobody.
       if (!opts.userId) return null;
       const input: SearchInput = opts.input ?? { query: params.titleQuery ?? params.query, country: params.country };
       // The index holds postings located in mainland China only.
-      if (input.country && input.country.toLowerCase() !== 'cn') return [];
-      const items = await preview(opts.userId, {
+      if (input.country && input.country.toLowerCase() !== 'cn') return { jobs: [], rankedByRelevance: false };
+      const relevance = opts.relevance?.trim();
+      const answer = await preview(opts.userId, {
         q: input.query,
         filters: indexFilters(input, await filterFields()),
         limit: 50,
+        ...(relevance ? { relevance } : {}),
       });
-      return items.map(indexRow).filter((row): row is ProviderJob => row !== null);
+      const items = Array.isArray(answer) ? answer : answer.items;
+      return {
+        jobs: items.map(indexRow).filter((row): row is ProviderJob => row !== null),
+        // Only what the feed said of this read; rows alone say nothing about their order.
+        rankedByRelevance: !!relevance && !Array.isArray(answer) && answer.relevanceApplied === true,
+      };
     },
   };
 }

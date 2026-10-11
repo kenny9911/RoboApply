@@ -12,7 +12,9 @@ vi.mock('../../../services/LoggerService.js', () => ({
 import { logger } from '../../../services/LoggerService.js';
 import { collect } from '../channel.js';
 import { guardLine } from '../text.js';
-import { USER, deltaText, jobDetail, makeService, newThread, runTurn } from './testkit.js';
+import { CITED_JOBS_RULE, WHOLE_LIST_RULE, chipHint, systemPrompt } from '../prompt.js';
+import { getBrand } from '../../../platform/brand/registry.js';
+import { USER, deltaText, feedItem, fitView, jobDetail, makeService, newThread, runTurn } from './testkit.js';
 
 describe('handleTurn: checks before anything streams', () => {
   it('aiAllowed(user)=false → 503 ai_unavailable and zero LLM calls, no credit', async () => {
@@ -72,23 +74,27 @@ describe('handleTurn: checks before anything streams', () => {
 });
 
 describe('handleTurn: one streamed turn', () => {
-  it('streams meta → deltas → tool → card → done, persists both messages and commits one credit', async () => {
+  it('streams meta → deltas → tools → card → done, persists both messages and commits one credit', async () => {
     const h = makeService({
       rounds: [
         { chunks: ['Looking at ', 'your search. '], toolCalls: [{ name: 'search_jobs', args: { q: 'analyst', limit: 2 } }] },
+        { toolCalls: [{ name: 'show_jobs', args: { jobIds: ['job_1', 'job_2'] } }] },
         { chunks: ['Here are 2 jobs. ', 'The first pays up to $120k.'] },
       ],
     });
     const t = await newThread(h);
     const events = await runTurn(h, t, 'Find analyst jobs');
-    expect(events.map((e) => e.event)).toEqual(['meta', 'delta', 'tool', 'card', 'tool', 'delta', 'delta', 'done']);
+    // The search shows nothing by itself; the card comes with show_jobs.
+    expect(events.map((e) => e.event)).toEqual(['meta', 'delta', 'tool', 'tool', 'tool', 'card', 'tool', 'delta', 'delta', 'done']);
+    expect(events.filter((e) => e.event === 'tool').map((e) => `${(e.data as { name: string }).name}:${(e.data as { phase: string }).phase}`)).toEqual(['search_jobs:start', 'search_jobs:end', 'show_jobs:start', 'show_jobs:end']);
     expect(deltaText(events)).toBe('Looking at your search. Here are 2 jobs. The first pays up to $120k.');
-    const card = events.find((e) => e.event === 'card')!.data as { type: string; data: { items: Array<{ jobId: string }> } };
+    const card = events.find((e) => e.event === 'card')!.data as { type: string; data: { items: Array<{ jobId: string }>; cited?: boolean } };
     expect(card.type).toBe('job_list');
+    expect(card.data.cited).toBe(true);
     expect(card.data.items.map((i) => i.jobId)).toEqual(['job_1', 'job_2']);
     const done = events.at(-1)!.data as { messageId: string; content: string; creditsRemaining: number; usage: { inputTokens: number } };
     expect(done.content).toBe('Looking at your search. Here are 2 jobs. The first pays up to $120k.');
-    expect(done.usage.inputTokens).toBe(200);
+    expect(done.usage.inputTokens).toBe(300);
     expect(done.creditsRemaining).toBe(29);
 
     const msgs = await h.db.rACopilotMessage.findMany({ where: { threadId: t } });
@@ -96,10 +102,10 @@ describe('handleTurn: one streamed turn', () => {
     const assistant = msgs.find((m: { role: string }) => m.role === 'assistant') as { id: string; cards: unknown[]; toolCalls: Array<{ name: string; ok: boolean }> };
     expect(assistant.id).toBe(done.messageId);
     expect(assistant.cards).toHaveLength(1);
-    expect(assistant.toolCalls).toEqual([expect.objectContaining({ name: 'search_jobs', ok: true })]);
+    expect(assistant.toolCalls).toEqual([expect.objectContaining({ name: 'search_jobs', ok: true }), expect.objectContaining({ name: 'show_jobs', ok: true })]);
     expect(h.credits.commit).toHaveBeenCalledTimes(1);
     expect(h.credits.release).not.toHaveBeenCalled();
-    expect(h.budget.spent.reduce((a, b) => a + b, 0)).toBeCloseTo(0.003);
+    expect(h.budget.spent.reduce((a, b) => a + b, 0)).toBeCloseTo(0.0045);
     const thread = await h.db.rACopilotThread.findUnique({ where: { id: t } });
     expect(thread).toMatchObject({ messageCount: 2, title: 'Find analyst jobs' });
     // cost row under the turn SKU, units 0 (the credit commit is the charged row)
@@ -168,6 +174,288 @@ describe('handleTurn: one streamed turn', () => {
     expect(events[2]!.data).toMatchObject({ code: 'save_failed', retryable: true });
     expect(h.credits.release).toHaveBeenCalledWith('res_1', 'save_failed');
     expect(h.credits.commit).not.toHaveBeenCalled();
+  });
+});
+
+describe('MKT-4H: the job card shows exactly the jobs the model cites (SM-9)', () => {
+  const five = () => ['a', 'b', 'c', 'd', 'e'].map((k) => feedItem({ jobId: `job_${k}`, title: `Analyst ${k.toUpperCase()}` }));
+  const SEARCH = { toolCalls: [{ name: 'search_jobs', args: { q: 'analyst', limit: 5 } }] };
+  type Events = Awaited<ReturnType<typeof runTurn>>;
+  const cardsOf = (events: Events) => events.filter((e) => e.event === 'card').map((e) => e.data as { type: string; data: { items: Array<{ jobId: string }>; cited?: boolean; note?: string; query?: unknown } });
+  const guardHits = (kind: string) => (logger.warn as ReturnType<typeof vi.fn>).mock.calls.filter((c) => c[1] === 'copilot_guard_hit' && (c[2] as { kind: string }).kind === kind);
+
+  it('a search of 5 rows and 2 cited ids: one card with exactly those 2 jobs in that order; the search itself showed nothing', async () => {
+    vi.mocked(logger.warn).mockClear();
+    const h = makeService({
+      areas: { feedPreview: async () => five() },
+      rounds: [SEARCH, { toolCalls: [{ name: 'show_jobs', args: { jobIds: ['job_d', 'job_b'], note: 'Both list their pay.' } }] }, { chunks: ['Analyst D and Analyst B stand out.'] }],
+    });
+    const t = await newThread(h);
+    const events = await runTurn(h, t, 'Find analyst jobs');
+    // The card is held back until cited: nothing between the search's start and end.
+    const names = events.map((e) => (e.event === 'tool' ? `tool:${(e.data as { name: string; phase: string }).name}:${(e.data as { phase: string }).phase}` : e.event));
+    expect(names).toEqual(['meta', 'tool:search_jobs:start', 'tool:search_jobs:end', 'tool:show_jobs:start', 'card', 'tool:show_jobs:end', 'delta', 'done']);
+    const cards = cardsOf(events);
+    expect(cards).toHaveLength(1);
+    expect(cards[0]!.data.items.map((i) => i.jobId)).toEqual(['job_d', 'job_b']);
+    expect(cards[0]!.data).toMatchObject({ cited: true, note: 'Both list their pay.' });
+    // Stored as shown: the reload renders the same two jobs.
+    const stored = (await h.service.listMessages(USER, t, {})).items.at(-1)!;
+    expect(stored.cards).toHaveLength(1);
+    expect((stored.cards[0]!.data as { items: Array<{ jobId: string }> }).items.map((i) => i.jobId)).toEqual(['job_d', 'job_b']);
+    expect(guardHits('jobs_not_cited')).toHaveLength(0);
+    // The model read all five rows, and was told that nothing is on screen yet.
+    const toolMsg = h.llm.calls[1]!.messages.find((m) => m.role === 'tool') as { content: string };
+    expect(toolMsg.content).toContain('job_e');
+    expect(toolMsg.content).toContain('Nothing is shown to the user yet');
+  });
+
+  it('a turn without show_jobs still shows the full list (nothing is lost) and logs jobs_not_cited', async () => {
+    vi.mocked(logger.warn).mockClear();
+    const h = makeService({ areas: { feedPreview: async () => five() }, rounds: [SEARCH, { chunks: ['Here are some jobs.'] }] });
+    const t = await newThread(h);
+    const events = await runTurn(h, t, 'Find analyst jobs');
+    expect(events.map((e) => e.event)).toEqual(['meta', 'tool', 'tool', 'delta', 'card', 'done']);
+    const cards = cardsOf(events);
+    expect(cards).toHaveLength(1);
+    expect(cards[0]!.data.items.map((i) => i.jobId)).toEqual(['job_a', 'job_b', 'job_c', 'job_d', 'job_e']);
+    // The whole list as the tool made it: not marked as cited, with what it was made by.
+    expect(cards[0]!.data.cited).toBeUndefined();
+    expect(cards[0]!.data.query).toMatchObject({ q: 'analyst' });
+    expect(guardHits('jobs_not_cited')).toEqual([['COPILOT', 'copilot_guard_hit', { kind: 'jobs_not_cited', lists: 1, jobs: 5, afterCitation: false, uncitable: 0, brand: 'roboapply', scope: 'seeker' }]]);
+    const stored = (await h.service.listMessages(USER, t, {})).items.at(-1)!;
+    expect(stored.cards).toHaveLength(1);
+    expect(h.credits.commit).toHaveBeenCalledTimes(1);
+  });
+
+  it('citing an id no tool returned is refused and logged; with no valid citation the full list is shown', async () => {
+    vi.mocked(logger.warn).mockClear();
+    const h = makeService({
+      areas: { feedPreview: async () => five() },
+      rounds: [SEARCH, { toolCalls: [{ name: 'show_jobs', args: { jobIds: ['job_a', 'job_invented'] } }] }, { chunks: ['Here they are.'] }],
+    });
+    const t = await newThread(h);
+    const events = await runTurn(h, t, 'Find analyst jobs');
+    const showEnd = events.filter((e) => e.event === 'tool' && (e.data as { name: string; phase: string }).name === 'show_jobs' && (e.data as { phase: string }).phase === 'end')[0]!;
+    expect(showEnd.data).toMatchObject({ ok: false });
+    expect(guardHits('unknown_job_id')).toEqual([['COPILOT', 'copilot_guard_hit', { kind: 'unknown_job_id', tool: 'show_jobs', jobIds: ['job_invented'], brand: 'roboapply' }]]);
+    // The refusal reaches the model as data, with the ids it must not use.
+    const refusal = h.llm.calls[2]!.messages.filter((m) => m.role === 'tool').at(-1) as { content: string };
+    expect(refusal.content).toContain('unknown_job_id');
+    expect(refusal.content).toContain('job_invented');
+    const cards = cardsOf(events);
+    expect(cards).toHaveLength(1);
+    expect(cards[0]!.data.items).toHaveLength(5);
+    expect(cards[0]!.data.cited).toBeUndefined();
+    expect(guardHits('jobs_not_cited')).toHaveLength(1);
+  });
+
+  it('a second, narrower search and one citation: only the cited jobs are shown, both whole lists are dropped', async () => {
+    const h = makeService({
+      areas: { feedPreview: async (_u, input) => (input.filters?.workModels ? five().slice(0, 2) : five()) },
+      rounds: [SEARCH, { toolCalls: [{ name: 'search_jobs', args: { q: 'analyst', filters: { workModels: ['remote'] } } }] }, { toolCalls: [{ name: 'show_jobs', args: { jobIds: ['job_b'] } }] }, { chunks: ['One remote role.'] }],
+    });
+    const t = await newThread(h);
+    const cards = cardsOf(await runTurn(h, t, 'Find remote analyst jobs'));
+    expect(cards).toHaveLength(1);
+    expect(cards[0]!.data.items.map((i) => i.jobId)).toEqual(['job_b']);
+  });
+
+  it('a list returned AFTER a citation is not dropped: it is shown whole under the cited card and logged, so the reply names no job that is on no card (review finding)', async () => {
+    vi.mocked(logger.warn).mockClear();
+    const remote = () => ['x', 'y'].map((k) => feedItem({ jobId: `job_${k}`, title: `Remote Analyst ${k.toUpperCase()}` }));
+    const h = makeService({
+      areas: { feedPreview: async (_u, input) => (input.q === 'remote analyst' ? remote() : five()) },
+      // top_fit_jobs → show_jobs → search_jobs → the reply. The fourth round has no tools, so the search can never be cited.
+      rounds: [
+        { toolCalls: [{ name: 'top_fit_jobs', args: {} }] },
+        { toolCalls: [{ name: 'show_jobs', args: { jobIds: ['job_a'] } }] },
+        { toolCalls: [{ name: 'search_jobs', args: { q: 'remote analyst' } }] },
+        { chunks: ['Analyst A fits best. Remote Analyst X and Remote Analyst Y are remote.'] },
+      ],
+    });
+    const t = await newThread(h);
+    const events = await runTurn(h, t, 'my best fit, and anything remote?');
+    const cards = cardsOf(events);
+    // The cited card, then the later list whole: every job the reply names is on a card.
+    expect(cards).toHaveLength(2);
+    expect(cards[0]!.data).toMatchObject({ cited: true });
+    expect(cards[0]!.data.items.map((i) => i.jobId)).toEqual(['job_a']);
+    expect(cards[1]!.data.cited).toBeUndefined();
+    expect(cards[1]!.data.items.map((i) => i.jobId)).toEqual(['job_x', 'job_y']);
+    expect(cards[1]!.data.query).toMatchObject({ q: 'remote analyst' });
+    // The list held before the citation (top_fit_jobs) is settled by it and is not shown again.
+    expect(JSON.stringify(cards)).not.toContain('job_e');
+    expect(guardHits('jobs_not_cited')).toEqual([['COPILOT', 'copilot_guard_hit', { kind: 'jobs_not_cited', lists: 1, jobs: 2, afterCitation: true, uncitable: 1, brand: 'roboapply', scope: 'seeker' }]]);
+    // The model was told the truth about that list: it is shown whole, and no show_jobs call can follow.
+    const lastToolMsg = h.llm.calls[3]!.messages.filter((m) => m.role === 'tool').at(-1) as { content: string };
+    expect(lastToolMsg.content).toContain('this whole list is shown to the user as it is');
+    expect(lastToolMsg.content).not.toContain('Nothing is shown to the user yet');
+    // A list from an earlier round still asks for the citation.
+    const firstToolMsg = h.llm.calls[1]!.messages.find((m) => m.role === 'tool') as { content: string };
+    expect(firstToolMsg.content).toContain('Nothing is shown to the user yet');
+    // Stored as shown.
+    const stored = (await h.service.listMessages(USER, t, {})).items.at(-1)!;
+    expect(stored.cards.map((c) => (c.data as { items: Array<{ jobId: string }> }).items.map((i) => i.jobId))).toEqual([['job_a'], ['job_x', 'job_y']]);
+  });
+
+  it('each citation settles the lists before it: a second list cited in its turn gives two cited cards, no whole list and no log', async () => {
+    vi.mocked(logger.warn).mockClear();
+    const remote = () => ['x', 'y'].map((k) => feedItem({ jobId: `job_${k}`, title: `Remote Analyst ${k.toUpperCase()}` }));
+    const h = makeService({
+      areas: { feedPreview: async (_u, input) => (input.q === 'remote analyst' ? remote() : five()) },
+      rounds: [
+        SEARCH,
+        // One round: cite from the first list and run the second search.
+        { toolCalls: [{ name: 'show_jobs', args: { jobIds: ['job_b'] } }, { name: 'search_jobs', args: { q: 'remote analyst' } }] },
+        { toolCalls: [{ name: 'show_jobs', args: { jobIds: ['job_y'] } }] },
+        { chunks: ['Analyst B, and Remote Analyst Y if you want remote.'] },
+      ],
+    });
+    const cards = cardsOf(await runTurn(h, await newThread(h), 'analyst jobs, and a remote one'));
+    expect(cards.map((c) => ({ cited: c.data.cited, ids: c.data.items.map((i) => i.jobId) }))).toEqual([
+      { cited: true, ids: ['job_b'] },
+      { cited: true, ids: ['job_y'] },
+    ]);
+    expect(guardHits('jobs_not_cited')).toHaveLength(0);
+  });
+
+  it('a list returned in the last tool round of a turn that cited nothing is logged as one the model could not cite', async () => {
+    vi.mocked(logger.warn).mockClear();
+    const h = makeService({
+      areas: { feedPreview: async () => five() },
+      rounds: [{ toolCalls: [{ name: 'get_current_filters', args: {} }] }, { toolCalls: [{ name: 'get_profile_gaps', args: {} }] }, SEARCH, { chunks: ['Here are some jobs.'] }],
+    });
+    const cards = cardsOf(await runTurn(h, await newThread(h), 'Find analyst jobs')).filter((c) => c.type === 'job_list');
+    expect(cards).toHaveLength(1);
+    expect(cards[0]!.data.items).toHaveLength(5);
+    expect(guardHits('jobs_not_cited')).toEqual([['COPILOT', 'copilot_guard_hit', { kind: 'jobs_not_cited', lists: 1, jobs: 5, afterCitation: false, uncitable: 1, brand: 'roboapply', scope: 'seeker' }]]);
+  });
+
+  it('the note is checked like the reply\'s text: one with a number no tool gave is left off the card and logged; the jobs are still shown', async () => {
+    vi.mocked(logger.warn).mockClear();
+    const h = makeService({
+      areas: { feedPreview: async () => five() },
+      rounds: [SEARCH, { toolCalls: [{ name: 'show_jobs', args: { jobIds: ['job_a'], note: 'You have a 93% chance here.' } }] }, { chunks: ['Take a look.'] }],
+    });
+    const t = await newThread(h);
+    const cards = cardsOf(await runTurn(h, t, 'Find analyst jobs'));
+    expect(cards[0]!.data.items.map((i) => i.jobId)).toEqual(['job_a']);
+    expect(cards[0]!.data).not.toHaveProperty('note');
+    expect(cards[0]!.data.cited).toBe(true);
+    expect(logger.warn).toHaveBeenCalledWith('COPILOT', 'copilot_guard_hit', expect.objectContaining({ kind: 'unsourced_number', where: 'job_list_note' }));
+    const stored = (await h.service.listMessages(USER, t, {})).items.at(-1)!;
+    expect(JSON.stringify(stored.cards)).not.toContain('93');
+    // A claim of having applied is refused the same way.
+    const claim = makeService({
+      areas: { feedPreview: async () => five() },
+      rounds: [SEARCH, { toolCalls: [{ name: 'show_jobs', args: { jobIds: ['job_a'], note: 'I applied to this one for you.' } }] }, { chunks: ['Take a look.'] }],
+    });
+    const cards2 = cardsOf(await runTurn(claim, await newThread(claim), 'Find analyst jobs'));
+    expect(cards2[0]!.data).not.toHaveProperty('note');
+    // A number a tool did give passes (the pay of the listed job).
+    const sourced = makeService({
+      areas: { feedPreview: async () => five() },
+      rounds: [SEARCH, { toolCalls: [{ name: 'show_jobs', args: { jobIds: ['job_a'], note: 'Pay goes up to $120k.' } }] }, { chunks: ['Take a look.'] }],
+    });
+    expect(cardsOf(await runTurn(sourced, await newThread(sourced), 'Find analyst jobs'))[0]!.data.note).toBe('Pay goes up to $120k.');
+  });
+
+  it('"the job I added at Acme" is found and can be cited; "my best fits" includes an added job with a strong fit, with the fit the job page shows', async () => {
+    const added = [
+      { jobId: 'mine_acme', title: 'Product Designer', companyName: 'Acme Robotics', location: 'New York', workModel: 'onsite' as const, applyUrl: null, sourceHost: null, addedAt: '2026-10-09T00:00:00.000Z', warnings: [], trackerStatus: null },
+    ];
+    // THE fit of the added job, as the job page reads it.
+    const page = { ...fitView('mine_acme'), tier: 'great' as const, score: 88, kind: 'ai' as const };
+    const fits = async (_u: string, ids: readonly string[]) => new Map(ids.map((id) => [id, { ...page, jobId: id }]));
+    const found = makeService({
+      areas: { feedPreview: async () => [], addedJobs: async () => added, fits },
+      rounds: [{ toolCalls: [{ name: 'search_jobs', args: { q: 'acme' } }] }, { toolCalls: [{ name: 'show_jobs', args: { jobIds: ['mine_acme'] } }] }, { chunks: ['That is the Product Designer role you added.'] }],
+    });
+    const card = cardsOf(await runTurn(found, await newThread(found), 'the job I added at Acme'))[0]!;
+    expect(card.data.items).toEqual([expect.objectContaining({ jobId: 'mine_acme', addedByUser: true, fit: expect.objectContaining({ score: page.score, tier: page.tier, kind: page.kind }) })]);
+
+    const best = makeService({
+      areas: { feedPreview: async () => [feedItem({ jobId: 'f1', fit: { tier: 'good', score: 74, kind: 'pre', topGap: null, topOverlap: null } })], addedJobs: async () => added, fits },
+      rounds: [{ toolCalls: [{ name: 'top_fit_jobs', args: {} }] }, { toolCalls: [{ name: 'show_jobs', args: { jobIds: ['mine_acme', 'f1'] } }] }, { chunks: ['Your strongest fit is a job you added.'] }],
+    });
+    const events = await runTurn(best, await newThread(best), 'my best fits');
+    expect(cardsOf(events)[0]!.data.items.map((i) => i.jobId)).toEqual(['mine_acme', 'f1']);
+    // One fit read for the added jobs; the scorer is never asked by a list.
+    expect(best.areas.fits).toHaveBeenCalledTimes(1);
+    expect(best.areas.fit).not.toHaveBeenCalled();
+    expect(best.areas.storedFit).not.toHaveBeenCalled();
+  });
+
+  it('a job shown in a recent answer can be cited again without a new search; its fit is read again, not copied from then', async () => {
+    const h = makeService({
+      areas: { feedPreview: async () => five() },
+      rounds: [SEARCH, { toolCalls: [{ name: 'show_jobs', args: { jobIds: ['job_a', 'job_c'] } }] }, { chunks: ['Two to start with.'] }],
+    });
+    const t = await newThread(h);
+    await runTurn(h, t, 'Find analyst jobs');
+    // Next turn: no search; the model cites one job of the earlier card and one it never showed.
+    h.llm.streamChatWithTools.mockClear();
+    h.areas.feedPreview.mockClear();
+    h.areas.fits.mockClear();
+    h.areas.fits.mockResolvedValue(new Map([['job_c', { ...fitView('job_c'), tier: 'possible', score: 52 } as never]]));
+    const again = makeService({ db: h.db, areas: h.areas, rounds: [{ toolCalls: [{ name: 'show_jobs', args: { jobIds: ['job_c'] } }] }, { chunks: ['Here it is again.'] }] });
+    const events = await runTurn(again, t, 'show me the second one again');
+    const card = cardsOf(events)[0]!;
+    expect(card.data.items).toEqual([expect.objectContaining({ jobId: 'job_c', title: 'Analyst C', fit: expect.objectContaining({ score: 52, tier: 'possible' }) })]);
+    expect(h.areas.feedPreview).not.toHaveBeenCalled();
+    expect(h.areas.fits).toHaveBeenCalledTimes(1);
+    expect(h.areas.fits).toHaveBeenCalledWith(USER, ['job_c'], { locale: 'en' });
+    // A job that was found then but never shown is not on any recent card: it cannot be cited now.
+    const never = makeService({ db: h.db, areas: h.areas, rounds: [{ toolCalls: [{ name: 'show_jobs', args: { jobIds: ['job_e'] } }] }, { chunks: ['Sorry.'] }] });
+    const refused = await runTurn(never, t, 'and the fifth?');
+    expect(cardsOf(refused)).toHaveLength(0);
+    expect(refused.filter((e) => e.event === 'tool').at(-1)!.data).toMatchObject({ name: 'show_jobs', ok: false });
+  });
+
+  it('a reply that breaks after a search keeps the list it found (shown whole) and is not counted as "not cited"', async () => {
+    vi.mocked(logger.warn).mockClear();
+    const h = makeService({ areas: { feedPreview: async () => five() }, rounds: [SEARCH, { chunks: ['I found '], error: Object.assign(new Error('x'), { code: 'stream_interrupted' }) }] });
+    const t = await newThread(h);
+    const events = await runTurn(h, t, 'Find analyst jobs');
+    expect(events.map((e) => e.event)).toEqual(['meta', 'tool', 'tool', 'delta', 'card', 'error', 'done']);
+    expect(cardsOf(events)[0]!.data.items).toHaveLength(5);
+    expect(guardHits('jobs_not_cited')).toHaveLength(0);
+  });
+
+  // What list `similar_jobs` answers is the area adapter's (areas.ts `similarJobs`; tools.test.ts covers both of its
+  // sources). This test is the turn: the chip names the tool, the tool is asked, the cited jobs are the card.
+  it('the Similar jobs quick action calls similar_jobs for the job in context (never search_jobs), then show_jobs: the card shows the cited ones', async () => {
+    const h = makeService({
+      rounds: [{ toolCalls: [{ name: 'similar_jobs', args: { jobId: 'job_9' } }] }, { toolCalls: [{ name: 'show_jobs', args: { jobIds: ['job_sim_2'] } }] }, { chunks: ['This one is close to the job you are viewing.'] }],
+    });
+    const t = await newThread(h, 'job_9');
+    const events = await runTurn(h, t, 'Similar jobs', { chip: 'similar_jobs', contextJobId: 'job_9' });
+    // The hint the chip adds names the tool and the citing step.
+    const hint = h.llm.calls[0]!.messages.find((m) => m.role === 'system' && String(m.content).includes('Similar jobs')) as { content: string };
+    expect(hint.content).toBe(chipHint('similar_jobs'));
+    expect(hint.content).toMatch(/call similar_jobs for the job in context, then show_jobs/);
+    expect(hint.content).not.toMatch(/search_jobs/);
+    expect(h.llm.calls[0]!.opts.tools.map((x) => x.name)).toEqual(expect.arrayContaining(['similar_jobs', 'show_jobs']));
+    expect(h.areas.similarJobs).toHaveBeenCalledWith(USER, 'job_9');
+    expect(h.areas.feedPreview).not.toHaveBeenCalled();
+    const card = cardsOf(events)[0]!;
+    expect(card.data.items.map((i) => i.jobId)).toEqual(['job_sim_2']);
+    expect(card.data.cited).toBe(true);
+  });
+
+  it('the rules: a signed-in turn is told to cite with show_jobs; a visitor turn keeps the whole-list rule and has no show_jobs', async () => {
+    const seeker = systemPrompt({ brand: getBrand('roboapply'), locale: 'en', today: '2026-10-10', scope: 'seeker' });
+    expect(seeker).toContain('- After a search, call show_jobs with the ids of the jobs you are going to talk about, in the order you mention them. The card shows exactly those jobs. Never name a job you did not pass to show_jobs. To narrow a list by a rule (only remote, only posts that list pay), call the search tool again with arguments.');
+    expect(seeker).toContain(CITED_JOBS_RULE);
+    expect(seeker).not.toContain(WHOLE_LIST_RULE);
+    expect(seeker).not.toMatch(/shows every job the tool returned/);
+    for (const brand of ['roboapply', 'goapply'] as const) {
+      expect(systemPrompt({ brand: getBrand(brand), locale: 'zh', today: '2026-10-10', scope: 'seeker' })).toContain(CITED_JOBS_RULE);
+    }
+    const visitor = systemPrompt({ brand: getBrand('roboapply'), locale: 'en', today: '2026-10-10', scope: 'public' });
+    expect(visitor).toContain(WHOLE_LIST_RULE);
+    expect(visitor).not.toContain('show_jobs');
   });
 });
 
@@ -387,7 +675,8 @@ describe('prompt injection', () => {
       expect(h.areas[write]).not.toHaveBeenCalled();
     }
     const cards = events.filter((e) => e.event === 'card').map((e) => (e.data as { type: string }).type);
-    expect(cards).toEqual(['job_list', 'credit_action', 'credit_action', 'credit_action']);
+    // The proposals come as they are made; the list no answer cited is shown whole when the turn ends.
+    expect(cards).toEqual(['credit_action', 'credit_action', 'credit_action', 'job_list']);
     const ca = events.filter((e) => e.event === 'card' && (e.data as { type: string }).type === 'credit_action')[0]!.data as { data: Record<string, unknown> };
     expect(ca.data).toMatchObject({ action: 'tailor', bucket: 'tailor', cost: 1, remaining: 2, status: 'pending' });
   });

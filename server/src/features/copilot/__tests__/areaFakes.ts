@@ -154,6 +154,12 @@ export function fakeAreas(over: Partial<CopilotAreas> = {}): FakeAreas {
       return variantFitView(jobId, variantId);
     },
     storedFit: async (_u, jobId) => fitView(jobId),
+    // The list read: one call for every id (the real area answers an empty map on GoApply without the grant).
+    fits: async (_u, jobIds) => new Map(jobIds.map((id) => [id, fitView(id)])),
+    similarJobs: async () => ({
+      items: [feedItem({ jobId: 'job_sim_1', title: 'Analytics Engineer' }), feedItem({ jobId: 'job_sim_2', title: 'Product Analyst', fit: { tier: 'great', score: 86, kind: 'ai', topGap: null, topOverlap: 'SQL' } })],
+      by: 'similar',
+    }),
     addedJobs: async () => [],
     companyProfile: async () => ({
       id: 'co_1',

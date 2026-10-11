@@ -12,7 +12,12 @@
 //      pinned: GoApply routes only to its domestic models). Text is released
 //      sentence by sentence through the guard; tool calls run through the
 //      registry (arguments parsed, job ids checked, results wrapped as
-//      <data>); cards are emitted as they come.
+//      <data>); cards are emitted as they come, except a job list: the list
+//      a search tool returns is held back, the model cites the jobs it is
+//      going to talk about with `show_jobs`, and that card (exactly those
+//      jobs, in that order) is the one shown. A turn that ends without
+//      citing shows the held lists whole (nothing is lost) and logs
+//      `copilot_guard_hit` kind `jobs_not_cited`.
 //   3. persist the user message and the reply (with cards and tool digests),
 //      commit the credit only for a stored, complete reply (released when
 //      nothing was produced, the save failed, or a retryable fault on our
@@ -65,7 +70,7 @@ import {
   type ThreadView,
   type VisitorTurnInput,
 } from './contract.js';
-import { collectSourceNumbers, numbersIn, StreamGuard, type GuardContext } from './guard.js';
+import { collectSourceNumbers, guardText, numbersIn, StreamGuard, type GuardContext } from './guard.js';
 import { nextNudge, type NudgeSignals } from './nudges.js';
 import {
   HISTORY_MESSAGES,
@@ -84,8 +89,9 @@ import { createProposalService, effectiveStatus, type ProposalService } from './
 import type { CopilotStore, MessageRow, ThreadRow } from './store.js';
 import { crossedSummaryMark } from './summary.js';
 import { guardLine } from './text.js';
+import { jobListItems, listedItems } from './tools/jobs.js';
 import { availableTools, runToolCall, toLlmTools, wrapData, type ToolRunRecord } from './tools/registry.js';
-import type { CopilotAreas, ToolContext } from './types.js';
+import type { CopilotAreas, ListedJob, ToolContext } from './types.js';
 
 export interface TurnInput {
   text: string;
@@ -469,6 +475,8 @@ export class CopilotService {
     // ── Context ──
     const allowedNumbers = new Set<string>();
     const allowedJobIds = new Set<string>();
+    /** The job rows `show_jobs` may put on its card: this turn's lists, and the lists of the recent answers. */
+    const listedJobs = new Map<string, ListedJob>();
     numbersIn(spec.text, allowedNumbers);
     const today = iso(now).slice(0, 10);
     numbersIn(today.replace(/-/g, ' '), allowedNumbers);
@@ -487,7 +495,13 @@ export class CopilotService {
       knownName = name;
       Object.assign(blocks, { profile, filters, job, memory, summary: spec.thread.summary });
       if (job && spec.contextJobId) allowedJobIds.add(spec.contextJobId);
-      for (const m of recent) for (const c of parseCards(m.cards)) for (const id of cardJobIds(c)) allowedJobIds.add(id);
+      for (const m of recent) {
+        for (const c of parseCards(m.cards)) {
+          for (const id of cardJobIds(c)) allowedJobIds.add(id);
+          // A job shown in a recent answer may be cited again: its row is kept (no query), its fit is read again when shown.
+          for (const item of jobListItems(c)) listedJobs.set(item.jobId, { item, fromThisTurn: false });
+        }
+      }
       history = recent.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.role === 'user' ? redactUserText(m.content, [name]) : m.content }));
       for (const text of [profile, memory.join('\n'), spec.thread.summary, ...recent.map((m) => m.content)]) if (text) numbersIn(text, allowedNumbers);
       if (filters) collectSourceNumbers(filters, allowedNumbers);
@@ -526,6 +540,7 @@ export class CopilotService {
       },
       hasConsent: async (type) => (userId ? deps.hasConsent(userId, type) : false),
       newCardId: this.newCardId,
+      listedJobs,
     };
 
     const tools = await availableTools(spec.scope, toolCtx);
@@ -547,6 +562,15 @@ export class CopilotService {
     const guardCtx = (): GuardContext => ({ allowedNumbers, allowedJobIds, locale: spec.locale });
     const guard = new StreamGuard(guardCtx);
     const cards: CopilotCard[] = [];
+    /**
+     * Whole lists the job tools returned and no `show_jobs` call has followed yet. A citation settles the lists
+     * before it (its card is the answer's card for them); a list returned AFTER the last citation is still held,
+     * and is shown whole when the turn ends, so the reply never names a job that is on no card.
+     * `citable`: false for a list returned in the last tool round, when no show_jobs call could follow it.
+     */
+    const heldLists: Array<{ card: CopilotCard; citable: boolean }> = [];
+    /** True once `show_jobs` put a card on the answer. */
+    let jobsCited = false;
     const records: ToolRunRecord[] = [];
     const usage = { inputTokens: 0, outputTokens: 0 };
     let costUsd = 0;
@@ -599,6 +623,8 @@ export class CopilotService {
         if (!res.toolCalls.length || last) break;
 
         messages.push({ role: 'assistant', content: res.content || null, toolCalls: res.toolCalls, ...(res.reasoningContent ? { reasoningContent: res.reasoningContent } : {}) });
+        // The next round is the reply (tools are off in it): a list returned now cannot be cited, and its tool says so.
+        toolCtx.lastToolRound = round === MAX_ROUNDS - 2;
         for (const call of res.toolCalls) {
           if (spec.signal?.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
           emit({ event: 'tool', data: { id: call.id, name: call.name, phase: 'start' } });
@@ -606,11 +632,25 @@ export class CopilotService {
           records.push(r.record);
           for (const id of r.output.jobIds ?? []) allowedJobIds.add(id);
           collectSourceNumbers(r.output.data, allowedNumbers);
-          for (const c of r.output.cards ?? []) {
-            const unknown = cardJobIds(c).filter((id) => !allowedJobIds.has(id));
+          // The rows a list tool returned are what `show_jobs` can put on its card later in this turn.
+          for (const item of listedItems(r.output)) listedJobs.set(item.jobId, { item, fromThisTurn: true });
+          for (const made of r.output.cards ?? []) {
+            const unknown = cardJobIds(made).filter((id) => !allowedJobIds.has(id));
             if (unknown.length) {
-              logger.warn('COPILOT', 'copilot_guard_hit', { kind: 'card_job_id', card: c.type, jobIds: unknown, brand: brand.id });
+              logger.warn('COPILOT', 'copilot_guard_hit', { kind: 'card_job_id', card: made.type, jobIds: unknown, brand: brand.id });
               continue;
+            }
+            // A whole list is not the answer's card: it waits for the jobs the model cites.
+            if (r.output.list === 'candidates') {
+              heldLists.push({ card: made, citable: !toolCtx.lastToolRound });
+              continue;
+            }
+            const cited = r.output.list === 'cited';
+            const c = cited ? this.checkedNote(made, guardCtx(), brand.id) : made;
+            if (cited) {
+              // The hold is per citation: this card answers for the lists returned so far, not for one that comes later.
+              jobsCited = true;
+              heldLists.length = 0;
             }
             cards.push(c);
             emit({ event: 'card', data: c });
@@ -645,6 +685,28 @@ export class CopilotService {
     }
 
     // ── Finish ──
+    // Lists a search returned and no show_jobs call followed (none in the whole turn, or none after the last
+    // citation): they are shown whole, as before `show_jobs` existed, so nothing a search found is lost and no job
+    // the reply names is missing from the cards. Logged when the turn ran to its end: that is the case to watch.
+    // `afterCitation` tells a turn that cited nothing from one whose later list came after a citation;
+    // `uncitable` counts the lists returned in the last tool round, which the model had no step left to cite.
+    if (heldLists.length) {
+      for (const held of heldLists) {
+        cards.push(held.card);
+        emit({ event: 'card', data: held.card });
+      }
+      if (!aborted && !failure) {
+        logger.warn('COPILOT', 'copilot_guard_hit', {
+          kind: 'jobs_not_cited',
+          lists: heldLists.length,
+          jobs: heldLists.reduce((n, held) => n + cardJobIds(held.card).length, 0),
+          afterCitation: jobsCited,
+          uncitable: heldLists.filter((held) => !held.citable).length,
+          brand: brand.id,
+          scope: spec.scope,
+        });
+      }
+    }
     let content = guard.text.trim();
     if (blockedTail) content = `${content}${content ? '\n\n' : ''}${guardLine('restBlocked', spec.locale)}`;
     const produced = content.length > 0 || cards.length > 0;
@@ -731,6 +793,22 @@ export class CopilotService {
     } else if (!aborted && (produced || !failure)) {
       emit({ event: 'done', data: { messageId, usage, creditsRemaining, content, guarded: hits.length > 0 } });
     }
+  }
+
+  /**
+   * The `note` of a cited job list is the model's own words, written in a
+   * tool argument, so it never passed the sentence guard of the reply. It is
+   * checked here the same way (no submission claim, no number without a
+   * source, no unknown job link); a note that fails is left off the card.
+   */
+  private checkedNote(c: CopilotCard, ctx: GuardContext, brandId: string): CopilotCard {
+    const data = c.data as { note?: unknown } | null;
+    if (!data || typeof data !== 'object' || typeof data.note !== 'string') return c;
+    const hits = guardText(data.note, ctx).hits;
+    if (!hits.length) return c;
+    for (const h of hits) logger.warn('COPILOT', 'copilot_guard_hit', { kind: h.kind, token: h.token, excerpt: h.excerpt, brand: brandId, where: 'job_list_note' });
+    const { note: _dropped, ...rest } = data as Record<string, unknown>;
+    return { ...c, data: rest };
   }
 
   private async memoryFor(userId: string): Promise<string[]> {

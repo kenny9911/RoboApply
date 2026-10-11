@@ -1,37 +1,50 @@
-// server/src/features/copilot/tools/jobs.ts — job tools (ARCH §5.2; WP-50).
+// server/src/features/copilot/tools/jobs.ts — job tools (ARCH §5.2; WP-50; MKT-4H).
 //
-// search_jobs · top_fit_jobs · added_jobs · get_job · analyze_fit ·
-// company_insights · salary_context · competitiveness. All read-only. Lists
-// come from the feed seam (`feedService.preview`, no session), jobs from job
-// detail (market and GoApply mode checks happen there), fit from THE fit
-// (match/fit.ts through `areas.fit` / `areas.storedFit`: the person's
-// primary resume, so the Assistant and the job page say one number whatever
-// resume is attached to the thread; the paid `fit_analysis` card lives on the
-// job page), company facts only with their provenance. Only an explicit
-// question about a resume version adds the second, separately named measure
-// "With this version" to analyze_fit.
+// search_jobs · top_fit_jobs · added_jobs · similar_jobs · show_jobs · get_job ·
+// analyze_fit · company_insights · salary_context · competitiveness. All
+// read-only. Lists come from the feed seam (`feedService.preview`, no session:
+// a typed query runs the feed's own retrieval), jobs from job detail (market
+// and GoApply mode checks happen there), fit from THE fit (match/fit.ts
+// through `areas.fit` / `areas.fits`: the person's primary resume, so the
+// Assistant and the job page say one number whatever resume is attached to the
+// thread; the paid `fit_analysis` card lives on the job page), company facts
+// only with their provenance. Only an explicit question about a resume
+// version adds the second, separately named measure "With this version" to
+// analyze_fit. No tool here calls the scorer except analyze_fit.
 //
-// The card is the list. A `job_list` card shows every job the tool returned,
-// so whatever narrows a list is done HERE, by the tool, never by the model in
-// its text: "only posts that list pay" is the `payListed` argument (the
-// search's own "Only jobs that list pay" filter, and no pay-less row is kept),
-// and each row carries its work model so "remote" can be seen on the card.
+// The card shows exactly the jobs the answer cites (MARKET_STRATEGY §2.3 step
+// 8; SM-9). A list tool (search_jobs, top_fit_jobs, added_jobs, similar_jobs)
+// returns its rows and ids to the model and marks its output `list:
+// 'candidates'`: its card is the whole list, which the service holds back.
+// The model then calls `show_jobs` with the ids of the jobs it is going to
+// talk about, and THAT card (`cited: true`, those jobs, that order) is what
+// the user sees. A list no show_jobs call followed (none in the turn, or none
+// after the last citation) is shown whole by the service when the turn ends,
+// so nothing a search found is lost and the reply names no job that is on no
+// card. Whatever narrows a list by a rule is still done by the tool ("only
+// posts that list pay" is the `payListed` argument), never by the model in
+// its text.
 //
 // Jobs the user added themselves (a pasted link or text) are private rows the
-// public lists never include. `added_jobs` lists them, and `search_jobs` with
-// keywords looks through them too, so "the job I added at Acme" is found.
-// `added_jobs` works with GoApply's third-party postings off: the user's own
-// rows are theirs to ask about.
+// public lists never include. `added_jobs` lists them, `search_jobs` with
+// keywords looks through them too ("the job I added at Acme" is found), and
+// `top_fit_jobs` ranks them with the rest by the same fit. `added_jobs` works
+// with GoApply's third-party postings off: the user's own rows are theirs to
+// ask about. Their fits are read in ONE batch (`areas.fits`).
+//
+// A 台灣就業通 open-data row carries its licence credit line in
+// `cardMeta.tw_sources`; the job-list card prints it (JobListCard.tsx), so
+// such a row is listed like any other.
 
 import { z } from 'zod';
-import { FEED_SORTS, itemOwesCreditLine } from '../../feed/contract.js';
+import { FEED_SORTS } from '../../feed/contract.js';
 import { parseFilterSetPatch, type FilterSet } from '../../search/index.js';
-import type { CardSource, CompetitivenessCardData } from '../contract.js';
+import { JOB_LIST_MAX, JOB_LIST_NOTE_MAX, type CardSource, type CompetitivenessCardData, type CopilotCard, type JobListCardData } from '../contract.js';
 import type { FeedItem, SalaryStatsResult } from '../../feed/index.js';
 import type { AddedJobItem } from '../../jobs/import/index.js';
 import type { MatchFitView } from '../../match/contract.js';
 import { logger } from '../../../services/LoggerService.js';
-import type { CopilotTool, ToolContext, ToolOutput } from '../types.js';
+import type { CopilotTool, JobListItem, ToolContext, ToolOutput } from '../types.js';
 import { card, clip, indexCount, isNotFound, JobId, jobForModel, notAvailable, requireUser } from './util.js';
 
 const FIT_LINE = 'This is not your chance of getting hired.';
@@ -46,7 +59,45 @@ function readFilters(raw: unknown): { ok: true; filters: Partial<FilterSet> } | 
   return { ok: true, filters: filters as Partial<FilterSet> };
 }
 
-const LIST_NOTE = 'The card shows exactly these jobs, all of them. Describe the list as it is; to show fewer or other jobs, call the tool again with the filters that narrow it.';
+/** What the model reads after a list tool: nothing is on screen until it cites. */
+const CITE_NOTE =
+  'Nothing is shown to the user yet. Call show_jobs with the ids of the jobs you are going to talk about, in the order you mention them: the card shows exactly those jobs. To narrow the list by a rule, call the tool again with arguments.';
+
+/**
+ * The same, for a list returned in the answer's last tool round
+ * (`ctx.lastToolRound`): the reply comes next and no show_jobs call can
+ * follow, so the service shows this list whole. The model is told what the
+ * user will see, not asked for a call it cannot make.
+ */
+const WHOLE_LIST_NOTE =
+  'You cannot call another tool in this answer, so this whole list is shown to the user as it is, in this order. Write only about jobs on it, or on a card you already showed.';
+
+/** A fit as a list row carries it (the feed card's own fields). */
+type RowFit = { tier: string | null; score: number | null; kind: 'pre' | 'ai'; topGap: string | null; topOverlap: string | null; confidence?: 'high' | 'medium' | 'low'; confidenceReason?: string | null };
+
+/** THE fit as a row shows it; null when nothing could be compared. */
+function rowFit(view: MatchFitView | undefined): RowFit | null {
+  if (!view || (!view.tier && view.score === null)) return null;
+  return {
+    tier: view.tier,
+    score: view.score,
+    kind: view.kind,
+    topGap: view.topGap,
+    topOverlap: view.topOverlap,
+    ...(view.confidence ? { confidence: view.confidence, confidenceReason: view.confidenceReason ?? null } : {}),
+  };
+}
+
+/** The fits of a list in one batch read (never a model call). A failed read answers none: the rows show no fit. */
+async function fitsOf(ctx: ToolContext, userId: string, jobIds: readonly string[]): Promise<Map<string, MatchFitView>> {
+  if (!jobIds.length) return new Map();
+  try {
+    return await ctx.areas.fits(userId, jobIds, { locale: ctx.locale });
+  } catch (err) {
+    logger.debug('COPILOT', 'fits not read for a job list (rows show none)', { jobs: jobIds.length, error: err instanceof Error ? err.message : String(err) });
+    return new Map();
+  }
+}
 
 /** One of the user's own added jobs as a list row. Its pay is not known here (`payKnown: false`): the card shows none rather than "not listed". */
 interface AddedRow {
@@ -60,43 +111,31 @@ interface AddedRow {
   addedByUser: true;
   addedAt: string;
   tracker: { status: string } | null;
-  fit: { tier: string | null; score: number | null; kind: 'pre' | 'ai'; topGap: string | null; topOverlap: string | null } | null;
+  fit: RowFit | null;
   badges: [];
 }
 
 /**
- * The stored fit of each added job (never a model call). A job whose fit
- * cannot be read has none. Read one after another: each read is a chain of
- * queries (the job, the user's profile and resume, the stored score), and a
- * turn must not take eight database connections at once for a list of at
- * most eight rows.
+ * The user's own added jobs as rows, each with THE fit the job page shows
+ * (the stored AI read, else the quick estimate), read for all of them in one
+ * batch: a list of eight never opens eight chains of queries.
  */
 async function addedRows(ctx: ToolContext, userId: string, jobs: readonly AddedJobItem[]): Promise<AddedRow[]> {
-  const rows: AddedRow[] = [];
-  for (const j of jobs) {
-    let fit: AddedRow['fit'] = null;
-    try {
-      const view = await ctx.areas.storedFit(userId, j.jobId, { locale: ctx.locale });
-      if (view.tier || view.score !== null) fit = { tier: view.tier, score: view.score, kind: view.kind, topGap: view.topGap, topOverlap: view.topOverlap };
-    } catch (err) {
-      logger.debug('COPILOT', 'no stored fit for an added job', { jobId: j.jobId, error: err instanceof Error ? err.message : String(err) });
-    }
-    rows.push({
-      jobId: j.jobId,
-      title: j.title,
-      company: { id: null, name: j.companyName, logoUrl: null },
-      location: j.location,
-      workModel: j.workModel,
-      pay: null,
-      payKnown: false,
-      addedByUser: true,
-      addedAt: j.addedAt,
-      tracker: j.trackerStatus ? { status: j.trackerStatus } : null,
-      fit,
-      badges: [],
-    });
-  }
-  return rows;
+  const fits = await fitsOf(ctx, userId, jobs.map((j) => j.jobId));
+  return jobs.map((j) => ({
+    jobId: j.jobId,
+    title: j.title,
+    company: { id: null, name: j.companyName, logoUrl: null },
+    location: j.location,
+    workModel: j.workModel,
+    pay: null,
+    payKnown: false,
+    addedByUser: true,
+    addedAt: j.addedAt,
+    tracker: j.trackerStatus ? { status: j.trackerStatus } : null,
+    fit: rowFit(fits.get(j.jobId)),
+    badges: [],
+  }));
 }
 
 function addedForModel(row: AddedRow): Record<string, unknown> {
@@ -128,39 +167,69 @@ const SearchJobsArgs = z
     filters: z.record(z.string(), z.unknown()).optional().describe('Filter fields for this search only (same names as get_current_filters). Does not change the saved search.'),
     payListed: z.boolean().optional().describe('true = only jobs whose post lists pay. Use it when the user asks for jobs that list or show their pay.'),
     sort: z.enum(FEED_SORTS).optional(),
-    limit: z.number().int().min(1).max(8).optional(),
+    limit: z.number().int().min(1).max(JOB_LIST_MAX).optional(),
   })
   .strict();
 
 const hasPay = (item: FeedItem): boolean => item.pay !== null && item.pay !== undefined;
 
 /**
- * A feed item that owes a source credit line (a 台灣就業通 open-data row; the
- * licence asks for it wherever the row is shown, MARKET_STRATEGY §1.3).
+ * A list for the model to choose from. The rows and ids are its data; the
+ * card is the list as a whole, which the service holds back (`list:
+ * 'candidates'`) until the model cites jobs with show_jobs or the turn ends.
  */
-const owesCreditLine = (item: FeedItem): boolean => itemOwesCreditLine(item);
+function candidates(ctx: ToolContext, rows: readonly JobListItem[], forModel: Array<Record<string, unknown>>, query: Record<string, unknown>, extra: Record<string, unknown> = {}): ToolOutput {
+  if (!rows.length) return { data: { count: 0, jobs: [], ...extra }, cards: [], jobIds: [] };
+  const data: JobListCardData = { items: [...rows], query };
+  return {
+    data: { count: rows.length, jobs: forModel, ...extra, fitNote: FIT_LINE, listNote: ctx.lastToolRound ? WHOLE_LIST_NOTE : CITE_NOTE },
+    cards: [card(ctx, 'job_list', data)],
+    jobIds: rows.map((r) => r.jobId),
+    list: 'candidates',
+  };
+}
 
-/** The largest list `feedPreview` builds. */
-const PREVIEW_MAX = 50;
+/** The rows of a job-list card (each with a job id), as `show_jobs` reads them. */
+export function jobListItems(c: CopilotCard): JobListItem[] {
+  if (c.type !== 'job_list') return [];
+  const items = (c.data as { items?: unknown } | null)?.items;
+  if (!Array.isArray(items)) return [];
+  return items.filter((it): it is JobListItem => !!it && typeof it === 'object' && typeof (it as { jobId?: unknown }).jobId === 'string' && !!(it as { jobId: string }).jobId);
+}
+
+/** The rows a list tool returned (empty for every other tool). */
+export function listedItems(output: ToolOutput): JobListItem[] {
+  return output.list === 'candidates' ? (output.cards ?? []).flatMap(jobListItems) : [];
+}
+
+type Scored = { fit?: { score?: number | null; kind?: string } | null };
+const scoreOf = (row: Scored): number | null => (typeof row.fit?.score === 'number' ? row.fit.score : null);
+/** Does `a` come before `b` by the fit: the higher score, and at one score the AI read before the quick estimate? A row with no fit beats none. */
+function beats(a: Scored, b: Scored): boolean {
+  const sa = scoreOf(a);
+  const sb = scoreOf(b);
+  if (sa === null) return false;
+  if (sb === null) return true;
+  return sa !== sb ? sa > sb : a.fit?.kind === 'ai' && b.fit?.kind !== 'ai';
+}
 
 /**
- * `feedPreview` without the rows the job-list card cannot credit yet: the card
- * has no place for the credit line, so such a row is not listed here (it stays
- * on the feed and its own page, which print it). When the first read holds
- * such rows, one wider read fills the list. Remove with MKT-4H.1, when the
- * card prints the line (requests/waveM3-carryover.md).
+ * Rows of several lists in ONE order, by the fit every one of them shows:
+ * best score first, the AI read before the quick estimate at one score, rows
+ * with no fit last. Rows that tie keep the order they came in. The scores are
+ * THE fit (one scale); nothing here computes or adjusts one.
  */
-async function creditablePreview(ctx: ToolContext, userId: string, input: Parameters<ToolContext['areas']['feedPreview']>[1]): Promise<FeedItem[]> {
-  const first = await ctx.areas.feedPreview(userId, input);
-  if (!first.some(owesCreditLine)) return first;
-  const wider = input.limit >= PREVIEW_MAX ? first : await ctx.areas.feedPreview(userId, { ...input, limit: Math.min(PREVIEW_MAX, input.limit * 4) });
-  return wider.filter((item) => !owesCreditLine(item)).slice(0, input.limit);
+export function orderByFit<T extends Scored>(rows: readonly T[]): T[] {
+  return rows
+    .map((row, i) => ({ row, i }))
+    .sort((a, b) => (beats(a.row, b.row) ? -1 : beats(b.row, a.row) ? 1 : a.i - b.i))
+    .map((entry) => entry.row);
 }
 
 export const searchJobs: CopilotTool<z.infer<typeof SearchJobsArgs>> = {
   name: 'search_jobs',
   description:
-    'Search open jobs for the user. Returns at most 8 jobs with ids; the card shows exactly the jobs returned, so narrow the list with arguments (filters, payListed), never in your text. With keywords it also looks through the jobs the user added themselves. Does not change the saved search; to change it, use propose_filter_change.',
+    'Search open jobs for the user. Returns at most 8 jobs with ids. Nothing is shown to the user until you call show_jobs with the ids you are going to talk about. Narrow the list with arguments (filters, payListed), never in your text. With keywords it also looks through the jobs the user added themselves. Does not change the saved search; to change it, use propose_filter_change.',
   schema: SearchJobsArgs,
   available: (ctx) => ctx.areas.postingsAllowed(ctx.market),
   async run(args, ctx) {
@@ -171,8 +240,9 @@ export const searchJobs: CopilotTool<z.infer<typeof SearchJobsArgs>> = {
     // "Only jobs that list pay" is the search's own filter; asked for by argument or inside `filters`.
     const payOnly = args.payListed === true || read.filters.includeUndisclosedPay === false;
     const filters: Partial<FilterSet> = payOnly ? { ...read.filters, includeUndisclosedPay: false } : read.filters;
-    const found = await creditablePreview(ctx, userId, { q: args.q, filters, sort: args.sort, limit });
-    // The card is the list: a row without pay never rides along on a pay-only search
+    // `q` is the typed query: the feed runs its own retrieval for it (nothing is ranked here).
+    const found = await ctx.areas.feedPreview(userId, { q: args.q, filters, sort: args.sort, limit });
+    // A row without pay never rides along on a pay-only search
     // (the filter steps back when a minimum pay is set; this does not).
     const items = payOnly ? found.filter(hasPay) : found;
     // The user's own added jobs are not in the public lists: keywords look through them too.
@@ -188,39 +258,33 @@ export const searchJobs: CopilotTool<z.infer<typeof SearchJobsArgs>> = {
     }
     const mineIds = new Set(mine.map((m) => m.jobId));
     const rows = [...mine, ...items.filter((i) => !mineIds.has(i.jobId))].slice(0, Math.max(limit, mine.length));
-    return {
-      data: {
-        count: rows.length,
-        jobs: rows.map((r) => ('addedByUser' in r ? addedForModel(r) : jobForModel(r))),
-        ...(payOnly ? { payListedOnly: true } : {}),
-        fitNote: FIT_LINE,
-        listNote: LIST_NOTE,
-      },
-      cards: rows.length ? [card(ctx, 'job_list', { items: rows, query: { q: args.q ?? null, sort: args.sort ?? null, ...(payOnly ? { payListed: true } : {}) } })] : [],
-      jobIds: rows.map((i) => i.jobId),
-    };
+    return candidates(
+      ctx,
+      rows as unknown as JobListItem[],
+      rows.map((r) => ('addedByUser' in r ? addedForModel(r) : jobForModel(r))),
+      { q: args.q ?? null, sort: args.sort ?? null, ...(payOnly ? { payListed: true } : {}) },
+      payOnly ? { payListedOnly: true } : {},
+    );
   },
 };
 
-const AddedJobsArgs = z.object({ limit: z.number().int().min(1).max(8).optional() }).strict();
+const AddedJobsArgs = z.object({ limit: z.number().int().min(1).max(JOB_LIST_MAX).optional() }).strict();
 
 export const addedJobs: CopilotTool<z.infer<typeof AddedJobsArgs>> = {
   name: 'added_jobs',
   description:
-    'The jobs the user added themselves (from a link or pasted text), newest first, each with its stored fit when there is one. Use it for "the jobs I added", "my added jobs", or a job or company the user says they added. These jobs are not in search_jobs without keywords.',
+    'The jobs the user added themselves (from a link or pasted text), newest first, each with its fit when there is one. Use it for "the jobs I added", "my added jobs", or a job or company the user says they added. These jobs are not in search_jobs without keywords. Nothing is shown to the user until you call show_jobs.',
   schema: AddedJobsArgs,
   async run(args, ctx) {
     const userId = requireUser(ctx);
-    const rows = await addedRows(ctx, userId, await ctx.areas.addedJobs(userId, { limit: args.limit ?? 8 }));
-    return {
-      data: {
-        count: rows.length,
-        jobs: rows.map(addedForModel),
-        ...(rows.length ? { fitNote: FIT_LINE, listNote: LIST_NOTE } : { note: 'The user has not added any job yet. They can add one with a link or pasted text (add_external_job).' }),
-      },
-      cards: rows.length ? [card(ctx, 'job_list', { items: rows, query: { added: true } })] : [],
-      jobIds: rows.map((r) => r.jobId),
-    };
+    const rows = await addedRows(ctx, userId, await ctx.areas.addedJobs(userId, { limit: args.limit ?? JOB_LIST_MAX }));
+    return candidates(
+      ctx,
+      rows as unknown as JobListItem[],
+      rows.map(addedForModel),
+      { added: true },
+      rows.length ? {} : { note: 'The user has not added any job yet. They can add one with a link or pasted text (add_external_job).' },
+    );
   },
 };
 
@@ -255,20 +319,114 @@ export const publicSearchJobs: CopilotTool<z.infer<typeof PublicSearchArgs>> = {
   },
 };
 
-const TopFitArgs = z.object({ limit: z.number().int().min(1).max(8).optional() }).strict();
+const TopFitArgs = z.object({ limit: z.number().int().min(1).max(JOB_LIST_MAX).optional() }).strict();
+
+/** Most added jobs `top_fit_jobs` ranks with the saved search's list (what `areas.addedJobs` reads at once). */
+const TOP_FIT_ADDED_MAX = 50;
 
 export const topFitJobs: CopilotTool<z.infer<typeof TopFitArgs>> = {
   name: 'top_fit_jobs',
-  description: "The user's best-fitting open jobs under the saved search, best fit first.",
+  description:
+    "The user's best-fitting open jobs, best fit first: the jobs under the saved search and the jobs they added themselves. Nothing is shown to the user until you call show_jobs.",
   schema: TopFitArgs,
   available: (ctx) => ctx.areas.postingsAllowed(ctx.market),
   async run(args, ctx) {
     const userId = requireUser(ctx);
-    const items = await creditablePreview(ctx, userId, { sort: 'best_fit', limit: args.limit ?? 5 });
+    const limit = args.limit ?? 5;
+    const items = await ctx.areas.feedPreview(userId, { sort: 'best_fit', limit });
+    // The feed's list leaves out an added job whose post has no date. Added jobs compete by the same fit:
+    // one batch read for all of them, and only a job that has a fit can be a best fit.
+    let mine: AddedRow[] = [];
+    try {
+      const listed = new Set(items.map((i) => i.jobId));
+      const added = (await ctx.areas.addedJobs(userId, { limit: TOP_FIT_ADDED_MAX })).filter((j) => !listed.has(j.jobId));
+      mine = (await addedRows(ctx, userId, added)).filter((row) => row.fit?.score !== null && row.fit?.score !== undefined);
+    } catch (err) {
+      logger.warn('COPILOT', 'added jobs unavailable for top_fit_jobs', { error: err instanceof Error ? err.message : String(err) });
+    }
+    const rows = orderByFit<FeedItem | AddedRow>([...items, ...mine]).slice(0, limit);
+    return candidates(
+      ctx,
+      rows as unknown as JobListItem[],
+      rows.map((r) => ('addedByUser' in r ? addedForModel(r) : jobForModel(r))),
+      { sort: 'best_fit' },
+    );
+  },
+};
+
+const SimilarJobsArgs = z.object({ jobId: JobId, limit: z.number().int().min(1).max(JOB_LIST_MAX).optional() }).strict();
+
+export const similarJobs: CopilotTool<z.infer<typeof SimilarJobsArgs>> = {
+  name: 'similar_jobs',
+  description:
+    'Open jobs like one job: the Similar jobs list of that job\'s page. Use it for "jobs like this one" and "similar jobs". Returns at most 8 jobs with ids. Nothing is shown to the user until you call show_jobs.',
+  schema: SimilarJobsArgs,
+  available: (ctx) => ctx.areas.postingsAllowed(ctx.market),
+  async run(args, ctx) {
+    const userId = requireUser(ctx);
+    try {
+      const found = await ctx.areas.similarJobs(userId, args.jobId);
+      const rows = found.items.filter((i) => i.jobId !== args.jobId).slice(0, args.limit ?? 5);
+      return candidates(
+        ctx,
+        rows as unknown as JobListItem[],
+        rows.map(jobForModel),
+        { similarTo: args.jobId, by: found.by },
+        {
+          // Said as it is: the page's list, or (where that list is not offered) jobs with a similar title.
+          basis: found.by === 'similar' ? "the Similar jobs list of the job's page" : 'open jobs with a similar title under the saved search',
+          ...(rows.length ? {} : { note: 'No similar job is listed right now.' }),
+        },
+      );
+    } catch (err) {
+      if (isNotFound(err)) return notAvailable('job_not_found');
+      throw err;
+    }
+  },
+};
+
+const ShowJobsArgs = z
+  .object({
+    jobIds: z
+      .array(JobId)
+      .min(1)
+      .max(JOB_LIST_MAX)
+      .describe('The jobs you are going to talk about, in the order you mention them. Only ids a list tool returned (search_jobs, top_fit_jobs, added_jobs, similar_jobs).'),
+    note: z.string().trim().min(1).max(JOB_LIST_NOTE_MAX).optional().describe('One short line shown above the list, for example what these jobs have in common. No number that is not in a tool result.'),
+  })
+  .strict();
+
+const NOT_LISTED_NOTE = 'Only a job from a list tool can be shown. Call search_jobs, top_fit_jobs, added_jobs or similar_jobs first, then pass ids it returned.';
+
+/**
+ * The card of the answer: exactly the jobs the model cites, in the order it
+ * gives. Rows come from the lists the turn already holds (`ctx.listedJobs`:
+ * no new query). A row taken from an earlier answer has its fit read again,
+ * so the card never shows a fit from then as the fit now.
+ */
+export const showJobs: CopilotTool<z.infer<typeof ShowJobsArgs>> = {
+  name: 'show_jobs',
+  description:
+    'Show the user the jobs your answer is about: one card with exactly these jobs, in this order. Call it after a list tool (search_jobs, top_fit_jobs, added_jobs, similar_jobs), with ids it returned, before you write about the jobs. Never name a job you did not pass here.',
+  schema: ShowJobsArgs,
+  async run(args, ctx) {
+    const userId = requireUser(ctx);
+    const ids = [...new Set(args.jobIds)];
+    const known = ctx.listedJobs;
+    const unlisted = ids.filter((id) => !known?.has(id));
+    if (unlisted.length) return { data: { error: 'job_not_listed', jobIds: unlisted, note: NOT_LISTED_NOTE } };
+    const earlier = ids.filter((id) => !known!.get(id)!.fromThisTurn);
+    const fresh = earlier.length ? await fitsOf(ctx, userId, earlier) : null;
+    const items = ids.map((id): JobListItem => {
+      const row = known!.get(id)!;
+      return row.fromThisTurn ? row.item : { ...row.item, fit: rowFit(fresh!.get(id)) };
+    });
+    const data: JobListCardData = { items, cited: true, ...(args.note ? { note: args.note } : {}) };
     return {
-      data: { count: items.length, jobs: items.map(jobForModel), fitNote: FIT_LINE, listNote: LIST_NOTE },
-      cards: items.length ? [card(ctx, 'job_list', { items, query: { sort: 'best_fit' } })] : [],
-      jobIds: items.map((i) => i.jobId),
+      data: { shown: ids.length, jobIds: ids, note: 'The card shows exactly these jobs, in this order. Write about these jobs only.' },
+      cards: [card(ctx, 'job_list', data)],
+      jobIds: ids,
+      list: 'cited',
     };
   },
 };

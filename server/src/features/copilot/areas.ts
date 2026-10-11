@@ -13,13 +13,20 @@
 //   J1  nudgeSignals    → feed `feedSignals`
 //   J2  primaryResumeId → resume `primaryVariantId`
 // This area reads no other area's table itself (guarded by tools.test.ts).
+//
+// Fits (MKT-4H): `fits` is the list read, ONE batch call of the fit contract
+// behind the feed's own personalisation rule (GoApply: no fit is read or shown
+// without a live 个性化推荐 grant), so a job list in the Assistant shows the
+// number the feed card and the job page show. `similarJobs` is the job page's
+// Similar jobs list; see the note on it below.
 
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { Market } from '../../platform/brand/registry.js';
 import { cnRecruitmentInfoMode } from '../../platform/flags.js';
-import type { FitFunctions } from '../match/index.js';
+import type { FitFunctions, MatchFitView } from '../match/index.js';
+import type { JobDetailService, SimilarJobsResponse } from '../jobs/detail/index.js';
 import type { CopilotAreas } from './types.js';
-import type { SalaryStatsInput, SalaryStatsResult } from '../feed/index.js';
+import type { FeedItem, FeedPreviewInput, SalaryStatsInput, SalaryStatsResult } from '../feed/index.js';
 import type { NudgeSignals } from './nudges.js';
 import type { CopilotStore } from './store.js';
 
@@ -59,19 +66,39 @@ export interface DefaultAreasOptions {
   env?: EnvSource;
   /** Test and join seam: replace a cross-area read (default: `CROSS_AREA_DEFAULTS`). */
   reads?: Partial<Pick<CrossAreaReads, 'salaryStats' | 'primaryResumeId'>>;
-  /** Test seam: the fit contract on other dependencies (default: match/fit.ts `getFit` / `getVariantFit`). */
-  fits?: Pick<FitFunctions, 'getFit' | 'getVariantFit'>;
+  /** Test seam: the fit contract on other dependencies (default: match/fit.ts `getFit` / `getFits` / `getVariantFit`). */
+  fits?: Pick<FitFunctions, 'getFit' | 'getVariantFit'> & Partial<Pick<FitFunctions, 'getFits'>>;
+  /** Test seam: may this person's fit be read for a list? (default: feed `isFeedPersonalized`.) */
+  personalized?: (userId: string, market: Market) => Promise<boolean>;
+  /** Test seam: the job page's service (default: jobs/detail `jobDetailService`). */
+  jobDetail?: JobDetailSeam;
+  /** Test seam: the feed's list read (default: feed `feedService.preview`). */
+  feedPreview?: (userId: string, input: FeedPreviewInput) => Promise<FeedItem[]>;
 }
+
+/**
+ * What the Assistant reads of job detail's public surface. `similar` is the
+ * job page's Similar jobs list (`GET /jobs/:id/similar`). The surface
+ * (`jobDetailService` in jobs/detail/index.ts) does not offer it yet, so it is
+ * read when present; see `similarJobs` below.
+ */
+export type JobDetailSeam = Pick<JobDetailService, 'get'> & { similar?: (userId: string, jobId: string) => Promise<SimilarJobsResponse> };
+
+/** Rows asked of the feed for the title search that stands in for Similar jobs (one more than a list shows: the job itself may be among them). */
+const SIMILAR_BY_TITLE_ROWS = 9;
 
 export function createDefaultAreas(options: DefaultAreasOptions): CopilotAreas {
   const env = (): EnvSource => options.env ?? process.env;
   const readSalaryStats = options.reads?.salaryStats ?? CROSS_AREA_DEFAULTS.salaryStats();
   const readPrimaryResumeId = options.reads?.primaryResumeId ?? CROSS_AREA_DEFAULTS.primaryResumeId();
+  const preview = async (userId: string, input: FeedPreviewInput): Promise<FeedItem[]> => {
+    if (options.feedPreview) return options.feedPreview(userId, input);
+    const { feedService } = await import('../feed/index.js');
+    return feedService.preview(userId, input);
+  };
+  const jobDetail = async (): Promise<JobDetailSeam> => options.jobDetail ?? (await import('../jobs/detail/index.js')).jobDetailService;
   return {
-    async feedPreview(userId, input) {
-      const { feedService } = await import('../feed/index.js');
-      return feedService.preview(userId, input);
-    },
+    feedPreview: (userId, input) => preview(userId, input),
     async feedPublicList(input) {
       const { feedService } = await import('../feed/index.js');
       return feedService.publicList(input);
@@ -93,8 +120,7 @@ export function createDefaultAreas(options: DefaultAreasOptions): CopilotAreas {
       return searchProfileService.patchFilters(userId, searchProfileId, version, patch);
     },
     async getJob(userId, jobId) {
-      const { jobDetailService } = await import('../jobs/detail/index.js');
-      return jobDetailService.get(userId, jobId);
+      return (await jobDetail()).get(userId, jobId);
     },
     // THE fit (match/fit.ts), so the Assistant and the job page say one number. `fit` and `storedFit` are for the
     // person's PRIMARY resume whatever resume is attached to the chat thread. `variantFit` is called only by
@@ -115,6 +141,30 @@ export function createDefaultAreas(options: DefaultAreasOptions): CopilotAreas {
       const match = await import('../match/index.js');
       // The stored score the job page and the lists show, else the quick estimate. Never a model call, never a version.
       return match.fitToView(await (options.fits ?? match).getFit(userId, jobId, { locale: opts.locale }), { locale: opts.locale });
+    },
+    // The fits of a list: one batch read, never a model call, and under the same rule as the feed card's fit.
+    async fits(userId, jobIds, opts) {
+      const out = new Map<string, MatchFitView>();
+      const ids = [...new Set(jobIds)];
+      if (!ids.length) return out;
+      const [match, { getCurrentBrandOrDefault }] = await Promise.all([import('../match/index.js'), import('../../platform/brand/index.js')]);
+      // GoApply: no fit is read or shown without a live 个性化推荐 grant (MARKET_STRATEGY 2.5; the feed's own rule).
+      const personalized = options.personalized ?? (await import('../feed/index.js')).isFeedPersonalized;
+      if (!(await personalized(userId, getCurrentBrandOrDefault().market))) return out;
+      const read = options.fits?.getFits ?? match.getFits;
+      for (const [jobId, fit] of await read(userId, ids)) out.set(jobId, match.fitToView(fit, { locale: opts.locale }));
+      return out;
+    },
+    // The job page's Similar jobs list (by job vector since MKT-2F / MKT-2H, best fit first). Job detail's public
+    // surface offers `get` only today, so `similar` is read when the surface has it (the Request in
+    // docs/jobright-clone/orch/handoffs-mkt/MKT-4H.md adds it there). Until then the answer is what the Similar
+    // jobs quick action did before: a search by the job's title through the feed, said as such (`by: 'title'`).
+    async similarJobs(userId, jobId) {
+      const detail = await jobDetail();
+      if (typeof detail.similar === 'function') return { items: (await detail.similar(userId, jobId)).items, by: 'similar' };
+      const { job } = await detail.get(userId, jobId);
+      const items = await preview(userId, { q: job.title, limit: SIMILAR_BY_TITLE_ROWS });
+      return { items: items.filter((item) => item.jobId !== jobId), by: 'title' };
     },
     async addedJobs(userId, opts) {
       const { jobImportService } = await import('../jobs/import/index.js');

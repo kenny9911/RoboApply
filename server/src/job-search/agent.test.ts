@@ -7,14 +7,16 @@ vi.mock('../services/LoggerService.js', () => ({ logger: { error: vi.fn(), warn:
 const llm = vi.hoisted(() => ({ chat: vi.fn(), model: vi.fn() }));
 vi.mock('../services/llm/LLMService.js', () => ({ llmService: { chat: llm.chat } }));
 vi.mock('../lib/llm/llmModels.js', () => ({ getModelSetting: llm.model }));
-import { configuredSearchPlanner, createJobSearchAgent, createPlannerGate, isLinkedInJob, JobSearchAgentUnavailableError, JobSearchAiOffError, JobSearchAiUnavailableError, JobSearchPhoneBindingError, type SearchPlanner } from './agent.js';
+import { configuredSearchPlanner, createJobSearchAgent, createPlannerGate, JobSearchAgentUnavailableError, JobSearchAiOffError, JobSearchAiUnavailableError, JobSearchPhoneBindingError, type SearchPlanner } from './agent.js';
 import { getBrand } from '../platform/brand/registry.js';
 import { setConsentLookup } from '../platform/consent/index.js';
 import { parseAgentPlan, parseAgentSearchInput } from './agent-validation.js';
 import { SearchQuotaError } from './quota.js';
 import { JobSearchValidationError } from './validation.js';
 import { getCurrentUserId } from '../lib/requestContext.js';
-import { createJobSearchService } from './service.js';
+import { createJobSearchService, type SearchProvider } from './service.js';
+import { createIndexProvider, type IndexFeedItem } from './index-provider.js';
+import { FILTER_FIELDS } from '../features/search/contract.js';
 import type { AgentSearchInput, ProviderInfo, SearchJob, SearchResult } from './types.js';
 import type { ProviderJob } from './normalization.js';
 
@@ -96,6 +98,9 @@ describe('planned search and durable ordering', () => {
     const response = await agent.search(INPUT, CONTEXT);
     expect(events).toEqual(['reserve:1', 'plan', 'search:software engineer', 'finish:reservation-1', 'reserve:2', 'search:backend engineer', 'finish:reservation-2']);
     expect(response.agent).toMatchObject({ mode: 'planned', queries: PLAN.queries, criteria: { country: 'tw', location: 'Taipei' } });
+    // A plan that names no topic: nothing is ranked by, and no source is asked for an order.
+    expect(response.agent.rankedBy).toEqual([]);
+    expect(service.search.mock.calls.every(call => !('rankBy' in call[1]))).toBe(true);
     expect(service.search).toHaveBeenCalledWith(expect.objectContaining({ query: 'software engineer', country: 'tw', location: 'Taipei' }), expect.objectContaining({ audience: 'website', requestId: 'agent-fixture' }));
     expect(response.jobs).toHaveLength(1); expect(response.meta.deduplicated).toBe(1);
     expect(response.searches).toHaveLength(2); expect(quota.reserve).toHaveBeenCalledTimes(2);
@@ -185,23 +190,7 @@ describe('cancellation and model runtime', () => {
   });
 });
 
-describe('LinkedIn provenance and audience rights', () => {
-  it.each([
-    'https://linkedin.com/jobs/view/123', 'https://www.linkedin.com/jobs/view/engineer-at-example-123/',
-    'https://tw.linkedin.com/jobs/view/123?tracking=x',
-  ])('recognizes canonical LinkedIn job URLs %s', sourceUrl => expect(isLinkedInJob(job({ sourceUrl }))).toBe(true));
-  it.each([
-    'https://linkedin.com.evil.example/jobs/view/123', 'https://notlinkedin.com/jobs/view/123',
-    'https://careers.example.com/linkedin.com/jobs/view/123', 'https://careers.example.com/?next=https://linkedin.com/jobs/view/123',
-    'https://user:password@linkedin.com/jobs/view/123', 'https://linkedin.com/in/engineer', 'https://linkedin.com/company/example',
-    'https://linkedin.com/jobs/view/',
-  ])('rejects spoofed or unrelated LinkedIn URLs %s', sourceUrl => expect(isLinkedInJob(job({ sourceUrl }))).toBe(false));
-  it('uses exact publisher or retained secondary source URL, never just provider ID', () => {
-    expect(isLinkedInJob(job({ provider: 'linkedin' }))).toBe(false);
-    expect(isLinkedInJob(job({ sources: [{ provider: 'jsearch', id: 'j1', applyUrl: 'https://careers.example.com/job/1', publisher: ' LinkedIn ' }] }))).toBe(true);
-    expect(isLinkedInJob(job({ sources: [{ provider: 'activejobs', id: 'a1', applyUrl: 'https://careers.example.com/job/1', publisher: 'Not LinkedIn' }] }))).toBe(false);
-    expect(isLinkedInJob(job({ sources: [{ provider: 'jsearch', id: 'j1', applyUrl: 'https://careers.example.com/job/1', publisher: null, sourceUrl: 'https://linkedin.com/jobs/view/123' }] }))).toBe(true);
-  });
+describe('LinkedIn is not a source, and audience rights', () => {
   it('an explicit linkedinOnly is refused on RoboApply too, before any reservation or model call: LinkedIn is not a source (M-4)', async () => {
     const { agent, planner, quota, service } = setup({ queries: ['engineer'], unverifiedPreferences: [] });
     const refused = agent.search({ ...INPUT, linkedinOnly: true }, { ...CONTEXT, brand: getBrand('roboapply') });
@@ -438,5 +427,186 @@ describe('LinkedIn-only: no site has a LinkedIn-capable source (GoApply by its l
     expect(response.agent.linkedinOnly).toBe(false);
     expect(response.agent.unverifiedPreferences).toEqual(['Find software engineer jobs in Taipei. LinkedIn only.']);
     expect(base.service.search).toHaveBeenCalledWith(expect.objectContaining({ providers: undefined }), expect.anything());
+  });
+});
+
+describe('MKT-4H: relevance terms (an order, never a filter, never a checked fact)', () => {
+  const GO = getBrand('goapply');
+  const RA = getBrand('roboapply');
+  const NOW = Date.parse('2026-10-11T12:00:00Z');
+  const REQUEST = { request: 'remote backend roles at climate startups, ideally using Rust, paying over 150k' };
+  const TOPICS = { queries: ['backend engineer'], remote: true, relevanceTerms: ['climate startups', 'Rust'], unverifiedPreferences: ['paying over 150k'] };
+  const open = createPlannerGate({ phoneBindingRequired: async () => false, aiAllowed: async () => true, aiTextEnabled: async () => true });
+
+  it('RoboApply: the sources return their own order, so rankedBy is empty and the topics stay visible as unverified; nothing else in the response changes', async () => {
+    const { agent, service } = setup(TOPICS);
+    const response = await agent.search(REQUEST, { ...CONTEXT, brand: RA });
+    // The plan: one role query, remote as a filter, the topics offered to the sources as an order.
+    expect(response.agent.queries).toEqual(['backend engineer']);
+    expect(response.agent.criteria).toEqual({ country: 'us', remote: true });
+    expect(service.search).toHaveBeenCalledWith(expect.objectContaining({ query: 'backend engineer', remote: true }), expect.objectContaining({ rankBy: ['climate startups', 'Rust'] }));
+    // The fake provider result carries no order (as JSearch and Active Jobs DB): nothing is claimed.
+    expect(response.agent.rankedBy).toEqual([]);
+    expect(response.agent.unverifiedPreferences).toEqual(['paying over 150k', 'climate startups', 'Rust']);
+    expect(Object.keys(response.agent).sort()).toEqual(['criteria', 'linkedinOnly', 'mode', 'queries', 'rankedBy', 'unverifiedPreferences']);
+    expect(Object.keys(response).sort()).toEqual(['agent', 'jobs', 'meta', 'searches']);
+    expect(response.meta).not.toHaveProperty('rankedBy');
+  });
+
+  it('RoboApply through the real service: a RapidAPI provider is never handed the topics, and its result is in provider order', async () => {
+    const row = (id: string, title: string): ProviderJob => ({ externalId: id, sourceBoard: 'jsearch', title, company: 'Fixture', location: 'Remote', locationCity: null, locationCountry: 'US', companyLogoUrl: null, workType: 'remote', employmentType: null, salaryMin: null, salaryMax: null, salaryCurrency: null, salaryPeriod: null, postedAt: '2026-10-10T00:00:00Z', applyUrl: `https://careers.example.com/job/${id}`, applyIsDirect: true, description: '', sourcePublisher: null });
+    const jsearch: SearchProvider = { id: 'jsearch', isEnabled: () => true, search: vi.fn(async () => [row('j1', 'Backend Engineer, Payments'), row('j2', 'Backend Engineer (Rust), climate startup')]) };
+    const service = createJobSearchService({ env: () => ({ RAPID_API_KEY: 'fixture', JOB_SEARCH_PROVIDERS: 'jsearch' }), providers: [jsearch], now: () => NOW });
+    const { quota } = setup();
+    const agent = createJobSearchAgent({ service, quota: quota as never, planner: async () => TOPICS, gate: open });
+    const response = await agent.search(REQUEST, { ...CONTEXT, brand: RA });
+    expect((jsearch.search as ReturnType<typeof vi.fn>).mock.calls[0][1]).not.toHaveProperty('relevance');
+    expect(response.jobs.map(j => j.title)).toEqual(['Backend Engineer, Payments', 'Backend Engineer (Rust), climate startup']);
+    expect(response.agent.rankedBy).toEqual([]);
+    expect(response.agent.unverifiedPreferences).toEqual(expect.arrayContaining(['climate startups', 'Rust']));
+  });
+
+  /**
+   * GoApply's one source over a fake of the feed's read function. `report` is what that fake says about its order:
+   * 'applied' (it used the text for the order, the row that mentions it comes first, and it says so), 'unapplied'
+   * (it took the text and says it did not order by it) or 'silent' (rows only: a feed without the report).
+   * The real feed service is run in index-feed.gate.test.ts.
+   */
+  function goSetup(plan: unknown, report: 'applied' | 'unapplied' | 'silent' | ((input: { q?: string }) => 'applied' | 'unapplied' | 'silent') = 'applied') {
+    const item = (jobId: string, title: string): IndexFeedItem => ({
+      jobId, title, company: { name: '示例科技' }, location: '上海', workModel: 'remote', employmentType: 'full_time', pay: null,
+      postedAt: '2026-10-09T00:00:00Z', lastSeenAt: '2026-10-11T02:00:00Z', fromRecruiterBank: false,
+      source: { name: 'Greenhouse', kind: 'ats_public', original: '示例科技', url: `https://boards.example.cn/${jobId}`, lastVerifiedAt: '2026-10-11T02:00:00Z', via: 'ats' },
+      apply: { url: `https://careers.example.cn/jobs/${jobId}`, target: 'employer' },
+    });
+    // Two equally recent rows.
+    const plain = item('plain', '后端工程师');
+    const topical = item('topical', '后端工程师（Rust，新能源）');
+    const preview = vi.fn(async (_userId: string, input: { q?: string; relevance?: string }) => {
+      if (!input.relevance) return [plain, topical];
+      const said = typeof report === 'function' ? report(input) : report;
+      if (said === 'applied') return { items: [topical, plain], relevanceApplied: true };
+      if (said === 'unapplied') return { items: [plain, topical], relevanceApplied: false };
+      return [plain, topical];
+    });
+    const rapid: SearchProvider = { id: 'jsearch', isEnabled: () => true, search: vi.fn(async () => []) };
+    const service = createJobSearchService({ providers: [rapid], brandProviders: { goapply: [createIndexProvider({ preview, filterFields: async () => FILTER_FIELDS })] }, env: () => ({ RAPID_API_KEY: 'fixture' }), now: () => NOW });
+    const { quota } = setup();
+    const agent = createJobSearchAgent({ service, quota: quota as never, planner: async () => structuredClone(plan), gate: open });
+    return { agent, preview, rapid, quota };
+  }
+
+  it('GoApply: the index is asked through the feed with the query as q and the topics as relevance; when the feed says the topics took part in its order, that order is kept, rankedBy names them, and no outside provider is called', async () => {
+    const { agent, preview, rapid } = goSetup({ queries: ['后端工程师'], relevanceTerms: ['新能源', 'Rust'], unverifiedPreferences: ['五险一金'] }, 'applied');
+    const response = await agent.search({ request: '找后端工程师职位，最好是新能源行业，用 Rust，要有五险一金' }, { ...CONTEXT, brand: GO });
+    expect(preview).toHaveBeenCalledTimes(1);
+    expect(preview).toHaveBeenCalledWith('owner', expect.objectContaining({ q: '后端工程师', relevance: '新能源 Rust', limit: 50 }));
+    expect(response.jobs.map(j => j.title)).toEqual(['后端工程师（Rust，新能源）', '后端工程师']);
+    expect(response.agent.rankedBy).toEqual(['新能源', 'Rust']);
+    // Ranked by, so not repeated among the preferences nobody applied; the benefit phrase stays there.
+    expect(response.agent.unverifiedPreferences).toEqual(['五险一金']);
+    expect(rapid.search).not.toHaveBeenCalled();
+  });
+
+  it.each(['unapplied', 'silent'] as const)('GoApply, a feed that does not say it ordered by the topics (%s): nothing is claimed, the rows keep the feed\'s order and the topics are listed as not applied, exactly as on RoboApply', async (report) => {
+    const { agent, preview, rapid } = goSetup({ queries: ['后端工程师'], relevanceTerms: ['新能源', 'Rust'], unverifiedPreferences: ['五险一金'] }, report);
+    const response = await agent.search({ request: '找后端工程师职位，最好是新能源行业，用 Rust，要有五险一金' }, { ...CONTEXT, brand: GO });
+    // The topics are still offered to the feed (the same call as above): what is said about them is the feed's answer.
+    expect(preview).toHaveBeenCalledWith('owner', expect.objectContaining({ q: '后端工程师', relevance: '新能源 Rust', limit: 50 }));
+    expect(response.jobs.map(j => j.title)).toEqual(['后端工程师', '后端工程师（Rust，新能源）']);
+    expect(response.agent.rankedBy).toEqual([]);
+    expect(response.agent.unverifiedPreferences).toEqual(['五险一金', '新能源', 'Rust']);
+    expect(response.meta).not.toHaveProperty('rankedBy');
+    expect(rapid.search).not.toHaveBeenCalled();
+  });
+
+  it('GoApply without topics: no relevance is sent and the list is the feed\'s own order', async () => {
+    const { agent, preview } = goSetup({ queries: ['后端工程师'], unverifiedPreferences: [] });
+    const response = await agent.search({ request: '找上海的后端工程师职位，最近一周发布' }, { ...CONTEXT, brand: GO });
+    expect((preview.mock.calls[0] as unknown[])[1]).not.toHaveProperty('relevance');
+    expect(response.jobs.map(j => j.title)).toEqual(['后端工程师', '后端工程师（Rust，新能源）']);
+    expect(response.agent.rankedBy).toEqual([]);
+  });
+
+  it('a requirement the model named as a topic is never ranked by (the feed\'s rule): it is listed as unverified, and only the real topics order the list', async () => {
+    const { agent, preview } = goSetup({ queries: ['后端工程师'], relevanceTerms: ['paying over 150k', 'visa sponsorship', '五险一金', 'Rust'], unverifiedPreferences: [] });
+    const response = await agent.search({ request: '找后端工程师职位，用 Rust 的团队优先' }, { ...CONTEXT, brand: GO });
+    expect(preview).toHaveBeenCalledWith('owner', expect.objectContaining({ relevance: 'Rust' }));
+    expect(response.agent.rankedBy).toEqual(['Rust']);
+    expect(response.agent.unverifiedPreferences).toEqual(['paying over 150k', 'visa sponsorship', '五险一金']);
+  });
+
+  it('only requirements among the terms: nothing is ranked by, no relevance is sent', async () => {
+    const { agent, preview } = goSetup({ queries: ['后端工程师'], relevanceTerms: ['salary above 150k'], unverifiedPreferences: [] });
+    const response = await agent.search({ request: '找后端工程师职位，最近一周发布的' }, { ...CONTEXT, brand: GO });
+    expect((preview.mock.calls[0] as unknown[])[1]).not.toHaveProperty('relevance');
+    expect(response.agent).toMatchObject({ rankedBy: [], unverifiedPreferences: ['salary above 150k'] });
+  });
+
+  it('a plan with nine terms or a URL in one is still accepted: the bad values are dropped and the search runs', async () => {
+    const nine = ['https://evil.example/x', '新能源', 'Rust', '储能', '出海', '开源', '机器人', '芯片', '游戏'];
+    const { agent, preview } = goSetup({ queries: ['后端工程师'], relevanceTerms: nine, unverifiedPreferences: [] });
+    const response = await agent.search({ request: '找后端工程师职位，最近一周发布的' }, { ...CONTEXT, brand: GO });
+    expect(response.agent.rankedBy).toEqual(['新能源', 'Rust', '储能', '出海', '开源']);
+    expect(preview).toHaveBeenCalledWith('owner', expect.objectContaining({ relevance: '新能源 Rust 储能 出海 开源' }));
+    expect(JSON.stringify(response)).not.toContain('evil.example');
+  });
+
+  it('two planned queries: each is ordered by the topics, and rankedBy is claimed only when every search that answered was', async () => {
+    const both = goSetup({ queries: ['后端工程师', '服务端工程师'], relevanceTerms: ['Rust'], unverifiedPreferences: [] });
+    const ok = await both.agent.search({ request: '找后端工程师职位，用 Rust 的团队优先' }, { ...CONTEXT, brand: GO });
+    expect(both.preview.mock.calls.map(c => (c as unknown as [string, { q: string; relevance?: string }])[1])).toEqual([
+      expect.objectContaining({ q: '后端工程师', relevance: 'Rust' }),
+      expect.objectContaining({ q: '服务端工程师', relevance: 'Rust' }),
+    ]);
+    expect(ok.agent.rankedBy).toEqual(['Rust']);
+    // One of the two searches was not ordered by the topic: the whole answer claims nothing, and the topic is disclosed.
+    const half = goSetup({ queries: ['后端工程师', '服务端工程师'], relevanceTerms: ['Rust'], unverifiedPreferences: [] }, input => (input.q === '后端工程师' ? 'applied' : 'unapplied'));
+    const mixed = await half.agent.search({ request: '找后端工程师职位，用 Rust 的团队优先' }, { ...CONTEXT, brand: GO });
+    expect(half.preview).toHaveBeenCalledTimes(2);
+    expect(mixed.agent).toMatchObject({ rankedBy: [], unverifiedPreferences: ['Rust'] });
+    // One search found nothing: the rows that came back were all ordered by the topic, so it is named.
+    const oneEmpty = goSetup({ queries: ['后端工程师', '服务端工程师'], relevanceTerms: ['Rust'], unverifiedPreferences: [] });
+    oneEmpty.preview.mockImplementationOnce(async () => ({ items: [], relevanceApplied: false }));
+    const partial = await oneEmpty.agent.search({ request: '找后端工程师职位，用 Rust 的团队优先' }, { ...CONTEXT, brand: GO });
+    expect(partial.jobs).toHaveLength(2);
+    expect(partial.agent.rankedBy).toEqual(['Rust']);
+    // Nothing was found at all: nothing was ordered, so nothing is claimed.
+    const nothing = goSetup({ queries: ['后端工程师'], relevanceTerms: ['Rust'], unverifiedPreferences: [] });
+    nothing.preview.mockImplementation(async () => ({ items: [], relevanceApplied: true }));
+    expect((await nothing.agent.search({ request: '找后端工程师职位，用 Rust 的团队优先' }, { ...CONTEXT, brand: GO })).agent).toMatchObject({ rankedBy: [], unverifiedPreferences: ['Rust'] });
+    // The index fails for every query: nothing was ordered, so nothing is claimed and the topic is disclosed.
+    const failing = goSetup({ queries: ['后端工程师'], relevanceTerms: ['Rust'], unverifiedPreferences: [] });
+    failing.preview.mockRejectedValue(new Error('index offline'));
+    const failed = await failing.agent.search({ request: '找后端工程师职位，用 Rust 的团队优先' }, { ...CONTEXT, brand: GO });
+    expect(failed.jobs).toEqual([]);
+    expect(failed.agent).toMatchObject({ rankedBy: [], unverifiedPreferences: ['Rust'] });
+  });
+
+  it('RoboApply takes the same rule: a requirement named as a topic is never offered to a source as an order; it is disclosed with the rest', async () => {
+    const base = setup({ ...TOPICS, relevanceTerms: ['climate startups', 'visa sponsorship', 'Rust'] });
+    const response = await base.agent.search(REQUEST, { ...CONTEXT, brand: RA });
+    expect(base.service.search.mock.calls[0][1]).toMatchObject({ rankBy: ['climate startups', 'Rust'] });
+    expect(response.agent.rankedBy).toEqual([]);
+    // The planner's own preference, the requirement it filed as a topic, then the topics nobody ordered by.
+    expect(response.agent.unverifiedPreferences).toEqual(['paying over 150k', 'visa sponsorship', 'climate startups', 'Rust']);
+    // A plan that names no topic asks for no order at all.
+    const none = setup();
+    await none.agent.search(INPUT, CONTEXT);
+    expect(none.service.search.mock.calls[0][1]).not.toHaveProperty('rankBy');
+  });
+
+  it('the planner prompt asks for the topics and keeps the conditions and the "never claim" rule', async () => {
+    llm.model.mockReturnValue(undefined);
+    llm.chat.mockResolvedValue(JSON.stringify(TOPICS));
+    await configuredSearchPlanner(REQUEST, { ...CONTEXT, signal: new AbortController().signal });
+    const prompt = String((llm.chat.mock.calls[0][0] as Array<{ role: string; content: string }>)[0]!.content);
+    expect(prompt).toContain('"relevanceTerms":["topic to rank results by"]');
+    expect(prompt).toMatch(/relevanceTerms: up to 5 short topical phrases/);
+    expect(prompt).toMatch(/pay, visa or work authorization, benefits, hours, time zone, commute or company size: those conditions stay in unverifiedPreferences and are never placed in relevanceTerms/);
+    expect(prompt).toContain('Never claim these facts were checked.');
+    expect(prompt).toContain('never claim they were checked');
+    // The LinkedIn wish is still recognised in words (and then disclosed, never applied).
+    expect(prompt).toContain('linkedinOnly:true only when the request explicitly restricts sources to LinkedIn');
   });
 });

@@ -186,6 +186,30 @@ export interface CampusDeadlinesCardData {
   }>;
 }
 
+/**
+ * `job_list`: jobs as rows (feed items, similar-job items, or the user's own
+ * added jobs; each with `jobId`, and `fit` as the feed card reads it).
+ *   cited: true  the list the answer talks about: exactly the jobs the model
+ *                passed to `show_jobs`, in that order, with its optional
+ *                `note`. Never a complete search result.
+ *   (absent)     a whole list a tool returned: shown when an answer cited no
+ *                job, for a visitor's search, and on every card stored
+ *                before `show_jobs` existed.
+ */
+export interface JobListCardData {
+  items: Array<{ jobId: string } & Record<string, unknown>>;
+  cited?: true;
+  /** One short line of the model's own, checked like the reply's text. Only with `cited`. */
+  note?: string;
+  /** What a whole list was made by (keywords, sort, "added by you", "similar to"). */
+  query?: Record<string, unknown>;
+  visitor?: true;
+}
+/** Longest `note` of a cited job list. */
+export const JOB_LIST_NOTE_MAX = 160;
+/** Most jobs one job list shows (also what one list tool returns). */
+export const JOB_LIST_MAX = 8;
+
 /** `job_imported`: the result of an applied `job_import` credit action. */
 export interface JobImportedCardData {
   status: string;
@@ -413,6 +437,8 @@ export const COPILOT_TOOL_NAMES = [
   'search_jobs',
   'top_fit_jobs',
   'added_jobs',
+  'similar_jobs',
+  'show_jobs',
   'get_current_filters',
   'propose_filter_change',
   'set_sort',

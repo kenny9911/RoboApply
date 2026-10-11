@@ -2,8 +2,9 @@
 //
 // Each tool is a zod schema exported to JSON Schema with `z.toJSONSchema`.
 // `runToolCall` is the only way a tool runs: it parses the model's arguments,
-// refuses job ids no tool returned (or that are not the job in context), runs
-// the tool, and never lets one tool call another. Errors become data the
+// refuses job ids no tool returned (or that are not the job in context; one
+// `jobId` or the `jobIds` a list is cited by), runs the tool, and never lets
+// one tool call another. Errors become data the
 // model reads (`{ error }`), never an exception out of the turn.
 
 import crypto from 'node:crypto';
@@ -13,7 +14,7 @@ import { logger } from '../../../services/LoggerService.js';
 import type { CopilotTool, ToolContext, ToolOutput } from '../types.js';
 import { addExternalJob, draftOutreach, findConnections, interviewPrep, tailorResume, writeCoverLetter } from './actions.js';
 import { getCurrentFilters, proposeFilterChange, setSort } from './filters.js';
-import { addedJobs, analyzeFit, companyInsights, competitiveness, getJob, publicSearchJobs, salaryContext, searchJobs, topFitJobs } from './jobs.js';
+import { addedJobs, analyzeFit, companyInsights, competitiveness, getJob, publicSearchJobs, salaryContext, searchJobs, showJobs, similarJobs, topFitJobs } from './jobs.js';
 import { isNotFound, isNotImplemented } from './util.js';
 import { applicationSummary, campusDeadlines, explainFeature, getProfileGaps, remember, resumeIssues, rewriteResumeSection } from './you.js';
 
@@ -24,6 +25,8 @@ export const SEEKER_TOOLS: readonly AnyTool[] = [
   searchJobs,
   topFitJobs,
   addedJobs,
+  similarJobs,
+  showJobs,
   getCurrentFilters,
   proposeFilterChange,
   setSort,
@@ -110,11 +113,13 @@ export interface ToolRunResult {
   record: ToolRunRecord;
 }
 
-/** Find job ids in parsed tool arguments (`jobId`). */
+/** Find job ids in parsed tool arguments (`jobId`, and the `jobIds` a list is cited by). */
 function argJobIds(args: unknown): string[] {
   if (!args || typeof args !== 'object') return [];
-  const id = (args as { jobId?: unknown }).jobId;
-  return typeof id === 'string' && id ? [id] : [];
+  const { jobId, jobIds } = args as { jobId?: unknown; jobIds?: unknown };
+  const out = typeof jobId === 'string' && jobId ? [jobId] : [];
+  if (Array.isArray(jobIds)) for (const id of jobIds) if (typeof id === 'string' && id) out.push(id);
+  return out;
 }
 
 export async function runToolCall(
@@ -140,10 +145,15 @@ export async function runToolCall(
   if (!parsed.success) {
     return finish({ data: { error: 'invalid_arguments', issues: parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })) } }, false, call.parsedArguments);
   }
-  for (const id of argJobIds(parsed.data)) {
-    if (!allowedJobIds.has(id)) {
-      return finish({ data: { error: 'unknown_job_id', jobId: id, note: 'Use a job id from a tool result (search_jobs, top_fit_jobs) or the job in context.' } }, false, parsed.data);
-    }
+  // An id no tool returned (and that is not the job in context or on a recent card) is refused whole, and logged.
+  const unknown = argJobIds(parsed.data).filter((id) => !allowedJobIds.has(id));
+  if (unknown.length) {
+    logger.warn('COPILOT', 'copilot_guard_hit', { kind: 'unknown_job_id', tool: call.name, jobIds: unknown, brand: ctx.brand.id });
+    return finish(
+      { data: { error: 'unknown_job_id', jobId: unknown[0], jobIds: unknown, note: 'Use a job id from a tool result (search_jobs, top_fit_jobs, added_jobs, similar_jobs) or the job in context.' } },
+      false,
+      parsed.data,
+    );
   }
   try {
     const output = await tool.run(parsed.data, ctx);
