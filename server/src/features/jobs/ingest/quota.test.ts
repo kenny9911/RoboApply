@@ -17,18 +17,53 @@ vi.mock('../../../services/LoggerService.js', () => ({ logger: logged }));
 import type { EnvSource, Market } from '../../../platform/brand/index.js';
 import { createFakePrisma } from '../../../test/fakePrisma.js';
 import { QUOTA_LISTENER_WAIT_MS, quotaObservationFrom, settleQuotaListener, type ExternalSourceBoard, type ProviderQuotaObservation } from '../../../roboapply/v2/lib/raExternalJobTypes.js';
-import { __test as fantasticTest, activeJobsDbProvider, isFantasticJobsEnabled, searchFantasticJobs } from '../../../roboapply/v2/lib/raFantasticJobs.js';
+import { __test as fantasticTest, activeJobsDbProvider, feedRequest, isFantasticJobsEnabled, searchFantasticJobs } from '../../../roboapply/v2/lib/raFantasticJobs.js';
 import { __test as jsearchTest, isJSearchEnabled, searchJSearchJobs } from '../../../roboapply/v2/lib/raRapidApiJobs.js';
-import { cursorTickShare, dailyCallLimit, effectiveDailyLimit, quotaDailyCap, quotaRecheckMs, quotaReserve, quotaReserveShare, resetConfigWarningsForTests } from './config.js';
 import {
+  DEFAULT_FEED_COUNTRIES,
+  FEED_CN_BUDGET_SHARE,
+  FEED_DAYS_PER_MONTH,
+  FEED_EXCLUDE_MIN_BOARDS,
+  FEED_MIN_MONTHLY_JOBS,
+  FEED_RESERVE_MIN_JOBS,
+  MAINLAND_ACTIVEJOBS_DAILY_CALLS,
+  cursorTickShare,
+  dailyCallLimit,
+  effectiveDailyLimit,
+  effectiveDailyLimitFor,
+  feedCountries,
+  feedDailyJobs,
+  feedDailyJobsFor,
+  feedGateFor,
+  feedJobsLeft,
+  feedJobsReserve,
+  feedMonthlyJobs,
+  feedQuotaDailyJobs,
+  feedTaxonomies,
+  mainlandActiveJobsEnabled,
+  mainlandOperatorCalls,
+  quotaDailyCap,
+  quotaRecheckMs,
+  quotaReserve,
+  quotaReserveShare,
+  resetConfigWarningsForTests,
+  servesMarket,
+} from './config.js';
+import {
+  FEED_PLAN_PROVIDER,
   QUOTA_PARK_MAX_MS,
   QUOTA_PERSIST_INTERVAL_MS,
   QUOTA_RETRY_MS,
   QUOTA_WRITE_ATTEMPTS,
   answerForMarket,
+  feedGate,
+  feedGateForMarket,
   flushProviderQuota,
   hydrateProviderQuota,
+  mainlandPlanOpen,
+  marketOfCall,
   providerCallGate,
+  providerJobsToday,
   providerQuotaSnapshots,
   quotaAllows,
   quotaListener,
@@ -730,6 +765,38 @@ describe('the clients, wired (mocked fetch): one reading, one gate, no key anywh
     expect(isJSearchEnabled()).toBe(true);
   });
 
+  it('a 403 on the licensed feed\'s expired route keeps the plan\'s stated size and closes nothing: the gate stays open and a person\'s search is served', async () => {
+    const replies: Array<{ status: number; body: unknown; headers?: Record<string, string | number> }> = [];
+    const fetchMock = vi.fn(async () => {
+      const r = replies.shift()!;
+      return new Response(JSON.stringify(r.body), { status: r.status, headers: Object.fromEntries(Object.entries(r.headers ?? {}).map(([k, v]) => [k, String(v)])) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const paid = { ...requests(50_000, 49_000, 20 * 86_400), 'x-ratelimit-jobs-limit': 100_000, 'x-ratelimit-jobs-remaining': 99_000 };
+    // The plan as its own responses stated it: the gate is open.
+    recordQuotaObservation(observe('activejobs', 200, paid));
+    expect(feedGate(process.env)).toEqual({ open: true, reason: 'ok', monthlyJobs: 100_000 });
+    // The expired route is not part of the plan.
+    replies.push({ status: 403, body: { message: 'This endpoint is disabled for your subscription.' } });
+    expect(await feedRequest('expired', { time_frame: '1h' })).toEqual({ ok: false, error: 'refused', status: 403, called: true });
+    await flushProviderQuota();
+    expect(quotaSnapshot('activejobs')).toMatchObject({ state: 'ok', jobsLimit: 100_000, jobsRemaining: 99_000, lastStatus: 200 });
+    expect(feedGate(process.env)).toEqual({ open: true, reason: 'ok', monthlyJobs: 100_000 });
+    expect(quotaAllows('activejobs', 'ingest')).toBe(true);
+    expect(quotaAllows('activejobs', 'interactive')).toBe(true);
+    expect(isFantasticJobsEnabled('activejobs')).toBe(true);
+    // A person's own search and the feed's next page are served.
+    replies.push({ status: 200, body: [], headers: paid }, { status: 200, body: [], headers: paid });
+    expect(await searchFantasticJobs('activejobs', { query: 'engineer', country: 'us', titleQuery: 'engineer' })).toEqual([]);
+    expect(await feedRequest('active', { time_frame: '7d', limit: '1000', offset: '0' })).toMatchObject({ ok: true });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    // The same 403 on the route the search shares is a refused key: every purpose stops for the hour, and the size is no longer stated.
+    replies.push({ status: 403, body: JSON.parse(NOT_SUBSCRIBED_403) });
+    expect(await feedRequest('active', { time_frame: '7d', limit: '1000', offset: '0' })).toMatchObject({ ok: false, error: 'refused' });
+    expect(quotaSnapshot('activejobs')).toMatchObject({ state: 'not_subscribed', jobsLimit: null });
+    expect(feedGate(process.env).reason).toBe('plan_unknown');
+  });
+
   it("JSearch: a person's search is counted in the day's usage row and its reading stored; an ingest call is not counted again", async () => {
     const fetchMock = mockFetch(200, { status: 'OK', data: { jobs: [] } }, requests(10_000, 9_773, 17 * 86_400));
     expect(await searchJSearchJobs({ query: 'data analyst in Austin', country: 'us' })).toEqual([]);
@@ -845,5 +912,425 @@ describe('the clients, wired (mocked fetch): one reading, one gate, no key anywh
     const everything = JSON.stringify([row, [...providerQuotaSnapshots(clock).values()], store.$sql.calls, ...Object.values(logged).map((fn) => fn.mock.calls)]);
     expect(everything).not.toContain(KEY);
     expect(everything).toContain('BASIC');
+  });
+});
+
+// ── MKT-5A: the licensed feed's gate (MARKET_STRATEGY M-2, JI-7, JC-6) ─────
+
+describe("the licensed feed's quota gate (feedGate)", () => {
+  const KEY = { RAPID_API_KEY: 'synthetic-rapidapi-key-0002' };
+  /** A plan as its own response headers state it (SYNTHETIC values in the shapes of the 2026-10-11 probe). */
+  const plan = (jobsLimit: number, jobsRemaining: number, requestsLimit = Math.floor(jobsLimit / 2), requestsRemaining = Math.floor(jobsLimit / 2) - 10) => ({
+    ...requests(requestsLimit, requestsRemaining, 20 * 86_400),
+    'x-ratelimit-jobs-limit': jobsLimit,
+    'x-ratelimit-jobs-remaining': jobsRemaining,
+  });
+  const withEnv = (next: EnvSource) => {
+    env = next;
+    install();
+  };
+
+  it('the constants of the rule', () => {
+    expect(FEED_MIN_MONTHLY_JOBS).toBe(20_000);
+    expect(FEED_DAYS_PER_MONTH).toBe(31);
+    expect(FEED_CN_BUDGET_SHARE).toBe(0.2);
+    expect(FEED_EXCLUDE_MIN_BOARDS).toBe(200);
+    expect(MAINLAND_ACTIVEJOBS_DAILY_CALLS).toBe(20);
+    expect(FEED_PLAN_PROVIDER).toBe('activejobs');
+  });
+
+  it("today's free plan (25 requests, 250 postings a month): closed, plan_too_small, used up or not", () => {
+    withEnv(KEY);
+    // As the 2026-10-11 probe found it: the month's requests are spent.
+    recordQuotaObservation(observe('activejobs', 429, { ...requests(25, 0, RESET_16_9_DAYS), 'x-ratelimit-jobs-limit': 250, 'x-ratelimit-jobs-remaining': 112 }, BASIC_429));
+    expect(feedGate()).toEqual({ open: false, reason: 'plan_too_small', monthlyJobs: 250 });
+    // After its reset the plan is still the free one: the limit is a plan fact and is kept.
+    clock = at((RESET_16_9_DAYS + 60) * 1000);
+    expect(quotaSnapshot('activejobs')!.state).toBe('unknown');
+    expect(feedGate()).toEqual({ open: false, reason: 'plan_too_small', monthlyJobs: 250 });
+    expect(feedGateForMarket('cn')).toEqual({ open: false, reason: 'plan_too_small', monthlyJobs: 250 });
+    expect(mainlandPlanOpen('activejobs')).toBe(false);
+  });
+
+  it('nothing states the plan: closed with a reason of its own (plan_unknown), with or without a key', () => {
+    // Not "too small": no response was read and FANTASTIC_MONTHLY_JOBS is unset, so nothing is known about the plan.
+    withEnv(KEY);
+    expect(feedGate()).toEqual({ open: false, reason: 'plan_unknown', monthlyJobs: null });
+    withEnv({});
+    expect(feedGate()).toEqual({ open: false, reason: 'plan_unknown', monthlyJobs: null });
+    expect(feedGateForMarket('cn')).toEqual({ open: false, reason: 'plan_unknown', monthlyJobs: null });
+    // A refused key states no plan either (its numbers are not carried over): the same reason, until the variable or a response says.
+    withEnv(KEY);
+    recordQuotaObservation(observe('activejobs', 200, plan(100_000, 99_000)));
+    expect(feedGate().open).toBe(true);
+    clock = at(1_000);
+    recordQuotaObservation(observe('activejobs', 403, {}, NOT_SUBSCRIBED_403));
+    expect(feedGate()).toEqual({ open: false, reason: 'plan_unknown', monthlyJobs: null });
+    // One number is enough to tell the two apart: a stated small plan is "too small".
+    withEnv({ ...KEY, FANTASTIC_MONTHLY_JOBS: '250' });
+    expect(feedGate()).toEqual({ open: false, reason: 'plan_too_small', monthlyJobs: 250 });
+  });
+
+  describe('a deployment that serves only GoApply never reads the plan by itself', () => {
+    const GO_ONLY = { ...KEY, ALLOWED_BRANDS: 'goapply' };
+    const hint = () => logged.warn.mock.calls.filter((c) => String(c[1]).includes('nothing states the size of the plan'));
+
+    it('says so once per process when the stored reading is loaded: FANTASTIC_MONTHLY_JOBS is what opens the gate there', async () => {
+      withEnv(GO_ONLY);
+      expect(servesMarket('intl', GO_ONLY)).toBe(false);
+      await hydrateProviderQuota(db());
+      expect(hint()).toHaveLength(1);
+      expect(hint()[0]![2]).toEqual({ set: 'FANTASTIC_MONTHLY_JOBS', reason: 'plan_unknown' });
+      await hydrateProviderQuota(db());
+      await hydrateProviderQuota(db());
+      expect(hint()).toHaveLength(1);
+      // No key value in it.
+      expect(JSON.stringify(logged.warn.mock.calls)).not.toContain(KEY.RAPID_API_KEY);
+    });
+
+    it('not when the variable is set, when a stored reading states the plan, without a key, or when RoboApply is served too', async () => {
+      withEnv({ ...GO_ONLY, FANTASTIC_MONTHLY_JOBS: '100000' });
+      await hydrateProviderQuota(db());
+      expect(hint()).toEqual([]);
+      // No key: the deployment is not trying to use the provider.
+      resetProviderQuotaForTests();
+      withEnv({ ALLOWED_BRANDS: 'goapply' });
+      await hydrateProviderQuota(db());
+      expect(hint()).toEqual([]);
+      // RoboApply's own search adapter calls on any plan: the first response states the size.
+      for (const served of [{}, { ALLOWED_BRANDS: 'roboapply,goapply' }, { BRAND_LOCK: 'roboapply' }]) {
+        resetProviderQuotaForTests();
+        withEnv({ ...KEY, ...served });
+        expect(servesMarket('intl', env)).toBe(true);
+        await hydrateProviderQuota(db());
+      }
+      expect(hint()).toEqual([]);
+      // A reading another process stored (a shared database) is loaded first, and states the plan: nothing to say.
+      resetProviderQuotaForTests();
+      withEnv(KEY);
+      recordQuotaObservation(observe('activejobs', 200, plan(250, 200, 25, 20)));
+      await flushProviderQuota();
+      resetProviderQuotaForTests();
+      withEnv(GO_ONLY);
+      await hydrateProviderQuota(db());
+      expect(feedGate().reason).toBe('plan_too_small');
+      expect(hint()).toEqual([]);
+    });
+
+    it('the kill switch is a decision, not a missing number: no hint', async () => {
+      withEnv({ ...GO_ONLY, FANTASTIC_FEED_DISABLED: 'true' });
+      await hydrateProviderQuota(db());
+      expect(hint()).toEqual([]);
+    });
+  });
+
+  it('a plan of 100,000 postings a month stated by the provider: open, and the day is 3,225 postings', () => {
+    withEnv(KEY);
+    recordQuotaObservation(observe('activejobs', 200, plan(100_000, 99_000)));
+    const gate = feedGate();
+    expect(gate).toEqual({ open: true, reason: 'ok', monthlyJobs: 100_000 });
+    expect(feedDailyJobs(env, gate.monthlyJobs)).toBe(3_225);
+    expect(feedGateForMarket('intl')).toEqual(gate);
+    expect(feedGateForMarket('cn')).toEqual(gate);
+  });
+
+  it('FANTASTIC_MONTHLY_JOBS=100000 and a key: open without any reading; the larger of the two numbers counts', () => {
+    withEnv({ ...KEY, FANTASTIC_MONTHLY_JOBS: '100000' });
+    expect(feedGate()).toEqual({ open: true, reason: 'ok', monthlyJobs: 100_000 });
+    expect(feedDailyJobs(env, 100_000)).toBe(3_225);
+    // A reading that states less than what was bought (an old plan's headers): the owner's number stands.
+    recordQuotaObservation(observe('activejobs', 200, plan(250, 200, 25, 20)));
+    expect(feedGate().monthlyJobs).toBe(100_000);
+    // A reading that states more: the provider's number stands.
+    clock = at(1_000);
+    recordQuotaObservation(observe('activejobs', 200, plan(250_000, 240_000)));
+    expect(feedGate().monthlyJobs).toBe(250_000);
+    expect(feedMonthlyJobs({ FANTASTIC_MONTHLY_JOBS: '19999' }, null)).toBe(19_999);
+    expect(feedMonthlyJobs({ FANTASTIC_MONTHLY_JOBS: 'lots' }, null)).toBeNull();
+    expect(feedMonthlyJobs({ FANTASTIC_MONTHLY_JOBS: '-5' }, 30_000)).toBe(30_000);
+  });
+
+  it('exactly 20,000 opens it; 19,999 does not', () => {
+    withEnv({ ...KEY, FANTASTIC_MONTHLY_JOBS: '19999' });
+    expect(feedGate()).toMatchObject({ open: false, reason: 'plan_too_small' });
+    withEnv({ ...KEY, FANTASTIC_MONTHLY_JOBS: '20000' });
+    expect(feedGate()).toEqual({ open: true, reason: 'ok', monthlyJobs: 20_000 });
+  });
+
+  it('FANTASTIC_FEED_DISABLED=true closes it; so does a kill switch of the provider', () => {
+    for (const off of [{ FANTASTIC_FEED_DISABLED: 'true' }, { FANTASTIC_FEED_DISABLED: '1' }, { RA_ONBOARDING_ACTIVEJOBS_DISABLED: 'true' }, { RA_ONBOARDING_EXTERNAL_JOBS_DISABLED: 'true' }]) {
+      withEnv({ ...KEY, FANTASTIC_MONTHLY_JOBS: '100000', ...off });
+      expect(feedGate(), JSON.stringify(off)).toEqual({ open: false, reason: 'disabled', monthlyJobs: 100_000 });
+    }
+    withEnv({ ...KEY, FANTASTIC_MONTHLY_JOBS: '100000', FANTASTIC_FEED_DISABLED: 'false' });
+    expect(feedGate().open).toBe(true);
+  });
+
+  it('no key for the chosen transport: no_key (the direct transport needs FANTASTIC_API_KEY, whatever the marketplace key is)', () => {
+    withEnv({ FANTASTIC_MONTHLY_JOBS: '100000' });
+    expect(feedGate()).toEqual({ open: false, reason: 'no_key', monthlyJobs: 100_000 });
+    withEnv({ ...KEY, FANTASTIC_MONTHLY_JOBS: '100000', FANTASTIC_TRANSPORT: 'direct' });
+    expect(feedGate()).toEqual({ open: false, reason: 'no_key', monthlyJobs: 100_000 });
+    // The header of the direct key is the documented one, so the key alone opens the transport ...
+    withEnv({ FANTASTIC_MONTHLY_JOBS: '100000', FANTASTIC_TRANSPORT: 'direct', FANTASTIC_API_KEY: 'synthetic-direct-key-0003' });
+    expect(feedGate()).toEqual({ open: true, reason: 'ok', monthlyJobs: 100_000 });
+    // ... and a header name alone opens nothing.
+    withEnv({ FANTASTIC_MONTHLY_JOBS: '100000', FANTASTIC_TRANSPORT: 'direct', FANTASTIC_API_KEY_HEADER: 'X-Api-Key' });
+    expect(feedGate().reason).toBe('no_key');
+  });
+
+  it('a paid plan that is used up, refused or down to its reserve: exhausted, until the reading stops blocking', () => {
+    withEnv({ ...KEY });
+    // The month's postings are gone (a served call whose own headers say so).
+    recordQuotaObservation(observe('activejobs', 200, plan(100_000, 0)));
+    expect(feedGate()).toEqual({ open: false, reason: 'exhausted', monthlyJobs: 100_000 });
+    // After the reset the old period says nothing: open again.
+    clock = at(21 * DAY);
+    expect(feedGate()).toEqual({ open: true, reason: 'ok', monthlyJobs: 100_000 });
+    // Requests at the reserve ingest keeps for people's searches (5% of 50,000 = 2,500).
+    recordQuotaObservation(observe('activejobs', 200, plan(100_000, 60_000, 50_000, 2_500)));
+    expect(feedGate().reason).toBe('exhausted');
+    clock = at(21 * DAY + 1_000);
+    recordQuotaObservation(observe('activejobs', 200, plan(100_000, 60_000, 50_000, 2_501)));
+    expect(feedGate().open).toBe(true);
+    // The key refused: closed for the hour ingest waits.
+    clock = at(21 * DAY + 2_000);
+    recordQuotaObservation(observe('activejobs', 403, {}, NOT_SUBSCRIBED_403));
+    withEnv({ ...KEY, FANTASTIC_MONTHLY_JOBS: '100000' });
+    expect(feedGate().reason).toBe('exhausted');
+  });
+
+  it('the order of the reasons: a switch, then the plan (unknown, or too small), then the key, then the quota', () => {
+    const facts = { env: {} as EnvSource, statedJobsLimit: 100_000, keyPresent: true, providerKilled: false, quotaStops: false };
+    expect(feedGateFor(facts)).toEqual({ open: true, reason: 'ok', monthlyJobs: 100_000 });
+    expect(feedGateFor({ ...facts, quotaStops: true }).reason).toBe('exhausted');
+    expect(feedGateFor({ ...facts, quotaStops: true, keyPresent: false }).reason).toBe('no_key');
+    expect(feedGateFor({ ...facts, quotaStops: true, keyPresent: false, statedJobsLimit: 250 }).reason).toBe('plan_too_small');
+    expect(feedGateFor({ ...facts, quotaStops: true, keyPresent: false, statedJobsLimit: null })).toEqual({ open: false, reason: 'plan_unknown', monthlyJobs: null });
+    expect(feedGateFor({ ...facts, statedJobsLimit: null, providerKilled: true }).reason).toBe('disabled');
+    expect(feedGateFor({ ...facts, statedJobsLimit: null, env: { FANTASTIC_MONTHLY_JOBS: '19999' } }).reason).toBe('plan_too_small');
+    expect(feedGateFor({ ...facts, quotaStops: true, keyPresent: false, statedJobsLimit: 250, providerKilled: true }).reason).toBe('disabled');
+    expect(feedGateFor({ ...facts, env: { FANTASTIC_FEED_DISABLED: 'yes' } }).reason).toBe('disabled');
+  });
+
+  it('never throws: an unreadable env closes it', () => {
+    const boom = new Proxy({}, { get: () => { throw new Error('env not readable'); } }) as EnvSource;
+    expect(feedGate(boom)).toEqual({ open: false, reason: 'disabled', monthlyJobs: null });
+  });
+
+  it('no key value appears in the gate or in a log line', () => {
+    withEnv({ RAPID_API_KEY: 'synthetic-rapidapi-key-0002', FANTASTIC_API_KEY: 'synthetic-direct-key-0003', FANTASTIC_MONTHLY_JOBS: '100000' });
+    const text = JSON.stringify([feedGate(), feedGateForMarket('cn'), logged.warn.mock.calls, logged.info.mock.calls]);
+    expect(text).not.toContain('synthetic-rapidapi-key-0002');
+    expect(text).not.toContain('synthetic-direct-key-0003');
+  });
+
+  describe('the mainland (JC-6)', () => {
+    it('CN_ACTIVEJOBS_ENABLED=false keeps Active Jobs DB off for the mainland while the gate is open; on by default', () => {
+      withEnv({ ...KEY, FANTASTIC_MONTHLY_JOBS: '100000' });
+      expect(feedGateForMarket('cn')).toEqual({ open: true, reason: 'ok', monthlyJobs: 100_000 });
+      expect(mainlandPlanOpen('activejobs')).toBe(true);
+      expect(mainlandPlanOpen('jsearch')).toBe(false);
+      expect(mainlandPlanOpen('linkedin')).toBe(false);
+      for (const off of ['false', '0', 'no', 'OFF']) {
+        withEnv({ ...KEY, FANTASTIC_MONTHLY_JOBS: '100000', CN_ACTIVEJOBS_ENABLED: off });
+        expect(feedGateForMarket('cn'), off).toEqual({ open: false, reason: 'disabled', monthlyJobs: 100_000 });
+        // The international sync is not touched by the mainland switch.
+        expect(feedGateForMarket('intl').open, off).toBe(true);
+        expect(mainlandPlanOpen('activejobs'), off).toBe(false);
+      }
+      expect(mainlandActiveJobsEnabled({})).toBe(true);
+      expect(mainlandActiveJobsEnabled({ CN_ACTIVEJOBS_ENABLED: 'true' })).toBe(true);
+      expect(mainlandActiveJobsEnabled({ CN_ACTIVEJOBS_ENABLED: 'anything else' })).toBe(true);
+    });
+
+    it('the mainland call bound: 0 while the gate is closed, 20 a day while it is open, the operator\'s number when set, always under what is left of the plan', () => {
+      withEnv(KEY);
+      expect(effectiveDailyLimit('activejobs', 'cn', env, clock)).toBe(0);
+      withEnv({ ...KEY, FANTASTIC_MONTHLY_JOBS: '100000' });
+      expect(effectiveDailyLimit('activejobs', 'cn', env, clock)).toBe(20);
+      // JSearch never gets a mainland call by itself.
+      expect(effectiveDailyLimit('jsearch', 'cn', env, clock)).toBe(0);
+      withEnv({ ...KEY, FANTASTIC_MONTHLY_JOBS: '100000', INGEST_ACTIVEJOBS_CN_DAILY_CALLS: '0' });
+      expect(effectiveDailyLimit('activejobs', 'cn', env, clock)).toBe(0);
+      withEnv({ ...KEY, FANTASTIC_MONTHLY_JOBS: '100000', INGEST_ACTIVEJOBS_CN_DAILY_CALLS: '75' });
+      expect(effectiveDailyLimit('activejobs', 'cn', env, clock)).toBe(75);
+      // The switch closes the default, not an operator's own number.
+      withEnv({ ...KEY, FANTASTIC_MONTHLY_JOBS: '100000', CN_ACTIVEJOBS_ENABLED: 'false' });
+      expect(effectiveDailyLimit('activejobs', 'cn', env, clock)).toBe(0);
+      // Under the plan: 10 days to the reset, 150 requests above the reserve of 50 → 10 a day.
+      withEnv({ ...KEY, FANTASTIC_MONTHLY_JOBS: '100000' });
+      recordQuotaObservation(observe('activejobs', 200, requests(1_000, 150, 10 * 86_400)));
+      expect(effectiveDailyLimit('activejobs', 'cn', env, clock)).toBe(10);
+      // The international bound is what it was.
+      expect(effectiveDailyLimit('activejobs', 'intl', env, clock)).toBe(10);
+      expect(mainlandOperatorCalls('activejobs', { INGEST_ACTIVEJOBS_CN_DAILY_CALLS: '12' })).toBe(12);
+      expect(mainlandOperatorCalls('activejobs', { INGEST_ACTIVEJOBS_CN_DAILY_CALLS: 'many' })).toBeNull();
+      expect(mainlandOperatorCalls('activejobs', {})).toBeNull();
+    });
+
+    it('the rule with the reading as an argument (the admin panel) gives the same mainland number', () => {
+      withEnv({ ...KEY, FANTASTIC_MONTHLY_JOBS: '100000' });
+      expect(effectiveDailyLimitFor('activejobs', 'cn', env, null, clock)).toBe(20);
+      withEnv(KEY);
+      expect(effectiveDailyLimitFor('activejobs', 'cn', env, null, clock)).toBe(0);
+    });
+
+    it("a person's own mainland search is still let through only under a bound the OPERATOR set: the gate's 20 calls are ingest's (role text only)", async () => {
+      const usageWrites = () => store.$sql.calls.filter((c) => c.text.startsWith('INSERT INTO \"RAProviderUsage\"'));
+      market = 'cn';
+      withEnv({ ...KEY, FANTASTIC_MONTHLY_JOBS: '100000' });
+      expect(effectiveDailyLimit('activejobs', 'cn', env, clock)).toBe(20);
+      // The gate is open and ingest may call; a typed search may not leave for the provider.
+      expect(providerCallGate('activejobs', 'interactive')).toBe(false);
+      expect(providerCallGate('activejobs', 'interactive', { probe: true })).toBe(false);
+      expect(providerCallGate('activejobs', 'ingest')).toBe(true);
+      expect(providerCallGate('jsearch', 'interactive')).toBe(false);
+      await flushProviderQuota();
+      expect(usageWrites()).toHaveLength(0);
+      // The operator's own decision opens it, counted under activejobs:cn (as before this bundle).
+      withEnv({ ...KEY, FANTASTIC_MONTHLY_JOBS: '100000', INGEST_ACTIVEJOBS_CN_DAILY_CALLS: '5' });
+      expect(providerCallGate('activejobs', 'interactive')).toBe(true);
+      await flushProviderQuota();
+      expect(usageWrites().map((c) => c.values[0])).toEqual(['activejobs:cn']);
+      expect(marketOfCall()).toBe('cn');
+      expect(answerForMarket('intl', () => marketOfCall())).toBe('intl');
+    });
+  });
+
+  describe("the day's posting budget", () => {
+    it('INGEST_FEED_DAILY_JOBS, else the plan divided by 31; nothing known is 0', () => {
+      expect(feedDailyJobs({}, 100_000)).toBe(3_225);
+      expect(feedDailyJobs({}, 20_000)).toBe(645);
+      expect(feedDailyJobs({}, 250_000)).toBe(8_064);
+      expect(feedDailyJobs({}, null)).toBe(0);
+      expect(feedDailyJobs({ INGEST_FEED_DAILY_JOBS: '1500' }, 100_000)).toBe(1_500);
+      expect(feedDailyJobs({ INGEST_FEED_DAILY_JOBS: '0' }, 100_000)).toBe(0);
+      expect(feedDailyJobs({ INGEST_FEED_DAILY_JOBS: 'plenty' }, 100_000)).toBe(3_225);
+      expect(feedDailyJobs({ INGEST_FEED_DAILY_JOBS: '-10' }, 100_000)).toBe(0);
+    });
+
+    it('the mainland gets 20% of the day and the international sync the rest: together never more than the day', () => {
+      expect(feedDailyJobsFor('cn', {}, 100_000)).toBe(645);
+      expect(feedDailyJobsFor('intl', {}, 100_000)).toBe(2_580);
+      expect(feedDailyJobsFor('cn', {}, 100_000) + feedDailyJobsFor('intl', {}, 100_000)).toBe(3_225);
+      // The operator's own mainland number, never above the day.
+      expect(feedDailyJobsFor('cn', { INGEST_FEED_CN_DAILY_JOBS: '1000' }, 100_000)).toBe(1_000);
+      expect(feedDailyJobsFor('intl', { INGEST_FEED_CN_DAILY_JOBS: '1000' }, 100_000)).toBe(2_225);
+      expect(feedDailyJobsFor('cn', { INGEST_FEED_CN_DAILY_JOBS: '99999' }, 100_000)).toBe(3_225);
+      expect(feedDailyJobsFor('intl', { INGEST_FEED_CN_DAILY_JOBS: '99999' }, 100_000)).toBe(0);
+      expect(feedDailyJobsFor('cn', { INGEST_FEED_CN_DAILY_JOBS: '0' }, 100_000)).toBe(0);
+      expect(feedDailyJobsFor('intl', { INGEST_FEED_CN_DAILY_JOBS: '0' }, 100_000)).toBe(3_225);
+    });
+
+    it('a market that is not synced here uses none of the day: the mainland switch off, or a deployment that serves one brand', () => {
+      const off = { CN_ACTIVEJOBS_ENABLED: 'false' };
+      expect([feedDailyJobsFor('intl', off, 100_000), feedDailyJobsFor('cn', off, 100_000)]).toEqual([3_225, 0]);
+      const roboOnly = { ALLOWED_BRANDS: 'roboapply' };
+      expect([feedDailyJobsFor('intl', roboOnly, 100_000), feedDailyJobsFor('cn', roboOnly, 100_000)]).toEqual([3_225, 0]);
+      // The mainland stack: its sync has its share (or the operator's number) and the international one runs nowhere here.
+      const goOnly = { ALLOWED_BRANDS: 'goapply' };
+      expect([feedDailyJobsFor('intl', goOnly, 100_000), feedDailyJobsFor('cn', goOnly, 100_000)]).toEqual([0, 645]);
+      expect(feedDailyJobsFor('cn', { ...goOnly, INGEST_FEED_CN_DAILY_JOBS: '3225' }, 100_000)).toBe(3_225);
+      expect(feedDailyJobsFor('cn', { BRAND_LOCK: 'goapply' }, 100_000)).toBe(645);
+    });
+
+    describe('held to what the plan has left, less a reserve for people\'s own searches (carry-over M3.1)', () => {
+      const inDays = (days: number) => at(days * DAY).toISOString();
+
+      it('the reserve: the share ingest leaves of the plan\'s requests, taken of its postings; never under one search page', () => {
+        expect(FEED_RESERVE_MIN_JOBS).toBe(20);
+        expect(feedJobsReserve(100_000, {})).toBe(5_000);
+        expect(feedJobsReserve(10_000, {})).toBe(500);
+        expect(feedJobsReserve(100_000, { INGEST_QUOTA_RESERVE_SHARE: '0.1' })).toBe(10_000);
+        expect(feedJobsReserve(100_000, { INGEST_QUOTA_RESERVE_SHARE: '0' })).toBe(20);
+        expect(feedJobsReserve(250, {})).toBe(20);
+        for (const unknown of [null, undefined, 0, -5, Number.NaN]) expect(feedJobsReserve(unknown, {})).toBe(20);
+        // The same share as the request side.
+        expect(feedJobsReserve(50_000, {})).toBe(quotaReserve(50_000, {}));
+      });
+
+      it('what the feed may still be billed for: the stated remainder less the reserve; nothing stated is null', () => {
+        expect(feedJobsLeft({ jobsLimit: 100_000, jobsRemaining: 60_000, resetAt: null }, {})).toBe(55_000);
+        expect(feedJobsLeft({ jobsLimit: 100_000, jobsRemaining: 5_000, resetAt: null }, {})).toBe(0);
+        expect(feedJobsLeft({ jobsLimit: 100_000, jobsRemaining: 12, resetAt: null }, {})).toBe(0);
+        expect(feedJobsLeft({ jobsLimit: null, jobsRemaining: 100, resetAt: null }, {})).toBe(80);
+        expect(feedJobsLeft({ jobsLimit: 100_000, jobsRemaining: null, resetAt: inDays(4) }, {})).toBeNull();
+        expect(feedJobsLeft(null, {})).toBeNull();
+      });
+
+      it('10 days and 10,000 postings left: at most 950 a day on a 10,000 plan, 500 on a 100,000 plan (default reserve)', () => {
+        expect(feedQuotaDailyJobs({ jobsLimit: 10_000, jobsRemaining: 10_000, resetAt: inDays(10) }, clock, {})).toBe(950);
+        expect(feedQuotaDailyJobs({ jobsLimit: 100_000, jobsRemaining: 10_000, resetAt: inDays(10) }, clock, {})).toBe(500);
+        // A fresh month of a 100,000 plan, 31 days to go: 3,064, a little under month / 31 (the reserve).
+        expect(feedQuotaDailyJobs({ jobsLimit: 100_000, jobsRemaining: 100_000, resetAt: inDays(31) }, clock, {})).toBe(3_064);
+        // The last day: everything above the reserve.
+        expect(feedQuotaDailyJobs({ jobsLimit: 100_000, jobsRemaining: 7_300, resetAt: at(5 * 3_600_000).toISOString() }, clock, {})).toBe(2_300);
+        // At or under the reserve: nothing.
+        expect(feedQuotaDailyJobs({ jobsLimit: 100_000, jobsRemaining: 4_000, resetAt: inDays(3) }, clock, {})).toBe(0);
+        // The operator's share.
+        expect(feedQuotaDailyJobs({ jobsLimit: 100_000, jobsRemaining: 30_000, resetAt: inDays(10) }, clock, { INGEST_QUOTA_RESERVE_SHARE: '0.2' })).toBe(1_000);
+      });
+
+      it('no stated remaining count, or no reset time: null (the month / 31 rule stands alone, never a guess)', () => {
+        expect(feedQuotaDailyJobs(null, clock, {})).toBeNull();
+        expect(feedQuotaDailyJobs({ jobsLimit: 100_000, jobsRemaining: null, resetAt: inDays(10) }, clock, {})).toBeNull();
+        expect(feedQuotaDailyJobs({ jobsLimit: 100_000, jobsRemaining: 60_000, resetAt: null }, clock, {})).toBeNull();
+        expect(feedDailyJobs({}, 100_000, null)).toBe(3_225);
+        expect(feedDailyJobs({}, 100_000)).toBe(3_225);
+      });
+
+      it('the day is the smaller of the two; the operator\'s INGEST_FEED_DAILY_JOBS is held to the remainder too', () => {
+        expect(feedDailyJobs({}, 100_000, 500)).toBe(500);
+        expect(feedDailyJobs({}, 100_000, 4_700)).toBe(3_225);
+        expect(feedDailyJobs({ INGEST_FEED_DAILY_JOBS: '9000' }, 100_000, 500)).toBe(500);
+        expect(feedDailyJobs({ INGEST_FEED_DAILY_JOBS: '300' }, 100_000, 500)).toBe(300);
+        expect(feedDailyJobs({}, 100_000, 0)).toBe(0);
+      });
+
+      it('split between the markets as before: 20% of the capped day for the mainland, the rest for the international sync', () => {
+        expect([feedDailyJobsFor('intl', {}, 100_000, 500), feedDailyJobsFor('cn', {}, 100_000, 500)]).toEqual([400, 100]);
+        expect([feedDailyJobsFor('intl', { ALLOWED_BRANDS: 'roboapply' }, 100_000, 500), feedDailyJobsFor('cn', { ALLOWED_BRANDS: 'roboapply' }, 100_000, 500)]).toEqual([500, 0]);
+        // The operator's mainland number is never above the capped day.
+        expect([feedDailyJobsFor('intl', { INGEST_FEED_CN_DAILY_JOBS: '800' }, 100_000, 500), feedDailyJobsFor('cn', { INGEST_FEED_CN_DAILY_JOBS: '800' }, 100_000, 500)]).toEqual([0, 500]);
+      });
+
+      it('from the provider\'s own reading: the snapshot of a response gives the cap', () => {
+        recordQuotaObservation(observe('activejobs', 200, { ...requests(50_000, 40_000, 10 * 86_400), 'x-ratelimit-jobs-limit': 100_000, 'x-ratelimit-jobs-remaining': 10_000 }));
+        expect(feedQuotaDailyJobs(quotaSnapshot('activejobs'), clock, {})).toBe(500);
+        // Past the reset the old period's remainder says nothing: no cap until a new response.
+        clock = at(10 * DAY + 1_000);
+        expect(feedQuotaDailyJobs(quotaSnapshot('activejobs'), clock, {})).toBeNull();
+      });
+    });
+
+    it("the day's postings are read from the usage row (0 when the day has no row; null when the read gives nothing usable)", async () => {
+      const seen: unknown[][] = [];
+      const fake = (rows: unknown) => ({ $queryRaw: async (_strings: TemplateStringsArray, ...values: unknown[]) => (seen.push(values), rows) }) as never;
+      expect(await providerJobsToday(fake([{ jobsReturned: 1_240 }]), 'activejobs', '2026-10-11')).toBe(1_240);
+      expect(await providerJobsToday(fake([{ jobsReturned: 7n }]), 'activejobs:cn', '2026-10-11')).toBe(7);
+      expect(await providerJobsToday(fake([]), 'activejobs', '2026-10-11')).toBe(0);
+      expect(await providerJobsToday(fake(undefined), 'activejobs', '2026-10-11')).toBeNull();
+      expect(await providerJobsToday(fake([{ jobsReturned: 'many' }]), 'activejobs', '2026-10-11')).toBeNull();
+      expect(seen[0]).toEqual(['activejobs', '2026-10-11']);
+      expect(seen[1]).toEqual(['activejobs:cn', '2026-10-11']);
+    });
+  });
+
+  describe('the filters the operator sets', () => {
+    it('INGEST_FEED_COUNTRIES: upper-case ISO codes in the order given, without repeats; the default is the thirteen markets', () => {
+      expect(feedCountries({})).toEqual(['US', 'CA', 'GB', 'IE', 'DE', 'FR', 'NL', 'ES', 'IT', 'SE', 'AU', 'SG', 'TW']);
+      expect(feedCountries({})).toEqual([...DEFAULT_FEED_COUNTRIES]);
+      expect(feedCountries({ INGEST_FEED_COUNTRIES: ' us, gb ,US,tw ' })).toEqual(['US', 'GB', 'TW']);
+      // Anything that is not two letters is not a code and is left out (a name is never sent as a code).
+      expect(feedCountries({ INGEST_FEED_COUNTRIES: 'USA,United States,1,de' })).toEqual(['DE']);
+      expect(feedCountries({ INGEST_FEED_COUNTRIES: 'USA' })).toEqual([]);
+      expect(feedCountries({ INGEST_FEED_COUNTRIES: '   ' })).toEqual([...DEFAULT_FEED_COUNTRIES]);
+    });
+
+    it('INGEST_FEED_TAXONOMIES: the names as written, unset by default', () => {
+      expect(feedTaxonomies({})).toEqual([]);
+      expect(feedTaxonomies({ INGEST_FEED_TAXONOMIES: ' Software, Data & Analytics ,Software,' })).toEqual(['Software', 'Data & Analytics']);
+    });
   });
 });

@@ -29,6 +29,22 @@
 //      did not make is counted by the gate. One row, so an onboarding search
 //      and an ingest query of the same day add up.
 //
+//   4. The licensed feed's gate (MKT-5A; MARKET_STRATEGY M-2, JI-7, JC-6).
+//      `feedGate()`: the Active Jobs DB window feed runs by itself the day
+//      the plan allows at least 20,000 postings a month, and never on the free
+//      plan (250). The plan's size is the `jobsLimit` the provider's own
+//      responses stated, or FANTASTIC_MONTHLY_JOBS; while neither states it
+//      the gate is closed with a reason of its own ('plan_unknown': a
+//      deployment that serves only GoApply never calls the provider before
+//      the gate is open, so there the variable is required, and
+//      `hydrateProviderQuota` says so once). `feedGateForMarket('cn')`
+//      adds the mainland switch (CN_ACTIVEJOBS_ENABLED). The feed is metered
+//      in POSTINGS: what the plan was billed for is added to the day's
+//      `jobsReturned` under `usageKey('activejobs', market)`, and a fetch is
+//      refused once the day reaches `feedDailyJobsFor(market)`. That day is
+//      also held to what the provider says the plan has left, less a reserve
+//      for people's own searches (config.ts `feedQuotaDailyJobs`).
+//
 // Honesty (D3): every number is one the provider stated. A value it did not
 // state is null and decides nothing. The API key is never read, stored or
 // logged here.
@@ -41,11 +57,23 @@
 import prisma from '../../../lib/prisma.js';
 import { logger } from '../../../services/LoggerService.js';
 import { getCurrentBrandOrDefault, type EnvSource, type Market } from '../../../platform/brand/index.js';
-import { setCallGate as setFantasticCallGate, setQuotaListener as setFantasticQuotaListener } from '../../../roboapply/v2/lib/raFantasticJobs.js';
+import { fantasticJobsOffReason, fantasticKeyPresent, setCallGate as setFantasticCallGate, setQuotaListener as setFantasticQuotaListener } from '../../../roboapply/v2/lib/raFantasticJobs.js';
 import { setCallGate as setJSearchCallGate, setQuotaListener as setJSearchQuotaListener } from '../../../roboapply/v2/lib/raRapidApiJobs.js';
 import type { ProviderCallGate, ProviderCallPurpose, ProviderQuotaListener, ProviderQuotaObservation } from '../../../roboapply/v2/lib/raExternalJobTypes.js';
 import type { IngestProvider } from '../sources/index.js';
-import { dailyCallLimit, effectiveDailyLimit, quotaRecheckMs, quotaReserve, setQuotaReader } from './config.js';
+import {
+  dailyCallLimit,
+  effectiveDailyLimit,
+  feedGateFor,
+  mainlandActiveJobsEnabled,
+  mainlandOperatorCalls,
+  quotaRecheckMs,
+  quotaReserve,
+  servesMarket,
+  setMainlandGate,
+  setQuotaReader,
+  type FeedGate,
+} from './config.js';
 import { dayKey, type IngestDb } from './db.js';
 import {
   PROVIDER_QUOTA_CONFIG_KEY,
@@ -259,6 +287,33 @@ export async function hydrateProviderQuota(store: Pick<QuotaDb, 'appConfig'> = d
   } catch (err) {
     logger.warn(TAG, 'stored quota not read', { error: errorText(err) });
   }
+  warnPlanNeverStated();
+}
+
+let planNeverStatedWarned = false;
+
+/**
+ * Says once per process when the licensed feed's gate cannot open by itself:
+ * the key is there, nothing states the plan's size (not even the stored
+ * reading, which was just loaded) and the deployment serves no international
+ * brand. Only RoboApply's own search adapter calls the provider on any plan;
+ * on a mainland-only deployment both Active Jobs DB sources stand behind the
+ * gate and a person's own mainland search is refused, so no response will
+ * ever state the size. The operator sets FANTASTIC_MONTHLY_JOBS. Never throws.
+ */
+function warnPlanNeverStated(): void {
+  if (planNeverStatedWarned) return;
+  try {
+    const env = envSource();
+    if (servesMarket('intl', env) || !fantasticKeyPresent(env) || feedGate(env, clock()).reason !== 'plan_unknown') return;
+    planNeverStatedWarned = true;
+    logger.warn(TAG, 'Active Jobs DB stays off: nothing states the size of the plan, and this deployment makes no call that could read it', {
+      set: 'FANTASTIC_MONTHLY_JOBS',
+      reason: 'plan_unknown',
+    });
+  } catch {
+    // A missing hint never fails a run.
+  }
 }
 
 /** Waits for the writes started so far (readings and counted calls). Never throws. */
@@ -380,6 +435,15 @@ export async function providerCallsToday(store: Pick<IngestDb, '$queryRaw'>, pro
   return Number.isFinite(calls) ? calls : null;
 }
 
+/** Postings counted today under a usage key (0 when the day has no row yet); null when the read gave nothing usable. */
+export async function providerJobsToday(store: Pick<IngestDb, '$queryRaw'>, provider: string, day: string): Promise<number | null> {
+  const rows = await store.$queryRaw<Array<{ jobsReturned: number | bigint }>>`
+    SELECT "jobsReturned" FROM "RAProviderUsage" WHERE "provider" = ${provider} AND "dayKey" = ${day}`;
+  if (!Array.isArray(rows)) return null;
+  const jobs = Number(rows[0]?.jobsReturned ?? 0);
+  return Number.isFinite(jobs) ? jobs : null;
+}
+
 /** Adds calls and yield counters to the day's usage row of a usage key. */
 export async function recordProviderUsage(
   store: Pick<IngestDb, '$executeRaw'>,
@@ -431,6 +495,67 @@ function currentMarket(): Market {
 }
 
 /**
+ * The market a question is asked for right now: the one `answerForMarket`
+ * set, else the brand of the unit of work. An adapter that serves two markets
+ * answers `disabledReason()` (which takes no market) with it: the admin lists
+ * each brand's sources inside that brand's context.
+ */
+export function marketOfCall(): Market {
+  return currentMarket();
+}
+
+// ── The licensed feed's gate (MARKET_STRATEGY M-2, JI-7, JC-6) ────────────
+
+/** The provider whose plan, quota reading and usage rows the licensed feed spends (one subscription for search and feed). */
+export const FEED_PLAN_PROVIDER = 'activejobs';
+
+/**
+ * May the licensed feed run? Open only when the plan allows at least 20,000
+ * postings a month (the provider's own `jobsLimit`, or FANTASTIC_MONTHLY_JOBS),
+ * the chosen transport has its key, no switch is on (FANTASTIC_FEED_DISABLED,
+ * the provider's kill switches) and the plan's quota allows an ingest call
+ * right now. With today's free plan (250 postings a month): closed,
+ * 'plan_too_small'; while nothing states the plan's size: closed,
+ * 'plan_unknown'. The rule itself is config.ts `feedGateFor`; never throws.
+ *
+ * The stated size is the reading this process holds in memory: a process that
+ * has not loaded the stored reading yet (`hydrateProviderQuota`) answers
+ * 'plan_unknown' for a plan another process read. Whoever lists a brand's
+ * adapters for a run loads the reading first.
+ */
+export function feedGate(env: EnvSource = envSource(), now: Date = clock()): FeedGate {
+  try {
+    const off = fantasticJobsOffReason(env);
+    return feedGateFor({
+      env,
+      // A plan fact, kept across the period's reset (liveView).
+      statedJobsLimit: quotaSnapshot(FEED_PLAN_PROVIDER, now)?.jobsLimit ?? null,
+      keyPresent: off !== 'no_api_key',
+      providerKilled: off === 'kill_switch',
+      quotaStops: !quotaAllows(FEED_PLAN_PROVIDER, 'ingest', now, env),
+    });
+  } catch {
+    return { open: false, reason: 'disabled', monthlyJobs: null };
+  }
+}
+
+/**
+ * The gate for one market. The mainland adds its own switch: Active Jobs DB
+ * serves GoApply once the plan gate is open unless CN_ACTIVEJOBS_ENABLED says
+ * no (D5: a paid plan is the only gate).
+ */
+export function feedGateForMarket(market: Market, env: EnvSource = envSource(), now: Date = clock()): FeedGate {
+  const gate = feedGate(env, now);
+  if (market === 'cn' && gate.open && !mainlandActiveJobsEnabled(env)) return { ...gate, open: false, reason: 'disabled' };
+  return gate;
+}
+
+/** Is a provider's plan open for mainland ingest calls? Only Active Jobs DB, behind the feed's gate (JC-6). */
+export function mainlandPlanOpen(provider: string, env: EnvSource = envSource(), now: Date = clock()): boolean {
+  return provider === FEED_PLAN_PROVIDER && feedGateForMarket('cn', env, now).open;
+}
+
+/**
  * The gate both clients ask before an upstream call (and, with `probe`, from
  * `isEnabled()`).
  *
@@ -439,7 +564,13 @@ function currentMarket(): Market {
  *   - Any other call is a person's own search in the brand of the request (a
  *     source's own `isEnabled()` asks for its own market: `answerForMarket`). For
  *     market cn it is refused unless the provider may serve the mainland and
- *     its mainland budget is open (default: closed). A daily bound the
+ *     the OPERATOR opened its mainland budget (INGEST_<PROVIDER>_CN_DAILY_CALLS
+ *     above 0; default: closed). The 20 calls a day Active Jobs DB gets by
+ *     itself while the feed's plan gate is open are ingest's: an ingest call
+ *     carries a taxonomy role label only, a person's search carries text the
+ *     person typed, and that never leaves for a provider on the mainland
+ *     unless the operator decided it (MARKET_STRATEGY §1.4 "send role text
+ *     only, never user data"). A daily bound the
  *     operator set to 0 refuses it too (the bound is the provider's one
  *     budget; 0 has always meant "no calls"). An allowed call is counted once
  *     in today's usage row, the same row ingest reserves in.
@@ -449,7 +580,12 @@ export const providerCallGate: ProviderCallGate = (provider, purpose, opts) => {
   const env = envSource();
   if (purpose === 'ingest') return quotaAllows(provider, 'ingest', now, env);
   const market = currentMarket();
-  if (market === 'cn' && !(MAINLAND_CALLABLE.has(provider) && (effectiveDailyLimit(provider as IngestProvider, 'cn', env, now) ?? 0) > 0)) return false;
+  if (
+    market === 'cn' &&
+    !(MAINLAND_CALLABLE.has(provider) && (mainlandOperatorCalls(provider, env) ?? 0) > 0 && (effectiveDailyLimit(provider as IngestProvider, 'cn', env, now) ?? 0) > 0)
+  ) {
+    return false;
+  }
   if (dailyCallLimit(provider as IngestProvider, env) === 0) return false;
   if (!quotaAllows(provider, 'interactive', now, env)) return false;
   if (opts?.probe !== true) {
@@ -490,6 +626,7 @@ export function registerQuotaListeners(): void {
   setJSearchCallGate(providerCallGate);
   setFantasticCallGate(providerCallGate);
   setQuotaReader((provider, now, env) => budgetReading(provider, now, env ?? envSource()));
+  setMainlandGate((provider, env, now) => mainlandPlanOpen(provider, env, now));
 }
 
 registerQuotaListeners();
@@ -508,4 +645,5 @@ export function resetProviderQuotaForTests(): void {
   pending = Promise.resolve();
   deps = {};
   askedForMarket = null;
+  planNeverStatedWarned = false;
 }

@@ -16,10 +16,22 @@
 //      `skippedProviders`; the queries it already has are left as they are.
 //      A SEED tuple is never planned on a source billed per request
 //      (`adapterCostModel` 'per_request': JSearch): seeds belong to sources
-//      that cost nothing per request. A user's own demand is planned on every
-//      source that is on.
+//      that cost nothing per request. Nor on a metered search source whose
+//      rows a feed already brings: while the licensed feed (a cursor source
+//      that writes the same board, Active Jobs DB) is on for the market, the
+//      feed covers the breadth and a seed search would pay per posting for
+//      rows it returns anyway (`feedCoversBoard`; MARKET_STRATEGY M-2, JI-7).
+//      A user's own demand is planned on every source that is on, with one
+//      exception: a search source that serves BOTH markets keeps each posting
+//      in the market of its own location (Active Jobs DB: adapters/rapidApi.ts
+//      "One posting, one market"), so the international market does not ask
+//      it for mainland China (every row would be billed and then dropped),
+//      as the mainland market asks any source for mainland China only.
 //   4. Which texts. One query per (tuple × query text × source):
-//        a typed title        as typed, once;
+//        a typed title        as typed, once. Market cn: never on a metered
+//                             source (a mainland request to a provider is a
+//                             taxonomy role's own label, never text a person
+//                             typed: MARKET_STRATEGY §1.4, JC-6);
 //        a taxonomy role      the texts of `providerQueryLabels`: the first
 //                             English label; for Taiwan also the Traditional
 //                             Chinese label once the role has one (never the
@@ -57,7 +69,22 @@
 //      switched off whether the source is on or not (`retireSeedsFor`).
 //      Queries of a provider the brand does not run at all are switched off
 //      (`retireUnrunProviders`). A source that is merely off today keeps
-//      every query it has, untouched, and resumes when it is back.
+//      every query it has, untouched, and resumes when it is back. That
+//      holds for a source behind a plan too (the licensed feed; Active Jobs
+//      DB for the mainland): while its gate is closed it is not in the run's
+//      adapter list at all (providers.ts), but it is still a source of the
+//      brand, so its standing query keeps its cursor and stays switched on,
+//      and its demand keeps its score (`knownIngestProvidersForBrand`). A
+//      gate that happens to be closed at 02:00 (a month's quota spent)
+//      therefore never stops the feed until the next plan.
+//   9. A source behind a plan is asked at plan time whether it is on. Its gate
+//      reads the quota reading this process holds, and the caller may have
+//      listed the brand's adapters before it loaded the stored reading (a new
+//      function instance): such a list lacks a feed that is in fact on. The
+//      run completes the list it was handed with the brand's sources behind a
+//      plan that are on now (`planAdaptersOnNow`), so it never plans as if the
+//      feed were off: no SEO seeds bought on the search adapter for a day, and
+//      the standing query is there.
 //   8. Two plan runs that overlap (a cron delivered twice) are safe: the
 //      "planned today" stamp never moves backwards, so neither run takes the
 //      other's rows for rows the plan no longer names.
@@ -407,10 +434,27 @@ export interface PlanOptions {
 }
 
 /**
+ * Does a feed that is on for the market already bring the rows of this search
+ * source? A cursor source that writes one of the search source's boards (the
+ * licensed Active Jobs DB window feed and its on-demand search adapter both
+ * write 'activejobs'). The banks and the employer boards write their own
+ * boards and cover no search source.
+ */
+export function feedCoversBoard(source: Pick<JobSourceAdapter, 'provider' | 'sourceBoards'>, adapters: readonly JobSourceAdapter[], market: Market): boolean {
+  return adapters.some(
+    (a) => a.kind === 'cursor' && a.provider !== source.provider && a.markets.includes(market) && a.sourceBoards.some((b) => source.sourceBoards.includes(b)) && adapterEnabledFor(a, market),
+  );
+}
+
+/**
  * One query per (tuple × query text × search adapter). An adapter gets a
  * tuple only when it serves the tuple's market, is on for it right now, can
  * search the country and, for a role label, reads the label's language. A
- * seed tuple is never planned on an adapter billed per request. Each query
+ * seed tuple is never planned on an adapter billed per request, nor on a
+ * metered adapter whose board a feed that is on already fills. For market cn a
+ * title a person typed is never planned on a metered adapter. An adapter that
+ * serves both markets is never asked by the international one for mainland
+ * China (its mainland rows belong to the mainland index). Each query
  * carries the window its own adapter applies (`adapterDateWindow`): the one
  * the demand calls for when the adapter honours it, else the adapter's fixed
  * frame. The result holds each (provider, `queryHash`) once.
@@ -418,6 +462,17 @@ export interface PlanOptions {
 export function planQueries(tuples: DemandTuple[], adapters: readonly JobSourceAdapter[], options: PlanOptions = {}): PlannedQuery[] {
   const search = adapters.filter((a) => a.kind === 'search');
   if (search.length === 0) return [];
+  // Asked once per (source, market): the answer reads the feed's gate.
+  const covered = new Map<string, boolean>();
+  const seedsCovered = (a: JobSourceAdapter, market: Market): boolean => {
+    const key = `${a.provider}|${market}`;
+    let answer = covered.get(key);
+    if (answer === undefined) {
+      answer = adapterCostModel(a) !== 'free' && feedCoversBoard(a, adapters, market);
+      covered.set(key, answer);
+    }
+    return answer;
+  };
   // Asked once per market, not once per tuple (an adapter reads env and its breaker to answer).
   const on = new Map<string, boolean>();
   const isOn = (a: JobSourceAdapter, market: Market): boolean => {
@@ -436,10 +491,13 @@ export function planQueries(tuples: DemandTuple[], adapters: readonly JobSourceA
     const country = searchCountry(t);
     const usable = search.filter((a) => {
       if (!isOn(a, t.market)) return false;
-      // SEO seeds only where a request costs nothing (MARKET_STRATEGY M-3).
-      if (t.origin === 'seo_seed' && adapterCostModel(a) === 'per_request') return false;
+      // SEO seeds only where a request costs nothing (MARKET_STRATEGY M-3), and never where a feed already brings the rows (M-2).
+      if (t.origin === 'seo_seed' && (adapterCostModel(a) === 'per_request' || seedsCovered(a, t.market))) return false;
       // A search for market cn asks for mainland postings only: any other row would be dropped as wrong_market.
-      if (t.market === 'cn' && country !== 'CN') return false;
+      if (t.market === 'cn' && country !== MAINLAND_COUNTRY) return false;
+      // And the mirror: a source that serves both markets writes a mainland posting for the mainland only (one
+      // posting, one market), so every row an international query for mainland China returned would be dropped.
+      if (t.market !== 'cn' && country === MAINLAND_COUNTRY && a.markets.includes('cn')) return false;
       try {
         return a.supportsCountry(country) === true;
       } catch {
@@ -448,7 +506,11 @@ export function planQueries(tuples: DemandTuple[], adapters: readonly JobSourceA
     });
     if (usable.length === 0) continue;
     for (const variant of queryVariants(t, options.queryLabels)) {
-      const takers = variant.language === null ? usable : usable.filter((a) => adapterQueryLanguages(a).includes(variant.language!));
+      const takers =
+        variant.language === null
+          ? // A typed title goes to every source as typed; on the mainland only to a source that is not a metered provider.
+            usable.filter((a) => t.market !== 'cn' || adapterCostModel(a) === 'free')
+          : usable.filter((a) => adapterQueryLanguages(a).includes(variant.language!));
       if (takers.length === 0) continue;
       const params = paramsForTuple(t, variant);
       const hash = queryHash(t, variant.language);
@@ -473,6 +535,9 @@ export function planQueries(tuples: DemandTuple[], adapters: readonly JobSourceA
   }
   return [...out.values()];
 }
+
+/** The country whose postings belong to the mainland market (normalize `marketOfPosting`). */
+const MAINLAND_COUNTRY = 'CN';
 
 /** The standing bank-sync query params (the cursor lives beside them). */
 export const BANK_SYNC_PARAMS: IngestQueryParams = { q: '', country: '*', datePosted: 'all' };
@@ -704,10 +769,13 @@ export async function retireUnusedDemand(
  * not one. A provider that comes back is switched on again by the plan itself
  * (`upsertPlannedQueries` for search queries, `ensureBankSyncQueries` for the
  * standing bank and board queries). A provider the brand runs but that is OFF
- * right now (no key, quota closed) is not retired: its queries wait.
+ * right now (no key, quota closed) is not retired: its queries wait. Neither
+ * is a source of the brand that is not in `adapters` because it stands behind
+ * a plan whose gate is closed right now (`waiting`): its standing query keeps
+ * its cursor and runs again on the first tick that finds the gate open.
  */
-export async function retireUnrunProviders(db: IngestDb, market: Market, adapters: readonly JobSourceAdapter[]): Promise<number> {
-  const providers = [...new Set(adapters.filter((a) => a.markets.includes(market)).map((a) => a.provider))];
+export async function retireUnrunProviders(db: IngestDb, market: Market, adapters: readonly JobSourceAdapter[], waiting: readonly string[] = []): Promise<number> {
+  const providers = [...new Set<string>([...adapters.filter((a) => a.markets.includes(market)).map((a) => a.provider), ...waiting])];
   return db.$executeRaw`
     UPDATE "RAIngestQuery" SET "enabled" = false
     WHERE "market" = ${market} AND "enabled" = true AND NOT ("provider" = ANY(${providers}::text[]))`;
@@ -809,23 +877,44 @@ export interface PlannerResult {
   skippedProviders: string[];
 }
 
-/** The whole `jobs-plan` run for one brand. */
-export async function runPlanner(
-  db: IngestDb,
-  brand: ProductBrand,
-  adapters: readonly JobSourceAdapter[],
-  options: { now?: Date; env?: EnvSource; queryLabels?: QueryLabelSource } = {},
-): Promise<PlannerResult> {
+export interface RunPlannerOptions {
+  now?: Date;
+  env?: EnvSource;
+  queryLabels?: QueryLabelSource;
+  /**
+   * Every ingest source the brand has, on or off (default: the job source
+   * registry's list for the brand, `knownIngestProvidersForBrand`). One of
+   * them that is missing from `adapters` stands behind a plan whose gate is
+   * closed right now: nothing is planned for it and nothing of it is retired.
+   */
+  knownProviders?: readonly string[];
+}
+
+/**
+ * The whole `jobs-plan` run for one brand. `given` is the brand's adapter
+ * list as the caller made it (providers.ts `adaptersForBrand`); the caller
+ * has loaded the stored quota reading before this runs (cron.ts).
+ */
+export async function runPlanner(db: IngestDb, brand: ProductBrand, given: readonly JobSourceAdapter[], options: RunPlannerOptions = {}): Promise<PlannerResult> {
   const now = options.now ?? new Date();
   const env = options.env ?? process.env;
   const market = brand.market;
+  // The brand's source lists live with the adapters (providers.ts), whose imports reach back into this area:
+  // loaded on demand, so this module stays free of that cycle at load time.
+  const { knownIngestProvidersForBrand, planAdaptersOnNow } = await import('./providers.js');
+  // Sources behind a plan are asked now (header, point 9): one that is on and missing from the list joins the run.
+  const late = planAdaptersOnNow(brand, env).filter((a) => !given.some((g) => g.provider === a.provider));
+  const adapters: readonly JobSourceAdapter[] = late.length > 0 ? [...given, ...late] : given;
   const { open, skipped } = plannableAdapters(adapters, market, await readQuotaSnapshots(db), now, env);
+  // Sources of the brand the run was not given: behind a plan, gate closed at this hour. Their queries wait.
+  const known: readonly string[] = options.knownProviders ?? knownIngestProvidersForBrand(brand, env);
+  const waiting = known.filter((provider) => !adapters.some((a) => a.provider === provider && a.markets.includes(market)));
   const demand = await collectDemand(db, brand, now);
   const seeds = seedTuples(brand, env);
   const planned = planQueries(mergeTuples(demand, seeds), open, { queryLabels: options.queryLabels });
   const written = await upsertPlannedQueries(db, planned, now);
-  const { zeroed, disabled } = await retireUnusedDemand(db, market, now, skipped);
-  const retired = await retireUnrunProviders(db, market, adapters);
+  const { zeroed, disabled } = await retireUnusedDemand(db, market, now, [...skipped, ...waiting]);
+  const retired = await retireUnrunProviders(db, market, adapters, waiting);
   const seedsRetired = await retireSeedsFor(db, market, perRequestProviders(adapters, market));
   const plannedSearch = open.filter((a) => a.kind === 'search').map((a) => a.provider);
   const superseded = await retireSuperseded(db, market, plannedSearch, now);

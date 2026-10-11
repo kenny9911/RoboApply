@@ -1,44 +1,83 @@
 // backend/src/roboapply/v2/lib/raFantasticJobs.ts
 //
-// Fantastic Jobs job-search client: Active Jobs DB
-// (active-jobs-db.p.rapidapi.com) → sourceBoard 'activejobs'.
+// Fantastic Jobs client: Active Jobs DB → sourceBoard 'activejobs'. Two kinds
+// of call share everything below (transport, timeout, circuit breaker, call
+// gate, quota listener):
+//   - `searchFantasticJobs`  one title × location search, 20 rows (a person's
+//     own search, and the ingest search adapter);
+//   - `feedRequest`          one page of the licensed feed's new-jobs route or
+//     one answer of its expired route (features/jobs/ingest/adapters/
+//     fantasticFeed.ts; MARKET_STRATEGY M-2, §1.2 tier 1, JI-7).
 //
 // The provider's sibling LinkedIn Job Search API shared this client until the
 // M3 gate of the market wave. It is removed: LinkedIn is not a source
 // (MARKET_STRATEGY M-4, §1.6), so no code here can build a request to it.
 //
+// Transport (FANTASTIC_TRANSPORT, one for the whole client, so one plan is
+// spent and one quota reading describes it):
+//   rapidapi (default)  https://active-jobs-db.p.rapidapi.com, headers
+//                       x-rapidapi-key (RAPID_API_KEY) and x-rapidapi-host.
+//                       Routes /active-ats (verified live 2026-09-12) and
+//                       /expired-ats (JOB_SOURCES_INTL §6.2; NOT verified on
+//                       the marketplace listing: the free plan was used up).
+//   direct              https://data.fantastic.jobs, header
+//                       `Authorization: Bearer <FANTASTIC_API_KEY>`, routes
+//                       /v1/active-ats and /v1/expired-ats. Read on 2026-10-12
+//                       from the vendor's documentation:
+//                       developer.fantastic.jobs/documentation/authentication
+//                       (last modified 2026-10-09), …/endpoints/new-jobs,
+//                       …/endpoints/expired-jobs, …/credit-usage and the
+//                       OpenAPI document data.fantastic.jobs/openapi
+//                       ("Fantastic.jobs API (v1)").
+// FANTASTIC_API_KEY_HEADER overrides the header NAME of the direct key (the
+// raw key is then the value); FANTASTIC_FEED_PATH / FANTASTIC_EXPIRED_PATH
+// override the two routes on the chosen host (the marketplace listing has
+// renamed its routes before: see "Sept 2026 marketplace migration" below).
+//
 // Mirrors the raRapidApiJobs.ts (JSearch) discipline exactly:
 //   - self-contained V2-local client (the boundary script forbids importing
 //     recruiter `services/*`);
-//   - RAPID_API_KEY read per call, never cached, never logged;
+//   - the key read per call, never cached, never logged, never part of a
+//     result or an error text;
 //   - hard "NEVER throws to callers" contract — every failure path returns
-//     `null` + a logger.warn so the recommendation round degrades to
-//     internal-only silently;
-//   - per-provider cost control: in-process LRU cache (6h), circuit breaker
-//     (403/401/monthly-429 → 1h cooldown; burst-429 → one jittered retry),
-//     global + per-provider kill switch, and the call gate (setCallGate) asked
-//     before every upstream call and by isFantasticJobsEnabled(). The
-//     inventory pipeline registers the gate (features/jobs/ingest/quota.ts):
-//     ONE budget per provider, read from the plan's own quota headers and
-//     counted in RAProviderUsage; this client keeps no call counter of its own
-//     (MARKET_STRATEGY §1.2, JI-1);
+//     `null` (search) or `{ ok: false, error }` (feed) + a logger.warn;
+//   - per-provider cost control: in-process LRU cache (6h, search only),
+//     circuit breaker (403/401/monthly-429 → 1h cooldown; burst-429 → one
+//     jittered retry; a 401/403 on the feed's EXPIRED route opens nothing and
+//     reports nothing: that route may be outside the plan while the key is
+//     good for the others), global + per-provider kill switch, and the call gate
+//     (setCallGate) asked before every upstream call and by
+//     isFantasticJobsEnabled(). The inventory pipeline registers the gate
+//     (features/jobs/ingest/quota.ts): ONE budget per provider, read from the
+//     plan's own quota headers and counted in RAProviderUsage; this client
+//     keeps no call counter of its own (MARKET_STRATEGY §1.2, JI-1);
 //   - the quota listener (setQuotaListener) is told what every upstream
 //     response said about the plan: requests and jobs limit / remaining, the
 //     reset time and, on a 429, the plan's name. Never the key.
 //
 // Response shape (verified against Fantastic Jobs docs + prospectio-api-mcp):
-// the body is a BARE JSON ARRAY of job objects (NO envelope). A 403/429 comes
-// back as `{message:"..."}` with a non-200 status, so we type-guard for an
-// array before mapping.
+// the body is a BARE JSON ARRAY (job objects on the new-jobs route, internal
+// job ids on the expired route; NO envelope). A 403/429 comes back as
+// `{message:"..."}` (the direct API: an RFC 7807 problem object) with a
+// non-200 status, so we type-guard for an array before mapping.
 //
 // Current marketplace contract verified 2026-09-12: GET /active-ats and
 // /active-jb, with time_frame/title/location/description_format. Raw response
-// fields now use salary, locations, and ai_salary_min_value/unit_text.
-// Legacy field aliases remain supported for cached and older records.
+// fields now use salary, locations, and ai_salary_min_value/unit_text; the v1
+// API also renamed date_validthrough → date_valid_through, returns `id` as an
+// integer and dropped remote_derived ("Field changes old to new API", read
+// 2026-10-12). Legacy field aliases remain supported for cached and older
+// records.
+//
+// Title search (INTL note §6.2): the `title` parameter reads like a Google
+// query, so a role is asked as quoted phrases joined by OR ('"product
+// manager" OR "product owner"'), never as loose tokens: on a per-job price
+// loose tokens buy loosely related postings.
 
 import { logger } from '../../../services/LoggerService.js';
 import {
   quotaObservationFrom,
+  requestsRemainingFrom,
   settleQuotaListener,
   type ExternalJobNormalized,
   type ExternalSearchParams,
@@ -56,24 +95,85 @@ const CACHE_MAX_ENTRIES = 200;
 const BREAKER_COOLDOWN_MS = 60 * 60 * 1000;
 const RESULT_LIMIT = 20; // jobs per billed call (Fantastic Jobs bills per row returned)
 
-// ─── Provider configs ──────────────────────────────────────────────────────
+// ─── Provider config and transport ─────────────────────────────────────────
+
+/** Rows one search call asks for (the plan bills per row returned). */
+export const FANTASTIC_SEARCH_LIMIT = RESULT_LIMIT;
 
 interface FantasticConfig {
   /** sourceBoard + externalId prefix. */
   readonly board: Extract<ExternalSourceBoard, 'activejobs'>;
-  readonly host: string;
-  /** Current marketplace route; freshness is sent as time_frame. */
-  readonly pathPrefix: string;
   /** Per-provider kill-switch env var name. */
   readonly disableEnv: string;
 }
 
 const ACTIVE_JOBS_CONFIG: FantasticConfig = {
   board: 'activejobs',
-  host: 'active-jobs-db.p.rapidapi.com',
-  pathPrefix: '/active-ats',
   disableEnv: 'RA_ONBOARDING_ACTIVEJOBS_DISABLED',
 };
+
+type Env = Readonly<Record<string, string | undefined>>;
+
+/** How the client reaches Active Jobs DB (see the header). */
+export type FantasticTransport = 'rapidapi' | 'direct';
+/** The two routes of the licensed feed; `active` is also the search route. */
+export type FantasticRoute = 'active' | 'expired';
+
+const RAPIDAPI_HOST = 'active-jobs-db.p.rapidapi.com';
+const DIRECT_HOST = 'data.fantastic.jobs';
+/** The direct API's documented key header (`Authorization: Bearer <key>`; vendor "Authentication" page, read 2026-10-12). */
+const DIRECT_KEY_HEADER = 'Authorization';
+const HEADER_NAME = /^[A-Za-z][A-Za-z0-9-]{0,63}$/;
+/** A plain path: segments of letters, digits, '_', '.', '-' (no empty segment, no query, no host). */
+const ROUTE_PATH = /^(?:\/[A-Za-z0-9_.-]{1,40}){1,6}$/;
+
+const DEFAULT_PATHS: Readonly<Record<FantasticTransport, Readonly<Record<FantasticRoute, string>>>> = {
+  rapidapi: { active: '/active-ats', expired: '/expired-ats' },
+  direct: { active: '/v1/active-ats', expired: '/v1/expired-ats' },
+};
+const PATH_ENV: Readonly<Record<FantasticRoute, string>> = { active: 'FANTASTIC_FEED_PATH', expired: 'FANTASTIC_EXPIRED_PATH' };
+
+/** FANTASTIC_TRANSPORT: 'direct' for a Fantastic.jobs key, anything else the RapidAPI marketplace. */
+export function fantasticTransport(env: Env = process.env): FantasticTransport {
+  return env.FANTASTIC_TRANSPORT?.trim().toLowerCase() === 'direct' ? 'direct' : 'rapidapi';
+}
+
+/** Is the key of the chosen transport set? (Presence only: the value is never read here.) */
+export function fantasticKeyPresent(env: Env = process.env): boolean {
+  return !!(fantasticTransport(env) === 'direct' ? env.FANTASTIC_API_KEY : env.RAPID_API_KEY)?.trim();
+}
+
+/** The path of a route on the chosen transport's host: the operator's override when it is a plain path, else the default. */
+export function fantasticRoutePath(route: FantasticRoute, env: Env = process.env): string {
+  const override = env[PATH_ENV[route]]?.trim();
+  return override && ROUTE_PATH.test(override) ? override : DEFAULT_PATHS[fantasticTransport(env)][route];
+}
+
+interface ResolvedTransport {
+  kind: FantasticTransport;
+  host: string;
+  /** Request headers, the key among them: never logged, never returned to a caller. */
+  headers: Record<string, string>;
+}
+
+/** Host and headers of the chosen transport; null without its key (read per call, never cached). */
+function resolveTransport(env: Env = process.env): ResolvedTransport | null {
+  if (fantasticTransport(env) === 'direct') {
+    const key = env.FANTASTIC_API_KEY?.trim();
+    if (!key) return null;
+    const override = env.FANTASTIC_API_KEY_HEADER?.trim();
+    const name = override && HEADER_NAME.test(override) ? override : DIRECT_KEY_HEADER;
+    return { kind: 'direct', host: DIRECT_HOST, headers: { [name]: name.toLowerCase() === 'authorization' ? `Bearer ${key}` : key } };
+  }
+  const key = env.RAPID_API_KEY?.trim();
+  if (!key) return null;
+  return { kind: 'rapidapi', host: RAPIDAPI_HOST, headers: { 'x-rapidapi-key': key, 'x-rapidapi-host': RAPIDAPI_HOST } };
+}
+
+/** Is a kill switch of this provider on (the shared one or its own)? */
+function killed(cfg: FantasticConfig, env: Env = process.env): boolean {
+  return env.RA_ONBOARDING_EXTERNAL_JOBS_DISABLED === 'true' || env[cfg.disableEnv] === 'true';
+}
 
 /**
  * Freshness window suffix. Default '7d' (a title+location query in a 24h window
@@ -84,6 +184,11 @@ const ACTIVE_JOBS_CONFIG: FantasticConfig = {
  */
 function windowSuffix(): '24h' | '7d' {
   return process.env.RA_ONBOARDING_FANTASTIC_WINDOW === '24h' ? '24h' : '7d';
+}
+
+/** The one frame every search call asks, as an ingest `datePosted` value ('7d' → 'week', '24h' → 'today'). */
+export function fantasticSearchDateWindow(): 'week' | 'today' {
+  return windowSuffix() === '24h' ? 'today' : 'week';
 }
 
 // ─── Postgres-safety helpers (forked, raRapidApiJobs.ts precedent) ─────────
@@ -300,8 +405,12 @@ function fantasticExtras(j: any, workArrangement: string): Partial<ExternalJobNo
     ? j.ai_key_skills.filter((s: unknown): s is string => typeof s === 'string' && s.trim() !== '')
     : [];
   if (skills.length) out.skills = skills;
-  const validThrough = typeof j.date_validthrough === 'string' ? j.date_validthrough : typeof j.valid_through === 'string' ? j.valid_through : null;
+  // `date_valid_through` is the v1 name; the two others are what older responses and cached rows carry.
+  const validThrough = [j.date_valid_through, j.date_validthrough, j.valid_through].find((v): v is string => typeof v === 'string' && v.trim() !== '') ?? null;
   if (validThrough && Number.isFinite(Date.parse(validThrough))) out.expiresAt = validThrough;
+  // The provider's reading, never a fact. `false` only says the description does not mention sponsorship
+  // (vendor field description, read 2026-10-12), so it is not copied as "not offered".
+  if (j.ai_visa_sponsorship === true) out.sponsorshipProvider = 'offered';
   const website =
     typeof j.organization_url === 'string' && /^https?:\/\//i.test(j.organization_url)
       ? j.organization_url
@@ -387,13 +496,16 @@ class ProviderState {
     });
   }
 
-  /** Key present && kill switches off && breaker closed && the call gate open for a person's own search (asked without counting a call). */
+  /** Key of the chosen transport present && kill switches off && breaker closed: the client can be called at all. */
+  isUsable(): boolean {
+    if (killed(this.cfg)) return false;
+    if (!fantasticKeyPresent()) return false;
+    return !this.breakerIsOpen(Date.now());
+  }
+
+  /** Usable && the call gate open for a person's own search (asked without counting a call). */
   isEnabled(): boolean {
-    if (process.env.RA_ONBOARDING_EXTERNAL_JOBS_DISABLED === 'true') return false;
-    if (process.env[this.cfg.disableEnv] === 'true') return false;
-    if (!process.env.RAPID_API_KEY?.trim()) return false;
-    if (this.breakerIsOpen(Date.now())) return false;
-    return gateAllows(this.cfg.board, 'interactive', true);
+    return this.isUsable() && gateAllows(this.cfg.board, 'interactive', true);
   }
 
   cacheGet(key: string, now: number): ExternalJobNormalized[] | null {
@@ -450,7 +562,7 @@ function headerNum(res: Response, name: string): number | null {
 
 function isMonthlyQuota429(bodyText: string, res: Response): boolean {
   if (/monthly|quota/i.test(bodyText)) return true;
-  return headerNum(res, 'x-ratelimit-requests-remaining') === 0;
+  return requestsRemainingFrom(res.headers) === 0;
 }
 
 function jitteredDelay(ms: number, signal: AbortSignal): Promise<void> {
@@ -473,33 +585,54 @@ function jitteredDelay(ms: number, signal: AbortSignal): Promise<void> {
 
 // ─── Request building ──────────────────────────────────────────────────────
 
-// Fantastic Jobs `title_filter` ANDs every space-separated token against the job
-// TITLE. The planner's role text is tuned for OR-overlap (2-6 tokens incl.
-// seniority modifiers), so passing it verbatim would AND e.g. "senior backend
-// software engineer" → near-zero hits. Reduce to the distinctive role noun(s):
-// drop seniority/level/stopword modifiers and cap the AND-width so recall stays
-// sane. The role noun tends to sit at the END of an English title, so keep the tail.
-const TITLE_STOPWORDS = new Set([
-  'senior', 'junior', 'sr', 'jr', 'lead', 'staff', 'principal', 'entry', 'mid',
-  'level', 'i', 'ii', 'iii', 'iv', 'the', 'a', 'an', 'of', 'and', 'for', 'to', 'in',
-]);
-const TITLE_MAX_TOKENS = 3;
+// The `title` parameter reads like a Google query: bare words are ANDed
+// loosely, a double-quoted string is an exact phrase, OR joins alternatives
+// (vendor documentation "New Jobs", parameter `title`, read 2026-10-12). A
+// role is therefore asked as its own name and up to two other names of the
+// same role, each an exact phrase: '"product manager" OR "product owner"'.
+// Bare tokens ("backend software engineer" as three words) match loosely
+// related titles, and every row returned is billed.
 
-function titleFilterFrom(raw: string): string {
-  const tokens = raw
-    .toLowerCase()
-    .split(/\s+/)
-    .map((t) => t.replace(/[^\p{L}\p{N}+#.]/gu, ''))
-    .filter(Boolean);
-  if (tokens.length === 0) return '';
-  const meaningful = tokens.filter((t) => !TITLE_STOPWORDS.has(t));
-  const chosen = (meaningful.length > 0 ? meaningful : tokens).slice(-TITLE_MAX_TOKENS);
-  return chosen.join(' ');
+/** Characters a phrase may not carry: every kind of double quote, and the backslash. */
+const PHRASE_QUOTES = /["\u201c\u201d\u201e\u201f\u00ab\u00bb\uff02\\]/g;
+/** Longest phrase sent (characters). */
+export const TITLE_PHRASE_MAX = 60;
+/** Other names of the role sent beside its own. */
+export const TITLE_SYNONYMS_MAX = 2;
+
+/** One role name as the text of a phrase: no quotes, no control characters, single spaces, lower case, at most 60 characters; '' when nothing nameable is left. */
+function titlePhrase(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  let cleaned = '';
+  for (const ch of raw.replace(PHRASE_QUOTES, ' ')) {
+    const c = ch.codePointAt(0) ?? 0;
+    cleaned += c < 32 || c === 127 ? ' ' : ch;
+  }
+  const phrase = cleaned.replace(/\s+/g, ' ').trim().toLowerCase().slice(0, TITLE_PHRASE_MAX).trim();
+  // A phrase with no letter and no digit ("---") names no role: it must never become a paid scan.
+  return /[\p{L}\p{N}]/u.test(phrase) ? phrase : '';
+}
+
+/**
+ * The `title` parameter for a role: its name and up to two synonyms as quoted
+ * phrases joined by OR. '' when the role text names nothing (the caller then
+ * makes no request).
+ */
+function titleFilterFrom(raw: string, synonyms: readonly string[] = []): string {
+  const first = titlePhrase(raw);
+  if (!first) return '';
+  const phrases = [first];
+  for (const synonym of synonyms) {
+    if (phrases.length > TITLE_SYNONYMS_MAX) break;
+    const phrase = titlePhrase(synonym);
+    if (phrase && !phrases.includes(phrase)) phrases.push(phrase);
+  }
+  return phrases.map((p) => `"${p}"`).join(' OR ');
 }
 
 function buildQuery(params: ExternalSearchParams): URLSearchParams {
   const q = new URLSearchParams();
-  const title = titleFilterFrom((params.titleQuery ?? params.query ?? '').trim());
+  const title = titleFilterFrom((params.titleQuery ?? params.query ?? '').trim(), Array.isArray(params.titleSynonyms) ? params.titleSynonyms : []);
   if (title) q.set('title', title);
   const location = (params.locationText ?? '').trim() || countryName(params.country) || '';
   if (location) q.set('location', location);
@@ -510,10 +643,99 @@ function buildQuery(params: ExternalSearchParams): URLSearchParams {
   return q;
 }
 
+/** The whole title expression is part of the key: a page cached for the old token form is never served for a phrase query. */
 function cacheKeyFor(board: FantasticConfig['board'], q: URLSearchParams): string {
   return [board, windowSuffix(), q.get('title') ?? '', q.get('location') ?? '', q.get('ai_work_arrangement') ?? '']
     .join('|')
     .toLowerCase();
+}
+
+// ─── One upstream GET (shared by the search and the feed) ──────────────────
+
+type UpstreamAnswer =
+  | { ok: true; response: Response }
+  /** quota: the period's quota is used up; rate_limited: a burst limit persisted; refused: 401 / 403; gate: the call gate refused the retry. */
+  | { ok: false; reason: 'quota' | 'rate_limited' | 'refused' | 'gate'; status: number | null };
+
+/**
+ * One GET with the provider's guards: a monthly-quota 429 and a 401 / 403
+ * open the breaker; a burst 429 gets one jittered retry (a second upstream
+ * call, so the gate is asked again); every upstream response is reported to
+ * the quota listener. Throws only what `fetch` throws (network, abort): the
+ * caller's own catch turns that into its "unavailable" answer.
+ *
+ * One exception, by route. A 401 / 403 on the EXPIRED route is a refusal of
+ * that route, not of the key: the marketplace answers 403 for a part of the
+ * API a plan does not include, and that route's path is not verified there.
+ * The search and the new-jobs route are on `active`, and a refused key shows
+ * itself there. So for `expired` the answer is 'refused' and nothing else
+ * happens: the breaker stays closed (a person's own search is not stopped for
+ * an hour) and the quota listener is not told the key is refused (the plan's
+ * stated size is kept, so the feed's gate does not close).
+ */
+async function getUpstream(
+  state: ProviderState,
+  board: FantasticConfig['board'],
+  url: string,
+  headers: Record<string, string>,
+  purpose: ProviderCallPurpose,
+  signal: AbortSignal,
+  requestId?: string,
+  route: FantasticRoute = 'active',
+): Promise<UpstreamAnswer> {
+  let response = await fetch(url, { method: 'GET', headers, signal });
+
+  if (response.status === 429) {
+    const bodyText = await response.text().catch(() => '');
+    await reportQuota(board, response, bodyText, purpose);
+    if (isMonthlyQuota429(bodyText, response)) {
+      state.openBreaker('429_monthly', 429, requestId);
+      return { ok: false, reason: 'quota', status: 429 };
+    }
+    // Per-second burst: one jittered retry (a second upstream call, so the gate is asked again).
+    await jitteredDelay(300 + Math.random() * 500, signal);
+    if (!gateAllows(board, purpose, false)) return { ok: false, reason: 'gate', status: null };
+    response = await fetch(url, { method: 'GET', headers, signal });
+    if (response.status === 429) {
+      const retryText = await response.text().catch(() => '');
+      await reportQuota(board, response, retryText, purpose);
+      if (isMonthlyQuota429(retryText, response)) {
+        state.openBreaker('429_monthly', 429, requestId);
+        return { ok: false, reason: 'quota', status: 429 };
+      }
+      logger.warn('RA_V2_FANTASTIC_RATE_LIMITED', 'Fantastic Jobs burst rate limit persisted', { requestId, board });
+      return { ok: false, reason: 'rate_limited', status: 429 };
+    }
+  }
+
+  if (response.status === 403 || response.status === 401) {
+    if (route === 'expired') {
+      await response.text().catch(() => '');
+      logger.warn('RA_V2_FANTASTIC_ROUTE_REFUSED', 'Fantastic Jobs refused the expired route; the search and the new-jobs route are not affected', { requestId, board, route, httpStatus: response.status });
+      return { ok: false, reason: 'refused', status: response.status };
+    }
+    // 403 also covers "endpoint not on plan" for a gated window (e.g. 7d); the body says which.
+    await reportQuota(board, response, await response.text().catch(() => ''), purpose);
+    state.openBreaker(response.status === 403 ? '403_not_subscribed' : '401', response.status, requestId);
+    return { ok: false, reason: 'refused', status: response.status };
+  }
+  await reportQuota(board, response, '', purpose);
+  return { ok: true, response };
+}
+
+/** A request's abort wiring: the caller's signal and the client's own timeout on one controller. */
+function withTimeout(signal: AbortSignal | undefined): { controller: AbortController; release(): void } {
+  const controller = new AbortController();
+  const abortHandler = () => controller.abort();
+  signal?.addEventListener('abort', abortHandler);
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  return {
+    controller,
+    release() {
+      clearTimeout(timeout);
+      signal?.removeEventListener('abort', abortHandler);
+    },
+  };
 }
 
 // ─── Search ────────────────────────────────────────────────────────────────
@@ -531,10 +753,9 @@ export async function searchFantasticJobs(
   const state = STATE[board];
   // A board this client has no config for (an untyped caller naming a dropped one) is never called and never throws.
   if (!cfg || !state) return null;
-  if (process.env.RA_ONBOARDING_EXTERNAL_JOBS_DISABLED === 'true') return null;
-  if (process.env[cfg.disableEnv] === 'true') return null;
-  const apiKey = process.env.RAPID_API_KEY?.trim(); // read per call — never cached, never logged
-  if (!apiKey) return null;
+  if (killed(cfg)) return null;
+  const transport = resolveTransport(); // the key is read per call — never cached, never logged
+  if (!transport) return null;
   const title = (params.titleQuery ?? params.query ?? '').trim();
   if (!title) return null; // no title filter ⇒ the whole window; refuse (too broad + costly)
   if (opts?.signal?.aborted) return null;
@@ -566,54 +787,18 @@ export async function searchFantasticJobs(
   // Sept 2026 marketplace migration: old /active-ats-7d /active-jb-7d
   // routes now 404. Current contracts use /active-ats or /active-jb with
   // time_frame/title/location/description_format. Verified live 2026-09-12.
-  const url = `https://${cfg.host}${cfg.pathPrefix}?${q.toString()}`;
-  const headers = { 'x-rapidapi-key': apiKey, 'x-rapidapi-host': cfg.host };
+  const url = `https://${transport.host}${fantasticRoutePath('active')}?${q.toString()}`;
 
-  const controller = new AbortController();
-  const abortHandler = () => controller.abort();
-  opts?.signal?.addEventListener('abort', abortHandler);
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const { controller, release } = withTimeout(opts?.signal);
   const startedAt = Date.now();
 
   try {
-    let response = await fetch(url, { method: 'GET', headers, signal: controller.signal });
+    const answer = await getUpstream(state, board, url, transport.headers, purpose, controller.signal, opts?.requestId);
+    if (!answer.ok) return null;
+    const response = answer.response;
 
-    if (response.status === 429) {
-      const bodyText = await response.text().catch(() => '');
-      await reportQuota(board, response, bodyText, purpose);
-      if (isMonthlyQuota429(bodyText, response)) {
-        state.openBreaker('429_monthly', 429, opts?.requestId);
-        return null;
-      }
-      // Per-second burst: one jittered retry (a second upstream call, so the gate is asked again).
-      await jitteredDelay(300 + Math.random() * 500, controller.signal);
-      if (!gateAllows(board, purpose, false)) return null;
-      response = await fetch(url, { method: 'GET', headers, signal: controller.signal });
-      if (response.status === 429) {
-        const retryText = await response.text().catch(() => '');
-        await reportQuota(board, response, retryText, purpose);
-        if (isMonthlyQuota429(retryText, response)) {
-          state.openBreaker('429_monthly', 429, opts?.requestId);
-        } else {
-          logger.warn('RA_V2_FANTASTIC_RATE_LIMITED', 'Fantastic Jobs burst rate limit persisted', {
-            requestId: opts?.requestId,
-            board,
-          });
-        }
-        return null;
-      }
-    }
-
-    if (response.status === 403 || response.status === 401) {
-      // 403 also covers "endpoint not on plan" for a gated window (e.g. 7d); the body says which.
-      await reportQuota(board, response, await response.text().catch(() => ''), purpose);
-      state.openBreaker(response.status === 403 ? '403_not_subscribed' : '401', response.status, opts?.requestId);
-      return null;
-    }
-    await reportQuota(board, response, '', purpose);
-
-    const rlLimit = headerNum(response, 'x-ratelimit-requests-limit');
-    const rlRemaining = headerNum(response, 'x-ratelimit-requests-remaining');
+    const rlLimit = headerNum(response, 'x-ratelimit-requests-limit') ?? headerNum(response, 'x-api-requests-limit');
+    const rlRemaining = requestsRemainingFrom(response.headers);
 
     if (!response.ok) {
       logger.warn('RA_V2_FANTASTIC_HTTP_ERROR', `Fantastic Jobs HTTP ${response.status}`, {
@@ -645,6 +830,7 @@ export async function searchFantasticJobs(
     logger.info('RA_V2_FANTASTIC_CALL', 'Fantastic Jobs search completed', {
       requestId: opts?.requestId,
       board,
+      transport: transport.kind,
       window: windowSuffix(),
       title: title.slice(0, 120),
       location: q.get('location') ?? '',
@@ -667,14 +853,116 @@ export async function searchFantasticJobs(
     });
     return null;
   } finally {
-    clearTimeout(timeout);
-    opts?.signal?.removeEventListener('abort', abortHandler);
+    release();
   }
 }
 
 export function isFantasticJobsEnabled(board: FantasticConfig['board']): boolean {
   return STATE[board]?.isEnabled() ?? false;
 }
+
+/**
+ * Can the client be called at all (the key of the chosen transport, the kill
+ * switches, the breaker)? The call gate is NOT asked: whoever plans an ingest
+ * call asks the quota itself, for its own market and purpose.
+ */
+export function isFantasticJobsUsable(board: FantasticConfig['board'] = 'activejobs'): boolean {
+  return STATE[board]?.isUsable() ?? false;
+}
+
+/**
+ * Why the client is off by configuration, as the short code the job-source
+ * registry shows: a kill switch (the shared one or its own) first, then the
+ * key of the chosen transport. Null when neither applies.
+ */
+export function fantasticJobsOffReason(env: Env = process.env): 'kill_switch' | 'no_api_key' | null {
+  if (killed(ACTIVE_JOBS_CONFIG, env)) return 'kill_switch';
+  return fantasticKeyPresent(env) ? null : 'no_api_key';
+}
+
+// ─── The licensed feed's two routes ────────────────────────────────────────
+
+/** A response body larger than this is not read (the expired route's monthly answer is "very large": vendor documentation). */
+export const FEED_RESPONSE_MAX_BYTES = 96 * 1024 * 1024;
+
+export interface FeedRequestOptions {
+  signal?: AbortSignal;
+  requestId?: string;
+}
+
+/**
+ * The answer of one feed request. `called` says whether an upstream request
+ * was made at all (a refusal by a switch, the key, the breaker or the gate
+ * makes none). `error` is a short code, never a URL, a header or a key:
+ * 'refused' is a 401 / 403 (on the expired route it concerns that route only
+ * and opens no breaker: see `getUpstream`).
+ */
+export type FeedResponse =
+  | { ok: true; status: number; body: unknown[]; called: true }
+  | { ok: false; error: string; status: number | null; called: boolean };
+
+/** What a feed transport is: the client's own `feedRequest`, or a test's stand-in. */
+export type FeedRequestFn = (route: FantasticRoute, params: Readonly<Record<string, string>>, opts?: FeedRequestOptions) => Promise<FeedResponse>;
+
+/**
+ * One GET of the licensed feed: a page of the new-jobs route (`active`) or the
+ * ids of the expired route. Shares the search's transport, 25 s timeout,
+ * breaker, call gate (asked as ingest: the feed is the pipeline's own call)
+ * and quota listener. NEVER throws. The parameters are sent as given: the
+ * feed adapter builds them from an allow-list of documented names (the direct
+ * API answers 400 to a name it does not know).
+ */
+export const feedRequest: FeedRequestFn = async (route, params, opts) => {
+  const board = ACTIVE_JOBS_CONFIG.board;
+  const state = STATE[board];
+  if (killed(ACTIVE_JOBS_CONFIG)) return { ok: false, error: 'disabled', status: null, called: false };
+  const transport = resolveTransport(); // the key is read per call — never cached, never logged
+  if (!transport) return { ok: false, error: 'no_key', status: null, called: false };
+  if (opts?.signal?.aborted) return { ok: false, error: 'aborted', status: null, called: false };
+  if (state.breakerIsOpen(Date.now())) return { ok: false, error: 'breaker_open', status: null, called: false };
+  if (!gateAllows(board, 'ingest', false)) return { ok: false, error: 'quota', status: null, called: false };
+
+  const url = `https://${transport.host}${fantasticRoutePath(route)}?${new URLSearchParams(params).toString()}`;
+  const { controller, release } = withTimeout(opts?.signal);
+  const startedAt = Date.now();
+  try {
+    const answer = await getUpstream(state, board, url, transport.headers, 'ingest', controller.signal, opts?.requestId, route);
+    if (!answer.ok) return { ok: false, error: answer.reason, status: answer.status, called: true };
+    const response = answer.response;
+    if (!response.ok) {
+      logger.warn('RA_V2_FANTASTIC_HTTP_ERROR', `Fantastic Jobs feed HTTP ${response.status}`, { requestId: opts?.requestId, board, route, httpStatus: response.status });
+      return { ok: false, error: `http_${response.status}`, status: response.status, called: true };
+    }
+    const stated = headerNum(response, 'content-length');
+    if (stated !== null && stated > FEED_RESPONSE_MAX_BYTES) {
+      logger.warn('RA_V2_FANTASTIC_FEED_TOO_LARGE', 'Fantastic Jobs feed answer is larger than the client reads', { requestId: opts?.requestId, board, route, bytes: stated });
+      return { ok: false, error: 'too_large', status: response.status, called: true };
+    }
+    const body = (await response.json().catch(() => null)) as unknown;
+    if (!Array.isArray(body)) {
+      logger.warn('RA_V2_FANTASTIC_ENVELOPE_ERROR', 'Fantastic Jobs feed returned a non-array body', { requestId: opts?.requestId, board, route });
+      return { ok: false, error: 'bad_shape', status: response.status, called: true };
+    }
+    logger.info('RA_V2_FANTASTIC_FEED', 'Fantastic Jobs feed request completed', {
+      requestId: opts?.requestId,
+      board,
+      route,
+      transport: transport.kind,
+      timeFrame: params.time_frame ?? null,
+      offset: params.offset ?? null,
+      httpStatus: response.status,
+      rows: body.length,
+      durationMs: Date.now() - startedAt,
+    });
+    return { ok: true, status: response.status, body, called: true };
+  } catch (err) {
+    const name = (err as { name?: unknown } | null)?.name;
+    logger.warn('RA_V2_FANTASTIC_FAILED', 'Fantastic Jobs feed request failed', { requestId: opts?.requestId, board, route, errorType: typeof name === 'string' ? name.slice(0, 40) : 'UnknownError' });
+    return { ok: false, error: (err as { name?: unknown } | null)?.name === 'AbortError' ? 'timeout' : 'network', status: null, called: true };
+  } finally {
+    release();
+  }
+};
 
 // ─── Providers ─────────────────────────────────────────────────────────────
 
@@ -697,6 +985,9 @@ export const __test = {
   toIsoUtc,
   countryName,
   buildQuery,
+  cacheKeyFor,
   titleFilterFrom,
+  titlePhrase,
   windowSuffix,
+  resolveTransport,
 };

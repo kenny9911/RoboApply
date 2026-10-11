@@ -41,6 +41,52 @@ export function isExternalSourceBoard(board: string | null | undefined): boolean
 }
 
 /**
+ * The taxonomy labels Fantastic Jobs assigns to a posting (`ai_taxonomies_a`,
+ * up to five per row, the first the primary one) and accepts as the filter of
+ * the same name. EXACTLY the 33 values the vendor documents: the enum of the
+ * `ai_taxonomies_a` parameter in its OpenAPI document
+ * (https://data.fantastic.jobs/openapi, "Fantastic.jobs API (v1)"), read
+ * 2026-10-12. Never typed from memory; a label that is not here is not sent
+ * as a filter and maps to nothing.
+ */
+export const FANTASTIC_TAXONOMY_LABELS = [
+  'Technology',
+  'Healthcare',
+  'Management & Leadership',
+  'Finance & Accounting',
+  'Human Resources',
+  'Sales',
+  'Marketing',
+  'Customer Service & Support',
+  'Education',
+  'Legal',
+  'Engineering',
+  'Science & Research',
+  'Trades',
+  'Construction',
+  'Manufacturing',
+  'Logistics',
+  'Creative & Media',
+  'Hospitality',
+  'Environmental & Sustainability',
+  'Retail',
+  'Data & Analytics',
+  'Software',
+  'Energy',
+  'Agriculture',
+  'Social Services',
+  'Administrative',
+  'Government & Public Sector',
+  'Art & Design',
+  'Food & Beverage',
+  'Transportation',
+  'Consulting',
+  'Sports & Recreation',
+  'Security & Safety',
+] as const;
+export type FantasticTaxonomyLabel = (typeof FANTASTIC_TAXONOMY_LABELS)[number];
+
+/**
  * Normalized external job — the common shape every provider client maps its
  * raw payload onto. Downstream (the blend/prefilter/upsert in
  * RAOnboardingRecommendService) maps this onto RAJob.
@@ -106,6 +152,16 @@ export interface ExternalJobNormalized {
   expiresAt?: string | null;
   /** The employer's website as the provider states it. */
   companyWebsite?: string | null;
+  /**
+   * The provider's own reading that the posting offers visa sponsorship
+   * (Active Jobs DB `ai_visa_sponsorship: true`). A reading, never a fact: the
+   * ingest upsert stores it as "the provider's reading" and never over a
+   * posting quote (MARKET_STRATEGY §1.5 "Provider fields first"). Absent or
+   * null: the provider states none. The provider's `false` only says that the
+   * description does not mention sponsorship, so it is never copied as
+   * 'not_offered'.
+   */
+  sponsorshipProvider?: 'offered' | 'not_offered' | null;
 }
 
 /**
@@ -129,6 +185,12 @@ export interface ExternalSearchParams {
   numPages?: number;
   /** Fantastic Jobs `title_filter` — the role/title text (English). Falls back to `query`. */
   titleQuery?: string;
+  /**
+   * Other names of the same role (a taxonomy role's synonyms; never text a
+   * user typed). Active Jobs DB asks for the title and at most two of them as
+   * quoted phrases joined by OR. Ignored by JSearch.
+   */
+  titleSynonyms?: string[];
   /** Fantastic Jobs `location_filter` — free-text location (city or country name). */
   locationText?: string;
 }
@@ -181,12 +243,12 @@ export interface ProviderQuotaObservation {
   provider: ExternalSourceBoard;
   /** HTTP status of the response. */
   status: number;
-  /** `x-ratelimit-requests-limit` / `-remaining`. */
+  /** `x-ratelimit-requests-limit` / `-remaining` (the direct API: `x-api-requests-*`). */
   requestsLimit: number | null;
   requestsRemaining: number | null;
-  /** `x-ratelimit-requests-reset`: seconds until the quota resets. */
+  /** `x-ratelimit-requests-reset`: seconds until the quota resets (the direct API: the time to `x-api-next-billing-date`). */
   resetSeconds: number | null;
-  /** `x-ratelimit-jobs-limit` / `-remaining` (plans that count postings). */
+  /** `x-ratelimit-jobs-limit` / `-remaining` (plans that count postings; the direct API: `x-api-jobs-*`). */
   jobsLimit: number | null;
   jobsRemaining: number | null;
   /** The plan's name as a 429 body states it ("… on your current plan, BASIC"). */
@@ -239,6 +301,47 @@ function headerCount(headers: { get(name: string): string | null }, name: string
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
+/** The first of these headers that states a count. */
+function firstHeaderCount(headers: { get(name: string): string | null }, names: readonly string[]): number | null {
+  for (const name of names) {
+    const n = headerCount(headers, name);
+    if (n !== null) return n;
+  }
+  return null;
+}
+
+/**
+ * The two header families a plan's quota is stated in:
+ *   RapidAPI marketplace   `x-ratelimit-requests-limit` / `-remaining` / `-reset` (seconds),
+ *                          `x-ratelimit-jobs-limit` / `-remaining`;
+ *   Fantastic.jobs direct  `x-api-requests-limit` / `-remaining`, `x-api-jobs-limit` /
+ *                          `-remaining`, `x-api-next-billing-date` (ISO 8601, UTC): vendor
+ *                          documentation "Plans, Limits & Upgrades", read 2026-10-12.
+ * A response carries one family; the marketplace's is read first.
+ */
+const QUOTA_HEADERS = {
+  requestsLimit: ['x-ratelimit-requests-limit', 'x-api-requests-limit'],
+  requestsRemaining: ['x-ratelimit-requests-remaining', 'x-api-requests-remaining'],
+  jobsLimit: ['x-ratelimit-jobs-limit', 'x-api-jobs-limit'],
+  jobsRemaining: ['x-ratelimit-jobs-remaining', 'x-api-jobs-remaining'],
+} as const;
+
+/** Seconds until the quota resets: the marketplace's own header, else the time to the direct API's next billing date. */
+function resetSecondsFrom(headers: { get(name: string): string | null }, at: Date): number | null {
+  const seconds = headerCount(headers, 'x-ratelimit-requests-reset');
+  if (seconds !== null) return seconds;
+  const raw = headers.get('x-api-next-billing-date');
+  const next = raw ? Date.parse(raw) : Number.NaN;
+  const now = at.getTime();
+  if (!Number.isFinite(next) || !Number.isFinite(now)) return null;
+  return Math.max(0, Math.round((next - now) / 1000));
+}
+
+/** Requests the plan has left, as either header family states it (null: not stated). */
+export function requestsRemainingFrom(headers: { get(name: string): string | null }): number | null {
+  return firstHeaderCount(headers, QUOTA_HEADERS.requestsRemaining);
+}
+
 /** The plan name in a quota refusal: the token after "current plan," ("… on your current plan, BASIC. Upgrade …"), or null. */
 export function planFromQuotaBody(bodyText: string): string | null {
   const m = /current plan,\s*([A-Za-z0-9][A-Za-z0-9_-]{0,39})/i.exec(bodyText);
@@ -255,17 +358,17 @@ export function quotaObservationFrom(
   bodyText: string,
   at: Date,
 ): ProviderQuotaObservation {
-  const requestsRemaining = headerCount(response.headers, 'x-ratelimit-requests-remaining');
+  const requestsRemaining = requestsRemainingFrom(response.headers);
   const monthly = response.status === 429 && (/monthly|quota/i.test(bodyText) || requestsRemaining === 0);
   const reason = monthly ? 'monthly_quota' : response.status === 403 && /not subscribed/i.test(bodyText) ? 'not_subscribed' : null;
   return {
     provider,
     status: response.status,
-    requestsLimit: headerCount(response.headers, 'x-ratelimit-requests-limit'),
+    requestsLimit: firstHeaderCount(response.headers, QUOTA_HEADERS.requestsLimit),
     requestsRemaining,
-    resetSeconds: headerCount(response.headers, 'x-ratelimit-requests-reset'),
-    jobsLimit: headerCount(response.headers, 'x-ratelimit-jobs-limit'),
-    jobsRemaining: headerCount(response.headers, 'x-ratelimit-jobs-remaining'),
+    resetSeconds: resetSecondsFrom(response.headers, at),
+    jobsLimit: firstHeaderCount(response.headers, QUOTA_HEADERS.jobsLimit),
+    jobsRemaining: firstHeaderCount(response.headers, QUOTA_HEADERS.jobsRemaining),
     plan: response.status === 429 ? planFromQuotaBody(bodyText) : null,
     reason,
     at,

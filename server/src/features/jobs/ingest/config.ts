@@ -14,9 +14,42 @@
 //                                   INGEST_ name is unset (logged once). It used to be a second,
 //                                   client-local counter; there is one budget per provider now.
 //   INGEST_<PROVIDER>_CN_DAILY_CALLS  daily calls for GoApply, counted under `<provider>:cn`
-//                                   (default 0: no metered provider is called for market cn)
+//                                   (default 0: no metered provider is called for market cn;
+//                                   Active Jobs DB: 20 while the licensed feed's plan gate is
+//                                   open for the mainland, JC-6. Ingest calls only: a person's
+//                                   own search is let through only when the operator set it)
+//   FANTASTIC_MONTHLY_JOBS          postings a month of the Active Jobs DB plan the owner bought,
+//                                   for a plan whose responses do not state it (unset). REQUIRED on
+//                                   a deployment that serves only GoApply: nothing there calls the
+//                                   provider before the gate is open, so no response ever states it
+//   FANTASTIC_FEED_DISABLED         true stops the licensed feed sync (default false)
+//   FANTASTIC_FEED_SLICE_CHECK_DISABLED
+//                                   true lets the feed read a page whose postings were mostly
+//                                   indexed outside the slice it asked for (default false: such
+//                                   a page is an error and the cursor stays). Only for the case
+//                                   that the provider's date bounds turn out to work on another
+//                                   timestamp than the `date_created` it returns
+//   INGEST_FEED_DAILY_JOBS          hard daily budget of postings for the feed sync, both markets
+//                                   together (default: the plan's month / 31). What the search
+//                                   adapter was billed for that day counts toward it: one plan.
+//                                   Once the provider states what the plan has left and when it
+//                                   resets, the day is also capped by that, less the reserve
+//                                   (INGEST_QUOTA_RESERVE_SHARE of the plan's postings), spread over
+//                                   the days to the reset: postings billed to people's own searches
+//                                   are then never on top of the feed's month
+//   INGEST_FEED_CN_DAILY_JOBS       the mainland sync's part of that day (default 20% of it; the
+//                                   international sync has the rest)
+//   INGEST_FEED_COUNTRIES           ISO codes the international feed sync asks for
+//                                   (default US,CA,GB,IE,DE,FR,NL,ES,IT,SE,AU,SG,TW)
+//   INGEST_FEED_TAXONOMIES          optional vendor taxonomy names the feed is narrowed to (unset)
+//   CN_ACTIVEJOBS_ENABLED           false keeps Active Jobs DB off for GoApply even with a paid
+//                                   plan (default on once the plan gate is open: D5)
+// The transport of the Active Jobs DB client (FANTASTIC_TRANSPORT, FANTASTIC_API_KEY,
+// FANTASTIC_API_KEY_HEADER, FANTASTIC_FEED_PATH, FANTASTIC_EXPIRED_PATH) is read by the client
+// itself (roboapply/v2/lib/raFantasticJobs.ts).
 //   INGEST_QUOTA_RESERVE_SHARE      share of a provider's monthly request limit that ingest
-//                                   leaves for people's own searches (default 0.05)
+//                                   leaves for people's own searches (default 0.05); the licensed
+//                                   feed leaves the same share of the plan's monthly postings
 //   INGEST_QUOTA_RECHECK_HOURS      hours after which a used-up or refused quota reading stops
 //                                   blocking calls before its reset time, so one call re-reads
 //                                   the plan (default 0: never before the reset; set it after
@@ -43,7 +76,7 @@
 //                                   queued remainder, which may use the day up to its limit.
 
 import { logger } from '../../../services/LoggerService.js';
-import type { EnvSource, Market } from '../../../platform/brand/index.js';
+import { allowedBrands, getBrand, parseBoolEnv, type EnvSource, type Market } from '../../../platform/brand/index.js';
 import type { IngestProvider } from '../sources/index.js';
 import { daysToReset, type ProviderQuotaSnapshot } from './quotaContract.js';
 
@@ -197,7 +230,8 @@ export function quotaDailyCap(reading: QuotaReading | null | undefined, now: Dat
  *         neither, the default. A stated quota replaces the default: 9,773 of
  *         10,000 left with 17 days to go is 545 a day, not 200 (272 once a
  *         call is known to take two requests).
- *   cn    `INGEST_<PROVIDER>_CN_DAILY_CALLS` (default 0), under the same cap.
+ *   cn    `INGEST_<PROVIDER>_CN_DAILY_CALLS` (default 0; 20 for Active Jobs DB
+ *         while the feed's plan gate is open for the mainland), under the same cap.
  *
  * Null = nothing is known about the provider (not metered by this module).
  *
@@ -215,11 +249,47 @@ export function effectiveDailyLimit(provider: IngestProvider, market: Market, en
   return effectiveDailyLimitFor(provider, market, env, reading, now);
 }
 
+/**
+ * The mainland call bound the operator set: INGEST_<PROVIDER>_CN_DAILY_CALLS.
+ * Null when it is unset or not a number (the default then applies:
+ * `mainlandDefaultCalls`). A person's own search for market cn is let through
+ * only under a bound set here above 0 (quota.ts `providerCallGate`).
+ */
+export function mainlandOperatorCalls(provider: string, env: EnvSource = process.env): number | null {
+  const raw = env[`INGEST_${provider.toUpperCase()}_CN_DAILY_CALLS`]?.trim();
+  if (!raw || !Number.isFinite(Number(raw))) return null;
+  return Math.max(0, Math.floor(Number(raw)));
+}
+
+/** Ingest calls a day Active Jobs DB gets for the mainland while the feed's plan gate is open and the operator set no bound (JC-6). */
+export const MAINLAND_ACTIVEJOBS_DAILY_CALLS = 20;
+
+type MainlandGate = (provider: string, env: EnvSource, now: Date) => boolean;
+let mainlandGate: MainlandGate | null = null;
+
+/**
+ * Where `effectiveDailyLimitFor` asks whether a provider's plan is open for
+ * the mainland (quota.ts registers `mainlandPlanOpen` when it loads; this
+ * module holds env knobs only). With nothing registered no plan is open.
+ */
+export function setMainlandGate(gate: MainlandGate | null): void {
+  mainlandGate = gate;
+}
+
+/** Mainland ingest calls a day when the operator set none: 20 for a provider whose plan gate is open for the mainland, else 0. */
+function mainlandDefaultCalls(provider: string, env: EnvSource, now: Date): number {
+  try {
+    return mainlandGate?.(provider, env, now) === true ? MAINLAND_ACTIVEJOBS_DAILY_CALLS : 0;
+  } catch {
+    return 0;
+  }
+}
+
 /** `effectiveDailyLimit` for a given quota reading (null: the provider stated no quota, or its period has ended). The one definition of the rule. */
 export function effectiveDailyLimitFor(provider: IngestProvider, market: Market, env: EnvSource, reading: QuotaReading | null, now: Date): number | null {
   const cap = quotaDailyCap(reading, now, env);
   if (market === 'cn') {
-    const cn = intEnv(env, `INGEST_${provider.toUpperCase()}_CN_DAILY_CALLS`, 0, 0);
+    const cn = mainlandOperatorCalls(provider, env) ?? mainlandDefaultCalls(provider, env, now);
     return cap === null ? cn : Math.min(cn, cap);
   }
   const configured = configuredDailyCalls(provider, env);
@@ -284,4 +354,217 @@ export function scheduledDemandLimit(limit: number, env: EnvSource = process.env
 export function seedBudgetShare(env: EnvSource = process.env): number {
   const raw = Number(env.INGEST_SEED_BUDGET_SHARE?.trim() || '0.5');
   return Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : 0.5;
+}
+
+// ── The licensed feed (Active Jobs DB window sync; MARKET_STRATEGY M-2, JI-7, JC-6) ──
+
+/** Postings a month the plan must allow before the feed sync turns itself on (M-2). */
+export const FEED_MIN_MONTHLY_JOBS = 20_000;
+/** A month of the plan is spread over this many days (the longest month: the day's budget never outruns the plan). */
+export const FEED_DAYS_PER_MONTH = 31;
+/** Share of the day's posting budget the mainland sync gets when the operator set none. */
+export const FEED_CN_BUDGET_SHARE = 0.2;
+/** Enabled boards of one ATS in our own list from which the feed stops returning that ATS (critic C14). */
+export const FEED_EXCLUDE_MIN_BOARDS = 200;
+/**
+ * Countries the international sync asks for when INGEST_FEED_COUNTRIES is
+ * unset: the brand's markets (MARKET_STRATEGY §1.2, §1.3). A tunable default:
+ * the owner trims it after measuring volume with the vendor's count endpoint.
+ */
+export const DEFAULT_FEED_COUNTRIES: readonly string[] = ['US', 'CA', 'GB', 'IE', 'DE', 'FR', 'NL', 'ES', 'IT', 'SE', 'AU', 'SG', 'TW'];
+
+/** FANTASTIC_MONTHLY_JOBS: the plan size the owner bought; null when unset or not a positive number. */
+export function feedMonthlyJobsEnv(env: EnvSource = process.env): number | null {
+  const raw = env.FANTASTIC_MONTHLY_JOBS?.trim();
+  const n = raw ? Number(raw) : Number.NaN;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+}
+
+/**
+ * The gate's reason as the short code the job-source registry and the admin
+ * panels read (`JobSourceAdapter.disabledReason()`): one table for the feed
+ * adapter and for Active Jobs DB's mainland search, which stand behind the
+ * same gate.
+ *
+ * 'plan_unknown' is reported under the code of 'plan_too_small' for now. The
+ * admin System panel knows ONE code for "off until a plan allows it"
+ * (admin/system.ts `PLAN_GATE_REASON`, which gives the row the state
+ * 'gated'). Any other code on a row whose quota reading is used up reads
+ * there as 'exhausted' and raises a provider alert (and a line in the daily
+ * health e-mail) for a source that never ran. The gate itself and the log
+ * tell the two apart (`FeedGate.reason`, quota.ts `hydrateProviderQuota`);
+ * the day the panel accepts the code 'plan_unknown', this entry names it.
+ */
+export const FEED_GATE_REASON_CODE: Readonly<Record<Exclude<FeedGateReason, 'ok'>, string>> = {
+  plan_unknown: 'plan_too_small',
+  plan_too_small: 'plan_too_small',
+  no_key: 'no_api_key',
+  disabled: 'kill_switch',
+  exhausted: 'quota',
+};
+
+/**
+ * Postings a month the feed's plan allows: the larger of what the provider's
+ * own responses stated (`jobsLimit` of the quota reading) and
+ * FANTASTIC_MONTHLY_JOBS. Null when neither says: never a guess.
+ */
+export function feedMonthlyJobs(env: EnvSource, statedJobsLimit: number | null | undefined): number | null {
+  const stated = typeof statedJobsLimit === 'number' && Number.isFinite(statedJobsLimit) && statedJobsLimit > 0 ? Math.floor(statedJobsLimit) : null;
+  const bought = feedMonthlyJobsEnv(env);
+  if (stated === null) return bought;
+  return bought === null ? stated : Math.max(stated, bought);
+}
+
+/** FANTASTIC_FEED_DISABLED: the feed's own kill switch. */
+export function feedDisabled(env: EnvSource = process.env): boolean {
+  return parseBoolEnv(env.FANTASTIC_FEED_DISABLED);
+}
+
+/** FANTASTIC_FEED_SLICE_CHECK_DISABLED: the operator's way out should the slice check misjudge real responses (none was ever seen). */
+export function feedSliceCheckDisabled(env: EnvSource = process.env): boolean {
+  return parseBoolEnv(env.FANTASTIC_FEED_SLICE_CHECK_DISABLED);
+}
+
+/** CN_ACTIVEJOBS_ENABLED: on unless it says no (D5: a paid plan is the only gate). */
+export function mainlandActiveJobsEnabled(env: EnvSource = process.env): boolean {
+  const raw = env.CN_ACTIVEJOBS_ENABLED?.trim().toLowerCase();
+  return !(raw === 'false' || raw === '0' || raw === 'no' || raw === 'off');
+}
+
+export type FeedGateReason = 'plan_unknown' | 'plan_too_small' | 'no_key' | 'disabled' | 'exhausted' | 'ok';
+
+export interface FeedGate {
+  open: boolean;
+  reason: FeedGateReason;
+  /** Postings a month the plan allows (`feedMonthlyJobs`); null = nothing states it. */
+  monthlyJobs: number | null;
+}
+
+/**
+ * The feed's quota gate as a pure rule (quota.ts `feedGate` supplies the
+ * facts). The first that applies:
+ *   disabled        FANTASTIC_FEED_DISABLED, or a kill switch of the provider;
+ *   plan_unknown    nothing states what the plan allows: no response of the
+ *                   provider was read yet (or the last one refused the key)
+ *                   and FANTASTIC_MONTHLY_JOBS is unset. Not the same as a
+ *                   small plan: on a deployment that serves only GoApply no
+ *                   call is ever made before the gate is open, so the gate
+ *                   stays here until the operator sets the variable;
+ *   plan_too_small  the plan allows fewer than 20,000 postings a month
+ *                   (today's BASIC plan: 250). The plan is THE gate (M-2), so
+ *                   both plan reasons are named before the key: a deployment
+ *                   with neither is waiting for a plan;
+ *   no_key          a plan of that size is stated and the chosen transport
+ *                   has no key;
+ *   exhausted       the plan's quota stops ingest right now (used up, the key
+ *                   refused, or down to the reserve kept for people's searches);
+ *   ok              open.
+ */
+export function feedGateFor(facts: { env: EnvSource; statedJobsLimit: number | null; keyPresent: boolean; providerKilled: boolean; quotaStops: boolean }): FeedGate {
+  const monthlyJobs = feedMonthlyJobs(facts.env, facts.statedJobsLimit);
+  const closed = (reason: FeedGateReason): FeedGate => ({ open: false, reason, monthlyJobs });
+  if (feedDisabled(facts.env) || facts.providerKilled) return closed('disabled');
+  if (monthlyJobs === null) return closed('plan_unknown');
+  if (monthlyJobs < FEED_MIN_MONTHLY_JOBS) return closed('plan_too_small');
+  if (!facts.keyPresent) return closed('no_key');
+  if (facts.quotaStops) return closed('exhausted');
+  return { open: true, reason: 'ok', monthlyJobs };
+}
+
+/** The smallest reserve of postings: one page of a person's own search (the search client asks 20 rows a call). */
+export const FEED_RESERVE_MIN_JOBS = 20;
+
+/**
+ * Postings of the plan's period the feed never spends: they are left for
+ * people's own searches (onboarding, the Assistant, the job-search API), which
+ * are billed per posting on the same plan and are not counted in the feed's
+ * day. `max(20, ceil(jobsLimit × INGEST_QUOTA_RESERVE_SHARE))`: the same share
+ * ingest leaves of the plan's requests (`quotaReserve`).
+ */
+export function feedJobsReserve(jobsLimit: number | null | undefined, env: EnvSource = process.env): number {
+  const limit = typeof jobsLimit === 'number' && Number.isFinite(jobsLimit) && jobsLimit > 0 ? jobsLimit : 0;
+  return Math.max(FEED_RESERVE_MIN_JOBS, Math.ceil(limit * quotaReserveShare(env)));
+}
+
+/** What the feed's budget needs from a quota reading (the provider's own numbers; null = not stated). */
+export type FeedQuotaReading = Pick<ProviderQuotaSnapshot, 'jobsLimit' | 'jobsRemaining' | 'resetAt'>;
+
+/**
+ * Postings the feed may still be billed for in this period: what the provider
+ * says the plan has left, less the reserve. Null when the provider stated no
+ * remaining count (never a guess).
+ */
+export function feedJobsLeft(reading: FeedQuotaReading | null | undefined, env: EnvSource = process.env): number | null {
+  if (!reading || reading.jobsRemaining === null) return null;
+  return Math.max(0, Math.floor(reading.jobsRemaining - feedJobsReserve(reading.jobsLimit, env)));
+}
+
+/**
+ * Postings a day that what is left of the plan's period allows the feed:
+ * `floor((jobsRemaining − reserve) / max(1, daysToReset))`, the posting side
+ * of `quotaDailyCap`. The provider's remaining count holds everything the
+ * plan was billed for, a person's own search included, so a feed held to this
+ * never uses the plan up before its reset. Null when the provider stated no
+ * remaining count or no reset time: the month / 31 rule then stands alone.
+ */
+export function feedQuotaDailyJobs(reading: FeedQuotaReading | null | undefined, now: Date, env: EnvSource = process.env): number | null {
+  const left = feedJobsLeft(reading, env);
+  if (left === null) return null;
+  const days = daysToReset(reading, now);
+  if (days === null) return null;
+  return Math.floor(left / Math.max(1, days));
+}
+
+/**
+ * Postings a day the feed sync may be billed for, both markets together: the
+ * smaller of
+ *   - INGEST_FEED_DAILY_JOBS, else `floor(monthlyJobs / 31)` (0 when nothing
+ *     states the plan's size and the operator set no budget), and
+ *   - `quotaCap` (`feedQuotaDailyJobs`), when the provider stated what the
+ *     plan has left and when it resets.
+ * The day is counted in the plan's own usage rows (`activejobs`,
+ * `activejobs:cn`), so what the ingest search adapter was billed for the same
+ * day counts toward it.
+ */
+export function feedDailyJobs(env: EnvSource, monthlyJobs: number | null, quotaCap: number | null = null): number {
+  const fallback = monthlyJobs !== null && monthlyJobs > 0 ? Math.floor(monthlyJobs / FEED_DAYS_PER_MONTH) : 0;
+  const day = intEnv(env, 'INGEST_FEED_DAILY_JOBS', fallback, 0);
+  return quotaCap === null ? day : Math.max(0, Math.min(day, Math.floor(quotaCap)));
+}
+
+/** Does this deployment serve a brand of the market (BRAND_LOCK / ALLOWED_BRANDS)? */
+export function servesMarket(market: Market, env: EnvSource = process.env): boolean {
+  try {
+    return allowedBrands(env).some((id) => getBrand(id).market === market);
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * One market's part of the day's posting budget (`feedDailyJobs`, the quota
+ * cap included). The two parts never add up to more than the day:
+ *   cn    INGEST_FEED_CN_DAILY_JOBS, else 20% of the day, never more than the
+ *         day; 0 when the mainland sync is off (CN_ACTIVEJOBS_ENABLED=false) or
+ *         the deployment serves no mainland brand;
+ *   intl  the rest of the day; 0 when the deployment serves no international brand.
+ */
+export function feedDailyJobsFor(market: Market, env: EnvSource, monthlyJobs: number | null, quotaCap: number | null = null): number {
+  const day = feedDailyJobs(env, monthlyJobs, quotaCap);
+  const cnOn = mainlandActiveJobsEnabled(env) && servesMarket('cn', env);
+  const cn = cnOn ? Math.min(day, intEnv(env, 'INGEST_FEED_CN_DAILY_JOBS', Math.floor(day * FEED_CN_BUDGET_SHARE), 0)) : 0;
+  if (market === 'cn') return cn;
+  return servesMarket('intl', env) ? day - cn : 0;
+}
+
+/** INGEST_FEED_COUNTRIES as upper-case ISO codes in the order given, without repeats (default `DEFAULT_FEED_COUNTRIES`). Anything that is not two letters is left out. */
+export function feedCountries(env: EnvSource = process.env): string[] {
+  const raw = env.INGEST_FEED_COUNTRIES?.trim();
+  const list = raw ? raw.split(',').map((c) => c.trim().toUpperCase()).filter((c) => /^[A-Z]{2}$/.test(c)) : [...DEFAULT_FEED_COUNTRIES];
+  return [...new Set(list)];
+}
+
+/** INGEST_FEED_TAXONOMIES: vendor taxonomy names as written (the feed adapter keeps the ones the vendor documents). */
+export function feedTaxonomies(env: EnvSource = process.env): string[] {
+  return [...new Set((env.INGEST_FEED_TAXONOMIES ?? '').split(',').map((t) => t.trim()).filter(Boolean))];
 }

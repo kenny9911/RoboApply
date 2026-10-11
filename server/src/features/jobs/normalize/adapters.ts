@@ -8,11 +8,25 @@
 // band, key skills and work arrangement (ARCH §4.2: map them first and let
 // enrichment skip the LLM), expiry dates, and JSearch's required experience.
 //
-// Structural input types only: no imports from roboapply/v2 (decoupled).
-// Never mapped (H9, D3): LinkedIn organization fields (`linkedin_org_*`),
-// hiring-manager names, and any applicant / view counts.
+// Structural input types only: nothing is imported from roboapply/v2 but the
+// pure contract file (types and the vendor's documented taxonomy labels).
+// Never mapped (H9, D3; MARKET_STRATEGY §1.6): LinkedIn organization fields
+// (`linkedin_org_*`, renamed `org_linkedin_*` in the vendor's v1 API: name,
+// industry, size, headcount, website, logo permalink, the agency flag derived
+// from the LinkedIn profile), Crunchbase fields (`org_crunchbase_*`: no note
+// confirms a right to show them), recruiter and hiring-manager names and
+// e-mail addresses, and any applicant / view counts.
+//
+// The licensed feed (MKT-5A, JI-7; MARKET_STRATEGY §1.5 "Provider fields
+// first"): `inputFromFantasticJob` maps the feed's own fields before any model
+// is asked: experience level, work arrangement, employment type, key skills,
+// pay, the employer's derived domain, the stated validity date, the vendor's
+// taxonomy label (as a category of our tree, see FANTASTIC_TAXONOMY_CATEGORY)
+// and the visa-sponsorship flag as the provider's reading. Field names are the
+// v1 API's (OpenAPI document data.fantastic.jobs/openapi, schema ActiveAtsJob,
+// read 2026-10-12); the names older responses used stay readable.
 
-import type { ExternalJobNormalized } from '../../../roboapply/v2/lib/raExternalJobTypes.js';
+import { FANTASTIC_TAXONOMY_LABELS, type ExternalJobNormalized, type FantasticTaxonomyLabel } from '../../../roboapply/v2/lib/raExternalJobTypes.js';
 import { pickEmployerLink } from './ats.js';
 import { cleanOrNull, safeUrl } from './text.js';
 import type { CompanyFactsInput, ProviderJobInput } from './types.js';
@@ -35,6 +49,75 @@ const numOrNull = (v: unknown): number | null => {
 const obj = (v: unknown): Raw | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Raw) : null);
 
 // ── Fantastic Jobs (Active Jobs DB, LinkedIn Job Search API) ───────────────
+
+/**
+ * The vendor's taxonomy labels (`ai_taxonomies_a`) → a category (level 1) of
+ * our role tree, or null. The keys are EXACTLY the 33 values the vendor
+ * documents (`FANTASTIC_TAXONOMY_LABELS`: the enum of the `ai_taxonomies_a`
+ * parameter in the OpenAPI document, read 2026-10-12; the type makes a
+ * missing or an extra key a compile error): no label is typed from memory. A
+ * label maps to a category only where our category names the same field and
+ * no other category could claim it; everything broader or ambiguous is null
+ * (never a guess: "Technology" spans five of our categories). The vendor's
+ * labels are fields of work, not roles, so none maps to a role (level 3).
+ */
+export const FANTASTIC_TAXONOMY_CATEGORY: Readonly<Record<FantasticTaxonomyLabel, string | null>> = {
+  Technology: null,
+  Healthcare: 'healthcare',
+  'Management & Leadership': null,
+  'Finance & Accounting': 'finance',
+  'Human Resources': 'people',
+  Sales: 'sales',
+  Marketing: 'marketing',
+  'Customer Service & Support': 'customer',
+  Education: 'education',
+  Legal: 'legal',
+  Engineering: 'engineering',
+  'Science & Research': null,
+  Trades: 'manufacturing',
+  Construction: null,
+  Manufacturing: 'manufacturing',
+  Logistics: 'operations',
+  'Creative & Media': null,
+  Hospitality: 'hospitality',
+  'Environmental & Sustainability': null,
+  Retail: null,
+  'Data & Analytics': 'data_ai',
+  Software: 'software_engineering',
+  Energy: null,
+  Agriculture: null,
+  'Social Services': null,
+  Administrative: 'administration',
+  'Government & Public Sector': 'consulting',
+  'Art & Design': 'design',
+  'Food & Beverage': null,
+  Transportation: null,
+  Consulting: 'consulting',
+  'Sports & Recreation': null,
+  'Security & Safety': null,
+};
+
+export { FANTASTIC_TAXONOMY_LABELS };
+
+/**
+ * Our category for a row's taxonomy labels: the mapping of its PRIMARY label
+ * (the first: the vendor orders them by relevance). Null when the row has
+ * none, the label is not one the vendor documents, or the table maps it to
+ * nothing: the title dictionary then decides, as for every other source.
+ */
+export function fantasticTaxonomyCategory(labels: unknown): string | null {
+  const primary = firstStr(labels)?.trim();
+  if (!primary || !Object.hasOwn(FANTASTIC_TAXONOMY_CATEGORY, primary)) return null;
+  return FANTASTIC_TAXONOMY_CATEGORY[primary as FantasticTaxonomyLabel] ?? null;
+}
+
+/** A stated employer domain as a bare host ("https://www.acme.example/careers" → "acme.example"); null when it is not one. */
+function bareDomain(v: unknown): string | null {
+  const raw = str(v)?.trim().toLowerCase();
+  if (!raw) return null;
+  const host = raw.replace(/^[a-z][a-z0-9+.-]*:\/\//, '').replace(/[/?#].*$/, '').replace(/^www\./, '');
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(host) ? host : null;
+}
 
 /** One raw Fantastic Jobs row → ProviderJobInput (null without id / title / organization). */
 export function inputFromFantasticJob(j: unknown, board: 'activejobs' | 'linkedin', fetchedAt: Date): ProviderJobInput | null {
@@ -60,8 +143,12 @@ export function inputFromFantasticJob(j: unknown, board: 'activejobs' | 'linkedi
 
   const workArrangement = firstStr(r.ai_work_arrangement);
   const remoteFlag = r.remote_derived === true || r.location_type === 'TELECOMMUTE';
+  // The employer's own domain as the vendor derived it (it feeds the employer-domain dedupe key: MARKET_STRATEGY §1.5 K3).
+  const domain = bareDomain(r.domain_derived);
   const website = str(r.organization_url) ?? (str(r.domain_derived) ? `https://${str(r.domain_derived)}` : null);
-  const companyFacts: CompanyFactsInput | null = website ? { source: `provider:${board}`, website, fetchedAt } : null;
+  const companyFacts: CompanyFactsInput | null = website || domain ? { source: `provider:${board}`, ...(website ? { website } : {}), ...(domain ? { domain } : {}), fetchedAt } : null;
+  // The vendor's category for the posting, when it is one our tree names too (never a role: the title decides that).
+  const category = fantasticTaxonomyCategory(r.ai_taxonomies_a);
 
   return {
     externalId: `${board}:${String(id)}`,
@@ -88,9 +175,17 @@ export function inputFromFantasticJob(j: unknown, board: 'activejobs' | 'linkedi
     postedAt: str(r.date_posted) ?? str(r.date_created),
     postedAtEstimated: !str(r.date_posted),
     fetchedAt,
-    expiresAt: str(r.date_validthrough) ?? str(r.valid_through),
+    // `date_valid_through` is the v1 name; older responses wrote `date_validthrough`.
+    expiresAt: str(r.date_valid_through) ?? str(r.date_validthrough) ?? str(r.valid_through),
     experienceLevel: firstStr(r.ai_experience_level),
     skills: strList(r.ai_key_skills),
+    ...(category ? { taxonomyId: category } : {}),
+    // The provider's reading, never a fact (stored with sponsorshipSource 'provider:<provider id>' and
+    // never over a posting quote: ingest/upsert.ts). The flag is "true if the job description mentions
+    // visa sponsorship opportunities" (vendor field description, read 2026-10-12): `false` says the
+    // description does not mention it, which is not "the employer does not sponsor", so only `true`
+    // is a reading. An absent flag and `false` are both "the provider states none".
+    sponsorshipProvider: r.ai_visa_sponsorship === true ? 'offered' : null,
     companyFacts,
   };
 }
