@@ -394,18 +394,34 @@ describe('enrichment catch-up', () => {
     expect((await runEnrichCatchUp(tableDb(rows).db, 'intl', { brand: robo, enqueueMany: on.enqueueMany, env: { ENRICH_DAILY_JOBS: '10' }, ...withModel })).rulesQueued).toBe(1);
   });
 
-  it('the real model rule: GoApply needs a domestic CN_* model; RoboApply uses the stack default', async () => {
+  // Parity wave (plan §3.3): GoApply's enrichment runs on the shared model by default. A mainland
+  // model is required only behind the operator's wall (`CN_LLM_DOMESTIC_ONLY`).
+  it('the real model rule: GoApply uses the shared model by default and needs a mainland one only behind the wall; RoboApply uses the stack default', async () => {
     const cnRows = [row({ id: 'cn_rules', market: 'cn', enrichModel: RULES_ONLY_MODEL })];
+    const WALL = { CN_LLM_DOMESTIC_ONLY: 'true' };
+    const run = (env: Record<string, string>, enqueueMany: ReturnType<typeof queue>['enqueueMany']) => runEnrichCatchUp(tableDb(cnRows).db, 'cn', { brand: go, enqueueMany, env });
+
+    // Default: the shared enrichment model, or GoApply's own (any vendor), serves GoApply.
+    const shared = queue();
+    expect(await run({ LLM_ENRICH_MODEL: 'openai/gpt-cheap' }, shared.enqueueMany)).toEqual({ staleQueued: 0, rulesQueued: 1, modelAvailable: true });
+    expect(shared.items[0]!.options).toMatchObject({ brand: 'goapply' });
+    expect((await run({ CN_LLM_ENRICH_MODEL: 'openai/gpt-cheap' }, queue().enqueueMany)).modelAvailable).toBe(true);
+    // No model anywhere: rules only, nothing queued for a model pass.
     const none = queue();
-    expect((await runEnrichCatchUp(tableDb(cnRows).db, 'cn', { brand: go, enqueueMany: none.enqueueMany, env: { LLM_ENRICH_MODEL: 'openai/gpt-cheap' } })).modelAvailable).toBe(false);
-    expect((await runEnrichCatchUp(tableDb(cnRows).db, 'cn', { brand: go, enqueueMany: none.enqueueMany, env: { CN_LLM_ENRICH_MODEL: 'openai/gpt-cheap' } })).modelAvailable).toBe(false);
+    expect((await run({}, none.enqueueMany)).modelAvailable).toBe(false);
+
+    // Behind the wall an international model, shared or GoApply's own, is not used.
+    expect((await run({ ...WALL, LLM_ENRICH_MODEL: 'openai/gpt-cheap' }, none.enqueueMany)).modelAvailable).toBe(false);
+    expect((await run({ ...WALL, CN_LLM_ENRICH_MODEL: 'openai/gpt-cheap' }, none.enqueueMany)).modelAvailable).toBe(false);
     expect(none.items).toHaveLength(0);
     const cn = queue();
-    const res = await runEnrichCatchUp(tableDb(cnRows).db, 'cn', { brand: go, enqueueMany: cn.enqueueMany, env: { CN_LLM_ENRICH_MODEL: 'deepseek/deepseek-chat' } });
-    expect(res).toEqual({ staleQueued: 0, rulesQueued: 1, modelAvailable: true });
+    expect(await run({ ...WALL, CN_LLM_ENRICH_MODEL: 'deepseek/deepseek-chat' }, cn.enqueueMany)).toEqual({ staleQueued: 0, rulesQueued: 1, modelAvailable: true });
     expect(cn.items[0]!.options).toMatchObject({ brand: 'goapply' });
+
     const intl = queue();
-    expect((await runEnrichCatchUp(tableDb([row({ id: 'r', enrichModel: RULES_ONLY_MODEL })]).db, 'intl', { brand: robo, enqueueMany: intl.enqueueMany, env: {} })).rulesQueued).toBe(1);
+    expect((await runEnrichCatchUp(tableDb([row({ id: 'r', enrichModel: RULES_ONLY_MODEL })]).db, 'intl', { brand: robo, enqueueMany: intl.enqueueMany, env: { LLM_MODEL: 'openai/gpt-default' } })).rulesQueued).toBe(1);
+    // RoboApply never reads GoApply's wall or its CN_ values.
+    expect((await runEnrichCatchUp(tableDb([row({ id: 'r', enrichModel: RULES_ONLY_MODEL })]).db, 'intl', { brand: robo, enqueueMany: queue().enqueueMany, env: { ...WALL, LLM_MODEL: 'openai/gpt-default' } })).modelAvailable).toBe(true);
   });
 
   it('the cap is respected: stale rows first (oldest enrichment first), the rest of the cap for rules-only rows', async () => {

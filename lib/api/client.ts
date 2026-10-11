@@ -42,6 +42,11 @@ export type RoboErrorCode =
   | 'account_deleted'
   | 'not_found'
   | 'rate_limited'
+  // 503 with `Retry-After` / `details.retryAfterSec`: a credit reserve found the
+  // database busy and reserved NOTHING, so the same request can be sent again
+  // (server/src/platform/http.ts). Kept apart from `server_error`, where the
+  // request may have been processed. The message is `credits.busy`.
+  | 'credits_busy'
   | 'server_error'
   | 'network_error'
   | 'unknown';
@@ -112,6 +117,8 @@ function normalizeCode(
       return 'not_a_seeker_account';
     case 'account_deleted':
       return 'account_deleted';
+    case 'credits_busy':
+      return 'credits_busy';
     // Transport codes this module sets on itself (a fetch that threw, a 5xx).
     // Without these they fall through to 'unknown' and a caller cannot tell a
     // connection that died mid-flight — where the request may well have been

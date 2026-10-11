@@ -3,6 +3,7 @@
 **Owner:** ops, with the product owner's sign-off on every step marked **[owner]**.
 **Kit:** `deploy/cn/` (WP-76). **Plan of record:** `docs/jobright-clone/CN_TW_LAUNCH_PLAN.md` §3 (stages), §5.2–5.3 (accounts and env), §6.1 (C-1…C-17), §6.2 (hosting).
 **Status:** the kit is ready; nothing is deployed. CN-1 is blocked on the Part C filings, not on code.
+**Since the parity wave (D5, `docs/jobright-clone/GOAPPLY_PARITY_PLAN.md`):** GoApply runs on the shared stack by default. A China-specific provider (`CN_LLM_*`, `CN_S3_*`, `CN_LIVEKIT_*`, Aliyun DirectMail, Aliyun content safety) is an optional override, and the boot checks refuse a wrong topology only. `CN_RESIDENCY_STRICT=true` is the operator's choice that makes the mainland providers a requirement again.
 
 This is not legal advice. The legal gates below come from the launch plan and need PRC counsel's sign-off.
 
@@ -18,33 +19,33 @@ One repository, one commit, two deployments. Vercel serves RoboApply (and the Go
 | Web | `goapply-web` (`deploy/cn/Dockerfile.web`, Next.js standalone) | Deployment `web` ×2, Service `web:3000` | Server-side SEO reads go to `http://api:4607` (runtime `NEXT_PUBLIC_API_URL`). |
 | API | `goapply-api` (`deploy/cn/Dockerfile.api`, `node server/dist/app.js`) | Deployment `api` ×2, Service `api:4607`, initContainer `preflight` | `ROBOAPPLY_CRON_DISABLED=true`: no node-cron; the CronJobs below run the sweeps. |
 | Crons | `goapply-api` (runs `deploy/cn/cron-call.mjs`) | 16 CronJobs `cron-*` (`deploy/cn/k8s/cronjobs.yaml`) | Generated from `vercel.json` by `scripts/gen-cn-cronjobs.mjs`; UTC schedules; `Authorization: Bearer $CRON_SECRET` to the API Service. |
-| Voice worker | `goapply-worker` (`interview-agent/deploy/cn/Dockerfile`) | Deployment `worker`, **0 replicas** until voice is ready | Agent name `GoApply-Interview`. Needs the self-hosted CN LiveKit and WP-63b's domestic backend. Text practice needs no worker. |
+| Voice worker | `goapply-worker` (`interview-agent/deploy/cn/Dockerfile`) | Deployment `worker`, **0 replicas** until voice is ready | For GoApply's **own** media plane (`CN_LIVEKIT_*`, anchored on `CN_LIVEKIT_URL`): agent name `GoApply-Interview`, the self-hosted CN LiveKit and WP-63b's domestic backend. Without `CN_LIVEKIT_URL` GoApply voice practice runs on the shared LiveKit project and the shared worker serves it, so this Deployment stays at 0. Text practice needs no worker. |
 | Database | Aliyun RDS PostgreSQL (cn-shanghai), same VPC | — | Reached over the VPC private address (passes the residency check without a suffix list). |
-| Object storage | Aliyun OSS (`CN_S3_*`) | — | No fallback to the international bucket. |
+| Object storage | Aliyun OSS (`CN_S3_*`) | — | Optional override (`CN_S3_*`, anchored on `CN_S3_BUCKET`); unset = the shared store, under a `goapply/` key prefix. Required only under `CN_RESIDENCY_STRICT=true`. A `CN_S3_*` value without `CN_S3_BUCKET` is ignored and named in the boot log (a boot failure under the strict switch). |
 
 Five vercel.json crons are deliberately **not** mirrored (listed with reasons at the top of `cronjobs.yaml`): the V1 auto-apply sweeps `daily-matcher`, `submitter`, `catchup` (D1: nothing submits on the user's behalf), the V1 `digest`, and the retired `billing-friday-nudge`.
 
 ## 2. Gates before the first production deploy
 
-Do not point `goapply.top` at the mainland stack until each of these is done (launch plan §3, §6.1):
+These are the owner's legal track (launch plan §3, §6.1), not code gates: since the parity wave the code no longer waits for any of them, so nothing below is enforced by the boot or the preflight unless `CN_RESIDENCY_STRICT=true`. Do not point `goapply.top` at the mainland stack until the owner and counsel have decided each one:
 
 - [ ] **[owner]** C-1 entity decision; C-2 domain under the entity; **C-3 ICP 备案** (the SLB needs an ICP-filed domain to serve HTTP/HTTPS in the mainland).
 - [ ] **[owner]** C-5 PIPL package; `CN_LEGAL_DOCS_VERSION` set to the counsel-approved documents.
 - [ ] **[owner]** C-6 生成式AI 登记 (counsel decides whether the soft launch can wait for it), with `CN_GENAI_DISCLOSURES` filled.
-- [ ] Content safety live: `CN_CONTENT_SAFETY_PROVIDER=aliyun_green` with keys; the large-model moderation services turned on in the Aliyun console.
+- [ ] Content safety: `CN_CONTENT_SAFETY_PROVIDER=aliyun_green` with keys and the large-model moderation services turned on in the Aliyun console is **recommended**, and required only under the strict posture. Without it the built-in keyword filter runs on every GoApply AI call (a setting that cannot run falls back to it with a warning).
 - [ ] C-7 SMS signature and OTP template (phone login); C-8 WeChat (optional for the soft launch).
 - [ ] C-4 公安备案 is filed **within 30 days of go-live**; set `CN_PSB_*` when it is granted.
-- [ ] Payments stay off (`CN_PAYMENTS_ENABLED=false`) until C-12 (EDI licence) and C-13.
+- [ ] **[owner]** Payments: GoApply plans are purchasable through the existing Alipay rail as soon as `ALIPAY_CALLBACK_SECRET` is set (there is no master switch to turn on). Whether to charge before C-12 (EDI licence) and C-13 is the owner's decision: `CN_PAYMENTS_ENABLED=false` is the kill switch (prices stay listed, no new order; the Alipay callback and the WeChat Pay notify stay open for payments already in flight).
 
-The API refuses to boot if the residency assertions fail, and the preflight (§7) refuses a few more cases. Neither replaces the list above.
+The API and the preflight (§7) refuse a wrong topology only (`DEPLOY_REGION`, the database host, RoboApply served from the mainland). A missing China-specific provider or filing number is a warning unless `CN_RESIDENCY_STRICT=true`, which turns those warnings into refusals. Neither replaces the list above.
 
 ## 3. One-time cloud setup (Aliyun, cn-shanghai)
 
 1. **VPC** with IPv4 and IPv6 CIDRs (dual stack), vSwitches in two zones.
 2. **ACK** managed cluster in that VPC, Kubernetes ≥ 1.27 (CronJob `timeZone`), Terway CNI with NetworkPolicy enabled, dual-stack if offered. Node pool sized for ~6 vCPU / 12 GB to start. Nodes booted with IPv6 disabled in the kernel (`ipv6.disable=1`) are fine: the gateway adds its IPv6 listener only when `/proc/net/if_inet6` exists (`deploy/cn/gateway-listen-ipv6.sh`) and logs which one it chose.
 3. **ACR** (Enterprise edition recommended) in cn-shanghai, namespace `goapply` (or set `ALIYUN_ACR_NAMESPACE`). Mirror the base images there if you will build inside the mainland (`node:24-slim`, `nginxinc/nginx-unprivileged:1.28-alpine`).
-4. **RDS PostgreSQL 16** in the same VPC. Create the database and a role for the app; enable `pg_trgm` once (`server/prisma/sql/000_extensions.sql`). Use the **VPC private address** in `DATABASE_URL`.
-5. **OSS** bucket (private, server-side encryption on) in cn-shanghai; an AccessKey for a RAM user limited to that bucket → `CN_S3_*`.
+4. **RDS PostgreSQL 16** in the same VPC. Create the database and a role for the app; enable `pg_trgm` once (`server/prisma/sql/000_extensions.sql`), then the `vector` extension (`server/prisma/sql/001_vector.sql`). **[owner]** Confirm first that the instance offers `vector` at **0.7.0 or newer** (the schema has `halfvec(1024)` columns since the market wave's M0 push; `SELECT extversion FROM pg_extension WHERE extname = 'vector'` must print 0.7.0 or newer). Without it the push of §6 fails at the first embedding table. Use the **VPC private address** in `DATABASE_URL`.
+5. **OSS** bucket (private, server-side encryption on) in cn-shanghai; an AccessKey for a RAM user limited to that bucket → `CN_S3_*`. Optional: without it GoApply files go to the shared store (see §1). Needed under `CN_RESIDENCY_STRICT=true`.
 6. **SLB certificate** for the ICP-filed domain uploaded to the SLB certificate service; note its id (`ACK_SLB_CERT_ID`).
 7. **Visitor address:** the gateway's listeners are layer 7 (`http:80`, `https:443`), so the SLB connects to the pods from its own backend range and puts the visitor's address at the end of `X-Forwarded-For` (CLB layer-7 listeners always add it). `deploy/cn/nginx.conf` trusts only `100.64.0.0/10`, the Aliyun SLB backend range. If you choose an SLB type that connects from another range, add that range to `set_real_ip_from` (never `0.0.0.0/0`); otherwise every visitor shares the SLB's address and the per-IP limits throttle normal traffic. §7 has the check.
 8. **IPv6:** the gateway Service asks for `PreferDualStack`. Whether the SLB itself answers on IPv6 depends on the SLB type (CLB IPv6 instances are IPv6-only; ALB/NLB can be dual stack). Decide with the network test (C-16) and adjust the annotations in `deploy/cn/k8s/gateway.yaml`. The annotation names there are the ACK cloud-controller-manager's; check them against your cluster's CCM version before the first apply.
@@ -65,7 +66,7 @@ kubectl -n goapply create secret docker-registry acr-pull \
   --docker-server=<acr host> --docker-username=<user> --docker-password=<password>
 ```
 
-- **`goapply-api-env`**: everything in `deploy/cn/cn.env.example` (names only; the repository-root `.env.example` has the full catalogue with comments). Generate **fresh** `JWT_SECRET`, `CRON_SECRET`, `INTERNAL_API_SECRET` for the mainland. `SENSITIVE_DATA_KEY`: see §8.6.
+- **`goapply-api-env`**: everything in `deploy/cn/cn.env.example` (names only; the repository-root `.env.example` has the full catalogue with comments). Generate **fresh** `JWT_SECRET`, `CRON_SECRET`, `INTERNAL_API_SECRET` for the mainland. `SENSITIVE_DATA_KEY`: see §8.6. On the shared email transport (`RESEND_API_KEY`, no `CN_EMAIL_TRANSPORT`) also set **`ROBOAPPLY_EMAIL_FROM`**, the shared verified sender: without it and without `CN_EMAIL_FROM` GoApply mail is sent from `noreply@goapply.top`, which Resend refuses while that domain is unverified, so verification and password-reset mail would not arrive.
 - **`goapply-web-env`**: only what the web server reads, names in `deploy/cn/cn.web.env.example`:
   - `INTERNAL_API_SECRET` (same value as the API), `CN_CANONICAL_ORIGIN`, `BAIDU_SITE_VERIFICATION` (no `CN_` prefix), and `BRAND_HOST_MAP` if you serve extra hostnames;
   - the values the legal pages (`/legal/[doc]`) fill in, same values as the API: `CN_LEGAL_ENTITY_NAME`, `CN_LEGAL_POSTAL_ADDRESS`, `CN_SUPPORT_EMAIL`, `CN_COMPLAINT_EMAIL`, `CN_COMPLAINT_PHONE`, `CN_LEGAL_DOCS_VERSION`, and optionally `CN_TAKEDOWN_CONTACT` (falls back to the support address). Without them the GoApply privacy policy and terms show 未披露 for the operator and complaint contacts and 草稿 for the version, which fails the C-5 disclosure.
@@ -113,6 +114,7 @@ A whole-stack smoke run on one machine: `docker compose -f deploy/cn/compose.yam
 Schema changes are never automated (the workflow cannot touch a database). For the first deploy and after every schema change on `main`:
 
 1. From a bastion inside the VPC (the database is not public), check out the commit being deployed and run `npm ci`.
+1a. Extensions, once per database and before the first push that carries the embedding tables (`server/prisma/sql/README.md`, step 2): run `server/prisma/sql/000_extensions.sql`, then `server/prisma/sql/001_vector.sql`, then `SELECT extversion FROM pg_extension WHERE extname = 'vector';`. It must print **0.7.0 or newer**. If the instance does not offer the extension at that version, stop: the push fails at the first `halfvec(1024)` column, and code from the market wave's M0 commit or later must not run against a database without those tables.
 2. Diff first (read-only; `prisma.config.ts` uses `DIRECT_DATABASE_URL`): `DIRECT_DATABASE_URL=<RDS, direct> npx prisma migrate diff --from-config-datasource --to-schema server/prisma/schema --script > diff.sql` and review it. Additive only, as on Neon (no `DROP`, no `ALTER COLUMN`), unless the owner approved otherwise.
 3. **The owner confirms**, then: `DIRECT_DATABASE_URL=<RDS, direct> npx prisma db push`.
 4. Re-run the diff; it must be empty.
@@ -143,7 +145,7 @@ kubectl -n goapply rollout status deployment/api deployment/web deployment/gatew
 
 ### After every deploy
 
-- `kubectl -n goapply logs deploy/api -c preflight` shows `CN-1 preflight: OK` (a refusal lists codes such as `content_safety_not_cn1_ready`, never values).
+- `kubectl -n goapply logs deploy/api -c preflight` shows `CN-1 preflight: OK`, or `CN-1 preflight: OK, with warnings` followed by the provider and filing codes that are advisory on the shared stack (`icp_missing`, `cn_storage_missing`, `cn_email_offshore`, …). A refusal (`CN-1 preflight: REFUSED`) lists codes, never values: a topology code always, a provider code such as `content_safety_not_cn1_ready` only under `CN_RESIDENCY_STRICT=true`.
 - `curl -sS https://www.goapply.top/api/v1/health` and `/api/health` answer `ok: true`.
 - The cron sweeps are closed from outside, in any letter case: `for p in cron CRON Cron; do curl -sS -o /dev/null -w '%{http_code}\n' https://www.goapply.top/api/v1/$p/queue-drain; done` prints **404** three times.
 - The visitor address cannot be forged: `curl -sS -o /dev/null -H 'X-Forwarded-For: 203.0.113.9' https://www.goapply.top/healthz`, then `kubectl -n goapply logs deploy/gateway --tail=50 | grep healthz` shows **your own** public address on that line, not `203.0.113.9` and not a `100.64.x.x` SLB address. If it shows a `100.64.` address, the SLB is not adding `X-Forwarded-For` or connects from another range (§3 step 7); do not open sign-up until this is right, because login, SMS and signup rate limits are keyed on it.
@@ -167,7 +169,7 @@ node deploy/cn/migration/plan.mjs --out ~/cn-migration     # renders SQL only, c
 ```
 
 Read `report.json` with the owner:
-- `tables`: each table and the rule that scopes it (`brand`, `market`, `user`, `userId`, `parent`, `manual`). The `manual` ones are reviewed entries in `MANUAL_SCOPES` (`plan.mjs`) for tables that hold a user's id without a foreign key: `AIAuditLog` (`actorUserId`), `MemoryEntry` (`scope = 'user'`, `scopeId`) and `RoboApplyCoverLetterCache` (by its `resumeId`).
+- `tables`: each table and the rule that scopes it (`brand`, `market`, `user`, `userId`, `parent`, `manual`). The `manual` ones are reviewed entries in `MANUAL_SCOPES` (`plan.mjs`): tables that hold a user's id without a foreign key, `AIAuditLog` (`actorUserId`), `MemoryEntry` (`scope = 'user'`, `scopeId`) and `RoboApplyCoverLetterCache` (by its `resumeId`); and one shared vocabulary copied whole, `RASkill` (it holds no personal data; the migrated `RAJob.skillIds` point to its rows, so it is copied and never purged offshore).
 - `purgeOnly`: regenerable caches with users' text but no owner column (`InterviewTranscriptSegment`, `InterviewGraderResult`). They do not move; the purge deletes every row created before the freeze (§8.3), RoboApply's rows of that age included (they are recomputed on demand).
 - `unscoped`: tables that neither move nor are purged (shared catalogues, RoboHire recruiter tables, config, runtime state). Every one of them that has a free-form payload (`Json`, `@db.Text`) or a user-like id column is also listed under `issues` as `unscoped_personal_data`. Go through each with the owner: confirm it holds no GoApply user's data, or add a reviewed `MANUAL_SCOPES` / `PURGE_ONLY` entry and regenerate. Do not start §8.4 with one unexplained.
 - `issues`: `unscoped_personal_data` (above), `required_fk_to_unscoped` (the import fails unless the referenced rows exist), `optional_fk_to_unscoped` (null the column or move the rows), `self_reference` and `fk_cycle` (import order within the table; an RDS privileged account can relax FK checks for the session), `multiple_user_relations`, `stale_manual_entry` (a `MANUAL_SCOPES` / `PURGE_ONLY` table that no longer exists).
@@ -180,7 +182,29 @@ Lower the DNS TTL of `goapply.top` to 300 s.
 1. On a hardened operator machine with an encrypted disk: `cd ~/cn-migration && psql "$NEON_DIRECT_DATABASE_URL" -v ON_ERROR_STOP=1 -f export.sql` (one read-only snapshot) and `psql … -f verify-source.sql > source-counts.txt`.
 2. Copy `data/` and `source-counts.txt` to a bastion in the mainland VPC over SSH (or a private OSS bucket with server-side encryption). The CSVs hold personal data: no email, no chat tools, no laptops without disk encryption. Log who copied what, when.
 3. On the bastion: `psql "$RDS_DIRECT_DATABASE_URL" -v ON_ERROR_STOP=1`, then `\i import.sql`, then `\i verify-target.sql`; compare with `source-counts.txt`. **COMMIT** only if every count matches; otherwise `ROLLBACK`, fix, repeat.
-4. Files in object storage: CN-0 stores no resume originals or photos for GoApply by default (WP-15 upload policy). If any GoApply object exists in the international bucket (check the migrated rows' storage keys), copy those objects to the `CN_S3_BUCKET` with the same keys before cutover.
+4. Files in object storage. Since the parity wave GoApply resume originals, application files and data exports **are** stored offshore by default, in the shared store under the `goapply/` key prefix (`CN_STORAGE_MODE=discard` is the mode that keeps none), and practice recordings under `interviews/<sessionId>/`. **The key decides the store**: a key that starts with `cn/` is read, signed and deleted in `CN_S3_BUCKET`; every other key, `goapply/…` included, in the shared store (`S3_*`) (`storeOfKey` in `server/src/services/ResumeOriginalFileStorageService.ts`). Copying an object is therefore not enough: a row that still names a `goapply/…` key is still served from, and deleted in, the shared store. Choose one:
+   - **(a) Leave the files offshore.** Keep the shared `S3_*` values set on the mainland stack. Old files stay readable and purgeable through them; new uploads go to `CN_S3_BUCKET` under `cn/`. Do not delete the `goapply/` objects in §8.8, and say in the notices that these files are kept outside the mainland.
+   - **(b) Mainland-only posture: copy the object AND rewrite its key.**
+     1. Copy every object `goapply/<rest>` of the shared bucket to `cn/<rest>` in `CN_S3_BUCKET` (the same `<rest>`; for example `rclone copy shared:<S3_BUCKET>/goapply mainland:<CN_S3_BUCKET>/cn`). Copy the recordings to the **same** key (`interviews/<sessionId>/…`): they are read from the brand's current store and need no rewrite.
+     2. In the mainland database, after the import of step 3 is committed, rewrite the stored keys with the same substitution, in one transaction (`goapply/` is 8 characters):
+
+        ```sql
+        BEGIN;
+        UPDATE "RAResumeVariant"       SET "originalFileKey" = 'cn/' || substr("originalFileKey", 9) WHERE "originalFileKey" LIKE 'goapply/%';
+        UPDATE "RAApplicationArtifact" SET "storageKey"      = 'cn/' || substr("storageKey", 9)      WHERE "storageKey" LIKE 'goapply/%';
+        UPDATE "RAPersonalInfoRequest" SET "detail" = jsonb_set("detail", '{export,key}', to_jsonb('cn/' || substr("detail" #>> '{export,key}', 9)))
+          WHERE "detail" #>> '{export,key}' LIKE 'goapply/%';
+        -- Every count must be 0. If the last one is not, apply the same rewrite to "Resume"."originalFileKey".
+        SELECT count(*) FROM "RAResumeVariant" WHERE "originalFileKey" LIKE 'goapply/%';
+        SELECT count(*) FROM "RAApplicationArtifact" WHERE "storageKey" LIKE 'goapply/%';
+        SELECT count(*) FROM "RAPersonalInfoRequest" WHERE "detail" #>> '{export,key}' LIKE 'goapply/%';
+        SELECT count(*) FROM "Resume" WHERE "originalFileKey" LIKE 'goapply/%';
+        COMMIT;
+        ```
+     3. Verify with a migrated test account before anything is deleted offshore: download one resume original, one application file and one data export (each must come from `CN_S3_BUCKET`), then delete one of each and check that the `cn/…` object is gone from `CN_S3_BUCKET`.
+     4. Only then delete the `goapply/` objects and the copied recordings offshore, in §8.8.
+
+   Until no row names a `goapply/` key, the shared `S3_*` values **must stay set** on the mainland stack. Without them a download of such a file fails ("S3 original-file storage is not configured", or 404 once the offshore object is gone), and account deletion and retention cannot delete it: the copy under `goapply/…` in the mainland bucket is never reached by any delete. Playback links of recordings left in the shared store stop once `CN_S3_BUCKET` is set, although they are still deleted on time.
 
 **8.5 Cut over.** Point `goapply.top` / `www.goapply.top` at the SLB. Smoke test (§7, "After every deploy") with a migrated test account. GoApply users sign in again (the mainland `JWT_SECRET` is new); passwords and phone logins carry over.
 

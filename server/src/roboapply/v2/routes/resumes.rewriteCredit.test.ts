@@ -31,6 +31,8 @@ const m = vi.hoisted(() => ({
   /** The account the phone gate reads (auth-cn `phoneBindingRequired`). */
   account: { brand: 'roboapply', phoneE164: null, phoneVerifiedAt: null } as Record<string, unknown>,
   hasWechat: false,
+  /** Whether a phone can be bound on this deployment (an SMS provider is live). */
+  smsLive: true,
 }));
 
 vi.mock('../../../lib/prisma.js', () => ({
@@ -51,12 +53,14 @@ vi.mock('../../../features/resume/index.js', async (orig) => ({
   resumeAiAvailable: async () => m.aiAvailable,
 }));
 vi.mock('../../../features/auth-cn/index.js', async (orig) => {
-  const actual = await orig<{ requirePhoneBound: (db?: unknown) => unknown }>();
+  const actual = await orig<{ requirePhoneBound: (db?: unknown, env?: unknown) => unknown }>();
   const db = {
     user: { findUnique: async () => m.account },
     rAAuthIdentity: { findFirst: async () => (m.hasWechat ? { id: 'ident_1' } : null) },
   };
-  return { ...actual, requirePhoneBound: () => actual.requirePhoneBound(db) };
+  // Parity wave (plan §3.7): a phone is asked for only where one can be bound.
+  // `m.smsLive` is that deployment fact: an SMS provider is live unless a test says otherwise.
+  return { ...actual, requirePhoneBound: () => (req: unknown, res: unknown, next: unknown) => (actual.requirePhoneBound(db, m.smsLive ? { NODE_ENV: 'test', SMS_DEV_CONSOLE: 'true' } : { NODE_ENV: 'test' }) as (...a: unknown[]) => unknown)(req, res, next) };
 });
 // The real module (error classes) with only the service object replaced: every
 // answer here is model-written (`agentSucceeded: true`). The real service, with
@@ -117,6 +121,7 @@ beforeEach(() => {
   m.aiAvailable = true;
   m.account = { brand: 'roboapply', phoneE164: null, phoneVerifiedAt: null };
   m.hasWechat = false;
+  m.smsLive = true;
 });
 
 const post = async (body: Row, headers: Record<string, string> = {}) => {
@@ -221,6 +226,12 @@ describe('POST /v2/resumes/:id/rewrite spends the rewrite credit', () => {
     m.hasWechat = false;
     expect((await post(BODY)).status).toBe(200);
     expect(rows('committed')).toHaveLength(2);
+
+    // No SMS provider: nobody can bind a phone, so the WeChat-only account is not held (plan §3.7).
+    m.hasWechat = true;
+    m.smsLive = false;
+    expect((await post(BODY)).status).toBe(200);
+    expect(rows('committed')).toHaveLength(3);
   });
 
   it('503 ai_unavailable without the AI consent, before any credit is reserved', async () => {

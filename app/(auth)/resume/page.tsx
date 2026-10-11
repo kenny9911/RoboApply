@@ -295,8 +295,6 @@ export default function ResumesPage() {
     storage_unavailable: t('hub.errors.storage_unavailable'),
     // 10 uploads a day per account (persisted server-side; 429 with Retry-After).
     rate_limited: t('hub.errors.upload_daily_limit', { limit: RESUME_UPLOADS_PER_DAY }),
-    // GoApply: an image is read by one service only; when it cannot, nothing else reads it.
-    image_parse_unavailable: t('hub.errors.image_unreadable'),
     // GoApply without the AI consent: no file is read (503 ai_unavailable).
     ai_unavailable: t('hub.errors.ai_off'),
   };

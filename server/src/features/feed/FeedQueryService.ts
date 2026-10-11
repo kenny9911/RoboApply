@@ -120,6 +120,7 @@ import {
   sourcesSql,
   type SqlScope,
 } from './sql.js';
+import { heldBankBoards } from './sourceLine.js';
 import { requiredSkills, toMatchRecord, type FeedCtx, type FeedJobRow } from './types.js';
 import { normalizeCompanyName, normalizeSkills } from '../jobs/normalize/index.js';
 
@@ -275,8 +276,13 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     return normalizeFilterSet(parsed.value);
   }
 
+  /** The recruiter banks with no posting page right now: their rows are held out of every statement (sourceLine.ts). */
+  function heldBanks(): string[] {
+    return heldBankBoards((deps.env ?? process.env) as Record<string, string | undefined>);
+  }
+
   function scopeOf(ctx: Pick<FeedCtx, 'market' | 'userId' | 'now'>, browse = false): SqlScope {
-    return { market: ctx.market, userId: ctx.userId, now: ctx.now, ...(browse ? { publicOnly: true } : {}) };
+    return { market: ctx.market, userId: ctx.userId, now: ctx.now, heldBanks: heldBanks(), ...(browse ? { publicOnly: true } : {}) };
   }
 
   /**
@@ -290,6 +296,13 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
 
   // ── Retrieval ─────────────────────────────────────────────────────────
 
+  /**
+   * The list's age floor (120 days, or the search's "posted within"). It cuts
+   * aggregator rows only: a recruiter-bank or employer-board row is listed at
+   * any age (sql.ts `ageFloorSql`; plan §3.9 "no posting-age cut-off for board
+   * or bank rows"). A "posted within" filter stays a hard bound for every row
+   * (its own filter predicate).
+   */
   function floorOf(filters: FilterSet, from: Date): Date {
     return new Date(from.getTime() - (filters.postedWithinDays ?? L.maxAgeDays) * DAY_MS);
   }
@@ -297,12 +310,14 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
   /**
    * One window, newest first. A full window (LIMIT reached) ends at its last
    * row's (postedAt, id), so rows tied on that postedAt past the LIMIT come in
-   * the next refill; a short window covered everything down to `from`.
+   * the next refill; a short window covered everything down to `from`, or,
+   * for the window that runs to the end of the list (`ageFloor`, no `from`),
+   * everything: it ends at the floor.
    */
   async function retrieve(
     ctx: FeedCtx,
     filters: FilterSet,
-    range: { from: Date | null; to: Date | null; toId?: string | null; orderBy?: 'posted' | 'deadline' },
+    range: { from: Date | null; to: Date | null; toId?: string | null; ageFloor?: Date | null; orderBy?: 'posted' | 'deadline' },
     browse = false,
   ): Promise<Window> {
     const rows = await repo.queryRows(
@@ -313,6 +328,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
         fields: browse ? FILTER_FIELDS.filter((f) => f !== 'taxonomyIds' && f !== 'titles') : FILTER_FIELDS,
         extra: browse ? [browseTaxonomySql(filters.taxonomyIds ?? [])] : undefined,
         from: range.from,
+        ageFloor: range.ageFloor ?? null,
         to: range.to,
         toId: range.toId ?? null,
         orderBy: range.orderBy,
@@ -321,20 +337,23 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     );
     const last = rows.length >= L.retrievalLimit ? rows[rows.length - 1] : undefined;
     if (last?.postedAt) return { rows, windowEndsAt: last.postedAt, windowEndsId: last.id };
-    return { rows, windowEndsAt: range.from ?? floorOf(filters, ctx.now), windowEndsId: null };
+    return { rows, windowEndsAt: range.from ?? range.ageFloor ?? floorOf(filters, ctx.now), windowEndsId: null };
   }
 
-  /** Older rows remain between the session's boundary and the age floor. */
+  /**
+   * Older rows remain: the session's boundary is above the age floor, or its
+   * last window was full (a full window can end below the floor: board and
+   * bank rows are listed at any age, and more of them may follow).
+   */
   function olderRemain(s: Pick<FeedSessionRecord, 'windowEndsAt' | 'windowEndsId'>, floor: Date): boolean {
-    const t = s.windowEndsAt.getTime();
-    return t > floor.getTime() || (!!s.windowEndsId && t >= floor.getTime());
+    return s.windowEndsAt.getTime() > floor.getTime() || !!s.windowEndsId;
   }
 
   /** First window: 14 days, widened to 45 under 60 rows; a posted-within filter is one window. */
   async function firstWindow(ctx: FeedCtx, filters: FilterSet, sort: FeedSort, browse = false): Promise<Window> {
     if (sort === 'deadline') {
-      // One window over the age floor: stated close dates first, then the rest newest first (no refill).
-      const w = await retrieve(ctx, filters, { from: floorOf(filters, ctx.now), to: null, orderBy: 'deadline' }, browse);
+      // One window over the whole list (the age floor cuts aggregator rows only): stated close dates first, then the rest newest first (no refill).
+      const w = await retrieve(ctx, filters, { from: null, to: null, ageFloor: floorOf(filters, ctx.now), orderBy: 'deadline' }, browse);
       return { rows: w.rows, windowEndsAt: floorOf(filters, ctx.now), windowEndsId: null };
     }
     if (filters.postedWithinDays) return retrieve(ctx, filters, { from: floorOf(filters, ctx.now), to: null }, browse);
@@ -504,8 +523,15 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     let changed = false;
     for (let i = 0; i < 3 && s.jobIds.length < need && olderRemain(s, floor) && state.sort !== 'deadline'; i++) {
       const to = s.windowEndsAt;
-      const from = new Date(Math.max(floor.getTime(), to.getTime() - L.widenWindowDays * DAY_MS));
-      const w = await retrieve(state.ctx, state.filters, { from, to, toId: s.windowEndsId }, state.browse);
+      const start = to.getTime() - L.widenWindowDays * DAY_MS;
+      // The window that reaches the age floor runs to the end of the list: aggregator rows stop at the
+      // floor, board and bank rows are listed at any age (`ageFloorSql`).
+      const w = await retrieve(
+        state.ctx,
+        state.filters,
+        start <= floor.getTime() ? { from: null, ageFloor: floor, to, toId: s.windowEndsId } : { from: new Date(start), to, toId: s.windowEndsId },
+        state.browse,
+      );
       const known = new Set(s.jobIds);
       const fresh = w.rows.filter((r) => !known.has(r.id));
       const scored = await score(state.ctx, fresh, state.personalized);
@@ -802,7 +828,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     let hit = exploreCache.get(ctx.market);
     if (!hit || ctx.now.getTime() - hit.at > exploreTtl) {
       // The same age floor as the lists, so a tile's count is what its browse list can reach.
-      const rows = await repo.queryCategoryCounts(exploreCountsSql(ctx.market, cats.map((c) => c.id), floorOf({}, ctx.now)));
+      const rows = await repo.queryCategoryCounts(exploreCountsSql(ctx.market, cats.map((c) => c.id), floorOf({}, ctx.now), heldBanks()));
       hit = { at: ctx.now.getTime(), counts: new Map(rows.map((r) => [r.taxonomyId, r.count])), asOf: ctx.now };
       exploreCache.set(ctx.market, hit);
     }
@@ -889,7 +915,12 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
   async function topRanked(ctx: FeedCtx, filters: FilterSet, sort: FeedSort, limit: number) {
     const personalized = await isPersonalized(ctx.userId, ctx.market);
     const eff: FeedSort = personalized || (sort !== 'recommended' && sort !== 'best_fit') ? sort : 'newest';
-    const w = await firstWindow(ctx, filters, eff);
+    let w = await firstWindow(ctx, filters, eff);
+    // No session, so no refill: when the first window (45 days at most) cannot fill the request, read the
+    // whole list once. Board and bank postings stay open for months and are listed at any age.
+    if (w.rows.length < limit && eff !== 'deadline' && !filters.postedWithinDays) {
+      w = await retrieve(ctx, filters, { from: null, to: null, ageFloor: floorOf(filters, ctx.now) });
+    }
     const scored = await score(ctx, w.rows, personalized);
     const rc = await rankContext(ctx, filters, personalized);
     const ranked = rankRows(w.rows, scored, eff, rc, filters, personalized);
@@ -944,7 +975,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     const limit = Math.max(1, Math.min(L.retrievalLimit, Math.floor(opts.limit)));
     const scope: SqlScope = { ...scopeOf(ctx), publicOnly: opts.publicOnly !== false };
     const { fitTier: _view, ...rest } = filters;
-    return repo.queryIds(jobIdsSql({ scope, filters: rest, fields: FILTER_FIELDS, from: floorOf(rest, ctx.now), limit, orderBy: 'posted' }));
+    return repo.queryIds(jobIdsSql({ scope, filters: rest, fields: FILTER_FIELDS, from: null, ageFloor: floorOf(rest, ctx.now), limit, orderBy: 'posted' }));
   }
 
   /**
@@ -960,16 +991,17 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     const limit = Math.max(1, Math.min(L.retrievalLimit, Math.floor(opts.limit)));
     const parsed = parseFilterSet(profile.filters, { market: ctx.market });
     const { fitTier: _view, ...filters } = normalizeFilterSet(parsed.ok ? parsed.value : coerceFilterSet(profile.filters, { market: ctx.market }).value);
-    const scope: SqlScope = { market: ctx.market, userId: profile.userId, now: ctx.now, publicOnly: true };
+    const scope: SqlScope = { market: ctx.market, userId: profile.userId, now: ctx.now, publicOnly: true, heldBanks: heldBanks() };
     const ids = await repo.queryIds(
       jobIdsSql({
         scope,
         filters,
         fields: FILTER_FIELDS,
         // Instant alerts pass their own posted floor (an undated posting still counts);
-        // otherwise the feed's age floor (120 days, or the search's "posted within").
-        from: opts.postedSince ?? floorOf(filters, ctx.now),
+        // otherwise the feed's age floor (120 days for aggregator rows, or the search's "posted within").
+        from: opts.postedSince ?? null,
         allowUndated: !!opts.postedSince,
+        ageFloor: opts.postedSince ? null : floorOf(filters, ctx.now),
         firstSeenAfter: opts.since,
         limit: limit + 1,
         orderBy: 'first_seen',
@@ -999,7 +1031,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     const publicBoards = await repo.publicBoards();
     const rows = await repo.queryRows(
       retrievalSql({
-        scope: { market: ctx.market, userId: null, now: ctx.now, publicOnly: true, publicDisplayOnly: true, publicBoards, ignoreHidden: true },
+        scope: { market: ctx.market, userId: null, now: ctx.now, publicOnly: true, publicDisplayOnly: true, publicBoards, ignoreHidden: true, heldBanks: heldBanks() },
         filters,
         fields: FILTER_FIELDS,
         from: new Date(ctx.now.getTime() - L.widenWindowDays * DAY_MS),

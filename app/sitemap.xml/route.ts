@@ -1,7 +1,9 @@
 // /sitemap.xml — host-aware sitemap index (ARCHITECTURE.md §9.5): the static
 // set (/sitemaps/static.xml) plus the API's partitions (`roles-<n>` browse
 // pages above the floor, `jobs-<n>` public job pages; ≤ 45,000 URLs each).
-// GoApply lists the static set only (browse and job pages are deferred).
+// Both brands (parity wave, PAR-9): GoApply's partitions follow the same gates
+// as RoboApply's (`seo.browse`, PUBLIC_DISPLAY_PROVIDERS) and are empty while
+// its postings are switched off (CN_RECRUITMENT_INFO_MODE=off).
 
 import { getBrand } from '../../lib/brand/registry.generated';
 import { brandUrl, sitemapIndexXml } from '../../lib/seo';

@@ -400,6 +400,20 @@ describe('support routes', () => {
     expect(statsMarkets).toEqual(['intl', 'cn']);
   });
 
+  // PAR gate (PAR-9 request): with GoApply's postings switched off the endpoint itself publishes no counts.
+  it('index stats: GoApply with CN_RECRUITMENT_INFO_MODE=off answers no counts and reads nothing; the default and RoboApply are unchanged', async () => {
+    const asked: string[] = [];
+    const counts = { openRoles: { value: 1800, source: 'index' }, addedThisWeek: null, popularLists: [], asOf: NOW.toISOString(), partial: false } as unknown as IndexStatsResponse;
+    const make = (env: Record<string, string>) =>
+      createSupportService({ env, stats: { get: async (market) => (asked.push(market), counts), clear() {} }, creditCatalog: async (brand) => DEFAULT_CREDIT_CATALOG[brand.id] });
+    const off = make({ CN_RECRUITMENT_INFO_MODE: 'off' });
+    expect(await off.indexStats(getBrand('goapply'))).toMatchObject({ openRoles: null, addedThisWeek: null, popularLists: [], partial: false });
+    expect(asked).toEqual([]);
+    expect((await off.indexStats(getBrand('roboapply'))).openRoles?.value).toBe(1800);
+    expect((await make({}).indexStats(getBrand('goapply'))).openRoles?.value).toBe(1800);
+    expect(asked).toEqual(['intl', 'cn']);
+  });
+
   it('GET /index-stats is not CDN-cached when a count is unknown because a query failed', async () => {
     stats.partial = true;
     try {

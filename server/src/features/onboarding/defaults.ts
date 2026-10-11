@@ -14,6 +14,7 @@ import { seedDraftFromParsedResume } from '../../roboapply/v2/lib/raResumeSeed.j
 import { searchTaxonomy, taxonomyAncestors, taxonomyChildren, taxonomyLabel } from '../jobs/taxonomy/index.js';
 import { searchProfileService } from '../search/index.js';
 import { createProfileService, type ProfileServiceImpl } from '../profile/index.js';
+import { loadAiStackSnapshot } from '../compliance/index.js';
 import { cnFirstValueContext, onboardingCnService, validateCnStep } from '../onboarding-cn/index.js';
 import { ONBOARDING_RESUME_UPLOADS_PER_DAY, type TitleSuggestionView } from './contract.js';
 import { createPrismaOnboardingRepo, type OnboardingRepo, type ResumeVariantRow } from './repo.js';
@@ -130,7 +131,13 @@ export function createDefaultOnboardingDeps(repo: OnboardingRepo = createPrismaO
       },
     },
     profile: profileEffects,
-    validateCnStep,
+    // G1 decides the cross-border box from the stack in use, admin model overrides included
+    // (compliance `crossBorderConsentApplies`): load them first, so a cold instance requires
+    // and stores what a warm one showed (PAR-5 review finding 2). The other steps read no consent rule.
+    validateCnStep: async (step, body, ctx) => {
+      if (step === 'consent') await loadAiStackSnapshot();
+      return validateCnStep(step, body, ctx);
+    },
     applyCnStep: (userId, brand, result, opts) => onboardingCnService.applyCnStep(userId, brand, result, opts),
     snapshot: createSnapshotLoader(async () => (await import('../../lib/prisma.js')).default as unknown as SnapshotDb),
     cnSnapshot: (q) => onboardingCnService.marketSnapshotForOnboarding(q),

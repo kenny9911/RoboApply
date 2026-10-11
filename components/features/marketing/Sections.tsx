@@ -335,6 +335,12 @@ export interface PricingSummaryProps {
 /**
  * Free + the preselected paid plan, priced from GET /billing/plans. A plan
  * name with no translation yet falls back to the catalog's own label.
+ *
+ * "Price not set yet" is a statement about the plan, so it is printed only
+ * when the plans API has answered and that plan carries no amount. Before the
+ * answer (the server HTML, the first paint, a failed request) the paid card
+ * shows its name and no price line: nothing is said about a price that is not
+ * known yet (D3; a GoApply plan is never unpriced, plan §3.8).
  */
 export function PricingSummary({ from, ns = 'landing.home.pricing', id = 'pricing', note = null }: PricingSummaryProps) {
   const t = useTranslations(ns);
@@ -344,6 +350,8 @@ export function PricingSummary({ from, ns = 'landing.home.pricing', id = 'pricin
   const brand = useBrand();
   const { data } = usePlans();
   const pro = data?.plans.find((p) => p.key === (data.defaultSelection ?? 'pro_monthly')) ?? null;
+  // Before the plans arrive the card names the catalog's usual preselection; the price waits for the answer.
+  const proKey = pro?.key ?? 'pro_monthly';
   const proPrice =
     pro && pro.amountMinor !== null
       ? tc(`price.${pro.kind === 'subscription' ? (pro.interval === 'week' ? 'week' : pro.interval === 'quarter' ? 'quarter' : 'month') : 'once'}`, {
@@ -371,8 +379,14 @@ export function PricingSummary({ from, ns = 'landing.home.pricing', id = 'pricin
             </SignupLink>
           </article>
           <article className={`${styles.card} ${styles.cardFeatured}`}>
-            <h3 className={styles.h3}>{pro ? (tc.has(`plans.${brand.id}.${pro.key}`) ? tc(`plans.${brand.id}.${pro.key}`) : pro.defaultLabel) : '—'}</h3>
-            <p className={styles.price}>{proPrice ?? t('notSet')}</p>
+            <h3 className={styles.h3}>{tc.has(`plans.${brand.id}.${proKey}`) ? tc(`plans.${brand.id}.${proKey}`) : (pro?.defaultLabel ?? '—')}</h3>
+            {proPrice ? (
+              <p className={styles.price}>{proPrice}</p>
+            ) : pro ? (
+              <p className={styles.price} data-price-unset="">
+                {t('notSet')}
+              </p>
+            ) : null}
             <p className={styles.body}>{t('proNote')}</p>
             <a className={styles.inlineLink} href="/pricing">
               {t('seeAll')}

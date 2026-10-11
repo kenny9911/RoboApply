@@ -337,11 +337,23 @@ describe('job page: source line, apply target, salary (the same rule as the feed
     expect(view.lastSeenAt).toBe(view.source.lastVerifiedAt);
   });
 
-  it('a bank row: apply.target gohire and its GoHire page', async () => {
+  it('a bank row: apply.target gohire and its GoHire page, only while GoHire has a posting page', async () => {
     const s = setup({ brand: cn, jobs: [cnBank()] });
-    const { job: view } = await s.service.get('u1', 'g1');
-    expect(view.apply).toEqual({ url: 'https://jobs.gohire.example/p/g1', target: 'gohire' });
-    expect(view.source).toMatchObject({ name: 'GoHire', kind: 'bank', via: 'bank', lastVerifiedAt: NOW.toISOString() });
+    // No posting page: the stored link is the bank site's "Page not found", so the page hands out none.
+    const held = (await s.service.get('u1', 'g1')).job;
+    expect(held.apply).toBeNull();
+    expect(held.applyUrl).toBeNull();
+    // …and the apply click has nowhere to send the user: nothing moves to Applied.
+    await expect(s.service.recordApplyClick('u1', 'g1')).rejects.toMatchObject({ code: 'conflict', details: { code: 'no_apply_link' } });
+    expect(held.source).toMatchObject({ name: 'GoHire', kind: 'bank', via: 'bank' });
+    vi.stubEnv('GOHIRE_PUBLIC_JOB_URL_TEMPLATE', 'https://jobs.gohire.example/p/{id}');
+    try {
+      const { job: view } = await s.service.get('u1', 'g1');
+      expect(view.apply).toEqual({ url: 'https://jobs.gohire.example/p/g1', target: 'gohire' });
+      expect(view.source).toMatchObject({ name: 'GoHire', kind: 'bank', via: 'bank', lastVerifiedAt: NOW.toISOString() });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("the user's own import: via import, no claim about where its link leads; no link → apply null (never invented)", () => {
@@ -958,6 +970,24 @@ describe('save, share, similar, company news', () => {
     // RoboApply keeps its own rule: nothing changes there.
     const robo = setup({ jobs: [job(), job({ id: 'nolink', applyUrl: '' })] });
     expect((await robo.service.similar('u1', 'j1')).items.map((i) => i.jobId)).toEqual(['nolink']);
+  });
+
+  it('similar jobs, both brands: a recruiter-bank row is recommended only while its bank has a posting page', async () => {
+    const jobs = () => [job(), job({ id: 'board' }), job({ id: 'bank', sourceBoard: 'robohire', sourceName: 'RoboHire', fromRecruiterBank: true, applyUrl: 'https://www.robohire.io/jobs/bank' })];
+    const held = setup({ jobs: jobs() });
+    expect((await held.service.similar('u1', 'j1')).items.map((i) => i.jobId)).toEqual(['board']);
+    expect((await held.service.get('u1', 'j1')).similarIds).toEqual(['board']);
+    // The service reads the setting from its own env; the card's link from the process env.
+    const page = { ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE: 'https://jobs.robohire.example/p/{id}' };
+    vi.stubEnv('ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE', page.ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE);
+    try {
+      const open = setup({ jobs: jobs(), deps: { env: page } });
+      const items = (await open.service.similar('u1', 'j1')).items;
+      expect(items.map((i) => i.jobId).sort()).toEqual(['bank', 'board']);
+      expect(items.find((i) => i.jobId === 'bank')!.apply).toEqual({ url: 'https://www.robohire.io/jobs/bank', target: null });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 

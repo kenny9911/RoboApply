@@ -25,6 +25,7 @@ import { requireAuth } from '../lib/raAuth.js';
 import { legacyAiGates } from '../lib/legacyAiGates.js';
 import { getRequestLocale } from '../lib/raLocale.js';
 import { logger } from '../../../services/LoggerService.js';
+import { withSearchKnownValues } from '../services/RAInterviewPromptService.js';
 import {
   raMockService,
   MockValidationError,
@@ -76,15 +77,21 @@ router.post('/start', requireAuth, ...legacyAiGates(), async (req: Request, res:
   try {
     const userId = req.user!.id;
     const { role, interviewerId, typeId, format, language, durationMinutes } = req.body ?? {};
-    const result = await raMockService.start(userId, {
-      role,
-      interviewerId,
-      typeId,
-      format,
-      language: typeof language === 'string' ? language : undefined,
-      durationMinutes: typeof durationMinutes === 'number' ? durationMinutes : undefined,
-      market: await requestMarket(),
-    }, getRequestLocale(req));
+    const market = await requestMarket();
+    // The account name must never reach the web-search vendor in the role-research query
+    // (PAR-4 review finding 5): the prompt service checks its query against these values,
+    // as it does for the first-party practice routes.
+    const result = await withSearchKnownValues([req.user!.name], () =>
+      raMockService.start(userId, {
+        role,
+        interviewerId,
+        typeId,
+        format,
+        language: typeof language === 'string' ? language : undefined,
+        durationMinutes: typeof durationMinutes === 'number' ? durationMinutes : undefined,
+        market,
+      }, getRequestLocale(req)),
+    );
     return res.json(result);
   } catch (err) {
     if (err instanceof MockValidationError) {

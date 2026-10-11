@@ -250,7 +250,8 @@ describe('admin areas (AdminNav.tsx)', () => {
   it('each brand’s admin sees only its own areas, and every admin page has an area (none is orphaned)', () => {
     // `inviteRewards` (held invite rewards, /admin/reports/invites) joined on both brands at the INT gate (INT-08).
     expect(adminAreasFor('roboapply').map((a) => a.id)).toEqual(['overview', 'system', 'reports', 'inviteRewards', 'credits', 'announcements', 'questions', 'coaches', 'sources']);
-    expect(adminAreasFor('goapply').map((a) => a.id)).toEqual(['overview', 'system', 'reports', 'inviteRewards', 'credits', 'announcements', 'questions', 'coaches', 'campus', 'fraud', 'invites']);
+    // `sources` (job sources and employer boards, /admin/sources) is on both brands since the parity wave (PAR-7 item 7).
+    expect(adminAreasFor('goapply').map((a) => a.id)).toEqual(['overview', 'system', 'reports', 'inviteRewards', 'credits', 'announcements', 'questions', 'coaches', 'sources', 'campus', 'fraud', 'invites']);
     const listed = new Set(ADMIN_AREAS.map((a) => a.href));
     const topLevelAdminPages = appRoutes()
       .filter((r) => r.segments[0] === 'admin' && r.segments.length <= 2 && !r.segments.some((s) => s.startsWith('[')))

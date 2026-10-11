@@ -44,6 +44,7 @@ import {
   warnVoiceConfigProblemsOnce,
 } from '../../config.js';
 import { runWithBrand } from '../../../lib/requestContext.js';
+import { resumeUploadPolicy } from '../../../platform/residency/uploadPolicy.js';
 
 const PREFIXES = ['LIVEKIT_', 'CN_', 'S3_', 'AWS_', 'INTERVIEW_', 'LLM_', 'VOICE_PROVIDER', 'BACKEND_PUBLIC_URL', 'PUBLIC_BACKEND_URL'];
 let saved: Record<string, string | undefined>;
@@ -234,7 +235,8 @@ describe('S3 for recordings and transcripts', () => {
 
 describe('CN_RESIDENCY_STRICT: mainland storage required (plan §4)', () => {
   const SHARED = { S3_BUCKET: 'intl', S3_ACCESS_KEY_ID: 'ak', S3_SECRET_ACCESS_KEY: 'sk' };
-  const OWN = { CN_S3_BUCKET: 'cn-bucket', CN_S3_ACCESS_KEY_ID: 'cak', CN_S3_SECRET_ACCESS_KEY: 'csk' };
+  // A bucket of its own that meets the strict rule: the four CN_S3_* values, on mainland object storage.
+  const OWN = { CN_S3_ENDPOINT: 'https://oss-cn-shanghai.aliyuncs.com', CN_S3_BUCKET: 'cn-bucket', CN_S3_ACCESS_KEY_ID: 'cak', CN_S3_SECRET_ACCESS_KEY: 'csk' };
 
   it('off (the default): new artifacts go where they are read from, on both brands', () => {
     vi.spyOn(console, 'info').mockImplementation(() => undefined);
@@ -263,8 +265,32 @@ describe('CN_RESIDENCY_STRICT: mainland storage required (plan §4)', () => {
     // It is said, with variable names only.
     expect(voiceConfigProblems('goapply')).toContainEqual({
       kind: 'storage',
-      message: 'CN_RESIDENCY_STRICT is on and GoApply has no bucket of its own (CN_S3_BUCKET and its keys): practice recordings and transcript files are not stored.',
+      message: 'CN_RESIDENCY_STRICT is on and GoApply has no bucket of its own (CN_S3_ENDPOINT, CN_S3_BUCKET and its keys): practice recordings and transcript files are not stored.',
     });
+    vi.restoreAllMocks();
+  });
+
+  it('on, with a bucket of its own that is NOT mainland storage: nothing new is written (the rule that holds resume originals)', () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    for (const endpoint of ['https://0123456789abcdef.r2.cloudflarestorage.com', 'https://s3.us-east-1.amazonaws.com', 'https://r2.intl.example']) {
+      Object.assign(process.env, SHARED, OWN, { CN_S3_ENDPOINT: endpoint, CN_RESIDENCY_STRICT: 'true' });
+      expect(resumeUploadPolicy('goapply').originals, endpoint).toBe('unavailable');
+      expect(interviewStorageWriteBlocked('goapply'), endpoint).toBe(true);
+      expect(getR2WriteCreds('goapply'), endpoint).toBeNull();
+      expect(interviewStorageWriteBlocked('roboapply')).toBe(false);
+    }
+    expect(voiceConfigProblems('goapply')).toContainEqual({
+      kind: 'storage',
+      message: "CN_RESIDENCY_STRICT is on and GoApply's own bucket is not mainland object storage (CN_S3_ENDPOINT): practice recordings and transcript files are not stored.",
+    });
+    // No endpoint at all is the provider's default, not the mainland.
+    delete process.env.CN_S3_ENDPOINT;
+    expect(interviewStorageWriteBlocked('goapply')).toBe(true);
+    // Without the strict switch the same bucket is written to, as before.
+    delete process.env.CN_RESIDENCY_STRICT;
+    process.env.CN_S3_ENDPOINT = 'https://s3.us-east-1.amazonaws.com';
+    expect(interviewStorageWriteBlocked('goapply')).toBe(false);
+    expect(getR2WriteCreds('goapply')).toMatchObject({ bucket: 'cn-bucket' });
     vi.restoreAllMocks();
   });
 
@@ -514,7 +540,9 @@ describe('interview models per brand (D5: the shared routing unless GoApply runs
     expect(() => getInterviewLlmRouting('roboapply')).toThrow(/^LLM_INTERVIEW_MODEL="anthropic\/claude-x" has no supported equivalent/);
     expect(voiceRoutingProblem('goapply')).toMatch(/LLM_INTERVIEW_MODEL="anthropic\/claude-x"/);
     delete process.env.LLM_INTERVIEW_MODEL;
-    expect(() => getInterviewLlmRouting('goapply')).toThrow(/^CN_LLM_INTERVIEW_MODEL="qwen\/qwen-max" has no supported equivalent in LiveKit Inference/);
+    // The model resolver reads a `qwen/…` value of a CN_ variable as the DashScope route it
+    // means (PAR-2, plan §3.3), so the message names the variable and that route.
+    expect(() => getInterviewLlmRouting('goapply')).toThrow(/^CN_LLM_INTERVIEW_MODEL="dashscope\/qwen-max" has no supported equivalent in LiveKit Inference/);
     delete process.env.CN_LLM_INTERVIEW_MODEL;
     expect(() => getWorkerLlmModel('goapply')).toThrow(/Set LLM_INTERVIEW_MODEL \(or LLM_INTERVIEW_LIVE_MODEL for the live worker\)/);
   });
@@ -557,9 +585,16 @@ describe('interview models per brand (D5: the shared routing unless GoApply runs
       { kind: 'worker', message: expect.stringMatching(/^GoApply voice practice cannot start, so the written practice is offered instead: CN_LLM_DOMESTIC_ONLY is on/) },
     ]);
     Object.assign(process.env, CN_LK);
-    // Its own plane but only the shared model: still refused, naming what to set.
-    expect(() => getInterviewLlmRouting('goapply')).toThrow(/LLM_INTERVIEW_MODEL="openai\/gpt-5.4" is not a domestic model/);
-    expect(voiceRoutingProblem('goapply')).toMatch(/is not a domestic model/);
+    // Its own plane but only the shared model: still refused, naming what to set. Behind the
+    // wall the resolver does not hand GoApply a shared international selector at all (PAR-2,
+    // plan §3.3), so the interview model counts as unset rather than as "not domestic".
+    expect(() => getInterviewLlmRouting('goapply')).toThrow(/GoApply interview LLM is not configured\. Set CN_LLM_INTERVIEW_MODEL/);
+    expect(voiceRoutingProblem('goapply')).toMatch(/Set CN_LLM_INTERVIEW_MODEL/);
+    // A model GoApply names itself that is not a mainland one is refused as such.
+    process.env.CN_LLM_INTERVIEW_LIVE_MODEL = 'openai/gpt-5.4';
+    process.env.CN_LLM_INTERVIEW_MODEL = 'deepseek/deepseek-v4-pro';
+    expect(() => getInterviewLlmRouting('goapply')).toThrow(/CN_LLM_INTERVIEW_LIVE_MODEL="[^"]*gpt-5\.4" is not a domestic model/);
+    delete process.env.CN_LLM_INTERVIEW_LIVE_MODEL;
     process.env.CN_LLM_INTERVIEW_MODEL = 'deepseek/deepseek-v4-pro';
     expect(getInterviewLlmRouting('goapply')).toEqual({ backendModel: 'deepseek/deepseek-v4-pro', workerModel: 'deepseek/deepseek-v4-pro' });
     expect(voiceRoutingProblem('goapply')).toBeNull();

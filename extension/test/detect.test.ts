@@ -30,9 +30,9 @@ describe('detectAdapter', () => {
     expect(detectAdapter(local, doc, { set: 'intl', dev: true })?.id).toBe('ashby');
   });
 
-  it('the GoApply build ships no international adapters', () => {
+  it('the GoApply build fills the international form sites too (its adapter set is a superset of RoboApply\'s, D5)', () => {
     const doc = loadFixture('greenhouse', 'classic');
-    expect(detectAdapter(new URL('https://boards.greenhouse.io/x/jobs/1'), doc, { set: 'cn', dev: false })).toBeNull();
+    expect(detectAdapter(new URL('https://boards.greenhouse.io/x/jobs/1'), doc, { set: 'cn', dev: false })?.id).toBe('greenhouse');
   });
 });
 

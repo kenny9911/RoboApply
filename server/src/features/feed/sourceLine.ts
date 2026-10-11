@@ -47,6 +47,7 @@
 // same rows.
 
 import { PUBLIC_ATS } from '../jobs/sources/atsPublic/contract.js';
+import { bankPublicJobUrlTemplate } from '../../roboapply/v2/lib/raCrossBankMatch.js';
 
 export type SourceKind = 'provider' | 'bank' | 'ats_public' | 'user_import';
 export type SourceVia = 'bank' | 'ats' | 'import';
@@ -84,6 +85,51 @@ export interface SalaryLine {
 
 /** `RAJob.sourceBoard` of a GoHire recruiter-bank row. */
 export const GOHIRE_SOURCE_BOARD = 'gohire';
+
+/** `RAJob.sourceBoard` of each recruiter bank's rows (the bank's id). */
+export const RECRUITER_BANK_BOARDS = ['robohire', GOHIRE_SOURCE_BOARD] as const;
+
+type EnvLike = Record<string, string | undefined>;
+
+/**
+ * The recruiter banks that have no candidate-facing posting page right now
+ * (`GOHIRE_PUBLIC_JOB_URL_TEMPLATE` / `ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE` unset
+ * or unusable). "A recruiter-bank row needs a real posting page"
+ * (GOAPPLY_PARITY_PLAN §3.9): the link such a row stores is the bank site's
+ * "Page not found", so the row is held, never listed. The bank sync archives
+ * these rows ('no_apply_target'); this is the read-side twin for rows stored
+ * before that rule, by another writer, or while the bank's sync does not run.
+ * Both markets.
+ */
+export function heldBankBoards(env: EnvLike = process.env): string[] {
+  return RECRUITER_BANK_BOARDS.filter((bank) => bankPublicJobUrlTemplate(bank, env) === null);
+}
+
+/** False for a recruiter-bank row whose bank has no posting page (see `heldBankBoards`). */
+export function bankListable(row: { fromRecruiterBank?: unknown; sourceBoard?: unknown }, env: EnvLike = process.env): boolean {
+  if (row.fromRecruiterBank !== true || typeof row.sourceBoard !== 'string') return true;
+  return !heldBankBoards(env).includes(row.sourceBoard);
+}
+
+/**
+ * `bankListable` as a Prisma `where` fragment (AND it in), or null when every
+ * bank has a posting page. The raw-SQL twin is `scopePredicates` in
+ * feed/sql.ts (`SqlScope.heldBanks`).
+ */
+export function bankListableWhere(env: EnvLike = process.env): { NOT: { fromRecruiterBank: true; sourceBoard: { in: string[] } } } | null {
+  const held = heldBankBoards(env);
+  return held.length ? { NOT: { fromRecruiterBank: true, sourceBoard: { in: held } } } : null;
+}
+
+/**
+ * `RAJob.sourceBoard` values the lists' posting-age floor never applies to:
+ * the recruiter banks and the public ATS boards. "No posting-age cut-off for
+ * board or bank rows" (GOAPPLY_PARITY_PLAN §3.9, MARKET_STRATEGY M-22): an
+ * employer lists a role for as long as it is open, often for months, and the
+ * source's own sync closes it. The same list as the ingest side's
+ * `NO_DATE_EXPIRY_BOARDS` (jobs/ingest/maintain.ts; a test holds them equal).
+ */
+export const NO_AGE_FLOOR_BOARDS: readonly string[] = [...new Set<string>([...RECRUITER_BANK_BOARDS, ...PUBLIC_ATS])];
 
 /**
  * `RAJob.sourceBoard` values of rows read from a public employer board (the
@@ -189,10 +235,15 @@ export interface SourceRowLike {
   lastSeenAt?: Date | string | null;
 }
 
-/** The apply link of a row (see the header). Never fabricated: no link → null. */
-export function applyLinkOf(row: Pick<SourceRowLike, 'applyUrl' | 'sourceBoard'>, kind: SourceKind): ApplyLink | null {
+/**
+ * The apply link of a row (see the header). Never fabricated: no link → null.
+ * A recruiter-bank row whose bank has no posting page has no link either: the
+ * one it stores opens the bank site's "Page not found" (`heldBankBoards`).
+ */
+export function applyLinkOf(row: Pick<SourceRowLike, 'applyUrl' | 'sourceBoard'>, kind: SourceKind, env: EnvLike = process.env): ApplyLink | null {
   const url = httpUrl(row.applyUrl);
   if (!url) return null;
+  if (kind === 'bank' && heldBankBoards(env).includes(row.sourceBoard)) return null;
   if (kind === 'bank') return { url, target: row.sourceBoard === GOHIRE_SOURCE_BOARD ? 'gohire' : null };
   if (kind === 'ats_public') return { url, target: 'employer' };
   return { url, target: null };

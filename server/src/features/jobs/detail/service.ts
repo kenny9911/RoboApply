@@ -22,7 +22,9 @@
 //   similar jobs are empty while `jobs.recommendations` is off (on GoApply
 //   that is CN_RECRUITMENT_INFO_MODE=off; on by default, D5); a public mainland
 //   posting with no usable apply link is never a similar job (feed/sourceLine.ts
-//   `cnListable`)
+//   `cnListable`), and neither is a recruiter-bank row whose bank has no
+//   posting page (`bankListableWhere`); the page of such a row carries no apply
+//   link (`applyLinkOf`)
 //   share         public page only with publicDisplay, else the app link
 //   companyNews   V2: the `companyNews` flag and a configured search only, on
 //                 both brands (no market term, D5)
@@ -40,7 +42,7 @@ import type { CompanyProfile } from '../companies/contract.js';
 import type { MatchFitView, PreScoreResult } from '../../match/contract.js';
 import type { MatchExplanation } from '../../compliance/contract.js';
 import { cnPostingVisible } from '../../cn/jobs/index.js';
-import { cnListableWhere } from '../../feed/contract.js';
+import { bankListable, bankListableWhere, cnListableWhere } from '../../feed/contract.js';
 import { OUTCOME_STATUS } from '../../tracker/contract.js';
 import {
   JOB_DETAIL_ERROR_CODES,
@@ -283,6 +285,8 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
   }
 
   function similarWhere(row: JobRow) {
+    // A recruiter-bank row whose bank has no posting page is never recommended (the feed's own rule, both markets).
+    const bank = bankListableWhere((deps.env ?? process.env) as Record<string, string | undefined>);
     const base = {
       market: row.market,
       visibility: 'public',
@@ -292,7 +296,7 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
       id: { not: row.id },
       ...(row.locationCountry ? { locationCountry: row.locationCountry } : {}),
       // Mainland: a posting with no usable apply link is never recommended (the feed's own rule).
-      ...(row.market === 'cn' ? { AND: [cnListableWhere()] } : {}),
+      ...(row.market === 'cn' || bank ? { AND: [...(row.market === 'cn' ? [cnListableWhere()] : []), ...(bank ? [bank] : [])] } : {}),
     };
     return row.primaryTaxonomyId ? { ...base, primaryTaxonomyId: row.primaryTaxonomyId } : { ...base, titleNormalized: row.titleNormalized };
   }
@@ -501,7 +505,8 @@ export function createJobDetailService(deps: JobDetailServiceDeps): JobDetailSer
     async recordApplyClick(userId, jobId) {
       const row = await loadJob(userId, jobId);
       if (isClosed(row)) throw new HttpError('conflict', 'This job is no longer listed.', { code: JOB_DETAIL_ERROR_CODES.closed });
-      const applyUrl = row.applyUrl?.trim() || null;
+      // A recruiter-bank row whose bank has no posting page has no link to open (feed/sourceLine.ts `bankListable`).
+      const applyUrl = bankListable(row) ? row.applyUrl?.trim() || null : null;
       // Nowhere to send the user: nothing moves to Applied ("I applied" covers this case).
       if (!applyUrl) throw new HttpError('conflict', 'This job has no application link.', { code: JOB_DETAIL_ERROR_CODES.noApplyLink });
       const at = now();

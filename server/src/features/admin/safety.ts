@@ -86,7 +86,7 @@ export async function getSafety(
   const page = rows.slice(0, SAFETY_PAGE_SIZE);
   const r = contentSafetyReadiness(options.env ?? process.env);
   return {
-    readiness: { provider: r.provider, usable: r.usable, cn1Ready: r.cn1Ready, keywordList: r.keywordList, timeoutMs: r.timeoutMs, problems: r.problems },
+    readiness: { provider: r.provider, usable: r.usable, cn1Ready: r.cn1Ready, keywordList: r.keywordList, timeoutMs: r.timeoutMs, problems: r.problems, degraded: r.degraded },
     last7d,
     items: page.map(toSafetyView),
     cursor: rows.length > SAFETY_PAGE_SIZE ? page[page.length - 1]!.id : null,

@@ -142,9 +142,11 @@ const scopes: Array<[string, JobScope]> = [
 ];
 
 const contexts: Array<[string, ScopeContext]> = [
-  ['no providers listed', { market: 'intl', now: NOW, publicBoards: [] }],
-  ['jsearch listed', { market: 'intl', now: NOW, publicBoards: ['jsearch'] }],
-  ['cn market', { market: 'cn', now: NOW, publicBoards: [] }],
+  ['no providers listed', { market: 'intl', now: NOW, publicBoards: [], heldBanks: [] }],
+  ['jsearch listed', { market: 'intl', now: NOW, publicBoards: ['jsearch'], heldBanks: [] }],
+  ['cn market', { market: 'cn', now: NOW, publicBoards: [], heldBanks: [] }],
+  // RoboHire has no posting page: its bank rows are on no public page (feed/sourceLine.ts `heldBankBoards`).
+  ['robohire held', { market: 'intl', now: NOW, publicBoards: ['jsearch'], heldBanks: ['robohire'] }],
 ];
 
 describe('publicJobWhere ≡ matchesScope (the two evaluators agree)', () => {
@@ -164,6 +166,20 @@ describe('publicJobWhere ≡ matchesScope (the two evaluators agree)', () => {
     expect(kept).toBeLessThan(rows.length - 10);
     // The planted closed / flagged / private / unlisted-provider rows are never kept.
     for (const bad of [rows[2], rows[5], rows[10], rows[14]]) expect(matchesScope(bad!, {}, ctx)).toBe(false);
+  });
+
+  it('a recruiter-bank row whose bank has no posting page is kept by neither evaluator; a listed provider row still is', () => {
+    const held = contexts[3]![1];
+    const bank = rows[0]!;
+    const provider = seoJob({ fromRecruiterBank: false, sourceBoard: 'jsearch' });
+    expect(matchesScope(bank, {}, contexts[1]![1])).toBe(true);
+    expect(matchesScope(bank, {}, held)).toBe(false);
+    expect(prismaSelects(publicJobWhere({}, held), bank)).toBe(false);
+    expect(matchesScope(provider, {}, held)).toBe(true);
+    expect(prismaSelects(publicJobWhere({}, held), provider)).toBe(true);
+    // Left out of the context, the rule is read from the environment (no bank has a page here).
+    expect(matchesScope(bank, {}, { market: 'intl', now: NOW, publicBoards: [] })).toBe(false);
+    expect(JSON.stringify(publicJobWhere({}, { market: 'intl', now: NOW, publicBoards: [] }).AND)).toContain('"NOT":{"fromRecruiterBank":true,"sourceBoard":{"in":["robohire","gohire"]}}');
   });
 });
 
@@ -194,7 +210,7 @@ function fakeDb() {
 }
 
 describe('createPrismaSeoRepo', () => {
-  const ctx: ScopeContext = { market: 'intl', now: NOW, publicBoards: [] };
+  const ctx: ScopeContext = { market: 'intl', now: NOW, publicBoards: [], heldBanks: [] };
   const scope: JobScope = { taxonomyId: 'backend_engineer' };
 
   it('countJobs: the full public predicate plus the extra narrowing', async () => {

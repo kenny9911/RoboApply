@@ -54,7 +54,12 @@ const authCnDb = {
   },
   rAAuthIdentity: { findFirst: async ({ where }: { where: { userId: string } }) => (where.userId === 'u_wx' ? { id: 'idn_1' } : null) },
 };
-const phoneGate = requirePhoneBound(authCnDb as never);
+// Parity wave (plan §3.7): a phone is asked for only where one can be bound, so
+// the gate under test runs with an SMS provider live. The opposite case (no SMS
+// provider: the same account passes) is asserted on the gate itself below.
+const SMS_ON = { NODE_ENV: 'test', SMS_DEV_CONSOLE: 'true' };
+const SMS_OFF = { NODE_ENV: 'test' };
+const phoneGate = requirePhoneBound(authCnDb as never, SMS_ON);
 
 const ENV_ON = { [flagEnvName('goapply', 'cn.referralCodes')]: 'true' };
 const ENV_OFF = { [flagEnvName('goapply', 'cn.referralCodes')]: 'false' };
@@ -111,6 +116,15 @@ describe('cn referral routes', () => {
     const mine = await on.request<Env<{ mine: unknown[] }>>('GET', BASE, { host: GO, headers: { 'x-user': 'u_wx' } });
     expect(mine.status).toBe(200);
     expect(mine.body.data.mine).toEqual([]);
+  });
+
+  it('no SMS provider: nobody can bind a phone, so the same WeChat-only account is not held (D5)', async () => {
+    const gate = requirePhoneBound(authCnDb as never, SMS_OFF);
+    const next = vi.fn();
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    await gate({ user: { id: 'u_wx' } } as never, res as never, next);
+    expect(next).toHaveBeenCalledWith();
+    expect(res.status).not.toHaveBeenCalled();
   });
 
   it('admin queue: 403 for a non-admin, then approve', async () => {

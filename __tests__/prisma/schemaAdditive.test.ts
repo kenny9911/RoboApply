@@ -63,7 +63,9 @@ describe.skipIf(baseline === null)('FND-1b additive schema diff (G1 diff a)', ()
     sql = execFileSync(
       'npx',
       ['prisma', 'migrate', 'diff', '--from-schema', base, '--to-schema', join('server', 'prisma', 'schema'), '--script'],
-      { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] },
+      // CHECKPOINT_DISABLE: the Prisma CLI's update check (checkpoint.prisma.io) is the one outbound
+      // connection this suite would open; the diff itself is schema to schema and reads no database.
+      { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, CHECKPOINT_DISABLE: '1' } },
     );
   }, 120_000);
 

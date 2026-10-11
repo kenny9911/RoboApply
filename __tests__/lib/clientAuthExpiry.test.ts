@@ -95,6 +95,9 @@ describe('RoboApiError code normalisation', () => {
     const { RoboApiError } = await importFreshClient();
     expect(new RoboApiError('x', { code: 'auth_other_brand', status: 401 }).code).toBe('auth_other_brand');
     expect(new RoboApiError('x', { code: 'account_other_brand', status: 409 }).code).toBe('account_other_brand');
+    // PAR gate: a busy credit reserve (nothing was reserved, safe to send again) is not folded into a crash.
+    expect(new RoboApiError('x', { code: 'credits_busy', status: 503 }).code).toBe('credits_busy');
+    expect(new RoboApiError('x', { code: 'something_else', status: 503 }).code).toBe('server_error');
   });
 });
 

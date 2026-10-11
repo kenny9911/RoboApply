@@ -56,10 +56,14 @@ export function listFollowUps(opts?: CallOptions): Promise<TR.FollowUpsResponse>
   return call<TR.FollowUpsResponse>('GET', `/api/v1/roboapply/v2/tracker/follow-ups`, opts);
 }
 
-/** `tracker.exportCsv` — GET /api/v1/roboapply/v2/tracker/export.csv */
-export function trackerExportCsvUrl(): string {
+/**
+ * `tracker.exportCsv` — GET /api/v1/roboapply/v2/tracker/export.csv
+ * `timeZone` (an IANA name, the reader's browser zone) makes the file carry the
+ * dates the page shows; without it the server uses the account's stored zone.
+ */
+export function trackerExportCsvUrl(timeZone?: string | null): string {
   // A download link (5 a day per user; the server answers 429 past that).
-  return apiUrl(`/api/v1/roboapply/v2/tracker/export.csv`);
+  return apiUrl(withQuery(`/api/v1/roboapply/v2/tracker/export.csv`, { tz: timeZone || undefined }));
 }
 
 /** `tracker.events` — GET /api/v1/roboapply/v2/tracker/:id/events */
@@ -77,14 +81,31 @@ export function listTrackerArtifacts(id: string, opts?: CallOptions): Promise<It
   return call<Items<TR.ApplicationArtifactView>>('GET', `${BASE}/${seg(id)}/artifacts`, opts);
 }
 
-/** Legacy V2 mount (roboapply/v2/routes/insights.ts): GET /v2/insights/weekly. */
-export function getWeeklyInsight(weekStartUtc?: string, opts?: CallOptions): Promise<TR.WeeklyInsightResponse> {
-  return call<TR.WeeklyInsightResponse>('GET', withQuery(`${INSIGHTS}/weekly`, { weekStartUtc }), opts);
+/** The week a weekly-insight call is about and the reader's zone (both optional; `WeeklyInsightQuerySchema`). */
+export interface WeeklyInsightScope {
+  /** The week the card shows (its start, YYYY-MM-DD). Default: the current week. */
+  weekStartUtc?: string;
+  /** The reader's IANA time zone, so the week is counted in it. Default: the account's stored zone. */
+  tz?: string | null;
 }
 
-/** Legacy V2 mount: POST /v2/insights/refresh (AI summary; 1 an hour). */
-export function refreshWeeklyInsight(opts?: CallOptions): Promise<TR.WeeklyInsightResponse> {
-  return call<TR.WeeklyInsightResponse>('POST', `${INSIGHTS}/refresh`, opts);
+/**
+ * Legacy V2 mount (roboapply/v2/routes/insights.ts): GET /v2/insights/weekly.
+ * The first argument is the week's start, or a `{ weekStartUtc, tz }` scope.
+ */
+export function getWeeklyInsight(week?: string | WeeklyInsightScope, opts?: CallOptions): Promise<TR.WeeklyInsightResponse> {
+  const scope: WeeklyInsightScope = typeof week === 'string' ? { weekStartUtc: week } : (week ?? {});
+  return call<TR.WeeklyInsightResponse>('GET', withQuery(`${INSIGHTS}/weekly`, { weekStartUtc: scope.weekStartUtc, tz: scope.tz || undefined }), opts);
+}
+
+/**
+ * Legacy V2 mount: POST /v2/insights/refresh (AI summary; 1 an hour). With a
+ * scope the summary is written for the week the card shows, in the reader's
+ * zone (`WeeklyInsightRefreshBodySchema`); without one, for the current week.
+ */
+export function refreshWeeklyInsight(scope?: WeeklyInsightScope, opts?: CallOptions): Promise<TR.WeeklyInsightResponse> {
+  const body = scope && (scope.weekStartUtc || scope.tz) ? { ...(scope.weekStartUtc ? { weekStartUtc: scope.weekStartUtc } : {}), ...(scope.tz ? { tz: scope.tz } : {}) } : undefined;
+  return call<TR.WeeklyInsightResponse>('POST', `${INSIGHTS}/refresh`, body ? { ...opts, body } : opts);
 }
 
 /** Every wrapper of this area, for callers that prefer one import. */

@@ -7,8 +7,11 @@
 // Pure: no database, no LLM, no network (manual mode works with AI consent off).
 //
 // Rules:
-//   G1  agreement (+ age 16) required; `pipl_cross_border` required while the
-//       data is processed offshore (CN-0, DEPLOY_REGION != cn-mainland);
+//   G1  agreement (+ age 16) required; `pipl_cross_border` required while
+//       personal information leaves the mainland on this deployment (the
+//       compliance catalog's rule, `crossBorderConsentApplies`: an offshore
+//       deployment, or a mainland one that uses the shared stack or a model
+//       vendor abroad; GOAPPLY_PARITY_PLAN.md §3.6);
 //       个性化推荐 must be an explicit true/false (no default); the prose
 //       version must be the one the server serves now.
 //   G2  应届/在校 need a 届别 (2025–2030; month defaults to 6); 社招 needs
@@ -27,7 +30,8 @@
 //   G7  up to 3 extra roles (merged into the search) and an optional source.
 
 import type { z } from 'zod';
-import { CONSENT_PROSE_VERSION, isOffshore } from '../compliance/index.js';
+import { getBrand } from '../../platform/brand/registry.js';
+import { CONSENT_PROSE_VERSION, crossBorderConsentApplies } from '../compliance/index.js';
 import {
   CN_ANY_CITY,
   CN_INDUSTRY_CODES,
@@ -97,7 +101,10 @@ function validateConsent(body: unknown, ctx: CnStepContext): CnStepValidation {
   const parsed = GOAPPLY_STEP_BODY_SCHEMAS.consent.safeParse(body);
   if (!parsed.success) return fail(zodIssues(parsed.error));
   const b = parsed.data;
-  const offshore = isOffshore(ctx.env ?? process.env);
+  // One rule with the consent catalog and sign-up (PAR-5 item 7): the box the G1 screen shows
+  // (it is catalog-driven) is the box this step requires and stores. For the live process the
+  // caller awaits `loadAiStackSnapshot()` first (features/onboarding/defaults.ts).
+  const offshore = crossBorderConsentApplies(getBrand('goapply'), ctx.env ?? process.env);
   const issues: Issue[] = [];
   if (offshore && b.crossBorder !== true) issues.push({ path: ['crossBorder'], message: CN_ISSUE.required });
   if (b.proseVersion !== CONSENT_PROSE_VERSION) issues.push({ path: ['proseVersion'], message: CN_ISSUE.proseOutdated });

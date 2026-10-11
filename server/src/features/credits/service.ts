@@ -481,12 +481,22 @@ export class CreditsAreaService {
         currentPlanKey = status.live ? status.planKey : 'free';
       }
     }
-    // Student plans are listed only for a signed-in, verified student: the
-    // rule that decides who may buy one (platform/billing/studentPlans).
-    const studentEnabled = await studentPlansListedFor(input.userId, brand, {
-      studentEnabled: (userId, b) => isEnabled('student', { userId, brand: b, env }),
-      isStudentVerified: this.d.isStudentVerified,
-    });
+    // GoApply (GOAPPLY_PARITY_PLAN §3.8, §7 step 6): the student passes are
+    // listed only for a signed-in, verified student, the rule that decides
+    // who may buy one (platform/billing/studentPlans).
+    // RoboApply lists its student plans as it did before the parity wave,
+    // whenever the `student` capability is on (the public /pricing page
+    // states the student price and the "verify to get it" path starts from
+    // the list); buying one still needs the verification
+    // (`studentVerifiedForPlan` at checkout, `assertStudentOrder` in the rail).
+    // One rule for both brands is an owner decision, not a default (P7).
+    const studentEnabled =
+      brand.market === 'cn'
+        ? await studentPlansListedFor(input.userId, brand, {
+            studentEnabled: (userId, b) => isEnabled('student', { userId, brand: b, env }),
+            isStudentVerified: this.d.isStudentVerified,
+          })
+        : await isEnabled('student', { userId: input.userId, brand, env }).catch(() => false);
     // The buyer's country picks the Taiwan price where one is configured
     // (`localPrice`); checkout applies the same rule to the same header.
     const { plans, defaultSelection } = buildPlanViews(brand.id, { env, currentPlanKey, studentEnabled, country: input.country });

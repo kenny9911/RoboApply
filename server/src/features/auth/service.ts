@@ -36,7 +36,7 @@ import { HttpError } from '../../platform/http.js';
 import { isEnabledForBrand, resolveFlagsForUser, type ResolvedFlags } from '../../platform/flags.js';
 import { emailOrigin, sendEmail as platformSendEmail, type SendEmailInput, type SendEmailResult } from '../../platform/email/index.js';
 import { AUTH_EMAIL_KEYS } from '../../platform/email/templates/auth/index.js';
-import { grantPracticeCredit as platformGrantPracticeCredit, type PracticeGrantResult } from '../../platform/credits/index.js';
+import { grantFirstPracticeCredit as platformGrantFirstPracticeCredit, type PracticeGrantResult } from '../../platform/credits/index.js';
 import { summarizeEntitlementsForMe, type EntitlementSummary } from '../../platform/credits/summary.js';
 import { createSeekerSession } from '../../roboapply/engine/lib/seekerSession.js';
 import { retentionDaysFor } from '../../roboapply/services/accountPurgeHelpers.js';
@@ -233,7 +233,9 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
   const createSession = (userId: string) => (deps.createSession ?? createSeekerSession)(userId);
   const hashPassword = (pw: string) => (deps.hashPassword ?? ((p: string) => bcrypt.hash(p, SALT_ROUNDS)))(pw);
   const grant = (userId: string) =>
-    (deps.grantPracticeCredit ?? ((u, r, k) => platformGrantPracticeCredit(u, r, k)))(userId, 'email_verified', 'email_verified');
+    // One first free practice per account: on GoApply a verified phone that already earned it
+    // means no second credit for the email (plan §3.5); RoboApply is the plain per-key grant.
+    (deps.grantPracticeCredit ?? ((u, r) => platformGrantFirstPracticeCredit(u, r)))(userId, 'email_verified', 'email_verified');
 
   // ── Shared helpers ──────────────────────────────────────────────────────
 

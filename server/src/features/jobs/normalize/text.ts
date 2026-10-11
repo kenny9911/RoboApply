@@ -11,6 +11,8 @@
 // " - <place or work model>" segment, and hiring slogans (急招, "Urgent").
 
 import { CITIES, SUBDIVISIONS, citiesNamed, countryByName, statedWorkModel } from '../geo/index.js';
+// The linear HTML scanner of the import area, through its contract (which re-exports the pure module html.ts).
+import { tagsOnly } from '../import/contract.js';
 
 /** Remove C0 control characters except tab, newline and carriage return. */
 export function stripControl(input: string): string {
@@ -64,11 +66,22 @@ export function decodeEntities(input: string): string {
   });
 }
 
-const looksLikeHtml = (s: string) => /<\/?[a-z][a-z0-9]*(\s[^>]*)?\/?>/i.test(s);
+// Bounded: `[^>]*` after an opener that never closes is read again from every "<" (quadratic).
+const looksLikeHtml = (s: string) => /<\/?[a-z][a-z0-9]*(\s[^<>]{0,2000})?\/?>/i.test(s);
 
-/** HTML (or plain text) → plain text with paragraph and list breaks kept. */
+/**
+ * HTML (or plain text) → plain text with paragraph and list breaks kept.
+ *
+ * The input is first reduced by the linear scanner (`tagsOnly`: every tag to
+ * its bare name, comments, scripts and styles gone, a stray "<" escaped), so
+ * the patterns below read it in linear time whatever a provider sent. Without
+ * it one posting with 100 KB of unclosed openers (`<li `, `<a `) took a second
+ * or more here, on every ingest pass (PAR-11 review; applied at the PAR gate).
+ * Well-formed markup and plain text give the same result as before
+ * (jobs/import/html.test.ts).
+ */
 export function htmlToPlain(input: string | null | undefined): string {
-  const s = cleanText(input);
+  const s = cleanText(typeof input === 'string' ? tagsOnly(input) : input);
   if (!s) return '';
   if (!looksLikeHtml(s) && !/&[a-z#0-9]+;/i.test(s)) return s.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n');
   let out = s

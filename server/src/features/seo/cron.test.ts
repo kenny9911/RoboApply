@@ -13,6 +13,11 @@ import { createMemorySeoRepo, seoJobs } from './testkit.js';
 
 const NOW = new Date('2026-10-10T04:00:00.000Z');
 const ENV = { INTERNAL_API_SECRET: 'sec' };
+// Both recruiter banks have a posting page in this file: a bank row is on a public page only then
+// (feed/sourceLine.ts `heldBankBoards`; the held case is tested in seo.test.ts).
+vi.stubEnv('ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE', 'https://jobs.robohire.example/p/{id}');
+vi.stubEnv('GOHIRE_PUBLIC_JOB_URL_TEMPLATE', 'https://jobs.gohire.example/p/{id}');
+
 const backend = { taxonomyIds: ['software_engineering', 'swe_backend', 'backend_engineer'] };
 
 function ctx(brand = BRANDS.roboapply, budgetMs = 240_000) {

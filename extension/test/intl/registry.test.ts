@@ -88,9 +88,12 @@ describe('RoboApply manifest after WP-70', () => {
     expect(manifestViolations(m)).toEqual([]);
   });
 
-  it('GoApply builds do not get the international form hosts', () => {
+  it('GoApply builds get the international form hosts too (D5); RoboApply gets no mainland portal host', () => {
     const cn = buildManifest({ brand: 'goapply', target: 'edge', dev: false, version: '1.0.0' }) as { host_permissions: string[] };
-    expect(cn.host_permissions.join(' ')).not.toMatch(/workday|smartrecruiters|icims|workable|taleo|successfactors|jobvite|bamboohr/);
+    expect(cn.host_permissions).toEqual(expect.arrayContaining(adapterHostPatterns('intl')));
+    expect(manifestViolations(cn)).toEqual([]);
+    const intl = buildManifest({ brand: 'roboapply', target: 'chrome', dev: false, version: '1.0.0' }) as { host_permissions: string[] };
+    expect(intl.host_permissions.join(' ')).not.toMatch(/mokahr|zhiye|beisen|feishu|dayee|hotjob/);
   });
 
   it('a supported site is recognised from the URL alone, before its form is open', () => {

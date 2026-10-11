@@ -20,7 +20,7 @@ import { CreditsExhaustedError } from '../../platform/credits/index.js';
 import { HttpError } from '../../platform/http.js';
 import { logger } from '../../services/LoggerService.js';
 import { resolveTimeZone } from '../alerts/index.js';
-import { cnListable } from '../feed/contract.js';
+import { bankListable, cnListable } from '../feed/contract.js';
 import {
   ACTIVE_QUEUE_STATES,
   AGENT_ERROR_CODES,
@@ -256,13 +256,15 @@ export function createAgentService(overrides: Partial<AgentDeps> = {}) {
    * Jobs this user may see on this brand (market, own imports, the GoApply
    * recruitment-info mode). A public mainland posting with no usable apply
    * link is never prepared or listed here either (feed/sourceLine.ts
-   * `cnListable`): Ready to apply ends at the user opening that link (D1).
+   * `cnListable`), and neither is a recruiter-bank row whose bank has no
+   * posting page (`bankListable`): Ready to apply ends at the user opening
+   * that link (D1).
    */
   async function visibleJobs(db: AgentDb, userId: string, ids: readonly string[]): Promise<Map<string, JobRow>> {
     if (!ids.length) return new Map();
     const market = deps.brand().market;
     const rows = (await db.rAJob.findMany({ where: { id: { in: [...new Set(ids)] } }, select: JOB_SELECT })) as JobRow[];
-    const mine = rows.filter((j) => j.market === market && (j.visibility !== 'private' || j.ownerUserId === userId) && cnListable(j));
+    const mine = rows.filter((j) => j.market === market && (j.visibility !== 'private' || j.ownerUserId === userId) && cnListable(j) && bankListable(j));
     const visible = await deps.visibleJobs(mine, userId);
     return new Map(visible.map((j) => [j.id, j]));
   }

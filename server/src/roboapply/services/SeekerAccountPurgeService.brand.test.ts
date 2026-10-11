@@ -131,7 +131,7 @@ beforeEach(async () => {
   h.deletes.length = 0;
   h.failBuckets.clear();
   h.resumeStorage = null;
-  for (const model of ['user', 'seekerProfile', 'interviewSession', 'rAResumeVariant', 'rAApplicationArtifact', 'rAOnboardingSession', 'rAWorkItem']) {
+  for (const model of ['user', 'seekerProfile', 'interviewSession', 'rAResumeVariant', 'rAApplicationArtifact', 'rAOnboardingSession', 'rAWorkItem', 'rABillingRefund']) {
     await (db() as unknown as Record<string, { deleteMany: (a: object) => Promise<unknown> }>)[model]!.deleteMany({});
   }
   for (const name of ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'CN_AWS_ACCESS_KEY_ID', 'CN_AWS_SECRET_ACCESS_KEY', 'S3_BUCKET', 'CN_S3_BUCKET', 'S3_ACCESS_KEY_ID', 'CN_S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY', 'CN_S3_SECRET_ACCESS_KEY', 'S3_ENDPOINT', 'CN_S3_ENDPOINT']) {

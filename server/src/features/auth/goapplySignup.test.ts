@@ -21,12 +21,19 @@ import { CN_OWN_STACK_ENV } from '../auth-cn/__tests__/testkit.js';
 import { planGoApplyEmailSignup, shownConsentProse, type GoApplyInviteSeam } from './goapplySignup.js';
 
 const goapply = getBrand('goapply');
-/** The hash of the text the form shows for a consent (what the policy serves in that language). */
-const hashOf = (type: string, locale: 'zh' | 'en' = 'zh') => resolveConsentProse(findConsentDefinition('goapply', type)!, goapply, locale).hash;
-/** What the form sends: each ticked consent with the hash of the text beside its box. */
-const granted = (...types: string[]) =>
-  types.map((type) => ({ type, granted: true, proseVersion: 'client-string', ...(findConsentDefinition('goapply', type) ? { proseHash: hashOf(type) } : {}) }));
-const CN0 = granted('pipl_basic_processing', 'age_16_plus', 'pipl_cross_border');
+/**
+ * The hash of the text the form shows for a consent (what the policy serves in that language).
+ * `env` is the deployment's: the cross-border text names the processors of the stack in use
+ * (PAR-5 item 7), so a deployment with other credentials shows, and hashes, another text.
+ */
+const hashOf = (type: string, locale: 'zh' | 'en' = 'zh', env: Record<string, string | undefined> = process.env) =>
+  resolveConsentProse(findConsentDefinition('goapply', type)!, goapply, locale, env).hash;
+/** What the form sends on a deployment with `env`: each ticked consent with the hash of the text beside its box. */
+const grantedOn = (env: Record<string, string | undefined>, ...types: string[]) =>
+  types.map((type) => ({ type, granted: true, proseVersion: 'client-string', ...(findConsentDefinition('goapply', type) ? { proseHash: hashOf(type, 'zh', env) } : {}) }));
+const granted = (...types: string[]) => grantedOn(process.env, ...types);
+const CN0_TYPES = ['pipl_basic_processing', 'age_16_plus', 'pipl_cross_border'] as const;
+const CN0 = granted(...CN0_TYPES);
 /** The default: no CN_SIGNUP_MODE. */
 const OPEN = { NODE_ENV: 'test' };
 const INVITE = { NODE_ENV: 'test', CN_SIGNUP_MODE: 'invite' };
@@ -61,13 +68,17 @@ async function code(p: Promise<unknown>): Promise<{ code?: string; status?: numb
 describe('planGoApplyEmailSignup', () => {
   it('production with no documents version, SMS or WeChat: the account is planned without an invite code', async () => {
     const seam = invites();
-    const plan = await planGoApplyEmailSignup({ consents: CN0 }, { env: PROD, invites: seam });
+    // The form on this deployment shows its own cross-border text (it names Resend here).
+    const plan = await planGoApplyEmailSignup({ consents: grantedOn(PROD, ...CN0_TYPES) }, { env: PROD, invites: seam });
+    // A hash of the text another deployment shows is not this deployment's text: asked again.
+    expect(await code(planGoApplyEmailSignup({ consents: CN0 }, { env: PROD, invites: seam }))).toMatchObject({ code: 'consent_required', details: { outdated: ['pipl_cross_border'] } });
     expect(plan.inviteRequired).toBe(false);
     expect(plan.consentRows.map((r) => r.consentType).sort()).toEqual(['age_16_plus', 'pipl_basic_processing', 'pipl_cross_border']);
     await plan.redeemInvite({ rABrandInvite: {} } as never);
     expect([seam.checked, seam.spent]).toEqual([[], []]);
     // The same answer whatever the documents version says: it is not a gate.
-    await expect(planGoApplyEmailSignup({ consents: CN0 }, { env: { ...PROD, CN_LEGAL_DOCS_VERSION: '2026-11' } })).resolves.toMatchObject({ inviteRequired: false });
+    const versioned = { ...PROD, CN_LEGAL_DOCS_VERSION: '2026-11' };
+    await expect(planGoApplyEmailSignup({ consents: grantedOn(versioned, ...CN0_TYPES) }, { env: versioned })).resolves.toMatchObject({ inviteRequired: false });
   });
 
   it('CN_SIGNUP_MODE=closed answers signup_closed before anything else is looked at', async () => {

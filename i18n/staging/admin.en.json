@@ -153,6 +153,9 @@
             "generic": "That did not work. Try again."
           }
         }
+      },
+      "safety": {
+        "problemsDegraded": "Setup problems. The check runs on the built-in word list until they are fixed"
       }
     }
   }

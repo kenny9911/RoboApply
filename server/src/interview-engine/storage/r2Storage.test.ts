@@ -234,7 +234,8 @@ describe('CN_RESIDENCY_STRICT: new artifacts need a bucket of GoApply’s own', 
   it('with a bucket of its own GoApply stores there; without the strict switch the shared bucket is the fallback', async () => {
     Object.assign(process.env, SHARED, {
       CN_RESIDENCY_STRICT: 'true',
-      CN_S3_BUCKET: 'interviews-cn', CN_S3_ENDPOINT: 'https://oss-cn-shanghai.example', CN_S3_ACCESS_KEY_ID: 'cn-ak', CN_S3_SECRET_ACCESS_KEY: 'cn-sk',
+      // Mainland object storage: under the strict switch a bucket of its own on any other host stores nothing.
+      CN_S3_BUCKET: 'interviews-cn', CN_S3_ENDPOINT: 'https://oss-cn-shanghai.aliyuncs.com', CN_S3_ACCESS_KEY_ID: 'cn-ak', CN_S3_SECRET_ACCESS_KEY: 'cn-sk',
     });
     const storage = new InterviewR2Storage();
     const own = spySend(storage, 'goapply');

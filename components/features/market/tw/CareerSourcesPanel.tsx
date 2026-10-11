@@ -24,7 +24,7 @@ import {
   type CareerSourceView,
   type PublicAts,
 } from '../../../../lib/api/careerSources';
-import { apiErrorCode } from '../../../../lib/api/contracts/wire';
+import { apiErrorCode, apiErrorReason } from '../../../../lib/api/contracts/wire';
 import { useAuth } from '../../../../lib/auth/AuthProvider';
 import { Btn } from '../../../v3/primitives/Btn';
 import { EmptyState } from '../../../v3/primitives/EmptyState';
@@ -65,6 +65,8 @@ export function problemKey(code: string): string {
 
 export function CareerSourcesPanel() {
   const t = useTranslations('jobsTw.admin');
+  // The one sentence this panel shares with GoApply's board manager (a board is read for one site at a time).
+  const tBoards = useTranslations('admin.console.sources.boards');
   const locale = useLocale();
   const { user, status } = useAuth();
   const qc = useQueryClient();
@@ -82,7 +84,10 @@ export function CareerSourcesPanel() {
   const refresh = () => qc.invalidateQueries({ queryKey: LIST_KEY });
   const errorText = (err: unknown) => {
     const code = apiErrorCode(err);
-    return code === 'conflict' ? t('errors.duplicate') : code === 'invalid_request' ? t('errors.invalid') : t('errors.generic');
+    // 409 with `details.reason: board_on_other_site` (PAR-7): the other site reads this board (the mainland
+    // seed boards, for example), so it is not in this list and "already in the list" would be untrue.
+    if (code === 'conflict') return apiErrorReason(err) === 'board_on_other_site' ? tBoards('errors.otherSite') : t('errors.duplicate');
+    return code === 'invalid_request' ? t('errors.invalid') : t('errors.generic');
   };
 
   const create = useMutation({

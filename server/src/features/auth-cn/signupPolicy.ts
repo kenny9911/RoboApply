@@ -109,7 +109,13 @@ export async function requiredSignupConsents(env: EnvSource = process.env): Prom
   const version = (env.CN_LEGAL_DOCS_VERSION || '').trim() || AUTH_CN_CONSENT_PROSE_VERSION;
   const types = new Set(requiredSignupConsentTypes(crossBorderConsentRequired(env)));
   // Lazy, like the prose lookups below: the compliance area is loaded only when a sign-up needs it.
-  const { consentDefinitionsFor, isConsentRequired } = await import('../compliance/index.js');
+  const { consentDefinitionsFor, isConsentRequired, loadAiStackSnapshot } = await import('../compliance/index.js');
+  // The requirement, the text and its hash follow the stack in use, admin model
+  // overrides included (PAR-5): load them first so the instance that serves the
+  // policy and the one that validates the form compute the same answer, cold or
+  // warm. Every sign-up path (policy, email, phone, WeChat) comes through here
+  // before it builds a text or a hash. Reads nothing for an injected env.
+  await loadAiStackSnapshot(env);
   for (const def of consentDefinitionsFor('goapply')) {
     if (def.stage === 'signup' && isConsentRequired(def, { env })) types.add(def.type);
   }

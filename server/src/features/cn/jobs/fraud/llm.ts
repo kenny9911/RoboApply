@@ -7,26 +7,33 @@
 //   - always under runWithBrand('goapply'): the call runs as GoApply, so it
 //     passes the content-safety filter on whichever stack answers it;
 //   - model: the fraud model, else the enrichment model, else the default
-//     model, each read through `brandEnv` per key (`CN_X ?? X`). So
-//     CN_LLM_FRAUD_MODEL wins when set, and a deployment with no CN_ value at
-//     all runs the pass on the shared model RoboApply uses. No model named
-//     anywhere → the pass is off ("unavailable", never faked);
-//   - never a shared model id under GoApply's own provider: when GoApply has
-//     its own LLM stack (CN_LLM_PROVIDER or CN_LLM_MODEL), only its own `CN_`
-//     model names are passed on. With none of them set the call names no
-//     model, and the model layer picks GoApply's default and routes it (it
-//     owns the rule for a shared selector beside an own provider);
-//   - the domestic-only wall is opt-in: only under `cnLlmDomesticOnly(env)`
-//     (CN_LLM_DOMESTIC_ONLY or CN_RESIDENCY_STRICT) must the id name a
-//     mainland provider ("deepseek/…", "dashscope/…"); anything else is
-//     refused there;
+//     model, each through the shared model resolver (lib/llm/llmModels.ts
+//     `getEnvModelSetting`; the enrich area's `resolveEnrichModel`), per key:
+//     GoApply's own value first (its admin setting, `CN_<NAME>`), then the
+//     shared stack's. So CN_LLM_FRAUD_MODEL wins when set, and a deployment
+//     with no CN_ value at all runs the pass on the shared model RoboApply
+//     uses. No model named anywhere → the pass is off ("unavailable", never
+//     faked);
+//   - a shared selector beside a provider of GoApply's own is qualified by
+//     the resolver to the route it has for RoboApply, so it is never sent to
+//     GoApply's provider under a bare id;
+//   - the domestic-only wall is opt-in: only under CN_LLM_DOMESTIC_ONLY (or
+//     CN_RESIDENCY_STRICT) must the id name a mainland provider
+//     ("deepseek/…", "dashscope/…"), and is the call pinned to it. Behind the
+//     wall the resolver hands GoApply no international shared value, so a
+//     shared LLM_FRAUD_MODEL that is not a mainland one falls through to the
+//     enrichment model; a model GoApply names itself that is not a mainland
+//     one is refused (`taskModelRoute`, the one rule enrichment, campus
+//     extraction and this pass share);
 //   - a user's own import is checked only with `aiAllowed(user)`.
 // The posting is untrusted text: the prompt fences it and says so. Every
 // flag needs a quote that is really in the posting; anything else is dropped.
 
 import { z } from 'zod';
 import { llmService, type LLMChatResult } from '../../../../platform/llm/index.js';
-import { brandEnv, brandOwnEnv, brandStack, cnLlmDomesticOnly, getBrand, runWithBrand, type EnvSource } from '../../../../platform/brand/index.js';
+import { getBrand, runWithBrand, type EnvSource } from '../../../../platform/brand/index.js';
+import { getEnvModelSetting } from '../../../../lib/llm/llmModels.js';
+import { CN_DOMESTIC_PROVIDERS, resolveEnrichModel, taskModelRoute } from '../../../jobs/enrich/index.js';
 import type { LLMOptions, Message } from '../../../../types/index.js';
 import { MAX_QUOTE_CHARS, quoteInText } from '../text.js';
 import type { CnFraudSignal } from './keywords.js';
@@ -49,7 +56,7 @@ export const defaultFraudLlm: FraudLlm = {
 
 export interface FraudModelRoute {
   model: string | undefined;
-  /** Set when the model id names a mainland provider by its prefix (LLMService strips that prefix). */
+  /** Set only behind the domestic-only wall: the mainland provider the id names, which the call is pinned to (LLMService strips that prefix). */
   provider?: string;
   available: boolean;
   /** Why the pass is off although a model is named: the domestic-only wall is on and the id is not a mainland one. */
@@ -58,37 +65,29 @@ export interface FraudModelRoute {
 
 /**
  * Mainland providers a model id can name by its routing prefix
- * ("deepseek/deepseek-chat", "dashscope/qwen-plus"): the vendors with their
- * platform names (qwen / dashscope, glm / zhipu, doubao / ark), the same set
- * the enrichment resolver accepts under the wall (jobs/enrich/agent.ts
- * CN_DOMESTIC_PROVIDERS). A self-hosted gateway ("newapi/") is not in it: its
- * host is not known to be in-region from the id alone.
+ * ("deepseek/deepseek-chat", "dashscope/qwen-plus"): the enrichment
+ * resolver's own list (jobs/enrich `CN_DOMESTIC_PROVIDERS`), kept under this
+ * name for the tests of this area. A self-hosted gateway ("newapi/") is not in
+ * it: its host is not known to be in-region from the id alone.
  */
-export const FRAUD_DOMESTIC_PROVIDERS = ['deepseek', 'kimi', 'moonshot', 'minimax', 'qwen', 'dashscope', 'glm', 'zhipu', 'doubao', 'ark'] as const;
-
-function domesticProviderOf(model: string): string | null {
-  const slash = model.indexOf('/');
-  if (slash <= 0 || slash === model.length - 1) return null;
-  const prefix = model.slice(0, slash).trim().toLowerCase();
-  return (FRAUD_DOMESTIC_PROVIDERS as readonly string[]).includes(prefix) ? prefix : null;
-}
+export const FRAUD_DOMESTIC_PROVIDERS = CN_DOMESTIC_PROVIDERS;
 
 /**
- * The fraud-check model for GoApply, from env only: the fraud model, else the
- * enrichment model, else the default model, each `CN_X ?? X` (see the header).
+ * The fraud-check model for GoApply: the fraud model (`CN_LLM_FRAUD_MODEL`,
+ * else the shared `LLM_FRAUD_MODEL`), else the enrichment model, else the
+ * default model, all through the shared resolver (see the header; the same
+ * shape as `resolveCampusModel` in cn/campus/extract.ts).
  */
 export function resolveFraudModel(env: EnvSource = process.env): FraudModelRoute {
   const brand = getBrand('goapply');
-  // GoApply's own stack: only its own names (a shared id would be sent to the wrong provider).
-  const ownStack = brandStack(brand, 'llm', env) === 'own';
-  const read = (name: string): string | undefined => (ownStack ? brandOwnEnv(brand, name, env) : brandEnv(brand, name, env))?.trim() || undefined;
-  const model = read('LLM_FRAUD_MODEL') ?? read('LLM_ENRICH_MODEL') ?? read('LLM_MODEL');
-  // Own stack with no model of its own named (a provider only): the model layer picks and routes GoApply's default.
-  if (!model) return { model: undefined, available: ownStack };
-  const provider = domesticProviderOf(model);
-  // The wall is an explicit operator choice (P4), never implied by a missing CN model.
-  if (!provider && cnLlmDomesticOnly(env)) return { model: undefined, available: false, refused: 'not_domestic_provider' };
-  return { model, ...(provider ? { provider } : {}), available: true };
+  const own = getEnvModelSetting('LLM_FRAUD_MODEL', brand, env);
+  const route = own ? taskModelRoute(brand, own, env) : resolveEnrichModel(brand, env);
+  return {
+    model: route.model,
+    ...(route.provider ? { provider: route.provider } : {}),
+    available: route.available,
+    ...(route.refused ? { refused: route.refused } : {}),
+  };
 }
 
 const SYSTEM_PROMPT = [

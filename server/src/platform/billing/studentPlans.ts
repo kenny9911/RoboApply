@@ -11,9 +11,13 @@
 // (学生月卡 30 days, 学生季卡 90 days) bought through Alipay or WeChat Pay. The
 // rule is the same on both.
 //
-// The same rule decides who is SHOWN a student plan (`studentPlansListedFor`,
-// used by `GET /billing/plans`): the plans list carries the student plans only
-// for a signed-in, verified student (GOAPPLY_PARITY_PLAN §7 step 6).
+// On GoApply the same rule decides who is SHOWN a student pass
+// (`studentPlansListedFor`, used by `GET /billing/plans` for market `cn`): the
+// plans list carries the student passes only for a signed-in, verified student
+// (GOAPPLY_PARITY_PLAN §3.8, §7 step 6). RoboApply lists its student plans
+// whenever the `student` capability is on, as before the parity wave
+// (features/credits/service.ts `plans()`); buying one needs the verification
+// on both brands.
 //
 // It fails closed: a capability or verification lookup that errors counts as
 // "no". The caller runs it BEFORE anything is recorded, so an unverified buyer

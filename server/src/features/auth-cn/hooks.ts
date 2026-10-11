@@ -35,8 +35,10 @@ export function defaultAccountHooks(): AccountHooks {
   return {
     recordAttribution: async (userId, touch, options) => (await import('../growth/index.js')).recordAttribution(userId, touch, options),
     checkReferral: async (userId) => (await import('../growth/index.js')).checkReferralFor(userId),
-    grantPhoneCredit: async (userId) =>
-      (await import('../../platform/credits/index.js')).grantPracticeCredit(userId, PHONE_VERIFIED_GRANT, PHONE_VERIFIED_GRANT),
+    // One first free practice per account: a GoApply account whose verified email already
+    // earned it gets no second one for binding a phone (plan §3.5; the account's brand is
+    // read from its row, so a RoboApply account keeps the plain per-key grant).
+    grantPhoneCredit: async (userId) => (await import('../../platform/credits/index.js')).grantFirstPracticeCredit(userId, PHONE_VERIFIED_GRANT),
   };
 }
 

@@ -54,6 +54,11 @@ const authCnDb = {
   rAAuthIdentity: { findFirst: async ({ where }: { where: { userId: string } }) => (where.userId === WECHAT_USER ? { id: 'idn' } : null) },
 };
 
+// Parity wave (plan §3.7): a phone is asked for only where one can be bound, so
+// both gates run with an SMS provider live; SMS_OFF is the opposite case.
+const SMS_ON = { NODE_ENV: 'test', SMS_DEV_CONSOLE: 'true' };
+const SMS_OFF = { NODE_ENV: 'test' };
+
 type Env<T> = { success: boolean; data: T; code?: string; details?: Record<string, unknown> };
 const BODY = { baseVariantId: 'rv_1', jobId: 'job_1', mode: 'guided', sections: ['experience', 'skills'], keywords: ['Tableau'] };
 
@@ -64,11 +69,11 @@ beforeAll(async () => {
   const auth = { seekerAuth: [fakeAuth((req) => (req.headers['x-test-anon'] ? null : { id: String(req.headers['x-test-user'] ?? USER) }))] };
   const seamService = new TailorService({
     ...serviceDeps,
-    assertPhoneBound: (userId) => assertPhoneBound(userId, authCnDb as never),
+    assertPhoneBound: (userId) => assertPhoneBound(userId, authCnDb as never, SMS_ON),
   });
   h = await startRouteHarness({
     mounts: [
-      [BASE_PATH, createResumeSuiteRouter(auth, { tailor: service, phoneGate: requirePhoneBound(authCnDb as never) })],
+      [BASE_PATH, createResumeSuiteRouter(auth, { tailor: service, phoneGate: requirePhoneBound(authCnDb as never, SMS_ON) })],
       [SEAM_PATH, createResumeSuiteRouter(auth, { tailor: seamService, phoneGate: (_req, _res, next) => next() })],
     ],
   });
@@ -144,6 +149,14 @@ describe('tailor session routes', () => {
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('phone_binding_required');
     expect(tailor).not.toHaveBeenCalled();
+  });
+
+  it('no SMS provider: nobody can bind a phone, so the same WeChat account is not held by either gate (D5)', async () => {
+    await expect(assertPhoneBound(WECHAT_USER, authCnDb as never, SMS_OFF)).resolves.toBeUndefined();
+    await expect(assertPhoneBound(WECHAT_USER, authCnDb as never, SMS_ON)).rejects.toMatchObject({ code: 'phone_binding_required' });
+    const next = vi.fn();
+    await requirePhoneBound(authCnDb as never, SMS_OFF)({ user: { id: WECHAT_USER } } as never, {} as never, next);
+    expect(next).toHaveBeenCalledWith();
   });
 
   it('create → claims → finalize (409 unverified_claims until every claim is checked)', async () => {

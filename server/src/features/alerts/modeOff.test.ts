@@ -132,6 +132,21 @@ describe('alert candidates: the selection seam', () => {
     expect(Object.keys((await w.repoFor(PARTNER).jobCards(['job_gh']))[0]!)).not.toContain('applyUrl');
   });
 
+  it('a recruiter-bank posting whose bank has no posting page is never a candidate and never a card; with the page it is (plan §3.9)', async () => {
+    // Stored before the rule: the link is the bank site's "Page not found", a valid http URL.
+    const stored = gohirePosting({ fromRecruiterBank: true, applyUrl: 'https://www.gohire.top/jobs/job_gh' });
+    const w = world([stored, gohirePosting({ id: 'job_ok', sourceBoard: 'greenhouse', fromRecruiterBank: false })]);
+    for (const env of [PARTNER, {}]) {
+      expect((await w.repoFor(env).candidateJobIds(query())).ids).toEqual(['job_ok']);
+      expect((await w.repoFor(env).jobCards(['job_gh', 'job_ok'])).map((c) => c.id)).toEqual(['job_ok']);
+    }
+    const page = { GOHIRE_PUBLIC_JOB_URL_TEMPLATE: 'https://jobs.gohire.example/p/{id}' };
+    expect((await w.repoFor(page).candidateJobIds(query())).ids.sort()).toEqual(['job_gh', 'job_ok']);
+    const cards = await w.repoFor(page).jobCards(['job_gh', 'job_ok']);
+    expect(cards.map((c) => c.id).sort()).toEqual(['job_gh', 'job_ok']);
+    expect(Object.keys(cards[0]!)).not.toContain('fromRecruiterBank');
+  });
+
   it('a user’s own import never alerts, in either mode', async () => {
     const w = world([gohirePosting({ id: 'job_own', visibility: 'private', ownerUserId: 'u1', provider: 'user_import', sourceBoard: null })]);
     for (const env of [OFF, PARTNER]) expect((await w.repoFor(env).candidateJobIds(query())).ids).toEqual([]);

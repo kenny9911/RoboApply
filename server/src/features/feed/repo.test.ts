@@ -156,6 +156,8 @@ function matches(row: Row, where: Row): boolean {
       if (!(v as Row[]).every((w) => matches(row, w))) return false;
     } else if (k === 'OR') {
       if (!(v as Row[]).some((w) => matches(row, w))) return false;
+    } else if (k === 'NOT') {
+      if (matches(row, v as Row)) return false;
     } else if (v !== null && typeof v === 'object' && !(v instanceof Date)) {
       const op = v as Row;
       const cell = row[k];
@@ -206,6 +208,8 @@ describe('publicPageIds applies the public-page rules of the SEO pages', () => {
     job({ id: 'expired', expiresAt: new Date('2026-10-01T00:00:00Z') }),
     job({ id: 'flagged', fraudFlags: [{ rule: 'upfront_fee', evidence: 'pay a deposit', at: '2026-10-01' }] }),
     job({ id: 'cn_job', market: 'cn' }),
+    // A recruiter-bank row whose bank has no posting page (no template is set here): on no public page.
+    job({ id: 'held_bank', sourceBoard: 'robohire' }),
   ];
   const db = { rAJob: { findMany: async ({ where }: { where: Row }) => rows.filter((r) => matches(r, where)).map((r) => ({ id: r.id })) } };
   const repo = createPrismaFeedRepo(async () => db as never);
@@ -216,6 +220,7 @@ describe('publicPageIds applies the public-page rules of the SEO pages', () => {
 
   it('closed, expired, fraud-flagged and other-market jobs are refused too; only asked ids are read', async () => {
     expect([...(await repo.publicPageIds(rows.map((r) => r.id as string), 'intl', NOW))]).toEqual(['valid']);
+    expect([...(await repo.publicPageIds(['held_bank'], 'intl', NOW))]).toEqual([]);
     expect([...(await repo.publicPageIds(['archived'], 'intl', NOW))]).toEqual([]);
     expect([...(await repo.publicPageIds([], 'intl', NOW))]).toEqual([]);
   });

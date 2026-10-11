@@ -19,7 +19,7 @@ export const CnConsentStepSchema = z
   .object({
     /** 用户协议 + 隐私政策 + 我已年满16周岁 (`age_16_plus`). Required. */
     agreement: z.literal(true),
-    /** `pipl_cross_border` — required while DEPLOY_REGION != cn-mainland (CN-0); the service enforces it. */
+    /** `pipl_cross_border` — required while personal information leaves the mainland on this deployment (offshore, or the shared stack is in use); the service enforces it. */
     crossBorder: z.boolean().optional(),
     /** `ai_resume_parsing` — off until tapped. */
     aiProcessing: z.boolean(),

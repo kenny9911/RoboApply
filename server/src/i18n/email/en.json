@@ -23,7 +23,9 @@
       "practice_pack_5": "Practice pack (5)",
       "practice_pack_15": "Practice pack (15)",
       "student_monthly": "Student Monthly",
-      "student_quarterly": "Student Quarterly"
+      "student_quarterly": "Student Quarterly",
+      "student_monthlyCn": "Student 30-day pass",
+      "student_quarterlyCn": "Student 90-day pass"
     },
     "periods": {
       "week": "week",

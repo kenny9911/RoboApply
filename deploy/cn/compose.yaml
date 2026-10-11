@@ -25,7 +25,14 @@ name: goapply-cn
 services:
   db:
     profiles: ["localdb"]
-    image: postgres:16-alpine
+    # PostgreSQL 16 with the pgvector extension: the schema has halfvec(1024)
+    # columns (market wave M0), which need pgvector 0.7.0 or newer. Run
+    # server/prisma/sql/000_extensions.sql and 001_vector.sql before the push,
+    # and confirm the version first:
+    #   SELECT extversion FROM pg_extension WHERE extname = 'vector';
+    # A volume made by the earlier postgres:16-alpine image is not reused
+    # safely (another C library): `docker compose ... down -v` it first.
+    image: pgvector/pgvector:0.8.0-pg16
     environment:
       POSTGRES_USER: goapply
       POSTGRES_DB: goapply

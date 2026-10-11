@@ -60,6 +60,10 @@ const ENVS: Array<[name: string, env: Env]> = [
     { LLM_PROVIDER: 'openrouter', LLM_MODEL: 'openrouter/x/y', LLM_ENRICH_MODEL: 'qwen/qwen3.8-flash', CN_LLM_PROVIDER: 'deepseek', CN_LLM_MODEL: 'deepseek-chat' },
   ],
   ['its own provider abroad', { CN_LLM_PROVIDER: 'openrouter', CN_LLM_MODEL: 'openai/gpt-5' }],
+  // CN_LLM_MODEL alone starts the own profile; a bare id has no route there (boot reports it, platform/startup.ts
+  // `cnDefaultModelHasNoRoute`). Nothing is sent, and the disclosures never call it a mainland vendor.
+  ['its own model as a bare id and no provider of its own (no route)', { LLM_PROVIDER: 'openrouter', LLM_MODEL: 'openai/gpt-5', CN_LLM_MODEL: 'deepseek-chat' }],
+  ['its own model with a vendor prefix and no provider of its own', { LLM_PROVIDER: 'openrouter', LLM_MODEL: 'openai/gpt-5', CN_LLM_MODEL: 'deepseek/deepseek-chat' }],
 ];
 
 describe('disclosures agree with the model resolver on where each task goes', () => {

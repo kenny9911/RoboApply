@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { STAGING_EN, STAGING_NAMESPACES } from '../../i18n/staging/index';
+import { substituteBrandTokens } from '../../lib/brand/tokens';
 import { loadMessages } from '../../lib/i18n';
 import { LOCALES } from '../../lib/localeConfig';
 
@@ -52,7 +53,15 @@ describe('staged English at runtime', () => {
     // Empty right after a merge (`npm run i18n:merge -- --check`); feature work stages new keys here again.
     const en = bundle('en');
     for (const path of leafPaths(STAGING_EN)) {
-      const staged = at(STAGING_EN, path);
+      // `loadMessages` returns the bundle of a brand, with `%BRAND%` already replaced by its
+      // name, so a staged string is compared after the same substitution (PAR gate; a staged
+      // string that follows the "use %BRAND%" rule used to fail here).
+      const raw = at(STAGING_EN, path);
+      const staged = substituteBrandTokens(raw, 'roboapply');
+      if (typeof raw === 'string' && raw.includes('%BRAND%')) {
+        expect(staged, path).not.toContain('%BRAND%');
+        expect(at(loadMessages('en', 'goapply'), path), `goapply:${path}`).toBe(substituteBrandTokens(raw, 'goapply'));
+      }
       expect(at(loadMessages('en'), path), path).toBe(staged);
       for (const locale of LOCALES) {
         if (locale === 'en' || typeof at(bundle(locale), path) === 'string') continue;

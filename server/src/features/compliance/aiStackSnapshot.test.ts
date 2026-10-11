@@ -39,7 +39,8 @@ import { emptyLlmStackBlob, type LlmStackConfigBlob } from '../../lib/llm/llmSta
 import { getBrand } from '../../platform/brand/registry.js';
 import { createFakePrisma } from '../../test/fakePrisma.js';
 import { CONSENT_PROSE_VERSION, findConsentDefinition, isConsentRequired, listConsents, recordConsent, resolveConsentProse, type ConsentDb } from './consents.js';
-import { aiLeavesMainland, buildDisclosures, configuredModels, crossBorderConsentApplies, loadAiStackSnapshot } from './disclosures.js';
+import { aiLeavesMainland, buildDisclosures, configuredModels, crossBorderConsentApplies, loadAiStackSnapshot, ownStackLeavesMainland } from './disclosures.js';
+import { requiredSignupConsents } from '../auth-cn/signupPolicy.js';
 import { aiPlaceSentence } from './processingStatement.js';
 
 const goapply = getBrand('goapply');
@@ -292,5 +293,48 @@ describe('the live process: a cold instance and a warm instance serve the same c
     h.fail = true;
     const items = await listConsents('u1', goapply, { locale: 'zh' }, deps(db()));
     expect(items.find((x) => x.type === 'ai_resume_parsing')!.prose).toContain('deepseek（中国大陆）');
+  });
+});
+
+describe("a provider of GoApply's own that is itself outside the mainland (own is not mainland)", () => {
+  const cross = (env: Record<string, string>) => ({
+    own: ownStackLeavesMainland(goapply, env),
+    consent: crossBorderConsentApplies(goapply, env),
+    required: isConsentRequired(findConsentDefinition('goapply', 'pipl_cross_border')!, { env }),
+    disclosed: buildDisclosures(goapply, env).offshore,
+  });
+  const yes = { own: true, consent: true, required: true, disclosed: true };
+  const no = { own: false, consent: false, required: false, disclosed: false };
+
+  it('the complete mainland stack: nothing leaves, no cross-border consent', () => {
+    expect(cross({ ...MAINLAND_OWN })).toEqual(no);
+    // An in-cluster bucket on the mainland deployment, and a host the operator lists as mainland storage.
+    expect(cross({ ...MAINLAND_OWN, CN_S3_ENDPOINT: 'http://10.0.0.5:9000' })).toEqual(no);
+    expect(cross({ ...MAINLAND_OWN, CN_S3_ENDPOINT: 'https://files.goapply.example.cn', CN_ALLOWED_STORAGE_HOST_SUFFIXES: 'goapply.example.cn' })).toEqual(no);
+  });
+
+  it('its own media plane on LiveKit Cloud: practice audio and video leave the mainland, so the consent is asked', async () => {
+    const env = { ...MAINLAND_OWN, CN_LIVEKIT_URL: 'wss://goapply-a1b2c3.livekit.cloud' };
+    expect(cross(env)).toEqual(yes);
+    expect(buildDisclosures(goapply, env).processors.find((p) => p.purpose === 'voice')).toMatchObject({ name: 'LiveKit Cloud' });
+    // Sign-up asks for what the catalog requires.
+    expect((await requiredSignupConsents(env)).map((c) => c.type)).toContain('pipl_cross_border');
+    expect((await requiredSignupConsents({ ...MAINLAND_OWN })).map((c) => c.type)).not.toContain('pipl_cross_border');
+  });
+
+  it('its own bucket outside the mainland: a foreign endpoint, or no endpoint at all (the provider default)', async () => {
+    const foreign = { ...MAINLAND_OWN, CN_S3_ENDPOINT: 'https://0123456789abcdef.r2.cloudflarestorage.com' };
+    expect(cross(foreign)).toEqual(yes);
+    // The country of that bucket is not known, so none is printed (D3).
+    expect(buildDisclosures(goapply, foreign).processors.find((p) => p.purpose === 'storage')).toMatchObject({ name: 'Object storage', country: null });
+    expect((await requiredSignupConsents(foreign)).map((c) => c.type)).toContain('pipl_cross_border');
+    const { CN_S3_ENDPOINT: _endpoint, ...noEndpoint } = MAINLAND_OWN;
+    expect(cross(noEndpoint)).toEqual(yes);
+  });
+
+  it('never RoboApply, whatever the CN_ settings say', () => {
+    const env = { ...MAINLAND_OWN, CN_LIVEKIT_URL: 'wss://goapply-a1b2c3.livekit.cloud', CN_S3_ENDPOINT: 'https://s3.us-east-1.amazonaws.com' };
+    expect(ownStackLeavesMainland(roboapply, env)).toBe(false);
+    expect(crossBorderConsentApplies(roboapply, env)).toBe(false);
   });
 });

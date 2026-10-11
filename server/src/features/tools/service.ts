@@ -32,8 +32,8 @@
 import crypto from 'node:crypto';
 
 import { HttpError } from '../../platform/http.js';
-import { applyResumeUploadPolicy, goHireParseActive, isCn0 } from '../../platform/residency/index.js';
-import { brandUsesSharedStack } from '../../platform/brand/index.js';
+import { applyResumeUploadPolicy, goHireParseActive } from '../../platform/residency/index.js';
+import { crossBorderConsentApplies, loadAiStackSnapshot } from '../compliance/index.js';
 import {
   DAY,
   consumeRateLimit,
@@ -176,13 +176,20 @@ export function toolsOpen(_brand: ProductBrand, _env: EnvSource = process.env): 
 }
 
 /**
- * Does a GoApply visitor's file leave the mainland on this deployment? Yes
- * when the deployment itself is offshore, or when GoApply runs on the shared
- * stack (no China-specific provider set), whose processors are offshore.
- * Never true for RoboApply: its notice does not carry the line.
+ * Does a GoApply visitor's file leave the mainland on this deployment? The
+ * consent catalog's own rule (compliance `crossBorderConsentApplies`, plan
+ * §3.6: one cross-border predicate), so this notice, sign-up and the
+ * disclosures page can never disagree: the deployment itself is offshore,
+ * GoApply runs on the shared stack (no China-specific provider set), or a
+ * model or provider of its own is itself abroad (`CN_LLM_PROVIDER=openrouter`,
+ * an admin model override). Never true for RoboApply: its notice does not
+ * carry the line.
+ *
+ * Synchronous; the config handler awaits `loadAiStackSnapshot` first so admin
+ * model overrides are part of the answer on a cold instance.
  */
 export function processedOutsideMainland(brand: ProductBrand, env: EnvSource = process.env): boolean {
-  return brand.market === 'cn' && (isCn0(brand, env) || brandUsesSharedStack(brand, env));
+  return crossBorderConsentApplies(brand, env);
 }
 
 function rateLimited(message: string, details: Record<string, unknown>, retryAfterSec: number): HttpError {
@@ -336,6 +343,8 @@ export function createToolsService(deps: ToolsServiceDeps): ToolsService {
         }
       }
       const cn = brand.market === 'cn';
+      // The notice follows the stack really in use, admin model overrides included (a failed read leaves the environment's answer).
+      if (cn) await loadAiStackSnapshot(env).catch(() => undefined);
       return {
         available,
         perIpPerDay: limit,

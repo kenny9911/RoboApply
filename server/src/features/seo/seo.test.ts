@@ -2,7 +2,7 @@
 // WP-56 pure logic: browse paths and slugs, the public-job predicate (both
 // evaluators), floors, the median sample rule and intro number checks.
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Prisma } from '../../generated/prisma/client.js';
 import { INDEX_FLOORS, type SeoPageStats } from './contract.js';
 import { citySlug, classifyBrowsePath, jobIdSlug, jobPath, parseIdSlug, resolveBrowsePath, resolveCity, seoCacheTag, targetFromParams } from './paths.js';
@@ -13,7 +13,10 @@ import { createMemorySeoRepo, seoJob } from './testkit.js';
 import { findCity } from '../jobs/geo/index.js';
 
 const NOW = new Date('2026-10-10T00:00:00.000Z');
-const CTX: ScopeContext = { market: 'intl', now: NOW, publicBoards: [] };
+const CTX: ScopeContext = { market: 'intl', now: NOW, publicBoards: [], heldBanks: [] };
+// The services below build their own context: both banks have a posting page in this file.
+vi.stubEnv('ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE', 'https://jobs.robohire.example/p/{id}');
+vi.stubEnv('GOHIRE_PUBLIC_JOB_URL_TEMPLATE', 'https://jobs.gohire.example/p/{id}');
 
 describe('job slugs (R-05)', () => {
   it('builds <id>-<slug> and parses the id back', () => {
@@ -215,7 +218,7 @@ describe('intros never add facts', () => {
 });
 
 describe('one predicate for both markets (D5)', () => {
-  const CN: ScopeContext = { market: 'cn', now: NOW, publicBoards: [] };
+  const CN: ScopeContext = { market: 'cn', now: NOW, publicBoards: [], heldBanks: [] };
 
   it('a cn row is judged by the same clauses as an intl row, each in its own market only', () => {
     const cn = seoJob({ market: 'cn', sourceBoard: 'gohire' });

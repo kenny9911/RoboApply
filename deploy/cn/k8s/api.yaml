@@ -38,8 +38,11 @@ spec:
         runAsUser: 1000
         runAsGroup: 1000
       initContainers:
-        # Refuses to start the API when the mainland checks fail (residency,
-        # Aliyun Green readiness, cron mode). Prints problem codes, never values.
+        # Refuses to start the API on a wrong topology (deploy region, database
+        # host, served brands, cron mode). A missing China-specific provider or
+        # filing number is a warning ("OK, with warnings") unless
+        # CN_RESIDENCY_STRICT=true, which makes it a refusal again (D5).
+        # Prints problem codes, never values.
         - name: preflight
           image: goapply-api
           command: ["node", "deploy/cn/preflight.mjs"]

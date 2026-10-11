@@ -10,8 +10,13 @@ import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 
 const __envDir = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__envDir, '../../.env'), override: false });
-dotenv.config({ path: path.resolve(__envDir, '../../../.env'), override: false });
+// Never under Vitest: a local .env carries live third-party keys, and a test
+// that imports this module unmocked must not put them into its worker's
+// environment (CI has no .env, so tests cannot depend on one anyway).
+if (!process.env.VITEST) {
+  dotenv.config({ path: path.resolve(__envDir, '../../.env'), override: false });
+  dotenv.config({ path: path.resolve(__envDir, '../../../.env'), override: false });
+}
 
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';

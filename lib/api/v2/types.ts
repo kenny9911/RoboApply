@@ -940,6 +940,12 @@ export interface ResumeRewriteResponse {
   options?: Array<{ label: string; text: string }>;
   /** mode === 'skills' */
   skills?: string[];
+  /**
+   * Who wrote the text (additive, always sent by the server since the parity
+   * wave): `model` = the rewrite model, charged; `fallback` = the fixed
+   * fallback text after the model failed, not charged. Absent on an older server.
+   */
+  source?: 'model' | 'fallback';
 }
 
 export interface ResumeTailorDiffResponse {

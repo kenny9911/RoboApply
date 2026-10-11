@@ -1,9 +1,9 @@
 // @vitest-environment node
 // WP-32: FeedItem shape and the honesty rules for badges, pay, source and dates (D3).
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { badgesFor, needsSponsorshipFor, publicItem, toFeedItem } from './items.js';
-import { feedRow } from './testkit.js';
+import { BANK_PAGES_ENV, feedRow } from './testkit.js';
 
 const needs = { needsSponsorship: true, workAuth: [] };
 const noNeed = { needsSponsorship: false, workAuth: [] };
@@ -92,6 +92,14 @@ describe('FeedItem', () => {
 // ── Source and apply contract (GOAPPLY_PARITY_PLAN §5; MARKET_STRATEGY §1.4, M-7, JC-1) ──
 
 describe('every card names its source and carries its own apply link', () => {
+  // A bank row is listed, with its link, only while its bank has a posting page (sourceLine.ts `heldBankBoards`).
+  beforeEach(() => {
+    for (const [k, v] of Object.entries(BANK_PAGES_ENV)) vi.stubEnv(k, v);
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   const SEEN = new Date('2026-10-10T06:00:00.000Z');
   /** A posting read from a public employer board, located in mainland China. */
   const board = (over: Partial<Parameters<typeof feedRow>[0]> = {}) =>
@@ -136,6 +144,14 @@ describe('every card names its source and carries its own apply link', () => {
     expect(publicItem(board({ companyDisplayName: '示例汽车' })).source.original).toBe('示例汽车');
     // No separate posting link: the apply link is the original link.
     expect(publicItem(board({ sourceUrl: null })).source.url).toBe('https://jobs.smartrecruiters.com/ExampleAuto/123-apply');
+  });
+
+  it('a bank row whose bank has no posting page carries no apply link (the stored one is the bank site’s "Page not found")', () => {
+    vi.unstubAllEnvs();
+    expect(publicItem(bank({ applyUrl: 'https://www.gohire.top/jobs/g1' })).apply).toBeNull();
+    expect(publicItem(feedRow({ id: 'r1', fromRecruiterBank: true, sourceBoard: 'robohire', sourceName: 'RoboHire', applyUrl: 'https://www.robohire.io/jobs/r1' })).apply).toBeNull();
+    // A board row is not a bank row: its link is the employer's own page.
+    expect(publicItem(board()).apply?.target).toBe('employer');
   });
 
   it('a bank row: apply.target gohire and its GoHire page; a RoboHire bank row is not called GoHire', () => {

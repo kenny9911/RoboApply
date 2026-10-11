@@ -9,9 +9,14 @@ import { describe, expect, it } from 'vitest';
 import * as contract from './contract.js';
 import {
   EMPLOYER_BOARD_SOURCES,
+  NO_AGE_FLOOR_BOARDS,
+  RECRUITER_BANK_BOARDS,
   applyLinkOf,
+  bankListable,
+  bankListableWhere,
   cnListable,
   cnListableWhere,
+  heldBankBoards,
   hasApplyLink,
   httpUrl,
   hasPayFigure,
@@ -21,6 +26,8 @@ import {
   viaOf,
 } from './sourceLine.js';
 import { PUBLIC_ATS } from '../jobs/sources/atsPublic/contract.js';
+import { NO_DATE_EXPIRY_BOARDS } from '../jobs/ingest/maintain.js';
+import { BANK_PAGES_ENV } from './testkit.js';
 
 describe('sourceKindOf / viaOf', () => {
   it('reads how a row reached us from its own columns; an unknown board is never an employer board', () => {
@@ -45,12 +52,50 @@ describe('apply link', () => {
       expect(httpUrl(bad), String(bad)).toBeNull();
       expect(hasApplyLink({ applyUrl: bad })).toBe(false);
     }
-    expect(applyLinkOf({ applyUrl: 'https://jobs.gohire.example/p/1', sourceBoard: 'gohire' }, 'bank')).toEqual({ url: 'https://jobs.gohire.example/p/1', target: 'gohire' });
-    expect(applyLinkOf({ applyUrl: 'https://jobs.robohire.example/p/1', sourceBoard: 'robohire' }, 'bank')).toEqual({ url: 'https://jobs.robohire.example/p/1', target: null });
+    expect(applyLinkOf({ applyUrl: 'https://jobs.gohire.example/p/1', sourceBoard: 'gohire' }, 'bank', BANK_PAGES_ENV)).toEqual({ url: 'https://jobs.gohire.example/p/1', target: 'gohire' });
+    expect(applyLinkOf({ applyUrl: 'https://jobs.robohire.example/p/1', sourceBoard: 'robohire' }, 'bank', BANK_PAGES_ENV)).toEqual({ url: 'https://jobs.robohire.example/p/1', target: null });
     expect(applyLinkOf({ applyUrl: 'https://boards.greenhouse.io/acme/jobs/1', sourceBoard: 'greenhouse' }, 'ats_public')?.target).toBe('employer');
     expect(applyLinkOf({ applyUrl: 'https://x.example/1', sourceBoard: 'user_import' }, 'user_import')?.target).toBeNull();
     expect(applyLinkOf({ applyUrl: 'https://x.example/1', sourceBoard: 'jsearch' }, 'provider')?.target).toBeNull();
     expect(applyLinkOf({ applyUrl: '', sourceBoard: 'greenhouse' }, 'ats_public')).toBeNull();
+  });
+});
+
+describe('a recruiter-bank row needs a real posting page (plan §3.9): the read-side rule', () => {
+  const stored = { fromRecruiterBank: true, sourceBoard: 'gohire', applyUrl: 'https://www.gohire.top/jobs/x' };
+
+  it('a bank with no usable posting-page template is held; each bank by its own setting', () => {
+    expect(heldBankBoards({})).toEqual(['robohire', 'gohire']);
+    expect(heldBankBoards(BANK_PAGES_ENV)).toEqual([]);
+    expect(heldBankBoards({ GOHIRE_PUBLIC_JOB_URL_TEMPLATE: BANK_PAGES_ENV.GOHIRE_PUBLIC_JOB_URL_TEMPLATE })).toEqual(['robohire']);
+    // A template that cannot be used (no {id}, not https) is no page; the ignored legacy base URL is none either.
+    expect(heldBankBoards({ GOHIRE_PUBLIC_JOB_URL_TEMPLATE: 'https://www.gohire.top/jobs/', ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE: 'http://x.example/{id}' })).toEqual(['robohire', 'gohire']);
+    expect(heldBankBoards({ GOHIRE_PUBLIC_JOB_BASE_URL: 'https://www.gohire.top' })).toContain('gohire');
+    expect([...RECRUITER_BANK_BOARDS]).toEqual(['robohire', 'gohire']);
+  });
+
+  it('a stored bank row is not listable and has no apply link until its bank has a page; other rows are untouched', () => {
+    expect(bankListable(stored, {})).toBe(false);
+    expect(bankListable(stored, BANK_PAGES_ENV)).toBe(true);
+    expect(bankListable({ fromRecruiterBank: false, sourceBoard: 'greenhouse' }, {})).toBe(true);
+    expect(bankListable({ fromRecruiterBank: false, sourceBoard: 'gohire' }, {})).toBe(true);
+    expect(applyLinkOf(stored, 'bank', {})).toBeNull();
+    expect(applyLinkOf({ applyUrl: 'https://www.robohire.io/jobs/x', sourceBoard: 'robohire' }, 'bank', {})).toBeNull();
+    expect(applyLinkOf({ applyUrl: 'https://boards.greenhouse.io/acme/jobs/1', sourceBoard: 'greenhouse' }, 'ats_public', {})?.target).toBe('employer');
+  });
+
+  it('the Prisma twin: NOT (bank row of a held bank), or nothing when every bank has a page', () => {
+    expect(bankListableWhere({})).toEqual({ NOT: { fromRecruiterBank: true, sourceBoard: { in: ['robohire', 'gohire'] } } });
+    expect(bankListableWhere(BANK_PAGES_ENV)).toBeNull();
+  });
+});
+
+describe('no posting-age cut-off for board or bank rows', () => {
+  it('the read side exempts exactly the boards the ingest side never expires by date', () => {
+    expect([...NO_AGE_FLOOR_BOARDS].sort()).toEqual([...NO_DATE_EXPIRY_BOARDS].sort());
+    for (const ats of PUBLIC_ATS) expect(NO_AGE_FLOOR_BOARDS).toContain(ats);
+    expect(NO_AGE_FLOOR_BOARDS).not.toContain('user_import');
+    expect(NO_AGE_FLOOR_BOARDS).not.toContain('jsearch');
   });
 });
 

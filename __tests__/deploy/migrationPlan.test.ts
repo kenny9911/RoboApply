@@ -328,6 +328,29 @@ describe('the real schema', () => {
     expect(report.issues.filter((i) => i.kind === 'stale_manual_entry')).toEqual([]);
   });
 
+  // MKT-0 request O-7 (applied at the PAR gate): GoApply's RAJob rows keep their skillIds,
+  // so the shared vocabulary they point to is copied whole, and is never deleted offshore,
+  // where RoboApply still uses it.
+  it('copies the shared skill vocabulary to the mainland and never purges it offshore', () => {
+    const real = planner.parsePrismaSchema(planner.readSchemaDir(join(ROOT, 'server/prisma/schema')));
+    const { files, report } = planner.buildPlan(real) as {
+      files: Record<string, string>;
+      report: { tables: Array<{ table: string; rule: string; where: string; copyOnly?: boolean }>; unscoped: string[] };
+    };
+    expect(report.tables.find((t) => t.table === 'RASkill')).toMatchObject({ rule: 'manual', where: 'TRUE', copyOnly: true });
+    expect(report.unscoped).not.toContain('RASkill');
+    expect(files['export.sql']).toMatch(/\\copy \(SELECT .* FROM "RASkill" WHERE TRUE\) TO 'data\/RASkill\.csv'/);
+    expect(files['import.sql']).toContain(`\\copy "RASkill" (`);
+    expect(files['verify-source.sql']).toContain(`FROM "RASkill" WHERE TRUE`);
+    expect(files['verify-target.sql']).toContain(`FROM "RASkill"`);
+    expect(files['purge-source.sql']).not.toMatch(/DELETE FROM "RASkill"/);
+    expect(files['purge-source.sql']).toContain('Copied to the mainland and kept here');
+    expect(files['verify-purge.sql']).not.toContain(`'RASkill'`);
+    // It is the only table kept offshore after being copied; every other scoped table is purged.
+    expect(report.tables.filter((t) => t.copyOnly).map((t) => t.table)).toEqual(['RASkill']);
+    for (const t of report.tables.filter((x) => !x.copyOnly)) expect(files['purge-source.sql'], t.table).toContain(`DELETE FROM "${t.table}" WHERE `);
+  });
+
   it('writes the plan files with --out', () => {
     const dir = mkdtempSync(join(tmpdir(), 'cn-plan-'));
     try {

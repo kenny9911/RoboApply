@@ -2,7 +2,7 @@
 
 exports[`feed header facts (sourcesSql) > one aggregate over the public rows the query can reach: any GoHire bank row, and distinct employer boards 1`] = `
 {
-  "text": "SELECT COALESCE(bool_or(j."fromRecruiterBank" = true AND j."sourceBoard" = $1), false) AS "gohire", count(DISTINCT (j."sourceBoard" || ':' || CASE WHEN position(':' in j."externalId") > 1 THEN split_part(j."externalId", ':', 1) ELSE j."companyNameNormalized" END)) FILTER (WHERE j."fromRecruiterBank" = false AND j."sourceBoard" = ANY($2::text[]))::int AS "employerBoards", count(*)::int AS "listed" FROM "RAJob" j LEFT JOIN "RACompany" c ON c."id" = j."companyId" WHERE j."market" = $3 AND j."isCanonical" = true AND j."archivedAt" IS NULL AND j."closedAt" IS NULL AND j."sourceBoard" <> 'seed' AND (j."fraudFlags" IS NULL OR jsonb_typeof(j."fraudFlags") <> 'array' OR j."fraudFlags" = '[]'::jsonb) AND j."visibility" = 'public' AND (j."visibility" <> 'public' OR j."applyUrl" ~* '^[[:space:]]*https?://') AND NOT EXISTS (SELECT 1 FROM "RAJobUserState" s WHERE s."userId" = $4 AND s."jobId" = j."id" AND s."hiddenAt" IS NOT NULL) AND j."workModel" = ANY($5::text[]) AND j."postedAt" >= $6::timestamp(3)",
+  "text": "SELECT COALESCE(bool_or(j."fromRecruiterBank" = true AND j."sourceBoard" = $1), false) AS "gohire", count(DISTINCT (j."sourceBoard" || ':' || CASE WHEN position(':' in j."externalId") > 1 THEN split_part(j."externalId", ':', 1) ELSE j."companyNameNormalized" END)) FILTER (WHERE j."fromRecruiterBank" = false AND j."sourceBoard" = ANY($2::text[]))::int AS "employerBoards", count(*)::int AS "listed" FROM "RAJob" j LEFT JOIN "RACompany" c ON c."id" = j."companyId" WHERE j."market" = $3 AND j."isCanonical" = true AND j."archivedAt" IS NULL AND j."closedAt" IS NULL AND j."sourceBoard" <> 'seed' AND (j."fraudFlags" IS NULL OR jsonb_typeof(j."fraudFlags") <> 'array' OR j."fraudFlags" = '[]'::jsonb) AND j."visibility" = 'public' AND (j."visibility" <> 'public' OR j."applyUrl" ~* '^[[:space:]]*https?://') AND NOT EXISTS (SELECT 1 FROM "RAJobUserState" s WHERE s."userId" = $4 AND s."jobId" = j."id" AND s."hiddenAt" IS NOT NULL) AND j."workModel" = ANY($5::text[]) AND (j."postedAt" >= $6::timestamp(3) OR (j."postedAt" IS NOT NULL AND (j."sourceBoard" = ANY($7::text[]) OR j."fromRecruiterBank" = true)))",
   "values": [
     "gohire",
     [
@@ -19,6 +19,14 @@ exports[`feed header facts (sourcesSql) > one aggregate over the public rows the
       "onsite",
     ],
     "2026-06-12T12:00:00.000Z",
+    [
+      "robohire",
+      "gohire",
+      "greenhouse",
+      "lever",
+      "ashby",
+      "smartrecruiters",
+    ],
   ],
 }
 `;

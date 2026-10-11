@@ -24,7 +24,7 @@ import type { FilterSet, FilterSetPatch } from '../search/contract.js';
 import type { ApplyLink, SalaryLine, SourceFacts } from './sourceLine.js';
 
 export type { ApplyLink, ApplyTarget, SalaryLine, SourceFacts, SourceKind, SourceVia } from './sourceLine.js';
-// The rules behind those fields, pure and dependency-free, for every area that
+// The rules behind those fields (pure; the bank rule reads the two posting-page settings), for every area that
 // shows a job (job page, alerts, Ready to apply, the GoApply card meta).
 export {
   EMPLOYER_BOARD_SOURCES,
@@ -32,6 +32,9 @@ export {
   applyLinkOf,
   cnListable,
   cnListableWhere,
+  bankListable,
+  bankListableWhere,
+  heldBankBoards,
   hasApplyLink,
   hasPayFigure,
   httpUrl,

@@ -231,7 +231,9 @@
       "pro_week_passCn": "Pro 会员周卡",
       "pro_weekly": "Pro 周付",
       "student_monthly": "学生月付",
-      "student_quarterly": "学生季付"
+      "student_monthlyCn": "学生月卡",
+      "student_quarterly": "学生季付",
+      "student_quarterlyCn": "学生季卡"
     },
     "renewalReminder": {
       "bodyAuto": "{plan} 将于 {date} 自动续费，{period} {price}。",

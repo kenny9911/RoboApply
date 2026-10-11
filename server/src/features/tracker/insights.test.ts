@@ -217,4 +217,20 @@ describe('/v2/insights routes', () => {
     expect([refresh.status, refresh.body.code]).toEqual([503, 'ai_unavailable']);
     expect(limited).toEqual(['phoneGate', INSIGHT_REFRESH_LIMIT_NAME]);
   });
+
+  // PAR gate (PAR-11 request O11-1): the routes hand the reader's zone and week to the service.
+  it('GET /weekly passes the reader’s zone on; POST /refresh takes { weekStartUtc, tz } and refuses an unknown field', async () => {
+    consent = true;
+    weeklyFacts.mockClear();
+    const res = await h.request('GET', '/api/v1/roboapply/v2/insights/weekly?weekStartUtc=2026-10-04&tz=Asia%2FTaipei', { host: 'localhost:3621' });
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(weeklyFacts.mock.calls)).toContain('Asia/Taipei');
+    // An unknown zone name is never an error: the service falls back to the stored zone (contract).
+    expect((await h.request('GET', '/api/v1/roboapply/v2/insights/weekly?tz=Not%2FAZone', { host: 'localhost:3621' })).status).toBe(200);
+    weeklyFacts.mockClear();
+    const ok = await h.request('POST', '/api/v1/roboapply/v2/insights/refresh', { host: 'localhost:3621', body: { tz: 'Asia/Taipei' } });
+    expect(ok.status).toBe(200);
+    expect(JSON.stringify(weeklyFacts.mock.calls)).toContain('Asia/Taipei');
+    expect((await h.request('POST', '/api/v1/roboapply/v2/insights/refresh', { host: 'localhost:3621', body: { tz: 'Asia/Taipei', extra: 1 } })).status).toBe(422);
+  });
 });

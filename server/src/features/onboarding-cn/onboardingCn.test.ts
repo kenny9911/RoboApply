@@ -65,7 +65,22 @@ import { firstValueRoute } from '../onboarding/contract.js';
 import { mergeMoeRows, parseMoeCsv } from './buildSchools.js';
 
 const OFFSHORE = {} as Record<string, string | undefined>;
+/** A mainland deployment with no China stack of its own: GoApply runs on the shared stack, so data still leaves the mainland. */
 const MAINLAND = { DEPLOY_REGION: 'cn-mainland' };
+/** A mainland deployment where every GoApply stack is its own (the kit of compliance/consents.test.ts): nothing leaves. */
+const MAINLAND_OWN = {
+  DEPLOY_REGION: 'cn-mainland',
+  DATABASE_URL: 'postgresql://u:p@10.0.0.12:5432/goapply',
+  CN_LLM_PROVIDER: 'deepseek',
+  CN_LLM_MODEL: 'deepseek-chat',
+  CN_LIVEKIT_URL: 'wss://rtc.goapply.example.cn',
+  CN_INTERVIEW_ENGINE_STT_MODEL: 'dashscope/paraformer',
+  CN_INTERVIEW_ENGINE_TTS_MODEL: 'dashscope/cosyvoice',
+  CN_S3_BUCKET: 'cn',
+  CN_S3_ENDPOINT: 'https://oss-cn-shanghai.aliyuncs.com',
+  CN_VAPID_PUBLIC_KEY: 'pub',
+  CN_EMAIL_TRANSPORT: 'aliyun_dm',
+};
 const OCT_2026 = new Date('2026-10-10T04:00:00Z');
 const GO = getBrand('goapply');
 
@@ -242,9 +257,19 @@ describe('G1 授权说明', () => {
     expect(issuesOf(offshore)).toEqual(['crossBorder:required']);
     const missing = await validateCnStep('consent', consentBody({ crossBorder: undefined }), { env: OFFSHORE });
     expect(missing.ok).toBe(false);
-    const mainland = ok(await validateCnStep('consent', consentBody({ crossBorder: undefined }), { env: MAINLAND }));
+    // Parity wave (plan §3.6, PAR-5 item 7): the region alone no longer decides. A mainland
+    // deployment on the shared stack still sends data out, so the box is required and stored.
+    const shared = await validateCnStep('consent', consentBody({ crossBorder: undefined }), { env: MAINLAND });
+    expect(issuesOf(shared)).toEqual(['crossBorder:required']);
+    const sharedOk = ok(await validateCnStep('consent', consentBody(), { env: MAINLAND }));
+    expect(sharedOk.effects!.consents).toContainEqual({ type: 'pipl_cross_border', granted: true });
+    expect(sharedOk.answers).toMatchObject({ crossBorder: true });
+    // With every GoApply stack its own, nothing leaves the mainland: not required, not stored.
+    const mainland = ok(await validateCnStep('consent', consentBody({ crossBorder: undefined }), { env: MAINLAND_OWN }));
     expect(mainland.effects!.consents.map((c) => c.type)).not.toContain('pipl_cross_border');
     expect(mainland.answers).not.toHaveProperty('crossBorder');
+    const mainlandTicked = ok(await validateCnStep('consent', consentBody(), { env: MAINLAND_OWN }));
+    expect(mainlandTicked.effects!.consents.map((c) => c.type)).not.toContain('pipl_cross_border');
   });
 
   it('refuses an outdated prose version (the user must see the current text)', async () => {

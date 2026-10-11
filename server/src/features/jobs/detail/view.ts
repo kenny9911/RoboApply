@@ -17,7 +17,7 @@
 
 import type { ProductBrand } from '../../../platform/brand/registry.js';
 import { cnSalary } from '../../cn/jobs/contract.js';
-import { applyLinkOf, hasPayFigure, salaryLineOf, sourceFactsOf, sourceKindOf, type FeedItem, type FitBadge, type SalaryLine } from '../../feed/contract.js';
+import { applyLinkOf, bankListable, hasPayFigure, salaryLineOf, sourceFactsOf, sourceKindOf, type FeedItem, type FitBadge, type SalaryLine } from '../../feed/contract.js';
 import type { PreScoreResult } from '../../match/contract.js';
 import { payPlausible, statesAmount } from '../normalize/index.js';
 import { bestTaxonomyMatch, taxonomyLabel } from '../taxonomy/index.js';
@@ -328,7 +328,8 @@ export function toJobDetail(row: JobRow, now: Date, campus: JobCampusInfo | null
     skills: toSkills(row.skillsDetail),
     sponsorship: toSponsorship(row),
     requirements: toRequirements(row.marketTags),
-    applyUrl: clean(row.applyUrl),
+    // A recruiter-bank row whose bank has no posting page hands out no link at all (the stored one is "Page not found").
+    applyUrl: bankListable(row) ? clean(row.applyUrl) : null,
     apply: applyOf(row),
     postedAt: row.postedAt ? row.postedAt.toISOString() : null,
     postedAtEstimated: row.postedAtEstimated,

@@ -410,7 +410,7 @@ export function configuredProcessors(brand: ProductBrand, env: EnvSource = proce
   const livekit = brandEnv(brand, 'LIVEKIT_URL', env);
   if (livekit) {
     const ownPlane = brandStack(brand, 'voice', env) === 'own';
-    const onCloud = /(?:^|\.)livekit\.cloud$/.test(hostOf(livekit) ?? '');
+    const onCloud = isLiveKitCloudHost(hostOf(livekit));
     add(ownPlane && !onCloud ? 'LiveKit' : 'LiveKit Cloud', 'voice', null);
   }
   // Speech: the shared speech vendors, unless GoApply has its own speech pair
@@ -547,20 +547,48 @@ export function llmEndpointFacts(brand: ProductBrand, env: EnvSource = process.e
   };
 }
 
+/** LiveKit Cloud (`*.livekit.cloud`): a hosted media plane with no mainland China region. */
+function isLiveKitCloudHost(host: string | null | undefined): boolean {
+  return /(?:^|\.)livekit\.cloud$/.test((host ?? '').toLowerCase());
+}
+
+/**
+ * GoApply runs a part of the stack on a provider of ITS OWN that is itself
+ * outside the mainland. "Own" is not "mainland": `brandUsesSharedStack` stops
+ * counting a group as shared as soon as its CN_ anchor is set, whatever host
+ * that names (nothing enforces a mainland host outside CN_RESIDENCY_STRICT).
+ * Two cases the settings prove:
+ *   storage  its own bucket (`CN_S3_BUCKET`) whose endpoint is not mainland
+ *            object storage (`storageCountry`: no endpoint, a foreign host, or
+ *            a private address on a deployment that is not in the mainland):
+ *            resume originals, exports and practice recordings are kept there;
+ *   voice    its own media plane (`CN_LIVEKIT_URL`) on LiveKit Cloud: practice
+ *            audio and video pass through it.
+ * A self-hosted plane on another host is not judged: its location is not in
+ * any setting, and nothing is claimed about it (D3).
+ */
+export function ownStackLeavesMainland(brand: ProductBrand, env: EnvSource = process.env): boolean {
+  if (brand.market !== 'cn') return false;
+  if (brandStack(brand, 'storage', env) === 'own' && storageCountry(brand, env) !== 'CN') return true;
+  if (brandStack(brand, 'voice', env) === 'own' && isLiveKitCloudHost(hostOf(brandEnv(brand, 'LIVEKIT_URL', env) ?? null))) return true;
+  return false;
+}
+
 /**
  * GoApply: personal information leaves mainland China on this deployment, so
  * the cross-border consent is asked and its text applies. The environment
  * predicate shared with sign-up (`crossBorderApplies`: offshore deployment, or
  * part of the stack is the shared one), OR a configured AI model that is
  * served outside the mainland (`aiLeavesMainland`, which also sees database
- * overrides). Always false for RoboApply.
+ * overrides), OR a bucket or media plane of GoApply's own that is itself
+ * outside the mainland (`ownStackLeavesMainland`). Always false for RoboApply.
  *
  * Synchronous: for the live process, await `loadAiStackSnapshot()` first so
  * the admin overrides are part of the answer on a cold instance too.
  */
 export function crossBorderConsentApplies(brand: ProductBrand, env: EnvSource = process.env): boolean {
   if (brand.market !== 'cn') return false;
-  return crossBorderApplies(brand, env) || aiLeavesMainland(brand, env);
+  return crossBorderApplies(brand, env) || aiLeavesMainland(brand, env) || ownStackLeavesMainland(brand, env);
 }
 
 function attributionPurpose(sourceId: string): DataAttributionPurpose {

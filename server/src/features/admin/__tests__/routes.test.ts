@@ -310,7 +310,9 @@ describe('as an admin', () => {
   it('GET /safety returns readiness without secrets', async () => {
     const res = await harness.request<{ data: { readiness: Record<string, unknown>; last7d: unknown } }>('GET', '/admin/safety');
     expect(res.status).toBe(200);
-    expect(Object.keys(res.body.data.readiness).sort()).toEqual(['cn1Ready', 'keywordList', 'problems', 'provider', 'timeoutMs', 'usable']);
+    // `degraded` (PAR gate, PAR-2 request): a setting that cannot run fell back to the keyword list.
+    expect(Object.keys(res.body.data.readiness).sort()).toEqual(['cn1Ready', 'degraded', 'keywordList', 'problems', 'provider', 'timeoutMs', 'usable']);
+    expect(res.body.data.readiness.degraded).toBe(false);
     expect(res.body.data.last7d).toEqual([{ verdict: 'block', count: 2 }]);
   });
 });

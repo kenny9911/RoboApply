@@ -11,7 +11,9 @@
 //   archivedAt IS NULL AND closedAt IS NULL AND (expiresAt IS NULL OR
 //   expiresAt > now) AND sourceBoard <> 'seed' AND no fraud flags AND
 //   publicDisplay AND (fromRecruiterBank OR sourceBoard is a board of a
-//   provider still listed in PUBLIC_DISPLAY_PROVIDERS).
+//   provider still listed in PUBLIC_DISPLAY_PROVIDERS) AND NOT (a recruiter-
+//   bank row whose bank has no posting page: feed/sourceLine.ts
+//   `heldBankBoards`, the rule the signed-in feed applies too).
 // `publicDisplay` is decided at ingest (bank syndication consent, or the
 // provider list at the time); the read-time provider check makes removing a
 // provider from the list take effect at once, without waiting for a re-ingest.
@@ -20,6 +22,7 @@ import { Prisma } from '../../generated/prisma/client.js';
 import type { EnvSource } from '../../platform/brand/index.js';
 import type { Market } from '../../platform/brand/registry.js';
 import { PUBLIC_ATS } from '../jobs/sources/atsPublic/contract.js';
+import { heldBankBoards } from '../feed/contract.js';
 
 /** Provider → the `sourceBoard` values its rows carry. Banks are governed by consent, not this list. */
 const PROVIDER_BOARDS: Readonly<Record<string, readonly string[]>> = {
@@ -71,10 +74,22 @@ export interface ScopeContext {
   now: Date;
   /** Boards from PUBLIC_DISPLAY_PROVIDERS (see allowedPublicBoards). */
   publicBoards: readonly string[];
+  /**
+   * `sourceBoard` of the recruiter banks that have no posting page right now
+   * (feed/sourceLine.ts `heldBankBoards`): their rows are on no public page.
+   * Left out, it is read from the process environment, so no caller can
+   * forget the rule.
+   */
+  heldBanks?: readonly string[];
+}
+
+function heldBanksOf(ctx: ScopeContext): readonly string[] {
+  return ctx.heldBanks ?? heldBankBoards();
 }
 
 /** The base predicate as a Prisma `where` (every clause of the header). */
 export function basePublicWhere(ctx: ScopeContext): Prisma.RAJobWhereInput {
+  const heldBanks = heldBanksOf(ctx);
   return {
     market: ctx.market,
     visibility: 'public',
@@ -87,6 +102,7 @@ export function basePublicWhere(ctx: ScopeContext): Prisma.RAJobWhereInput {
       { OR: [{ expiresAt: null }, { expiresAt: { gt: ctx.now } }] },
       { OR: [{ fraudFlags: { equals: Prisma.AnyNull } }, { fraudFlags: { equals: [] } }] },
       { OR: [{ fromRecruiterBank: true }, { sourceBoard: { in: [...ctx.publicBoards] } }] },
+      ...(heldBanks.length ? [{ NOT: { fromRecruiterBank: true, sourceBoard: { in: [...heldBanks] } } }] : []),
     ],
   };
 }
@@ -164,7 +180,8 @@ export function isPubliclyListable(row: ScopeRow, ctx: ScopeContext): boolean {
     row.sourceBoard !== 'seed' &&
     noFraudFlags(row.fraudFlags) &&
     row.publicDisplay === true &&
-    (row.fromRecruiterBank === true || ctx.publicBoards.includes(row.sourceBoard))
+    (row.fromRecruiterBank === true || ctx.publicBoards.includes(row.sourceBoard)) &&
+    !(row.fromRecruiterBank === true && heldBanksOf(ctx).includes(row.sourceBoard))
   );
 }
 

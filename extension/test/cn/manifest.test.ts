@@ -1,5 +1,7 @@
-// GoApply build (WP-71): manifest host permissions follow the portal adapters,
-// no job boards, no broad hosts; detection; distribution values.
+// GoApply build (WP-71; parity wave PAR-8): manifest host permissions follow
+// the adapter set (the mainland portals first, then the international form
+// sites RoboApply fills, D5), no job boards, no broad hosts; detection;
+// distribution values.
 
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -14,22 +16,18 @@ import { loadCnFixture } from './helpers';
 
 describe('GoApply manifest', () => {
   for (const target of ['edge', 'chrome'] as const) {
-    it(`${target}: brand origin + the four portal hosts; content scripts only there; policy clean`, () => {
+    it(`${target}: brand origin + the portal hosts, then the international form hosts; content scripts only there; policy clean`, () => {
       const m = buildManifest({ brand: 'goapply', target, dev: false, version: '1.0.0' }) as {
         permissions: string[];
         host_permissions: string[];
         content_scripts: Array<{ matches: string[] }>;
       };
       expect(m.permissions).toEqual(['activeTab', 'scripting', 'storage']);
-      expect(m.host_permissions).toEqual([
-        'https://www.goapply.top/*',
-        'https://*.mokahr.com/*',
-        'https://*.zhiye.com/*',
-        'https://*.beisen.com/*',
-        'https://*.jobs.feishu.cn/*',
-        'https://*.dayee.com/*',
-        'https://*.hotjob.cn/*',
-      ]);
+      const portalHosts = ['https://*.mokahr.com/*', 'https://*.zhiye.com/*', 'https://*.beisen.com/*', 'https://*.jobs.feishu.cn/*', 'https://*.dayee.com/*', 'https://*.hotjob.cn/*'];
+      expect(m.host_permissions).toEqual(['https://www.goapply.top/*', ...adapterHostPatterns('cn')]);
+      // The mainland portals come first, then every host the RoboApply build has.
+      expect(m.host_permissions.slice(1, 1 + portalHosts.length)).toEqual(portalHosts);
+      expect(m.host_permissions).toEqual(expect.arrayContaining(adapterHostPatterns('intl')));
       expect(m.content_scripts[0].matches).toEqual(adapterHostPatterns('cn'));
       expect(manifestViolations(m)).toEqual([]);
       expect(JSON.stringify(m)).not.toMatch(/zhipin|liepin|51job|lagou|zhaopin|linkedin|indeed|<all_urls>|"\*:\/\/\*\/\*"/);
@@ -75,7 +73,8 @@ describe('GoApply distribution values (scripts/build.mjs reads them; test/build.
       };
       expect(manifestViolations(m)).toEqual([]);
       const portalHosts = CN_PORTAL_ADAPTERS.filter((a) => goapplyPortalIds().includes(a.id)).flatMap((a) => a.hostPatterns);
-      expect(m.host_permissions.slice(1)).toEqual(portalHosts);
+      expect(m.host_permissions.slice(1)).toEqual(adapterHostPatterns('cn'));
+      expect(m.host_permissions.slice(1, 1 + portalHosts.length)).toEqual(portalHosts);
       // The store strings are message placeholders the build fills from `_locales`.
       expect([m.name, m.description, m.action.default_title].every((v) => v.startsWith('__MSG_'))).toBe(true);
     });

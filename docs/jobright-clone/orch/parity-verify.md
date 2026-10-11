@@ -17,7 +17,7 @@ Rules while verifying:
 
 This is the release rule from the PAR-1 handoff (O-1). It is a precondition, not a test.
 
-1. `ALLOWED_BRANDS=roboapply` is set on every Vercel environment of the project (Production and Preview) before the wave branch is pushed. A deployment with no `ALLOWED_BRANDS` now serves both brands, so it would serve `goapply.top` as soon as its DNS points there. Remove the variable deliberately on the day GoApply goes live.
+1. `ALLOWED_BRANDS=roboapply` is set on every Vercel environment of the project (Production and Preview) before the wave branch is pushed. A deployment with no `ALLOWED_BRANDS` now serves both brands. That does not wait for DNS: the brand override (cookie or header) is honoured on every `*.vercel.app` host, and the production deployment answers on its `*.vercel.app` aliases too, so from the first deployment without the variable anyone who sends the override there gets GoApply against the production database (open sign-up, AI on the shared keys, CNY plans). `goapply.top` itself is served as soon as its DNS points there. So the variable must be in place **before the first deployment**, not at DNS time. Remove it deliberately on the day GoApply goes live.
 2. A value that names no valid brand (a typo) does not open GoApply: the deployment serves RoboApply only and logs the bad value at boot. The mainland kit keeps `ALLOWED_BRANDS=goapply`; a typo there refuses the boot (`intl_brand_on_mainland`).
 3. The i18n merge and translation pass has run, or is scheduled before GoApply is shown to users. Until then GoApply shows English for strings that exist only in `i18n/staging/`.
 

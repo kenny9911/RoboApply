@@ -77,6 +77,21 @@ describe('text helpers', () => {
     expect(decodeEntities('&bogus; &#0; &#x0; &#99999999;')).toBe('&bogus; &#0; &#x0; &#99999999;');
   });
 
+  // PAR gate (PAR-11 review): a provider description of unclosed openers used to cost a
+  // second or more per 100 KB here, on every ingest pass (the patterns restarted at each
+  // "<"). The measured time is a few milliseconds; the limit is generous for a busy machine.
+  it.each(['<li ', '<a ', '<', '<script ', '<!-- ', '<p class="'])('htmlToPlain reads 200 KB of %j in linear time', (unit) => {
+    const input = unit.repeat(Math.ceil(200_000 / unit.length));
+    const started = performance.now();
+    htmlToPlain(input);
+    expect(performance.now() - started).toBeLessThan(1500);
+  });
+
+  it('htmlToPlain keeps the words of text that only looks like markup', () => {
+    expect(htmlToPlain('if a<b then c, and x < y')).toBe('if a<b then c, and x < y');
+    expect(htmlToPlain('<p class="a" data-x="<li <li">一</p><!-- c --><p>二 &amp; 三</p>')).toBe('一\n二 & 三');
+  });
+
   it('accepts only http(s) URLs without credentials', () => {
     expect(safeUrl('https://example.com/a')).toBe('https://example.com/a');
     expect(safeUrl('javascript:alert(1)')).toBeNull();

@@ -21,9 +21,10 @@
 --
 -- Idempotent: safe to run again. Neon ships pgvector. On any other host (the
 -- mainland stack's PostgreSQL) confirm first that the instance offers the `vector`
--- extension at 0.7.0 or newer; this file has not been run there, and the `localdb`
--- image of deploy/cn/compose.yaml does not ship the extension at all
--- (server/prisma/sql/README.md, "Databases that are not Neon").
+-- extension at 0.7.0 or newer; this file has not been run there. The `localdb`
+-- image of deploy/cn/compose.yaml is a pgvector image since the parity-wave gate
+-- (not yet run: confirm the version below on its first start;
+-- server/prisma/sql/README.md, "Databases that are not Neon").
 --
 -- Confirm after running it, before the push (it must print 0.7.0 or newer):
 --   SELECT extversion FROM pg_extension WHERE extname = 'vector'

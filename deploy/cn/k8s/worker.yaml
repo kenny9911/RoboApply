@@ -1,5 +1,9 @@
 # The GoApply interview voice worker, registered with LiveKit as
-# GoApply-Interview. This is the ONE worker manifest of the mainland stack:
+# GoApply-Interview. It serves GoApply's OWN media plane only (CN_LIVEKIT_*,
+# anchored on CN_LIVEKIT_URL, on the control plane). Without CN_LIVEKIT_URL
+# GoApply voice practice runs on the shared LiveKit project, where the shared
+# worker serves both brands and this Deployment is not needed (D5).
+# This is the ONE worker manifest of the mainland stack:
 # WP-63b's standalone recipe (interview-agent/deploy/cn/k8s.yaml) was folded
 # into it and is now a pointer to this file.
 #

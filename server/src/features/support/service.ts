@@ -6,7 +6,8 @@
 //                   Answers `received` only when the transport accepted it;
 //                   otherwise an error that carries the inbox address so the
 //                   page can say "email us at …" instead of pretending.
-//   indexStats()  → hourly-cached public counts (stats.ts).
+//   indexStats()  → hourly-cached public counts (stats.ts); none for GoApply
+//                   while its postings are switched off.
 //   creditCaps()  → Free vs Pro caps from the effective credit catalog
 //                   (defaults + the admin override), never from copy.
 
@@ -116,7 +117,14 @@ export function createSupportService(deps: SupportServiceDeps = {}): SupportServ
       throw new HttpError('internal_error', 'The message could not be sent.', { supportEmail: to });
     },
 
-    indexStats(brand) {
+    async indexStats(brand) {
+      // GoApply with the operator's off switch (CN_RECRUITMENT_INFO_MODE=off) shows no public
+      // posting anywhere, so it publishes no counts of them either (the one rule of the public
+      // surfaces, features/seo `publicListingsOpen`; PAR-9 request). Lazy: only this brand asks.
+      if (brand.market === 'cn') {
+        const { publicListingsOpen } = await import('../seo/index.js');
+        if (!publicListingsOpen(brand, env)) return { openRoles: null, addedThisWeek: null, popularLists: [], asOf: new Date().toISOString(), partial: false };
+      }
       return stats.get(brand.market);
     },
 

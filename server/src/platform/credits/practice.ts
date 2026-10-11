@@ -14,6 +14,13 @@
 // A crash between the adjust and the settle leaves the row `reserved`; it is
 // never auto-released (CreditService.releaseStale skips practice rows), so a
 // grant happens at most once per key.
+//
+// The first free practice (`grantFirstPracticeCredit`; GOAPPLY_PARITY_PLAN.md
+// §3.5, PAR-4 item 8): a verified email earns it on RoboApply. On GoApply a
+// verified email OR a verified phone earns it, ONCE: the two verifications
+// keep their own keys ('email_verified', 'phone_verified'), and the claim of
+// one reads the other inside the same transaction, so an account that verifies
+// an email and later binds a phone (or the reverse) is granted one credit.
 
 import { logger } from '../../services/LoggerService.js';
 import type { CreditStore } from './store.js';
@@ -28,6 +35,9 @@ export type PracticeGrantReason =
   | 'admin'
   /** A purchased practice pack (platform/billing/packs.ts; key = the order / checkout session). */
   | 'pack_purchase';
+
+/** The two verifications that earn the first free practice. */
+export type FirstPracticeReason = Extract<PracticeGrantReason, 'email_verified' | 'phone_verified'>;
 
 export type PracticeGrantStatus = 'granted' | 'already_granted' | 'in_progress' | 'no_profile' | 'failed';
 
@@ -50,6 +60,8 @@ export interface PracticeDeps {
   adjust?: (input: { userId: string; delta: number; metadata: Record<string, unknown> }) => Promise<{ balanceAfter: number } | null>;
   hasSeekerProfile?: (userId: string) => Promise<boolean>;
   getBalance?: (userId: string) => Promise<PracticeBalance>;
+  /** The stored brand of an account ('goapply' | anything else = RoboApply); used when the caller has no brand at hand. */
+  userBrand?: (userId: string) => Promise<string | null>;
   now?: () => Date;
 }
 
@@ -74,6 +86,12 @@ const defaultGetBalance: NonNullable<PracticeDeps['getBalance']> = async (userId
   return { credits: b.credits, tier: b.tier, periodAllotment: b.periodAllotment, renewedAt: b.renewedAt };
 };
 
+const defaultUserBrand: NonNullable<PracticeDeps['userBrand']> = async (userId) => {
+  const { default: prisma } = await import('../../lib/prisma.js');
+  const row = await prisma.user.findUnique({ where: { id: userId }, select: { brand: true } });
+  return row?.brand ?? null;
+};
+
 export interface PracticeCredits {
   grantPracticeCredit(
     userId: string,
@@ -81,6 +99,14 @@ export interface PracticeCredits {
     idempotencyKey: string,
     options?: { credits?: number },
   ): Promise<PracticeGrantResult>;
+  /**
+   * The first free practice, for the verification that just happened.
+   * RoboApply: exactly `grantPracticeCredit(userId, reason, reason)`. GoApply:
+   * `already_granted` (nothing inserted) when the OTHER verification already
+   * holds the grant. `brand` is the account's brand; when omitted it is read
+   * from the user row (a failed read throws: nothing is granted on a guess).
+   */
+  grantFirstPracticeCredit(userId: string, reason: FirstPracticeReason, brand?: string | null): Promise<PracticeGrantResult>;
   getPracticeBalance(userId: string): Promise<PracticeBalance>;
 }
 
@@ -89,10 +115,17 @@ export function createPracticeCredits(deps: PracticeDeps = {}): PracticeCredits 
   const adjust = deps.adjust ?? defaultAdjust;
   const hasSeekerProfile = deps.hasSeekerProfile ?? defaultHasSeekerProfile;
   const getBalance = deps.getBalance ?? defaultGetBalance;
+  const userBrand = deps.userBrand ?? defaultUserBrand;
   const now = deps.now ?? (() => new Date());
 
-  return {
-    async grantPracticeCredit(userId, reason, idempotencyKey, options = {}) {
+  /** `siblingKey`: another key of the same entitlement; when it is granted or being granted, this one is not. */
+  async function grant(
+    userId: string,
+    reason: PracticeGrantReason,
+    idempotencyKey: string,
+    options: { credits?: number } = {},
+    siblingKey?: string,
+  ): Promise<PracticeGrantResult> {
       const key = idempotencyKey.trim();
       if (!key) throw new Error('grantPracticeCredit needs an idempotency key');
       const credits = Math.max(1, Math.floor(options.credits ?? 1));
@@ -100,6 +133,10 @@ export function createPracticeCredits(deps: PracticeDeps = {}): PracticeCredits 
       const fullKey = `${userId}:practice:${key}`;
 
       const claim = await store.transaction(async (tx) => {
+        if (siblingKey) {
+          const sibling = await tx.findLedgerByKey(`${userId}:practice:${siblingKey}`);
+          if (sibling && (sibling.status === 'committed' || sibling.status === 'reserved')) return { id: sibling.id, state: 'committed' as const };
+        }
         const id = await tx.insertLedger({
           userId,
           bucket: 'practice',
@@ -154,6 +191,14 @@ export function createPracticeCredits(deps: PracticeDeps = {}): PracticeCredits 
       if (!result) return { status: 'failed', ledgerId: claim.id, balanceAfter: null };
       logger.info('CREDITS', 'practice credit granted', { userId, reason, credits });
       return { status: 'granted', ledgerId: claim.id, balanceAfter: result.balanceAfter };
+  }
+
+  return {
+    grantPracticeCredit: (userId, reason, idempotencyKey, options = {}) => grant(userId, reason, idempotencyKey, options),
+    async grantFirstPracticeCredit(userId, reason, brand) {
+      const accountBrand = brand ?? (await userBrand(userId));
+      if (accountBrand !== 'goapply') return grant(userId, reason, reason);
+      return grant(userId, reason, reason, {}, reason === 'email_verified' ? 'phone_verified' : 'email_verified');
     },
     getPracticeBalance: (userId) => getBalance(userId),
   };
@@ -163,5 +208,7 @@ const practice = createPracticeCredits();
 
 /** Grant practice interview credits once per idempotency key (WP-10 email verify, WP-11 phone verify, WP-23 checklist). */
 export const grantPracticeCredit = practice.grantPracticeCredit;
+/** The first free practice for a verified email or phone: one per account, also when a GoApply account verifies both. */
+export const grantFirstPracticeCredit = practice.grantFirstPracticeCredit;
 /** Current practice credit balance (mockCreditService; lazily applies the free monthly grant). */
 export const getPracticeBalance = practice.getPracticeBalance;

@@ -287,8 +287,11 @@ describe('7. browse pages render VisitorFeed', () => {
     expect(readSource('components/features/seo/BrowsePage.tsx')).toMatch(/VisitorFeed below \(rendered by the route/);
   });
 
-  it('browse is dark on GoApply (404) and its hub is a real page on RoboApply', () => {
-    expect(source).toMatch(/if \(req\.brand\.market === 'cn'\) return \{ kind: 'missing' \};/);
+  // Parity wave (PAR-9 item 1, plan §3.11): browse pages follow the same gates on both
+  // brands (`seo.browse`, the display providers), so the route has no market guard.
+  it('browse has no market guard (both brands, behind seo.browse) and its hub is a real page', () => {
+    expect(source).not.toMatch(/brand\.market === 'cn'/);
+    expect(readSource('app/browse/page.tsx')).not.toMatch(/brand\.market === 'cn'/);
     expect(expectLivePage('/browse')).toBe('app/browse/page.tsx');
     expect(expectLivePage('/browse/remote/data-analyst')).toBe(route);
   });

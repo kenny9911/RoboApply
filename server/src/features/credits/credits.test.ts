@@ -589,11 +589,20 @@ describe('GET /billing/plans', () => {
         expect(lookups).toEqual([]);
       });
 
-      it('one rule for both brands: RoboApply lists its student plans to a verified student only', async () => {
+      it('RoboApply is unchanged by the GoApply rule (P7): its student plans are listed while the capability is on, to a visitor and an unverified user too', async () => {
         const robo = getBrand('roboapply');
-        expect(students(await studentPlansFor(ENV, null, true, robo))).toEqual([]);
-        expect(students(await studentPlansFor(ENV, 'u_1', false, robo))).toEqual([]);
-        expect(students(await studentPlansFor(ENV, 'u_1', true, robo))).toEqual(['student_monthly', 'student_quarterly']);
+        const both = ['student_monthly', 'student_quarterly'];
+        expect(students(await studentPlansFor(ENV, null, true, robo))).toEqual(both);
+        expect(students(await studentPlansFor(ENV, 'u_1', false, robo))).toEqual(both);
+        expect(students(await studentPlansFor(ENV, 'u_1', true, robo))).toEqual(both);
+        expect(students(await studentPlansFor(ENV, 'u_1', 'lookup_fails', robo))).toEqual(both);
+        // Listing asks for no verification on RoboApply; buying does (the checkout's own check).
+        expect(lookups).toEqual([]);
+        // The capability switch still removes them.
+        expect(students(await studentPlansFor({ ...ENV, FLAG_ROBOAPPLY_STUDENT: 'false' }, 'u_1', true, robo))).toEqual([]);
+        // The public route, signed out, on the RoboApply host.
+        const res = await h.request<any>('GET', '/anon/plans', RA);
+        expect(students(res.body.data)).toEqual(both);
       });
     });
   });

@@ -24,6 +24,15 @@
 //        - an unknown CN_SIGNUP_MODE value (sign-up stays OPEN)        error
 //        - a GoApply content-safety setting that is not valid, so the
 //          built-in keyword filter runs instead                       warning
+//        - GoApply's voice, speech, worker and recording-storage problems
+//          (interview-engine `voiceConfigProblems`: a CN_ voice value with
+//          no plane, an own plane with no callback secret, a CN model the
+//          worker does not run, ...), each once, by that module       warning
+//        - GoApply can charge through Alipay and no collecting entity is
+//          named (billing rails `warnIfAlipayEntityUnset`)             warning
+//        - CN_LLM_MODEL starts GoApply's own model profile and has no
+//          route there (a bare id with no CN_LLM_PROVIDER): GoApply AI
+//          answers 503 until it carries a vendor prefix               error
 //      The GoApply lines are skipped on a deployment that does not serve it.
 //   3. Assistant tools (WP-14 / WP-50): `assertCopilotModelSupportsTools()`
 //      runs for the brands this deployment serves whose `copilot` capability
@@ -35,21 +44,32 @@
 //      404/503, so turning the switch off (FLAG_<BRAND>_COPILOT=false)
 //      always lets the deployment boot.
 //        production      a model that cannot stream tool calls (or that the
-//                        brand policy refuses) refuses to boot, like (1)
+//                        brand policy refuses) refuses to boot, like (1),
+//                        when it is the model of the deployment's PRIMARY
+//                        brand (the default brand when it is served, else
+//                        the one brand served). A failure of another brand
+//                        is that brand's problem: an error line, its
+//                        Assistant answers "unavailable", and the
+//                        deployment boots. One optional GoApply override
+//                        (D5) must never stop RoboApply.
 //        anything else   a warning per brand; `npm run dev` and tests that
 //                        import app.ts boot without a copilot model
 //   4. Capability probes: registers `voiceAvailable` (interview-engine/providers)
 //      behind the `ai.interviewVoice` flag and `wechatPayReadiness`
 //      (platform/billing/rails/wechatpay) behind `pay.wechatpay`.
 
+import { warnVoiceConfigProblemsOnce } from '../interview-engine/config.js';
 import { voiceAvailable } from '../interview-engine/providers/index.js';
+import { warnIfAlipayEntityUnset } from './billing/rails/index.js';
 import { wechatPayReadiness } from './billing/rails/wechatpay.js';
 import { brandEnvGroupProblems, cnResidencyStrict, type BrandEnvGroupProblem } from './brand/brandEnv.js';
-import { getBrand, type BrandId } from './brand/registry.js';
+import { DEFAULT_BRAND, getBrand, type BrandId } from './brand/registry.js';
 import { allowedBrands, allowedBrandsProblem } from './brand/runtime.js';
 import { cnRecruitmentInfoModeProblem, isEnabledForBrand, setVoiceAvailabilityProbe, setWechatPayReadinessProbe } from './flags.js';
 import { contentSafetyReadiness } from './llm/contentSafety/config.js';
 import { assertCopilotModelSupportsTools } from './llm/index.js';
+import { getLlmRoutingDefaults } from '../lib/llm/llmModels.js';
+import { resolveSelectorRoute } from '../services/llm/providerPrefixes.js';
 import { ResidencyStartupError, assertResidencyAtStartup, cnStorageModeProblem } from './residency/index.js';
 
 export interface StartupLog {
@@ -73,7 +93,20 @@ export interface StartupDeps {
    * `cnSignupModeProblem`), loaded lazily and only when the variable is set.
    */
   signupModeProblem?: (env: NodeJS.ProcessEnv) => string | null | Promise<string | null>;
+  /**
+   * Reports that other modules own and log themselves, once per process, asked
+   * for at boot when the deployment serves GoApply: the practice voice setup
+   * (interview-engine `warnVoiceConfigProblemsOnce`) and the missing Alipay
+   * collecting entity (billing rails `warnIfAlipayEntityUnset`). Both read the
+   * live process environment, so the defaults run only for it.
+   */
+  goapplyModuleReports?: Array<(env: NodeJS.ProcessEnv) => unknown>;
 }
+
+const DEFAULT_GOAPPLY_MODULE_REPORTS: NonNullable<StartupDeps['goapplyModuleReports']> = [
+  (env) => (env === process.env ? warnVoiceConfigProblemsOnce('goapply') : null),
+  (env) => (env === process.env ? warnIfAlipayEntityUnset(env) : null),
+];
 
 /** One brand whose Assistant model cannot be used. */
 export interface AssistantModelFailure {
@@ -131,10 +164,45 @@ function assertAssistantModel(deps: StartupDeps, env: NodeJS.ProcessEnv): void {
     }
     return;
   }
+  // The boot is refused for the deployment's primary brand only. A failure of another brand comes from
+  // that brand's own settings (an optional GoApply override, D5): its Assistant answers "unavailable"
+  // (503 ai_unavailable) and the rest of the deployment, the primary brand included, is served.
+  const primary = primaryBrand(env);
+  if (!failures.some((f) => f.brand === primary)) {
+    for (const f of failures) {
+      deps.log.error(
+        'STARTUP',
+        `Assistant model for ${f.brand} cannot be used: ${f.problem} (selector ${f.selector ?? '(none)'}). ` +
+          `The ${f.brand} Assistant is unavailable until it is fixed; ${primary} is served. ` +
+          'Set CN_LLM_COPILOT_MODEL (else the shared LLM_COPILOT_MODEL) to an allowed model that can stream tool calls, or turn it off (FLAG_<BRAND>_COPILOT=false).',
+        { brand: f.brand, selector: f.selector, primary },
+      );
+    }
+    return;
+  }
   const error = new AssistantModelStartupError(failures);
   deps.log.error('STARTUP', error.message, { brands: failures.map((f) => f.brand) });
   if (!env.VERCEL) (deps.exit ?? ((code: number) => process.exit(code)))(1);
   throw error;
+}
+
+/** The brand a deployment cannot run without: the default brand when it is served, else the first brand served. */
+function primaryBrand(env: NodeJS.ProcessEnv): BrandId {
+  const served = allowedBrands(env);
+  return served.includes(DEFAULT_BRAND) ? DEFAULT_BRAND : (served[0] ?? DEFAULT_BRAND);
+}
+
+/**
+ * True when GoApply runs its own model profile and its default model has no
+ * route there: `CN_LLM_MODEL` (or the admin value) is a bare id and GoApply has
+ * no provider of its own. Setting `CN_LLM_MODEL` alone starts the own profile
+ * (brandEnv `brandStack(…, 'llm')`), where the shared provider mode is not
+ * used, so `deepseek-chat` goes nowhere while `deepseek/deepseek-chat` works.
+ */
+export function cnDefaultModelHasNoRoute(env: NodeJS.ProcessEnv = process.env): boolean {
+  const defaults = getLlmRoutingDefaults('goapply', env);
+  if (defaults.profile !== 'domestic_cn' || !defaults.model) return false;
+  return !resolveSelectorRoute(defaults.model, defaults.providerMode, defaults.model, defaults.profile).providerType;
 }
 
 /**
@@ -222,7 +290,30 @@ function reportConfigurationProblems(deps: StartupDeps, env: NodeJS.ProcessEnv):
     );
   }
 
+  try {
+    if (cnDefaultModelHasNoRoute(env)) {
+      deps.log.error(
+        'STARTUP',
+        'CN_LLM_MODEL is set without CN_LLM_PROVIDER and carries no vendor prefix: GoApply runs its own model profile and has no route for it, ' +
+          'so GoApply AI answers 503 ai_unavailable. Write the model as <vendor>/<model> (for example deepseek/deepseek-chat) or set CN_LLM_PROVIDER; ' +
+          'unset CN_LLM_MODEL to use the shared models.',
+        { variable: 'CN_LLM_MODEL', missing: 'CN_LLM_PROVIDER' },
+      );
+    }
+  } catch {
+    /* a fault in the check is not a configuration problem */
+  }
+
   reportSignupModeProblem(deps, env);
+
+  // Lines other modules own (voice setup, Alipay collecting entity). A log line never stops a boot.
+  for (const report of deps.goapplyModuleReports ?? DEFAULT_GOAPPLY_MODULE_REPORTS) {
+    try {
+      report(env);
+    } catch {
+      /* reported by the module on first use instead */
+    }
+  }
 
   // An invalid CN_CONTENT_SAFETY_* setting no longer turns GoApply AI off: the
   // built-in keyword filter runs instead (`degraded`, platform/llm/contentSafety).

@@ -169,6 +169,23 @@ describe('CareerSourcesPanel', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('This board is already in the list.');
   });
 
+  // PAR gate (PAR-7 request): the 14 boards seeded for the mainland site cannot be added here,
+  // and they are not in this list, so the duplicate sentence would be untrue.
+  it('says so when the other site already reads the board (409 with reason board_on_other_site)', async () => {
+    api.adminListCareerSources.mockResolvedValue({ items: [], cursor: null });
+    api.adminCreateCareerSource.mockRejectedValue(
+      new RoboApiError('x', { status: 409, code: 'conflict', payload: { success: false, code: 'conflict', error: 'x', details: { field: 'boardToken', reason: 'board_on_other_site' } } }),
+    );
+    renderWithBrand(<CareerSourcesPanel />);
+    await screen.findByText('No company job boards yet.');
+    fireEvent.change(screen.getByLabelText('Board id'), { target: { value: 'BoschGroup' } });
+    fireEvent.change(screen.getByLabelText('Company name'), { target: { value: 'Bosch' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add board' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('This board is already read for the other site, so it cannot be added here.');
+    expect(alert).not.toHaveTextContent('already in the list');
+  });
+
   it('check now reports what the board lists; turn off and remove (after confirming)', async () => {
     api.adminListCareerSources.mockResolvedValue({ items: [ROW], cursor: null });
     api.adminRunCareerSource.mockResolvedValue({ sourceId: 'cs1', status: 'scheduled', listed: 2, queued: true, error: null });

@@ -487,6 +487,39 @@ describe('GoApply home', () => {
     expect(screen.queryByText("Paid passes can't be bought yet.")).toBeNull();
   });
 
+  it('never says "Price not set yet" before the plans answer or when the request fails; only for a plan that really has no amount', async () => {
+    // Before the answer (the server HTML and the first paint): the paid card is named, no price is claimed.
+    let release: (v: unknown) => void = () => undefined;
+    api.getPlans.mockImplementation(() => new Promise((resolve) => (release = resolve)));
+    const first = renderWithBrand(<GoApplyHome />, { brand: 'goapply', flags: FEED_ON });
+    const pricing = () => first.container.querySelector('[data-pricing-summary]') as HTMLElement;
+    await waitFor(() => expect(api.getPlans).toHaveBeenCalled());
+    expect(pricing().textContent).not.toContain('Price not set yet');
+    expect(pricing().querySelector('[data-price-unset]')).toBeNull();
+    expect(within(pricing()).getByRole('heading', { name: 'Member 30-day pass' })).toBeInTheDocument();
+    release(openPlans());
+    await waitFor(() => expect(within(pricing()).getByText('¥39, paid once')).toBeInTheDocument());
+    expect(pricing().textContent).not.toContain('Price not set yet');
+    // A failed read says nothing about the price either.
+    cleanup();
+    api.getPlans.mockReset();
+    api.getPlans.mockRejectedValue(new Error('down'));
+    const failed = renderWithBrand(<GoApplyHome />, { brand: 'goapply', flags: FEED_ON });
+    await waitFor(() => expect(api.getPlans).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(failed.container.querySelector('[data-pricing-summary]')!.textContent).not.toContain('Price not set yet');
+    // The sentence is for a plan the API lists with no amount (RoboApply before its prices are set).
+    cleanup();
+    api.getPlans.mockReset();
+    api.getPlans.mockImplementation(async () => {
+      const view = plansView('roboapply');
+      return { ...view, plans: view.plans.map((p) => (p.kind === 'free' ? p : { ...p, amountMinor: null })) };
+    });
+    const unset = renderWithBrand(<RoboApplyHome />);
+    await waitFor(() => expect(unset.container.querySelector('[data-pricing-summary] [data-price-unset]')).not.toBeNull());
+    expect(unset.container.querySelector('[data-pricing-summary] [data-price-unset]')!.textContent).toBe('Price not set yet');
+  });
+
   // D5: the free tools run on GoApply, so its chrome links them like RoboApply's, without asking the API.
   it('GoApply links the free tools from the header nav and the footer', async () => {
     const { container } = renderWithBrand(<GoApplyHome />, { brand: 'goapply', flags: FEED_ON });

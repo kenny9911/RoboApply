@@ -75,7 +75,7 @@
 //     longer than the 90 days both privacy notices publish.
 
 import { AsyncLocalStorage } from 'node:async_hooks';
-import * as llmModels from '../lib/llm/llmModels.js';
+import { getEnvModelSetting } from '../lib/llm/llmModels.js';
 import { getTaskModel, getTaskReasoningEffort } from '../lib/llm/llmTaskSettings.js';
 import {
   brandEnv,
@@ -87,6 +87,7 @@ import {
   parseBoolEnv,
 } from '../platform/brand/brandEnv.js';
 import { BRAND_IDS, getBrand, DEFAULT_BRAND, type BrandId, type ProductBrand } from '../platform/brand/registry.js';
+import { cnOwnStorageProblem } from '../platform/residency/uploadPolicy.js';
 import { getCurrentBrandId } from '../lib/requestContext.js';
 import { isGoApplyDirectProvider } from '../platform/llm/brandPolicy.js';
 import { parseReasoningEffort, type ReasoningEffort } from '../services/llm/reasoningEffort.js';
@@ -371,17 +372,22 @@ function r2CredsFrom(read: (name: string) => string | undefined): R2Creds | null
 /**
  * GoApply may not write NEW interview artifacts: the operator chose the strict
  * mainland posture (CN_RESIDENCY_STRICT: mainland storage required, plan §4)
- * and GoApply has no bucket of its own. Never true for RoboApply.
+ * and GoApply has no MAINLAND bucket of its own. The same predicate as resume
+ * originals (`cnOwnStorageProblem`, platform/residency/uploadPolicy): the
+ * four CN_S3_* values set and CN_S3_ENDPOINT on mainland object storage. A
+ * bucket of its own on a foreign endpoint is not one: practice audio, video
+ * and transcripts are held to the rule that holds the resume file. Never true
+ * for RoboApply.
  */
 export function interviewStorageWriteBlocked(brand?: InterviewBrandRef): boolean {
   const b = interviewBrand(brand);
-  return b.market === 'cn' && cnResidencyStrict() && brandStack(b, 'storage') !== 'own';
+  return b.market === 'cn' && cnResidencyStrict() && cnOwnStorageProblem(process.env) !== null;
 }
 
 /**
  * The store NEW recordings and transcript files of the brand are written to:
- * `getR2Creds`, except under CN_RESIDENCY_STRICT, where GoApply without
- * CN_S3_BUCKET writes nothing (null: recording is not offered and the
+ * `getR2Creds`, except under CN_RESIDENCY_STRICT, where GoApply without a
+ * mainland bucket of its own writes nothing (null: recording is not offered and the
  * transcript stays in the database only). Reads and deletes keep using
  * `getR2Creds`, so what earlier sessions stored in the shared bucket is still
  * played back and still deleted on time.
@@ -810,29 +816,17 @@ export function getBlueprintModel(brand?: InterviewBrandRef): string | undefined
   return blueprintSelector(b) || interviewTaskModel(b);
 }
 
-type EnvModelResolver = (envName: string, brand?: BrandId | ProductBrand) => string | undefined;
-
 /**
- * The shared model resolver for a selector kept outside the stack table
- * (lib/llm/llmModels.ts `getEnvModelSetting`, plan §3.3 and the §5 contract:
- * the interview blueprint goes through the shared resolver, so a shared
- * selector is qualified to a full route when GoApply has a provider of its
- * own). It is delivered by the LLM bundle of the same wave, so it is looked up
- * at call time: where it is not there, the plain per-key read (CN_ value, else
- * the shared one) is the same rule without the qualification.
+ * The blueprint selector of GoApply through the shared model resolver
+ * (lib/llm/llmModels.ts `getEnvModelSetting`, plan §3.3 and the §5 contract):
+ * CN_LLM_INTERVIEW_BLUEPRINT_MODEL, else the shared value, which is qualified
+ * to a full route when GoApply has a provider of its own and is not inherited
+ * behind the domestic-only wall unless it names a mainland vendor. A plain
+ * import since the parity gate (both bundles are merged), so a renamed export
+ * is a compile error and never a silent fallback to the unqualified read.
  */
-function envModelResolver(): EnvModelResolver | undefined {
-  try {
-    const fn: unknown = Reflect.get(llmModels, 'getEnvModelSetting');
-    return typeof fn === 'function' ? (fn as EnvModelResolver) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 function blueprintSelector(b: ProductBrand): string | undefined {
-  const resolve = envModelResolver();
-  return resolve ? resolve('LLM_INTERVIEW_BLUEPRINT_MODEL', b) : brandEnv(b, 'LLM_INTERVIEW_BLUEPRINT_MODEL');
+  return getEnvModelSetting('LLM_INTERVIEW_BLUEPRINT_MODEL', b);
 }
 
 /** Effort for the blueprint call: LLM_INTERVIEW_BLUEPRINT_REASONING_EFFORT when
@@ -1077,7 +1071,10 @@ export function voiceConfigProblems(brand?: InterviewBrandRef): VoiceConfigProbl
   if (interviewStorageWriteBlocked(b)) {
     out.push({
       kind: 'storage',
-      message: `CN_RESIDENCY_STRICT is on and ${b.name} has no bucket of its own (CN_S3_BUCKET and its keys): practice recordings and transcript files are not stored.`,
+      message:
+        cnOwnStorageProblem(process.env) === 'offshore'
+          ? `CN_RESIDENCY_STRICT is on and ${b.name}'s own bucket is not mainland object storage (CN_S3_ENDPOINT): practice recordings and transcript files are not stored.`
+          : `CN_RESIDENCY_STRICT is on and ${b.name} has no bucket of its own (CN_S3_ENDPOINT, CN_S3_BUCKET and its keys): practice recordings and transcript files are not stored.`,
     });
   }
   return out;

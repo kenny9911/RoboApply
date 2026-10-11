@@ -232,10 +232,18 @@ async function purgeUser(userId: string, userBrand: BrandId): Promise<UserPurgeO
  * schemaInvariants NO_CASCADE, `no_fk` entries that are user data). Run before
  * the User row goes, by the account purge and nowhere else.
  */
-export async function deleteRowsWithoutUserFk(userId: string): Promise<{ onboardingSessions: number; workItems: number; anonEvents: number | null }> {
-  const [onboardingSessions, workItems] = await prisma.$transaction([
+export async function deleteRowsWithoutUserFk(userId: string): Promise<{ onboardingSessions: number; workItems: number; billingRefunds: number; anonEvents: number | null }> {
+  // RABillingRefund (market wave schema, MKT-0 O-3): a refund record names the
+  // user, the charge and the order and has no FK, so nothing else removes it.
+  // Payment rows go with the account (AlipayOrder cascades from User); the
+  // record of truth stays with Stripe and the merchant console.
+  // RABillingConsentArchive is deliberately NOT here: it is the proof of a
+  // checkout acknowledgement that must outlive the account, and
+  // compliance-daily deletes it at its `retainUntil`.
+  const [onboardingSessions, workItems, billingRefunds] = await prisma.$transaction([
     prisma.rAOnboardingSession.deleteMany({ where: { userId } }),
     prisma.rAWorkItem.deleteMany({ where: { userId } }),
+    prisma.rABillingRefund.deleteMany({ where: { userId } }),
   ]);
   let anonEvents: number | null = null;
   try {
@@ -248,7 +256,7 @@ export async function deleteRowsWithoutUserFk(userId: string): Promise<{ onboard
       error: err instanceof Error ? err.message : String(err),
     });
   }
-  return { onboardingSessions: onboardingSessions.count, workItems: workItems.count, anonEvents };
+  return { onboardingSessions: onboardingSessions.count, workItems: workItems.count, billingRefunds: billingRefunds.count, anonEvents };
 }
 
 /**

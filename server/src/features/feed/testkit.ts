@@ -2,7 +2,8 @@
 //
 // No vitest imports: the file compiles with the server. The fake repo honours
 // the parts of the SQL a service test depends on (posted-date windows, the
-// (postedAt, id) keyset, firstSeenAt, ids, LIMIT, hidden state, market, the
+// (postedAt, id) keyset, the age floor and its board/bank exemption, the bank
+// posting-page rule, firstSeenAt, ids, LIMIT, hidden state, market, the
 // public-only and publicDisplay scopes, a role (taxonomy) predicate; ordering
 // is newest first, then id descending, like the SQL); the other predicates'
 // SQL is covered by sql.test.ts snapshots instead.
@@ -12,6 +13,16 @@ import type { AffinityState } from './affinity.js';
 import type { ActionJob, CardExtrasRow, FeedRepo, FeedSessionRecord, InteractionWrite } from './repo.js';
 import { EMPLOYER_BOARD_SOURCES, GOHIRE_SOURCE_BOARD } from './sourceLine.js';
 import type { FeedJobRow } from './types.js';
+
+/**
+ * Both recruiter banks with a candidate-facing posting page. A bank row is
+ * listed (and carries an apply link) only then (sourceLine.ts `heldBankBoards`),
+ * so a test that lists bank rows runs with these two settings.
+ */
+export const BANK_PAGES_ENV: Readonly<Record<string, string>> = {
+  GOHIRE_PUBLIC_JOB_URL_TEMPLATE: 'https://jobs.gohire.example/p/{id}',
+  ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE: 'https://jobs.robohire.example/p/{id}',
+};
 
 export function feedRow(over: Partial<FeedJobRow> & { id: string }): FeedJobRow {
   return {
@@ -190,6 +201,9 @@ export class FakeFeedRepo implements FeedRepo {
     if (notExpiredAt) rows = rows.filter((r) => !r.expiresAt || r.expiresAt > notExpiredAt);
     const boards = valueAfter(s, /j\."fromRecruiterBank" = true OR j\."sourceBoard" = ANY\(\$(\d+)/) as string[] | undefined;
     if (boards) rows = rows.filter((r) => r.fromRecruiterBank || boards.includes(r.sourceBoard));
+    // The bank rule of `scopePredicates`: a recruiter-bank row whose bank has no posting page is never listed.
+    const heldBanks = valueAfter(s, /NOT \(j\."fromRecruiterBank" = true AND j\."sourceBoard" = ANY\(\$(\d+)/) as string[] | undefined;
+    if (heldBanks) rows = rows.filter((r) => !(r.fromRecruiterBank && heldBanks.includes(r.sourceBoard)));
     const ids = valueAfter(s, /j\."id" = ANY\(\$(\d+)/) as string[] | undefined;
     if (ids) return rows.filter((r) => ids.includes(r.id));
     // The browse category predicate only (a bare AND part; a search's role predicate sits in parentheses with its title match).
@@ -203,6 +217,10 @@ export class FakeFeedRepo implements FeedRepo {
     const keyId = valueAfter(s, /\(j\."postedAt", j\."id"\) < \(\$\d+::timestamp\(3\), \$(\d+)\)/) as string | undefined;
     const seen = valueAfter(s, /j\."firstSeenAt" > \$(\d+)/) as Date | undefined;
     if (from) rows = rows.filter((r) => r.postedAt && r.postedAt >= from);
+    // The age floor (`ageFloorSql`): an aggregator row must be at or above it; a dated board or bank row passes at any age.
+    const ageFloor = valueAfter(s, /\(j\."postedAt" >= \$(\d+)::timestamp\(3\) OR \(j\."postedAt" IS NOT NULL AND/) as Date | undefined;
+    const ageFree = valueAfter(s, /j\."postedAt" IS NOT NULL AND \(j\."sourceBoard" = ANY\(\$(\d+)/) as string[] | undefined;
+    if (ageFloor) rows = rows.filter((r) => r.postedAt && (r.postedAt >= ageFloor || r.fromRecruiterBank || (ageFree ?? []).includes(r.sourceBoard)));
     if (to) rows = rows.filter((r) => r.postedAt && r.postedAt < to);
     if (keyTo && keyId) {
       rows = rows.filter((r) => r.postedAt && (r.postedAt.getTime() < keyTo.getTime() || (r.postedAt.getTime() === keyTo.getTime() && r.id < keyId)));

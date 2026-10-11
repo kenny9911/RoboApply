@@ -36,8 +36,13 @@ const robo = BRANDS.roboapply;
 const go = BRANDS.goapply;
 const EMPTY = { NODE_ENV: 'test' };
 const CN_MODEL = { CN_LLM_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'k', CN_LLM_MODEL: 'deepseek-chat' };
-/** A content-safety setting that cannot run: the one thing that turns GoApply AI off. */
-const SAFETY_BROKEN = { CN_CONTENT_SAFETY_PROVIDER: 'nonsense' };
+/**
+ * A content-safety setting that cannot run under the strict posture: the one
+ * thing that turns GoApply AI off. Without `CN_RESIDENCY_STRICT` the same typo
+ * degrades to the built-in keyword list and AI stays on (plan §3.3, PAR-2 item 6).
+ */
+const SAFETY_TYPO = { CN_CONTENT_SAFETY_PROVIDER: 'nonsense' };
+const SAFETY_BROKEN = { ...SAFETY_TYPO, CN_RESIDENCY_STRICT: 'true' };
 
 afterEach(() => {
   setFlagOverrideLoader(null);
@@ -220,6 +225,13 @@ describe('requirements (credentials, off switches) cannot be overridden', () => 
     }
     // The rail is not RoboApply's.
     expect(isEnabledForBrand('pay.alipay', robo, SECRET)).toBe(false);
+    // The opt-in entity gate: the capability follows the rail (which refuses to charge without the entity).
+    expect(isEnabledForBrand('pay.alipay', go, { ...SECRET, CN_PAYMENT_REQUIRE_ENTITY: 'true' })).toBe(false);
+    expect(isEnabledForBrand('pay.alipay', go, { ...SECRET, CN_PAYMENT_REQUIRE_ENTITY: 'true', CN_PAYMENT_COLLECTING_ENTITY: '   ' })).toBe(false);
+    expect(isEnabledForBrand('pay.alipay', go, { ...SECRET, CN_PAYMENT_REQUIRE_ENTITY: 'true', CN_PAYMENT_COLLECTING_ENTITY: '示例（上海）科技有限公司' })).toBe(true);
+    expect(isEnabledForBrand('pay.alipay', go, { ...SECRET, CN_PAYMENT_REQUIRE_ENTITY: 'false' })).toBe(true);
+    // Brand-own: RoboApply's entity name never opens GoApply's rail.
+    expect(isEnabledForBrand('pay.alipay', go, { ...SECRET, CN_PAYMENT_REQUIRE_ENTITY: 'true', PAYMENT_COLLECTING_ENTITY: 'Other Inc.' })).toBe(false);
     expect(isEnabledForBrand('pay.alipay', robo, { ...SECRET, CN_PAYMENTS_ENABLED: 'true' })).toBe(false);
     // WeChat Pay still needs its merchant set.
     expect(isEnabledForBrand('pay.wechatpay', go, EMPTY)).toBe(false);
@@ -247,10 +259,13 @@ describe('requirements (credentials, off switches) cannot be overridden', () => 
       expect(isEnabledForBrand(key, go, { CN_LLM_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'k' }), key).toBe(true);
       expect(isEnabledForBrand(key, go, { CN_LLM_PROVIDER: 'openrouter', OPENROUTER_API_KEY: 'k', CN_LLM_MODEL: 'x' }), key).toBe(true);
       expect(isEnabledForBrand(key, go, { CN_LLM_PROVIDER: 'newapi', NEWAPI_API_KEY: 'k', NEWAPI_BASE_URL: 'https://openrouter.ai/api/v1', CN_LLM_MODEL: 'x' }), key).toBe(true);
-      // WP-24: a content-safety filter that cannot run hides GoApply AI (never RoboApply's).
+      // A filter setting that cannot run degrades to the built-in keyword list: AI stays on (D5).
+      expect(isEnabledForBrand(key, go, SAFETY_TYPO), key).toBe(true);
+      expect(isEnabledForBrand(key, go, { CN_CONTENT_SAFETY_PROVIDER: 'aliyun_green' }), key).toBe(true); // no keys
+      // WP-24, now only under the strict posture: a filter that cannot run hides GoApply AI (never RoboApply's).
       expect(isEnabledForBrand(key, go, SAFETY_BROKEN), key).toBe(false);
       expect(isEnabledForBrand(key, go, { ...CN_MODEL, ...SAFETY_BROKEN }), key).toBe(false);
-      expect(isEnabledForBrand(key, go, { CN_CONTENT_SAFETY_PROVIDER: 'aliyun_green' }), key).toBe(false); // no keys
+      expect(isEnabledForBrand(key, go, { CN_CONTENT_SAFETY_PROVIDER: 'aliyun_green', CN_RESIDENCY_STRICT: 'true' }), key).toBe(false); // no keys
       expect(isEnabledForBrand(key, go, SAFETY_BROKEN, { [key]: true }), key).toBe(false);
       expect(isEnabledForBrand(key, robo, SAFETY_BROKEN), key).toBe(true);
       // The filter setting is GoApply's own: an unprefixed value is not read.

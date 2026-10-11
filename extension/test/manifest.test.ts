@@ -40,10 +40,10 @@ describe('buildManifest', () => {
     expect(m.background.service_worker).toBe('sw.js');
   });
 
-  it('GoApply: its own origin; no international form hosts until WP-71 ships portal adapters', () => {
+  it('GoApply: its own origin, the mainland portal hosts, then the international form hosts (D5: the same forms as RoboApply)', () => {
     const m = buildManifest({ brand: 'goapply', target: 'edge', dev: false, version: '1.0.0' }) as { host_permissions: string[]; content_scripts: unknown[]; externally_connectable: { matches: string[] } };
     expect(m.host_permissions).toEqual(['https://www.goapply.top/*', ...adapterHostPatterns('cn')]);
-    expect(m.host_permissions.join(' ')).not.toMatch(/greenhouse|lever|ashby/);
+    expect(m.host_permissions).toEqual(expect.arrayContaining(adapterHostPatterns('intl')));
     expect(m.externally_connectable.matches).toEqual(['https://goapply.top/*', 'https://www.goapply.top/*']);
   });
 

@@ -96,6 +96,9 @@ export interface JobRow {
   companyName: string;
   location: string | null;
   applyUrl: string | null;
+  /** With `fromRecruiterBank`: what the bank posting-page rule reads (feed/sourceLine.ts `bankListable`). */
+  sourceBoard?: string;
+  fromRecruiterBank?: boolean;
   market: string;
   visibility: string;
   ownerUserId: string | null;
@@ -131,6 +134,8 @@ export const JOB_SELECT = {
   companyName: true,
   location: true,
   applyUrl: true,
+  sourceBoard: true,
+  fromRecruiterBank: true,
   market: true,
   visibility: true,
   ownerUserId: true,

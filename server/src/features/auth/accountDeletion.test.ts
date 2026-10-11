@@ -77,6 +77,7 @@ const KEPT_BY_DESIGN: Record<string, string> = {
   RAAiContentLabelLog: 'AI-label log; compliance-daily purges it at 6 months (WP-13)',
   RAContentSafetyEvent: 'content-safety log; compliance-daily purges it (WP-13)',
   RAPersonalInfoRequest: 'SET NULL: proof the request was handled outlives the account',
+  RABillingConsentArchive: 'proof of a checkout acknowledgement that must outlive the account (AB 2863); compliance-daily deletes it at retainUntil',
 };
 
 // ── Fake cascade: deleting a User removes the rows the schema cascades ─────

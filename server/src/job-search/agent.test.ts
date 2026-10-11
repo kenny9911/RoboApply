@@ -309,9 +309,16 @@ describe('the planner gate (phone binding, AI consent and the AI text capability
       return base;
     };
     try {
+      // A phone is asked for only where one can be bound (plan §3.7): an SMS provider is live.
+      vi.stubEnv('SMS_DEV_CONSOLE', 'true');
       const refused = build();
       await expect(refused.agent.search(REQUEST, { ...CONTEXT, brand: GO, audience: 'api', apiKeyId: 'key' })).rejects.toMatchObject({ code: 'phone_binding_required', status: 403 });
       expect(refused.planner).not.toHaveBeenCalled(); expect(refused.quota.reserve).not.toHaveBeenCalled();
+      // With no SMS provider nobody can bind a phone, so the same account is not held (D5).
+      vi.stubEnv('SMS_DEV_CONSOLE', '');
+      const noSms = build();
+      await expect(noSms.agent.search(REQUEST, { ...CONTEXT, brand: GO, audience: 'api', apiKeyId: 'key' })).resolves.toMatchObject({ agent: { queries: ['数据分析师'] } });
+      vi.stubEnv('SMS_DEV_CONSOLE', 'true');
       account.phoneE164 = '+8613800000000'; account.phoneVerifiedAt = new Date();
       const allowed = build();
       await expect(allowed.agent.search(REQUEST, { ...CONTEXT, brand: GO, audience: 'api', apiKeyId: 'key' })).resolves.toMatchObject({ agent: { queries: ['数据分析师'] } });
@@ -321,7 +328,7 @@ describe('the planner gate (phone binding, AI consent and the AI text capability
       const off = build();
       await expect(off.agent.search(REQUEST, { ...CONTEXT, brand: GO })).rejects.toMatchObject({ code: 'ai_unavailable', status: 503 });
       expect(off.planner).not.toHaveBeenCalled(); expect(off.quota.reserve).not.toHaveBeenCalled();
-    } finally { setConsentLookup(null); delete db.user; delete db.rAAuthIdentity; }
+    } finally { vi.unstubAllEnvs(); setConsentLookup(null); delete db.user; delete db.rAAuthIdentity; }
   });
 
   it('a failed phone lookup fails closed: no reservation and no planner call', async () => {

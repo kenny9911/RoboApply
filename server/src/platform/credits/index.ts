@@ -66,8 +66,8 @@ export {
   creditErrorToHttp,
   isCreditError,
 } from './errors.js';
-export { createPracticeCredits, getPracticeBalance, grantPracticeCredit } from './practice.js';
-export type { PracticeBalance, PracticeGrantReason, PracticeGrantResult, PracticeGrantStatus } from './practice.js';
+export { createPracticeCredits, getPracticeBalance, grantFirstPracticeCredit, grantPracticeCredit } from './practice.js';
+export type { FirstPracticeReason, PracticeBalance, PracticeGrantReason, PracticeGrantResult, PracticeGrantStatus } from './practice.js';
 export { summarizeEntitlementsForMe } from './summary.js';
 export type { BucketSummary, EntitlementSummary } from './summary.js';
 export { createPrismaCreditStore, isDbBusyError } from './store.js';

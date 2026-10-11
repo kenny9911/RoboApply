@@ -39,7 +39,9 @@ export function isLegacyPlan(planKey: string): boolean {
 export function planName(t: EmailTranslator, planKey: string): string {
   if (isLegacyPlan(planKey)) return t('billing.planNames.legacy');
   if (KNOWN_PLAN_NAMES.has(planKey)) {
-    const key = `billing.planNames.${planKey}${t.brand.market === 'cn' && planKey.startsWith('pro_') ? 'Cn' : ''}`;
+    // GoApply sells non-renewing passes: its Pro and student plans have their own names (月卡, 学生月卡), never "billed monthly".
+    const isPass = planKey.startsWith('pro_') || planKey.startsWith('student_');
+    const key = `billing.planNames.${planKey}${t.brand.market === 'cn' && isPass ? 'Cn' : ''}`;
     if (t.has(key)) return t(key);
     return t(`billing.planNames.${planKey}`);
   }

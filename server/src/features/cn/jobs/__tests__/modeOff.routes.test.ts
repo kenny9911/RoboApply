@@ -652,6 +652,9 @@ function jobSearchHarness(env: Record<string, string>) {
     quota: { reserve: async () => 'r1', finish: async () => undefined } as never,
     agent: { search: async () => (calls.agent++, { jobs: [posting], meta, agent: { queries: ['产品经理'], mode: 'planned', criteria: { country: 'cn' }, unverifiedPreferences: [], linkedinOnly: false }, searches: [] }) } as never,
     sessionAuth: (req, _res, next) => (calls.auth++, (req.user = { id: 'u1' } as never), next()),
+    // The routers read the mode per request from their own `env` dependency
+    // (PAR-8 `requireJobsFeed`), so the harness env is handed to them too.
+    env: () => env,
   });
   const routes = { api: routesOf(routers.api), website: routesOf(routers.website) };
   return startRouteHarness({ env, mounts: [[JOB_SEARCH_MOUNTS.api, routers.api], [JOB_SEARCH_MOUNTS.website, routers.website]] }).then((h) => ({ h, routes, calls }));

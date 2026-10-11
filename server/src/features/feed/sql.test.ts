@@ -9,6 +9,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import { normalizeSql } from '../../test/sqlSnapshot.js';
 import { FILTER_FIELDS, type FilterField, type FilterSet } from '../search/index.js';
 import {
+  ageFloorSql,
   annualFloor,
   browseTaxonomySql,
   cardExtrasSql,
@@ -216,6 +217,61 @@ describe('mainland apply-link rule (a public posting with no usable apply URL is
   });
 });
 
+const AGE_FLOOR = '(j."postedAt" >= $';
+const AGE_FREE = 'OR (j."postedAt" IS NOT NULL AND (j."sourceBoard" = ANY($';
+const HELD_BANKS = 'NOT (j."fromRecruiterBank" = true AND j."sourceBoard" = ANY($';
+
+describe('posting age: the floor cuts aggregator rows only (plan §3.9: no posting-age cut-off for board or bank rows)', () => {
+  const floor = new Date('2026-06-12T12:00:00Z');
+
+  it('the predicate: at or above the floor, or a dated row of a recruiter bank or a public employer board', () => {
+    const sql = show(ageFloorSql(floor))!;
+    expect(sql.text).toBe('(j."postedAt" >= $1::timestamp(3) OR (j."postedAt" IS NOT NULL AND (j."sourceBoard" = ANY($2::text[]) OR j."fromRecruiterBank" = true)))');
+    expect(sql.values).toEqual(['2026-06-12T12:00:00.000Z', ['robohire', 'gohire', 'greenhouse', 'lever', 'ashby', 'smartrecruiters']]);
+  });
+
+  it('a window start stays a hard bound; the age floor is the exempting one, in the list, the id seams, the header and Explore', () => {
+    const scope = { market: 'cn' as const, userId: 'u1', now: NOW };
+    const hard = show(retrievalSql({ scope, filters: {}, fields: FILTER_FIELDS, from: floor, to: null, limit: 400 }))!;
+    expect(hard.text).toContain('j."postedAt" >= $');
+    expect(hard.text).not.toContain(AGE_FREE);
+    const last = show(retrievalSql({ scope, filters: {}, fields: FILTER_FIELDS, from: null, ageFloor: floor, to: new Date('2026-08-01T00:00:00Z'), toId: 'j9', limit: 400 }))!;
+    expect(last.text).toContain(AGE_FREE);
+    expect(last.text).toContain('(j."postedAt", j."id") < (');
+    expect(show(jobIdsSql({ scope, filters: {}, fields: FILTER_FIELDS, from: null, ageFloor: floor, limit: 10, orderBy: 'posted' }))!.text).toContain(AGE_FREE);
+    expect(show(sourcesSql({ scope, filters: {}, fields: FILTER_FIELDS, from: floor }))!.text).toContain(AGE_FREE);
+    expect(show(exploreCountsSql('cn', ['software_engineering'], floor))!.text).toContain(AGE_FREE);
+    // The user's own "posted within" filter is a plain bound for every row.
+    const within = show(predicateFor('postedWithinDays', { postedWithinDays: 7 }, { market: 'cn', now: NOW }))!;
+    expect(within.text).toBe('j."postedAt" >= $1::timestamp(3)');
+  });
+});
+
+describe('recruiter-bank rows of a bank with no posting page are held out of every statement', () => {
+  it('the scope carries the rule when a bank is held, and nothing when none is', () => {
+    const held = scopePredicates({ market: 'cn', userId: 'u1', now: NOW, heldBanks: ['robohire', 'gohire'] }).map((p) => show(p)!);
+    const rule = held.find((p) => p.text.startsWith('NOT (j."fromRecruiterBank"'))!;
+    expect(rule.text).toBe('NOT (j."fromRecruiterBank" = true AND j."sourceBoard" = ANY($1::text[]))');
+    expect(rule.values).toEqual([['robohire', 'gohire']]);
+    for (const scope of [{ market: 'intl' as const, userId: 'u1', now: NOW }, { market: 'cn' as const, userId: null, now: NOW, heldBanks: [] }]) {
+      expect(scopePredicates(scope).some((p) => p.text.includes('NOT (j."fromRecruiterBank"'))).toBe(false);
+    }
+  });
+
+  it('list, counts, id seams, later pages, header and the visitor list all go through that scope', () => {
+    const scope = { market: 'intl' as const, userId: 'u1', now: NOW, heldBanks: ['robohire'] };
+    const statements = [
+      retrievalSql({ scope, filters: {}, fields: FILTER_FIELDS, from: null, to: null, limit: 400 }),
+      retrievalSql({ scope: { ...scope, userId: null, publicOnly: true, publicDisplayOnly: true, publicBoards: ['activejobs'], ignoreHidden: true }, filters: {}, fields: FILTER_FIELDS, from: null, to: null, limit: 20 }),
+      countSql({ scope, filters: {}, fields: FILTER_FIELDS, cap: 5000 }),
+      jobIdsSql({ scope, filters: {}, fields: FILTER_FIELDS, from: null, limit: 10, orderBy: 'posted' }),
+      rowsByIdSql(scope, ['j1']),
+      sourcesSql({ scope, filters: {}, fields: FILTER_FIELDS, from: null }),
+    ];
+    for (const s of statements) expect(show(s)!.text).toContain(HELD_BANKS);
+  });
+});
+
 describe('feed header facts (sourcesSql)', () => {
   it('one aggregate over the public rows the query can reach: any GoHire bank row, and distinct employer boards', () => {
     const sql = show(sourcesSql({ scope: { market: 'cn', userId: 'u1', now: NOW }, filters: { workModels: ['onsite'] }, fields: FILTER_FIELDS, from: new Date('2026-06-12T12:00:00Z') }))!;
@@ -230,9 +286,9 @@ describe('feed header facts (sourcesSql)', () => {
     expect(sql.text).toContain('count(*)::int AS "listed"');
     expect(sql.values).toContain('gohire');
     expect(sql.values.find((v) => Array.isArray(v) && v.includes('smartrecruiters'))).toEqual(expect.arrayContaining(['greenhouse', 'lever', 'ashby', 'smartrecruiters']));
-    // The query's own filters and the list's age floor apply.
+    // The query's own filters and the list's age floor apply (the floor cuts aggregator rows only).
     expect(sql.text).toContain('j."workModel" = ANY(');
-    expect(sql.text).toContain('j."postedAt" >= ');
+    expect(sql.text).toContain(AGE_FLOOR);
     expect(sql.text).not.toMatch(/LIMIT/);
   });
 
@@ -309,9 +365,12 @@ describe('statements', () => {
 
   it('explore counts can carry the lists’ age floor (a tile then counts what its browse list reaches)', () => {
     const sql = show(exploreCountsSql('intl', ['software_engineering'], new Date('2026-06-12T12:00:00Z')));
-    expect(sql?.text).toContain('j."postedAt" >= $');
+    expect(sql?.text).toContain(AGE_FLOOR);
     expect(sql?.values).toContain('2026-06-12T12:00:00.000Z');
     expect(sql?.text).toContain(`j."visibility" = 'public'`);
+    // …and the bank rule, so a tile never counts a held bank row.
+    expect(sql?.text).not.toContain(HELD_BANKS);
+    expect(show(exploreCountsSql('cn', ['software_engineering'], null, ['gohire']))?.text).toContain(HELD_BANKS);
   });
 
   it('browse: the category predicate matches the category id itself and every role under it, as a bare AND part', () => {

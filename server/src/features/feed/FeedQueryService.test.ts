@@ -6,7 +6,7 @@
 // order, hide/unhide with filter diffs, report thresholds, impressions, daily
 // rating, Explore cache, NL query (aiAllowed), new-count, skills-check, counts.
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
 
@@ -16,7 +16,7 @@ import type { FilterSet, SearchProfileWire } from '../search/index.js';
 import { SearchProfileNotFoundError } from '../search/index.js';
 import { createFeedQueryService, type FeedServiceDeps } from './FeedQueryService.js';
 import type { PlannerPlan } from './filterDiff.js';
-import { FakeFeedRepo, feedRow } from './testkit.js';
+import { BANK_PAGES_ENV, FakeFeedRepo, feedRow } from './testkit.js';
 import type { FeedCtx } from './types.js';
 
 const NOW = new Date('2026-10-10T12:00:00.000Z');
@@ -611,6 +611,9 @@ describe('GoApply: where postings come from, thin results, and no posting withou
   beforeEach(() => {
     personalized = false;
   });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
 
   it('sources: employer boards are counted from the rows the query can reach; gohire only when a GoHire row is listed', async () => {
     repo.rows.push(
@@ -627,6 +630,9 @@ describe('GoApply: where postings come from, thin results, and no posting withou
     expect(boardsOnly.items.map((i) => i.jobId).sort()).toEqual(['b1', 'b2', 'b3', 'b4', 'own']);
 
     repo.rows.push(cnRow('g1', { sourceBoard: 'gohire', sourceName: 'GoHire', fromRecruiterBank: true, companyNameNormalized: 'bank co' }));
+    // GoHire has no posting page: its row is held, so the header does not name GoHire.
+    expect((await service().query(cn(), { sort: 'newest' })).sources).toEqual({ gohire: false, employerBoards: 3 });
+    vi.stubEnv('GOHIRE_PUBLIC_JOB_URL_TEMPLATE', BANK_PAGES_ENV.GOHIRE_PUBLIC_JOB_URL_TEMPLATE!);
     const withBank = await service().query(cn(), { sort: 'newest' });
     expect(withBank.sources).toEqual({ gohire: true, employerBoards: 3 });
     // The header statement reads public rows of this market only, whoever asks.
@@ -725,6 +731,98 @@ describe('GoApply: where postings come from, thin results, and no posting withou
     const cnStatements = repo.queries.filter((q) => q.values.includes('cn') && /FROM "RAJob" j LEFT JOIN/.test(q.text));
     expect(cnStatements.length).toBeGreaterThan(4);
     for (const q of cnStatements) expect(q.text).toContain(`(j."visibility" <> 'public' OR j."applyUrl" ~* '^[[:space:]]*https?://')`);
+  });
+
+  it('no posting-age cut-off for board or bank rows: a board posting 300 days old is listed, counted, sampled and previewed; an aggregator row that old is not', async () => {
+    const old = { postedAt: daysAgo(300), firstSeenAt: daysAgo(300) };
+    repo.rows.push(
+      cnRow('recent'),
+      cnRow('old_board', { ...old, sourceBoard: 'greenhouse', companyNameNormalized: 'riot' }),
+      cnRow('old_agg', { ...old, sourceBoard: 'activejobs', companyNameNormalized: 'agg' }),
+      // The user's own import keeps the age floor, as before.
+      cnRow('old_own', { ...old, visibility: 'private', ownerUserId: 'u1', sourceBoard: 'user_import', companyNameNormalized: 'mine' }),
+    );
+    const res = await service().query(cn(), { sort: 'newest' });
+    expect(res.items.map((i) => i.jobId)).toEqual(['recent', 'old_board']);
+    expect(res.endOfFeed).toBe(true);
+    // The header counts what the list shows: the old board is one of the two employer boards.
+    expect(res.sources).toEqual({ gohire: false, employerBoards: 2 });
+    // The session-less seams: the preview (Assistant tools, the job-search `index` provider), the report sample, the deadline order.
+    expect((await service().preview(cn(), { limit: 10, sort: 'newest' })).map((i) => i.jobId)).toEqual(['recent', 'old_board']);
+    expect(await service().sampleForFilters(cn(), {}, { limit: 400 })).toEqual(['recent', 'old_board']);
+    expect((await service().query(cn(), { sort: 'deadline' })).items.map((i) => i.jobId)).toEqual(['recent', 'old_board']);
+    // The user's own "posted within" stays a hard bound for every row.
+    expect((await service().query(cn(), { sort: 'newest', overrides: { postedWithinDays: 30 } })).items.map((i) => i.jobId)).toEqual(['recent']);
+    // RoboApply: the same rule for its board and bank rows (the aggregator rows keep the 120-day floor).
+    personalized = true;
+    vi.stubEnv('ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE', BANK_PAGES_ENV.ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE!);
+    repo.rows.push(
+      feedRow({ id: 'i_board', ...old, sourceBoard: 'lever' }),
+      feedRow({ id: 'i_bank', ...old, sourceBoard: 'robohire', fromRecruiterBank: true }),
+      feedRow({ id: 'i_agg', ...old, sourceBoard: 'jsearch' }),
+    );
+    expect((await service().query(ctx(), { sort: 'newest' })).items.map((i) => i.jobId).sort()).toEqual(['i_bank', 'i_board']);
+  });
+
+  it('board rows older than the age floor page to the end: more of them than one window holds, then the list ends', async () => {
+    // 450 open board postings, all between 200 and 219 days old (one window reads 400).
+    for (let i = 0; i < 450; i++) {
+      const at = new Date(daysAgo(200).getTime() - i * 3_600_000);
+      repo.rows.push(cnRow(`o${String(i).padStart(3, '0')}`, { postedAt: at, firstSeenAt: at, sourceBoard: 'greenhouse', companyNameNormalized: `co${i}` }));
+    }
+    let page = await service().query(cn(), { sort: 'newest' });
+    expect(page.items).toHaveLength(20);
+    expect(page.items[0]!.jobId).toBe('o000');
+    const seen = new Set(page.items.map((i) => i.jobId));
+    let pages = 1;
+    while (page.cursor && pages < 40) {
+      page = await service().query(cn(), { sort: 'newest', cursor: page.cursor });
+      for (const item of page.items) seen.add(item.jobId);
+      pages += 1;
+    }
+    expect(seen.size).toBe(450);
+    expect(page).toMatchObject({ cursor: null, endOfFeed: true });
+  });
+
+  it('a recruiter-bank row is listed only while its bank has a posting page: feed, header, preview, sample, alerts, Explore', async () => {
+    // Stored before the rule: the link is the bank site's "Page not found", a valid http URL.
+    repo.rows.push(cnRow('b1'), cnRow('g1', { sourceBoard: 'gohire', sourceName: 'GoHire', fromRecruiterBank: true, applyUrl: 'https://www.gohire.top/jobs/x', companyNameNormalized: 'bank co' }));
+    const findById = async () => ({ ...profile(), userId: 'u1', brand: 'goapply' as const });
+    const deps = { search: { getActive: async () => profile(), get: async () => profile(), findById } as unknown as FeedServiceDeps['search'] };
+    const held = service(deps);
+    const listed = await held.query(cn(), { sort: 'newest' });
+    expect(listed.items.map((i) => i.jobId)).toEqual(['b1']);
+    expect(listed.sources).toEqual({ gohire: false, employerBoards: 1 });
+    expect((await held.preview(cn(), { limit: 10, sort: 'newest' })).map((i) => i.jobId)).toEqual(['b1']);
+    expect(await held.sampleForFilters(cn(), {}, { limit: 400 })).toEqual(['b1']);
+    expect((await held.alertCandidates({ market: 'cn', now: NOW }, 'sp1', { since: daysAgo(30), limit: 100 })).ids).toEqual(['b1']);
+    await held.countForFilters(cn(), {});
+    await held.explore({ market: 'cn', now: NOW }, 'zh');
+    await held.publicList({ market: 'cn', now: NOW }, { limit: 20 });
+    // Every statement over the index holds both banks out (neither has a page here).
+    const statements = repo.queries.filter((q) => /FROM "RAJob" j /.test(q.text));
+    expect(statements.length).toBeGreaterThan(6);
+    for (const q of statements) {
+      expect(q.text).toContain('NOT (j."fromRecruiterBank" = true AND j."sourceBoard" = ANY(');
+      expect(q.values).toContainEqual(['robohire', 'gohire']);
+    }
+    // The bank has a page: its rows are listed, and only the other bank is still held.
+    vi.stubEnv('GOHIRE_PUBLIC_JOB_URL_TEMPLATE', BANK_PAGES_ENV.GOHIRE_PUBLIC_JOB_URL_TEMPLATE!);
+    const open = await service(deps).query(cn(), { sort: 'newest' });
+    expect(open.items.map((i) => i.jobId).sort()).toEqual(['b1', 'g1']);
+    expect(open.sources).toEqual({ gohire: true, employerBoards: 1 });
+    expect(repo.queries.at(-1)!.values).toContainEqual(['robohire']);
+    // The service reads the setting from its own env when it is given one.
+    expect((await service({ ...deps, env: {} }).query(cn(), { sort: 'newest' })).items.map((i) => i.jobId)).toEqual(['b1']);
+    // RoboApply: the same rule for a RoboHire bank row.
+    personalized = true;
+    repo.rows.push(feedRow({ id: 'r1', sourceBoard: 'robohire', sourceName: 'RoboHire', fromRecruiterBank: true }), feedRow({ id: 'a1' }));
+    expect((await service().query(ctx(), { sort: 'newest' })).items.map((i) => i.jobId)).toEqual(['a1']);
+    vi.stubEnv('ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE', BANK_PAGES_ENV.ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE!);
+    expect((await service().query(ctx(), { sort: 'newest' })).items.map((i) => i.jobId).sort()).toEqual(['a1', 'r1']);
+    // With a page for every bank no statement carries the predicate.
+    await service().query(ctx(), { sort: 'newest' });
+    expect(repo.queries.at(-1)!.text).not.toContain('NOT (j."fromRecruiterBank" = true');
   });
 
   it('RoboApply statements are unchanged by the mainland rule', async () => {

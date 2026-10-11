@@ -71,7 +71,7 @@ describe('CN_SIGNUP_MODE', () => {
     expect(cnSignupModeProblem({ CN_SIGNUP_MODE: ' Invited ' })).toBe('Invited');
   });
 
-  it('the phone-auth router, built at boot, logs a mistyped value once per process and nothing for a valid one', () => {
+  it('the warning text for a mistyped value; the router itself logs nothing (startup reports it once, platform/startup.ts)', () => {
     expect(cnSignupModeWarning({ CN_SIGNUP_MODE: 'invite' })).toBeNull();
     expect(cnSignupModeWarning({})).toBeNull();
     expect(cnSignupModeWarning({ CN_SIGNUP_MODE: 'invite-only' })).toBe(
@@ -84,8 +84,7 @@ describe('CN_SIGNUP_MODE', () => {
 
     createPhoneAuthRouter({ env: { CN_SIGNUP_MODE: 'invite-only' } });
     createPhoneAuthRouter({ env: { CN_SIGNUP_MODE: 'invite-only' } });
-    expect(log.error).toHaveBeenCalledTimes(1);
-    expect(log.error).toHaveBeenCalledWith('AUTH_CN', 'unknown CN_SIGNUP_MODE value "invite-only"; GoApply sign-up is OPEN. Use invite or closed.');
+    expect(log.error).not.toHaveBeenCalled();
   });
 
   it('sign-up is open in every environment with no legal-documents version; only `closed` refuses', () => {

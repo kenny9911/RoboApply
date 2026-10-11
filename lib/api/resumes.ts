@@ -193,8 +193,9 @@ export const RESUME_UPLOADS_PER_DAY = 10;
 /**
  * `POST /v2/resumes/upload` (multipart) — parse a file into a new base resume.
  * 409 `resume_limit_reached` when every base slot is taken; 429 `rate_limited`
- * with `Retry-After` past RESUME_UPLOADS_PER_DAY; 422 `image_parse_unavailable`
- * when an image cannot be read right now (GoApply).
+ * with `Retry-After` past RESUME_UPLOADS_PER_DAY. An image nothing can read
+ * answers the ordinary parse error (`empty_text`) on both brands: GoApply
+ * images fall back to the local reader since the parity wave.
  */
 export async function uploadResume(file: File, opts?: UploadResumeOptions): Promise<ResumeVariant> {
   const fd = new FormData();

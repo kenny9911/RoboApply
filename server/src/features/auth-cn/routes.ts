@@ -78,7 +78,7 @@ import { currentSessionToken, issueSessionCookie } from './accounts.js';
 import { cnRoute } from './errors.js';
 import { phoneBindingAvailable } from './phoneBinding.js';
 import { createAuthCnServices, type AuthCnServices } from './services.js';
-import { buildSignupPolicy, cnSignupModeWarning } from './signupPolicy.js';
+import { buildSignupPolicy } from './signupPolicy.js';
 import { OAUTH_STATE_TTL_MS, returnLocation } from './wechatAuthService.js';
 
 /** The first-party visitor id cookie (growth `ANON_ID_COOKIE`; lib/analytics.ts sets it). */
@@ -159,22 +159,13 @@ function services(deps: FeatureRouterDeps, overrides?: Partial<AuthCnServices>):
   return { ...createAuthCnServices({ env: deps.env, ...(overrides?.db ? { db: overrides.db } : {}) }), ...overrides };
 }
 
-/** Warnings already logged in this process (the routers are built once at boot, and again by tests). */
-const loggedSignupModeWarnings = new Set<string>();
-
-/**
- * A mistyped `CN_SIGNUP_MODE` (`off`, `invite-only`, ...) leaves GoApply
- * sign-up OPEN. Say so once, loudly, where the operator reads the boot log.
- */
-function logSignupModeProblem(env: FeatureRouterDeps['env']): void {
-  const warning = cnSignupModeWarning(env ?? process.env);
-  if (!warning || loggedSignupModeWarnings.has(warning)) return;
-  loggedSignupModeWarnings.add(warning);
-  logger.error('AUTH_CN', warning);
-}
+// A mistyped `CN_SIGNUP_MODE` leaves GoApply sign-up OPEN. It is reported once
+// at boot by platform/startup.ts (`reportSignupModeProblem`, which asks this
+// area's `cnSignupModeProblem`), beside the other configuration problems and
+// only on a deployment that serves GoApply. This router logged the same line
+// until the parity gate (one boot line, not two).
 
 export function createPhoneAuthRouter(deps: FeatureRouterDeps = {}, overrides?: Partial<AuthCnServices>): Router {
-  logSignupModeProblem(deps.env);
   const router = Router();
   const auth = [...(deps.seekerAuth ?? seekerAuth)];
   const maybeAuth = [...(deps.optionalAuth ?? [optionalAuth])];

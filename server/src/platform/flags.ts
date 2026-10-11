@@ -364,7 +364,16 @@ export function requirementsMet(key: FlagKey, brand: ProductBrand, env: EnvSourc
       // The rail's own credential is the callback secret, the equal of
       // STRIPE_SECRET_KEY (it is what refuses a forged notify). The worker URL
       // has a default in the rail, so ALIPAY_API_URL is not required.
-      return brand.paymentRails.includes('alipay') && !cnPaymentsKilled(env) && envSet(env, 'ALIPAY_CALLBACK_SECRET');
+      // Under the operator's hard gate (CN_PAYMENT_REQUIRE_ENTITY=true, off by
+      // default) the rail refuses to charge until the collecting entity is
+      // named; the capability says the same, so the public brand payload never
+      // lists a rail that `GET /billing/plans` does not offer (PAR gate).
+      return (
+        brand.paymentRails.includes('alipay') &&
+        !cnPaymentsKilled(env) &&
+        envSet(env, 'ALIPAY_CALLBACK_SECRET') &&
+        !(parseBoolEnv(env.CN_PAYMENT_REQUIRE_ENTITY) && !brandEnv(brand, 'PAYMENT_COLLECTING_ENTITY', env)?.trim())
+      );
     case 'pay.wechatpay':
       // Merchant credentials, the WeChat Pay public key + id that verify
       // notifies, and the collecting entity matching the merchant's legal name

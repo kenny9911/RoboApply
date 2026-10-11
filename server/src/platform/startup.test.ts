@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isEnabledForBrand, setVoiceAvailabilityProbe, setWechatPayReadinessProbe } from './flags.js';
 import { BRANDS } from './brand/registry.js';
 import { ResidencyStartupError } from './residency/index.js';
-import { AssistantModelStartupError, StrictStorageGroupStartupError, copilotBrands, runStartupAssertions, type StartupLog } from './startup.js';
+import { AssistantModelStartupError, StrictStorageGroupStartupError, cnDefaultModelHasNoRoute, copilotBrands, runStartupAssertions, type StartupLog } from './startup.js';
 
 afterEach(() => {
   setVoiceAvailabilityProbe(null);
@@ -204,6 +204,39 @@ describe('Assistant model check (WP-93: blocking in production for brands with t
     expect(exit).not.toHaveBeenCalled();
   });
 
+  it('production, both brands served: a failure of GoApply alone is an error line and the deployment boots (one GoApply override never stops RoboApply)', () => {
+    const l = log();
+    const copilotTools = vi.fn((o: { brands: string[] }) => o.brands.map((b) => (b === 'goapply' ? toolless(b) : fine(b))));
+    for (const env of [PROD, { ...PROD, VERCEL: '1' } as NodeJS.ProcessEnv]) {
+      expect(() => runStartupAssertions({ env, log: l, exit: neverExit, residency: okResidency, copilotTools: copilotTools as never, copilotEnabled: () => true })).not.toThrow();
+    }
+    expect(l.error).toHaveBeenCalledTimes(2);
+    expect(l.error).toHaveBeenCalledWith(
+      'STARTUP',
+      expect.stringMatching(/Assistant model for goapply cannot be used: provider "anthropic" cannot stream tool calls.*goapply Assistant is unavailable.*roboapply is served/),
+      { brand: 'goapply', selector: 'anthropic/claude-sonnet', primary: 'roboapply' },
+    );
+    expect(l.warn).not.toHaveBeenCalled();
+  });
+
+  it('the primary brand still refuses the boot: RoboApply failing alone, and GoApply on a deployment that serves GoApply only', () => {
+    const only = (bad: string) => ((o: { brands: string[] }) => o.brands.map((b) => (b === bad ? toolless(b) : fine(b)))) as never;
+    const boot = (env: NodeJS.ProcessEnv, bad: string) => {
+      try {
+        runStartupAssertions({ env, log: log(), exit: vi.fn() as unknown as (code: number) => never, residency: okResidency, copilotTools: only(bad), copilotEnabled: () => true });
+        return null;
+      } catch (err) {
+        return err;
+      }
+    };
+    const robo = boot(PROD, 'roboapply');
+    expect(robo).toBeInstanceOf(AssistantModelStartupError);
+    expect((robo as AssistantModelStartupError).failures.map((f) => f.brand)).toEqual(['roboapply']);
+    const cnOnly = boot({ ...PROD, ALLOWED_BRANDS: 'goapply' } as NodeJS.ProcessEnv, 'goapply');
+    expect(cnOnly).toBeInstanceOf(AssistantModelStartupError);
+    expect((cnOnly as AssistantModelStartupError).failures.map((f) => f.brand)).toEqual(['goapply']);
+  });
+
   it('production + capability off → boots, and the model is not even checked', () => {
     const l = log();
     const copilotTools = vi.fn(() => [toolless('roboapply')]);
@@ -397,6 +430,25 @@ describe('configuration problems are reported at boot, never silent (PAR-1 reque
     expect(onVercel).not.toHaveBeenCalled();
   });
 
+  it('CN_LLM_MODEL alone starts GoApply’s own model profile: a bare id has no route there and is reported; a vendor prefix or CN_LLM_PROVIDER gives it one', () => {
+    vi.stubEnv('LLM_SETTINGS_DB_DISABLED', 'true');
+    const shared = { LLM_PROVIDER: 'openrouter', LLM_MODEL: 'openai/gpt-5' };
+    const bare = run({ ...shared, CN_LLM_MODEL: 'deepseek-chat' });
+    expect(lines(bare.error)).toEqual([expect.stringContaining('CN_LLM_MODEL is set without CN_LLM_PROVIDER and carries no vendor prefix')]);
+    expect(lines(bare.error)[0]).toContain('deepseek/deepseek-chat');
+    expect(bare.error.mock.calls[0]![2]).toEqual({ variable: 'CN_LLM_MODEL', missing: 'CN_LLM_PROVIDER' });
+    expect(cnDefaultModelHasNoRoute({ ...shared, CN_LLM_MODEL: 'deepseek-chat' } as NodeJS.ProcessEnv)).toBe(true);
+    for (const ok of [
+      { ...shared },
+      { ...shared, CN_LLM_MODEL: 'deepseek/deepseek-chat' },
+      { ...shared, CN_LLM_PROVIDER: 'deepseek', CN_LLM_MODEL: 'deepseek-chat' },
+      // Not served here: GoApply's settings are not this deployment's problem.
+      { ...shared, CN_LLM_MODEL: 'deepseek-chat', ALLOWED_BRANDS: 'roboapply' },
+    ]) {
+      expect(run(ok).error, JSON.stringify(ok)).not.toHaveBeenCalled();
+    }
+  });
+
   it('an unknown CN_RECRUITMENT_INFO_MODE value: an error line saying the job feed is ON', () => {
     const l = run({ CN_RECRUITMENT_INFO_MODE: 'false' });
     expect(l.error).toHaveBeenCalledWith('STARTUP', 'unknown CN_RECRUITMENT_INFO_MODE value "false"; the job feed is ON. Use off to close it.', { value: 'false' });
@@ -437,6 +489,33 @@ describe('configuration problems are reported at boot, never silent (PAR-1 reque
     expect(quiet.error).not.toHaveBeenCalled();
   });
 
+  // PAR gate: this is the only boot line for the switch (the phone-auth router no longer logs
+  // it), so the default detector must reach the sign-up policy's real export. A renamed export
+  // would otherwise make the line disappear silently.
+  it('with nothing injected the line comes from the real sign-up policy (features/auth-cn cnSignupModeProblem)', async () => {
+    const l = log();
+    runStartupAssertions({ env: { CN_SIGNUP_MODE: 'invite-only' } as NodeJS.ProcessEnv, log: l, exit: neverExit, residency: okResidency, copilotTools: okTools });
+    await vi.waitFor(() => expect(l.error).toHaveBeenCalledWith('STARTUP', 'unknown CN_SIGNUP_MODE value "invite-only"; GoApply sign-up is OPEN. Use invite or closed.', { value: 'invite-only' }), { timeout: 15_000 });
+  }, 20_000);
+
+  // PAR gate (PAR-4 request P5-C, plan §3.8): the voice-setup lines and the Alipay
+  // collecting-entity notice are asked for at boot, not only at first use.
+  it('asks the modules that log their own GoApply lines (voice setup, Alipay entity), only where GoApply is served; a fault there never stops the boot', () => {
+    const voice = vi.fn();
+    const entity = vi.fn(() => {
+      throw new Error('boom');
+    });
+    const go = (env: Record<string, string>) =>
+      runStartupAssertions({ env: env as NodeJS.ProcessEnv, log: log(), exit: neverExit, residency: okResidency, copilotTools: okTools, goapplyModuleReports: [entity, voice] });
+    go({});
+    expect(entity).toHaveBeenCalledTimes(1);
+    expect(voice).toHaveBeenCalledTimes(1);
+    go({ ALLOWED_BRANDS: 'roboapply' });
+    expect(voice).toHaveBeenCalledTimes(1);
+    go({ ALLOWED_BRANDS: 'goapply' });
+    expect(voice).toHaveBeenCalledTimes(2);
+  });
+
   it('the GoApply checks are skipped on a deployment that does not serve GoApply', () => {
     const l = run({ ALLOWED_BRANDS: 'roboapply', CN_S3_ENDPOINT: 'x', CN_RECRUITMENT_INFO_MODE: 'false', CN_STORAGE_MODE: 'redcat', CN_SIGNUP_MODE: 'invte', CN_RESIDENCY_STRICT: 'true' });
     expect(l.warn).not.toHaveBeenCalled();
@@ -467,6 +546,33 @@ describe('production, both brands served, shared model stack only (PAR-1 request
     const l = log();
     expect(copilotBrands(process.env)).toEqual(['roboapply', 'goapply']);
     expect(() => runStartupAssertions({ env: process.env, log: l, exit: neverExit, residency: okResidency })).not.toThrow();
+    expect(l.error).not.toHaveBeenCalled();
+  });
+
+  it.runIf(hasEffectiveProfile)('a GoApply-only model override that has no route (CN_LLM_MODEL=deepseek-chat, no CN_LLM_PROVIDER) does not stop the boot: two error lines, RoboApply served', () => {
+    for (const name of ['ALLOWED_BRANDS', 'BRAND_LOCK', 'CN_LLM_PROVIDER', 'CN_LLM_COPILOT_MODEL', 'CN_LLM_DOMESTIC_ONLY', 'CN_RESIDENCY_STRICT', 'DEPLOY_REGION', 'LLM_COPILOT_MODEL']) {
+      vi.stubEnv(name, '');
+    }
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('LLM_SETTINGS_DB_DISABLED', 'true');
+    vi.stubEnv('LLM_PROVIDER', 'openrouter');
+    vi.stubEnv('LLM_MODEL', 'openai/gpt-5');
+    vi.stubEnv('OPENROUTER_API_KEY', 'test-key');
+    vi.stubEnv('CN_LLM_MODEL', 'deepseek-chat');
+    for (const vercel of ['', '1']) {
+      vi.stubEnv('VERCEL', vercel);
+      const l = log();
+      expect(() => runStartupAssertions({ env: process.env, log: l, exit: neverExit, residency: okResidency, goapplyModuleReports: [] })).not.toThrow();
+      const errors = l.error.mock.calls.map((c) => String(c[1]));
+      expect(errors).toHaveLength(2);
+      expect(errors[0]).toContain('CN_LLM_MODEL is set without CN_LLM_PROVIDER and carries no vendor prefix');
+      expect(errors[1]).toMatch(/Assistant model for goapply cannot be used: .*roboapply is served/);
+    }
+    // With the vendor prefix the same override routes, and nothing is reported.
+    vi.stubEnv('CN_LLM_MODEL', 'deepseek/deepseek-chat');
+    vi.stubEnv('DEEPSEEK_API_KEY', 'test-key');
+    const l = log();
+    expect(() => runStartupAssertions({ env: process.env, log: l, exit: neverExit, residency: okResidency, goapplyModuleReports: [] })).not.toThrow();
     expect(l.error).not.toHaveBeenCalled();
   });
 

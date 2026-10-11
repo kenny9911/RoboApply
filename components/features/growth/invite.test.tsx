@@ -327,12 +327,13 @@ describe('/legal/referral-terms', () => {
   // rule (app/legal/legalSource, another bundle's): hidden before the parity
   // wave, served and marked as a draft after it. What the invite pages rely
   // on, either way: a draft is never served as if it were the final terms.
-  it('production GoApply never serves the draft as final terms: it is hidden, or served marked as a draft', () => {
+  // Tightened at the parity gate (PAR-5 item 8): GoApply serves its legal documents by the
+  // same rule as RoboApply, so the draft IS served in production, marked as a draft.
+  it('production GoApply serves the draft referral terms marked as a draft, never as final terms', () => {
     const res = loadLegalDocForPage({ id: 'goapply', market: 'cn', name: 'GoApply', replyTo: 'x@y.z' }, 'referral-terms', { NODE_ENV: 'production', CN_LEGAL_DOCS_VERSION: '2026-11' });
-    expect(['not_found', 'doc']).toContain(res.kind);
-    if (res.kind === 'doc') {
-      expect(res.doc.draft).toBe(true);
-      expect(res.doc.body).toMatch(/DRAFT/);
-    }
+    expect(res.kind).toBe('doc');
+    if (res.kind !== 'doc') return;
+    expect(res.doc.draft).toBe(true);
+    expect(res.doc.body).toMatch(/DRAFT/);
   });
 });

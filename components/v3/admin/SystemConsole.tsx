@@ -458,7 +458,7 @@ function SafetyView() {
             ]}
           />
           {q.data.readiness.problems.length > 0 && (
-            <div className={styles.alertBox}><strong>{t('problems')}</strong><ul>{q.data.readiness.problems.map((p) => <li key={p}>{p}</li>)}</ul></div>
+            <div className={styles.alertBox}><strong>{t(q.data.readiness.degraded ? 'problemsDegraded' : 'problems')}</strong><ul>{q.data.readiness.problems.map((p) => <li key={p}>{p}</li>)}</ul></div>
           )}
           <div className={styles.filters}>
             <label className={styles.field}>

@@ -78,19 +78,19 @@ release). `DIRECT_DATABASE_URL` must be the direct, non-pooler endpoint
 
 ## Databases that are not Neon
 
-The mainland stack does not have the `vector` extension today, and two files outside this
-folder still describe a database without it. Both need a change before that database can
-take the M0 push (no market bundle owns either file; the orchestrator assigns it):
+Neon ships pgvector. Any other PostgreSQL needs the `vector` extension at 0.7.0 or newer
+before it can take the M0 push. The two places that describe such a database were brought
+in line at the parity-wave gate (2026-10-11):
 
-- `deploy/cn/compose.yaml`: the `localdb` profile runs `postgres:16-alpine`, an image
-  with no `vector` extension. `001_vector.sql` fails there and so does the push, at the
-  first `halfvec(1024)` column. It needs an image that ships pgvector 0.7.0 or newer.
-- `docs/runbooks/cn-deploy.md`: section 3 item 4 names only `pg_trgm` for the RDS
-  instance, and section 6 goes straight to the push. Both need step 2 above (run
-  `001_vector.sql`, confirm 0.7.0 or newer) before the push, and the owner has to confirm
-  that the RDS instance offers the extension at that version.
+- `deploy/cn/compose.yaml`: the `localdb` profile now names `pgvector/pgvector:0.8.0-pg16`
+  in place of `postgres:16-alpine` (which has no `vector` extension). The image was not
+  pulled or run at that gate, so step 2 above (run `001_vector.sql`, read the version) is
+  still the proof on its first start.
+- `docs/runbooks/cn-deploy.md`: section 3 item 4 names the `vector` extension for the RDS
+  instance and section 6 has step 2 above before the push. **The owner still has to confirm
+  that the mainland RDS instance offers the extension at 0.7.0 or newer.**
 
-Until then the mainland database stays on the schema before M0 and must not run code from
+Until that is confirmed the mainland database stays on the schema before M0 and must not run code from
 this commit or later (step 7).
 
 ## What the push must never do

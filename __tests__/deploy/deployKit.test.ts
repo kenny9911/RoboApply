@@ -1132,6 +1132,24 @@ describe('web pods get every value the legal pages read', () => {
     expect(read('lib/brand/metadata.ts')).toContain('env.BAIDU_SITE_VERIFICATION');
   });
 
+  it('runbook §8.4 step 4: a migrated file needs its key rewritten to cn/, because the key decides the store', () => {
+    const runbook = read('docs/runbooks/cn-deploy.md');
+    const service = read('server/src/services/ResumeOriginalFileStorageService.ts');
+    // The rule the step depends on: only a `cn/` key lives in GoApply's own bucket; a `goapply/` key is in the shared store.
+    expect(service).toMatch(/const CN_KEY_PREFIX = 'cn\/';/);
+    expect(service).toMatch(/const GOAPPLY_SHARED_KEY_PREFIX = 'goapply\/';/);
+    expect(service).toMatch(/function storeOfKey\(key: string\): StoreId \{\s*return key\.startsWith\(CN_KEY_PREFIX\) \? 'cn' : 'shared';/);
+    // So the step copies to `cn/<rest>` and rewrites every column that holds a key, and never says a plain copy is enough.
+    expect(runbook).toContain('`goapply/<rest>` of the shared bucket to `cn/<rest>` in `CN_S3_BUCKET`');
+    for (const column of ['"RAResumeVariant"       SET "originalFileKey"', '"RAApplicationArtifact" SET "storageKey"', `jsonb_set("detail", '{export,key}'`]) {
+      expect(runbook, column).toContain(column);
+    }
+    expect('goapply/'.length + 1).toBe(9);
+    expect(runbook).toContain(`'cn/' || substr("originalFileKey", 9)`);
+    expect(runbook).toContain('the shared `S3_*` values **must stay set**');
+    expect(runbook).not.toContain('copy every object the migrated rows name');
+  });
+
   it('the web env example, the web manifest and the runbook list them', () => {
     const web = envNames(`${CN}/cn.web.env.example`).map(([n]) => n);
     expect(web).toEqual(expect.arrayContaining(['INTERNAL_API_SECRET', 'CN_CANONICAL_ORIGIN', 'BAIDU_SITE_VERIFICATION', ...LEGAL]));

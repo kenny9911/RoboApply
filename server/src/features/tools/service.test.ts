@@ -38,6 +38,7 @@ import {
   type UploadedFile,
 } from './service.js';
 import { hashResultId } from './store.js';
+import { crossBorderConsentApplies } from '../compliance/disclosures.js';
 
 const T0 = new Date('2026-10-10T12:00:00.000Z');
 /** The visitor cookie of "this browser", and of another one. */
@@ -54,6 +55,8 @@ const MAINLAND_OWN_STACK = {
   CN_INTERVIEW_ENGINE_STT_MODEL: 'paraformer',
   CN_INTERVIEW_ENGINE_TTS_MODEL: 'cosyvoice',
   CN_S3_BUCKET: 'goapply-cn',
+  // A bucket of its own counts as mainland storage only on a mainland endpoint (compliance `ownStackLeavesMainland`).
+  CN_S3_ENDPOINT: 'https://oss-cn-shanghai.aliyuncs.com',
   CN_VAPID_PUBLIC_KEY: 'pk',
   CN_EMAIL_TRANSPORT: 'aliyun_dm',
 };
@@ -482,6 +485,13 @@ describe('GoApply', () => {
     const own = await setup('goapply', { env: MAINLAND_OWN_STACK }).service.config('x');
     expect(own).toMatchObject({ available: true, consentRequired: true, consentVersion: TOOLS_CONSENT_VERSION, processedOutsideMainland: false });
     expect(processedOutsideMainland(getBrand('goapply'), MAINLAND_OWN_STACK)).toBe(false);
+    // The catalog's rule, not the environment's alone: a model provider of GoApply's own that is itself abroad
+    // sends the visitor's resume abroad although every stack is "its own" (the case sign-up and the disclosures already cover).
+    const ownModelAbroad = { ...MAINLAND_OWN_STACK, CN_LLM_PROVIDER: 'openrouter', CN_LLM_MODEL: 'openai/gpt-5' };
+    expect((await setup('goapply', { env: ownModelAbroad }).service.config('x')).processedOutsideMainland).toBe(true);
+    expect(processedOutsideMainland(getBrand('goapply'), ownModelAbroad)).toBe(crossBorderConsentApplies(getBrand('goapply'), ownModelAbroad));
+    // …and a bucket of its own that is not mainland storage.
+    expect((await setup('goapply', { env: { ...MAINLAND_OWN_STACK, CN_S3_ENDPOINT: 'https://s3.us-east-1.amazonaws.com' } }).service.config('x')).processedOutsideMainland).toBe(true);
     // Never RoboApply's line.
     expect(processedOutsideMainland(getBrand('roboapply'), {})).toBe(false);
     expect(toolsOpen(getBrand('goapply'), {})).toBe(true);

@@ -14,6 +14,16 @@
 //   · market `cn`: a public row is listed only with a usable apply link (the
 //     read-side twin of the ingest rule; sourceLine.ts `cnListable`). The
 //     user's own import needs none.
+//   · both markets: a recruiter-bank row is listed only while its bank has a
+//     candidate-facing posting page (`SqlScope.heldBanks`; sourceLine.ts
+//     `heldBankBoards`, the read-side twin of the bank sync's 'no_apply_target').
+//
+// Posting age: the lists' age floor (`ageFloor`, FEED_LIMITS.maxAgeDays) cuts
+// aggregator rows and the user's own imports only. A recruiter-bank row or a
+// public employer-board row is listed for as long as its source lists it
+// (`ageFloorSql`; GOAPPLY_PARITY_PLAN §3.9 "no posting-age cut-off for board
+// or bank rows"). A window start (`from`) and the user's own "posted within"
+// filter are hard bounds for every row.
 //
 // Predicates follow FILTER_SET specs in search/filterSet.ts (ruling C15).
 // Conventions this file relies on (handoff requests to the writers):
@@ -33,7 +43,7 @@ import { normalizeCompanyName, normalizeJobTitle, normalizeSkills } from '../job
 import { findCity, resolveCountry } from '../jobs/geo/index.js';
 import { expandTaxonomyIds, matchTitle } from '../jobs/taxonomy/index.js';
 import { includesUndisclosedPay, type FilterField, type FilterSet } from '../search/index.js';
-import { EMPLOYER_BOARD_SOURCES, GOHIRE_SOURCE_BOARD } from './sourceLine.js';
+import { EMPLOYER_BOARD_SOURCES, GOHIRE_SOURCE_BOARD, NO_AGE_FLOOR_BOARDS } from './sourceLine.js';
 
 export interface SqlScope {
   market: Market;
@@ -54,6 +64,11 @@ export interface SqlScope {
   publicBoards?: readonly string[];
   /** Skip the per-user hidden-state check (visitor list). */
   ignoreHidden?: boolean;
+  /**
+   * `sourceBoard` of the recruiter banks that have no posting page right now
+   * (sourceLine.ts `heldBankBoards`): their bank rows are never listed.
+   */
+  heldBanks?: readonly string[];
 }
 
 const DAY_MS = 86_400_000;
@@ -364,6 +379,8 @@ export function scopePredicates(scope: SqlScope): Prisma.Sql[] {
   else out.push(Prisma.sql`(j."visibility" = 'public' OR j."ownerUserId" = ${scope.userId})`);
   // Mainland: a public posting with no usable apply link is never listed (sourceLine.ts `cnListable`).
   if (scope.market === 'cn') out.push(Prisma.sql`(j."visibility" <> 'public' OR j."applyUrl" ~* '^[[:space:]]*https?://')`);
+  // A recruiter-bank row whose bank has no posting page is held, not listed (sourceLine.ts `heldBankBoards`).
+  if (scope.heldBanks?.length) out.push(Prisma.sql`NOT (j."fromRecruiterBank" = true AND j."sourceBoard" = ANY(${[...scope.heldBanks]}::text[]))`);
   if (scope.publicDisplayOnly) {
     out.push(Prisma.sql`j."publicDisplay" = true`);
     out.push(Prisma.sql`(j."expiresAt" IS NULL OR j."expiresAt" > ${scope.now}::timestamp(3))`);
@@ -375,6 +392,16 @@ export function scopePredicates(scope: SqlScope): Prisma.Sql[] {
     );
   }
   return out;
+}
+
+/**
+ * The lists' posting-age floor: an aggregator row (or the user's own import)
+ * must be posted on or after `floor`; a recruiter-bank row or a public
+ * employer-board row passes at any age, as long as it carries a date (an
+ * undated row is in no posted-date window, as before). See the header.
+ */
+export function ageFloorSql(floor: Date): Prisma.Sql {
+  return Prisma.sql`(j."postedAt" >= ${floor}::timestamp(3) OR (j."postedAt" IS NOT NULL AND (j."sourceBoard" = ANY(${[...NO_AGE_FLOOR_BOARDS]}::text[]) OR j."fromRecruiterBank" = true)))`;
 }
 
 /** Columns the feed reads (pre-score inputs + card fields), with the company join. */
@@ -400,8 +427,10 @@ export interface RetrievalSqlInput {
   scope: SqlScope;
   filters: FilterSet;
   fields: readonly FilterField[];
-  /** postedAt ≥ from (window start). */
+  /** postedAt ≥ from (window start): a hard bound for every row. */
   from: Date | null;
+  /** The list's age floor, for a window with no start of its own (`ageFloorSql`: board and bank rows pass at any age). */
+  ageFloor?: Date | null;
   /** Older refill boundary; null on the first window. With `toId`, a keyset `(postedAt, id) < (to, toId)`, else `postedAt < to`. */
   to: Date | null;
   /**
@@ -426,6 +455,7 @@ export interface RetrievalSqlInput {
 export function retrievalSql(input: RetrievalSqlInput): Prisma.Sql {
   const parts = [...scopePredicates(input.scope), ...filterPredicates(input.filters, input.scope, input.fields), ...(input.extra ?? [])];
   if (input.from) parts.push(Prisma.sql`j."postedAt" >= ${input.from}::timestamp(3)`);
+  if (input.ageFloor) parts.push(ageFloorSql(input.ageFloor));
   if (input.to && input.toId) parts.push(Prisma.sql`(j."postedAt", j."id") < (${input.to}::timestamp(3), ${input.toId})`);
   else if (input.to) parts.push(Prisma.sql`j."postedAt" < ${input.to}::timestamp(3)`);
   if (input.firstSeenAfter) parts.push(Prisma.sql`j."firstSeenAt" > ${input.firstSeenAfter}::timestamp(3)`);
@@ -455,10 +485,12 @@ export interface JobIdsSqlInput {
   scope: SqlScope;
   filters: FilterSet;
   fields: readonly FilterField[];
-  /** postedAt ≥ from. */
+  /** postedAt ≥ from: a hard bound for every row. */
   from: Date | null;
   /** With `from`: a posting with no date also passes (alerts for jobs we only just found). */
   allowUndated?: boolean;
+  /** The list's age floor (`ageFloorSql`: board and bank rows pass at any age). */
+  ageFloor?: Date | null;
   firstSeenAfter?: Date | null;
   /** `posted`: newest posting first. `first_seen`: newest in our index first (alerts). */
   orderBy: 'posted' | 'first_seen';
@@ -470,6 +502,7 @@ export function jobIdsSql(input: JobIdsSqlInput): Prisma.Sql {
   const parts = [...scopePredicates(input.scope), ...filterPredicates(input.filters, input.scope, input.fields)];
   if (input.from && input.allowUndated) parts.push(Prisma.sql`(j."postedAt" IS NULL OR j."postedAt" >= ${input.from}::timestamp(3))`);
   else if (input.from) parts.push(Prisma.sql`j."postedAt" >= ${input.from}::timestamp(3)`);
+  if (input.ageFloor) parts.push(ageFloorSql(input.ageFloor));
   if (input.firstSeenAfter) parts.push(Prisma.sql`j."firstSeenAt" > ${input.firstSeenAfter}::timestamp(3)`);
   const order =
     input.orderBy === 'first_seen'
@@ -519,7 +552,7 @@ export interface SourcesSqlInput {
   fields: readonly FilterField[];
   /** Extra predicates ANDed in (the browse category predicate). */
   extra?: Prisma.Sql[];
-  /** The list's age floor (postedAt ≥ from), so the header counts what the list can reach. */
+  /** The list's age floor (`ageFloorSql`), so the header counts what the list can reach. */
   from: Date | null;
 }
 
@@ -537,7 +570,7 @@ export interface SourcesSqlInput {
 export function sourcesSql(input: SourcesSqlInput): Prisma.Sql {
   const scope: SqlScope = { ...input.scope, publicOnly: true };
   const parts = [...scopePredicates(scope), ...filterPredicates(input.filters, scope, input.fields), ...(input.extra ?? [])];
-  if (input.from) parts.push(Prisma.sql`j."postedAt" >= ${input.from}::timestamp(3)`);
+  if (input.from) parts.push(ageFloorSql(input.from));
   return Prisma.sql`SELECT COALESCE(bool_or(j."fromRecruiterBank" = true AND j."sourceBoard" = ${GOHIRE_SOURCE_BOARD}), false) AS "gohire",
   count(DISTINCT (j."sourceBoard" || ':' || CASE WHEN position(':' in j."externalId") > 1 THEN split_part(j."externalId", ':', 1) ELSE j."companyNameNormalized" END))
     FILTER (WHERE j."fromRecruiterBank" = false AND j."sourceBoard" = ANY(${[...EMPLOYER_BOARD_SOURCES]}::text[]))::int AS "employerBoards",
@@ -548,11 +581,12 @@ ${where(parts)}`;
 
 /**
  * Live public counts per L1 category (Explore). `since` is the lists' age
- * floor (postedAt ≥ since), so a tile counts what its browse list can reach.
+ * floor (`ageFloorSql`) and `heldBanks` their bank rule, so a tile counts what
+ * its browse list can reach.
  */
-export function exploreCountsSql(market: Market, categoryIds: string[], since: Date | null = null): Prisma.Sql {
-  const parts = [...scopePredicates({ market, userId: null, now: new Date(0), publicOnly: true }), Prisma.sql`j."taxonomyIds" && ${categoryIds}::text[]`];
-  if (since) parts.push(Prisma.sql`j."postedAt" >= ${since}::timestamp(3)`);
+export function exploreCountsSql(market: Market, categoryIds: string[], since: Date | null = null, heldBanks: readonly string[] = []): Prisma.Sql {
+  const parts = [...scopePredicates({ market, userId: null, now: new Date(0), publicOnly: true, heldBanks }), Prisma.sql`j."taxonomyIds" && ${categoryIds}::text[]`];
+  if (since) parts.push(ageFloorSql(since));
   return Prisma.sql`SELECT t.id AS "taxonomyId", count(*)::int AS "count"
 FROM "RAJob" j CROSS JOIN LATERAL unnest(j."taxonomyIds") AS t(id)
 ${where(parts)} AND t.id = ANY(${categoryIds}::text[])

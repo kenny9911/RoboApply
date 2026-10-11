@@ -8,7 +8,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import type prismaClient from '../../lib/prisma.js';
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { BrandId, Market } from '../../platform/brand/registry.js';
-import { cnListable, cnListableWhere } from '../feed/contract.js';
+import { bankListable, bankListableWhere, cnListable, cnListableWhere } from '../feed/contract.js';
 import { coerceFilterSet } from '../search/index.js';
 import { jobWhereForFilters } from './jobFilters.js';
 import { isLiveAccount } from './preferences.js';
@@ -102,6 +102,12 @@ async function cnModeWhere(market: Market, env: EnvSource): Promise<Prisma.RAJob
   if (market !== 'cn') return [];
   const { cnPostingsWhere } = await import('../cn/jobs/index.js');
   return [cnPostingsWhere(null, env) as Prisma.RAJobWhereInput, cnListableWhere() as Prisma.RAJobWhereInput];
+}
+
+/** The bank rule as `where` fragments (none when every bank has a posting page). */
+function bankWhere(env: EnvSource): Array<Record<string, unknown>> {
+  const where = bankListableWhere(env as Record<string, string | undefined>);
+  return where ? [where] : [];
 }
 
 async function expandTaxonomy(): Promise<(ids: readonly string[]) => string[]> {
@@ -199,6 +205,8 @@ export function createPrismaAlertsRepo(options: PrismaAlertsRepoOptions = {}): A
           AND: [
             where,
             ...(await cnModeWhere(market, env)),
+            // Both markets: a recruiter-bank row whose bank has no posting page never alerts (feed/sourceLine.ts).
+            ...(bankWhere(env) as Prisma.RAJobWhereInput[]),
             { firstSeenAt: { gt: since } },
             ...(postedSince ? [{ OR: [{ postedAt: null }, { postedAt: { gte: postedSince } }] }] : []),
           ],
@@ -287,6 +295,7 @@ export function createPrismaAlertsRepo(options: PrismaAlertsRepoOptions = {}): A
           ownerUserId: true,
           sourceBoard: true,
           applyUrl: true,
+          fromRecruiterBank: true,
           id: true,
           title: true,
           companyName: true,
@@ -307,7 +316,8 @@ export function createPrismaAlertsRepo(options: PrismaAlertsRepoOptions = {}): A
       const { filterCnPostings } = await import('../cn/jobs/index.js');
       return filterCnPostings(rows, null, env)
         .filter(cnListable)
-        .map(({ market: _m, visibility: _v, ownerUserId: _o, sourceBoard: _s, applyUrl: _a, ...card }) => card);
+        .filter((r) => bankListable(r, env as Record<string, string | undefined>))
+        .map(({ market: _m, visibility: _v, ownerUserId: _o, sourceBoard: _s, applyUrl: _a, fromRecruiterBank: _b, ...card }) => card);
     },
 
     async noReplyCount(userId, now) {

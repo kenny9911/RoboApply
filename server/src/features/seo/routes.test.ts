@@ -18,7 +18,7 @@
 //     skip and fail-open paths;
 //   - a brand-echo mismatch 404 is never publicly cacheable.
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Request } from 'express';
 import { setFlagOverrideLoader } from '../../platform/flags.js';
 import { HttpError } from '../../platform/http.js';
@@ -42,6 +42,11 @@ const RA = 'localhost:3621';
 const GA = 'goapply.localhost:3621';
 const NOW = new Date('2026-10-10T00:00:00.000Z');
 const ENV = { FLAG_ROBOAPPLY_SEO_BROWSE: 'true', FLAG_GOAPPLY_SEO_BROWSE: 'true', INTERNAL_API_SECRET: 'internal-secret' };
+// Both recruiter banks have a posting page in this file: a bank row is on a public page only then
+// (feed/sourceLine.ts `heldBankBoards`; the held case is tested in seo.test.ts).
+vi.stubEnv('ROBOHIRE_PUBLIC_JOB_URL_TEMPLATE', 'https://jobs.robohire.example/p/{id}');
+vi.stubEnv('GOHIRE_PUBLIC_JOB_URL_TEMPLATE', 'https://jobs.gohire.example/p/{id}');
+
 
 const backend = { taxonomyIds: ['software_engineering', 'swe_backend', 'backend_engineer'] };
 

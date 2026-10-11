@@ -306,6 +306,13 @@ export interface SafetyResponse {
     keywordList: string;
     timeoutMs: number;
     problems: string[];
+    /**
+     * True when a setting could not run and the check fell back to its safe
+     * default (the built-in keyword list): AI stays on and `problems` says why.
+     * False under CN_RESIDENCY_STRICT, where the same problem turns AI off
+     * (`usable: false`). Always sent by the server; optional for older fixtures.
+     */
+    degraded?: boolean;
   };
   /** Verdict counts over the last 7 days. */
   last7d: Array<{ verdict: string; count: number }>;

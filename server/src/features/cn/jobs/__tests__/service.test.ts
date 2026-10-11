@@ -348,7 +348,9 @@ describe('LLM check worker', () => {
     expect(deps.repo.jobs.get('job_1')!.fraudFlags).toEqual([expect.objectContaining({ rule: 'telecom_lure', method: 'llm' })]);
     expect(deps.repo.costs).toHaveLength(1);
     const [, options] = llm.chatWithUsage.mock.calls[0]!;
-    expect(options).toMatchObject({ model: 'deepseek/deepseek-chat', provider: 'deepseek', temperature: 0, carriesUserData: false });
+    expect(options).toMatchObject({ model: 'deepseek/deepseek-chat', temperature: 0, carriesUserData: false });
+    // No provider is pinned without the wall: the model layer routes the id as it routes every GoApply call.
+    expect(options).not.toHaveProperty('provider');
   });
 
   it('no model configured anywhere → no call; own import without AI consent → zero LLM calls', async () => {
@@ -391,24 +393,41 @@ describe('LLM check worker', () => {
     expect(open.chatWithUsage.mock.calls[0]![1]).toMatchObject({ model: 'openrouter/openai/gpt-5' });
   });
 
+  // PAR gate (PAR-2 request, PAR-11 O11-4; plan §3.3): the model comes from the shared resolver.
   it('model order: the fraud model, then the enrichment model, then the default; a CN_ value wins over the shared one, key by key', () => {
     expect(resolveFraudModel({})).toEqual({ model: undefined, available: false });
     expect(resolveFraudModel(SHARED_MODEL_ENV)).toEqual({ model: SHARED_MODEL_ENV.LLM_MODEL, available: true });
     expect(resolveFraudModel({ ...SHARED_MODEL_ENV, LLM_ENRICH_MODEL: 'openrouter/google/gemini-3.8-flash' }).model).toBe('openrouter/google/gemini-3.8-flash');
     expect(resolveFraudModel({ ...SHARED_MODEL_ENV, LLM_ENRICH_MODEL: 'x/enrich', LLM_FRAUD_MODEL: 'x/fraud' }).model).toBe('x/fraud');
-    expect(resolveFraudModel({ ...SHARED_MODEL_ENV, CN_LLM_MODEL: 'deepseek/deepseek-chat' })).toEqual({ model: 'deepseek/deepseek-chat', provider: 'deepseek', available: true });
-    expect(resolveFraudModel({ ...SHARED_MODEL_ENV, LLM_FRAUD_MODEL: 'x/fraud', CN_LLM_FRAUD_MODEL: 'kimi/moonshot-v1-8k' })).toEqual({ model: 'kimi/moonshot-v1-8k', provider: 'kimi', available: true });
-    expect(resolveFraudModel({ ...SHARED_MODEL_ENV, CN_LLM_DOMESTIC_ONLY: 'true' })).toEqual({ model: undefined, available: false, refused: 'not_domestic_provider' });
-    expect(resolveFraudModel({ CN_LLM_DOMESTIC_ONLY: 'true' })).toEqual({ model: undefined, available: false });
+    // GoApply's own values win, key by key. No provider is pinned without the wall.
+    expect(resolveFraudModel({ ...SHARED_MODEL_ENV, CN_LLM_MODEL: 'deepseek/deepseek-chat' })).toEqual({ model: 'deepseek/deepseek-chat', available: true });
+    expect(resolveFraudModel({ ...SHARED_MODEL_ENV, LLM_FRAUD_MODEL: 'x/fraud', CN_LLM_FRAUD_MODEL: 'kimi/moonshot-v1-8k' })).toEqual({ model: 'kimi/moonshot-v1-8k', available: true });
+    // A `qwen/…` value of a CN_ variable keeps meaning DashScope while GoApply is on the shared stack.
+    expect(resolveFraudModel({ ...SHARED_MODEL_ENV, CN_LLM_FRAUD_MODEL: 'qwen/qwen-plus' })).toEqual({ model: 'dashscope/qwen-plus', available: true });
   });
 
-  it('GoApply with its own LLM stack never passes a shared model id to its own provider', () => {
-    // A CN provider and a shared task model: the shared id is not used; the call names no model (the model layer picks GoApply's default).
+  it('behind the wall: a mainland model is pinned to its provider; a shared international value is not inherited; one GoApply names itself is refused', () => {
+    const WALL = { CN_LLM_DOMESTIC_ONLY: 'true' };
+    // The shared stack is not borrowed behind the wall: no model, the pass is off.
+    expect(resolveFraudModel({ ...SHARED_MODEL_ENV, ...WALL })).toEqual({ model: undefined, available: false });
+    expect(resolveFraudModel(WALL)).toEqual({ model: undefined, available: false });
+    expect(resolveFraudModel({ CN_LLM_MODEL: 'deepseek/deepseek-chat', CN_LLM_FRAUD_MODEL: 'kimi/moonshot-v1-8k', ...WALL })).toEqual({ model: 'kimi/moonshot-v1-8k', provider: 'kimi', available: true });
+    // A shared fraud model that is not a mainland one falls through to GoApply's own model (it used to switch the pass off).
+    expect(resolveFraudModel({ CN_LLM_MODEL: 'deepseek/deepseek-chat', LLM_FRAUD_MODEL: 'openrouter/x/fraud', ...WALL })).toEqual({ model: 'deepseek/deepseek-chat', provider: 'deepseek', available: true });
+    // A model GoApply names itself that is not a mainland one is a wrong setting: refused.
+    expect(resolveFraudModel({ CN_LLM_MODEL: 'deepseek/deepseek-chat', CN_LLM_FRAUD_MODEL: 'openrouter/x/fraud', ...WALL })).toEqual({ model: undefined, available: false, refused: 'not_domestic_provider' });
+  });
+
+  it('GoApply with its own LLM stack: a shared model id is used on the route it has for RoboApply, never as a bare id under GoApply’s provider', () => {
     const own = { CN_LLM_PROVIDER: 'deepseek', DEEPSEEK_API_KEY: 'k' };
-    expect(resolveFraudModel({ ...own, ...SHARED_MODEL_ENV, LLM_FRAUD_MODEL: 'openrouter/x/fraud', LLM_ENRICH_MODEL: 'openrouter/x/enrich' })).toEqual({ model: undefined, available: true });
+    // The shared fraud model, per key; a selector with no gateway prefix is qualified to its real route.
+    expect(resolveFraudModel({ ...own, ...SHARED_MODEL_ENV, LLM_FRAUD_MODEL: 'openrouter/x/fraud', LLM_ENRICH_MODEL: 'openrouter/x/enrich' })).toEqual({ model: 'openrouter/x/fraud', available: true });
+    expect(resolveFraudModel({ ...own, ...SHARED_MODEL_ENV, LLM_FRAUD_MODEL: 'x/fraud' })).toEqual({ model: 'openrouter/x/fraud', available: true });
     // Its own names still apply, in the same order.
-    expect(resolveFraudModel({ ...own, ...SHARED_MODEL_ENV, CN_LLM_MODEL: 'deepseek/deepseek-chat' })).toEqual({ model: 'deepseek/deepseek-chat', provider: 'deepseek', available: true });
-    expect(resolveFraudModel({ ...own, CN_LLM_MODEL: 'deepseek/deepseek-chat', CN_LLM_ENRICH_MODEL: 'kimi/moonshot-v1-8k', LLM_FRAUD_MODEL: 'openrouter/x/fraud' }).model).toBe('kimi/moonshot-v1-8k');
+    expect(resolveFraudModel({ ...own, ...SHARED_MODEL_ENV, CN_LLM_MODEL: 'deepseek/deepseek-chat' })).toEqual({ model: 'deepseek/deepseek-chat', available: true });
+    expect(resolveFraudModel({ ...own, CN_LLM_MODEL: 'deepseek/deepseek-chat', CN_LLM_ENRICH_MODEL: 'kimi/moonshot-v1-8k' }).model).toBe('kimi/moonshot-v1-8k');
+    // The fraud key is read before the enrichment key, whichever stack names it.
+    expect(resolveFraudModel({ ...own, CN_LLM_MODEL: 'deepseek/deepseek-chat', CN_LLM_ENRICH_MODEL: 'kimi/moonshot-v1-8k', LLM_FRAUD_MODEL: 'openrouter/x/fraud' }).model).toBe('openrouter/x/fraud');
   });
 
   it('under the wall every mainland provider prefix is accepted, with its vendor and platform names', () => {
@@ -426,7 +445,12 @@ describe('LLM check worker', () => {
     const llm = fakeLlm();
     const deps = fakeDeps({ env: { ...CN_MODEL_ENV, CN_LLM_FRAUD_MODEL: 'kimi/moonshot-v1-8k' }, llm, repo: fakeRepo([lure]) });
     await runFraudCheck('job_1', deps);
-    expect(llm.chatWithUsage.mock.calls[0]![1]).toMatchObject({ model: 'kimi/moonshot-v1-8k', provider: 'kimi' });
+    expect(llm.chatWithUsage.mock.calls[0]![1]).toMatchObject({ model: 'kimi/moonshot-v1-8k' });
+    expect(llm.chatWithUsage.mock.calls[0]![1]).not.toHaveProperty('provider');
+    // Behind the wall the same model is pinned to its mainland provider.
+    const walled = fakeLlm();
+    await runFraudCheck('job_1', fakeDeps({ env: { ...CN_MODEL_ENV, CN_LLM_FRAUD_MODEL: 'kimi/moonshot-v1-8k', CN_LLM_DOMESTIC_ONLY: 'true' }, llm: walled, repo: fakeRepo([lure]) }));
+    expect(walled.chatWithUsage.mock.calls[0]![1]).toMatchObject({ model: 'kimi/moonshot-v1-8k', provider: 'kimi' });
   });
 
   it('malformed replies throw (the queue retries); missing jobs are skipped', async () => {

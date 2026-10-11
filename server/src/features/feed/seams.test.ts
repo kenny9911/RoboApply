@@ -10,7 +10,7 @@
 //   - GoApply: the seams return postings by default (D5); with the
 //     recruitment-info mode set to off every seam answers empty
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
 
@@ -20,7 +20,7 @@ import { cardMeta } from '../jobs/marketHooks.js';
 import { DEFAULT_MATCH_TIERS, DEFAULT_MATCH_WEIGHTS, buildMatchUser } from '../match/index.js';
 import type { FilterSet, SearchProfileWire } from '../search/index.js';
 import { createFeedQueryService, type FeedServiceDeps } from './FeedQueryService.js';
-import { FakeFeedRepo, feedRow } from './testkit.js';
+import { BANK_PAGES_ENV, FakeFeedRepo, feedRow } from './testkit.js';
 import type { FeedCtx } from './types.js';
 
 const NOW = new Date('2026-10-10T12:00:00.000Z');
@@ -108,6 +108,11 @@ beforeEach(() => {
   personalized = true;
   profileReads = 0;
   userContextCalls = 0;
+  // Both banks have a posting page in this file: bank rows are listed (the held case is in FeedQueryService.test.ts).
+  for (const [k, v] of Object.entries(BANK_PAGES_ENV)) vi.stubEnv(k, v);
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe('sampleForFilters (competitiveness report sample)', () => {
@@ -432,9 +437,9 @@ describe('cardMeta and explanation on FeedItem', () => {
 });
 
 describe('GoApply: the seams return postings by default, and answer empty with CN_RECRUITMENT_INFO_MODE=off', () => {
-  const off = { postingsAllowed: undefined, env: { CN_RECRUITMENT_INFO_MODE: 'off' } as Record<string, string> };
-  const byDefault = { postingsAllowed: undefined, env: {} as Record<string, string> };
-  const on = { postingsAllowed: undefined, env: { CN_RECRUITMENT_INFO_MODE: 'partner_deeplink' } };
+  const off = { postingsAllowed: undefined, env: { ...BANK_PAGES_ENV, CN_RECRUITMENT_INFO_MODE: 'off' } as Record<string, string> };
+  const byDefault = { postingsAllowed: undefined, env: { ...BANK_PAGES_ENV } as Record<string, string> };
+  const on = { postingsAllowed: undefined, env: { ...BANK_PAGES_ENV, CN_RECRUITMENT_INFO_MODE: 'partner_deeplink' } };
 
   beforeEach(() => {
     seed(3, () => ({ market: 'cn', sourceBoard: 'gohire', sourceName: 'GoHire', fromRecruiterBank: true }));

@@ -56,7 +56,9 @@ const ENV_OFF = { FLAG_ROBOAPPLY_VISITOR_ASSISTANT: 'false', FLAG_ROBOAPPLY_JOBS
 const ENV_CN_MODE_OFF = { ...ENV_ON, CN_RECRUITMENT_INFO_MODE: 'off' };
 const ENV_CN_ALERTS_FLAG_OFF = { ...ENV_ON, FLAG_GOAPPLY_JOBS_ALERTS: 'false' };
 const ENV_CN_EMAIL_NONE = { ...ENV_ON, CN_EMAIL_TRANSPORT: 'none' };
-const ENV_CN_AI_OFF = { ...ENV_ON, CN_CONTENT_SAFETY_PROVIDER: 'nonsense' };
+// A content-safety setting that cannot run turns GoApply AI off only under the
+// strict posture; by default it degrades to the keyword list (plan §3.3, PAR-2 item 6).
+const ENV_CN_AI_OFF = { ...ENV_ON, CN_CONTENT_SAFETY_PROVIDER: 'nonsense', CN_RESIDENCY_STRICT: 'true' };
 
 function item(id: string, extra: Record<string, unknown> = {}): PublicFeedItem {
   return {
@@ -383,7 +385,7 @@ describe('POST /public/copilot on GoApply (flag on, shared stack only)', () => {
     expect((await h.request('POST', '/on/copilot', { host: GO_HOST, body: { ...body, consent: VISITOR_CONSENT_VERSION, extra: 1 } })).status).toBe(422);
   });
 
-  it('off switch: an unusable content-safety filter turns GoApply AI off (503 ai_unavailable), consent or not; RoboApply is not affected', async () => {
+  it('off switch: under CN_RESIDENCY_STRICT an unusable content-safety filter turns GoApply AI off (503 ai_unavailable), consent or not; RoboApply is not affected', async () => {
     turnImpl = ok;
     turnSpy.mockClear();
     const go = await h.request<Env<unknown>>('POST', '/aioff/copilot', { host: GO_HOST, body: { ...body, consent: VISITOR_CONSENT_VERSION } });

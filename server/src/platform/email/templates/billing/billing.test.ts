@@ -44,6 +44,10 @@ describe('billing email templates', () => {
     expect(planName(intl, 'growth')).toBe('Practice plan (legacy)');
     expect(planName(intl, 'pro_monthly')).toBe('Pro Monthly');
     expect(planName(cn, 'pro_monthly')).toBe('Pro month pass');
+    // GoApply student plans are passes too (PAR-6): never the subscription name.
+    expect(planName(cn, 'student_monthly')).toBe('Student 30-day pass');
+    expect(planName(cn, 'student_quarterly')).toBe('Student 90-day pass');
+    expect(planName(intl, 'student_monthly')).toBe('Student Monthly');
     expect(planName(intl, 'mystery')).toBe('Pro');
   });
 
