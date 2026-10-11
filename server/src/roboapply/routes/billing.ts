@@ -32,7 +32,12 @@
 //   POST /switch                    { planKey } → quote; { planKey, confirm: true, prorationDate, autoRenewAck } →
 //                                   { switched: true, planKey }, or { switched: false, requiresAction: true,
 //                                   hostedInvoiceUrl, planKey } when the payment for the switch still needs the buyer
-//   GET  /history                   unified invoice list (Stripe + CN orders)
+//   GET  /history?cursor=&limit=    → { invoices: BillingInvoice[], nextCursor: string | null }. One list of Stripe
+//                                   invoices (paid, open, uncollectible; never a draft or a void) and completed CN
+//                                   orders, newest first; `limit` 1 to 50 (default 20), `cursor` is the `nextCursor` of
+//                                   the page before. A row carries `refunded: 'full' | 'partial'` only when it was
+//                                   refunded and `channel` only when `kind` does not say it (a WeChat Pay order); both
+//                                   keys are left out otherwise, so an old row keeps its eight keys. 422 invalid_request.
 //   GET  /invoices/:id/download     Stripe PDF redirect / brand-aware CN receipt
 //
 // The new seeker endpoints (/credits area, /billing/plans, public /cancel)
@@ -128,6 +133,12 @@ export const CHECKOUT_SESSION_ID_PATTERN = /^cs_[A-Za-z0-9_]{8,200}$/;
 export const ReconcileBodySchema = z.object({ sessionId: z.string().regex(CHECKOUT_SESSION_ID_PATTERN) }).strict();
 
 export const PortalBodySchema = z.object({ flow: z.enum(['payment_method_update']).optional() }).strict();
+
+/** GET /history: the opaque cursor of the page before, and 1 to 50 rows a page. */
+export const HistoryQuerySchema = z.object({
+  cursor: z.string().min(1).max(1000).optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+});
 
 function legacyTierRefusal(res: Response) {
   return res.status(409).json({
@@ -285,8 +296,10 @@ router.post('/switch', requireAuth, async (req: Request, res: Response) => {
 });
 
 router.get('/history', requireAuth, async (req: Request, res: Response) => {
+  const parsed = HistoryQuerySchema.safeParse(req.query ?? {});
+  if (!parsed.success) return invalid(res, parsed.error);
   try {
-    const data = await getBillingHistory(req.user!.id);
+    const data = await getBillingHistory(req.user!.id, parsed.data);
     return res.json({ success: true, data });
   } catch (err) {
     return handleErr(err, req, res, 'history_failed');
