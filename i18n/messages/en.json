@@ -196,7 +196,8 @@
       "feedOff": "Job listings are not available here yet. You can still add jobs you found yourself.",
       "addJob": "Add a job",
       "detailLabel": "Job details",
-      "closeDetail": "Close job details"
+      "closeDetail": "Close job details",
+      "introByDate": "Jobs are listed by date posted, newest first. Open one to see the details."
     },
     "card": {
       "openJob": "Open {title} at {company}",
@@ -258,7 +259,12 @@
         "markedApplied": "Moved to Applied.",
         "undoApplied": "Undo · I didn't apply",
         "undone": "Moved back out of Applied."
-      }
+      },
+      "firstSeen": "First seen {date}",
+      "leadLabel": "{label}:",
+      "alsoIn": "Also in {count, plural, one {# more location} other {# more locations}}",
+      "alsoInList": "Other locations for {title} at {company}",
+      "alsoInMore": "{count, plural, one {# more location is not listed here.} other {# more locations are not listed here.}}"
     },
     "hide": {
       "title": "Not interested",
@@ -397,6 +403,21 @@
       "nlNoChange": "That description doesn't change your current search.",
       "loadFailed": "Categories did not load.",
       "noCategories": "No categories to show yet."
+    },
+    "searchApi": {
+      "keySourcesOff": "No job source is open to API keys on this site right now, so a request made with a key returns an error and no jobs. The site operator decides which sources keys can read."
+    },
+    "order": {
+      "queryMatch": "Ordered by how closely the post matches your search."
+    },
+    "nl": {
+      "rankedBy": "Ranked by closeness to: {terms}. These were not checked as requirements.",
+      "notChecked": "Not checked: {items}.",
+      "rankOnlyTitle": "Your filters stay as they are",
+      "rankOnlyApply": "Rank my list by these words",
+      "chip": "Ranked by: {terms}",
+      "chipClear": "Clear",
+      "chipClearLabel": "Stop ranking the list by these words"
     }
   },
   "resume": {
@@ -439,7 +460,8 @@
       "edited": "Edited {when}",
       "score_unit": "/100",
       "delete": "Delete resume",
-      "versions_used": "{used} of {cap} versions used"
+      "versions_used": "{used} of {cap} versions used",
+      "tailored_stamp": "Tailored"
     },
     "tip": {
       "label": "If you are early in your career",
@@ -479,6 +501,12 @@
         "skills_v": "Skills · tools · keywords",
         "cleaned": "Cleaned",
         "cleaned_v": "Wording and spacing"
+      },
+      "found": {
+        "roles": "{count, plural, one {1 role} other {# roles}}",
+        "schools": "{count, plural, one {1 entry} other {# entries}}",
+        "skills": "{count, plural, one {1 skill} other {# skills}}",
+        "none": "Not found. Add it in the editor."
       }
     },
     "import": {
@@ -501,7 +529,8 @@
       "drop": {
         "title": "Drop your resume here",
         "sub": "PDF, DOCX, or Apple Pages",
-        "ready": "ready to read"
+        "ready": "ready to read",
+        "formats": "PDF, Word (DOC or DOCX), plain text or Markdown"
       },
       "linkedin": {
         "steps_title": "Save your LinkedIn profile as a PDF",
@@ -521,7 +550,8 @@
         "title_scratch": "Draft ready",
         "title_import": "Imported",
         "body_scratch": "Open the editor and start filling it in. Line-by-line help sits in the right margin.",
-        "body_import": "Your resume was read. Two weak bullets are highlighted in the editor."
+        "body_import": "Your resume was read. Two weak bullets are highlighted in the editor.",
+        "body_read": "Your resume was read. Open the editor to check what was picked up."
       },
       "cancel": "Cancel",
       "create_draft": "Create draft",
@@ -541,7 +571,8 @@
         "file_required": "Choose a file first."
       },
       "demo_file_name": "resume-2024.pdf",
-      "demo_file_size": "184 KB"
+      "demo_file_size": "184 KB",
+      "reading": "Reading {file}…"
     },
     "toolbar": {
       "back": "All resumes",
@@ -554,7 +585,9 @@
       "hide_coach": "Hide line check",
       "download": "Download",
       "tailor": "Tailor for a job",
-      "delete": "Delete"
+      "delete": "Delete",
+      "quick_score": "Quick score",
+      "quick_score_hint": "The editor's own quick score. It changes as you type and is not your Resume check result."
     },
     "section": {
       "identity": "You",
@@ -610,7 +643,8 @@
     },
     "bullet": {
       "flag": "This bullet has no number and a vague verb. Try Improve the writing or Add numbers.",
-      "placeholder": "What you did — start with a verb, end with the result"
+      "placeholder": "What you did — start with a verb, end with the result",
+      "placeholder_flag": "Fill in {placeholders} with your real number, or rewrite the line without it. This line is not ready to send."
     },
     "rewrite": {
       "rewriting": "Rewriting",
@@ -909,8 +943,14 @@
         "company_role_name": "Company - Job title - Your name",
         "name_date": "Your name - Date"
       },
-      "ai_note": "AI wrote part of this resume. PDF and Word files say so in their file properties."
-    }
+      "ai_note": "AI wrote part of this resume. PDF and Word files say so in their file properties.",
+      "unverified": "{count, plural, one {1 detail in this tailored resume has not been checked yet. Check it in Verify details before you download.} other {# details in this tailored resume have not been checked yet. Check them in Verify details before you download.}}",
+      "verify_cta": "Verify details",
+      "placeholders": "{count, plural, one {1 line still has a blank like [X] where your own number goes. Fill it in, or rewrite the line without the number.} other {# lines still have a blank like [X] where your own number goes. Fill them in, or rewrite those lines without the numbers.}}",
+      "placeholders_show": "Show the first one",
+      "placeholders_anyway": "Download with these blanks left in"
+    },
+    "ai_edit_cost": "Each AI edit of a bullet, your summary or your skills uses 1 credit."
   },
   "applications": {
     "page_title": "Applications",
@@ -1181,15 +1221,15 @@
           "length": "How long should it run?"
         },
         "done": "Done",
-        "costShort": "{n} credits — more than you have",
+        "costShort": "{n, plural, one {# credit} other {# credits}} — more than you have",
         "useShorter": "Use {minutes} min instead",
         "previewToggle": "Preview what you may be asked"
       },
       "loading": "Loading interview prep…",
       "startError": "That interview could not be started. Try again.",
-      "creditCost": "Costs {n} credits",
-      "creditsRemaining": "{n} credits left",
-      "insufficientCredits": "This interview needs {required} credits and you have {balance}. Add credits to continue.",
+      "creditCost": "Costs {n, plural, one {# credit} other {# credits}}",
+      "creditsRemaining": "{n, plural, one {# credit} other {# credits}} left",
+      "insufficientCredits": "This interview needs {required, plural, one {# credit} other {# credits}} and you have {balance}. Add credits to continue.",
       "getCredits": "Get credits",
       "brief_line": "Your interviewer is briefed on {topic}.",
       "first_free": "Your first full practice interview is free.",
@@ -1600,7 +1640,8 @@
       "showAll": "Show all {count}",
       "showFewer": "Show fewer",
       "startErrorNetwork": "We couldn't reach the server. Check your internet connection and try again.",
-      "startErrorBusy": "The interview service is busy right now. Wait a minute, then try again."
+      "startErrorBusy": "The interview service is busy right now. Wait a minute, then try again.",
+      "insufficientCreditsNoPurchase": "This interview needs {required, plural, one {# credit} other {# credits}} and you have {balance}."
     },
     "live": {
       "loading": "Setting up your room…",
@@ -2218,7 +2259,8 @@
       "lead": "%BRAND% reads your resume, shows you the jobs you can actually get, names exactly what is missing, and gets you ready for the interview.",
       "feature_resume": "A resume that scanners can read",
       "feature_interview": "Practice interviews that talk back",
-      "feature_track": "Every application in one place"
+      "feature_track": "Every application in one place",
+      "feature_interview_written": "Practice interviews for the job you want"
     },
     "common": {
       "or": "or",
@@ -2243,7 +2285,12 @@
       "google": "Continue with Google",
       "line": "Continue with LINE",
       "useEmail": "Use email instead",
-      "needAgreements": "Tick the required boxes below first."
+      "needAgreements": "Tick the required boxes below first.",
+      "tabs": {
+        "label": "Ways to sign in",
+        "email_password": "Email",
+        "phone_otp": "Phone"
+      }
     },
     "agreements": {
       "marketing": "Send me product news and tips",
@@ -2320,7 +2367,8 @@
       "expired": "The link has expired. Send a new one from Settings.",
       "accountExistsTitle": "You already have an account",
       "accountExistsBody": "An account with this email already exists. Nothing new was created, and no sign-in method was added to it. Sign in the way you usually do.",
-      "toSignIn": "Sign in"
+      "toSignIn": "Sign in",
+      "requestNew": "Send a new link from Settings"
     },
     "callback": {
       "working": "Signing you in…",
@@ -2500,7 +2548,8 @@
         "freeNote": "Daily limits on AI actions",
         "proNote": "Higher daily limits on every AI action",
         "notSet": "Price not set yet",
-        "seeAll": "See every plan and limit"
+        "seeAll": "See every plan and limit",
+        "notOpen": "Paid plans can't be bought yet."
       },
       "faq": {
         "title": "Questions",
@@ -2518,7 +2567,7 @@
         },
         "q4": {
           "q": "Where do the jobs come from?",
-          "a": "From job listing providers and from recruiters who post on our partner sites. Every job shows its source and when it was last checked."
+          "a": "From public posts on employers' own careers pages, from Taiwan's public open-data job list, and from job listing providers when you search. Every job shows its source and when it was last checked. %BRAND% does not list every job on the market."
         },
         "q5": {
           "q": "How much does it cost?",
@@ -2585,12 +2634,13 @@
         "noDate": "Closing date not announced",
         "source": "Source: {source} · checked {date}",
         "needsCheck": "Not re-checked in the last 14 days",
-        "empty": "No programmes are listed yet."
+        "empty": "The calendar is being put together. A programme shows here once it has been checked against the employer's official page."
       },
       "practice": {
         "title": "AI interview practice",
         "sub": "Practice the AI interview formats employers commonly use. Each session ends with a report: what you said well and what to change.",
-        "cta": "Try a practice interview"
+        "cta": "Try a practice interview",
+        "voice": "You can answer out loud to an AI interviewer, or type your answers."
       },
       "free": {
         "title": "The core is free",
@@ -2611,11 +2661,37 @@
         "q3": {
           "q": "Is AI used on my resume?",
           "a": "Only after you turn on AI processing. You can turn it off in Settings at any time."
+        },
+        "q4": {
+          "q": "Where do the jobs come from?",
+          "a": "From public posts on employers' own hiring pages and from the source named on each job. Every job shows its source, a link to the original post and the date we last checked it. %BRAND% does not list every job on the market."
+        },
+        "q5": {
+          "q": "What does it cost?",
+          "a": "Your resume, the applications board and reminders are free, with daily limits on AI actions. A paid pass raises those limits for a set number of days and never renews by itself. Every price and limit is on the pricing page."
+        },
+        "q6": {
+          "q": "What does the fit score mean?",
+          "a": "It says how well your resume lines up with the job post: title and level, skills, industry, location and pay, and how your career has moved. It is not your chance of getting hired."
         }
       },
       "final": {
         "title": "Start with your resume.",
         "sub": "Add it once, then keep every application and deadline in one place."
+      },
+      "search": {
+        "rolePlaceholder": "e.g. Data analyst",
+        "cityPlaceholder": "e.g. Shanghai"
+      },
+      "pricing": {
+        "eyebrow": "Pricing",
+        "title": "The core is free",
+        "sub": "Your resume, the applications board and reminders are free. A paid pass raises the daily limits on AI actions for a set number of days, and it never renews by itself.",
+        "freeNote": "Daily limits on AI actions",
+        "proNote": "Higher daily limits on every AI action while the pass lasts",
+        "notSet": "Price not set yet",
+        "seeAll": "See every pass, pack and limit",
+        "notOpen": "Paid passes can't be bought yet."
       }
     },
     "features": {
@@ -3077,6 +3153,166 @@
             "q": "Which sites does it work on?",
             "a": "Common application systems. Where a field can't be filled, it says so."
           }
+        },
+        "jobMatches": {
+          "metaTitle": "Jobs that fit your resume, each with its source",
+          "metaDescription": "%BRAND% ranks open jobs by how well your resume fits. Every job leads with what's missing and names where the post came from.",
+          "eyebrow": "Job matches",
+          "title": "Jobs ranked by fit, with the reason in plain words",
+          "sub": "Every job gets a fit tier and leads with the gap: what the employer asks for that your resume doesn't show. Each job names its source and links to the original post.",
+          "sample": {
+            "line1": "Good fit · 78 / 100",
+            "line2": "They ask for SQL and Tableau. Your resume shows SQL only.",
+            "line3": "Source: the employer's hiring page · checked 2 days ago"
+          },
+          "s1": {
+            "title": "Add your resume and search",
+            "body": "Tell us the roles, cities and pay you want. Your resume does the rest."
+          },
+          "s2": {
+            "title": "Read the gap first",
+            "body": "Each job shows what overlaps and what's missing before it shows a number."
+          },
+          "s3": {
+            "title": "Apply on the employer's site",
+            "body": "Open the original post and apply there yourself. The job then moves to Applied on your board."
+          },
+          "q1": {
+            "q": "Where do the jobs come from?",
+            "a": "From public posts on employers' own hiring pages and from the source named on each job. %BRAND% does not list every job on the market."
+          },
+          "q2": {
+            "q": "How is the list ordered?",
+            "a": "By fit, freshness, what you've shown interest in and the listing source. The How ranking works page lists every factor."
+          }
+        },
+        "resumeTailoring": {
+          "metaTitle": "Tailor your resume for each job",
+          "metaDescription": "Make a version of your resume for one job, see every change, and confirm anything new before you download.",
+          "eyebrow": "Resume tailoring",
+          "title": "A version of your resume for each job",
+          "sub": "See every change side by side. Anything the draft adds that isn't on your resume waits for you to confirm it.",
+          "sample": {
+            "line1": "Changed: the summary now names your data analysis projects.",
+            "line2": "One line has a number we couldn't find on your resume. Fix it or remove it before you download.",
+            "line3": "Fit after changes: Good fit · 84 / 100"
+          },
+          "s1": {
+            "title": "Pick a job",
+            "body": "Start from any job in your list or one you added yourself."
+          },
+          "s2": {
+            "title": "Review the changes",
+            "body": "Keep, edit or remove each change. Nothing new is added without your say."
+          },
+          "s3": {
+            "title": "Download",
+            "body": "Export a PDF or Word file once every new detail is confirmed."
+          },
+          "q1": {
+            "q": "Can it invent experience?",
+            "a": "It can suggest wording, but a claim, number or skill that isn't on your resume can't be downloaded until you confirm, edit or remove it."
+          },
+          "q2": {
+            "q": "Does it change my main resume?",
+            "a": "No. Each tailored copy is separate, and your main resume stays as it is."
+          }
+        },
+        "coverLetters": {
+          "metaTitle": "Cover letters from the job post and your resume",
+          "metaDescription": "Write a cover letter for one job from the post and your own resume, then edit it.",
+          "eyebrow": "Cover letters",
+          "title": "A cover letter for this job, from your own resume",
+          "sub": "The letter uses what the post asks for and what your resume shows. You edit it before you use it.",
+          "sample": {
+            "line1": "Opening names the role and the team from the post.",
+            "line2": "Middle paragraph uses two results from your resume.",
+            "line3": "Written by AI. Read it before you send it."
+          },
+          "s1": {
+            "title": "Choose the job",
+            "body": "Start from the job page."
+          },
+          "s2": {
+            "title": "Read the draft",
+            "body": "Every fact comes from your resume or the post."
+          },
+          "s3": {
+            "title": "Edit and download",
+            "body": "Change anything, then copy it or download it."
+          },
+          "q1": {
+            "q": "Is it sent to the employer?",
+            "a": "No. You decide where and whether to use it."
+          },
+          "q2": {
+            "q": "Is there a limit?",
+            "a": "Yes, a daily limit. The pricing page lists it."
+          }
+        },
+        "readyToApply": {
+          "metaTitle": "Applications prepared each week; you submit them",
+          "metaDescription": "Each week %BRAND% prepares materials for jobs that fit. You review them and submit each application yourself.",
+          "eyebrow": "Ready to apply",
+          "title": "Each week, applications prepared for you to review",
+          "sub": "For jobs that fit, %BRAND% prepares a tailored resume, a cover letter and answers to common questions. You open each application and submit it yourself.",
+          "sample": {
+            "line1": "5 jobs this week · Good fit or better",
+            "line2": "Kit ready: tailored resume, cover letter, 4 answers",
+            "line3": "Open application → you check it and submit"
+          },
+          "s1": {
+            "title": "Set how many a week",
+            "body": "Choose 5, 10, 20 or 30 jobs and the lowest fit you'll accept."
+          },
+          "s2": {
+            "title": "Review each kit",
+            "body": "Change anything before you use it."
+          },
+          "s3": {
+            "title": "Submit it yourself",
+            "body": "Open the employer's page and submit. The job moves to Applied."
+          },
+          "q1": {
+            "q": "Does it submit anything?",
+            "a": "No. It never submits an application or contacts an employer."
+          },
+          "q2": {
+            "q": "What if I didn't apply after opening a job?",
+            "a": "Undo it in one tap and the job goes back where it was."
+          }
+        },
+        "referralCodes": {
+          "metaTitle": "Referral codes shared by other job seekers",
+          "metaDescription": "See the referral codes other %BRAND% users shared for a company. A moderator checks each one before it appears.",
+          "eyebrow": "Referral codes",
+          "title": "Referral codes for the company you're applying to",
+          "sub": "Other %BRAND% users share the referral codes they have. A moderator checks each one before it appears, and codes that cost money are not allowed.",
+          "sample": {
+            "line1": "Example company · 2027 campus programme",
+            "line2": "Referral code: EXAMPLE2027 · checked by a moderator",
+            "line3": "A code helps your application reach the company. It does not decide the outcome."
+          },
+          "s1": {
+            "title": "Open a job or a company",
+            "body": "Codes shared for that company show on the job page and under Referral codes."
+          },
+          "s2": {
+            "title": "Copy the code",
+            "body": "Enter it in the employer's own application form when you apply."
+          },
+          "s3": {
+            "title": "Share one you have",
+            "body": "Add a code of your own. It appears after a moderator checks it."
+          },
+          "q1": {
+            "q": "Do the codes cost anything?",
+            "a": "No. Codes that are sold or traded are refused, and so are codes that carry a phone number, a WeChat ID, an email or a link."
+          },
+          "q2": {
+            "q": "Does a code get me the job?",
+            "a": "No. It helps your application reach the company. It does not decide the outcome."
+          }
         }
       }
     },
@@ -3135,7 +3371,13 @@
       "q3": {
         "q": "Do unused credits roll over?",
         "a": "No. Limits reset each day or each week, as shown in the table. Practice packs stay valid for the months listed."
-      }
+      },
+      "choosePlan": "Choose this plan",
+      "signupToBuy": "Create a free account to buy",
+      "confirmSchoolEmail": "Confirm your school email",
+      "passRefund1": "Your first pass can be refunded within 7 days (48 hours for the week pass) if you used fewer than 5 actions that need a paid pass.",
+      "passRefund2": "A practice pack can be refunded while none of its practice interviews has been used.",
+      "passRefundHow": "Ask for a refund from the Help page"
     },
     "about": {
       "metaTitle": "About",
@@ -3252,11 +3494,11 @@
       "weight": "{pct}% of the order",
       "fit": {
         "title": "Fit to your resume and search",
-        "body": "Your fit score for the job, out of 100. When a full fit analysis isn't available yet, a quick estimate is used, counted slightly lower."
+        "body": "Your fit score for the job, out of 100. When a full fit analysis isn't available yet, a quick estimate on the same scale is used. A job whose quick estimate has too little to go on is left out when you filter for Good fits and better or Great fits only. While we are still comparing quick estimates with full analyses, a job with a full analysis is placed halfway between its quick estimate and its analysed score, so its place in the list can differ from the number on its card."
       },
       "freshness": {
         "title": "Freshness",
-        "body": "Newer posts come first. The effect fades over about three days."
+        "body": "Newer posts come first. The effect is strongest in the first two days and keeps a smaller weight for about two weeks. A post that is no longer listed by its source counts as older."
       },
       "affinity": {
         "title": "What you've shown interest in",
@@ -3278,8 +3520,8 @@
         "weight": "{pct}% of the fit score"
       },
       "rulesTitle": "{count, plural, one {One more rule} other {More rules}}",
-      "pointsNote": "Each job gets a ranking score out of 100 from the four factors. The rules and goals below add points to that score or move jobs within the list.",
-      "pointsNoteRules": "Each job gets a ranking score out of 100 from the four factors. The rule below adds points to that score.",
+      "pointsNote": "Each job gets a ranking score out of 100 from the four factors. The rules and goals below add points to that score, take points away, or move jobs within the list.",
+      "pointsNoteRules": "Each job gets a ranking score out of 100 from the four factors. The rules below add points to that score or take points away.",
       "upToPoints": "Up to {points} points",
       "addsPoints": "+{points} points",
       "rules": {
@@ -3290,6 +3532,14 @@
         "skillsBoost": {
           "title": "Your chosen skills",
           "body": "When skills are the only filter narrowing your list, jobs that ask for more of your chosen skills rank higher in Recommended, in proportion to how many of them the job asks for."
+        },
+        "wrongTitle": {
+          "title": "Titles you marked as wrong",
+          "body": "If you mark a job as \"Not interested: wrong title\", the weight of that role and the weight of that title each go down by 0.25, on a scale that runs from -1 to 1. \"What you've shown interest in\" is the average of a job's role, company and skills weights, and of its title weight when that is below zero. So one mark lowers other jobs with the same role or title a little, and each further mark lowers them more. The effect fades by 2% a day. Your filters stay as they are."
+        },
+        "seenSkipped": {
+          "title": "Jobs you keep passing over",
+          "body": "A job that was in your list on three or more visits and that you never opened ranks lower: 5 points after three visits, 7.5 after four, and 10 from five on."
         }
       },
       "goalTitle": "Your goal",
@@ -3309,8 +3559,11 @@
       "never3": "Jobs flagged as possible scams are taken out of the list until they're reviewed.",
       "never4": "Your photo, age, gender or family details.",
       "otherSortsTitle": "Other ways to sort",
-      "otherSorts": "Newest, Best fit and Highest pay sort by that one thing only.",
-      "cnNote": "On %BRAND%, if personalised recommendations are off or not chosen yet, jobs are ordered by date and your filters only."
+      "otherSorts": "{newest}, {bestFit} and {highestPay} each sort by that one thing only.",
+      "cnNote": "On %BRAND%, if personalised recommendations are off or not chosen yet, jobs are ordered by date and your filters only. When you search with words, they are ordered by how closely each post matches those words.",
+      "deadlineSort": "{deadline} lists jobs by the date their applications close, soonest first.",
+      "upToPointsLower": "Up to {points} points lower",
+      "sameRole": "When a company posts the same role in several cities, you see one card that lists the other locations, up to 10. Any further locations appear as another card."
     }
   },
   "errors": {
@@ -3637,14 +3890,63 @@
           "retryFailed": "That item couldn't be put back in line. Refresh and try again."
         },
         "providers": {
-          "title": "Job providers today",
-          "sub": "Calls against each provider's daily limit, UTC day {day}.",
-          "empty": "No provider calls today.",
+          "title": "Job providers",
+          "sub": "What each provider last reported about its own plan, and its calls on UTC day {day}. A dash means the provider did not say.",
+          "empty": "No job providers are set up.",
           "provider": "Provider",
-          "calls": "Calls",
-          "returned": "Jobs returned",
-          "new": "New jobs",
-          "errors": "Errors"
+          "calls": "Calls today / daily limit",
+          "returned": "Returned",
+          "new": "New",
+          "errors": "Errors",
+          "market": "Market",
+          "state": "State",
+          "plan": "Plan",
+          "requests": "Requests left / limit",
+          "jobs": "Jobs left / limit",
+          "resetsIn": "Resets in",
+          "leftOfLimit": "{left} / {limit}",
+          "days": "{count, plural, one {# day} other {# days}}",
+          "markets": {
+            "intl": "International",
+            "cn": "Mainland China"
+          },
+          "states": {
+            "ok": "On",
+            "low": "Running low",
+            "exhausted": "Exhausted",
+            "not_subscribed": "Not subscribed",
+            "unauthorized": "Key rejected",
+            "gated": "Needs a larger plan",
+            "disabled": "Off",
+            "unknown": "Not known yet"
+          },
+          "banner": "Not available right now: {providers}. The job feed is running without them.",
+          "bannerOne": "Not available right now: {providers}. The job feed is running without it.",
+          "alert": {
+            "exhausted": "{provider}: the monthly quota is used up. It resets in {days}.",
+            "exhaustedNoReset": "{provider}: the monthly quota is used up. The provider did not say when it resets.",
+            "not_subscribed": "{provider}: the key has no plan for this provider.",
+            "unauthorized": "{provider}: the provider rejected the key.",
+            "low": "{provider}: {value} left of the monthly quota (alert level {level})."
+          }
+        },
+        "payments": {
+          "title": "Payments",
+          "sub": "Whether card payments can be taken here.",
+          "loading": "Loading…",
+          "ready": "Card payments are ready.",
+          "notReady": "Card payments are not ready.",
+          "reason": {
+            "missing": "No Stripe key is set.",
+            "live_key_outside_production": "A live Stripe key is refused outside production.",
+            "no_secret": "No webhook signing secret is set."
+          },
+          "eventsAll": "The webhook endpoint sends every event the site acts on.",
+          "missingEvents": "{count, plural, one {# event the site acts on is not sent by the webhook endpoint.} other {# events the site acts on are not sent by the webhook endpoint.}}",
+          "noEndpoint": "No webhook endpoint in Stripe points at this site.",
+          "notChecked": "The webhook endpoint could not be checked.",
+          "failed": "Card payments could not be checked.",
+          "link": "See the full Stripe readout in Credits and plans"
         }
       },
       "costs": {
@@ -3702,7 +4004,8 @@
         "problems": "Setup problems",
         "verdict": "Result",
         "allVerdicts": "Stopped, flagged and errors",
-        "empty": "Nothing stopped or flagged."
+        "empty": "Nothing stopped or flagged.",
+        "problemsDegraded": "Setup problems. The check runs on the built-in word list until they are fixed"
       },
       "reports": {
         "eyebrow": "Admin",
@@ -3859,7 +4162,7 @@
       },
       "refund": {
         "title": "Refund check",
-        "sub": "What the published refund rules say about this person's latest charge. This is a check only: refunds are issued in the payment provider.",
+        "sub": "What the published refund rules say about this person's latest charge. This is a check only.",
         "check": "Check the latest charge",
         "loading": "Loading…",
         "noCharge": "No paid charge found.",
@@ -3874,7 +4177,7 @@
         "blocker": "Because: {blocker}",
         "deadline": "Refund window ends {at}",
         "amount": "Refund amount: {amount}",
-        "issueElsewhere": "Issue the refund in the payment provider, then note it on the person's record."
+        "issueElsewhere": "To refund, open Credits and plans, then Refunds. A card charge is refunded there. A mainland order is recorded there after the money was returned in the merchant console."
       },
       "audit": {
         "title": "Admin actions",
@@ -3940,13 +4243,194 @@
           "already_reviewed": "Someone already reviewed this invite. Nothing changed.",
           "failed": "That didn't save. Try again."
         }
+      },
+      "sources": {
+        "eyebrow": "Admin",
+        "title": "Job sources",
+        "sub": "Where this site gets its jobs, what each source did when it was last checked, and why some postings were left out.",
+        "loading": "Loading…",
+        "refresh": "Refresh",
+        "refreshing": "Refreshing…",
+        "panelTitle": "Where the jobs come from",
+        "panelTitleBrand": "Where the jobs come from: {brand}",
+        "panelSub": "Each source is checked on its own schedule. Numbers are from the last check, not live.",
+        "empty": "This site has no job source yet.",
+        "name": {
+          "bank": "{sourceName} recruiter jobs",
+          "ats_public": "Company job boards",
+          "activejobs": "Active Jobs DB",
+          "jsearch": "JSearch",
+          "linkedin": "LinkedIn job search",
+          "user_import": "Jobs people add themselves",
+          "tw_open_data": "Taiwan government open data",
+          "activejobs_feed": "Active Jobs DB feed",
+          "tw_gov_jobs": "Taiwan public-sector vacancies",
+          "usajobs": "USAJOBS",
+          "other": "{provider}"
+        },
+        "about": {
+          "bank": "Jobs that recruiters publish on {sourceName} for a named employer.",
+          "ats_public": "Postings from companies' own public job boards. Each one links to the company's own page.",
+          "activejobs": "A job search service. Used for searches people ask for.",
+          "jsearch": "A job search service. Used for searches people ask for.",
+          "linkedin": "A job search service that is no longer used.",
+          "user_import": "A person pastes a link or a posting. Only that person sees it.",
+          "tw_open_data": "Vacancies from the open data set of Taiwan's public employment service. Each one shows the credit line its licence asks for.",
+          "activejobs_feed": "New postings from employer career sites, read every hour. Runs by itself once a paid plan exists.",
+          "tw_gov_jobs": "Vacancies of government agencies and schools from Taiwan's open data. Each one shows the credit line its licence asks for. No contact details of officials are kept.",
+          "usajobs": "United States federal vacancies from the government's own job site. Each one links to the official announcement.",
+          "other": "A job source."
+        },
+        "state": {
+          "on": "On",
+          "off": "Off"
+        },
+        "transport": {
+          "db": "Read from its database",
+          "api": "Read over a secure web connection",
+          "syndication": "Read from its job feed",
+          "board_api": "Read from each board's public job feed",
+          "rapidapi": "Search service",
+          "off": "Not connected"
+        },
+        "reason": {
+          "kill_switch": "Turned off in the server settings.",
+          "transport_off": "Turned off in the server settings.",
+          "tls_required": "Its database connection is not encrypted, so we do not open it.",
+          "tls_required_no_api_key": "Its database connection is not encrypted and no web key is set, so we cannot read it.",
+          "no_api_key": "No web key is set for it.",
+          "not_configured": "Not set up on this server.",
+          "cross_tenant_unconfirmed": "Reading this source has not been confirmed for this site.",
+          "not_registered": "Not available on this server.",
+          "wrong_market": "Not a source for this site.",
+          "disabled": "Turned off, or its key is missing.",
+          "url_invalid": "The address set for it is not one we accept, so it is not read.",
+          "quota": "Paused: its plan's quota for this period is used up, was refused, or is kept for people's own searches.",
+          "no_key": "No key is set for it.",
+          "plan_too_small": "Off until the plan allows at least 20,000 postings a month.",
+          "plan_unknown": "Off. The size of the plan is not known yet: set FANTASTIC_MONTHLY_JOBS, or wait for the provider's first answer.",
+          "other": "Off ({code})."
+        },
+        "facts": {
+          "lastRun": "Last checked",
+          "never": "Not checked yet",
+          "written": "Jobs saved in the last check",
+          "open": "Jobs people can see now",
+          "held": "Jobs saved but not shown",
+          "boards": "Boards we read",
+          "boardsValue": "{enabled} of {total} on",
+          "boardsFailing": "{count, plural, one {# board could not be read last time} other {# boards could not be read last time}}"
+        },
+        "lastError": "The last check failed: {error}",
+        "notShown": {
+          "title": "These jobs are saved but not shown",
+          "body": "{source} has no public page for a single job yet, so a person would have nowhere to apply. We keep its jobs up to date and show them once that page exists. To turn this on, set {variable} to the address of that page.",
+          "count": "{count, plural, one {# published job is waiting} other {# published jobs are waiting}}"
+        },
+        "pageSet": "Its public job page is set. Each job links to that page.",
+        "skips": {
+          "title": "What the last check counted",
+          "countedAt": "Counted in the check on {time}.",
+          "none": "Nothing was left out in the last check.",
+          "bank_synced": "Published jobs with a named employer: {count}",
+          "bank_unpublished": "Open but not published by the recruiter: {count}",
+          "bank_no_company": "No employer named: {count}",
+          "bank_test_posting": "Test postings: {count}",
+          "bank_no_public_page": "No public job page to link to: {count}",
+          "bank_closed": "Closed by the recruiter: {count}",
+          "bank_page_cap": "Checks that stopped at the page limit: {count}",
+          "bank_pass_cut_short": "Checks that ran out of time: {count}",
+          "bank_validity_ended": "Past the end date the recruiter set: {count}",
+          "bank_time_without_zone": "Times sent without a time zone, read as China time: {count}",
+          "bank_reread_started": "Full re-reads of the source started: {count}",
+          "wrong_market_cn": "Located outside mainland China: {count}",
+          "wrong_market_intl": "Located in mainland China, so not for this site: {count}",
+          "no_apply_url": "No link to apply: {count}",
+          "missing_title_or_company": "No job title or employer name: {count}",
+          "private_row": "Already saved privately by a user, left as it is: {count}",
+          "normalize_failed": "Could not be read: {count}",
+          "no_external_id": "No posting ID from the source: {count}",
+          "boards_read": "Boards checked: {count}",
+          "board_errors": "Boards that could not be read: {count}",
+          "board_backlog": "Postings still to read: {count}",
+          "country_not_selected": "Located in a country this board is not read for: {count}",
+          "linkedin_only_link": "Left out because the only link was to LinkedIn: {count}",
+          "indeed_only_link": "Left out because the only link was to Indeed: {count}",
+          "tw_sweep_finished": "Daily reads finished: {count}",
+          "tw_sweep_incomplete": "Daily reads that ended incomplete: {count}",
+          "tw_request_errors": "Requests that failed: {count}",
+          "tw_skipped_position": "Parts of a daily read given up after repeated failures: {count}",
+          "tw_county_only": "Vacancies the daily read did not reach by district: {count}",
+          "tw_county_unreached": "Vacancies not reached by district or by job category: {count}",
+          "tw_capped_leaf": "Requests that hit the limit on rows and could not be split further: {count}",
+          "tw_capped_county_major": "Requests by county and job category that hit the limit on rows: {count}",
+          "tw_absence_unproven": "Not returned by the last two daily reads but kept open, because their county could not be read whole: {count}"
+        },
+        "boards": {
+          "title": "Company job boards",
+          "sub": "Public job boards of companies that hire in mainland China. We read each board's own public job feed and keep the postings located there. Every job links to the company's own page.",
+          "systems": "We can read boards on {names}.",
+          "add": {
+            "title": "Add a company's job board",
+            "system": "Job board system",
+            "token": "Board ID",
+            "tokenHint": "The company's short name in its job board address.",
+            "company": "Company name",
+            "companyHint": "As the company writes it on its own board.",
+            "submit": "Add board",
+            "adding": "Adding…"
+          },
+          "list": {
+            "title": "Boards on this site",
+            "empty": "No board yet. Add one above.",
+            "loadError": "The list could not be loaded.",
+            "never": "Not checked yet",
+            "columns": {
+              "company": "Company",
+              "system": "System",
+              "board": "Board ID",
+              "status": "Status",
+              "lastChecked": "Last checked",
+              "jobs": "Postings listed",
+              "problem": "Last problem",
+              "actions": "Actions"
+            },
+            "on": "On",
+            "off": "Off",
+            "noProblem": "None"
+          },
+          "actions": {
+            "check": "Check now",
+            "checking": "Checking…",
+            "turnOff": "Turn off",
+            "turnOn": "Turn on",
+            "remove": "Remove",
+            "confirmRemove": "Remove and hide its jobs",
+            "cancel": "Cancel",
+            "checkLabel": "Check {company} now",
+            "toggleLabel": "Turn {company} on or off",
+            "removeLabel": "Remove {company}"
+          },
+          "offNote": "Turning a board off or removing it hides its jobs. Turning it back on reads the board again.",
+          "run": {
+            "queued": "{company}: the board lists {listed, plural, one {# posting} other {# postings}} for this site. Reading them has started.",
+            "waiting": "{company}: the board lists {listed, plural, one {# posting} other {# postings}} for this site. They are read at the next scheduled check.",
+            "error": "{company}: {problem}"
+          },
+          "errors": {
+            "duplicate": "This board is already in the list.",
+            "otherSite": "This board is already read for the other site, so it cannot be added here. A board is read for one site at a time.",
+            "invalid": "Check the board ID and the company name.",
+            "generic": "That did not work. Try again."
+          }
+        }
       }
     }
   },
   "jobSearch": {
     "eyebrow": "Search Job Agent",
     "title": "Job search",
-    "intro": "Describe the work you want. Turn your request into focused searches across connected job sources, including LinkedIn listings when available.",
+    "intro": "Describe the work you want. Turn your request into focused searches across connected job sources.",
     "back": "Your job matches",
     "developers": "Use the API",
     "query": "Role or keywords",
@@ -4408,6 +4892,26 @@
       "cta": "See what changes",
       "dismiss": "No thanks",
       "once": "We show this suggestion only once."
+    },
+    "prefs": {
+      "identity": {
+        "name_ph": "Your name",
+        "name_save_failed": "Your name was not saved. Try again.",
+        "pronouns_she": "she/her",
+        "pronouns_he": "he/him",
+        "pronouns_they": "they/them",
+        "years_unset": "Not set",
+        "linkedin_invalid": "Use your LinkedIn profile link (linkedin.com/in/your-name), or leave it empty."
+      },
+      "danger": {
+        "confirmKeyword": "DELETE",
+        "signedOutNow": "You are signed out everywhere right away."
+      },
+      "security": {
+        "phoneNote": "You sign in with a code sent to your phone, so there is no password to change.",
+        "wechatNote": "You sign in with WeChat, so there is no password to change.",
+        "otherNote": "You sign in without a password, so there is no password to change."
+      }
     }
   },
   "assistant": {
@@ -4427,7 +4931,10 @@
     },
     "context": {
       "job": "About this job",
-      "resume": "About this resume"
+      "resume": "About this resume",
+      "noJob": "This chat is not about the job on this page.",
+      "otherJob": "This chat is about another job.",
+      "askPageJob": "New chat about this job"
     },
     "composer": {
       "label": "Your question",
@@ -4435,13 +4942,15 @@
       "send": "Send",
       "stop": "Stop",
       "hint": "Enter sends. Shift+Enter starts a new line.",
-      "tooLong": "Keep it under {max} characters."
+      "tooLong": "Keep it under {max} characters.",
+      "placeholderShort": "Ask a question"
     },
     "voice": {
       "start": "Speak your question",
       "stop": "Stop listening",
       "listening": "Listening…",
-      "blocked": "Microphone access is blocked in this browser."
+      "blocked": "Microphone access is blocked in this browser.",
+      "vendorNotice": "Your browser turns your speech into text with its own speech service. The browser maker processes the audio, which may happen outside mainland China."
     },
     "message": {
       "you": "You",
@@ -4461,7 +4970,10 @@
       "salary_context": "Reading posted pay…",
       "application_summary": "Reading your applications…",
       "get_profile_gaps": "Checking your profile…",
-      "other": "Working…"
+      "other": "Working…",
+      "added_jobs": "Looking at the jobs you added…",
+      "similar_jobs": "Looking for similar jobs…",
+      "show_jobs": "Putting the list together…"
     },
     "errors": {
       "credits_exhausted": "No Assistant messages left today.",
@@ -4550,7 +5062,10 @@
           "q2": "Summarize my applications.",
           "q3": "Add a job from a link."
         }
-      }
+      },
+      "needsJob": "These questions are about one job. Open a job, then ask from there.",
+      "openJobs": "Open your jobs",
+      "needsJobHere": "These questions are about one job. This chat is not about the job on this page."
     },
     "empty": {
       "title": "Ask about jobs, your search or your resume",
@@ -4607,7 +5122,14 @@
           "day": "{amount} a day",
           "hour": "{amount} an hour"
         },
-        "seeAll": "See all your jobs"
+        "seeAll": "See all your jobs",
+        "workModel": {
+          "remote": "Remote",
+          "hybrid": "Hybrid",
+          "onsite": "On-site"
+        },
+        "addedByYou": "Added by you",
+        "payAsStated": "Pay as stated: {text}"
       },
       "filters": {
         "title": "Your search now",
@@ -4639,7 +5161,9 @@
         "aligned": "What lines up",
         "missing": "What the post asks for that your resume does not show",
         "highlights": "Worth mentioning",
-        "gaps": "What could be stronger"
+        "gaps": "What could be stronger",
+        "snapshot": "This is your fit when this answer was written. It changes when your resume or your search changes.",
+        "openJob": "See your fit now"
       },
       "company": {
         "title": "About {name}",
@@ -4792,7 +5316,8 @@
         "ai_unavailable": "The Assistant is not available right now.",
         "content_blocked": "Part of this answer was blocked.",
         "rate_limited": "Too many messages in a short time. Wait a moment, then try again.",
-        "proposal_expired": "This suggestion expired. Ask again for a fresh one."
+        "proposal_expired": "This suggestion expired. Ask again for a fresh one.",
+        "stopped": "Stopped."
       },
       "campus": {
         "title": "Application deadlines",
@@ -4818,7 +5343,11 @@
         "blocked": "{count, plural, one {# suggestion was left out because it added numbers that are not in your resume.} other {# suggestions were left out because they added numbers that are not in your resume.}}",
         "open": "Review and apply in the resume check"
       },
-      "proposalClosed": "This suggestion can no longer be used. Ask again for a fresh one."
+      "proposalClosed": "This suggestion can no longer be used. Ask again for a fresh one.",
+      "applying": "Working on it…",
+      "inProgress": "This is already being worked on. If nothing shows up in a minute, try again.",
+      "waitForAnswer": "You can use this once the answer is finished.",
+      "notSaved": "This suggestion was not saved with its answer, so it cannot be used. Ask again."
     },
     "memory": {
       "title": "What the Assistant remembers",
@@ -4851,6 +5380,9 @@
       "week": "a week",
       "day": "a day",
       "hour": "an hour"
+    },
+    "jobList": {
+      "title": "Jobs mentioned in this answer"
     }
   },
   "authCn": {
@@ -5005,7 +5537,9 @@
       "pro_quarterly": "90-day pass",
       "practice_pack_5": "Practice pack (5 sessions)",
       "practice_pack_15": "Practice pack (15 sessions)",
-      "unknown": "Plan"
+      "unknown": "Plan",
+      "student_monthly": "Student 30-day pass",
+      "student_quarterly": "Student 90-day pass"
     },
     "summary": {
       "pass": "Pro for {days} days. It does not renew, and nothing is charged automatically.",
@@ -5064,13 +5598,31 @@
       "termsOutdated": "The agreement was updated. Read it again and tick the box to continue. Nothing was charged.",
       "tooMany": "Too many payment attempts. Wait a minute and try again. Nothing was charged.",
       "generic": "Something went wrong. Nothing was charged. Try again.",
-      "retry": "Try again"
+      "retry": "Try again",
+      "studentRequired": "Confirm your school email first to get the student price. Nothing was charged."
     },
     "renew": {
       "button": "Renew",
       "title": "Renew your {plan}",
       "description": "The new days start after your current access ends ({date}).",
       "descriptionNoDate": "The new days start right away."
+    },
+    "noRenewal": {
+      "title": "Nothing to cancel",
+      "body": "Memberships here are passes you pay for once. They never renew and nothing is charged again, so there is no subscription to cancel.",
+      "ends": "A pass ends by itself on its last day. To keep going after that, you buy a new one.",
+      "pricingLink": "See prices",
+      "settingsLink": "Open plan and billing settings"
+    },
+    "pricing": {
+      "passNote": "{days, plural, one {# day} other {# days}} of Pro. One-time payment. It does not renew automatically when it ends.",
+      "practicePerMonth": "{count, plural, one {# practice interview} other {# practice interviews}} each calendar month while the pass is active",
+      "refund": {
+        "first": "First pass: you can get a refund within {days, plural, one {# day} other {# days}} (week pass: within {hours, plural, one {# hour} other {# hours}}) if you used fewer than {limit} actions that need a paid pass.",
+        "packs": "Practice packs: you can get a refund while no interview from the pack has been used. A pack stays valid for {months, plural, one {# month} other {# months}}.",
+        "oneTime": "One-time payment. A pass does not renew automatically when it ends. Passes last {days} days.",
+        "entity": "Payment is collected by: {entity}"
+      }
     }
   },
   "brand": {
@@ -5131,7 +5683,9 @@
       "empty": "No programmes match these filters.",
       "emptySub": "Programmes appear here after staff check them against the employer's official page.",
       "more": "Show more",
-      "loadingMore": "Loading…"
+      "loadingMore": "Loading…",
+      "compiling": "The calendar is being put together",
+      "compilingSub": "We add campus programmes one at a time, and each is checked against the employer's official page first. Nothing shows here before that check, so an empty calendar does not mean that no employer is hiring."
     },
     "event": {
       "classTag": "Class of {year}",
@@ -5615,7 +6169,9 @@
       "writing": "Writing and checking your letter. This can take up to a minute.",
       "cancel": "Cancel",
       "honesty": "Written from the job post and your resume. Each AI line is checked against them. A letter that presents the job post’s requirements as your experience is written again, or not saved.",
-      "neverSent": "%BRAND% never sends this letter. You copy or download it and add it to your application yourself."
+      "neverSent": "%BRAND% never sends this letter. You copy or download it and add it to your application yourself.",
+      "resumeError": "Your resumes did not load. Nothing was lost.",
+      "resumeRetry": "Try again"
     },
     "ai": {
       "label": "Written from the job post and your resume.",
@@ -5748,7 +6304,9 @@
         "pro_monthly": "Member 30-day pass",
         "pro_quarterly": "Member 90-day pass",
         "practice_pack_5": "Practice pack (5 interviews)",
-        "practice_pack_15": "Practice pack (15 interviews)"
+        "practice_pack_15": "Practice pack (15 interviews)",
+        "student_monthly": "Student 30-day pass",
+        "student_quarterly": "Student 90-day pass"
       }
     },
     "price": {
@@ -5781,7 +6339,21 @@
       "error": "We couldn't open the payment page. Nothing was charged. Try again.",
       "continue": "Continue to payment",
       "continuing": "Opening the payment page…",
-      "switchContinue": "See what switching costs"
+      "switchContinue": "See what switching costs",
+      "notOpen": "These are the prices. Payment is not open yet, so nothing can be bought right now.",
+      "railGroup": "Pay with",
+      "rails": {
+        "alipay": "Alipay",
+        "wechatpay": "WeChat Pay",
+        "stripe": "Card"
+      },
+      "railHint": {
+        "alipay": "You pay on the Alipay page.",
+        "wechatpay": "You scan a code, or pay inside WeChat.",
+        "stripe": "You pay on the card payment page."
+      },
+      "portalScope": "Manage payment is for your payment method, invoices and billing details. To change your plan, choose another one here.",
+      "cnVisitor": "In mainland China? <link>You can pay in RMB with Alipay on %OTHER_BRAND%.</link>"
     },
     "quote": {
       "title": "Switch to {plan}",
@@ -5796,7 +6368,9 @@
       "confirmError": "The switch didn't go through. Check your invoices before you try again.",
       "done": "You're on {plan}. It renews on {date}.",
       "doneNoDate": "You're on {plan}.",
-      "close": "Close"
+      "close": "Close",
+      "requiresAction": "Your bank needs you to confirm this payment. Your plan has not changed yet.",
+      "requiresActionCta": "Confirm the payment"
     },
     "cancel": {
       "button": "Cancel subscription",
@@ -5856,7 +6430,8 @@
       "historyTitle": "Recent use",
       "historyEmpty": "Nothing used yet.",
       "historyUnavailable": "Recent use isn't available right now.",
-      "used": "{n, plural, one {# used} other {# used}}"
+      "used": "{n, plural, one {# used} other {# used}}",
+      "usedPractice": "{n, plural, one {# practice credit used} other {# practice credits used}}"
     },
     "badge": {
       "free": "Free",
@@ -5902,7 +6477,23 @@
       "tokenInvalid": "This link has expired or was already used. Ask for a new one below.",
       "signedIn": "You're signed in, so you can also cancel in settings.",
       "settingsLink": "Open billing settings",
-      "footerLink": "Cancel a subscription"
+      "footerLink": "Cancel a subscription",
+      "checking": "Checking your link…",
+      "choose": "This link can do one of two things. Choose one.",
+      "cancelChoiceTitle": "Cancel at the end of the period",
+      "cancelChoiceSub": "The renewal stops now. You keep Pro until {date}.",
+      "cancelChoiceSubNoDate": "The renewal stops now. You keep Pro until the end of the period you paid for.",
+      "cancelChoiceButton": "Cancel at the end of the period",
+      "withdrawChoiceTitle": "Withdraw from contract",
+      "withdrawChoiceSub": "The plan ends at once and we refund {amount}. You can do this until {date}.",
+      "withdrawProrata": "You asked us to start at once, so the refund covers the days you have not used.",
+      "withdrawButton": "Withdraw from contract and refund {amount}",
+      "withdrawing": "Withdrawing…",
+      "withdrawn": "You have withdrawn from the contract. The plan has ended and we are refunding {amount}. A confirmation email is on its way.",
+      "withdrawnNoAmount": "You have withdrawn from the contract. The plan has ended. Your refund and a confirmation email are on their way.",
+      "withdrawGone": "This purchase can no longer be withdrawn.",
+      "cancelledInstead": "We cancelled your subscription at the end of the period instead. You keep Pro until {date}. We've emailed you a confirmation.",
+      "cancelledInsteadNoDate": "We cancelled your subscription at the end of the period instead. You keep Pro until the end of the period you paid for. We've emailed you a confirmation."
     },
     "return": {
       "successTitle": "Payment received",
@@ -5985,6 +6576,284 @@
         "share": "{pct}% of the level",
         "asOf": "Source: {source}, as of {date}",
         "warn": "Revenue is above {pct}% of the VAT registration level. Plan the registration now."
+      },
+      "refunds": {
+        "title": "Refunds",
+        "sub": "Look up one person to see what the refund rules say about their latest charge, refund a card charge, see their refunds, withdrawals and disputes, and record a refund of a mainland order.",
+        "userId": "User ID",
+        "show": "Show",
+        "pick": "Enter a user ID to start.",
+        "facts": {
+          "title": "Latest charge and the refund rules",
+          "loadError": "We couldn't load the refund check.",
+          "notFound": "No user with this ID.",
+          "paidThrough": "Paid through",
+          "source": {
+            "stripe": "Card",
+            "cn": "Alipay or WeChat Pay"
+          },
+          "country": "Billing country",
+          "waiver": "Start-now box ticked at checkout",
+          "yes": "Yes",
+          "no": "No",
+          "paidOnlyUsed": "Actions that need Pro, used since the charge",
+          "packUsed": "Practice interviews used from this pack",
+          "prorata": "Days used of the paid period",
+          "prorataValue": "{used} of {period}"
+        },
+        "stripe": {
+          "title": "Refund through Stripe",
+          "sub": "The money goes back to the card that paid. Access does not change here: it changes when Stripe confirms the refund, usually within a minute. A full refund takes back what the charge bought. A partial refund changes no access.",
+          "target": "What to refund",
+          "targetLatest": "The latest charge: {amount} on {date}",
+          "targetOther": "Another invoice or checkout session",
+          "targetId": "Invoice or checkout session ID",
+          "targetIdHelp": "It starts with in_ or cs_.",
+          "amount": "Amount (leave empty to refund everything that can still be refunded)",
+          "amountHelp": "In the currency of the charge, for example 10.00.",
+          "reason": "Reason",
+          "review": "Review refund",
+          "invalid": "Check what to refund, the amount and the reason.",
+          "confirmTitle": "Refund this charge?",
+          "confirmUser": "User",
+          "confirmTarget": "Charge",
+          "confirmAmount": "Amount",
+          "confirmReason": "Reason",
+          "everything": "Everything that can still be refunded",
+          "amountAsTyped": "{amount} in the currency of the charge",
+          "confirm": "Refund now",
+          "pending": "Refunding…",
+          "back": "Back",
+          "done": "Refunded {amount}. Access changes when Stripe confirms the refund.",
+          "doneNoAmount": "The refund was sent. Access changes when Stripe confirms the refund.",
+          "doneFull": "Nothing is left to refund on this charge.",
+          "donePartial": "Part of this charge has not been refunded.",
+          "errors": {
+            "not_found": "No such user, invoice or checkout session.",
+            "refund_not_available": "This charge can't be refunded: it belongs to someone else, it was already refunded in full, or the amount is more than what is left.",
+            "rail_not_configured": "Card payments are not set up here, so no refund can be sent.",
+            "payment_provider_error": "Stripe did not confirm the refund. Check the list below before you try again.",
+            "generic": "The refund didn't go through. Check the list below before you try again."
+          }
+        },
+        "list": {
+          "title": "Refunds, withdrawals and disputes",
+          "loading": "Loading…",
+          "loadError": "We couldn't load the refunds.",
+          "refresh": "Refresh",
+          "refreshLabel": "Refresh the list of refunds, withdrawals and disputes",
+          "refreshing": "Refreshing…",
+          "refreshError": "We couldn't refresh the list. What you see may be out of date.",
+          "empty": "Nothing on record for this person.",
+          "date": "Date",
+          "kind": "Kind",
+          "amount": "Amount",
+          "access": "Access",
+          "reason": "Reason",
+          "by": "By",
+          "ref": "Reference",
+          "kinds": {
+            "refund": "Refund",
+            "withdrawal": "Withdrawal",
+            "dispute": "Dispute",
+            "manual_cn": "Recorded by hand",
+            "other": "Other"
+          },
+          "full": "full",
+          "partial": "partial",
+          "amountValue": "{amount} ({share})",
+          "reversed": "Taken back",
+          "kept": "Unchanged",
+          "disputeFlag": "{count, plural, one {# dispute on record: the bank took the money back. Check this account.} other {# disputes on record: the bank took the money back. Check this account.}}",
+          "more": "Show more",
+          "moreError": "We couldn't load more. Try again."
+        },
+        "cn": {
+          "title": "Mainland orders",
+          "sub": "Alipay and WeChat Pay refunds are made in the merchant console, not here. Return the money there first, then record it. Recording a full refund ends that pass or removes what is left of that pack, once.",
+          "loading": "Loading…",
+          "loadError": "We couldn't load the orders.",
+          "empty": "No completed mainland orders for this person.",
+          "order": "Order",
+          "plan": "Plan",
+          "channel": "Paid with",
+          "amount": "Amount",
+          "date": "Completed",
+          "refund": "Refund",
+          "channels": {
+            "alipay": "Alipay",
+            "wechatpay": "WeChat Pay"
+          },
+          "refunded": {
+            "full": "Refund recorded",
+            "partial": "Partial refund recorded"
+          },
+          "record": "Record refund",
+          "recordLabel": "Record refund for order {order}",
+          "formTitle": "Record a refund for order {order}",
+          "moneyReturned": "The money was returned in the merchant console",
+          "reason": "Reason",
+          "partialAmount": "Amount returned in yuan, if less than the whole order (leave empty for the whole order)",
+          "invalidAmount": "Enter the amount in yuan, for example 12 or 12.50, and not more than the order.",
+          "save": "Record refund",
+          "saving": "Recording…",
+          "cancel": "Cancel",
+          "recorded": "Refund recorded for order {order}.",
+          "already": "A refund was already recorded for order {order}. It is not recorded twice.",
+          "check": "Check the record",
+          "checkLabel": "Check the refund record for order {order}",
+          "checking": "Checking…",
+          "checkHint": "No access was taken back for this refund. If the pass or pack is still there, check the record to finish it.",
+          "entitlement": {
+            "pass_ended": "The pass was ended.",
+            "pass_shortened": "The pass was shortened by the days this order added.",
+            "pack_zeroed": "The practice interviews left from this pack were removed.",
+            "none": "No access was changed."
+          },
+          "errors": {
+            "not_found": "No such completed order.",
+            "order_not_completed": "This order was never completed, so there is no payment to refund.",
+            "invalid_request": "Check the reason and the amount.",
+            "generic": "We couldn't finish recording the refund. Try again. A refund is never recorded twice."
+          }
+        }
+      },
+      "practiceCost": {
+        "title": "Practice cost",
+        "sub": "What one practice interview costs us on average, over each brand's latest sessions. The figure is in US dollars, as the cost is recorded.",
+        "loading": "Loading…",
+        "loadError": "We couldn't load the cost.",
+        "brand": "Brand",
+        "average": "Average cost per session (USD)",
+        "sample": "Sessions counted",
+        "range": "First and last session",
+        "sampleValue": "{n} (the latest {max} at most)",
+        "notEnough": "Not enough sessions yet ({n} of {min})",
+        "rangeValue": "{from} to {to}",
+        "ruleTitle": "The owner's rule",
+        "rules": {
+          "roboapply": "Above $1.00 a session, reprice the 15-pack to $27.99.",
+          "goapply": "Above about ¥3.5 a session, move the packs to ¥39 and ¥99."
+        },
+        "ruleNote": "The averages above are in US dollars and are not converted. A new price is one catalog default per brand."
+      },
+      "stripe": {
+        "title": "Stripe",
+        "sub": "Whether card payments can be taken here, and whether Stripe sends every event the site acts on. No key or secret is shown here.",
+        "loading": "Loading…",
+        "loadError": "We couldn't load the Stripe state.",
+        "key": "Key",
+        "keyModes": {
+          "none": "No key",
+          "test": "Test key",
+          "live": "Live key",
+          "unknown": "Not stated"
+        },
+        "usable": "Key can be used here",
+        "yes": "Yes",
+        "no": "No",
+        "refused": {
+          "missing": "No key is set.",
+          "live_key_outside_production": "A live key is refused outside production, so no card payment or refund can be made here.",
+          "unknown": "The key can't be used here."
+        },
+        "secrets": "Webhook signing secrets",
+        "rail": "Card payments",
+        "railReady": "Ready",
+        "railNotReady": "Not ready",
+        "endpoint": "Webhook endpoint",
+        "events": "Events the endpoint does not send",
+        "eventsNone": "None. The endpoint sends every event the site acts on.",
+        "eventsMissing": "{count, plural, one {# event is missing. Add it to the endpoint in Stripe.} other {# events are missing. Add them to the endpoint in Stripe.}}",
+        "endpointNone": "No webhook endpoint in Stripe points at this site. Add one in Stripe.",
+        "eventsNeeded": "{count, plural, one {The endpoint needs this # event:} other {The endpoint needs these # events:}}",
+        "notChecked": "Could not be checked.",
+        "notCheckedReason": {
+          "restricted_key": "This key is not allowed to read webhook endpoints.",
+          "error": "Stripe did not answer.",
+          "no_key": "There is no key that can be used here."
+        },
+        "pinned": "Plans with a pinned price",
+        "pinnedNone": "None"
+      }
+    },
+    "busy": "We could not start this right now. Try again in a moment.",
+    "pricing": {
+      "samePriceAsWeekly": "Same price as weekly billing. The pass does not renew; weekly billing does.",
+      "refund": {
+        "first": "First purchase: you can get a refund within {days, plural, one {# day} other {# days}} (weekly billing and the week pass: within {hours, plural, one {# hour} other {# hours}}) if you used fewer than {limit} actions that need Pro.",
+        "renewal": "A renewal charged by mistake: you can get a refund within {days, plural, one {# day} other {# days}} of the charge.",
+        "packs": "Practice packs: you can get a refund while no interview from the pack has been used. A pack stays valid for {months, plural, one {# month} other {# months}}.",
+        "withdrawal": "In the EU, the EEA, the UK and Taiwan you can withdraw within {days, plural, one {# day} other {# days}}. You get a full refund if you did not ask us to start at once. If you did, a subscription is refunded for the days you have not used. Withdrawing ends the subscription at once."
+      },
+      "studentOffer": {
+        "title": "Student price",
+        "row": "{name}: {price}.",
+        "how": "The student price is for students who confirm a school email in Settings. The student plans are listed there once the email is confirmed."
+      }
+    },
+    "resume": {
+      "button": "Keep my plan",
+      "pending": "Turning renewal back on…",
+      "done": "Renewal is back on.",
+      "ended": "This plan has already ended. Choose a plan below.",
+      "error": "We couldn't turn renewal back on. Try again."
+    },
+    "withdraw": {
+      "label": "Withdraw from contract",
+      "entryLabel": "{label}: {plan}",
+      "intro": "{count, plural, one {You can still withdraw from the purchase below.} other {You can still withdraw from the purchases below.}} Withdrawing refunds the amount shown and ends what the purchase gave you at once.",
+      "unknownPlan": "Your purchase",
+      "paid": "Paid so far: {amount}. Bought on {date}.",
+      "paidNoDate": "Paid so far: {amount}.",
+      "refund": "Refund if you withdraw now: {amount}.",
+      "lastDay": "You can withdraw until {date}.",
+      "confirmTitle": "Withdraw from {plan}?",
+      "confirmRefund": "We refund {amount} to the payment method you paid with.",
+      "prorata": "You asked us to start at once, so the refund covers the {unused} of {periodDays} days you have not used.",
+      "ends": {
+        "subscription": "Your subscription ends at once and Pro stops right away.",
+        "pass": "The days this pass gave you end at once.",
+        "pack": "The practice interviews left from this pack are removed at once.",
+        "other": "What this purchase gave you ends at once."
+      },
+      "confirmButton": "Withdraw and refund {amount}",
+      "pending": "Withdrawing…",
+      "back": "Keep this purchase",
+      "done": "You have withdrawn from {plan}. We are refunding {amount}. A confirmation email is on its way.",
+      "doneNoAmount": "You have withdrawn from {plan}. Your refund and a confirmation email are on their way.",
+      "ended": {
+        "subscription": "Your subscription has ended, so Pro is off.",
+        "pass": "The days this pass gave you end as soon as the refund is recorded.",
+        "pack": "The practice interviews left from this pack are removed as soon as the refund is recorded.",
+        "other": "What this purchase gave you has ended."
+      },
+      "checkError": "We couldn't check whether you can still withdraw from a recent purchase.",
+      "refreshing": "Checking the refund amount…",
+      "refreshError": "We couldn't check the refund amount just now. Try again.",
+      "errors": {
+        "unavailable": "This purchase can no longer be withdrawn.",
+        "rateLimited": "You tried this several times in a row. Wait a while, then try again.",
+        "notConfigured": "Card payments are not set up here, so we can't send the refund. Nothing changed.",
+        "provider": "The payment provider did not confirm the withdrawal. Try again. Nothing is refunded twice.",
+        "generic": "The withdrawal didn't go through. Try again."
+      }
+    },
+    "history": {
+      "more": "Show more",
+      "loadingMore": "Loading…",
+      "moreError": "We couldn't load more. Try again.",
+      "channel": {
+        "alipay": "Alipay",
+        "wechatpay": "WeChat Pay"
+      },
+      "refunded": {
+        "full": "Refunded",
+        "partial": "Partly refunded"
+      },
+      "status": {
+        "uncollectible": "Not paid",
+        "unknown": "Status not known"
       }
     }
   },
@@ -6191,7 +7060,10 @@
       "dailyPay": "Internship pay a day",
       "salaryMonthsMin": "Months of pay a year",
       "hukouTag": "Hukou",
-      "schoolTiers": "Your school"
+      "schoolTiers": "Your school",
+      "twDistricts": "Districts",
+      "twDistrictsOf": "Districts in {county}",
+      "workShifts": "Shift"
     },
     "help": {
       "taxonomyIds": "Pick a function or a specific role. Type at least 2 letters.",
@@ -6209,7 +7081,12 @@
       "hukouTag": "Only posts whose official text says hukou is offered.",
       "salaryMonthsMin": "Jobs that don't say how many months they pay stay in your list.",
       "preferredCompanies": "Jobs at these companies rank higher. Other jobs still show.",
-      "companies": "When you add companies here, only their jobs show."
+      "companies": "When you add companies here, only their jobs show.",
+      "twDistricts": "Shows only jobs whose posting says which district it is in. Jobs that name no district are left out.",
+      "twDistrictsFull": "You can pick up to {max} districts. Take one off to add another.",
+      "twDistrictsOnly": "Only the districts you picked are shown. Jobs in your other places are left out.",
+      "workShifts": "Shows only jobs whose posting states the shift. Most of those come from 台灣就業通, so the list gets shorter.",
+      "twPay": "In Taiwan, most postings that state pay come from 台灣就業通. Postings found through job search rarely state it, so they are left out when “Only jobs that list pay” is on. Monthly pay is shown as the posting states it."
     },
     "options": {
       "any": "Any",
@@ -6292,7 +7169,14 @@
       "radiusKm": "Within {distance} km",
       "radiusMi": "Within {distance} mi",
       "classYear": "Class of {year}",
-      "salaryMonths": "{months} months or more"
+      "salaryMonths": "{months} months or more",
+      "workShifts": {
+        "day": "Day",
+        "evening": "Evening",
+        "night": "Night",
+        "rotating": "Rotating",
+        "part_time": "Part-time hours"
+      }
     },
     "controls": {
       "add": "Add",
@@ -6349,7 +7233,12 @@
       "sponsorshipNeeded": "Needs sponsorship",
       "hukouOnly": "Hukou offered",
       "excluded": "Not {value}",
-      "only": "Only {value}"
+      "only": "Only {value}",
+      "anywhereIn": "Anywhere in {country}",
+      "sponsorshipNotNeeded": "No sponsorship needed",
+      "cleared": "Filters cleared.",
+      "undo": "Undo",
+      "shiftValue": "Shift: {shift}"
     },
     "fit": {
       "label": "Show",
@@ -6475,20 +7364,30 @@
         "visa_not_offered": "The post says sponsorship is not offered: “{text}”",
         "visa_offered_plain": "The post says sponsorship is offered",
         "visa_not_offered_plain": "The post says sponsorship is not offered",
-        "quote": "“{text}”"
-      }
+        "quote": "“{text}”",
+        "logistics_by_your_filters": "These already match the filters you set, so they do not change the score: {text}",
+        "skill_related": "They ask for {text}, and your resume shows a related skill"
+      },
+      "notCompared": "Not enough to compare.",
+      "notComparedEstimate": "Not enough to compare, so this part is counted at a typical value.",
+      "notComparedAi": "Not enough to compare, so this part is left out of the score.",
+      "byFilters": "Not compared. The filters you set already cover this part."
     },
     "why": {
       "title": "Why you fit",
       "haveSkills": "The post lists these, and your resume or profile mentions them:",
       "empty": "None of the skills this post lists show up in your resume or profile.",
-      "noSkillsListed": "This post doesn't list specific skills to compare."
+      "noSkillsListed": "This post doesn't list specific skills to compare.",
+      "notChecked": "The skills this post lists are not checked against your resume yet."
     },
     "missing": {
       "title": "What you're missing",
       "skillsHeading": "The post lists these, and your resume and profile don't mention them:",
       "empty": "Your resume or profile mentions every skill this post lists.",
-      "noSkillsListed": "This post doesn't list specific skills to check."
+      "noSkillsListed": "This post doesn't list specific skills to check.",
+      "emptyCompared": "Your resume or profile shows every skill we compared for this post.",
+      "unchecked": "{count, plural, one {# more skill in the post is not checked yet.} other {# more skills in the post are not checked yet.}}",
+      "noneChecked": "{count, plural, one {The # skill in this post is not checked against your resume yet.} other {The # skills in this post are not checked against your resume yet.}}"
     },
     "analysis": {
       "title": "Fit analysis",
@@ -6536,16 +7435,34 @@
         "partly": "Partly met",
         "not_met": "Not met",
         "not_stated": "Not stated in the post",
-        "unknown": "Not shown on your resume"
+        "unknown": "Not shown on your resume",
+        "not_checked": "Not checked yet"
       },
       "titleNeed": "The post: {need}",
       "titleHave": "Your recent title: {have}",
       "yearsNeed": "They ask for {need}+ years",
       "yearsHave": "Your resume shows about {have} years",
-      "count": "{found} of {total} mentioned in your resume",
+      "count": "{found} of {total} shown by your resume",
       "mentioned": "Mentioned in your resume",
       "notMentioned": "Not mentioned in your resume",
-      "required": "Required"
+      "required": "Required",
+      "shownBy": "your resume shows {term}",
+      "via": "from {term}",
+      "countStates": "{shown} shown, {related} related, of {total}",
+      "state": {
+        "shown": "Your resume shows it",
+        "related": "Related: your resume shows {term}",
+        "relatedPlain": "Related: your resume shows something close",
+        "not_shown": "Not in your resume"
+      },
+      "quote": "“{text}”",
+      "unchecked": "{count, plural, one {# more skill from the post is not checked yet.} other {# more skills from the post are not checked yet.}}",
+      "uncheckedAll": "{count, plural, one {The # skill from the post is not checked yet.} other {The # skills from the post are not checked yet.}}",
+      "add": {
+        "note": "Have one of these? Add the exact words to your resume yourself. Nothing is added for you.",
+        "action": "Open your resume for this job",
+        "resume": "Open your resume"
+      }
     },
     "seniority": {
       "intern_newgrad": "Intern or new grad",
@@ -6554,6 +7471,33 @@
       "senior": "Senior",
       "lead_staff": "Lead or staff",
       "director_exec": "Director or executive"
+    },
+    "otherLanguage": {
+      "note": "The written parts of this analysis are in another language. The score is the same.",
+      "rewrite": "Rewrite them in this language",
+      "rewriting": "Rewriting…",
+      "failed": "We couldn't rewrite it. Try again."
+    },
+    "confidence": {
+      "reason": {
+        "no_skills_listed": "This post lists no skills",
+        "no_level_stated": "This post states no level",
+        "no_role_evidence": "Your resume shows no role to compare",
+        "few_details": "This post says too little to compare"
+      }
+    },
+    "requirements": {
+      "title": "What the post asks for",
+      "intro": "Each line is copied from the job post and checked against your resume.",
+      "must": "Must have",
+      "preferred": "Nice to have",
+      "count": "{met} met, {partly} partly, {notShown} not shown, of {total}",
+      "status": {
+        "met": "Met",
+        "partly": "Partly",
+        "not_shown": "Not shown in your resume"
+      },
+      "note": "AI compared each line with your resume. Check it before you rely on it."
     }
   },
   "growth": {
@@ -6761,6 +7705,11 @@
       "send": "Send",
       "thanks": "Thanks for telling us.",
       "surveyFailed": "Your answer was not sent. Try again."
+    },
+    "alertJobs": {
+      "label": "Jobs in this alert",
+      "item": "{title} at {company}",
+      "more": "{count, plural, one {And # more job in the list.} other {And # more jobs in the list.}}"
     }
   },
   "invite": {
@@ -6911,7 +7860,8 @@
       "badge": {
         "direct_from_employer": "Direct from employer",
         "sponsorship": "Visa sponsorship",
-        "new": "New"
+        "new": "New",
+        "sponsorship_provider": "{provider} lists visa sponsorship"
       },
       "quote": "The post says: “{quote}”",
       "private": "Only you can see this job"
@@ -6983,7 +7933,9 @@
       "title": "This job is no longer listed",
       "lastSeen": "Last seen {date}.",
       "kept": "Anything you saved for it stays in Applications.",
-      "similarTitle": "Similar jobs you can still apply to"
+      "similarTitle": "Similar jobs you can still apply to",
+      "boardCheck": "We checked the employer's job board when you opened this page. It no longer lists this job.",
+      "lastListed": "We last saw it listed on {date}."
     },
     "similar": {
       "title": "Similar jobs",
@@ -7188,7 +8140,7 @@
         "interviewing": "Interviewing",
         "negotiating": "Offer",
         "accepted": "Accepted",
-        "rejected": "Not selected",
+        "rejected": "Rejected",
         "withdrawn": "Withdrawn"
       }
     },
@@ -7214,7 +8166,8 @@
       "unknown": "Source not listed",
       "addedByYou": "Added by you",
       "reposted": "First posted on {name}",
-      "licence": "{holder}, HR service licence {number}"
+      "licence": "{holder}, HR service licence {number}",
+      "original": "Original posting"
     },
     "dates": {
       "updated": "Updated {date}",
@@ -7222,7 +8175,8 @@
       "lastChecked": "Last checked {date}",
       "expires": "Open until {date}",
       "expiresUnknown": "Closing date not listed",
-      "expired": "Closed on {date}"
+      "expired": "Closed on {date}",
+      "lastVerified": "Last verified {date}"
     },
     "salary": {
       "label": "Pay",
@@ -7264,7 +8218,14 @@
         "intro": "%BRAND% does not list jobs from other sites here yet. Search them yourself, then add the jobs you like so you can track them and prepare for them here.",
         "label": "What job are you looking for?",
         "placeholder": "Job title or keyword",
-        "submit": "Show search links"
+        "submit": "Show search links",
+        "thinIntro": "Only a few jobs match here. You can run the same search on other job sites, then add the jobs you like so you can track them and prepare for them here."
+      },
+      "none": "No search links are available right now.",
+      "groups": {
+        "campus": "Campus hiring and internship sites",
+        "experienced": "General job sites",
+        "campusNote": "Useful for campus hiring, internships and jobs for new graduates."
       }
     },
     "admin": {
@@ -7323,6 +8284,27 @@
         "added": "Added {date}",
         "matched": "{count, plural, =0 {No open posts matched this name. Check the spelling, or use the full company name.} one {# open post matched this name and is now flagged.} other {# open posts matched this name and are now flagged.}}"
       }
+    },
+    "fit": {
+      "logistics": "Location and pay"
+    },
+    "searchApi": {
+      "exampleNote": "Replace {origin} with the address of this site and {key} with your API key.",
+      "agentIntro": "Describe the work you want in a sentence. The request is turned into focused searches over the postings collected here. The owner of the key must have AI features turned on in their settings, and an account that signed in with WeChat needs a verified phone number. Keyword search works without either.",
+      "sources": "Results come from the postings collected here: jobs located in mainland China, read from employers' public careers pages and, when they are listed, from {sourceName}. This is not the whole market. Every result names where it was published and links to the original posting. The site operator decides whether keys can read these postings. Until that is turned on, a request made with a key returns an error. This endpoint does not submit applications.",
+      "keyScope": "A key works only on this site. It does not work on other sites."
+    },
+    "apply": {
+      "employer": "Apply on the employer's careers site",
+      "employerHint": "Opens the employer's careers site in a new tab. You send the application there.",
+      "bank": "Apply on {name}",
+      "bankHint": "Opens this job's page on {name} in a new tab. You send the application there."
+    },
+    "header": {
+      "boards": "From {count, plural, one {# employer careers site} other {# employer careers sites}}.",
+      "gohireAndBoards": "From {sourceName} and {count, plural, one {# employer careers site} other {# employer careers sites}}.",
+      "gohire": "From {sourceName}.",
+      "coverage": "These are the postings collected here, not every job on the market."
     }
   },
   "jobsTw": {
@@ -7336,19 +8318,23 @@
       "quoteLabel": "From the posting",
       "source": "Source: {name}",
       "viewPosting": "Open the original posting",
-      "postedWords": "The posting's own words: {text}"
+      "postedWords": "The posting's own words: {text}",
+      "foundThroughGoogle": "{publisher} · found through Google job search",
+      "foundThroughGoogleOnly": "Found through Google job search"
     },
     "negotiable": {
       "summary": "Why is pay not listed?",
-      "body": "The posting does not list an amount (for example, it says 面議 or 依公司規定). Taiwan's Employment Services Act, Article 5, lets an employer leave pay unlisted only when the regular monthly wage is NT$40,000 or more.",
+      "body": "The posting does not list an amount (for example, it says 面議 or 依公司規定). Taiwan's Employment Services Act, Article 5, lets an employer leave pay unlisted only when the regular monthly wage is {amount} or more. That is the amount in the law as of {asOf}.",
       "notAFigure": "That rule is for employers. It is not this job's pay, and pay that a posting does not list is never estimated here.",
       "lawLink": "Read Article 5 in the national law database",
-      "filterHint": "Jobs that say 面議 have no listed pay. Turn on “Only jobs that list pay” to hide them."
+      "filterHint": "Jobs that say 面議 have no listed pay. Turn on “Only jobs that list pay” to hide them.",
+      "bodyNoAmount": "The posting does not list an amount (for example, it says 面議 or 依公司規定). Taiwan's Employment Services Act, Article 5, lets an employer leave pay unlisted only when the regular monthly wage is at or above an amount the law sets.",
+      "sourceLink": "Read the rule at its source"
     },
     "admin": {
       "eyebrow": "Admin",
       "title": "Company job boards",
-      "subtitle": "Public company job boards, read into the job list every 6 hours. Each posting keeps its company name and a link to the original.",
+      "subtitle": "Public company job boards, read into the job list. A board that changed lately is read every 2 hours, a quiet one once or twice a day. Each posting keeps its company name and a link to the original, and lands on the site of the country it is in.",
       "notAuthorized": "Only admins can see this page.",
       "loading": "Loading…",
       "systems": "Boards can come from: {names}.",
@@ -7362,7 +8348,9 @@
         "countryHint": "Two letters, for example TW. Used only to place a posting that names a city but no country.",
         "willRead": "Reads {url}",
         "submit": "Add board",
-        "adding": "Adding…"
+        "adding": "Adding…",
+        "countries": "Countries to read (optional)",
+        "countriesHint": "Two-letter codes separated by commas, for example TW, CN. Leave empty to read every country."
       },
       "list": {
         "title": "Boards",
@@ -7374,13 +8362,17 @@
           "company": "Company",
           "system": "System",
           "board": "Board id",
-          "country": "Country",
+          "country": "City hint",
           "status": "Status",
           "lastChecked": "Last checked",
           "jobs": "Jobs at last check",
           "problem": "Last problem",
-          "actions": "Actions"
-        }
+          "actions": "Actions",
+          "origin": "Added by",
+          "countries": "Countries read",
+          "state": "State"
+        },
+        "all": "Every country"
       },
       "status": {
         "on": "On",
@@ -7395,16 +8387,19 @@
         "confirmRemove": "Remove for good",
         "cancel": "Cancel"
       },
-      "offNote": "Turning a board off or removing it takes its open jobs out of the job list. Turning it back on reads the board again.",
+      "offNote": "Turning a board off or removing it takes its open jobs out of the job list. Turning it back on reads the board again. A removed board is not picked up again from a posting's link. Add it again to bring it back.",
       "run": {
-        "queued": "{company}: the board lists {listed} jobs. They are being added to the job list now.",
-        "waiting": "{company}: the board lists {listed} jobs. They will be added at the next scheduled run.",
+        "queued": "{company}: the board lists {listed} jobs. They will be added within a few minutes.",
+        "waiting": "{company}: the board lists {listed} jobs. They will be added at the next scheduled read.",
         "error": "{company}: the board could not be read. {problem}"
       },
       "errors": {
         "duplicate": "This board is already in the list.",
         "invalid": "Check the fields and try again.",
-        "generic": "Something went wrong. Try again."
+        "generic": "Something went wrong. Try again.",
+        "otherCountries": "This board is already in the list, but it is read for other countries, so it does not show here.",
+        "otherCountriesAction": "Read it for this site too",
+        "otherCountriesDone": "{company} is now read for this site too. Its jobs will be added within a few minutes."
       },
       "problem": {
         "board_not_found": "The board was not found. Check the board id.",
@@ -7418,7 +8413,58 @@
         "server_error": "The job board system had a problem. It will be tried again later.",
         "refused": "The job board system refused the request.",
         "network": "The board could not be reached.",
-        "other": "Something went wrong while reading the board."
+        "other": "Something went wrong while reading the board.",
+        "sources_off": "Reading job boards is switched off right now.",
+        "empty_board": "The board listed no jobs when it was checked.",
+        "name_mismatch": "The board belongs to a company with a different name.",
+        "name_unconfirmed": "The board does not say which company it belongs to, so it could not be confirmed. Turn it on if it is the right one.",
+        "connector_disabled": "This job board system is switched off here, so the board is not read.",
+        "tenant_denied": "This board is on the do-not-read list. It is not read and its jobs were taken out.",
+        "tenant_floor": "This board was asked less than 30 minutes ago. Try again later."
+      },
+      "origin": {
+        "admin": "An admin",
+        "seed": "Starting list",
+        "import": "Import",
+        "discovered": "Found in a posting's link"
+      },
+      "state": {
+        "on": "On",
+        "waiting": "Waiting for its first check",
+        "notConfirmed": "Not confirmed",
+        "off": "Off",
+        "offAfterFailures": "Off after 3 failed reads"
+      },
+      "import": {
+        "title": "Add many boards",
+        "intro": "Paste a list or choose a file. Use CSV whose first line is {header} (countries separated by |), or a JSON list with the same fields. Up to 5,000 boards.",
+        "paste": "List of boards",
+        "file": "Or choose a CSV or JSON file",
+        "enable": "Turn the new boards on right away",
+        "enableHint": "Left off, each new board is checked once first and turned on only if it lists jobs and its company name matches.",
+        "submit": "Import",
+        "importing": "Importing…",
+        "summary": "{total, plural, one {# row} other {# rows}} read: {created} added, {merged} already in the list, {invalid} not added.",
+        "invalidTitle": "Rows that were not added",
+        "invalidRow": "Row {line}: {reason}",
+        "invalidMore": "{count, plural, one {And # more row.} other {And # more rows.}}",
+        "errors": {
+          "empty": "Paste a list or choose a file first.",
+          "json": "The list could not be read as JSON. Check it and try again.",
+          "tooLarge": "The list is too large. A file holds up to 5,000 boards.",
+          "invalid": "The list could not be read. Check the first line and try again.",
+          "file": "The file could not be read."
+        },
+        "reason": {
+          "unknown_job_board": "this job board system is not supported",
+          "invalid_board_id": "the board id has characters a board id cannot have",
+          "invalid_country": "a country is not a two-letter code",
+          "too_many_countries": "too many countries",
+          "company_name_too_long": "the company name is too long",
+          "duplicate_in_file": "the same board is listed earlier in the file",
+          "unreadable_row": "the row could not be read",
+          "connector_disabled": "this job board system is switched off here"
+        }
       }
     }
   },
@@ -7493,7 +8539,8 @@
       "payments": "Payments",
       "ai_models": "AI models",
       "storage": "File storage",
-      "content_safety": "Content safety checks"
+      "content_safety": "Content safety checks",
+      "push": "Push notifications"
     },
     "retention": {
       "title": "How long we keep data",
@@ -7526,7 +8573,8 @@
         "anon_alerts_unsubscribed": "Job alerts you unsubscribed from without an account (with the email address)",
         "billing_consent_records": "Records that you agreed to a plan renewing automatically or to purchase terms",
         "data_exports": "Your data export files",
-        "backups": "Database backups"
+        "backups": "Database backups",
+        "billing_consent_archive": "Proof of those records after you delete your account: your account ID, a hash of your email address, the payment customer ID, what you agreed to and when. No IP address or browser details. Kept for 3 years after you agreed, or until 1 year after your plan ended if that is later"
       }
     },
     "privacy": {
@@ -7597,7 +8645,10 @@
       "closeBody": "This service runs outside mainland China during the beta, so it cannot run without this consent. Withdrawing it closes your account now and deletes your data. This cannot be undone.",
       "closeConfirm": "Withdraw and delete my account",
       "closeKeep": "Keep my account",
-      "closing": "Your account is closed and your data is being deleted. You will be signed out."
+      "closing": "Your account is closed and your data is being deleted. You will be signed out.",
+      "textChanged": "This text has changed since you answered. Your answer was given to the earlier version.",
+      "agreeCurrent": "Agree to this text",
+      "closeBodyCrossBorder": "This service relies on providers outside mainland China, so it cannot run without this consent. Withdrawing it closes your account now and deletes your data. This cannot be undone."
     },
     "explain": {
       "title": "Why this job",
@@ -7638,6 +8689,13 @@
         "factorsNone": "Your profile is not used to sort these jobs.",
         "turnOff": "To sort jobs without your profile, turn off “Rank jobs using my profile” in Settings.",
         "turnOn": "To sort jobs by fit, turn on “Rank jobs using my profile” in Settings."
+      },
+      "quoteFromPosting": "From the posting: “{evidence}”",
+      "quoteFromResume": "From your resume: “{evidence}”",
+      "notCompared": {
+        "title_level": "Not enough to compare the role and level.",
+        "industry": "Not enough to compare the industry.",
+        "logistics": "Not enough to compare the location, pay or work setup."
       }
     },
     "processing": {
@@ -7663,7 +8721,8 @@
       "hosts": "{rule, select, mainland_only {AI addresses that are allowed (and their subdomains):} other {AI addresses that are never used (and their subdomains):}}",
       "excluded": "When a request goes through a gateway, these upstream providers are left out:",
       "colProvider": "Provider",
-      "colHost": "Address"
+      "colHost": "Address",
+      "open": "AI requests go to the model services listed under AI models. Some of them can be outside mainland China. These are the providers we can use, and the address each one uses unless we set another:"
     },
     "attributions": {
       "none": "No dataset that requires attribution is in use.",
@@ -7687,6 +8746,10 @@
       "endpointsTitle": "Where AI requests can go",
       "attributionsTitle": "Data we credit",
       "attributionsSub": "Datasets we use under a licence that asks for credit."
+    },
+    "crossBorder": {
+      "applies": "Your personal information is processed or stored by services outside mainland China. The lists on this page name them. This happens only after you agree to it separately. Withdrawing that consent closes your account and deletes your data.",
+      "none": "Your personal information is processed and stored in mainland China."
     }
   },
   "notifyCn": {
@@ -8082,7 +9145,8 @@
         "wrongType": "Use a PDF, Word or text file.",
         "pdfNeedsConsent": "This PDF can't be read without the reading option you turned off. Upload a Word or text file, or paste the text.",
         "dailyLimit": "You've added 10 resumes today. Try again tomorrow, or use one you already have.",
-        "failed": "Something went wrong while saving your resume. Try again."
+        "failed": "Something went wrong while saving your resume. Try again.",
+        "consentUnanswered": "Answer the question above first. Then choose your PDF again."
       },
       "ready": "Ready: {name}",
       "submit": "Find my jobs",
@@ -8174,7 +9238,13 @@
         "other": "Other"
       },
       "heardOther": "Tell us where",
-      "submit": "Show my jobs"
+      "submit": "Show my jobs",
+      "titleSearch": "{count, plural, one {We found # job for your search. Check these details.} other {We found # jobs for your search. Check these details.}}",
+      "titleSearchCapped": "We found {count, number}+ jobs for your search. Check these details.",
+      "titleSearchNone": "We didn't find jobs for your search yet. Adjust your search below.",
+      "titleUncounted": "Your search is saved. Check these details.",
+      "searchNote": "These are open jobs that match your search. No resume was compared, so this is not a fit count.",
+      "countNoteCompared": "Counts jobs at Good fit or better, out of the {compared, plural, one {# job} other {# jobs}} we compared with your resume."
     },
     "tour": {
       "label": "Welcome tour",
@@ -8234,7 +9304,8 @@
       "loading": "Loading…",
       "required": "Required",
       "needRequired": "Fill in the required fields to continue.",
-      "remove": "Remove {label}"
+      "remove": "Remove {label}",
+      "optional": "Optional"
     },
     "errors": {
       "save": "We couldn't save this step. Check your connection and try again.",
@@ -8264,7 +9335,12 @@
       "changeLater": "You can change any of these later in Settings.",
       "needRequired": "Tick the required boxes to continue.",
       "needChoice": "Choose On or Off for ranking to continue.",
-      "restoreError": "We couldn't load your current choices. Try again before saving."
+      "restoreError": "We couldn't load your current choices. Try again before saving.",
+      "given": "You agreed to this when you signed up.",
+      "givenOn": "You agreed to this on {date}.",
+      "requiredGiven": "You agreed to these when you signed up, so we don't ask again.",
+      "changedSinceOn": "You agreed to an earlier version of this text on {date}. The text has changed, so please read it and tick the box again.",
+      "changedSince": "You agreed to an earlier version of this text. The text has changed, so please read it and tick the box again."
     },
     "identity": {
       "title": "Which describes you?",
@@ -8330,7 +9406,9 @@
       "source": "School list: {source}, as of {date}.",
       "majorLabel": "Major",
       "majorPlaceholder": "e.g. Computer Science",
-      "sourceUnverified": "School marks come only from the 985, 211 and Double First-Class lists. This copy hasn't been checked against the official files yet."
+      "sourceUnverified": "School marks come only from the 985, 211 and Double First-Class lists. This copy hasn't been checked against the official files yet.",
+      "fullTimeYes": "Yes",
+      "fullTimeNo": "No"
     },
     "intent": {
       "title": "What are you looking for?",
@@ -8473,7 +9551,28 @@
         "school": "School career office",
         "other": "Other"
       },
-      "cta": "Start"
+      "cta": "Start",
+      "summaryTitle": "Your choices",
+      "edit": "Change",
+      "editRow": "Change {row}",
+      "notSet": "Not filled in",
+      "skipped": "Skipped",
+      "notChosen": "Not chosen",
+      "fullTime": "{answer, select, yes {Full-time program: yes} other {Full-time program: no}}",
+      "resumeAdded": "Added",
+      "resumeNone": "Not added. You can fill in your profile by hand.",
+      "rows": {
+        "identity": "You are",
+        "education": "Education",
+        "roles": "Roles",
+        "cities": "Cities",
+        "workType": "Work type",
+        "pay": "Pay",
+        "employer": "What matters to you",
+        "resume": "Resume",
+        "ai": "AI processing",
+        "ranking": "Ranking with my profile"
+      }
     },
     "resume": {
       "offTitle": "Resume reading is off",
@@ -8515,6 +9614,42 @@
         }
       },
       "start": "Start"
+    },
+    "manual": {
+      "title": "Fill in your profile by hand",
+      "subtitle": "No file is read and no AI is used. Everything here is optional, and you can add more later in My profile.",
+      "nameGroup": "Name",
+      "lastName": "Family name",
+      "firstName": "Given name",
+      "educationGroup": "Education",
+      "educationNote": "From what you entered earlier. Change it if you need to.",
+      "experienceGroup": "One experience (optional)",
+      "experienceHint": "An internship or a job. You can add more later.",
+      "kindLabel": "Type",
+      "kind": {
+        "internship": "Internship",
+        "work": "Job"
+      },
+      "company": "Company",
+      "jobTitle": "Job title",
+      "start": "Start month",
+      "end": "End month",
+      "current": "I still work here",
+      "description": "What you did",
+      "descriptionPlaceholder": "A few lines about your work and what came of it",
+      "skillsLabel": "Skills",
+      "skillsHint": "Separate skills with commas",
+      "skillsPlaceholder": "e.g. Python, SQL, Excel",
+      "save": "Save and continue",
+      "later": "Fill in later",
+      "saveError": "Some of this wasn't saved. Try again. What was already saved won't be added twice.",
+      "problem": {
+        "empty": "Fill in at least one item, or choose Fill in later.",
+        "experience": "Add the company, the job title and the type for this experience.",
+        "dateFormat": "Write each month as year and month, like 2024-03.",
+        "dates": "The end month can't be before the start month."
+      },
+      "monthPlaceholder": "YYYY-MM"
     }
   },
   "people": {
@@ -8754,7 +9889,8 @@
         "rateWords": "{rate} per 100 words",
         "top": "Used most:",
         "item": "{word} ×{count}",
-        "note": "Counted from the transcript. Speech-to-text can miss or add words."
+        "note": "Counted from the transcript. Speech-to-text can miss or add words.",
+        "noteTyped": "Counted from the answers you typed."
       },
       "how": {
         "summary": "How these checks work",
@@ -9481,7 +10617,7 @@
       "point_list": "A weekly list of jobs that fit your search. You can add any job yourself.",
       "point_kit": "For each job you choose, a kit: your resume tailored to the post, a cover letter when the post asks for one, and your saved answers.",
       "point_review": "You check every kit before you use it. Anything new in your resume must be confirmed by you.",
-      "point_open": "You open the application on the company's site and send it yourself.",
+      "point_open": "You open the application page and send the application yourself.",
       "start": "Set up Ready to apply",
       "continue": "Continue setup"
     },
@@ -9677,7 +10813,10 @@
         "more": "Show 3 more",
         "noteLabelOther": "What's wrong with it?",
         "needReason": "Pick a reason to save.",
-        "needNote": "Write a few words to save."
+        "needNote": "Write a few words to save.",
+        "later": "Rate jobs later",
+        "laterNote": "You can go on with setup and rate jobs later.",
+        "noFeed": "There are no jobs to rate here yet."
       },
       "extension": {
         "lead": "The browser extension fills in application forms with your profile and answers when you ask. You check the form and send it yourself.",
@@ -9790,7 +10929,8 @@
         "use": "Use in this kit",
         "asIs": "This kit uses your resume as it is.",
         "openAsIs": "Open resume",
-        "loadFailed": "The tailored resume couldn't be loaded. Reload the page to try again."
+        "loadFailed": "The tailored resume couldn't be loaded. Reload the page to try again.",
+        "fitNote": "“Before” and “After” show your fit when this resume was tailored. The fit next to the job title is today's, so the two can differ."
       },
       "letter": {
         "title": "Cover letter",
@@ -9832,7 +10972,9 @@
         "seeApplication": "See it in Applications",
         "noLink": "This job has no application link. If you applied another way, mark it here.",
         "iApplied": "I applied",
-        "changeInApplications": "Change the status in Applications"
+        "changeInApplications": "Change the status in Applications",
+        "leadNeutral": "Opens the application page in a new tab and moves this job to Applied.",
+        "host": "The page is on {host}."
       },
       "practice": {
         "title": "Practice for this job",
@@ -10300,7 +11442,8 @@
       "previous": "Last time: {label}, {score} of 100",
       "row": "{before} → {after}",
       "fixed": "Fixed since last time",
-      "same": "No change in the issue counts yet."
+      "same": "No change in the issue counts yet.",
+      "notChecked": "Not checked this time"
     },
     "detail": {
       "why": "Why it matters",
@@ -10518,6 +11661,11 @@
         "title": "Photo (optional)",
         "why": "A photo is optional. Some employers ask for one; many do not.",
         "how": "Keep a recent, professional photo only if the employer asks for one."
+      },
+      "placeholder_unfilled": {
+        "title": "Unfilled blank: {placeholder}",
+        "why": "This line still has a blank where your own number goes. A reader would see the brackets.",
+        "how": "Put in the real number, or rewrite the line without it. Never guess a figure."
       }
     },
     "typeName": {
@@ -10546,11 +11694,13 @@
       "cn_internship_missing": "Internship (实习)",
       "cn_english_cert_missing": "English certificate",
       "cn_personal_details_optional": "Optional personal details",
-      "cn_photo_optional": "Photo"
+      "cn_photo_optional": "Photo",
+      "placeholder_unfilled": "Unfilled blanks"
     },
     "focus": {
       "gone": "The issue you opened is not in the latest check. It may already be fixed."
-    }
+    },
+    "carried": "From your last check. Not checked again this time."
   },
   "seo": {
     "breadcrumb": {
@@ -10681,7 +11831,9 @@
         "title": "This job is no longer listed",
         "body": "It may have closed, or the source removed it.",
         "home": "Go to the home page"
-      }
+      },
+      "lastChecked": "Last checked {date}",
+      "licence": "{holder}, HR service licence {number}"
     },
     "ticker": {
       "title": "Just found",
@@ -10838,6 +11990,11 @@
       "chosenLabel": "Tailoring for:",
       "chosenWithCompany": "{title} at {company}",
       "change": "Change job"
+    },
+    "fit": {
+      "yours": "Your fit",
+      "withVersion": "With this version",
+      "note": "Your fit on the job page stays the one for your main resume until you make this version your main resume."
     }
   },
   "taxonomy": {
@@ -10921,6 +12078,238 @@
       "trades": "Skilled trades and transport",
       "food_service": "Food service",
       "hotel_travel": "Hotels and travel"
+    },
+    "roles": {
+      "software_engineer": "Software engineer",
+      "backend_engineer": "Backend engineer",
+      "fullstack_engineer": "Full-stack engineer",
+      "platform_engineer": "Platform engineer",
+      "blockchain_engineer": "Blockchain engineer",
+      "frontend_engineer": "Frontend engineer",
+      "web_developer": "Web developer",
+      "ios_engineer": "iOS engineer",
+      "android_engineer": "Android engineer",
+      "mobile_engineer": "Mobile engineer",
+      "game_developer": "Game developer",
+      "qa_engineer": "QA engineer",
+      "sdet": "Test automation engineer",
+      "embedded_software_engineer": "Embedded software engineer",
+      "systems_software_engineer": "Systems software engineer",
+      "tech_lead": "Tech lead",
+      "engineering_manager": "Engineering manager",
+      "engineering_director": "Director of engineering / CTO",
+      "software_architect": "Software architect",
+      "data_scientist": "Data scientist",
+      "data_analyst": "Data analyst",
+      "product_analyst": "Product analyst",
+      "bi_analyst": "Business intelligence analyst",
+      "statistician": "Statistician",
+      "data_engineer": "Data engineer",
+      "analytics_engineer": "Analytics engineer",
+      "database_administrator": "Database administrator",
+      "data_architect": "Data architect",
+      "ml_engineer": "Machine learning engineer",
+      "ai_research_scientist": "AI research scientist",
+      "nlp_engineer": "NLP and LLM engineer",
+      "cv_engineer": "Computer vision engineer",
+      "recsys_engineer": "Search and recommendation engineer",
+      "mlops_engineer": "MLOps engineer",
+      "data_annotator": "Data annotation specialist",
+      "devops_engineer": "DevOps engineer",
+      "sre": "Site reliability engineer",
+      "cloud_engineer": "Cloud engineer",
+      "infrastructure_engineer": "Infrastructure engineer",
+      "sysadmin": "Systems administrator",
+      "network_engineer": "Network engineer",
+      "it_support": "IT support specialist",
+      "it_manager": "IT manager",
+      "it_project_manager": "IT project manager",
+      "systems_analyst": "Systems analyst",
+      "erp_consultant": "ERP consultant",
+      "security_engineer": "Security engineer",
+      "penetration_tester": "Penetration tester",
+      "security_analyst": "Security analyst",
+      "security_architect": "Security architect",
+      "security_compliance": "Security compliance analyst",
+      "security_leader": "Head of security / CISO",
+      "product_manager": "Product manager",
+      "technical_product_manager": "Technical product manager",
+      "ai_product_manager": "AI product manager",
+      "product_director": "Head of product",
+      "program_manager": "Program manager",
+      "project_manager": "Project manager",
+      "scrum_master": "Scrum master",
+      "product_designer": "Product designer",
+      "ux_designer": "UX designer",
+      "ui_designer": "UI designer",
+      "ux_researcher": "UX researcher",
+      "design_manager": "Design manager",
+      "graphic_designer": "Graphic designer",
+      "motion_designer": "Motion designer and animator",
+      "illustrator": "Illustrator",
+      "game_artist": "Game artist",
+      "game_designer": "Game designer",
+      "industrial_designer": "Industrial designer",
+      "interior_designer": "Interior designer",
+      "architect": "Architect",
+      "hardware_engineer": "Hardware engineer",
+      "electrical_engineer": "Electrical engineer",
+      "electronics_engineer": "Electronics engineer",
+      "chip_design_engineer": "Chip design engineer",
+      "chip_verification_engineer": "Chip verification engineer",
+      "semiconductor_process_engineer": "Semiconductor process engineer",
+      "robotics_engineer": "Robotics engineer",
+      "controls_engineer": "Controls and automation engineer",
+      "autonomous_driving_engineer": "Autonomous driving engineer",
+      "mechanical_engineer": "Mechanical engineer",
+      "manufacturing_engineer": "Manufacturing engineer",
+      "industrial_engineer": "Industrial engineer",
+      "quality_engineer": "Quality engineer",
+      "civil_engineer": "Civil engineer",
+      "construction_manager": "Construction manager",
+      "mep_engineer": "MEP engineer",
+      "cost_estimator": "Cost estimator / quantity surveyor",
+      "chemical_engineer": "Chemical engineer",
+      "energy_engineer": "Energy engineer",
+      "environmental_engineer": "Environmental and EHS engineer",
+      "materials_engineer": "Materials engineer",
+      "aerospace_engineer": "Aerospace engineer",
+      "automotive_engineer": "Automotive engineer",
+      "marketing_manager": "Marketing manager",
+      "marketing_specialist": "Marketing specialist",
+      "brand_manager": "Brand manager",
+      "product_marketing_manager": "Product marketing manager",
+      "market_research_analyst": "Market research analyst",
+      "pr_specialist": "Communications and PR specialist",
+      "event_planner": "Event planner",
+      "digital_marketing_manager": "Digital marketing manager",
+      "seo_specialist": "SEO specialist",
+      "growth_marketer": "Growth marketer",
+      "content_marketer": "Content marketing manager",
+      "social_media_manager": "Social media manager",
+      "ecommerce_manager": "E-commerce manager",
+      "user_operations": "User operations specialist",
+      "content_operations": "Content operations specialist",
+      "product_operations": "Product operations specialist",
+      "live_commerce_operations": "Live commerce operations specialist",
+      "content_moderator": "Content moderator",
+      "account_executive": "Account executive",
+      "sdr": "Sales development representative",
+      "account_manager": "Account manager",
+      "sales_manager": "Sales manager",
+      "sales_engineer": "Sales engineer",
+      "retail_sales": "Retail sales associate",
+      "store_manager": "Store manager",
+      "real_estate_agent": "Real estate agent",
+      "insurance_agent": "Insurance agent",
+      "bd_manager": "Business development manager",
+      "partnerships_manager": "Partnerships and channel manager",
+      "customer_service_rep": "Customer service representative",
+      "technical_support_engineer": "Technical support engineer",
+      "customer_service_manager": "Customer service manager",
+      "customer_success_manager": "Customer success manager",
+      "onboarding_specialist": "Customer onboarding specialist",
+      "accountant": "Accountant",
+      "auditor": "Auditor",
+      "bookkeeper": "Bookkeeper and AP/AR specialist",
+      "tax_specialist": "Tax specialist",
+      "finance_leader": "Finance manager / controller",
+      "financial_analyst": "Financial analyst",
+      "investment_analyst": "Investment analyst",
+      "investment_banker": "Investment banking analyst",
+      "quant_analyst": "Quantitative analyst",
+      "risk_analyst": "Risk and credit analyst",
+      "actuary": "Actuary",
+      "financial_advisor": "Financial advisor",
+      "loan_officer": "Loan officer",
+      "bank_teller": "Bank teller",
+      "trader": "Trader",
+      "operations_manager": "Operations manager",
+      "operations_analyst": "Operations analyst",
+      "facilities_manager": "Facilities manager",
+      "supply_chain_manager": "Supply chain manager",
+      "logistics_coordinator": "Logistics coordinator",
+      "buyer": "Buyer and procurement specialist",
+      "warehouse_manager": "Warehouse manager",
+      "import_export": "Import and export specialist",
+      "hr_generalist": "HR generalist",
+      "hrbp": "HR business partner",
+      "hr_manager": "HR manager",
+      "compensation_benefits": "Compensation and benefits specialist",
+      "learning_development": "Learning and development specialist",
+      "employee_relations": "Employee relations specialist",
+      "recruiter": "Recruiter",
+      "talent_acquisition_manager": "Talent acquisition manager",
+      "lawyer": "Lawyer",
+      "in_house_counsel": "In-house counsel",
+      "paralegal": "Paralegal",
+      "ip_specialist": "Intellectual property specialist",
+      "compliance_officer": "Compliance officer",
+      "regulatory_affairs": "Regulatory affairs specialist",
+      "privacy_specialist": "Privacy specialist",
+      "physician": "Physician",
+      "registered_nurse": "Registered nurse",
+      "nurse_practitioner": "Nurse practitioner",
+      "pharmacist": "Pharmacist",
+      "physical_therapist": "Physical or occupational therapist",
+      "dentist": "Dentist",
+      "medical_technologist": "Medical lab and imaging technologist",
+      "psychologist": "Psychologist or therapist",
+      "healthcare_administrator": "Healthcare administrator",
+      "medical_coder": "Medical coder and biller",
+      "medical_sales_rep": "Medical sales representative",
+      "clinical_research_associate": "Clinical research associate",
+      "biomedical_scientist": "Biomedical research scientist",
+      "chemist": "Chemist",
+      "biomedical_engineer": "Biomedical engineer",
+      "bioinformatics_scientist": "Bioinformatics scientist",
+      "school_teacher": "School teacher",
+      "tutor": "Tutor",
+      "language_teacher": "Language teacher",
+      "early_childhood_teacher": "Early childhood teacher",
+      "professor": "Professor or lecturer",
+      "special_education_teacher": "Special education teacher",
+      "instructional_designer": "Instructional designer",
+      "academic_advisor": "Academic or career advisor",
+      "education_administrator": "Education administrator",
+      "postdoc": "Postdoctoral researcher",
+      "research_assistant": "Research assistant",
+      "economist": "Economist or policy researcher",
+      "management_consultant": "Management consultant",
+      "business_analyst": "Business analyst",
+      "strategy_manager": "Strategy manager",
+      "policy_analyst": "Policy and public affairs",
+      "civil_servant": "Civil servant",
+      "nonprofit_program_manager": "Nonprofit program manager",
+      "social_worker": "Social worker",
+      "administrative_assistant": "Administrative assistant",
+      "executive_assistant": "Executive assistant",
+      "office_manager": "Office manager",
+      "receptionist": "Receptionist",
+      "data_entry_clerk": "Data entry and office clerk",
+      "copywriter": "Copywriter",
+      "technical_writer": "Technical writer",
+      "editor": "Editor",
+      "journalist": "Journalist",
+      "translator": "Translator or interpreter",
+      "video_editor": "Video editor",
+      "photographer": "Photographer or videographer",
+      "content_creator": "Content creator",
+      "producer": "Producer",
+      "production_supervisor": "Production supervisor",
+      "machine_operator": "Machine operator",
+      "quality_inspector": "Quality inspector",
+      "cnc_machinist": "CNC machinist",
+      "electrician": "Electrician",
+      "maintenance_technician": "Maintenance technician",
+      "welder": "Welder",
+      "driver": "Driver and courier",
+      "chef": "Chef or cook",
+      "restaurant_manager": "Restaurant manager",
+      "server": "Server, barista or bartender",
+      "hotel_manager": "Hotel manager",
+      "travel_consultant": "Travel consultant",
+      "flight_attendant": "Flight attendant"
     }
   },
   "tools": {
@@ -10978,7 +12367,9 @@
       "readingService": "The file may be sent to {service}, the resume-reading service %BRAND% uses, on servers in mainland China.",
       "offshore": "During the beta, this is processed outside mainland China, in the United States.",
       "whereUnknown": "Who reads it and where it is processed is set out in the privacy notice.",
-      "privacyLink": "Privacy notice"
+      "privacyLink": "Privacy notice",
+      "labelAi": "I agree that %BRAND% reads this resume with automated software, including an AI model, to make this report. It is deleted after {hours} hours unless I create an account.",
+      "outsideMainland": "It is processed outside mainland China by the service providers named in the privacy notice."
     },
     "allowance": {
       "left": "{count, plural, =0 {No free checks left today} one {# free check left today} other {# free checks left today}}",
@@ -11179,9 +12570,15 @@
       "errors": {
         "rateLimited": "That's the limit for questions without an account. Create a free account to keep asking.",
         "unavailable": "The assistant is not available right now.",
-        "generic": "Something went wrong. Try again."
+        "generic": "Something went wrong. Try again.",
+        "consent": "Tick the box above first. %BRAND% answers with AI only after you agree."
       },
-      "signupCta": "Create a free account"
+      "signupCta": "Create a free account",
+      "consent": {
+        "label": "I agree that %BRAND% sends my questions to an AI model to answer them.",
+        "detail": "The AI service that answers may process your question outside mainland China. Nothing you type here is saved.",
+        "privacyLink": "Privacy notice"
+      }
     },
     "alerts": {
       "eyebrow": "Free tool",
@@ -11242,6 +12639,30 @@
       "error": "We couldn't check this link. Try again.",
       "retry": "Try again",
       "seeJobs": "Create a free account"
+    }
+  },
+  "companyFacts": {
+    "sponsorship": {
+      "title": "Visa sponsorship records for {company}",
+      "intro": "Public records about this employer. Each line names its source and date.",
+      "fact": {
+        "dolLca": "{count, plural, one {# H-1B labor condition application} other {# H-1B labor condition applications}} certified in fiscal year {year}",
+        "uscis": "{approvals, plural, one {# H-1B petition} other {# H-1B petitions}} approved and {denials, number} denied in fiscal year {year}",
+        "uk": "Licensed sponsor on the UK register",
+        "ukRating": "Type and rating: {rating}",
+        "ukRoutes": "{count, plural, one {Route} other {Routes}}: {routes}",
+        "ukTown": "Town: {town}"
+      },
+      "earlier": "{count, plural, one {# record from an earlier fiscal year} other {# records from earlier fiscal years}}",
+      "listedAs": "Listed as {name}",
+      "source": "Source: <link>{name}</link>",
+      "file": "File: {file}",
+      "dated": {
+        "published": "as of {date}",
+        "imported": "file imported {date}"
+      },
+      "usNote": "A certified application is not a visa approval or a hire. Petition counts are first decisions and cover new and continuing employment.",
+      "disclaimer": "These are public records about the employer, not about this job. Past filings or a sponsor license do not mean this employer will sponsor this role."
     }
   }
 }

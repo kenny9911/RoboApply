@@ -1,33 +1,3 @@
 {
-  "legal": {
-    "consents": {
-      "textChanged": "This text has changed since you answered. Your answer was given to the earlier version.",
-      "agreeCurrent": "Agree to this text",
-      "closeBodyCrossBorder": "This service relies on providers outside mainland China, so it cannot run without this consent. Withdrawing it closes your account now and deletes your data. This cannot be undone."
-    },
-    "processors": {
-      "push": "Push notifications"
-    },
-    "llmEndpoints": {
-      "open": "AI requests go to the model services listed under AI models. Some of them can be outside mainland China. These are the providers we can use, and the address each one uses unless we set another:"
-    },
-    "crossBorder": {
-      "applies": "Your personal information is processed or stored by services outside mainland China. The lists on this page name them. This happens only after you agree to it separately. Withdrawing that consent closes your account and deletes your data.",
-      "none": "Your personal information is processed and stored in mainland China."
-    },
-    "explain": {
-      "quoteFromPosting": "From the posting: “{evidence}”",
-      "quoteFromResume": "From your resume: “{evidence}”",
-      "notCompared": {
-        "title_level": "Not enough to compare the role and level.",
-        "industry": "Not enough to compare the industry.",
-        "logistics": "Not enough to compare the location, pay or work setup."
-      }
-    },
-    "retention": {
-      "rows": {
-        "billing_consent_archive": "Proof of those records after you delete your account: your account ID, a hash of your email address, the payment customer ID, what you agreed to and when. No IP address or browser details. Kept for 3 years after you agreed, or until 1 year after your plan ended if that is later"
-      }
-    }
-  }
+  "legal": {}
 }

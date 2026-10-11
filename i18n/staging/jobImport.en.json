@@ -1,9 +1,3 @@
 {
-  "jobImport": {
-    "list": {
-      "status": {
-        "rejected": "Rejected"
-      }
-    }
-  }
+  "jobImport": {}
 }

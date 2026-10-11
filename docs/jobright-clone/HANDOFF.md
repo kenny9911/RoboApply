@@ -42,7 +42,19 @@ Last full gate run (M5, 2026-10-12, after the cross-review fix pass): `npx prism
 
 **The M5 gate is done (steps 1 and 2 below).** The 13 tests that were red at the seams between bundles are green: one was fixed in code (`normalize/ats.ts`: the posting-key rule covers the nine board systems), twelve on the test side (they pinned the tree before M5). The gate also applied the small requests the bundles addressed to the orchestrator, added `server/src/features/m5Seams.test.ts`, and wrote what stays open to `requests/waveM5-carryover.md`, by who must act. The gate's cross-review (three medium and nine low findings) is resolved as well: what was fixed and what was carried is in `requests/waveM5-carryover.md` ("Applied after the cross-review of the gate", fix package X1 to X4).
 
-The gate session did not commit. If `git status --short` still shows changes, commit and push them first: at the end of the gate it showed 84 paths (80 modified, 4 new: `docs/jobright-clone/requests/waveM5-carryover.md`, `hooks/job/useAddToReady.test.tsx`, `lib/api/contracts/tw.ts`, `server/src/features/m5Seams.test.ts`), and all 84 are the gate's (67 from the gate, 17 more from its cross-review fix pass). They are listed one per line at the end of `requests/waveM5-carryover.md` ("Paths the gate left uncommitted"): stage exactly those, by path. A path `git status` shows that is not on that list is another session's work: leave it. **Start at step 3** (merge and translate the staged strings).
+The M5 gate is committed and pushed as `4e449f6` (the paragraph about uncommitted gate paths no longer applies).
+
+**Step 3 is in progress (2026-10-12).** Done: `node scripts/i18n-merge-staging.mjs` was run (1,171 new and 30 changed keys are in `i18n/messages/en.json`; GoApply Chinese is in `zh.json`; staging is reset) and committed. So `npm run check` is RED on this commit with `missing-key` violations in the eight other locales until the translations are applied: that is expected, and it is the only thing red. To do: translate the gap and apply it.
+
+```bash
+python3 docs/jobright-clone/orch/make-delta-chunks.py --size 450     # real gap per locale -> .i18n-work/in/<kind>/<locale>/<nn>.json (8,412 strings in 39 chunks on 2026-10-12)
+# one translator per chunk writes .i18n-work/out/<kind>/<locale>/<nn>.json with the same key structure
+node docs/jobright-clone/orch/apply-translations.mjs "$PWD" .i18n-work/out        # validates and merges; exit 1 lists rejected leaves
+python3 docs/jobright-clone/orch/make-delta-chunks.py --size 450     # run again: prints nothing to translate when the gap is closed
+npm run check && npx vitest run --exclude ".claude/**"
+```
+
+`.i18n-work/` is local and not in git. If chunks already exist under `.i18n-work/out`, apply them before making new ones (the chunker moves older `in/` and `out/` folders aside to `prev-*`, it does not delete them). **Start at step 3, "translate the gap"**, unless a later line says the translations are committed.
 
 ## 4. What remains, in order
 

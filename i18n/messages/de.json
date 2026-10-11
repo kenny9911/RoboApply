@@ -1181,15 +1181,11 @@
           "length": "Wie lange soll es dauern?"
         },
         "done": "Fertig",
-        "costShort": "{n} Credits — mehr als du hast",
         "useShorter": "Lieber {minutes} Min.",
         "previewToggle": "Vorschau auf mögliche Fragen"
       },
       "loading": "Vorbereitung wird geladen…",
       "startError": "Dieses Gespräch konnte nicht gestartet werden. Versuch es erneut.",
-      "creditCost": "Kostet {n} Credits",
-      "creditsRemaining": "{n} Credits übrig",
-      "insufficientCredits": "Dieses Gespräch braucht {required} Credits, du hast {balance}. Hol dir Credits, um weiterzumachen.",
       "getCredits": "Credits holen",
       "brief_line": "Deine Gesprächsperson ist auf {topic} vorbereitet.",
       "first_free": "Dein erstes vollständiges Übungsgespräch ist kostenlos.",
@@ -2959,7 +2955,6 @@
           "q": "Was bedeutet die Passgenauigkeit?"
         },
         "q4": {
-          "a": "Von Anbietern von Stellenanzeigen und von Recruitern, die auf unseren Partnerseiten veröffentlichen. Jeder Job zeigt seine Quelle und wann er zuletzt geprüft wurde.",
           "q": "Woher kommen die Jobs?"
         },
         "q5": {
@@ -3114,10 +3109,8 @@
         "body": "Jobs, die denen ähneln, die du dir gemerkt oder geöffnet hast, rücken nach oben. Jobs, die denen ähneln, die du ausgeblendet hast, rücken nach unten. Ältere Aktionen zählen weniger.",
         "title": "Woran du Interesse gezeigt hast"
       },
-      "cnNote": "Sind auf %BRAND% personalisierte Empfehlungen ausgeschaltet oder noch nicht gewählt, werden Jobs nur nach Datum und deinen Filtern sortiert.",
       "factorsTitle": "Die vier Faktoren",
       "fit": {
-        "body": "Deine Passgenauigkeit für den Job, auf einer Skala bis 100. Liegt noch keine vollständige Passungsanalyse vor, wird eine schnelle Einschätzung verwendet, die etwas weniger zählt.",
         "title": "Passung zu deinem Lebenslauf und deiner Suche"
       },
       "fitParts": {
@@ -3132,7 +3125,6 @@
         "weight": "{pct} % der Passgenauigkeit"
       },
       "freshness": {
-        "body": "Neuere Anzeigen kommen zuerst. Der Effekt nimmt über etwa drei Tage ab.",
         "title": "Aktualität"
       },
       "goalIntro": "Das Karriereziel, das du beim Einrichten deines Kontos gewählt hast, gibt Jobs, die dazu passen, zusätzliche Punkte.",
@@ -3152,10 +3144,7 @@
       "never3": "Jobs, die als möglicher Betrug markiert sind, werden aus der Liste genommen, bis sie geprüft sind.",
       "never4": "Dein Foto, dein Alter, dein Geschlecht oder Angaben zu deiner Familie.",
       "neverTitle": "Was nie ins Ranking einfließt",
-      "otherSorts": "„Neueste“, „Beste Passung“ und „Höchstes Gehalt“ sortieren nur nach diesem einen Merkmal.",
       "otherSortsTitle": "Andere Sortierungen",
-      "pointsNote": "Jeder Job bekommt aus den vier Faktoren einen Ranking-Wert auf einer Skala bis 100. Die Regeln und Ziele unten geben zusätzliche Punkte auf diesen Wert oder verschieben Jobs innerhalb der Liste.",
-      "pointsNoteRules": "Jeder Job bekommt aus den vier Faktoren einen Ranking-Wert auf einer Skala bis 100. Die Regel unten gibt zusätzliche Punkte auf diesen Wert.",
       "rules": {
         "skillsBoost": {
           "body": "Wenn Fähigkeiten der einzige Filter sind, der deine Liste eingrenzt, stehen Jobs, die mehr deiner gewählten Fähigkeiten verlangen, bei „Empfohlen“ weiter oben, und zwar im Verhältnis dazu, wie viele davon der Job verlangt.",
@@ -3695,12 +3684,10 @@
         "check": "Letzte Zahlung prüfen",
         "deadline": "Erstattungsfrist endet am {at}",
         "eligible": "Kann erstattet werden",
-        "issueElsewhere": "Veranlasse die Erstattung beim Zahlungsanbieter und vermerk sie dann im Datensatz der Person.",
         "loading": "Wird geladen…",
         "noCharge": "Keine abgeschlossene Zahlung gefunden.",
         "notEligible": "Kann nicht erstattet werden",
         "rule": "Regel: {rule}",
-        "sub": "Was die veröffentlichten Erstattungsregeln zur letzten Zahlung dieser Person sagen. Das ist nur eine Prüfung: Erstattungen werden beim Zahlungsanbieter veranlasst.",
         "title": "Erstattungsprüfung"
       },
       "reports": {
@@ -3827,14 +3814,8 @@
           "scoresDetail": "Gemessen am Tagesbudget"
         },
         "providers": {
-          "calls": "Aufrufe",
-          "empty": "Heute keine Anbieteraufrufe.",
           "errors": "Fehler",
-          "new": "Neue Jobs",
-          "provider": "Anbieter",
-          "returned": "Gelieferte Jobs",
-          "sub": "Aufrufe gemessen am Tageslimit jedes Anbieters, UTC-Tag {day}.",
-          "title": "Job-Anbieter heute"
+          "provider": "Anbieter"
         },
         "queue": {
           "dead": "Aufgegeben",
@@ -3875,7 +3856,6 @@
   "jobSearch": {
     "eyebrow": "Dein Agent für die Jobsuche",
     "title": "Jobsuche",
-    "intro": "Beschreibe die Arbeit, die du suchst. Dein Wunsch wird in gezielte Suchanfragen für die verbundenen Jobquellen übersetzt. LinkedIn-Anzeigen werden einbezogen, wenn sie verfügbar sind.",
     "back": "Deine passenden Jobs",
     "developers": "API nutzen",
     "query": "Stelle oder Suchbegriffe",
@@ -6006,7 +5986,6 @@
     },
     "error": "Wir konnten die Passung für diesen Job nicht laden. Versuch es erneut.",
     "keywordCheck": {
-      "count": "{found} von {total} in deinem Lebenslauf genannt",
       "error": "Wir konnten die Schlagwortprüfung nicht durchführen. Versuch es erneut.",
       "intro": "Anforderungen aus der Stellenanzeige, abgeglichen mit deinem Lebenslauf. Das sind dieselben Teile, die auch die Passgenauigkeit verwendet.",
       "loading": "Dein Lebenslauf wird geprüft…",
@@ -6680,7 +6659,6 @@
         "bookmarked": "Gemerkt",
         "interviewing": "Im Gespräch",
         "negotiating": "Angebot",
-        "rejected": "Absage",
         "withdrawn": "Zurückgezogen"
       },
       "typed": "Von dir eingetippt",
@@ -6748,7 +6726,6 @@
           "actions": "Aktionen",
           "board": "ID der Karriereseite",
           "company": "Unternehmen",
-          "country": "Land",
           "jobs": "Jobs bei der letzten Prüfung",
           "lastChecked": "Zuletzt geprüft",
           "problem": "Letztes Problem",
@@ -6763,7 +6740,6 @@
       },
       "loading": "Wird geladen…",
       "notAuthorized": "Nur Admins können diese Seite sehen.",
-      "offNote": "Wenn du eine Karriereseite ausschaltest oder entfernst, verschwinden ihre offenen Jobs aus der Jobliste. Wenn du sie wieder einschaltest, wird sie erneut gelesen.",
       "problem": {
         "board_not_found": "Die Karriereseite wurde nicht gefunden. Prüf die ID der Karriereseite.",
         "network": "Die Karriereseite war nicht erreichbar.",
@@ -6779,15 +6755,12 @@
         "unsupported_job_board": "Dieses System für Karriereseiten wird nicht unterstützt."
       },
       "run": {
-        "error": "{company}: Die Karriereseite konnte nicht gelesen werden. {problem}",
-        "queued": "{company}: Die Karriereseite listet {listed} Jobs. Sie werden jetzt zur Jobliste hinzugefügt.",
-        "waiting": "{company}: Die Karriereseite listet {listed} Jobs. Sie werden beim nächsten geplanten Durchlauf hinzugefügt."
+        "error": "{company}: Die Karriereseite konnte nicht gelesen werden. {problem}"
       },
       "status": {
         "off": "Aus",
         "on": "An"
       },
-      "subtitle": "Öffentliche Karriereseiten von Unternehmen, die alle 6 Stunden in die Jobliste eingelesen werden. Jede Anzeige behält den Namen ihres Unternehmens und einen Link zum Original.",
       "systems": "Karriereseiten können aus diesen Systemen kommen: {names}.",
       "title": "Karriereseiten von Unternehmen"
     },
@@ -6804,7 +6777,6 @@
       "viewPosting": "Originalanzeige öffnen"
     },
     "negotiable": {
-      "body": "Die Anzeige nennt keinen Betrag (zum Beispiel steht dort 面議 oder 依公司規定). Nach Artikel 5 des taiwanischen Arbeitsvermittlungsgesetzes (Employment Services Act) darf ein Arbeitgeber das Gehalt nur dann weglassen, wenn der regelmäßige Monatslohn NT$40.000 oder mehr beträgt.",
       "filterHint": "Jobs mit der Angabe 面議 haben kein angegebenes Gehalt. Schalte „Nur Jobs mit Gehaltsangabe“ ein, um sie auszublenden.",
       "lawLink": "Artikel 5 in der nationalen Gesetzesdatenbank lesen",
       "notAFigure": "Diese Regel gilt für Arbeitgeber. Sie ist nicht das Gehalt dieses Jobs, und ein Gehalt, das in einer Anzeige nicht steht, wird hier nie geschätzt.",
@@ -8525,7 +8497,6 @@
       "lead": "Jede Woche wählt %BRAND% Jobs aus deiner Suche aus. Du entscheidest, für welche ein Paket vorbereitet wird.",
       "point_kit": "Für jeden Job, den du auswählst, ein Paket: dein Lebenslauf, angepasst an die Stellenanzeige, ein Anschreiben, wenn die Anzeige eines verlangt, und deine gespeicherten Antworten.",
       "point_list": "Eine Wochenliste mit Jobs, die zu deiner Suche passen. Du kannst jeden Job auch selbst hinzufügen.",
-      "point_open": "Du öffnest die Bewerbung auf der Seite des Unternehmens und sendest sie selbst ab.",
       "point_review": "Du prüfst jedes Paket, bevor du es nutzt. Alles, was in deinem Lebenslauf neu ist, musst du selbst bestätigen.",
       "start": "„Bereit zum Bewerben“ einrichten",
       "title": "Bereite jede Bewerbung vor und sende sie dann selbst ab"

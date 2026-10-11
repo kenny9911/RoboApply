@@ -44,7 +44,9 @@
       "bodyManual": "{plan} ends on {date}. It does not renew and nothing will be charged. Buy another pass if you want to keep Pro.",
       "ctaManual": "See passes",
       "bodyManualLegacy": "{plan} ends on {date}. It does not renew and nothing will be charged. See the current plans if you want to keep practicing.",
-      "ctaManualLegacy": "See plans"
+      "ctaManualLegacy": "See plans",
+      "goapplyLine": "In mainland China? You can pay in RMB with Alipay on %OTHER_BRAND%.",
+      "ctaGoapply": "See %OTHER_BRAND% prices"
     },
     "annualReminder": {
       "subject": "Your %BRAND% subscription is still active",
@@ -79,6 +81,13 @@
       "body": "The payment of {price} for {plan} failed. We will try again over the next few days.",
       "keep": "Update your payment method to keep your plan. If the last try fails, your account moves to Free. Credits you already have stay yours.",
       "cta": "Update payment method"
+    },
+    "paymentActionRequired": {
+      "subject": "Confirm your %BRAND% payment",
+      "heading": "Your bank needs you to confirm this payment",
+      "body": "The payment of {price} for {plan} is waiting for your confirmation. Open the payment page to finish it. Nothing is charged until you confirm.",
+      "bodyNoPlan": "A payment of {price} is waiting for your confirmation. Open the payment page to finish it. Nothing is charged until you confirm.",
+      "cta": "Confirm payment"
     }
   },
   "accountV2": {
@@ -148,7 +157,8 @@
       "heading": "Your account is scheduled for deletion",
       "body": "You asked us to delete your %BRAND% account. You have been signed out everywhere and can no longer sign in.",
       "when": "We delete your account and its data within {days} days. Backups are cleared within 90 days after that.",
-      "notYou": "If you did not ask for this, reply to this email or contact support right away."
+      "notYou": "If you did not ask for this, reply to this email or contact support right away.",
+      "renewalStopped": "Your paid plan will not renew, and you will not be charged for it again."
     }
   },
   "coaching": {
@@ -222,7 +232,8 @@
       "payPerMonth": "{amount} a month",
       "payPerWeek": "{amount} a week",
       "payPerDay": "{amount} a day",
-      "payPerHour": "{amount} an hour"
+      "payPerHour": "{amount} an hour",
+      "tierEstimate": "{tier} · Quick estimate"
     },
     "jobAlertInstant": {
       "subject": "{count, plural, one {# new job} other {# new jobs}} for \"{search}\"",
@@ -465,6 +476,32 @@
         "preheader": "New jobs for your alert."
       },
       "searchAny": "any job"
+    }
+  },
+  "billingRefunds": {
+    "refundIssued": {
+      "subject": "Your %BRAND% refund of {amount}",
+      "heading": "We refunded your payment",
+      "bodyFull": "We refunded {amount} for {plan}. That is the full amount you paid.",
+      "bodyPartial": "We refunded {amount} of your payment for {plan}.",
+      "bodyRest": "We refunded {amount} for {plan}. With the earlier refunds, your payment is now refunded in full.",
+      "method": "The money goes back to the payment method you paid with. Your bank or card provider decides when it shows on your statement.",
+      "accessEndedPlan": "The paid time from this purchase is no longer on your account. If no other paid plan is running, your account is now on Free.",
+      "accessEndedPack": "The unused practice credits from this pack are no longer on your account.",
+      "accessUnchanged": "Your plan and your credits stay as they are.",
+      "cta": "See your plan"
+    },
+    "withdrawalConfirmed": {
+      "subject": "Your %BRAND% withdrawal is confirmed",
+      "heading": "Your withdrawal is confirmed",
+      "body": "You withdrew from your contract for {plan}.",
+      "received": "We received your withdrawal on {at}.",
+      "refund": "We are refunding {amount} to the payment method you paid with. Your bank or card provider decides when it shows on your statement.",
+      "refundNone": "No refund is due, because the period you paid for was already used.",
+      "endedSubscription": "The subscription has ended. It will not renew and you will not be charged again for it.",
+      "endedPass": "The pass has ended. Its paid time is no longer on your account.",
+      "endedPack": "The unused practice credits from this pack are no longer on your account.",
+      "cta": "See your plan"
     }
   }
 }

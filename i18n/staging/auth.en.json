@@ -1,17 +1,3 @@
 {
-  "auth": {
-    "verify": {
-      "requestNew": "Send a new link from Settings"
-    },
-    "brand": {
-      "feature_interview_written": "Practice interviews for the job you want"
-    },
-    "methods": {
-      "tabs": {
-        "label": "Ways to sign in",
-        "email_password": "Email",
-        "phone_otp": "Phone"
-      }
-    }
-  }
+  "auth": {}
 }

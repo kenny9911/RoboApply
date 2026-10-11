@@ -101,5 +101,15 @@
         "contact_links": "加一个作品集或个人主页链接，让招聘方有地方深入了解你。"
       }
     }
+  },
+  "admin": {
+    "console": {
+      "system": {
+        "providers": {
+          "provider": "服务商",
+          "errors": "错误"
+        }
+      }
+    }
   }
 }

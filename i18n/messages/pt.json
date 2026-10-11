@@ -1181,15 +1181,11 @@
           "length": "Quanto tempo ela deve durar?"
         },
         "done": "Pronto",
-        "costShort": "{n} créditos — mais do que você tem",
         "useShorter": "Usar {minutes} min",
         "previewToggle": "Ver o que podem perguntar"
       },
       "loading": "Carregando a preparação…",
       "startError": "Essa entrevista não pôde começar. Tente de novo.",
-      "creditCost": "Custa {n} créditos",
-      "creditsRemaining": "Restam {n} créditos",
-      "insufficientCredits": "Esta entrevista precisa de {required} créditos e você tem {balance}. Adicione créditos para continuar.",
       "getCredits": "Obter créditos",
       "brief_line": "Quem entrevista recebeu informações sobre {topic}.",
       "first_free": "Sua primeira entrevista de treino completa é gratuita.",
@@ -2959,7 +2955,6 @@
           "q": "O que significa a pontuação de encaixe?"
         },
         "q4": {
-          "a": "De provedores de anúncios de vagas e de recrutadores que publicam nos sites dos nossos parceiros. Cada vaga mostra a fonte e quando foi conferida pela última vez.",
           "q": "De onde vêm as vagas?"
         },
         "q5": {
@@ -3114,10 +3109,8 @@
         "body": "Vagas parecidas com as que você salvou ou abriu sobem; vagas parecidas com as que você ocultou descem. Ações mais antigas contam menos.",
         "title": "O que despertou seu interesse"
       },
-      "cnNote": "No %BRAND%, se as recomendações personalizadas estiverem desativadas ou ainda não tiverem sido escolhidas, as vagas são ordenadas só por data e pelos seus filtros.",
       "factorsTitle": "Os quatro fatores",
       "fit": {
-        "body": "Sua pontuação de encaixe para a vaga, de um total de 100. Quando a análise completa de encaixe ainda não está disponível, usamos uma estimativa rápida, que conta um pouco menos.",
         "title": "Encaixe com seu currículo e sua busca"
       },
       "fitParts": {
@@ -3132,7 +3125,6 @@
         "weight": "{pct}% da pontuação de encaixe"
       },
       "freshness": {
-        "body": "Anúncios mais novos vêm primeiro. O efeito diminui ao longo de cerca de três dias.",
         "title": "Data do anúncio"
       },
       "goalIntro": "O objetivo de carreira que você escolheu ao configurar sua conta soma pontos às vagas que combinam com ele.",
@@ -3152,10 +3144,7 @@
       "never3": "Vagas sinalizadas como possíveis golpes saem da lista até serem analisadas.",
       "never4": "Sua foto, idade, gênero ou dados da família.",
       "neverTitle": "O que a ordenação nunca usa",
-      "otherSorts": "Mais recentes, Melhor encaixe e Maior salário ordenam só por esse critério.",
       "otherSortsTitle": "Outras formas de ordenar",
-      "pointsNote": "Cada vaga recebe uma pontuação de ordenação, de um total de 100, a partir dos quatro fatores. As regras e os objetivos abaixo somam pontos a essa pontuação ou mudam a posição das vagas na lista.",
-      "pointsNoteRules": "Cada vaga recebe uma pontuação de ordenação, de um total de 100, a partir dos quatro fatores. A regra abaixo soma pontos a essa pontuação.",
       "rules": {
         "skillsBoost": {
           "body": "Quando as habilidades são o único filtro que restringe sua lista, as vagas que pedem mais das habilidades que você escolheu ficam mais acima em Recomendadas, na proporção de quantas delas a vaga pede.",
@@ -3695,12 +3684,10 @@
         "check": "Verificar a cobrança mais recente",
         "deadline": "O prazo para reembolso termina em {at}",
         "eligible": "Pode ser reembolsada",
-        "issueElsewhere": "Faça o reembolso no provedor de pagamento e depois anote no registro da pessoa.",
         "loading": "Carregando…",
         "noCharge": "Nenhuma cobrança paga encontrada.",
         "notEligible": "Não pode ser reembolsada",
         "rule": "Regra: {rule}",
-        "sub": "O que as regras de reembolso publicadas dizem sobre a cobrança mais recente desta pessoa. Isto é só uma verificação: os reembolsos são feitos no provedor de pagamento.",
         "title": "Verificação de reembolso"
       },
       "reports": {
@@ -3827,14 +3814,8 @@
           "scoresDetail": "Em relação ao orçamento diário"
         },
         "providers": {
-          "calls": "Chamadas",
-          "empty": "Nenhuma chamada a provedores hoje.",
           "errors": "Erros",
-          "new": "Vagas novas",
-          "provider": "Provedor",
-          "returned": "Vagas retornadas",
-          "sub": "Chamadas em relação ao limite diário de cada provedor, dia UTC {day}.",
-          "title": "Provedores de vagas hoje"
+          "provider": "Provedor"
         },
         "queue": {
           "dead": "Abandonados",
@@ -3875,7 +3856,6 @@
   "jobSearch": {
     "eyebrow": "Agente de busca de vagas",
     "title": "Busca de vagas",
-    "intro": "Descreva o trabalho que você procura. Seu pedido vira buscas específicas nas fontes de vagas conectadas, incluindo anúncios do LinkedIn quando disponíveis.",
     "back": "Vagas para o seu perfil",
     "developers": "Usar a API",
     "query": "Cargo ou palavras-chave",
@@ -6006,7 +5986,6 @@
     },
     "error": "Não conseguimos carregar o encaixe desta vaga. Tente de novo.",
     "keywordCheck": {
-      "count": "{found} de {total} mencionados no seu currículo",
       "error": "Não conseguimos fazer a conferência de palavras-chave. Tente de novo.",
       "intro": "Requisitos do anúncio, conferidos com o seu currículo. São as mesmas partes que a pontuação usa.",
       "loading": "Conferindo seu currículo…",
@@ -6680,7 +6659,6 @@
         "bookmarked": "Salva",
         "interviewing": "Em entrevistas",
         "negotiating": "Proposta",
-        "rejected": "Não selecionada",
         "withdrawn": "Desistência"
       },
       "typed": "Digitada por você",
@@ -6748,7 +6726,6 @@
           "actions": "Ações",
           "board": "ID da página",
           "company": "Empresa",
-          "country": "País",
           "jobs": "Vagas na última verificação",
           "lastChecked": "Última verificação",
           "problem": "Último problema",
@@ -6763,7 +6740,6 @@
       },
       "loading": "Carregando…",
       "notAuthorized": "Só administradores podem ver esta página.",
-      "offNote": "Desativar ou remover uma página tira as vagas abertas dela da lista de vagas. Ao reativar, a página é lida de novo.",
       "problem": {
         "board_not_found": "A página não foi encontrada. Confira o ID da página.",
         "network": "Não foi possível acessar a página.",
@@ -6779,15 +6755,12 @@
         "unsupported_job_board": "Este sistema de página de carreiras não é compatível."
       },
       "run": {
-        "error": "{company}: não foi possível ler a página. {problem}",
-        "queued": "{company}: a página lista {listed} vagas. Elas estão sendo adicionadas à lista de vagas agora.",
-        "waiting": "{company}: a página lista {listed} vagas. Elas serão adicionadas na próxima execução programada."
+        "error": "{company}: não foi possível ler a página. {problem}"
       },
       "status": {
         "off": "Inativa",
         "on": "Ativa"
       },
-      "subtitle": "Páginas de carreiras públicas de empresas, lidas para a lista de vagas a cada 6 horas. Cada anúncio mantém o nome da empresa e um link para o original.",
       "systems": "As páginas podem vir de: {names}.",
       "title": "Páginas de carreiras de empresas"
     },
@@ -6804,7 +6777,6 @@
       "viewPosting": "Abrir o anúncio original"
     },
     "negotiable": {
-      "body": "O anúncio não informa um valor (por exemplo, diz 面議 ou 依公司規定). O artigo 5 da Lei de Serviços de Emprego de Taiwan só permite que o empregador não informe o salário quando o salário mensal regular é de NT$40,000 ou mais.",
       "filterHint": "Vagas que dizem 面議 não têm salário informado. Ative “Só vagas que informam o salário” para ocultá-las.",
       "lawLink": "Ler o artigo 5 na base nacional de leis",
       "notAFigure": "Essa regra vale para os empregadores. Não é o salário desta vaga, e aqui nunca estimamos um salário que o anúncio não informa.",
@@ -8525,7 +8497,6 @@
       "lead": "Toda semana, o %BRAND% escolhe vagas da sua busca. Você decide para quais delas preparar um kit.",
       "point_kit": "Para cada vaga que você escolher, um kit: seu currículo adaptado ao anúncio, uma carta de apresentação quando o anúncio pedir e suas respostas salvas.",
       "point_list": "Uma lista semanal de vagas que combinam com a sua busca. Você também pode adicionar qualquer vaga por conta própria.",
-      "point_open": "Você abre a candidatura no site da empresa, e é você quem envia.",
       "point_review": "Você confere cada kit antes de usar. Tudo o que for novo no seu currículo precisa ser confirmado por você.",
       "start": "Configurar “Prontas para candidatura”",
       "title": "Deixe cada candidatura pronta; quem envia é você"

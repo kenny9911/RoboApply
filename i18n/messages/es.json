@@ -1181,15 +1181,11 @@
           "length": "¿Cuánto debe durar?"
         },
         "done": "Listo",
-        "costShort": "{n} créditos: más de los que tienes",
         "useShorter": "Usar {minutes} min",
         "previewToggle": "Ver qué podrían preguntarte"
       },
       "loading": "Cargando la práctica…",
       "startError": "Esa entrevista no se pudo empezar. Inténtalo otra vez.",
-      "creditCost": "Cuesta {n} créditos",
-      "creditsRemaining": "Te quedan {n} créditos",
-      "insufficientCredits": "Esta entrevista necesita {required} créditos y tienes {balance}. Consigue créditos para continuar.",
       "getCredits": "Conseguir créditos",
       "brief_line": "Quien te entrevista viene preparado sobre {topic}.",
       "first_free": "Tu primera entrevista de práctica completa es gratis.",
@@ -2959,7 +2955,6 @@
           "q": "¿Qué significa la puntuación de encaje?"
         },
         "q4": {
-          "a": "De proveedores de anuncios de empleo y de reclutadores que publican en nuestros sitios asociados. Cada empleo muestra su fuente y cuándo se revisó por última vez.",
           "q": "¿De dónde salen los empleos?"
         },
         "q5": {
@@ -3114,10 +3109,8 @@
         "body": "Los empleos parecidos a los que guardaste o abriste suben; los parecidos a los que ocultaste bajan. Las acciones más antiguas cuentan menos.",
         "title": "Lo que te ha interesado"
       },
-      "cnNote": "En %BRAND%, si las recomendaciones personalizadas están desactivadas o aún no elegiste, los empleos se ordenan solo por fecha y por tus filtros.",
       "factorsTitle": "Los cuatro factores",
       "fit": {
-        "body": "Tu puntuación de encaje para el empleo, sobre 100. Cuando todavía no hay un análisis de encaje completo, se usa una estimación rápida, que cuenta un poco menos.",
         "title": "Encaje con tu currículum y tu búsqueda"
       },
       "fitParts": {
@@ -3132,7 +3125,6 @@
         "weight": "{pct}% de la puntuación de encaje"
       },
       "freshness": {
-        "body": "Los anuncios más nuevos van primero. El efecto se reduce a lo largo de unos tres días.",
         "title": "Qué tan reciente es el anuncio"
       },
       "goalIntro": "El objetivo profesional que elegiste al configurar tu cuenta suma puntos a los empleos que coinciden con él.",
@@ -3152,10 +3144,7 @@
       "never3": "Los empleos marcados como posibles estafas se quitan de la lista hasta que se revisan.",
       "never4": "Tu foto, edad, género o datos familiares.",
       "neverTitle": "Lo que el orden nunca usa",
-      "otherSorts": "«Más recientes», «Los que mejor encajan» y «Mayor sueldo» ordenan solo por ese criterio.",
       "otherSortsTitle": "Otras formas de ordenar",
-      "pointsNote": "Cada empleo recibe una puntuación de orden sobre 100 a partir de los cuatro factores. Las reglas y los objetivos de abajo suman puntos a esa puntuación o mueven empleos dentro de la lista.",
-      "pointsNoteRules": "Cada empleo recibe una puntuación de orden sobre 100 a partir de los cuatro factores. La regla de abajo suma puntos a esa puntuación.",
       "rules": {
         "skillsBoost": {
           "body": "Cuando las habilidades son el único filtro que reduce tu lista, los empleos que piden más de las habilidades que elegiste aparecen más arriba en Recomendados, en proporción a cuántas de ellas pide el empleo.",
@@ -3695,12 +3684,10 @@
         "check": "Revisar el último cobro",
         "deadline": "El plazo de reembolso termina el {at}",
         "eligible": "Se puede reembolsar",
-        "issueElsewhere": "Emite el reembolso en el proveedor de pagos y luego anótalo en el registro de la persona.",
         "loading": "Cargando…",
         "noCharge": "No se encontró ningún cobro pagado.",
         "notEligible": "No se puede reembolsar",
         "rule": "Regla: {rule}",
-        "sub": "Lo que dicen las reglas de reembolso publicadas sobre el último cobro de esta persona. Esto es solo una revisión: los reembolsos se emiten en el proveedor de pagos.",
         "title": "Revisión de reembolso"
       },
       "reports": {
@@ -3827,14 +3814,8 @@
           "scoresDetail": "Frente al presupuesto diario"
         },
         "providers": {
-          "calls": "Llamadas",
-          "empty": "Hoy no hay llamadas a proveedores.",
           "errors": "Errores",
-          "new": "Empleos nuevos",
-          "provider": "Proveedor",
-          "returned": "Empleos devueltos",
-          "sub": "Llamadas frente al límite diario de cada proveedor, día UTC {day}.",
-          "title": "Proveedores de empleos hoy"
+          "provider": "Proveedor"
         },
         "queue": {
           "dead": "Abandonadas",
@@ -3875,7 +3856,6 @@
   "jobSearch": {
     "eyebrow": "Agente de búsqueda de empleo",
     "title": "Buscar empleo",
-    "intro": "Describe el trabajo que buscas. Tu solicitud se convierte en búsquedas específicas en las fuentes de empleo conectadas, con ofertas de LinkedIn cuando estén disponibles.",
     "back": "Empleos para tu perfil",
     "developers": "Usar la API",
     "query": "Puesto o palabras clave",
@@ -6006,7 +5986,6 @@
     },
     "error": "No pudimos cargar el encaje de este empleo. Inténtalo otra vez.",
     "keywordCheck": {
-      "count": "Tu currículum menciona {found} de {total}",
       "error": "No pudimos hacer la revisión de palabras clave. Inténtalo otra vez.",
       "intro": "Requisitos del anuncio, comparados con tu currículum. Son las mismas partes que usa la puntuación de encaje.",
       "loading": "Revisando tu currículum…",
@@ -6680,7 +6659,6 @@
         "bookmarked": "Guardada",
         "interviewing": "En entrevistas",
         "negotiating": "Oferta",
-        "rejected": "No seleccionada",
         "withdrawn": "Retirada"
       },
       "typed": "Escrito por ti",
@@ -6748,7 +6726,6 @@
           "actions": "Acciones",
           "board": "ID del portal",
           "company": "Empresa",
-          "country": "País",
           "jobs": "Empleos en la última revisión",
           "lastChecked": "Última revisión",
           "problem": "Último problema",
@@ -6763,7 +6740,6 @@
       },
       "loading": "Cargando…",
       "notAuthorized": "Solo los administradores pueden ver esta página.",
-      "offNote": "Al desactivar o quitar un portal, sus vacantes salen de la lista de empleos. Al activarlo de nuevo, el portal se vuelve a leer.",
       "problem": {
         "board_not_found": "No se encontró el portal. Revisa el ID del portal.",
         "network": "No se pudo conectar con el portal.",
@@ -6779,15 +6755,12 @@
         "unsupported_job_board": "Este sistema de portal de empleo no es compatible."
       },
       "run": {
-        "error": "{company}: no se pudo leer el portal. {problem}",
-        "queued": "{company}: el portal tiene {listed} empleos. Se están añadiendo a la lista de empleos ahora.",
-        "waiting": "{company}: el portal tiene {listed} empleos. Se añadirán en la próxima ejecución programada."
+        "error": "{company}: no se pudo leer el portal. {problem}"
       },
       "status": {
         "off": "Desactivado",
         "on": "Activado"
       },
-      "subtitle": "Portales de empleo públicos de empresas, que se leen e incorporan a la lista de empleos cada 6 horas. Cada anuncio conserva el nombre de su empresa y un enlace al original.",
       "systems": "Los portales pueden venir de: {names}.",
       "title": "Portales de empleo de empresas"
     },
@@ -6804,7 +6777,6 @@
       "viewPosting": "Abrir el anuncio original"
     },
     "negotiable": {
-      "body": "El anuncio no indica un monto (por ejemplo, dice 面議 o 依公司規定). El artículo 5 de la Ley de Servicios de Empleo de Taiwán permite que un empleador no indique el sueldo solo cuando el salario mensual regular es de NT$40,000 o más.",
       "filterHint": "Los empleos que dicen 面議 no indican el sueldo. Activa «Solo empleos que indican el sueldo» para ocultarlos.",
       "lawLink": "Leer el artículo 5 en la base de datos nacional de leyes",
       "notAFigure": "Esa regla es para los empleadores. No es el sueldo de este empleo, y aquí nunca se estima un sueldo que el anuncio no indica.",
@@ -8525,7 +8497,6 @@
       "lead": "Cada semana %BRAND% elige empleos de tu búsqueda. Tú eliges para cuáles preparar un kit.",
       "point_kit": "Para cada empleo que elijas, un kit: tu currículum adaptado al anuncio, una carta de presentación cuando el anuncio la pide y tus respuestas guardadas.",
       "point_list": "Una lista semanal de empleos que encajan con tu búsqueda. También puedes añadir cualquier empleo por tu cuenta.",
-      "point_open": "Abres la candidatura en el sitio de la empresa y la envías tú.",
       "point_review": "Revisas cada kit antes de usarlo. Todo lo nuevo en tu currículum lo tienes que confirmar tú.",
       "start": "Configurar Listo para postular",
       "title": "Deja lista cada candidatura y luego envíala tú"

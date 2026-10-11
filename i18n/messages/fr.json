@@ -1181,15 +1181,11 @@
           "length": "Combien de temps doit-il durer ?"
         },
         "done": "Terminé",
-        "costShort": "{n} crédits — plus que ton solde",
         "useShorter": "Passer à {minutes} min",
         "previewToggle": "Voir les questions possibles"
       },
       "loading": "Chargement de l’entraînement…",
       "startError": "Cet entretien n’a pas pu démarrer. Réessaie.",
-      "creditCost": "Coûte {n} crédits",
-      "creditsRemaining": "Il te reste {n} crédits",
-      "insufficientCredits": "Cet entretien demande {required} crédits et tu en as {balance}. Ajoute des crédits pour continuer.",
       "getCredits": "Obtenir des crédits",
       "brief_line": "Ton interlocuteur a été briefé sur {topic}.",
       "first_free": "Ton premier entretien d’entraînement complet est gratuit.",
@@ -2959,7 +2955,6 @@
           "q": "Que signifie la note d’adéquation ?"
         },
         "q4": {
-          "a": "De fournisseurs d’offres d’emploi et de recruteurs qui publient sur nos sites partenaires. Chaque offre indique sa source et la date de sa dernière vérification.",
           "q": "D’où viennent les offres ?"
         },
         "q5": {
@@ -3114,10 +3109,8 @@
         "body": "Les offres qui ressemblent à celles que tu as gardées ou ouvertes remontent ; celles qui ressemblent à des offres que tu as masquées descendent. Les actions plus anciennes comptent moins.",
         "title": "Ce qui t’a intéressé"
       },
-      "cnNote": "Sur %BRAND%, si les recommandations personnalisées sont désactivées ou pas encore choisies, les offres sont classées uniquement par date et selon tes filtres.",
       "factorsTitle": "Les quatre facteurs",
       "fit": {
-        "body": "Ta note d’adéquation pour l’offre, sur 100. Quand une analyse d’adéquation complète n’est pas encore disponible, une estimation rapide est utilisée, comptée légèrement plus bas.",
         "title": "Adéquation avec ton CV et ta recherche"
       },
       "fitParts": {
@@ -3132,7 +3125,6 @@
         "weight": "{pct} % de la note d’adéquation"
       },
       "freshness": {
-        "body": "Les annonces les plus récentes passent en premier. L’effet s’estompe en trois jours environ.",
         "title": "Fraîcheur"
       },
       "goalIntro": "L’objectif de carrière que tu as choisi en créant ton compte ajoute des points aux offres qui y correspondent.",
@@ -3152,10 +3144,7 @@
       "never3": "Les offres signalées comme de possibles arnaques sont retirées de la liste jusqu’à ce qu’elles soient examinées.",
       "never4": "Ta photo, ton âge, ton genre ou des informations sur ta famille.",
       "neverTitle": "Ce que le classement n’utilise jamais",
-      "otherSorts": "« Les plus récentes », « Les plus adaptées » et « Salaire le plus élevé » trient uniquement selon ce critère.",
       "otherSortsTitle": "Autres façons de trier",
-      "pointsNote": "Chaque offre reçoit un score de classement sur 100 à partir des quatre facteurs. Les règles et les objectifs ci-dessous ajoutent des points à ce score ou déplacent des offres dans la liste.",
-      "pointsNoteRules": "Chaque offre reçoit un score de classement sur 100 à partir des quatre facteurs. La règle ci-dessous ajoute des points à ce score.",
       "rules": {
         "skillsBoost": {
           "body": "Quand les compétences sont le seul filtre qui réduit ta liste, les offres qui demandent davantage des compétences que tu as choisies sont mieux classées dans « Recommandées », en proportion du nombre de ces compétences que l’offre demande.",
@@ -3695,12 +3684,10 @@
         "check": "Vérifier le dernier paiement",
         "deadline": "Le délai de remboursement se termine le {at}",
         "eligible": "Remboursable",
-        "issueElsewhere": "Effectue le remboursement chez le prestataire de paiement, puis note-le dans le dossier de la personne.",
         "loading": "Chargement…",
         "noCharge": "Aucun paiement réglé trouvé.",
         "notEligible": "Non remboursable",
         "rule": "Règle : {rule}",
-        "sub": "Ce que les règles de remboursement publiées disent du dernier paiement de cette personne. C’est seulement une vérification : les remboursements se font chez le prestataire de paiement.",
         "title": "Vérification de remboursement"
       },
       "reports": {
@@ -3827,14 +3814,8 @@
           "scoresDetail": "Par rapport au budget quotidien"
         },
         "providers": {
-          "calls": "Appels",
-          "empty": "Aucun appel à un fournisseur aujourd’hui.",
           "errors": "Erreurs",
-          "new": "Nouvelles offres",
-          "provider": "Fournisseur",
-          "returned": "Offres renvoyées",
-          "sub": "Appels par rapport à la limite quotidienne de chaque fournisseur, jour UTC {day}.",
-          "title": "Fournisseurs d’offres aujourd’hui"
+          "provider": "Fournisseur"
         },
         "queue": {
           "dead": "Abandonnées",
@@ -3875,7 +3856,6 @@
   "jobSearch": {
     "eyebrow": "Agent de recherche d’emploi",
     "title": "Recherche d’emploi",
-    "intro": "Décris le travail que tu recherches. Ta demande est transformée en recherches ciblées parmi les sources d’emploi connectées, avec des offres LinkedIn lorsqu’elles sont disponibles.",
     "back": "Les offres pour ton profil",
     "developers": "Utiliser l’API",
     "query": "Poste ou mots-clés",
@@ -6006,7 +5986,6 @@
     },
     "error": "L’adéquation avec cette offre n’a pas pu être chargée. Réessaie.",
     "keywordCheck": {
-      "count": "{found} sur {total} mentionnés dans ton CV",
       "error": "La vérification des mots-clés n’a pas pu être lancée. Réessaie.",
       "intro": "Les exigences de l’annonce, comparées à ton CV. Ce sont les mêmes parties que celles de la note d’adéquation.",
       "loading": "Vérification de ton CV…",
@@ -6680,7 +6659,6 @@
         "bookmarked": "Gardée",
         "interviewing": "Entretiens en cours",
         "negotiating": "Proposition",
-        "rejected": "Non retenue",
         "withdrawn": "Candidature retirée"
       },
       "typed": "Saisie par toi",
@@ -6748,7 +6726,6 @@
           "actions": "Actions",
           "board": "Identifiant du site",
           "company": "Entreprise",
-          "country": "Pays",
           "jobs": "Offres à la dernière vérification",
           "lastChecked": "Dernière vérification",
           "problem": "Dernier problème",
@@ -6763,7 +6740,6 @@
       },
       "loading": "Chargement…",
       "notAuthorized": "Seuls les administrateurs peuvent voir cette page.",
-      "offNote": "Désactiver ou retirer un site carrières enlève ses offres ouvertes de la liste des offres. Le réactiver relance la lecture du site.",
       "problem": {
         "board_not_found": "Le site carrières est introuvable. Vérifie son identifiant.",
         "network": "Le site carrières n’a pas pu être joint.",
@@ -6779,15 +6755,12 @@
         "unsupported_job_board": "Ce système de site carrières n’est pas pris en charge."
       },
       "run": {
-        "error": "{company} : le site carrières n’a pas pu être lu. {problem}",
-        "queued": "{company} : le site carrières affiche {listed} offres. Elles sont en cours d’ajout à la liste des offres.",
-        "waiting": "{company} : le site carrières affiche {listed} offres. Elles seront ajoutées lors du prochain passage programmé."
+        "error": "{company} : le site carrières n’a pas pu être lu. {problem}"
       },
       "status": {
         "off": "Désactivé",
         "on": "Activé"
       },
-      "subtitle": "Des sites carrières publics d’entreprises, lus et intégrés à la liste des offres toutes les 6 heures. Chaque annonce conserve le nom de son entreprise et un lien vers l’original.",
       "systems": "Les sites carrières peuvent provenir de : {names}.",
       "title": "Sites carrières d’entreprises"
     },
@@ -6804,7 +6777,6 @@
       "viewPosting": "Ouvrir l’annonce d’origine"
     },
     "negotiable": {
-      "body": "L’annonce n’indique pas de montant (par exemple, elle dit 面議 ou 依公司規定). L’article 5 de la loi taïwanaise sur les services de l’emploi autorise un employeur à ne pas indiquer le salaire uniquement lorsque le salaire mensuel régulier est de NT$40,000 ou plus.",
       "filterHint": "Les offres qui indiquent 面議 n’ont pas de salaire affiché. Active « Uniquement les offres qui indiquent le salaire » pour les masquer.",
       "lawLink": "Lire l’article 5 dans la base nationale des lois",
       "notAFigure": "Cette règle s’adresse aux employeurs. Ce n’est pas le salaire de cette offre, et un salaire qu’une annonce n’indique pas n’est jamais estimé ici.",
@@ -8525,7 +8497,6 @@
       "lead": "Chaque semaine, %BRAND% sélectionne des offres à partir de ta recherche. Tu choisis celles pour lesquelles préparer un kit.",
       "point_kit": "Pour chaque offre que tu choisis, un kit : ton CV adapté à l’annonce, une lettre de motivation quand l’annonce en demande une, et tes réponses enregistrées.",
       "point_list": "Une liste hebdomadaire d’offres qui correspondent à ta recherche. Tu peux ajouter toi-même n’importe quelle offre.",
-      "point_open": "Tu ouvres la candidature sur le site de l’entreprise et tu l’envoies toi-même.",
       "point_review": "Tu vérifies chaque kit avant de l’utiliser. Tout ce qui est nouveau dans ton CV doit être confirmé par toi.",
       "start": "Configurer « Prêt à postuler »",
       "title": "Prépare chaque candidature, puis envoie-la toi-même"

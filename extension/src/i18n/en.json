@@ -50,7 +50,16 @@
       },
       "score": "{score} / 100",
       "quickEstimate": "Quick estimate",
-      "note": "This is not your chance of getting hired."
+      "note": "This is not your chance of getting hired.",
+      "confidence": {
+        "reason": {
+          "no_skills_listed": "This post lists no skills",
+          "no_level_stated": "This post states no level",
+          "no_role_evidence": "Your resume shows no role to compare",
+          "no_resume": "Add a resume for a full comparison. This estimate uses your profile and preferences.",
+          "few_details": "This post says too little to compare"
+        }
+      }
     },
     "status": {
       "filled": "Filled",

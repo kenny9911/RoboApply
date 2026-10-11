@@ -1,8 +1,3 @@
 {
-  "seo": {
-    "job": {
-      "lastChecked": "Last checked {date}",
-      "licence": "{holder}, HR service licence {number}"
-    }
-  }
+  "seo": {}
 }

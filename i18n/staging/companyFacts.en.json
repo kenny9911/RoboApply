@@ -1,26 +1,3 @@
 {
-  "companyFacts": {
-    "sponsorship": {
-      "title": "Visa sponsorship records for {company}",
-      "intro": "Public records about this employer. Each line names its source and date.",
-      "fact": {
-        "dolLca": "{count, plural, one {# H-1B labor condition application} other {# H-1B labor condition applications}} certified in fiscal year {year}",
-        "uscis": "{approvals, plural, one {# H-1B petition} other {# H-1B petitions}} approved and {denials, number} denied in fiscal year {year}",
-        "uk": "Licensed sponsor on the UK register",
-        "ukRating": "Type and rating: {rating}",
-        "ukRoutes": "{count, plural, one {Route} other {Routes}}: {routes}",
-        "ukTown": "Town: {town}"
-      },
-      "earlier": "{count, plural, one {# record from an earlier fiscal year} other {# records from earlier fiscal years}}",
-      "listedAs": "Listed as {name}",
-      "source": "Source: <link>{name}</link>",
-      "file": "File: {file}",
-      "dated": {
-        "published": "as of {date}",
-        "imported": "file imported {date}"
-      },
-      "usNote": "A certified application is not a visa approval or a hire. Petition counts are first decisions and cover new and continuing employment.",
-      "disclaimer": "These are public records about the employer, not about this job. Past filings or a sponsor license do not mean this employer will sponsor this role."
-    }
-  }
+  "companyFacts": {}
 }

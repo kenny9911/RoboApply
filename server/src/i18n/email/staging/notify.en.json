@@ -1,7 +1,3 @@
 {
-  "notify": {
-    "common": {
-      "tierEstimate": "{tier} · Quick estimate"
-    }
-  }
+  "notify": {}
 }

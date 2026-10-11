@@ -1,13 +1,3 @@
 {
-  "jobDetail": {
-    "header": {
-      "badge": {
-        "sponsorship_provider": "{provider} lists visa sponsorship"
-      }
-    },
-    "closed": {
-      "boardCheck": "We checked the employer's job board when you opened this page. It no longer lists this job.",
-      "lastListed": "We last saw it listed on {date}."
-    }
-  }
+  "jobDetail": {}
 }
