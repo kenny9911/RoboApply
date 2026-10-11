@@ -21,8 +21,14 @@ import { INDUSTRY_IDS, industryIdFor } from '../companies/contract.js';
  *   2 (SM-2, SM-10): the model may overrule a role whose title match is weak;
  *     `titleMatchScore` is stored; the employer's industry is read from a
  *     quoted line of the posting.
+ *   3 (SM-6, SM-8, JI-11): skills carry canonical ids (`skillsDetail[].skillId`,
+ *     `RAJob.skillIds`: hard skills and certifications only); keywords are
+ *     canonical terms only; the posting's requirement lines are extracted once
+ *     and stored (`RAJob.requirements`); a quoted sponsorship reading names
+ *     its source (`sponsorshipSource = 'posting_quote'`). Until a row's turn
+ *     it has empty `skillIds` and no requirements, and every reader falls back.
  */
-export const ENRICH_VERSION = 2;
+export const ENRICH_VERSION = 3;
 
 /**
  * `RAJob.enrichModel` when no model ran and a model pass is still owed: the
@@ -52,6 +58,24 @@ export const MAX_TAXONOMY_CANDIDATES = 15;
 export const MAX_QUOTE_CHARS = 240;
 /** `RAJob.summary`: at most two sentences, and never longer than this. */
 export const MAX_SUMMARY_CHARS = 400;
+/** A requirement line is one line of the posting: never longer than this (a longer text is a paragraph, not a line). */
+export const MAX_REQUIREMENT_CHARS = 240;
+/** Requirement lines kept per posting unless ENRICH_REQUIREMENTS_MAX says otherwise. */
+export const DEFAULT_ENRICH_REQUIREMENTS_MAX = 12;
+/** ENRICH_REQUIREMENTS_MAX is never read above this (the per-user scoring call fills one status per line). */
+export const ENRICH_REQUIREMENTS_CEILING = 24;
+
+/**
+ * `ENRICH_REQUIREMENTS_MAX`: requirement lines kept per posting (SM-8). A
+ * whole number from 1 to 24; unset or anything else means 12.
+ */
+export function enrichRequirementsMax(env: Record<string, string | undefined> = process.env): number {
+  const raw = env.ENRICH_REQUIREMENTS_MAX?.trim();
+  if (!raw) return DEFAULT_ENRICH_REQUIREMENTS_MAX;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) return DEFAULT_ENRICH_REQUIREMENTS_MAX;
+  return Math.min(ENRICH_REQUIREMENTS_CEILING, n);
+}
 
 export const SENIORITY_LEVELS = ['intern_newgrad', 'entry', 'mid', 'senior', 'lead_staff', 'director_exec'] as const;
 export type Seniority = (typeof SENIORITY_LEVELS)[number];
@@ -94,6 +118,45 @@ const skillsField = z
       const parsed = EnrichSkillSchema.safeParse(item);
       if (parsed.success) out.push(parsed.data);
       if (out.length >= MAX_ENRICH_SKILLS) break;
+    }
+    return out;
+  });
+
+/** What kind of thing a requirement line asks for (features/match/contract.ts `JobRequirement.kind`). */
+export const REQUIREMENT_KINDS = ['skill', 'experience', 'education', 'domain', 'scope'] as const;
+export type RequirementKind = (typeof REQUIREMENT_KINDS)[number];
+export const REQUIREMENT_IMPORTANCES = ['must', 'preferred'] as const;
+export type RequirementImportance = (typeof REQUIREMENT_IMPORTANCES)[number];
+
+/**
+ * One requirement line as the model returns it. The text is the posting's own
+ * line (checked against the posting in reconcile.ts); a line longer than
+ * MAX_REQUIREMENT_CHARS, an unknown kind or a missing text drops the item. An
+ * importance the model did not state clearly is `preferred`: nothing is called
+ * a must that the posting does not call one.
+ */
+export const EnrichRequirementSchema = z.object({
+  kind: z.enum(REQUIREMENT_KINDS),
+  text: z
+    .string()
+    .transform((s) => s.trim().replace(/\s+/g, ' '))
+    .pipe(z.string().min(2).max(MAX_REQUIREMENT_CHARS)),
+  importance: z.enum(REQUIREMENT_IMPORTANCES).catch('preferred'),
+});
+export type EnrichRequirement = z.infer<typeof EnrichRequirementSchema>;
+
+/** The model's requirement lines: bad items dropped, at most `enrichRequirementsMax()` kept, in the model's order. */
+const requirementsField = z
+  .array(z.unknown())
+  .catch([])
+  .optional()
+  .transform((items) => {
+    const max = enrichRequirementsMax();
+    const out: EnrichRequirement[] = [];
+    for (const item of items ?? []) {
+      if (out.length >= max) break;
+      const parsed = EnrichRequirementSchema.safeParse(item);
+      if (parsed.success) out.push(parsed.data);
     }
     return out;
   });
@@ -179,6 +242,7 @@ export const EnrichLlmOutputSchema = z.object({
     .transform((v) => (v && v.trim() ? v.trim() : null)),
   employerTags: employerTagsField,
   industry: industryField,
+  requirements: requirementsField,
 });
 export type EnrichLlmOutput = z.infer<typeof EnrichLlmOutputSchema>;
 
@@ -225,5 +289,13 @@ export const EnrichPayloadSchema = z.object({
   jobId: z.string().min(1).max(64),
   /** Re-run even when the row is already enriched at ENRICH_VERSION (material change). */
   force: z.boolean().optional(),
+  /**
+   * Map the row's skill strings to canonical ids again and rewrite its keyword
+   * row: no model call, no other column touched (service.ts `remapSkills`).
+   * For a row that is already enriched at ENRICH_VERSION and was mapped while
+   * the embedding step was off; a row that is not at that version gets the
+   * full pass instead, which maps its skills too.
+   */
+  skillsOnly: z.boolean().optional(),
 });
 export type EnrichPayload = z.infer<typeof EnrichPayloadSchema>;

@@ -1,6 +1,20 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
-import { ENRICH_INDUSTRY_IDS, ENRICH_VERSION, EnrichOutputError, EnrichPayloadSchema, MAX_ENRICH_SKILLS, parseEnrichOutput, parseEnrichText } from './schema.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  DEFAULT_ENRICH_REQUIREMENTS_MAX,
+  ENRICH_INDUSTRY_IDS,
+  ENRICH_REQUIREMENTS_CEILING,
+  ENRICH_VERSION,
+  EnrichOutputError,
+  EnrichPayloadSchema,
+  MAX_ENRICH_SKILLS,
+  MAX_REQUIREMENT_CHARS,
+  REQUIREMENT_KINDS,
+  enrichRequirementsMax,
+  parseEnrichOutput,
+  parseEnrichText,
+} from './schema.js';
+import { JobRequirementSchema } from '../../match/contract.js';
 import { ONBOARDING_INDUSTRIES } from '../../onboarding/contract.js';
 import { intlModelReply } from './__tests__/fixtures.js';
 
@@ -17,8 +31,8 @@ describe('enrichment output schema', () => {
     expect(out.industry).toBeNull();
   });
 
-  it('SM-2 / SM-10: the version is 2, so rows enriched before the role override and the industry field are enriched again', () => {
-    expect(ENRICH_VERSION).toBe(2);
+  it('SM-6 / SM-8 / JI-11: the version is 3, so rows enriched before canonical skill ids, stored requirements and the sponsorship source are enriched again', () => {
+    expect(ENRICH_VERSION).toBe(3);
   });
 
   it('SM-10: reads the employer industry only as a value of the closed list with a quote', () => {
@@ -87,6 +101,78 @@ describe('enrichment output schema', () => {
     expect(parseEnrichText('Here you go: ' + json).seniority).toBe('mid');
     expect(parseEnrichText(json).skills).toHaveLength(4);
     expect(() => parseEnrichText('I cannot help with that.')).toThrow(EnrichOutputError);
+  });
+
+  describe('SM-8: requirement lines', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('reads well-formed lines, in the model\'s order', () => {
+      const out = parseEnrichOutput({
+        requirements: [
+          { kind: 'experience', text: '5+ years building backend services', importance: 'must' },
+          { kind: 'skill', text: 'Nice to have: Kubernetes', importance: 'preferred' },
+        ],
+      });
+      expect(out.requirements).toEqual([
+        { kind: 'experience', text: '5+ years building backend services', importance: 'must' },
+        { kind: 'skill', text: 'Nice to have: Kubernetes', importance: 'preferred' },
+      ]);
+      // A reply without the field, or with something that is not a list, has none.
+      expect(parseEnrichOutput({}).requirements).toEqual([]);
+      for (const requirements of [null, 'none', 7, { kind: 'skill' }]) expect(parseEnrichOutput({ requirements }).requirements, JSON.stringify(requirements)).toEqual([]);
+    });
+
+    it('is lenient per item: a bad item is dropped, never the list and never the reply', () => {
+      const out = parseEnrichOutput({
+        ...intlModelReply(),
+        requirements: [
+          'Python',
+          null,
+          { kind: 'logistics', text: 'Based in Austin', importance: 'must' },
+          { kind: 'skill', importance: 'must' },
+          { kind: 'skill', text: '', importance: 'must' },
+          { kind: 'skill', text: 'x'.repeat(MAX_REQUIREMENT_CHARS + 1), importance: 'must' },
+          { kind: 'education', text: '  Bachelor\u2019s   degree\n in CS ', importance: 'essential' },
+          { kind: 'domain', text: '熟悉支付行业', importance: 'must' },
+          { kind: 'scope', text: 'y'.repeat(MAX_REQUIREMENT_CHARS), importance: 'preferred' },
+        ],
+      });
+      expect(out.requirements).toEqual([
+        // Whitespace is collapsed; an importance the model did not state clearly is "preferred", never "must".
+        { kind: 'education', text: 'Bachelor\u2019s degree in CS', importance: 'preferred' },
+        { kind: 'domain', text: '熟悉支付行业', importance: 'must' },
+        { kind: 'scope', text: 'y'.repeat(MAX_REQUIREMENT_CHARS), importance: 'preferred' },
+      ]);
+      expect(out.taxonomyId).toBe('backend_engineer');
+      expect(out.skills).toHaveLength(4);
+    });
+
+    it('keeps at most ENRICH_REQUIREMENTS_MAX valid lines (12 unless the variable says otherwise)', () => {
+      const requirements = Array.from({ length: 40 }, (_, i) => ({ kind: 'experience', text: `Requirement line ${i + 1}`, importance: 'must' }));
+      expect(parseEnrichOutput({ requirements }).requirements).toHaveLength(DEFAULT_ENRICH_REQUIREMENTS_MAX);
+      expect(DEFAULT_ENRICH_REQUIREMENTS_MAX).toBe(12);
+      // Bad items do not use up the room.
+      const padded = parseEnrichOutput({ requirements: [{ kind: 'nope', text: 'x' }, ...requirements] }).requirements;
+      expect(padded).toHaveLength(12);
+      expect(padded[0]!.text).toBe('Requirement line 1');
+      vi.stubEnv('ENRICH_REQUIREMENTS_MAX', '5');
+      expect(parseEnrichOutput({ requirements }).requirements).toHaveLength(5);
+    });
+
+    it('ENRICH_REQUIREMENTS_MAX: a whole number from 1 to 24; anything else is 12', () => {
+      expect(enrichRequirementsMax({})).toBe(12);
+      expect(enrichRequirementsMax({ ENRICH_REQUIREMENTS_MAX: ' 8 ' })).toBe(8);
+      expect(enrichRequirementsMax({ ENRICH_REQUIREMENTS_MAX: '500' })).toBe(ENRICH_REQUIREMENTS_CEILING);
+      for (const bad of ['0', '-3', '2.5', 'many', '']) expect(enrichRequirementsMax({ ENRICH_REQUIREMENTS_MAX: bad }), bad).toBe(12);
+    });
+
+    it('a parsed line is a JobRequirement once it has its id (the wire type of features/match)', () => {
+      const [line] = parseEnrichOutput({ requirements: [{ kind: 'skill', text: 'Kubernetes', importance: 'preferred' }] }).requirements;
+      expect(JobRequirementSchema.safeParse({ id: 'r1', ...line }).success).toBe(true);
+      expect([...REQUIREMENT_KINDS]).toEqual(JobRequirementSchema.shape.kind.options);
+    });
   });
 
   it('validates the work item payload', () => {

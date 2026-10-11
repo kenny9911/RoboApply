@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { selectTaxonomyCandidates, taxonomyIdsFor } from './candidates.js';
+import { CANDIDATE_ROLES, MAX_NEIGHBOUR_CANDIDATES, selectTaxonomyCandidates, taxonomyIdsFor, titleIsWeak } from './candidates.js';
 import { MAX_TAXONOMY_CANDIDATES } from './schema.js';
 import { CN_POSTING, INTL_POSTING } from './__tests__/fixtures.js';
 import { isTaxonomyId, matchTitle } from '../taxonomy/index.js';
@@ -80,6 +80,84 @@ describe('taxonomy candidate preselection', () => {
     expect(held.slice(1)).toEqual(without);
     // It never displaces the deterministic pick, and a limit still holds.
     expect(selectTaxonomyCandidates('Java Backend Architect', '', 2, ['architect']).map((c) => c.id)).toEqual(['software_architect', 'architect']);
+  });
+
+  describe('SM-2: the roles nearest to the title by embedding (extraIds)', () => {
+    const WEAK = 'Head of Special Projects';
+    const NEAREST = ['strategy_manager', 'program_manager', 'operations_manager', 'project_manager'];
+
+    it('the ids used here are roles of the tree', () => {
+      const ids = new Set(CANDIDATE_ROLES.map((r) => r.id));
+      for (const id of NEAREST) expect(ids.has(id), id).toBe(true);
+      expect(MAX_NEIGHBOUR_CANDIDATES).toBe(3);
+    });
+
+    it('ACCEPT: a weak title gets three extra candidates; without them the list is what it was', () => {
+      expect(titleIsWeak(WEAK)).toBe(true);
+      // The title alone: what the deterministic steps offer.
+      const fromTitle = selectTaxonomyCandidates(WEAK, '').map((c) => c.id);
+      expect(NEAREST.some((id) => fromTitle.includes(id))).toBe(false);
+      // The three nearest roles join before the roles that only share words with the posting, so those cannot push them out.
+      expect(selectTaxonomyCandidates(WEAK, '', undefined, [], NEAREST).map((c) => c.id)).toEqual([...NEAREST.slice(0, 3), ...fromTitle]);
+      // With a posting whose words fill the list to the cap, they are still on it.
+      const before = selectTaxonomyCandidates(WEAK, INTL_POSTING).map((c) => c.id);
+      expect(before).toHaveLength(MAX_TAXONOMY_CANDIDATES);
+      const after = selectTaxonomyCandidates(WEAK, INTL_POSTING, undefined, [], NEAREST).map((c) => c.id);
+      expect(after).toHaveLength(MAX_TAXONOMY_CANDIDATES);
+      expect(after.filter((id) => !before.includes(id))).toEqual(NEAREST.slice(0, 3));
+      expect(new Set(after).size).toBe(after.length);
+      // No neighbours (the client is unavailable): today's list, in today's order.
+      expect(selectTaxonomyCandidates(WEAK, INTL_POSTING, undefined, [], []).map((c) => c.id)).toEqual(before);
+      expect(selectTaxonomyCandidates(WEAK, INTL_POSTING, undefined, [], undefined).map((c) => c.id)).toEqual(before);
+    });
+
+    it('ACCEPT: a title that names its role outright gets none', () => {
+      expect(titleIsWeak('Backend Engineer')).toBe(false);
+      const before = selectTaxonomyCandidates('Backend Engineer', INTL_POSTING).map((c) => c.id);
+      expect(selectTaxonomyCandidates('Backend Engineer', INTL_POSTING, undefined, [], NEAREST).map((c) => c.id)).toEqual(before);
+    });
+
+    it('takes at most three, after the deterministic pick and the held role, and stays inside the cap of 15', () => {
+      const ids = selectTaxonomyCandidates('Java Backend Architect', 'You will design distributed services in Java.', undefined, ['architect'], NEAREST).map((c) => c.id);
+      expect(ids[0]).toBe('software_architect');
+      expect(ids).toContain('architect');
+      expect(NEAREST.slice(0, 3).every((id) => ids.includes(id))).toBe(true);
+      expect(ids).not.toContain(NEAREST[3]);
+      expect(ids.length).toBeLessThanOrEqual(MAX_TAXONOMY_CANDIDATES);
+      expect(new Set(ids).size).toBe(ids.length);
+      // The held role comes before them.
+      expect(ids.indexOf('architect')).toBeLessThan(ids.indexOf('strategy_manager'));
+      // A neighbour that is already a candidate adds nothing; an id that is not a role is ignored.
+      const withKnown = selectTaxonomyCandidates('Java Backend Architect', '', undefined, [], ['software_architect', 'not_a_role', null]).map((c) => c.id);
+      expect(withKnown).toEqual(selectTaxonomyCandidates('Java Backend Architect', '').map((c) => c.id));
+      // A small limit still holds.
+      expect(selectTaxonomyCandidates(WEAK, '', 2, [], NEAREST)).toHaveLength(2);
+    });
+
+    it('never pushes the other reading of a head noun out: the head noun\'s roles are picked first, the neighbours after them (review probe)', () => {
+      const FAMILY = ['architect', 'software_architect', 'cloud_engineer', 'data_architect', 'security_architect', 'network_engineer', 'interior_designer', 'ux_designer'];
+      // Three neighbours that have nothing to do with the head noun, as an embedding may return them.
+      for (const [title, description] of [
+        ['Associate Architect', ''],
+        ['Java Backend Architect', 'You will design distributed services in Java and review system designs.'],
+        ['Java Backend Architect', INTL_POSTING],
+      ] as const) {
+        expect(titleIsWeak(title), title).toBe(true);
+        const without = selectTaxonomyCandidates(title, description).map((c) => c.id);
+        const withNeighbours = selectTaxonomyCandidates(title, description, undefined, [], NEAREST).map((c) => c.id);
+        // The building profession and the software reading are both still offered, with the rest of the family.
+        expect(without, title).toEqual(expect.arrayContaining(FAMILY));
+        expect(withNeighbours, title).toEqual(expect.arrayContaining(FAMILY));
+        expect(withNeighbours, title).toEqual(expect.arrayContaining(NEAREST.slice(0, 3)));
+        expect(withNeighbours.length).toBeLessThanOrEqual(MAX_TAXONOMY_CANDIDATES);
+        // They come after every role the head noun brought, and before the roles that only share words with the posting.
+        const firstNeighbour = withNeighbours.indexOf(NEAREST[0]!);
+        for (const id of FAMILY) expect(withNeighbours.indexOf(id), `${title}: ${id}`).toBeLessThan(firstNeighbour);
+        // Up to the first neighbour the list is exactly what it is without them; after the three, it goes on as before.
+        expect(withNeighbours.slice(0, firstNeighbour)).toEqual(without.slice(0, firstNeighbour));
+        expect(withNeighbours.slice(firstNeighbour + 3)).toEqual(without.slice(firstNeighbour, firstNeighbour + withNeighbours.length - firstNeighbour - 3));
+      }
+    });
   });
 
   it('expands a role id to [category, group, role]', () => {
