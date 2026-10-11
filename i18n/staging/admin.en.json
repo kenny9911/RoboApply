@@ -156,6 +156,49 @@
       },
       "safety": {
         "problemsDegraded": "Setup problems. The check runs on the built-in word list until they are fixed"
+      },
+      "system": {
+        "providers": {
+          "title": "Job providers",
+          "sub": "What each provider last reported about its own plan, and its calls on UTC day {day}. A dash means the provider did not say.",
+          "empty": "No job providers are set up.",
+          "provider": "Provider",
+          "market": "Market",
+          "state": "State",
+          "plan": "Plan",
+          "requests": "Requests left / limit",
+          "jobs": "Jobs left / limit",
+          "resetsIn": "Resets in",
+          "calls": "Calls today / daily limit",
+          "returned": "Returned",
+          "new": "New",
+          "errors": "Errors",
+          "leftOfLimit": "{left} / {limit}",
+          "days": "{count, plural, one {# day} other {# days}}",
+          "markets": {
+            "intl": "International",
+            "cn": "Mainland China"
+          },
+          "states": {
+            "ok": "On",
+            "low": "Running low",
+            "exhausted": "Exhausted",
+            "not_subscribed": "Not subscribed",
+            "unauthorized": "Key rejected",
+            "gated": "Needs a larger plan",
+            "disabled": "Off",
+            "unknown": "Not known yet"
+          },
+          "banner": "Not available right now: {providers}. The job feed is running without them.",
+          "bannerOne": "Not available right now: {providers}. The job feed is running without it.",
+          "alert": {
+            "exhausted": "{provider}: the monthly quota is used up. It resets in {days}.",
+            "exhaustedNoReset": "{provider}: the monthly quota is used up. The provider did not say when it resets.",
+            "not_subscribed": "{provider}: the key has no plan for this provider.",
+            "unauthorized": "{provider}: the provider rejected the key.",
+            "low": "{provider}: {value} left of the monthly quota (alert level {level})."
+          }
+        }
       }
     }
   }

@@ -1,5 +1,6 @@
 // In-memory SystemStore for the admin tests (no database).
 
+import type { ProviderQuotaSnapshot } from '../../jobs/ingest/index.js';
 import type { SystemStore, TimeRange } from '../system.js';
 
 export interface FakeSystemData {
@@ -9,6 +10,8 @@ export interface FakeSystemData {
   counters: Record<string, number>;
   queue: Awaited<ReturnType<SystemStore['queueByKind']>>;
   providers: Awaited<ReturnType<SystemStore['providerUsage']>>;
+  /** The providers' quota readings by snapshot key (absent = nothing recorded). Partial entries are completed by `quotaSnapshot`. */
+  quota?: Record<string, Partial<ProviderQuotaSnapshot>>;
   alertEmails: { sent: number; failed: number };
   email: { sent: number; failed: number };
   failedByTemplate: Array<{ template: string; count: number }>;
@@ -41,6 +44,24 @@ export function fakeSystemData(over: Partial<FakeSystemData> = {}): FakeSystemDa
   };
 }
 
+/** A full quota reading from the fields a test cares about (everything else "not stated"). */
+export function quotaSnapshot(provider: string, over: Partial<ProviderQuotaSnapshot> = {}): ProviderQuotaSnapshot {
+  return {
+    provider,
+    plan: null,
+    requestsLimit: null,
+    requestsRemaining: null,
+    jobsLimit: null,
+    jobsRemaining: null,
+    resetAt: null,
+    observedAt: '2026-10-10T11:00:00.000Z',
+    lastStatus: null,
+    lastCallCost: null,
+    state: 'ok',
+    ...over,
+  };
+}
+
 /** What the fake was asked for: counter windows, provider day keys and the email/Assistant ranges (ISO). */
 export interface FakeSystemReads {
   counterWindows: string[];
@@ -67,6 +88,7 @@ export function fakeSystemStore(data: FakeSystemData | ((brand: string) => FakeS
     },
     queueByKind: async () => of('roboapply').queue,
     providerUsage: async (dayKey) => (reads.providerDays.push(dayKey), of('roboapply').providers),
+    providerQuota: async () => new Map(Object.entries(of('roboapply').quota ?? {}).map(([key, s]) => [key, quotaSnapshot(key, s)])),
     emailStatus: async (brand, range, templates) => (reads.ranges.push(rangeOf(templates ? 'alertEmails' : 'email', range)), templates ? of(brand).alertEmails : of(brand).email),
     emailFailuresByTemplate: async (brand) => of(brand).failedByTemplate,
     copilotStats: async (brand, range) => (reads.ranges.push(rangeOf('copilot', range)), of(brand).copilot),

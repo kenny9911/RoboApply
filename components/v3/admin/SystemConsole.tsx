@@ -2,10 +2,12 @@
 
 // components/v3/admin/SystemConsole.tsx — /admin/system (WP-74; ARCHITECTURE.md
 // §10.4). Five views, linkable with ?view=:
-//   health    ingest, queue (dead items with retry), provider calls, enrichment,
-//             AI scores, alert and email sends, Assistant, out-of-credits — per brand,
+//   health    ingest, queue (dead items with retry), enrichment, AI scores,
+//             alert and email sends, Assistant, out-of-credits — per brand,
 //             with the metrics past their alert level listed first; then each
-//             brand's job sources (what each did in its last check);
+//             brand's job sources (what each did in its last check); then the
+//             job providers: plan, quota left, days to reset and today's
+//             calls, so a provider that stopped answering is visible that day;
 //   costs     cost by SKU × brand × day, with a CSV download;
 //   feedback  Assistant thumbs up/down with a redacted excerpt and guard hits;
 //   safety    GoApply content-safety readiness and recent events;
@@ -32,7 +34,7 @@ import {
   useSystemStatus,
   useWorkItems,
 } from '../../../hooks/useAdmin';
-import { costsCsvUrl, type AlertHit, type BrandHealth, type SystemStatusResponse } from '../../../lib/api/admin';
+import { costsCsvUrl, type AlertHit, type BrandHealth, type ProviderState, type ProviderUsageRow, type SystemStatusResponse } from '../../../lib/api/admin';
 import { AiGeneratedBadge } from '../../features/market';
 import { AdminGate } from './AdminGate';
 import { AdminNav } from './AdminNav';
@@ -85,6 +87,7 @@ function SystemConsoleInner() {
 // ── Health ───────────────────────────────────────────────────────────────
 
 function alertText(hit: AlertHit, t: T, locale: string): string {
+  if (hit.key === 'provider_quota') return quotaAlertText(hit, t, locale);
   const value = hit.key === 'assistant_budget' ? fmtUsd(hit.value, locale) : fmtCount(hit.value, locale);
   const level = hit.key === 'assistant_budget' ? fmtUsd(hit.level, locale) : fmtCount(hit.level, locale);
   return t(`alerts.${hit.key}`, { brand: hit.brand ?? '', subject: hit.subject ?? '', value, level });
@@ -244,9 +247,87 @@ function QueuePanel({ status }: { status: SystemStatusResponse }) {
   );
 }
 
+// ── Job providers (plan, quota left, days to reset; JI-1) ────────────────
+
+type BadgeTone = 'neutral' | 'warn' | 'danger' | 'muted';
+
+/** One tone per state. Colour is never the only signal: the badge always carries the state's words. */
+export const PROVIDER_STATE_TONE: Record<ProviderState, BadgeTone> = {
+  ok: 'neutral',
+  low: 'warn',
+  exhausted: 'danger',
+  not_subscribed: 'danger',
+  unauthorized: 'danger',
+  gated: 'muted',
+  disabled: 'muted',
+  unknown: 'muted',
+};
+
+/** The same token pairs as the badges of badges.tsx (status and tier pills). */
+const TONE_STYLE: Record<BadgeTone, { background: string; color: string; borderColor: string }> = {
+  neutral: { background: 'var(--surface-2)', color: 'var(--text-2)', borderColor: 'var(--rule)' },
+  warn: { background: 'var(--warn-subtle)', color: 'var(--warn)', borderColor: 'var(--warn)' },
+  danger: { background: 'var(--danger-subtle)', color: 'var(--danger)', borderColor: 'var(--danger)' },
+  muted: { background: 'transparent', color: 'var(--text-muted)', borderColor: 'var(--rule)' },
+};
+
+/** States in which a metered provider is not answering: the feed runs without it. */
+const DEAD_STATES: ReadonlySet<ProviderState> = new Set<ProviderState>(['exhausted', 'not_subscribed', 'unauthorized']);
+const KNOWN_STATES = new Set<string>(Object.keys(PROVIDER_STATE_TONE));
+
+/** A state this build does not know (a newer server) reads as "not known yet", never as a raw code. */
+function knownState(state: string): ProviderState {
+  return KNOWN_STATES.has(state) ? (state as ProviderState) : 'unknown';
+}
+
+function ProviderStateBadge({ state }: { state: ProviderState }) {
+  const t = useTranslations('admin.console.system');
+  const tone = TONE_STYLE[PROVIDER_STATE_TONE[state]];
+  return (
+    <span
+      data-state={state}
+      style={{ ...tone, display: 'inline-block', padding: '3px 9px', borderRadius: '99px', borderWidth: 1, borderStyle: 'solid', fontSize: 'var(--fs-label)', fontWeight: 600, whiteSpace: 'nowrap' }}
+    >
+      {t(`providers.states.${state}`)}
+    </span>
+  );
+}
+
+/** A count the provider stated, or a dash: a value nobody stated is never shown as 0. */
+function stated(value: number | null | undefined, locale: string): string {
+  return typeof value === 'number' && Number.isFinite(value) ? fmtCount(value, locale) : '—';
+}
+
+/** "0 / 25"; one dash when the provider stated neither side. */
+function leftOfLimit(left: number | null | undefined, limit: number | null | undefined, locale: string, t: T): string {
+  if (typeof left !== 'number' && typeof limit !== 'number') return '—';
+  return t('providers.leftOfLimit', { left: stated(left, locale), limit: stated(limit, locale) });
+}
+
+function daysText(days: number | null | undefined, t: T): string {
+  return typeof days === 'number' && Number.isFinite(days) ? t('providers.days', { count: days }) : '—';
+}
+
+function quotaAlertText(hit: AlertHit, t: T, locale: string): string {
+  const provider = hit.subject ?? '—';
+  switch (hit.state) {
+    case 'exhausted':
+      return typeof hit.daysToReset === 'number' ? t('providers.alert.exhausted', { provider, days: daysText(hit.daysToReset, t) }) : t('providers.alert.exhaustedNoReset', { provider });
+    case 'not_subscribed':
+      return t('providers.alert.not_subscribed', { provider });
+    case 'unauthorized':
+      return t('providers.alert.unauthorized', { provider });
+    default:
+      return t('providers.alert.low', { provider, value: fmtCount(hit.value, locale), level: fmtCount(hit.level, locale) });
+  }
+}
+
 function ProvidersPanel({ status }: { status: SystemStatusResponse }) {
   const t = useTranslations('admin.console.system');
   const locale = useLocale();
+  const rows = status.providers;
+  // Metered providers that are not answering right now. The line says only that: nothing about how much of the market is covered.
+  const dead = rows.filter((p) => p.costModel !== 'free' && DEAD_STATES.has(knownState(p.state))).map((p) => p.provider);
   return (
     <section className={styles.panel} aria-labelledby="providers-title">
       <div className={styles.panelHead}>
@@ -255,7 +336,12 @@ function ProvidersPanel({ status }: { status: SystemStatusResponse }) {
           <p>{t('providers.sub', { day: status.dayKey })}</p>
         </div>
       </div>
-      {status.providers.length === 0 ? (
+      {dead.length > 0 && (
+        <p className={styles.alertBox} role="status" data-testid="providers-banner">
+          {t(dead.length === 1 ? 'providers.bannerOne' : 'providers.banner', { providers: dead.join(', ') })}
+        </p>
+      )}
+      {rows.length === 0 ? (
         <p className={styles.muted}>{t('providers.empty')}</p>
       ) : (
         <div className={styles.tableWrap}>
@@ -263,6 +349,12 @@ function ProvidersPanel({ status }: { status: SystemStatusResponse }) {
             <thead>
               <tr>
                 <th scope="col">{t('providers.provider')}</th>
+                <th scope="col">{t('providers.market')}</th>
+                <th scope="col">{t('providers.state')}</th>
+                <th scope="col">{t('providers.plan')}</th>
+                <th scope="col" className={styles.num}>{t('providers.requests')}</th>
+                <th scope="col" className={styles.num}>{t('providers.jobs')}</th>
+                <th scope="col" className={styles.num}>{t('providers.resetsIn')}</th>
                 <th scope="col" className={styles.num}>{t('providers.calls')}</th>
                 <th scope="col" className={styles.num}>{t('providers.returned')}</th>
                 <th scope="col" className={styles.num}>{t('providers.new')}</th>
@@ -270,20 +362,31 @@ function ProvidersPanel({ status }: { status: SystemStatusResponse }) {
               </tr>
             </thead>
             <tbody>
-              {status.providers.map((p) => (
-                <tr key={p.provider}>
-                  <td>{p.provider}</td>
-                  <td className={styles.num}>{usage(p.calls, p.limit, locale, t)}</td>
-                  <td className={styles.num}>{fmtCount(p.jobsReturned, locale)}</td>
-                  <td className={styles.num}>{fmtCount(p.jobsNew, locale)}</td>
-                  <td className={styles.num}>{fmtCount(p.errors, locale)}</td>
-                </tr>
-              ))}
+              {rows.map((p) => <ProviderRow key={p.provider} row={p} locale={locale} t={t} />)}
             </tbody>
           </table>
         </div>
       )}
     </section>
+  );
+}
+
+function ProviderRow({ row: p, locale, t }: { row: ProviderUsageRow; locale: string; t: T }) {
+  return (
+    <tr>
+      {/* Provider ids are data: shown as they are. The row header is styled by the stylesheet (`.table th[scope='row']`), as in the sources table. */}
+      <th scope="row"><span className={styles.code}>{p.provider}</span></th>
+      <td>{t(`providers.markets.${p.market === 'cn' ? 'cn' : 'intl'}`)}</td>
+      <td><ProviderStateBadge state={knownState(p.state)} /></td>
+      <td>{p.plan ?? '—'}</td>
+      <td className={styles.num}>{leftOfLimit(p.requestsRemaining, p.requestsLimit, locale, t)}</td>
+      <td className={styles.num}>{leftOfLimit(p.jobsRemaining, p.jobsLimit, locale, t)}</td>
+      <td className={styles.num}>{daysText(p.daysToReset, t)}</td>
+      <td className={styles.num}>{usage(p.calls, p.limit, locale, t)}</td>
+      <td className={styles.num}>{fmtCount(p.jobsReturned, locale)}</td>
+      <td className={styles.num}>{fmtCount(p.jobsNew, locale)}</td>
+      <td className={styles.num}>{fmtCount(p.errors, locale)}</td>
+    </tr>
   );
 }
 
