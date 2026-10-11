@@ -61,6 +61,7 @@ import { AFFINITY_DELTAS, EMPTY_AFFINITY, affinityKeys, applyAffinity, decayed, 
 import {
   FEED_ERROR_CODES,
   FEED_LIMITS,
+  FEED_RELEVANCE_MAX_CHARS,
   FEED_THIN_BELOW,
   type ExploreResponse,
   type FeedCountResult,
@@ -161,6 +162,32 @@ export interface FeedQueryInput {
   overrides?: Record<string, unknown>;
   cursor?: string;
   fitTier?: 'all' | 'good' | 'great';
+  /**
+   * Free text the list may be ordered by (never a filter). Accepted, part of
+   * the session hash and carried on the query state; nothing reads it for the
+   * order in this phase (hybrid retrieval, phase M4, does).
+   */
+  relevance?: string;
+}
+
+/** The input of `preview` (the Assistant's tools, precompute, the job-search index read). */
+export interface FeedPreviewInput {
+  q?: string;
+  filters?: Partial<FilterSet>;
+  sort?: FeedSort;
+  limit: number;
+  /** As `FeedQueryInput.relevance`: accepted, not yet used for the order. */
+  relevance?: string;
+}
+
+/** `relevance` as the service keeps it: trimmed, empty → null. Longer than the contract allows is refused, never cut. */
+function relevanceOf(value: string | undefined | null): string | null {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!text) return null;
+  if (text.length > FEED_RELEVANCE_MAX_CHARS) {
+    throw new HttpError('invalid_request', `The text to rank by is too long (at most ${FEED_RELEVANCE_MAX_CHARS} characters).`, { reason: 'relevance_too_long' });
+  }
+  return text;
 }
 
 /** Options of the unranked id seams. */
@@ -506,8 +533,9 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
 
   // ── Sessions ──────────────────────────────────────────────────────────
 
-  function queryHash(input: { profile: Pick<SearchProfileWire, 'id' | 'version'>; filters: FilterSet; sort: FeedSort; order: FeedOrder; market: Market }): string {
-    return sha(stableStringify({ p: input.profile.id, v: input.profile.version, f: input.filters, s: input.sort, o: input.order, m: input.market }));
+  function queryHash(input: { profile: Pick<SearchProfileWire, 'id' | 'version'>; filters: FilterSet; sort: FeedSort; order: FeedOrder; market: Market; relevance?: string | null }): string {
+    // `r` is added only when a relevance text is given, so a query without one keeps the hash it always had.
+    return sha(stableStringify({ p: input.profile.id, v: input.profile.version, f: input.filters, s: input.sort, o: input.order, m: input.market, ...(input.relevance ? { r: input.relevance } : {}) }));
   }
 
   function ranksOf(cands: Candidate[]) {
@@ -526,6 +554,8 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     user: MatchUser | null;
     /** A category list from Explore: public rows, no saved filters. */
     browse: boolean;
+    /** The text to rank by, when the query carries one. Not read for the order in this phase. */
+    relevance: string | null;
   }
 
   /** Append the next older window(s) until `need` ids exist or the age floor is reached (≤3 windows a request). */
@@ -666,9 +696,10 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     const personalized = await isPersonalized(ctx.userId, ctx.market);
     const order: FeedOrder = personalized ? 'personalized' : 'recency';
     const sort: FeedSort = personalized || (input.sort !== 'recommended' && input.sort !== 'best_fit') ? input.sort : 'newest';
-    const hash = queryHash({ profile, filters, sort, order, market: ctx.market });
+    const relevance = relevanceOf(input.relevance);
+    const hash = queryHash({ profile, filters, sort, order, market: ctx.market, relevance });
     const rc = await rankContext(ctx, filters, personalized);
-    const state: QueryState = { ctx, filters, sort, personalized, rc, rowCache: new Map(), scoreCache: new Map(), user: null, browse };
+    const state: QueryState = { ctx, filters, sort, personalized, rc, rowCache: new Map(), scoreCache: new Map(), user: null, browse, relevance };
 
     if (cursor) {
       const session = await repo.getSession(cursor.sessionId, ctx.userId);
@@ -874,9 +905,9 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
       logger.warn('FEED', 'NL query planner failed', { error: err instanceof Error ? err.message : String(err) });
       throw new HttpError('ai_unavailable', undefined, { reason: 'planner_failed' });
     }
-    const { patch, unmatched } = planToFilters(plan, body.text, ctx.market);
+    const { patch, unmatched, rankedBy } = planToFilters(plan, body.text, ctx.market);
     const after = mergeFilterSet(profile.filters, patch);
-    return { diff: await proposal(ctx, profile, after), explanation: unmatched.join('; '), unmatched };
+    return { diff: await proposal(ctx, profile, after), explanation: unmatched.join('; '), unmatched, rankedBy };
   }
 
   // ── Badge count and skills check ──────────────────────────────────────
@@ -971,7 +1002,9 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
 
   // ── Seams for other areas ─────────────────────────────────────────────
 
-  async function preview(ctx: FeedCtx, input: { q?: string; filters?: Partial<FilterSet>; sort?: FeedSort; limit: number }): Promise<FeedItem[]> {
+  async function preview(ctx: FeedCtx, input: FeedPreviewInput): Promise<FeedItem[]> {
+    // Accepted and validated like the query's; nothing reads it for the order in this phase.
+    relevanceOf(input.relevance);
     if (!postingsAllowed(ctx.market)) return [];
     const profile = await loadProfile(ctx.userId);
     const filters = effectiveFilters(ctx.market, profile.filters, { overrides: input.filters as Record<string, unknown> | undefined, q: input.q });

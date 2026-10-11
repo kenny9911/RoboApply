@@ -5,6 +5,9 @@
 // `waitUntil` kick after an ingest tick run them (ARCHITECTURE.md §4.5–4.6).
 // Kinds:
 //   - 'job.enrich': one structured enrichment of one job (service.ts).
+//   - 'job.index' and 'user.embed': the retrieval write path (features/retrieval/workers.ts, MKT-2H). They are
+//     registered through this array so the queue registry needs no new area entry: enrichment queues
+//     'job.index' for every job it finishes.
 // Concurrency 10 per drain batch (ARCH §4.5). Idempotent: the producer's
 // dedupe key is `job.enrich:<jobId>:v<ENRICH_VERSION>` and a row already
 // enriched at that version is skipped (`force: true` re-runs a changed job).
@@ -13,8 +16,14 @@ import { DeferWorkError, PermanentWorkError, type WorkerDefinition } from '../..
 import type { Prisma } from '../../../generated/prisma/client.js';
 import { enrichJob, defaultEnrichDeps, type EnrichDeps } from './service.js';
 import { EnrichPayloadSchema } from './schema.js';
+import { retrievalWorkers } from '../../retrieval/index.js';
 
-export const JOBS_ENRICH_WORK_KINDS = { jobEnrich: 'job.enrich' } as const;
+/**
+ * Every kind this array registers: enrichment's own and the two of the
+ * retrieval write path (the same strings as features/retrieval
+ * `RETRIEVAL_WORK_KINDS`; a test keeps them equal).
+ */
+export const JOBS_ENRICH_WORK_KINDS = { jobEnrich: 'job.enrich', jobIndex: 'job.index', userEmbed: 'user.embed' } as const;
 
 /** Jobs enriched in parallel within one drain batch (ARCH §4.5). */
 export const ENRICH_CONCURRENCY = 10;
@@ -41,4 +50,4 @@ export const jobEnrichWorker: WorkerDefinition<Prisma.JsonValue> = {
   },
 };
 
-export const workers: WorkerDefinition[] = [jobEnrichWorker];
+export const workers: WorkerDefinition[] = [jobEnrichWorker, ...(retrievalWorkers as WorkerDefinition[])];

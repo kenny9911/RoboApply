@@ -2,8 +2,8 @@
 // WP-32: deterministic filter-diff proposals per hide reason, relaxations, and the NL plan → filters mapping.
 
 import { describe, expect, it } from 'vitest';
-import { HIDE_REASONS } from './contract.js';
-import { extractPayFloor, hideProposal, planToFilters, relaxations, toDiff, type HideJobFacts } from './filterDiff.js';
+import { FEED_RELEVANCE_MAX_CHARS, FeedRelevanceSchema, HIDE_REASONS } from './contract.js';
+import { RANKED_BY_MAX_CHARS, RANKED_BY_MAX_TERMS, extractPayFloor, hideProposal, isConstraintPhrase, planToFilters, relaxations, toDiff, type HideJobFacts } from './filterDiff.js';
 
 const job: HideJobFacts = {
   title: 'Sales Engineer',
@@ -138,5 +138,136 @@ describe('NL plan → filters', () => {
     const raw = planToFilters({ queries: ['实习生'], unverifiedPreferences: [] }, '实习生 200元/天', 'cn');
     expect(raw.patch.dailyPay).toEqual({ min: 200 });
     expect(planToFilters({ queries: ['实习生'], unverifiedPreferences: [] }, '实习生 至少3年经验', 'cn').patch.salaryMin).toBeUndefined();
+  });
+});
+
+describe('NL plan → rankedBy (topics a list may be ordered by, never filters; MKT-2H)', () => {
+  it('"backend jobs at climate startups using Rust, salary above 150k": the topics, never the pay phrase', () => {
+    const { patch, unmatched, rankedBy } = planToFilters(
+      { queries: ['Backend Engineer'], unverifiedPreferences: ['climate startups', 'using Rust', 'salary above 150k'] },
+      'backend jobs at climate startups using Rust, salary above 150k',
+      'intl',
+    );
+    expect(rankedBy).toEqual(['climate startups', 'Rust']);
+    // The pay phrase names no currency, so it is not a filter either: it stays unmatched, a requirement nobody checked.
+    expect(patch.salaryMin).toBeUndefined();
+    expect(unmatched).toEqual(['climate startups', 'using Rust', 'salary above 150k']);
+  });
+
+  it("uses the planner's own relevance terms when it gives any", () => {
+    const { rankedBy, unmatched } = planToFilters(
+      { queries: ['Backend Engineer'], unverifiedPreferences: ['at a climate-focused company', 'salary above 150k'], relevanceTerms: [' climate tech ', 'Rust', 'rust', ''] },
+      'backend jobs',
+      'intl',
+    );
+    expect(rankedBy).toEqual(['climate tech', 'Rust']);
+    expect(unmatched).toEqual(['at a climate-focused company', 'salary above 150k']);
+    // An empty list is "none given": the topics are derived.
+    expect(planToFilters({ queries: ['X'], unverifiedPreferences: ['fintech'], relevanceTerms: [] }, 'x', 'intl').rankedBy).toEqual(['fintech']);
+  });
+
+  it('a phrase about pay, visa, benefits, hours, time zone or commute is a requirement, not a topic', () => {
+    const constraints = [
+      'salary above 150k', 'paying at least 90k', 'good equity', 'strong bonus',
+      'visa sponsorship for later', 'must not need a work permit', 'H-1B transfer',
+      'great benefits', 'unlimited PTO', 'health insurance', 'generous vacation',
+      'flexible hours', 'no weekends', '4-day week', 'four days a week',
+      'overlap with the EST time zone', 'UTC+1 timezone',
+      'short commute', 'near me', '30 minutes from home', 'open to relocation',
+      '薪资 20k 以上', '需要签证担保', '五险一金', '不加班 双休', '每周至少4天', '时区 UTC+8', '通勤 30 分钟以内', '地铁附近',
+    ];
+    for (const phrase of constraints) expect(isConstraintPhrase(phrase), phrase).toBe(true);
+    const { rankedBy, unmatched } = planToFilters({ queries: ['Designer'], unverifiedPreferences: constraints.slice(0, 12) }, 'designer', 'intl');
+    expect(rankedBy).toEqual([]);
+    // They are still told to the user as not checked.
+    expect(unmatched.length).toBeGreaterThan(0);
+  });
+
+  it('a topic is not mistaken for a requirement', () => {
+    for (const phrase of ['climate startups', 'payments infrastructure', 'Rust', 'developer tools', 'series B fintech', 'open source', '新能源行业', '游戏公司', 'machine learning platform', 'estimation tooling', 'healthcare data', 'insurance companies', 'private equity', 'pension funds', "c'est une startup"]) {
+      expect(isConstraintPhrase(phrase), phrase).toBe(false);
+    }
+  });
+
+  it('words that are pay, hours or commute in one wording and a field of work in another are told apart', () => {
+    const topics = [
+      'equity research', 'equity derivatives', 'paid social', 'paid media', 'paid search campaigns', 'shift-left testing', 'schedule optimization', 'scheduling software',
+      '4k video', '10k users', '弹性计算', '彈性伸縮', '融资担保', '地铁运营', '地鐵信號系統', 'adoption of the product', 'an optimised runtime', 'ahead of schedule delivery',
+    ];
+    for (const phrase of topics) expect(isConstraintPhrase(phrase), phrase).toBe(false);
+    const requirements = [
+      'well paid', 'paid internship', 'paid overtime', 'equity package', 'equity and bonus', 'some equity', 'over 120k', 'at least 90k', '150k+', '120k a year', '100-150k', 'USD 150k', '20k以上', '30万以上',
+      'night shifts', 'no shifts', 'shift work', 'flexible schedule', 'a fixed work schedule', '弹性工作', '彈性工時', '弹性上班时间',
+      '担保工签', '签证担保', '近地铁', '地铁口', '地鐵站附近',
+    ];
+    for (const phrase of requirements) expect(isConstraintPhrase(phrase), phrase).toBe(true);
+    const { rankedBy } = planToFilters({ queries: ['Analyst'], unverifiedPreferences: ['equity research', 'paid social', 'good equity', 'well paid', '地铁运营'] }, 'analyst', 'intl');
+    expect(rankedBy).toEqual(['equity research', 'paid social', '地铁运营']);
+  });
+
+  it('US work-authorisation wording is a requirement: OPT, CPT and EAD in capitals, and E-Verify', () => {
+    for (const phrase of ['OPT friendly', 'accepts CPT', 'EAD accepted', 'E-Verify employer', 'everify', 'open to OPT/CPT']) expect(isConstraintPhrase(phrase), phrase).toBe(true);
+    // The same letters inside ordinary words are not.
+    for (const phrase of ['opt-in marketing', 'adoption', 'optimisation', 'head of product', 'a leading team', 'concept design']) expect(isConstraintPhrase(phrase), phrase).toBe(false);
+    expect(planToFilters({ queries: ['Engineer'], unverifiedPreferences: ['OPT friendly', 'Rust'] }, 'engineer', 'intl').rankedBy).toEqual(['Rust']);
+  });
+
+  it("the planner's own terms pass the same test: a pay or visa phrase it names is never ranked by", () => {
+    const { rankedBy, unmatched } = planToFilters(
+      { queries: ['Backend Engineer'], unverifiedPreferences: ['salary above 150k', 'great benefits'], relevanceTerms: ['salary above 150k', 'visa sponsorship', 'Rust'] },
+      'backend jobs',
+      'intl',
+    );
+    expect(rankedBy).toEqual(['Rust']);
+    // Still told to the user as not checked.
+    expect(unmatched).toEqual(['salary above 150k', 'great benefits']);
+    // When none of its terms is a topic, the topics are derived from the unmatched phrases.
+    expect(planToFilters({ queries: ['X'], unverifiedPreferences: ['using Rust', 'salary above 150k'], relevanceTerms: ['salary above 150k', 'H-1B transfer'] }, 'x', 'intl').rankedBy).toEqual(['Rust']);
+    expect(planToFilters({ queries: ['X'], unverifiedPreferences: ['salary above 150k'], relevanceTerms: ['salary above 150k'] }, 'x', 'intl').rankedBy).toEqual([]);
+  });
+
+  it('the terms joined by a space always fit what `relevance` accepts (240 characters)', () => {
+    const word = (c: string) => `${c.repeat(59)}x`;
+    const five = ['a', 'b', 'c', 'd', 'e'].map(word);
+    expect(five.every((t) => t.length === RANKED_BY_MAX_CHARS)).toBe(true);
+    const { rankedBy } = planToFilters({ queries: ['Engineer'], unverifiedPreferences: [], relevanceTerms: five }, 'engineer', 'intl');
+    // Four of 60 characters and three spaces are 243: the fourth does not fit, so three are kept.
+    expect(rankedBy).toEqual(five.slice(0, 3));
+    expect(rankedBy.join(' ').length).toBeLessThanOrEqual(FEED_RELEVANCE_MAX_CHARS);
+    expect(FeedRelevanceSchema.safeParse(rankedBy.join(' ')).success).toBe(true);
+    expect(FeedRelevanceSchema.safeParse(five.join(' ')).success).toBe(false);
+    // A shorter later term still fits in the room that is left.
+    const mixed = planToFilters({ queries: ['Engineer'], unverifiedPreferences: [], relevanceTerms: [...five.slice(0, 4), 'Rust'] }, 'engineer', 'intl').rankedBy;
+    expect(mixed).toEqual([...five.slice(0, 3), 'Rust']);
+    expect(mixed.join(' ').length).toBeLessThanOrEqual(FEED_RELEVANCE_MAX_CHARS);
+  });
+
+  it('drops the lead-in of a phrase, cuts a term to 60 characters and keeps at most 5 distinct terms', () => {
+    const many = ['using Rust', 'with Kubernetes', 'at climate startups', 'in the energy sector', 'working with robots', 'focused on developer tools', 'about open source'];
+    const { rankedBy } = planToFilters({ queries: ['Engineer'], unverifiedPreferences: many }, 'engineer', 'intl');
+    expect(rankedBy).toEqual(['Rust', 'Kubernetes', 'climate startups', 'the energy sector', 'robots']);
+    expect(rankedBy).toHaveLength(RANKED_BY_MAX_TERMS);
+    const long = planToFilters({ queries: ['Engineer'], unverifiedPreferences: [`a team that ${'really '.repeat(20)}cares`, 'Rust', 'rust'] }, 'engineer', 'intl').rankedBy;
+    expect(long[0]!.length).toBeLessThanOrEqual(RANKED_BY_MAX_CHARS);
+    expect(long).toHaveLength(2);
+    expect(RANKED_BY_MAX_CHARS).toBe(60);
+    expect(RANKED_BY_MAX_TERMS).toBe(5);
+  });
+
+  it('a phrase that became a filter is neither unmatched nor ranked by', () => {
+    const { patch, unmatched, rankedBy } = planToFilters({ queries: ['Data Analyst'], unverifiedPreferences: ['paying over €70k', 'needs visa sponsorship', 'no staffing agencies', 'healthcare data'] }, 'data analyst', 'intl');
+    expect(patch).toMatchObject({ salaryMin: { amount: 70000 }, needsSponsorship: true, excludeAgencies: true });
+    expect(unmatched).toEqual(['healthcare data']);
+    expect(rankedBy).toEqual(['healthcare data']);
+  });
+
+  it('GoApply: an experience line may order the list; an intern-days line is a requirement', () => {
+    const { rankedBy, unmatched } = planToFilters({ queries: ['数据分析实习生'], unverifiedPreferences: ['新能源行业', '每周至少4天'] }, '数据分析实习生', 'cn');
+    expect(unmatched).toEqual(['新能源行业', '每周至少4天']);
+    expect(rankedBy).toEqual(['新能源行业']);
+  });
+
+  it('answers an empty list when nothing is left over', () => {
+    expect(planToFilters({ queries: ['Designer'], unverifiedPreferences: [] }, 'designer', 'intl').rankedBy).toEqual([]);
   });
 });

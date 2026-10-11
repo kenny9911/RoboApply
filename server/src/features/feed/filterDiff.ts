@@ -2,7 +2,8 @@
 //
 //   hideProposal   "Not interested" reason → the exact FilterSet change (or an editor to open)
 //   relaxations    one candidate per active filter for "What's limiting your results"
-//   planToFilters  the job-search planner's plan + deterministic extraction → FilterSet patch (NL query)
+//   planToFilters  the job-search planner's plan + deterministic extraction → FilterSet patch (NL query),
+//                  plus `rankedBy`: the topics of the request that are not filters and may order the list
 //   toDiff         before/after → { ops, patch } shown to the user before anything is saved
 //
 // Nothing here calls a model or the database.
@@ -21,7 +22,7 @@ import {
   type FilterSet,
   type FilterSetPatch,
 } from '../search/index.js';
-import type { FilterDiffProposal, HIDE_REASONS } from './contract.js';
+import { FEED_RELEVANCE_MAX_CHARS, type FilterDiffProposal, type HIDE_REASONS } from './contract.js';
 import { ANNUAL_FACTOR } from './sql.js';
 
 type HideReason = (typeof HIDE_REASONS)[number];
@@ -136,6 +137,102 @@ export interface PlannerPlan {
   datePosted?: 'all' | 'today' | '3days' | 'week' | 'month';
   employmentTypes?: Array<'full_time' | 'part_time' | 'contract' | 'internship'>;
   unverifiedPreferences: string[];
+  /**
+   * Topics of the request that are not filters and that the list may be
+   * ordered by ("climate startups", "Rust"), when the planner names them
+   * itself. Absent: they are derived from `unverifiedPreferences`.
+   */
+  relevanceTerms?: string[];
+}
+
+/**
+ * Most topics a request is ranked by, and the longest one. Together, joined by
+ * a space, they never exceed FEED_RELEVANCE_MAX_CHARS (what `relevance` accepts).
+ */
+export const RANKED_BY_MAX_TERMS = 5;
+export const RANKED_BY_MAX_CHARS = 60;
+
+/**
+ * A phrase that states a requirement of the job, not a topic: pay, visa,
+ * benefits, hours, time zone or commute. Nobody checked it against a posting,
+ * so it stays in `unmatched` and is never a thing to rank by (ranking by
+ * closeness to "salary above 150k" would read as if pay had been checked).
+ *
+ * The patterns name the requirement wording, not single words that are also
+ * topics: "equity research", "paid social", "shift-left testing", "schedule
+ * optimization", "4k video", 弹性计算, 融资担保 and 地铁运营 are things to rank by.
+ */
+const CURRENCY_CODE = '(?:usd|eur|gbp|cny|rmb|twd|ntd|hkd|sgd|cad|aud|jpy)';
+const CONSTRAINT_PHRASES: RegExp[] = [
+  // pay words ("private equity" and "equity research" are industries; "paid social", "paid media" are marketing)
+  /\b(?:salary|salaries|pay|pays|paying|compensation|wages?|bonus(?:es)?|stock options?|rsus?)\b|[$€£¥￥]|薪|工资|工資|待遇|奖金|獎金|期权|期權|报酬|報酬/i,
+  /\bpaid\b(?![- ](?:social|media|search|ads?|advertising|acquisition|marketing|channels?|campaigns?|growth|traffic|partnerships?|content)\b)/i,
+  /(?<!\bprivate )\bequity\b(?! (?:research|analyst|analysts|analysis|trading|trader|traders|markets?|capital|sales|derivatives|funds?|investing|investments?|portfolio|strategy)\b)/i,
+  // an amount in thousands only next to a currency, a comparison or a pay period ("4k video" and "10k users" are topics)
+  new RegExp(
+    [
+      `\\b${CURRENCY_CODE}\\s*\\d[\\d,.]*\\s*k\\b`,
+      `\\d[\\d,.]*\\s*k\\s*(?:${CURRENCY_CODE}\\b|\\+|a year\\b|per (?:year|annum|month)\\b|\\/ ?(?:yr|year|mo|month)\\b|annual(?:ly)?\\b|base\\b|ote\\b|以上|以下|起|左右)`,
+      `\\b(?:above|over|under|below|at least|at most|minimum|min|more than|less than|up to|around)\\s+\\d[\\d,.]*\\s*k\\b`,
+      `[<>]=?\\s*\\d[\\d,.]*\\s*k\\b`,
+      `\\d[\\d,.]*\\s*k?\\s*[-–~至到]\\s*\\d[\\d,.]*\\s*k\\b`,
+      `\\d\\s*万\\s*(?:以上|以下|起|左右)`,
+    ].join('|'),
+    'i',
+  ),
+  // visa and work authorisation
+  /\b(?:visa|sponsor(?:s|ship|ed|ing)?|work permit|work authori[sz]ation|h-?1b|green card|citizens?(?:hip)?|clearance|e-?verify)\b|签证|簽證|工作许可|工作許可|工签|工簽|身份担保|身份擔保|担保(?:工作)?(?:签证|工签)|擔保(?:工作)?(?:簽證|工簽)/i,
+  // US work-authorisation abbreviations, in capitals only ("opt" and "ead" are also parts of ordinary words and names)
+  /\b(?:OPT|CPT|EAD)\b/,
+  // benefits ("healthcare", "insurance" and "pension" alone are industries: only the benefit wording counts)
+  /\b(?:benefits?|perks?|pto|401\s?k|(?:health|medical|dental|vision|life) insurance|insurance (?:plan|coverage)|pension (?:plan|scheme)|(?:paid|unlimited|generous) (?:vacation|holidays?|leave|time off)|vacation days|parental leave|maternity|paternity)\b|福利|五险一金|五險一金|社保|公积金|公積金|年假|带薪|帶薪|餐补|餐補/i,
+  // hours ("shift" and "schedule" only in their working-time wording)
+  /\b(?:hours?|overtime|weekends?|work[- ]life|part[- ]time|full[- ]time|\d[- ]day (?:work ?)?week|days? (?:a|per) week)\b|加班|双休|雙休|单休|單休|996|工时|工時|班次|每周|每週|朝九晚五|排班/i,
+  /\b(?:(?:night|day|evening|morning|weekend|rotating|swing|split|early|late|graveyard|flexible|fixed|no|\d+[- ]hour)[- ]shifts?|shift (?:work|pattern|patterns|hours|rota|schedule)|(?:work|working|flexible|fixed|weekly|rotating|compressed|predictable|regular|set) schedules?)\b/i,
+  /弹性(?:工作|工时|上班|办公|打卡|上下班|时间)|彈性(?:工作|工時|上班|辦公|打卡|上下班|時間)/,
+  // time zone (the abbreviations only in capitals: "est" is also a French word)
+  /\btime ?zones?\b|时区|時區|时差|時差/i,
+  /\b(?:UTC|GMT|EST|PST|CET|CST)\b/,
+  // commute (地铁 alone is also an industry: 地铁运营)
+  /\b(?:commut(?:e|es|ing)|relocat(?:e|ion|ing)|walking distance|public transit|near (?:me|home|my home)|close to home|minutes? (?:from|away))\b|通勤|离家|離家|附近|班车|班車|(?:近|靠近|临近|臨近)地[铁鐵]|地[铁鐵](?:沿线|沿線|口|站|直达|直達)/i,
+];
+
+/** True for a phrase about pay, visa, benefits, hours, time zone or commute. */
+export function isConstraintPhrase(phrase: string): boolean {
+  return CONSTRAINT_PHRASES.some((re) => re.test(phrase));
+}
+
+/** "using Rust" → "Rust", "at climate startups" → "climate startups": the topic without its lead-in. */
+function topicOf(phrase: string): string {
+  return phrase
+    .trim()
+    .replace(/^(?:(?:that|which|who)\s+)?(?:(?:is|are|uses?|using|use|with|at|in|for|on|about|around|doing|working (?:with|on|in|at)|focused on|focusing on|related to|involving)\s+)+/i, '')
+    .replace(/^[\s,;:.\-–—]+|[\s,;:.\-–—]+$/g, '')
+    .trim();
+}
+
+function rankedByOf(plan: PlannerPlan, unmatched: readonly string[]): string[] {
+  const own = Array.isArray(plan.relevanceTerms) ? plan.relevanceTerms.filter((t): t is string => typeof t === 'string').map((t) => t.trim()).filter(Boolean) : [];
+  // The planner's own terms pass the same test as the derived ones (a model may name a pay or visa phrase as a topic).
+  // When none of them passes, the topics are derived as if it had given none.
+  const ownTopics = own.filter((p) => !isConstraintPhrase(p));
+  const source = ownTopics.length ? ownTopics : unmatched.filter((p) => !isConstraintPhrase(p)).map(topicOf);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  let joined = 0;
+  for (const raw of source) {
+    const term = raw.slice(0, RANKED_BY_MAX_CHARS).trim();
+    const key = term.toLowerCase();
+    if (!term || seen.has(key)) continue;
+    // The terms joined by a space are what a client sends back as `relevance`: they must fit its limit together.
+    const length = joined + (out.length ? 1 : 0) + term.length;
+    if (length > FEED_RELEVANCE_MAX_CHARS) continue;
+    seen.add(key);
+    out.push(term);
+    joined = length;
+    if (out.length === RANKED_BY_MAX_TERMS) break;
+  }
+  return out;
 }
 
 const DATE_POSTED_DAYS: Record<string, 1 | 3 | 7 | 30> = { today: 1, '3days': 3, week: 7, month: 30 };
@@ -225,8 +322,11 @@ function extractDailyPay(text: string, market: Market): FilterSet['dailyPay'] | 
 /**
  * Plan → FilterSet patch. Supported constraints become filters; the rest
  * (in the user's words) are returned as `unmatched` and never claimed checked.
+ * `rankedBy` names the topics among them a list may be ORDERED by (never
+ * filtered by): the planner's own `relevanceTerms` when it gives any, else the
+ * unmatched phrases that are not requirements (see `isConstraintPhrase`).
  */
-export function planToFilters(plan: PlannerPlan, text: string, market: Market): { patch: FilterSetPatch; unmatched: string[] } {
+export function planToFilters(plan: PlannerPlan, text: string, market: Market): { patch: FilterSetPatch; unmatched: string[]; rankedBy: string[] } {
   const patch: FilterSetPatch = {};
   const titles = plan.queries.map((q) => q.trim()).filter(Boolean).slice(0, 2);
   if (titles.length) {
@@ -281,5 +381,6 @@ export function planToFilters(plan: PlannerPlan, text: string, market: Market): 
   // Fields of the other market never leave this function.
   const drop = market === 'intl' ? CN_ONLY_FIELDS : INTL_ONLY_FIELDS;
   for (const f of drop) delete (patch as Record<string, unknown>)[f];
-  return { patch, unmatched: [...new Set(unmatched)].slice(0, 12) };
+  const left = [...new Set(unmatched)].slice(0, 12);
+  return { patch, unmatched: left, rankedBy: rankedByOf(plan, left) };
 }
