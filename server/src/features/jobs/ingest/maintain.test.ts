@@ -12,9 +12,16 @@
 //     sync then starts from the beginning;
 //   - WP-17 → WP-16b: the enrichment catch-up — a stale-version row is queued
 //     once, a rules-only row only when a model is configured and the budget is
-//     above 0, and the per-run cap is respected.
-// A small in-memory RAJob table plays the two SELECTs and the expiry UPDATE:
-// no database, no network, no model.
+//     above 0, and the per-run cap is respected;
+//   - MKT-5C (JI-10; MARKET_STRATEGY 1.5 "Closure", M-22): a public mainland
+//     row no source has confirmed for 45 days is archived as 'expired'; the
+//     rule exists for market `cn` only and never touches a user's import;
+//   - MKT-5C (carry-over M4): a version bump reaches the newest postings
+//     first, and a row that still holds a skill with no canonical id is queued
+//     for a skills-only pass once the brand's embedding model has label
+//     vectors in RASkill.
+// A small in-memory RAJob table plays the SELECTs and the UPDATEs: no
+// database, no network, no model.
 
 import { describe, expect, it, vi } from 'vitest';
 
@@ -25,7 +32,7 @@ import { getBrand } from '../../../platform/brand/index.js';
 import type { EnqueueManyItem } from '../../../platform/queue/index.js';
 import { createFakePrisma } from '../../../test/fakePrisma.js';
 import { normalizeSql } from '../../../test/sqlSnapshot.js';
-import { ENRICH_VERSION, RULES_CHECKED_MODEL, RULES_ONLY_MODEL, enrichDedupeKey, enrichJob } from '../enrich/index.js';
+import { ENRICH_VERSION, RULES_CHECKED_MODEL, RULES_ONLY_MODEL, enrichDedupeKey, enrichJob, skillRemapDedupeKey } from '../enrich/index.js';
 import { makeJob } from '../enrich/__tests__/fixtures.js';
 import { bankMarket } from '../../../roboapply/v2/lib/raCrossBankMatch.js';
 import { resolveExpiresAt } from '../normalize/identity.js';
@@ -37,16 +44,20 @@ import type { IngestDb } from './db.js';
 import {
   BANK_BOARDS,
   BANK_SYNC_PROVIDER,
+  CN_UNSEEN_DAYS,
   DEAD_BANK_LINK_SCAN_LIMIT,
   ENRICH_REQUEUE_PER_RUN,
-  NO_DATE_EXPIRY_BOARDS,
   alignSourcePriority,
   archiveDeadBankLinks,
+  archiveUnseenMainland,
   buildAlignPrioritySql,
   buildExpireSql,
   buildRestartBankSyncSql,
   buildRulesOnlySql,
+  buildSkillRemapSql,
+  buildSkillVectorProbeSql,
   buildStaleEnrichSql,
+  buildUnseenMainlandSql,
   priorityTargets,
   rulesRetryDedupeKey,
   runEnrichCatchUp,
@@ -83,6 +94,10 @@ interface JobRow {
   enrichModel: string | null;
   enrichedAt: Date | null;
   sourcePriority: number;
+  /** When a source last confirmed the row listed (step 2b). */
+  lastSeenAt: Date;
+  /** `skillsDetail[].via` of the row's skills (step 6c reads "has an entry with via 'none'"). */
+  skillVias: string[];
 }
 
 const row = (over: Partial<JobRow> & { id: string }): JobRow => ({
@@ -97,17 +112,23 @@ const row = (over: Partial<JobRow> & { id: string }): JobRow => ({
   enrichModel: 'test/model',
   enrichedAt: new Date(NOW.getTime() - DAY),
   sourcePriority: 10,
+  lastSeenAt: new Date(NOW.getTime() - DAY),
+  skillVias: [],
   ...over,
 });
 
 /**
- * Plays buildExpireSql, buildAlignPrioritySql, buildStaleEnrichSql and
- * buildRulesOnlySql over `rows`, reading each statement's own parameters (the
+ * Plays buildExpireSql, buildUnseenMainlandSql, buildAlignPrioritySql,
+ * buildStaleEnrichSql, buildRulesOnlySql, buildSkillVectorProbeSql and
+ * buildSkillRemapSql over `rows`, reading each statement's own parameters (the
  * dedupe repair updates nothing). Every statement is recorded in `sql`.
+ * `skillVectorModels`: the embedding model tags RASkill holds a label vector of.
  */
-function tableDb(rows: JobRow[]): { db: IngestDb; sql: string[] } {
+function tableDb(rows: JobRow[], opts: { skillVectorModels?: string[] } = {}): { db: IngestDb; sql: string[] } {
   const sql: string[] = [];
   const byEnriched = (a: JobRow, b: JobRow) => (a.enrichedAt?.getTime() ?? -1) - (b.enrichedAt?.getTime() ?? -1) || (a.id < b.id ? -1 : 1);
+  // ORDER BY "postedAt" DESC NULLS LAST, "id" ASC
+  const newestFirst = (a: JobRow, b: JobRow) => (b.postedAt?.getTime() ?? Number.NEGATIVE_INFINITY) - (a.postedAt?.getTime() ?? Number.NEGATIVE_INFINITY) || (a.id < b.id ? -1 : 1);
   const read = (strings: TemplateStringsArray | { text: string; values: unknown[] }, ...values: unknown[]) => {
     const text = normalizeSql('text' in strings ? strings.text : strings.join('?'));
     const vals = 'text' in strings ? strings.values : values;
@@ -145,6 +166,19 @@ function tableDb(rows: JobRow[]): { db: IngestDb; sql: string[] } {
         }
         return n;
       }
+      if (text.includes('"lastSeenAt" < now()')) {
+        // Step 2b: the market is a parameter of the statement's own (always the mainland), then the import board, then the days.
+        const [market, importBoard, days] = vals as [string, string, number];
+        let n = 0;
+        for (const r of rows) {
+          if (r.market !== market || r.visibility !== 'public' || r.archivedAt || r.sourceBoard === importBoard) continue;
+          if (r.lastSeenAt.getTime() >= NOW.getTime() - days * DAY) continue;
+          r.archivedAt = NOW;
+          r.closeReason = 'expired';
+          n += 1;
+        }
+        return n;
+      }
       if (!text.includes(`"closeReason" = 'expired'`)) return 0;
       // Past a stated deadline: any board. No deadline: by age, and only the boards the statement names.
       const [market, ageBoards, days] = vals as [string, string[], number];
@@ -164,7 +198,19 @@ function tableDb(rows: JobRow[]): { db: IngestDb; sql: string[] } {
       const { text, vals } = read(strings, ...values);
       if (text.includes('"enrichVersion" <')) {
         const [market, version, limit] = vals as [string, number, number];
-        return rows.filter((r) => r.market === market && !r.archivedAt && r.enrichVersion !== null && r.enrichVersion < version).sort(byEnriched).slice(0, limit).map((r) => ({ id: r.id }));
+        return rows.filter((r) => r.market === market && !r.archivedAt && r.enrichVersion !== null && r.enrichVersion < version).sort(newestFirst).slice(0, limit).map((r) => ({ id: r.id }));
+      }
+      if (text.includes('FROM "RASkill"')) {
+        const [modelTag] = vals as [string];
+        return (opts.skillVectorModels ?? []).includes(modelTag) ? [{ one: 1 }] : [];
+      }
+      if (text.includes('"skillsDetail" @>')) {
+        const [market, version, limit] = vals as [string, number, number];
+        return rows
+          .filter((r) => r.market === market && !r.archivedAt && r.visibility === 'public' && r.enrichVersion === version && r.skillVias.includes('none'))
+          .sort(newestFirst)
+          .slice(0, limit)
+          .map((r) => ({ id: r.id }));
       }
       if (text.includes('"enrichModel" =')) {
         const [market, version, model, limit] = vals as [string, number, string, number];
@@ -276,10 +322,95 @@ describe('expiry (WP-42; MKT-3C JI-10): a stated deadline for every source, post
     for (const board of [...BANK_BOARDS, ...PUBLIC_ATS, 'tw_open_data', 'tw_gov_jobs', 'usajobs', 'user_import']) expect(AGE_EXPIRY_BOARDS).not.toContain(board);
   });
 
-  it('the list the feed mirrors for its age floor is unchanged: the banks plus every public ATS', () => {
-    expect([...NO_DATE_EXPIRY_BOARDS]).toEqual([...BANK_BOARDS, ...PUBLIC_ATS]);
-    // The banks are written to the markets raCrossBankMatch names.
+  it('the banks are written to the markets raCrossBankMatch names', () => {
+    // (The list of boards with no date expiry is gone: the expiry step names the boards that DO expire by age.)
     expect(BANK_BOARDS.map((b) => bankMarket(b))).toEqual(['intl', 'cn']);
+  });
+});
+
+describe('MKT-5C JI-10: a mainland row no source has confirmed for 45 days is archived (step 2b)', () => {
+  const seen = (days: number) => new Date(NOW.getTime() - days * DAY);
+  /** The GoHire bank has a posting page and its sync runs, so step 4 closes nothing here. */
+  const CN = [bankAdapter('bank_gohire', 'gohire', true)];
+
+  it('ACCEPT: a mainland board row not seen for 46 days is archived as expired; one seen 44 days ago is not', async () => {
+    const rows = [
+      row({ id: 'cn_board_46', market: 'cn', sourceBoard: 'smartrecruiters', lastSeenAt: seen(46) }),
+      row({ id: 'cn_board_44', market: 'cn', sourceBoard: 'smartrecruiters', lastSeenAt: seen(44) }),
+      row({ id: 'cn_board_45_less_an_hour', market: 'cn', sourceBoard: 'greenhouse', lastSeenAt: new Date(NOW.getTime() - 45 * DAY + 3_600_000) }),
+    ];
+    const res = await runMaintenance(tableDb(rows).db, 'cn', CN, BANKS_LISTED);
+    expect(res).toMatchObject({ unseenMainland: 1, expired: 0 });
+    expect(rows.find((r) => r.id === 'cn_board_46')).toMatchObject({ archivedAt: NOW, closeReason: 'expired' });
+    expect(rows.find((r) => r.id === 'cn_board_44')).toMatchObject({ archivedAt: null, closeReason: null });
+    expect(rows.find((r) => r.id === 'cn_board_45_less_an_hour')).toMatchObject({ archivedAt: null });
+    expect(CN_UNSEEN_DAYS).toBe(45);
+  });
+
+  it('every mainland source falls under it (board, bank, feed, a board no list names), whatever its posted date; a user\'s import never does', async () => {
+    const fresh = new Date(NOW.getTime() - DAY);
+    const rows = [
+      // Posted yesterday and listed with a far deadline, but unseen for 60 days: the source stopped being read.
+      ...['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'gohire', 'activejobs', 'beisen', 'workable'].map((b) =>
+        row({ id: `cn_${b}`, market: 'cn', sourceBoard: b, postedAt: fresh, expiresAt: new Date(NOW.getTime() + 30 * DAY), lastSeenAt: seen(60) }),
+      ),
+      row({ id: 'cn_import_public', market: 'cn', sourceBoard: 'user_import', lastSeenAt: seen(400) }),
+      row({ id: 'cn_import_private', market: 'cn', sourceBoard: 'user_import', visibility: 'private', lastSeenAt: seen(400) }),
+      row({ id: 'cn_private_other', market: 'cn', sourceBoard: 'greenhouse', visibility: 'private', lastSeenAt: seen(400) }),
+      row({ id: 'cn_archived', market: 'cn', sourceBoard: 'greenhouse', lastSeenAt: seen(400), archivedAt: seen(300), closeReason: 'source_removed' }),
+    ];
+    const res = await runMaintenance(tableDb(rows).db, 'cn', CN, BANKS_LISTED);
+    expect(res.unseenMainland).toBe(8);
+    expect(rows.filter((r) => r.closeReason === 'expired').map((r) => r.id).sort()).toEqual(['cn_activejobs', 'cn_ashby', 'cn_beisen', 'cn_gohire', 'cn_greenhouse', 'cn_lever', 'cn_smartrecruiters', 'cn_workable']);
+    for (const id of ['cn_import_public', 'cn_import_private', 'cn_private_other']) expect(rows.find((r) => r.id === id), id).toMatchObject({ archivedAt: null, closeReason: null });
+    // A row closed earlier keeps its own reason.
+    expect(rows.find((r) => r.id === 'cn_archived')).toMatchObject({ closeReason: 'source_removed' });
+    // A second run finds nothing more.
+    expect((await runMaintenance(tableDb(rows).db, 'cn', CN, BANKS_LISTED)).unseenMainland).toBe(0);
+  });
+
+  it('ACCEPT: an international board or bank row not seen for 60 days is untouched: the step does not run for that market at all', async () => {
+    const rows = [
+      row({ id: 'intl_board', sourceBoard: 'greenhouse', lastSeenAt: seen(60), postedAt: seen(300) }),
+      row({ id: 'intl_bank', sourceBoard: 'robohire', lastSeenAt: seen(60) }),
+      row({ id: 'intl_tw', sourceBoard: 'tw_open_data', lastSeenAt: seen(60) }),
+      // The mainland row of the same table is not this run's market.
+      row({ id: 'cn_board', market: 'cn', sourceBoard: 'greenhouse', lastSeenAt: seen(60) }),
+    ];
+    const { db, sql } = tableDb(rows);
+    const res = await runMaintenance(db, 'intl', BANKS_RUNNING, BANKS_LISTED);
+    expect(res).toMatchObject({ unseenMainland: 0, expired: 0 });
+    expect(rows.every((r) => r.archivedAt === null)).toBe(true);
+    expect(sql.some((t) => t.includes('"lastSeenAt" <'))).toBe(false);
+    expect(await archiveUnseenMainland(db, 'intl')).toBe(0);
+    // The same table, the mainland run: only its own row.
+    expect(await archiveUnseenMainland(db, 'cn')).toBe(1);
+    expect(rows.filter((r) => r.archivedAt).map((r) => r.id)).toEqual(['cn_board']);
+  });
+
+  it('the statement: the mainland market as a constant of the rule, public live rows, never a user import, 45 days by last seen', () => {
+    const stmt = buildUnseenMainlandSql();
+    expect(normalizeSql(stmt.text)).toBe(
+      `UPDATE "RAJob" SET "archivedAt" = now(), "closedAt" = COALESCE("closedAt", now()), "closeReason" = 'expired', "updatedAt" = now() ` +
+        `WHERE "market" = $1 AND "visibility" = 'public' AND "archivedAt" IS NULL AND "sourceBoard" <> $2 AND "lastSeenAt" < now() - make_interval(days => $3::int)`,
+    );
+    expect(stmt.values).toEqual(['cn', 'user_import', 45]);
+    // It reads no posted date and no deadline: a row is unseen however fresh its posting looks.
+    expect(stmt.text).not.toContain('"postedAt"');
+    expect(stmt.text).not.toContain('"expiresAt"');
+  });
+
+  it('it runs after the stated-validity step and before the priorities and the dedupe repair, so a hand-over happens in the same run', async () => {
+    const rows = [row({ id: 'cn_unseen', market: 'cn', sourceBoard: 'greenhouse', lastSeenAt: seen(50), sourcePriority: 5 })];
+    const { db, sql } = tableDb(rows);
+    const res = await runMaintenance(db, 'cn', CN, BANKS_LISTED);
+    expect(res).toEqual({ expired: 0, missed: 0, unseenMainland: 1, priorityAligned: 0, deadBankLinks: 0, dedupeRepaired: 0, missedRule: false, enrichQueued: 0 });
+    const at = (needle: string) => sql.findIndex((t) => t.includes(needle));
+    expect(at('"expiresAt" < now()')).toBeLessThan(at('"lastSeenAt" < now()'));
+    expect(at('"lastSeenAt" < now()')).toBeLessThan(at('SET "sourcePriority" ='));
+    expect(at('"lastSeenAt" < now()')).toBeLessThan(at('WITH ranked AS'));
+    // The archive moves `updatedAt`, which is what the repair reads to find the group.
+    expect(sql[at('"lastSeenAt" < now()')]).toContain('"updatedAt" = now()');
   });
 });
 
@@ -334,7 +465,7 @@ describe('MKT-3C JI-5 / JC-7: stored dedupe priorities follow PROVIDER_META (ali
     const rows = [row({ id: 'a', sourceBoard: 'lever', sourcePriority: 10 }), row({ id: 'b', sourceBoard: 'greenhouse', sourcePriority: 5 })];
     const { db, sql } = tableDb(rows);
     const first = await runMaintenance(db, 'intl', [], { perQueryTracking: false, deadBankLinks: { env: {} } });
-    expect(first).toEqual({ expired: 0, missed: 0, priorityAligned: 1, deadBankLinks: 0, dedupeRepaired: 0, missedRule: false, enrichQueued: 0 });
+    expect(first).toEqual({ expired: 0, missed: 0, unseenMainland: 0, priorityAligned: 1, deadBankLinks: 0, dedupeRepaired: 0, missedRule: false, enrichQueued: 0 });
     const at = (needle: string) => sql.findIndex((t) => t.includes(needle));
     // The first UPDATE of the run is still the expiry; the dedupe repair (both steps) sees the new numbers.
     expect(sql.findIndex((t) => t.startsWith('UPDATE "RAJob"'))).toBe(at(`"closeReason" = 'expired'`));
@@ -578,7 +709,7 @@ describe('enrichment catch-up', () => {
     const { db } = tableDb(rows);
     const q = queue();
     const first = await runEnrichCatchUp(db, 'intl', { brand: robo, enqueueMany: q.enqueueMany, env: {}, ...withModel });
-    expect(first).toEqual({ staleQueued: 1, rulesQueued: 0, modelAvailable: true });
+    expect(first).toEqual({ staleQueued: 1, rulesQueued: 0, modelAvailable: true, skillsQueued: 0 });
     expect(q.items).toEqual([{ kind: 'job.enrich', payload: { jobId: 'stale' }, options: { dedupeKey: enrichDedupeKey('stale'), brand: 'roboapply' } }]);
     const second = await runEnrichCatchUp(db, 'intl', { brand: robo, enqueueMany: q.enqueueMany, env: {}, ...withModel });
     expect(second.staleQueued).toBe(0);
@@ -594,12 +725,12 @@ describe('enrichment catch-up', () => {
 
     // GoApply without a domestic model: nothing to retry with.
     const none = queue();
-    expect(await runEnrichCatchUp(tableDb(rows.map((r) => ({ ...r, market: 'cn' }))).db, 'cn', { brand: go, enqueueMany: none.enqueueMany, env: {}, ...noModel })).toEqual({ staleQueued: 0, rulesQueued: 0, modelAvailable: false });
+    expect(await runEnrichCatchUp(tableDb(rows.map((r) => ({ ...r, market: 'cn' }))).db, 'cn', { brand: go, enqueueMany: none.enqueueMany, env: {}, ...noModel })).toEqual({ staleQueued: 0, rulesQueued: 0, modelAvailable: false, skillsQueued: 0 });
     expect(none.items).toHaveLength(0);
 
     const q = queue();
     const first = await runEnrichCatchUp(db, 'intl', { brand: robo, enqueueMany: q.enqueueMany, env: {}, ...withModel });
-    expect(first).toEqual({ staleQueued: 0, rulesQueued: 1, modelAvailable: true });
+    expect(first).toEqual({ staleQueued: 0, rulesQueued: 1, modelAvailable: true, skillsQueued: 0 });
     expect(q.items).toEqual([
       { kind: 'job.enrich', payload: { jobId: 'rules', force: true }, options: { dedupeKey: rulesRetryDedupeKey('rules', 'openai/gpt-cheap', ENRICH_VERSION), brand: 'roboapply' } },
     ]);
@@ -693,7 +824,7 @@ describe('enrichment catch-up', () => {
       // so no row is rewritten, no market hook reruns and no model call is made for them again.
       expect(q.items).toHaveLength(0);
       for (let night = 0; night < 3; night++) {
-        expect(await run()).toEqual({ staleQueued: 0, rulesQueued: 0, modelAvailable: true });
+        expect(await run()).toEqual({ staleQueued: 0, rulesQueued: 0, modelAvailable: true, skillsQueued: 0 });
         const again = await drainAndPrune(q, rows, records, { llm: () => Promise.reject(new Error('upstream 503')), consent: false });
         expect(again).toEqual({ modelCalls: 0, rowWrites: 0, outcomes: [] });
       }
@@ -738,7 +869,7 @@ describe('enrichment catch-up', () => {
   it('ENRICH_DAILY_JOBS=0 means no model pass even with a model configured; a budget above 0 allows it', async () => {
     const rows = [row({ id: 'rules', enrichModel: RULES_ONLY_MODEL })];
     const off = queue();
-    expect(await runEnrichCatchUp(tableDb(rows).db, 'intl', { brand: robo, enqueueMany: off.enqueueMany, env: { ENRICH_DAILY_JOBS: '0' }, ...withModel })).toEqual({ staleQueued: 0, rulesQueued: 0, modelAvailable: false });
+    expect(await runEnrichCatchUp(tableDb(rows).db, 'intl', { brand: robo, enqueueMany: off.enqueueMany, env: { ENRICH_DAILY_JOBS: '0' }, ...withModel })).toEqual({ staleQueued: 0, rulesQueued: 0, modelAvailable: false, skillsQueued: 0 });
     const on = queue();
     expect((await runEnrichCatchUp(tableDb(rows).db, 'intl', { brand: robo, enqueueMany: on.enqueueMany, env: { ENRICH_DAILY_JOBS: '10' }, ...withModel })).rulesQueued).toBe(1);
   });
@@ -752,7 +883,7 @@ describe('enrichment catch-up', () => {
 
     // Default: the shared enrichment model, or GoApply's own (any vendor), serves GoApply.
     const shared = queue();
-    expect(await run({ LLM_ENRICH_MODEL: 'openai/gpt-cheap' }, shared.enqueueMany)).toEqual({ staleQueued: 0, rulesQueued: 1, modelAvailable: true });
+    expect(await run({ LLM_ENRICH_MODEL: 'openai/gpt-cheap' }, shared.enqueueMany)).toEqual({ staleQueued: 0, rulesQueued: 1, modelAvailable: true, skillsQueued: 0 });
     expect(shared.items[0]!.options).toMatchObject({ brand: 'goapply' });
     expect((await run({ CN_LLM_ENRICH_MODEL: 'openai/gpt-cheap' }, queue().enqueueMany)).modelAvailable).toBe(true);
     // No model anywhere: rules only, nothing queued for a model pass.
@@ -764,7 +895,7 @@ describe('enrichment catch-up', () => {
     expect((await run({ ...WALL, CN_LLM_ENRICH_MODEL: 'openai/gpt-cheap' }, none.enqueueMany)).modelAvailable).toBe(false);
     expect(none.items).toHaveLength(0);
     const cn = queue();
-    expect(await run({ ...WALL, CN_LLM_ENRICH_MODEL: 'deepseek/deepseek-chat' }, cn.enqueueMany)).toEqual({ staleQueued: 0, rulesQueued: 1, modelAvailable: true });
+    expect(await run({ ...WALL, CN_LLM_ENRICH_MODEL: 'deepseek/deepseek-chat' }, cn.enqueueMany)).toEqual({ staleQueued: 0, rulesQueued: 1, modelAvailable: true, skillsQueued: 0 });
     expect(cn.items[0]!.options).toMatchObject({ brand: 'goapply' });
 
     const intl = queue();
@@ -773,9 +904,10 @@ describe('enrichment catch-up', () => {
     expect((await runEnrichCatchUp(tableDb([row({ id: 'r', enrichModel: RULES_ONLY_MODEL })]).db, 'intl', { brand: robo, enqueueMany: queue().enqueueMany, env: { ...WALL, LLM_MODEL: 'openai/gpt-default' } })).modelAvailable).toBe(true);
   });
 
-  it('the cap is respected: stale rows first (oldest enrichment first), the rest of the cap for rules-only rows', async () => {
+  it('the cap is respected: stale rows first (the newest postings first), the rest of the cap for rules-only rows (oldest enrichment first)', async () => {
     const rows = [
-      ...Array.from({ length: 6 }, (_, i) => row({ id: `stale${i}`, enrichVersion: ENRICH_VERSION - 1, enrichedAt: new Date(NOW.getTime() - (10 - i) * DAY) })),
+      // stale0 is the newest posting and was enriched most recently: the posting date decides, not the enrichment date.
+      ...Array.from({ length: 6 }, (_, i) => row({ id: `stale${i}`, enrichVersion: ENRICH_VERSION - 1, postedAt: new Date(NOW.getTime() - (i + 1) * DAY), enrichedAt: new Date(NOW.getTime() - (i + 1) * DAY) })),
       ...Array.from({ length: 6 }, (_, i) => row({ id: `rules${i}`, enrichModel: RULES_ONLY_MODEL, enrichedAt: new Date(NOW.getTime() - (10 - i) * DAY) })),
     ];
     const tight = queue();
@@ -808,10 +940,118 @@ describe('enrichment catch-up', () => {
     expect(skipped.sql.some((t) => t.includes('"enrichVersion"'))).toBe(false);
   });
 
+  it('a version bump reaches the newest postings first; an undated row comes last', async () => {
+    const rows = [
+      row({ id: 'old', enrichVersion: 0, postedAt: new Date(NOW.getTime() - 90 * DAY), enrichedAt: null }),
+      row({ id: 'undated', enrichVersion: 0, postedAt: null }),
+      row({ id: 'new', enrichVersion: 0, postedAt: new Date(NOW.getTime() - DAY) }),
+      row({ id: 'mid', enrichVersion: 0, postedAt: new Date(NOW.getTime() - 10 * DAY) }),
+    ];
+    const q = queue();
+    await runEnrichCatchUp(tableDb(rows).db, 'intl', { brand: robo, enqueueMany: q.enqueueMany, env: {}, limit: 3, enrichModel: () => ({ available: true, model: 'openai/gpt-cheap' }) });
+    expect(q.ids()).toEqual(['new', 'mid', 'old']);
+  });
+
+  describe('the skills-only pass (step 6c): rows enriched while the embedding step was off', () => {
+    const TAG = 'text-embedding-3-large@1024';
+    const withTag = { enrichModel: () => ({ available: true, model: 'openai/gpt-cheap' }), embeddingModelTag: () => TAG };
+    const unmapped = (id: string, over: Partial<JobRow> = {}) => row({ id, skillVias: ['alias', 'none'], ...over });
+
+    it('a public row at the current version that holds a skill with no id is queued once the model has label vectors, with the remap key', async () => {
+      const rows = [unmapped('a'), row({ id: 'mapped', skillVias: ['alias', 'embedding'] }), row({ id: 'no_skills' })];
+      const q = queue();
+      const first = await runEnrichCatchUp(tableDb(rows, { skillVectorModels: [TAG] }).db, 'intl', { brand: robo, enqueueMany: q.enqueueMany, env: {}, ...withTag });
+      expect(first).toEqual({ staleQueued: 0, rulesQueued: 0, modelAvailable: true, skillsQueued: 1 });
+      expect(q.items).toEqual([{ kind: 'job.enrich', payload: { jobId: 'a', skillsOnly: true }, options: { dedupeKey: skillRemapDedupeKey('a', TAG), brand: 'roboapply' } }]);
+      // The same vocabulary state never queues the job twice while the item exists.
+      expect((await runEnrichCatchUp(tableDb(rows, { skillVectorModels: [TAG] }).db, 'intl', { brand: robo, enqueueMany: q.enqueueMany, env: {}, ...withTag })).skillsQueued).toBe(0);
+      // Another model tag (the vectors were re-embedded) queues it again.
+      const other = 'other-model@1024';
+      expect((await runEnrichCatchUp(tableDb(rows, { skillVectorModels: [other] }).db, 'intl', { brand: robo, enqueueMany: q.enqueueMany, env: {}, ...withTag, embeddingModelTag: () => other })).skillsQueued).toBe(1);
+    });
+
+    it('nothing is queued without an embedding model, or while RASkill holds no label vector of it', async () => {
+      const rows = [unmapped('a')];
+      const none = queue();
+      const noTag = tableDb(rows, { skillVectorModels: [TAG] });
+      expect((await runEnrichCatchUp(noTag.db, 'intl', { brand: robo, enqueueMany: none.enqueueMany, env: {}, ...withTag, embeddingModelTag: () => null })).skillsQueued).toBe(0);
+      // No probe and no select without a tag.
+      expect(noTag.sql.some((t) => t.includes('"RASkill"') || t.includes('"skillsDetail"'))).toBe(false);
+      const noVectors = tableDb(rows, { skillVectorModels: [] });
+      expect((await runEnrichCatchUp(noVectors.db, 'intl', { brand: robo, enqueueMany: none.enqueueMany, env: {}, ...withTag })).skillsQueued).toBe(0);
+      expect(noVectors.sql.some((t) => t.includes('"RASkill"'))).toBe(true);
+      expect(noVectors.sql.some((t) => t.includes('"skillsDetail"'))).toBe(false);
+      expect(none.items).toHaveLength(0);
+      // The real default: a brand with no embedding key has no tag.
+      expect((await runEnrichCatchUp(tableDb(rows, { skillVectorModels: [TAG] }).db, 'intl', { brand: robo, enqueueMany: none.enqueueMany, env: {}, enrichModel: withTag.enrichModel })).skillsQueued).toBe(0);
+      // …and with a key it is the platform's tag (the model name and the dimensions).
+      const keyed = queue();
+      const tag = `text-embedding-3-large@1024`;
+      const res = await runEnrichCatchUp(tableDb(rows, { skillVectorModels: [tag] }).db, 'intl', { brand: robo, enqueueMany: keyed.enqueueMany, env: { OPENAI_API_KEY: 'placeholder-for-this-test', EMBED_MODEL: 'text-embedding-3-large' }, enrichModel: withTag.enrichModel });
+      expect(res.skillsQueued).toBe(1);
+    });
+
+    it('never a private row (a user\'s import is mapped by exact alias only), an archived row, another market or an older version; newest postings first', async () => {
+      const rows = [
+        unmapped('import', { visibility: 'private', sourceBoard: 'user_import' }),
+        unmapped('gone', { archivedAt: NOW }),
+        unmapped('cn', { market: 'cn' }),
+        unmapped('older', { postedAt: new Date(NOW.getTime() - 20 * DAY) }),
+        unmapped('newer', { postedAt: new Date(NOW.getTime() - 2 * DAY) }),
+      ];
+      const q = queue();
+      const res = await runEnrichCatchUp(tableDb(rows, { skillVectorModels: [TAG] }).db, 'intl', { brand: robo, enqueueMany: q.enqueueMany, env: {}, ...withTag });
+      expect(res.skillsQueued).toBe(2);
+      expect(q.ids()).toEqual(['newer', 'older']);
+    });
+
+    it('it takes what is left of the cap after the stale and the rules-only rows; a failing probe queues nothing and fails nothing', async () => {
+      const rows = [
+        ...Array.from({ length: 3 }, (_, i) => row({ id: `stale${i}`, enrichVersion: ENRICH_VERSION - 1 })),
+        ...Array.from({ length: 2 }, (_, i) => row({ id: `rules${i}`, enrichModel: RULES_ONLY_MODEL })),
+        ...Array.from({ length: 4 }, (_, i) => unmapped(`skills${i}`)),
+      ];
+      const q = queue();
+      const res = await runEnrichCatchUp(tableDb(rows, { skillVectorModels: [TAG] }).db, 'intl', { brand: robo, enqueueMany: q.enqueueMany, env: {}, limit: 7, ...withTag });
+      expect(res).toEqual({ staleQueued: 3, rulesQueued: 2, modelAvailable: true, skillsQueued: 2 });
+      expect(q.ids()).toEqual(['stale0', 'stale1', 'stale2', 'rules0', 'rules1', 'skills0', 'skills1']);
+      // The cap is spent before the skills pass: nothing more.
+      const tight = queue();
+      expect((await runEnrichCatchUp(tableDb(rows, { skillVectorModels: [TAG] }).db, 'intl', { brand: robo, enqueueMany: tight.enqueueMany, env: {}, limit: 5, ...withTag })).skillsQueued).toBe(0);
+      // No RASkill table (a database before the M0 push): the two other kinds are still queued.
+      const broken = tableDb(rows, { skillVectorModels: [TAG] });
+      const realQuery = broken.db.$queryRaw.bind(broken.db) as unknown as (sql: { text: string; values: unknown[] }) => Promise<unknown[]>;
+      (broken.db as unknown as { $queryRaw: unknown }).$queryRaw = async (stmt: { text: string; values: unknown[] }) => (stmt.text.includes('"RASkill"') ? Promise.reject(new Error('relation "RASkill" does not exist')) : realQuery(stmt));
+      const safe = queue();
+      expect(await runEnrichCatchUp(broken.db, 'intl', { brand: robo, enqueueMany: safe.enqueueMany, env: {}, ...withTag })).toEqual({ staleQueued: 3, rulesQueued: 2, modelAvailable: true, skillsQueued: 0 });
+    });
+
+    it('runMaintenance counts the pass in enrichQueued', async () => {
+      const q = queue();
+      const res = await runMaintenance(tableDb([unmapped('a'), row({ id: 'stale', enrichVersion: 0 })], { skillVectorModels: [TAG] }).db, 'intl', [], {
+        perQueryTracking: false,
+        enrich: { brand: robo, enqueueMany: q.enqueueMany, env: {}, ...withTag },
+      });
+      expect(res.enrichQueued).toBe(2);
+    });
+
+    it('the two statements: a one-row probe of the label vectors, and the bounded, market-scoped select of public rows', () => {
+      const probe = buildSkillVectorProbeSql(TAG);
+      expect(normalizeSql(probe.text)).toBe('SELECT 1 AS "one" FROM "RASkill" WHERE "embedding" IS NOT NULL AND "embeddingModel" = $1 LIMIT 1');
+      expect(probe.values).toEqual([TAG]);
+      const remap = buildSkillRemapSql('cn', 3, 40);
+      expect(normalizeSql(remap.text)).toBe(
+        `SELECT "id" FROM "RAJob" WHERE "market" = $1 AND "archivedAt" IS NULL AND "visibility" = 'public' AND "enrichVersion" = $2::int AND "skillsDetail" @> '[{"via":"none"}]'::jsonb ` +
+          `ORDER BY "postedAt" DESC NULLS LAST, "id" ASC LIMIT $3::int`,
+      );
+      expect(remap.values).toEqual(['cn', 3, 40]);
+    });
+  });
+
   it('the two reads are bounded, market-scoped and skip archived rows', () => {
     const stale = buildStaleEnrichSql('intl', 3, 50);
     expect(normalizeSql(stale.text)).toBe(
-      'SELECT "id" FROM "RAJob" WHERE "market" = $1 AND "archivedAt" IS NULL AND "enrichVersion" < $2::int ORDER BY "enrichedAt" ASC NULLS FIRST, "id" ASC LIMIT $3::int',
+      'SELECT "id" FROM "RAJob" WHERE "market" = $1 AND "archivedAt" IS NULL AND "enrichVersion" < $2::int ORDER BY "postedAt" DESC NULLS LAST, "id" ASC LIMIT $3::int',
     );
     expect(stale.values).toEqual(['intl', 3, 50]);
     const rules = buildRulesOnlySql('cn', 3, RULES_ONLY_MODEL, 20);

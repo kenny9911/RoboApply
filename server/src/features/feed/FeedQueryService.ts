@@ -53,6 +53,16 @@
 // is in date order from its first row to its last, and legs B and C could only
 // add rows out of that order.
 //
+// "New" (JI-10; items.ts): a card is new when we first read its posting after
+// the viewer's previous visit to the list. That visit is the stored stamp
+// (`RAUserUiState.lastFeedVisitAt`, the instant the new-count badge counts
+// from) as it was BEFORE this request stamps it, and it travels in the cursor,
+// so every page of one list uses the same instant. A stamp younger than a feed
+// session (30 minutes) is this sitting's own (a refresh, another sort): it is
+// not a previous visit, and the 48-hour rule applies, as it does for a person
+// who never opened the list and for every list without a session (preview,
+// the visitor list).
+//
 // GoApply: with 个性化推荐 off or not yet chosen the list is ordered by date
 // posted and filters only, and no fit is used or shown (PIPL Art. 24; the mode
 // and the `jobs.feed` capability are enforced on the routes). Such a list
@@ -66,6 +76,7 @@
 // `aiAllowed()` and the per-brand LLM layer.
 
 import { createHash } from 'node:crypto';
+import { Prisma } from '../../generated/prisma/client.js';
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { BrandId, Market } from '../../platform/brand/registry.js';
 import { cnRecruitmentInfoMode } from '../../platform/flags.js';
@@ -116,7 +127,7 @@ import {
 } from './contract.js';
 import { hideProposal, planToFilters, relaxations, toDiff, type PlannerPlan } from './filterDiff.js';
 import { denseLegSql, lexicalLegSql, profileQueryText, recencyLegSql } from './hybridSql.js';
-import { publicItem, toFeedItem } from './items.js';
+import { needsSponsorshipFor, publicItem, toFeedItem } from './items.js';
 import {
   collapseSameRole,
   companyKeyOf,
@@ -260,6 +271,13 @@ export interface FeedQueryInput {
    * Part of the session hash.
    */
   relevance?: string;
+  /**
+   * The UI language of the request, when the caller knows it: the skill labels
+   * of a card's fit ("what lines up", "what is missing") are written in it
+   * (match `GetFitsOptions.locale`). Absent: the posting's language, else the
+   * market's. Never part of the session hash: it changes no row and no order.
+   */
+  locale?: string;
 }
 
 /** The input of `preview` (the Assistant's tools, precompute, the job-search index read). */
@@ -270,6 +288,8 @@ export interface FeedPreviewInput {
   limit: number;
   /** As `FeedQueryInput.relevance`. */
   relevance?: string;
+  /** As `FeedQueryInput.locale`. */
+  locale?: string;
 }
 
 /** `relevance` as the service keeps it: trimmed, empty → null. Longer than the contract allows is refused, never cut. */
@@ -389,10 +409,43 @@ function typedText(filters: FilterSet, relevance: string | null): string | null 
 
 const sha = (v: string) => createHash('sha256').update(v).digest('hex').slice(0, 40);
 
-function parseCursor(cursor: string): { sessionId: string; offset: number } {
-  const m = cursor.match(/^([A-Za-z0-9_-]{1,64}):(\d{1,6})$/);
+/**
+ * A cursor is `<sessionId>:<offset>`, with `:<since>` after it when the list
+ * was opened with a known previous visit: that instant in base 36
+ * milliseconds, so every page of the list judges "New" against the same
+ * moment (the stored stamp moves when the first page is served). It decides a
+ * badge on the reader's own list and nothing else.
+ */
+function parseCursor(cursor: string): { sessionId: string; offset: number; newSince: Date | null } {
+  const m = cursor.match(/^([A-Za-z0-9_-]{1,64}):(\d{1,6})(?::([0-9a-z]{1,11}))?$/);
   if (!m) throw new HttpError('invalid_request', 'The cursor is not valid.', { where: 'body', issues: [{ path: ['cursor'], code: 'invalid', message: 'Invalid cursor' }] });
-  return { sessionId: m[1]!, offset: Number(m[2]) };
+  const ms = m[3] ? Number.parseInt(m[3], 36) : Number.NaN;
+  return { sessionId: m[1]!, offset: Number(m[2]), newSince: Number.isFinite(ms) && ms > 0 ? new Date(ms) : null };
+}
+
+function cursorOf(sessionId: string, offset: number, newSince: Date | null): string {
+  return newSince ? `${sessionId}:${offset}:${newSince.getTime().toString(36)}` : `${sessionId}:${offset}`;
+}
+
+/**
+ * The stored visit stamp as a PREVIOUS visit: null when there is none, when it
+ * lies in the future, or when it is younger than a feed session (this
+ * sitting's own stamp: a refresh or another sort is not a new visit).
+ */
+export function previousVisit(stamp: Date | null | undefined, now: Date): Date | null {
+  if (!(stamp instanceof Date) || !Number.isFinite(stamp.getTime())) return null;
+  const age = now.getTime() - stamp.getTime();
+  return age >= L.sessionTtlMin * 60_000 ? stamp : null;
+}
+
+/**
+ * `RAJob.sponsorshipSource` of a page's rows, for the provider-reading badge
+ * (items.ts). The list projection (sql.ts FEED_COLUMNS) does not select the
+ * column; `items` runs this only for the rows that could carry such a badge
+ * and only until the projection carries the column itself.
+ */
+export function sponsorshipSourceSql(ids: readonly string[]): Prisma.Sql {
+  return Prisma.sql`SELECT j."id", j."sponsorshipSource" FROM "RAJob" j WHERE j."id" = ANY(${[...ids]}::text[])`;
 }
 
 function sessionExpired(): HttpError {
@@ -768,7 +821,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
    * reads neither again and loads no description: what it adds to a window is
    * the one stored-score query the feed always made.
    */
-  async function score(ctx: FeedCtx, rows: FeedJobRow[], personalized: boolean, loaded?: () => Promise<FeedMatchContext>): Promise<Scored> {
+  async function score(ctx: FeedCtx, rows: FeedJobRow[], personalized: boolean, loaded?: () => Promise<FeedMatchContext>, locale?: string): Promise<Scored> {
     const byId = new Map<string, ScoreEntry>();
     if (!personalized) {
       for (const r of rows) byId.set(r.id, { badge: null, fit: null });
@@ -781,7 +834,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     if (rows.length) {
       try {
         const [read, map] = await Promise.all([
-          deps.match.getFits(ctx.userId, rows.map((r) => r.id), { context, rows: rows.map(toMatchRecord) }),
+          deps.match.getFits(ctx.userId, rows.map((r) => r.id), { context, rows: rows.map(toMatchRecord), ...(locale ? { locale } : {}) }),
           deps.match.calibrationMap ? deps.match.calibrationMap().catch(() => null) : null,
         ]);
         fits = read;
@@ -986,6 +1039,40 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     return { count: named.length, locations: listed.map((x) => x.place), jobIds: listed.map((x) => x.id) };
   }
 
+  /** A list row once the page knows its `RAJob.sponsorshipSource` (the list projection does not select it yet). */
+  type SourcedRow = FeedJobRow & { sponsorshipSource?: string | null };
+
+  /**
+   * The rows of a page with their `sponsorshipSource`, for the provider-reading
+   * badge (items.ts `badgesFor`). One small read, and only for rows that could
+   * carry that badge: an international row whose stored value is 'offered'
+   * with no quote, shown to a person who needs sponsorship there. Rows that
+   * already carry the column (once the list projection selects it) are never
+   * read again. A failing read shows no such badge: nothing is guessed.
+   */
+  async function withSponsorshipSource(rows: FeedJobRow[], user: MatchUser | null): Promise<Map<string, SourcedRow>> {
+    const out = new Map<string, SourcedRow>(rows.map((r) => [r.id, r]));
+    const ask = rows.filter(
+      (r) =>
+        (r as SourcedRow).sponsorshipSource === undefined &&
+        r.market === 'intl' &&
+        r.sponsorship === 'offered' &&
+        !r.sponsorshipEvidence?.trim() &&
+        needsSponsorshipFor(user, r.locationCountry),
+    );
+    if (!ask.length) return out;
+    try {
+      const read = await repo.queryCardExtras(sponsorshipSourceSql(ask.map((r) => r.id)));
+      for (const e of read) {
+        const row = out.get(e.id);
+        if (row && typeof e.sponsorshipSource === 'string') out.set(e.id, { ...row, sponsorshipSource: e.sponsorshipSource });
+      }
+    } catch (err) {
+      logger.warn('FEED', 'sponsorship sources unavailable; no provider-reading badge on this page', { error: err instanceof Error ? err.message : String(err) });
+    }
+    return out;
+  }
+
   async function items(
     ctx: FeedCtx,
     cands: CardCandidate[],
@@ -994,15 +1081,22 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     personalized: boolean,
     also: ReadonlyMap<string, FeedJobRow[]> = new Map(),
     fused = false,
+    newSince: Date | null = null,
   ): Promise<FeedItem[]> {
-    const [tracker, meta] = await Promise.all([repo.trackerStates(ctx.userId, cands.map((c) => c.row.id)), cardMetaFor(ctx, cands.map((c) => c.row))]);
+    const [tracker, meta, sourced] = await Promise.all([
+      repo.trackerStates(ctx.userId, cands.map((c) => c.row.id)),
+      cardMetaFor(ctx, cands.map((c) => c.row)),
+      withSponsorshipSource(cands.map((c) => c.row), user),
+    ]);
     return cands.map((c, i) => {
-      const item = toFeedItem(c.row, {
+      const item = toFeedItem(sourced.get(c.row.id) ?? c.row, {
         user,
         fit: c.badge,
         tracker: tracker.has(c.row.id) ? { status: tracker.get(c.row.id)! } : null,
         position: offset === null ? null : offset + i,
         now: ctx.now,
+        // The viewer's previous visit: "New" = first seen by us after it (null: the 48-hour rule).
+        newSince,
         cardMeta: meta.get(c.row.id),
         explanation: explanationFor(ctx, c, personalized, fused),
       });
@@ -1057,6 +1151,10 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     fused: boolean;
     /** The person's side, read at most once in this request. */
     context: () => Promise<FeedMatchContext>;
+    /** The viewer's previous visit to the list, for "New" (null: none known, the 48-hour rule). The same instant on every page of the list. */
+    newSince: Date | null;
+    /** The request's UI language, for the skill labels of the fits (absent: the posting's language). */
+    locale?: string;
   }
 
   /**
@@ -1115,7 +1213,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
       // Cards, postings folded into a card, and first-window rows the tier view hid (rank entries flagged `h`).
       const known = new Set([...s.jobIds, ...prevRanks.flatMap((r) => [r.jobId, ...(r.also ?? [])])]);
       const fresh = w.rows.filter((r) => !known.has(r.id));
-      const scored = await score(state.ctx, fresh, state.personalized, state.context);
+      const scored = await score(state.ctx, fresh, state.personalized, state.context, state.locale);
       state.user = state.user ?? scored.user;
       const tailIds = s.jobIds.slice(-(L.companyWindow - 1));
       const tailRows = await rowsFor(state, tailIds);
@@ -1195,7 +1293,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     const also = new Map([...folded].map(([cardId, list]) => [cardId, list.map((id) => fetched.get(id)).filter((r): r is FeedJobRow => !!r)]));
     const needScore = rows.filter((r) => !state.scoreCache.has(r.id));
     if (needScore.length) {
-      const scored = await score(state.ctx, needScore, state.personalized, state.context);
+      const scored = await score(state.ctx, needScore, state.personalized, state.context, state.locale);
       state.user = state.user ?? scored.user;
       for (const [id, v] of scored.byId) state.scoreCache.set(id, v);
     }
@@ -1204,7 +1302,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     const exhausted = state.sort === 'deadline' || !olderRemain(s, floor);
     const nextOffset = offset + L.pageSize;
     const more = nextOffset < s.jobIds.length || !exhausted;
-    const [cards, header] = await Promise.all([items(state.ctx, cands, state.user, offset, state.personalized, also, state.fused), sourcesFor(state, s.createdAt)]);
+    const [cards, header] = await Promise.all([items(state.ctx, cands, state.user, offset, state.personalized, also, state.fused, state.newSince), sourcesFor(state, s.createdAt)]);
     const sources = header?.sources;
     // Thin means the WHOLE list is short, not the part read so far: `jobIds` holds the windows fetched up to
     // now (the first one reaches back 14 or 45 days, the list 120). So it is said only when that is known:
@@ -1213,7 +1311,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     const thin = s.jobIds.length < FEED_THIN_BELOW && (exhausted || (header !== undefined && header.listed < FEED_THIN_BELOW));
     return {
       items: cards,
-      cursor: more ? `${s.id}:${nextOffset}` : null,
+      cursor: more ? cursorOf(s.id, nextOffset, state.newSince) : null,
       endOfFeed: !more,
       hiddenByTier: Math.max(0, s.totalEstimate - s.jobIds.length),
       sessionId: s.id,
@@ -1276,7 +1374,10 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     const order: FeedOrder = personalized ? 'personalized' : fused ? 'query_match' : 'recency';
     const hash = queryHash({ profile, filters, sort, order, market: ctx.market, relevance });
     const rc = await rankContext(ctx, filters, personalized);
-    const state: QueryState = { ctx, filters, sort, personalized, rc, rowCache: new Map(), scoreCache: new Map(), user: null, browse, relevance, fused, context: contextOnce(ctx) };
+    // The previous visit: a later page reads it from its cursor; the first page reads the stored stamp now,
+    // before this request stamps the visit itself (below). A failing read is "no known visit".
+    const newSince = cursor ? cursor.newSince : previousVisit(await repo.lastFeedVisit(ctx.userId).catch(() => null), ctx.now);
+    const state: QueryState = { ctx, filters, sort, personalized, rc, rowCache: new Map(), scoreCache: new Map(), user: null, browse, relevance, fused, context: contextOnce(ctx), newSince, ...(input.locale ? { locale: input.locale } : {}) };
 
     if (cursor) {
       const session = await repo.getSession(cursor.sessionId, ctx.userId);
@@ -1285,7 +1386,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     }
 
     const w = await firstWindow(ctx, filters, sort, browse, hybrid ? { personalized, relevance, context: state.context } : null);
-    const [scored, seenSkipped] = await Promise.all([score(ctx, w.rows, personalized, state.context), seenSkippedOf(ctx, w.rows, sort, personalized)]);
+    const [scored, seenSkipped] = await Promise.all([score(ctx, w.rows, personalized, state.context, state.locale), seenSkippedOf(ctx, w.rows, sort, personalized)]);
     state.user = scored.user;
     const ranked = rankRows(w.rows, scored, sort, rc, filters, personalized, { retrievalRank: w.retrievalRank, fused, seenSkipped });
     for (const c of [...ranked.kept, ...[...ranked.also.values()].flat()]) {
@@ -1316,7 +1417,10 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     // The saved search as it is (no one-off override, no typed query) came back thin: one targeted ingest.
     const asSaved = !browse && input.q === undefined && !Object.keys(input.overrides ?? {}).length;
     if (asSaved && w.rows.length < L.widenBelowRows) requestIngestOnce(profile, ctx.now);
-    return page(state, session, 0, order);
+    const first = await page(state, session, 0, order);
+    // With a text to rank by: say whether it took part in this list (a leg asked with it returned rows), so a
+    // reader can leave "Ranked by …" out when no posting matched the words. Only the first page knows.
+    return relevance ? { ...first, relevanceApplied: w.relevanceApplied === true } : first;
   }
 
   // ── Counts ────────────────────────────────────────────────────────────
@@ -1560,7 +1664,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
    * preview, the fit-score precompute): the same first window as the list's
    * own, so with hybrid retrieval its candidates are the fused union.
    */
-  async function topRanked(ctx: FeedCtx, filters: FilterSet, sort: FeedSort, limit: number, relevance: string | null = null) {
+  async function topRanked(ctx: FeedCtx, filters: FilterSet, sort: FeedSort, limit: number, relevance: string | null = null, locale?: string) {
     const personalized = await isPersonalized(ctx.userId, ctx.market);
     const { sort: eff, hybrid, fused } = listPlan(sort, personalized, filters, relevance, false);
     const context = contextOnce(ctx);
@@ -1573,7 +1677,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
       const have = new Set(w.rows.map((r) => r.id));
       w = { ...whole, rows: [...w.rows, ...whole.rows.filter((r) => !have.has(r.id))], retrievalRank: w.retrievalRank, relevanceApplied: w.relevanceApplied };
     }
-    const [scored, seenSkipped] = await Promise.all([score(ctx, w.rows, personalized, context), seenSkippedOf(ctx, w.rows, eff, personalized)]);
+    const [scored, seenSkipped] = await Promise.all([score(ctx, w.rows, personalized, context, locale), seenSkippedOf(ctx, w.rows, eff, personalized)]);
     const rc = await rankContext(ctx, filters, personalized);
     const ranked = rankRows(w.rows, scored, eff, rc, filters, personalized, { retrievalRank: w.retrievalRank, fused, seenSkipped });
     const cands: CardCandidate[] = ranked.kept.slice(0, limit).map((c) => {
@@ -1629,7 +1733,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     const profile = await loadProfile(ctx.userId);
     const filters = effectiveFilters(ctx.market, profile.filters, { overrides: input.filters as Record<string, unknown> | undefined, q: input.q });
     const sort = input.sort === 'deadline' && ctx.market !== 'cn' ? 'recommended' : (input.sort ?? 'recommended');
-    const { cands, user, personalized, also, fused, relevanceApplied } = await topRanked(ctx, filters, sort, Math.max(1, Math.min(50, input.limit)), relevance);
+    const { cands, user, personalized, also, fused, relevanceApplied } = await topRanked(ctx, filters, sort, Math.max(1, Math.min(50, input.limit)), relevance, input.locale);
     return { items: await items(ctx, cands, user, null, personalized, also, fused), relevanceApplied };
   }
 
@@ -1693,6 +1797,13 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
    * its LIMIT counts listable rows (newer rows that fail a rule do not push
    * valid older ones out); `publicPageIds` then checks every row once more
    * with the SEO predicate itself.
+   *
+   * Age (JI-10): the list has the signed-in feed's age floor, not a window of
+   * its own. An aggregator's row is listed for 120 days from its posting date;
+   * an employer board's or a recruiter bank's row is listed for as long as its
+   * source lists it (`ageFloorSql`), so a board posting published months ago
+   * and still open is not cut out of the visitor list by its age. Newest
+   * first, so older rows show only where newer ones do not fill the list.
    */
   async function publicList(ctx: { market: Market; now: Date }, input: { role?: string; city?: string; country?: string; limit: number }): Promise<PublicFeedItem[]> {
     if (!postingsAllowed(ctx.market)) return [];
@@ -1708,7 +1819,8 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
         scope: { market: ctx.market, userId: null, now: ctx.now, publicOnly: true, publicDisplayOnly: true, publicBoards, ignoreHidden: true, heldBanks: heldBanks() },
         filters,
         fields: FILTER_FIELDS,
-        from: new Date(ctx.now.getTime() - L.widenWindowDays * DAY_MS),
+        from: null,
+        ageFloor: floorOf(filters, ctx.now),
         to: null,
         limit: Math.max(1, Math.min(50, input.limit)),
       }),

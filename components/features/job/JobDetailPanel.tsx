@@ -22,6 +22,20 @@
 // what the user tells us. The line that points at that button goes away once
 // the job is marked applied (the button is gone by then).
 //
+// A job whose posting is gone (MARKET_STRATEGY 1.5 "Closure"): the server
+// asks the employer's applicant tracking system when the page is opened, so
+// a posting it no longer lists arrives closed. The page then says so, says
+// when the job was last seen listed, and offers no apply button (never a
+// link to a dead page). When the apply click itself finds the posting gone
+// (409 `job_closed`), the page is read again and shows the same. The tab the
+// click opens follows the server's answer, never the link the page was sent:
+// useJobActions is handed no link, so it opens an empty tab inside the click
+// (pop-up blockers allow that), points it at the answered link, and closes it
+// when the click is refused. A person is never sent to a dead page. In a
+// browser with one window (WeChat's and other apps' built-in browsers) no
+// empty tab is opened; the page goes to the answered link itself (feed
+// cardModel `applyTabOpener`, the card's own rule).
+//
 // GoApply: the market block (JobMetaCn) carries the job's pay, dates and
 // source in place of the header's own lines, so it sits above the tabs and
 // stays on screen on Company and People too. Elsewhere the market block stays
@@ -45,9 +59,10 @@ import { WechatShareCard } from '../notify-cn';
 import { useJob, useApplyIntercept } from '../../../hooks/job';
 import { useJobFit } from '../../../hooks/match';
 import { useJobActions } from '../../../hooks/shared/useJobActions';
+import { applyTabOpener } from '../feed/cardModel';
 import { useCapabilities, useFlag, useHiringContactsMode, type FlagKey } from '../../../lib/flags';
 import { useBrand } from '../../../lib/brand';
-import { apiErrorCode } from '../../../lib/api/contracts/wire';
+import { apiErrorCode, apiErrorDetails } from '../../../lib/api/contracts/wire';
 import { RoboApiError } from '../../../lib/api/client';
 import { cn } from '../../../lib/utils';
 import type { JobDetailResponse } from '../../../lib/api/contracts/jobs/detail';
@@ -128,7 +143,8 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
   // Who published the posting and where the apply button leads (the contract's `source` / `apply`).
   const listing = jobListing(detail);
   const applyCopy = brand.market === 'cn' ? cnApplyCopy(listing) : null;
-  const actions = useJobActions(job.id, { applyUrl: job.applyUrl ?? listing.apply.url, source: 'job_detail' });
+  // No link is handed over: the tab follows the server's answer to the click (see the header).
+  const actions = useJobActions(job.id, { source: 'job_detail', opener: applyTabOpener });
   const intercept = useApplyIntercept(job.id, !!checklist.tailoredResumeId);
   const openJob = useOpenJob(mode);
   const [tab, setTab] = useState<TabId>('overview');
@@ -151,6 +167,17 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
   }, [fitQ.data, detail.fit, refetch]);
 
   const open = job.status === 'open';
+  // The apply click found the posting gone (409 job_closed): nothing moved to Applied. Read the page again,
+  // once per such answer; it now arrives closed and says so, in place of a generic error.
+  const closedByClick = apiErrorDetails<{ code?: string }>(actions.error)?.code === 'job_closed';
+  const closedSeen = useRef<unknown>(null);
+  useEffect(() => {
+    if (!closedByClick || closedSeen.current === actions.error) return;
+    closedSeen.current = actions.error;
+    refetch();
+  }, [closedByClick, actions.error, refetch]);
+  // The closure was found by asking the employer's job board for this page (not by our regular reads).
+  const checkedNow = !open && job.listing?.via === 'ats_api';
   // One rule for both brands (D5): hiring contacts and people you know when the
   // contacts mode is on for this user and this job, or GoApply's 内推码.
   const peopleTab = (hiring !== 'off' && detail.people.mode !== 'off') || referralCodes;
@@ -310,7 +337,7 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
           <input id={`${idBase}-share`} className={styles.shareInput} readOnly value={shareUrl} onFocus={(e) => e.currentTarget.select()} />
         </div>
       ) : null}
-      {actions.error ? (
+      {actions.error && !closedByClick ? (
         <p className={styles.alert} role="alert">
           {t('actions.error')}
         </p>
@@ -332,7 +359,16 @@ function Loaded({ detail, mode, onClose, refetch }: { detail: JobDetailResponse;
       {!open ? (
         <section className={styles.notice} role="status" data-testid="job-closed">
           <h2 className={styles.sectionTitle}>{t('closed.title')}</h2>
-          {lastSeen ? <p className={styles.body}>{t('closed.lastSeen', { date: format.dateTime(lastSeen, { dateStyle: 'medium' }) })}</p> : null}
+          {checkedNow ? (
+            <p className={styles.body} data-testid="job-closed-checked">
+              {t('closed.boardCheck')}
+            </p>
+          ) : null}
+          {lastSeen ? (
+            <p className={styles.body} data-testid="job-last-listed">
+              {t('closed.lastListed', { date: format.dateTime(lastSeen, { dateStyle: 'medium' }) })}
+            </p>
+          ) : null}
           {tracker ? <p className={styles.muted}>{t('closed.kept')}</p> : null}
         </section>
       ) : null}

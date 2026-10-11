@@ -14,26 +14,46 @@
 //   • the sponsorship badge needs the quote it is based on (its tooltip shows
 //     it). WP-32 sends the post's stance as the badge kind: 'sponsorship' →
 //     "Visa sponsorship mentioned", 'no_sponsorship' → "Says no visa
-//     sponsorship". Without a quote it is dropped — never guessed;
+//     sponsorship". Without a quote it is dropped — never guessed. A
+//     provider's own reading is another badge (`sponsorship_provider`): it
+//     names the provider, has no quote and never uses the wording of the
+//     quoted badge; without a provider name it is dropped (JI-11);
 //   • clearance / citizens-only requirements and GoApply employer tags show
 //     only with the quote they rest on (tooltip);
 //   • a deadline is shown only when the post states one (`campus.applyClosesAt`,
 //     from an `apply_closes:` tag with its quote); there is no invented
 //     urgency — the reserved `closing_soon` badge is never used;
-//   • at most 3 badges, fixed priority.
+//   • at most 3 badges, fixed priority;
+//   • dates are three separate facts (JI-10): "Posted" only for the
+//     employer's own date; a date we assigned is never called posted (the card
+//     says when we first saw the job instead) and "Last checked" is when a
+//     source last confirmed the posting listed;
+//   • "New" comes from `isNew` alone (first seen by us since the last visit,
+//     or in the last 48 hours), never from the posted date and never from a
+//     badge of the list. It is ours, not a fact from the post, so it is not
+//     one of the three badges.
+//
+// Also here, because the card and the job page share it: how "Apply on
+// company site" opens its tab (`applyTabOpener`). The tab goes where the
+// server's answer to the click says, never to a link the page already holds:
+// the click first asks whether the posting is still listed, and a posting
+// that is gone must not be opened (MARKET_STRATEGY 1.5 "Closure").
 
 import type { FeedItem } from '../../../lib/api/contracts/feed';
+import type { TabOpener } from '../../../hooks/shared/useJobActions';
+import { detectInAppBrowser } from '../../../lib/auth/inAppBrowser';
 import { marketPayLineText, type MarketCardMeta } from '../market';
 
 export type CardBadge =
   | { kind: 'direct' }
   | { kind: 'sponsorship'; status: SponsorshipStatus; quote: string }
+  /** A provider's reading that the job offers sponsorship: `provider` is its display name. No quote. */
+  | { kind: 'sponsorship_provider'; provider: string }
   | { kind: 'clearance'; quote: string }
   | { kind: 'citizens'; quote: string }
   | { kind: 'agency' }
   | { kind: 'market'; label: string; quote: string | null }
-  | { kind: 'closes'; at: string; quote: string | null }
-  | { kind: 'new' };
+  | { kind: 'closes'; at: string; quote: string | null };
 
 export type SponsorshipStatus = 'offered' | 'not_offered';
 
@@ -49,12 +69,12 @@ export function sponsorshipStatus(badge: FeedItem['badges'][number]): Sponsorshi
 const BADGE_ORDER: Record<CardBadge['kind'], number> = {
   direct: 0,
   sponsorship: 1,
+  sponsorship_provider: 1,
   clearance: 2,
   citizens: 3,
   agency: 4,
   market: 5,
   closes: 6,
-  new: 7,
 };
 
 function quoteOf(badge: FeedItem['badges'][number]): string | null {
@@ -91,6 +111,12 @@ export function cardBadges(item: FeedItem): CardBadge[] {
         if (status && quote) push({ kind: 'sponsorship', status, quote });
         break;
       }
+      case 'sponsorship_provider': {
+        // A provider's reading: shown only with the provider's name, which the label states.
+        const provider = typeof b.provider === 'string' ? b.provider.trim() : '';
+        if (provider) push({ kind: 'sponsorship_provider', provider });
+        break;
+      }
       case 'clearance_required': {
         const quote = quoteOf(b);
         if (quote) push({ kind: 'clearance', quote });
@@ -104,11 +130,9 @@ export function cardBadges(item: FeedItem): CardBadge[] {
       case 'market_tag':
         if (typeof b.label === 'string' && b.label.trim()) push({ kind: 'market', label: b.label.trim(), quote: quoteOf(b) });
         break;
-      case 'new':
-        push({ kind: 'new' });
-        break;
       // 'direct_from_employer' is decided from the fields above, never from the badge alone;
-      // 'closing_soon' is reserved and never emitted (the stated date below is the only deadline).
+      // 'closing_soon' is reserved and never emitted (the stated date below is the only deadline);
+      // 'new' is not read from the list: "New" is the field `isNew` (`cardIsNew`).
       default:
         break;
     }
@@ -119,6 +143,39 @@ export function cardBadges(item: FeedItem): CardBadge[] {
     push({ kind: 'closes', at: closes, quote: quote || null });
   }
   return out.sort((a, b) => BADGE_ORDER[a.kind] - BADGE_ORDER[b.kind]).slice(0, MAX_BADGES);
+}
+
+/** "New": first seen by us since the viewer's last visit, or in the last 48 hours (the server's `isNew`). Never the posted date. */
+export function cardIsNew(item: Pick<FeedItem, 'isNew'>): boolean {
+  return item.isNew === true;
+}
+
+/** One date fact of a card, with the instant it states. */
+export type CardDate = { kind: 'posted' | 'first_seen' | 'last_verified'; at: string };
+
+export interface CardDates {
+  /**
+   * The line that leads: the employer's own posted date when the posting
+   * states one; otherwise when we first saw the posting; null when neither is
+   * known ("Posting date not listed").
+   */
+  lead: CardDate | null;
+  /** When a source last confirmed the posting listed ("Last checked"); null when unknown. */
+  verified: CardDate | null;
+}
+
+/**
+ * The card's dates as three separate facts. A date we assigned
+ * (`postedAtEstimated`) is never a posted date, whatever `postedAt` holds: a
+ * server from before the three-date wire sent our first-seen date there, so
+ * it is read as "first seen" and nothing else.
+ */
+export function cardDates(item: Pick<FeedItem, 'postedAt' | 'postedAtEstimated' | 'firstSeenAt' | 'lastSeenAt'>): CardDates {
+  const estimated = item.postedAtEstimated === true;
+  const posted = !estimated && validDate(item.postedAt) ? item.postedAt : null;
+  const firstSeen = validDate(item.firstSeenAt) ? item.firstSeenAt : estimated && validDate(item.postedAt) ? item.postedAt : null;
+  const lead: CardDate | null = posted ? { kind: 'posted', at: posted } : firstSeen ? { kind: 'first_seen', at: firstSeen } : null;
+  return { lead, verified: validDate(item.lastSeenAt) ? { kind: 'last_verified', at: item.lastSeenAt } : null };
 }
 
 export type SourceLine =
@@ -240,3 +297,60 @@ export function companyInitial(name: string): string {
   const ch = Array.from(name.trim())[0];
   return ch ? ch.toLocaleUpperCase() : '·';
 }
+
+// ── The apply tab ─────────────────────────────────────────────────────────
+
+/**
+ * Does this browser have one window only? A social app's built-in browser
+ * (WeChat, LinkedIn, …), an Android WebView (`; wv)`) and an iOS web view
+ * inside an app (an iPhone or iPad user agent with no `Safari/` token) load
+ * whatever `window.open` is given in the page itself. Pure.
+ */
+export function isOneWindowBrowser(userAgent: string | null | undefined): boolean {
+  const ua = userAgent ?? '';
+  if (detectInAppBrowser(ua)) return true;
+  if (/;\s*wv\)/.test(ua)) return true;
+  return /\b(iPhone|iPad|iPod)\b/.test(ua) && !/Safari\//.test(ua);
+}
+
+/** What the apply tab needs from the browser (the test seam of `createApplyTabOpener`). */
+export interface ApplyTabBrowser {
+  userAgent(): string;
+  open(url: string, target: string, features?: string): Window | null;
+  /** Take the page itself to `url`. */
+  go(url: string): void;
+}
+
+/**
+ * How "Apply on company site" opens the employer's page, for
+ * `useJobActions(jobId, { opener })` WITHOUT a link (the hook then opens an
+ * empty tab inside the click, points it at the link the server answers with,
+ * and closes it when the click is refused, so a posting that is gone is never
+ * opened).
+ *   - a browser with tabs: exactly the hook's own way;
+ *   - a browser with one window: no empty tab (it would replace this page with
+ *     a blank one, and the answer would never arrive). Nothing is opened inside
+ *     the click; when the server has answered, the page itself goes to the
+ *     link, which is what "open" does there anyway and needs no pop-up
+ *     permission.
+ */
+export function createApplyTabOpener(browser: ApplyTabBrowser): TabOpener {
+  return {
+    blank() {
+      return isOneWindowBrowser(browser.userAgent()) ? null : browser.open('about:blank', '_blank');
+    },
+    open(url) {
+      if (isOneWindowBrowser(browser.userAgent())) browser.go(url);
+      else browser.open(url, '_blank', 'noopener,noreferrer');
+    },
+  };
+}
+
+/** The opener of the card and the job page, on the real browser (nothing happens during server rendering). */
+export const applyTabOpener: TabOpener = createApplyTabOpener({
+  userAgent: () => (typeof navigator === 'undefined' ? '' : navigator.userAgent),
+  open: (url, target, features) => (typeof window === 'undefined' ? null : features === undefined ? window.open(url, target) : window.open(url, target, features)),
+  go: (url) => {
+    if (typeof window !== 'undefined') window.location.assign(url);
+  },
+});

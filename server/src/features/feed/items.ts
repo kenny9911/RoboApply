@@ -3,15 +3,23 @@
 // Honesty rules applied here (D3):
 //   - pay is null ("Pay not listed") unless the posting discloses it; never 0;
 //   - "Direct from employer" only when fromRecruiterBank && employerVerified && !isAgency;
-//   - the sponsorship badges only for users who need sponsorship, and only
-//     with the posting's own quote; "says no sponsorship" also needs a
-//     negation in that quote;
+//   - the sponsorship badges only for users who need sponsorship. A badge that
+//     says the job sponsors rests on the posting's own quote, or it is a
+//     provider's reading shown under its own kind (`sponsorship_provider`)
+//     with that provider's name and no quote; "says no sponsorship" needs the
+//     posting's quote and a negation in it, never a provider's flag alone
+//     (contract.ts `sponsorshipSignalOf`, JI-11). A company's sponsorship
+//     history is a company fact and is never read here;
 //   - citizenship / clearance badges only with their quote (marketTags);
 //   - CN market tags (央国企 / 事业编 / 可落户 / 外企) only with an evidence quote;
 //   - the 网申 close date only when the posting states it (marketTags
 //     `apply_closes:<date>` + quote), never RAJob.expiresAt (often postedAt + 45 days);
-//   - no applicant count, no "new" / "closing soon" urgency badges;
-//   - "Last checked {date}" comes from lastSeenAt;
+//   - no applicant count, no "closing soon" urgency badge;
+//   - three date facts (JI-10): `postedAt` is the employer's date or null (a
+//     date we assigned never travels under that name), `firstSeenAt` is ours,
+//     `lastSeenAt` is "last checked"; `isNew` rests on `firstSeenAt` alone
+//     (after the viewer's previous visit when the caller knows it, else the
+//     last 48 hours) and is a field, not one of the three badges;
 //   - every card names its source and carries its own apply link
 //     (`source.original / url / lastVerifiedAt / via`, `apply { url, target }`:
 //     sourceLine.ts; D1: the user opens the link, nothing is submitted);
@@ -22,9 +30,9 @@
 
 import { cnSalary } from '../cn/jobs/contract.js';
 import type { MatchExplanation } from '../compliance/contract.js';
-import { displayPostedAt, payPlausible, statesAmount } from '../jobs/normalize/index.js';
+import { payPlausible, statesAmount } from '../jobs/normalize/index.js';
 import type { MatchUser } from '../match/index.js';
-import type { FeedBadge, FeedItem, FitBadge, PublicFeedItem } from './contract.js';
+import { isNewPosting, sponsorshipLabelsShown, sponsorshipSignalOf, type FeedBadge, type FeedItem, type FitBadge, type PublicFeedItem } from './contract.js';
 import type { FeedJobRow } from './types.js';
 import { marketTagsOf, statedApplyClose } from './types.js';
 import { SPONSORSHIP_NEGATION_REGEX, cnDate } from './sql.js';
@@ -37,12 +45,14 @@ const NEGATION = new RegExp(SPONSORSHIP_NEGATION_REGEX.replace(/\\m|\\M/g, '\\b'
 const iso = (d: Date | null | undefined) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOString() : null);
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
-/** Does the user need sponsorship for this job's country? (search-profile answer, or the per-country work-auth answer). */
-export function needsSponsorshipFor(user: Pick<MatchUser, 'needsSponsorship' | 'workAuth'> | null, country: string | null): boolean {
-  if (!user) return false;
-  const entry = country ? user.workAuth.find((w) => w.country === country) : undefined;
-  if (entry && entry.sponsorship) return entry.sponsorship === 'now' || entry.sponsorship === 'later';
-  return user.needsSponsorship === true;
+// Does the user need sponsorship for this job's country? The rule lives in the contract (the job page reads it
+// too); it is re-exported here under the name and signature this module always had.
+export { needsSponsorshipFor } from './contract.js';
+
+/** Where a posting's pay words are read (normalize/salary.ts `statesAmount`). */
+function payContextOf(row: Pick<FeedJobRow, 'locationCountry' | 'market'>): { country?: string | null; market?: 'intl' | 'cn' } {
+  const market = row.market === 'cn' ? 'cn' : row.market === 'intl' ? 'intl' : undefined;
+  return { country: row.locationCountry, ...(market ? { market } : {}) };
 }
 
 function payOf(row: FeedJobRow): FeedItem['pay'] {
@@ -51,7 +61,8 @@ function payOf(row: FeedJobRow): FeedItem['pay'] {
   // A stored figure that cannot be pay for its period (a posting typo: "$60,000,000 an hour") is not shown as a number.
   if (!payPlausible({ min: row.salaryMin, max: row.salaryMax, currency: row.salaryCurrency, period: row.salaryPeriod, months: row.salaryMonths })) return null;
   // No figures, only words: they are shown only when they state an amount.
-  if (row.salaryMin === null && row.salaryMax === null && !statesAmount(row.salaryText)) return null;
+  // The row's own country and market decide which pay clauses are a statutory line and no amount (Taiwan's threshold).
+  if (row.salaryMin === null && row.salaryMax === null && !statesAmount(row.salaryText, payContextOf(row))) return null;
   const period = row.salaryPeriod && PERIODS.has(row.salaryPeriod) ? (row.salaryPeriod as NonNullable<FeedItem['pay']>['period']) : 'year';
   return { min: row.salaryMin, max: row.salaryMax, currency: row.salaryCurrency ?? '', period, text: row.salaryText };
 }
@@ -91,10 +102,12 @@ function quoteFor(row: FeedJobRow, tag: string): string | null {
 export function badgesFor(row: FeedJobRow, user: Pick<MatchUser, 'needsSponsorship' | 'workAuth'> | null): FeedBadge[] {
   const out: FeedBadge[] = [];
   if (row.fromRecruiterBank && row.employerVerified && row.isAgency !== true) out.push({ kind: 'direct_from_employer', label: 'direct_from_employer' });
-  if (row.market === 'intl' && needsSponsorshipFor(user, row.locationCountry)) {
-    const quote = row.sponsorshipEvidence?.trim();
-    if (quote && row.sponsorship === 'offered') out.push({ kind: 'sponsorship', label: 'sponsorship', quote });
-    else if (quote && row.sponsorship === 'not_offered' && NEGATION.test(quote)) out.push({ kind: 'no_sponsorship', label: 'no_sponsorship', quote });
+  if (sponsorshipLabelsShown(row, user)) {
+    const signal = sponsorshipSignalOf(row);
+    if (signal?.basis === 'quote' && signal.status === 'offered') out.push({ kind: 'sponsorship', label: 'sponsorship', quote: signal.quote });
+    else if (signal?.basis === 'quote' && NEGATION.test(signal.quote)) out.push({ kind: 'no_sponsorship', label: 'no_sponsorship', quote: signal.quote });
+    // A provider's reading: its own kind, the provider named, no quote, never the wording of the quoted badge.
+    else if (signal?.basis === 'provider') out.push({ kind: 'sponsorship_provider', label: 'sponsorship_provider', provider: signal.provider });
   }
   if (row.market === 'intl' && row.clearanceRequired === true) {
     const quote = quoteFor(row, 'clearance_required');
@@ -138,8 +151,14 @@ export interface ItemContext {
   fit: FitBadge | null;
   tracker: { status: string } | null;
   position: number | null;
-  /** Today's date for the stated 网申 close (defaults to the clock). */
+  /** Today's date for the stated 网申 close and the clock of "New" (defaults to the clock). */
   now?: Date;
+  /**
+   * The viewer's previous visit to the list (the instant the new-count badge
+   * counts from). With it, `isNew` = first seen after it; null or absent =
+   * no known visit, so first seen in the last 48 hours (contract.ts `isNewPosting`).
+   */
+  newSince?: Date | null;
   /** `marketHooks.cardMeta` output for this job (CN / TW card lines); left off the item when empty. */
   cardMeta?: Record<string, Record<string, unknown>> | null;
   /** `explainMatch` lines ("Why this job"); left off the item when absent. */
@@ -147,7 +166,7 @@ export interface ItemContext {
 }
 
 /** The public part of a card (no fit, no tracker) — also the visitor list item. */
-export function publicItem(row: FeedJobRow, user: ItemContext['user'] = null, now: Date = new Date()): PublicFeedItem {
+export function publicItem(row: FeedJobRow, user: ItemContext['user'] = null, now: Date = new Date(), newSince: Date | null = null): PublicFeedItem {
   const workModel = row.workModel === 'remote' || row.workModel === 'hybrid' || row.workModel === 'onsite' ? row.workModel : null;
   const pay = payOf(row);
   const source = sourceOf(row);
@@ -167,11 +186,12 @@ export function publicItem(row: FeedJobRow, user: ItemContext['user'] = null, no
     pay,
     salary: salaryOf(row, pay),
     payMonths: row.market === 'cn' ? row.salaryMonths : null,
-    // An estimated date that is not the day we first saw the row (台灣就業通's update date) is not
-    // printed as "First seen": the card then says the posting date is not listed (displayPostedAt).
-    postedAt: iso(displayPostedAt(row)),
+    // The employer's date only: a date we assigned (first sight, an open-data set's update date) is never sent as "posted".
+    postedAt: row.postedAtEstimated === true ? null : iso(row.postedAt),
     postedAtEstimated: row.postedAtEstimated === true,
+    firstSeenAt: iso(row.firstSeenAt),
     lastSeenAt: iso(row.lastSeenAt),
+    isNew: isNewPosting(row.firstSeenAt, now, newSince),
     source,
     apply: applyLinkOf(row, source.kind),
     fromRecruiterBank: row.fromRecruiterBank,
@@ -184,7 +204,7 @@ export function publicItem(row: FeedJobRow, user: ItemContext['user'] = null, no
 }
 
 export function toFeedItem(row: FeedJobRow, ctx: ItemContext): FeedItem {
-  const item: FeedItem = { ...publicItem(row, ctx.user, ctx.now), fit: ctx.fit, tracker: ctx.tracker, position: ctx.position };
+  const item: FeedItem = { ...publicItem(row, ctx.user, ctx.now, ctx.newSince ?? null), fit: ctx.fit, tracker: ctx.tracker, position: ctx.position };
   if (ctx.cardMeta && Object.keys(ctx.cardMeta).length) item.cardMeta = ctx.cardMeta;
   if (ctx.explanation) item.explanation = ctx.explanation;
   return item;
