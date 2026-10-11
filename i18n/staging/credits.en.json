@@ -50,6 +50,282 @@
       "done": "Renewal is back on.",
       "ended": "This plan has already ended. Choose a plan below.",
       "error": "We couldn't turn renewal back on. Try again."
+    },
+    "withdraw": {
+      "label": "Withdraw from contract",
+      "entryLabel": "{label}: {plan}",
+      "intro": "{count, plural, one {You can still withdraw from the purchase below.} other {You can still withdraw from the purchases below.}} Withdrawing refunds the amount shown and ends what the purchase gave you at once.",
+      "unknownPlan": "Your purchase",
+      "paid": "Paid so far: {amount}. Bought on {date}.",
+      "paidNoDate": "Paid so far: {amount}.",
+      "refund": "Refund if you withdraw now: {amount}.",
+      "lastDay": "You can withdraw until {date}.",
+      "confirmTitle": "Withdraw from {plan}?",
+      "confirmRefund": "We refund {amount} to the payment method you paid with.",
+      "prorata": "You asked us to start at once, so the refund covers the {unused} of {periodDays} days you have not used.",
+      "ends": {
+        "subscription": "Your subscription ends at once and Pro stops right away.",
+        "pass": "The days this pass gave you end at once.",
+        "pack": "The practice interviews left from this pack are removed at once.",
+        "other": "What this purchase gave you ends at once."
+      },
+      "confirmButton": "Withdraw and refund {amount}",
+      "pending": "Withdrawing…",
+      "back": "Keep this purchase",
+      "done": "You have withdrawn from {plan}. We are refunding {amount}. A confirmation email is on its way.",
+      "doneNoAmount": "You have withdrawn from {plan}. Your refund and a confirmation email are on their way.",
+      "ended": {
+        "subscription": "Your subscription has ended, so Pro is off.",
+        "pass": "The days this pass gave you end as soon as the refund is recorded.",
+        "pack": "The practice interviews left from this pack are removed as soon as the refund is recorded.",
+        "other": "What this purchase gave you has ended."
+      },
+      "checkError": "We couldn't check whether you can still withdraw from a recent purchase.",
+      "refreshing": "Checking the refund amount…",
+      "refreshError": "We couldn't check the refund amount just now. Try again.",
+      "errors": {
+        "unavailable": "This purchase can no longer be withdrawn.",
+        "rateLimited": "You tried this several times in a row. Wait a while, then try again.",
+        "notConfigured": "Card payments are not set up here, so we can't send the refund. Nothing changed.",
+        "provider": "The payment provider did not confirm the withdrawal. Try again. Nothing is refunded twice.",
+        "generic": "The withdrawal didn't go through. Try again."
+      }
+    },
+    "cancelPage": {
+      "checking": "Checking your link…",
+      "choose": "This link can do one of two things. Choose one.",
+      "cancelChoiceTitle": "Cancel at the end of the period",
+      "cancelChoiceSub": "The renewal stops now. You keep Pro until {date}.",
+      "cancelChoiceSubNoDate": "The renewal stops now. You keep Pro until the end of the period you paid for.",
+      "cancelChoiceButton": "Cancel at the end of the period",
+      "withdrawChoiceTitle": "Withdraw from contract",
+      "withdrawChoiceSub": "The plan ends at once and we refund {amount}. You can do this until {date}.",
+      "withdrawProrata": "You asked us to start at once, so the refund covers the days you have not used.",
+      "withdrawButton": "Withdraw from contract and refund {amount}",
+      "withdrawing": "Withdrawing…",
+      "withdrawn": "You have withdrawn from the contract. The plan has ended and we are refunding {amount}. A confirmation email is on its way.",
+      "withdrawnNoAmount": "You have withdrawn from the contract. The plan has ended. Your refund and a confirmation email are on their way.",
+      "withdrawGone": "This purchase can no longer be withdrawn.",
+      "cancelledInstead": "We cancelled your subscription at the end of the period instead. You keep Pro until {date}. We've emailed you a confirmation.",
+      "cancelledInsteadNoDate": "We cancelled your subscription at the end of the period instead. You keep Pro until the end of the period you paid for. We've emailed you a confirmation."
+    },
+    "history": {
+      "more": "Show more",
+      "loadingMore": "Loading…",
+      "moreError": "We couldn't load more. Try again.",
+      "channel": {
+        "alipay": "Alipay",
+        "wechatpay": "WeChat Pay"
+      },
+      "refunded": {
+        "full": "Refunded",
+        "partial": "Partly refunded"
+      },
+      "status": {
+        "uncollectible": "Not paid",
+        "unknown": "Status not known"
+      }
+    },
+    "admin": {
+      "refunds": {
+        "title": "Refunds",
+        "sub": "Look up one person to see what the refund rules say about their latest charge, refund a card charge, see their refunds, withdrawals and disputes, and record a refund of a mainland order.",
+        "userId": "User ID",
+        "show": "Show",
+        "pick": "Enter a user ID to start.",
+        "facts": {
+          "title": "Latest charge and the refund rules",
+          "loadError": "We couldn't load the refund check.",
+          "notFound": "No user with this ID.",
+          "paidThrough": "Paid through",
+          "source": {
+            "stripe": "Card",
+            "cn": "Alipay or WeChat Pay"
+          },
+          "country": "Billing country",
+          "waiver": "Start-now box ticked at checkout",
+          "yes": "Yes",
+          "no": "No",
+          "paidOnlyUsed": "Actions that need Pro, used since the charge",
+          "packUsed": "Practice interviews used from this pack",
+          "prorata": "Days used of the paid period",
+          "prorataValue": "{used} of {period}"
+        },
+        "stripe": {
+          "title": "Refund through Stripe",
+          "sub": "The money goes back to the card that paid. Access does not change here: it changes when Stripe confirms the refund, usually within a minute. A full refund takes back what the charge bought. A partial refund changes no access.",
+          "target": "What to refund",
+          "targetLatest": "The latest charge: {amount} on {date}",
+          "targetOther": "Another invoice or checkout session",
+          "targetId": "Invoice or checkout session ID",
+          "targetIdHelp": "It starts with in_ or cs_.",
+          "amount": "Amount (leave empty to refund everything that can still be refunded)",
+          "amountHelp": "In the currency of the charge, for example 10.00.",
+          "reason": "Reason",
+          "review": "Review refund",
+          "invalid": "Check what to refund, the amount and the reason.",
+          "confirmTitle": "Refund this charge?",
+          "confirmUser": "User",
+          "confirmTarget": "Charge",
+          "confirmAmount": "Amount",
+          "confirmReason": "Reason",
+          "everything": "Everything that can still be refunded",
+          "amountAsTyped": "{amount} in the currency of the charge",
+          "confirm": "Refund now",
+          "pending": "Refunding…",
+          "back": "Back",
+          "done": "Refunded {amount}. Access changes when Stripe confirms the refund.",
+          "doneNoAmount": "The refund was sent. Access changes when Stripe confirms the refund.",
+          "doneFull": "Nothing is left to refund on this charge.",
+          "donePartial": "Part of this charge has not been refunded.",
+          "errors": {
+            "not_found": "No such user, invoice or checkout session.",
+            "refund_not_available": "This charge can't be refunded: it belongs to someone else, it was already refunded in full, or the amount is more than what is left.",
+            "rail_not_configured": "Card payments are not set up here, so no refund can be sent.",
+            "payment_provider_error": "Stripe did not confirm the refund. Check the list below before you try again.",
+            "generic": "The refund didn't go through. Check the list below before you try again."
+          }
+        },
+        "list": {
+          "title": "Refunds, withdrawals and disputes",
+          "loading": "Loading…",
+          "loadError": "We couldn't load the refunds.",
+          "refresh": "Refresh",
+          "refreshLabel": "Refresh the list of refunds, withdrawals and disputes",
+          "refreshing": "Refreshing…",
+          "refreshError": "We couldn't refresh the list. What you see may be out of date.",
+          "empty": "Nothing on record for this person.",
+          "date": "Date",
+          "kind": "Kind",
+          "amount": "Amount",
+          "access": "Access",
+          "reason": "Reason",
+          "by": "By",
+          "ref": "Reference",
+          "kinds": {
+            "refund": "Refund",
+            "withdrawal": "Withdrawal",
+            "dispute": "Dispute",
+            "manual_cn": "Recorded by hand",
+            "other": "Other"
+          },
+          "full": "full",
+          "partial": "partial",
+          "amountValue": "{amount} ({share})",
+          "reversed": "Taken back",
+          "kept": "Unchanged",
+          "disputeFlag": "{count, plural, one {# dispute on record: the bank took the money back. Check this account.} other {# disputes on record: the bank took the money back. Check this account.}}",
+          "more": "Show more",
+          "moreError": "We couldn't load more. Try again."
+        },
+        "cn": {
+          "title": "Mainland orders",
+          "sub": "Alipay and WeChat Pay refunds are made in the merchant console, not here. Return the money there first, then record it. Recording a full refund ends that pass or removes what is left of that pack, once.",
+          "loading": "Loading…",
+          "loadError": "We couldn't load the orders.",
+          "empty": "No completed mainland orders for this person.",
+          "order": "Order",
+          "plan": "Plan",
+          "channel": "Paid with",
+          "amount": "Amount",
+          "date": "Completed",
+          "refund": "Refund",
+          "channels": {
+            "alipay": "Alipay",
+            "wechatpay": "WeChat Pay"
+          },
+          "refunded": {
+            "full": "Refund recorded",
+            "partial": "Partial refund recorded"
+          },
+          "record": "Record refund",
+          "recordLabel": "Record refund for order {order}",
+          "formTitle": "Record a refund for order {order}",
+          "moneyReturned": "The money was returned in the merchant console",
+          "reason": "Reason",
+          "partialAmount": "Amount returned in yuan, if less than the whole order (leave empty for the whole order)",
+          "invalidAmount": "Enter the amount in yuan, for example 12 or 12.50, and not more than the order.",
+          "save": "Record refund",
+          "saving": "Recording…",
+          "cancel": "Cancel",
+          "recorded": "Refund recorded for order {order}.",
+          "already": "A refund was already recorded for order {order}. It is not recorded twice.",
+          "check": "Check the record",
+          "checkLabel": "Check the refund record for order {order}",
+          "checking": "Checking…",
+          "checkHint": "No access was taken back for this refund. If the pass or pack is still there, check the record to finish it.",
+          "entitlement": {
+            "pass_ended": "The pass was ended.",
+            "pass_shortened": "The pass was shortened by the days this order added.",
+            "pack_zeroed": "The practice interviews left from this pack were removed.",
+            "none": "No access was changed."
+          },
+          "errors": {
+            "not_found": "No such completed order.",
+            "order_not_completed": "This order was never completed, so there is no payment to refund.",
+            "invalid_request": "Check the reason and the amount.",
+            "generic": "We couldn't finish recording the refund. Try again. A refund is never recorded twice."
+          }
+        }
+      },
+      "practiceCost": {
+        "title": "Practice cost",
+        "sub": "What one practice interview costs us on average, over each brand's latest sessions. The figure is in US dollars, as the cost is recorded.",
+        "loading": "Loading…",
+        "loadError": "We couldn't load the cost.",
+        "brand": "Brand",
+        "average": "Average cost per session (USD)",
+        "sample": "Sessions counted",
+        "range": "First and last session",
+        "sampleValue": "{n} (the latest {max} at most)",
+        "notEnough": "Not enough sessions yet ({n} of {min})",
+        "rangeValue": "{from} to {to}",
+        "ruleTitle": "The owner's rule",
+        "rules": {
+          "roboapply": "Above $1.00 a session, reprice the 15-pack to $27.99.",
+          "goapply": "Above about ¥3.5 a session, move the packs to ¥39 and ¥99."
+        },
+        "ruleNote": "The averages above are in US dollars and are not converted. A new price is one catalog default per brand."
+      },
+      "stripe": {
+        "title": "Stripe",
+        "sub": "Whether card payments can be taken here, and whether Stripe sends every event the site acts on. No key or secret is shown here.",
+        "loading": "Loading…",
+        "loadError": "We couldn't load the Stripe state.",
+        "key": "Key",
+        "keyModes": {
+          "none": "No key",
+          "test": "Test key",
+          "live": "Live key",
+          "unknown": "Not stated"
+        },
+        "usable": "Key can be used here",
+        "yes": "Yes",
+        "no": "No",
+        "refused": {
+          "missing": "No key is set.",
+          "live_key_outside_production": "A live key is refused outside production, so no card payment or refund can be made here.",
+          "unknown": "The key can't be used here."
+        },
+        "secrets": "Webhook signing secrets",
+        "rail": "Card payments",
+        "railReady": "Ready",
+        "railNotReady": "Not ready",
+        "endpoint": "Webhook endpoint",
+        "events": "Events the endpoint does not send",
+        "eventsNone": "None. The endpoint sends every event the site acts on.",
+        "eventsMissing": "{count, plural, one {# event is missing. Add it to the endpoint in Stripe.} other {# events are missing. Add them to the endpoint in Stripe.}}",
+        "endpointNone": "No webhook endpoint in Stripe points at this site. Add one in Stripe.",
+        "eventsNeeded": "{count, plural, one {The endpoint needs this # event:} other {The endpoint needs these # events:}}",
+        "notChecked": "Could not be checked.",
+        "notCheckedReason": {
+          "restricted_key": "This key is not allowed to read webhook endpoints.",
+          "error": "Stripe did not answer.",
+          "no_key": "There is no key that can be used here."
+        },
+        "pinned": "Plans with a pinned price",
+        "pinnedNone": "None"
+      }
     }
   }
 }

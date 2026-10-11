@@ -13,9 +13,12 @@
 // QuarterlySuggestion and useSubscriptionState read it.
 
 import {
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
+  type InfiniteData,
+  type UseInfiniteQueryResult,
   type UseMutationResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
@@ -78,10 +81,17 @@ export function useCredits(): UseQueryResult<CreditsResponse, Error> {
   });
 }
 
-export function useBillingHistory(): UseQueryResult<BillingHistoryResponse, Error> {
-  return useQuery({
+/**
+ * Invoices and receipts, newest first, a page at a time (ST-10). The next
+ * page is asked for with the cursor the server sent; `nextCursor: null` (or
+ * none at all, from an older server) is the end.
+ */
+export function useBillingHistory(): UseInfiniteQueryResult<InfiniteData<BillingHistoryResponse, string | null>, Error> {
+  return useInfiniteQuery({
     queryKey: accountKeys.history(),
-    queryFn: () => accountApi.history(),
+    queryFn: ({ pageParam }) => accountApi.history(pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
 }
 

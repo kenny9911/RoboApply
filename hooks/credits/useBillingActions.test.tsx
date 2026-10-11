@@ -7,14 +7,35 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
-const account = vi.hoisted(() => ({ checkoutPlan: vi.fn(), alipayCheckoutPlan: vi.fn(), portal: vi.fn(), resumeSubscription: vi.fn(), switchConfirm: vi.fn() }));
+const account = vi.hoisted(() => ({
+  checkoutPlan: vi.fn(),
+  alipayCheckoutPlan: vi.fn(),
+  portal: vi.fn(),
+  resumeSubscription: vi.fn(),
+  switchConfirm: vi.fn(),
+  withdrawal: vi.fn(),
+  withdraw: vi.fn(),
+}));
 vi.mock('../../lib/api/account', async (orig) => ({ ...(await orig<Record<string, unknown>>()), accountApi: account }));
 
 import { CHECKOUT_ATTEMPT_KEY_PATTERN } from '../../lib/api/account';
 import { CREDITS_QUERY_KEY } from '../shared/useCredits';
 import { PLANS_QUERY_KEY } from './usePlans';
 import { RoboApiError } from '../../lib/api/client';
-import { RESUME_NOTHING_CODE, RESUME_REREAD_WAIT_MS, newAttemptKey, useCheckoutAttempt, useConfirmSwitch, usePaymentPortal, usePlanCheckout, useResumeSubscription } from './useBillingActions';
+import {
+  RESUME_NOTHING_CODE,
+  RESUME_REREAD_WAIT_MS,
+  WITHDRAWAL_QUERY_KEY,
+  WITHDRAWAL_UNAVAILABLE_CODE,
+  newAttemptKey,
+  useCheckoutAttempt,
+  useConfirmSwitch,
+  usePaymentPortal,
+  usePlanCheckout,
+  useResumeSubscription,
+  useWithdraw,
+  useWithdrawalQuote,
+} from './useBillingActions';
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -161,8 +182,15 @@ describe('usePaymentPortal / useResumeSubscription / useConfirmSwitch (subscript
     const invalidated = () => invalidate.mock.calls.map((call) => JSON.stringify((call[0] as { queryKey: unknown }).queryKey)).sort();
     return { wrapper, invalidated };
   }
-  // What cancel invalidates: the summary, the plans, the billing plan and the profile.
-  const BILLING_KEYS = [JSON.stringify(CREDITS_QUERY_KEY), JSON.stringify(PLANS_QUERY_KEY), JSON.stringify(['account', 'plan']), JSON.stringify(['account', 'profile'])].sort();
+  // What cancel invalidates: the summary, the plans, the billing plan and the profile; and, since ST-9, the
+  // withdrawal quote (a plan change is a purchase of its own, and a withdrawal ends a plan).
+  const BILLING_KEYS = [
+    JSON.stringify(CREDITS_QUERY_KEY),
+    JSON.stringify(PLANS_QUERY_KEY),
+    JSON.stringify(['account', 'plan']),
+    JSON.stringify(['account', 'profile']),
+    JSON.stringify(WITHDRAWAL_QUERY_KEY),
+  ].sort();
 
   it('the portal with a flow passes it on; without one the wrapper is called with nothing', async () => {
     account.portal.mockResolvedValue({ url: 'https://billing.stripe.test/s' });
@@ -289,5 +317,78 @@ describe('usePaymentPortal / useResumeSubscription / useConfirmSwitch (subscript
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual({ status: 'requires_action', planKey: 'pro_quarterly', hostedInvoiceUrl: null });
     expect(invalidated()).toEqual(BILLING_KEYS);
+  });
+});
+
+// ST-9 (web): the withdrawal quote is a read; the withdrawal itself is sent
+// only by `useWithdraw`, and whatever it answers the page reads the plan and
+// the quote again.
+describe('useWithdrawalQuote / useWithdraw (statutory withdrawal)', () => {
+  function setup() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    const invalidated = () => invalidate.mock.calls.map((call) => JSON.stringify((call[0] as { queryKey: unknown }).queryKey));
+    return { client, wrapper, invalidated };
+  }
+  const refused = (code: string, status: number) => new RoboApiError('refused', { code, status, payload: { success: false, code } });
+  const BILLING = [CREDITS_QUERY_KEY, PLANS_QUERY_KEY, ['account', 'plan'], ['account', 'profile'], WITHDRAWAL_QUERY_KEY].map((k) => JSON.stringify(k));
+
+  it('the quote is read once under its own key, and not at all when disabled (the mainland brand never asks)', async () => {
+    account.withdrawal.mockResolvedValue({ available: false, options: [] });
+    const { wrapper } = setup();
+    const off = renderHook(() => useWithdrawalQuote({ enabled: false }), { wrapper });
+    expect(off.result.current.fetchStatus).toBe('idle');
+    expect(account.withdrawal).not.toHaveBeenCalled();
+    const on = renderHook(() => useWithdrawalQuote(), { wrapper });
+    await waitFor(() => expect(on.result.current.isSuccess).toBe(true));
+    expect(account.withdrawal).toHaveBeenCalledTimes(1);
+    expect(on.result.current.data).toEqual({ available: false, options: [] });
+    expect(WITHDRAWAL_QUERY_KEY).toEqual(['credits', 'withdrawal']);
+  });
+
+  it('mounting the withdraw hook sends nothing; mutate sends the purchase id once', async () => {
+    account.withdraw.mockResolvedValue({ status: 'withdrawn', refundMinor: 2083, currency: 'USD' });
+    const { wrapper, invalidated } = setup();
+    const { result } = renderHook(() => useWithdraw(), { wrapper });
+    expect(account.withdraw).not.toHaveBeenCalled();
+    act(() => result.current.mutate({ purchaseId: 'in_purchase_1' }));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(account.withdraw).toHaveBeenCalledTimes(1);
+    expect(account.withdraw).toHaveBeenCalledWith('in_purchase_1');
+    expect(result.current.data).toEqual({ status: 'withdrawn', refundMinor: 2083, currency: 'USD' });
+    // The plan ended and the quote is closed: both are read again.
+    expect(invalidated().sort()).toEqual([...BILLING].sort());
+  });
+
+  it('a refusal reads the plan and the quote again too (the page was behind the server), and the code is the server\'s', async () => {
+    account.withdraw.mockRejectedValue(refused(WITHDRAWAL_UNAVAILABLE_CODE, 409));
+    const { wrapper, invalidated } = setup();
+    const { result } = renderHook(() => useWithdraw(), { wrapper });
+    act(() => result.current.mutate({ purchaseId: 'in_purchase_1' }));
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(WITHDRAWAL_UNAVAILABLE_CODE).toBe('withdrawal_not_available');
+    expect(invalidated()).toContain(JSON.stringify(WITHDRAWAL_QUERY_KEY));
+    expect(invalidated().sort()).toEqual([...BILLING].sort());
+  });
+
+  it('no billing answer waits for the withdrawal quote: a quote that never answers does not hold a refused resume', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const { client, wrapper } = setup();
+      // The quote is on screen and its re-read never answers.
+      account.withdrawal.mockResolvedValueOnce({ available: false, options: [] });
+      const quote = renderHook(() => useWithdrawalQuote(), { wrapper });
+      await waitFor(() => expect(quote.result.current.isSuccess).toBe(true));
+      account.withdrawal.mockReturnValue(new Promise(() => undefined));
+      account.resumeSubscription.mockRejectedValue(refused(RESUME_NOTHING_CODE, 409));
+      const { result } = renderHook(() => useResumeSubscription(), { wrapper });
+      act(() => result.current.mutate());
+      // Nothing else is on screen, so the awaited reads answer at once: the refusal shows well before the cap.
+      await waitFor(() => expect(result.current.isError).toBe(true));
+      expect(client.isFetching({ queryKey: WITHDRAWAL_QUERY_KEY })).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

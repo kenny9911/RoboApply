@@ -73,6 +73,50 @@ export function formatMoney(locale: string, amountMinor: number, currency: strin
   }
 }
 
+/** The symbol a locale prints for a currency (falls back to the ISO code). */
+function currencySymbol(locale: string, currency: string, display: 'symbol' | 'narrowSymbol'): string {
+  try {
+    const parts = new Intl.NumberFormat(locale, { style: 'currency', currency, currencyDisplay: display }).formatToParts(0);
+    return parts.find((p) => p.type === 'currency')?.value ?? currency;
+  } catch {
+    return currency;
+  }
+}
+
+/**
+ * An amount somebody is charged or refunded, in a sentence that has no note
+ * beside it saying which currency it is: the renewal acknowledgement, the
+ * withdrawal quote, a refund confirmation.
+ *
+ * In the brand's own currency (`homeCurrency`) it reads as every price on the
+ * page does (`formatMoney`: "$24.99", "¥39"). In any other currency the amount
+ * names its currency, because a bare "$749" for a New Taiwan dollar charge
+ * reads as US dollars on a page whose prices are in US dollars: the locale's
+ * longer symbol where it has one ("NT$749", "US$15", "CN¥39"), else the ISO
+ * code ("TWD 749" for a Taiwan reader, whose "$" is the same sign as the US
+ * dollar's short form).
+ */
+export function formatChargedMoney(locale: string, amountMinor: number, currency: string, homeCurrency: string): string {
+  const code = (currency || homeCurrency || 'USD').toUpperCase();
+  const home = (homeCurrency || '').toUpperCase();
+  if (!home || code === home) return formatMoney(locale, amountMinor, code);
+  const amount = amountMinor / 100;
+  const named = currencySymbol(locale, code, 'symbol');
+  // Still the sign the home currency is printed with: only the code tells them apart.
+  const currencyDisplay = named === currencySymbol(locale, home, 'narrowSymbol') ? 'code' : 'symbol';
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: code,
+      currencyDisplay,
+      minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return `${code} ${amount}`;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Clone plan catalog helpers (WP-21b; PRODUCT_PLAN.md §6.1–§6.4, TASK_PLAN.md
 // R-08, R-25). The plan sheet, /settings#billing and PriceReference read the
@@ -85,15 +129,23 @@ export function formatMoney(locale: string, amountMinor: number, currency: strin
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Countries where the consumer has a 14-day right of withdrawal at checkout,
- * so the plan sheet adds the optional withdrawal-waiver acknowledgement
- * (PRODUCT F-BILL-08): the EU 27, the UK, and Taiwan (digital-services
- * exemption only with prior agreement). Unknown country → no box, so the
- * buyer keeps the full 14-day refund (the safe default for the consumer).
+ * Billing countries with a statutory 14-day right of withdrawal that we
+ * honour, so the plan sheet adds the optional withdrawal-waiver
+ * acknowledgement (PRODUCT F-BILL-08; MARKET_STRATEGY.md §4.4): the EU 27,
+ * the three EEA states outside it (Iceland, Liechtenstein, Norway), the
+ * United Kingdom, and Taiwan (digital-services exemption only with prior
+ * agreement). Unknown country → no box, so the buyer keeps the full 14-day
+ * refund (the safe default for the consumer).
+ *
+ * This is the web's copy of the server's one list (`WITHDRAWAL_COUNTRIES` in
+ * server/src/platform/billing/acknowledgements.ts). The web must not import
+ * server code into the browser bundle, so the list is written out here and
+ * __tests__/lib/pricing.test.ts fails when the two differ.
  */
 export const WITHDRAWAL_WAIVER_COUNTRIES: ReadonlySet<string> = new Set([
   'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE',
   'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE',
+  'IS', 'LI', 'NO',
   'GB', 'TW',
 ]);
 

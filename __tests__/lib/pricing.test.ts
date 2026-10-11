@@ -14,18 +14,22 @@ import { describe, it, expect } from 'vitest';
 import * as pricing from '../../lib/pricing';
 import {
   MARKET_CURRENCY,
+  WITHDRAWAL_WAIVER_COUNTRIES,
   displayPrice,
+  formatChargedMoney,
   formatMoney,
   marketFromCountry,
   marketFromLocale,
   monthlyEquivalentMinor,
   quarterlySuggestion,
+  requiresWithdrawalWaiver,
   resolveMarket,
   samePriceAsWeeklyBilling,
   savingsPercent,
 } from '../../lib/pricing';
 import { marketingJsonLd } from '../../lib/seo';
 import { buildPlanViews } from '../../server/src/platform/billing/planViews';
+import { WITHDRAWAL_COUNTRIES, showsWithdrawalWaiver } from '../../server/src/platform/billing/acknowledgements';
 
 describe('lib/pricing', () => {
   it('holds no price table: every amount comes from the plans API', () => {
@@ -81,6 +85,67 @@ describe('lib/pricing', () => {
     expect(formatMoney('zh', 4500, 'CNY')).toBe('¥45');
     expect(formatMoney('en', 1550, 'USD')).toBe('$15.50');
     expect(formatMoney('en', 0, 'USD')).toBe('$0');
+  });
+
+  // ST-9 (MARKET_STRATEGY §4.4): one country list. The server's
+  // `WITHDRAWAL_COUNTRIES` decides the refund; the web's copy decides whether
+  // the plan sheet shows the waiver box. They are held equal here, so adding
+  // or removing a country on one side alone fails this test.
+  describe('the withdrawal countries are the server\'s list', () => {
+    it('the web list equals the server list, entry for entry (32 countries)', () => {
+      expect([...WITHDRAWAL_WAIVER_COUNTRIES].sort()).toEqual([...WITHDRAWAL_COUNTRIES].sort());
+      expect(WITHDRAWAL_WAIVER_COUNTRIES.size).toBe(32);
+      expect(new Set(WITHDRAWAL_COUNTRIES).size).toBe(WITHDRAWAL_COUNTRIES.length);
+    });
+
+    it('Norway, Iceland and Liechtenstein see the waiver box the server already honours; the US does not', () => {
+      for (const c of ['NO', 'IS', 'LI']) expect(requiresWithdrawalWaiver(c), c).toBe(true);
+      for (const c of ['no', ' is ', 'Li']) expect(requiresWithdrawalWaiver(c), c).toBe(true);
+      for (const c of ['DE', 'FR', 'GB', 'TW']) expect(requiresWithdrawalWaiver(c), c).toBe(true);
+      for (const c of ['US', 'CA', 'CH', 'CN', 'JP', 'AU', '', null, undefined, 'XX', 'NOR']) expect(requiresWithdrawalWaiver(c), String(c)).toBe(false);
+    });
+
+    it('the web and the server give the same answer for every country either side knows, and for others', () => {
+      for (const c of [...WITHDRAWAL_COUNTRIES, ...WITHDRAWAL_WAIVER_COUNTRIES, 'US', 'CH', 'CN', 'JP', 'HK', 'SG', 'AU', 'CA']) {
+        expect(requiresWithdrawalWaiver(c), c).toBe(showsWithdrawalWaiver(c));
+      }
+    });
+  });
+
+  // An amount in a sentence with no currency note beside it (the renewal
+  // acknowledgement, a withdrawal quote) names its currency when it is not
+  // the brand's own (waveM2-carryover MKT-4C.3).
+  describe('formatChargedMoney: a charge in another currency names the currency', () => {
+    it('the brand\'s own currency reads exactly as every other price does', () => {
+      for (const [locale, amount, currency] of [['en', 2499, 'USD'], ['zh', 2499, 'USD'], ['zh-TW', 2499, 'USD'], ['de', 2499, 'USD'], ['en', 1500, 'USD']] as const) {
+        expect(formatChargedMoney(locale, amount, currency, 'USD')).toBe(formatMoney(locale, amount, currency));
+      }
+      expect(formatChargedMoney('zh', 3900, 'CNY', 'CNY')).toBe('¥39');
+      expect(formatChargedMoney('en', 3900, 'cny', 'CNY')).toBe('¥39');
+    });
+
+    it('a New Taiwan dollar charge on a US dollar brand is never a bare "$"', () => {
+      expect(formatMoney('en', 74900, 'TWD')).toBe('$749');
+      expect(formatChargedMoney('en', 74900, 'TWD', 'USD')).toBe('NT$749');
+      expect(formatChargedMoney('ja', 74900, 'TWD', 'USD')).toBe('NT$749');
+      // A Taiwan reader's own "$" is the sign US dollars are printed with there: the code tells them apart.
+      const local = formatChargedMoney('zh-TW', 74900, 'TWD', 'USD');
+      expect(local).toMatch(/TWD/);
+      expect(local).toMatch(/749/);
+      expect(local).not.toBe(formatMoney('zh-TW', 74900, 'USD'));
+    });
+
+    it('either brand: the other currency is named, cents are kept when there are some', () => {
+      expect(formatChargedMoney('en', 3900, 'CNY', 'USD')).toBe('CN¥39');
+      expect(formatChargedMoney('zh', 2499, 'USD', 'CNY')).toBe('US$24.99');
+      expect(formatChargedMoney('en', 2499, 'USD', 'CNY')).toBe('$24.99');
+      expect(formatChargedMoney('en', 74950, 'TWD', 'USD')).toBe('NT$749.50');
+    });
+
+    it('with no home currency stated it is the plain formatter; a bad currency code never throws', () => {
+      expect(formatChargedMoney('en', 74900, 'TWD', '')).toBe(formatMoney('en', 74900, 'TWD'));
+      expect(() => formatChargedMoney('en', 100, 'not-a-code', 'USD')).not.toThrow();
+    });
   });
 
   it('a weekly price reads as a whole monthly amount: 999 a week is "about $43 a month"', () => {

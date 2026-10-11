@@ -99,7 +99,7 @@ import { useVisitorCountry } from '../../../hooks/credits/useVisitorCountry';
 import { useCredits } from '../../../hooks/shared/useCredits';
 import { cn } from '../../../lib/utils';
 import { SwitchQuoteSheet } from './SwitchQuoteSheet';
-import { money, planNameKey, pricePeriod } from './labels';
+import { chargedMoney, money, planNameKey, pricePeriod } from './labels';
 import styles from './credits.module.css';
 
 /** A rail `GET /billing/plans` may list in `checkout.rails`. */
@@ -315,7 +315,9 @@ export function PlanPicker({ visitorCountry, requestedPlan, navigate = defaultNa
   const cnVisitorUrl = cnVisitorPricingUrl(brand, country);
   const period = plan ? pricePeriod(plan) : 'once';
   const shown = plan ? displayPrice(plan, monthly) : null;
-  const price = shown ? money(locale, shown.amountMinor, shown.currency) : '—';
+  // The price in the renewal sentence. The option above it has a note beside its price; the sentence has none,
+  // so a price in another currency than the brand's names it there ("NT$749", never a bare "$749").
+  const price = shown ? chargedMoney(locale, shown.amountMinor, shown.currency, brand.currency) : '—';
   // WeChat Pay sells one-time passes and packs only.
   const viaWechat = rail === 'wechatpay';
   const wechatCanSell = !viaWechat || (!!plan && sellableCnPlan(plans, plan.key) !== null);

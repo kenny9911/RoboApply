@@ -3,7 +3,7 @@
 // here: prices, caps and dates all come from the server.
 
 import type { BrandId } from '../../../lib/brand/registry.generated';
-import { formatMoney } from '../../../lib/pricing';
+import { formatChargedMoney, formatMoney } from '../../../lib/pricing';
 
 /** Credit buckets with a label under `credits.buckets.*` (R-07 names). */
 export const BUCKET_LABEL_KEYS = [
@@ -85,6 +85,18 @@ export function pricePeriod(plan: { kind: string; interval: string | null }): Pr
 export function money(locale: string, amountMinor: number | null | undefined, currency: string): string {
   if (amountMinor === null || amountMinor === undefined || !Number.isFinite(amountMinor)) return '—';
   return formatMoney(locale, amountMinor, currency);
+}
+
+/**
+ * An amount somebody is charged or refunded, for a sentence with no currency
+ * note beside it (the renewal acknowledgement, a withdrawal quote): in the
+ * brand's own currency it reads like every price on the page; in another one
+ * it names the currency ("NT$749", never a bare "$749" on a US dollar page).
+ * `homeCurrency` is the brand's (`useBrand().currency`).
+ */
+export function chargedMoney(locale: string, amountMinor: number | null | undefined, currency: string, homeCurrency: string): string {
+  if (amountMinor === null || amountMinor === undefined || !Number.isFinite(amountMinor)) return '—';
+  return formatChargedMoney(locale, amountMinor, currency, homeCurrency);
 }
 
 /** A parsed ISO time, or null. */

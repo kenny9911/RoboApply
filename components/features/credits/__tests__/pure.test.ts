@@ -25,7 +25,8 @@ import { checkoutRedirectUrl } from '../../../../hooks/credits/useBillingActions
 import { applyDraft, draftFromOverride, invalidCells, parseOverrideValue, revenueShare } from '../adminCatalog';
 import { bucketLabelKey, calendarDaysUntil, knownTimeZone, planMonths, planNameKey, pricePeriod, refillLabel } from '../labels';
 import en from '../../../../i18n/messages/en.json';
-import { creditsResponse, GA_ENV, plansView, RA_ENV, railNotReadyPlansView, unpricedPlansView } from './fixtures';
+import { creditsResponse, GA_ENV, plansView, publicPolicyLabel, RA_ENV, railNotReadyPlansView, refundPolicyFor, unpricedPlansView } from './fixtures';
+import { REFUND_POLICY_VERSION } from '../../../../server/src/platform/billing/refunds';
 import type { BillingPlanResponse } from '../../../../lib/api/account';
 
 describe('pricing math (derived from server prices only)', () => {
@@ -449,6 +450,23 @@ describe('the plan sheet for a subscriber (ST-5) and for a mainland visitor (AL-
       expect(text).not.toMatch(/[0-9$¥€£]/);
       expect(text).not.toMatch(/—|Weekly|Monthly|Quarterly/);
     }
+  });
+});
+
+// waveM2-carryover MKT-4C.5: the wire sends the PUBLIC policy label, so the
+// fixture that stands in for the wire does too.
+describe('the plans fixture carries the public refund policy label', () => {
+  it('no brand\'s fixture shows an internal review note; the rule set\'s own name is kept', () => {
+    for (const brand of ['roboapply', 'goapply'] as const) {
+      const stored = REFUND_POLICY_VERSION[brand];
+      const shown = refundPolicyFor(brand).version;
+      expect(shown, brand).not.toMatch(/pending|counsel/i);
+      expect(stored.startsWith(shown), brand).toBe(true);
+      expect(shown, brand).toMatch(/^refund-v\d+-\d{4}-\d{2}$/);
+      expect((plansView(brand) as { refundPolicy?: { version: string } }).refundPolicy?.version).toBe(shown);
+    }
+    expect(publicPolicyLabel('refund-v1-2026-10-pending-counsel')).toBe('refund-v1-2026-10');
+    expect(publicPolicyLabel('refund-v2-2026-10')).toBe('refund-v2-2026-10');
   });
 });
 

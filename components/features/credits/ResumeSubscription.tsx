@@ -17,7 +17,8 @@
 //     the plan's. The price is what the subscription is charged, as the
 //     billing plan states it: the same figure the server stores with the
 //     acknowledgement. It is never the catalog price (a subscription can be
-//     charged another currency or an earlier price). With no charged price
+//     charged another currency or an earlier price), and a charge in another
+//     currency than the brand's names its currency. With no charged price
 //     (the billing plan has not answered, failed, or states none) the control
 //     is not offered: the sentence is never printed with a guess.
 //   - The button is enabled only while the box is ticked. Nothing is charged
@@ -40,7 +41,7 @@ import { useBrand } from '../../../lib/brand/BrandProvider';
 import { apiErrorCode } from '../../../lib/api/contracts/wire';
 import { RESUME_NOTHING_CODE, useResumeSubscription } from '../../../hooks/credits/useBillingActions';
 import type { SubscriptionState } from '../../../hooks/credits/useSubscriptionState';
-import { money, parseDate, type PricePeriod } from './labels';
+import { chargedMoney, parseDate, type PricePeriod } from './labels';
 import styles from './credits.module.css';
 
 export type RenewalPeriod = Exclude<PricePeriod, 'once'>;
@@ -133,6 +134,7 @@ export function ResumeSubscription({ sub, onResumed, now = () => new Date() }: R
 function ResumeControl({ sub, eligible, at, onResumed }: { sub: SubscriptionState; eligible: boolean; at: Date; onResumed?: () => void }) {
   const t = useTranslations('credits');
   const locale = useLocale();
+  const brand = useBrand();
   const resume = useResumeSubscription();
   const [ack, setAck] = useState(false);
   const { isSuccess: resumed, isError: failed } = resume;
@@ -167,7 +169,8 @@ function ResumeControl({ sub, eligible, at, onResumed }: { sub: SubscriptionStat
         <span>
           {t('planSheet.autoRenewAck', {
             period: terms.period,
-            price: money(locale, terms.amountMinor, terms.currency),
+            // A charge in another currency than the brand's names it ("NT$749", never a bare "$749").
+            price: chargedMoney(locale, terms.amountMinor, terms.currency, brand.currency),
           })}
         </span>
       </label>

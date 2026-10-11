@@ -5,6 +5,9 @@
 // panel, the admin actions view (INT-08) and held invite rewards (INT-08:
 // list, approve, reject, the 409 on approve). API wrappers are mocked; nothing
 // reaches the network.
+// Market wave M4 (MKT-4C; MARKET_STRATEGY §5.1 "Endpoint health"): the Payments
+// panel of the System view, one status line and one count from the Stripe
+// readout, with a link to the full list in the credits console.
 
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -38,6 +41,12 @@ vi.mock('../../../../lib/api/admin', async (orig) => {
   const real = await orig<typeof import('../../../../lib/api/admin')>();
   return { ...real, adminConsoleApi: api, costsCsvUrl: api.costsCsvUrl };
 });
+// The Stripe readout the Payments panel reads (lib/api/adminBilling.ts, the same route as the credits console).
+const billing = vi.hoisted(() => ({ stripeHealth: vi.fn() }));
+vi.mock('../../../../lib/api/adminBilling', async (orig) => {
+  const real = await orig<typeof import('../../../../lib/api/adminBilling')>();
+  return { ...real, adminBillingApi: { ...real.adminBillingApi, ...billing } };
+});
 const growth = vi.hoisted(() => ({ listHeldReferrals: vi.fn(), reviewReferral: vi.fn() }));
 vi.mock('../../../../lib/api/growth', async (orig) => ({ ...(await orig<typeof import('../../../../lib/api/growth')>()), ...growth }));
 const pi = vi.hoisted(() => ({ adminListPiRequests: vi.fn(), adminUpdatePiRequest: vi.fn() }));
@@ -52,7 +61,9 @@ import type { HeldReferralView } from '../../../../lib/api/contracts/growth';
 import adminCopy from '../../../../i18n/messages/en.json';
 import { ADMIN_AUDIT_EVENTS } from '../../../../server/src/features/admin/contract';
 import { RISK_WEIGHTS } from '../../../../server/src/features/growth/referralRisk';
-import { AUDIT_ACTIONS, PROVIDER_STATE_TONE } from '../SystemConsole';
+import { AUDIT_ACTIONS, PROVIDER_STATE_TONE, STRIPE_READOUT_HREF, paymentsNotReadyReason } from '../SystemConsole';
+import { ADMIN_STRIPE_PANEL_ID } from '../../../features/credits/AdminBillingPanels';
+import type { StripeHealth } from '../../../../lib/api/adminBilling';
 import { PROVIDER_STATES } from '../../../../server/src/features/admin/contract';
 import { UserOverridesPanel, parseOverrideValue } from '../UserAdminPanels';
 import type { BrandHealth, ProviderUsageRow, SystemStatusResponse, ReportItem } from '../../../../lib/api/admin';
@@ -92,6 +103,18 @@ const status: SystemStatusResponse = {
   brandsServed: ['roboapply'],
 };
 
+/** The Stripe readout of a deployment that can take card payments and whose endpoint sends every event. */
+const stripeHealth = (over: Partial<StripeHealth> = {}): StripeHealth => ({
+  keyMode: 'test',
+  usable: true,
+  refusedReason: null,
+  webhookSecrets: 1,
+  railReady: true,
+  endpoint: { checked: true, url: 'https://www.example.test/api/v1/roboapply/stripe/webhook', missingEvents: [], reason: null },
+  pinnedPlans: [],
+  ...over,
+});
+
 const report = (over: Partial<ReportItem> = {}): ReportItem => ({
   id: 'job1', title: 'Data analyst', companyName: 'Acme', market: 'intl', sourceName: 'Greenhouse', applyUrl: 'https://example.com/a',
   state: 'open', closeReason: null, closedAt: null, reasons: [{ reason: 'scam', count: 2 }], reportCount: 2,
@@ -113,6 +136,7 @@ beforeEach(() => {
   window.history.replaceState(null, '', '/admin/system');
   mockAuthState.value = admin();
   api.getSystemStatus.mockResolvedValue(status);
+  billing.stripeHealth.mockResolvedValue(stripeHealth());
   api.listWorkItems.mockResolvedValue({ items: [{ id: 'w1', kind: 'job.enrich', status: 'dead', brand: 'roboapply', attempts: 5, maxAttempts: 5, runAfter: status.asOf, lastError: 'timeout', createdAt: status.asOf, updatedAt: status.asOf }], cursor: null });
   api.retryWorkItem.mockResolvedValue({ id: 'w1', status: 'queued' });
   api.getCosts.mockResolvedValue({ from: '2026-09-11', to: '2026-10-10', rows: [{ day: '2026-10-09', sku: 'ra_job_enrich', brand: 'roboapply', costUsd: 1.5, units: 30, rows: 30, unpricedRows: 0, platform: true }], totals: { costUsd: 1.5, units: 30, rows: 30 } });
@@ -291,6 +315,114 @@ describe('/admin/system', () => {
     withProviders([]);
     renderWithBrand(<SystemConsole />);
     expect(await screen.findByText('No job providers are set up.')).toBeInTheDocument();
+  });
+
+  // ── Payments: the Stripe line of the System view (MKT-4C; strategy §5.1 "Endpoint health") ──
+  describe('payments', () => {
+    const panel = () => screen.findByTestId('payments-panel');
+
+    it('ready: one status line, every event sent, and a link to the Stripe panel of the credits console', async () => {
+      renderWithBrand(<SystemConsole />);
+      const el = await panel();
+      expect(within(el).getByRole('heading', { name: 'Payments' })).toBeInTheDocument();
+      await waitFor(() => expect(within(el).getByTestId('payments-status')).toHaveTextContent('Card payments are ready.'));
+      expect(within(el).getByTestId('payments-events')).toHaveTextContent('The webhook endpoint sends every event the site acts on.');
+      const link = within(el).getByRole('link', { name: 'See the full Stripe readout in Credits and plans' });
+      expect(link).toHaveAttribute('href', '/admin/credits#admin-stripe');
+      // The link lands on the panel that holds the list.
+      expect(STRIPE_READOUT_HREF).toBe(`/admin/credits#${ADMIN_STRIPE_PANEL_ID}`);
+      expect(billing.stripeHealth).toHaveBeenCalledTimes(1);
+      // It comes after the providers panel.
+      const providers = screen.getByRole('heading', { name: 'Job providers' });
+      expect(providers.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it.each([
+      ['no key', stripeHealth({ keyMode: 'none', usable: false, refusedReason: 'missing', webhookSecrets: 0, railReady: false }), 'Card payments are not ready. No Stripe key is set.'],
+      ['a live key outside production', stripeHealth({ keyMode: 'live', usable: false, refusedReason: 'live_key_outside_production', railReady: false }), 'Card payments are not ready. A live Stripe key is refused outside production.'],
+      ['a key without a webhook secret', stripeHealth({ webhookSecrets: 0, railReady: false }), 'Card payments are not ready. No webhook signing secret is set.'],
+      ['no reason stated', stripeHealth({ railReady: false, webhookSecrets: null }), 'Card payments are not ready.'],
+    ])('not ready with the reason: %s', async (_name, health, text) => {
+      billing.stripeHealth.mockResolvedValue(health);
+      renderWithBrand(<SystemConsole />);
+      const el = await panel();
+      await waitFor(() => expect(within(el).getByTestId('payments-status').textContent?.trim()).toBe(text));
+      expect(within(el).getByTestId('payments-status')).not.toHaveTextContent('Card payments are ready.');
+    });
+
+    it('the reason is read from the readout, never guessed', () => {
+      expect(paymentsNotReadyReason(stripeHealth())).toBeNull();
+      expect(paymentsNotReadyReason(stripeHealth({ railReady: false, usable: false, refusedReason: 'missing' }))).toBe('missing');
+      expect(paymentsNotReadyReason(stripeHealth({ railReady: false, usable: false, refusedReason: 'live_key_outside_production' }))).toBe('live_key_outside_production');
+      expect(paymentsNotReadyReason(stripeHealth({ railReady: false, webhookSecrets: 0 }))).toBe('no_secret');
+      // Secrets are configured, or their number is not stated: no reason is made up.
+      expect(paymentsNotReadyReason(stripeHealth({ railReady: false, webhookSecrets: 2 }))).toBeNull();
+      expect(paymentsNotReadyReason(stripeHealth({ railReady: false, webhookSecrets: null }))).toBeNull();
+      expect(paymentsNotReadyReason(stripeHealth({ railReady: false, usable: false, webhookSecrets: 0 }))).toBeNull();
+    });
+
+    it('says how many events the webhook endpoint does not send; the list itself is in the credits console', async () => {
+      billing.stripeHealth.mockResolvedValue(stripeHealth({ endpoint: { checked: true, url: 'https://www.example.test/hook', missingEvents: ['charge.refunded', 'charge.dispute.created', 'invoice.payment_action_required'], reason: null } }));
+      renderWithBrand(<SystemConsole />);
+      const el = await panel();
+      await waitFor(() => expect(within(el).getByTestId('payments-events')).toHaveTextContent('3 events the site acts on are not sent by the webhook endpoint.'));
+      // The count here, the names there.
+      expect(el).not.toHaveTextContent('charge.refunded');
+    });
+
+    it('one missing event reads in the singular', async () => {
+      billing.stripeHealth.mockResolvedValue(stripeHealth({ endpoint: { checked: true, url: null, missingEvents: ['charge.refunded'], reason: null } }));
+      renderWithBrand(<SystemConsole />);
+      const el = await panel();
+      await waitFor(() => expect(within(el).getByTestId('payments-events')).toHaveTextContent('1 event the site acts on is not sent by the webhook endpoint.'));
+    });
+
+    // The server's answer when no endpoint in Stripe points at the site (stripeHealth.ts): the check was made, every
+    // event is listed as missing, and the reason says why. Not "14 events are not sent by the webhook endpoint".
+    const EVERY_EVENT = ['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed', 'checkout.session.expired', 'customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted', 'customer.subscription.pending_update_applied', 'customer.subscription.pending_update_expired', 'invoice.paid', 'invoice.payment_failed', 'invoice.payment_action_required', 'charge.refunded', 'charge.dispute.created'];
+    it.each([
+      ['as the server sends it (checked, all fourteen events missing)', { checked: true, url: null, missingEvents: EVERY_EVENT, reason: 'not_found' as const }],
+      ['if a server ever sends it as an unchecked one', { checked: false, url: null, missingEvents: [], reason: 'not_found' as const }],
+    ])('no webhook endpoint at all says so, never a count of events an endpoint "does not send" (%s)', async (_name, endpoint) => {
+      billing.stripeHealth.mockResolvedValue(stripeHealth({ endpoint }));
+      renderWithBrand(<SystemConsole />);
+      const el = await panel();
+      await waitFor(() => expect(within(el).getByTestId('payments-events')).toHaveTextContent('No webhook endpoint in Stripe points at this site.'));
+      expect(el).not.toHaveTextContent(/14 events|not sent by the webhook endpoint|sends every event|could not be checked/);
+      // The rail line is still what the readout says about the key and the secret.
+      expect(within(el).getByTestId('payments-status')).toHaveTextContent('Card payments are ready.');
+    });
+
+    it('an endpoint that could not be read says "could not be checked", never "every event"', async () => {
+      billing.stripeHealth.mockResolvedValue(stripeHealth({ endpoint: { checked: false, url: null, missingEvents: [], reason: 'restricted_key' } }));
+      renderWithBrand(<SystemConsole />);
+      const el = await panel();
+      await waitFor(() => expect(within(el).getByTestId('payments-events')).toHaveTextContent('The webhook endpoint could not be checked.'));
+      expect(el).not.toHaveTextContent('sends every event');
+      // The rail itself is still what the readout says.
+      expect(within(el).getByTestId('payments-status')).toHaveTextContent('Card payments are ready.');
+    });
+
+    it('a failed read renders "could not be checked" and never breaks the page', async () => {
+      billing.stripeHealth.mockRejectedValue(new RoboApiError('gone', { code: 'not_found', status: 404, payload: { success: false, code: 'not_found' } }));
+      renderWithBrand(<SystemConsole />);
+      const el = await panel();
+      await waitFor(() => expect(within(el).getByTestId('payments-status')).toHaveTextContent('Card payments could not be checked.'));
+      expect(within(el).queryByTestId('payments-events')).toBeNull();
+      expect(el).not.toHaveTextContent(/ready/);
+      // The rest of the System view is all there.
+      expect(screen.getByText('New jobs today')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Job providers' })).toBeInTheDocument();
+      expect(within(el).getByRole('link', { name: 'See the full Stripe readout in Credits and plans' })).toBeInTheDocument();
+    });
+
+    it('the mainland brand has no such panel and asks Stripe nothing (Stripe never serves it)', async () => {
+      api.getSystemStatus.mockResolvedValue({ ...status, brands: [brand({ brand: 'goapply', market: 'cn' })], brandsServed: ['goapply'] });
+      renderWithBrand(<SystemConsole />, { brand: 'goapply' });
+      expect(await screen.findByRole('heading', { name: 'Job providers' })).toBeInTheDocument();
+      expect(screen.queryByTestId('payments-panel')).toBeNull();
+      expect(billing.stripeHealth).not.toHaveBeenCalled();
+    });
   });
 
   it('retries a dead item', async () => {

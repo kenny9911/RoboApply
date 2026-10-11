@@ -8,7 +8,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactElement } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { focusManager, useQueryClient } from '@tanstack/react-query';
 
 import { RA_ENV, anAttempt, atPhoneWidth, checkoutOf, creditsResponse, plansView, railNotReadyPlansView, renderUi, studentPlansView, unpricedPlansView, withBrand } from './fixtures';
 import { buildPlanViews } from '../../../../server/src/platform/billing/planViews';
@@ -32,6 +32,8 @@ const account = vi.hoisted(() => ({
   portal: vi.fn(),
   reconcileCheckout: vi.fn(),
   resumeSubscription: vi.fn(),
+  withdrawal: vi.fn(),
+  withdraw: vi.fn(),
 }));
 // Account V2 (WP-79) cards inside the billing view: no network.
 const v2 = vi.hoisted(() => ({
@@ -56,6 +58,9 @@ vi.mock('next/navigation', () => ({
 import { PlanPicker } from '../PlanPicker';
 import { CancelSubscription, CANCEL_ALTERNATIVE_STORAGE_KEY } from '../CancelSubscription';
 import { BillingView } from '../BillingView';
+import { WITHDRAW_REREAD_DELAYS_MS, WithdrawContract, openWithdrawals, withdrawRefusal, withdrawalKind } from '../WithdrawContract';
+import type { WithdrawalOption, WithdrawalOverview } from '../../../../lib/api/account';
+import { WITHDRAWAL_OPEN_STEP_REFRESH_MS, WITHDRAWAL_STALE_MS } from '../../../../hooks/credits/useBillingActions';
 import { CheckoutReturn, RETURN_POLL_ATTEMPTS, RETURN_RECONCILE_EVERY } from '../CheckoutReturn';
 import { PaymentFailedBanner } from '../PaymentFailedBanner';
 import { SettingsSection } from '../SettingsSection';
@@ -84,6 +89,8 @@ beforeEach(() => {
   api.getPlans.mockResolvedValue(plansView());
   api.getCreditHistory.mockResolvedValue({ items: [] });
   account.plan.mockResolvedValue(legacyPlan());
+  // No purchase can be withdrawn unless a test says otherwise (the answer for most buyers).
+  account.withdrawal.mockResolvedValue({ available: false, options: [] });
   try {
     window.localStorage.clear();
   } catch {
@@ -1003,8 +1010,9 @@ describe('BillingView: "Keep my plan" for a cancelled subscription that is still
     subscriber('pro_monthly', 'month', cancelled, { amountMinor: 74900, currency: 'twd' });
     renderUi(<BillingView navigate={vi.fn()} />);
     const ack = within(await screen.findByTestId('resume-subscription')).getByRole('checkbox');
-    // 74900 minor units of TWD, formatted by the shared money helper; never the catalog's 24.99.
-    expect(ack).toHaveAccessibleName(expect.stringMatching(/every month at \D*749 until I cancel\.$/));
+    // 74900 minor units of TWD; never the catalog's 24.99. The sentence has no currency note beside it, so on a
+    // US dollar page the amount names its currency: "NT$749", never a bare "$749" (waveM2-carryover MKT-4C.3).
+    expect(ack).toHaveAccessibleName('I agree this renews automatically every month at NT$749 until I cancel.');
     expect(ack).not.toHaveAccessibleName(expect.stringContaining('24.99'));
   });
 
@@ -1207,6 +1215,583 @@ describe('BillingView: "Keep my plan" for a cancelled subscription that is still
 });
 
 // AL-6 (web): MARKET_STRATEGY §5.3 G12, M-18. One line with a link; no redirect.
+// ST-9 (web): MARKET_STRATEGY §4.4 "Statutory withdrawal": a labelled "Withdraw
+// from contract" entry for 14 days after each purchase of a buyer in the EU,
+// the EEA, the UK or Taiwan. Who sees it is the server's answer; the page asks
+// and prints, it never computes an amount or a day.
+describe('BillingView: "Withdraw from contract" for 14 days after an eligible purchase', () => {
+  // The page's clock in the tests that fix it: noon on day 5 of a purchase made on Oct 6.
+  const NOW = new Date('2026-10-10T12:00:00.000Z');
+  const now = () => NOW;
+  const PAID_AT = '2026-10-06T12:00:00.000Z';
+  const DEADLINE = '2026-10-20T12:00:00.000Z';
+  const IN_9_DAYS = new Date(Date.now() + 9 * 86_400_000).toISOString();
+
+  /** One open purchase and its quote. The default: a monthly plan on day 5, waiver ticked, 25 of 30 days go back. */
+  const option = (over: { purchase?: Partial<WithdrawalOption['purchase']>; quote?: Partial<WithdrawalOption['quote']> } = {}): WithdrawalOption => ({
+    purchase: { source: 'stripe', id: 'in_monthly_1', planKey: 'pro_monthly', chargedAt: PAID_AT, amountMinor: 2499, currency: 'USD', ...over.purchase },
+    quote: { rule: 'withdrawal_14d_prorata', refundMinor: 2083, currency: 'USD', deadline: DEADLINE, prorata: { usedDays: 5, periodDays: 30 }, region: 'eu', ...over.quote },
+  });
+  const open = (...options: WithdrawalOption[]): WithdrawalOverview => ({ available: true, options });
+  const NONE: WithdrawalOverview = { available: false, options: [] };
+  /** The quote without the waiver: the whole price, no day count. */
+  const fullRefund = (over: Partial<WithdrawalOption['quote']> = {}) => option({ quote: { rule: 'withdrawal_14d', refundMinor: 2499, prorata: null, ...over } });
+
+  const section = () => screen.findByTestId('withdraw-contract');
+  const entry = () => screen.getByRole('button', { name: 'Withdraw from contract' });
+  const confirmButton = (amount = '$20.83') => screen.getByRole('button', { name: `Withdraw and refund ${amount}` });
+  const settled = async () => {
+    await screen.findByTestId('current-plan');
+    await waitFor(() => expect(account.withdrawal).toHaveBeenCalled());
+    await waitFor(() => expect(radio('pro_monthly')).not.toBeNull());
+  };
+
+  describe('who sees it', () => {
+    it('a German subscriber inside the 14 days sees the entry, as its own section with its own heading', async () => {
+      subscriber('pro_monthly', 'month');
+      account.withdrawal.mockResolvedValue(open(option({ quote: { deadline: IN_9_DAYS } })));
+      renderUi(<BillingView navigate={vi.fn()} />);
+      const block = await section();
+      expect(within(block).getByRole('heading', { level: 2, name: 'Withdraw from contract' })).toBeInTheDocument();
+      expect(within(block).getByRole('button', { name: 'Withdraw from contract' })).toBeEnabled();
+      // Never a line inside the plan card or its cancel control: cancelling and withdrawing are different things.
+      const card = screen.getByTestId('current-plan');
+      expect(card).not.toContainElement(block);
+      expect(within(card).queryByText(/Withdraw/)).toBeNull();
+      expect(within(screen.getByTestId('cancel-subscription')).queryByText(/Withdraw/)).toBeNull();
+      // It sits under the plan card, above the plan sheet.
+      expect(card.compareDocumentPosition(block) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(block.compareDocumentPosition(document.getElementById('billing-plans')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      // Showing it sends nothing.
+      expect(account.withdraw).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      { name: 'a US subscriber (the server says not available)', answer: NONE },
+      { name: 'anyone past day 14 (the server says not available)', answer: NONE },
+      { name: 'a quote whose last day has already passed on this device', answer: open(option({ quote: { deadline: YESTERDAY } })) },
+      { name: 'an answer that says available but carries no quote', answer: { available: true, options: [] } as WithdrawalOverview },
+    ])('never: $name', async ({ answer }) => {
+      subscriber('pro_monthly', 'month');
+      account.withdrawal.mockResolvedValue(answer);
+      renderUi(<BillingView visitorCountry="US" navigate={vi.fn()} />);
+      await settled();
+      expect(screen.queryByTestId('withdraw-contract')).toBeNull();
+      expect(screen.queryByText(/Withdraw/)).toBeNull();
+    });
+
+    it('never on GoApply, and the mainland brand does not even ask', async () => {
+      api.getPlans.mockResolvedValue(plansView('goapply', undefined, { paymentsOpen: true, checkout: checkoutOf(['alipay']) }));
+      api.getCredits.mockResolvedValue(creditsResponse({ planKey: 'pro_monthly', planProfile: 'pro', interval: 'pass', periodEnd: IN_20_DAYS }));
+      // Even if something answered with a quote, a GoApply page would not show it.
+      account.withdrawal.mockResolvedValue(open(option({ quote: { deadline: IN_9_DAYS } })));
+      renderUi(<BillingView navigate={vi.fn()} />, { brand: 'goapply' });
+      await screen.findByTestId('current-plan');
+      await waitFor(() => expect(radio('pro_monthly')).not.toBeNull());
+      expect(account.withdrawal).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('withdraw-contract')).toBeNull();
+      expect(screen.queryByText(/Withdraw/)).toBeNull();
+    });
+
+    it('nothing while the answer is still out', async () => {
+      account.withdrawal.mockReturnValue(new Promise(() => undefined));
+      renderUi(<BillingView navigate={vi.fn()} />);
+      await screen.findByTestId('current-plan');
+      expect(screen.queryByTestId('withdraw-contract')).toBeNull();
+    });
+
+    it('a check that failed is mentioned only where a right of withdrawal is plausible, with a way to ask again', async () => {
+      account.withdrawal.mockRejectedValue(apiError('payment_provider_error', 502));
+      const us = renderUi(<BillingView visitorCountry="US" navigate={vi.fn()} />);
+      await screen.findByTestId('current-plan');
+      await waitFor(() => expect(account.withdrawal.mock.calls.length).toBeGreaterThanOrEqual(2), { timeout: 4000 });
+      expect(screen.queryByTestId('withdraw-contract')).toBeNull();
+      us.unmount();
+
+      account.withdrawal.mockReset();
+      account.withdrawal.mockRejectedValue(apiError('payment_provider_error', 502));
+      renderUi(<BillingView visitorCountry="DE" navigate={vi.fn()} />);
+      const failed = await screen.findByTestId('withdraw-check-error', undefined, { timeout: 4000 });
+      expect(failed).toHaveTextContent("We couldn't check whether you can still withdraw from a recent purchase.");
+      // Nothing is claimed: no amount, no day, no button that withdraws.
+      expect(screen.queryByRole('button', { name: 'Withdraw from contract' })).toBeNull();
+      account.withdrawal.mockResolvedValue(open(option({ quote: { deadline: IN_9_DAYS } })));
+      fireEvent.click(within(failed).getByRole('button', { name: 'Try again' }));
+      expect(await screen.findByRole('button', { name: 'Withdraw from contract' })).toBeEnabled();
+      expect(screen.queryByTestId('withdraw-check-error')).toBeNull();
+    });
+  });
+
+  describe('the two steps', () => {
+    it('step one opens the confirmation: the plan, the quoted refund, the pro-rata sentence, the last day, and that Pro ends at once', async () => {
+      account.withdrawal.mockResolvedValue(open(option()));
+      renderUi(<WithdrawContract now={now} />);
+      const block = await section();
+      // The row: what was paid, what goes back, until when. All from the quote.
+      const row = within(block).getByTestId('withdraw-option');
+      expect(row).toHaveTextContent('Pro Monthly');
+      expect(row).toHaveTextContent('Paid so far: $24.99. Bought on Oct 6, 2026.');
+      expect(row).toHaveTextContent('Refund if you withdraw now: $20.83.');
+      expect(row).toHaveTextContent(/You can withdraw until Oct 20, 2026/);
+      fireEvent.click(entry());
+      const step = await screen.findByTestId('withdraw-confirm');
+      expect(within(step).getByRole('heading', { name: 'Withdraw from Pro Monthly?' })).toBeInTheDocument();
+      expect(step).toHaveTextContent('We refund $20.83 to the payment method you paid with.');
+      // 25/30 on day 5 with the waiver: the numbers are the quote's `prorata`, never worked out here.
+      expect(within(step).getByTestId('withdraw-prorata')).toHaveTextContent('You asked us to start at once, so the refund covers the 25 of 30 days you have not used.');
+      expect(step).toHaveTextContent(/You can withdraw until Oct 20, 2026/);
+      expect(step).toHaveTextContent('Your subscription ends at once and Pro stops right away.');
+      expect(confirmButton()).toBeEnabled();
+      // Nothing is sent to the server before the second step.
+      expect(account.withdraw).not.toHaveBeenCalled();
+    });
+
+    it('without the waiver the quote is the full price and there is no day count', async () => {
+      account.withdrawal.mockResolvedValue(open(fullRefund()));
+      renderUi(<WithdrawContract now={now} />);
+      await section();
+      fireEvent.click(entry());
+      const step = await screen.findByTestId('withdraw-confirm');
+      expect(step).toHaveTextContent('We refund $24.99 to the payment method you paid with.');
+      expect(within(step).queryByTestId('withdraw-prorata')).toBeNull();
+      expect(step).not.toHaveTextContent(/days you have not used/);
+      expect(confirmButton('$24.99')).toBeEnabled();
+    });
+
+    it('every number on the sheet comes from the quote (other numbers, other sheet)', async () => {
+      account.withdrawal.mockResolvedValue(
+        open(option({ purchase: { id: 'in_weekly_9', planKey: 'pro_weekly', amountMinor: 1998 }, quote: { refundMinor: 571, prorata: { usedDays: 3, periodDays: 7 }, deadline: '2026-10-16T12:00:00.000Z' } })),
+      );
+      renderUi(<WithdrawContract now={now} />);
+      const block = await section();
+      // A weekly plan on day 10: both charges it paid so far are in the amount.
+      expect(block).toHaveTextContent('Paid so far: $19.98.');
+      fireEvent.click(entry());
+      const step = await screen.findByTestId('withdraw-confirm');
+      expect(step).toHaveTextContent('We refund $5.71 to the payment method you paid with.');
+      expect(step).toHaveTextContent('covers the 4 of 7 days you have not used');
+      expect(step).toHaveTextContent(/until Oct 16, 2026/);
+      expect(confirmButton('$5.71')).toBeInTheDocument();
+      expect(step).not.toHaveTextContent(/20\.83|24\.99|25 of 30/);
+    });
+
+    it('"Keep this purchase" closes the step and sends nothing', async () => {
+      account.withdrawal.mockResolvedValue(open(option()));
+      renderUi(<WithdrawContract now={now} />);
+      await section();
+      fireEvent.click(entry());
+      fireEvent.click(await screen.findByRole('button', { name: 'Keep this purchase' }));
+      expect(screen.queryByTestId('withdraw-confirm')).toBeNull();
+      expect(entry()).toBeEnabled();
+      expect(account.withdraw).not.toHaveBeenCalled();
+    });
+
+    it('focus follows the step: to its title when it opens, back to the entry when it closes, to the heading once the purchase is gone', async () => {
+      account.withdrawal.mockResolvedValue(open(option()));
+      account.withdraw.mockResolvedValue({ status: 'withdrawn', refundMinor: 2083, currency: 'USD' });
+      renderUi(<WithdrawContract now={now} />);
+      const block = await section();
+      fireEvent.click(entry());
+      const step = await screen.findByTestId('withdraw-confirm');
+      expect(within(step).getByRole('heading', { name: 'Withdraw from Pro Monthly?' })).toHaveFocus();
+      fireEvent.click(screen.getByRole('button', { name: 'Keep this purchase' }));
+      await waitFor(() => expect(entry()).toHaveFocus());
+      fireEvent.click(entry());
+      fireEvent.click(confirmButton());
+      await screen.findByTestId('withdraw-done');
+      await waitFor(() => expect(within(block).getByRole('heading', { level: 2, name: 'Withdraw from contract' })).toHaveFocus());
+    });
+
+    it('step two withdraws: the purchase id goes out once; the page shows the refunded amount, the email line, and reads the plan again', async () => {
+      subscriber('pro_monthly', 'month');
+      account.withdrawal.mockResolvedValue(open(option({ quote: { deadline: IN_9_DAYS } })));
+      // The server's own figure, on purpose not the quoted one.
+      account.withdraw.mockResolvedValue({ status: 'withdrawn', refundMinor: 2000, currency: 'USD' });
+      renderUi(<BillingView navigate={vi.fn()} />);
+      await section();
+      const card = screen.getByTestId('current-plan');
+      await waitFor(() => expect(card).toHaveTextContent('Renews on'));
+      fireEvent.click(entry());
+      await screen.findByTestId('withdraw-confirm');
+      // After the withdrawal the server holds a free account and no open purchase.
+      api.getCredits.mockResolvedValue(creditsResponse());
+      account.plan.mockResolvedValue(legacyPlan({ hasStripeCustomer: true }));
+      account.withdrawal.mockResolvedValue(NONE);
+      fireEvent.click(confirmButton());
+      const done = await screen.findByTestId('withdraw-done');
+      expect(done).toHaveTextContent('You have withdrawn from Pro Monthly. We are refunding $20. A confirmation email is on its way.');
+      expect(done).toHaveTextContent('Your subscription has ended, so Pro is off.');
+      expect(account.withdraw).toHaveBeenCalledTimes(1);
+      expect(account.withdraw).toHaveBeenCalledWith('in_monthly_1');
+      // The plan is read again: the card shows what the server holds now.
+      await waitFor(() => expect(card).toHaveTextContent('Free'));
+      expect(card).not.toHaveTextContent('Renews on');
+      // The confirmation stays although the quote now says nothing is open; the entry is gone.
+      expect(screen.getByTestId('withdraw-done')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Withdraw from contract' })).toBeNull();
+      expect(screen.queryByTestId('withdraw-confirm')).toBeNull();
+    });
+
+    it('an answer without an amount states none', async () => {
+      account.withdrawal.mockResolvedValue(open(option()));
+      account.withdraw.mockResolvedValue({ status: 'withdrawn', refundMinor: null, currency: null });
+      renderUi(<WithdrawContract now={now} />);
+      await section();
+      fireEvent.click(entry());
+      fireEvent.click(confirmButton());
+      const done = await screen.findByTestId('withdraw-done');
+      expect(done).toHaveTextContent('You have withdrawn from Pro Monthly. Your refund and a confirmation email are on their way.');
+      expect(done.textContent).not.toMatch(/\d/);
+    });
+
+    it('while it is being sent the button cannot be pressed twice', async () => {
+      account.withdrawal.mockResolvedValue(open(option()));
+      account.withdraw.mockReturnValue(new Promise(() => undefined));
+      renderUi(<WithdrawContract now={now} />);
+      await section();
+      fireEvent.click(entry());
+      fireEvent.click(confirmButton());
+      const pending = await screen.findByRole('button', { name: 'Withdrawing…' });
+      expect(pending).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Keep this purchase' })).toBeDisabled();
+      fireEvent.click(pending);
+      expect(account.withdraw).toHaveBeenCalledTimes(1);
+    });
+
+    it('after a withdrawal the plan is read again at once and twice more, so the card catches up with the payment provider', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        account.withdrawal.mockResolvedValue(open(option({ quote: { deadline: new Date(Date.now() + 9 * 86_400_000).toISOString() } })));
+        account.withdraw.mockResolvedValue({ status: 'withdrawn', refundMinor: 2083, currency: 'USD' });
+        subscriber('pro_monthly', 'month');
+        renderUi(<BillingView navigate={vi.fn()} />);
+        await section();
+        fireEvent.click(entry());
+        fireEvent.click(confirmButton());
+        await screen.findByTestId('withdraw-done');
+        expect(WITHDRAW_REREAD_DELAYS_MS).toEqual([3000, 10_000]);
+        await waitFor(() => expect(api.getCredits.mock.calls.length).toBeGreaterThanOrEqual(2));
+        const afterFirst = api.getCredits.mock.calls.length;
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(3000);
+        });
+        await waitFor(() => expect(api.getCredits.mock.calls.length).toBe(afterFirst + 1));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(7000);
+        });
+        await waitFor(() => expect(api.getCredits.mock.calls.length).toBe(afterFirst + 2));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(30_000);
+        });
+        expect(api.getCredits.mock.calls.length).toBe(afterFirst + 2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  // A pro-rata refund is one day smaller every day, and the server works the refund out when the withdrawal is sent.
+  // So the amount the buyer is asked to confirm must be today's, also on a page that was left open.
+  describe('the amount to confirm is never an old one', () => {
+    /** Day 5: 25 of 30 days go back. Day 6: 24 of 30. */
+    const day5 = option();
+    const day6 = option({ quote: { refundMinor: 2000, prorata: { usedDays: 6, periodDays: 30 } } });
+    const leaveOpen = (ms: number) =>
+      act(async () => {
+        await vi.advanceTimersByTimeAsync(ms);
+      });
+
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+    });
+    afterEach(() => {
+      focusManager.setFocused(undefined);
+      vi.useRealTimers();
+    });
+
+    it('a quote just read opens the step at once, without another read', async () => {
+      account.withdrawal.mockResolvedValue(open(day5));
+      renderUi(<WithdrawContract now={now} />);
+      await section();
+      await leaveOpen(WITHDRAWAL_STALE_MS - 5000);
+      fireEvent.click(entry());
+      expect(screen.getByTestId('withdraw-confirm')).toBeInTheDocument();
+      expect(confirmButton('$20.83')).toBeEnabled();
+      expect(account.withdrawal).toHaveBeenCalledTimes(1);
+    });
+
+    it('a quote that has been on screen for a while is read again when the entry is pressed; the step opens with that answer', async () => {
+      account.withdrawal.mockResolvedValueOnce(open(day5));
+      let answer!: (o: WithdrawalOverview) => void;
+      account.withdrawal.mockImplementationOnce(() => new Promise<WithdrawalOverview>((resolve) => (answer = resolve)));
+      renderUi(<WithdrawContract now={now} />);
+      const block = await section();
+      expect(block).toHaveTextContent('Refund if you withdraw now: $20.83.');
+      // The page stays open into the next day. Nothing is asked meanwhile.
+      await leaveOpen(86_400_000);
+      expect(account.withdrawal).toHaveBeenCalledTimes(1);
+      fireEvent.click(entry());
+      // The read is out: no step yet, and the entry cannot be pressed twice.
+      expect(account.withdrawal).toHaveBeenCalledTimes(2);
+      expect(screen.queryByTestId('withdraw-confirm')).toBeNull();
+      expect(entry()).toBeDisabled();
+      expect(entry()).toHaveAttribute('aria-busy', 'true');
+      expect(screen.getByTestId('withdraw-refreshing')).toHaveTextContent('Checking the refund amount…');
+      await act(async () => answer(open(day6)));
+      const step = await screen.findByTestId('withdraw-confirm');
+      // Today's figures, on the sheet and on the button. Yesterday's are nowhere.
+      expect(step).toHaveTextContent('We refund $20 to the payment method you paid with.');
+      expect(within(step).getByTestId('withdraw-prorata')).toHaveTextContent('covers the 24 of 30 days you have not used');
+      expect(confirmButton('$20')).toBeEnabled();
+      expect(block).not.toHaveTextContent(/20\.83|25 of 30/);
+      expect(screen.queryByTestId('withdraw-refreshing')).toBeNull();
+      // Reading again sends no withdrawal.
+      expect(account.withdraw).not.toHaveBeenCalled();
+    });
+
+    it('when that read says the purchase is no longer open, no step opens and the page says so', async () => {
+      account.withdrawal.mockResolvedValueOnce(open(day5));
+      account.withdrawal.mockResolvedValue(NONE);
+      renderUi(<WithdrawContract now={now} />);
+      await section();
+      await leaveOpen(86_400_000);
+      fireEvent.click(entry());
+      expect(await screen.findByTestId('withdraw-gone')).toHaveTextContent('This purchase can no longer be withdrawn.');
+      expect(screen.queryByTestId('withdraw-confirm')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Withdraw from contract' })).toBeNull();
+      expect(account.withdraw).not.toHaveBeenCalled();
+    });
+
+    it('when that read fails, no step opens with the old amount; the row says so and the entry asks again', async () => {
+      account.withdrawal.mockResolvedValueOnce(open(day5));
+      account.withdrawal.mockRejectedValueOnce(apiError('not_found', 404));
+      account.withdrawal.mockResolvedValue(open(day6));
+      renderUi(<WithdrawContract now={now} />);
+      await section();
+      await leaveOpen(86_400_000);
+      fireEvent.click(entry());
+      expect(await screen.findByTestId('withdraw-refresh-error')).toHaveTextContent("We couldn't check the refund amount just now. Try again.");
+      expect(screen.queryByTestId('withdraw-confirm')).toBeNull();
+      expect(screen.queryByRole('button', { name: /Withdraw and refund/ })).toBeNull();
+      await waitFor(() => expect(entry()).toBeEnabled());
+      fireEvent.click(entry());
+      await screen.findByTestId('withdraw-confirm');
+      expect(confirmButton('$20')).toBeEnabled();
+      expect(screen.queryByTestId('withdraw-refresh-error')).toBeNull();
+      expect(account.withdrawal).toHaveBeenCalledTimes(3);
+    });
+
+    it('while a step is open the quote is read again every few minutes, and the step shows the new amount', async () => {
+      account.withdrawal.mockResolvedValueOnce(open(day5));
+      account.withdrawal.mockResolvedValue(open(day6));
+      renderUi(<WithdrawContract now={now} />);
+      await section();
+      // No step, no timer: a page that only shows the rows asks nothing by itself.
+      await leaveOpen(WITHDRAWAL_OPEN_STEP_REFRESH_MS + 1000);
+      expect(account.withdrawal).toHaveBeenCalledTimes(1);
+      fireEvent.click(entry());
+      await screen.findByTestId('withdraw-confirm');
+      await waitFor(() => expect(confirmButton('$20')).toBeEnabled());
+      const reads = account.withdrawal.mock.calls.length;
+      await leaveOpen(WITHDRAWAL_OPEN_STEP_REFRESH_MS + 1000);
+      await waitFor(() => expect(account.withdrawal.mock.calls.length).toBe(reads + 1));
+      expect(WITHDRAWAL_OPEN_STEP_REFRESH_MS).toBeLessThanOrEqual(10 * 60 * 1000);
+      // Closing the step stops the timer.
+      fireEvent.click(screen.getByRole('button', { name: 'Keep this purchase' }));
+      const after = account.withdrawal.mock.calls.length;
+      await leaveOpen(WITHDRAWAL_OPEN_STEP_REFRESH_MS * 3);
+      expect(account.withdrawal.mock.calls.length).toBe(after);
+    });
+
+    it('a read that says the purchase is gone while its step is open closes the step with the reason, instead of an empty page', async () => {
+      account.withdrawal.mockResolvedValueOnce(open(day5));
+      account.withdrawal.mockResolvedValue(NONE);
+      renderUi(<WithdrawContract now={now} />);
+      await section();
+      fireEvent.click(entry());
+      await screen.findByTestId('withdraw-confirm');
+      await leaveOpen(WITHDRAWAL_OPEN_STEP_REFRESH_MS + 1000);
+      expect(await screen.findByTestId('withdraw-gone')).toHaveTextContent('This purchase can no longer be withdrawn.');
+      expect(screen.queryByTestId('withdraw-confirm')).toBeNull();
+      expect(screen.queryByRole('button', { name: /Withdraw and refund/ })).toBeNull();
+      expect(account.withdraw).not.toHaveBeenCalled();
+    });
+
+    it('a tab that comes back into view reads an old quote again, so the row shows today\'s amount; a fresh one is left alone', async () => {
+      account.withdrawal.mockResolvedValueOnce(open(day5));
+      account.withdrawal.mockResolvedValue(open(day6));
+      renderUi(<WithdrawContract now={now} />);
+      const block = await section();
+      const comeBack = () =>
+        act(async () => {
+          focusManager.setFocused(false);
+          focusManager.setFocused(true);
+          await vi.advanceTimersByTimeAsync(50);
+        });
+      await comeBack();
+      expect(account.withdrawal).toHaveBeenCalledTimes(1);
+      await leaveOpen(86_400_000);
+      await comeBack();
+      await waitFor(() => expect(block).toHaveTextContent('Refund if you withdraw now: $20.'));
+      expect(account.withdrawal).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('refusals', () => {
+    it('409 withdrawal_not_available: "This purchase can no longer be withdrawn", the step closes and the quote is read again', async () => {
+      account.withdrawal.mockResolvedValueOnce(open(option()));
+      account.withdrawal.mockResolvedValue(NONE);
+      account.withdraw.mockRejectedValue(apiError('withdrawal_not_available', 409));
+      renderUi(<WithdrawContract now={now} />);
+      await section();
+      fireEvent.click(entry());
+      fireEvent.click(confirmButton());
+      expect(await screen.findByTestId('withdraw-gone')).toHaveTextContent('This purchase can no longer be withdrawn.');
+      expect(screen.queryByTestId('withdraw-confirm')).toBeNull();
+      await waitFor(() => expect(account.withdrawal).toHaveBeenCalledTimes(2));
+      // The quote read again says nothing is open: the entry goes, the message stays.
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Withdraw from contract' })).toBeNull());
+      expect(screen.getByTestId('withdraw-gone')).toBeInTheDocument();
+      expect(screen.queryByTestId('withdraw-done')).toBeNull();
+    });
+
+    it('a refused purchase is not offered again, even if a later quote still lists it; another purchase still is', async () => {
+      const pack = option({ purchase: { id: 'in_pack_1', planKey: 'practice_pack_5', amountMinor: 999 }, quote: { rule: 'withdrawal_14d', refundMinor: 999, prorata: null } });
+      // The quote keeps listing both (as after a refund the provider itself refused: 409 with details.reason refund_refused).
+      account.withdrawal.mockResolvedValue(open(option(), pack));
+      account.withdraw.mockRejectedValue(
+        new RoboApiError('refused', { code: 'withdrawal_not_available', status: 409, payload: { success: false, code: 'withdrawal_not_available', details: { reason: 'refund_refused' } } }),
+      );
+      renderUi(<WithdrawContract now={now} />);
+      const block = await section();
+      fireEvent.click(within(block).getByRole('button', { name: 'Withdraw from contract: Pro Monthly' }));
+      fireEvent.click(confirmButton());
+      expect(await screen.findByTestId('withdraw-gone')).toHaveTextContent('This purchase can no longer be withdrawn.');
+      await waitFor(() => expect(account.withdrawal.mock.calls.length).toBeGreaterThanOrEqual(2));
+      await waitFor(() => expect(screen.getAllByTestId('withdraw-option').map((r) => r.getAttribute('data-purchase'))).toEqual(['in_pack_1']));
+      expect(screen.queryByRole('button', { name: /Pro Monthly/ })).toBeNull();
+    });
+
+    it.each([
+      ['rate_limited', 429, 'You tried this several times in a row. Wait a while, then try again.'],
+      ['rail_not_configured', 503, "Card payments are not set up here, so we can't send the refund. Nothing changed."],
+      ['payment_provider_error', 502, 'The payment provider did not confirm the withdrawal. Try again. Nothing is refunded twice.'],
+      ['server_error', 500, "The withdrawal didn't go through. Try again."],
+    ])('%s (%i) keeps the confirmation open with its own message, and the same button sends again', async (code, status, message) => {
+      account.withdrawal.mockResolvedValue(open(option()));
+      account.withdraw.mockRejectedValueOnce(apiError(code, status));
+      account.withdraw.mockResolvedValue({ status: 'withdrawn', refundMinor: 2083, currency: 'USD' });
+      renderUi(<WithdrawContract now={now} />);
+      await section();
+      fireEvent.click(entry());
+      fireEvent.click(confirmButton());
+      const step = screen.getByTestId('withdraw-confirm');
+      expect(await within(step).findByRole('alert')).toHaveTextContent(message);
+      expect(screen.queryByTestId('withdraw-gone')).toBeNull();
+      expect(confirmButton()).toBeEnabled();
+      fireEvent.click(confirmButton());
+      expect(await screen.findByTestId('withdraw-done')).toHaveTextContent('We are refunding $20.83.');
+      expect(account.withdraw).toHaveBeenCalledTimes(2);
+    });
+
+    it('each refusal maps to its own message key', () => {
+      expect(withdrawRefusal(apiError('withdrawal_not_available', 409))).toBe('unavailable');
+      expect(withdrawRefusal(apiError('rate_limited', 429))).toBe('rateLimited');
+      expect(withdrawRefusal(apiError('rail_not_configured', 503))).toBe('notConfigured');
+      expect(withdrawRefusal(apiError('payment_provider_error', 502))).toBe('provider');
+      expect(withdrawRefusal(new Error('offline'))).toBe('generic');
+    });
+  });
+
+  describe('one row per open purchase', () => {
+    const pack = option({ purchase: { id: 'in_pack_1', planKey: 'practice_pack_5', amountMinor: 999, chargedAt: '2026-10-09T12:00:00.000Z' }, quote: { rule: 'withdrawal_14d', refundMinor: 999, prorata: null, deadline: '2026-10-23T12:00:00.000Z' } });
+
+    it('a pack bought on day 3 of a monthly plan and the plan are two rows, each with its own amount and last day', async () => {
+      account.withdrawal.mockResolvedValue(open(pack, option()));
+      renderUi(<WithdrawContract now={now} />);
+      const block = await section();
+      expect(block).toHaveTextContent('You can still withdraw from the purchases below.');
+      const rows = within(block).getAllByTestId('withdraw-option');
+      expect(rows.map((r) => r.getAttribute('data-purchase'))).toEqual(['in_pack_1', 'in_monthly_1']);
+      expect(rows[0]).toHaveTextContent('Practice pack (5)');
+      expect(rows[0]).toHaveTextContent('Refund if you withdraw now: $9.99.');
+      expect(rows[0]).toHaveTextContent(/until Oct 23, 2026/);
+      expect(rows[1]).toHaveTextContent('Pro Monthly');
+      expect(rows[1]).toHaveTextContent('Refund if you withdraw now: $20.83.');
+      expect(rows[1]).toHaveTextContent(/until Oct 20, 2026/);
+      // Each entry says which purchase it is for.
+      expect(within(rows[0]!).getByRole('button', { name: 'Withdraw from contract: Practice pack (5)' })).toBeInTheDocument();
+      expect(within(rows[1]!).getByRole('button', { name: 'Withdraw from contract: Pro Monthly' })).toBeInTheDocument();
+    });
+
+    it('withdrawing the pack names what ends (the pack, not Pro), sends the pack\'s id and leaves the plan\'s row', async () => {
+      account.withdrawal.mockResolvedValue(open(pack, option()));
+      account.withdraw.mockResolvedValue({ status: 'withdrawn', refundMinor: 999, currency: 'USD' });
+      renderUi(<WithdrawContract now={now} />);
+      const block = await section();
+      fireEvent.click(within(block).getByRole('button', { name: 'Withdraw from contract: Practice pack (5)' }));
+      const step = await screen.findByTestId('withdraw-confirm');
+      expect(step).toHaveAttribute('data-purchase', 'in_pack_1');
+      expect(step).toHaveTextContent('The practice interviews left from this pack are removed at once.');
+      expect(step).not.toHaveTextContent(/Pro stops/);
+      fireEvent.click(confirmButton('$9.99'));
+      const done = await screen.findByTestId('withdraw-done');
+      expect(done).toHaveTextContent('You have withdrawn from Practice pack (5). We are refunding $9.99.');
+      expect(account.withdraw).toHaveBeenCalledWith('in_pack_1');
+      // The plan can still be withdrawn: its row stays, alone.
+      const rows = screen.getAllByTestId('withdraw-option');
+      expect(rows.map((r) => r.getAttribute('data-purchase'))).toEqual(['in_monthly_1']);
+    });
+
+    it('what a withdrawal ends is worded by the kind of purchase', () => {
+      const plans = buildPlanViews('roboapply', { env: RA_ENV }).plans;
+      expect(withdrawalKind('pro_monthly', plans)).toBe('subscription');
+      expect(withdrawalKind('pro_weekly', plans)).toBe('subscription');
+      expect(withdrawalKind('pro_week_pass', plans)).toBe('pass');
+      expect(withdrawalKind('practice_pack_15', plans)).toBe('pack');
+      // A plan the catalog does not list: a pack by its key, anything else says only "what this purchase gave you".
+      expect(withdrawalKind('practice_pack_5', [])).toBe('pack');
+      expect(withdrawalKind('starter', plans)).toBe('other');
+      expect(withdrawalKind(null, plans)).toBe('other');
+    });
+
+    it('a pass, and a plan the page has no name for, are worded without claiming Pro stops', async () => {
+      account.withdrawal.mockResolvedValue(
+        open(option({ purchase: { id: 'in_pass_1', planKey: 'pro_week_pass', amountMinor: 999 }, quote: { rule: 'withdrawal_14d', refundMinor: 999, prorata: null } }), option({ purchase: { id: 'in_x_1', planKey: 'some_future_plan' } })),
+      );
+      renderUi(<WithdrawContract now={now} />);
+      const block = await section();
+      fireEvent.click(within(block).getByRole('button', { name: 'Withdraw from contract: 7-day pass (no renewal)' }));
+      expect(await screen.findByTestId('withdraw-confirm')).toHaveTextContent('The days this pass gave you end at once.');
+      fireEvent.click(screen.getByRole('button', { name: 'Keep this purchase' }));
+      fireEvent.click(within(block).getByRole('button', { name: 'Withdraw from contract: Your purchase' }));
+      const step = await screen.findByTestId('withdraw-confirm');
+      expect(within(step).getByRole('heading', { name: 'Withdraw from Your purchase?' })).toBeInTheDocument();
+      expect(step).toHaveTextContent('What this purchase gave you ends at once.');
+    });
+  });
+
+  it('a refund in another currency than the brand\'s names its currency everywhere on the sheet', async () => {
+    account.withdrawal.mockResolvedValue(open(option({ purchase: { amountMinor: 74900, currency: 'TWD' }, quote: { rule: 'withdrawal_14d', refundMinor: 74900, currency: 'TWD', prorata: null, region: 'tw' } })));
+    renderUi(<WithdrawContract now={now} />);
+    const block = await section();
+    expect(block).toHaveTextContent('Paid so far: NT$749.');
+    expect(block).toHaveTextContent('Refund if you withdraw now: NT$749.');
+    fireEvent.click(entry());
+    expect(confirmButton('NT$749')).toBeInTheDocument();
+    expect(block.textContent).not.toMatch(/(^|[^T])\$749/);
+  });
+
+  it('openWithdrawals: what the server offers, minus anything whose last day has passed', () => {
+    const live = option();
+    const over = option({ purchase: { id: 'in_old' }, quote: { deadline: NOW.toISOString() } });
+    expect(openWithdrawals(open(live, over), NOW).map((o) => o.purchase.id)).toEqual(['in_monthly_1']);
+    expect(openWithdrawals({ available: false, options: [live] }, NOW)).toEqual([]);
+    expect(openWithdrawals(null, NOW)).toEqual([]);
+    expect(openWithdrawals(undefined, NOW)).toEqual([]);
+  });
+});
+
 describe('PlanPicker: a visitor in mainland China on the international brand', () => {
   const note = () => screen.queryByTestId('cn-visitor-note');
 

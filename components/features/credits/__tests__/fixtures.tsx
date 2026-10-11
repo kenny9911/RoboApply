@@ -76,9 +76,21 @@ export const RA_STUDENT_ENV = {
 export const GA_ENV: Record<string, string> = {};
 
 /**
+ * The policy label a buyer may read: the stored version without the internal
+ * review note a brand's version can carry after the rule set's own name
+ * (GoApply: `…-pending-counsel`). The wire sends this, never the stored value
+ * (server `publicRefundPolicyVersion`, features/credits/service.ts; the cut is
+ * repeated here because a UI fixture must not load the credits service).
+ */
+export function publicPolicyLabel(version: string): string {
+  return version.replace(/-pending\b.*$/i, '');
+}
+
+/**
  * The refund numbers as `GET /billing/plans` sends them (`refundPolicy`): the
  * server's own constants (`platform/billing/refunds.ts`), so the fixture is
  * what a deployment answers and no test restates a number the server owns.
+ * `version` is the PUBLIC label, as on the wire.
  */
 export function refundPolicyFor(brand: BrandId = 'roboapply'): RefundPolicyFacts {
   return {
@@ -88,7 +100,7 @@ export function refundPolicyFor(brand: BrandId = 'roboapply'): RefundPolicyFacts
     accidentalRenewalDays: ACCIDENTAL_RENEWAL_DAYS,
     withdrawalDays: WITHDRAWAL_DAYS,
     packValidMonths: PACK_VALID_MONTHS,
-    version: REFUND_POLICY_VERSION[brand],
+    version: publicPolicyLabel(REFUND_POLICY_VERSION[brand]),
   };
 }
 export const REFUND_POLICY: RefundPolicyFacts = refundPolicyFor('roboapply');
