@@ -18,6 +18,7 @@
     { "path": "/api/v1/cron/interview-cleanup", "schedule": "*/15 * * * *" },
     { "path": "/api/v1/cron/jobs-plan", "schedule": "0 2 * * *" },
     { "path": "/api/v1/cron/jobs-ingest", "schedule": "*/10 * * * *" },
+    { "path": "/api/v1/cron/jobs-boards", "schedule": "*/5 * * * *" },
     { "path": "/api/v1/cron/queue-drain", "schedule": "*/5 * * * *" },
     { "path": "/api/v1/cron/jobs-maintain", "schedule": "30 3 * * *" },
     { "path": "/api/v1/cron/score-precompute", "schedule": "*/15 * * * *" },

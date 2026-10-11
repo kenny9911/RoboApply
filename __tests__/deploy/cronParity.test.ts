@@ -116,6 +116,17 @@ describe('deploy/cn/k8s/cronjobs.yaml ↔ vercel.json', () => {
       expect(paths).toContain(`/api/v1/cron/${name}`);
     }
   });
+
+  it('the board sync (jobs-boards, MKT-3D) has one schedule in vercel.json and in the mainland CronJobs', () => {
+    const path = '/api/v1/cron/jobs-boards';
+    const inVercel = vercel.crons.filter((c: { path: string }) => c.path === path);
+    expect(inVercel).toEqual([{ path, schedule: '*/5 * * * *' }]);
+    const inCluster = cronJobsIn(committed).filter((j) => j.path === path);
+    expect(inCluster).toHaveLength(1);
+    expect(inCluster[0]).toMatchObject({ name: 'cron-jobs-boards', schedule: '*/5 * * * *' });
+    // GoApply's feed is filled by this run first: it is never on the exclusion list.
+    expect(gen.EXCLUDED_CRONS).not.toHaveProperty('jobs-boards');
+  });
 });
 
 describe('drift detection (gen-cn-cronjobs.mjs --check)', () => {

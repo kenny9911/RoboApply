@@ -40,6 +40,7 @@ import {
 import { pruneRateCounters } from '../platform/ratelimit/index.js';
 import { creditService } from '../platform/credits/index.js';
 import { runJobsIngest, runJobsMaintain, runJobsPlan } from '../features/jobs/ingest/cron.js';
+import { runJobsBoards } from '../features/jobs/ingest/boards.js';
 import { runScorePrecompute } from '../features/match/cron.js';
 import { runJobAlerts } from '../features/alerts/cron.js';
 import { runLifecycleEmails } from '../features/lifecycle/cron.js';
@@ -350,6 +351,10 @@ registerReminderProducer({ name: 'winback', task: runWinbackSweep });
 export const PLATFORM_CRON_JOBS: readonly PlatformCronJob[] = [
   brandCronJob('jobs-plan', '0 2 * * *', 'WP-16b', [{ name: 'plan', task: runJobsPlan }]),
   brandCronJob('jobs-ingest', '*/10 * * * *', 'WP-16b', [{ name: 'ingest', task: runJobsIngest }]),
+  // jobs-boards (MKT-3D; MARKET_STRATEGY 1.2 tier 0, JI-4): the employer-board sync. A platform
+  // step, not a brand step: one board is read once and feeds both brands, each posting landing
+  // in the market of its own location. Kill switch: ATS_PUBLIC_SOURCES_DISABLED.
+  brandCronJob('jobs-boards', '*/5 * * * *', 'MKT-3D', [], [{ name: 'boards', run: (budget) => runJobsBoards(budget) }]),
   queueDrainJob,
   brandCronJob(
     'jobs-maintain',

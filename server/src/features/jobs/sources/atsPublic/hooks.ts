@@ -3,6 +3,8 @@
 //
 //   afterNormalize  ats_public postings (both markets): sourceName = company +
 //                   job board ("Appier · Greenhouse"), no separate "original source".
+//                   Every ingested or imported posting: the job board its link
+//                   names becomes a candidate source (see Discovery below).
 //   afterEnrich     Taiwan jobs: work-authorization tags (可協助申請工作許可,
 //                   就業金卡) in RAJob.marketTags, each with a verbatim quote
 //                   from the posting; tags whose quote left the posting go.
@@ -24,18 +26,22 @@
 // the note explaining that rule. An amount in another currency or for another
 // period ("年薪 USD 60,000 以上") is not that clause and stays. The wording
 // list, the clause pattern and its two guards are the pay parser's
-// (normalize/salary.ts `CJK_NEGOTIABLE_SOURCE`, `TW_FLOOR_CLAUSE_SOURCE`,
-// `TW_FLOOR_STATUTE_SOURCE`, `TW_FLOOR_OTHER_PAY_BEFORE_SOURCE`), copied below
-// because an area may only import another area's index.ts
-// (features/boundary.test.ts) and normalize/index.ts does not export them
-// yet; atsPublic.test.ts fails when the copies differ.
+// (`CJK_NEGOTIABLE_SOURCE`, `TW_FLOOR_CLAUSE_SOURCE`, `TW_FLOOR_STATUTE_SOURCE`,
+// `TW_FLOOR_OTHER_PAY_BEFORE_SOURCE`), imported from normalize/index.ts.
+//
+// Discovery (MARKET_STRATEGY 1.2, JI-3). afterNormalize also runs for every
+// ingested or imported posting of either market: when its link points at a
+// public job board, that board is recorded as a candidate source
+// (./discovery.ts). It adds nothing to the job and can never fail it.
 //
 // Importing this module also registers the `ats_public` ingest adapter
 // (./register.ts), because marketHooks is the module the pipeline always loads.
 
 import { Prisma } from '../../../../generated/prisma/client.js';
-import type { MarketHookJob, MarketHookSet } from '../../marketHooks.js';
+import type { MarketHookContext, MarketHookJob, MarketHookSet } from '../../marketHooks.js';
+import { CJK_NEGOTIABLE_SOURCE, TW_FLOOR_CLAUSE_SOURCE, TW_FLOOR_OTHER_PAY_BEFORE_SOURCE, TW_FLOOR_STATUTE_SOURCE } from '../../normalize/index.js';
 import { TW_PERMIT_TAGS, type TwCardMeta, type TwPermitTag, type TwPermitTagView } from './contract.js';
+import { noteDiscoveredBoard, type DiscoveryOutcome } from './discovery.js';
 import { extractPermitTags, quoteInPosting, type PermitTagEvidence } from './permitTags.js';
 import { atsSourceName, isPublicAts } from './shared.js';
 import type { CareerSourceDb } from './sync.js';
@@ -45,6 +51,18 @@ type HookDb = Pick<CareerSourceDb, 'rAJob'>;
 
 export interface AtsPublicHookDeps {
   db?: () => Promise<HookDb> | HookDb;
+  /** Records the board a posting's link names (default: the process-wide collector of ./discovery.ts). */
+  discover?: (job: MarketHookJob, ctx: Pick<MarketHookContext, 'stage'>) => Promise<DiscoveryOutcome | void>;
+  /** Longest a posting waits for that record (default DISCOVERY_WAIT_MS). */
+  discoverWaitMs?: number;
+}
+
+/** A posting never waits longer than this for its board to be recorded; the record itself still completes. */
+export const DISCOVERY_WAIT_MS = 1500;
+
+/** Stages whose postings can name a board: the ingest run and a user's import. */
+function discovers(ctx: Pick<MarketHookContext, 'stage'> | undefined): boolean {
+  return ctx?.stage === 'ingest' || ctx?.stage === 'import';
 }
 
 async function defaultDb(): Promise<HookDb> {
@@ -80,69 +98,14 @@ export function readMarketTags(v: unknown): MarketTag[] {
 
 const OWNED = new Set<string>(TW_PERMIT_TAGS);
 
-/** 核薪 as wording of its own, not inside 核薪方式 / 核薪作業 / 審核薪資 / 考核薪酬 (the parser's HE_XIN). */
-const HE_XIN = '(?<![審审考稽查複复覆])核薪(?!方式|資|资|酬|水|作業|作业|人員|人员)';
-
-/**
- * Taiwan "pay not listed" wording (面議, 依公司規定, 依學經歷、證照核薪 …), as a
- * regular-expression source: the pay parser's Chinese list, character for
- * character (`CJK_NEGOTIABLE_SOURCE`). English "competitive salary" / "DOE"
- * are not 面議 and get no note.
- */
-export const TW_NEGOTIABLE_SOURCE =
-  '待遇面議|薪資面議|薪资面议|薪酬面议|面議|面议' +
-  '|依公司規定|依公司规定|按公司規定|按公司规定' +
-  `|依學經歷[、,，]?\\s*(?:證照)?\\s*${HE_XIN}|依学经历[、,，]?\\s*(?:证照)?\\s*${HE_XIN}|依學經歷|依学经历` +
-  `|${HE_XIN}`;
+// The "pay not listed" wording, the Art. 5 clause, the statute's own term and
+// the other-currency guard are the pay parser's (normalize/salary.ts), imported
+// through its index: one rule, one place. `TW_NEGOTIABLE_SOURCE` is the
+// parser's Chinese list (面議, 依公司規定, 依學經歷、證照核薪 …); English
+// "competitive salary" / "DOE" are not 面議 and get no note.
+export const TW_NEGOTIABLE_SOURCE = CJK_NEGOTIABLE_SOURCE;
+export { TW_FLOOR_CLAUSE_SOURCE, TW_FLOOR_OTHER_PAY_BEFORE_SOURCE, TW_FLOOR_STATUTE_SOURCE };
 const TW_NEGOTIABLE_RE = new RegExp(TW_NEGOTIABLE_SOURCE);
-
-/** Not the top of a stated range ("4萬~5萬以上", "3萬至5萬以上"): that is a figure. */
-const TW_FLOOR_NOT_RANGE_TOP = String.raw`(?<![\d０-９萬万元kK]\s*[-–—~～〜至到]\s*)`;
-
-/** The statute's own term for the wage the threshold is about (the parser's `TW_FLOOR_STATUTE_SOURCE`). */
-export const TW_FLOOR_STATUTE_SOURCE = '經常性|经常性';
-/** A Taiwan-dollar marker in front of the amount (the parser's `TW_FLOOR_TWD_SOURCE`). */
-const TW_FLOOR_TWD_SOURCE = String.raw`新台幣|新臺幣|新台币|台幣|臺幣|台币|NT\$|NTD|TWD`;
-
-/** What may stand between the pay word and the amount: the clause's verb and a Taiwan-dollar marker. */
-const TW_FLOOR_LEAD = String.raw`\s*(?:達到|达到|達|达|為|为|[:：])?\s*(?:${TW_FLOOR_TWD_SOURCE})?\s*`;
-/** The amount: a round number of ten thousands (4萬 to 9萬), with 元 and a month marker ("4萬/月", "40,000元／月"). */
-const TW_FLOOR_AMOUNT =
-  String.raw`(?:${TW_FLOOR_NOT_RANGE_TOP}(?<![\d０-９.,，〇一二三四五六七八九十百千])[4-9４-９四五六七八九]\s*[萬万]` +
-  String.raw`|${TW_FLOOR_NOT_RANGE_TOP}(?<![\d０-９.,，])[4-9４-９][0０][,，]?[0０]{3})` +
-  String.raw`\s*元?\s*(?:[/／]\s*月)?`;
-/** "… or more": 以上, 或以上, (含)以上, 含以上. */
-const TW_FLOOR_ABOVE = String.raw`\s*(?:[(（]?含[)）]?)?\s*(?:或)?\s*以上`;
-/** Without 以上: the amount must end there, not run on as a longer number ("4萬5千") or a range ("4萬~6萬"). */
-const TW_FLOOR_NOT_LONGER = String.raw`(?!\s*[\d０-９〇一二三四五六七八九千百])(?!\s*[-–—~～〜至到]\s*[\d０-９〇一二三四五六七八九])`;
-
-/**
- * The Employment Services Act Art. 5 clause such a posting repeats
- * ("經常性薪資達4萬元或以上", "每月經常性薪資達4萬元以上", "月薪 NT$50,000 以上"),
- * as a regular-expression source: the pay parser's pattern, character for
- * character (`TW_FLOOR_CLAUSE_SOURCE` there). With the statute's term
- * (經常性薪資) a month marker or 含 may stand before 以上, and 以上 may be missing
- * ("經常性薪資4萬/月含以上", "經常性薪資達4萬元"). Threshold-agnostic: any round
- * amount of 4萬 to 9萬, in half-width or full-width digits or Chinese
- * numerals, so no amount is hard-coded. Its look-behinds keep a real figure
- * such as "104萬以上" or "140,000以上", and the top of a stated range
- * ("4萬~5萬以上"), out of it. No capturing group.
- */
-export const TW_FLOOR_CLAUSE_SOURCE =
-  String.raw`(?:每月)?(?:` +
-  String.raw`(?:${TW_FLOOR_STATUTE_SOURCE})(?:薪資|薪资|月薪)?${TW_FLOOR_LEAD}${TW_FLOOR_AMOUNT}(?:${TW_FLOOR_ABOVE}|${TW_FLOOR_NOT_LONGER})` +
-  String.raw`|(?:薪資|薪资|月薪)?${TW_FLOOR_LEAD}${TW_FLOOR_AMOUNT}${TW_FLOOR_ABOVE})`;
-
-/**
- * Text that ends by naming another currency or another pay period: the amount
- * after it ("HK$40,000 以上", "年薪 USD 60,000 以上") is not the clause, which
- * is about a month's regular wage in Taiwan dollars (the parser's
- * `TW_FLOOR_OTHER_PAY_BEFORE_SOURCE`).
- */
-export const TW_FLOOR_OTHER_PAY_BEFORE_SOURCE =
-  String.raw`(?:US\$|HK\$|S\$|A\$|AU\$|C\$|CA\$|R\$|MX\$|JP¥|USD|HKD|SGD|AUD|CAD|CNY|RMB|JPY|GBP|EUR|INR|KRW|CHF|MOP|MYR|[¥￥£€₹₩]` +
-  String.raw`|美元|美金|港幣|港币|港元|澳門幣|澳门币|人民幣|人民币|日圓|日元|歐元|欧元|英鎊|英镑|新加坡幣|新加坡币` +
-  String.raw`|年薪|年收入|年收|時薪|时薪|日薪|週薪|周薪)\s*(?:約|约|為|为|達到|达到|達|达|[:：])?\s*$`;
 
 const TW_FLOOR_CLAUSE_RE = new RegExp(TW_FLOOR_CLAUSE_SOURCE, 'g');
 const TW_FLOOR_STATUTE_RE = new RegExp(TW_FLOOR_STATUTE_SOURCE);
@@ -247,12 +210,27 @@ function hasPlace(job: MarketHookJob): boolean {
 export function createAtsPublicHooks(deps: AtsPublicHookDeps = {}): MarketHookSet {
   return {
     id: 'ats_public',
-    // Every intl enrich call: the enrich row carries no location, so whether
-    // the job is in Taiwan is decided inside afterEnrich (see header).
-    // ats_public postings of either market get their source name (company + job board);
-    // the Taiwan parts below stay international-only.
-    appliesTo: (job, ctx) => job.provider === 'ats_public' || (job.market === 'intl' && (ctx?.stage === 'enrich' || isTaiwanJob(job))),
-    afterNormalize: (job) => withAtsSourceName(job),
+    // ats_public postings of either market get their source name (company + job board).
+    // Every ingested or imported posting, of either market and any provider, may name a board (discovery).
+    // Every intl enrich call: the enrich row carries no location, so whether the job is in
+    // Taiwan is decided inside afterEnrich (see header). The Taiwan parts stay international-only.
+    appliesTo: (job, ctx) => job.provider === 'ats_public' || discovers(ctx) || (job.market === 'intl' && (ctx?.stage === 'enrich' || isTaiwanJob(job))),
+    async afterNormalize(job, ctx) {
+      const named = withAtsSourceName(job);
+      if (discovers(ctx)) {
+        // Never in the way: no throw reaches the caller, and a slow database is not waited for.
+        const noted = Promise.resolve()
+          .then(() => (deps.discover ?? noteDiscoveredBoard)(named, ctx))
+          .catch(() => undefined);
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const cap = new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, deps.discoverWaitMs ?? DISCOVERY_WAIT_MS);
+        });
+        await Promise.race([noted, cap]);
+        if (timer) clearTimeout(timer);
+      }
+      return named;
+    },
     async afterEnrich(job) {
       const id = s(job.id);
       if (!id || job.market !== 'intl') return;

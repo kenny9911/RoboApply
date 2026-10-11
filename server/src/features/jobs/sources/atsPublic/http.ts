@@ -8,7 +8,14 @@
 // information: only the ops-curated board token is in the URL. Redirects are
 // never followed (`redirect: 'error'`, and a 3xx is refused), so an allowed
 // API host cannot hand the request on to another host.
+//
+// Every request says who is asking (MARKET_STRATEGY 1.2 tier 0, JI-4): the
+// identifying User-Agent of jobs/sources/userAgent.ts, for the market the
+// caller names (`deps.market`; a board read for both brands is asked as the
+// international brand). We never pose as a browser.
 
+import type { EnvSource, Market } from '../../../../platform/brand/index.js';
+import { sourceUserAgent } from '../index.js';
 import { MAX_RESPONSE_BYTES, REQUEST_TIMEOUT_MS } from './shared.js';
 
 /** The documented public posting APIs, one per supported ATS. */
@@ -36,6 +43,15 @@ export interface HttpDeps {
   fetch?: FetchLike;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** The market whose brand signs the request (default 'intl'). */
+  market?: Market;
+  /** Environment the contact is read from (default process.env). */
+  env?: EnvSource;
+}
+
+/** The headers of every board request: JSON only, and who is asking. */
+export function boardRequestHeaders(deps: Pick<HttpDeps, 'market' | 'env'> = {}): Record<string, string> {
+  return { Accept: 'application/json', 'User-Agent': sourceUserAgent(deps.market ?? 'intl', deps.env ?? process.env) };
 }
 
 export function assertApiHost(url: string): URL {
@@ -61,7 +77,7 @@ export async function getJson(url: string, deps: HttpDeps = {}): Promise<unknown
   const onAbort = () => controller.abort();
   deps.signal?.addEventListener('abort', onAbort, { once: true });
   try {
-    const res = await doFetch(url, { signal: controller.signal, headers: { Accept: 'application/json' }, redirect: 'error' });
+    const res = await doFetch(url, { signal: controller.signal, headers: boardRequestHeaders(deps), redirect: 'error' });
     // A fetch that ignores `redirect` (or answers 'manual') must still not be followed.
     if (res.status >= 300 && res.status < 400) throw new BoardFetchError('redirect', res.status);
     if (!res.ok) throw new BoardFetchError(res.status === 404 ? 'board_not_found' : `http_${res.status}`, res.status);
