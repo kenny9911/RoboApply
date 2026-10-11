@@ -1,8 +1,8 @@
 // backend/src/roboapply/v2/lib/raExternalJobTypes.ts
 //
 // Shared contract for the external RapidAPI job-search providers consumed by
-// the onboarding recommendation round. PURE TYPES + tiny constants, zero
-// provider imports — this file breaks the client↔seam import cycle so every
+// the onboarding recommendation round. PURE TYPES + tiny constants and pure
+// helpers, zero provider imports — this file breaks the client↔seam import cycle so every
 // client (JSearch, Fantastic Jobs) can carry its own `sourceBoard` on its
 // output without importing the seam, and the seam can aggregate them.
 //
@@ -136,14 +136,138 @@ export interface ExternalSearchParams {
 /**
  * The provider seam. `null` from `search()` means unavailable/failed and MUST
  * NEVER throw — callers degrade to internal-only. `isEnabled()` is a cheap
- * pre-check (key present && kill switch off && circuit breaker closed && daily
- * budget left) so the orchestrator can skip a doomed fetch.
+ * pre-check (key present && kill switch off && circuit breaker closed && the
+ * call gate open) so the orchestrator can skip a doomed fetch.
  */
 export interface JobSearchProvider {
   readonly id: ExternalSourceBoard;
   isEnabled(): boolean;
-  search(
-    params: ExternalSearchParams,
-    opts?: { requestId?: string; signal?: AbortSignal },
-  ): Promise<ExternalJobNormalized[] | null>;
+  search(params: ExternalSearchParams, opts?: ProviderSearchOptions): Promise<ExternalJobNormalized[] | null>;
+}
+
+/** Options of one `search()` call. */
+export interface ProviderSearchOptions {
+  requestId?: string;
+  signal?: AbortSignal;
+  /**
+   * True when the inventory pipeline makes the call: ingest has already
+   * counted it in today's RAProviderUsage row, so the call gate must not count
+   * it a second time. Every other caller (a person's own search) leaves it
+   * unset and the gate counts the call.
+   */
+  reservedByIngest?: boolean;
+}
+
+// ── Monthly quota and the call gate (MARKET_STRATEGY §1.2, JI-1) ────────────
+// A RapidAPI plan is a MONTHLY quota shared by every caller of a provider.
+// The clients state what each upstream response said about it (listener) and
+// ask before each upstream call (gate). Both are registered by the inventory
+// pipeline (features/jobs/ingest/quota.ts); with nothing registered a client
+// behaves as if the quota were unknown and every call allowed. The clients
+// keep no counter of their own.
+
+/** Who makes a provider call: the inventory pipeline, or a person's own search. */
+export type ProviderCallPurpose = 'ingest' | 'interactive';
+
+/**
+ * Asked before every upstream call (never for a cache hit): false refuses the
+ * call. With `probe: true` it only answers whether a call would be allowed
+ * right now and counts nothing (`isEnabled()` asks this way).
+ */
+export type ProviderCallGate = (provider: ExternalSourceBoard, purpose: ProviderCallPurpose, opts?: { probe?: boolean }) => boolean;
+
+/** What one upstream response said about the plan's quota. A value the response did not state is null. */
+export interface ProviderQuotaObservation {
+  provider: ExternalSourceBoard;
+  /** HTTP status of the response. */
+  status: number;
+  /** `x-ratelimit-requests-limit` / `-remaining`. */
+  requestsLimit: number | null;
+  requestsRemaining: number | null;
+  /** `x-ratelimit-requests-reset`: seconds until the quota resets. */
+  resetSeconds: number | null;
+  /** `x-ratelimit-jobs-limit` / `-remaining` (plans that count postings). */
+  jobsLimit: number | null;
+  jobsRemaining: number | null;
+  /** The plan's name as a 429 body states it ("… on your current plan, BASIC"). */
+  plan: string | null;
+  /** What a refusal's body says: the period's quota is used up, or the key has no subscription to this API. */
+  reason: 'monthly_quota' | 'not_subscribed' | null;
+  /** When the response arrived. */
+  at: Date;
+}
+
+/**
+ * Called once per upstream response (never for a cache hit). The API key is
+ * never part of it. The listener may answer with a promise when the reading
+ * must be stored before the caller's work ends (it closed or reopened the
+ * provider for every process): a client serving a person's own search waits
+ * for it, at most QUOTA_LISTENER_WAIT_MS (`settleQuotaListener`). An ingest
+ * call does not wait: the tick awaits its writes itself.
+ */
+export type ProviderQuotaListener = (observation: ProviderQuotaObservation) => unknown;
+
+/** The longest a person's search waits for the listener to store a reading. */
+export const QUOTA_LISTENER_WAIT_MS = 500;
+
+/**
+ * Waits for what a quota listener answered, when it is a promise, at most
+ * `maxMs`; a listener that answered nothing is not waited for (no timer is
+ * set). Never throws.
+ */
+export function settleQuotaListener(answer: unknown, maxMs: number = QUOTA_LISTENER_WAIT_MS): Promise<void> | undefined {
+  if (!answer || typeof (answer as PromiseLike<unknown>).then !== 'function') return undefined;
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, Math.max(0, maxMs));
+    const done = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    try {
+      (answer as PromiseLike<unknown>).then(done, done);
+    } catch {
+      done();
+    }
+  });
+}
+
+/** A stated count from a response header: a finite number that is not negative, else null. */
+function headerCount(headers: { get(name: string): string | null }, name: string): number | null {
+  const raw = headers.get(name);
+  if (raw == null || raw.trim() === '') return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/** The plan name in a quota refusal: the token after "current plan," ("… on your current plan, BASIC. Upgrade …"), or null. */
+export function planFromQuotaBody(bodyText: string): string | null {
+  const m = /current plan,\s*([A-Za-z0-9][A-Za-z0-9_-]{0,39})/i.exec(bodyText);
+  return m?.[1]?.trim() || null;
+}
+
+/**
+ * One response as a quota observation (pure: headers, status and the refusal
+ * text only). `bodyText` is the body of a 429 / 403 / 401 and '' otherwise.
+ */
+export function quotaObservationFrom(
+  provider: ExternalSourceBoard,
+  response: { status: number; headers: { get(name: string): string | null } },
+  bodyText: string,
+  at: Date,
+): ProviderQuotaObservation {
+  const requestsRemaining = headerCount(response.headers, 'x-ratelimit-requests-remaining');
+  const monthly = response.status === 429 && (/monthly|quota/i.test(bodyText) || requestsRemaining === 0);
+  const reason = monthly ? 'monthly_quota' : response.status === 403 && /not subscribed/i.test(bodyText) ? 'not_subscribed' : null;
+  return {
+    provider,
+    status: response.status,
+    requestsLimit: headerCount(response.headers, 'x-ratelimit-requests-limit'),
+    requestsRemaining,
+    resetSeconds: headerCount(response.headers, 'x-ratelimit-requests-reset'),
+    jobsLimit: headerCount(response.headers, 'x-ratelimit-jobs-limit'),
+    jobsRemaining: headerCount(response.headers, 'x-ratelimit-jobs-remaining'),
+    plan: response.status === 429 ? planFromQuotaBody(bodyText) : null,
+    reason,
+    at,
+  };
 }

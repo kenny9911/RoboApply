@@ -22,8 +22,10 @@ import { runMaintenance } from './maintain.js';
 import { ENRICH_KIND, type EnqueueManyFn } from './pipeline.js';
 import { runPlanner } from './planner.js';
 import { adaptersForBrand } from './providers.js';
-import { runIngestTick } from './run.js';
+import { hydrateProviderQuota } from './quota.js';
+import { adapterRunsInTick, runIngestTick } from './run.js';
 import { perQueryTrackingAvailable } from './tracking.js';
+import { adapterEnabledFor } from '../sources/index.js';
 import type { SeedResult } from '../sources/atsPublic/index.js';
 
 const TAG = 'JOBS_INGEST';
@@ -59,9 +61,11 @@ export const runJobsPlan: CronTask = async (ctx): Promise<CronResult> => {
   if (!ingestAllowed(ctx.brand, env())) return { skipped: 'disabled' };
   const adapters = adaptersForBrand(ctx.brand, env());
   if (adapters.length === 0) return { skipped: 'no_providers' };
+  // What the providers last said about their plans, so a provider that is out of quota is not planned.
+  await hydrateProviderQuota(db());
   // The market's verified seed list of employer boards, registered once per seed version.
   let seed: SeedResult | null = null;
-  if (adapters.some((a) => a.provider === 'ats_public' && a.isEnabled())) {
+  if (adapters.some((a) => a.provider === 'ats_public' && adapterEnabledFor(a, ctx.brand.market))) {
     try {
       // Loaded on demand through the boards' public surface (that area imports ingest's own surface back).
       const { ensureSeedCareerSources } = await import('../sources/atsPublic/index.js');
@@ -80,7 +84,9 @@ export const runJobsPlan: CronTask = async (ctx): Promise<CronResult> => {
 export const runJobsIngest: CronTask = async (ctx): Promise<CronResult> => {
   if (!ingestAllowed(ctx.brand, env())) return { skipped: 'disabled' };
   const adapters = adaptersForBrand(ctx.brand, env());
-  if (!adapters.some((a) => a.isEnabled())) return { skipped: 'no_providers' };
+  // What the providers last said about their plans (one AppConfig read; another process may have made the call).
+  await hydrateProviderQuota(db());
+  if (!adapters.some((a) => adapterRunsInTick(a, ctx.brand.market, ctx.now, env()))) return { skipped: 'no_providers' };
   const tally = await runIngestTick({ db: db(), brand: ctx.brand, adapters, budgetMs: ctx.budget.remainingMs(), env: env(), enqueueMany: deps.enqueueMany, perQueryTracking: deps.perQueryTracking });
   if (tally.queries === 0) return { skipped: 'no_work' };
   if (tally.enrichQueued > 0) (deps.kick ?? kickDrain)([ENRICH_KIND]);

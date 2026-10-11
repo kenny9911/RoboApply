@@ -13,8 +13,16 @@
 //     `null` + a logger.warn so the recommendation round degrades to
 //     internal-only silently;
 //   - per-provider cost control: in-process LRU cache (6h), circuit breaker
-//     (403/401/monthly-429 → 1h cooldown; burst-429 → one jittered retry), and
-//     a per-process daily billed-call budget; global + per-provider kill switch.
+//     (403/401/monthly-429 → 1h cooldown; burst-429 → one jittered retry),
+//     global + per-provider kill switch, and the call gate (setCallGate) asked
+//     before every upstream call and by isFantasticJobsEnabled(). The
+//     inventory pipeline registers the gate (features/jobs/ingest/quota.ts):
+//     ONE budget per provider, read from the plan's own quota headers and
+//     counted in RAProviderUsage; this client keeps no call counter of its own
+//     (MARKET_STRATEGY §1.2, JI-1);
+//   - the quota listener (setQuotaListener) is told what every upstream
+//     response said about the plan: requests and jobs limit / remaining, the
+//     reset time and, on a 429, the plan's name. Never the key.
 //
 // Response shape (verified against Fantastic Jobs docs + prospectio-api-mcp):
 // the body is a BARE JSON ARRAY of job objects (NO envelope). A 403/429 comes
@@ -27,18 +35,23 @@
 // Legacy field aliases remain supported for cached and older records.
 
 import { logger } from '../../../services/LoggerService.js';
-import type {
-  ExternalJobNormalized,
-  ExternalSearchParams,
-  ExternalSourceBoard,
-  JobSearchProvider,
+import {
+  quotaObservationFrom,
+  settleQuotaListener,
+  type ExternalJobNormalized,
+  type ExternalSearchParams,
+  type ExternalSourceBoard,
+  type JobSearchProvider,
+  type ProviderCallGate,
+  type ProviderCallPurpose,
+  type ProviderQuotaListener,
+  type ProviderSearchOptions,
 } from './raExternalJobTypes.js';
 
 const REQUEST_TIMEOUT_MS = 25_000;
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 200;
 const BREAKER_COOLDOWN_MS = 60 * 60 * 1000;
-const DEFAULT_DAILY_BUDGET = 300;
 const RESULT_LIMIT = 20; // jobs per billed call (Fantastic Jobs bills per row returned)
 
 // ─── Provider configs ──────────────────────────────────────────────────────
@@ -49,9 +62,8 @@ interface FantasticConfig {
   readonly host: string;
   /** Current marketplace route; freshness is sent as time_frame. */
   readonly pathPrefix: string;
-  /** Per-provider kill-switch + daily-budget env var names. */
+  /** Per-provider kill-switch env var name. */
   readonly disableEnv: string;
-  readonly budgetEnv: string;
 }
 
 const ACTIVE_JOBS_CONFIG: FantasticConfig = {
@@ -59,7 +71,6 @@ const ACTIVE_JOBS_CONFIG: FantasticConfig = {
   host: 'active-jobs-db.p.rapidapi.com',
   pathPrefix: '/active-ats',
   disableEnv: 'RA_ONBOARDING_ACTIVEJOBS_DISABLED',
-  budgetEnv: 'RA_ONBOARDING_ACTIVEJOBS_DAILY_BUDGET',
 };
 
 const LINKEDIN_CONFIG: FantasticConfig = {
@@ -67,7 +78,6 @@ const LINKEDIN_CONFIG: FantasticConfig = {
   host: 'linkedin-job-search-api.p.rapidapi.com',
   pathPrefix: '/active-jb',
   disableEnv: 'RA_ONBOARDING_LINKEDIN_JOBS_DISABLED',
-  budgetEnv: 'RA_ONBOARDING_LINKEDIN_JOBS_DAILY_BUDGET',
 };
 
 /**
@@ -307,27 +317,59 @@ function fantasticExtras(j: any, workArrangement: string): Partial<ExternalJobNo
   return out;
 }
 
-// ─── Per-provider guard: LRU cache, circuit breaker, daily budget ──────────
-// One instance per config (activejobs / linkedin) so their budgets + breakers
-// are fully independent.
+// ─── The call gate and the quota listener (one budget per provider) ────────
+// Registered by the inventory pipeline (features/jobs/ingest/quota.ts). With
+// nothing registered every call is allowed and no reading is reported.
+
+let callGate: ProviderCallGate | null = null;
+let quotaListener: ProviderQuotaListener | null = null;
+
+/** Registers (or, with null, removes) the gate asked before every upstream call and by `isFantasticJobsEnabled()`. */
+export function setCallGate(gate: ProviderCallGate | null): void {
+  callGate = gate;
+}
+
+/** Registers (or, with null, removes) the listener told what every upstream response said about the plan's quota. */
+export function setQuotaListener(listener: ProviderQuotaListener | null): void {
+  quotaListener = listener;
+}
+
+/** The gate's answer; no gate, or a gate that throws, allows the call. */
+function gateAllows(board: FantasticConfig['board'], purpose: ProviderCallPurpose, probe: boolean): boolean {
+  if (!callGate) return true;
+  try {
+    return callGate(board, purpose, probe ? { probe: true } : undefined) !== false;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Tells the listener what one upstream response said. A listener that throws
+ * is swallowed. When the listener answers with a promise (the reading closed
+ * or reopened the provider and is being stored), a person's own search gets
+ * that wait back, bounded by QUOTA_LISTENER_WAIT_MS; an ingest call never
+ * waits (its tick awaits the writes).
+ */
+async function reportQuota(board: FantasticConfig['board'], response: Response, bodyText: string, purpose: ProviderCallPurpose): Promise<void> {
+  if (!quotaListener) return;
+  try {
+    const answer = quotaListener(quotaObservationFrom(board, response, bodyText, new Date()));
+    if (purpose === 'interactive') await settleQuotaListener(answer);
+  } catch {
+    // The reading is lost; the search goes on.
+  }
+}
+
+// ─── Per-provider guard: LRU cache, circuit breaker ────────────────────────
+// One instance per config (activejobs / linkedin) so their caches + breakers
+// are fully independent. No call counter: the gate above is the one budget.
 
 class ProviderState {
   private cache = new Map<string, { at: number; jobs: ExternalJobNormalized[] }>();
   private breakerOpenedAt: number | null = null;
-  private daily = { day: '', used: 0, warned: false };
 
   constructor(private readonly cfg: FantasticConfig) {}
-
-  private budget(): number {
-    const configured = process.env[this.cfg.budgetEnv];
-    const raw = configured?.trim() ? Number(configured) : DEFAULT_DAILY_BUDGET;
-    return Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : DEFAULT_DAILY_BUDGET;
-  }
-
-  private rollDay(now: number): void {
-    const day = new Date(now).toISOString().slice(0, 10);
-    if (this.daily.day !== day) this.daily = { day, used: 0, warned: false };
-  }
 
   breakerIsOpen(now: number): boolean {
     if (this.breakerOpenedAt == null) return false;
@@ -350,15 +392,13 @@ class ProviderState {
     });
   }
 
-  /** Key present && kill switches off && breaker closed && daily budget left. */
+  /** Key present && kill switches off && breaker closed && the call gate open for a person's own search (asked without counting a call). */
   isEnabled(): boolean {
     if (process.env.RA_ONBOARDING_EXTERNAL_JOBS_DISABLED === 'true') return false;
     if (process.env[this.cfg.disableEnv] === 'true') return false;
     if (!process.env.RAPID_API_KEY?.trim()) return false;
-    const now = Date.now();
-    if (this.breakerIsOpen(now)) return false;
-    this.rollDay(now);
-    return this.daily.used < this.budget();
+    if (this.breakerIsOpen(Date.now())) return false;
+    return gateAllows(this.cfg.board, 'interactive', true);
   }
 
   cacheGet(key: string, now: number): ExternalJobNormalized[] | null {
@@ -383,34 +423,14 @@ class ProviderState {
     }
   }
 
-  /** Whether a billed call may proceed now; increments the daily counter. */
-  claimDailyTicket(now: number): boolean {
-    this.rollDay(now);
-    if (this.daily.used >= this.budget()) {
-      if (!this.daily.warned) {
-        this.daily.warned = true;
-        logger.warn('RA_V2_FANTASTIC_DAILY_BUDGET_EXHAUSTED', 'Fantastic Jobs daily budget exhausted', {
-          board: this.cfg.board,
-          used: this.daily.used,
-          budget: this.budget(),
-        });
-      }
-      return false;
-    }
-    this.daily.used += 1;
-    return true;
-  }
-
   reset(): void {
     this.cache.clear();
     this.breakerOpenedAt = null;
-    this.daily = { day: '', used: 0, warned: false };
   }
 
   snapshot() {
     return {
       breakerOpen: this.breakerOpenedAt != null,
-      dailyUsed: this.daily.used,
       cacheSize: this.cache.size,
     };
   }
@@ -507,12 +527,12 @@ function cacheKeyFor(board: FantasticConfig['board'], q: URLSearchParams): strin
 
 /**
  * Run one Fantastic Jobs search for `board`. Returns `null` (NEVER throws) when
- * disabled, unconfigured, budget-exhausted, breaker-open, or failed.
+ * disabled, unconfigured, refused by the call gate, breaker-open, or failed.
  */
 export async function searchFantasticJobs(
   board: FantasticConfig['board'],
   params: ExternalSearchParams,
-  opts?: { requestId?: string; signal?: AbortSignal },
+  opts?: ProviderSearchOptions,
 ): Promise<ExternalJobNormalized[] | null> {
   const cfg = CONFIG[board];
   const state = STATE[board];
@@ -547,7 +567,10 @@ export async function searchFantasticJobs(
     return [...cached];
   }
 
-  if (!state.claimDailyTicket(now)) return null;
+  // One budget per provider: the gate decides (and counts a call ingest has not already counted).
+  // A cache hit above never reaches it.
+  const purpose: ProviderCallPurpose = opts?.reservedByIngest === true ? 'ingest' : 'interactive';
+  if (!gateAllows(board, purpose, false)) return null;
 
   // Sept 2026 marketplace migration: old /active-ats-7d /active-jb-7d
   // routes now 404. Current contracts use /active-ats or /active-jb with
@@ -566,15 +589,18 @@ export async function searchFantasticJobs(
 
     if (response.status === 429) {
       const bodyText = await response.text().catch(() => '');
+      await reportQuota(board, response, bodyText, purpose);
       if (isMonthlyQuota429(bodyText, response)) {
         state.openBreaker('429_monthly', 429, opts?.requestId);
         return null;
       }
+      // Per-second burst: one jittered retry (a second upstream call, so the gate is asked again).
       await jitteredDelay(300 + Math.random() * 500, controller.signal);
-      if (!state.claimDailyTicket(Date.now())) return null;
+      if (!gateAllows(board, purpose, false)) return null;
       response = await fetch(url, { method: 'GET', headers, signal: controller.signal });
       if (response.status === 429) {
         const retryText = await response.text().catch(() => '');
+        await reportQuota(board, response, retryText, purpose);
         if (isMonthlyQuota429(retryText, response)) {
           state.openBreaker('429_monthly', 429, opts?.requestId);
         } else {
@@ -588,10 +614,12 @@ export async function searchFantasticJobs(
     }
 
     if (response.status === 403 || response.status === 401) {
-      // 403 also covers "endpoint not on plan" for a gated window (e.g. 7d).
+      // 403 also covers "endpoint not on plan" for a gated window (e.g. 7d); the body says which.
+      await reportQuota(board, response, await response.text().catch(() => ''), purpose);
       state.openBreaker(response.status === 403 ? '403_not_subscribed' : '401', response.status, opts?.requestId);
       return null;
     }
+    await reportQuota(board, response, '', purpose);
 
     const rlLimit = headerNum(response, 'x-ratelimit-requests-limit');
     const rlRemaining = headerNum(response, 'x-ratelimit-requests-remaining');

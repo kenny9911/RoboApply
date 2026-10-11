@@ -10,6 +10,7 @@ import prisma from '../../../lib/prisma.js';
 import { getCurrentBrandOrDefault } from '../../../platform/brand/index.js';
 import { PermanentWorkError, type WorkerDefinition } from '../../../platform/queue/index.js';
 import { adaptersForBrand } from './providers.js';
+import { hydrateProviderQuota } from './quota.js';
 import { runIngestTick } from './run.js';
 import { ingestAllowed } from './cron.js';
 
@@ -24,6 +25,8 @@ export const workers: WorkerDefinition[] = [
       if (typeof payload.queryId !== 'string' || !payload.queryId) throw new PermanentWorkError('ingest.query: payload.queryId missing');
       const brand = getCurrentBrandOrDefault();
       if (!ingestAllowed(brand)) return;
+      // The plans' quota as the last response anywhere stated it (the worker may never have called a provider).
+      await hydrateProviderQuota(prisma);
       await runIngestTick({
         db: prisma,
         brand,

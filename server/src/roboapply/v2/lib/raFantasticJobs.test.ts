@@ -2,16 +2,24 @@
 //
 // Unit tests for the Fantastic Jobs client (Active Jobs DB + LinkedIn Job
 // Search). Focus: the load-bearing normalizer mapping (the synthesis §1 table),
-// request building, window/kill-switch/budget gating, and the never-throws
+// request building, window/kill-switch gating, and the never-throws
 // contract. Run: npx vitest run server/src/roboapply/v2/lib/raFantasticJobs.test.ts
+//
+// MKT-3A: the client keeps no call counter of its own. It asks the call gate
+// before every upstream call and tells the quota listener what every upstream
+// response said about the plan (requests and jobs limit / remaining, the reset,
+// the plan's name on a 429). Rows and headers are SYNTHETIC; no network.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   normalizeFantasticJob,
   searchFantasticJobs,
   isFantasticJobsEnabled,
+  setCallGate,
+  setQuotaListener,
   __test,
 } from './raFantasticJobs.js';
+import type { ProviderQuotaObservation } from './raExternalJobTypes.js';
 
 const FETCH_AT = new Date('2026-07-13T12:00:00.000Z');
 
@@ -452,10 +460,153 @@ describe('searchFantasticJobs — never-throws + wire behavior (fetch mocked)', 
     expect(await searchFantasticJobs('activejobs', { query: '---', country: 'tw' })).toBeNull();
     expect(fn).toHaveBeenCalledTimes(1);
   });
-  it('zero daily budget refuses upstream calls', async () => {
+  it('keeps no call counter of its own: the old client-local budget variable refuses nothing here', async () => {
+    // RA_ONBOARDING_ACTIVEJOBS_DAILY_BUDGET is now a deprecated alias of INGEST_ACTIVEJOBS_DAILY_CALLS, read by the
+    // one budget in features/jobs/ingest (quota.test.ts covers the refusal); with no gate registered every call is allowed.
     process.env.RA_ONBOARDING_ACTIVEJOBS_DAILY_BUDGET = '0';
     const fn = mockFetch(200, [atsRow()]);
-    expect(await searchFantasticJobs('activejobs', { query: 'engineer', country: 'us' })).toBeNull();
-    expect(fn).not.toHaveBeenCalled();
+    expect(await searchFantasticJobs('activejobs', { query: 'engineer', country: 'us' })).toHaveLength(1);
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(__test.state('activejobs')).toEqual({ breakerOpen: false, cacheSize: 1 });
+  });
+
+  describe('the call gate (one budget per provider)', () => {
+    afterEach(() => setCallGate(null));
+
+    it('a gate that refuses: no upstream call, null; each board is asked under its own id', async () => {
+      const gate = vi.fn((provider: string) => provider !== 'activejobs');
+      setCallGate(gate);
+      const fn = mockFetch(200, [atsRow()]);
+      expect(await searchFantasticJobs('activejobs', { query: 'engineer', country: 'us' })).toBeNull();
+      expect(fn).not.toHaveBeenCalled();
+      expect(gate).toHaveBeenLastCalledWith('activejobs', 'interactive', undefined);
+      expect(await searchFantasticJobs('linkedin', { query: 'engineer', country: 'us' })).toHaveLength(1);
+      expect(gate).toHaveBeenLastCalledWith('linkedin', 'interactive', undefined);
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it("a gate that allows is asked once per upstream call: 'interactive' for a person's search, 'ingest' when ingest already counted it", async () => {
+      const gate = vi.fn(() => true);
+      setCallGate(gate);
+      const fn = mockFetch(200, [atsRow()]);
+      await searchFantasticJobs('activejobs', { query: 'engineer', country: 'us' });
+      await searchFantasticJobs('activejobs', { query: 'designer', country: 'us' }, { reservedByIngest: true });
+      expect(fn).toHaveBeenCalledTimes(2);
+      expect(gate.mock.calls).toEqual([
+        ['activejobs', 'interactive', undefined],
+        ['activejobs', 'ingest', undefined],
+      ]);
+    });
+
+    it('a cache hit never reaches the gate', async () => {
+      const gate = vi.fn(() => true);
+      setCallGate(gate);
+      const fn = mockFetch(200, [atsRow()]);
+      await searchFantasticJobs('activejobs', { query: 'engineer', country: 'us', titleQuery: 'engineer' });
+      gate.mockReturnValue(false);
+      expect(await searchFantasticJobs('activejobs', { query: 'engineer', country: 'us', titleQuery: 'engineer' })).toHaveLength(1);
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(gate).toHaveBeenCalledTimes(1);
+    });
+
+    it('isFantasticJobsEnabled asks the gate without counting a call (probe); a gate that throws allows', async () => {
+      const gate = vi.fn((_provider: string, _purpose: string, opts?: { probe?: boolean }) => opts?.probe !== true);
+      setCallGate(gate);
+      expect(isFantasticJobsEnabled('activejobs')).toBe(false);
+      expect(gate).toHaveBeenCalledWith('activejobs', 'interactive', { probe: true });
+      setCallGate(() => {
+        throw new Error('gate broke');
+      });
+      expect(isFantasticJobsEnabled('activejobs')).toBe(true);
+      const fn = mockFetch(200, [atsRow()]);
+      expect(await searchFantasticJobs('activejobs', { query: 'engineer', country: 'us' })).toHaveLength(1);
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it('a kill switch still wins over an open gate', () => {
+      setCallGate(() => true);
+      process.env.RA_ONBOARDING_ACTIVEJOBS_DISABLED = 'true';
+      expect(isFantasticJobsEnabled('activejobs')).toBe(false);
+      expect(isFantasticJobsEnabled('linkedin')).toBe(true);
+    });
+  });
+
+  describe('the quota listener (what every upstream response said about the plan)', () => {
+    afterEach(() => setQuotaListener(null));
+    // A per-job plan states two quotas: requests and postings.
+    const quota = {
+      'x-ratelimit-requests-limit': '25',
+      'x-ratelimit-requests-remaining': '24',
+      'x-ratelimit-requests-reset': '1460160',
+      'x-ratelimit-jobs-limit': '250',
+      'x-ratelimit-jobs-remaining': '230',
+    };
+
+    it('200: requests and jobs limit / remaining and seconds to reset; once per upstream response, not for a cache hit', async () => {
+      const seen: ProviderQuotaObservation[] = [];
+      setQuotaListener((o) => seen.push(o));
+      mockFetch(200, [atsRow()], quota);
+      await searchFantasticJobs('activejobs', { query: 'engineer', country: 'us', titleQuery: 'engineer' });
+      await searchFantasticJobs('activejobs', { query: 'engineer', country: 'us', titleQuery: 'engineer' }); // cache hit
+      expect(seen).toHaveLength(1);
+      expect(seen[0]).toMatchObject({ provider: 'activejobs', status: 200, requestsLimit: 25, requestsRemaining: 24, resetSeconds: 1_460_160, jobsLimit: 250, jobsRemaining: 230, plan: null, reason: null });
+      expect(JSON.stringify(seen)).not.toContain('test-key');
+    });
+
+    it('429 on a used-up BASIC plan: remaining 0, the plan name from the body, the reset', async () => {
+      const seen: ProviderQuotaObservation[] = [];
+      setQuotaListener((o) => seen.push(o));
+      mockFetch(429, { message: 'You have exceeded the MONTHLY quota for Requests on your current plan, BASIC. Upgrade your plan.' }, { ...quota, 'x-ratelimit-requests-remaining': '0', 'x-ratelimit-jobs-remaining': '0' });
+      expect(await searchFantasticJobs('activejobs', { query: 'engineer', country: 'us' })).toBeNull();
+      expect(seen).toHaveLength(1);
+      expect(seen[0]).toMatchObject({ provider: 'activejobs', status: 429, requestsRemaining: 0, jobsRemaining: 0, plan: 'BASIC', reason: 'monthly_quota', resetSeconds: 1_460_160 });
+      expect(__test.state('activejobs').breakerOpen).toBe(true);
+    });
+
+    it('403 not subscribed is reported for the board that answered it', async () => {
+      const seen: ProviderQuotaObservation[] = [];
+      setQuotaListener((o) => seen.push(o));
+      mockFetch(403, { message: 'You are not subscribed to this API.' });
+      expect(await searchFantasticJobs('linkedin', { query: 'engineer', country: 'us' })).toBeNull();
+      expect(seen).toHaveLength(1);
+      expect(seen[0]).toMatchObject({ provider: 'linkedin', status: 403, reason: 'not_subscribed', requestsLimit: null, requestsRemaining: null, plan: null });
+    });
+
+    it("a listener that answers with a promise (a reading being stored) is waited for by a person's search, at most 500 ms; never by an ingest call", async () => {
+      vi.useFakeTimers();
+      try {
+        setQuotaListener(() => new Promise(() => undefined));
+        mockFetch(429, { message: 'You have exceeded the MONTHLY quota for Requests on your current plan, BASIC.' }, { ...quota, 'x-ratelimit-requests-remaining': '0' });
+        let done = false;
+        const search = searchFantasticJobs('activejobs', { query: 'engineer', country: 'us' }).then((rows) => {
+          done = true;
+          return rows;
+        });
+        await vi.advanceTimersByTimeAsync(499);
+        expect(done).toBe(false);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(await search).toBeNull();
+        // The pipeline's own call returns without waiting: its tick awaits the writes.
+        __test.reset();
+        let ingestDone = false;
+        const ingest = searchFantasticJobs('activejobs', { query: 'designer', country: 'us' }, { reservedByIngest: true }).then((rows) => {
+          ingestDone = true;
+          return rows;
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(ingestDone).toBe(true);
+        expect(await ingest).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('a listener that throws does not fail the search', async () => {
+      setQuotaListener(() => {
+        throw new Error('listener broke');
+      });
+      mockFetch(200, [atsRow()], quota);
+      expect(await searchFantasticJobs('activejobs', { query: 'engineer', country: 'us' })).toHaveLength(1);
+    });
   });
 });

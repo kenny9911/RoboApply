@@ -21,10 +21,25 @@ import {
 import { adaptersForBrand } from './providers.js';
 import { emptyTally, ingestForProfileWith, type TargetedIngestResult } from './run.js';
 import { ingestAllowed } from './cron.js';
+// Importing quota.ts registers the quota listener and the call gate with both RapidAPI clients.
+import { hydrateProviderQuota } from './quota.js';
 
 export { runJobsIngest, runJobsMaintain, runJobsPlan, ingestAllowed } from './cron.js';
 /** A provider's daily call limit from env (admin "Limits" page reads it here, never from a copy). */
-export { dailyCallLimit } from './config.js';
+export { dailyCallLimit, effectiveDailyLimit } from './config.js';
+// One budget per metered provider (MKT-3A): the plan's quota as the provider states it, and what it allows.
+export {
+  answerForMarket,
+  flushProviderQuota,
+  hydrateProviderQuota,
+  providerQuotaSnapshots,
+  quotaAllows,
+  quotaParkUntil,
+  quotaRetryAt,
+  quotaSnapshot,
+  recordQuotaObservation,
+  registerQuotaListeners,
+} from './quota.js';
 export { JOBS_INGEST_WORK_KINDS, workers } from './workers.js';
 export { rapidApiCountry, rapidApiSearchParams } from './adapters/rapidApi.js';
 export { bankPublicPageState, readBankEmployerSignals, isSyncableBankJob } from './adapters/bank.js';
@@ -32,7 +47,7 @@ export { adaptersForBrand, ingestProvidersForBrand, sourcesForBrand } from './pr
 export { readSourceStatuses, sourceStatusKey } from './status.js';
 export type { SourceRunStatus, SourceStatusDoc } from './status.js';
 // MKT-1C: the provider quota snapshot contract (AppConfig `jobs.providerQuota.v1`). Types, constants and
-// pure functions only; the writer is MKT-3A and the admin reader MKT-3F. Exported at the M1 gate.
+// pure functions only; the writer is quota.ts (MKT-3A) and the admin reader MKT-3F. Exported at the M1 gate.
 export { PROVIDER_QUOTA_CONFIG_KEY, PROVIDER_QUOTA_STATES, PROVIDER_QUOTA_VERSION, daysToReset, parseProviderQuota, serializeProviderQuota, usageKey } from './quotaContract.js';
 export type { ProviderQuotaDocument, ProviderQuotaSnapshot, ProviderQuotaState } from './quotaContract.js';
 export { registerSourceAdapter, getSourceAdapter } from '../sources/index.js';
@@ -64,5 +79,6 @@ export const bankClients = {
 export async function ingestForProfile(searchProfileId: string, budgetMs: number): Promise<TargetedIngestResult> {
   const brand = getCurrentBrandOrDefault();
   if (!ingestAllowed(brand)) return { ...emptyTally(), planned: 0, deferred: 0 };
+  await hydrateProviderQuota(prisma);
   return ingestForProfileWith({ db: prisma, brand, adapters: adaptersForBrand(brand) }, searchProfileId, budgetMs);
 }
