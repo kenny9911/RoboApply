@@ -13,11 +13,15 @@ import { enrichDedupeKey, enrichJob, rulesOnlyMarker, systemUserIdFor, type Enri
 import type { EnrichLlmOptions } from './agent.js';
 import type { EnrichJobRecord, EnrichUpdate } from './reconcile.js';
 import type { EnrichCostEntry, KeywordRow } from './repository.js';
+import type { PostingIndustry } from '../companies/service.js';
+import { logger } from '../../../services/LoggerService.js';
 import { ENRICH_VERSION, RULES_CHECKED_MODEL, RULES_ONLY_MODEL } from './schema.js';
-import { CN_POSTING, INTL_POSTING, intlModelReply, makeJob } from './__tests__/fixtures.js';
+import { CN_POSTING, INTL_BUSINESS_LINE, INTL_POSTING, INTL_POSTING_WITH_BUSINESS, intlModelReply, makeJob } from './__tests__/fixtures.js';
 
 const NOW = new Date('2026-10-10T12:00:00.000Z');
 const FIRST = { attempt: 1, maxAttempts: 5 };
+/** A posting that says what its employer does (SM-10). */
+const STATED = { description: INTL_POSTING_WITH_BUSINESS, descriptionPlain: INTL_POSTING_WITH_BUSINESS };
 
 interface Harness {
   deps: EnrichDeps;
@@ -27,6 +31,8 @@ interface Harness {
   costs: EnrichCostEntry[];
   calls: Array<{ brand: string | undefined; options: EnrichLlmOptions; user: string }>;
   hooks: Array<{ job: Record<string, unknown>; ctx: Record<string, unknown> }>;
+  /** Industries passed on to a company row (SM-10). */
+  industries: Array<{ companyId: string; input: PostingIndustry }>;
   aiAllowed: ReturnType<typeof vi.fn>;
 }
 
@@ -38,6 +44,8 @@ function harness(
     budgetAllowed?: boolean;
     budgetLimit?: number;
     consent?: boolean;
+    /** Make the company write fail (the job must still finish). */
+    industryWriteFails?: boolean;
   } = {},
 ): Harness {
   const state = { ...job };
@@ -48,6 +56,7 @@ function harness(
     costs: [],
     calls: [],
     hooks: [],
+    industries: [],
     aiAllowed: vi.fn(async () => options.consent ?? true),
     deps: undefined as unknown as EnrichDeps,
   };
@@ -81,6 +90,10 @@ function harness(
     aiAllowed: h.aiAllowed as unknown as EnrichDeps['aiAllowed'],
     afterEnrich: async (j, ctx) => {
       h.hooks.push({ job: j, ctx: ctx as unknown as Record<string, unknown> });
+    },
+    setCompanyIndustry: async (companyId, input) => {
+      h.industries.push({ companyId, input });
+      if (options.industryWriteFails) throw new Error('company write failed');
     },
     env: options.env ?? DEFAULT_ENV,
     now: () => NOW,
@@ -245,6 +258,139 @@ describe('enrichJob', () => {
     expect(h.job.enrichModel).toBe(RULES_CHECKED_MODEL);
     expect(h.keywords[0]!.modelUsed).toBe(RULES_ONLY_MODEL);
     expect(h.keywords[0]!.keywords.slice(0, 5).map((k) => k.keyword)).toEqual(['python', 'go', 'sql', 'kafka', 'terraform']);
+  });
+
+  it('SM-2: a covered row whose title only half names a role is the model\'s to decide: one call, and its pick replaces the weak role', async () => {
+    const plain = 'Design distributed services in Java and Go. Review system designs with the platform team.';
+    // Filed under the building profession by the old one-word match; ingest covered the rest.
+    const h = harness(
+      makeJob({
+        title: 'Java Backend Architect',
+        titleNormalized: 'java backend architect',
+        descriptionPlain: plain,
+        description: plain,
+        primaryTaxonomyId: 'architect',
+        taxonomyIds: ['design', 'spatial_design', 'architect'],
+        seniority: 'senior',
+        skills: ['java', 'go', 'sql', 'kafka', 'terraform'],
+        enrichedAt: new Date('2026-09-01T00:00:00.000Z'),
+        enrichVersion: 1,
+        enrichModel: 'openai/gpt-cheap',
+      }),
+      { reply: intlModelReply({ taxonomyId: 'software_architect', sponsorship: null, citizenshipRequired: null, skills: [], summary: null }) },
+    );
+    vi.mocked(logger.info).mockClear();
+    // A row stamped with the old version is enriched again without `force`.
+    expect((await enrichJob({ jobId: 'job_1' }, FIRST, h.deps)).status).toBe('enriched');
+    expect(h.calls).toHaveLength(1);
+    // The model is offered the software reading, the building profession and the role the row holds.
+    expect(h.calls[0]!.user).toContain('- software_architect:');
+    expect(h.calls[0]!.user).toContain('- architect:');
+    expect(h.job).toMatchObject({
+      primaryTaxonomyId: 'software_architect',
+      taxonomyIds: ['software_engineering', 'swe_leadership', 'software_architect'],
+      enrichVersion: ENRICH_VERSION,
+    });
+    expect(h.job.titleMatchScore).toBeGreaterThanOrEqual(0.85);
+    expect(h.job.titleMatchScore).toBeLessThan(0.9);
+    expect(vi.mocked(logger.info).mock.calls.some(([, , meta]) => JSON.stringify((meta as { taxonomyOverridden?: unknown })?.taxonomyOverridden) === JSON.stringify({ from: 'architect', to: 'software_architect', by: 'model' }))).toBe(true);
+  });
+
+  it('SM-2: a title that names its role keeps it without a call, and a rules-only finish still stores the title score', async () => {
+    const plain = 'Build APIs in Python and Go. Benefits include dental.';
+    const covered = { descriptionPlain: plain, description: plain, seniority: 'mid', skills: ['python', 'go', 'sql', 'kafka', 'terraform'] };
+    const exact = harness(makeJob({ ...covered, primaryTaxonomyId: 'backend_engineer', taxonomyIds: ['software_engineering', 'swe_backend', 'backend_engineer'] }));
+    expect(await enrichJob({ jobId: 'job_1' }, FIRST, exact.deps)).toEqual({ status: 'rules_only', reason: 'covered' });
+    expect(exact.calls).toHaveLength(0);
+    expect(exact.job.titleMatchScore).toBe(1);
+    expect(exact.job.primaryTaxonomyId).toBe('backend_engineer');
+    // No model for the brand: a weak row finishes rules only, keeps its role and records how weak the title was.
+    vi.mocked(logger.info).mockClear();
+    const weak = harness(
+      makeJob({ ...covered, title: 'Registered Nurse - ICU', primaryTaxonomyId: 'nurse_practitioner', taxonomyIds: ['healthcare', 'clinical', 'nurse_practitioner'] }),
+      { env: { RA_SYSTEM_USER_ID: 'sys_roboapply' } },
+    );
+    expect(await enrichJob({ jobId: 'job_1' }, FIRST, weak.deps)).toEqual({ status: 'rules_only', reason: 'no_model' });
+    expect(weak.calls).toHaveLength(0);
+    expect(weak.job.primaryTaxonomyId).toBe('nurse_practitioner');
+    expect(weak.job.titleMatchScore).toBeLessThan(0.9);
+    expect(weak.job.enrichModel).toBe(RULES_ONLY_MODEL);
+    // Nothing changed, so nothing is logged about the role.
+    expect(vi.mocked(logger.info).mock.calls.filter(([, message]) => message === 'role changed by the title')).toEqual([]);
+    // Even without a model, a role the retired one-word match put there leaves the wrong category.
+    const retired = harness(
+      makeJob({ ...covered, title: 'Java Backend Architect', primaryTaxonomyId: 'architect', taxonomyIds: ['design', 'spatial_design', 'architect'] }),
+      { env: { RA_SYSTEM_USER_ID: 'sys_roboapply' } },
+    );
+    expect(await enrichJob({ jobId: 'job_1' }, FIRST, retired.deps)).toEqual({ status: 'rules_only', reason: 'no_model' });
+    expect(retired.job).toMatchObject({ primaryTaxonomyId: 'software_architect', taxonomyIds: ['software_engineering', 'swe_leadership', 'software_architect'] });
+    // A role the title moved on a rules-only pass leaves a trace, like a model's override does.
+    expect(vi.mocked(logger.info).mock.calls.filter(([, message]) => message === 'role changed by the title')).toEqual([
+      ['JOB_ENRICH', 'role changed by the title', { jobId: 'job_1', reason: 'no_model', taxonomyOverridden: { from: 'architect', to: 'software_architect', by: 'title' } }],
+    ]);
+    // So does a role the title removes ("Principal Engineer" is not a school principal), on a covered pass too.
+    vi.mocked(logger.info).mockClear();
+    const removed = harness(
+      makeJob({ ...covered, title: 'Principal Engineer', primaryTaxonomyId: 'education_administrator', taxonomyIds: ['education', 'education_admin', 'education_administrator'] }),
+      { env: { RA_SYSTEM_USER_ID: 'sys_roboapply' } },
+    );
+    expect(await enrichJob({ jobId: 'job_1' }, FIRST, removed.deps)).toEqual({ status: 'rules_only', reason: 'no_model' });
+    expect(removed.job).toMatchObject({ primaryTaxonomyId: null, taxonomyIds: [] });
+    expect(vi.mocked(logger.info).mock.calls.filter(([, message]) => message === 'role changed by the title')).toEqual([
+      ['JOB_ENRICH', 'role changed by the title', { jobId: 'job_1', reason: 'no_model', taxonomyOverridden: { from: 'education_administrator', to: null, by: 'title' } }],
+    ]);
+  });
+
+  it('SM-10: a public posting that says what its employer does fills the company industry, once, with the posting link', async () => {
+    const quote = INTL_BUSINESS_LINE;
+    const h = harness(makeJob({ ...STATED, companyId: 'co_1', sourceUrl: 'https://boards.example.com/acme/123' }), { reply: intlModelReply({ industry: { value: 'B2B SaaS', quote } }) });
+    expect((await enrichJob({ jobId: 'job_1' }, FIRST, h.deps)).status).toBe('enriched');
+    expect(h.calls).toHaveLength(1);
+    expect(h.industries).toEqual([{ companyId: 'co_1', input: { industry: 'B2B SaaS', sourceUrl: 'https://boards.example.com/acme/123', at: NOW } }]);
+    // The industry is a company fact, never a job column.
+    expect(h.saves.every((u) => !('industry' in u))).toBe(true);
+    // A second delivery of the same item does nothing more.
+    await enrichJob({ jobId: 'job_1' }, FIRST, h.deps);
+    expect(h.industries).toHaveLength(1);
+  });
+
+  it('SM-10: no industry is stored without a verified quote, without a company, or from a user\'s own import', async () => {
+    const quote = INTL_BUSINESS_LINE;
+    const invented = harness(makeJob({ ...STATED, companyId: 'co_1' }), { reply: intlModelReply({ industry: { value: 'Fintech', quote: 'We are a leading payments company.' } }) });
+    await enrichJob({ jobId: 'job_1' }, FIRST, invented.deps);
+    expect(invented.industries).toEqual([]);
+
+    const noCompany = harness(makeJob({ ...STATED, companyId: null }), { reply: intlModelReply({ industry: { value: 'B2B SaaS', quote } }) });
+    await enrichJob({ jobId: 'job_1' }, FIRST, noCompany.deps);
+    expect(noCompany.industries).toEqual([]);
+
+    // A private import is its owner's data: it never writes to a company row everyone shares.
+    const imported = harness(makeJob({ ...STATED, companyId: 'co_1', visibility: 'private', ownerUserId: 'user_1' }), { reply: intlModelReply({ industry: { value: 'B2B SaaS', quote } }) });
+    expect((await enrichJob({ jobId: 'job_1' }, FIRST, imported.deps)).status).toBe('enriched');
+    expect(imported.industries).toEqual([]);
+
+    // Rules only (no model): nothing is claimed.
+    const rules = harness(makeJob({ ...STATED, companyId: 'co_1' }), { env: { RA_SYSTEM_USER_ID: 'sys_roboapply' } });
+    await enrichJob({ jobId: 'job_1' }, FIRST, rules.deps);
+    expect(rules.industries).toEqual([]);
+  });
+
+  it('SM-10: a failed company write does not fail the job (the row is written, the hooks run)', async () => {
+    const quote = INTL_BUSINESS_LINE;
+    const h = harness(makeJob({ ...STATED, companyId: 'co_1' }), { reply: intlModelReply({ industry: { value: 'B2B SaaS', quote } }), industryWriteFails: true });
+    expect((await enrichJob({ jobId: 'job_1' }, FIRST, h.deps)).status).toBe('enriched');
+    expect(h.industries).toHaveLength(1);
+    expect(h.job.enrichVersion).toBe(ENRICH_VERSION);
+    expect(h.hooks).toHaveLength(1);
+    expect(h.costs).toHaveLength(1);
+  });
+
+  it('SM-10: a dependency set without the company writer still enriches (the industry is simply not stored)', async () => {
+    const quote = INTL_BUSINESS_LINE;
+    const h = harness(makeJob({ ...STATED, companyId: 'co_1' }), { reply: intlModelReply({ industry: { value: 'B2B SaaS', quote } }) });
+    const { setCompanyIndustry: _unused, ...withoutWriter } = h.deps;
+    expect((await enrichJob({ jobId: 'job_1' }, FIRST, withoutWriter)).status).toBe('enriched');
+    expect(h.industries).toEqual([]);
   });
 
   it('respects the daily budget: writes the rule-based parts and defers without calling the model', async () => {

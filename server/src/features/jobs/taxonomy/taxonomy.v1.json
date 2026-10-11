@@ -64,7 +64,9 @@
           "软件开发工程师",
           "程序员",
           "开发工程师",
-          "研发工程师"
+          "研发工程师",
+          "程序设计师",
+          "软件设计师"
         ]
       },
       "soc": [
@@ -95,7 +97,10 @@
           "php developer",
           "ruby on rails developer",
           "dotnet developer",
-          "cpp developer"
+          "cpp developer",
+          "dotnet engineer",
+          "csharp developer",
+          "csharp engineer"
         ],
         "zh": [
           "后端工程师",
@@ -110,7 +115,14 @@
           "golang开发工程师",
           "python开发工程师",
           "php开发工程师",
-          "cpp开发工程师"
+          "cpp开发工程师",
+          "服务端",
+          "服务端工程师",
+          "后台开发",
+          "后台开发工程师",
+          "dotnet开发工程师",
+          "csharp开发工程师",
+          "nodejs开发工程师"
         ]
       },
       "soc": [
@@ -217,7 +229,11 @@
           "前端",
           "web前端开发工程师",
           "web前端",
-          "h5开发工程师"
+          "h5开发工程师",
+          "fe",
+          "fe工程师",
+          "web前端工程师",
+          "h5前端"
         ]
       },
       "soc": [
@@ -559,7 +575,16 @@
           "system architect",
           "technical architect",
           "application architect",
-          "enterprise architect"
+          "enterprise architect",
+          "ai architect",
+          "ml architect",
+          "microservices architect",
+          "java architect",
+          "backend architect",
+          "platform architect",
+          "integration architect",
+          "systems architect",
+          "it architect"
         ],
         "zh": [
           "架构师",
@@ -774,7 +799,11 @@
           "database engineer",
           "sql dba",
           "oracle dba",
-          "mysql dba"
+          "mysql dba",
+          "database developer",
+          "sql developer",
+          "sql server developer",
+          "pl sql developer"
         ],
         "zh": [
           "dba工程师",
@@ -834,7 +863,9 @@
           "ai engineer",
           "artificial intelligence engineer",
           "applied ml engineer",
-          "ai developer"
+          "ai developer",
+          "machine learning developer",
+          "ml developer"
         ],
         "zh": [
           "算法工程师",
@@ -936,7 +967,8 @@
           "recommendation systems engineer",
           "search relevance engineer",
           "ranking engineer",
-          "ads ranking engineer"
+          "ads ranking engineer",
+          "search engineer"
         ],
         "zh": [
           "推荐算法工程师",
@@ -1379,7 +1411,12 @@
           "threat analyst",
           "incident responder",
           "threat intelligence analyst",
-          "security operations analyst"
+          "security operations analyst",
+          "cybersecurity specialist",
+          "information security specialist",
+          "it security specialist",
+          "cybersecurity consultant",
+          "information security consultant"
         ],
         "zh": [
           "信息安全分析师",
@@ -1625,7 +1662,8 @@
           "项目专员",
           "项目助理",
           "项目主管",
-          "pmo"
+          "pmo",
+          "项目管理师"
         ]
       },
       "soc": [
@@ -1832,7 +1870,8 @@
           "2d animator",
           "3d animator",
           "motion graphics artist",
-          "vfx artist"
+          "vfx artist",
+          "motion designer"
         ],
         "zh": [
           "动画设计师",
@@ -2299,7 +2338,8 @@
         "zh": [
           "机械设计工程师",
           "结构设计工程师",
-          "热设计工程师"
+          "热设计工程师",
+          "机构工程师"
         ]
       },
       "soc": [
@@ -2368,7 +2408,9 @@
           "质量管理工程师",
           "供应商质量工程师",
           "sqe工程师",
-          "可靠性工程师"
+          "可靠性工程师",
+          "质量保证工程师",
+          "品保工程师"
         ]
       }
     },
@@ -2544,7 +2586,8 @@
           "environmental health and safety engineer",
           "ehs specialist",
           "sustainability engineer",
-          "safety engineer"
+          "safety engineer",
+          "environmental engineer"
         ],
         "zh": [
           "环保工程师",
@@ -2942,7 +2985,15 @@
           "社区运营",
           "小红书运营",
           "抖音运营",
-          "公众号运营"
+          "公众号运营",
+          "新媒体",
+          "新媒体运营专员",
+          "新媒体专员",
+          "微信运营",
+          "视频号运营",
+          "微博运营",
+          "自媒体运营",
+          "b站运营"
         ]
       }
     },
@@ -2967,7 +3018,9 @@
           "淘宝运营",
           "跨境电商运营",
           "亚马逊运营",
-          "京东运营"
+          "京东运营",
+          "店铺运营",
+          "网店运营"
         ]
       }
     },
@@ -3031,7 +3084,12 @@
         ],
         "zh": [
           "产品运营专员",
-          "活动运营"
+          "活动运营",
+          "运营专员",
+          "运营助理",
+          "平台运营",
+          "网站运营",
+          "app运营"
         ]
       }
     },
@@ -3115,7 +3173,12 @@
           "销售",
           "大客户销售",
           "销售专员",
-          "销售顾问"
+          "销售顾问",
+          "业务员",
+          "业务代表",
+          "业务专员",
+          "销售业务员",
+          "客户代表"
         ]
       },
       "soc": [
@@ -3140,7 +3203,8 @@
           "电话销售",
           "电销",
           "销售线索专员",
-          "网络销售"
+          "网络销售",
+          "电话销售代表"
         ]
       }
     },
@@ -3210,7 +3274,8 @@
           "售前顾问",
           "解决方案工程师",
           "技术销售",
-          "解决方案架构师"
+          "解决方案架构师",
+          "销售工程师"
         ]
       },
       "soc": [
@@ -3229,7 +3294,8 @@
           "store associate",
           "sales associate",
           "retail sales representative",
-          "cashier"
+          "cashier",
+          "sales clerk"
         ],
         "zh": [
           "导购",
@@ -3297,7 +3363,8 @@
         "en": [
           "insurance broker",
           "insurance advisor",
-          "insurance sales agent"
+          "insurance sales agent",
+          "insurance producer"
         ],
         "zh": [
           "保险顾问",
@@ -3408,7 +3475,9 @@
           "在线客服",
           "电话客服",
           "客户服务专员",
-          "售后客服"
+          "售后客服",
+          "客户服务",
+          "客服代表"
         ]
       },
       "soc": [
@@ -3455,7 +3524,9 @@
         ],
         "zh": [
           "客服主管",
-          "客服组长"
+          "客服组长",
+          "客户服务经理",
+          "客户服务主管"
         ]
       }
     },
@@ -3482,7 +3553,8 @@
           "client success manager",
           "customer success specialist",
           "customer success lead",
-          "client services manager"
+          "client services manager",
+          "technical account manager"
         ],
         "zh": [
           "客户成功专员"
@@ -3570,7 +3642,10 @@
           "audit associate",
           "audit senior",
           "audit manager",
-          "financial auditor"
+          "financial auditor",
+          "tax auditor",
+          "audit analyst",
+          "audit supervisor"
         ],
         "zh": [
           "审计",
@@ -3648,7 +3723,11 @@
           "cfo",
           "chief financial officer",
           "finance director",
-          "treasurer"
+          "treasurer",
+          "corporate controller",
+          "assistant controller",
+          "plant controller",
+          "business controller"
         ],
         "zh": [
           "财务总监",
@@ -3683,7 +3762,12 @@
           "finance analyst",
           "corporate finance analyst",
           "budget analyst",
-          "financial planning analyst"
+          "financial planning analyst",
+          "financial planning and analysis manager",
+          "financial planning and analysis analyst",
+          "fp and a analyst",
+          "fp and a manager",
+          "financial planning manager"
         ],
         "zh": [
           "财务分析",
@@ -3717,7 +3801,8 @@
           "投研",
           "股票研究员",
           "投资助理",
-          "基金研究员"
+          "基金研究员",
+          "行业分析师"
         ]
       },
       "soc": [
@@ -4067,7 +4152,9 @@
           "transportation coordinator",
           "freight forwarder",
           "shipping coordinator",
-          "logistics specialist"
+          "logistics specialist",
+          "shipping clerk",
+          "shipping and receiving clerk"
         ],
         "zh": [
           "物流经理",
@@ -4144,7 +4231,10 @@
           "export coordinator",
           "foreign trade specialist",
           "import coordinator",
-          "customs broker"
+          "customs broker",
+          "import export specialist",
+          "import specialist",
+          "export specialist"
         ],
         "zh": [
           "外贸业务员",
@@ -4197,7 +4287,8 @@
           "人力资源专员",
           "人事助理",
           "hr专员",
-          "人事行政专员"
+          "人事行政专员",
+          "人事"
         ]
       },
       "soc": [
@@ -4263,7 +4354,11 @@
           "benefits administrator",
           "total rewards manager",
           "payroll administrator",
-          "compensation manager"
+          "compensation manager",
+          "payroll clerk",
+          "benefits specialist",
+          "compensation specialist",
+          "compensation and benefits manager"
         ],
         "zh": [
           "薪酬专员",
@@ -4289,13 +4384,17 @@
           "learning and development manager",
           "trainer",
           "corporate trainer",
-          "training manager"
+          "training manager",
+          "technical trainer",
+          "sales trainer",
+          "training coordinator"
         ],
         "zh": [
           "培训经理",
           "培训师",
           "企业讲师",
-          "内训师"
+          "内训师",
+          "培训讲师"
         ]
       },
       "soc": [
@@ -4442,7 +4541,8 @@
           "法务",
           "法务经理",
           "企业法务",
-          "法务总监"
+          "法务总监",
+          "法律顾问"
         ]
       }
     },
@@ -4748,7 +4848,10 @@
           "medical lab scientist",
           "radiologic technologist",
           "sonographer",
-          "radiographer"
+          "radiographer",
+          "medical laboratory technician",
+          "medical lab technician",
+          "medical lab technologist"
         ],
         "zh": [
           "检验技师",
@@ -4857,7 +4960,9 @@
         "zh": [
           "医药销售",
           "医疗器械销售",
-          "医药代表专员"
+          "医药代表专员",
+          "医药销售代表",
+          "医疗器械销售代表"
         ]
       }
     },
@@ -5228,7 +5333,11 @@
           "dean",
           "academic affairs coordinator",
           "school director",
-          "registrar"
+          "registrar",
+          "school principal",
+          "assistant principal",
+          "vice principal",
+          "school registrar"
         ],
         "zh": [
           "校长",
@@ -5471,7 +5580,8 @@
           "fundraiser",
           "fundraising manager",
           "development officer",
-          "community organizer"
+          "community organizer",
+          "grant writer"
         ],
         "zh": [
           "公益项目官员",
@@ -5545,7 +5655,8 @@
           "行政专员",
           "文员",
           "秘书",
-          "行政文员"
+          "行政文员",
+          "行政"
         ]
       },
       "soc": [
@@ -5569,7 +5680,11 @@
           "总经理助理",
           "董事长秘书",
           "高管助理",
-          "董事长助理"
+          "董事长助理",
+          "总经理特助",
+          "特别助理",
+          "总裁特助",
+          "董事长特助"
         ]
       },
       "soc": [
@@ -5632,7 +5747,12 @@
           "data entry specialist",
           "office clerk",
           "clerk",
-          "records clerk"
+          "records clerk",
+          "file clerk",
+          "general clerk",
+          "administrative clerk",
+          "document controller",
+          "document control specialist"
         ],
         "zh": [
           "录入员",
@@ -5678,7 +5798,16 @@
           "advertising copywriter",
           "content writer",
           "brand copywriter",
-          "writer"
+          "writer",
+          "copy writer",
+          "creative writer",
+          "freelance writer",
+          "blog writer",
+          "seo writer",
+          "script writer",
+          "scriptwriter",
+          "screenwriter",
+          "staff writer"
         ],
         "zh": [
           "文案策划",
@@ -5752,7 +5881,9 @@
           "reporter",
           "correspondent",
           "news writer",
-          "news reporter"
+          "news reporter",
+          "news correspondent",
+          "foreign correspondent"
         ],
         "zh": [
           "新闻记者",
@@ -5886,7 +6017,12 @@
           "podcast producer",
           "executive producer",
           "video producer",
-          "production coordinator"
+          "production coordinator",
+          "associate producer",
+          "content producer",
+          "creative producer",
+          "digital producer",
+          "line producer"
         ],
         "zh": [
           "制片",
@@ -6117,7 +6253,13 @@
           "cdl driver",
           "courier",
           "chauffeur",
-          "van driver"
+          "van driver",
+          "bus driver",
+          "school bus driver",
+          "forklift driver",
+          "shuttle driver",
+          "company driver",
+          "route driver"
         ],
         "zh": [
           "货车司机",
@@ -6215,7 +6357,11 @@
           "server",
           "barista",
           "bartender",
-          "restaurant host"
+          "restaurant host",
+          "food server",
+          "banquet server",
+          "restaurant server",
+          "cocktail server"
         ],
         "zh": [
           "服务员",

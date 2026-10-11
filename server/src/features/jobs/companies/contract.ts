@@ -14,6 +14,13 @@ import { z } from 'zod';
 import type { Sourced } from '../../../platform/http.js';
 import type { FeedItem } from '../../feed/contract.js';
 
+/**
+ * The one industry vocabulary of `RACompany.industries` (SM-10): the closed
+ * list the industries filter uses, and the exact-label mapping onto it. Other
+ * areas (enrichment) read it from here.
+ */
+export { INDUSTRY_IDS, industryIdFor, mapIndustries } from './industryMap.js';
+
 /** GET /companies?q= — trigram typeahead on the normalized name (≥2 chars), market-scoped, with logo. */
 export const CompanyTypeaheadQuerySchema = z.object({ q: z.string().trim().min(2).max(80), limit: z.coerce.number().int().min(1).max(20).optional() });
 export interface CompanyTypeaheadItem {
