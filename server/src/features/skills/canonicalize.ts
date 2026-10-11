@@ -256,10 +256,11 @@ export type RawDb = Pick<ExtendedPrismaClient, '$queryRaw' | '$executeRaw'>;
 /** What `skillStoreDeps` needs: the raw statements and the RASkill delegate. */
 export type SkillStoreDb = RawDb & Pick<ExtendedPrismaClient, 'rASkill' | '$transaction'>;
 
-/** A vector as the text pgvector reads: "[0.1,0.2,…]". Throws on a wrong length or a value that is not a number. */
+/** A vector as the text pgvector reads: "[0.1,0.2,…]". Throws on a wrong length, a value that is not a number, or a vector of zeros (no embedding: its cosine to anything is NaN). */
 export function vectorLiteral(vector: readonly number[]): string {
   if (vector.length !== SKILL_EMBED_DIMENSIONS) throw new Error(`A skill vector has ${SKILL_EMBED_DIMENSIONS} dimensions; got ${vector.length}.`);
   if (!vector.every((x) => typeof x === 'number' && Number.isFinite(x))) throw new Error('A skill vector holds a value that is not a finite number.');
+  if (!vector.some((x) => x !== 0)) throw new Error('A skill vector of zeros is not an embedding.');
   return `[${vector.join(',')}]`;
 }
 
@@ -279,7 +280,8 @@ export async function nearestSkills(db: RawDb, vector: readonly number[], option
     ORDER BY s."embedding" <=> ${literal}::halfvec
     LIMIT ${limit}
   `;
-  return rows.map((r) => ({ id: r.id, cosine: Number(r.cosine) }));
+  // A cosine that is not a number (a zero vector stored before the guards) is no neighbour.
+  return rows.map((r) => ({ id: r.id, cosine: Number(r.cosine) })).filter((r) => Number.isFinite(r.cosine));
 }
 
 /** Write one label vector and the model that made it. Returns false when the row does not exist. */

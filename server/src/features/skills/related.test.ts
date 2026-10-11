@@ -56,16 +56,27 @@ describe('evidenceFor', () => {
     expect(evidenceFor('nosql', have('postgresql'), vocabulary)).toEqual({ state: 'not_shown', via: null });
   });
 
-  it('not_shown: nothing, an unrelated skill, an unknown id', () => {
+  it('not_shown: nothing, or an unrelated skill, for a reviewed skill', () => {
     expect(evidenceFor('kubernetes', have(), vocabulary)).toEqual({ state: 'not_shown', via: null });
     expect(evidenceFor('kubernetes', have('postgresql'), vocabulary)).toEqual({ state: 'not_shown', via: null });
-    expect(evidenceFor('no_such_skill', have('postgresql'), vocabulary)).toEqual({ state: 'not_shown', via: null });
-    // An id the vocabulary does not know is still "shown" when the person has exactly it.
+  });
+
+  // M2 gate: MATCH 4.6 says an unreviewed skill is "shown but not scored". It used to answer not_shown, which the
+  // keyword check renders as "Not in your resume" for a string nobody has looked at ("fastpacedteamwork").
+  it('unscored, never not_shown, for a skill the vocabulary has not reviewed or does not hold', () => {
+    const withUnreviewed = buildVocabulary([skill('kubernetes'), { ...skill('fastpacedteamwork'), status: 'unreviewed' }, { ...skill('helm', 'fastpacedteamwork') }]);
+    expect(evidenceFor('fastpacedteamwork', have('kubernetes'), withUnreviewed)).toEqual({ state: 'unscored', via: null });
+    // Not even through a narrower skill: nobody reviewed what it is, so nothing is said to show it.
+    expect(evidenceFor('fastpacedteamwork', have('helm'), withUnreviewed)).toEqual({ state: 'unscored', via: null });
+    expect(evidenceFor('no_such_skill', have('postgresql'), vocabulary)).toEqual({ state: 'unscored', via: null });
+    // The person listing exactly that string is still a fact.
+    expect(evidenceFor('fastpacedteamwork', have('fastpacedteamwork'), withUnreviewed)).toEqual({ state: 'shown', via: null });
     expect(evidenceFor('no_such_skill', have('no_such_skill'), vocabulary).state).toBe('shown');
   });
 
   it('ends on a loop in bad data', () => {
-    const loop = { ...vocabulary, childrenOf: (id: string) => (id === 'a' ? ['b'] : id === 'b' ? ['a'] : []) };
+    // Two reviewed skills that name each other as narrower: the walk must still end.
+    const loop = { ...vocabulary, reviewed: () => true, childrenOf: (id: string) => (id === 'a' ? ['b'] : id === 'b' ? ['a'] : []) };
     expect(evidenceFor('a', have('zzz'), loop)).toEqual({ state: 'not_shown', via: null });
     expect(narrowerSkills('a', loop)).toEqual(['b']);
   });

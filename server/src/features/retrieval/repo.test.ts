@@ -221,4 +221,19 @@ describe('vector text form', () => {
     expect(parseVector(`[${[...v.slice(0, 1023), 'x'].join(',')}]`)).toBeNull();
     expect(() => vectorLiteral([1, 2, 3])).toThrow(/exactly 1024/);
   });
+
+  // M2 gate: a zero vector has no direction; pgvector's cosine distance to it is NaN.
+  it('refuses a vector of zeros, as a stored vector and as a query', async () => {
+    const zeros = Array.from({ length: VECTOR_DIMENSIONS }, () => 0);
+    expect(() => vectorLiteral(zeros)).toThrow(/zeros/);
+    const k = kit();
+    await expect(k.repo.upsertJobEmbedding('job_1', 'intl', TAG, 'hash', zeros)).rejects.toThrow(/zeros/);
+    await expect(k.repo.upsertUserEmbedding('u_1', 'intl', 'resume', TAG, 'hash', zeros)).rejects.toThrow(/zeros/);
+    expect(k.statements).toEqual([]);
+  });
+
+  it('a neighbour whose distance is not a number (a zero vector stored earlier) is not a neighbour', async () => {
+    const k = kit({ respond: () => [{ jobId: 'job_nan', distance: 'NaN' }, { jobId: 'job_9', distance: '0.12' }, { jobId: 'job_null', distance: Number.NaN }] });
+    expect(await k.repo.nearestJobsByJob('job_1', { market: 'intl', modelTag: TAG, limit: 50 })).toEqual([{ jobId: 'job_9', distance: 0.12 }]);
+  });
 });

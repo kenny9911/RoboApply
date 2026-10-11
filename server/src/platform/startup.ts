@@ -30,6 +30,14 @@
 //          worker does not run, ...), each once, by that module       warning
 //        - GoApply can charge through Alipay and no collecting entity is
 //          named (billing rails `warnIfAlipayEntityUnset`)             warning
+//        - the host GoApply's Alipay notify goes to and, when
+//          ALIPAY_SECRETLESS_UNTIL is set, the state of the secret-less
+//          window (billing rails `reportAlipayRailOnce`; a warning when
+//          CN_ALIPAY_NOTIFY_ORIGIN is set and ignored or the instant
+//          cannot be read)                                      info / warning
+//        - CN_EMBED_BASE_URL and CN_EMBED_API_KEY set one without the
+//          other: GoApply embeds nothing (platform/embeddings
+//          `embeddingEnvProblems`)                                    warning
 //        - CN_LLM_MODEL starts GoApply's own model profile and has no
 //          route there (a bare id with no CN_LLM_PROVIDER): GoApply AI
 //          answers 503 until it carries a vendor prefix               error
@@ -60,12 +68,13 @@
 
 import { warnVoiceConfigProblemsOnce } from '../interview-engine/config.js';
 import { voiceAvailable } from '../interview-engine/providers/index.js';
-import { warnIfAlipayEntityUnset } from './billing/rails/index.js';
+import { reportAlipayRailOnce, warnIfAlipayEntityUnset } from './billing/rails/index.js';
 import { wechatPayReadiness } from './billing/rails/wechatpay.js';
 import { brandEnvGroupProblems, cnResidencyStrict, type BrandEnvGroupProblem } from './brand/brandEnv.js';
 import { DEFAULT_BRAND, getBrand, type BrandId } from './brand/registry.js';
 import { allowedBrands, allowedBrandsProblem } from './brand/runtime.js';
 import { cnRecruitmentInfoModeProblem, isEnabledForBrand, setVoiceAvailabilityProbe, setWechatPayReadinessProbe } from './flags.js';
+import { embeddingEnvProblems } from './embeddings/index.js';
 import { contentSafetyReadiness } from './llm/contentSafety/config.js';
 import { assertCopilotModelSupportsTools } from './llm/index.js';
 import { getLlmRoutingDefaults } from '../lib/llm/llmModels.js';
@@ -96,9 +105,11 @@ export interface StartupDeps {
   /**
    * Reports that other modules own and log themselves, once per process, asked
    * for at boot when the deployment serves GoApply: the practice voice setup
-   * (interview-engine `warnVoiceConfigProblemsOnce`) and the missing Alipay
-   * collecting entity (billing rails `warnIfAlipayEntityUnset`). Both read the
-   * live process environment, so the defaults run only for it.
+   * (interview-engine `warnVoiceConfigProblemsOnce`), the missing Alipay
+   * collecting entity (billing rails `warnIfAlipayEntityUnset`) and the Alipay
+   * rail's own report (`reportAlipayRailOnce`: notify host and secret-less
+   * window). All read the live process environment, so the defaults run only
+   * for it.
    */
   goapplyModuleReports?: Array<(env: NodeJS.ProcessEnv) => unknown>;
 }
@@ -106,6 +117,11 @@ export interface StartupDeps {
 const DEFAULT_GOAPPLY_MODULE_REPORTS: NonNullable<StartupDeps['goapplyModuleReports']> = [
   (env) => (env === process.env ? warnVoiceConfigProblemsOnce('goapply') : null),
   (env) => (env === process.env ? warnIfAlipayEntityUnset(env) : null),
+  // M2 gate (MKT-2A O-1): the rail also reports at import, which can be before the entry
+  // point loaded `.env`. Asked again here, after it, a runtime that loads `.env` late hears
+  // the true notify host and window state at boot; each line is guarded by its own text, so
+  // a deployed runtime prints nothing twice.
+  (env) => (env === process.env ? reportAlipayRailOnce(env) : null),
 ];
 
 /** One brand whose Assistant model cannot be used. */
@@ -274,6 +290,16 @@ function reportConfigurationProblems(deps: StartupDeps, env: NodeJS.ProcessEnv):
       { group: problem.group, set: problem.set, missingAnchors: problem.missingAnchors },
     );
     if (problem.group === 'storage' && cnResidencyStrict(env)) strictStorage = problem;
+  }
+
+  // GoApply's own embeddings endpoint and key are one pair (MKT-2H): half of it means
+  // GoApply embeds nothing. Names only; without this line the client says it at its first call.
+  try {
+    for (const problem of embeddingEnvProblems(env)) {
+      deps.log.warn('STARTUP', problem.message, { group: 'embeddings', set: [problem.set], missing: [problem.missing] });
+    }
+  } catch {
+    /* a fault in the check is not a configuration problem */
   }
 
   const mode = cnRecruitmentInfoModeProblem(env);

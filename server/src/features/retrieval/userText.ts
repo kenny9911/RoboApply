@@ -105,22 +105,87 @@ export function isSensitiveLine(line: string): boolean {
 const URL_TEXT =
   /\b(?:https?:\/\/|www\.)\S+|\b(?:[a-z0-9-]+\.)*(?:linkedin\.com|github\.com|github\.io|gitlab\.com|gitee\.com|bitbucket\.org|behance\.net|dribbble\.com|medium\.com|twitter\.com|x\.com|facebook\.com|instagram\.com|weibo\.com|zhihu\.com|csdn\.net|juejin\.cn|stackoverflow\.com|kaggle\.com|leetcode\.com|leetcode\.cn|notion\.site|about\.me)(?:\/[^\s,;，；)）]*)?/giu;
 
+/** Personal pages on shared hosts, written without a scheme (ada.vercel.app, ada.pages.dev/cv). */
+const PERSONAL_HOST =
+  /\b(?:[a-z0-9-]+\.)+(?:vercel\.app|netlify\.app|pages\.dev|web\.app|firebaseapp\.com|herokuapp\.com|onrender\.com|wixsite\.com|wordpress\.com|blogspot\.com|substack\.com|gitbook\.io|webflow\.io|framer\.website|carrd\.co|read\.cv)(?:\/[^\s,;，；)）]*)?/giu;
+
+/** A bare host after a label that says it is the person's own page ("Site: ada.dev", "个人主页：ada.cn"). The label stays. */
+const LABELLED_SITE =
+  /((?:\b(?:web ?site|site|portfolio|blog|home ?page|personal page)|个人网站|个人主页|个人博客|主页|博客|作品集|個人網站|個人網頁|個人主頁|部落格)\s*[:：]\s*)(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s,;，；)）]*)?/giu;
+
+/** Any bare host; removed only when it spells one of the person's names (adalovelace.dev). "socket.io" and "ASP.NET" stay. */
+const BARE_HOST = /\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b(?:\/[^\s,;，；)）]*)?/giu;
+
+/**
+ * A chat handle after its label: 微信 wxm_dev2020, QQ 123456789, WeChat: coder_x99,
+ * Telegram @coderx, LINE ID: ada_l. The label alone is ordinary resume text
+ * ("WeChat mini programs", "QQ 音乐", "a product line", "Telegram bots"), so
+ * what follows must be marked as a handle (号 / ID / a colon / @) or have the
+ * shape of one (five characters or more with a digit or an underscore).
+ * `wx` and `tg` are left out: too short to tell from code ("wx:else").
+ */
+const CHAT_LABEL = String.raw`(?:微信|weixin|wechat|vx|qq|telegram|whatsapp|skype)`;
+const CHAT_MARK = String.raw`(?:号码?|账号|帳號|id\b)`;
+const HANDLE = String.raw`@?[A-Za-z0-9][A-Za-z0-9_.-]{3,}`;
+const CHAT_HANDLE = new RegExp(
+  [
+    // label, optional 号 / ID, a colon, the handle
+    String.raw`(?<![A-Za-z])${CHAT_LABEL}\s*${CHAT_MARK}?\s*[:：]\s*${HANDLE}`,
+    // label, 号 / ID, the handle
+    String.raw`(?<![A-Za-z])${CHAT_LABEL}\s*${CHAT_MARK}\s*${HANDLE}`,
+    // label, then an @handle
+    String.raw`(?<![A-Za-z])${CHAT_LABEL}\s+@[A-Za-z0-9][A-Za-z0-9_.-]{3,}`,
+    // label, then something handle-shaped
+    String.raw`(?<![A-Za-z])${CHAT_LABEL}\s*(?=[A-Za-z0-9_.-]*[0-9_])[A-Za-z0-9][A-Za-z0-9_.-]{4,}`,
+    // LINE only with "ID" (a "line" is an ordinary word)
+    String.raw`(?<![A-Za-z])line\s*id\b\s*[:：]?\s*${HANDLE}`,
+  ].join('|'),
+  'giu',
+);
+
+/** What is left glued to a removed name: the rest of an address or of a host ("[removed]@example.com", "[removed]-portfolio.example.dev"). */
+const REMOVED_REMNANT = /\S*\[removed\]\S*/g;
+const REMNANT_SHAPE = /\[removed\][^\s@]*@|@[^\s@]*\[removed\]|\[removed\][A-Za-z0-9-]*\.[a-z]{2,}|[A-Za-z0-9-]\.\[removed\]/i;
+
+function nameParts(names: Array<string | null | undefined>): string[] {
+  const parts = new Set<string>();
+  for (const name of names) {
+    for (const part of (name ?? '').toLowerCase().split(/[^a-z]+/)) if (part.length >= 3) parts.add(part);
+  }
+  return [...parts];
+}
+
 /**
  * The strip used when the scorer's `stripResumeForScoring` is not reachable
  * through the match area's public surface. Safe on its own, in this order:
  *   1. every line that names a sensitive field is dropped (`isSensitiveLine`);
- *   2. URLs are removed (a profile link identifies the person);
- *   3. the platform redactor runs with the kinds no prompt may carry (contact
- *      details, addresses, government ids, health) and the person's names.
+ *   2. URLs are removed (a profile link identifies the person), and with them
+ *      a personal page written without a scheme: on a shared host, after a
+ *      label ("Site:", "个人主页："), or spelling the person's name;
+ *   3. a chat handle after its label is removed (微信, QQ, WeChat, Telegram, …):
+ *      the usual way to leave a contact in a 自我评价 line;
+ *   4. the platform redactor runs with the kinds no prompt may carry (contact
+ *      details, addresses, government ids, health) and the person's names;
+ *   5. what is left glued to a removed name (the domain of an address whose
+ *      local part was the name, the rest of a host) is removed with it.
  */
 export const redactResumeText: ResumeStrip = (text, { names }) => {
+  const parts = nameParts(names);
   const kept = text
     .replace(/\r\n?/g, '\n')
     .split('\n')
     .filter((line) => !isSensitiveLine(line))
     .join('\n')
-    .replace(URL_TEXT, '[removed]');
-  return redactPii(kept, { kinds: LLM_PII_KINDS, marker: () => '[removed]', knownValues: names }).text;
+    .replace(URL_TEXT, '[removed]')
+    .replace(PERSONAL_HOST, '[removed]')
+    .replace(LABELLED_SITE, '$1[removed]')
+    .replace(CHAT_HANDLE, '[removed]')
+    .replace(BARE_HOST, (host) => {
+      if (!parts.length) return host;
+      const letters = host.toLowerCase().replace(/[^a-z]/g, '');
+      return parts.some((part) => letters.includes(part)) ? '[removed]' : host;
+    });
+  return redactPii(kept, { kinds: LLM_PII_KINDS, marker: () => '[removed]', knownValues: names }).text.replace(REMOVED_REMNANT, (token) => (REMNANT_SHAPE.test(token) ? '[removed]' : token));
 };
 
 function skillsOf(parsed: Record<string, unknown>): string[] {

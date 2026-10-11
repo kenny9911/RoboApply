@@ -1244,6 +1244,29 @@ describe('MKT-2F: Similar jobs by job vector, re-ordered by the one fit (strateg
     // A feed module that fails to load is the service's "throws" case: it lists the same-role jobs.
     await expect(similarFromFeed(row, 50, async () => Promise.reject(new Error('feed failed to load')))).rejects.toThrow('feed failed to load');
   });
+
+  // M2 gate: the seam between MKT-2F (this reader) and MKT-2H (`feed/index.ts similarJobIds`), on the merged
+  // tree, with no loader handed in: the REAL feed export is called, and it asks retrieval with the row's
+  // market, country and the market's model tag. Only the two retrieval reads are fakes (no database).
+  it('defaultService: with no loader the real feed export answers, asked with the market, the country and the model tag', async () => {
+    const { setSimilarJobsDepsForTests } = await import('../../feed/index.js');
+    const nearestJobsByJob = vi.fn(async () => [{ jobId: 'near1' }, { jobId: 'near2' }]);
+    const currentModelTag = vi.fn(async (): Promise<string | null> => 'openai/text-embedding-3-small@1024');
+    setSimilarJobsDepsForTests({ currentModelTag, nearestJobsByJob });
+    try {
+      const row = { id: 'j1', market: 'cn', locationCountry: 'CN', visibility: 'public', ownerUserId: null };
+      expect(await similarFromFeed(row, 50)).toEqual(['near1', 'near2']);
+      expect(currentModelTag).toHaveBeenCalledWith('cn');
+      expect(nearestJobsByJob).toHaveBeenCalledWith('j1', { market: 'cn', country: 'CN', modelTag: 'openai/text-embedding-3-small@1024', limit: 50 });
+      // A market with no vectors yet: null, so the service lists the same-role jobs.
+      currentModelTag.mockResolvedValueOnce(null);
+      expect(await similarFromFeed(row, 50)).toBeNull();
+      nearestJobsByJob.mockResolvedValueOnce([]);
+      expect(await similarFromFeed(row, 50)).toBeNull();
+    } finally {
+      setSimilarJobsDepsForTests(null);
+    }
+  });
 });
 
 describe('company news search (Tavily)', () => {

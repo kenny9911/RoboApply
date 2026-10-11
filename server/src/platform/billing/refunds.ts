@@ -20,6 +20,9 @@
 //      period the charge paid for; without them, or with bounds of a later
 //      period (the paid one is then over), this rule does not apply and the
 //      rules below decide. A pass and practice credits keep rules 2 to 4.
+//      The 14 days of rules 1 and 1b run from the PURCHASE: for a renewal
+//      paid inside them (a weekly plan renews on day 7) the caller passes
+//      `purchasedAt`, and the charge it describes is the running period's.
 //   2. Practice packs: refundable while no credit from the pack was used
 //      (within the pack's 12-month validity).
 //   3. First purchase of a plan: within 7 days (weekly plan and 7-day pass:
@@ -106,6 +109,14 @@ export interface RefundInput {
    */
   periodStart?: Date | null;
   periodEnd?: Date | null;
+  /**
+   * Subscriptions only: when the purchase was made, if THIS charge is a later
+   * charge of it (a renewal paid inside the purchase's 14 days: a weekly plan
+   * renews on day 7). The statutory window runs from the purchase, not from
+   * the renewal; the amount and the paid period are this charge's. Absent: the
+   * charge is the purchase.
+   */
+  purchasedAt?: Date | null;
 }
 
 export interface RefundDecision {
@@ -183,9 +194,12 @@ export function computeRefund(input: RefundInput): RefundDecision {
   const now = input.now.getTime();
   const pack = isPackPlan(input.planKey);
 
+  // The 14 days of rules 1 and 1b run from the purchase.
+  const purchased = input.purchasedAt ?? input.chargedAt;
+
   // 1. Statutory right of withdrawal (first purchases and packs; never renewals).
   if (region && !input.withdrawalWaiver && (input.chargeKind === 'first_purchase' || pack)) {
-    const deadline = addMs(input.chargedAt, WITHDRAWAL_DAYS * DAY_MS);
+    const deadline = addMs(purchased, WITHDRAWAL_DAYS * DAY_MS);
     if (now <= deadline.getTime()) return yes('withdrawal_14d', deadline);
   }
 
@@ -203,7 +217,7 @@ export function computeRefund(input: RefundInput): RefundDecision {
     const start = input.periodStart.getTime();
     const end = input.periodEnd.getTime();
     const charged = input.chargedAt.getTime();
-    const withdrawalEnd = charged + WITHDRAWAL_DAYS * DAY_MS;
+    const withdrawalEnd = purchased.getTime() + WITHDRAWAL_DAYS * DAY_MS;
     // The bounds must be those of the period this charge paid for: it started
     // by the time of the charge (an hour of slack for the provider's clock)
     // and had not ended. A period that starts later is the next, unpaid one.

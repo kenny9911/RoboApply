@@ -225,7 +225,9 @@ export default function ResumeEditorPage({
       return null;
     }
   }, [structured]);
-  const strength = analysis?.score ?? resume?.matchScoreCached ?? 72;
+  // Null when the resume cannot be analysed: the meter is then hidden. It never
+  // falls back to a job-fit number of this version or to a made-up one (D3).
+  const strength = analysis?.score ?? null;
 
   // Lines that still carry a blank an AI suggestion left ("[X]", "[n=__]").
   const placeholderLines = useMemo(() => (structured ? resumePlaceholders(structured) : []), [structured]);

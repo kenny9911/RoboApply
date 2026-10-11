@@ -78,7 +78,7 @@ export function KitRow({ item, selectable = false, selected = false, onSelect, o
           {company ? <span>{company}</span> : null}
           {place ? <span>{place}</span> : null}
           <Pill tone={STATE_TONE[item.state]}>{t(`state.${item.state}`)}</Pill>
-          {fit ? <FitTierLabel tier={fit.tier} score={fit.score} /> : null}
+          {fit ? <FitTierLabel tier={fit.tier} score={fit.score} estimate={fit.kind !== 'ai'} /> : null}
           {item.missingFields.length > 0 ? <span>{t('row.missing', { count: item.missingFields.length })}</span> : null}
         </p>
       </div>

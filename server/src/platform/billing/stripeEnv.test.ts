@@ -133,14 +133,14 @@ describe('stripeRailReady: a usable key AND a webhook secret the webhook can ver
   });
 });
 
-// The webhook route (roboapply/routes/stripeWebhook.ts) still hands the ONE
-// string it reads to constructEvent. A rail that opened on a list would take
-// money while every signature fails. MKT-2B item 1 makes the route loop over
-// stripeWebhookSecrets() and sets STRIPE_WEBHOOK_TRIES_EVERY_SECRET to true in
-// the same change. The ONE line of the test suite to flip then is the first
-// test of this block: everything else here and in planCatalog, registry and
-// flags tests follows the constant.
-describe('until the webhook tries every secret, the rail needs the one string the route reads to be a single secret', () => {
+// The webhook route (roboapply/routes/stripeWebhook.ts) tries every secret of
+// stripeWebhookSecrets() in order (MKT-2B item 1), and STRIPE_WEBHOOK_TRIES_EVERY_SECRET
+// is true in the same change: a list, a blank RoboApply variable in front of a
+// real secret and a secret with whitespace around it all verify, so the rail is
+// open on them. The table keeps both readings (`false` = a route that hands one
+// raw string to constructEvent, the state before M2) so the rule stays tested
+// from both sides; planCatalog, registry and flags tests follow the constant.
+describe('the webhook tries every secret: shapes a one-secret route could not verify open the rail (MKT-2B item 1)', () => {
   const KEY = { STRIPE_SECRET_KEY: TEST_KEY };
   const notOne: Array<[string, Record<string, string>]> = [
     ['a comma-separated list in STRIPE_WEBHOOK_SECRET', { STRIPE_WEBHOOK_SECRET: 'whsec_a,whsec_b' }],
@@ -154,7 +154,7 @@ describe('until the webhook tries every secret, the rail needs the one string th
     ['a trailing space in the RoboApply variable', { ROBOAPPLY_STRIPE_WEBHOOK_SECRET: 'whsec_a ' }],
   ];
 
-  it('the route does not try every secret yet (flip this with the route change, MKT-2B item 1)', () => {
+  it('the route tries every secret (MKT-2B item 1; the route loop and this constant change together or not at all)', () => {
     expect(STRIPE_WEBHOOK_TRIES_EVERY_SECRET).toBe(true);
   });
 
@@ -163,7 +163,7 @@ describe('until the webhook tries every secret, the rail needs the one string th
     expect(stripeWebhookSecrets(env).length).toBeGreaterThan(0);
     expect(stripeWebhookCanVerify(env, false)).toBe(false);
     expect(stripeWebhookCanVerify(env, true)).toBe(true);
-    // The default is what the route does today.
+    // The default is what the route does.
     expect(stripeWebhookCanVerify(env)).toBe(STRIPE_WEBHOOK_TRIES_EVERY_SECRET);
     expect(stripeRailReady(env)).toBe(STRIPE_WEBHOOK_TRIES_EVERY_SECRET);
     expect(stripeRailBlocker(env)).toBe(STRIPE_WEBHOOK_TRIES_EVERY_SECRET ? null : 'webhook_secret_unverifiable');

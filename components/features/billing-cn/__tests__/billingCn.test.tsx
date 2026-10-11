@@ -48,7 +48,8 @@ import { CnRenewButton, WechatPayCheckout, WechatPayReturn, detectTradeType, isO
 
 /** The part of WeChat's JS-SDK global the notice prompt touches (a fake: no script is loaded). */
 type WxSdk = { config: (c: unknown) => void; ready: (cb: () => void) => void; error: (cb: (res: unknown) => void) => void };
-import { ORDER_POLL_GRACE_MS, ORDER_POLL_MS, invokeWechatJsapi, orderPollInterval } from '../useWechatPay';
+import { ORDER_POLL_GRACE_MS, ORDER_POLL_MS, invokeWechatJsapi, isWechatPayNotSetUp, orderPollInterval } from '../useWechatPay';
+import { refundPolicyFor } from '../../credits/__tests__/fixtures';
 
 const DESKTOP = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 Chrome/128.0 Safari/537.36';
 const MOBILE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1';
@@ -69,7 +70,10 @@ function plansView(rails: string[] = ['wechatpay'], opts: { studentEnabled?: boo
     defaultSelection,
     currency: 'CNY',
     paymentsOpen: rails.length > 0,
-    checkout: { rails, showWithdrawalWaiver: false, country: null, acknowledgementVersion: 'test' },
+    // The three billing facts every plans response carries since M1 (carry-over MKT-2E.1): a truthful fixture.
+    checkout: { rails, showWithdrawalWaiver: false, country: null, acknowledgementVersion: 'test', collectingEntity: null },
+    refundPolicy: refundPolicyFor('goapply'),
+    studentOffer: null,
     fxReference: null,
     offers: [],
   } as unknown as PlansView;
@@ -623,19 +627,49 @@ describe('WechatPayReturn (the H5 return page)', () => {
     await waitFor(() => expect(box).toHaveTextContent('Payment received. Your practice sessions are added.'));
   });
 
-  it('renders nothing without an order, off GoApply, or while WeChat Pay is not live', async () => {
-    const none = renderUi(<WechatPayReturn orderId={null} />);
-    await waitFor(() => expect(credits.getPlans).toHaveBeenCalled());
+  it('renders nothing, and asks nothing, without an order or off GoApply', async () => {
+    const onStatus = vi.fn();
+    const none = renderUi(<WechatPayReturn orderId={null} onStatus={onStatus} />);
     expect(none.container).toBeEmptyDOMElement();
     none.unmount();
-    const ra = renderUi(<WechatPayReturn orderId={ORDER} />, { brand: 'roboapply' });
+    const ra = renderUi(<WechatPayReturn orderId={ORDER} onStatus={onStatus} />, { brand: 'roboapply' });
     expect(ra.container).toBeEmptyDOMElement();
     ra.unmount();
-    credits.getPlans.mockResolvedValue(plansView([]));
-    const off = renderUi(<WechatPayReturn orderId={ORDER} />);
-    await waitFor(() => expect(credits.getPlans).toHaveBeenCalled());
-    expect(off.container).toBeEmptyDOMElement();
     expect(api.getWechatPayOrder).not.toHaveBeenCalled();
+    expect(onStatus).not.toHaveBeenCalled();
+  });
+
+  // M2 gate (PAR carry-over, payments 10): the kill switch closes NEW orders. An order that was in flight
+  // is still completed by the server, and the status read stays open while WeChat Pay is set up.
+  it('an order in flight when sales were closed is still looked up and shown: no rail on sale, capability off', async () => {
+    credits.getPlans.mockResolvedValue(plansView([]));
+    api.getWechatPayOrder.mockResolvedValue(status({ status: 'paid', tradeType: 'h5', accessUntil: '2026-11-09T08:01:00.000Z' }));
+    const onPaid = vi.fn();
+    renderUi(<WechatPayReturn orderId={ORDER} onPaid={onPaid} />, { flagOn: false });
+    const box = await screen.findByTestId('wechatpay-return');
+    await waitFor(() => expect(box).toHaveAttribute('data-state', 'paid'));
+    expect(box).toHaveTextContent(/Payment received\. Pro is on until/);
+    expect(onPaid).toHaveBeenCalledTimes(1);
+    expect(api.getWechatPayOrder).toHaveBeenCalledWith(ORDER, expect.anything());
+  });
+
+  it('where WeChat Pay is not set up (404 feature_disabled) it asks once, renders nothing and reports "unavailable"', async () => {
+    api.getWechatPayOrder.mockRejectedValue(apiError('feature_disabled', 404));
+    const onStatus = vi.fn();
+    const off = renderUi(<WechatPayReturn orderId={ORDER} onStatus={onStatus} />, { flagOn: false });
+    await waitFor(() => expect(onStatus).toHaveBeenLastCalledWith('unavailable'));
+    expect(off.container).toBeEmptyDOMElement();
+    // A final answer: never retried, never polled.
+    expect(api.getWechatPayOrder).toHaveBeenCalledTimes(1);
+    expect(onStatus.mock.calls.map((c) => c[0])).toEqual(['checking', 'unavailable']);
+  });
+
+  it('only that answer means "not set up": another 404, or feature_disabled with another status, is a failed check', () => {
+    expect(isWechatPayNotSetUp(apiError('feature_disabled', 404))).toBe(true);
+    expect(isWechatPayNotSetUp(apiError('not_found', 404))).toBe(false);
+    expect(isWechatPayNotSetUp(apiError('feature_disabled', 403))).toBe(false);
+    expect(isWechatPayNotSetUp(new Error('network'))).toBe(false);
+    expect(isWechatPayNotSetUp(null)).toBe(false);
   });
 
   it('is in Chinese on GoApply', async () => {

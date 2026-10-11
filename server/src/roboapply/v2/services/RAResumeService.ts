@@ -370,6 +370,16 @@ function isoDate(d: any): string {
   return String(d);
 }
 
+/**
+ * `RAResumeVariant.matchScoreCached` is never sent. It is a copy of a variant's
+ * fit for its target job, frozen at the last model call, with no kind, version
+ * or date. A variant's fit ("With this version") is shown only in tailoring
+ * and is read live there (`getVariantFit`; MARKET_STRATEGY §2.2, MKT-2F item 3);
+ * any other page that printed this copy showed a fit outside the fit contract.
+ * The wire field stays (always null) so no reader's type changes.
+ */
+const NO_STORED_VARIANT_FIT = null;
+
 function toView(row: any): RAResumeVariantView {
   return {
     id: row.id,
@@ -381,7 +391,7 @@ function toView(row: any): RAResumeVariantView {
     templateKey: row.templateKey ?? null,
     resumeMarkdown: row.resumeMarkdown ?? '',
     resumeContentHash: row.resumeContentHash,
-    matchScoreCached: row.matchScoreCached ?? null,
+    matchScoreCached: NO_STORED_VARIANT_FIT,
     isPrimary: row.isPrimary ?? false,
     sourceKind: row.sourceKind ?? null,
     parseStatus: row.parseStatus ?? null,
@@ -409,7 +419,7 @@ function toSummary(row: any, jobsById: Map<string, any>, sessionByVariant: Recor
     targetJobId: row.targetJobId ?? null,
     targetJobTitle: targetJob?.title ?? null,
     targetJobCompany: targetJob?.companyName ?? null,
-    matchScoreCached: row.matchScoreCached ?? null,
+    matchScoreCached: NO_STORED_VARIANT_FIT,
     isPrimary: row.isPrimary ?? false,
     sourceKind: row.sourceKind ?? null,
     lastEditedAt: isoDate(row.lastEditedAt),

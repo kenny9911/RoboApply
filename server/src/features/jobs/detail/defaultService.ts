@@ -117,20 +117,28 @@ export function explainNow(input: { market: 'intl' | 'cn'; personalized: boolean
   });
 }
 
-/** The vector read as the feed area may export it: `similarJobIds(row, limit)` (MARKET_TASK_PLAN 3.3, "Feed pre-wiring"). */
+/** The vector read as the feed area exports it: `similarJobIds(row, limit)` (MARKET_TASK_PLAN 3.3, "Feed pre-wiring"). */
 type SimilarJobIds = (row: SimilarSourceRow, limit: number) => Promise<string[] | null>;
 
 /**
- * Similar jobs by job vector, through the feed area's seam. The export is
- * built in the same phase by another bundle, so it is read without a static
- * type: a feed module without it (or one that fails to load) answers null and
- * the service lists the same-role jobs, as before. Once both are merged the
- * cast can become a typed import.
+ * The feed area, loaded when Similar jobs is first asked for. Typed since the
+ * M2 gate (both halves are merged): if `feed/index.ts` drops `similarJobIds`
+ * or changes what it takes or answers, the server type-check fails HERE.
+ */
+async function loadFeedArea(): Promise<{ similarJobIds: SimilarJobIds }> {
+  return import('../../feed/index.js');
+}
+
+/**
+ * Similar jobs by job vector, through the feed area's seam. `loadFeed` is the
+ * test seam; whatever it returns is still read defensively, so a module
+ * without the export (or one whose export answers null) gives null and the
+ * service lists the same-role jobs.
  */
 export async function similarFromFeed(
   row: SimilarSourceRow,
   limit: number,
-  loadFeed: () => Promise<unknown> = () => import('../../feed/index.js'),
+  loadFeed: () => Promise<unknown> = loadFeedArea,
 ): Promise<string[] | null> {
   const feed = (await loadFeed()) as { similarJobIds?: SimilarJobIds } | null | undefined;
   const fn = feed?.similarJobIds;

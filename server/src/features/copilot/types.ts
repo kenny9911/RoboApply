@@ -36,9 +36,12 @@ export interface CopilotAreas {
   patchFilters(userId: string, searchProfileId: string, version: number, patch: Record<string, unknown>): Promise<SearchProfileWire>;
   // jobs
   getJob(userId: string, jobId: string): Promise<JobDetailResponse>;
-  scoreJob(userId: string, jobId: string, options: { resumeVariantId?: string | null; locale?: string }): Promise<MatchFitView>;
-  /** The stored fit for a job (the last AI read, else the quick estimate). Never a model call, never a credit. */
-  storedFit(userId: string, jobId: string, options: { resumeVariantId?: string | null; locale?: string }): Promise<MatchFitView>;
+  /** THE fit of a job for the person's main resume (match/fit.ts `getFit`); the free on-demand score may run. Never a resume version. */
+  fit(userId: string, jobId: string, options: { locale?: string }): Promise<MatchFitView>;
+  /** The separately named measure "With this version" (`getVariantFit`): only for the user's explicit question about one resume version. */
+  variantFit(userId: string, jobId: string, variantId: string, options: { locale?: string }): Promise<MatchFitView>;
+  /** The stored fit for a job (the last AI read, else the quick estimate). Never a model call, never a credit, never a resume version. */
+  storedFit(userId: string, jobId: string, options: { locale?: string }): Promise<MatchFitView>;
   /** Jobs the user added themselves ("Added by you": private, owned by them), newest first. */
   addedJobs(userId: string, options: { limit: number }): Promise<AddedJobItem[]>;
   companyProfile(idOrSlug: string): Promise<CompanyProfile>;

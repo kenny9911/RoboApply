@@ -75,6 +75,13 @@ export interface JobIndexDeps {
   aiAllowed: (userId: string) => Promise<boolean>;
   /** The canonical skill vocabulary, when one is loaded (features/skills); null → the stored skill strings. */
   skillLabels?: () => Promise<SkillLabels | null>;
+  /**
+   * The mainland contact strip (features/cn/jobs `stripContactInfo`), asked
+   * for only when the item holds a mainland posting. A failure to load it
+   * fails the item (the queue retries): a mainland text is never indexed or
+   * embedded unstripped because the strip was not there.
+   */
+  stripContact?: () => Promise<(text: string) => string>;
   env?: EnvSource;
 }
 
@@ -105,7 +112,10 @@ export async function indexJobs(payload: JobIndexPayload, deps: JobIndexDeps, me
   if (!rows.length) return outcome;
 
   const skillLabels = deps.skillLabels && rows.some((r) => r.skillIds?.length) ? await deps.skillLabels().catch(() => null) : null;
-  const textDeps = { skillLabels };
+  // A user's own mainland import keeps its text as pasted (a recruiter's phone number, a WeChat id): it is cleaned
+  // here, where the text leaves for the search document and the embeddings provider. Indexed rows are clean already.
+  const stripContact = deps.stripContact && rows.some((r) => r.market === 'cn') ? await deps.stripContact() : null;
+  const textDeps = { skillLabels, stripContact };
 
   // 1. The lexical part: no model, always written.
   for (const row of rows) {
@@ -332,6 +342,10 @@ export function defaultJobIndexDeps(): JobIndexDeps {
     contentHash: async (row) => (await import('../match/index.js')).jobContentHash(row),
     aiAllowed: aiAllowedLazy,
     skillLabels: () => loadSkillLabels(),
+    stripContact: async () => {
+      const { stripContactInfo } = await import('../cn/jobs/index.js');
+      return (text: string) => stripContactInfo(text).text;
+    },
   };
 }
 

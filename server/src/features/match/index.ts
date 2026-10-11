@@ -41,6 +41,11 @@ export type { ScorerPin } from './config.js';
 // The fit contract (fit.ts): the only place a fit is assembled.
 export { getFit, getFits, getVariantFit, estimateForPosting, fitSnapshot, assembleFit, createFitService, fitFunctions, fitToListResult, fitToView, hysteresisTier, setFitServiceForTests, storedFitStatus, toWireKind, ADHOC_POSTING_ID } from './fit.js';
 export type { AdhocPosting, Fit, FitConfig, FitFunctions, FitInputs, FitProse, FitSource, GetFitOptions, GetFitsOptions, StoredFitStatus } from './fit.js';
+// `stripResumeForScoring` (pii.ts) is NOT exported on purpose (M2 gate, MKT-2H request 1 declined): the
+// retrieval workers pick it up as their default strip the moment it is exported (retrieval/workers.ts
+// `defaultStrip`), and it is the weaker of the two today: a profile link written without a scheme
+// ("linkedin.com/in/<handle>") passes it, while retrieval's own `redactResumeText` removes the link.
+// Export it only once pii.ts removes those links too (requests/waveM2-carryover.md, MKT-4G).
 export { jobContentHash, currentJobHash } from './jobHash.js';
 export type { JobHashInput } from './jobHash.js';
 export { registerMatchPreparer, runMatchPreparers } from './prepare.js';

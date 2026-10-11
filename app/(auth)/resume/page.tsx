@@ -423,7 +423,6 @@ export default function ResumesPage() {
                 version={versionById.get(r.id) ?? 'v1'}
                 editedLabel={editedLabel(r)}
                 baseLabel={r.targetTitle ? t('hub.target.for', { title: r.targetTitle }) : t('card.base')}
-                scoreUnit={t('card.score_unit')}
                 onOpen={() => router.push(`/resume/${r.id}`)}
                 onDelete={() => setDeleteTarget(r)}
                 deleteLabel={t('card.delete')}

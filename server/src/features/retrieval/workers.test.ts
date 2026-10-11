@@ -155,6 +155,59 @@ describe('job.index', () => {
     expect(allowed.upserts()[0]!.values.slice(0, 2)).toEqual(['imp_1', 'cn']);
   });
 
+  // M2 gate (match-retrieval): the mainland contact strip runs at ingest only, and a user's own import keeps its
+  // text as pasted. Its card text was sent to the embeddings provider with the recruiter's phone number and WeChat id.
+  describe('a private mainland import is cleaned of recruiter contact details where its text leaves', () => {
+    const PASTED = '岗位职责：负责后端服务开发，熟悉 Go 与 PostgreSQL。联系人：王经理 电话 13800138000 微信号 wangjl_hr88 微信同号';
+    const imported = (over: Partial<ReturnType<typeof indexJob>> = {}) =>
+      indexJob({ id: 'imp_1', visibility: 'private', ownerUserId: 'u_yes', market: 'cn', title: '后端工程师（电话 13800138000）', summary: '后端开发。加微信 wangjl_hr88 详聊', qualifications: null, descriptionPlain: PASTED, ...over });
+    const LEAKS = ['13800138000', 'wangjl_hr88', '微信同号'];
+
+    it('with the real worker dependencies: the embedded card text and the stored search document carry no phone number or WeChat id', async () => {
+      const { defaultJobIndexDeps } = await import('./workers.js');
+      const k = jobKit({ jobs: [imported()] });
+      const deps: JobIndexDeps = { ...k.deps, stripContact: defaultJobIndexDeps().stripContact };
+      expect(await indexJobs({ jobIds: ['imp_1'] }, deps)).toMatchObject({ indexed: 1, embedded: 1 });
+      const sent = (k.embedCalls[0]!.texts as string[])[0]!;
+      const doc = String(k.writes()[0]!.values[0]);
+      for (const leak of LEAKS) {
+        expect(sent, leak).not.toContain(leak);
+        expect(doc, leak).not.toContain(leak);
+      }
+      // What the job is stays: the duties, the title, the skills.
+      expect(sent).toContain('负责后端服务开发');
+      expect(sent).toContain('后端工程师');
+      // The stored hash is the hash of what was sent.
+      expect(k.upserts()[0]!.values[3]).toBe(cardHash(sent));
+    });
+
+    it('buildCardText strips a mainland row and leaves another market exactly as it is', async () => {
+      const { stripContactInfo } = await import('../cn/jobs/index.js');
+      const stripContact = (text: string) => stripContactInfo(text).text;
+      const cn = buildCardText(imported(), { stripContact });
+      for (const leak of LEAKS) expect(cn, leak).not.toContain(leak);
+      // Without the strip the same row leaks: this is what was embedded before.
+      expect(buildCardText(imported())).toContain('13800138000');
+      const intl = imported({ market: 'intl' });
+      expect(buildCardText(intl, { stripContact })).toBe(buildCardText(intl));
+      // A clean mainland row is unchanged, so its stored card hash stays valid.
+      const clean = indexJob({ market: 'cn' });
+      expect(buildCardText(clean, { stripContact })).toBe(buildCardText(clean));
+    });
+
+    it('the strip is asked for only when the item holds a mainland posting, and a strip that cannot be loaded fails the item before anything is written', async () => {
+      const stripContact = vi.fn(async () => (text: string) => text);
+      const intl = jobKit();
+      await indexJobs({ jobIds: ['job_1'] }, { ...intl.deps, stripContact });
+      expect(stripContact).not.toHaveBeenCalled();
+
+      const cn = jobKit({ jobs: [imported()] });
+      await expect(indexJobs({ jobIds: ['imp_1'] }, { ...cn.deps, stripContact: async () => Promise.reject(new Error('module not loaded')) })).rejects.toThrow('module not loaded');
+      expect(cn.writes()).toHaveLength(0);
+      expect(cn.embedCalls).toHaveLength(0);
+    });
+  });
+
   it('never asks about consent for a public posting', async () => {
     const k = jobKit();
     await indexJobs({ jobIds: ['job_1'] }, k.deps);
@@ -470,5 +523,34 @@ describe('registration', () => {
 describe('loadSkillLabels', () => {
   it('answers null when the skills area is absent or does not load, never an error', async () => {
     expect(await loadSkillLabels('./no-such-module.js')).toBeNull();
+  });
+
+  // M2 gate: the seam between this reader (MKT-2H) and the skills area (MKT-2G), on the merged tree, by the
+  // default specifier. A vocabulary is pinned, so nothing reads a database.
+  it('reads the real skills area: kinds and labels of the vocabulary in use, an empty label where the script has none', async () => {
+    const skills = await import('../skills/index.js');
+    const record = (over: Record<string, unknown>) => ({ kind: 'hard', labelZh: null, labelZhHant: null, aliases: [], parentId: null, esco: null, onet: null, status: 'reviewed', ...over });
+    skills.setVocabularyForTests([
+      record({ id: 'postgresql', labelEn: 'PostgreSQL', aliases: ['postgres'] }),
+      record({ id: 'communication', kind: 'soft', labelEn: 'Communication', labelZh: '沟通能力', labelZhHant: '溝通能力' }),
+    ] as never);
+    try {
+      const labels = await loadSkillLabels();
+      expect(labels).not.toBeNull();
+      expect(labels!.kindOf('postgresql')).toBe('hard');
+      expect(labels!.label('postgresql', 'en')).toBe('PostgreSQL');
+      expect(labels!.label('postgresql', 'zh-TW')).toBe('PostgreSQL');
+      expect(labels!.kindOf('communication')).toBe('soft');
+      expect(labels!.label('communication', 'zh')).toBe('沟通能力');
+      expect(labels!.label('communication', 'zh-TW')).toBe('溝通能力');
+      // An id the vocabulary does not hold: no kind, and a label the search document can skip.
+      expect(labels!.kindOf('not_a_skill')).toBeNull();
+      // The search document of a posting that carries canonical ids holds the canonical labels and leaves the soft skill out.
+      const doc = buildSearchDoc(indexJob({ skills: ['Postgres'], skillIds: ['postgresql', 'communication'] }) as never, { skillLabels: labels });
+      expect(doc.toLowerCase()).toContain('postgresql');
+      expect(doc).not.toContain('溝通能力');
+    } finally {
+      skills.resetVocabularyForTests();
+    }
   });
 });

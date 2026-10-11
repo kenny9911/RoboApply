@@ -504,7 +504,15 @@ export async function quoteSwitch(account: BillingAccount, target: CatalogPlan, 
   const stripe = deps.getStripe();
   if (!stripe) throw new BillingError('rail_not_configured', 'Card payments are not set up', { rail: 'stripe' });
   const prorationDate = Math.floor(now.getTime() / 1000);
-  const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId!);
+  // Every Stripe read of a quote that fails is the provider's failure (502
+  // `payment_provider_error`), like the price lookup and the update itself.
+  const quoteFailure = (err: unknown) => providerFailure('switch (quote)', 'The quote could not be read from the payment provider. Try again.', account.userId, err);
+  let stripeSub: Stripe.Subscription;
+  try {
+    stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId!);
+  } catch (err) {
+    throw quoteFailure(err);
+  }
   const item = itemOf(stripeSub);
   const price = await switchPriceFor(stripe, stripeSub, target);
   const previewParams: Stripe.InvoiceCreatePreviewParams = {
@@ -530,10 +538,14 @@ export async function quoteSwitch(account: BillingAccount, target: CatalogPlan, 
     // A safety net: the customer's address may have become one Stripe Tax
     // cannot use. Our prices are tax-inclusive, so the amount due is the same
     // without the tax lines: quote it that way instead of failing. Every
-    // other error is thrown as before.
-    if (!withTax || !isTaxLocationError(err)) throw err;
+    // other error is the provider's failure.
+    if (!withTax || !isTaxLocationError(err)) throw quoteFailure(err);
     logger.warn('RA_BILLING', 'switch quote: no usable tax location; quoted without automatic tax', { userId: account.userId });
-    preview = await stripe.invoices.createPreview(previewParams);
+    try {
+      preview = await stripe.invoices.createPreview(previewParams);
+    } catch (retryErr) {
+      throw quoteFailure(retryErr);
+    }
   }
   const priceIdOf = price.priceId;
   const newLine = preview.lines?.data?.find((l) => {
@@ -623,7 +635,13 @@ export async function confirmSwitch(
   }
   const stripe = deps.getStripe();
   if (!stripe) throw new BillingError('rail_not_configured', 'Card payments are not set up', { rail: 'stripe' });
-  const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId!);
+  let stripeSub: Stripe.Subscription;
+  try {
+    stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId!);
+  } catch (err) {
+    // Nothing was recorded and nothing was sent: the buyer can confirm again.
+    throw providerFailure('switch', 'The plan change could not be sent to the payment provider. Try again.', account.userId, err);
+  }
   const item = itemOf(stripeSub);
   const price = await switchPriceFor(stripe, stripeSub, target);
   await ack.record({ amountMinor: price.amountMinor, currency: (stripeSub.currency ?? '').toLowerCase() === 'twd' ? 'TWD' : target.currency });

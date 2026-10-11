@@ -55,7 +55,6 @@ export function ResumeSection({
                   {r.targetJobCompany
                     ? `→ ${r.targetJobCompany}`
                     : t('identity.resume_base')}
-                  {r.matchScoreCached != null ? ` · ${r.matchScoreCached}/100` : ''}
                 </div>
               </label>
             ))}

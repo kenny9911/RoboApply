@@ -25,7 +25,7 @@ import '../../lib/prisma.js';
 import { BillingError } from './errors.js';
 import { setStripeClientForTests } from './stripeClient.js';
 import { billingEventClaimKey } from './stripeEvents.js';
-import { issueRefund, setStripeRefundDepsForTests, withdrawPurchase, withdrawalQuote } from './stripeRefunds.js';
+import { issueRefund, setStripeRefundDepsForTests, withdrawPurchase, withdrawalQuote, withdrawalQuotes } from './stripeRefunds.js';
 
 const DAY_S = 86_400;
 /** The purchase instant. */
@@ -475,6 +475,38 @@ describe('issueRefund', () => {
   });
 });
 
+// M2 gate (payments-safety): Stripe answers a repeated idempotency key with the stored FIRST answer and moves no
+// money. With the key `refund:<pi>:<amount>` alone, the second of two equal partial refunds was that replay, and
+// the caller was told the payment was refunded in full while half of it was still with us.
+describe('issueRefund: one refund decision is one key (attemptKey)', () => {
+  beforeEach(async () => {
+    await seedUser({});
+  });
+
+  it('two refunds of 1000 on one payment, each with its own attempt, are two requests with two keys', async () => {
+    const first = await issueRefund({ ...ADMIN, target: { invoiceId: 'in_1' }, amountMinor: 1000, attemptKey: 'a1' });
+    expect(first.full).toBe(false);
+    // The webhook recorded the first one.
+    await fake.db.rABillingRefund.create({
+      data: { userId: 'u_1', brand: 'roboapply', rail: 'stripe', kind: 'refund', externalRef: 'ch_1:1000', chargeId: 'ch_1', paymentIntentId: 'pi_inv', invoiceId: 'in_1', amountMinor: 1000, currency: 'USD', full: false },
+    });
+    await issueRefund({ ...ADMIN, target: { invoiceId: 'in_1' }, amountMinor: 1000, attemptKey: 'a2' });
+    expect(stripe.refunds.create).toHaveBeenCalledTimes(2);
+    expect([refundCall(0)[1], refundCall(1)[1]]).toEqual([{ idempotencyKey: 'refund:pi_inv:1000:a1' }, { idempotencyKey: 'refund:pi_inv:1000:a2' }]);
+    // A retry of the SAME decision sends the same key, so Stripe refunds it once.
+    await issueRefund({ ...ADMIN, target: { invoiceId: 'in_1' }, amountMinor: 1000, attemptKey: 'a2' });
+    expect(refundCall(2)[1]).toEqual(refundCall(1)[1]);
+  });
+
+  it('without an attempt the key is the three-part one, as before; an attempt that is not a plain token is refused before Stripe', async () => {
+    await issueRefund({ ...ADMIN, target: { invoiceId: 'in_1' }, amountMinor: 1000 });
+    expect(refundCall()[1]).toEqual({ idempotencyKey: 'refund:pi_inv:1000' });
+    const before = account.calls.length;
+    await refused(issueRefund({ ...ADMIN, target: { invoiceId: 'in_1' }, amountMinor: 1000, attemptKey: 'a b:c' }), 'refund_not_available', 'invalid_attempt');
+    expect(account.calls.length).toBe(before);
+  });
+});
+
 describe('issueRefund never serves GoApply (rule A11)', () => {
   it.each([
     ['a GoApply user', { brand: 'goapply', rowBrand: 'goapply' }],
@@ -644,7 +676,7 @@ describe('withdrawPurchase', () => {
       reason: 'requested_by_customer',
       metadata: { product: 'roboapply', userId: 'u_1', actor: 'self', kind: 'withdrawal', planKey: 'pro_monthly', reason: 'withdrawal' },
     });
-    expect(opts).toEqual({ idempotencyKey: 'refund:pi_inv:2082' });
+    expect(opts).toEqual({ idempotencyKey: 'refund:pi_inv:2082:withdrawal' });
     expect(sendEmail).toHaveBeenCalledTimes(1);
     expect(sendEmail).toHaveBeenCalledWith({
       template: 'billing.withdrawal_confirmed',
@@ -668,7 +700,7 @@ describe('withdrawPurchase', () => {
     expect(writes()).toEqual(['subscriptions.cancel', 'refunds.create']);
     expect(refundCall()[0]).not.toHaveProperty('amount');
     expect(refundCall()[0].metadata.kind).toBe('withdrawal');
-    expect(refundCall()[1]).toEqual({ idempotencyKey: 'refund:pi_inv:full' });
+    expect(refundCall()[1]).toEqual({ idempotencyKey: 'refund:pi_inv:full:withdrawal' });
     expect(sendEmail.mock.calls[0]![0].params).toMatchObject({ amountMinor: 2499 });
   });
 
@@ -681,7 +713,7 @@ describe('withdrawPurchase', () => {
     expect(cancelCall(1)[2]).toEqual({ idempotencyKey: 'withdraw:sub_1' });
     expect(stripe.refunds.create).toHaveBeenCalledTimes(2);
     expect(refundCall(0)).toEqual(refundCall(1));
-    expect(refundCall(0)[1]).toEqual({ idempotencyKey: 'refund:pi_inv:2082' });
+    expect(refundCall(0)[1]).toEqual({ idempotencyKey: 'refund:pi_inv:2082:withdrawal' });
     expect(sendEmail).toHaveBeenCalledTimes(1);
   });
 
@@ -698,7 +730,7 @@ describe('withdrawPurchase', () => {
     await expect(withdrawPurchase(SELF)).resolves.toMatchObject({ status: 'withdrawn', refundMinor: 2082 });
     expect(cancelCall(1)[2]).toEqual(cancelCall(0)[2]);
     expect(refundCall(1)[1]).toEqual(refundCall(0)[1]);
-    expect(refundCall(1)[1]).toEqual({ idempotencyKey: 'refund:pi_inv:2082' });
+    expect(refundCall(1)[1]).toEqual({ idempotencyKey: 'refund:pi_inv:2082:withdrawal' });
     expect(sendEmail).toHaveBeenCalledTimes(1);
 
     // Complete: the quote is gone and a third call is refused without touching Stripe.
@@ -757,7 +789,7 @@ describe('withdrawPurchase', () => {
     expect(res).toEqual({ status: 'withdrawn', refundMinor: 999, currency: 'USD', accessEnded: true, rule: 'withdrawal_14d' });
     expect(writes()).toEqual(['refunds.create']);
     expect(refundCall()[0]).toMatchObject({ payment_intent: 'pi_pass', metadata: { kind: 'withdrawal', actor: 'public_link', planKey: 'pro_week_pass' } });
-    expect(refundCall()[1]).toEqual({ idempotencyKey: 'refund:pi_pass:full' });
+    expect(refundCall()[1]).toEqual({ idempotencyKey: 'refund:pi_pass:full:withdrawal' });
     // The row is untouched here: entitlements reverse on charge.refunded.
     expect(await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).toMatchObject({ tier: 'pro', planKey: 'pro_week_pass' });
     expect(sendEmail.mock.calls[0]![0].params).toMatchObject({ planKey: 'pro_week_pass', amountMinor: 999 });
@@ -772,7 +804,7 @@ describe('withdrawPurchase', () => {
     // The buyer is owed 2082 in total; 500 went back earlier.
     expect(res.refundMinor).toBe(2082);
     expect(refundCall()[0].amount).toBe(1582);
-    expect(refundCall()[1]).toEqual({ idempotencyKey: 'refund:pi_inv:1582' });
+    expect(refundCall()[1]).toEqual({ idempotencyKey: 'refund:pi_inv:1582:withdrawal' });
   });
 
   it('a withdrawal that stopped after its refund was recorded by the webhook finishes without refunding again', async () => {
@@ -836,5 +868,134 @@ describe('withdrawPurchase', () => {
     sendEmail.mockRejectedValueOnce(new Error('mail transport down'));
     await expect(withdrawPurchase(SELF)).resolves.toMatchObject({ status: 'withdrawn', refundMinor: 2082 });
     expect(writes()).toEqual(['subscriptions.cancel', 'refunds.create']);
+  });
+});
+
+// M2 gate (payments-safety; MARKET_STRATEGY §4.4: "14 days ... after each
+// purchase"). The withdrawal used to be read from the LATEST paid invoice
+// alone: a weekly subscriber lost it on day 7 (the latest invoice was then the
+// renewal), and any later purchase hid the earlier one.
+describe('a withdrawal is per purchase, for 14 days from that purchase', () => {
+  const RENEWAL_S = T0_S + 7 * DAY_S;
+  /** A weekly plan bought at T0 whose renewal was paid on day 7. */
+  function weeklyWithPaidRenewal() {
+    account.invoices.set('in_1', weeklyInvoice());
+    account.invoices.set(
+      'in_renewal',
+      weeklyInvoice({ id: 'in_renewal', created: RENEWAL_S - 3600, status_transitions: { paid_at: RENEWAL_S }, billing_reason: 'subscription_cycle', lines: { data: [subscriptionLine(7, RENEWAL_S)] } }),
+    );
+    account.payments.set('in_renewal', paid('pi_renewal'));
+    account.subscriptions.set('sub_1', stripeSubscription({ items: { data: [{ id: 'si_1', current_period_start: RENEWAL_S, current_period_end: RENEWAL_S + 7 * DAY_S }] } }));
+  }
+
+  it('a weekly subscriber without the waiver on day 10: everything paid under the purchase goes back, the renewal included', async () => {
+    await seedUser({ planKey: 'pro_weekly' });
+    weeklyWithPaidRenewal();
+    clock.now = at(10);
+    const quote = await withdrawalQuote('u_1');
+    expect(quote!.purchase).toEqual({ source: 'stripe', id: 'in_1', planKey: 'pro_weekly', chargedAt: T0.toISOString(), amountMinor: 1998, currency: 'USD' });
+    expect(quote!.decision).toMatchObject({ rule: 'withdrawal_14d', amountMinor: 1998, deadline: at(14).toISOString(), endsAccess: true });
+
+    const res = await withdrawPurchase({ userId: 'u_1', purchaseId: 'in_1', actor: 'self' });
+    expect(res).toEqual({ status: 'withdrawn', refundMinor: 1998, currency: 'USD', accessEnded: true, rule: 'withdrawal_14d' });
+    expect(writes()).toEqual(['subscriptions.cancel', 'refunds.create', 'refunds.create']);
+    expect([refundCall(0)[0].payment_intent, refundCall(1)[0].payment_intent]).toEqual(['pi_inv', 'pi_renewal']);
+    expect(refundCall(0)[0]).not.toHaveProperty('amount');
+    expect(refundCall(1)[0]).not.toHaveProperty('amount');
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(sendEmail.mock.calls[0]![0].params).toMatchObject({ planKey: 'pro_weekly', amountMinor: 1998 });
+    // One claim, on the purchase: closed afterwards.
+    expect((await fake.db.rACreditLedger.findMany({})).map((r: Obj) => r.idempotencyKey)).toEqual([billingEventClaimKey('withdraw:in_1')]);
+    expect(await withdrawalQuote('u_1')).toBeNull();
+  });
+
+  it('the same subscriber on day 15 has no withdrawal left, and the renewal is never a purchase of its own', async () => {
+    await seedUser({ planKey: 'pro_weekly' });
+    weeklyWithPaidRenewal();
+    clock.now = new Date(at(14).getTime() + 1);
+    expect(await withdrawalQuote('u_1')).toBeNull();
+    clock.now = at(10);
+    await refused(withdrawPurchase({ userId: 'u_1', purchaseId: 'in_renewal', actor: 'self' }), 'withdrawal_not_available');
+    expect(writes()).toEqual([]);
+  });
+
+  it('with the waiver on day 10: the unused days of the week that is running (4 of 7), refunded on the renewal; the first week is used up', async () => {
+    await seedUser({ planKey: 'pro_weekly', waiver: true });
+    weeklyWithPaidRenewal();
+    clock.now = at(10);
+    const quote = await withdrawalQuote('u_1');
+    expect(quote!.purchase).toMatchObject({ id: 'in_1', chargedAt: T0.toISOString(), amountMinor: 1998 });
+    expect(quote!.decision).toMatchObject({ rule: 'withdrawal_14d_prorata', amountMinor: Math.floor((999 * 4) / 7), prorata: { usedDays: 3, periodDays: 7 }, deadline: at(14).toISOString() });
+    // The subscription's own period is not read: the renewal invoice carries the paid period.
+    expect(stripe.subscriptions.retrieve).not.toHaveBeenCalled();
+
+    const res = await withdrawPurchase({ userId: 'u_1', purchaseId: 'in_1', actor: 'self' });
+    expect(res).toMatchObject({ refundMinor: 570, rule: 'withdrawal_14d_prorata' });
+    expect(writes()).toEqual(['subscriptions.cancel', 'refunds.create']);
+    expect(refundCall()[0]).toMatchObject({ payment_intent: 'pi_renewal', amount: 570 });
+    expect(refundCall()[1]).toEqual({ idempotencyKey: 'refund:pi_renewal:570:withdrawal' });
+  });
+
+  it('a pack bought on day 3 of a monthly plan does not hide the plan: two purchases, two quotes, each withdrawn by its own id', async () => {
+    await seedUser({});
+    account.invoices.set('in_pack', oneTimeInvoice('practice_pack_5', 999, { id: 'in_pack', created: T0_S + 3 * DAY_S, status_transitions: { paid_at: T0_S + 3 * DAY_S } }));
+    account.payments.set('in_pack', paid('pi_pack'));
+    clock.now = at(5);
+    const quotes = await withdrawalQuotes('u_1');
+    expect(quotes.map((q) => [q.purchase.id, q.purchase.planKey, q.decision.rule, q.decision.amountMinor, q.decision.deadline])).toEqual([
+      ['in_pack', 'practice_pack_5', 'withdrawal_14d', 999, at(17).toISOString()],
+      ['in_1', 'pro_monthly', 'withdrawal_14d', 2499, at(14).toISOString()],
+    ]);
+    // The single quote is the latest purchase.
+    expect((await withdrawalQuote('u_1'))!.purchase.id).toBe('in_pack');
+
+    // The subscription is withdrawn from by its own id; the pack stays open, with its own claim.
+    await withdrawPurchase({ userId: 'u_1', purchaseId: 'in_1', actor: 'self' });
+    expect(writes()).toEqual(['subscriptions.cancel', 'refunds.create']);
+    expect(refundCall()[0].payment_intent).toBe('pi_inv');
+    expect((await withdrawalQuotes('u_1')).map((q) => q.purchase.id)).toEqual(['in_pack']);
+    await withdrawPurchase({ userId: 'u_1', purchaseId: 'in_pack', actor: 'self' });
+    expect(refundCall(1)[0].payment_intent).toBe('pi_pack');
+    // Only the subscription's withdrawal cancelled anything.
+    expect(stripe.subscriptions.cancel).toHaveBeenCalledTimes(1);
+    expect(await withdrawalQuotes('u_1')).toEqual([]);
+    expect(((await fake.db.rACreditLedger.findMany({})) as Obj[]).map((r) => r.idempotencyKey).sort()).toEqual([billingEventClaimKey('withdraw:in_1'), billingEventClaimKey('withdraw:in_pack')].sort());
+  });
+
+  it('on day 16 the plan is out of its 14 days while the pack of day 3 still has one day', async () => {
+    await seedUser({});
+    account.invoices.set('in_pack', oneTimeInvoice('practice_pack_5', 999, { id: 'in_pack', created: T0_S + 3 * DAY_S, status_transitions: { paid_at: T0_S + 3 * DAY_S } }));
+    clock.now = at(16);
+    expect((await withdrawalQuotes('u_1')).map((q) => q.purchase.id)).toEqual(['in_pack']);
+    await refused(withdrawPurchase({ userId: 'u_1', purchaseId: 'in_1', actor: 'self' }), 'withdrawal_not_available');
+  });
+
+  it('a renewal already refunded by staff is not refunded twice; a call that stopped after the first refund finishes with the second', async () => {
+    await seedUser({ planKey: 'pro_weekly' });
+    weeklyWithPaidRenewal();
+    clock.now = at(10);
+    stripe.refunds.create.mockImplementationOnce(async (params: Obj) => ({ id: 're_a', amount: 999, currency: 'usd', charge: 'ch_a', payment_intent: params.payment_intent }));
+    stripe.refunds.create.mockRejectedValueOnce(stripeError({ type: 'StripeConnectionError', message: 'socket hang up' }));
+    await refused(withdrawPurchase({ userId: 'u_1', purchaseId: 'in_1', actor: 'self' }), 'payment_provider_error');
+    expect(sendEmail).not.toHaveBeenCalled();
+    // The webhook recorded the first refund in the meantime.
+    await fake.db.rABillingRefund.create({
+      data: { userId: 'u_1', brand: 'roboapply', rail: 'stripe', kind: 'withdrawal', externalRef: 'ch_a:999', chargeId: 'ch_a', paymentIntentId: 'pi_inv', invoiceId: 'in_1', amountMinor: 999, currency: 'USD', full: true },
+    });
+    account.subscriptions.set('sub_1', stripeSubscription({ status: 'canceled' }));
+    stripe.refunds.create.mockClear();
+    await expect(withdrawPurchase({ userId: 'u_1', purchaseId: 'in_1', actor: 'self' })).resolves.toMatchObject({ status: 'withdrawn', refundMinor: 1998 });
+    expect(stripe.refunds.create).toHaveBeenCalledTimes(1);
+    expect(refundCall()[0].payment_intent).toBe('pi_renewal');
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('the billing country comes from the invoice when the account holds none (a subscription activated without its Checkout Session)', async () => {
+    await seedUser({ billingCountry: null });
+    expect(await withdrawalQuote('u_1')).toBeNull();
+    account.invoices.set('in_1', subscriptionInvoice({ customer_address: { country: 'DE' } }));
+    expect((await withdrawalQuote('u_1'))!.decision).toMatchObject({ rule: 'withdrawal_14d', withdrawalRegion: 'eu' });
+    account.invoices.set('in_1', subscriptionInvoice({ customer_address: { country: 'US' } }));
+    expect(await withdrawalQuote('u_1')).toBeNull();
   });
 });

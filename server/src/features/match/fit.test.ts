@@ -850,39 +850,21 @@ describe('MKT-2F: every consumer reads the fit contract (SM-5)', () => {
   /** The code of a file without its comments (block comments keep their line count). */
   const codeOf = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, '')).replace(/\/\/.*$/gm, '');
 
-  /**
-   * The item's own acceptance pattern, read literally: `preScoreMany`,
-   * `preScoreJobs` or `scoreJob(` anywhere under features/ outside match/ and
-   * resume/tailor/. One name is still left, and only where it is listed here:
-   * the Assistant's adapter method `CopilotAreas.scoreJob` (declared in
-   * copilot/types.ts, which no M2 bundle owns). It calls getFit /
-   * getVariantFit, not the match scorer. When the method is renamed (handoff
-   * MKT-2F, Request 2) these entries match nothing and can be deleted.
-   */
-  const ASSISTANT_ADAPTER: Record<string, RegExp> = {
-    'copilot/types.ts': /^\s*scoreJob\(userId: string, jobId: string, options: /,
-    'copilot/areas.ts': /^\s*async scoreJob\(userId, jobId, opts\) \{/,
-    'copilot/tools/jobs.ts': /\bctx\.areas\.scoreJob\(/,
-  };
-
+  // The item's own acceptance pattern, read literally. The Assistant's adapter used to be called
+  // `CopilotAreas.scoreJob`; it was renamed at the M2 gate (handoff MKT-2F, Request 2: `fit`,
+  // `variantFit`, `storedFit`), so the grep has no exception left.
   it('no code under features/ outside match/ and resume/tailor/ names preScoreMany, preScoreJobs or scoreJob( (the literal acceptance grep)', () => {
     const sources = featureSources().filter(([file]) => !file.startsWith('match/') && !file.startsWith('resume/tailor/'));
     expect(sources.length).toBeGreaterThan(200);
     const offenders: string[] = [];
-    const adapterLines: string[] = [];
     for (const [file, text] of sources) {
       codeOf(text)
         .split('\n')
         .forEach((line, i) => {
-          if (!/preScoreMany|preScoreJobs|scoreJob\(/.test(line)) return;
-          const adapter = ASSISTANT_ADAPTER[file];
-          if (adapter && adapter.test(line) && !/preScoreMany|preScoreJobs|matchService/.test(line)) adapterLines.push(file);
-          else offenders.push(`${file}:${i + 1}: ${line.trim()}`);
+          if (/preScoreMany|preScoreJobs|scoreJob\(/.test(line)) offenders.push(`${file}:${i + 1}: ${line.trim()}`);
         });
     }
     expect(offenders).toEqual([]);
-    // The exception is exactly the adapter: its declaration, its implementation and analyze_fit's two calls, or nothing once it is renamed.
-    expect([[], ['copilot/areas.ts', 'copilot/tools/jobs.ts', 'copilot/tools/jobs.ts', 'copilot/types.ts']]).toContainEqual([...adapterLines].sort());
   });
 
   it('the Assistant\'s adapter reads the fit contract and never the match scorer', () => {

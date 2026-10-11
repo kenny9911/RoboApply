@@ -4,7 +4,7 @@
 // company_insights · salary_context · competitiveness. All read-only. Lists
 // come from the feed seam (`feedService.preview`, no session), jobs from job
 // detail (market and GoApply mode checks happen there), fit from THE fit
-// (match/fit.ts through `areas.scoreJob` / `areas.storedFit`: the person's
+// (match/fit.ts through `areas.fit` / `areas.storedFit`: the person's
 // primary resume, so the Assistant and the job page say one number whatever
 // resume is attached to the thread; the paid `fit_analysis` card lives on the
 // job page), company facts only with their provenance. Only an explicit
@@ -326,11 +326,11 @@ export const analyzeFit: CopilotTool<z.infer<typeof AnalyzeFitArgs>> = {
     const userId = requireUser(ctx);
     try {
       // The canonical fit: never the resume attached to the thread.
-      const view = await ctx.areas.scoreJob(userId, args.jobId, { locale: ctx.locale });
+      const view = await ctx.areas.fit(userId, args.jobId, { locale: ctx.locale });
       let withThisVersion: Record<string, unknown> | undefined;
       if (args.resumeVariantId) {
         try {
-          const variant = await ctx.areas.scoreJob(userId, args.jobId, { resumeVariantId: args.resumeVariantId, locale: ctx.locale });
+          const variant = await ctx.areas.variantFit(userId, args.jobId, args.resumeVariantId, { locale: ctx.locale });
           withThisVersion = { variant: true, label: WITH_THIS_VERSION_LABEL, resumeVariantId: variant.resumeVariantId ?? args.resumeVariantId, ...measureForModel(variant) };
         } catch (err) {
           if (!isNotFound(err)) throw err;

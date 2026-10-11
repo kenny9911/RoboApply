@@ -116,6 +116,8 @@ export interface JobListRow {
   addedByUser: boolean;
   tier: FitTierKey | null;
   score: number | null;
+  /** The fit is a quick estimate (`kind: 'pre'`): the row says so, as the feed card does. */
+  estimate: boolean;
 }
 export interface JobListData {
   items: JobListRow[];
@@ -165,6 +167,7 @@ export function parseJobList(d: unknown): JobListData | null {
       addedByUser: r.addedByUser === true,
       tier: tierOf(fit.tier),
       score: num(fit.score),
+      estimate: fit.kind === 'pre',
     });
   }
   return { items };
@@ -293,6 +296,8 @@ export interface FitAnalysisData {
   gaps: string[];
   /** The text above came from the AI read (`kind: 'ai'`), not a quick estimate. */
   aiWritten: boolean;
+  /** The fit is a quick estimate (`kind: 'pre'`): the card says so next to the tier. */
+  estimate: boolean;
 }
 /** `MatchFitView` (+ `aiWritten`) from the analyze_fit tool. Pure. */
 export function parseFitAnalysis(d: unknown): FitAnalysisData | null {
@@ -303,7 +308,7 @@ export function parseFitAnalysis(d: unknown): FitAnalysisData | null {
   const highlights = strList(d.strengths);
   const gaps = strList(d.gaps);
   if (aligned.length + missing.length + highlights.length + gaps.length === 0 && !tierOf(d.tier) && num(d.score) === null) return null;
-  return { jobId: d.jobId as string, tier: tierOf(d.tier), score: num(d.score), aligned, missing, highlights, gaps, aiWritten: d.kind === 'ai' || d.aiWritten === true };
+  return { jobId: d.jobId as string, tier: tierOf(d.tier), score: num(d.score), aligned, missing, highlights, gaps, aiWritten: d.kind === 'ai' || d.aiWritten === true, estimate: d.kind === 'pre' };
 }
 
 // ── company ──────────────────────────────────────────────────────────────

@@ -962,8 +962,9 @@ describe('CheckoutReturn with ?order= (back from WeChat Pay H5)', () => {
     nav.search = 'order=<script>';
     const go = renderUi(<CheckoutReturn outcome={null} />, { brand: 'goapply', flags: WECHAT_ON });
     expect(await screen.findByText('Open billing to see your current plan.')).toBeInTheDocument();
-    await waitFor(() => expect(api.getPlans).toHaveBeenCalled());
+    // (The return page no longer reads the plan list to decide: it asks about an order number, or about nothing.)
     expect(screen.queryByTestId('wechatpay-return')).toBeNull();
+    expect(cn.getWechatPayOrder).not.toHaveBeenCalled();
     go.unmount();
     api.getPlans.mockResolvedValue(plansView());
     nav.search = `order=${ORDER}`;
@@ -973,10 +974,25 @@ describe('CheckoutReturn with ?order= (back from WeChat Pay H5)', () => {
     expect(cn.getWechatPayOrder).not.toHaveBeenCalled();
   });
 
-  it('with WeChat Pay off the ordinary return page shows and no order is looked up', async () => {
+  // M2 gate (PAR carry-over, payments 10). Whether WeChat Pay is set up is the server's fact, so the page asks
+  // about the order once; "not set up here" (404 feature_disabled) falls back to the ordinary return page.
+  it('where WeChat Pay is not set up the order is looked up once and the ordinary return page shows', async () => {
     api.getPlans.mockResolvedValue(plansView('goapply'));
+    cn.getWechatPayOrder.mockRejectedValue(apiError({ code: 'feature_disabled' }, 404));
     renderUi(<CheckoutReturn outcome={null} orderId={ORDER} />, { brand: 'goapply', flags: { 'pay.wechatpay': false } });
     expect(await screen.findByText('Open billing to see your current plan.')).toBeInTheDocument();
-    expect(cn.getWechatPayOrder).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('wechatpay-return')).toBeNull();
+    expect(cn.getWechatPayOrder).toHaveBeenCalledTimes(1);
+    expect(cn.getWechatPayOrder).toHaveBeenCalledWith(ORDER, expect.anything());
+  });
+
+  it('under the kill switch (WeChat Pay set up, not on sale) an order that was in flight still gets its own return page', async () => {
+    api.getPlans.mockResolvedValue(plansView('goapply')); // no rail on sale
+    cn.getWechatPayOrder.mockResolvedValue(orderStatus({ status: 'paid', accessUntil: '2026-11-09T08:01:00.000Z' }));
+    renderUi(<CheckoutReturn outcome={null} orderId={ORDER} />, { brand: 'goapply', flags: { 'pay.wechatpay': false } });
+    const box = await screen.findByTestId('wechatpay-return');
+    await waitFor(() => expect(box).toHaveAttribute('data-state', 'paid'));
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Payment received'));
+    expect(screen.queryByText('Open billing to see your current plan.')).toBeNull();
   });
 });

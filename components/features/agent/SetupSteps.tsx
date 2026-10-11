@@ -179,7 +179,7 @@ function CalibrationJob({ job, verdict, onRated }: { job: FeedItem; verdict: 'up
         <p className={styles.kitMeta}>
           <span>{job.company.name}</span>
           {job.location ? <span>{job.location}</span> : null}
-          {job.fit ? <FitTierLabel tier={job.fit.tier} score={job.fit.score} /> : null}
+          {job.fit ? <FitTierLabel tier={job.fit.tier} score={job.fit.score} estimate={job.fit.kind !== 'ai'} /> : null}
         </p>
       </div>
       <div className={styles.verdicts} role="group" aria-label={t('setup.calibrate.verdictLabel', { title: job.title })}>

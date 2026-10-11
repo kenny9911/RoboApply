@@ -43,7 +43,7 @@ export function FitAnalysisCard({ card, ctx }: CardProps) {
   return (
     <CardFrame card={card} title={t('title')}>
       <div className={styles.row}>
-        <FitTierLabel tier={data.tier} score={data.score} />
+        <FitTierLabel tier={data.tier} score={data.score} estimate={data.estimate} />
         {data.aiWritten ? <AiGeneratedBadge /> : null}
       </div>
       <Section title={t('aligned')} items={data.aligned} />

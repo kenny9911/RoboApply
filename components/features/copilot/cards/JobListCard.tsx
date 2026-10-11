@@ -52,7 +52,7 @@ export function JobListCard({ card, ctx }: CardProps) {
                 {job.workModel ? <span data-work-model={job.workModel}>{t(`workModel.${job.workModel}`)}</span> : null}
                 {job.addedByUser ? <span data-added="true">{t('addedByYou')}</span> : null}
                 {pay || job.payKnown ? <span>{pay ? (pay.period ? t(`payPeriod.${pay.period}`, { amount: pay.amount }) : pay.amount) : t('payNotListed')}</span> : null}
-                {job.tier || job.score !== null ? <FitTierLabel tier={job.tier} score={job.score} /> : null}
+                {job.tier || job.score !== null ? <FitTierLabel tier={job.tier} score={job.score} estimate={job.estimate} /> : null}
               </div>
             </li>
           );

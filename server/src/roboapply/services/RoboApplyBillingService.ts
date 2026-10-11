@@ -458,6 +458,13 @@ export async function createCheckout(input: CheckoutInput): Promise<CheckoutView
     const rail = resolveRail(input.brand, input.rail ?? null);
     const account = await requireAccount(input.userId);
     if (!account.seekerProfileId) throw new BillingError('no_profile', 'No seeker profile');
+    // Rule A11 for the ACCOUNT, not only for the request's brand: Stripe never
+    // serves an account or a plan row of another brand (an admin session may
+    // sit on the other brand's host). The webhook would refuse to fulfil such
+    // a payment, so the session is never created.
+    if (rail.id === 'stripe' && !stripeServesAccount(account)) {
+      throw new BillingError('rail_not_allowed', 'Card payments are not available for this account', { rail: 'stripe' });
+    }
 
     const status = describePlan(account, deps.now());
     if (plan.kind === 'pass' && status.live && status.autoRenews) {
@@ -548,12 +555,15 @@ export type PortalFlow = 'payment_method_update';
  * on the account's default one.
  */
 export async function createPortalSession(userId: string, brand: ProductBrand, opts: { flow?: PortalFlow } = {}): Promise<{ url: string }> {
+  const noCustomer = () => new RoboApplyBillingError('no_customer', 'No billing account yet — subscribe first', 409);
+  // Rule A11, before anything else: a brand that does not list Stripe has no
+  // Stripe customer to open a portal for, whether or not a Stripe key is usable here.
+  if (!brand.paymentRails.includes('stripe')) throw noCustomer();
   const stripe = deps.getStripe();
   if (!stripe) throw new RoboApplyBillingError('stripe_not_configured', 'Billing is not configured', 503);
   const account = await requireAccount(userId);
-  // Rule A11: a brand that does not list Stripe has no Stripe customer to open a portal for.
-  const customer = brand.paymentRails.includes('stripe') ? account.subscription?.stripeCustomerId : null;
-  if (!customer) throw new RoboApplyBillingError('no_customer', 'No billing account yet — subscribe first', 409);
+  const customer = account.subscription?.stripeCustomerId;
+  if (!customer) throw noCustomer();
   try {
     const configuration = await ensurePortalConfiguration(stripe, brand);
     const portal = await stripe.billingPortal.sessions.create({
@@ -639,6 +649,25 @@ interface SwitchNeedsAction {
   hostedInvoiceUrl?: string | null;
 }
 
+/**
+ * Read-your-write for a paid switch. Stripe has applied the new plan, and the
+ * web reads the plan once, right after the answer: without this the row would
+ * still say the old plan until `customer.subscription.updated` arrives, so the
+ * sheet would say "You're on Pro Quarterly" above a card that reads Monthly.
+ * State only: the practice credits of the switch stay with `invoice.paid`
+ * (its own claim). Never fails the answer: the charge is made, and the webhook
+ * writes the same state a moment later.
+ */
+async function syncSwitchedSubscription(userId: string, subscriptionId: string | null | undefined): Promise<void> {
+  const stripe = deps.getStripe();
+  if (!stripe || !subscriptionId) return;
+  try {
+    await upsertFromSubscription(await stripe.subscriptions.retrieve(subscriptionId), {}, 'none');
+  } catch (err) {
+    logger.warn('RA_BILLING', 'plan switched, but the row could not be synced; the webhook will write it', { userId, error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
 export async function switchPlan(userId: string, brand: ProductBrand, input: SwitchInput): Promise<SwitchResult> {
   const account = await requireAccount(userId);
   try {
@@ -665,12 +694,14 @@ export async function switchPlan(userId: string, brand: ProductBrand, input: Swi
           userAgent: input.userAgent,
         }),
     });
-    deps.invalidate(userId);
     if (res.requiresAction === true) {
+      deps.invalidate(userId);
       // Stripe holds the change until the payment is completed: the plan is NOT switched yet.
       const hostedInvoiceUrl = typeof res.hostedInvoiceUrl === 'string' && res.hostedInvoiceUrl ? res.hostedInvoiceUrl : null;
       return { switched: false, requiresAction: true, hostedInvoiceUrl, planKey: res.planKey };
     }
+    await syncSwitchedSubscription(userId, res.stripeSubscriptionId);
+    deps.invalidate(userId);
     return { switched: true, planKey: res.planKey };
   } catch (err) {
     return fromBillingError(err);
@@ -735,7 +766,8 @@ export async function getBillingHistory(userId: string): Promise<{ invoices: Bil
   const account = await requireAccount(userId);
   const out: BillingInvoice[] = [];
   const brandName = getBrand(account.brand).name;
-  const stripe = deps.getStripe();
+  // Rule A11: only a RoboApply account has invoices at Stripe; no other account makes the server ask.
+  const stripe = stripeServesAccount(account) ? deps.getStripe() : null;
   const customer = account.subscription?.stripeCustomerId;
   if (stripe && customer) {
     try {
@@ -784,11 +816,24 @@ export async function resolveInvoiceDownload(
 ): Promise<{ kind: 'stripe'; url: string } | { kind: 'alipay'; orderId: string }> {
   const account = await requireAccount(userId);
   if (invoiceId.startsWith('in_')) {
+    const notFound = () => new RoboApplyBillingError('not_found', 'Invoice not found', 404);
+    // Rule A11, before Stripe is asked anything: only a RoboApply account that
+    // holds a Stripe customer can own a Stripe invoice. Anyone else (a GoApply
+    // user, an account that never paid by card) gets 404 with no Stripe call.
+    const ownCustomer = stripeServesAccount(account) ? (account.subscription?.stripeCustomerId ?? null) : null;
+    if (!ownCustomer) throw notFound();
     const stripe = deps.getStripe();
     if (!stripe) throw new RoboApplyBillingError('stripe_not_configured', 'Billing is not configured', 503);
-    const inv = await stripe.invoices.retrieve(invoiceId);
+    let inv: Stripe.Invoice;
+    try {
+      inv = await stripe.invoices.retrieve(invoiceId);
+    } catch (err) {
+      if (isStripeMissing(err)) throw notFound();
+      logger.error('RA_BILLING', 'stripe invoice read failed', { userId, error: err instanceof Error ? err.message : String(err) });
+      throw new RoboApplyBillingError('payment_provider_error', 'The invoice could not be read. Try again.', 502, { provider: 'stripe' });
+    }
     const customerId = typeof inv.customer === 'string' ? inv.customer : inv.customer?.id;
-    if (!account.subscription?.stripeCustomerId || customerId !== account.subscription.stripeCustomerId) {
+    if (customerId !== ownCustomer) {
       throw new RoboApplyBillingError('forbidden', 'Invoice does not belong to you', 403);
     }
     const url = inv.invoice_pdf || inv.hosted_invoice_url;
@@ -871,6 +916,16 @@ function stripeMayChange(row: { brand?: string | null }): boolean {
   return row.brand == null || row.brand === 'roboapply';
 }
 
+/**
+ * Stripe serves this account: it is RoboApply's and so is its plan row (or
+ * the row names no brand, or there is none). The request-side half of rule
+ * A11, for the paths that are not the webhook: checkout, the invoice list and
+ * the invoice download.
+ */
+function stripeServesAccount(account: Pick<BillingAccount, 'brand' | 'subscription'>): boolean {
+  return account.brand === 'roboapply' && stripeMayChange(account.subscription ?? {});
+}
+
 /** Metadata that names a brand other than RoboApply (GoApply never charges through Stripe). */
 function namesAnotherBrand(metadata: Stripe.Metadata | null | undefined): boolean {
   return Boolean(metadata?.brand) && metadata!.brand !== 'roboapply';
@@ -940,7 +995,16 @@ function resolvePlanFromStripe(sub: Stripe.Subscription, hints: SubHints, legacy
   return { planKey: legacy as string, tier: legacy as GrantTier, legacy: true, priceId };
 }
 
-async function upsertFromSubscription(sub: Stripe.Subscription, hints: SubHints, creditGrant: 'always' | 'period' | 'none'): Promise<UpsertResult> {
+/**
+ * How a sync grants practice credits: 'none' (state only), 'period' (once per
+ * billing period, guarded by the period start), 'always' (forced: a first
+ * period), 'change' (forced, for a paid plan switch: a legacy plan moving to
+ * Pro gets the new allowance, a switch between two Pro plans only tops the
+ * balance up; mockCreditService `planChange`).
+ */
+type CreditGrantMode = 'always' | 'period' | 'none' | 'change';
+
+async function upsertFromSubscription(sub: Stripe.Subscription, hints: SubHints, creditGrant: CreditGrantMode): Promise<UpsertResult> {
   const db = deps.db;
   const select = { id: true, seekerProfileId: true, tier: true, stripeSubscriptionId: true, brand: true } as const;
   const customerId = stripeRefId(sub.customer);
@@ -1014,7 +1078,8 @@ async function upsertFromSubscription(sub: Stripe.Subscription, hints: SubHints,
         periodStart: start,
         currentPeriodEnd: end,
         source: 'stripe',
-        force: creditGrant === 'always' || String(row.tier) !== String(plan.tier),
+        force: creditGrant === 'always' || creditGrant === 'change' || String(row.tier) !== String(plan.tier),
+        ...(creditGrant === 'change' ? { planChange: true } : {}),
         metadata: { planKey: plan.planKey, stripeSubscriptionId: sub.id },
       });
     }
@@ -1029,8 +1094,43 @@ function sessionIsPaid(session: Stripe.Checkout.Session): boolean {
   return !session.payment_status || session.payment_status === 'paid' || session.payment_status === 'no_payment_required';
 }
 
+/** The claim that records which subscription a paid pass took off its row (`refId` holds the subscription id). */
+function passoverClaimKey(sessionId: string): string {
+  return `billing:passover:${sessionId}`;
+}
+
+/**
+ * End, at Stripe, the subscription a paid pass took off its row. The pass
+ * clears `stripeSubscriptionId`, so no later event of that subscription can
+ * reach the row again: left alone, a subscription that still renews (bought in
+ * another tab, or kept with "Keep my plan" after the pass checkout was opened,
+ * or renewed again in Stripe's portal) would charge every period with nothing
+ * behind it and no way to cancel it in the app. The row already carries the
+ * time that was paid for (the pass starts at the period's end), so nothing the
+ * buyer paid for is lost.
+ *
+ * Idempotent (`passover:<sub>:<session>`); a subscription Stripe already holds
+ * as cancelled is success. Any other failure throws: the webhook answers 500
+ * and the replay branch runs this again.
+ */
+async function endDetachedSubscription(stripe: Stripe, subscriptionId: string, sessionId: string): Promise<void> {
+  try {
+    await stripe.subscriptions.cancel(subscriptionId, {}, { idempotencyKey: `passover:${subscriptionId}:${sessionId}` });
+  } catch (err) {
+    if (isStripeMissing(err)) return;
+    // Stripe refuses to cancel what is already cancelled; the subscription's own status decides.
+    let status: string | null = null;
+    try {
+      status = (await stripe.subscriptions.retrieve(subscriptionId)).status;
+    } catch (readErr) {
+      if (isStripeMissing(readErr)) return;
+    }
+    if (status !== 'canceled' && status !== 'incomplete_expired') throw err;
+  }
+}
+
 /** A one-time payment (7-day pass or practice pack) from Stripe Checkout. */
-async function fulfilStripePayment(session: Stripe.Checkout.Session): Promise<{ handled: boolean; duplicate?: boolean; pending?: boolean }> {
+async function fulfilStripePayment(session: Stripe.Checkout.Session, stripe: Stripe): Promise<{ handled: boolean; duplicate?: boolean; pending?: boolean }> {
   const meta = session.metadata ?? {};
   const planKey = meta.planKey;
   const userId = meta.userId ?? session.client_reference_id ?? undefined;
@@ -1057,13 +1157,35 @@ async function fulfilStripePayment(session: Stripe.Checkout.Session): Promise<{ 
   }
 
   // The 7-day pass: claim + activate in one transaction.
-  const periodEnd = await deps.db.$transaction(async (tx) => {
+  const activated = await deps.db.$transaction(async (tx) => {
     const fresh = await claimOnce(tx, userId, `checkout:${session.id}`, 'stripe_checkout');
     if (!fresh) return null;
     const cur = await tx.seekerSubscription.findUnique({
       where: { seekerProfileId },
-      select: { tier: true, status: true, currentPeriodEnd: true, startedAt: true, stripeSubscriptionId: true },
+      select: { tier: true, status: true, currentPeriodEnd: true, startedAt: true, stripeSubscriptionId: true, cancelAtPeriodEnd: true },
     });
+    // The subscription this pass takes off the row is written down in the same
+    // transaction, so a delivery that dies before it is ended at Stripe is
+    // finished by the replay (`endDetachedSubscription`).
+    const detached = cur?.stripeSubscriptionId ?? null;
+    if (detached) {
+      await tx.rACreditLedger.createMany({
+        data: [
+          {
+            userId,
+            bucket: 'billing_event',
+            amount: 0,
+            status: 'committed',
+            fromSource: 'stripe',
+            idempotencyKey: passoverClaimKey(session.id),
+            refType: 'stripe_subscription',
+            refId: detached,
+            settledAt: now,
+          },
+        ],
+        skipDuplicates: true,
+      });
+    }
     const curLive =
       cur && String(cur.tier) !== 'free' && ['active', 'trialing', 'past_due'].includes(cur.status) && cur.currentPeriodEnd && cur.currentPeriodEnd > now
         ? cur.currentPeriodEnd
@@ -1083,18 +1205,24 @@ async function fulfilStripePayment(session: Stripe.Checkout.Session): Promise<{ 
       currentPeriodEnd: end,
       cancelAtPeriodEnd: false,
       canceledAt: null,
-      // A cancelled subscription still running hands over to the pass at its end;
-      // its later events no longer match this row (stripeSubscriptionId cleared).
+      // A subscription still running hands over to the pass at its end; its
+      // later events no longer match this row (stripeSubscriptionId cleared),
+      // so it is ended at Stripe right after the commit.
       stripeSubscriptionId: null,
       startedAt: curLive ? (cur?.startedAt ?? now) : now,
       ...(typeof session.customer === 'string' ? { stripeCustomerId: session.customer } : {}),
       ...(billingCountry ? { billingCountry } : {}),
     };
     await tx.seekerSubscription.upsert({ where: { seekerProfileId }, update: data, create: { seekerProfileId, ...data } });
-    return end;
+    return { end, detached, stillRenewing: Boolean(detached) && curLive !== null && cur?.cancelAtPeriodEnd !== true };
   });
-  if (!periodEnd) {
-    // Replay: the activation committed earlier. Re-run the period-guarded grant
+  if (!activated) {
+    // Replay: the activation committed earlier. Finish what may have been cut
+    // short. First the subscription the pass took off the row (the same
+    // idempotent cancel).
+    const passover = await deps.db.rACreditLedger.findUnique({ where: { idempotencyKey: passoverClaimKey(session.id) }, select: { refId: true } });
+    if (passover?.refId) await endDetachedSubscription(stripe, passover.refId, session.id);
+    // Then the period-guarded grant
     // (periodStart = when the claim committed) so a crash between the commit
     // and the grant heals, while a completed grant (renewedAt ≥ claim) skips.
     const claim = await deps.db.rACreditLedger.findUnique({
@@ -1116,6 +1244,18 @@ async function fulfilStripePayment(session: Stripe.Checkout.Session): Promise<{ 
       });
     }
     return { handled: true, duplicate: true };
+  }
+  const periodEnd = activated.end;
+  if (activated.detached) {
+    if (activated.stillRenewing) {
+      // Money: the buyer held a renewing subscription and paid for a pass as well. Someone should look.
+      logger.error('RA_BILLING', 'pass paid over a subscription that still renewed: the subscription is ended at Stripe', {
+        userId,
+        sessionId: session.id,
+        subId: activated.detached,
+      });
+    }
+    await endDetachedSubscription(stripe, activated.detached, session.id);
   }
   await deps.grantIfNewPeriod({
     userId,
@@ -1223,7 +1363,7 @@ async function applyCheckoutSession(session: Stripe.Checkout.Session, stripe: St
   const metaPlanKey = session.metadata?.planKey;
   const planKey = isPlanKey(metaPlanKey) ? metaPlanKey : null;
   if (session.mode === 'payment') {
-    const r = await fulfilStripePayment(session);
+    const r = await fulfilStripePayment(session, stripe);
     return { ...r, planKey };
   }
   const subscriptionId = stripeRefId(session.subscription);
@@ -1426,7 +1566,7 @@ interface AttachOptions {
   /** A Checkout Session fulfilled for the first time (its claim was won just now). Events are never that. */
   firstFulfilment?: boolean;
   /** Asked only once the subscription really attaches, so a refused attach claims nothing. */
-  creditGrant: () => Promise<'always' | 'period' | 'none'>;
+  creditGrant: () => Promise<CreditGrantMode>;
 }
 
 /**
@@ -1513,7 +1653,14 @@ async function handleInvoicePaid(invoice: Stripe.Invoice, stripe: Stripe): Promi
   const subId = invoiceSubscriptionId(invoice);
   if (!subId) return { handled: false };
   const reason = invoice.billing_reason;
-  const owned = await deps.db.seekerSubscription.findFirst({ where: { stripeSubscriptionId: subId }, select: { id: true, seekerProfileId: true, brand: true } });
+  const owned = await deps.db.seekerSubscription.findFirst({
+    where: { stripeSubscriptionId: subId },
+    select: { id: true, seekerProfileId: true, brand: true, billingCountry: true },
+  });
+  // The first invoice carries the customer's address. When the Checkout
+  // Session never arrived (the only other source), it is what tells the
+  // withdrawal rules and the Taiwan revenue report where the buyer is.
+  const invoiceCountry = reason === 'subscription_create' ? (invoice.customer_address?.country ?? null) : null;
   // The first paid invoice forces the first period's grant when it is the
   // first to arrive (`firstPeriodGrant`). Only while the subscription is in
   // that first period: an old first invoice sent again after a renewal is
@@ -1533,7 +1680,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice, stripe: Stripe): Promi
       return { handled: false };
     }
     const sub = await stripe.subscriptions.retrieve(subId);
-    return { handled: (await attachSubscription(sub, { creditGrant: () => firstInvoiceGrant(owner.userId, sub) })).handled };
+    return { handled: (await attachSubscription(sub, { hints: { billingCountry: invoiceCountry }, creditGrant: () => firstInvoiceGrant(owner.userId, sub) })).handled };
   }
   if (!stripeMayChange(owned)) {
     logger.error('RA_BILLING', 'stripe invoice event for a row of another brand ignored', { invoiceId: invoice.id ?? null, rowId: owned.id, brand: owned.brand });
@@ -1543,20 +1690,23 @@ async function handleInvoicePaid(invoice: Stripe.Invoice, stripe: Stripe): Promi
   // Stripe first, claims second: a failed read leaves nothing claimed, so the retry still grants.
   const sub = await stripe.subscriptions.retrieve(subId);
   // A paid renewal grants the period's credits once, guarded by the period
-  // start. A paid plan switch grants the new plan's credits once per invoice.
-  // The first invoice grants the first period (see `firstInvoiceGrant`).
-  let mode: 'always' | 'period' = 'period';
+  // start. A paid plan switch grants once per invoice, as a plan change: the
+  // new plan's allowance for a legacy plan moving to Pro, a top-up (never a
+  // refill) between two Pro plans. The first invoice grants the first period
+  // (see `firstInvoiceGrant`).
+  let mode: 'always' | 'period' | 'change' = 'period';
   let duplicate = false;
   if (reason !== 'subscription_cycle') {
     const profile = await deps.db.seekerProfile.findUnique({ where: { id: owned.seekerProfileId }, select: { userId: true } });
     if (profile && reason === 'subscription_update' && invoice.id) {
       const fresh = await claimOnce(deps.db, profile.userId, `invoice:${invoice.id}`, 'stripe_invoice');
-      mode = fresh ? 'always' : 'period';
+      mode = fresh ? 'change' : 'period';
       duplicate = !fresh;
     }
     if (reason === 'subscription_create') mode = await firstInvoiceGrant(profile?.userId, sub);
   }
-  await upsertFromSubscription(sub, {}, mode);
+  // Never over a country the row already holds (the Checkout Session's).
+  await upsertFromSubscription(sub, invoiceCountry && !owned.billingCountry ? { billingCountry: invoiceCountry } : {}, mode);
   return { handled: true, ...(duplicate ? { duplicate: true } : {}) };
 }
 

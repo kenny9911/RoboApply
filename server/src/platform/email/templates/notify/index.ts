@@ -122,6 +122,8 @@ export interface AlertJobCard {
   remote: boolean;
   pay: AlertJobPay | null;
   tier: 'great' | 'good' | 'possible';
+  /** A quick estimate, not an AI read (strategy 2.2 I6). Absent on cards stored before MKT-2F: printed as before. */
+  kind?: 'ai' | 'estimate';
   /** Top skill the post asks for that the resume does not show (pre-score), or null. */
   gap: string | null;
   /** App path, e.g. `/jobs/<id>?from=alert&imp=<deliveryId>`. */
@@ -165,6 +167,12 @@ export function tierLabel(tier: AlertJobCard['tier'], t: EmailTranslator): strin
   return t(tier === 'great' ? 'notify.common.tierGreat' : tier === 'good' ? 'notify.common.tierGood' : 'notify.common.tierPossible');
 }
 
+/** The tier line of a job card: "Good fit", or "Good fit · Quick estimate" for an estimated job. */
+export function fitLine(job: Pick<AlertJobCard, 'tier' | 'kind'>, t: EmailTranslator): string {
+  const tier = tierLabel(job.tier, t);
+  return job.kind === 'estimate' ? t('notify.common.tierEstimate', { tier }) : tier;
+}
+
 function abs(origin: string, href: string): string {
   if (/^https?:\/\//i.test(href)) return href;
   return `${origin}${href.startsWith('/') ? '' : '/'}${href}`;
@@ -180,7 +188,7 @@ function jobListHtml(jobs: readonly AlertJobCard[], ctx: TemplateContext<unknown
       `<div style="border-top:1px solid #ececf1;padding:12px 0;">` +
       `<a href="${escapeHtml(safeUrl(abs(origin, j.href)))}" style="font-size:16px;font-weight:600;color:#111111;text-decoration:none;">${escapeHtml(j.title)}</a>` +
       `<div style="font-size:14px;color:#444444;margin-top:2px;">${meta}</div>` +
-      `<div style="font-size:13px;color:#444444;margin-top:2px;">${escapeHtml(tierLabel(j.tier, t))}</div>` +
+      `<div style="font-size:13px;color:#444444;margin-top:2px;">${escapeHtml(fitLine(j, t))}</div>` +
       gap +
       `</div>`
     );
@@ -193,7 +201,7 @@ function jobListText(jobs: readonly AlertJobCard[], ctx: TemplateContext<unknown
   return jobs
     .map((j) => {
       const place = j.remote ? t('notify.common.remote') : j.place || t('notify.common.placeNotListed');
-      const lines = [`- ${j.title}`, `  ${[j.company, place, formatPay(j.pay, t)].join(' · ')}`, `  ${tierLabel(j.tier, t)}`];
+      const lines = [`- ${j.title}`, `  ${[j.company, place, formatPay(j.pay, t)].join(' · ')}`, `  ${fitLine(j, t)}`];
       if (j.gap) lines.push(`  ${t('notify.common.gapLine', { skill: j.gap })}`);
       lines.push(`  ${abs(origin, j.href)}`);
       return lines.join('\n');

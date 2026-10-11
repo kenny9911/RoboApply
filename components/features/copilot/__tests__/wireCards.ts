@@ -19,7 +19,7 @@ import { applicationSummary, campusDeadlines, getProfileGaps, remember, resumeIs
 
 /** Area answers with every field the cards read (the shared fakes leave some seams as stubs). */
 export const WIRE_AREAS: Partial<CopilotAreas> = {
-  scoreJob: async (_u, jobId) => ({
+  fit: async (_u, jobId) => ({
     ...fitView(jobId),
     kind: 'ai',
     summary: 'You show most of what the post asks for.',

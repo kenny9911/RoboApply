@@ -17,10 +17,15 @@
 //                      reversed like a full refund and flagged with a row of
 //                      kind 'dispute' (the admin console lists them).
 //   withdrawalQuote    the statutory withdrawal (EU, EEA, UK, Taiwan; 14 days)
-//   withdrawPurchase   for the user's latest paid Stripe purchase: the quote,
-//                      and the execution. A withdrawal ends the subscription
-//                      FIRST and then refunds, so access ends whatever amount
-//                      goes back: it is the one partial refund that ends access.
+//   withdrawalQuotes   for each Stripe purchase of the last 14 days (a paid
+//   withdrawPurchase   invoice that is not a renewal): the quote, every open
+//                      quote, and the execution for the purchase the caller
+//                      names. Without the waiver everything paid under the
+//                      purchase goes back, a renewal paid inside the 14 days
+//                      included; with it, the unused days of the running
+//                      period. A withdrawal ends the subscription FIRST and
+//                      then refunds, so access ends whatever amount goes back:
+//                      it is the one partial refund that ends access.
 //
 // What a full refund reverses:
 //   a practice pack    what is left of that pack leaves the practice balance
@@ -74,7 +79,7 @@ import type { RefundIssuedParams, WithdrawalConfirmedParams } from '../email/tem
 import '../email/templates/billing/refunds.js';
 import { BillingError } from './errors.js';
 import { packGrantId } from './packs.js';
-import { computeRefund, isWithdrawalRule, type RefundDecision, type WithdrawalRule } from './refunds.js';
+import { computeRefund, isWithdrawalRule, WITHDRAWAL_DAYS, type RefundDecision, type WithdrawalRule } from './refunds.js';
 import { getStripe as platformGetStripe, type StripeClient } from './stripeClient.js';
 import {
   billingEventClaimKey,
@@ -106,6 +111,16 @@ export interface IssueRefundInput {
   /** An admin's user id, 'self' or 'public_link'. */
   actor: string;
   kind?: RefundKind;
+  /**
+   * Names ONE refund decision; it becomes the last part of the idempotency
+   * key. Stripe answers a repeated key with the stored first answer and moves
+   * no money, so without it two refunds of the same amount on one payment
+   * (1000 now and the remaining 1000 an hour later) are one request. The admin
+   * action sends one value per refund it confirms (and the same value when it
+   * retries that one); a withdrawal sends 'withdrawal', so it never shares a
+   * key with a staff refund of the same amount. Letters, digits, '-' and '_'.
+   */
+  attemptKey?: string;
 }
 
 export interface IssuedRefund {
@@ -118,13 +133,15 @@ export interface IssuedRefund {
   full: boolean;
 }
 
-/** The purchase a withdrawal is about (the paid Stripe invoice). */
+/** The purchase a withdrawal is about (the paid Stripe invoice that is not a renewal). */
 export interface WithdrawalPurchase {
   source: 'stripe';
   /** The invoice id; pass it back as `purchaseId`. */
   id: string;
   planKey: string;
+  /** When the purchase was paid; the 14 days run from it. */
   chargedAt: string;
+  /** Everything paid under the purchase so far: its own invoice, and the renewals of its subscription paid since. */
   amountMinor: number;
   currency: string;
 }
@@ -418,8 +435,9 @@ async function existingRefund(stripe: StripeClient, paymentIntentId: string, kin
 
 /**
  * Refund a payment of this user, in full or in part. One Stripe write
- * (`refunds.create`, idempotency key `refund:<payment intent>:<amount|full>`)
- * and no database write: entitlements change in the `charge.refunded` webhook.
+ * (`refunds.create`, idempotency key `refund:<payment intent>:<amount|full>`,
+ * plus `:<attemptKey>` when the caller names the refund decision) and no
+ * database write: entitlements change in the `charge.refunded` webhook.
  *
  * Throws BillingError `refund_not_available` (409: not this user's payment,
  * nothing paid, nothing left to refund, an amount above what is left, a
@@ -432,6 +450,8 @@ export async function issueRefund(input: IssueRefundInput, deps: Partial<StripeR
   if (input.amountMinor !== undefined && !(Number.isSafeInteger(input.amountMinor) && input.amountMinor > 0)) {
     throw notAvailable('invalid_amount');
   }
+  const attempt = input.attemptKey ?? '';
+  if (attempt && !/^[A-Za-z0-9_-]{1,64}$/.test(attempt)) throw notAvailable('invalid_attempt');
   const account = await loadBillingAccount(db, input.userId);
   if (!account) throw notAvailable('no_account');
   // GoApply never reaches Stripe (rule A11): refused before a client is even asked for.
@@ -465,7 +485,7 @@ export async function issueRefund(input: IssueRefundInput, deps: Partial<StripeR
   try {
     refund = await stripe.refunds.create(
       { payment_intent: target.paymentIntentId, ...(partialMinor !== null ? { amount: partialMinor } : {}), reason: 'requested_by_customer', metadata },
-      { idempotencyKey: `refund:${target.paymentIntentId}:${partialMinor ?? 'full'}` },
+      { idempotencyKey: `refund:${target.paymentIntentId}:${partialMinor ?? 'full'}${attempt ? `:${attempt}` : ''}` },
     );
   } catch (err) {
     const made = isIdempotencyConflict(err) ? await existingRefund(stripe, target.paymentIntentId, kind, partialMinor) : null;
@@ -998,13 +1018,34 @@ export const STRIPE_REFUND_EVENT_TYPES = ['charge.refunded', 'charge.dispute.cre
 const WAIVER_BEFORE_MS = DAY_MS;
 const WAIVER_AFTER_MS = 3_600_000;
 
+/** What goes back for one paid invoice of the purchase. */
+interface WithdrawalCharge {
+  invoiceId: string;
+  /** Owed for this invoice in total (what already went back for it is taken off when the refund is issued). */
+  owedMinor: number;
+  paidMinor: number;
+}
+
 interface OpenWithdrawal extends WithdrawalQuote {
   /** The subscription the purchase started, when it is one (cancelled first on withdrawal). */
   subscriptionId: string | null;
+  /** The refunds that make up `decision.amountMinor`: one per paid invoice that money goes back on. */
+  charges: WithdrawalCharge[];
 }
 
 function withdrawalClaimKey(purchaseId: string): string {
   return `withdraw:${purchaseId}`;
+}
+
+/**
+ * How far back paid invoices are read: the 14 days, and a week more for an
+ * invoice that was created some time before it was paid (the deadline itself
+ * is counted from the payment, by `computeRefund`).
+ */
+const WITHDRAWAL_LOOKBACK_MS = (WITHDRAWAL_DAYS + 7) * DAY_MS;
+
+function invoicePaidAt(invoice: Stripe.Invoice): Date {
+  return new Date((invoice.status_transitions?.paid_at ?? invoice.created) * 1000);
 }
 
 /**
@@ -1029,21 +1070,27 @@ function invoicePaidPeriod(invoice: Stripe.Invoice): { start: Date; end: Date } 
 }
 
 /**
- * The withdrawal that is open on this account right now, or null: the latest
- * paid Stripe invoice (a renewal never qualifies), the waiver ticked at that
- * checkout, the billing country on the account and, for a subscription, the
- * period that invoice paid for (its own line; the subscription's current
- * period only for an invoice that carries no line, and `computeRefund` refuses
- * bounds the charge does not lie in).
+ * The withdrawal open for ONE purchase, or null. A purchase is a paid invoice
+ * that is not a renewal: the first invoice of a subscription, or a one-time
+ * payment (a pass, a pack). What decides: the waiver ticked at that checkout,
+ * the billing country (the account's; the invoice's customer address when the
+ * account holds none) and, for a subscription, what was paid under the
+ * purchase since:
+ *
+ *   - without the waiver, everything paid under it goes back: the first
+ *     invoice and every renewal of that subscription paid since (a weekly plan
+ *     renews on day 7, inside the 14 days);
+ *   - with the waiver, the unused days of the period that is running: the
+ *     period of the latest paid invoice of the subscription (its own line;
+ *     the subscription's current period only for an invoice that carries no
+ *     line, and `computeRefund` refuses bounds the charge does not lie in).
+ *
+ * `paid` is every paid invoice read for the account (the renewals are found
+ * among them).
  */
-async function openWithdrawal(account: BillingAccount, stripe: StripeClient, d: StripeRefundDeps): Promise<OpenWithdrawal | null> {
-  const db = await dbOf(d);
+async function openWithdrawalFor(account: BillingAccount, stripe: StripeClient, d: StripeRefundDeps, db: RefundDb, invoice: Stripe.Invoice, paid: readonly Stripe.Invoice[]): Promise<OpenWithdrawal | null> {
   const sub = account.subscription;
-  if (!sub?.stripeCustomerId) return null;
-
-  const invoice = (await stripe.invoices.list({ customer: sub.stripeCustomerId, status: 'paid', limit: 1 })).data[0];
-  if (!invoice?.id || !((invoice.amount_paid ?? 0) > 0)) return null;
-  const purchaseId = invoice.id;
+  const purchaseId = invoice.id as string;
 
   // A completed withdrawal closes the purchase (the claim is written last, with the confirmation mail).
   const done = await db.rACreditLedger.findUnique({ where: { idempotencyKey: billingEventClaimKey(withdrawalClaimKey(purchaseId)) }, select: { id: true } });
@@ -1056,67 +1103,127 @@ async function openWithdrawal(account: BillingAccount, stripe: StripeClient, d: 
   });
   if (closed) return null;
 
-  const chargedAt = new Date((invoice.status_transitions?.paid_at ?? invoice.created) * 1000);
+  const purchasedAt = invoicePaidAt(invoice);
   const subscriptionId = invoiceSubscriptionId(invoice);
-  const planKey = invoicePlanKey(invoice, account) ?? sub.planKey ?? sub.tier;
+  const planKey = invoicePlanKey(invoice, account) ?? sub?.planKey ?? sub?.tier ?? 'free';
+  const currency = upper(invoice.currency);
   const waiver = account.seekerProfileId
     ? await db.seekerConsentRecord.findFirst({
         where: {
           seekerProfileId: account.seekerProfileId,
           consentType: 'withdrawal_waiver',
           granted: true,
-          createdAt: { gte: new Date(chargedAt.getTime() - WAIVER_BEFORE_MS), lte: new Date(chargedAt.getTime() + WAIVER_AFTER_MS) },
+          createdAt: { gte: new Date(purchasedAt.getTime() - WAIVER_BEFORE_MS), lte: new Date(purchasedAt.getTime() + WAIVER_AFTER_MS) },
         },
         select: { id: true },
       })
     : null;
-  const period: { start: Date | null; end: Date | null } = subscriptionId
-    ? (invoicePaidPeriod(invoice) ?? stripePeriod(await stripe.subscriptions.retrieve(subscriptionId)))
-    : { start: null, end: null };
+  // The renewals of this subscription paid since the purchase, oldest first.
+  const renewals = subscriptionId
+    ? paid
+        .filter((i) => i.id !== invoice.id && i.billing_reason === 'subscription_cycle' && invoiceSubscriptionId(i) === subscriptionId && invoicePaidAt(i).getTime() >= purchasedAt.getTime())
+        .sort((a, b) => invoicePaidAt(a).getTime() - invoicePaidAt(b).getTime())
+    : [];
+  const latest = renewals.at(-1) ?? invoice;
+  const paidUnderPurchase = [invoice, ...renewals].reduce((sum, i) => sum + i.amount_paid, 0);
 
-  const decision = computeRefund({
+  const facts = {
     brand: account.brand,
     planKey,
-    chargeKind: invoice.billing_reason === 'subscription_cycle' ? 'renewal' : 'first_purchase',
-    chargedAt,
-    amountMinor: invoice.amount_paid,
-    currency: upper(invoice.currency),
+    chargeKind: 'first_purchase' as const,
+    currency,
     now: d.now(),
-    billingCountry: sub.billingCountry,
+    // The account's country; a subscription activated without its Checkout Session has it on the invoice only.
+    billingCountry: sub?.billingCountry ?? invoice.customer_address?.country ?? null,
     withdrawalWaiver: Boolean(waiver),
     // Use never changes a withdrawal (rules 1 and 1b are decided before the usage rules).
     paidOnlyCreditsUsed: 0,
-    periodStart: period.start,
-    periodEnd: period.end,
-  });
+  };
+
+  let decision: RefundDecision;
+  let charges: WithdrawalCharge[];
+  if (waiver) {
+    const period: { start: Date | null; end: Date | null } = subscriptionId
+      ? (invoicePaidPeriod(latest) ?? stripePeriod(await stripe.subscriptions.retrieve(subscriptionId)))
+      : { start: null, end: null };
+    decision = computeRefund({
+      ...facts,
+      chargedAt: invoicePaidAt(latest),
+      ...(latest === invoice ? {} : { purchasedAt }),
+      amountMinor: latest.amount_paid,
+      periodStart: period.start,
+      periodEnd: period.end,
+    });
+    charges = [{ invoiceId: latest.id as string, owedMinor: decision.amountMinor, paidMinor: latest.amount_paid }];
+  } else {
+    decision = computeRefund({ ...facts, chargedAt: purchasedAt, amountMinor: paidUnderPurchase });
+    charges = [invoice, ...renewals].map((i) => ({ invoiceId: i.id as string, owedMinor: i.amount_paid, paidMinor: i.amount_paid }));
+  }
   if (!decision.eligible || !isWithdrawalRule(decision.rule)) return null;
   return {
-    purchase: { source: 'stripe', id: purchaseId, planKey, chargedAt: chargedAt.toISOString(), amountMinor: invoice.amount_paid, currency: upper(invoice.currency) },
+    purchase: { source: 'stripe', id: purchaseId, planKey, chargedAt: purchasedAt.toISOString(), amountMinor: paidUnderPurchase, currency },
     decision,
     subscriptionId,
+    charges,
   };
 }
 
 /**
- * The statutory withdrawal open for this user, or null when there is none
- * (outside the EU, EEA, UK and Taiwan; after the 14 days; a renewal; already
- * withdrawn or refunded; no card payments here; a GoApply account).
- * `decision.amountMinor` is what goes back: everything without the waiver,
- * the unused days of the period with it.
+ * Every withdrawal open on this account right now, the latest purchase first.
+ * Each purchase of the last 14 days is looked at on its own (its own quote,
+ * its own 14 days, its own completion claim `withdraw:<invoice>`), so a pack
+ * bought on day 3 of a monthly plan does not hide the plan, and a renewal
+ * (which is never a purchase) does not hide the purchase it renews.
  */
-export async function withdrawalQuote(userId: string, deps: Partial<StripeRefundDeps> = {}): Promise<WithdrawalQuote | null> {
-  const d = resolveDeps(deps);
+async function openWithdrawals(account: BillingAccount, stripe: StripeClient, d: StripeRefundDeps): Promise<OpenWithdrawal[]> {
+  const db = await dbOf(d);
+  const customer = account.subscription?.stripeCustomerId;
+  if (!customer) return [];
+  const since = Math.floor((d.now().getTime() - WITHDRAWAL_LOOKBACK_MS) / 1000);
+  const listed = await stripe.invoices.list({ customer, status: 'paid', created: { gte: since }, limit: 100 });
+  const paid = listed.data.filter((i) => Boolean(i.id) && (i.amount_paid ?? 0) > 0).sort((a, b) => invoicePaidAt(b).getTime() - invoicePaidAt(a).getTime());
+  const open: OpenWithdrawal[] = [];
+  for (const invoice of paid) {
+    if (invoice.billing_reason === 'subscription_cycle') continue;
+    const found = await openWithdrawalFor(account, stripe, d, db, invoice, paid);
+    if (found) open.push(found);
+  }
+  return open;
+}
+
+/** The account and the Stripe client of a withdrawal read, or null when Stripe does not serve the account. */
+async function withdrawalQuotesOf(userId: string, d: StripeRefundDeps): Promise<OpenWithdrawal[]> {
   const account = await loadBillingAccount(await dbOf(d), userId);
   // GoApply: the mainland rails have no refund call, and Stripe never serves it (no client is asked for).
-  if (!account || !isRoboApplyAccount(account)) return null;
+  if (!account || !isRoboApplyAccount(account)) return [];
   const stripe = d.getStripe();
-  if (!stripe) return null;
-  let open: OpenWithdrawal | null;
+  if (!stripe) return [];
   try {
-    open = await openWithdrawal(account, stripe, d);
+    return await openWithdrawals(account, stripe, d);
   } catch (err) {
     throw providerError('The purchase could not be read from the payment provider. Try again.', err);
   }
+}
+
+/**
+ * Every statutory withdrawal open for this user, the latest purchase first
+ * (empty when there is none). One entry per purchase of the last 14 days:
+ * pass `purchase.id` to `withdrawPurchase`.
+ */
+export async function withdrawalQuotes(userId: string, deps: Partial<StripeRefundDeps> = {}): Promise<WithdrawalQuote[]> {
+  return (await withdrawalQuotesOf(userId, resolveDeps(deps))).map((open) => ({ purchase: open.purchase, decision: open.decision }));
+}
+
+/**
+ * The statutory withdrawal open for this user's LATEST purchase that has one,
+ * or null when there is none (outside the EU, EEA, UK and Taiwan; after the
+ * 14 days; already withdrawn or refunded; no card payments here; a GoApply
+ * account). `decision.amountMinor` is what goes back: everything paid under
+ * the purchase without the waiver, the unused days of the running period with
+ * it. `withdrawalQuotes` lists every open purchase.
+ */
+export async function withdrawalQuote(userId: string, deps: Partial<StripeRefundDeps> = {}): Promise<WithdrawalQuote | null> {
+  const open = (await withdrawalQuotesOf(userId, resolveDeps(deps)))[0];
   return open ? { purchase: open.purchase, decision: open.decision } : null;
 }
 
@@ -1143,13 +1250,14 @@ export async function withdrawPurchase(input: WithdrawPurchaseInput, deps: Parti
   const stripe = d.getStripe();
   if (!stripe) throw new BillingError('rail_not_configured', 'Card payments are not set up', { rail: 'stripe' });
 
-  let open: OpenWithdrawal | null;
+  // The purchase the caller names, among every purchase that is open (never "the latest one").
+  let open: OpenWithdrawal | undefined;
   try {
-    open = await openWithdrawal(account, stripe, d);
+    open = (await openWithdrawals(account, stripe, d)).find((candidate) => candidate.purchase.id === input.purchaseId);
   } catch (err) {
     throw providerError('The purchase could not be read from the payment provider. Try again.', err);
   }
-  if (!open || open.purchase.id !== input.purchaseId) throw refuse();
+  if (!open) throw refuse();
   const { purchase, decision } = open;
 
   // 1. End the subscription now. Access ends through customer.subscription.deleted, whatever is refunded.
@@ -1162,12 +1270,23 @@ export async function withdrawPurchase(input: WithdrawPurchaseInput, deps: Parti
     }
   }
 
-  // 2. Refund what the buyer is owed, less what our rows say already went back for this purchase.
+  // 2. Refund what the buyer is owed, invoice by invoice (a purchase with a paid renewal has two), less what our
+  // rows say already went back for each. A call that stopped half way repeats the same refunds with the same keys.
   const owed = decision.amountMinor;
-  const due = owed - (await recordedRefundedMinor(db, { invoiceId: purchase.id }));
-  if (due > 0) {
+  for (const charge of open.charges) {
+    const due = charge.owedMinor - (await recordedRefundedMinor(db, { invoiceId: charge.invoiceId }));
+    if (due <= 0) continue;
     await issueRefund(
-      { userId: input.userId, target: { invoiceId: purchase.id }, ...(due < purchase.amountMinor ? { amountMinor: due } : {}), reason: 'withdrawal', actor: input.actor, kind: 'withdrawal' },
+      {
+        userId: input.userId,
+        target: { invoiceId: charge.invoiceId },
+        ...(due < charge.paidMinor ? { amountMinor: due } : {}),
+        reason: 'withdrawal',
+        actor: input.actor,
+        kind: 'withdrawal',
+        // Its own key: an earlier staff refund of the same amount must not answer for this one.
+        attemptKey: 'withdrawal',
+      },
       d,
     );
   }

@@ -96,17 +96,20 @@ export function createDefaultAreas(options: DefaultAreasOptions): CopilotAreas {
       const { jobDetailService } = await import('../jobs/detail/index.js');
       return jobDetailService.get(userId, jobId);
     },
-    // THE fit (match/fit.ts), so the Assistant and the job page say one number. Both reads are for the person's
-    // PRIMARY resume whatever resume is attached to the chat thread. `resumeVariantId` is set only by analyze_fit's
-    // explicit version question ("how does my tailored resume fit"): that answer is the separately named measure
-    // "With this version" (`getVariantFit`), never the fit.
-    async scoreJob(userId, jobId, opts) {
+    // THE fit (match/fit.ts), so the Assistant and the job page say one number. `fit` and `storedFit` are for the
+    // person's PRIMARY resume whatever resume is attached to the chat thread. `variantFit` is called only by
+    // analyze_fit's explicit version question ("how does my tailored resume fit"): that answer is the separately
+    // named measure "With this version" (`getVariantFit`), never the fit.
+    async fit(userId, jobId, opts) {
       const match = await import('../match/index.js');
-      const fits = options.fits ?? match;
       // Free, platform-paid score (80/day/user, then the quick estimate); never a credit.
       const call = { allowModelCall: true, mode: 'on_demand', locale: opts.locale } as const;
-      const fit = opts.resumeVariantId ? await fits.getVariantFit(userId, jobId, opts.resumeVariantId, call) : await fits.getFit(userId, jobId, call);
-      return match.fitToView(fit, { locale: opts.locale });
+      return match.fitToView(await (options.fits ?? match).getFit(userId, jobId, call), { locale: opts.locale });
+    },
+    async variantFit(userId, jobId, variantId, opts) {
+      const match = await import('../match/index.js');
+      const call = { allowModelCall: true, mode: 'on_demand', locale: opts.locale } as const;
+      return match.fitToView(await (options.fits ?? match).getVariantFit(userId, jobId, variantId, call), { locale: opts.locale });
     },
     async storedFit(userId, jobId, opts) {
       const match = await import('../match/index.js');

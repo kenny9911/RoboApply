@@ -532,6 +532,8 @@ describe('the database functions', () => {
     expect(vectorLiteral(vector).startsWith('[0,0.1,0.2')).toBe(true);
     expect(() => vectorLiteral([1, 2, 3])).toThrow(/1024 dimensions/);
     expect(() => vectorLiteral([...vector.slice(1), Number.NaN])).toThrow(/finite/);
+    // M2 gate: a vector of zeros is no embedding (its cosine to anything is NaN).
+    expect(() => vectorLiteral(vector.map(() => 0))).toThrow(/zeros/);
   });
 
   it('nearestSkills orders by cosine distance over reviewed rows of one model, by name, never SELECT *', async () => {

@@ -154,7 +154,7 @@ function Kit({ item }: { item: ReadyQueueItem }) {
           <span className={styles.row}>
             {company ? <span>{company}</span> : null}
             <Pill tone={STATE_TONE[item.state]}>{t(`state.${item.state}`)}</Pill>
-            {fit ? <FitTierLabel tier={fit.tier} score={fit.score} /> : null}
+            {fit ? <FitTierLabel tier={fit.tier} score={fit.score} estimate={fit.kind !== 'ai'} /> : null}
           </span>
         }
       />

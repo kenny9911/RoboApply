@@ -67,6 +67,8 @@ export const FEATURE_BY_SKU: Record<string, FeatureDef> = {
   ra_job_import: { key: 'job_import', label: 'Job Import', modality: 'llm' },
   ra_interview_guide: { key: 'interview_guide', label: 'Interview Question Guide', modality: 'llm' },
   ra_seo_intro: { key: 'seo_intro', label: 'Public Page Intro', modality: 'llm' },
+  // Embeddings (search documents, user vectors, skill labels; platform/embeddings, MKT-2H). Units are tokens.
+  ra_embed: { key: 'embedding', label: 'Embeddings', modality: 'llm' },
 };
 
 /** The SKUs ARCHITECTURE.md §7.5 adds for the jobright clone (all mapped above). */
@@ -89,10 +91,11 @@ export const CLONE_SKUS = [
   'ra_seo_intro',
   'ra_crossbank_score',
   'ra_crossbank_insight',
+  'ra_embed',
 ] as const;
 
 /** SKUs whose cost belongs to the platform, not to one user (logged under SHARED_COST_USER_ID). */
-export const PLATFORM_SKUS: ReadonlySet<string> = new Set(['ra_job_enrich', 'ra_cn_fraud_check', 'ra_seo_intro']);
+export const PLATFORM_SKUS: ReadonlySet<string> = new Set(['ra_job_enrich', 'ra_cn_fraud_check', 'ra_seo_intro', 'ra_embed']);
 
 export const FEATURE_OTHER: FeatureDef = { key: 'other', label: 'Other', modality: 'llm' };
 

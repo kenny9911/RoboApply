@@ -29,11 +29,8 @@ export interface UseFitAnalysis {
   run: () => Promise<void>;
 }
 
-/**
- * @param _unused Kept so a caller that still passes `{ resumeVariantId }` compiles. It is not read: the fit analysis
- *   is always for the main resume, and the server refuses a request that names a version.
- */
-export function useFitAnalysis(jobId: string, _unused?: { resumeVariantId?: string | null }): UseFitAnalysis {
+/** The fit analysis is always for the main resume: the hook takes no resume version, and the server refuses a request that names one (422). */
+export function useFitAnalysis(jobId: string): UseFitAnalysis {
   const gate = useCreditGate('fit_analysis');
   const client = useQueryClient();
   const [card, setCard] = useState<FitAnalysisCard | null>(null);

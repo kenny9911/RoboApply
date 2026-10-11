@@ -516,6 +516,43 @@ describe('configuration problems are reported at boot, never silent (PAR-1 reque
     expect(voice).toHaveBeenCalledTimes(2);
   });
 
+  // M2 gate (MKT-2H request 5): GoApply's own embeddings endpoint and key are one pair.
+  it("half of GoApply's embeddings pair is one warning naming both variables and no value; the whole pair, or none of it, says nothing", () => {
+    const keyOnly = run({ CN_EMBED_API_KEY: 'cn-embed-key-value' });
+    expect(lines(keyOnly.warn)).toEqual([expect.stringContaining('CN_EMBED_API_KEY is set without CN_EMBED_BASE_URL')]);
+    expect(keyOnly.warn).toHaveBeenCalledWith('STARTUP', expect.any(String), { group: 'embeddings', set: ['CN_EMBED_API_KEY'], missing: ['CN_EMBED_BASE_URL'] });
+    const urlOnly = run({ CN_EMBED_BASE_URL: 'https://embed.example.cn/v1' });
+    expect(lines(urlOnly.warn)).toEqual([expect.stringContaining('CN_EMBED_BASE_URL is set without CN_EMBED_API_KEY')]);
+    expect(JSON.stringify([keyOnly.warn.mock.calls, urlOnly.warn.mock.calls])).not.toMatch(/cn-embed-key-value|embed\.example\.cn/);
+    expect(run({ CN_EMBED_BASE_URL: 'https://embed.example.cn/v1', CN_EMBED_API_KEY: 'cn-embed-key-value' }).warn).not.toHaveBeenCalled();
+    expect(run({ ALLOWED_BRANDS: 'roboapply', CN_EMBED_API_KEY: 'cn-embed-key-value' }).warn).not.toHaveBeenCalled();
+    expect(keyOnly.error).not.toHaveBeenCalled();
+  });
+
+  // M2 gate (MKT-2A O-1): the Alipay rail's own report (notify host, secret-less window) is one of
+  // the default boot reports, so a runtime that loads `.env` after the rail was imported still
+  // hears the true notify host at boot.
+  it("the default boot reports ask the Alipay rail for its lines: the notify host of the environment the boot sees, host only", async () => {
+    const { logger } = await import('../services/LoggerService.js');
+    const { resetAlipayNotifyHostLogForTests } = await import('./billing/rails/alipayWorker.js');
+    for (const name of ['ALLOWED_BRANDS', 'BRAND_LOCK', 'CN_BACKEND_URL', 'ALIPAY_SECRETLESS_UNTIL']) vi.stubEnv(name, '');
+    vi.stubEnv('CN_ALIPAY_NOTIFY_ORIGIN', 'https://pay-notify.example.cn');
+    resetAlipayNotifyHostLogForTests();
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => undefined);
+    try {
+      runStartupAssertions({ env: process.env, log: log(), exit: neverExit, residency: okResidency, copilotTools: okTools });
+      const hostLines = info.mock.calls.filter((c) => c[0] === 'RA_BILLING' && String(c[1]).startsWith('GoApply Alipay notify host:'));
+      expect(hostLines).toHaveLength(1);
+      expect(String(hostLines[0][1])).toBe('GoApply Alipay notify host: pay-notify.example.cn (decided by CN_ALIPAY_NOTIFY_ORIGIN)');
+      // Asked again with the same answer (a second boot report in one process): nothing is printed twice.
+      runStartupAssertions({ env: process.env, log: log(), exit: neverExit, residency: okResidency, copilotTools: okTools });
+      expect(info.mock.calls.filter((c) => c[0] === 'RA_BILLING' && String(c[1]).startsWith('GoApply Alipay notify host:'))).toHaveLength(1);
+    } finally {
+      info.mockRestore();
+      resetAlipayNotifyHostLogForTests();
+    }
+  });
+
   it('the GoApply checks are skipped on a deployment that does not serve GoApply', () => {
     const l = run({ ALLOWED_BRANDS: 'roboapply', CN_S3_ENDPOINT: 'x', CN_RECRUITMENT_INFO_MODE: 'false', CN_STORAGE_MODE: 'redcat', CN_SIGNUP_MODE: 'invte', CN_RESIDENCY_STRICT: 'true' });
     expect(l.warn).not.toHaveBeenCalled();

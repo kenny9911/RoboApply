@@ -39,6 +39,8 @@ import { setStripeClientForTests } from '../../platform/billing/index.js';
 import { desiredPortalConfiguration, resetStripePortalCacheForTests } from '../../platform/billing/stripePortal.js';
 import { getBrand } from '../../platform/brand/registry.js';
 import billingRouter, { CHECKOUT_SESSION_ID_PATTERN } from './billing.js';
+// The web's own readers of these two routes (M2 gate seam: MKT-2B sends, MKT-2E reads).
+import { CHECKOUT_SESSION_ID_PATTERN as WEB_SESSION_ID_PATTERN, checkoutSessionId, normaliseReconcile } from '../../../../lib/api/account';
 
 const NOW = new Date('2026-10-10T08:00:00.000Z');
 const NOW_S = Math.floor(NOW.getTime() / 1000);
@@ -67,7 +69,12 @@ const session = (over: Record<string, unknown> = {}, meta: Record<string, unknow
   ...over,
 });
 
-const account = { sessions: new Map<string, Record<string, any>>(), subs: new Map<string, Record<string, any>>(), configs: [] as Array<Record<string, any>> };
+const account = {
+  sessions: new Map<string, Record<string, any>>(),
+  subs: new Map<string, Record<string, any>>(),
+  invoices: new Map<string, Record<string, any>>(),
+  configs: [] as Array<Record<string, any>>,
+};
 
 const stripe = {
   checkout: {
@@ -89,6 +96,14 @@ const stripe = {
     update: vi.fn(),
   },
   customers: { create: vi.fn() },
+  invoices: {
+    retrieve: vi.fn(async (id: string): Promise<Record<string, any>> => {
+      const found = account.invoices.get(id);
+      if (!found) throw stripeError('StripeInvalidRequestError', 'resource_missing', 404);
+      return found;
+    }),
+    list: vi.fn(async (_params: Record<string, any>) => ({ data: [...account.invoices.values()] })),
+  },
   billingPortal: {
     configurations: {
       list: vi.fn(async () => ({ data: account.configs.filter((c) => c.active), has_more: false })),
@@ -110,6 +125,8 @@ function stripeCalls(): number {
     stripe.subscriptions.retrieve.mock.calls.length +
     stripe.subscriptions.update.mock.calls.length +
     stripe.customers.create.mock.calls.length +
+    stripe.invoices.retrieve.mock.calls.length +
+    stripe.invoices.list.mock.calls.length +
     stripe.billingPortal.configurations.list.mock.calls.length +
     stripe.billingPortal.configurations.create.mock.calls.length +
     stripe.billingPortal.sessions.create.mock.calls.length
@@ -162,6 +179,7 @@ beforeEach(() => {
   limiter.down = false;
   account.sessions.clear();
   account.subs.clear();
+  account.invoices.clear();
   account.configs = [];
   stripeOn = true;
   resetStripePortalCacheForTests();
@@ -457,6 +475,58 @@ describe('POST /checkout/reconcile', () => {
 
 // ── POST /portal ──────────────────────────────────────────────────────────
 
+// ── M2 gate: the seam with the web (lib/api/account.ts) ───────────────────
+
+describe('what the web reads from these routes (MKT-2B to MKT-2E)', () => {
+  it('reconcile: the three states arrive as the three states, with the mode and the plan key, through JSON', async () => {
+    await customerRow();
+    account.sessions.set('cs_test_pass0001', session());
+    const first = await reconcile({ sessionId: 'cs_test_pass0001' });
+    expect(normaliseReconcile(first.body.data)).toEqual({ status: 'fulfilled', mode: 'payment', planKey: 'pro_week_pass' });
+    const again = await reconcile({ sessionId: 'cs_test_pass0001' });
+    expect(normaliseReconcile(again.body.data)).toEqual({ status: 'already_fulfilled', mode: 'payment', planKey: 'pro_week_pass' });
+    account.sessions.set('cs_test_unpaid001', session({ id: 'cs_test_unpaid001', payment_status: 'unpaid', status: 'open' }));
+    const unpaid = await reconcile({ sessionId: 'cs_test_unpaid001' });
+    expect(normaliseReconcile(unpaid.body.data)).toMatchObject({ status: 'pending', mode: 'payment' });
+    // Every answer has exactly the three fields the web's type names.
+    for (const res of [first, again, unpaid]) expect(Object.keys(res.body.data).sort()).toEqual(['mode', 'planKey', 'status']);
+  });
+
+  it('reconcile: the web and the route accept the same session ids, so the page never sends one the route refuses', () => {
+    expect(WEB_SESSION_ID_PATTERN.source).toBe(CHECKOUT_SESSION_ID_PATTERN.source);
+    expect(WEB_SESSION_ID_PATTERN.flags).toBe(CHECKOUT_SESSION_ID_PATTERN.flags);
+    expect(checkoutSessionId('cs_test_pass0001')).toBe('cs_test_pass0001');
+    expect(checkoutSessionId('cs_short')).toBeNull();
+  });
+
+  it('the refusals the page treats as final carry the codes it reads: 403 forbidden, 404 not_found, 422 invalid_request, 503 stripe_not_configured', async () => {
+    await customerRow();
+    account.sessions.set('cs_test_pass0001', session());
+    const other = await reconcile({ sessionId: 'cs_test_pass0001' }, as('u_2'));
+    expect([other.status, other.body.code]).toEqual([403, 'forbidden']);
+    const missing = await reconcile({ sessionId: 'cs_test_missing01' });
+    expect([missing.status, missing.body.code]).toEqual([404, 'not_found']);
+    const invalid = await reconcile({ sessionId: 'nope' });
+    expect([invalid.status, invalid.body.code]).toEqual([422, 'invalid_request']);
+    stripeOn = false;
+    const off = await reconcile({ sessionId: 'cs_test_pass0001' });
+    expect([off.status, off.body.code]).toEqual([503, 'stripe_not_configured']);
+  });
+
+  it('portal: the two requests the web makes (no body at all; the payment-method flow) both answer { url } with an http(s) address', async () => {
+    await customerRow();
+    const plain = await h.request<any>('POST', `${BASE}/portal`, as('u_1')); // "Manage payment": no body
+    const flow = await h.request<any>('POST', `${BASE}/portal`, { ...as('u_1'), body: { flow: 'payment_method_update' } }); // the failed-payment banner
+    for (const res of [plain, flow]) {
+      expect(res.status).toBe(200);
+      expect(Object.keys(res.body.data)).toEqual(['url']);
+      expect(res.body.data.url).toMatch(/^https:\/\//);
+    }
+    expect(stripe.billingPortal.sessions.create.mock.calls[0]![0]).not.toHaveProperty('flow_data');
+    expect(stripe.billingPortal.sessions.create.mock.calls[1]![0]).toMatchObject({ flow_data: { type: 'payment_method_update' } });
+  });
+});
+
 describe('POST /portal', () => {
   const portal = (body?: unknown, who = as('u_1')) => h.request<any>('POST', `${BASE}/portal`, { ...who, ...(body === undefined ? {} : { body }) });
 
@@ -544,8 +614,79 @@ describe('POST /portal', () => {
     expect(stripeCalls()).toBe(0);
   });
 
+  // M2 gate (contract row `POST /billing/portal`): the brand is looked at before the Stripe client, so the answer
+  // is the same on a deployment that holds no usable Stripe key (the mainland one, a dev stack with a live key).
+  it('a GoApply request answers 409 no_customer where no Stripe key is usable too, not 503', async () => {
+    stripeOn = false;
+    const res = await portal({}, as('u_cn', GO_HOST));
+    expect([res.status, res.body.code]).toEqual([409, 'no_customer']);
+    // RoboApply on the same deployment is still told that billing is not set up.
+    await customerRow();
+    const robo = await portal();
+    expect([robo.status, robo.body.code]).toEqual([503, 'stripe_not_configured']);
+  });
+
   it('needs a signed-in user', async () => {
     const res = await h.request<any>('POST', `${BASE}/portal`, { host: ROBO_HOST, body: {} });
     expect(res.status).toBe(401);
+  });
+});
+
+// M2 gate (payments-safety, rule A11 outside the webhook): Stripe never serves
+// a GoApply account, and nobody makes the server ask Stripe about an invoice
+// id unless the account can own one.
+describe('the brand wall on the request side: invoice download, invoice list, checkout', () => {
+  const download = (id: string, who = as('u_1')) => h.request<any>('GET', `${BASE}/invoices/${id}/download`, { ...who, redirect: 'manual' } as never);
+  const cnRow = () =>
+    fake.db.seekerSubscription.create({ data: { id: 'row_cn', seekerProfileId: 'sp_cn', tier: 'free', status: 'active', brand: 'goapply', stripeCustomerId: 'cus_cn', cancelAtPeriodEnd: false } });
+
+  it('an invoice id from a GoApply user, or from an account that never paid by card, is 404 with no Stripe call', async () => {
+    account.invoices.set('in_any', { id: 'in_any', customer: 'cus_cn', invoice_pdf: 'https://pay.stripe.test/in_any.pdf' });
+    await cnRow();
+    for (const host of [GO_HOST, ROBO_HOST]) {
+      const res = await download('in_any', as('u_cn', host));
+      expect([host, res.status, res.body.code]).toEqual([host, 404, 'not_found']);
+    }
+    // u_2 has no plan row at all.
+    const none = await download('in_any', as('u_2'));
+    expect([none.status, none.body.code]).toEqual([404, 'not_found']);
+    expect(stripeCalls()).toBe(0);
+  });
+
+  it('an id Stripe does not know is 404 (not 500); another customer\'s invoice is 403; a Stripe failure is 502', async () => {
+    await customerRow();
+    const unknown = await download('in_unknown');
+    expect([unknown.status, unknown.body.code]).toEqual([404, 'not_found']);
+    account.invoices.set('in_other', { id: 'in_other', customer: 'cus_someone_else', invoice_pdf: 'https://pay.stripe.test/in_other.pdf' });
+    const other = await download('in_other');
+    expect([other.status, other.body.code]).toEqual([403, 'forbidden']);
+    stripe.invoices.retrieve.mockRejectedValueOnce(stripeError('StripeAPIError', 'api_error', 500));
+    const down = await download('in_other');
+    expect([down.status, down.body.code]).toEqual([502, 'payment_provider_error']);
+  });
+
+  it('the invoice list never asks Stripe for a GoApply account, even one whose row carries a customer id', async () => {
+    await cnRow();
+    account.invoices.set('in_cn', { id: 'in_cn', customer: 'cus_cn', created: NOW_S, amount_paid: 999, currency: 'usd', status: 'paid' });
+    const res = await h.request<any>('GET', `${BASE}/history`, as('u_cn', GO_HOST));
+    expect(res.status).toBe(200);
+    expect(res.body.data.invoices).toEqual([]);
+    expect(stripeCalls()).toBe(0);
+    // A RoboApply account with a customer is listed as before.
+    await customerRow();
+    account.invoices.set('in_1', { id: 'in_1', customer: 'cus_1', created: NOW_S, amount_paid: 2499, currency: 'usd', status: 'paid', invoice_pdf: 'https://pay.stripe.test/in_1.pdf' });
+    const mine = await h.request<any>('GET', `${BASE}/history`, as('u_1'));
+    expect(mine.body.data.invoices.map((i: any) => i.kind)).toContain('stripe');
+  });
+
+  it('checkout on the RoboApply host for an account of another brand is refused before anything is recorded or sent to Stripe', async () => {
+    // The auth middleware lets an admin of the other brand through; the account itself is GoApply's.
+    vi.stubEnv('STRIPE_PRICE_PRO_WEEK_PASS', 'price_p');
+    vi.stubEnv('STRIPE_PRICE_PRO_WEEK_PASS_CENTS', '699');
+    const res = await h.request<any>('POST', `${BASE}/checkout`, { ...as('u_cn', ROBO_HOST), body: { planKey: 'pro_week_pass' } });
+    expect([res.status, res.body.code]).toEqual([409, 'rail_not_allowed']);
+    expect(stripeCalls()).toBe(0);
+    expect(await fake.db.seekerConsentRecord.findMany({})).toEqual([]);
+    expect(await fake.db.seekerSubscription.findMany({ where: { seekerProfileId: 'sp_cn' } })).toEqual([]);
   });
 });

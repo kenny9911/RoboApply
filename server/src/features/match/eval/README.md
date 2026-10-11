@@ -47,7 +47,7 @@ Status values:
 
 After the M1 merge the orchestrator runs `npm run eval:match -- --enforce M1`; after M2 `--enforce M2`; after M4 `--enforce M4`. The stage names are the phase names of the market wave.
 
-The harness specs (`*.eval.ts`) are **not** part of `npm test`. `vitest.eval.config.mts` collects them; the default config collects `*.test.ts` only. A later bundle puts the invariants of finished phases into `npm test` by calling `registerInvariants({ enforce })` from a `*.test.ts` file (`enforced.test.ts`).
+The harness specs (`*.eval.ts`) are **not** part of `npm test`. `vitest.eval.config.mts` collects them; the default config collects `*.test.ts` only. The invariants of finished phases run in `npm test` through `enforced.test.ts`, which calls `registerInvariants({ enforce })`: since phase M2 (MKT-2F) it enforces `M2`, so nine of the ten run there (INV-7 is due M4), together with the per-seam tests and the completeness test described under `seamRegistry.ts` below.
 
 ## The ten invariants
 
@@ -70,7 +70,8 @@ Files:
 - `invariantSpecs.ts`: the executable specs. They use `node:assert`, the MATCH test kit and the counting fakes of `world.ts`.
 - `invariants.eval.ts`: `registerInvariants({ enforce })` declares them as Vitest cases. It registers nothing at import.
 - `invariants.entry.eval.ts`: the entry the runner executes.
-- `seamRegistry.ts`: the surfaces INV-3 reads. Each read is wired in phase M2.
+- `seamRegistry.ts`: the surfaces INV-3 reads, wired since phase M2 (MKT-2F). Ten seams, each running the surface's own code on the fakes of the world: `feed_card`, `job_detail`, `similar_jobs`, `alert_selection`, `ready_list`, `assistant_stored_fit`, `assistant_analyze_fit`, `extension_chip`, `tailoring_kit`, `onboarding_result`. A name in `REQUIRED_FIT_SEAMS` is never removed.
+- `enforced.test.ts`: the `npm test` entry. It also scans `server/src` (outside `features/match`) for files that read `getFit`, `getFits`, `getVariantFit` or `estimateForPosting` and compares them with its `FIT_READERS` list: a new reader fails the test until it is listed there with its seam, or with a note saying why it is not a surface.
 
 Rules:
 

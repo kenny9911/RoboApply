@@ -25,7 +25,7 @@ import {
   MODEL_COST_TABLE,
   idsForRow,
 } from '../server/src/lib/modelCostTable.js';
-import { lookupModelRate } from '../server/src/lib/modelPricing.js';
+import { EMBEDDING_MODEL_PRICING_PER_1M, lookupModelRate } from '../server/src/lib/modelPricing.js';
 import {
   DIRECT_PROVIDER_PREFIXES,
   PROVIDER_PREFIX_ALIASES,
@@ -141,9 +141,26 @@ function render(): string {
     out.push(`| \`${model}\` | ${usd(rate)} |`);
   }
   out.push('');
+  // Embedding models are priced per input token only and live in their own map
+  // (modelPricing.ts EMBEDDING_MODEL_PRICING_PER_1M): a model without a row has
+  // an UNKNOWN cost and never falls back to the default tier.
+  out.push('## Embedding models (input tokens)');
+  out.push('');
+  out.push(
+    'Rates of `EMBEDDING_MODEL_PRICING_PER_1M` in [`server/src/lib/modelPricing.ts`](../server/src/lib/modelPricing.ts), ' +
+      'keyed by the bare model id. A usage row (`UsageDeductionLog`, SKU `ra_embed`) carries a cost only for a model listed here ' +
+      "that was called on its vendor's own endpoint; any other call is logged with its tokens and an unknown cost, never an assumed price.",
+  );
+  out.push('');
+  out.push('| Model | Input $/1M |');
+  out.push('| --- | ---: |');
+  for (const [model, rate] of Object.entries(EMBEDDING_MODEL_PRICING_PER_1M)) {
+    out.push(`| \`${model}\` | ${usd(rate)} |`);
+  }
+  out.push('');
   out.push('## Keeping this current');
   out.push('');
-  out.push('1. Edit the row in `server/src/lib/modelCostTable.ts`.');
+  out.push('1. Edit the row in `server/src/lib/modelCostTable.ts` (an embedding model: `EMBEDDING_MODEL_PRICING_PER_1M` in `server/src/lib/modelPricing.ts`).');
   out.push('2. `npm run llm:costs -- --write` to regenerate this file.');
   out.push('3. `npx vitest run server/src/lib/modelCostTable.test.ts`.');
   out.push('');
@@ -201,7 +218,7 @@ if (process.argv.includes('--check')) {
   const onDisk = existsSync(DOC_PATH) ? readFileSync(DOC_PATH, 'utf8') : '';
   if (onDisk !== markdown) {
     console.error(
-      '✗ docs/LLM_COSTS.md is out of date with server/src/lib/modelCostTable.ts.\n' +
+      '✗ docs/LLM_COSTS.md is out of date with server/src/lib/modelCostTable.ts (or the embedding rates in modelPricing.ts).\n' +
         '  Run: npm run llm:costs -- --write',
     );
     process.exit(1);

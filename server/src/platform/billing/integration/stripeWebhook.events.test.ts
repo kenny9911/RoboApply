@@ -87,6 +87,14 @@ const stripe = {
       account.subs.set(id, next);
       return next;
     }),
+    // Cancel now. Stripe refuses a subscription it no longer holds as running.
+    cancel: vi.fn(async (id: string, _params: Record<string, any>, _opts: { idempotencyKey: string }) => {
+      const cur = account.subs.get(id);
+      if (!cur || cur.status === 'canceled') throw stripeError('StripeInvalidRequestError', 'resource_missing', 404);
+      const next = { ...cur, status: 'canceled' };
+      account.subs.set(id, next);
+      return next;
+    }),
   },
   checkout: {
     sessions: {
@@ -551,6 +559,38 @@ describe('lost-event recovery for subscriptions: created + invoice.paid activate
     expect(credits.grants).toBe(1);
   });
 
+  // M2 gate (payments-safety): the billing country used to come from the Checkout Session alone, so a subscription
+  // activated on this path had no withdrawal region (EU / UK / Taiwan) and was missing from the Taiwan revenue report.
+  it('the first paid invoice brings the billing country (its customer address) when the Checkout Session never arrived', async () => {
+    await freeRow();
+    account.subs.set('sub_1', sub('sub_1'));
+    const withAddress = () => invoice({ id: 'in_first', billing_reason: 'subscription_create', customer_address: { country: 'de' } });
+    // `created` attached the subscription first: the invoice still fills the country in.
+    expect(await deliver('customer.subscription.created', sub('sub_1'))).toEqual({ handled: true });
+    expect((await row()).billingCountry ?? null).toBeNull();
+    expect(await deliver('invoice.paid', withAddress())).toEqual({ handled: true });
+    expect(await row()).toMatchObject({ stripeSubscriptionId: 'sub_1', billingCountry: 'DE' });
+
+    // The invoice alone attaches and carries it too.
+    await fake.db.seekerSubscription.deleteMany({});
+    await fake.db.rACreditLedger.deleteMany({});
+    await freeRow();
+    expect(await deliver('invoice.paid', withAddress())).toEqual({ handled: true });
+    expect(await row()).toMatchObject({ stripeSubscriptionId: 'sub_1', billingCountry: 'DE' });
+  });
+
+  it('the country a Checkout Session stored is never replaced by an invoice\'s, and a renewal invoice brings none', async () => {
+    await freeRow();
+    account.subs.set('sub_1', sub('sub_1'));
+    expect(await deliver('checkout.session.completed', subscriptionSession({ customer_details: { address: { country: 'tw' } } }))).toEqual({ handled: true });
+    expect((await row()).billingCountry).toBe('TW');
+    await deliver('invoice.paid', invoice({ id: 'in_first', billing_reason: 'subscription_create', customer_address: { country: 'de' } }));
+    expect((await row()).billingCountry).toBe('TW');
+    await fake.db.seekerSubscription.update({ where: { id: 'row_1' }, data: { billingCountry: null } });
+    await deliver('invoice.paid', invoice({ id: 'in_2', billing_reason: 'subscription_cycle', customer_address: { country: 'de' } }));
+    expect((await row()).billingCountry ?? null).toBeNull();
+  });
+
   it('a renewal invoice of a subscription on no row never attaches (only the first invoice does)', async () => {
     await freeRow();
     account.subs.set('sub_1', sub('sub_1'));
@@ -707,6 +747,23 @@ describe('invoice.payment_failed follows what Stripe holds now, never the event 
     expect((await planStatus()).paymentFailed).toBe(false);
     expect(sendEmail).not.toHaveBeenCalled();
     expect(await claims()).toEqual([]);
+  });
+
+  // M2 gate, the seam between MKT-2C (the switch uses `pending_if_incomplete`) and this handler: a declined
+  // proration leaves the Stripe subscription ACTIVE on its old price with a pending update, and Stripe still
+  // sends `invoice.payment_failed` for the proration invoice. Nothing is being retried and the renewal is healthy.
+  it('a declined plan switch (billing_reason subscription_update, the subscription still active with a pending update) is not a failed renewal: active, old plan, no mail, no claim', async () => {
+    await subscribedRow();
+    account.subs.set(
+      'sub_1',
+      sub('sub_1', { pending_update: { expires_at: NOW_S + 23 * 3600, subscription_items: [{ id: 'si_1', price: PRICE.quarterly }], metadata: { ...OUR_META, planKey: 'pro_quarterly' } } }),
+    );
+    expect(await deliver('invoice.payment_failed', invoice({ id: 'in_switch', billing_reason: 'subscription_update', amount_due: 3120, amount_remaining: 3120 }))).toEqual({ handled: true });
+    expect(await row()).toMatchObject({ tier: 'pro', status: 'active', planKey: 'pro_monthly', interval: 'month', amountMinor: 2499, stripePriceId: 'price_m' });
+    expect(await planStatus()).toMatchObject({ live: true, paymentFailed: false });
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(await claims()).toEqual([]);
+    expect(grantIfNewPeriod).not.toHaveBeenCalled();
   });
 
   it('a subscription Stripe has ended in the meantime ends on the row, with no failure mail', async () => {
@@ -878,6 +935,80 @@ describe('a row that has moved on is never taken back by an old or a second subs
       expect(await deliver('customer.subscription.created', sub('sub_B', {}, PRICE.weekly))).toEqual({ handled: true });
       expect(await row()).toMatchObject({ planKey: 'pro_weekly', interval: 'week', stripeSubscriptionId: 'sub_B' });
     });
+  });
+});
+
+// M2 gate (payments-safety): a paid pass clears `stripeSubscriptionId`, so no
+// later event of that subscription reaches the row. A subscription that still
+// renewed (or one the buyer renews again in Stripe's portal) would then charge
+// every period with no row behind it and nothing in the app to stop it.
+describe('a paid pass ends, at Stripe, the subscription it takes off the row', () => {
+  const cancelCalls = () => stripe.subscriptions.cancel.mock.calls as unknown as Array<[string, Record<string, unknown>, { idempotencyKey: string }]>;
+
+  it('a subscription paid first and a pass paid after it (two sessions open at once): the pass is added to the paid time and the subscription is cancelled', async () => {
+    await subscribedRow();
+    account.subs.set('sub_1', sub('sub_1'));
+    expect(await deliver('checkout.session.completed', passSession())).toEqual({ handled: true });
+    // The paid month is kept and the pass starts when it ends.
+    expect(await row()).toMatchObject({ tier: 'pro', planKey: 'pro_week_pass', interval: 'pass', stripeSubscriptionId: null });
+    expect(((await row()).currentPeriodEnd as Date).toISOString()).toBe(new Date((PERIOD_END_S + 7 * DAY_S) * 1000).toISOString());
+    expect(cancelCalls()).toEqual([['sub_1', {}, { idempotencyKey: 'passover:sub_1:cs_pass_1' }]]);
+    expect(account.subs.get('sub_1')!.status).toBe('canceled');
+    // A buyer who paid for both is money someone should look at.
+    expect(vi.mocked(logger.error).mock.calls.filter((c) => String(c[1]).includes('pass paid over a subscription that still renewed'))).toHaveLength(1);
+    expect(credits.grants).toBe(1);
+    // Its `deleted` event finds no row and changes nothing.
+    const before = await everything();
+    expect(await deliver('customer.subscription.deleted', account.subs.get('sub_1')!)).toEqual({ handled: false });
+    expect(await everything()).toBe(before);
+  });
+
+  it('a pass over a cancelled plan that still runs: the subscription is ended too, so it cannot be renewed again from the portal; no error line', async () => {
+    await subscribedRow({ cancelAtPeriodEnd: true });
+    account.subs.set('sub_1', sub('sub_1', { cancel_at_period_end: true }));
+    expect(await deliver('checkout.session.completed', passSession())).toEqual({ handled: true });
+    expect(cancelCalls()).toEqual([['sub_1', {}, { idempotencyKey: 'passover:sub_1:cs_pass_1' }]]);
+    expect(((await row()).currentPeriodEnd as Date).toISOString()).toBe(new Date((PERIOD_END_S + 7 * DAY_S) * 1000).toISOString());
+    expect(vi.mocked(logger.error).mock.calls.filter((c) => String(c[1]).includes('still renewed'))).toEqual([]);
+  });
+
+  it('a subscription Stripe already holds as cancelled is success; a pass on a row without a subscription cancels nothing', async () => {
+    await subscribedRow({ cancelAtPeriodEnd: true });
+    account.subs.set('sub_1', sub('sub_1', { status: 'canceled' }));
+    expect(await deliver('checkout.session.completed', passSession())).toEqual({ handled: true });
+    expect(cancelCalls()).toHaveLength(1);
+    expect(await row()).toMatchObject({ planKey: 'pro_week_pass', stripeSubscriptionId: null });
+
+    await fake.db.seekerSubscription.deleteMany({});
+    await fake.db.rACreditLedger.deleteMany({});
+    stripe.subscriptions.cancel.mockClear();
+    await freeRow();
+    expect(await deliver('checkout.session.completed', passSession({ id: 'cs_pass_2' }))).toEqual({ handled: true });
+    expect(cancelCalls()).toEqual([]);
+  });
+
+  it('a cancel that fails answers 500, and the replay ends the subscription with the same key and grants once', async () => {
+    await subscribedRow();
+    account.subs.set('sub_1', sub('sub_1'));
+    stripe.subscriptions.cancel.mockRejectedValueOnce(stripeError('StripeAPIError', 'api_error', 500));
+    expect(await deliver('checkout.session.completed', passSession())).toEqual({ handled: false, failed: true });
+    // The pass is active (the buyer paid); the subscription is still running at Stripe.
+    expect(await row()).toMatchObject({ planKey: 'pro_week_pass', stripeSubscriptionId: null });
+    expect(account.subs.get('sub_1')!.status).toBe('active');
+    expect(credits.grants).toBe(0);
+
+    expect(await deliver('checkout.session.completed', passSession())).toEqual({ handled: true, duplicate: true });
+    expect(cancelCalls().map((c) => [c[0], c[2]])).toEqual([
+      ['sub_1', { idempotencyKey: 'passover:sub_1:cs_pass_1' }],
+      ['sub_1', { idempotencyKey: 'passover:sub_1:cs_pass_1' }],
+    ]);
+    expect(account.subs.get('sub_1')!.status).toBe('canceled');
+    expect(credits.grants).toBe(1);
+    // A third delivery changes nothing (the cancel is repeated and already done).
+    const before = await everything();
+    expect(await deliver('checkout.session.completed', passSession())).toEqual({ handled: true, duplicate: true });
+    expect(await everything()).toBe(before);
+    expect(credits.grants).toBe(1);
   });
 });
 

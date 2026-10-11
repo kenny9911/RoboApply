@@ -13,6 +13,16 @@ afterEach(() => {
   cleanup();
 });
 
+// M2 gate (MKT-2A request O-2). Three variables change what the Alipay rail sends or accepts
+// (the notify host, the secret-less callback window, the legacy package id). The frozen Alipay
+// characterisation tests (named "A<n> …", never edited) read the process environment through
+// fixtures that predate them, so a value exported in a developer's shell could move such a
+// test. No test may depend on the shell: they are removed before any test file loads, and a
+// test that wants one sets it itself (an env object, or vi.stubEnv).
+for (const name of ['CN_ALIPAY_NOTIFY_ORIGIN', 'ALIPAY_SECRETLESS_UNTIL', 'CN_ALIPAY_PACKAGE_ID_MODE']) {
+  delete process.env[name];
+}
+
 // JSDOM doesn't ship matchMedia. Some components branch on mobile-vs-desktop
 // breakpoints at mount time; without this they throw.
 if (typeof window !== 'undefined' && !window.matchMedia) {

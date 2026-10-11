@@ -52,6 +52,7 @@ import {
   publicFxReference,
   readFxReference,
   recordCheckoutAcknowledgements,
+  resumeSubscription,
   saveFxReference,
   showsWithdrawalWaiver,
   studentPlansListedFor,
@@ -60,8 +61,6 @@ import {
   type CancelOutcome,
   type FxReference,
 } from '../../platform/billing/index.js';
-// By file path: the billing index has another owner in this phase (MARKET_TASK_PLAN §2).
-import { resumeSubscription } from '../../platform/billing/subscriptions.js';
 import {
   CREDIT_CATALOG_CONFIG_KEY,
   CreditCatalogOverrideSchema,

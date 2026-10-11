@@ -91,7 +91,14 @@ function fitOf(raw: unknown): NonNullable<QueueJobSummary['fit']> | null {
   const f = raw as Record<string, unknown>;
   if (typeof f.tier !== 'string' || !FIT_TIERS.has(f.tier)) return null;
   if (typeof f.score !== 'number' || !Number.isFinite(f.score)) return null;
-  return { tier: f.tier as NonNullable<QueueJobSummary['fit']>['tier'], score: f.score };
+  return {
+    tier: f.tier as NonNullable<QueueJobSummary['fit']>['tier'],
+    score: f.score,
+    // What kind of fit it is travels with it (the server sends it with every fit): the row says "Quick estimate"
+    // for an estimate. Left out when the server sent none; a reader then treats the fit as an estimate (the contract).
+    ...(f.kind === 'ai' || f.kind === 'pre' ? { kind: f.kind } : {}),
+    ...(f.confidence === 'high' || f.confidence === 'medium' || f.confidence === 'low' ? { confidence: f.confidence } : {}),
+  };
 }
 
 /** The raw code of why preparing failed, when the server says (never shown as is). */

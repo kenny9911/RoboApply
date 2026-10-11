@@ -282,7 +282,7 @@ function Suggestions() {
               </p>
               <p className={styles.kitMeta}>
                 <span>{job.company.name}</span>
-                {job.fit ? <FitTierLabel tier={job.fit.tier} score={job.fit.score} /> : null}
+                {job.fit ? <FitTierLabel tier={job.fit.tier} score={job.fit.score} estimate={job.fit.kind !== 'ai'} /> : null}
               </p>
             </div>
             <div className={styles.kitActions}>

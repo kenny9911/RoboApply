@@ -4,7 +4,7 @@ import { CLONE_SKUS, FEATURE_OTHER, PLATFORM_SKUS, featureForSku } from './raFea
 
 describe('raFeatureCatalog clone SKUs (ARCHITECTURE.md §7.5)', () => {
   it('maps every new SKU (and the two cross-bank ones) to a real feature', () => {
-    expect(CLONE_SKUS).toHaveLength(18);
+    expect(CLONE_SKUS).toHaveLength(19);
     for (const sku of CLONE_SKUS) expect(featureForSku(sku), sku).not.toBe(FEATURE_OTHER);
     expect(featureForSku('ra_crossbank_score').key).toBe('crossbank');
     expect(featureForSku('ra_copilot_turn')).toMatchObject({ key: 'assistant', modality: 'llm' });
@@ -17,6 +17,11 @@ describe('raFeatureCatalog clone SKUs (ARCHITECTURE.md §7.5)', () => {
     expect(featureForSku('ra_cn_fraud_check').key).not.toBe(featureForSku('ra_job_enrich').key);
     expect(PLATFORM_SKUS.has('ra_cn_fraud_check')).toBe(true);
     expect(PLATFORM_SKUS.has('ra_job_enrich')).toBe(true);
+    // M2 gate (MKT-2H request 3): the embeddings client logs under 'ra_embed' (platform/embeddings/usage.ts
+    // EMBED_COST_SKU; client.test.ts pins the value); it is a platform cost with its own feature, not "Other".
+    expect(featureForSku('ra_embed')).toEqual({ key: 'embedding', label: 'Embeddings', modality: 'llm' });
+    expect(CLONE_SKUS).toContain('ra_embed');
+    expect(PLATFORM_SKUS.has('ra_embed')).toBe(true);
   });
 
   it('keeps existing mappings and the Other fallback', () => {

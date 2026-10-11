@@ -407,8 +407,8 @@ async function assistantAreas(world: World, fits: Loose): Promise<Record<string,
 
 async function readAssistantStoredFit(userId: string, jobId: string, { world }: SeamContext): Promise<SeamReading> {
   const areas = await assistantAreas(world, await fitsOf(world));
-  // A resume attached to the thread must not matter: the stored fit is the main resume's.
-  const view = (await world.inBrand(() => areas.storedFit!(userId, jobId, { resumeVariantId: 'attached-to-the-thread', locale: 'en' }))) as SeamReading;
+  // A resume attached to the thread cannot matter: the adapter takes no version (copilot/types.ts `storedFit`).
+  const view = (await world.inBrand(() => areas.storedFit!(userId, jobId, { locale: 'en' }))) as SeamReading;
   return reading('the Assistant (stored fit)', view);
 }
 

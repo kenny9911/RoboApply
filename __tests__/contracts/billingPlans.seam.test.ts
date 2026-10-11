@@ -45,7 +45,9 @@ describe('GET /billing/plans: what the server sends is what /pricing reads (MKT-
       accidentalRenewalDays: 3,
       withdrawalDays: 14,
       packValidMonths: 12,
-      version: 'refund-v1-2026-10',
+      // M2 gate: RoboApply's rules gained the pro-rata withdrawal rule (MKT-2D item 4), so its
+      // public label moved to v2. GoApply's rules did not change and keep v1 (asserted below).
+      version: 'refund-v2-2026-10',
     });
     expect(facts.collectingEntity).toBeNull();
     expect(facts.studentOffer).toEqual([]);
@@ -56,6 +58,7 @@ describe('GET /billing/plans: what the server sends is what /pricing reads (MKT-
     expect(plain.refundPolicy).not.toBeNull();
     // The label a buyer can read never carries the internal review suffix.
     expect(plain.refundPolicy!.version).toMatch(/^refund-v\d+-\d{4}-\d{2}$/);
+    expect(plain.refundPolicy!.version).toBe('refund-v1-2026-10');
     expect(plain.collectingEntity).toBeNull();
     expect(plain.studentOffer).toEqual([
       { key: 'student_monthly', amountMinor: 2900, studentDiscountPercent: 25 },

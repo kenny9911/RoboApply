@@ -770,6 +770,29 @@ describe('embed-labels', () => {
     const unavailable = { resolveEmbeddingConfig: () => ({ modelTag: 'm@1024', apiKey: 'k' }), embedTexts: async () => ({ unavailable: 'no_key' }) };
     expect(await (await loadLabelEmbedder('roboapply', async () => unavailable))!.embed(['x'])).toBeNull();
   });
+
+  // M2 gate: the seam between this reader (MKT-2G) and the embeddings client (MKT-2H) on the merged tree, by the
+  // default loader. The client itself is replaced through its own test seam, so no request is made.
+  it('with the default loader it finds the real embeddings client: the model tag of its config, and a skill-purpose call without user data', async () => {
+    const client = await import('../../platform/embeddings/client.js');
+    const embedTexts = vi.fn(async (_brand: unknown, texts: readonly string[]) => ({ vectors: texts.map(() => [0.5, 0.25]), model: 'openai/text-embedding-3-small', tokens: 2 }));
+    client.setEmbeddingsClientForTests({ embedTexts } as never);
+    try {
+      // No key: not available, and the tag the real config would stamp is never invented.
+      expect(await loadLabelEmbedder('roboapply', undefined, {})).toBeNull();
+      const embedder = (await loadLabelEmbedder('roboapply', undefined, { OPENAI_API_KEY: 'test-key-not-real' }))!;
+      expect(embedder).not.toBeNull();
+      // The same tag the retrieval workers write (`resolveEmbeddingConfig(...).modelTag`), which `nearestSkills` filters on.
+      expect(embedder.model).toBe(client.resolveEmbeddingConfig('roboapply', { OPENAI_API_KEY: 'test-key-not-real' }).modelTag);
+      expect(embedder.model).toBe('openai/text-embedding-3-small@1024');
+      expect(await embedder.embed(['PostgreSQL'])).toEqual([[0.5, 0.25]]);
+      expect(embedTexts).toHaveBeenCalledWith('roboapply', ['PostgreSQL'], { purpose: 'skill', carriesUserData: false });
+      // GoApply with half of its own pair set has no key (the pair rule of the client): not available.
+      expect(await loadLabelEmbedder('goapply', undefined, { OPENAI_API_KEY: 'test-key-not-real', CN_EMBED_API_KEY: 'cn-key-not-real' })).toBeNull();
+    } finally {
+      client.setEmbeddingsClientForTests(null);
+    }
+  });
 });
 
 describe('export-seed', () => {

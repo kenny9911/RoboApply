@@ -538,6 +538,66 @@ export async function grantForPlan(params: {
 }
 
 /**
+ * A paid switch between two plans of the SAME paid tier (Pro weekly ↔ monthly ↔
+ * quarterly). `grantForPlan` SETS the balance to the plan's allowance, which is
+ * right for a purchase, a renewal and a legacy plan moving to Pro, and wrong
+ * here: every switch would hand out a full allowance again, so switching back
+ * and forth would refill practice credits for the price of a proration.
+ *
+ * So the balance is topped up by what the new plan allows ABOVE what this
+ * period was already granted, and is never lowered:
+ *   weekly (1 granted) → monthly (3): +2;
+ *   monthly (3 granted, all used) → weekly → monthly: +0 and +0.
+ * `mockCreditsPeriodAllotment` keeps the highest allowance granted in the
+ * period (the next renewal sets it afresh), and `mockCreditsRenewedAt` is
+ * stamped now: an interval change moves the period start to the switch, and
+ * the period guard must not read that as a new, ungranted period.
+ *
+ * Answers false (the caller then sets the balance as before) unless the
+ * balance's current allotment was granted for this same tier: the last grant
+ * row of the practice ledger says which tier that was.
+ */
+async function topUpForPlanChange(
+  seeker: ResolvedSeeker,
+  params: { userId: string; tier: GrantTier; credits?: number; currentPeriodEnd?: Date | null; source: string; metadata?: Record<string, unknown> | null },
+): Promise<boolean> {
+  if (params.tier !== 'pro' || typeof params.credits !== 'number' || params.credits < 0) return false;
+  if (seeker.mockCreditsPeriodAllotment == null || !seeker.mockCreditsRenewedAt) return false;
+  const lastGrant = await prisma.mockInterviewCreditLedger.findFirst({
+    where: { seekerProfileId: seeker.seekerProfileId, reason: { in: ['grant_purchase', 'grant_renewal', 'grant_free_monthly', 'signup_bonus'] } },
+    orderBy: { createdAt: 'desc' },
+    select: { tier: true },
+  });
+  if (lastGrant?.tier !== params.tier) return false;
+
+  const now = new Date();
+  const previousAllotment = seeker.mockCreditsPeriodAllotment;
+  const added = Math.max(0, params.credits - previousAllotment);
+  const balanceAfter = seeker.mockCredits + added;
+  await prisma.seekerSubscription.update({
+    where: { id: seeker.subscriptionId },
+    data: {
+      mockCredits: balanceAfter,
+      mockCreditsRenewedAt: now,
+      mockCreditsPeriodAllotment: Math.max(previousAllotment, params.credits),
+      ...(params.currentPeriodEnd !== undefined ? { currentPeriodEnd: params.currentPeriodEnd } : {}),
+    },
+  });
+  await appendLedger({
+    seekerProfileId: seeker.seekerProfileId,
+    userId: params.userId,
+    delta: added,
+    balanceAfter,
+    reason: 'grant_purchase',
+    tier: params.tier,
+    source: params.source,
+    metadata: { previousBalance: seeker.mockCredits, allotment: params.credits, previousAllotment, planChange: true, ...(params.metadata ?? {}) },
+  });
+  logger.info('MOCK_CREDIT', 'plan change: credits topped up', { userId: params.userId, tier: params.tier, added, previousAllotment, allotment: params.credits });
+  return true;
+}
+
+/**
  * Grant the plan allotment, but only once per billing period (idempotent for
  * Stripe webhooks that can fire many times). Grants when: the period changed
  * (last grant predates `periodStart`), nothing was ever granted, or `force` is
@@ -553,10 +613,18 @@ export async function grantForPlanIfNewPeriod(params: {
   currentPeriodEnd?: Date | null;
   source: string;
   force?: boolean;
+  /**
+   * The forced grant is for a paid plan SWITCH on a running subscription (a
+   * `subscription_update` invoice). Inside one paid tier (Pro weekly, monthly,
+   * quarterly) the balance is then topped up, never set: see `topUpForPlanChange`.
+   */
+  planChange?: boolean;
   metadata?: Record<string, unknown> | null;
 }): Promise<'granted' | 'skipped' | 'no_profile'> {
   const seeker = await resolveSeeker(params.userId);
   if (!seeker) return 'no_profile';
+
+  if (params.force && params.planChange && (await topUpForPlanChange(seeker, params))) return 'granted';
 
   const alreadyThisPeriod =
     !params.force &&

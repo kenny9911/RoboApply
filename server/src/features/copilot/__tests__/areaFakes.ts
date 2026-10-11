@@ -126,7 +126,7 @@ export function fitView(jobId = 'job_1'): MatchFitView {
 
 /**
  * The fit of one named resume version ("With this version"): what
- * `areas.scoreJob` answers when it is asked with a `resumeVariantId`. A
+ * `areas.variantFit` answers. A
  * different number than the canonical fit, on purpose.
  */
 export function variantFitView(jobId = 'job_1', resumeVariantId = 'res_tailored'): MatchFitView {
@@ -147,10 +147,11 @@ export function fakeAreas(over: Partial<CopilotAreas> = {}): FakeAreas {
       if (jobId.startsWith('missing')) throw Object.assign(new Error('nf'), { code: 'not_found', status: 404 });
       return jobDetail(jobId);
     },
-    // Like the real area: the canonical fit unless a resume version is named.
-    scoreJob: async (_u, jobId, options) => {
-      if (options?.resumeVariantId === 'res_gone') throw Object.assign(new Error('Resume not found.'), { code: 'not_found', status: 404 });
-      return options?.resumeVariantId ? variantFitView(jobId, options.resumeVariantId) : fitView(jobId);
+    // Like the real area: `fit` is the canonical fit, `variantFit` the named version.
+    fit: async (_u, jobId) => fitView(jobId),
+    variantFit: async (_u, jobId, variantId) => {
+      if (variantId === 'res_gone') throw Object.assign(new Error('Resume not found.'), { code: 'not_found', status: 404 });
+      return variantFitView(jobId, variantId);
     },
     storedFit: async (_u, jobId) => fitView(jobId),
     addedJobs: async () => [],

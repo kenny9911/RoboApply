@@ -398,6 +398,31 @@ describe('switch without price pins (the catalog sync resolves the target price)
     expect(record).not.toHaveBeenCalled();
     expect(w.stripe.subscriptions.update).not.toHaveBeenCalled();
   });
+
+  // M2 gate (contract row "Plan switch": "a Stripe failure is 502 payment_provider_error"):
+  // the two reads of the subscription and the preview were thrown raw, which the route answered as 500 `switch_failed`.
+  it('every Stripe read of a quote or a confirm that fails is a 502: the subscription read, the preview, the read before the update', async () => {
+    const target = getPlan('roboapply', 'pro_quarterly', READY)!;
+    const down = () => Object.assign(new Error('stripe is down'), { type: 'StripeAPIError' });
+
+    const a = syncedWorld('usd');
+    const accountA = (await loadBillingAccount(a.deps.db, 'u_1'))!;
+    a.stripe.subscriptions.retrieve.mockRejectedValueOnce(down());
+    await expect(quoteSwitch(accountA, target, a.deps)).rejects.toMatchObject({ code: 'payment_provider_error', status: 502 });
+
+    const b = syncedWorld('usd');
+    const accountB = (await loadBillingAccount(b.deps.db, 'u_1'))!;
+    b.stripe.invoices.createPreview.mockRejectedValueOnce(down());
+    await expect(quoteSwitch(accountB, target, b.deps)).rejects.toMatchObject({ code: 'payment_provider_error', status: 502 });
+
+    const c = syncedWorld('usd');
+    const accountC = (await loadBillingAccount(c.deps.db, 'u_1'))!;
+    c.stripe.subscriptions.retrieve.mockRejectedValueOnce(down());
+    const record = vi.fn(async () => undefined);
+    await expect(confirmSwitch(accountC, target, Math.floor(NOW.getTime() / 1000), c.deps, { autoRenewAck: true, record })).rejects.toMatchObject({ code: 'payment_provider_error', status: 502 });
+    expect(record).not.toHaveBeenCalled();
+    expect(c.stripe.subscriptions.update).not.toHaveBeenCalled();
+  });
 });
 
 // ST-5 (MARKET_STRATEGY §5.1 "Switch", PAY S10): the plan changes only if the
@@ -777,14 +802,15 @@ describe('switch and the tax switch', () => {
       const w = world(legacy, { env });
       taxed(w);
       w.stripe.invoices.createPreview.mockRejectedValueOnce(Object.assign(new Error('boom'), { code: 'customer_tax_location_invalid_not' }));
-      await expect(quoteSwitch(await accountOf(w), target(), w.deps)).rejects.toThrow('boom');
+      // Not retried, and answered as the provider's failure (502), never as a raw error (M2 gate).
+      await expect(quoteSwitch(await accountOf(w), target(), w.deps)).rejects.toMatchObject({ code: 'payment_provider_error', status: 502 });
       expect(w.stripe.invoices.createPreview).toHaveBeenCalledTimes(1);
     }
     // Off: even the location error is not retried (no tax was asked for).
     const off = world(legacy);
     taxed(off);
     off.stripe.invoices.createPreview.mockRejectedValueOnce(Object.assign(new Error('location'), { code: 'customer_tax_location_invalid' }));
-    await expect(quoteSwitch(await accountOf(off), target(), off.deps)).rejects.toThrow('location');
+    await expect(quoteSwitch(await accountOf(off), target(), off.deps)).rejects.toMatchObject({ code: 'payment_provider_error', status: 502 });
     expect(off.stripe.invoices.createPreview).toHaveBeenCalledTimes(1);
   });
 

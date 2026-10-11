@@ -45,6 +45,8 @@ import {
   type OverrideAuditEntry,
 } from './index.js';
 import { publicRefundPolicyVersion } from './service.js';
+// The web's own reader of the resume answer (M2 gate seam: MKT-2C sends, MKT-2E reads).
+import { normaliseResume } from '../../../../lib/api/account';
 
 const NOW = new Date('2026-10-10T08:00:00.000Z');
 const LATER = new Date('2026-10-30T08:00:00.000Z');
@@ -364,6 +366,8 @@ describe('POST /credits/resume ("Keep my plan")', () => {
     const res = await h.request<any>('POST', PATH, { ...RA, body: { autoRenewAck: true }, headers: { 'user-agent': 'resume-test/1.0' } });
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ success: true, data: { status: 'resumed', planKey: 'pro_monthly', renewsAt: LATER.toISOString() } });
+    // M2 gate seam: what the web reads from that answer (lib/api/account.ts) is the plan and the renewal date, nothing defaulted.
+    expect(normaliseResume(res.body.data)).toEqual({ status: 'resumed', planKey: 'pro_monthly', renewsAt: LATER.toISOString() });
 
     // The consent record: an auto_renew_ack with the hash of the sentence that names the period and the charged price.
     const rows = await consents();

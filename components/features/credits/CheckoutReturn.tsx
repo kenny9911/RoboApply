@@ -49,7 +49,7 @@ import { accountApi, checkoutSessionId } from '../../../lib/api/account';
 import { RoboApiError } from '../../../lib/api/client';
 import { apiErrorCode } from '../../../lib/api/contracts/wire';
 import { useCredits, useInvalidateCredits } from '../../../hooks/shared/useCredits';
-import { WechatPayReturn, isOrderNumber, useWechatPayAvailable, type WechatPayReturnState } from '../billing-cn';
+import { WechatPayReturn, isOrderNumber, type WechatPayReturnState } from '../billing-cn';
 import styles from './credits.module.css';
 
 export const RETURN_POLL_MS = 3000;
@@ -99,11 +99,12 @@ export function orderTitleKind(state: WechatPayReturnState): 'checking' | 'paid'
   if (state === 'closed' || state === 'failed') return 'notPaid';
   if (state === 'checking' || state === 'pending') return 'checking';
   // needs_support, refunded, a failed status check: the body explains; the heading claims nothing.
+  // (`unavailable` is never shown: the page falls back to the ordinary return page.)
   return 'neutral';
 }
 
 /** GoApply, back from WeChat Pay H5: the heading and the order check, kept in step. */
-function CnOrderReturn({ orderId, onPaid }: { orderId: string; onPaid: () => void }) {
+function CnOrderReturn({ orderId, onPaid, onUnavailable }: { orderId: string; onPaid: () => void; onUnavailable: () => void }) {
   const t = useTranslations('credits.return');
   const tCn = useTranslations('billingCn.return');
   const [state, setState] = useState<WechatPayReturnState>('checking');
@@ -112,7 +113,7 @@ function CnOrderReturn({ orderId, onPaid }: { orderId: string; onPaid: () => voi
   return (
     <div className={styles.page} data-testid="checkout-return" data-outcome="order">
       <h1 className={styles.title}>{title}</h1>
-      <WechatPayReturn orderId={orderId} onPaid={onPaid} onStatus={setState} />
+      <WechatPayReturn orderId={orderId} onPaid={onPaid} onStatus={(next) => (next === 'unavailable' ? onUnavailable() : setState(next))} />
     </div>
   );
 }
@@ -121,7 +122,6 @@ export function CheckoutReturn({ outcome, planKey = null, practiceBefore = null,
   const t = useTranslations('credits.return');
   const brand = useBrand();
   const params = useSearchParams();
-  const wechatPay = useWechatPayAvailable();
   const { data } = useCredits();
   const invalidate = useInvalidateCredits();
   const [attempts, setAttempts] = useState(0);
@@ -129,8 +129,11 @@ export function CheckoutReturn({ outcome, planKey = null, practiceBefore = null,
   const [reconcilePending, setReconcilePending] = useState(false);
 
   const order = orderId === undefined ? (params?.get('order') ?? null) : orderId;
-  // Only GoApply has orders to look up, and only while WeChat Pay is live.
-  const cnOrder = brand.market === 'cn' && wechatPay.available && isOrderNumber(order) ? order : null;
+  // The server said WeChat Pay is not set up on this deployment: there is no order to show.
+  const [cnOrderUnavailable, setCnOrderUnavailable] = useState(false);
+  // Only GoApply has orders to look up. The lookup does NOT wait for WeChat Pay to be on sale: an order that was
+  // in flight when the kill switch closed new purchases still completes, and its buyer lands here.
+  const cnOrder = brand.market === 'cn' && isOrderNumber(order) && !cnOrderUnavailable ? order : null;
 
   // The card rail is the international brand's; a mainland page never reconciles.
   const session = outcome === 'success' && brand.market === 'intl' ? checkoutSessionId(sessionId) : null;
@@ -215,7 +218,7 @@ export function CheckoutReturn({ outcome, planKey = null, practiceBefore = null,
 
   if (cnOrder) {
     // The plan and the practice balance changed on the server once it is paid.
-    return <CnOrderReturn orderId={cnOrder} onPaid={() => void invalidate()} />;
+    return <CnOrderReturn orderId={cnOrder} onPaid={() => void invalidate()} onUnavailable={() => setCnOrderUnavailable(true)} />;
   }
 
   return (

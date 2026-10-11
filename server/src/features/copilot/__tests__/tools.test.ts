@@ -101,7 +101,7 @@ describe('registry', () => {
     const r = await runToolCall(call('analyze_fit', { jobId: 'job_x' }), tools, s.ctx, new Set(['job_1']));
     expect(r.output.data).toMatchObject({ error: 'unknown_job_id' });
     expect(r.record.ok).toBe(false);
-    expect(s.areas.scoreJob).not.toHaveBeenCalled();
+    expect(s.areas.fit).not.toHaveBeenCalled();
   });
 
   it('wraps and truncates results', () => {
@@ -164,7 +164,7 @@ describe('job tools (read only)', () => {
     const r = await run('added_jobs', {}, s, []);
     expect(s.areas.addedJobs).toHaveBeenCalledWith(USER, { limit: 8 });
     expect(s.areas.storedFit).toHaveBeenCalledTimes(2);
-    expect(s.areas.scoreJob).not.toHaveBeenCalled(); // never a model call for a list
+    expect(s.areas.fit).not.toHaveBeenCalled(); // never a model call for a list
     const data = r.output.data as { count: number; jobs: Array<{ jobId: string; addedByUser: boolean; fit: { tier: string } | null; applicationStatus: string | null }> };
     expect(data.jobs.map((j) => [j.jobId, j.fit?.tier, j.applicationStatus])).toEqual([
       ['mine_1', 'great', 'bookmarked'],
@@ -222,8 +222,9 @@ describe('job tools (read only)', () => {
     const s = ctxFor();
     const r = await run('analyze_fit', { jobId: 'job_1' }, s);
     // The canonical fit: no resume version is passed.
-    expect(s.areas.scoreJob).toHaveBeenCalledTimes(1);
-    expect(s.areas.scoreJob).toHaveBeenCalledWith(USER, 'job_1', { locale: 'en' });
+    expect(s.areas.fit).toHaveBeenCalledTimes(1);
+    expect(s.areas.fit).toHaveBeenCalledWith(USER, 'job_1', { locale: 'en' });
+    expect(s.areas.variantFit).not.toHaveBeenCalled();
     expect(r.output.data).toMatchObject({ kind: 'quick estimate (no AI read)', skillsMissing: ['GraphQL'] });
     expect(r.output.cards?.[0]).toMatchObject({ type: 'fit_analysis', data: { aiWritten: false } });
   });
@@ -234,8 +235,9 @@ describe('job tools (read only)', () => {
     const none = ctxFor({ resumeId: null });
     const a = await run('analyze_fit', { jobId: 'job_1' }, attached);
     const b = await run('analyze_fit', { jobId: 'job_1' }, none);
-    expect(attached.areas.scoreJob).toHaveBeenCalledTimes(1);
-    expect(attached.areas.scoreJob).toHaveBeenCalledWith(USER, 'job_1', { locale: 'en' });
+    expect(attached.areas.fit).toHaveBeenCalledTimes(1);
+    expect(attached.areas.fit).toHaveBeenCalledWith(USER, 'job_1', { locale: 'en' });
+    expect(attached.areas.variantFit).not.toHaveBeenCalled();
     expect(a.output.data).toEqual(b.output.data);
     // The same score, tier and kind as the stored-fit read (the read the job page and the lists make).
     const page = await attached.areas.storedFit(USER, 'job_1', { locale: 'en' });
@@ -248,11 +250,11 @@ describe('job tools (read only)', () => {
 
   it('MKT-2F: analyze_fit carries confidence and, for a quick estimate, why it is one', async () => {
     const estimate = ctxFor({
-      areasOver: { scoreJob: async (_u, jobId) => ({ ...fitView(jobId), kind: 'pre', score: 58, tier: 'possible', estimateReason: 'daily_cap', confidence: 'low', confidenceReason: 'no_skills_listed' }) },
+      areasOver: { fit: async (_u, jobId) => ({ ...fitView(jobId), kind: 'pre', score: 58, tier: 'possible', estimateReason: 'daily_cap', confidence: 'low', confidenceReason: 'no_skills_listed' }) },
     });
     const r = await run('analyze_fit', { jobId: 'job_1' }, estimate);
     expect(r.output.data).toMatchObject({ kind: 'quick estimate (no AI read)', confidence: 'low', reason: 'daily_cap', confidenceReason: 'no_skills_listed' });
-    const ai = ctxFor({ areasOver: { scoreJob: async (_u, jobId) => ({ ...fitView(jobId), kind: 'ai', confidence: 'high' }) } });
+    const ai = ctxFor({ areasOver: { fit: async (_u, jobId) => ({ ...fitView(jobId), kind: 'ai', confidence: 'high' }) } });
     const out = (await run('analyze_fit', { jobId: 'job_1' }, ai)).output.data as Record<string, unknown>;
     expect(out).toMatchObject({ kind: 'ai', confidence: 'high' });
     // An AI fit has no "why it is an estimate".
@@ -264,7 +266,8 @@ describe('job tools (read only)', () => {
     const s = ctxFor({ resumeId: 'res_other' });
     const r = await run('analyze_fit', { jobId: 'job_1', resumeVariantId: 'res_tailored' }, s);
     // Two reads: the canonical fit, then the named version (never the thread's own resume).
-    expect(s.areas.scoreJob.mock.calls.map((c) => c[2])).toEqual([{ locale: 'en' }, { resumeVariantId: 'res_tailored', locale: 'en' }]);
+    expect(s.areas.fit.mock.calls).toEqual([[USER, 'job_1', { locale: 'en' }]]);
+    expect(s.areas.variantFit.mock.calls).toEqual([[USER, 'job_1', 'res_tailored', { locale: 'en' }]]);
     const data = r.output.data as Record<string, unknown>;
     expect(data).toMatchObject({ label: 'Your fit', score: 72, tier: 'good', kind: 'quick estimate (no AI read)' });
     expect(data.withThisVersion).toEqual({ variant: true, label: 'With this version', resumeVariantId: 'res_tailored', score: 81, tier: 'great', kind: 'ai', confidence: 'high' });
@@ -289,7 +292,7 @@ describe('job tools (read only)', () => {
     const s = ctxFor({ resumeId: 'res_tailored', areasOver: { addedJobs: async () => added as never } });
     await run('added_jobs', {}, s, []);
     expect(s.areas.storedFit).toHaveBeenCalledWith(USER, 'mine_1', { locale: 'en' });
-    expect(s.areas.scoreJob).not.toHaveBeenCalled();
+    expect(s.areas.fit).not.toHaveBeenCalled();
   });
 
   it('company_insights returns only sourced facts and the computed open-job count', async () => {
@@ -571,7 +574,7 @@ describe('draft_outreach (a credit proposal over NET networkService.createOutrea
 
 // ── MKT-2F: the production areas read the fit contract (match/fit.ts) ────────
 
-describe('MKT-2F: areas.scoreJob and areas.storedFit read THE fit', () => {
+describe('MKT-2F: areas.fit, areas.variantFit and areas.storedFit read THE fit', () => {
   const AT = new Date('2026-10-10T08:00:00Z');
   function world(scores: Array<Record<string, unknown>> = []) {
     const repo = createMemoryRepo({
@@ -626,28 +629,29 @@ describe('MKT-2F: areas.scoreJob and areas.storedFit read THE fit', () => {
   it('storedFit ignores a resume version: the canonical fit is always the main resume', async () => {
     const w = world([freshAiRow()]);
     const canonical = await w.areas.storedFit('u1', 'job1', { locale: 'en' });
-    const withVersion = await w.areas.storedFit('u1', 'job1', { resumeVariantId: 'v_tailored', locale: 'en' });
+    // The adapter takes no version since the M2 gate; an option an older caller still sends changes nothing.
+    const withVersion = await w.areas.storedFit('u1', 'job1', { resumeVariantId: 'v_tailored', locale: 'en' } as { locale: string });
     expect(withVersion).toEqual(canonical);
     expect(withVersion.resumeVariantId).toBe('v1');
     expect(w.scorer.run).not.toHaveBeenCalled();
   });
 
-  it('scoreJob without a version is the canonical fit (a model call is allowed: the free on-demand score); with one it is that version', async () => {
+  it('fit is the canonical fit (a model call is allowed: the free on-demand score); variantFit is the named version', async () => {
     const w = world();
-    const canonical = await w.areas.scoreJob('u1', 'job1', { locale: 'en' });
+    const canonical = await w.areas.fit('u1', 'job1', { locale: 'en' });
     expect(canonical).toMatchObject({ kind: 'ai', resumeVariantId: 'v1' });
     expect(w.scorer.run).toHaveBeenCalledTimes(1);
     // The page read now answers that same stored fit.
     const page = await w.service.fits.getFit('u1', 'job1');
     expect({ score: canonical.score, tier: canonical.tier }).toEqual({ score: page.score, tier: page.tier });
     // The named version is another row, another measure.
-    const variant = await w.areas.scoreJob('u1', 'job1', { resumeVariantId: 'v_tailored', locale: 'en' });
+    const variant = await w.areas.variantFit('u1', 'job1', 'v_tailored', { locale: 'en' });
     expect(variant).toMatchObject({ kind: 'ai', resumeVariantId: 'v_tailored' });
     expect(w.scorer.run).toHaveBeenCalledTimes(2);
     // …and it did not move the canonical fit.
     expect(await w.areas.storedFit('u1', 'job1', { locale: 'en' })).toMatchObject({ score: canonical.score, tier: canonical.tier, kind: 'ai', resumeVariantId: 'v1' });
     // A version that is not the person's: not found, nothing scored.
-    await expect(w.areas.scoreJob('u1', 'job1', { resumeVariantId: 'nope', locale: 'en' })).rejects.toMatchObject({ code: 'not_found' });
+    await expect(w.areas.variantFit('u1', 'job1', 'nope', { locale: 'en' })).rejects.toMatchObject({ code: 'not_found' });
     expect(w.scorer.run).toHaveBeenCalledTimes(2);
   });
 

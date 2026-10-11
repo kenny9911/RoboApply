@@ -57,13 +57,12 @@ export function FitAnalysisView({ card }: FitAnalysisViewProps) {
 
 export interface FitAnalysisCardProps {
   jobId: string;
-  resumeVariantId?: string | null;
 }
 
 /** The connected card: an explicit "Get the full fit analysis" action with its credit line. */
-export function FitAnalysisCard({ jobId, resumeVariantId }: FitAnalysisCardProps) {
+export function FitAnalysisCard({ jobId }: FitAnalysisCardProps) {
   const t = useTranslations('fit.analysis');
-  const { card, status, gate, run } = useFitAnalysis(jobId, { resumeVariantId });
+  const { card, status, gate, run } = useFitAnalysis(jobId);
   if (card) return <FitAnalysisView card={card} />;
   const running = status === 'running';
   return (

@@ -724,6 +724,26 @@ describe('legacy switch never charges without confirm', () => {
       expect(invalidate).toHaveBeenCalledWith('u_1');
     });
 
+    // M2 gate seam (MKT-2C confirmSwitch → MKT-2B route → MKT-2E reader): the web calls it a switch only for
+    // `switched === true`, and "confirm with your bank" only for `requiresAction === true`.
+    it('the web\'s reader (lib/api/account.ts fromServerSwitch) reads each answer of the route as the state it means', async () => {
+      const { fromServerSwitch } = await import('../../../../../lib/api/account');
+      const answer = async (result: Record<string, unknown>) => {
+        setBillingServiceDepsForTests(testDeps({ confirmSwitch: (async () => result) as never }));
+        return (await post(confirmBody)).body.data as unknown;
+      };
+      const base = { planKey: 'pro_monthly', stripeSubscriptionId: 'sub_old' };
+      expect(fromServerSwitch(await answer({ ...base, requiresAction: true, hostedInvoiceUrl: 'https://invoice.stripe.test/i/acct_1/in_sw' }), 'asked')).toEqual({
+        status: 'requires_action',
+        planKey: 'pro_monthly',
+        hostedInvoiceUrl: 'https://invoice.stripe.test/i/acct_1/in_sw',
+      });
+      // No invoice page: the sheet offers Manage payment instead of a dead link.
+      expect(fromServerSwitch(await answer({ ...base, requiresAction: true, hostedInvoiceUrl: null }), 'asked')).toEqual({ status: 'requires_action', planKey: 'pro_monthly', hostedInvoiceUrl: null });
+      // MKT-2C's own result for a paid proration: `requiresAction: false` and no URL key.
+      expect(fromServerSwitch(await answer({ ...base, requiresAction: false }), 'asked')).toEqual({ status: 'switched', planKey: 'pro_monthly', nextRenewalAt: null });
+    });
+
     it('requiresAction without a URL answers hostedInvoiceUrl null (never undefined, never an empty string)', async () => {
       for (const hostedInvoiceUrl of [undefined, null, '']) {
         setBillingServiceDepsForTests(testDeps({ confirmSwitch: (async () => ({ planKey: 'pro_monthly', stripeSubscriptionId: 'sub_old', requiresAction: true, hostedInvoiceUrl })) as never }));
@@ -791,6 +811,79 @@ describe('legacy switch never charges without confirm', () => {
     expect(res.body.data.plans.every((p: any) => p.purchasable === false)).toBe(true);
     expect(res.body.data.defaultSelection).toBe('pro_monthly');
     expect(res.body.data.region).toEqual({ market: 'other', currency: 'USD', method: 'stripe', source: 'brand' });
+  });
+});
+
+// M2 gate (contracts, MKT-2C / MKT-2B server → MKT-2E web): the web reads the
+// plan ONCE, right after the switch answers. The row used to change only when
+// the webhook arrived, so that one read still said the old plan.
+describe('a confirmed switch is on the row when the answer goes out (read-your-write)', () => {
+  const QUARTER_END_S = NOW_S + 90 * 86400;
+  const confirmBody = { planKey: 'pro_quarterly', confirm: true, prorationDate: NOW_S, autoRenewAck: true };
+  const onMonthly = () => stripeSub('sub_1', 'price_m', { metadata: { planKey: 'pro_monthly' } });
+  const onQuarterly = () =>
+    stripeSub('sub_1', 'price_q', {
+      metadata: { planKey: 'pro_quarterly' },
+      items: { data: [{ id: 'si_1', price: { id: 'price_q', currency: 'usd', unit_amount: 5999 }, current_period_start: NOW_S, current_period_end: QUARTER_END_S }] },
+    });
+
+  beforeEach(async () => {
+    await fake.db.seekerSubscription.create({
+      data: { id: 'row_1', seekerProfileId: 'sp_1', tier: 'pro', status: 'active', brand: 'roboapply', rail: 'stripe', planKey: 'pro_monthly', interval: 'month', stripeSubscriptionId: 'sub_1', stripeCustomerId: 'cus_1', amountMinor: 2499, currency: 'USD', currentPeriodEnd: new Date(PERIOD_END_S * 1000), cancelAtPeriodEnd: false },
+    });
+    // Stripe holds the monthly plan until the update is made, the quarterly one after it.
+    let switched = false;
+    stripe.subscriptions.retrieve.mockImplementation(async () => (switched ? onQuarterly() : onMonthly()) as never);
+    stripe.subscriptions.update.mockImplementation(async () => {
+      switched = true;
+      return {};
+    });
+  });
+  afterEach(() => {
+    stripe.subscriptions.update.mockImplementation(async () => ({}));
+  });
+
+  it('no event delivered: GET /billing/plan reports the new plan, interval, price and renewal date; credits wait for invoice.paid', async () => {
+    const res = await h.request<any>('POST', '/api/v1/roboapply/billing/switch', { ...AS_USER, body: confirmBody });
+    expect(res.body.data).toEqual({ switched: true, planKey: 'pro_quarterly' });
+    expect(await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).toMatchObject({
+      tier: 'pro',
+      planKey: 'pro_quarterly',
+      interval: 'quarter',
+      amountMinor: 5999,
+      stripeSubscriptionId: 'sub_1',
+      currentPeriodEnd: new Date(QUARTER_END_S * 1000),
+    });
+    const plan = await h.request<any>('GET', '/api/v1/roboapply/billing/plan', AS_USER);
+    expect(plan.body.data.current).toMatchObject({ planKey: 'pro_quarterly', amountMinor: 5999, currentPeriodEnd: new Date(QUARTER_END_S * 1000).toISOString(), autoRenews: true });
+    // State only: the practice credits of the switch are granted by its paid invoice, once.
+    expect(grantIfNewPeriod).not.toHaveBeenCalled();
+    expect(invalidate).toHaveBeenCalledWith('u_1');
+    const paid = { id: 'evt_sw', type: 'invoice.paid', data: { object: { id: 'in_sw', billing_reason: 'subscription_update', parent: { subscription_details: { subscription: 'sub_1' } } } } };
+    expect(await handleRoboApplyStripeEvent(paid as never, stripe as never)).toEqual({ handled: true });
+    // A switch between two Pro plans is granted as a plan change (a top-up, never a refill: mockCreditService).
+    expect(grantIfNewPeriod).toHaveBeenCalledTimes(1);
+    expect(grantIfNewPeriod).toHaveBeenLastCalledWith(expect.objectContaining({ tier: 'pro', credits: 3, force: true, planChange: true }));
+    // A replay of the invoice is no plan change any more: it is guarded by the period.
+    expect(await handleRoboApplyStripeEvent(paid as never, stripe as never)).toEqual({ handled: true, duplicate: true });
+    expect(grantIfNewPeriod).toHaveBeenLastCalledWith(expect.not.objectContaining({ planChange: true }));
+  });
+
+  it('a switch that still needs the buyer writes nothing to the row', async () => {
+    setBillingServiceDepsForTests(testDeps({ confirmSwitch: (async () => ({ planKey: 'pro_quarterly', stripeSubscriptionId: 'sub_1', requiresAction: true, hostedInvoiceUrl: null })) as never }));
+    const res = await h.request<any>('POST', '/api/v1/roboapply/billing/switch', { ...AS_USER, body: confirmBody });
+    expect(res.body.data).toMatchObject({ switched: false, requiresAction: true });
+    expect(await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).toMatchObject({ planKey: 'pro_monthly', interval: 'month' });
+    expect(stripe.subscriptions.retrieve).not.toHaveBeenCalled();
+  });
+
+  it('a sync that fails never fails the answer: the charge is made and the webhook writes the row', async () => {
+    setBillingServiceDepsForTests(testDeps({ confirmSwitch: (async () => ({ planKey: 'pro_quarterly', stripeSubscriptionId: 'sub_1', requiresAction: false })) as never }));
+    stripe.subscriptions.retrieve.mockRejectedValueOnce(Object.assign(new Error('stripe is down'), { type: 'StripeAPIError' }));
+    const res = await h.request<any>('POST', '/api/v1/roboapply/billing/switch', { ...AS_USER, body: confirmBody });
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({ switched: true, planKey: 'pro_quarterly' });
+    expect(await fake.db.seekerSubscription.findUnique({ where: { id: 'row_1' } })).toMatchObject({ planKey: 'pro_monthly' });
   });
 });
 
@@ -1065,8 +1158,10 @@ describe('webhook: a synced price is recognised without metadata or pins', () =>
 });
 
 describe('Stripe event handler registry (the seam for refunds, disputes and the later lifecycle events)', () => {
-  const TYPE = 'charge.refunded';
-  const event = { id: 'evt_r1', type: TYPE, data: { object: { id: 'ch_1', customer: 'cus_1', amount: 2499, amount_refunded: 2499 } } };
+  // A type no module of the product handles. (It was `charge.refunded` until the refund engine registered a
+  // real handler for it at boot, MKT-2D; this block must not depend on whether that module is loaded.)
+  const TYPE = 'payout.paid';
+  const event = { id: 'evt_r1', type: TYPE, data: { object: { id: 'po_1', amount: 2499 } } };
   afterEach(() => {
     unregisterStripeEventHandlerForTests(TYPE);
     unregisterStripeEventHandlerForTests('invoice.paid');
@@ -1123,7 +1218,7 @@ describe('Stripe event handler registry (the seam for refunds, disputes and the 
       const failed = await post();
       expect([failed.status, failed.body]).toEqual([500, { received: true, handled: false }]);
 
-      next = { id: 'evt_other', type: 'payout.paid', data: { object: {} } };
+      next = { id: 'evt_other', type: 'customer.created', data: { object: {} } };
       expect((await post()).status).toBe(200);
     } finally {
       await wh.close();

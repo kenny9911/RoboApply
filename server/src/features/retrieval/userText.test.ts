@@ -123,6 +123,53 @@ describe('resumeText', () => {
     expect(strip('Node.js, ASP.NET Core, socket.io and Vue.js')).toBe('Node.js, ASP.NET Core, socket.io and Vue.js');
   });
 
+  // M2 gate (match-retrieval): this strip is the one in force for `user.embed`. On GoApply a WeChat id in a
+  // 自我评价 line is the usual way to leave a contact; it went to the embeddings provider with the rest.
+  it('removes a chat handle after its label, and leaves the same words alone when no handle follows', () => {
+    const strip = (t: string) => redactResumeText(t, { names: ['Ada', 'Lovelace', 'Ada Lovelace'] });
+    const zh = strip('- 负责后端开发，联系我 微信 wxm_dev2020 或 QQ 123456789');
+    expect(zh).not.toMatch(/wxm_dev2020|123456789/);
+    expect(zh).toContain('负责后端开发');
+    const en = strip('- reach me on WeChat: coder_x99, Telegram @coderx');
+    expect(en).not.toMatch(/coder_x99|coderx/);
+    for (const line of ['微信号：abc12345', '微信号 abcdefg', 'VX：ada_2020', 'WeChat ID wxid_9k2', 'QQ号 88886666', 'Skype: ada.example', 'WhatsApp: +491512345678x', 'LINE ID: ada_l99', 'weixin：ada-dev']) {
+      const out = strip(`- 联系 ${line} 谢谢`);
+      expect(out, line).toMatch(/联系 .*谢谢/);
+      expect(out, line).not.toMatch(/abc12345|abcdefg|ada_2020|wxid_9k2|88886666|ada\.example|1512345678|ada_l99|ada-dev/);
+    }
+    // Ordinary resume text that names the same products stays word for word.
+    for (const line of [
+      '- Built WeChat mini programs and WeChat Pay v3 integrations',
+      '- 负责微信小程序与微信支付的开发',
+      '- 运营 QQ 音乐活动，管理 QQ 群',
+      '- Wrote Telegram bots and a WhatsApp Business API client',
+      '- Owned the product line items and the Skype for Business rollout',
+      '- Maintained the WeChat identity service',
+      'Node.js, ASP.NET Core, socket.io and Vue.js',
+    ]) {
+      expect(strip(line), line).toBe(line);
+    }
+  });
+
+  it('removes a personal page written without a scheme: on a shared host, after a label, or spelling the person\'s name', () => {
+    const strip = (t: string) => redactResumeText(t, { names: ['Ada', 'Lovelace', 'Ada Lovelace'] });
+    const out = strip('- Site: adalovelace.dev and ada-portfolio.vercel.app');
+    expect(out).not.toMatch(/adalovelace|portfolio|vercel|\.dev|\.app/);
+    expect(strip('- 个人主页：coder.example.cn/about 欢迎访问')).not.toMatch(/coder|example\.cn/);
+    expect(strip('- Notes at lovelace-notes.xyz/posts')).not.toMatch(/lovelace|notes\.xyz/);
+    expect(strip('- Demo on my-demo.pages.dev')).not.toContain('pages.dev');
+    // A host that is not the person's stays (an employer, a product).
+    expect(strip('- Scaled booking.example.com checkout')).toContain('booking.example.com');
+  });
+
+  it('removes what is left glued to a removed name: the domain of an address, the rest of a host', () => {
+    const strip = (t: string) => redactResumeText(t, { names: ['Ada', 'Lovelace', 'Ada Lovelace'] });
+    expect(strip('- Email ada@example.com for details')).not.toMatch(/example\.com|@/);
+    expect(strip('- Mail ada.lovelace@mail.example.org')).not.toMatch(/example\.org|@/);
+    // A removed name at the end of a sentence takes nothing else with it.
+    expect(strip('- Mentored by Ada. Then led the team')).toContain('Then led the team');
+  });
+
   it('is empty for a resume with no parsed data, and for one with nothing to read', () => {
     expect(resumeText({ parsedData: null }, { names: [], strip: redactResumeText })).toBe('');
     expect(resumeText({ parsedData: 'markdown only' }, { names: [], strip: redactResumeText })).toBe('');

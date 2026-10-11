@@ -206,6 +206,7 @@
     "pricingPage": {
       "choosePlan": "选择这个套餐",
       "signupToBuy": "先免费注册，再购买",
+      "confirmSchoolEmail": "确认学校邮箱",
       "passRefund1": "首次购买的会员卡，在使用需要会员的功能不满 5 次的情况下，可在 7 天内退款（周卡为 48 小时内）。",
       "passRefund2": "面试练习包在一次都没有使用之前可以退款。",
       "passRefundHow": "在帮助页面申请退款"

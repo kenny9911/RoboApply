@@ -102,6 +102,27 @@ export interface FitChip {
   score: number | null;
   tier: FitTier | null;
   kind: 'pre' | 'ai';
+  /**
+   * How much the fit rests on, and one reason when that is low (server:
+   * features/extension/contract.ts `PageJobResponse.fit`). Optional: an older
+   * server sends neither, and the chip then shows as before.
+   */
+  confidence?: 'high' | 'medium' | 'low';
+  confidenceReason?: string | null;
+}
+
+/** Low-confidence reasons the extension has words for (`extension.fit.confidence.reason.*`). */
+export const FIT_CONFIDENCE_REASONS = ['no_skills_listed', 'no_level_stated', 'no_role_evidence', 'no_resume', 'few_details'] as const;
+
+/**
+ * The string key of the one reason line under a fit: only for a quick
+ * estimate whose confidence is low and whose reason has words. An AI fit, a
+ * high- or medium-confidence estimate and an unknown reason show nothing.
+ */
+export function fitConfidenceReasonKey(fit: FitChip | null | undefined): string | null {
+  if (!fit || fit.kind !== 'pre' || fit.confidence !== 'low') return null;
+  const reason = fit.confidenceReason;
+  return reason && (FIT_CONFIDENCE_REASONS as readonly string[]).includes(reason) ? `fit.confidence.reason.${reason}` : null;
 }
 
 /** Body of POST /ext/page-job and POST /ext/jobs/save. */

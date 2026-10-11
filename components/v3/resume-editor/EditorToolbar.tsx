@@ -24,8 +24,8 @@ interface Props {
   name: string;
   onRename: (next: string) => void;
   saveState: SaveState;
-  /** 0..100 resume strength. */
-  strength: number;
+  /** 0..100 resume strength; null when the resume could not be analysed (the meter is then not shown). */
+  strength: number | null;
   /** Full analyzer report backing the meter; null while structured is unset. */
   report?: AnalyzerReport | null;
   /** Scroll to the section an analyzer issue points at. */
@@ -98,6 +98,7 @@ export function EditorToolbar({
           >
             {savedLabel}
           </span>
+          {strength === null ? null : (
           <span className="rb-analyzer-wrap">
             <button
               type="button"
@@ -132,6 +133,7 @@ export function EditorToolbar({
               />
             ) : null}
           </span>
+          )}
         </div>
       </div>
 

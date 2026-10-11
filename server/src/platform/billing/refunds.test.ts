@@ -211,6 +211,32 @@ describe('computeRefund: statutory withdrawal with the waiver ticked (ST-9, MARK
   });
 });
 
+// M2 gate: the 14 days run from the PURCHASE. A weekly plan renews on day 7, inside them.
+describe('a renewal paid inside the purchase\'s 14 days (`purchasedAt`)', () => {
+  const renewal = (over: Partial<RefundInput> = {}) =>
+    input({ planKey: 'pro_weekly', amountMinor: 999, billingCountry: 'DE', withdrawalWaiver: true, chargedAt: days(7), purchasedAt: T0, periodStart: days(7), periodEnd: days(14), ...over });
+
+  it('with the waiver: the unused days of the running week, until day 14 of the purchase', () => {
+    const d = computeRefund(renewal({ now: days(10) }));
+    expect(d).toMatchObject({ eligible: true, rule: 'withdrawal_14d_prorata', amountMinor: Math.floor((999 * 4) / 7), prorata: { usedDays: 3, periodDays: 7 }, endsAccess: true });
+    expect(d.deadline).toBe(days(14).toISOString());
+    expect(isWithdrawalRule(computeRefund(renewal({ now: new Date(days(14).getTime() + 1) })).rule)).toBe(false);
+  });
+
+  it('a monthly plan is unaffected: its 14 days end before its first renewal, and without `purchasedAt` the window runs from the charge', () => {
+    // A third week (charged on day 14) is outside the purchase's 14 days.
+    expect(isWithdrawalRule(computeRefund(renewal({ chargedAt: days(14), periodStart: days(14), periodEnd: days(21), now: days(15) })).rule)).toBe(false);
+    // The same charge described as a purchase of its own would be inside its own window: only `purchasedAt` says otherwise.
+    expect(computeRefund(renewal({ purchasedAt: null, chargedAt: days(14), periodStart: days(14), periodEnd: days(21), now: days(15) })).rule).toBe('withdrawal_14d_prorata');
+  });
+
+  it('without the waiver the full amount handed in, with the purchase\'s deadline', () => {
+    const d = computeRefund(renewal({ withdrawalWaiver: false, chargedAt: T0, purchasedAt: null, amountMinor: 1998, now: days(10) }));
+    expect(d).toMatchObject({ eligible: true, rule: 'withdrawal_14d', amountMinor: 1998 });
+    expect(d.deadline).toBe(days(14).toISOString());
+  });
+});
+
 describe('paidOnlyCreditsUsed', () => {
   it('counts units above the Free cap per window only', () => {
     const used = paidOnlyCreditsUsed(

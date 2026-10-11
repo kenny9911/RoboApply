@@ -247,6 +247,19 @@ describe('embedTexts', () => {
     await expect(kit({ OPENAI_API_KEY: 'sk-open' }, { fetch: dup.fetch }).client.embedTexts('roboapply', ['a', 'b'], JOB)).rejects.toMatchObject({ code: 'bad_response' });
   });
 
+  // M2 gate: some compatible gateways answer a filtered or failed input with zeros. Its cosine distance to anything is NaN.
+  it('fails the whole call for a vector of zeros: it is a malformed answer, never an embedding', async () => {
+    const zeros = Array.from({ length: 1024 }, () => 0);
+    const f = fakeFetch((call) => ok(call.body.input.map((_, i) => (i === 1 ? zeros : vec(i)))));
+    const k = kit({ OPENAI_API_KEY: 'sk-open' }, { fetch: f.fetch });
+    await expect(k.client.embedTexts('roboapply', ['a', 'b', 'c'], JOB)).rejects.toMatchObject({ name: 'EmbeddingsError', code: 'bad_response' });
+    // One component that is not zero is a direction, so it is a vector.
+    const almost = [...zeros.slice(0, 1023), 0.5];
+    const g = fakeFetch((call) => ok(call.body.input.map(() => almost)));
+    const out = await kit({ OPENAI_API_KEY: 'sk-open' }, { fetch: g.fetch }).client.embedTexts('roboapply', ['a'], JOB);
+    expect('vectors' in out && out.vectors[0]).toEqual(almost);
+  });
+
   it('retries once on 429 after the Retry-After delay, and once on a 5xx', async () => {
     const f = fakeFetch((call, n) => (n === 1 ? new Response('slow down', { status: 429, headers: { 'Retry-After': '2' } }) : ok(call.body.input.map((_, i) => vec(i)))));
     const k = kit({ OPENAI_API_KEY: 'sk-open' }, { fetch: f.fetch });

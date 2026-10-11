@@ -516,6 +516,25 @@ describe('KitRow', () => {
     expect(within(row).getByText(/Good fit/)).toHaveAttribute('data-tier', 'good');
     expect(net.calls.some((c) => c.path.includes('/jobs/jobY'))).toBe(false);
   });
+
+  // M2 gate (D3): the server sends `kind` with every fit since MKT-2F. A deterministic estimate read "Good fit"
+  // here with nothing saying so, while the feed card and the job page show "Quick estimate" for the same fit.
+  it('a quick estimate says so next to the tier; an AI fit does not; a fit without a kind is read as an estimate (the contract\'s rule)', async () => {
+    const kit = (jobId: string, fit: Record<string, unknown>) =>
+      item({ id: `q_${jobId}`, jobId, job: { title: `Analyst ${jobId}`, companyName: 'Initech', location: null, hasApplyUrl: true, closed: false, asksForCoverLetter: false, fit } as never });
+    renderWithBrand(
+      <ul>
+        <KitRow item={kit('pre', { tier: 'good', score: 72, kind: 'pre' })} />
+        <KitRow item={kit('ai', { tier: 'good', score: 72, kind: 'ai' })} />
+        <KitRow item={kit('none', { tier: 'good', score: 72 })} />
+      </ul>,
+      { flags: ON },
+    );
+    const [pre, ai, none] = screen.getAllByTestId('kit-row');
+    expect(within(pre!).getByTestId('fit-estimate-tag')).toHaveTextContent('Quick estimate');
+    expect(within(ai!).queryByTestId('fit-estimate-tag')).toBeNull();
+    expect(within(none!).getByTestId('fit-estimate-tag')).toHaveTextContent('Quick estimate');
+  });
 });
 
 // ── /ready/[jobId] ──────────────────────────────────────────────────────────

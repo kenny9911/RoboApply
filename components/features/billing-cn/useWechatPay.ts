@@ -13,10 +13,18 @@
 //   detectTradeType(ua)       JSAPI inside WeChat, H5 in a mobile browser,
 //                             Native QR on desktop.
 //   useWechatPayOrder(id)     polls the order while it is pending (stops on
-//                             an error and after the payment window).
+//                             an error and after the payment window). The
+//                             status read is open whenever WeChat Pay is SET
+//                             UP, also under the kill switch, so an order
+//                             that was in flight when sales were closed can
+//                             still be looked up; a deployment where WeChat
+//                             Pay is not set up answers 404 `feature_disabled`
+//                             (`isWechatPayNotSetUp`), which is not retried.
 
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
+import { RoboApiError } from '../../../lib/api/client';
+import { apiErrorCode } from '../../../lib/api/contracts/wire';
 import { useBrand } from '../../../lib/brand/BrandProvider';
 import { useFlag } from '../../../lib/flags';
 import { getWechatPayOrder } from '../../../lib/api/billingCn';
@@ -98,6 +106,15 @@ export function orderPollInterval(
   return ORDER_POLL_MS;
 }
 
+/**
+ * The order read answered "WeChat Pay is not set up on this deployment"
+ * (server: features/billing-cn/routes.ts `whenSetUp`, 404 `feature_disabled`).
+ * A final answer: there is no WeChat Pay order to show here.
+ */
+export function isWechatPayNotSetUp(err: unknown): boolean {
+  return err instanceof RoboApiError && err.status === 404 && apiErrorCode(err) === 'feature_disabled';
+}
+
 export function useWechatPayOrder(orderId: string | null, opts: { expiresAt?: string | null } = {}): UseQueryResult<CnOrderStatus> {
   return useQuery<CnOrderStatus>({
     queryKey: orderQueryKey(orderId),
@@ -105,7 +122,8 @@ export function useWechatPayOrder(orderId: string | null, opts: { expiresAt?: st
     enabled: Boolean(orderId),
     refetchInterval: (q) => orderPollInterval(q.state, opts.expiresAt),
     refetchIntervalInBackground: false,
-    retry: 2,
+    // "Not set up here" cannot change by asking again.
+    retry: (failures, err) => !isWechatPayNotSetUp(err) && failures < 2,
   });
 }
 

@@ -52,11 +52,27 @@ export {
   loadBillingAccount,
   planDefinitionFor,
   quoteSwitch,
+  renewalChangeIdempotencyKey,
+  resumeSubscription,
   stripePeriod,
+  switchIdempotencyKey,
   switchPriceFor,
   toSubscriptionRow,
 } from './subscriptions.js';
-export type { BillingAccount, BillingDb, CancelInput, CancelOutcome, PlanState, PlanStatus, SubscriptionRow, SwitchQuote } from './subscriptions.js';
+export type {
+  BillingAccount,
+  BillingDb,
+  CancelInput,
+  CancelOutcome,
+  ConfirmSwitchResult,
+  PlanState,
+  PlanStatus,
+  ResumeAck,
+  ResumeCharge,
+  ResumeOutcome,
+  SubscriptionRow,
+  SwitchQuote,
+} from './subscriptions.js';
 export {
   ACCIDENTAL_RENEWAL_DAYS,
   FIRST_PURCHASE_DAYS,
@@ -143,6 +159,7 @@ export {
   setStripeRefundDepsForTests,
   withdrawPurchase,
   withdrawalQuote,
+  withdrawalQuotes,
 } from './stripeRefunds.js';
 export type {
   IssueRefundInput,

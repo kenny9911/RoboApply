@@ -22,6 +22,7 @@ import { getEmailTemplate } from '../registry.js';
 import {
   NOTIFY_TEMPLATE_KEYS,
   NOTIFY_TEMPLATES,
+  fitLine,
   formatPay,
   type AlertJobCard,
   type NotifyTemplateKey,
@@ -128,6 +129,31 @@ describe('notify email templates', () => {
     expect(weekly.bodyText).toContain('2 applications have had no reply for 10 days.');
     const weeklyNone = tpl.render({ brand, t, origin: brand.canonicalOrigin, params: { search: 'Data', cadence: 'weekly', jobs: [job(1)], moreCount: 0, noReplyCount: 0 } });
     expect(weeklyNone.bodyText).not.toContain('no reply');
+  });
+
+  // M2 gate (MKT-2F item 4, strategy 2.2 I6): a mail for an estimated job says it is a quick estimate.
+  it('an alert or digest card for an estimated job says "Quick estimate"; an AI fit and a card stored before the kind existed print the tier alone', () => {
+    const brand = getBrand('roboapply');
+    const t = createEmailTranslator(brand, 'en');
+    const jobs = [job(1, { kind: 'estimate' }), job(2, { kind: 'ai' }), job(3)];
+    const renders = [
+      getEmailTemplate(NOTIFY_TEMPLATES.jobAlertInstant)!.render({ brand, t, origin: brand.canonicalOrigin, params: { search: 'Backend', jobs } }),
+      getEmailTemplate(NOTIFY_TEMPLATES.jobAlertDigest)!.render({ brand, t, origin: brand.canonicalOrigin, params: { search: 'Backend', cadence: 'daily', jobs, moreCount: 0 } }),
+    ];
+    for (const body of renders) {
+      for (const text of [body.bodyText, body.bodyHtml]) {
+        expect(text.split('Quick estimate')).toHaveLength(2); // exactly once
+        expect(text.match(/Good fit/g)).toHaveLength(3);
+      }
+      // The estimated card is the first one: its tier line carries the words, the two others do not.
+      const cards = body.bodyText.split(/\n(?=- Backend Engineer \d)/);
+      expect(cards[1]).toContain('\n  Good fit · Quick estimate\n');
+      expect(cards[2]).toMatch(/\n  Good fit\n/);
+      expect(cards[3]).toMatch(/\n  Good fit\n/);
+      expect(body.bodyHtml).toContain('>Good fit · Quick estimate</div>');
+    }
+    expect(fitLine({ tier: 'great', kind: 'estimate' }, t)).toBe('Great fit · Quick estimate');
+    expect(fitLine({ tier: 'possible' }, t)).toBe('Possible');
   });
 
   it('links each job with from=alert, shows the tier, the gap line and the fit note', () => {

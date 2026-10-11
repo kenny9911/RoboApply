@@ -113,7 +113,13 @@ export interface SkillSnapshot extends SkillVocabulary {
   everydayWord(id: string): boolean;
 }
 
-export type SkillEvidenceState = 'shown' | 'related' | 'not_shown';
+/**
+ * `unscored`: the skill is not one the vocabulary has reviewed (an unreviewed
+ * skill, or an id it does not hold) and the person does not list exactly it.
+ * Such a skill is shown but not scored (MATCH 4.6): nothing may say "Not in
+ * your resume" about it, because nobody has checked what it is or what shows it.
+ */
+export type SkillEvidenceState = 'shown' | 'related' | 'not_shown' | 'unscored';
 
 /** `via` is the more specific skill that counted, for `related` only. */
 export interface SkillEvidence {

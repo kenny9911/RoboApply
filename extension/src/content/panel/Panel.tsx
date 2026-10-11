@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { AtsAdapter, JobOnPage } from '../../adapters/types';
 import { useTranslations, type TFunction } from '../../i18n/index';
-import type { ExtMeResponse, FitChip } from '../../shared/contract';
+import { fitConfidenceReasonKey, type ExtMeResponse, type FitChip } from '../../shared/contract';
 import type { ExtApi } from '../bridge';
 import { apiPageUrl } from '../pageUrl';
 import { FillSession, summarize, type ChecklistItem, type FillMode, type SessionState } from '../fill';
@@ -73,6 +73,8 @@ function formatReset(iso: string | null): string | null {
 }
 
 function FitLine({ fit, market, t }: { fit: FitChip; market: 'intl' | 'cn'; t: TFunction }) {
+  // Why a quick estimate rests on little (the same reasons, in the same words, as the app's fit card).
+  const reasonKey = fitConfidenceReasonKey(fit);
   return (
     <div className="fit">
       {fit.tier ? (
@@ -83,6 +85,11 @@ function FitLine({ fit, market, t }: { fit: FitChip; market: 'intl' | 'cn'; t: T
       <span className="meta">{fit.score === null ? '—' : t('fit.score', { score: Math.round(fit.score) })}</span>
       {fit.kind === 'pre' ? <span className="chip">{t('fit.quickEstimate')}</span> : null}
       {fit.kind === 'ai' && market === 'cn' ? <CnAiBadge /> : null}
+      {reasonKey ? (
+        <p className="meta" data-testid="fit-low-confidence" style={{ width: '100%', margin: 0 }}>
+          {t(reasonKey)}
+        </p>
+      ) : null}
       <p className="meta muted" style={{ width: '100%', margin: 0 }}>
         {t('fit.note')}
       </p>

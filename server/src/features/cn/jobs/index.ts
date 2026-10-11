@@ -10,7 +10,8 @@
 //     with stage 'import'), `hasCnFraudFlags(fraudFlags)`, `CN_FRAUD_RULES`;
 //   - card: `buildCnCardMeta` (what marketHooks.cardMeta returns under `cn`),
 //     `isDirectFromEmployer` (企业直招 rule);
-//   - deep links: `buildExternalSearchLinks`.
+//   - deep links: `buildExternalSearchLinks`;
+//   - contact strip: `stripContactInfo` (recruiter phone numbers and WeChat ids out of a text).
 
 export * from './contract.js';
 export { createCnJobsAdminRouter, createCnJobsRouter } from './routes.js';
@@ -32,6 +33,9 @@ export { buildExternalSearchLinks } from './deeplinks.js';
 export { cnFlagsOf } from './fraud/flags.js';
 export { detectCnFraudSignals } from './fraud/keywords.js';
 export { cnImportWarnings } from './service.js';
+// The mainland text rule (§1.5 / JC-7) for a text that leaves the row: the retrieval area strips a private import's
+// card text and search document with it (the import itself stays as pasted for its owner).
+export { stripContactInfo } from './text.js';
 
 import { cnFlagsOf } from './fraud/flags.js';
 

@@ -8,16 +8,24 @@
 // "paid" only when the server does. `onStatus` tells the page what the order
 // is now, so its heading never keeps saying "checking" over a final answer.
 //
-// Renders nothing off GoApply or when WeChat Pay is not available (no UI
-// entry, R-04); the caller then shows its ordinary return page.
+// The order is asked for on GoApply whenever `?order=` is an order number,
+// NOT only while WeChat Pay can start a new purchase: an order that was in
+// flight when the kill switch closed sales is still completed by the server,
+// and its buyer must see it here (PAR carry-over, payments 10). The status
+// read is open whenever WeChat Pay is set up. Where it is not, the server
+// answers 404 `feature_disabled`: this renders nothing and reports
+// `unavailable`, and the caller shows its ordinary return page.
+//
+// Renders nothing off GoApply and without an order number.
 
 import { useEffect, type ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { Btn } from '../../v3/primitives/Btn';
 import type { CnOrderStatus } from '../../../lib/api/contracts/billing-cn';
+import { useBrand } from '../../../lib/brand/BrandProvider';
 import { BILLING_PATH, HELP_PATH } from './WechatPayCheckout';
-import { useWechatPayAvailable, useWechatPayOrder } from './useWechatPay';
+import { isWechatPayNotSetUp, useWechatPayOrder } from './useWechatPay';
 import styles from './billingCn.module.css';
 
 /** Our WeChat Pay order numbers (`GAWX…`, ≤32 chars of [0-9A-Za-z_-|*]). */
@@ -25,8 +33,12 @@ export function isOrderNumber(value: string | null | undefined): value is string
   return typeof value === 'string' && /^[0-9A-Za-z_\-|*]{6,64}$/.test(value);
 }
 
-/** What the order is now: the server's status, `checking` before the first answer, `error` when the status call failed. */
-export type WechatPayReturnState = CnOrderStatus['status'] | 'checking' | 'error';
+/**
+ * What the order is now: the server's status, `checking` before the first
+ * answer, `error` when the status call failed, `unavailable` when the server
+ * said WeChat Pay is not set up here (nothing is rendered then).
+ */
+export type WechatPayReturnState = CnOrderStatus['status'] | 'checking' | 'error' | 'unavailable';
 
 export interface WechatPayReturnProps {
   /** `?order=` from the return URL. */
@@ -40,10 +52,11 @@ export interface WechatPayReturnProps {
 export function WechatPayReturn({ orderId, onPaid, onStatus }: WechatPayReturnProps) {
   const t = useTranslations('billingCn');
   const locale = useLocale();
-  const { available, loading } = useWechatPayAvailable();
-  const id = isOrderNumber(orderId) ? orderId : null;
-  const status = useWechatPayOrder(available ? id : null);
+  const brand = useBrand();
+  const id = brand.market === 'cn' && isOrderNumber(orderId) ? orderId : null;
+  const status = useWechatPayOrder(id);
   const order = status.data ?? null;
+  const notSetUp = status.isError && isWechatPayNotSetUp(status.error);
 
   const paidOrder = order?.status === 'paid' ? order : null;
   useEffect(() => {
@@ -52,14 +65,15 @@ export function WechatPayReturn({ orderId, onPaid, onStatus }: WechatPayReturnPr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paidOrder?.orderId]);
 
-  const shown = !loading && available && id !== null;
+  const asked = id !== null;
+  const shown = asked && !notSetUp;
   const state = order?.status ?? null;
-  const reported: WechatPayReturnState = status.isError ? 'error' : (state ?? 'checking');
+  const reported: WechatPayReturnState = notSetUp ? 'unavailable' : status.isError ? 'error' : (state ?? 'checking');
   useEffect(() => {
-    if (shown) onStatus?.(reported);
+    if (asked) onStatus?.(reported);
     // Fire once per change of state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shown, reported]);
+  }, [asked, reported]);
 
   if (!shown) return null;
 

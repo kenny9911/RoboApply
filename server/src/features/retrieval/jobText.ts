@@ -4,7 +4,9 @@
 // document (searchDoc.ts) and the embedded card text (cardText.ts):
 // title; role labels; level; skills, required first; the enrichment summary;
 // the head of the requirement text. Company boilerplate, benefits and legal
-// text are not part of either (MATCH 4.9).
+// text are not part of either (MATCH 4.9). For a mainland posting the free
+// text goes through the contact strip first (`JobTextDeps.stripContact`): what
+// is indexed or embedded for it carries no recruiter phone number or WeChat id.
 //
 // Skills: when the posting has canonical skill ids (`RAJob.skillIds`, filled
 // from phase M4) and a vocabulary is given, the canonical labels are used,
@@ -47,6 +49,16 @@ export interface SkillLabels {
 export interface JobTextDeps {
   /** The skill vocabulary, when one is loaded. Absent or null: the stored display strings are used. */
   skillLabels?: SkillLabels | null;
+  /**
+   * Removes a recruiter's phone number and WeChat id from a text
+   * (features/cn/jobs `stripContactInfo`). Applied to the free text of every
+   * MAINLAND posting (title, summary, requirement text) before it is cut: an
+   * indexed mainland row was cleaned before it was stored, but a user's own
+   * import keeps its text as pasted, and this is where that text would
+   * otherwise leave for the search document and the embeddings provider
+   * (MARKET_STRATEGY §1.5 / JC-7). Other markets are never touched.
+   */
+  stripContact?: ((text: string) => string) | null;
 }
 
 export interface JobTextParts {
@@ -130,15 +142,17 @@ export function jobTextParts(row: IndexJobRow, deps: JobTextDeps = {}): JobTextP
   const display = displaySkills(row);
   // `skillIds` are stored required first (ra-jobs.prisma); they carry no required flag of their own.
   const canonical = canonicalSkills(row, deps.skillLabels);
-  const requirementText = clean(row.qualifications) || clean(row.descriptionPlain?.slice(0, REQUIREMENTS_HEAD_CHARS * 4));
+  const stripContact = row.market === 'cn' ? (deps.stripContact ?? null) : null;
+  const text = (v: string | null | undefined): string => clean(stripContact && typeof v === 'string' ? stripContact(v) : v);
+  const requirementText = text(row.qualifications) || text(row.descriptionPlain?.slice(0, REQUIREMENTS_HEAD_CHARS * 4));
   return {
-    title: clean(row.title),
+    title: text(row.title),
     roleLabels,
     level: clean(row.seniority) || null,
     requiredSkills: canonical ?? display.required,
     preferredSkills: canonical ? [] : display.preferred,
     skillAliases: canonical ? unique([...canonical, ...display.required, ...display.preferred]).slice(canonical.length) : [],
-    summary: clean(row.summary) || null,
+    summary: text(row.summary) || null,
     requirementsHead: requirementText.slice(0, REQUIREMENTS_HEAD_CHARS),
   };
 }

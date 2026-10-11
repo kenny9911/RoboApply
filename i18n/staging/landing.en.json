@@ -215,6 +215,7 @@
     "pricingPage": {
       "choosePlan": "Choose this plan",
       "signupToBuy": "Create a free account to buy",
+      "confirmSchoolEmail": "Confirm your school email",
       "passRefund1": "Your first pass can be refunded within 7 days (48 hours for the week pass) if you used fewer than 5 actions that need a paid pass.",
       "passRefund2": "A practice pack can be refunded while none of its practice interviews has been used.",
       "passRefundHow": "Ask for a refund from the Help page"

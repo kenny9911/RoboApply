@@ -21,6 +21,9 @@ vi.mock('../../../../lib/api/support', () => ({
   sendSupportMessage: api.sendSupportMessage,
 }));
 vi.mock('../../../../lib/api/credits', async (orig) => ({ ...(await orig<Record<string, unknown>>()), getPlans: api.getPlans }));
+// The one account call of this public page: the signed-in viewer's student status (never asked for a visitor).
+const account = vi.hoisted(() => ({ getStudentStatus: vi.fn() }));
+vi.mock('../../../../lib/api/accountV2', () => ({ accountV2Api: { getStudentStatus: account.getStudentStatus } }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), forward: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
   usePathname: () => '/pricing',
@@ -173,6 +176,70 @@ describe('/pricing, RoboApply: every amount and label from GET /billing/plans (Â
     serve({ ...view, plans: view.plans.map((p) => (p.key === 'student_monthly' ? { ...p, studentDiscountPercent: 22 } : p)) });
     const other = await renderPricing();
     expect(other.card('student_monthly').querySelector('[data-student-discount]')).toHaveTextContent('22% below the regular price');
+  });
+
+  // M2 gate (carry-over MKT-2E.5 a): RoboApply lists the student plans for every caller once the rail is ready,
+  // and the plan sheet offers them to a verified student only. The card must not lead anyone to a dead end.
+  describe('a student plan on a page where plans can be bought', () => {
+    const open = (): PlansView => {
+      const view = withBillingFacts(studentPlansView('roboapply'));
+      return { ...view, paymentsOpen: true, plans: view.plans.map((p) => (p.kind === 'free' ? p : { ...p, sellable: true, unsellableReason: null })) };
+    };
+    const cta = (el: HTMLElement) => el.querySelector('[data-plan-cta]');
+    const HOW = 'The student price is for students who confirm a school email in Settings. The student plans are listed there once the email is confirmed.';
+
+    it('a visitor: both student cards say how the student price works; sign-up is offered and no account call is made', async () => {
+      serve(open());
+      const { card } = await renderPricing();
+      for (const key of ['student_monthly', 'student_quarterly']) {
+        expect(card(key).querySelector('[data-student-how]')).toHaveTextContent(HOW);
+        expect(cta(card(key))).toBeNull();
+        expect(within(card(key)).getByRole('link', { name: 'Create a free account to buy' })).toBeInTheDocument();
+      }
+      // A regular plan says nothing about a school email.
+      expect(card('pro_monthly').querySelector('[data-student-how]')).toBeNull();
+      expect(account.getStudentStatus).not.toHaveBeenCalled();
+    });
+
+    it('signed in without a confirmed school email: the student cards link to the billing page to confirm one, never to a checkout; regular plans keep their checkout link', async () => {
+      auth.status = 'authenticated';
+      account.getStudentStatus.mockResolvedValue({ verified: false });
+      serve(open());
+      const { card } = await renderPricing();
+      await waitFor(() => expect(account.getStudentStatus).toHaveBeenCalledTimes(1));
+      for (const key of ['student_monthly', 'student_quarterly']) {
+        const link = within(card(key)).getByRole('link', { name: 'Confirm your school email' });
+        expect(link).toHaveAttribute('href', '/settings/billing');
+        expect(link).toHaveAttribute('data-plan-cta', 'verify-student');
+        expect(card(key).querySelector('[data-plan-cta="checkout"]')).toBeNull();
+      }
+      expect(cta(card('pro_monthly'))).toHaveAttribute('href', '/settings/billing?plan=pro_monthly#plans');
+    });
+
+    it('a verified student gets the checkout link of the student plan; while the status is unknown or its read fails the card stays on "confirm"', async () => {
+      auth.status = 'authenticated';
+      account.getStudentStatus.mockResolvedValue({ verified: true });
+      serve(open());
+      const verified = await renderPricing();
+      await waitFor(() => expect(cta(verified.card('student_monthly'))).toHaveAttribute('href', '/settings/billing?plan=student_monthly#plans'));
+      expect(cta(verified.card('student_quarterly'))).toHaveAttribute('data-plan-cta', 'checkout');
+      expect(verified.card('student_monthly').querySelector('[data-student-how]')).toHaveTextContent(HOW);
+      cleanup();
+      account.getStudentStatus.mockReset();
+      account.getStudentStatus.mockRejectedValue(new Error('status read failed'));
+      const failed = await renderPricing();
+      await waitFor(() => expect(account.getStudentStatus).toHaveBeenCalled());
+      expect(cta(failed.card('student_monthly'))).toHaveAttribute('data-plan-cta', 'verify-student');
+    });
+
+    it('with no student plan in the list a signed-in viewer makes no student call', async () => {
+      auth.status = 'authenticated';
+      const view = withBillingFacts(plansView('roboapply'));
+      serve({ ...view, paymentsOpen: true, plans: view.plans.map((p) => (p.kind === 'free' ? p : { ...p, sellable: true, unsellableReason: null })) });
+      const { card } = await renderPricing();
+      expect(cta(card('pro_monthly'))).toHaveAttribute('data-plan-cta', 'checkout');
+      expect(account.getStudentStatus).not.toHaveBeenCalled();
+    });
   });
 
   it('"Price not set yet" appears nowhere: a plan with no amount is left out, priced plans stay', async () => {

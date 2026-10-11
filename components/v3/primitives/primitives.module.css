@@ -273,6 +273,15 @@
 .tierPossible { color: var(--text-2); }
 .tierUnlikely { color: var(--text-muted); }
 .tierUnknown { color: var(--text-muted); }
+/* "Quick estimate", after the tier word (the feed card's own tag). */
+.tierEstimate {
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--fs-label);
+  white-space: nowrap;
+}
 
 /* ── Honesty and source lines ─────────────────────────────────────────── */
 .honesty {

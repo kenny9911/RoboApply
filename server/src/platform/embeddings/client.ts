@@ -285,8 +285,15 @@ interface EmbeddingsResponseBody {
   usage?: { total_tokens?: unknown; prompt_tokens?: unknown };
 }
 
+/**
+ * A vector of the right length, of finite numbers, and not all zeros. Some
+ * OpenAI-compatible gateways and self-hosted servers answer a filtered or
+ * failed input with a zero vector: it has no direction, its cosine distance to
+ * anything is NaN, and stored as a job's or a person's vector it would make
+ * "nearest" an arbitrary order. It is a malformed answer, never an embedding.
+ */
 function isVector(value: unknown): value is number[] {
-  return Array.isArray(value) && value.length === EMBEDDING_DIMENSIONS && value.every((n) => typeof n === 'number' && Number.isFinite(n));
+  return Array.isArray(value) && value.length === EMBEDDING_DIMENSIONS && value.every((n) => typeof n === 'number' && Number.isFinite(n)) && value.some((n) => n !== 0);
 }
 
 /** Seconds or an HTTP date → ms, bounded; the default when the header is absent or unreadable. */

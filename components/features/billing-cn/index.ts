@@ -7,4 +7,4 @@ export { CnRenewButton, type CnRenewButtonProps } from './CnRenewButton';
 export { NoRenewalNotice } from './NoRenewalNotice';
 export { brandHasRenewingPlans } from './renewal';
 export { WechatPayReturn, isOrderNumber, type WechatPayReturnProps, type WechatPayReturnState } from './WechatPayReturn';
-export { detectTradeType, sellableCnPlan, useWechatPayAvailable, useWechatPayOrder, type WechatPayAvailability } from './useWechatPay';
+export { detectTradeType, isWechatPayNotSetUp, sellableCnPlan, useWechatPayAvailable, useWechatPayOrder, type WechatPayAvailability } from './useWechatPay';

@@ -18,7 +18,7 @@ vi.mock('../../lib/prisma.js', async () => {
 });
 vi.mock('../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
 
-import { allocatePackRemaining, getBalance, grantForPlan, paidPlanLive, planPracticeAllowance } from '../../lib/mockCreditService.js';
+import { allocatePackRemaining, getBalance, grantForPlan, grantForPlanIfNewPeriod, paidPlanLive, planPracticeAllowance } from '../../lib/mockCreditService.js';
 
 const NOW = new Date('2026-10-10T08:00:00.000Z');
 
@@ -121,5 +121,86 @@ describe('packs', () => {
     expect((await fake.db.rACreditGrant.findUnique({ where: { id: 'pk_old' } })).remaining).toBe(0);
     const expire = (await fake.db.mockInterviewCreditLedger.findMany({})).filter((r: any) => r.reason === 'expire');
     expect(expire).toHaveLength(1);
+  });
+});
+
+// M2 gate (payments-safety): every Pro ↔ Pro switch is offered since M2, and a
+// paid switch invoice used to SET the balance to the new plan's full
+// allowance. A subscriber who had used the month's 3 credits could switch to
+// weekly and back for the price of a proration and hold 3 again.
+describe('a paid plan switch between two Pro plans tops the balance up; it never refills it', () => {
+  const HOUR = 3_600_000;
+  const row = () => fake.db.seekerSubscription.findUnique({ where: { id: 'sub_1' } });
+  /** The grant a paid `subscription_update` invoice makes: forced, as a plan change; the period started at the switch. */
+  const planChange = (credits: number, tier: 'pro' | 'starter' = 'pro') =>
+    grantForPlanIfNewPeriod({ userId: 'u_1', tier, credits, periodStart: new Date(), currentPeriodEnd: new Date('2026-11-10T08:00:00Z'), source: 'stripe', force: true, planChange: true });
+  /** A subscriber whose current allotment was granted `daysAgo` days ago for `tier`. */
+  function subscriber(planKey: string, allotment: number, left: number, tier = 'pro', packs: Record<string, unknown>[] = []) {
+    const grantedAt = new Date(NOW.getTime() - 10 * 24 * HOUR);
+    seed({ tier, planKey, mockCredits: left, mockCreditsRenewedAt: grantedAt, mockCreditsPeriodAllotment: allotment, currentPeriodEnd: new Date('2026-10-30T08:00:00Z'), stripeSubscriptionId: 'st_1' }, packs);
+    fake.db.mockInterviewCreditLedger.create({ data: { seekerProfileId: 'sp_1', userId: 'u_1', delta: allotment, balanceAfter: allotment, reason: 'grant_purchase', tier, createdAt: grantedAt } });
+  }
+  const later = (hours: number) => vi.setSystemTime(new Date(NOW.getTime() + hours * HOUR));
+
+  it('pro_monthly with 0 credits left → pro_weekly → pro_monthly ends with 0 credits', async () => {
+    subscriber('pro_monthly', 3, 0);
+    expect(await planChange(1)).toBe('granted');
+    expect(await row()).toMatchObject({ mockCredits: 0, mockCreditsPeriodAllotment: 3, mockCreditsRenewedAt: NOW });
+    later(1);
+    expect(await planChange(3)).toBe('granted');
+    expect(await row()).toMatchObject({ mockCredits: 0, mockCreditsPeriodAllotment: 3 });
+    // The interval change moved the period start to the switch. The period guard must not read that as an ungranted period.
+    expect(await grantForPlanIfNewPeriod({ userId: 'u_1', tier: 'pro', credits: 3, periodStart: new Date(), source: 'stripe', force: false })).toBe('skipped');
+    expect((await row()).mockCredits).toBe(0);
+    // Every switch leaves a readable ledger row that adds nothing.
+    const changes = (await fake.db.mockInterviewCreditLedger.findMany({})).filter((r: any) => r.metadata?.planChange === true);
+    expect(changes.map((r: any) => [r.delta, r.balanceAfter, r.tier])).toEqual([
+      [0, 0, 'pro'],
+      [0, 0, 'pro'],
+    ]);
+  });
+
+  it('pro_weekly (1 granted) → pro_monthly gains 2, whether the weekly credit was used or not', async () => {
+    subscriber('pro_weekly', 1, 1);
+    await planChange(3);
+    expect(await row()).toMatchObject({ mockCredits: 3, mockCreditsPeriodAllotment: 3 });
+
+    subscriber('pro_weekly', 1, 0);
+    await planChange(3);
+    expect(await row()).toMatchObject({ mockCredits: 2, mockCreditsPeriodAllotment: 3 });
+    // Back to weekly and to monthly again: nothing more.
+    later(1);
+    await planChange(1);
+    later(2);
+    await planChange(3);
+    expect((await row()).mockCredits).toBe(2);
+  });
+
+  it('a top-up adds to the balance, so unspent pack credits and what is left of the plan stay as they are', async () => {
+    subscriber('pro_weekly', 1, 6, 'pro', [{ id: 'pk_1', amount: 5, remaining: 5, expiresAt: new Date('2027-10-01T00:00:00Z') }]);
+    await planChange(3);
+    expect((await row()).mockCredits).toBe(8);
+    expect((await fake.db.rACreditGrant.findUnique({ where: { id: 'pk_1' } })).remaining).toBe(5);
+  });
+
+  it('a legacy practice plan moving to Pro still gets the new plan\'s allowance, set as before', async () => {
+    subscriber('starter', 5, 0, 'starter');
+    await planChange(3);
+    expect(await row()).toMatchObject({ mockCredits: 3, mockCreditsPeriodAllotment: 3 });
+    // An account with no grant on record is set too (nothing says what its balance was granted for).
+    seed({ tier: 'pro', planKey: 'pro_monthly', mockCredits: 0, mockCreditsRenewedAt: null, mockCreditsPeriodAllotment: null, currentPeriodEnd: new Date('2026-10-30T08:00:00Z') });
+    await planChange(3);
+    expect((await row()).mockCredits).toBe(3);
+  });
+
+  it('the next paid renewal sets the plan\'s allowance afresh, and a forced grant that is not a plan change still sets', async () => {
+    subscriber('pro_monthly', 3, 0);
+    await planChange(1); // now weekly; the highest allowance granted this period is still 3
+    later(7 * 24);
+    expect(await grantForPlanIfNewPeriod({ userId: 'u_1', tier: 'pro', credits: 1, periodStart: new Date(), source: 'stripe', force: false })).toBe('granted');
+    expect(await row()).toMatchObject({ mockCredits: 1, mockCreditsPeriodAllotment: 1 });
+    later(7 * 24 + 1);
+    expect(await grantForPlanIfNewPeriod({ userId: 'u_1', tier: 'pro', credits: 3, periodStart: new Date(), source: 'stripe', force: true })).toBe('granted');
+    expect(await row()).toMatchObject({ mockCredits: 3, mockCreditsPeriodAllotment: 3 });
   });
 });

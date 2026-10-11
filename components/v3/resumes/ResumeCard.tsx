@@ -3,7 +3,12 @@
 // ResumeCard — one card in the library grid (.rb-card). Source:
 // RoboApply_V3/resume.jsx ResumeCard. Renders a faux "paper" preview, the
 // variant name + a derived version pill, a tailored-for line (or a "base"
-// muted line), and a meta row with the cached match score + last-edited.
+// muted line), and a meta row with the last-edited time.
+//
+// No fit number here. A resume version's fit for its target job is the "With
+// this version" number, shown only in tailoring and read live there
+// (MARKET_STRATEGY §2.2). The stored copy (`matchScoreCached`) was frozen at
+// the last model call, carried no label, kind or date, and is not printed.
 //
 // Data: a single `RAResumeVariantSummary` from `resumes.list()`. The prototype
 // carries `sections` + `version` which the summary shape does NOT have:
@@ -25,8 +30,6 @@ interface Props {
   editedLabel: string;
   /** Localized fallback when the variant isn't tailored to a job. */
   baseLabel: string;
-  /** Localized "/100" suffix unit. */
-  scoreUnit: string;
   onOpen: () => void;
   /** Open the delete-confirm for this variant. Omit to hide the control. */
   onDelete?: () => void;
@@ -34,25 +37,17 @@ interface Props {
   deleteLabel?: string;
 }
 
-function scoreColor(score: number): string {
-  if (score >= 90) return 'var(--ok)';
-  if (score >= 80) return 'var(--action)';
-  return 'var(--warn)';
-}
-
 export function ResumeCard({
   resume,
   version,
   editedLabel,
   baseLabel,
-  scoreUnit,
   onOpen,
   onDelete,
   deleteLabel,
 }: Props) {
   const t = useTranslations('resume');
   const tailored = Boolean(resume.targetJobTitle || resume.targetJobCompany);
-  const score = resume.matchScoreCached;
 
   return (
     <div className="rb-card-wrap">
@@ -92,13 +87,6 @@ export function ResumeCard({
         )}
 
         <div className="rb-card-meta">
-          {score !== null ? (
-            <span className="rb-card-score" style={{ color: scoreColor(score) }}>
-              {Math.round(score)}
-              <span style={{ fontSize: 'var(--fs-label)', color: 'var(--text-muted)' }}>{scoreUnit}</span>
-            </span>
-          ) : null}
-          {score !== null ? <span className="rb-card-divider">·</span> : null}
           <span>{editedLabel}</span>
         </div>
       </div>

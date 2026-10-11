@@ -278,7 +278,7 @@ Tests to add or change: `rails.test.ts` (default prices sellable with an empty e
 
 **SCA.** First payment: Stripe Checkout runs 3-D Secure. Renewals and switches: `invoice.payment_action_required` and `pending_if_incomplete`, as above.
 
-**Idempotency keys (Stripe API).** `customers.create`: `customer:<seekerProfileId>`. `checkout.sessions.create`: `checkout:<userId>:<planKey>:<currency>:<client key>` where the client key is the `Idempotency-Key` header the web already sends on other writes, falling back to a 10-minute time bucket. `subscriptions.update` (switch): `switch:<subId>:<planKey>:<prorationDate>`. Cancel / resume: `cancel:<subId>:<periodEnd>` / `resume:<subId>:<periodEnd>`. Refund: above. Catalog: above.
+**Idempotency keys (Stripe API).** `customers.create`: `customer:<seekerProfileId>`. `checkout.sessions.create`: `checkout:<userId>:<planKey>:<currency>:<client key>` where the client key is the `Idempotency-Key` header the web already sends on other writes, falling back to a 10-minute time bucket. `subscriptions.update` (switch): `switch:<subId>:<planKey>:<prorationDate>`. Cancel / resume: `cancel:<subId>:<periodEnd>` / `resume:<subId>:<periodEnd>`. Refund: above. Catalog: above. *As built (M2, MKT-2C; owner confirmation pending):* cancel and resume send `cancel|resume:<subId>:<periodEnd>:v<row updatedAt ms>:b<minute>`; the reason is in `MARKET_STRATEGY.md` 5.1, row "Idempotency keys". *As built (M2 gate):* a refund key takes an optional last part, `refund:<pi>:<amount|full>:<attempt>` (one refund decision; a withdrawal sends `withdrawal`), and a pass paid over a subscription ends it with `passover:<subId>:<sessionId>`.
 
 **Webhook.** Events to subscribe (one endpoint, `https://www.roboapply.io/api/v1/roboapply/stripe/webhook`):
 

@@ -32,6 +32,27 @@ describe('Panel', () => {
     expect(api.calls[1]).toMatchObject({ op: 'pageJob', body: { url: URL_GH, title: 'Platform Engineer', company: 'Example Co' } });
   });
 
+  // M2 gate (MKT-2F request 4): the server sends confidence and its reason with every fit.
+  it('a quick estimate with low confidence says why in one line; a confident estimate, an AI fit and an unknown reason say nothing more', async () => {
+    const withFit = (fit: Record<string, unknown>) => fakeApi({ pageJob: () => ({ ok: true as const, data: { jobId: 'job_1', fit: { score: 61, tier: 'good' as const, kind: 'pre' as const, ...fit } } }) });
+    const low = renderPanel(withFit({ confidence: 'low', confidenceReason: 'no_skills_listed' }));
+    expect(await low.panel.findByText('This post lists no skills')).toBeTruthy();
+    expect(low.panel.getByText('Quick estimate')).toBeTruthy();
+    const noResume = renderPanel(withFit({ confidence: 'low', confidenceReason: 'no_resume' }));
+    expect(await noResume.panel.findByText('Add a resume for a full comparison. This estimate uses your profile and preferences.')).toBeTruthy();
+    for (const fit of [
+      { confidence: 'high', confidenceReason: null },
+      { confidence: 'medium', confidenceReason: 'no_level_stated' },
+      { confidence: 'low', confidenceReason: 'a_reason_added_later' },
+      { confidence: 'low', confidenceReason: 'no_skills_listed', kind: 'ai' },
+      {},
+    ]) {
+      const { panel } = renderPanel(withFit(fit));
+      await panel.findByText('Good fit');
+      expect(panel.queryByTestId('fit-low-confidence')).toBeNull();
+    }
+  });
+
   it('fills on click, shows the checklist, and keeps an AI draft in the panel until "Use this answer"', async () => {
     const { panel, api } = renderPanel();
     await panel.findByText('Great fit');

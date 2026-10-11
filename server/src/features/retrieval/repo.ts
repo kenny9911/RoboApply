@@ -133,11 +133,17 @@ const INDEX_JOB_SELECT = {
   archivedAt: true,
 } as const satisfies Prisma.RAJobSelect;
 
-/** A vector as the text literal pgvector reads (`[0.1,0.2,…]`). Throws unless it has exactly 1024 finite numbers. */
+/**
+ * A vector as the text literal pgvector reads (`[0.1,0.2,…]`). Throws unless it
+ * has exactly 1024 finite numbers, and on a vector of zeros: that is no
+ * embedding (its cosine distance to anything is NaN), so it is never stored
+ * and never used as a query.
+ */
 export function vectorLiteral(vector: readonly number[]): string {
   if (!Array.isArray(vector) || vector.length !== VECTOR_DIMENSIONS || !vector.every((n) => typeof n === 'number' && Number.isFinite(n))) {
     throw new Error(`retrieval: a vector must have exactly ${VECTOR_DIMENSIONS} finite numbers (got ${Array.isArray(vector) ? vector.length : 'no array'})`);
   }
+  if (!vector.some((n) => n !== 0)) throw new Error('retrieval: a vector of zeros is not an embedding');
   return `[${vector.join(',')}]`;
 }
 
@@ -264,7 +270,8 @@ export function createRetrievalRepo(getDb: () => Promise<RetrievalDb>, now: () =
           ORDER BY e."embedding" <=> a."embedding", e."jobId"
           LIMIT ${Math.max(1, Math.min(200, Math.floor(limit)))}`,
       );
-      return rows.map((r) => ({ jobId: r.jobId, distance: Number(r.distance) }));
+      // A distance that is not a number (a zero vector stored before the guards) is no neighbour at all.
+      return rows.map((r) => ({ jobId: r.jobId, distance: Number(r.distance) })).filter((r) => Number.isFinite(r.distance));
     },
 
     async userEmbeddingMeta(userId, market) {

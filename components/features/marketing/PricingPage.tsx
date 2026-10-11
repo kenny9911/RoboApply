@@ -33,16 +33,19 @@
 // transport (`notify.email`), AI rows `ai.text`, and the campus calendar line
 // `jobs.campusCalendar`.
 
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 
 import { monthlyPlan, usePlans } from '../../../hooks/credits/usePlans';
 import { useAuth } from '../../../lib/auth/useAuth';
 import { plansBillingFacts, type RefundPolicyFacts, type StudentOfferRow } from '../../../lib/api/account';
+import { accountV2Api } from '../../../lib/api/accountV2';
 import type { CatalogPlan } from '../../../lib/api/credits';
 import type { CreditCapsResponse } from '../../../lib/api/contracts/support';
 import { useBrand } from '../../../lib/brand';
 import { displayPrice, formatMoney, samePriceAsWeeklyBilling } from '../../../lib/pricing';
+import { STUDENT_KEY } from '../account-v2/queries';
 import { CancelFooterLink } from '../credits';
 import { PriceReference } from '../market';
 import { PRICING_FAQ_KEYS, brandPlansRenew, extensionStoreId } from './catalog';
@@ -71,9 +74,25 @@ interface PlanCardProps {
   /** GET /billing/plans said no plan can be bought right now. */
   notOpen: boolean;
   signedIn: boolean;
+  /** The signed-in viewer confirmed a school email (false while unknown, and for a visitor). Read only for a student plan. */
+  studentVerified: boolean;
 }
 
-function PlanCard({ plan, monthly, samePriceAsWeekly, notOpen, signedIn }: PlanCardProps) {
+/** Where a signed-in buyer confirms a school email (the student block of the billing page). */
+export const STUDENT_VERIFY_HREF = '/settings/billing';
+
+/**
+ * Whether the signed-in viewer is a verified student. Asked only when someone
+ * is signed in AND the list carries a student plan: a visitor of this public
+ * page makes no account call. Unknown (loading, failed) reads as "not
+ * verified", so the card never offers a checkout the server would refuse.
+ */
+function useVerifiedStudent(enabled: boolean): boolean {
+  const status = useQuery({ queryKey: STUDENT_KEY, queryFn: () => accountV2Api.getStudentStatus(), enabled, staleTime: 60_000 });
+  return enabled && status.data?.verified === true;
+}
+
+function PlanCard({ plan, monthly, samePriceAsWeekly, notOpen, signedIn, studentVerified }: PlanCardProps) {
   const t = useTranslations('landing.pricingPage');
   const tc = useTranslations('credits');
   const tv = useTranslations('accountV2');
@@ -90,6 +109,11 @@ function PlanCard({ plan, monthly, samePriceAsWeekly, notOpen, signedIn }: PlanC
   const name = tc.has(nameKey) ? tc(nameKey) : plan.defaultLabel;
   const buyable = !notOpen && plan.sellable;
   const oneTimeMarket = !brandPlansRenew(brand);
+  // A student plan is bought only with a confirmed school email (the server refuses the rest, and
+  // the plan sheet does not offer it): say so on the card, and send a signed-in buyer who has not
+  // confirmed one to the place where they can, instead of a plan sheet that cannot select it.
+  const studentPlan = plan.requiresFlag === 'student';
+  const mustVerifyFirst = studentPlan && signedIn && !studentVerified;
   return (
     <article className={`${styles.card} ${plan.isDefaultSelection ? styles.cardFeatured : ''}`} data-plan={plan.key}>
       <h3 className={styles.h3}>{name}</h3>
@@ -136,8 +160,17 @@ function PlanCard({ plan, monthly, samePriceAsWeekly, notOpen, signedIn }: PlanC
             : t('practiceCredits', { count: plan.practice.credits, per: plan.practice.per })}
         </p>
       ) : null}
+      {studentPlan ? (
+        <p className={styles.muted} data-student-how="">
+          {tc('pricing.studentOffer.how')}
+        </p>
+      ) : null}
       {buyable ? (
-        signedIn ? (
+        mustVerifyFirst ? (
+          <Link className={styles.ctaSecondary} href={STUDENT_VERIFY_HREF} data-plan-cta="verify-student">
+            {t('confirmSchoolEmail')}
+          </Link>
+        ) : signedIn ? (
           <Link className={styles.ctaSecondary} href={checkoutHref(plan.key)} data-plan-cta="checkout">
             {t('choosePlan')}
           </Link>
@@ -333,6 +366,8 @@ export function PricingPage() {
   const paid = all.filter((p) => p.kind !== 'free' && p.amountMinor !== null);
   const monthly = monthlyPlan(all);
   const facts = plansBillingFacts(plans.data);
+  const signedIn = status === 'authenticated';
+  const studentVerified = useVerifiedStudent(signedIn && paid.some((p) => p.requiresFlag === 'student'));
   const passDays = Array.from(new Set(paid.filter((p) => p.kind === 'pass' && !!p.passDays).map((p) => p.passDays as number))).sort((a, b) => a - b);
   // The student prices are published separately only while the list itself carries no student plan.
   const studentOffer = paid.some((p) => p.requiresFlag === 'student') ? [] : facts.studentOffer;
@@ -379,7 +414,8 @@ export function PricingPage() {
                 monthly={monthly}
                 samePriceAsWeekly={samePriceAsWeeklyBilling(p, all)}
                 notOpen={notOpen}
-                signedIn={status === 'authenticated'}
+                signedIn={signedIn}
+                studentVerified={studentVerified}
               />
             ))}
           </div>

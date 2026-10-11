@@ -181,6 +181,26 @@ describe('card content', () => {
     expect(container.querySelector('[data-ai-label]')).toBeNull();
   });
 
+  // M2 gate (D3): an estimate's tier used to stand alone on the Assistant's cards ("Good fit"), while the feed
+  // card and the job page add "Quick estimate" for the same fit. The server sends `kind`; the cards dropped it.
+  it('fit_analysis and job_list say "Quick estimate" next to the tier of an estimate, and nothing for an AI fit', () => {
+    installFetch(routes());
+    const pre = { ...(wire('fit_analysis') as object), kind: 'pre', aiWritten: false, strengths: [], gaps: [] };
+    const estimate = renderUi(<CopilotCardView card={card('fit_analysis', pre)} />);
+    expect(within(estimate.container.querySelector('[data-card="fit_analysis"]') as HTMLElement).getByTestId('fit-estimate-tag')).toHaveTextContent('Quick estimate');
+    estimate.unmount();
+    const ai = renderUi(<CopilotCardView card={card('fit_analysis', { ...(wire('fit_analysis') as object), kind: 'ai' })} />);
+    expect(ai.container.querySelector('[data-testid="fit-estimate-tag"]')).toBeNull();
+    ai.unmount();
+
+    const row = (jobId: string, kind: string) => ({ jobId, title: `Analyst ${jobId}`, company: { name: 'Initech' }, location: 'Lisbon', workModel: 'remote', pay: null, fit: { tier: 'good', score: 72, kind, topGap: null, topOverlap: null } });
+    const list = renderUi(<CopilotCardView card={card('job_list', { items: [row('j_pre', 'pre'), row('j_ai', 'ai')] })} />);
+    const rows = [...list.container.querySelectorAll('[data-card="job_list"] li')] as HTMLElement[];
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]!).getByTestId('fit-estimate-tag')).toHaveTextContent('Quick estimate');
+    expect(within(rows[1]!).queryByTestId('fit-estimate-tag')).toBeNull();
+  });
+
   /** The salary card's data with `stats` replaced (posted pay dropped unless given). */
   const salaryWith = (stats: Record<string, unknown>, posted: unknown = null) => {
     const real = wire('salary') as { stats: Record<string, unknown> };
