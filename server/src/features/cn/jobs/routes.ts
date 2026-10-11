@@ -2,9 +2,12 @@
 //
 // Mounted by features/index.ts:
 //   createCnJobsRouter()       at /api/v1/roboapply/cn/jobs (seeker)
-//     GET  /external-links?q&city   BOSS直聘 / 智联 / 猎聘 search links for the
-//                                   user's own query (GoApply only; every mode:
-//                                   links are not postings)
+//     GET  /external-links?q&city&audience
+//                                   search links on other mainland job sites for
+//                                   the user's own query (GoApply only; every
+//                                   mode: links are not postings). The boards of
+//                                   the user's audience come first: `audience`
+//                                   when sent, else their identity answer
 //   createCnJobsAdminRouter()  at /api/v1/roboapply/admin/cn/jobs (admin)
 //     GET    /fraud?status&cursor    可疑职位待审核 (flagged | cleared | confirmed)
 //     POST   /fraud/:jobId/resolve   clear | confirm (+ blacklistEmployer)
@@ -30,12 +33,16 @@ import {
   ResolveFraudBodySchema,
   type BlacklistListResponse,
 } from './contract.js';
-import { buildExternalSearchLinks } from './deeplinks.js';
+import { buildExternalSearchLinks, resolveLinkAudience, type BoardSpec } from './deeplinks.js';
 import { addToBlacklist, defaultCnJobsDeps, listBlacklist, listFraudQueue, removeFromBlacklist, resolveFraud, type CnJobsDeps } from './service.js';
 
 export interface CnJobsRouterDeps extends FeatureRouterDeps {
   /** Test seam (default: Prisma + AppConfig + LLMService). */
   service?: CnJobsDeps;
+  /** Test seam: the user's GoApply identity answer (default: the profile, else the stored onboarding answer). */
+  cnIdentity?: (userId: string) => Promise<string | null>;
+  /** Test seam: the board table (default: CN_EXTERNAL_BOARD_SPECS). */
+  boardSpecs?: readonly BoardSpec[];
 }
 
 const brandOf = (req: Request): ProductBrand => (req as Request & { brand?: ProductBrand }).brand ?? getCurrentBrandOrDefault();
@@ -49,8 +56,8 @@ export function createCnJobsRouter(deps: CnJobsRouterDeps = {}): Router {
     ...auth,
     route(async (req) => {
       if (brandOf(req).market !== 'cn') throw new HttpError('feature_disabled');
-      const { q, city } = parseQuery(req, ExternalLinksQuerySchema);
-      return buildExternalSearchLinks(q, city);
+      const { q, city, audience } = parseQuery(req, ExternalLinksQuerySchema);
+      return buildExternalSearchLinks(q, city, await resolveLinkAudience(audience, requireUserId(req), deps.cnIdentity), deps.boardSpecs);
     }),
   );
   return router;

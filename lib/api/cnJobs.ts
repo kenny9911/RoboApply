@@ -19,9 +19,45 @@ import { feedIsThin, feedSources } from './feed';
 /** A blacklist row (admin). */
 export type BlacklistEntryView = CJ.BlacklistEntryView;
 
-/** `cnJobs.externalLinks` — GET /api/v1/roboapply/cn/jobs/external-links */
+/**
+ * `cnJobs.externalLinks` — GET /api/v1/roboapply/cn/jobs/external-links
+ *
+ * `query.audience` ('campus' | 'experienced') is optional: it chooses whose
+ * job sites come first. Without it the server uses the signed-in user's
+ * identity answer. The links arrive in display order.
+ */
 export function getExternalLinks(query: In<typeof CJ.ExternalLinksQuerySchema>, opts?: CallOptions): Promise<CJ.ExternalLinksResponse> {
   return call<CJ.ExternalLinksResponse>('GET', withQuery(`/api/v1/roboapply/cn/jobs/external-links`, query), opts);
+}
+
+/** One search link as the server sends it (`audience` may be missing on an older response). */
+export type ExternalLinkView = Omit<CJ.ExternalLink, 'audience'> & { audience?: CJ.CnBoardAudience };
+
+/** The links of one audience, in the order the server sent them. */
+export interface ExternalLinkGroup {
+  audience: CJ.CnLinkAudience;
+  links: ExternalLinkView[];
+}
+
+/**
+ * The search links in groups, for display. The server's order is the display
+ * order, so the groups come in the order their first link arrived: the user's
+ * own group first. A link for both audiences joins the first group; a link
+ * with no audience (or one this build does not know) counts as `experienced`.
+ * One audience → one group; no links → no group.
+ */
+export function groupExternalLinks(links: readonly ExternalLinkView[] | null | undefined): ExternalLinkGroup[] {
+  const list = Array.isArray(links) ? links.filter((l) => l && typeof l.url === 'string' && typeof l.label === 'string') : [];
+  const own = (l: ExternalLinkView): CJ.CnLinkAudience | null => (l.audience === 'both' ? null : l.audience === 'campus' ? 'campus' : 'experienced');
+  const first = list.map(own).find((a) => a !== null) ?? 'experienced';
+  const groups: ExternalLinkGroup[] = [];
+  for (const l of list) {
+    const audience = own(l) ?? first;
+    const group = groups.find((g) => g.audience === audience);
+    if (group) group.links.push(l);
+    else groups.push({ audience, links: [l] });
+  }
+  return groups;
 }
 
 /** `cnJobs.admin.fraudQueue` — GET /api/v1/roboapply/admin/cn/jobs/fraud */

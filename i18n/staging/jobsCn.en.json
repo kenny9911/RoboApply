@@ -30,6 +30,12 @@
     "external": {
       "panel": {
         "thinIntro": "Only a few jobs match here. You can run the same search on other job sites, then add the jobs you like so you can track them and prepare for them here."
+      },
+      "none": "No search links are available right now.",
+      "groups": {
+        "campus": "Campus hiring and internship sites",
+        "experienced": "General job sites",
+        "campusNote": "Useful for campus hiring, internships and jobs for new graduates."
       }
     }
   }
