@@ -36,10 +36,11 @@ Merged, gated and pushed, in order:
 | Market phase M2 | `48a5e56` | Stripe webhook lifecycle, switch, resume, refunds; Alipay wire parity (additive); skills; embeddings |
 | Market phase M3 | `55e7177` | Job sources per market: quota, planner, posting identity, employer boards, Taiwan open data, deep links |
 | Market phase M4 | `df4aaf2` | Hybrid retrieval, scorer v4, withdrawal and admin billing, validated board seeds (505 intl / 41 TW / 52 CN) |
+| Market phase M5 (merged, **gate pending**) | `198ee6b` | Licensed feed behind its quota gate, more board connectors, closure and liveness check, USAJobs and 事求人, GoHire syndication adapter, Taiwan extras, sponsorship facts, env examples |
 
 Last full gate run (M4): 758 test files / 19,637 tests, both typechecks, `npm run check`, extension 710 tests, `npm run eval:match -- --enforce M4`.
 
-**In flight when this was written: market phase M5** (bundles MKT-5A … MKT-5H). All eight were implemented and reviewed; the fix pass after review was finishing. Their work is **uncommitted** in the worktrees `/Users/kenny/code/RoboApply/.claude/worktrees/wp-MKT-5A` … `wp-MKT-5H` (branches `wp/MKT-5A` …, cut from tag `jobright-m5-base`). Handoffs: `docs/jobright-clone/orch/handoffs-mkt/MKT-5*.md`. If a later line of this file says M5 is merged, skip step 1 below.
+**M5 is merged and pushed (step 1 below is done).** On the merged tree both typechecks and `npm run check` pass and `npm run eval:match -- --enforce M4` exits 0; 13 tests fail in 9 files at the seams between bundles (`jobs/sources/types.test.ts`, `jobs/ingest/maintain.test.ts`, `jobs/ingest/adapters/adapters.test.ts`, `market/tw/__tests__/careerSourcesPanel.test.tsx`, `jobs/sources/registry.test.ts`, `jobs/normalize/ats.test.ts`, `cn/jobs/__tests__/modeOff.routes.test.ts`, `admin/__tests__/services.test.ts`, `components/features/feed/cnListing.test.tsx`). **Start at step 2** unless a later line says the M5 gate is committed.
 
 ## 4. What remains, in order
 
