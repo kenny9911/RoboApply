@@ -1,9 +1,12 @@
 // server/src/features/match/index.ts — public surface of MATCH (FND-5; owners WP-18, WP-77).
 //
 // Seams:
-//   - `matchService.scoreJob`      job detail's POST /jobs/:id/score (mount `createScoreJobHandler()`)
-//   - `matchService.preScoreMany`  feed, extension; deterministic, no LLM
-//     `matchService.preScoreJobs`  the same over rows the caller already loaded
+//   - `getFit` / `getFits` / `getVariantFit`  THE fit contract (fit.ts; MARKET_STRATEGY 2.2): one fit per
+//                                  person and job against the primary resume, the same on every surface.
+//                                  `getFits` never calls a model; `getVariantFit` is for tailoring only.
+//   - `matchService.scoreJob`      job detail's POST /jobs/:id/score (mount `createScoreJobHandler()`): `getFit` as a view
+//   - `matchService.preScoreMany`  `getFits` in the older list shape, for callers not yet moved to it
+//     `matchService.preScoreJobs`  the estimate only, over rows the caller already loaded
 //   - `matchService.fitAnalysis`   the Assistant's fit tool (spends `fit_analysis` when a model runs)
 //   - `matchService.keywordCheck`  / `keywordRows()` resume check keyword report (WP-22), tailoring (WP-36a)
 //   - `preScore`, `buildMatchUser`, `toMatchJob`  pure pre-score pieces (feed ranking)
@@ -22,13 +25,22 @@ export { createMatchRouter, createScoreJobHandler } from './routes.js';
 export { MATCH_WORK_KINDS } from './workers.js';
 export { createMatchService, visibleTo, ScorerFailedError } from './MatchService.js';
 export type { MatchService, MatchServiceDeps, ScoreMode, ScoreOptions } from './MatchService.js';
-export { preScore, preScoreDimensions, combineDimensions, logisticsChecks, skillKey, splitSkills } from './preScore.js';
+export { preScore, preScoreDimensions, combineDimensions, combineWithPriors, isByFilters, logisticsChecks, skillKey, splitSkills, LOGISTICS_BY_FILTERS_REF } from './preScore.js';
 export type { MatchJob, MatchUser, PreScoreConfig, DegreeLevel } from './preScore.js';
 export { buildMatchUser, toMatchJob } from './context.js';
 export type { MatchJobRecord, UserMatchInputs } from './context.js';
 export { buildKeywordRows } from './keywordRows.js';
 // Limits other areas display (admin "Limits" page) come from here, never from a copy.
-export { getMatchTiers, getMatchWeights, ON_DEMAND_SCORE_CAP_PER_DAY, scoreCounterKeys, scoreDailyBudget } from './config.js';
+export { getMatchPriors, getMatchTiers, getMatchWeights, currentScorerPin, ON_DEMAND_SCORE_CAP_PER_DAY, scoreCounterKeys, scoreDailyBudget } from './config.js';
+export type { ScorerPin } from './config.js';
+// The fit contract (fit.ts): the only place a fit is assembled.
+export { getFit, getFits, getVariantFit, assembleFit, createFitService, fitFunctions, fitToListResult, fitToView, hysteresisTier, setFitServiceForTests, storedFitStatus, toWireKind } from './fit.js';
+export type { Fit, FitConfig, FitFunctions, FitInputs, FitProse, FitSource, GetFitOptions, GetFitsOptions, StoredFitStatus } from './fit.js';
+export { jobContentHash, currentJobHash } from './jobHash.js';
+export type { JobHashInput } from './jobHash.js';
+export { registerMatchPreparer, runMatchPreparers } from './prepare.js';
+export { applyMap } from './calibration.js';
+export type { CalibrationMap } from './calibration.js';
 export { createCompetitivenessService } from './CompetitivenessService.js';
 export type { CompetitivenessService, CompetitivenessServiceDeps } from './CompetitivenessService.js';
 export { BROADEN_EXCLUDED_FIELDS, askedSkills, buildReportBody, evaluatePost } from './competitiveness.js';

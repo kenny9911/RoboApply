@@ -6,6 +6,7 @@
 // (typed Prisma, no `as any`; the client is imported lazily so importing the
 // area never opens a pool).
 
+import { Prisma } from '../../generated/prisma/client.js';
 import type { Market } from '../../platform/brand/registry.js';
 import { normalizeCompanyName } from '../jobs/normalize/index.js';
 import type { MatchDimension } from './contract.js';
@@ -35,29 +36,102 @@ export interface ScoreRecord {
   promptVersion: string | null;
   locale: string | null;
   searchProfileVersion: number | null;
+  /** `jobContentHash` of the posting the score was written for; null on rows older than the column. */
+  jobContentHash?: string | null;
+  /** 'fit_v3' | 'fit_v4': the rubric the stored components follow; null on rows older than the column. */
+  rubricVersion?: string | null;
 }
 
 export type ScoreWrite = Omit<ScoreRecord, 'generatedAt'> & { generatedAt?: Date };
 
+/** What a list reads of a stored AI score (no prose). */
+export type StoredFitRow = Pick<
+  ScoreRecord,
+  'score' | 'tier' | 'dimensions' | 'generatedAt' | 'modelUsed' | 'promptVersion' | 'jobContentHash' | 'rubricVersion' | 'searchProfileVersion' | 'resumeContentHashAtScore' | 'resumeVariantId'
+>;
+
+/** One (estimate, AI) pair for calibration: numbers only, never text. */
+export interface CalibrationPair {
+  /** The v2 estimate at score time (`explanation.estimateAtScore.score`). */
+  estimate: number;
+  /** The AI total stored with the row. */
+  ai: number;
+  /** The AI's component scores (0–100), for the components it scored. */
+  components: Partial<Record<MatchDimension['key'], number>>;
+}
+
 export interface MatchRepo {
   getJob(jobId: string): Promise<MatchJobRecord | null>;
   getJobs(jobIds: string[]): Promise<MatchJobRecord[]>;
+  /**
+   * The rows a list of fits needs: every column the estimate reads and no
+   * long text (`description`, `descriptionPlain`, `responsibilities` and
+   * `benefits` come back empty: a list never sends a posting to a model and
+   * never loads a description, not even for the content hash, which a list
+   * reads from the stored `contentHash` column only).
+   */
+  getFitJobs(jobIds: string[]): Promise<MatchJobRecord[]>;
   getUserInputs(userId: string, market: Market): Promise<Omit<UserMatchInputs, 'resumeParsed'>>;
   /** The given variant, or the user's primary (else most recent) resume. */
   getResume(userId: string, variantId?: string | null): Promise<ResumeRecord | null>;
   getScore(userId: string, jobId: string, variantId: string): Promise<ScoreRecord | null>;
   /**
-   * The stored AI scores of `jobIds` for this resume content and prompt (the
-   * same rows the feed shows): job id → score, tier and components.
+   * The stored AI scores of `jobIds` for this resume content: job id → the
+   * row's numbers and versions. Rows of every model and prompt come back:
+   * fit.ts decides which one is a fit and whether it is stale (I7), so a
+   * version change never reads as "no score".
    */
-  listAiScores(input: { userId: string; jobIds: string[]; resumeVariantId: string; resumeContentHash: string; promptVersion: string }): Promise<Map<string, Pick<ScoreRecord, 'score' | 'tier' | 'dimensions'>>>;
+  listAiScores(input: { userId: string; jobIds: string[]; resumeVariantId: string; resumeContentHash: string }): Promise<Map<string, StoredFitRow>>;
   saveScore(row: ScoreWrite): Promise<ScoreRecord>;
   updateVariantCachedScore(variantId: string, score: number): Promise<void>;
   getKeywords(jobId: string): Promise<KeywordInput[] | null>;
   /** Users of a brand active since `since`, most recent first. */
   activeUsers(brandId: string, since: Date, limit: number): Promise<string[]>;
-  /** Of `jobIds`, those with a fresh v3 AI score for this resume content and model. */
-  freshAiScoredJobIds(input: { userId: string; jobIds: string[]; resumeVariantId: string; resumeContentHash: string; modelUsed: string; promptVersion: string }): Promise<Set<string>>;
+  /**
+   * Of `jobIds`, those with an AI score that needs no re-scoring: written for
+   * this resume content by the pinned model and prompt, and (when
+   * `jobContentHashes` names the job) for the posting as it is now. A row of
+   * an older model, an older prompt or an older posting is not in the set, so
+   * the precompute cron picks it again: that is the planned backfill.
+   */
+  freshAiScoredJobIds(input: {
+    userId: string;
+    jobIds: string[];
+    resumeVariantId: string;
+    resumeContentHash: string;
+    modelUsed: string;
+    promptVersion: string;
+    jobContentHashes?: ReadonlyMap<string, string>;
+  }): Promise<Set<string>>;
+  /**
+   * (estimate, AI) pairs of a market since `since`, newest first: AI rows of
+   * primary resumes that stored the estimate they were scored next to.
+   */
+  listCalibrationPairs(input: { market: Market; since: Date; limit: number }): Promise<CalibrationPair[]>;
+  /** One AppConfig value (the calibration document); null when the key is not stored. */
+  getConfigValue(key: string): Promise<string | null>;
+  setConfigValue(key: string, value: string): Promise<void>;
+}
+
+/** A stored row counts for a posting when it carries no hash (older than the column) or the posting's current one. */
+export function jobHashCurrent(stored: string | null | undefined, current: string | null | undefined): boolean {
+  return !stored || !current || stored === current;
+}
+
+/** A calibration pair from a stored row's numbers; null when the row carries no usable estimate. */
+export function toCalibrationPair(row: { ai: unknown; estimateAtScore: unknown; dimensions: unknown }): CalibrationPair | null {
+  const est = row.estimateAtScore && typeof row.estimateAtScore === 'object' ? (row.estimateAtScore as { score?: unknown }).score : null;
+  if (typeof est !== 'number' || !Number.isFinite(est) || typeof row.ai !== 'number' || !Number.isFinite(row.ai)) return null;
+  const components: CalibrationPair['components'] = {};
+  if (Array.isArray(row.dimensions)) {
+    for (const d of row.dimensions) {
+      if (!d || typeof d !== 'object') continue;
+      const { key, score, status } = d as { key?: unknown; score?: unknown; status?: unknown };
+      if (status !== 'scored' || typeof score !== 'number' || !Number.isFinite(score)) continue;
+      if (key === 'title_level' || key === 'skills' || key === 'industry' || key === 'logistics' || key === 'career_path') components[key] = score;
+    }
+  }
+  return { estimate: est, ai: row.ai, components };
 }
 
 // ── Prisma implementation ────────────────────────────────────────────────
@@ -98,6 +172,12 @@ const JOB_SELECT = {
   marketTags: true,
   fraudFlags: true,
   archivedAt: true,
+  // Market wave columns (MKT-0): carried now, read by later phases.
+  skillIds: true,
+  contentHash: true,
+  lang: true,
+  requirements: true,
+  titleMatchScore: true,
   company: { select: { industries: true } },
 } as const;
 
@@ -109,6 +189,10 @@ function toRecord(row: JobRow): MatchJobRecord {
   const { company, fraudFlags: _fraud, ...rest } = row;
   return { ...rest, companyIndustries: company?.industries ?? [] };
 }
+
+/** The list projection: JOB_SELECT without the long text a list never reads. */
+const { description: _d, descriptionPlain: _p, responsibilities: _r, benefits: _b, ...FIT_JOB_SELECT } = JOB_SELECT;
+type FitJobRow = Omit<JobRow, 'description' | 'descriptionPlain' | 'responsibilities' | 'benefits'>;
 
 /**
  * Company-name key for looking up past employers in RACompany.nameNormalized:
@@ -138,12 +222,19 @@ export function createPrismaMatchRepo(): MatchRepo {
       return rows.map((r) => toRecord(r as JobRow));
     },
 
+    async getFitJobs(jobIds) {
+      if (!jobIds.length) return [];
+      const p = await db();
+      const rows = (await p.rAJob.findMany({ where: { id: { in: jobIds } }, select: FIT_JOB_SELECT })) as unknown as FitJobRow[];
+      return rows.map((r) => toRecord({ ...r, description: '', descriptionPlain: '', responsibilities: null, benefits: null }));
+    },
+
     async getUserInputs(userId, market) {
       const p = await db();
       const [profile, education, experience, searchProfile] = await Promise.all([
         p.rAProfile.findUnique({
           where: { userId },
-          select: { firstName: true, lastName: true, country: true, skills: true, workAuth: true, cnFields: true },
+          select: { firstName: true, lastName: true, country: true, skills: true, workAuth: true, cnFields: true, headline: true, seekerType: true },
         }),
         p.rAProfileEducation.findMany({ where: { userId }, select: { degree: true, major: true, endYm: true }, orderBy: { sortOrder: 'asc' } }),
         p.rAProfileExperience.findMany({
@@ -201,6 +292,8 @@ export function createPrismaMatchRepo(): MatchRepo {
           promptVersion: true,
           locale: true,
           searchProfileVersion: true,
+          jobContentHash: true,
+          rubricVersion: true,
         },
       });
     },
@@ -219,6 +312,8 @@ export function createPrismaMatchRepo(): MatchRepo {
         promptVersion: row.promptVersion,
         locale: row.locale,
         searchProfileVersion: row.searchProfileVersion,
+        jobContentHash: row.jobContentHash ?? null,
+        rubricVersion: row.rubricVersion ?? null,
       };
       const saved = await p.rAJobMatchScore.upsert({
         where: { userId_jobId_resumeVariantId: { userId: row.userId, jobId: row.jobId, resumeVariantId: row.resumeVariantId } },
@@ -258,26 +353,69 @@ export function createPrismaMatchRepo(): MatchRepo {
       return rows.map((r) => r.id);
     },
 
-    async listAiScores({ userId, jobIds, resumeVariantId, resumeContentHash, promptVersion }) {
-      const out = new Map<string, Pick<ScoreRecord, 'score' | 'tier' | 'dimensions'>>();
+    async listAiScores({ userId, jobIds, resumeVariantId, resumeContentHash }) {
+      const out = new Map<string, StoredFitRow>();
       if (!jobIds.length) return out;
       const p = await db();
       const rows = await p.rAJobMatchScore.findMany({
-        where: { userId, resumeVariantId, jobId: { in: jobIds }, scoreKind: 'ai', promptVersion, resumeContentHashAtScore: resumeContentHash },
-        select: { jobId: true, score: true, tier: true, dimensions: true },
+        where: { userId, resumeVariantId, jobId: { in: jobIds }, scoreKind: 'ai', resumeContentHashAtScore: resumeContentHash },
+        select: {
+          jobId: true,
+          resumeVariantId: true,
+          score: true,
+          tier: true,
+          dimensions: true,
+          generatedAt: true,
+          modelUsed: true,
+          promptVersion: true,
+          jobContentHash: true,
+          rubricVersion: true,
+          searchProfileVersion: true,
+          resumeContentHashAtScore: true,
+        },
       });
-      for (const r of rows) out.set(r.jobId, { score: r.score, tier: r.tier, dimensions: r.dimensions });
+      for (const { jobId, ...row } of rows) out.set(jobId, row);
       return out;
     },
 
-    async freshAiScoredJobIds({ userId, jobIds, resumeVariantId, resumeContentHash, modelUsed, promptVersion }) {
+    async freshAiScoredJobIds({ userId, jobIds, resumeVariantId, resumeContentHash, modelUsed, promptVersion, jobContentHashes }) {
       if (!jobIds.length) return new Set();
       const p = await db();
       const rows = await p.rAJobMatchScore.findMany({
         where: { userId, resumeVariantId, jobId: { in: jobIds }, resumeContentHashAtScore: resumeContentHash, modelUsed, promptVersion },
-        select: { jobId: true },
+        select: { jobId: true, jobContentHash: true },
       });
-      return new Set(rows.map((r) => r.jobId));
+      return new Set(rows.filter((r) => jobHashCurrent(r.jobContentHash, jobContentHashes?.get(r.jobId))).map((r) => r.jobId));
+    },
+
+    async listCalibrationPairs({ market, since, limit }) {
+      const p = await db();
+      // Numbers only: the estimate stored at score time, the AI total and its components. No prose is read.
+      const rows = await p.$queryRaw<Array<{ ai: number; estimateAtScore: unknown; dimensions: unknown }>>(Prisma.sql`
+        SELECT s."score" AS "ai", s."explanation"->'estimateAtScore' AS "estimateAtScore", s."dimensions" AS "dimensions"
+        FROM "RAJobMatchScore" s
+        JOIN "RAJob" j ON j."id" = s."jobId"
+        JOIN "RAResumeVariant" v ON v."id" = s."resumeVariantId"
+        WHERE s."scoreKind" = 'ai'
+          AND s."generatedAt" >= ${since}::timestamp(3)
+          AND j."market" = ${market}
+          AND v."isPrimary" = true
+          AND v."deletedAt" IS NULL
+          AND (s."explanation"->'estimateAtScore') IS NOT NULL
+        ORDER BY s."generatedAt" DESC
+        LIMIT ${Math.max(1, Math.floor(limit))}`);
+      return rows.map((r) => toCalibrationPair(r)).filter((x): x is CalibrationPair => !!x);
+    },
+
+    async getConfigValue(key) {
+      const p = await db();
+      const row = await p.appConfig.findUnique({ where: { key }, select: { value: true } });
+      return row?.value ?? null;
+    },
+
+    async setConfigValue(key, value) {
+      const p = await db();
+      await p.appConfig.upsert({ where: { key }, create: { key, value, updatedBy: 'score-precompute' }, update: { value, updatedBy: 'score-precompute' } });
     },
   };
 }

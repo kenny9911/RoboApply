@@ -2,7 +2,10 @@
   "landing": {
     "ranking": {
       "otherSorts": "{newest}, {bestFit} and {highestPay} each sort by that one thing only.",
-      "deadlineSort": "{deadline} lists jobs by the date their applications close, soonest first."
+      "deadlineSort": "{deadline} lists jobs by the date their applications close, soonest first.",
+      "fit": {
+        "body": "Your fit score for the job, out of 100. When a full fit analysis isn't available yet, a quick estimate on the same scale is used. A job whose quick estimate has too little to go on is left out when you filter for Good fits and better or Great fits only."
+      }
     },
     "cnHome": {
       "search": {

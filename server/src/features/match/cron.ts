@@ -12,17 +12,29 @@
 //      `preview` seam: their active search with the feed's own filters, order
 //      and visibility rules), so AI scores land on the jobs they will see;
 //   3. queue `job.score` for the best pre-scores that have no fresh AI score.
+//      Fresh means written for this resume content AND by the pinned model and
+//      prompt AND for the posting as it is now: a row of an earlier model, an
+//      earlier prompt or an earlier version of the posting is picked again.
+//      That is the planned backfill after a version or posting change (I7);
+//      until its turn comes the old row keeps serving, flagged stale.
 // One user's failure (their profile, their search, the feed preview) is
 // logged and counted; the run goes on with the next user, so a user whose
 // preview throws cannot block everyone behind them run after run.
 // The brand's daily budget (brandEnv SCORE_DAILY_BUDGET, default 20,000) is
 // checked here (skip when spent) and charged per model call by the worker.
 // The AI score is a platform cost, never a user credit.
+//
+// `runScorePrecompute` is this task followed by the calibration refresh
+// (calibration.ts): the estimate-to-AI map weekly and the priors monthly, for
+// the brand's market, inside the same time budget. It calls no model. No cron
+// entry of its own: the job already runs every 15 minutes.
 
 import crypto from 'node:crypto';
 import type { RateLimitResult, RateWindow } from '../../platform/ratelimit/index.js';
 import type { CronResult, CronTask, EnqueueOptions, EnqueuedItem } from '../../platform/queue/index.js';
+import { calibrationFor, type CalibrationRefreshResult } from './calibration.js';
 import { SCORER_PROMPT_VERSION } from './contract.js';
+import { currentJobHash } from './jobHash.js';
 import {
   PRECOMPUTE_ACTIVE_DAYS,
   PRECOMPUTE_CANDIDATES,
@@ -63,8 +75,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** Stop starting a new user when this much budget is left. */
 const RESERVE_MS = 5_000;
 
-function dedupeKey(userId: string, jobId: string, resumeHash: string, model: string): string {
-  const h = crypto.createHash('sha256').update(`${resumeHash}|${model}|${SCORER_PROMPT_VERSION}`).digest('hex').slice(0, 16);
+/** One queued item per (person, job) and per version of what the score depends on: resume, model, prompt and posting. */
+function dedupeKey(userId: string, jobId: string, resumeHash: string, model: string, jobHash: string): string {
+  const h = crypto.createHash('sha256').update(`${resumeHash}|${model}|${SCORER_PROMPT_VERSION}|${jobHash}`).digest('hex').slice(0, 16);
   return `job.score:${userId}:${jobId}:${h}`;
 }
 
@@ -111,6 +124,8 @@ export function createScorePrecompute(getDeps: () => Promise<PrecomputeDeps>): C
       if (!candidates.length) return 0;
       const pre = (await deps.service.preScoreJobs(userId, candidates)).filter((p) => p.score !== null);
       pre.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      const jobHashes = new Map(candidates.map((r) => [r.id, currentJobHash(r)]));
+      // Fresh = this resume, the pinned model and prompt, the posting as it is now. Anything else is re-scored here.
       const fresh = await deps.repo.freshAiScoredJobIds({
         userId,
         jobIds: pre.map((p) => p.jobId),
@@ -118,6 +133,7 @@ export function createScorePrecompute(getDeps: () => Promise<PrecomputeDeps>): C
         resumeContentHash: resume.resumeContentHash,
         modelUsed: model,
         promptVersion: SCORER_PROMPT_VERSION,
+        jobContentHashes: jobHashes,
       });
       const picks = pre.filter((p) => !fresh.has(p.jobId)).slice(0, Math.min(allowance, budgetLeft));
       let queuedForUser = 0;
@@ -126,7 +142,7 @@ export function createScorePrecompute(getDeps: () => Promise<PrecomputeDeps>): C
           const item = await deps.enqueue(
             MATCH_WORK_KINDS.jobScore,
             { userId, jobId: p.jobId, resumeVariantId: resume.id },
-            { dedupeKey: dedupeKey(userId, p.jobId, resume.resumeContentHash, model), userId, brand: brand.id, priority: 200 },
+            { dedupeKey: dedupeKey(userId, p.jobId, resume.resumeContentHash, model, jobHashes.get(p.jobId) ?? ''), userId, brand: brand.id, priority: 200 },
           );
           if (item.created) queuedForUser += 1;
         }
@@ -192,5 +208,52 @@ async function defaultDeps(): Promise<PrecomputeDeps> {
   };
 }
 
-/** score-precompute (every 15 min): AI scores within the daily budget (ARCH §4.7). */
-export const runScorePrecompute: CronTask = createScorePrecompute(defaultDeps);
+/** What the calibration step needs: the refresh for one market. */
+export interface CalibrationStepDeps {
+  refreshIfDue: (market: ProductBrand['market'], now: Date) => Promise<CalibrationRefreshResult>;
+}
+
+/**
+ * The calibration refresh of the cron's brand market, when it is due (the map
+ * weekly, the priors monthly). Skipped when the time budget is nearly spent;
+ * a failure is reported, never thrown: it must not fail the precompute run
+ * that came before it.
+ */
+export function createCalibrationRefresh(getDeps: () => Promise<CalibrationStepDeps>) {
+  return async (ctx: Parameters<CronTask>[0]): Promise<CalibrationRefreshResult | { skipped: 'no_time' | 'failed' }> => {
+    if (ctx.budget.exhausted(RESERVE_MS)) return { skipped: 'no_time' };
+    try {
+      return await (await getDeps()).refreshIfDue(ctx.brand.market, ctx.now);
+    } catch (err) {
+      logger.warn('MATCH_CALIBRATION', 'calibration refresh failed; the stored calibration stays in use', {
+        brand: ctx.brand.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return { skipped: 'failed' };
+    }
+  };
+}
+
+/**
+ * score-precompute as the cron runs it: the precompute task, then the
+ * calibration refresh. Both results are reported; `calibration` sits next to
+ * the precompute fields.
+ */
+export function composeScorePrecompute(precompute: CronTask, calibration: ReturnType<typeof createCalibrationRefresh>): CronTask {
+  return async (ctx): Promise<CronResult> => {
+    const result = await precompute(ctx);
+    return { ...result, calibration: await calibration(ctx) };
+  };
+}
+
+async function defaultCalibrationDeps(): Promise<CalibrationStepDeps> {
+  const { defaultMatchRepo } = await import('./defaultService.js');
+  const calibration = calibrationFor(defaultMatchRepo);
+  return { refreshIfDue: (market, now) => calibration.refreshIfDue(market, now) };
+}
+
+/** Kept for callers that refresh outside the cron (an admin action, a script): the calibration step on its own. */
+export const refreshCalibrationIfDue = createCalibrationRefresh(defaultCalibrationDeps);
+
+/** score-precompute (every 15 min): AI scores within the daily budget (ARCH §4.7), then the calibration refresh. */
+export const runScorePrecompute: CronTask = composeScorePrecompute(createScorePrecompute(defaultDeps), refreshCalibrationIfDue);

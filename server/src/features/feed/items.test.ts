@@ -255,6 +255,12 @@ describe('cardMeta and explanation (WP-33 ← WP-32)', () => {
     expect(item.fit).toEqual(fit);
   });
 
+  it('the card carries the fit as the fit contract answered it, with its confidence and reason', () => {
+    const fit = { tier: 'good' as const, score: 71, kind: 'pre' as const, topGap: 'Kubernetes', topOverlap: 'Python', confidence: 'low' as const, confidenceReason: 'no_level_stated' };
+    expect(toFeedItem(feedRow({ id: 'f1' }), { user: null, fit, tracker: null, position: 0 }).fit).toEqual(fit);
+    expect(toFeedItem(feedRow({ id: 'f2' }), { user: null, fit: null, tracker: null, position: 0 }).fit).toBeNull();
+  });
+
   it('both are left off the wire when there is nothing to say (never an empty object or null)', () => {
     const bare = toFeedItem(feedRow({ id: 'b1' }), { user: null, fit: null, tracker: null, position: 0 });
     expect('cardMeta' in bare).toBe(false);

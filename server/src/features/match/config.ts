@@ -10,16 +10,26 @@
 //                                  brandEnv (D5): GoApply uses CN_SCORE_DAILY_BUDGET when set, else the shared
 //                                  SCORE_DAILY_BUDGET; each brand still has its own counter.
 //   SCORE_PRECOMPUTE_PER_USER_DAY  AI scores the precompute cron may queue per user per day (25)
+//   MATCH_PRIORS / CN_…            JSON {title_level, skills, industry, logistics, career_path}: what a component
+//                                  the quick estimate cannot compare contributes (44/39/24/50/45). Read through
+//                                  brandEnv (D5): GoApply uses CN_MATCH_PRIORS when set, else the shared value.
+//   MATCH_CALIBRATION_MIN_PAIRS    (estimate, AI) pairs a market needs before the isotonic map replaces the
+//                                  ranking blend (500)
 
 import { brandEnv, type EnvSource } from '../../platform/brand/brandEnv.js';
 import type { BrandId, ProductBrand } from '../../platform/brand/registry.js';
 import { DAY } from '../../platform/ratelimit/defaults.js';
 import {
+  DEFAULT_MATCH_PRIORS,
   DEFAULT_MATCH_TIERS,
   DEFAULT_MATCH_WEIGHTS,
+  FIT_RUBRIC_BY_PROMPT,
   MATCH_DIMENSION_KEYS,
+  SCORER_PROMPT_VERSION,
   tierForScore,
+  type FitRubric,
   type FitTierKey,
+  type MatchPriors,
   type MatchTiers,
   type MatchWeights,
 } from './contract.js';
@@ -60,6 +70,54 @@ export function getMatchWeights(env: EnvSource = process.env): MatchWeights {
   }
   if (MATCH_DIMENSION_KEYS.every((k) => out[k] === 0)) return { ...DEFAULT_MATCH_WEIGHTS };
   return out;
+}
+
+/**
+ * MATCH_PRIORS (GoApply: CN_MATCH_PRIORS, else the shared value): the starting
+ * priors of the quick estimate. Every key given must be a finite number from 0
+ * to 100; one malformed key keeps the defaults whole, like MATCH_WEIGHTS.
+ */
+export function getMatchPriors(brand: BrandId | ProductBrand = 'roboapply', env: EnvSource = process.env): MatchPriors {
+  const parsed = parseJson(brandEnv(brand, 'MATCH_PRIORS', env));
+  if (!parsed) return { ...DEFAULT_MATCH_PRIORS };
+  const out = { ...DEFAULT_MATCH_PRIORS } as MatchPriors;
+  for (const key of MATCH_DIMENSION_KEYS) {
+    if (!(key in parsed)) continue;
+    const raw = parsed[key];
+    // A number, or a number written as text ("40"); never null, a boolean or an empty string (Number() reads those as 0 or 1).
+    const n = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() ? Number(raw) : Number.NaN;
+    if (!Number.isFinite(n) || n < 0 || n > 100) return { ...DEFAULT_MATCH_PRIORS };
+    out[key] = n;
+  }
+  return out;
+}
+
+/** (estimate, AI) pairs a market needs before its isotonic map is used (MARKET_STRATEGY 2.4). */
+export const DEFAULT_CALIBRATION_MIN_PAIRS = 500;
+/** Pairs a market needs before priors computed from its data replace the starting priors. */
+export const CALIBRATION_PRIORS_MIN_PAIRS = 200;
+
+/** MATCH_CALIBRATION_MIN_PAIRS: a whole number of at least 1; else 500. */
+export function calibrationMinPairs(env: EnvSource = process.env): number {
+  const n = positiveInt(env.MATCH_CALIBRATION_MIN_PAIRS, DEFAULT_CALIBRATION_MIN_PAIRS);
+  return n >= 1 ? n : DEFAULT_CALIBRATION_MIN_PAIRS;
+}
+
+/**
+ * The scorer version a brand's fits are pinned to: one model, one prompt and
+ * the rubric that prompt writes. A stored row written under another model or
+ * prompt keeps serving (flagged stale) until the precompute cron replaces it;
+ * a version change is a planned backfill, never a silent cache miss (I7).
+ * `model` is the resolved scorer model, or null when none is configured.
+ */
+export interface ScorerPin {
+  model: string | null;
+  prompt: string;
+  rubric: FitRubric;
+}
+
+export function currentScorerPin(_brand: BrandId | ProductBrand, model: string | null): ScorerPin {
+  return { model, prompt: SCORER_PROMPT_VERSION, rubric: FIT_RUBRIC_BY_PROMPT[SCORER_PROMPT_VERSION] };
 }
 
 /** MATCH_TIERS: 0 ≤ possible < good < great ≤ 100; else the defaults. */

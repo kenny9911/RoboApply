@@ -4,8 +4,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_MATCH_TIERS, DEFAULT_MATCH_WEIGHTS } from './contract.js';
-import { getMatchTiers, getMatchWeights, precomputePerUserDay, scoreDailyBudget, tierFor } from './config.js';
-import { buildMatchUser, classYearsFromTags, degreeFromText, parseMonth, postingText, toMatchJob, userNames, yearsFromRanges } from './context.js';
+import { calibrationMinPairs, currentScorerPin, getMatchTiers, getMatchWeights, precomputePerUserDay, scoreDailyBudget, tierFor } from './config.js';
+import { buildMatchUser, classYearsFromTags, degreeFromText, evidenceRoleIdsOf, levelFromSeekerType, parseMonth, postingText, toMatchJob, userNames, yearsFromRanges } from './context.js';
+import { bestTaxonomyMatch } from '../jobs/taxonomy/index.js';
+import { preScore } from './preScore.js';
 import { guardEvidence, normalizeForGuard, plainQuote } from './evidence.js';
 import { buildKeywordRows, mentions, normalizeText } from './keywordRows.js';
 import { stripResumeForScoring } from './pii.js';
@@ -24,6 +26,61 @@ describe('buildMatchUser', () => {
     expect(u.yearsExperience).toBeCloseTo(7.8, 1);
     expect(u.recentTitle).toBe('Senior Software Engineer');
     expect(u.searchProfileVersion).toBe(1);
+  });
+
+  it('fills evidenceRoleIds from the record, and the saved search no longer feeds the estimate', () => {
+    const inputs = { userId: 'u1', market: 'intl' as const, ...defaultUserInputs(), resumeParsed: null };
+    const u = buildMatchUser(inputs, NOW);
+    // The experience title on file ("Senior Software Engineer"), not the Role chip (backend_engineer).
+    expect(u.evidenceRoleIds).toEqual(evidenceRoleIdsOf(inputs));
+    expect(u.evidenceRoleIds).toEqual([bestTaxonomyMatch('Senior Software Engineer')!.id]);
+    expect(u.evidenceRoleIds).not.toContain('backend_engineer');
+    expect(u.resumeSeniority).toBe('senior');
+    expect(u.levelSource).toBe('record');
+    // The chips are still carried, as what the person says they are looking for (the AI scorer is told).
+    expect(u).toMatchObject({ targetTaxonomyIds: ['backend_engineer'], targetSeniority: ['senior'], targetTitles: [] });
+
+    // Another Role, Title and Level in the saved search: the same estimate for every job.
+    const other = buildMatchUser({ ...inputs, searchProfile: { version: 1, filters: { ...(inputs.searchProfile!.filters as object), taxonomyIds: ['data_analyst'], titles: ['Data Analyst'], seniority: ['intern_newgrad'] } } }, NOW);
+    expect(other.evidenceRoleIds).toEqual(u.evidenceRoleIds);
+    expect(other.resumeSeniority).toBe(u.resumeSeniority);
+    const cfg = { weights: { ...DEFAULT_MATCH_WEIGHTS }, tiers: { ...DEFAULT_MATCH_TIERS } };
+    for (const job of [matchJob(), matchJob({ title: 'Data Analyst', taxonomyIds: ['data_ai', 'data_analytics', 'data_analyst'], primaryTaxonomyId: 'data_analyst', seniority: 'intern_newgrad' })]) {
+      expect(preScore(other, job, cfg)).toEqual(preScore(u, job, cfg));
+    }
+  });
+
+  it('which logistics answers are filters of the saved search (a profile country is not one)', () => {
+    const base = { userId: 'u1', market: 'intl' as const, ...defaultUserInputs(), resumeParsed: null };
+    expect(buildMatchUser(base, NOW).hardFilters).toEqual({ location: true, pay: true });
+    const bare = buildMatchUser({ ...base, searchProfile: { version: 1, filters: {} } }, NOW);
+    // The country comes from the profile: it is checked, and no filter guarantees it.
+    expect(bare.country).toBe('DE');
+    expect(bare.hardFilters).toEqual({ location: false, pay: false });
+    // The sponsorship answer is never one: that filter only removes postings that say no, so an offer stays a fact.
+    const needs = buildMatchUser({ ...base, searchProfile: { version: 1, filters: { workModels: ['remote'], needsSponsorship: true } } }, NOW);
+    expect(needs.needsSponsorship).toBe(true);
+    expect(needs.hardFilters).toEqual({ location: true, pay: false });
+    // GoApply has no visa answer at all.
+    const cn = buildMatchUser({ ...base, market: 'cn', searchProfile: { version: 1, filters: { needsSponsorship: true } } }, NOW);
+    expect(cn.needsSponsorship).toBeNull();
+    expect(cn.hardFilters).toEqual({ location: false, pay: false });
+  });
+
+  it('with no resume and no experience the level is the onboarding answer (students and recent graduates only)', () => {
+    const blank = { userId: 'u1', market: 'intl' as const, ...defaultUserInputs(), experience: [], resumeParsed: null };
+    const withType = (seekerType: string | null) => buildMatchUser({ ...blank, profile: { ...blank.profile!, seekerType } }, NOW);
+    expect(withType('student')).toMatchObject({ resumeSeniority: 'intern_newgrad', levelSource: 'onboarding' });
+    expect(withType('recent_graduate')).toMatchObject({ resumeSeniority: 'intern_newgrad', levelSource: 'onboarding' });
+    // The other answers name no level; nothing is invented.
+    for (const t of ['experienced', 'career_change', null, 'nonsense']) expect(withType(t)).toMatchObject({ resumeSeniority: null, levelSource: null });
+    expect(levelFromSeekerType('student')).toBe('intern_newgrad');
+    expect(levelFromSeekerType('experienced')).toBeNull();
+    // A record wins over the answer: the experience on file, or the parsed resume.
+    const working = buildMatchUser({ ...blank, experience: defaultUserInputs().experience, profile: { ...blank.profile!, seekerType: 'student' } }, NOW);
+    expect(working).toMatchObject({ resumeSeniority: 'senior', levelSource: 'record' });
+    const resumeOnly = buildMatchUser({ ...blank, resumeParsed: { skills: ['Go'] }, profile: { ...blank.profile!, seekerType: 'student' } }, NOW);
+    expect(resumeOnly).toMatchObject({ resumeSeniority: null, levelSource: null });
   });
 
   it('never reads school name or school tier, and drops sponsorship inputs on GoApply', () => {
@@ -251,7 +308,7 @@ describe('keyword rows (F-RES-08)', () => {
   it('says not stated / unknown instead of counting a miss', () => {
     const rows = buildKeywordRows({
       job: { ...matchJob({ skills: [], skillsDetail: null, educationLevel: null }), minYears: null },
-      user: matchUser({ yearsExperience: null, highestDegree: null, targetTaxonomyIds: [], recentTitle: null }),
+      user: matchUser({ yearsExperience: null, highestDegree: null, evidenceRoleIds: [], recentTitle: null }),
       resumeText: '',
       keywords: null,
     });
@@ -273,6 +330,14 @@ describe('config', () => {
     expect(getMatchTiers({ MATCH_TIERS: '{"great":60,"good":70}' })).toEqual(DEFAULT_MATCH_TIERS);
     expect(tierFor(null, DEFAULT_MATCH_TIERS)).toBeNull();
     expect(tierFor(81, { great: 85, good: 70, possible: 50 })).toBe('good');
+  });
+
+  it('the scorer pin and the calibration minimum', () => {
+    expect(currentScorerPin('roboapply', 'vendor/model-a')).toEqual({ model: 'vendor/model-a', prompt: 'scorer_v3', rubric: 'fit_v3' });
+    expect(currentScorerPin('goapply', null)).toEqual({ model: null, prompt: 'scorer_v3', rubric: 'fit_v3' });
+    expect(calibrationMinPairs({})).toBe(500);
+    expect(calibrationMinPairs({ MATCH_CALIBRATION_MIN_PAIRS: '50' })).toBe(50);
+    for (const bad of ['0', '-3', 'many', '1.5', '']) expect(calibrationMinPairs({ MATCH_CALIBRATION_MIN_PAIRS: bad }), bad).toBe(500);
   });
 
   it('budgets: read per key (GoApply: CN_ value, else the shared one), defaults, invalid ignored', () => {

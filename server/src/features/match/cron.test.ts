@@ -8,8 +8,11 @@ import { getBrand } from '../../platform/brand/registry.js';
 import { DeferWorkError, createBudget, type EnqueuedItem, type LeasedWorkItem } from '../../platform/queue/index.js';
 import type { RateLimitResult } from '../../platform/ratelimit/index.js';
 import { SCORER_PROMPT_VERSION } from './contract.js';
-import { createScorePrecompute, type PrecomputeDeps } from './cron.js';
+import { calibrationFor, parseCalibrationDoc, CALIBRATION_CONFIG_KEY } from './calibration.js';
+import { composeScorePrecompute, createCalibrationRefresh, createScorePrecompute, type PrecomputeDeps } from './cron.js';
+import { currentJobHash } from './jobHash.js';
 import { createMatchService } from './MatchService.js';
+import type { ScoreRecord } from './repo.js';
 import { createMemoryRepo, jobRecord } from './testkit.js';
 import { createJobScoreHandler, MATCH_WORK_KINDS, workers } from './workers.js';
 
@@ -118,6 +121,35 @@ describe('score-precompute', () => {
     expect(s.enqueued.map((e) => (e.payload as { jobId: string }).jobId).sort()).toEqual(['job1', 'job2']);
   });
 
+  it('the planned backfill: a row of an older model, an older prompt or an older posting is picked again; a current one is not', async () => {
+    const s = setup({ jobs: 5 });
+    const row = (jobId: string, over: Partial<ScoreRecord> = {}): ScoreRecord => ({
+      userId: 'u1', jobId, resumeVariantId: 'v1', score: 80, explanation: {}, resumeContentHashAtScore: 'hash-1', modelUsed: MODEL,
+      generatedAt: NOW, scoreKind: 'ai', tier: 'great', dimensions: [], promptVersion: SCORER_PROMPT_VERSION, locale: 'en', searchProfileVersion: 1,
+      jobContentHash: currentJobHash(s.repo.state.jobs.find((j) => j.id === jobId)!),
+      ...over,
+    });
+    s.repo.state.scores.push(
+      row('job0'), // current: the pinned model and prompt, the posting as it is
+      row('job1', { modelUsed: 'test/model-old' }), // an older model
+      row('job2', { promptVersion: 'scorer_v2' }), // an older prompt
+      row('job3', { jobContentHash: 'hash-of-the-posting-before-it-changed' }), // the posting changed since
+      row('job4', { jobContentHash: null }), // written before the hash column: counts as current
+    );
+    await s.task(s.ctx);
+    expect(s.enqueued.map((e) => (e.payload as { jobId: string }).jobId).sort()).toEqual(['job1', 'job2', 'job3']);
+
+    // A changed posting gets its own queue item even when the same (person, job) was queued for the old version.
+    const again = setup({ jobs: 1 });
+    await again.task(again.ctx);
+    const firstKey = again.enqueued[0]!.options.dedupeKey;
+    again.repo.state.jobs[0] = { ...again.repo.state.jobs[0]!, qualifications: 'New requirements: Rust.' };
+    again.counts.clear();
+    await again.task(again.ctx);
+    expect(again.enqueued).toHaveLength(2);
+    expect(again.enqueued[1]!.options.dedupeKey).not.toBe(firstKey);
+  });
+
   it('candidates are exactly the ids the feed preview lists for the user (WP-93 #25): nothing outside it is queued', async () => {
     // 30 jobs exist; the feed lists only these four for u1 (their search, order and visibility rules).
     const s = setup({ preview: () => ['job7', 'job3', 'job20', 'job11'] });
@@ -185,6 +217,80 @@ describe('score-precompute', () => {
     expect(await s.task(s.ctx)).toMatchObject({ skipped: 'no_work' });
     const noModel = createScorePrecompute(async () => ({ resolveModel: async () => null }) as unknown as PrecomputeDeps);
     expect(await noModel(s.ctx)).toEqual({ skipped: 'ai_unavailable' });
+  });
+});
+
+describe('score-precompute as the cron runs it: precompute, then the calibration refresh', () => {
+  const refreshed = { map: 'stored' as const, pairs: 640 };
+
+  it('runs calibration after precompute and reports both results', async () => {
+    const order: string[] = [];
+    const s = setup({ perUser: '2' });
+    const precompute = vi.fn(async (ctx: typeof s.ctx) => {
+      const r = await s.task(ctx);
+      order.push('precompute');
+      return r;
+    });
+    const refreshIfDue = vi.fn(async () => {
+      order.push('calibration');
+      return refreshed;
+    });
+    const task = composeScorePrecompute(precompute, createCalibrationRefresh(async () => ({ refreshIfDue })));
+    const result = await task(s.ctx);
+    expect(order).toEqual(['precompute', 'calibration']);
+    expect(result).toMatchObject({ processed: 1, enqueued: 2, calibration: refreshed });
+    // The refresh is for the cron's brand market, at the cron's time.
+    expect(refreshIfDue).toHaveBeenCalledWith('intl', NOW);
+
+    const cn = setup({ brand: 'goapply', perUser: '1' });
+    const cnRefresh = vi.fn(async () => ({ skipped: 'not_due' as const }));
+    expect(await composeScorePrecompute(cn.task, createCalibrationRefresh(async () => ({ refreshIfDue: cnRefresh })))(cn.ctx)).toMatchObject({ enqueued: 1, calibration: { skipped: 'not_due' } });
+    expect(cnRefresh).toHaveBeenCalledWith('cn', NOW);
+  });
+
+  it('calibration still runs when precompute had nothing to do, calls no model, and its failure never fails the run', async () => {
+    const idle = setup({ users: 0 });
+    const refreshIfDue = vi.fn(async () => refreshed);
+    expect(await composeScorePrecompute(idle.task, createCalibrationRefresh(async () => ({ refreshIfDue })))(idle.ctx)).toEqual({ skipped: 'no_work', processed: 0, calibration: refreshed });
+
+    const failing = createCalibrationRefresh(async () => ({
+      refreshIfDue: async () => {
+        throw new Error('store down');
+      },
+    }));
+    const s = setup({ perUser: '1' });
+    expect(await composeScorePrecompute(s.task, failing)(s.ctx)).toMatchObject({ enqueued: 1, calibration: { skipped: 'failed' } });
+
+    // With the time budget spent the refresh waits for the next run.
+    const spent = { ...s.ctx, budget: createBudget(1) };
+    await new Promise((r) => setTimeout(r, 5));
+    const never = vi.fn(async () => refreshed);
+    expect(await createCalibrationRefresh(async () => ({ refreshIfDue: never }))(spent)).toEqual({ skipped: 'no_time' });
+    expect(never).not.toHaveBeenCalled();
+  });
+
+  it('end to end over the memory repo: pairs written by the scorer become the stored calibration of the market', async () => {
+    const s = setup({ jobs: 3, perUser: '0' });
+    // SYNTHETIC pairs: 600 AI rows that stored the estimate they were scored next to (AI about 0.6 × the estimate).
+    const jobs = Array.from({ length: 600 }, (_, i) => jobRecord({ id: `p${i}` }));
+    s.repo.state.jobs.push(...jobs);
+    for (const [i, j] of jobs.entries()) {
+      const estimate = 30 + (i % 60);
+      s.repo.state.scores.push({
+        userId: 'u1', jobId: j.id, resumeVariantId: 'v1', score: Math.round(estimate * 0.6), explanation: { estimateAtScore: { score: estimate, coverage: 0.8 } }, resumeContentHashAtScore: 'hash-1', modelUsed: MODEL,
+        generatedAt: new Date(NOW.getTime() - 86_400_000), scoreKind: 'ai', tier: 'possible', dimensions: [{ key: 'skills', weight: 30, score: 41, status: 'scored', evidence: [] }], promptVersion: SCORER_PROMPT_VERSION, locale: 'en', searchProfileVersion: 1,
+      });
+    }
+    const calibration = calibrationFor(s.repo, { env: {}, now: () => NOW });
+    const task = composeScorePrecompute(s.task, createCalibrationRefresh(async () => ({ refreshIfDue: (market, now) => calibration.refreshIfDue(market, now) })));
+    expect(await task(s.ctx)).toMatchObject({ calibration: { map: 'stored', pairs: 600, priors: 'stored', priorsPairs: 600 } });
+    const doc = parseCalibrationDoc(s.repo.state.config[CALIBRATION_CONFIG_KEY]);
+    expect(doc.intl!.map!.knots.length).toBeGreaterThan(1);
+    expect(doc.intl!.priors).toEqual({ skills: 41 });
+    // The next run, 15 minutes later, leaves it alone.
+    expect(await task({ ...s.ctx, now: new Date(NOW.getTime() + 15 * 60_000) })).toMatchObject({ calibration: { skipped: 'not_due' } });
+    // No model was called for any of it (this setup has no scorer at all) and nothing was queued.
+    expect(s.enqueued).toHaveLength(0);
   });
 });
 

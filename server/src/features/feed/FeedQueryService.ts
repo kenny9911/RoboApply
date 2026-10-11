@@ -1,6 +1,7 @@
 // server/src/features/feed/FeedQueryService.ts — the feed (WP-32; ARCH §4.8, §4.9, §3.4).
 //
-//   query        retrieval SQL → pre-score + cached AI scores → rank → fit-tier view →
+//   query        retrieval SQL → the fits of the window (match `getFits`: the stored AI score,
+//                else the quick estimate; never a model call) → rank → fit-tier view →
 //                company scatter → RAFeedSession (30 min) → page 1; later pages slice
 //                the session and refill it from the next older window
 //   counts       For you / Saved / Added by you / Applied
@@ -43,18 +44,7 @@ import type { ExplainMatchInput } from '../compliance/index.js';
 import type { MatchExplanation } from '../compliance/contract.js';
 import type { MarketHookContext, MarketHookJob } from '../jobs/marketHooks.js';
 import { taxonomyCategories, taxonomyLabel } from '../jobs/taxonomy/index.js';
-import {
-  MatchDimensionsSchema,
-  preScore,
-  skillKey,
-  splitSkills,
-  toMatchJob,
-  SCORER_PROMPT_VERSION,
-  type MatchDimension,
-  type MatchService,
-  type MatchUser,
-  type PreScoreResult,
-} from '../match/index.js';
+import { applyMap, isByFilters, skillKey, type Fit, type FitFunctions, type MatchDimension, type MatchService, type MatchUser } from '../match/index.js';
 import {
   FILTER_FIELDS,
   coerceFilterSet,
@@ -96,13 +86,12 @@ import { publicItem, toFeedItem } from './items.js';
 import {
   companyKeyOf,
   fitBadge,
-  fitOf,
   passesTier,
+  rankFitOf,
   recommendedRank,
   scatterByCompany,
   sortCandidates,
   sponsorshipFirst,
-  type AiScore,
   type Candidate,
   type RankContext,
 } from './ranking.js';
@@ -134,7 +123,13 @@ const UNSPECIFIC_HIDE: ReadonlySet<string> = new Set(['not_interested', 'other']
 
 export interface FeedServiceDeps {
   repo: FeedRepo;
-  match: Pick<MatchService, 'userContext' | 'config'>;
+  /**
+   * The fits of a window come from `getFits` (match/fit.ts): the same fit job
+   * detail, alerts and the Assistant read, never a model call.
+   * `calibrationMap` is the market's estimate-to-AI map for the ranking input
+   * (absent or null: the blend of ranking.ts `fitForRank`).
+   */
+  match: Pick<MatchService, 'userContext' | 'config'> & { getFits: FitFunctions['getFits'] } & Partial<Pick<MatchService, 'calibrationMap'>>;
   search: Pick<SearchProfileService, 'getActive' | 'get'> & Partial<Pick<SearchProfileService, 'findById'>>;
   /** RoboApply: always; GoApply: a live `personalized_recommendation` grant (fails closed). */
   personalized: (userId: string, market: Market) => Promise<boolean>;
@@ -199,9 +194,11 @@ type RatingReason = (typeof RATING_REASONS)[number];
 
 interface ScoreEntry {
   badge: Candidate['badge'];
+  /** The ranking input (ranking.ts `fitForRank`). */
   fit: number | null;
-  /** The stored AI score's dimensions (scorer v3), when the badge is an AI score. */
-  aiDimensions?: MatchDimension[] | null;
+  /** The components and the skill split of the same fit the badge shows ("Why this job"). */
+  dimensions?: MatchDimension[] | null;
+  skills?: { aligned: string[]; missing: string[] } | null;
 }
 
 interface Scored {
@@ -211,11 +208,6 @@ interface Scored {
 
 /** The id and version a browse session is hashed under (it reads no search profile). */
 const BROWSE_PROFILE = { id: 'browse', version: 0 } as const;
-
-function aiDimensionsOf(v: unknown): MatchDimension[] | null {
-  const parsed = MatchDimensionsSchema.safeParse(v);
-  return parsed.success && parsed.data.length ? parsed.data : null;
-}
 
 interface Window {
   rows: FeedJobRow[];
@@ -364,27 +356,47 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
 
   // ── Scoring and ranking ───────────────────────────────────────────────
 
+  /**
+   * The fits of a window: one `getFits` call (the stored AI score where it can
+   * be shown, else the quick estimate; never a model call). The badge, the
+   * ranking input and the "Why this job" lines of a row all come from that one
+   * fit. A failing read never drops a row: it is listed without a fit.
+   *
+   * The window's rows and the person's side are handed over, so `getFits`
+   * reads neither again and loads no description: what it adds to a window is
+   * the one stored-score query the feed always made.
+   */
   async function score(ctx: FeedCtx, rows: FeedJobRow[], personalized: boolean): Promise<Scored> {
     const byId = new Map<string, ScoreEntry>();
     if (!personalized) {
       for (const r of rows) byId.set(r.id, { badge: null, fit: null });
       return { user: null, byId };
     }
-    const { user, resume } = await deps.match.userContext(ctx.userId);
-    const cfg = deps.match.config();
-    const ai = rows.length ? await repo.aiScores(ctx.userId, rows.map((r) => r.id), resume, SCORER_PROMPT_VERSION) : new Map();
-    for (const r of rows) {
-      let pre: PreScoreResult | null = null;
+    const context = await deps.match.userContext(ctx.userId);
+    let fits = new Map<string, Fit>();
+    let mapFn: ((estimate: number) => number) | null = null;
+    if (rows.length) {
       try {
-        pre = preScore(user, toMatchJob(toMatchRecord(r)), cfg);
+        const [read, map] = await Promise.all([
+          deps.match.getFits(ctx.userId, rows.map((r) => r.id), { context, rows: rows.map(toMatchRecord) }),
+          deps.match.calibrationMap ? deps.match.calibrationMap().catch(() => null) : null,
+        ]);
+        fits = read;
+        if (map) mapFn = (estimate) => applyMap(map, estimate);
       } catch (err) {
-        logger.warn('FEED', 'pre-score failed for a job', { jobId: r.id, error: err instanceof Error ? err.message : String(err) });
+        logger.warn('FEED', 'fits unavailable for a window; the rows are listed without a fit', { error: err instanceof Error ? err.message : String(err) });
       }
-      const a = ai.get(r.id);
-      const aiScore: AiScore | null = a ? { score: a.score, tier: (a.tier as AiScore['tier']) ?? null } : null;
-      byId.set(r.id, { badge: fitBadge(pre, aiScore, cfg.tiers), fit: fitOf(aiScore?.score, pre?.score), aiDimensions: a ? aiDimensionsOf(a.dimensions) : null });
     }
-    return { user, byId };
+    for (const r of rows) {
+      const fit = fits.get(r.id) ?? null;
+      byId.set(r.id, {
+        badge: fitBadge(fit),
+        fit: rankFitOf(fit, mapFn),
+        dimensions: fit?.dimensions ?? null,
+        skills: fit ? { aligned: fit.skills.aligned, missing: fit.skills.missing } : null,
+      });
+    }
+    return { user: context.user, byId };
   }
 
   /** Chosen skills when skills is the only filter that narrows the SQL (ORDERING_RULES skills_boost). */
@@ -437,19 +449,18 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
   /**
    * "Why this job" for one card (PIPL Art. 24). Not personalised (GoApply
    * without 个性化推荐): the recency explanation, no reasons. Personalised: the
-   * scored dimensions behind the badge — the stored AI dimensions for an AI
-   * score, else the deterministic pre-score's. No badge → no explanation.
+   * components and the skill split of the fit behind the badge (the AI's for
+   * an AI score, the estimate's otherwise). No badge → no explanation.
    */
-  function explanationFor(ctx: FeedCtx, c: CardCandidate, user: MatchUser | null, personalized: boolean): MatchExplanation | undefined {
+  function explanationFor(ctx: FeedCtx, c: CardCandidate, personalized: boolean): MatchExplanation | undefined {
     if (!deps.explain) return undefined;
     const market = ctx.market === 'cn' ? 'cn' : 'intl';
     try {
       if (!personalized) return deps.explain({ market, personalized: false });
-      if (!c.badge || !user) return undefined;
-      const job = toMatchJob(toMatchRecord(c.row));
-      const dimensions = c.badge.kind === 'ai' && c.aiDimensions?.length ? c.aiDimensions : preScore(user, job, deps.match.config()).dimensions;
-      const { aligned, missing } = splitSkills(user, job);
-      return deps.explain({ market, personalized: true, score: c.badge.score, kind: c.badge.kind, dimensions, skills: { aligned, missing } });
+      if (!c.badge || !c.dimensions) return undefined;
+      // A logistics part met only through the person's own filters says nothing about the job: it is neither a reason nor a gap.
+      const dimensions = c.dimensions.filter((d) => !isByFilters(d));
+      return deps.explain({ market, personalized: true, score: c.badge.score, kind: c.badge.kind, dimensions, skills: c.skills ?? { aligned: [], missing: [] } });
     } catch (err) {
       logger.warn('FEED', 'explanation failed for a job', { jobId: c.row.id, error: err instanceof Error ? err.message : String(err) });
       return undefined;
@@ -474,7 +485,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     return out;
   }
 
-  type CardCandidate = Pick<Candidate, 'row' | 'badge'> & { aiDimensions?: MatchDimension[] | null };
+  type CardCandidate = Pick<Candidate, 'row' | 'badge'> & Pick<ScoreEntry, 'dimensions' | 'skills'>;
 
   async function items(ctx: FeedCtx, cands: CardCandidate[], user: MatchUser | null, offset: number | null, personalized: boolean): Promise<FeedItem[]> {
     const [tracker, meta] = await Promise.all([repo.trackerStates(ctx.userId, cands.map((c) => c.row.id)), cardMetaFor(ctx, cands.map((c) => c.row))]);
@@ -486,7 +497,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
         position: offset === null ? null : offset + i,
         now: ctx.now,
         cardMeta: meta.get(c.row.id),
-        explanation: explanationFor(ctx, c, user, personalized),
+        explanation: explanationFor(ctx, c, personalized),
       });
       return item;
     });
@@ -870,8 +881,10 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
   // ── Badge count and skills check ──────────────────────────────────────
 
   /**
-   * Jobs first seen since the last visit. Personalised: those scoring ≥ Good
-   * (pre-score / cached AI score over the newest 400; `capped` past that).
+   * Jobs first seen since the last visit. Personalised: those at Good or
+   * better by the same rule as the "Good or better" view (the fit of each of
+   * the newest 400; a quick estimate with low confidence does not count;
+   * `capped` past that).
    * Not personalised (GoApply without 个性化推荐): a plain capped count, no
    * scoring. Reused for 2 minutes per (user, market, visit, profile version)
    * so a polling badge stays cheap; `markVisited` stamps the visit and drops
@@ -897,7 +910,7 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
       );
       const tiers = deps.match.config().tiers;
       const scored = rows.length ? await score(ctx, rows, true) : { byId: new Map<string, { badge: Candidate['badge'] }>() };
-      const count = [...scored.byId.values()].filter((s) => s.badge && s.badge.score >= tiers.good).length;
+      const count = [...scored.byId.values()].filter((s) => s.badge && passesTier(s.badge, 'good', tiers)).length;
       res = { count, since: since.toISOString(), capped: rows.length >= L.retrievalLimit };
     }
     if (!cached) {
@@ -924,7 +937,10 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     const scored = await score(ctx, w.rows, personalized);
     const rc = await rankContext(ctx, filters, personalized);
     const ranked = rankRows(w.rows, scored, eff, rc, filters, personalized);
-    const cands: CardCandidate[] = ranked.kept.slice(0, limit).map((c) => ({ row: c.row, badge: c.badge, aiDimensions: scored.byId.get(c.row.id)?.aiDimensions ?? null }));
+    const cands: CardCandidate[] = ranked.kept.slice(0, limit).map((c) => {
+      const entry = scored.byId.get(c.row.id);
+      return { row: c.row, badge: c.badge, dimensions: entry?.dimensions ?? null, skills: entry?.skills ?? null };
+    });
     return { cands, user: scored.user, personalized };
   }
 

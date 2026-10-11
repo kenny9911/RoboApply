@@ -9,10 +9,25 @@
 // SQL is covered by sql.test.ts snapshots instead.
 
 import type { Prisma } from '../../generated/prisma/client.js';
+import {
+  DEFAULT_MATCH_PRIORS,
+  DEFAULT_MATCH_TIERS,
+  DEFAULT_MATCH_WEIGHTS,
+  SCORER_PROMPT_VERSION,
+  assembleFit,
+  currentScorerPin,
+  type CalibrationMap,
+  type Fit,
+  type MatchPriors,
+  type MatchTiers,
+  type MatchUser,
+  type MatchWeights,
+} from '../match/index.js';
 import type { AffinityState } from './affinity.js';
+import type { FeedServiceDeps } from './FeedQueryService.js';
 import type { ActionJob, CardExtrasRow, FeedRepo, FeedSessionRecord, InteractionWrite } from './repo.js';
 import { EMPLOYER_BOARD_SOURCES, GOHIRE_SOURCE_BOARD } from './sourceLine.js';
-import type { FeedJobRow } from './types.js';
+import { toMatchRecord, type FeedJobRow } from './types.js';
 
 /**
  * Both recruiter banks with a candidate-facing posting page. A bank row is
@@ -90,6 +105,10 @@ export function feedRow(over: Partial<FeedJobRow> & { id: string }): FeedJobRow 
     companyFacts: {},
     companyDisplayName: null,
     companyLogo: null,
+    skillIds: [],
+    contentHash: null,
+    lang: null,
+    titleMatchScore: null,
     ...over,
   };
 }
@@ -114,7 +133,12 @@ export class FakeFeedRepo implements FeedRepo {
   affinity = new Map<string, AffinityState>();
   visits = new Map<string, Date>();
   closed: string[] = [];
-  ai = new Map<string, { score: number; tier: string | null; dimensions?: unknown }>();
+  /**
+   * Stored AI scores by job id. Not a repo read any more: the feed gets its
+   * fits from match `getFits`, and `fakeFeedMatch` serves these as that
+   * person's stored scores.
+   */
+  ai = new Map<string, { score: number; tier: string | null; dimensions?: unknown; modelUsed?: string; promptVersion?: string | null; jobContentHash?: string | null }>();
   /** Ids whose `publicDisplay` is false (the visitor list's SQL scope drops them). */
   notPublicDisplay = new Set<string>();
   /** Ids the public-page re-check refuses (archived, closed, expired, flagged, source no longer allowed). */
@@ -243,13 +267,6 @@ export class FakeFeedRepo implements FeedRepo {
     return this.categoryCounts;
   }
 
-  async aiScores(_userId: string, jobIds: string[], resume: { id: string } | null) {
-    const out = new Map<string, { score: number; tier: string | null; dimensions?: unknown }>();
-    if (!resume) return out;
-    for (const id of jobIds) if (this.ai.has(id)) out.set(id, this.ai.get(id)!);
-    return out;
-  }
-
   async trackerStates(_userId: string, jobIds: string[]) {
     return new Map([...this.tracker].filter(([id]) => jobIds.includes(id)));
   }
@@ -361,4 +378,97 @@ export class FakeFeedRepo implements FeedRepo {
   async careerGoal() {
     return this.goal;
   }
+}
+
+// ── The match dependency (fits) ───────────────────────────────────────────
+
+/** The scorer model the fake stored scores were "written" by. */
+export const FAKE_SCORER_MODEL = 'test/model-a';
+
+type FeedMatchContext = Awaited<ReturnType<FeedServiceDeps['match']['userContext']>>;
+
+export interface FakeFeedMatchOptions {
+  repo: FakeFeedRepo;
+  /** The person's side, as match `userContext` answers it. */
+  context: (userId: string) => FeedMatchContext | Promise<FeedMatchContext>;
+  config?: () => { weights: MatchWeights; tiers: MatchTiers; priors: MatchPriors };
+  /** The market's calibration map (default: none, so ranking uses the blend). */
+  map?: () => CalibrationMap | null;
+  now?: () => Date;
+}
+
+export type FakeFeedMatch = FeedServiceDeps['match'] & {
+  /** `rowsHanded`: per `getFits` call, how many of the asked ids came with their row (the feed hands its window over). */
+  calls: { userContext: number; getFits: string[][]; rowsHanded: number[] };
+};
+
+/**
+ * The feed's match dependency for tests: the REAL fit assembly (match/fit.ts
+ * `assembleFit`, the function production `getFits` runs) over the fake repo's
+ * rows, with `repo.ai` as the person's stored AI scores. No model, no
+ * database. A stored score given without components gets one component that
+ * carries its total, so the total is the number the test wrote.
+ */
+export function fakeFeedMatch(opts: FakeFeedMatchOptions): FakeFeedMatch {
+  const calls = { userContext: 0, getFits: [] as string[][], rowsHanded: [] as number[] };
+  const config = opts.config ?? (() => ({ weights: { ...DEFAULT_MATCH_WEIGHTS }, tiers: { ...DEFAULT_MATCH_TIERS }, priors: { ...DEFAULT_MATCH_PRIORS } }));
+  const now = opts.now ?? (() => new Date());
+  const pin = currentScorerPin('roboapply', FAKE_SCORER_MODEL);
+  return {
+    calls,
+    async userContext(userId) {
+      calls.userContext += 1;
+      return opts.context(userId);
+    },
+    config,
+    async calibrationMap() {
+      return opts.map ? opts.map() : null;
+    },
+    async getFits(userId, jobIds, o) {
+      calls.getFits.push([...jobIds]);
+      const { user, resume } = o?.context ?? (await opts.context(userId));
+      const cfg = config();
+      const out = new Map<string, Fit>();
+      const handed = new Map((o?.rows ?? []).map((r) => [r.id, r]));
+      calls.rowsHanded.push(jobIds.filter((id) => handed.has(id)).length);
+      for (const id of jobIds) {
+        // As production `getFits`: a row the caller handed over is used as it is; any other is read.
+        const read = opts.repo.rows.find((r) => r.id === id);
+        const job = handed.get(id) ?? (read ? toMatchRecord(read) : null);
+        if (!job) continue;
+        const ai = opts.repo.ai.get(id);
+        out.set(
+          id,
+          assembleFit({
+            job,
+            // A list knows the posting's hash only when the row stores one (no description is read here).
+            jobContentHash: job.contentHash ?? null,
+            user: user as MatchUser,
+            resume,
+            stored:
+              ai && resume
+                ? {
+                    resumeVariantId: resume.id,
+                    score: ai.score,
+                    tier: ai.tier,
+                    dimensions: ai.dimensions ?? [{ key: 'title_level', weight: cfg.weights.title_level, score: ai.score, status: 'scored', evidence: [] }],
+                    generatedAt: new Date('2026-10-09T00:00:00.000Z'),
+                    modelUsed: ai.modelUsed ?? FAKE_SCORER_MODEL,
+                    promptVersion: ai.promptVersion === undefined ? SCORER_PROMPT_VERSION : ai.promptVersion,
+                    jobContentHash: ai.jobContentHash ?? null,
+                    rubricVersion: null,
+                    searchProfileVersion: user.searchProfileVersion,
+                    resumeContentHashAtScore: resume.resumeContentHash,
+                  }
+                : null,
+            config: cfg,
+            pin,
+            map: opts.map ? opts.map() : null,
+            now: now(),
+          }),
+        );
+      }
+      return out;
+    },
+  };
 }

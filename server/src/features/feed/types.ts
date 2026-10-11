@@ -72,6 +72,15 @@ export interface FeedJobRow {
   companyFacts: unknown;
   companyDisplayName: string | null;
   companyLogo: string | null;
+  // ── Market wave columns (MKT-0), carried by the list projection so later phases need not edit it. Not read yet. ──
+  /** RASkill ids of the posting's skills (canonical vocabulary). */
+  skillIds: string[];
+  /** RAJob.contentHash: the content hash stored with the search document; null until it is written. */
+  contentHash: string | null;
+  /** The posting's language tag. */
+  lang: string | null;
+  /** The deterministic taxonomy match score of the title (0–1). */
+  titleMatchScore: number | null;
 }
 
 /** Who and where a feed call runs for. */
@@ -120,6 +129,10 @@ export function toMatchRecord(row: FeedJobRow): MatchJobRecord {
     marketTags: row.marketTags,
     archivedAt: row.archivedAt,
     companyIndustries: row.companyIndustries ?? [],
+    skillIds: row.skillIds ?? [],
+    contentHash: row.contentHash ?? null,
+    lang: row.lang ?? null,
+    titleMatchScore: row.titleMatchScore ?? null,
   };
 }
 

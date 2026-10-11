@@ -85,6 +85,14 @@ export interface FitBadge {
   kind: 'pre' | 'ai';
   topGap: string | null;
   topOverlap: string | null;
+  /**
+   * How much of the rubric the fit rests on (estimate v2). A quick estimate
+   * with `low` confidence is not listed by the "Good or better" and "Great"
+   * views. Sent with every fit; a reader treats a missing value as unknown.
+   */
+  confidence?: 'high' | 'medium' | 'low';
+  /** One reason when the confidence is low (`no_skills_listed`, `no_level_stated`, `no_role_evidence`, `no_resume`, `few_details`); null otherwise. */
+  confidenceReason?: string | null;
 }
 
 export interface FeedItem {
@@ -420,7 +428,7 @@ export const FEED_ERROR_CODES = {
  * /help/ranking; tests pin them so the page and the code cannot drift.
  */
 export const RANKING_FACTORS = [
-  { key: 'fit', weight: 0.55, what: 'Fit score: the AI score when one exists, otherwise the quick estimate minus 5 points.' },
+  { key: 'fit', weight: 0.55, what: 'Fit score: the AI score when one exists, otherwise the quick estimate. Both are on the same scale.' },
   { key: 'freshness', weight: 0.2, what: 'How recently the job was posted: 100 × e^(−hours since posting / 72).' },
   { key: 'affinity', weight: 0.15, what: 'Your own actions: saving, applying and hiding jobs, and companies you marked as preferred; fades 2% a day.' },
   { key: 'source_quality', weight: 0.1, what: 'How complete the posting is: pay listed, a known application system, a real posting date, a detailed description.' },

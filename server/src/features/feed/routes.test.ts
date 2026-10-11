@@ -15,11 +15,11 @@ import { flagEnvName, setFlagOverrideLoader } from '../../platform/flags.js';
 import { explainMatch } from '../compliance/explainMatch.js';
 import { cardMeta } from '../jobs/marketHooks.js';
 import { fakeAuth, startRouteHarness, type RouteHarness } from '../../test/routeHarness.js';
-import { DEFAULT_MATCH_TIERS, DEFAULT_MATCH_WEIGHTS, buildMatchUser } from '../match/index.js';
+import { buildMatchUser } from '../match/index.js';
 import type { SearchProfileWire } from '../search/index.js';
 import { createFeedQueryService } from './FeedQueryService.js';
 import { createFeedRouter } from './routes.js';
-import { FakeFeedRepo, feedRow } from './testkit.js';
+import { FakeFeedRepo, fakeFeedMatch, feedRow } from './testkit.js';
 
 const NOW = new Date('2026-10-10T12:00:00.000Z');
 const P = '/api/v1/roboapply/feed';
@@ -49,13 +49,16 @@ const profile = (): SearchProfileWire => ({
 
 const service = createFeedQueryService({
   repo,
-  match: {
-    async userContext(userId) {
-      const user = buildMatchUser({ userId, market: 'intl', profile: null, education: [], experience: [], resumeParsed: null, searchProfile: null, employerIndustries: [] }, NOW);
+  // The real fit assembly (match/fit.ts) over the fake repo's rows. The person has experience on file and no resume.
+  match: fakeFeedMatch({
+    repo,
+    now: () => NOW,
+    context(userId) {
+      const experience = [{ title: 'Backend Engineer', company: 'Acme', startYm: '2022-01', endYm: null, current: true, kind: 'work' }];
+      const user = buildMatchUser({ userId, market: 'intl', profile: null, education: [], experience, resumeParsed: null, searchProfile: null, employerIndustries: [] }, NOW);
       return { user, resume: null };
     },
-    config: () => ({ weights: { ...DEFAULT_MATCH_WEIGHTS }, tiers: { ...DEFAULT_MATCH_TIERS } }),
-  },
+  }),
   search: {
     getActive: async () => {
       profileReads += 1;

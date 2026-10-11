@@ -7,7 +7,7 @@ import type { Market } from '../../platform/brand/registry.js';
 import { logger } from '../../services/LoggerService.js';
 import { explainMatch } from '../compliance/index.js';
 import type { MarketHookContext, MarketHookJob } from '../jobs/marketHooks.js';
-import { matchService } from '../match/index.js';
+import { getFits, matchService } from '../match/index.js';
 import { searchProfileService } from '../search/index.js';
 import { createFeedQueryService, type FeedServiceDeps } from './FeedQueryService.js';
 import type { PlannerPlan } from './filterDiff.js';
@@ -65,7 +65,13 @@ async function defaultCardMeta(job: MarketHookJob, ctx: MarketHookContext): Prom
 export function defaultFeedDeps(): FeedServiceDeps {
   return {
     repo: createPrismaFeedRepo(),
-    match: matchService,
+    // The fits come from the fit contract's own `getFits` (match/fit.ts), the function every other surface calls.
+    match: {
+      userContext: (userId) => matchService.userContext(userId),
+      config: () => matchService.config(),
+      getFits: (userId, jobIds, opts) => getFits(userId, jobIds, opts),
+      calibrationMap: () => matchService.calibrationMap(),
+    },
     search: searchProfileService,
     personalized: defaultPersonalized,
     consumeRefresh: defaultConsumeRefresh,
