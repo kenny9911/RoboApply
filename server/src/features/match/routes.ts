@@ -103,7 +103,7 @@ export function createMatchRouter(
       const { id } = parseParams(req, MatchJobParamsSchema);
       const query = parseQuery(req, KeywordCheckQuerySchema);
       const service = await getService();
-      return service.keywordCheck(userId, id, { resumeVariantId: query.resumeVariantId });
+      return service.keywordCheck(userId, id, { resumeVariantId: query.resumeVariantId, locale: await requestLocale(req) });
     }),
   );
 

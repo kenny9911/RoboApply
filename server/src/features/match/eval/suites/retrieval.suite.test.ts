@@ -238,7 +238,9 @@ describe('measures', () => {
     expect(by('recall_at_200_fused', CAREER_CHANGER_SUBSET).value).toBe(0.1);
     expect(findGate('retrieval', 'recall_at_200_fused')).toBeNull();
     expect(findGate('retrieval', 'recall_at_200_recency')).toBeNull();
-    expect(gateReads(findGate('retrieval', 'recall_at_200_hybrid')!, CAREER_CHANGER_SUBSET)).toBe(true);
+    // And the gate itself never reads that subset (M4 gate: `exceptSubsets`, as for ranking), whatever id a row carries.
+    expect(gateReads(findGate('retrieval', 'recall_at_200_hybrid')!, CAREER_CHANGER_SUBSET)).toBe(false);
+    expect(gateReads(findGate('retrieval', 'recall_at_200_worst_persona_delta')!, CAREER_CHANGER_SUBSET)).toBe(false);
     // With recorded vectors the gate is evaluated: +19 points passes, and −2 points for the worst persona is inside −5.
     const r = report(measures);
     expect(r.rows.filter((x) => x.status === 'pass').map((x) => x.metric)).toEqual(['recall_at_200_hybrid [intl]', 'recall_at_200_worst_persona_delta [intl]']);

@@ -10,7 +10,6 @@ import * as contract from './contract.js';
 import {
   CREDIT_LINE_BOARDS,
   EMPLOYER_BOARD_SOURCES,
-  NO_AGE_FLOOR_BOARDS,
   RECRUITER_BANK_BOARDS,
   applyLinkOf,
   bankListable,
@@ -31,7 +30,6 @@ import {
 } from './sourceLine.js';
 import { PUBLIC_ATS } from '../jobs/sources/atsPublic/contract.js';
 import { TW_OPEN_DATA_ATTRIBUTIONS } from '../jobs/sources/twHooks.js';
-import { NO_DATE_EXPIRY_BOARDS } from '../jobs/ingest/maintain.js';
 import { BANK_PAGES_ENV } from './testkit.js';
 
 describe('sourceKindOf / viaOf', () => {
@@ -92,15 +90,6 @@ describe('a recruiter-bank row needs a real posting page (plan §3.9): the read-
   it('the Prisma twin: NOT (bank row of a held bank), or nothing when every bank has a page', () => {
     expect(bankListableWhere({})).toEqual({ NOT: { fromRecruiterBank: true, sourceBoard: { in: ['robohire', 'gohire'] } } });
     expect(bankListableWhere(BANK_PAGES_ENV)).toBeNull();
-  });
-});
-
-describe('no posting-age cut-off for board or bank rows', () => {
-  it('the read side exempts exactly the boards the ingest side never expires by date', () => {
-    expect([...NO_AGE_FLOOR_BOARDS].sort()).toEqual([...NO_DATE_EXPIRY_BOARDS].sort());
-    for (const ats of PUBLIC_ATS) expect(NO_AGE_FLOOR_BOARDS).toContain(ats);
-    expect(NO_AGE_FLOOR_BOARDS).not.toContain('user_import');
-    expect(NO_AGE_FLOOR_BOARDS).not.toContain('jsearch');
   });
 });
 

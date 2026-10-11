@@ -478,6 +478,38 @@ describe('recordConsent', () => {
     }
   });
 
+  it('GoApply: withdrawing the AI or the 个性化推荐 consent deletes the vectors that exist under it, at once (M4 gate; carry-over M2 MKT-4A.5)', async () => {
+    const withdraw = async (brand: typeof goapply, type: 'ai_resume_parsing' | 'personalized_recommendation', granted: boolean, deleteVectors = vi.fn(async () => undefined)) => {
+      const fake = db();
+      const out = await recordConsent({ userId: 'u1', brand, type, granted, proseVersion: CONSENT_PROSE_VERSION, locale: 'zh' }, { db: fake as unknown as ConsentDb, env: OFFSHORE, enqueue: vi.fn(), kick: vi.fn(), deleteVectors });
+      return { out, deleteVectors, rows: fake.$rows('seekerConsentRecord') };
+    };
+    // One call per withdrawal, naming the consent: the default deletes the person's vectors, and for the AI consent
+    // the vectors of their own imported jobs too (the retrieval sweep's rule).
+    for (const type of ['ai_resume_parsing', 'personalized_recommendation'] as const) {
+      const w = await withdraw(goapply, type, false);
+      expect(w.deleteVectors.mock.calls).toEqual([['u1', type]]);
+      expect(w.rows).toMatchObject([{ consentType: type, granted: false }]);
+      expect(w.out).toMatchObject({ type, granted: false, accountClosing: false });
+      // A grant deletes nothing.
+      expect((await withdraw(goapply, type, true)).deleteVectors).not.toHaveBeenCalled();
+    }
+    // Best effort: the withdrawal is recorded and answered when the deletion fails (the sweep removes what is left).
+    const failing = await withdraw(goapply, 'ai_resume_parsing', false, vi.fn(async () => { throw new Error('index down'); }));
+    expect(failing.rows).toMatchObject([{ consentType: 'ai_resume_parsing', granted: false }]);
+    expect(failing.out.granted).toBe(false);
+    // Another GoApply consent, and RoboApply (where these two are not asked for): never.
+    const other = vi.fn(async () => undefined);
+    await recordConsent({ userId: 'u1', brand: goapply, type: 'autofill_sensitive', granted: false, proseVersion: CONSENT_PROSE_VERSION }, { db: db() as unknown as ConsentDb, env: OFFSHORE, enqueue: vi.fn(), kick: vi.fn(), deleteVectors: other });
+    await recordConsent({ userId: 'u1', brand: roboapply, type: 'autofill_sensitive', granted: false, proseVersion: CONSENT_PROSE_VERSION }, { db: db() as unknown as ConsentDb, env: OFFSHORE, enqueue: vi.fn(), kick: vi.fn(), deleteVectors: other });
+    expect(other).not.toHaveBeenCalled();
+    for (const type of ['ai_resume_parsing', 'personalized_recommendation'] as const) {
+      if (!findConsentDefinition(roboapply.id, type)) continue;
+      await recordConsent({ userId: 'u1', brand: roboapply, type, granted: false, proseVersion: CONSENT_PROSE_VERSION }, { db: db() as unknown as ConsentDb, env: OFFSHORE, enqueue: vi.fn(), kick: vi.fn(), deleteVectors: other });
+    }
+    expect(other).not.toHaveBeenCalled();
+  });
+
   it('409 on outdated prose, 422 on unknown or non-withdrawable', async () => {
     const deps = { db: db() as unknown as ConsentDb, env: OFFSHORE, enqueue: vi.fn(), kick: vi.fn() };
     await expect(recordConsent({ userId: 'u1', brand: goapply, type: 'ai_resume_parsing', granted: true, proseVersion: 'v0' }, deps)).rejects.toMatchObject({ code: 'version_conflict' });
@@ -540,7 +572,8 @@ describe('recordConsent', () => {
 
   it('withdrawing other consents, or the cross-border one where nothing leaves the mainland, does not purge', async () => {
     const enqueue = vi.fn();
-    const deps = { db: db() as unknown as ConsentDb, env: MAINLAND_OWN, enqueue, kick: vi.fn() };
+    // The vector deletion of a withdrawn AI consent is its own test; faked here so nothing loads the retrieval area.
+    const deps = { db: db() as unknown as ConsentDb, env: MAINLAND_OWN, enqueue, kick: vi.fn(), deleteVectors: vi.fn(async () => undefined) };
     await recordConsent({ userId: 'u1', brand: goapply, type: 'ai_resume_parsing', granted: false, proseVersion: CONSENT_PROSE_VERSION }, deps);
     const out = await recordConsent({ userId: 'u1', brand: goapply, type: 'pipl_cross_border', granted: false, proseVersion: CONSENT_PROSE_VERSION }, deps);
     expect(out.accountClosing).toBe(false);

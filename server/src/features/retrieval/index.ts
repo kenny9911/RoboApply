@@ -18,7 +18,7 @@ import { defaultRetrievalRepo, type NearestJob, type UserVectorKind } from './re
 
 export { VECTOR_DIMENSIONS, createRetrievalRepo, defaultRetrievalRepo, parseVector, vectorLiteral } from './repo.js';
 export type { EmbeddingMeta, IndexStats, NearestJob, RetrievalDb, RetrievalRepo, UserEmbeddingMeta, UserVectorKind } from './repo.js';
-export { MAX_QUERY_TOKENS, QUERY_STOPWORDS, queryTokens, segmentForSearch, toTsQuery } from './segment.js';
+export { FILTER_KEPT_STOPWORDS, MAX_QUERY_TOKENS, QUERY_STOPWORDS, filterTokens, queryTokens, segmentForSearch, toTsQuery } from './segment.js';
 export { HANT_HANS_UNICODE_VERSION, foldHantToHans, isTraditionalOnly } from './hantHans.js';
 export { detectLang } from './lang.js';
 export type { PostingLang } from './lang.js';

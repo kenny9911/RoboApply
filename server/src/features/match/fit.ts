@@ -37,10 +37,10 @@
 //     stored with the tier on the estimate's side of that edge
 //     (scorerV4.ts `borderlineTier`); this read keeps it there.
 //   - An AI score that could judge less than 60% of the rubric weight (its
-//     other components are "not stated") is never Great and its confidence is
-//     low, whatever its total (I4, `tierWithinCoverage`): the same rule the
-//     estimate applies to a thin posting. The total itself is shown as
-//     computed.
+//     other components are "not stated"), or that judged no skill line for a
+//     posting that states no level, is never Great and its confidence is low,
+//     whatever its total (I4, `aiFitThin`): the same rule the estimate applies
+//     to a thin posting. The total itself is shown as computed.
 //   - AI is off for this person (GoApply without the "Use AI" consent): the
 //     estimate, with `estimateReason: 'ai_off'`, on every surface (I8).
 //
@@ -77,7 +77,7 @@ import {
 import { toMatchJob, type MatchJobRecord } from './context.js';
 import { currentJobHash } from './jobHash.js';
 import type { MatchService, ScoreMode } from './MatchService.js';
-import { combineDimensions, confidenceFor, confidenceReasonFor, hardSkillList, logisticsDimension, preScore, splitSkills, type MatchJob, type MatchUser } from './preScore.js';
+import { combineDimensions, confidenceFor, confidenceReasonFor, hardSkillList, logisticsDimension, postingStates, preScore, splitSkills, type MatchJob, type MatchUser } from './preScore.js';
 import { jobHashCurrent, type ResumeRecord, type StoredFitRow } from './repo.js';
 
 // ── The type ──────────────────────────────────────────────────────────────
@@ -259,7 +259,38 @@ export function thinCoverage(coverage: number): boolean {
  * tier and the shown tier agree.
  */
 export function tierWithinCoverage<T extends FitTierKey | null>(tier: T, coverage: number): T | 'good' {
-  return tier === 'great' && thinCoverage(coverage) ? 'good' : tier;
+  return tierWhenThin(tier, thinCoverage(coverage));
+}
+
+/** A thin fit is never Great; every other tier stays. */
+export function tierWhenThin<T extends FitTierKey | null>(tier: T, thin: boolean): T | 'good' {
+  return tier === 'great' && thin ? 'good' : tier;
+}
+
+/**
+ * Is this AI fit thin (invariant I4: never Great, confidence low)? Read on
+ * the answer AND on the posting:
+ *   - the scorer could judge under 60% of the rubric weight (`thinCoverage`);
+ *   - or it judged nothing on skills and the posting states no level.
+ *
+ * The second half is the invariant's own sentence ("a job with no listed
+ * skills and no stated level is never Great") for a scorer that cannot say
+ * "not stated" about the level. Scorer v4 always scores title_level from its
+ * own reading of two levels, and its domain and trajectory judgments count
+ * with no quote behind them, so a posting that says a title and nothing else
+ * reached 60% to 70% coverage and was stored and shown Great at 100
+ * (M4 cross-review). A level the posting does not state is not evidence, and
+ * with no skill or experience line judged there is nothing else to carry a
+ * Great. A posting that states its level, or one whose requirement lines the
+ * scorer found and judged, is not touched by this half.
+ *
+ * One function for the write (MatchService) and every read (`assembleFit`).
+ */
+export function aiFitThin(dimensions: MatchDimension[], job: MatchJob): boolean {
+  if (thinCoverage(aiCoverage(dimensions))) return true;
+  const skills = dimensions.find((d) => d.key === 'skills');
+  const skillsJudged = !!skills && skills.status === 'scored' && skills.score !== null;
+  return !skillsJudged && !postingStates(job).level;
 }
 
 // ── Assembly ──────────────────────────────────────────────────────────────
@@ -344,13 +375,15 @@ export function assembleFit(input: FitInputs): Fit {
     const dimensions = refreshDimensions(status.dimensions, user, job, config.weights);
     const score = combineDimensions(dimensions) ?? row.score;
     const coverage = aiCoverage(dimensions);
-    // I4: under 60% of the rubric weight judged is low confidence and never Great.
-    const confidence = confidenceFor(coverage, thinCoverage(coverage));
+    // I4: under 60% of the rubric weight judged, or no skill line judged for a posting that states no level, is low
+    // confidence and never Great (`aiFitThin`).
+    const thin = aiFitThin(dimensions, job);
+    const confidence = confidenceFor(coverage, thin);
     return {
       ...common,
       requirements: input.requirements ?? [],
       score,
-      tier: tierWithinCoverage(hysteresisTier(row.tier, score, config.tiers), coverage),
+      tier: tierWhenThin(hysteresisTier(row.tier, score, config.tiers), thin),
       kind: 'ai',
       coverage,
       confidence,
@@ -475,6 +508,11 @@ export interface GetFitOptions {
 export interface GetFitsOptions {
   /** The answer of this same service's `userContext(userId)` in this request. */
   context?: { user: MatchUser; resume: ResumeRecord | null };
+  /**
+   * The UI language of the request, when the caller knows it: skill labels
+   * are written in it. Absent: the posting's language, else the market's.
+   */
+  locale?: string;
   /**
    * Job rows the caller already read from the database in this request (the
    * feed's window, as `toMatchRecord` gives them). An id that has its row

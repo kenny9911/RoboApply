@@ -38,6 +38,25 @@ describe('auth email templates', () => {
     }
   });
 
+  it('the account-deleted mail says the plan will not renew only when closing the account turned the renewal off', () => {
+    // It stands in for the "plan cancelled" mail, which would promise paid features to a closed account.
+    const r = getBrand('roboapply');
+    const render = (params: Record<string, unknown>) =>
+      getEmailTemplate(AUTH_EMAIL_KEYS.accountDeleted)!.render({ brand: r, t: createEmailTranslator(r, 'en'), params, origin: r.canonicalOrigin });
+    const sentence = 'Your paid plan will not renew, and you will not be charged for it again.';
+    const stopped = render({ days: 30, renewalStopped: true });
+    expect(stopped.bodyText).toContain(sentence);
+    expect(stopped.bodyHtml).toContain(sentence);
+    expect(stopped.bodyText).toContain('can no longer sign in');
+    for (const params of [{ days: 30 }, { days: 30, renewalStopped: false }]) {
+      const plain = render(params);
+      expect(plain.bodyText).not.toContain('will not renew');
+      expect(plain.bodyHtml).not.toContain('will not renew');
+    }
+    // Nothing in it promises access: that was the contradiction with "you can no longer sign in".
+    expect(stopped.bodyText).not.toMatch(/stay on until|See your plan/);
+  });
+
   it('the cross-brand notice names the brand that holds the account and links there', () => {
     const go = getBrand('goapply');
     const out = getEmailTemplate(AUTH_EMAIL_KEYS.otherBrand)!.render({

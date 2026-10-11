@@ -402,14 +402,22 @@ async function readReadyList(userId: string, jobId: string, { world }: SeamConte
 
 async function assistantAreas(world: World, fits: Loose): Promise<Record<string, (...args: unknown[]) => Promise<unknown>>> {
   const createDefaultAreas = await loadSeam<(options: Loose) => Record<string, (...args: unknown[]) => Promise<unknown>>>(`${PATHS.copilotAreas}#createDefaultAreas`);
-  return createDefaultAreas({ store: {}, env: {}, fits });
+  // The 个性化推荐 grant is live (as for the Ready to apply read above): without it GoApply's lists read nobody's fit.
+  return createDefaultAreas({ store: {}, env: {}, fits, personalized: async () => true });
 }
 
+/**
+ * The fit on a row of a job list the Assistant shows (`search_jobs`,
+ * `top_fit_jobs`, `added_jobs`, `similar_jobs`, the cited card of
+ * `show_jobs`). Since MKT-4H every list reads its fits in one batch through
+ * `CopilotAreas.fits`; no tool calls `storedFit` any more, so the seam reads
+ * what the lists read. The seam keeps its name (the invariant list names it).
+ */
 async function readAssistantStoredFit(userId: string, jobId: string, { world }: SeamContext): Promise<SeamReading> {
   const areas = await assistantAreas(world, await fitsOf(world));
-  // A resume attached to the thread cannot matter: the adapter takes no version (copilot/types.ts `storedFit`).
-  const view = (await world.inBrand(() => areas.storedFit!(userId, jobId, { locale: 'en' }))) as SeamReading;
-  return reading('the Assistant (stored fit)', view);
+  // A resume attached to the thread cannot matter: the adapter takes no version (copilot/types.ts `fits`).
+  const views = (await world.inBrand(() => areas.fits!(userId, [jobId], { locale: 'en' }))) as Map<string, SeamReading>;
+  return reading('the Assistant (the fit on a job-list row)', views.get(jobId));
 }
 
 /**

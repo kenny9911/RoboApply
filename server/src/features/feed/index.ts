@@ -3,6 +3,8 @@
 // Seams other areas call:
 //   - countForFilters / limitingFilters: search (/search-profiles/count, /:id/limiting), onboarding O7
 //   - preview: the Assistant's search_jobs / top_fit_jobs tools, the fit-score precompute (no session)
+//   - previewOrdered: `preview`, and whether `relevance` took part in the order (the job-search API's
+//     index provider reads it before it names an order in `agent.rankedBy`; MKT-4F, MKT-4H)
 //   - publicList: visitor feed (WP-78; the SEO pages' public rules, no fit)
 //   - sampleForFilters: job ids for a filter set, newest first, no ranking (competitiveness report)
 //   - alertCandidates: new job ids for a saved search with the feed's filter semantics (alerts)
@@ -12,8 +14,9 @@
 //   - isFeedPersonalized: whether the feed may use the profile for order and fit (WP-31)
 //   - similarJobIds: the public jobs nearest to a job by its vector (features/retrieval), for Similar jobs
 // All of them run in the brand of the current request (or runWithBrand).
-// `preview` and `POST /feed/query` accept `relevance` (free text to order by, never a filter);
-// it is part of the session hash and changes the order from phase M4.
+// `preview` and `POST /feed/query` accept `relevance` (free text to order by, never a filter). It is
+// part of the session hash and, since phase M4 (MKT-4F), part of the query text of the lexical and the
+// dense retrieval leg under Recommended and Best fit, together with a typed `q`; only `q` is a predicate.
 
 import { getCurrentBrandOrDefault } from '../../platform/brand/brandContext.js';
 import type { FeedCountResult, FeedItem, FilterSet, LimitingFilter, PublicFeedItem } from './contract.js';
@@ -35,8 +38,16 @@ export { defaultPersonalized as isFeedPersonalized } from './defaultService.js';
 export interface FeedService {
   countForFilters(userId: string, filters: FilterSet): Promise<FeedCountResult>;
   limitingFilters(userId: string, searchProfileId: string): Promise<LimitingFilter[]>;
-  /** `input.relevance` (free text to order by, at most 240 characters) is accepted; it changes the order from phase M4. */
+  /** `input.relevance` (free text to order by, at most 240 characters, never a filter) joins the query text of the hybrid legs. */
   preview(userId: string, input: FeedPreviewInput): Promise<FeedItem[]>;
+  /**
+   * As `preview`, and whether `input.relevance` took part in the order of the
+   * rows returned: true only for a hybrid list whose lexical or dense leg was
+   * asked with the text and returned rows (for a personalised list: it chose
+   * candidates and broke ties). A caller that names an order to its own reader
+   * reads this and never assumes it.
+   */
+  previewOrdered(userId: string, input: FeedPreviewInput): Promise<{ items: FeedItem[]; relevanceApplied: boolean }>;
   publicList(input: { role?: string; city?: string; country?: string; limit: number }): Promise<PublicFeedItem[]>;
   /**
    * Job ids for `filters`, newest first, with the feed's own filter rules and
@@ -64,6 +75,7 @@ export const feedService: FeedService = {
   countForFilters: (userId, filters) => defaultFeedQueryService.countForFilters(ctxFor(userId), filters),
   limitingFilters: (userId, searchProfileId) => defaultFeedQueryService.limitingFilters(ctxFor(userId), searchProfileId),
   preview: (userId, input) => defaultFeedQueryService.preview(ctxFor(userId), input),
+  previewOrdered: (userId, input) => defaultFeedQueryService.previewOrdered(ctxFor(userId), input),
   publicList: (input) => {
     const brand = getCurrentBrandOrDefault();
     return defaultFeedQueryService.publicList({ market: brand.market, now: defaultFeedQueryService.now() }, input);

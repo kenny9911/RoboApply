@@ -126,6 +126,36 @@ async function inv1(): Promise<void> {
       assertNoModelCall(world, 'getFits');
     });
   }
+  // The same posting through the pinned scorer (scorer v4). It always scores the level, and its domain and
+  // trajectory judgments count with no quote, so an answer with nothing on the checklist still judges 60% to 70% of
+  // the rubric: the invariant must hold on the posting, not only on what the model said it judged.
+  await parts.part('the same posting scored by scorer v4 (level match, domain direct, trajectory toward, an empty checklist)', async () => {
+    const world = createWorld({ jobs: [thinPosting()], users: { u1: exactTitle } });
+    world.deps.scorerV4 = {
+      async run() {
+        world.scorer.calls += 1;
+        return {
+          requirements: [],
+          level: { post: 'senior', resume: 'senior', direction: 'match' },
+          domain: { status: 'direct', evidence: '' },
+          trajectory: { status: 'toward', evidence: '' },
+          strengths: [],
+          gaps: [],
+          summary: null,
+        };
+      },
+    };
+    const api = await world.fit();
+    const scored = await api.getFit('u1', 'job1', { allowModelCall: true });
+    assert.equal(world.scorer.calls, 1, `the scorer was called ${world.scorer.calls} time(s); this part needs the one call that writes the AI fit`);
+    assert.equal(fitKind(scored.kind), 'ai', `kind is ${String(scored.kind)}: the scorer's answer was not stored as the fit, so this part proves nothing`);
+    for (const [form, fit] of [['getFit after the call', scored], ['getFit', await api.getFit('u1', 'job1')], ['getFits', await onlyFit(world)]] as const) {
+      assert.equal(fitKind(fit.kind), 'ai', `${form}: kind is ${String(fit.kind)}, expected the stored AI fit`);
+      assert.notEqual(fit.tier, 'great', `${form}: tier is great (score ${fit.score}) for a posting that lists no skills and states no level, scored by a model`);
+      assert.equal(fit.confidence, 'low', `${form}: confidence is ${String(fit.confidence)} (expected low) for a posting that lists no skills and states no level, scored by a model`);
+    }
+    assert.equal(world.scorer.calls, 1, 'a read after the score called the scorer again');
+  });
   parts.done();
 }
 

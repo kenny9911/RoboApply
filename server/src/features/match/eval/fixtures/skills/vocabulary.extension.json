@@ -1,6 +1,6 @@
 {
  "_synthetic": true,
- "_note": "Fixture extension of the skill vocabulary for the skills gate (eval/suites/skills.suite.ts). The gate runs on the committed seed (server/src/features/skills/seed/skills.seed.json) plus these skills: the skills of the MKT-1D role groups (eval/fixtures/seed/groups.json) that the seed does not hold, with the names those groups use in English, Simplified and Traditional Chinese. Every entry is reviewed for the purpose of the fixture only. Nothing here is loaded by the product, and none of it is a reviewed row of RASkill.",
+ "_note": "Fixture extension of the skill vocabulary for the skills suite (eval/suites/skills.suite.ts). The GATE is read on the committed seed alone (server/src/features/skills/seed/skills.seed.json, the vocabulary production loads). These skills are added only for the rows named *_extended_vocabulary, which are information: the skills of the MKT-1D role groups (eval/fixtures/seed/groups.json) that the seed does not hold, with the names those groups use in English, Simplified and Traditional Chinese. Every entry is reviewed for the purpose of the fixture only. Nothing here is loaded by the product, and none of it is a reviewed row of RASkill.",
  "skills": [
   {
    "id": "model_deployment",

@@ -8,6 +8,7 @@
 import type prismaClient from '../../lib/prisma.js';
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { BrandId, Market } from '../../platform/brand/registry.js';
+import { creditLineHeldWhere } from '../feed/contract.js';
 import type { FitSnapshot } from '../match/contract.js';
 import type { Fit } from '../match/index.js';
 import { LIFECYCLE_TEMPLATE_KEYS, type LifecycleFacts, type SentRecord } from './rules.js';
@@ -305,7 +306,9 @@ export function createPrismaLifecycleRepo(options: PrismaLifecycleRepoOptions = 
         where: {
           userId,
           tier: { in: ['great', 'good'] },
-          job: { market, visibility: 'public', isCanonical: true, archivedAt: null, closedAt: null },
+          // A row that owes a credit line (the Taiwan open-data sources) is never named: the tip prints a title and a
+          // company, in the app and by e-mail, and cannot print the line (feed/sourceLine.ts `creditLineHeld`).
+          job: { market, visibility: 'public', isCanonical: true, archivedAt: null, closedAt: null, ...creditLineHeldWhere() },
         },
         select: { jobId: true, score: true, job: { select: { title: true, companyName: true } } },
         orderBy: { score: 'desc' },

@@ -22,7 +22,8 @@
 //   GET  …/refunds?userId=&cursor=
 //     -> { items: AdminRefundRow[], cursor: string | null }
 //   GET  …/cn-orders?userId=
-//     -> { items: CnOrderRow[] }   (a row may carry `reversalPending: true`; optional, see Requests to MKT-4B)
+//     -> { items: CnOrderRow[] }   (a row carries `reversalPending: true` only when its full record stopped half
+//        way; sent by the server since the M4 gate, absent otherwise)
 //   POST …/cn-orders/:orderId/refund { reason, confirmMoneyReturned: true, refundedAmountMinor? }
 //     -> { status: 'recorded' | 'already_recorded', orderId, entitlement }
 //     errors 404 not_found · 409 order_not_completed · 422 invalid_request

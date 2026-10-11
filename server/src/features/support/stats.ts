@@ -89,7 +89,13 @@ export async function computeIndexStats(db: IndexStatsDb, market: Market, now: D
   };
   const [open, week, groups] = await Promise.all([
     db.rAJob.count({ where }).catch(failed<number | null>(null)),
-    db.rAJob.count({ where: { ...where, firstSeenAt: { gte: weekAgo } } }).catch(failed<number | null>(null)),
+    // "Added in the last 7 days" is printed beside the open roles and reads as the week's inflow, so a posting
+    // counts only when it is new on BOTH clocks: we first saw it in the window and the employer posted it in the
+    // window, by a date the source states (an estimated date, such as the dataset date of a 台灣就業通 row, does not
+    // count). By first-seen alone the number was the whole index after any bulk load: the first board sync of a
+    // fresh deployment, or a batch of new boards, made it equal to the open roles for a week, although most of
+    // those postings had been open at the employer for weeks (D3). A quiet week counts 0, and 0 hides the line.
+    db.rAJob.count({ where: { ...where, firstSeenAt: { gte: weekAgo }, postedAt: { gte: weekAgo }, postedAtEstimated: false } }).catch(failed<number | null>(null)),
     db.rAJob
       .groupBy({
         by: ['primaryTaxonomyId'],

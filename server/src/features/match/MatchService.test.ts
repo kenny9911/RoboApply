@@ -36,7 +36,7 @@ import {
 } from '../../roboapply/v2/agents/RAJobMatchScorerAgent.js';
 import { SCORER_PROMPT_VERSION, type JobRequirement } from './contract.js';
 import { cnPostingVisible } from '../cn/jobs/index.js';
-import { currentJobHash, jobContentHash } from './jobHash.js';
+import { currentJobHash, jobContentHash, requirementListHash } from './jobHash.js';
 import { ScorerFailedError, createMatchService, shownKeywords, visibleTo, type MatchServiceDeps, type ScorerLike, type ScorerV4Like } from './MatchService.js';
 import type { StoredRequirementsDoc } from './scorerV4.js';
 import { createMemoryRepo, defaultUserInputs, jobRecord, resumeRecord } from './testkit.js';
@@ -504,7 +504,7 @@ describe('scoreJob — scorer v3 (the rollback: MATCH_SCORER_RUBRIC=fit_v3)', ()
   });
 
   it('a score for the job a resume version was tailored for is stored as a fit only: no copy is written to the version (matchScoreCached)', async () => {
-    // The writer is put on the repository here, so the test says the same whether or not the test kit still has one.
+    // The writer is put on the repository here: neither repository has one any more (M4 gate), and the service calls none.
     const cached = vi.fn(async () => undefined);
     const repo = Object.assign(createMemoryRepo({ resumes: [{ ...resumeRecord({ targetJobId: 'job1' }), userId: 'u1' }] }), { updateVariantCachedScore: cached });
     const { service } = setup({ repo });
@@ -512,7 +512,6 @@ describe('scoreJob — scorer v3 (the rollback: MATCH_SCORER_RUBRIC=fit_v3)', ()
     expect(fit.kind).toBe('ai');
     expect(repo.state.scores).toHaveLength(1);
     expect(cached).not.toHaveBeenCalled();
-    expect((repo.state as { cachedScores?: Record<string, number> }).cachedScores ?? {}).toEqual({});
   });
 
   it('a rewrite the daily cap stops says so on the view (rewriteBlocked), and the stored fit is answered as it was', async () => {
@@ -723,8 +722,11 @@ function withRequirementStore(repo: ReturnType<typeof createMemoryRepo>) {
   return Object.assign(repo, { saveJobRequirements });
 }
 
-/** The hash a stored requirement list of the test kit's posting carries: the posting's own text and skills. */
-const KIT_HASH = jobContentHash(jobRecord());
+/**
+ * The key a stored requirement list of the test kit's posting carries: the posting's title and requirement text,
+ * never its skills (M4 gate; the same value enrichment v3 writes, jobs/enrich `requirementsHashRow`).
+ */
+const KIT_HASH = requirementListHash(jobRecord());
 
 /** A service with BOTH scorers and nothing configured: the default pin decides which one runs. */
 function setupV4(over: Partial<MatchServiceDeps> & { repo?: ReturnType<typeof createMemoryRepo>; answer?: () => RAJobMatchScorerV4Output } = {}) {
@@ -1185,12 +1187,33 @@ describe('scorer v4 — the requirement lines belong to the posting', () => {
     await again.service.scoreJob('u1', 'job1');
     expect((again.scorerV4.run.mock.calls[0]![0] as RAJobMatchScorerV4Input).requirements).toBeNull();
     expect(unhashed.state.jobs[0]!.requirements).toMatchObject({ contentHash: KIT_HASH });
-    // The list is for the posting's own text and skills, whatever the search index stored as its hash a moment ago.
+    // The list is for the posting's own text, whatever the search index stored as its hash a moment ago.
     const indexedLater = withRequirementStore(createMemoryRepo({ jobs: [jobRecord({ contentHash: 'the-hash-the-index-wrote-before-enrichment', requirements: { v: 1, contentHash: KIT_HASH, model: 'enrich/model', extractedAt: '2026-10-09T00:00:00.000Z', items: [{ id: 'r1', kind: 'skill', text: K8S.text, importance: 'must' }] } })] }));
     const fresh = setupV4({ repo: indexedLater, answer: () => checklist({ requirements: [{ ...K8S, id: 'r1' }] }) });
     await fresh.service.scoreJob('u1', 'job1');
     expect((fresh.scorerV4.run.mock.calls[0]![0] as RAJobMatchScorerV4Input).requirements).toEqual([{ id: 'r1', kind: 'skill', text: K8S.text, importance: 'must' }]);
     expect(indexedLater.saveJobRequirements).not.toHaveBeenCalled();
+  });
+
+  it('a list enrichment stored survives a change of the skill strings: the key reads the text only, so the scorer does not copy the lines again', async () => {
+    // Enrichment v3 keys its list by the title and the requirement text with no skills. Ingest then writes the
+    // provider's skill list back over the row (every refresh does), which changes the fit's hash and not this key.
+    const list: StoredRequirementsDoc = { v: 1, contentHash: KIT_HASH, model: 'enrich/model', extractedAt: '2026-10-09T00:00:00.000Z', items: [{ id: 'r1', kind: 'skill', text: K8S.text, importance: 'must' }] };
+    const refreshed = jobRecord({ skills: ['Kubernetes', 'A skill string the refresh added'], requirements: list });
+    expect(jobContentHash(refreshed)).not.toBe(jobContentHash(jobRecord()));
+    expect(requirementListHash(refreshed)).toBe(KIT_HASH);
+    expect(KIT_HASH).not.toBe(jobContentHash(jobRecord()));
+    const repo = withRequirementStore(createMemoryRepo({ jobs: [refreshed] }));
+    const { service, scorerV4 } = setupV4({ repo, answer: () => checklist({ requirements: [{ ...K8S, id: 'r1' }] }) });
+    await service.scoreJob('u1', 'job1');
+    expect((scorerV4.run.mock.calls[0]![0] as RAJobMatchScorerV4Input).requirements).toEqual(list.items);
+    expect(repo.saveJobRequirements).not.toHaveBeenCalled();
+    expect(repo.state.jobs[0]!.requirements).toEqual(list);
+    // An edited text is another posting text: the stored list is not used and the next score replaces it.
+    const edited = withRequirementStore(createMemoryRepo({ jobs: [jobRecord({ qualifications: `${jobRecord().qualifications ?? ''}\nA line the employer added.`, requirements: list })] }));
+    const again = setupV4({ repo: edited });
+    await again.service.scoreJob('u1', 'job1');
+    expect((again.scorerV4.run.mock.calls[0]![0] as RAJobMatchScorerV4Input).requirements).toBeNull();
   });
 
   it('nothing is stored when no copied line is in the posting: the answer is refused; a lost race or a failed write never fails the score', async () => {

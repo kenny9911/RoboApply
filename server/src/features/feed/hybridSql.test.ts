@@ -98,7 +98,7 @@ describe('lexicalLegSql and denseLegSql', () => {
     `);
   });
 
-  it('a full RoboApply set with a typed q: the lexical leg applies the wide q predicate, the dense leg does not', () => {
+  it('a full RoboApply set with a typed q: the lexical leg and the dense leg both apply the wide q predicate', () => {
     const tsQuery = toTsQuery(FULL_INTL.q)!;
     expect(show(lexicalLegSql({ scope: intlScope, filters: FULL_INTL, ageFloor: FLOOR, limit: LIMIT }, tsQuery))).toMatchInlineSnapshot(`
       {
@@ -143,11 +143,15 @@ describe('lexicalLegSql and denseLegSql', () => {
         ],
       }
     `);
+    // M4 cross-review: the typed q is a filter of the LIST, so the dense leg carries the same rule (once), with the
+    // same bound values, between the shared predicates and the age floor. Without it the leg returned its 200
+    // nearest rows of everything the other filters left, and the keyword filtered nothing under Recommended.
     const dense = show(denseLegSql({ scope: intlScope, filters: FULL_INTL, ageFloor: FLOOR, limit: LIMIT }, VECTOR, TAG));
-    expect(dense.text).not.toContain('searchText');
-    expect(dense.text).not.toContain('searchTsv');
-    expect(dense.values).not.toContain("'terraform'");
-    expect(dense.text).toMatchInlineSnapshot(`"SELECT <FEED_COLUMNS> FROM "RAJob" j LEFT JOIN "RACompany" c ON c."id" = j."companyId" JOIN "RAJobEmbedding" e ON e."jobId" = j."id" AND e."model" = $1 AND e."market" = $2 WHERE j."market" = $3 AND j."isCanonical" = true AND j."archivedAt" IS NULL AND j."closedAt" IS NULL AND j."sourceBoard" <> 'seed' AND (j."fraudFlags" IS NULL OR jsonb_typeof(j."fraudFlags") <> 'array' OR j."fraudFlags" = '[]'::jsonb) AND (j."visibility" = 'public' OR j."ownerUserId" = $4) AND NOT EXISTS (SELECT 1 FROM "RAJobUserState" s WHERE s."userId" = $5 AND s."jobId" = j."id" AND s."hiddenAt" IS NOT NULL) AND (j."taxonomyIds" && $6::text[]) AND j."workModel" = ANY($7::text[]) AND (j."locationCountry" = $8 OR (j."workModel" = 'remote' AND (j."remoteScope" = $9 OR j."remoteScope" = 'global'))) AND j."seniority" = ANY($10::text[]) AND ((j."salaryDisclosed" = true AND j."salaryCurrency" = $11 AND COALESCE(j."salaryAnnualMax", j."salaryAnnualMin") >= $12) OR j."salaryDisclosed" = false OR COALESCE(j."salaryAnnualMax", j."salaryAnnualMin") IS NULL OR j."salaryCurrency" IS DISTINCT FROM $13) AND NOT (j."sponsorship" = 'not_offered' AND COALESCE(j."sponsorshipEvidence", '') ~* $14) AND j."companyNameNormalized" <> ALL($15::text[]) AND (j."postedAt" >= $16::timestamp(3) OR (j."postedAt" IS NOT NULL AND NOT (j."sourceBoard" = ANY($17::text[])))) ORDER BY e."embedding" <=> $18::halfvec(1024), j."id" DESC LIMIT $19"`);
+    expect(dense.text.split('j."searchText" ILIKE').length - 1).toBe(1);
+    expect(dense.values.filter((v) => v === "'terraform'")).toHaveLength(1);
+    expect(dense.values).toContain('%terraform%');
+    expect(dense.text).not.toContain('ts_rank_cd');
+    expect(dense.text).toMatchInlineSnapshot(`"SELECT <FEED_COLUMNS> FROM "RAJob" j LEFT JOIN "RACompany" c ON c."id" = j."companyId" JOIN "RAJobEmbedding" e ON e."jobId" = j."id" AND e."model" = $1 AND e."market" = $2 WHERE j."market" = $3 AND j."isCanonical" = true AND j."archivedAt" IS NULL AND j."closedAt" IS NULL AND j."sourceBoard" <> 'seed' AND (j."fraudFlags" IS NULL OR jsonb_typeof(j."fraudFlags") <> 'array' OR j."fraudFlags" = '[]'::jsonb) AND (j."visibility" = 'public' OR j."ownerUserId" = $4) AND NOT EXISTS (SELECT 1 FROM "RAJobUserState" s WHERE s."userId" = $5 AND s."jobId" = j."id" AND s."hiddenAt" IS NOT NULL) AND (j."taxonomyIds" && $6::text[]) AND j."workModel" = ANY($7::text[]) AND (j."locationCountry" = $8 OR (j."workModel" = 'remote' AND (j."remoteScope" = $9 OR j."remoteScope" = 'global'))) AND j."seniority" = ANY($10::text[]) AND ((j."salaryDisclosed" = true AND j."salaryCurrency" = $11 AND COALESCE(j."salaryAnnualMax", j."salaryAnnualMin") >= $12) OR j."salaryDisclosed" = false OR COALESCE(j."salaryAnnualMax", j."salaryAnnualMin") IS NULL OR j."salaryCurrency" IS DISTINCT FROM $13) AND NOT (j."sponsorship" = 'not_offered' AND COALESCE(j."sponsorshipEvidence", '') ~* $14) AND j."companyNameNormalized" <> ALL($15::text[]) AND (j."searchTsv" @@ to_tsquery('simple', $16) OR (j."searchText" ILIKE $17 OR $18 <% j."searchText")) AND (j."postedAt" >= $19::timestamp(3) OR (j."postedAt" IS NOT NULL AND NOT (j."sourceBoard" = ANY($20::text[])))) ORDER BY e."embedding" <=> $21::halfvec(1024), j."id" DESC LIMIT $22"`);
   });
 
   it('a GoApply set: the mainland scope (apply link, held banks) and the GoApply filters, segmented Chinese tokens in the query', () => {
@@ -223,7 +227,7 @@ describe('the three legs of one input', () => {
     // The same columns and the same base FROM; only the dense leg joins the embedding table.
     for (const leg of legs) expect(leg.startsWith('SELECT j."id", j."market"')).toBe(true);
     expect(legs.map((l) => l.includes('JOIN "RAJobEmbedding" e'))).toEqual([false, false, true]);
-    // What follows the shared block: the q rule (legs A and B), the leg's own bound, its order.
+    // What follows the shared block: the q rule (every leg, when a q is typed), the leg's own bound, its order.
     const tail = (leg: string) => leg.slice(leg.indexOf(block) + block.length);
     const q = filters.q ? ` AND ${plain(wideQPredicateSql(filters.q))}` : '';
     const floor = ` AND ${plain(ageFloorSql(FLOOR))}`;
@@ -231,7 +235,7 @@ describe('the three legs of one input', () => {
     expect(tail(legs[1]!)).toBe(
       `${q}${floor} AND j."searchTsv" @@ to_tsquery('simple', $n) ORDER BY ts_rank_cd(j."searchTsv", to_tsquery('simple', $n)) DESC, j."postedAt" DESC NULLS LAST, j."id" DESC LIMIT $n`,
     );
-    expect(tail(legs[2]!)).toBe(`${floor} ORDER BY e."embedding" <=> $n::halfvec(1024), j."id" DESC LIMIT $n`);
+    expect(tail(legs[2]!)).toBe(`${q}${floor} ORDER BY e."embedding" <=> $n::halfvec(1024), j."id" DESC LIMIT $n`);
   });
 
   it('leg A is retrievalSql itself: the list statement of a query with no typed q is unchanged', () => {
@@ -260,7 +264,7 @@ describe('the q rule and bound parameters', () => {
     expect(b.values).toContain("'go'");
   });
 
-  it('a typed q of two words: the filter of legs A and B needs both words, while leg B matches and orders by any word of its query text', () => {
+  it('a typed q of two words: the filter of every leg needs both words, while leg B matches and orders by any word of its query text', () => {
     const filters: FilterSet = { q: 'product manager' };
     // The leg's query text may be longer than the typed q (the text to rank by joins it): it only orders.
     const legQuery = toTsQuery('product manager fintech')!;
@@ -274,14 +278,33 @@ describe('the q rule and bound parameters', () => {
     // The leg's own `@@` and its ORDER BY bind the OR of the query text's tokens, twice.
     expect(b.values.filter((v) => v === "'product' | 'manager' | 'fintech'")).toHaveLength(2);
     expect(b.text).toMatch(/\(j\."searchTsv" @@ to_tsquery\('simple', \$\d+\) OR \(j\."searchText" ILIKE \$\d+ OR \$\d+ <% j\."searchText"\)\) AND \(j\."postedAt" >=/);
-    // The dense leg carries neither.
-    expect(c.values.some((v) => typeof v === 'string' && /product/.test(v))).toBe(false);
+    // The dense leg carries the filter too (once), and never the OR query: it orders by the vector.
+    expect(c.values.filter((v) => v === filter)).toHaveLength(1);
+    expect(c.values.some((v) => typeof v === 'string' && / \| /.test(v))).toBe(false);
+    expect(c.text).toMatch(/\(j\."searchTsv" @@ to_tsquery\('simple', \$\d+\) OR \(j\."searchText" ILIKE \$\d+ OR \$\d+ <% j\."searchText"\)\) AND \(j\."postedAt" >=/);
+  });
+
+  it('a typed q that holds a word an OR query drops: every leg filters on every word ("IT support" is not "support")', () => {
+    const filters: FilterSet = { q: 'IT support' };
+    const legQuery = toTsQuery('IT support')!;
+    expect(legQuery).toBe("'support'");
+    for (const leg of [
+      show(recencyLegSql({ scope: intlScope, filters, from: WINDOW, limit: LIMIT })),
+      show(lexicalLegSql({ scope: intlScope, filters, ageFloor: FLOOR, limit: LIMIT }, legQuery)),
+      show(denseLegSql({ scope: intlScope, filters, ageFloor: FLOOR, limit: LIMIT }, VECTOR, TAG)),
+    ]) {
+      expect(leg.values.filter((v) => v === "'it' & 'support'")).toHaveLength(1);
+    }
   });
 
   it('no typed q: no q rule in any leg (a relevance text only orders, through the lexical query and the vector)', () => {
     expect(legPredicates({ scope: intlScope, filters: { taxonomyIds: ['backend_engineer'] } }).q).toBeNull();
     const b = plain(lexicalLegSql({ scope: intlScope, filters: {}, ageFloor: FLOOR, limit: LIMIT }, toTsQuery('climate startups Rust')!));
     expect(b).not.toContain('searchText');
+    // The dense leg of the ranking words, and of the person's own vector, is bounded by the other filters only.
+    const c = plain(denseLegSql({ scope: intlScope, filters: { taxonomyIds: ['backend_engineer'] }, ageFloor: FLOOR, limit: LIMIT }, VECTOR, TAG));
+    expect(c).not.toContain('searchText');
+    expect(c).not.toContain('searchTsv');
   });
 
   it('the lexical query and the vector are parameters, whatever they hold', () => {

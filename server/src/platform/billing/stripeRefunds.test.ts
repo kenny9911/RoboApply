@@ -25,7 +25,8 @@ import '../../lib/prisma.js';
 import { BillingError } from './errors.js';
 import { setStripeClientForTests } from './stripeClient.js';
 import { billingEventClaimKey } from './stripeEvents.js';
-import { issueRefund, setStripeRefundDepsForTests, withdrawPurchase, withdrawalQuote, withdrawalQuotes } from './stripeRefunds.js';
+import { logger } from '../../services/LoggerService.js';
+import { issueRefund, purchaseWaiverStamp, setStripeRefundDepsForTests, withdrawPurchase, withdrawalQuote, withdrawalQuotes } from './stripeRefunds.js';
 
 const DAY_S = 86_400;
 /** The purchase instant. */
@@ -455,10 +456,28 @@ describe('issueRefund', () => {
 
   it('Stripe refusing the refund is refund_not_available; Stripe failing is payment_provider_error', async () => {
     stripe.refunds.create.mockRejectedValueOnce(stripeError({ type: 'StripeInvalidRequestError', code: 'charge_already_refunded', message: 'Charge ch_1 has already been refunded.' }));
-    await refused(issueRefund({ ...ADMIN, target: { invoiceId: 'in_1' } }), 'refund_not_available', 'refused_by_provider');
+    const already = await refused(issueRefund({ ...ADMIN, target: { invoiceId: 'in_1' } }), 'refund_not_available', 'refused_by_provider');
+    // Stripe's own code says which refusal it is ("already refunded" is final; any other is not).
+    expect(already.details).toMatchObject({ providerCode: 'charge_already_refunded' });
+    stripe.refunds.create.mockRejectedValueOnce(stripeError({ type: 'StripeInvalidRequestError', code: 'parameter_unknown', message: 'Received unknown parameter: foo' }));
+    expect((await refused(issueRefund({ ...ADMIN, target: { invoiceId: 'in_1' } }), 'refund_not_available', 'refused_by_provider')).details).toMatchObject({ providerCode: 'parameter_unknown' });
+    stripe.refunds.create.mockRejectedValueOnce(stripeError({ type: 'StripeInvalidRequestError', message: 'no code' }));
+    expect((await refused(issueRefund({ ...ADMIN, target: { invoiceId: 'in_1' } }), 'refund_not_available', 'refused_by_provider')).details).toMatchObject({ providerCode: null });
     stripe.refunds.create.mockRejectedValueOnce(stripeError({ type: 'StripeConnectionError', message: 'socket hang up' }));
     const err = await refused(issueRefund({ ...ADMIN, target: { invoiceId: 'in_1' } }), 'payment_provider_error');
     expect(err.status).toBe(502);
+  });
+
+  it('a 502 never carries the failure\'s own text: it is logged, and the answer names the provider only', async () => {
+    // Since M4 these errors reach buyers; the text can hold a masked key, a Stripe account id, a server path or the database host.
+    stripe.refunds.create.mockRejectedValueOnce(stripeError({ type: 'StripeAuthenticationError', message: "The provided key 'rk_live_****1234' does not have the required permissions for this endpoint on account 'acct_1EXAMPLE'." }));
+    const refund = await refused(issueRefund({ ...ADMIN, target: { invoiceId: 'in_1' } }), 'payment_provider_error');
+    expect(refund.details).toEqual({ provider: 'stripe' });
+    stripe.invoices.retrieve.mockRejectedValueOnce(stripeError({ type: 'StripeAuthenticationError', message: 'Invalid API Key provided: sk_live_********************abcd' }));
+    const read = await refused(issueRefund({ ...ADMIN, target: { invoiceId: 'in_1' } }), 'payment_provider_error');
+    expect(read.details).toEqual({ provider: 'stripe' });
+    expect(JSON.stringify([refund.details, read.details, refund.message, read.message])).not.toMatch(/rk_live|sk_live|acct_/);
+    expect(vi.mocked(logger.error).mock.calls.some((call) => JSON.stringify(call).includes('sk_live_'))).toBe(true);
   });
 
   it('a key Stripe refuses because another actor sent it a moment ago answers with the refund that was made', async () => {
@@ -496,6 +515,29 @@ describe('issueRefund: one refund decision is one key (attemptKey)', () => {
     // A retry of the SAME decision sends the same key, so Stripe refunds it once.
     await issueRefund({ ...ADMIN, target: { invoiceId: 'in_1' }, amountMinor: 1000, attemptKey: 'a2' });
     expect(refundCall(2)[1]).toEqual(refundCall(1)[1]);
+  });
+
+  it('the same dialog sent again after charge.refunded recorded its refund: Stripe replays the refund, and a half refund is not called full (M4 gate; MKT-4B request 6)', async () => {
+    // Paid 2,499. The dialog refunds 1,000; Stripe created the refund at T.
+    const createdSec = Math.floor(at(5).getTime() / 1000);
+    const replayed = { id: 're_half', amount: 1000, currency: 'usd', charge: 'ch_1', created: createdSec };
+    stripe.refunds.create.mockImplementationOnce(async () => replayed).mockImplementationOnce(async () => replayed);
+    const first = await issueRefund({ ...ADMIN, target: { invoiceId: 'in_1' }, amountMinor: 1000, attemptKey: 'dialog1' });
+    expect(first).toMatchObject({ refundId: 're_half', amountMinor: 1000, full: false });
+    // The webhook recorded it two seconds after Stripe created it.
+    await fake.db.rABillingRefund.create({
+      data: { userId: 'u_1', brand: 'roboapply', rail: 'stripe', kind: 'refund', externalRef: 'ch_1:1000', chargeId: 'ch_1', paymentIntentId: 'pi_inv', invoiceId: 'in_1', amountMinor: 1000, currency: 'USD', full: false, createdAt: new Date(createdSec * 1000 + 2000) },
+    });
+    // The same dialog again (a lost answer, a double click after a reload): same key, same refund, and 1,000 of 2,499 is not "full".
+    const again = await issueRefund({ ...ADMIN, target: { invoiceId: 'in_1' }, amountMinor: 1000, attemptKey: 'dialog1' });
+    expect(refundCall(1)[1]).toEqual(refundCall(0)[1]);
+    expect(again).toMatchObject({ refundId: 're_half', amountMinor: 1000, full: false });
+    // A SECOND refund of the same amount is a new refund (created after that row): it is added to what is recorded.
+    stripe.refunds.create.mockImplementationOnce(async () => ({ id: 're_second', amount: 1000, currency: 'usd', charge: 'ch_1', created: createdSec + 3600 }));
+    expect(await issueRefund({ ...ADMIN, target: { invoiceId: 'in_1' }, amountMinor: 1000, attemptKey: 'dialog2' })).toMatchObject({ refundId: 're_second', full: false });
+    // And the refund that takes the rest is full, whether it is new or replayed after its row landed.
+    stripe.refunds.create.mockImplementationOnce(async () => ({ id: 're_rest', amount: 1499, currency: 'usd', charge: 'ch_1', created: createdSec + 7200 }));
+    expect(await issueRefund({ ...ADMIN, target: { invoiceId: 'in_1' }, amountMinor: 1499, attemptKey: 'dialog3' })).toMatchObject({ refundId: 're_rest', full: true });
   });
 
   it('without an attempt the key is the three-part one, as before; an attempt that is not a plain token is refused before Stripe', async () => {
@@ -615,6 +657,83 @@ describe('withdrawalQuote', () => {
     await fake.db.seekerConsentRecord.create({ data: { seekerProfileId: 'sp_1', consentType: 'withdrawal_waiver', granted: true, createdAt: new Date(T0.getTime() - 3 * DAY_S * 1000) } });
     await fake.db.seekerConsentRecord.create({ data: { seekerProfileId: 'sp_1', consentType: 'auto_renew_ack', granted: true, createdAt: T0 } });
     expect((await withdrawalQuote('u_1'))!.decision.rule).toBe('withdrawal_14d');
+  });
+
+  // M4 cross-review: the waiver is the box of THIS purchase (its checkout stamp), not any waiver record of the day.
+  const stamped = (waiver: 'yes' | 'no') => ({ parent: { subscription_details: { subscription: 'sub_1', metadata: { product: 'roboapply', brand: 'roboapply', planKey: 'pro_monthly', withdrawalWaiver: waiver } } } });
+  const waiverRecord = (at: Date) => fake.db.seekerConsentRecord.create({ data: { seekerProfileId: 'sp_1', consentType: 'withdrawal_waiver', granted: true, createdAt: at } });
+
+  it('a waiver ticked at a checkout the buyer abandoned six hours earlier does not turn the full refund of an unwaived purchase into a pro-rata one', async () => {
+    await seedUser({});
+    // This checkout: the box NOT ticked (the subscription's metadata, copied onto its first invoice, says so).
+    account.invoices.set('in_1', subscriptionInvoice(stamped('no')));
+    // Another checkout, six hours earlier, abandoned: its record was written before the payment page opened.
+    await waiverRecord(new Date(T0.getTime() - 6 * 3_600_000));
+    expect((await withdrawalQuote('u_1'))!.decision).toMatchObject({ rule: 'withdrawal_14d', amountMinor: 2499, prorata: null });
+    // An invoice with no stamp has only the window, where that record reads as its own (the fallback, as before).
+    account.invoices.set('in_1', subscriptionInvoice());
+    expect((await withdrawalQuote('u_1'))!.decision).toMatchObject({ rule: 'withdrawal_14d_prorata', amountMinor: 2082 });
+  });
+
+  it('a purchase stamped "yes" is a waiver also when no consent record lies in the window', async () => {
+    await seedUser({});
+    account.invoices.set('in_1', subscriptionInvoice(stamped('yes')));
+    expect((await withdrawalQuote('u_1'))!.decision).toMatchObject({ rule: 'withdrawal_14d_prorata', amountMinor: 2082, prorata: { usedDays: 5, periodDays: 30 } });
+  });
+
+  it('a plan and a pack bought the same day each follow their own box', async () => {
+    await seedUser({});
+    // The plan with the box ticked; an hour later a pack without it.
+    account.invoices.set('in_1', subscriptionInvoice(stamped('yes')));
+    await waiverRecord(new Date(T0.getTime() - 60_000));
+    const packAt = T0_S + 3600;
+    const pack = (waiver?: 'no') =>
+      oneTimeInvoice('practice_pack_5', 999, {
+        id: 'in_pack',
+        created: packAt,
+        status_transitions: { paid_at: packAt },
+        metadata: { product: 'roboapply', brand: 'roboapply', planKey: 'practice_pack_5', userId: 'u_1', ...(waiver ? { withdrawalWaiver: waiver } : {}) },
+      });
+    account.invoices.set('in_pack', pack('no'));
+    account.payments.set('in_pack', paid('pi_pack'));
+    expect((await withdrawalQuotes('u_1')).map((q) => [q.purchase.id, q.decision.rule, q.decision.amountMinor])).toEqual([
+      ['in_pack', 'withdrawal_14d', 999],
+      ['in_1', 'withdrawal_14d_prorata', 2082],
+    ]);
+    // By the window alone the pack shares the plan's waiver, and a waived pack has no withdrawal entry at all.
+    account.invoices.set('in_pack', pack());
+    expect((await withdrawalQuotes('u_1')).map((q) => q.purchase.id)).toEqual(['in_1']);
+  });
+
+  it('a plan-switch invoice and a renewal never read the first checkout\'s stamp: the consent window decides for the switch', async () => {
+    await seedUser({});
+    const switchedS = T0_S + 3 * DAY_S;
+    const switchInvoice = subscriptionInvoice({
+      id: 'in_switch',
+      amount_paid: 3000,
+      created: switchedS,
+      status_transitions: { paid_at: switchedS },
+      billing_reason: 'subscription_update',
+      // The subscription's metadata still carries the FIRST checkout's box.
+      parent: { subscription_details: { subscription: 'sub_1', metadata: { planKey: 'pro_quarterly', withdrawalWaiver: 'yes' } } },
+      lines: { data: [subscriptionLine(90, switchedS)] },
+    });
+    expect(purchaseWaiverStamp(switchInvoice as never)).toBeNull();
+    expect(purchaseWaiverStamp({ ...switchInvoice, billing_reason: 'subscription_cycle' } as never)).toBeNull();
+    expect(purchaseWaiverStamp(subscriptionInvoice(stamped('yes')) as never)).toBe(true);
+    expect(purchaseWaiverStamp(subscriptionInvoice(stamped('no')) as never)).toBe(false);
+    expect(purchaseWaiverStamp(subscriptionInvoice() as never)).toBeNull();
+    // A one-time payment carries the stamp on the invoice itself.
+    expect(purchaseWaiverStamp(oneTimeInvoice('practice_pack_5', 999, { metadata: { planKey: 'practice_pack_5', withdrawalWaiver: 'no' } }) as never)).toBe(false);
+    expect(purchaseWaiverStamp(null)).toBeNull();
+
+    account.invoices.clear();
+    account.invoices.set('in_switch', switchInvoice);
+    // No waiver record at the switch: the switch is unwaived, whatever the first checkout said.
+    expect((await withdrawalQuote('u_1'))!.decision).toMatchObject({ rule: 'withdrawal_14d', amountMinor: 3000 });
+    // The switch's own box, recorded by the switch: the unused days.
+    await waiverRecord(new Date(switchedS * 1000 - 30_000));
+    expect((await withdrawalQuote('u_1'))!.decision.rule).toBe('withdrawal_14d_prorata');
   });
 
   it('null for a US buyer, an unknown country, day 15, a renewal, and an account without card payments', async () => {
@@ -739,6 +858,55 @@ describe('withdrawPurchase', () => {
     await refused(withdrawPurchase(SELF), 'withdrawal_not_available');
     expect(writes().length).toBe(before);
     expect(sendEmail).toHaveBeenCalledTimes(1);
+  });
+
+  // M4 cross-review: ending access first is right only because the refund follows. A purchase whose refund the
+  // engine cannot make is refused before the subscription is touched.
+  it('a purchase whose payment cannot be resolved is refused before anything is ended: nothing is cancelled, nothing refunded, nothing written', async () => {
+    await seedUser({ waiver: true });
+    const before = await snapshot();
+    const cases: Array<[string, () => void]> = [
+      ['no paid payment on the invoice', () => account.payments.set('in_1', [{ id: 'inpay_open', status: 'open', payment: { type: 'payment_intent', payment_intent: 'pi_abandoned' } }])],
+      ['the invoice is gone when it is read on its own', () => stripe.invoices.retrieve.mockRejectedValueOnce(stripeError({ code: 'resource_missing', statusCode: 404, type: 'StripeInvalidRequestError', message: "No such invoice: 'in_1'" }))],
+      ['the invoice belongs to another customer when it is read on its own', () => stripe.invoices.retrieve.mockResolvedValueOnce({ ...subscriptionInvoice(), customer: 'cus_other' } as never)],
+    ];
+    for (const [name, arrange] of cases) {
+      account.payments.set('in_1', paid('pi_inv'));
+      arrange();
+      const err = await refused(withdrawPurchase({ userId: 'u_1', purchaseId: 'in_1', actor: 'self' }), 'withdrawal_not_available');
+      expect(err.status, name).toBe(409);
+      expect(writes(), name).toEqual([]);
+      expect(await snapshot(), name).toBe(before);
+      expect(sendEmail, name).not.toHaveBeenCalled();
+    }
+    // The same purchase with its payment readable is withdrawn as usual.
+    account.payments.set('in_1', paid('pi_inv'));
+    expect(await withdrawPurchase({ userId: 'u_1', purchaseId: 'in_1', actor: 'self' })).toMatchObject({ status: 'withdrawn', refundMinor: 2082 });
+    expect(writes()).toEqual(['subscriptions.cancel', 'refunds.create']);
+  });
+
+  it('a payment our rows show as refunded already (recorded without its invoice) is refused before the cancel, not after it', async () => {
+    await seedUser({});
+    // A refund row that names the payment but not the invoice: the purchase still looks open, and nothing is left to send.
+    await fake.db.rABillingRefund.create({ data: { userId: 'u_1', rail: 'stripe', kind: 'refund', externalRef: 're_old', paymentIntentId: 'pi_inv', invoiceId: null, amountMinor: 2499, currency: 'USD', full: false } });
+    await refused(withdrawPurchase({ userId: 'u_1', purchaseId: 'in_1', actor: 'self' }), 'withdrawal_not_available');
+    expect(writes()).toEqual([]);
+  });
+
+  it('the payment cannot be read at all (the provider is down): 502 before anything is ended', async () => {
+    await seedUser({ waiver: true });
+    stripe.invoices.retrieve.mockRejectedValueOnce(stripeError({ type: 'StripeConnectionError', message: 'socket hang up' }));
+    const err = await refused(withdrawPurchase({ userId: 'u_1', purchaseId: 'in_1', actor: 'self' }), 'payment_provider_error');
+    expect(err.details).toEqual({ provider: 'stripe' });
+    expect(writes()).toEqual([]);
+  });
+
+  it('a refund Stripe refuses after the cancel says which refusal it was', async () => {
+    await seedUser({ waiver: true });
+    stripe.refunds.create.mockRejectedValueOnce(stripeError({ type: 'StripeInvalidRequestError', code: 'parameter_unknown', message: 'Received unknown parameter: foo' }));
+    const err = await refused(withdrawPurchase({ userId: 'u_1', purchaseId: 'in_1', actor: 'self' }), 'refund_not_available', 'refused_by_provider');
+    expect(err.details).toMatchObject({ providerCode: 'parameter_unknown' });
+    expect(writes()).toEqual(['subscriptions.cancel', 'refunds.create']);
   });
 
   it('outside the 14 days the call is refused and nothing is cancelled', async () => {

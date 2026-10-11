@@ -14,6 +14,8 @@ Owner ruling D5 ([`docs/jobright-clone/GOAPPLY_PARITY_PLAN.md`](../../docs/jobri
 
 With those, the preflight passes with warnings and GoApply works: AI, email, voice practice, uploads, the job feed from public employer boards, open sign-up with email and password, and its plans and prices. Payments open once `ALIPAY_CALLBACK_SECRET` (the Alipay rail's own credential) is set.
 
+**Which employer boards this stack reads.** The board sync (`jobs-boards`, every 5 minutes) loads the seed files of the markets a deployment serves. This stack serves GoApply alone (`ALLOWED_BRANDS=goapply`), so it loads `server/src/features/jobs/sources/atsPublic/seeds.cn.json` and no other: the 52 boards that listed a mainland posting on 2026-10-11, a SmartRecruiters board asked for CN alone. The other 460 boards of the international and Taiwan files are not created or read here; a board an admin adds in GoApply's sources console is read as before. What the list holds, what it leaves out and how to refresh it: [`docs/jobright-clone/market/BOARD_SEEDS.md`](../../docs/jobright-clone/market/BOARD_SEEDS.md). The account purge of this stack never asks Stripe (GoApply's rail is Alipay), so it needs no Stripe key.
+
 Every `CN_<NAME>` value in `cn.env.example` is an optional override of `<NAME>`: a domestic model, Aliyun OSS, Aliyun DirectMail, Aliyun Green, SMS and WeChat sign-in, GoApply's own LiveKit. Set one and it is used; leave it unset and that part runs on the shared stack. Settings that belong together are read as one set, decided by the group's anchor (`CN_S3_BUCKET`, `CN_LIVEKIT_URL`, both speech models, `CN_VAPID_PUBLIC_KEY`): without the anchor the other `CN_` values of that group are ignored, and startup names them in a warning.
 
 ## What the preflight refuses

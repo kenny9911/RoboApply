@@ -16,10 +16,17 @@ import { getBrand } from '../../../platform/brand/registry.js';
 import { fitSnapshot, setFitServiceForTests } from '../../match/fit.js';
 import { createMatchService } from '../../match/MatchService.js';
 import { RESUME_MD, createMemoryRepo, jobRecord, resumeRecord } from '../../match/testkit.js';
-import { EVAL_SCORER_MODEL, freshAiRow } from '../../match/eval/world.js';
+import { EVAL_SCORER_MODEL, freshAiRow as harnessAiRow } from '../../match/eval/world.js';
 import { defaultTailorDeps } from '../index.js';
 import { setPrimaryVariantLookup } from '../primaryVariant.js';
 import { createPrismaResumeCheckStore, fitRowForVersion, fitRowFromContract } from '../store.js';
+
+/**
+ * A stored AI fit that is fresh for THIS file's service: it is handed the scorer v3 fake only, so its pin is v3
+ * (a service follows the one scorer it was given), and a fresh row is a v3 row. The harness helper writes a row of
+ * the default pin (scorer v4) since the M4 gate.
+ */
+const freshAiRow = (input: Parameters<typeof harnessAiRow>[0] = {}) => harnessAiRow({ prompt: 'scorer_v3', ...input });
 
 const NOW = new Date('2026-10-10T08:00:00Z');
 

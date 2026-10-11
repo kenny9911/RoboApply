@@ -34,6 +34,8 @@ interface Row {
   closedAt: Date | null;
   fraudFlags: unknown;
   firstSeenAt: Date;
+  postedAt: Date | null;
+  postedAtEstimated: boolean;
   publicDisplay: boolean;
   primaryTaxonomyId: string | null;
 }
@@ -46,6 +48,8 @@ const base: Row = {
   closedAt: null,
   fraudFlags: null,
   firstSeenAt: new Date(NOW.getTime() - 30 * DAY),
+  postedAt: new Date(NOW.getTime() - 30 * DAY),
+  postedAtEstimated: false,
   publicDisplay: false,
   primaryTaxonomyId: null,
 };
@@ -147,11 +151,34 @@ describe('public index counts (D3 count rule)', () => {
     expect(stats.openRoles!.value).toBeLessThan(HERO_COUNT_MIN);
   });
 
-  it('counts jobs first seen in the last 7 days', async () => {
+  it('counts jobs first seen AND posted in the last 7 days', async () => {
     const recent = new Date(NOW.getTime() - 2 * DAY);
-    const stats = await computeIndexStats(fakeJobs([...many(40), ...many(321, { firstSeenAt: recent }), ...many(9, { firstSeenAt: recent, visibility: 'private' })]), 'intl', NOW);
+    const fresh = { firstSeenAt: recent, postedAt: recent };
+    const stats = await computeIndexStats(fakeJobs([...many(40), ...many(321, fresh), ...many(9, { ...fresh, visibility: 'private' })]), 'intl', NOW);
     expect(stats.addedThisWeek?.value).toBe(320);
     expect(stats.openRoles?.value).toBe(360);
+  });
+
+  it('a bulk load is not the week\'s inflow: postings we first saw this week that the employer posted earlier do not count (M4 cross-review)', async () => {
+    // The first board sync of a fresh deployment: 48,000 postings first seen yesterday, most of them open for weeks.
+    const yesterday = new Date(NOW.getTime() - DAY);
+    const rows = [
+      ...many(47_000, { firstSeenAt: yesterday, postedAt: new Date(NOW.getTime() - 40 * DAY) }),
+      // Posted this week by a stated date: the real inflow.
+      ...many(1_234, { firstSeenAt: yesterday, postedAt: new Date(NOW.getTime() - 3 * DAY) }),
+      // A date we estimated (the dataset date of an open-data row) or do not have is not a posting date.
+      ...many(500, { firstSeenAt: yesterday, postedAt: yesterday, postedAtEstimated: true }),
+      ...many(300, { firstSeenAt: yesterday, postedAt: null }),
+      // Posted this week and already in the index before the window (cannot happen for a real row; never counted).
+      ...many(7, { postedAt: yesterday }),
+    ];
+    const stats = await computeIndexStats(fakeJobs(rows), 'intl', NOW);
+    expect(stats.openRoles?.value).toBe(49_000);
+    // Before: 49,034 first seen this week, printed as "49,000+ added in the last 7 days" beside "49,000+ open roles".
+    expect(stats.addedThisWeek?.value).toBe(1_200);
+    // A week with no new posting counts 0, which hides the line on the page.
+    const quiet = await computeIndexStats(fakeJobs(many(47_000, { firstSeenAt: yesterday, postedAt: new Date(NOW.getTime() - 40 * DAY) })), 'intl', NOW);
+    expect(quiet.addedThisWeek?.value).toBe(0);
   });
 
   it('unknown counts are null, never 0', async () => {

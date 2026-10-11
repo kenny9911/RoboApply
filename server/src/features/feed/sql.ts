@@ -56,7 +56,7 @@ import type { Market } from '../../platform/brand/registry.js';
 import { AGE_EXPIRY_BOARDS, normalizeCompanyName, normalizeJobTitle, normalizeSkills } from '../jobs/normalize/index.js';
 import { findCity, resolveCountry } from '../jobs/geo/index.js';
 import { expandTaxonomyIds, matchTitle } from '../jobs/taxonomy/index.js';
-import { queryTokens } from '../retrieval/index.js';
+import { filterTokens } from '../retrieval/index.js';
 import { includesUndisclosedPay, type FilterField, type FilterSet } from '../search/index.js';
 import { EMPLOYER_BOARD_SOURCES, GOHIRE_SOURCE_BOARD } from './sourceLine.js';
 
@@ -242,12 +242,16 @@ const quoteLexeme = (token: string): string => `'${token.replace(/\\/g, '\\\\').
 /**
  * The search-document half of the typed-query predicate, for
  * `to_tsquery('simple', $1)`: the AND of the query's distinct tokens, each
- * quoted. The tokens are retrieval `queryTokens`, the function that segmented
- * the document (function words, one-character CJK tokens and bare numbers are
- * left out, as in the lexical leg's query). Null when the query has no token.
+ * quoted. The tokens are retrieval `filterTokens`, segmented by the function
+ * that segmented the document. Every word the person typed is required,
+ * the ones an OR query drops included when they can be part of a job's name
+ * ("IT support" needs "it" AND "support"; "social work", "US tax", 招聘专员);
+ * only grammar and search filler ("for", "a", "jobs"), one-character CJK
+ * tokens and bare numbers are left out. This is NOT the lexical leg's token
+ * list (`queryTokens`, the OR it ranks by). Null when the query has no token.
  */
 export function allTokensTsQuery(q: string | null | undefined): string | null {
-  const tokens = queryTokens(q);
+  const tokens = filterTokens(q);
   return tokens.length ? tokens.map(quoteLexeme).join(' & ') : null;
 }
 

@@ -457,10 +457,17 @@ export async function writeBoard(ctx: WriteContext, outcome: BoardReadOutcome): 
     result.closed = await archiveClosedBankJobs(db, source.ats, outcome.closedExternalIds, now, 'source_removed');
   }
   const inserted = MARKETS.reduce((n, m) => n + (result.processed[m]?.inserted ?? 0), 0);
+  // A board's FIRST successful read inserts every posting it lists. That is the load, not news about the board:
+  // counted as a change it put every newly seeded board on the 2-hour interval for 48 hours (512 boards and about
+  // 48,500 postings downloaded and rewritten in full every pass; M4 cross-review). A new board is still read at
+  // once; after that it is read every 24 hours until a posting really opens or closes (strategy 1.2: "diff ids to
+  // open and close"). `lastJobCount` is written by a successful read only, so it is null exactly until the first one
+  // (a board whose first attempts failed in passing has a `lastSyncedAt` and still no successful read).
+  const firstRead = source.lastJobCount === null;
   const stamp = successStamp(source, {
     now,
     listed: outcome.read.listing.length,
-    changed: inserted > 0 || result.closed > 0,
+    changed: (inserted > 0 && !firstRead) || result.closed > 0,
     pendingDetails: outcome.read.pendingDetails,
     failedDetails: outcome.read.failedDetails,
     readDetails: outcome.read.inputs.length,
@@ -498,6 +505,13 @@ export async function runBoardSync(deps: BoardSyncDeps): Promise<BoardSyncTally 
 
   // 2. Postings of sources switched off 48 hours ago.
   tally.archivedDisabled = await archiveDisabledSources(db, clock());
+
+  // No brand of this deployment writes board postings (the mainland stack with CN_RECRUITMENT_INFO_MODE=off, or
+  // every brand narrowed by JOB_PROVIDERS_<BRAND> to a list without `ats_public`): nothing a read returned could
+  // be stored, so nothing is read. No board is leased, no candidate is checked and no request is made; before this
+  // every due board was downloaded once a day and its postings dropped (the 512 seeded boards are about 48,500
+  // postings and half a gigabyte a pass). The seed load and the archive step above still ran.
+  if (markets.length === 0) return tally;
 
   // Every read stops when the run's time is nearly used up (a real timer: reads are real waits).
   const stop = new AbortController();

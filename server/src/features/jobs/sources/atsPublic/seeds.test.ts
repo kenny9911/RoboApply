@@ -460,8 +460,11 @@ describe('the seed files and the validation report', () => {
     }
   });
 
-  it('the builder\'s size caps leave a quarter of the connector\'s limit free at the densest answer measured, and no seeded one-answer board is above its cap', () => {
+  it('the builder\'s size caps leave a quarter of the connector\'s limit free at the density of the one answer each was calibrated on, and no seeded one-answer board is above its cap', () => {
     // A Greenhouse or an Ashby board comes in ONE answer; one over MAX_RESPONSE_BYTES is refused, and three refusals switch the source off.
+    // This holds the COUNT caps at the two calibration densities only. It is not a bound on a seeded board's size:
+    // `greenhouse/coupang` measured 11,048,005 characters for 673 postings (70% of the limit; M4 cross-review). The
+    // assertion on recorded answer sizes that replaces this one is MKT-5B's (requests/waveM4-carryover.md, MKT-5B.1).
     const { greenhouseMax, ashbyMax } = builder.DEFAULT_LIMITS;
     expect(greenhouseMax * builder.MEASURED_CHARS_PER_POSTING.greenhouse).toBeLessThanOrEqual(0.75 * MAX_RESPONSE_BYTES);
     expect(ashbyMax * builder.MEASURED_CHARS_PER_POSTING.ashby).toBeLessThanOrEqual(0.75 * MAX_RESPONSE_BYTES);

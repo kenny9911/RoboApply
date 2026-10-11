@@ -21,8 +21,15 @@ import { createNetworkFixture, jobRow } from '../../network/testkit.js';
 import { CROSS_AREA_DEFAULTS, createDefaultAreas } from '../areas.js';
 import { createMatchService } from '../../match/MatchService.js';
 import { RESUME_MD, createMemoryRepo, resumeRecord } from '../../match/testkit.js';
-import { EVAL_SCORER_MODEL, freshAiRow } from '../../match/eval/world.js';
+import { EVAL_SCORER_MODEL, freshAiRow as harnessAiRow } from '../../match/eval/world.js';
 import * as copilotIndex from '../index.js';
+
+/**
+ * A stored AI fit that is fresh for THIS file's service: it is handed the scorer v3 fake only, so its pin is v3
+ * (a service follows the one scorer it was given), and a fresh row is a v3 row. The harness helper writes a row of
+ * the default pin (scorer v4) since the M4 gate.
+ */
+const freshAiRow = (input: Parameters<typeof harnessAiRow>[0] = {}) => harnessAiRow({ prompt: 'scorer_v3', ...input });
 
 const WRITES = ['patchFilters', 'createTailorSession', 'createCoverLetter', 'createOutreachDraft', 'importJob', 'saveImportedJob', 'fixResumeIssue'] as const;
 
@@ -620,7 +627,7 @@ describe('MKT-4H: similar_jobs (the job page\'s Similar jobs list where job deta
     const r = await run('similar_jobs', { jobId: 'job_1' }, s);
     expect(s.areas.similarJobs).toHaveBeenCalledWith(USER, 'job_1');
     // The tool asks the area's Similar jobs read and never searches itself. Which list that read answers (the job
-    // page's own, or the title search that stands in until job detail offers it) is the adapter's: see the last test here.
+    // page's own, or the title search for a seam that has no list) is the adapter's: see the last test here.
     expect(s.areas.feedPreview).not.toHaveBeenCalled();
     expect(r.output.jobIds).toEqual(['job_sim_1', 'job_sim_2']);
     expect(r.output.list).toBe('candidates');
@@ -669,7 +676,8 @@ describe('MKT-4H: similar_jobs (the job page\'s Similar jobs list where job deta
     expect(similar).toHaveBeenCalledWith('u1', 'job_1');
     expect(get).not.toHaveBeenCalled();
     expect(feedPreview).not.toHaveBeenCalled();
-    // Job detail's public surface without `similar` (what it is today): the title search, with the job itself left out.
+    // A job-detail seam without `similar` (the public surface has it since the M4 gate: features/m4Seams.test.ts):
+    // the title search, with the job itself left out.
     const withoutList = createDefaultAreas({ store: {} as never, jobDetail: { get }, feedPreview });
     expect(await withoutList.similarJobs('u1', 'job_1')).toEqual({ items: [expect.objectContaining({ jobId: 'title_1' })], by: 'title' });
     expect(get).toHaveBeenCalledWith('u1', 'job_1');
@@ -999,7 +1007,8 @@ describe('MKT-2F: areas.fit, areas.variantFit and areas.storedFit read THE fit',
     const fits = await areas.fits('u1', ['job1', 'job1', 'no_such_job'], { locale: 'en' });
     // One call for the whole list, each id once.
     expect(getFits).toHaveBeenCalledTimes(1);
-    expect(getFits).toHaveBeenCalledWith('u1', ['job1', 'no_such_job']);
+    // The request language is handed on, so skill labels are in the language of the conversation (M4 cross-review).
+    expect(getFits).toHaveBeenCalledWith('u1', ['job1', 'no_such_job'], { locale: 'en' });
     expect(w.scorer.run).not.toHaveBeenCalled();
     // The same score, tier and kind as the read the job page makes (storedFit = getFit with no model call).
     const page = await areas.storedFit('u1', 'job1', { locale: 'en' });

@@ -347,8 +347,11 @@ function skillsDetailOf(v: unknown): MatchJob['skillsDetail'] {
       required: s.required === true,
       // The canonical skill enrichment v3 mapped the string to; absent on a row it has not written.
       ...(str(s.skillId) ? { skillId: str(s.skillId) } : {}),
-      // How the id was found, when enrichment stores it ('embedding' is a machine guess; preScore.ts never compares it).
-      ...(str(s.skillId) && str(s.via) ? { via: str(s.via) } : {}),
+      // How enrichment v3 mapped the string, whenever it says so: 'alias', 'embedding' (a machine guess; preScore.ts
+      // never compares it), 'new', or 'none' (it tried and the vocabulary has no such skill). Kept without an id too:
+      // it is what tells a mapped row with no skill in the vocabulary from a row enrichment never wrote
+      // (preScore.ts `carriesSkillIds`).
+      ...(str(s.via) ? { via: str(s.via) } : {}),
     }));
 }
 

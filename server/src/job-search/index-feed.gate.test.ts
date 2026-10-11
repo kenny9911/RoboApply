@@ -14,11 +14,16 @@
 //      would otherwise follow;
 //   3. otherwise the topics are listed in `agent.unverifiedPreferences`.
 //
-// The feed's side of the contract is requested in the MKT-4H handoff (the
-// query text of its lexical and dense legs is `q` and `relevance` together,
-// and `previewOrdered` reports the applied order). Until the feed offers it,
-// branch 3 is what runs: the feed takes `relevance` and says nothing, so the
-// API claims nothing. Branch 2 becomes live with no edit here.
+// The feed's side of the contract (the query text of its lexical and dense
+// legs is `q` and `relevance` together, and `previewOrdered` reports the
+// applied order) was built by MKT-4F in the same phase. Since the M4 gate the
+// two are merged and branch 2 is the one that runs: the test now REQUIRES the
+// feed to report the applied order for this fixture, so a feed that stops
+// reading `relevance` beside a typed `q`, or stops saying so, fails here and
+// cannot fall back silently to branch 3. (Branch 3 stays as the statement of
+// what the API must say for a feed that reports nothing; `orderedPreview`
+// below covers that feed.) Production reads the same function on the facade:
+// `feedService.previewOrdered` (features/feed/index.ts, added at the gate).
 //
 // No database, no network, no model: the feed's FakeFeedRepo and fake match.
 
@@ -56,9 +61,9 @@ const profile = (): SearchProfileWire => ({
   alertInstantMax: 0, alertDigest: null, createdAt: NOW.toISOString(), updatedAt: NOW.toISOString(),
 });
 
-function realFeed() {
+function realFeed(rows: ReadonlyArray<{ id: string; title: string; doc: string }> = ROWS) {
   const repo = new FakeFeedRepo();
-  for (const row of ROWS) {
+  for (const row of rows) {
     repo.rows.push(feedRow({
       id: row.id, market: 'cn', title: row.title, titleNormalized: row.title.toLowerCase(),
       companyName: `公司 ${row.id}`, companyNameNormalized: `公司 ${row.id}`, sourceBoard: 'greenhouse', sourceName: 'Greenhouse',
@@ -95,8 +100,8 @@ function realFeed() {
 
 const ctx = (userId: string): FeedCtx => ({ userId, market: 'cn', brandId: 'goapply', now: NOW });
 
-function plannedSearch() {
-  const { feed } = realFeed();
+function plannedSearch(rows?: ReadonlyArray<{ id: string; title: string; doc: string }>) {
+  const { feed } = realFeed(rows);
   const seam = feed as unknown as PreviewSeam<FeedCtx>;
   const reads: Array<{ input: IndexPreviewInput; relevanceApplied: boolean }> = [];
   const preview = async (userId: string, input: IndexPreviewInput) => {
@@ -144,6 +149,11 @@ describe('MKT-4H gate: a planned GoApply search over the real feed service', () 
     // 2 and 3. The claim is the feed's own statement about this read, never this area's assumption.
     const fedSaysApplied = reads[0]!.relevanceApplied;
     expect(fedSaysApplied).toBe(own.relevanceApplied);
+    // M4 gate: on the merged tree the feed applies the topics beside the typed query and says so. Reciprocal rank
+    // fusion of the recency leg (c, b, a) with the lexical leg (a first: the only row that mentions the topics)
+    // gives c, a, b: the topical row precedes the row it follows by date and id alone.
+    expect(fedSaysApplied).toBe(true);
+    expect(ids).toEqual(['c_plain', 'a_topical', 'b_plain']);
     if (fedSaysApplied) {
       expect(response.agent.rankedBy).toEqual(TOPICS);
       expect(response.agent.unverifiedPreferences).toEqual(['五险一金']);
@@ -155,6 +165,28 @@ describe('MKT-4H gate: a planned GoApply search over the real feed service', () 
       expect(response.agent.unverifiedPreferences).toEqual(['五险一金', ...TOPICS]);
       expect(response.meta).not.toHaveProperty('rankedBy');
     }
+  });
+
+  it('topics that no listed posting mentions are not reported as an order: `rankedBy` is empty and they stay unverified (M4 cross-review)', async () => {
+    // The same three rows match the role query; none of them says "climate" or "rust". The lexical leg still returns
+    // rows (for the role words), which is not the topics having ordered anything.
+    const { agent, seam, reads } = plannedSearch([
+      { id: 'c_plain', title: 'Backend Engineer', doc: 'backend engineer payments' },
+      { id: 'b_plain', title: 'Backend Engineer, Platform', doc: 'backend engineer platform' },
+      { id: 'a_plain', title: 'Backend Engineer, Data', doc: 'backend engineer data' },
+    ]);
+    const response = await agent.search({ request: 'backend engineer jobs at climate companies, ideally using Rust, with 五险一金' }, { userId: 'owner', requestId: 'gate', brand: GO });
+    expect(reads).toHaveLength(1);
+    expect(reads[0]!.input).toMatchObject({ q: 'backend engineer', relevance: 'climate Rust' });
+    expect(reads[0]!.relevanceApplied).toBe(false);
+    // The order is the plain one, with and without the topics.
+    const ids = response.jobs.map(idOf);
+    expect(ids).toEqual(['c_plain', 'b_plain', 'a_plain']);
+    expect((await orderedPreview(seam, ctx('owner'), { q: 'backend engineer', limit: 50 })).items.map((item) => item.jobId)).toEqual(ids);
+    // No claim: the topics changed nothing, so they are named as not verified.
+    expect(response.agent.rankedBy).toEqual([]);
+    expect(response.agent.unverifiedPreferences).toEqual(['五险一金', ...TOPICS]);
+    expect(response.meta).not.toHaveProperty('rankedBy');
   });
 
   it('the same search without topics is the feed\'s plain list for the query: date, then id (the order the topics would have to change)', async () => {

@@ -23,6 +23,11 @@
         "industry": "Not enough to compare the industry.",
         "logistics": "Not enough to compare the location, pay or work setup."
       }
+    },
+    "retention": {
+      "rows": {
+        "billing_consent_archive": "Proof of those records after you delete your account: your account ID, a hash of your email address, the payment customer ID, what you agreed to and when. No IP address or browser details. Kept for 3 years after you agreed, or until 1 year after your plan ended if that is later"
+      }
     }
   }
 }

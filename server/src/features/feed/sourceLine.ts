@@ -139,12 +139,22 @@ export const CREDIT_LINE_BOARDS: readonly string[] = ['tw_open_data', 'tw_gov_jo
  * through `JobMetaTw`). A surface that CANNOT print it yet holds the row out
  * with this predicate, so no open-data row is shown uncredited:
  *   - job alerts, in the app and by e-mail (alerts/repo.ts, alerts/service.ts);
- *   - similar jobs (jobs/detail/service.ts `similarScope`);
- *   - the Assistant's job lists (copilot/tools/jobs.ts) and the Ready to
- *     apply suggestions and picks (agent/deps.ts), through `itemOwesCreditLine`.
- * Remove a use when its surface carries the line: the Assistant cards with
- * MKT-4H.1, similar jobs with MKT-5C.3, alerts and Ready to apply with
- * Orchestrator 3 (requests/waveM3-carryover.md). Tracker rows are the
+ *   - similar jobs (jobs/detail/service.ts `similarScope`), on the job page
+ *     and, since the M4 gate, in the Assistant's `similar_jobs`, which reads
+ *     that same list;
+ *   - the Ready to apply suggestions and picks (agent/deps.ts), through
+ *     `itemOwesCreditLine`;
+ *   - the tailoring tip (`tips_first_tailor`, in the app and by e-mail), which
+ *     names the person's best-fit job by title and company
+ *     (lifecycle/repo.ts `topFitJob`; M4 cross-review);
+ *   - a company's job list (jobs/companies/service.ts `liveJobWhere`: the
+ *     Company tab's "other jobs" and `GET /companies/:id/jobs`, with its
+ *     open-job count; M4 cross-review).
+ * The Assistant's own job lists print the line since MKT-4H (the cited card
+ * and the fallback card read `cardMeta.tw_sources`), so they hold nothing.
+ * Remove a use when its surface carries the line: similar jobs with
+ * MKT-5C.3, the company list with MKT-5G, alerts, Ready to apply and the tip
+ * with Orchestrator 3 (requests/waveM3-carryover.md). Tracker rows are the
  * person's own saved jobs and are not held (Orchestrator 3 there).
  */
 export function creditLineHeld(row: { sourceBoard?: unknown }): boolean {
@@ -154,8 +164,9 @@ export function creditLineHeld(row: { sourceBoard?: unknown }): boolean {
 /**
  * `creditLineHeld` for a feed item, which carries no `sourceBoard`: the feed
  * attaches the sentence the row owes as `cardMeta.tw_sources.attribution`
- * (jobs/sources/twHooks.ts). For the readers that take their rows from
- * `feedService.preview` (the Assistant's job lists, the Ready to apply picks).
+ * (jobs/sources/twHooks.ts). For a reader that takes its rows from
+ * `feedService.preview` and cannot print the line: the Ready to apply picks
+ * (agent/deps.ts), the only caller since MKT-4H.
  */
 export function itemOwesCreditLine(item: { cardMeta?: unknown }): boolean {
   const meta = item.cardMeta;
@@ -168,16 +179,6 @@ export function itemOwesCreditLine(item: { cardMeta?: unknown }): boolean {
 export function creditLineHeldWhere(): { NOT: { sourceBoard: { in: string[] } } } {
   return { NOT: { sourceBoard: { in: [...CREDIT_LINE_BOARDS] } } };
 }
-
-/**
- * `RAJob.sourceBoard` values the lists' posting-age floor never applies to:
- * the recruiter banks and the public ATS boards. "No posting-age cut-off for
- * board or bank rows" (GOAPPLY_PARITY_PLAN §3.9, MARKET_STRATEGY M-22): an
- * employer lists a role for as long as it is open, often for months, and the
- * source's own sync closes it. The same list as the ingest side's
- * `NO_DATE_EXPIRY_BOARDS` (jobs/ingest/maintain.ts; a test holds them equal).
- */
-export const NO_AGE_FLOOR_BOARDS: readonly string[] = [...new Set<string>([...RECRUITER_BANK_BOARDS, ...PUBLIC_ATS])];
 
 /**
  * `RAJob.sourceBoard` values of rows read from a public employer board (the

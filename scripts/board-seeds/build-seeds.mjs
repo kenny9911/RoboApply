@@ -47,12 +47,20 @@
 // because a count is what the report holds; a count is only a stand-in for a
 // size (one posting took from about 7,700 characters of an answer to 17,447
 // on the boards measured), so they leave more than a quarter of the limit
-// free at the densest answer measured for each system
-// (MEASURED_CHARS_PER_POSTING): --greenhouse-max 1000 (11.4 million characters
-// at SpaceX's 11,433 a posting, 73% of the limit) and --ashby-max 650 (11.3
-// million at OpenAI's 17,447, 72%). A board above its cap is reported, not
-// written. `lever_eu` boards are reported only: no connector reads that host
-// yet.
+// free at the density of the ONE answer measured for each system when the
+// caps were set (MEASURED_CHARS_PER_POSTING): --greenhouse-max 1000 (11.4
+// million characters at SpaceX's 11,433 a posting, 73% of the limit) and
+// --ashby-max 650 (11.3 million at OpenAI's 17,447, 72%). A board above its
+// cap is reported, not written. `lever_eu` boards are reported only: no
+// connector reads that host yet.
+//
+// KNOWN GAP (M4 cross-review; docs/jobright-clone/market/BOARD_SEEDS.md 3.1):
+// a count cap does not bound a size. A SEEDED Greenhouse board is denser than
+// the calibration: `coupang` answered 11,048,005 characters for 673 postings
+// (16,416 a posting, 70% of the limit; it reaches the limit at about 958
+// postings, under the cap). The fix is to record each large board's answer
+// size in the report and to leave a board out above 75% of the limit
+// (requests/waveM4-carryover.md, MKT-5B.1), not to lower the count cap.
 //
 // The name of an entry is what the board's answer stated. Where the system
 // states none (Lever, Ashby) it is the employer the board id spells, or the
@@ -91,10 +99,14 @@ export const SEEDABLE_ATS = ['greenhouse', 'lever', 'ashby', 'smartrecruiters'];
 export const SEED_FILES = ['cn', 'tw', 'intl'];
 export const DEFAULT_LIMITS = { srMax: 1000, greenhouseMax: 1000, ashbyMax: 650 };
 /**
- * The densest single answer measured for each one-answer system, in characters
- * a posting, with the connector's own URL on 2026-10-11: Greenhouse `spacex`
- * 31,155,380 characters for 2,725 postings; Ashby `openai` 14,219,219 for 815.
- * seeds.test.ts holds the caps above to the connector's limit with these.
+ * The answer the caps were calibrated on for each one-answer system, in
+ * characters a posting, with the connector's own URL on 2026-10-11: Greenhouse
+ * `spacex` 31,155,380 characters for 2,725 postings; Ashby `openai` 14,219,219
+ * for 815. seeds.test.ts holds the caps above to the connector's limit with
+ * these. NOT the densest board there is: seeded `greenhouse/coupang` measures
+ * 16,416 a posting (see the header's KNOWN GAP). Do not simply raise the
+ * Greenhouse value to that: the 75% rule would then cap at 718 postings and
+ * drop Databricks (62% measured) for no reason.
  */
 export const MEASURED_CHARS_PER_POSTING = { greenhouse: 11_433, ashby: 17_447 };
 export const DEFAULT_SEEDS_DIR = 'server/src/features/jobs/sources/atsPublic';

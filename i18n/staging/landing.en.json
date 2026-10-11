@@ -28,6 +28,11 @@
     "home": {
       "pricing": {
         "notOpen": "Paid plans can't be bought yet."
+      },
+      "faq": {
+        "q4": {
+          "a": "From public posts on employers' own careers pages, from Taiwan's public open-data job list, and from job listing providers when you search. Every job shows its source and when it was last checked. %BRAND% does not list every job on the market."
+        }
       }
     },
     "cnHome": {

@@ -571,10 +571,20 @@ describe('RetentionTable: the rows added in WP-93', () => {
   });
 
   it('the en and zh bundles label every rule and every way a row ends', () => {
-    for (const file of ['en.json', 'zh.json']) {
-      const legal = (JSON.parse(readFileSync(path.join(process.cwd(), 'i18n/messages', file), 'utf8')) as { legal: { retention: { rows: Record<string, string>; enforced: Record<string, string> } } }).legal;
-      expect(Object.keys(legal.retention.rows).sort(), file).toEqual(RETENTION.map((r) => r.id).sort());
-      expect(Object.keys(legal.retention.enforced).sort(), file).toEqual(['auto', 'manual', 'minimum', 'provider']);
+    // A bundle as the i18n merge will write it: the committed file with the staged `legal` strings of that language
+    // over it (scripts/i18n-merge-staging.mjs; a wave gate adds strings to i18n/staging only, the merge into
+    // i18n/messages is one pass after the last phase). So a rule a later bundle publishes (MKT-4A's
+    // `billing_consent_archive`) must be labelled in BOTH staged files, and nothing may be labelled that is no rule.
+    type Retention = { rows?: Record<string, string>; enforced?: Record<string, string> };
+    const legalOf = (file: string): Retention => (JSON.parse(readFileSync(path.join(process.cwd(), file), 'utf8')) as { legal?: { retention?: Retention } }).legal?.retention ?? {};
+    for (const locale of ['en', 'zh']) {
+      const bundle = legalOf(`i18n/messages/${locale}.json`);
+      const staged = legalOf(`i18n/staging/legal.${locale}.json`);
+      const rows = { ...bundle.rows, ...staged.rows };
+      const enforced = { ...bundle.enforced, ...staged.enforced };
+      expect(Object.keys(rows).sort(), locale).toEqual(RETENTION.map((r) => r.id).sort());
+      for (const [id, label] of Object.entries(rows)) expect(typeof label === 'string' && label.trim().length > 0, `${locale}: ${id}`).toBe(true);
+      expect(Object.keys(enforced).sort(), locale).toEqual(['auto', 'manual', 'minimum', 'provider']);
     }
   });
 });

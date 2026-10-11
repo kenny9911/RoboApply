@@ -20,8 +20,11 @@
 //     statement binds: the OR of the leg's tokens (`toTsQuery`, `'a' | 'b'`:
 //     any token matches) or the AND of a typed query's tokens (the wide
 //     predicate, sql.ts `allTokensTsQuery`, `'a' & 'b'`: every token must be
-//     in the document). The rank is the number of occurrences of the query's
-//     tokens in the document (ts_rank_cd-like).
+//     in the document; the tokens are retrieval `filterTokens`, which the
+//     fake never recomputes: it reads the bound value). Every leg statement
+//     that carries the typed-query predicate is filtered by it, the dense leg
+//     included. The rank is the number of occurrences of the query's tokens
+//     in the document (ts_rank_cd-like).
 //   - `vectors` holds a job's embedding under `vectorModel`. A row without one
 //     is in no dense leg. The distance is the exact cosine distance.
 // The emulation is exported (`lexicalMatch`, `cosineDistance`, `tsQueryTokens`)

@@ -299,13 +299,27 @@ function isStripeRequestRefusal(err: unknown): boolean {
   return e?.type === 'StripeInvalidRequestError' || e?.rawType === 'invalid_request_error' || e?.code === 'charge_already_refunded';
 }
 
+/** Stripe's error code (`charge_already_refunded`, `parameter_unknown`, …), or null when the error carries none. */
+function stripeErrorCode(err: unknown): string | null {
+  const code = (err as { code?: unknown } | null)?.code;
+  return typeof code === 'string' && code ? code : null;
+}
+
 function notAvailable(reason: string, details: Record<string, unknown> = {}): BillingError {
   return new BillingError('refund_not_available', 'No refund can be made for this payment', { reason, ...details });
 }
 
+/**
+ * The 502 the routes send. The failure's own text is logged and never put in
+ * the answer: since M4 these errors reach buyers (the withdrawal routes, the
+ * public cancel link), the wrapped blocks also hold our own database reads,
+ * and the text can carry a server path, the database host, a masked key or a
+ * Stripe account id. Same shape as `providerFailure` of subscriptions.ts.
+ */
 function providerError(message: string, err: unknown): BillingError {
   if (err instanceof BillingError) return err;
-  return new BillingError('payment_provider_error', message, { provider: 'stripe', message: errorText(err).slice(0, 200) });
+  logger.error('RA_BILLING', message, { error: errorText(err) });
+  return new BillingError('payment_provider_error', message, { provider: 'stripe', ...(isIdempotencyConflict(err) ? { reason: 'idempotency_conflict' } : {}) });
 }
 
 function isRoboApplyAccount(account: BillingAccount): boolean {
@@ -462,7 +476,12 @@ export async function issueRefund(input: IssueRefundInput, deps: Partial<StripeR
   if (!customerId) throw notAvailable('no_customer');
 
   const target = await loadRefundTarget(stripe, account, customerId, input.target);
-  const refundedBefore = await recordedRefundedMinor(db, { paymentIntentId: target.paymentIntentId });
+  // The refund rows of this payment (refunds and withdrawals; never disputes), with when each was recorded.
+  const recorded = await db.rABillingRefund.findMany({
+    where: { rail: 'stripe', kind: { in: REFUND_ROW_KINDS }, paymentIntentId: target.paymentIntentId },
+    select: { amountMinor: true, createdAt: true },
+  });
+  const refundedBefore = recorded.reduce((sum, row) => sum + Math.max(0, row.amountMinor), 0);
   const refundable = target.paidMinor - refundedBefore;
   if (refundable <= 0) throw notAvailable('already_refunded');
   if (input.amountMinor !== undefined && input.amountMinor > refundable) {
@@ -497,20 +516,31 @@ export async function issueRefund(input: IssueRefundInput, deps: Partial<StripeR
           reason: 'idempotency_conflict',
         });
       }
-      if (isStripeRequestRefusal(err)) throw notAvailable('refused_by_provider', { message: errorText(err).slice(0, 200) });
+      // Stripe's own code says WHICH refusal this is: "already refunded" is final, a request Stripe rejects for
+      // another reason is not (the withdrawal path keeps the buyer's instant for those; credits service `runWithdrawal`).
+      if (isStripeRequestRefusal(err)) throw notAvailable('refused_by_provider', { message: errorText(err).slice(0, 200), providerCode: stripeErrorCode(err) });
       throw providerError('The refund could not be sent to the payment provider. Try again.', err);
     }
     refund = made;
   }
   const amountMinor = typeof refund.amount === 'number' ? refund.amount : (partialMinor ?? refundable);
-  logger.info('RA_BILLING', 'refund issued', { userId: input.userId, refundId: refund.id, kind, amountMinor, actor: input.actor });
+  // A request sent again under its key is answered by Stripe with the SAME refund. When `charge.refunded` has
+  // recorded that refund meanwhile, `refundedBefore` already holds it, and adding it again would call a half refund
+  // "full" (paid 2,000, refund 1,000, the same dialog sent again after its row landed: `full` must stay false).
+  // Our row of a refund is written after Stripe created the refund, and a row of an EARLIER refund of the same amount
+  // was written before this one was created, so: a row of this amount recorded at or after the refund's own creation
+  // time is this refund. A refund object without a creation time is counted as new, as before.
+  const createdMs = typeof refund.created === 'number' && Number.isFinite(refund.created) ? refund.created * 1000 : null;
+  const alreadyRecorded = createdMs !== null && recorded.some((row) => row.amountMinor === amountMinor && row.createdAt instanceof Date && row.createdAt.getTime() >= createdMs);
+  const refundedAfter = alreadyRecorded ? refundedBefore : refundedBefore + amountMinor;
+  logger.info('RA_BILLING', 'refund issued', { userId: input.userId, refundId: refund.id, kind, amountMinor, actor: input.actor, ...(alreadyRecorded ? { replay: true } : {}) });
   return {
     refundId: refund.id,
     paymentIntentId: target.paymentIntentId,
     chargeId: idOf(refund.charge),
     amountMinor,
     currency: upper(refund.currency ?? target.currency),
-    full: refundedBefore + amountMinor >= target.paidMinor,
+    full: refundedAfter >= target.paidMinor,
   };
 }
 
@@ -1014,9 +1044,72 @@ export const STRIPE_REFUND_EVENT_TYPES = ['charge.refunded', 'charge.dispute.cre
 
 // ── Withdrawal ────────────────────────────────────────────────────────────
 
-/** A waiver ticked at this checkout: a consent record from a day before the charge to an hour after it. */
+/** The consent-record window, for a purchase that carries no stamp: a record from a day before the charge to an hour after it. */
 const WAIVER_BEFORE_MS = DAY_MS;
 const WAIVER_AFTER_MS = 3_600_000;
+
+/**
+ * The waiver box of THIS purchase as its own checkout stamped it: true
+ * ('yes'), false ('no'), or null when the invoice does not say.
+ *
+ * Checkout stamps `withdrawalWaiver: 'yes' | 'no'` on what it creates
+ * (rails/stripe.ts `stripeCheckoutMetadata`): on the invoice of a one-time
+ * payment, and on the subscription, whose metadata the first invoice carries a
+ * copy of. That stamp is the box of this checkout and of no other.
+ *
+ * Null for an invoice with no stamp (a purchase made before the stamp, a
+ * subscription activated without its Checkout Session) and for the two
+ * invoices whose copy of the subscription metadata is NOT their own box: a
+ * plan switch (`subscription_update`: the metadata is still the first
+ * checkout's, and the switch records its own consent) and a renewal
+ * (`subscription_cycle`: never a purchase).
+ */
+export function purchaseWaiverStamp(invoice: Pick<Stripe.Invoice, 'billing_reason' | 'metadata'> | null | undefined): boolean | null {
+  if (!invoice || invoice.billing_reason === 'subscription_update' || invoice.billing_reason === 'subscription_cycle') return null;
+  for (const meta of [invoice.metadata, invoiceSubscriptionMetadata(invoice as Stripe.Invoice)]) {
+    const stamp = meta?.withdrawalWaiver;
+    if (stamp === 'yes') return true;
+    if (stamp === 'no') return false;
+  }
+  return null;
+}
+
+/**
+ * Did the buyer tick the waiver box for THIS purchase? The purchase's own
+ * stamp decides (`purchaseWaiverStamp`). Only when the invoice carries none is
+ * the consent ledger read: any `withdrawal_waiver` record of the profile from
+ * a day before the payment to an hour after it. That window cannot tell two
+ * checkouts of one day apart (a record is written before the payment page
+ * opens, also for a checkout the buyer abandons, and a plan switch writes one
+ * too), which is why it is the fallback and not the rule: with it alone a
+ * waiver ticked at another checkout turned a full statutory refund into a
+ * pro-rata one, and a pack bought without the box next to a plan bought with
+ * it lost its withdrawal.
+ *
+ * One reading for the buyer's quote (`openWithdrawalFor`) and the admin quote
+ * (credits service `refundQuote`). `invoice` is null for a charge that is not
+ * a Stripe invoice.
+ */
+export async function purchaseWaived(
+  db: Pick<RefundDb, 'seekerConsentRecord'>,
+  seekerProfileId: string | null | undefined,
+  invoice: Pick<Stripe.Invoice, 'billing_reason' | 'metadata'> | null,
+  paidAt: Date,
+): Promise<boolean> {
+  const stamp = purchaseWaiverStamp(invoice);
+  if (stamp !== null) return stamp;
+  if (!seekerProfileId) return false;
+  const record = await db.seekerConsentRecord.findFirst({
+    where: {
+      seekerProfileId,
+      consentType: 'withdrawal_waiver',
+      granted: true,
+      createdAt: { gte: new Date(paidAt.getTime() - WAIVER_BEFORE_MS), lte: new Date(paidAt.getTime() + WAIVER_AFTER_MS) },
+    },
+    select: { id: true },
+  });
+  return Boolean(record);
+}
 
 /** What goes back for one paid invoice of the purchase. */
 interface WithdrawalCharge {
@@ -1072,8 +1165,8 @@ function invoicePaidPeriod(invoice: Stripe.Invoice): { start: Date; end: Date } 
 /**
  * The withdrawal open for ONE purchase, or null. A purchase is a paid invoice
  * that is not a renewal: the first invoice of a subscription, or a one-time
- * payment (a pass, a pack). What decides: the waiver ticked at that checkout,
- * the billing country (the account's; the invoice's customer address when the
+ * payment (a pass, a pack). What decides: the waiver ticked at that checkout
+ * (the purchase's own stamp; `purchaseWaived`), the billing country (the account's; the invoice's customer address when the
  * account holds none) and, for a subscription, what was paid under the
  * purchase since:
  *
@@ -1107,17 +1200,8 @@ async function openWithdrawalFor(account: BillingAccount, stripe: StripeClient, 
   const subscriptionId = invoiceSubscriptionId(invoice);
   const planKey = invoicePlanKey(invoice, account) ?? sub?.planKey ?? sub?.tier ?? 'free';
   const currency = upper(invoice.currency);
-  const waiver = account.seekerProfileId
-    ? await db.seekerConsentRecord.findFirst({
-        where: {
-          seekerProfileId: account.seekerProfileId,
-          consentType: 'withdrawal_waiver',
-          granted: true,
-          createdAt: { gte: new Date(purchasedAt.getTime() - WAIVER_BEFORE_MS), lte: new Date(purchasedAt.getTime() + WAIVER_AFTER_MS) },
-        },
-        select: { id: true },
-      })
-    : null;
+  // The box of this purchase: its own checkout stamp, else the consent window (`purchaseWaived`).
+  const waiver = await purchaseWaived(db, account.seekerProfileId, invoice, purchasedAt);
   // The renewals of this subscription paid since the purchase, oldest first.
   const renewals = subscriptionId
     ? paid
@@ -1135,7 +1219,7 @@ async function openWithdrawalFor(account: BillingAccount, stripe: StripeClient, 
     now: d.now(),
     // The account's country; a subscription activated without its Checkout Session has it on the invoice only.
     billingCountry: sub?.billingCountry ?? invoice.customer_address?.country ?? null,
-    withdrawalWaiver: Boolean(waiver),
+    withdrawalWaiver: waiver,
     // Use never changes a withdrawal (rules 1 and 1b are decided before the usage rules).
     paidOnlyCreditsUsed: 0,
   };
@@ -1238,8 +1322,14 @@ export async function withdrawalQuote(userId: string, deps: Partial<StripeRefund
  * way, repeats the same two Stripe calls with the same keys. Once a withdrawal
  * is complete, the next call is refused.
  *
+ * Nothing is ended for a purchase whose refund cannot be made: the payment of
+ * every invoice the withdrawal owes money on is resolved before the cancel,
+ * and a purchase that fails there is refused as "not open" (step 0).
+ *
  * Throws BillingError `withdrawal_not_available` (409), `rail_not_configured`
- * (503) or `payment_provider_error` (502).
+ * (503), `payment_provider_error` (502), or, from the refund step after the
+ * subscription was ended, `refund_not_available` (409; `details.reason`, and
+ * for `refused_by_provider` Stripe's own `details.providerCode`).
  */
 export async function withdrawPurchase(input: WithdrawPurchaseInput, deps: Partial<StripeRefundDeps> = {}): Promise<WithdrawalResult> {
   const d = resolveDeps(deps);
@@ -1259,6 +1349,35 @@ export async function withdrawPurchase(input: WithdrawPurchaseInput, deps: Parti
   }
   if (!open) throw refuse();
   const { purchase, decision } = open;
+
+  // 0. Before anything is ended: can every refund this withdrawal owes be made? The payment of each invoice is
+  // resolved now (the read `issueRefund` makes) and what our rows say is left of it is held against what step 2
+  // will send, by `issueRefund`'s own two rules. Ending access first is right only because the refund follows
+  // (strategy 4.4), so a purchase whose payment the engine cannot resolve (`nothing_paid`, `not_found`, `not_yours`,
+  // no customer), or whose refund our rows already rule out, is refused HERE, with the subscription still running:
+  // nothing is cancelled and nothing is refunded. A provider that cannot be read is a 502 as everywhere else, also
+  // before anything was ended.
+  const customerId = account.subscription?.stripeCustomerId ?? null;
+  for (const charge of open.charges) {
+    const due = charge.owedMinor - (await recordedRefundedMinor(db, { invoiceId: charge.invoiceId }));
+    if (due <= 0) continue;
+    let reason: string | null = null;
+    try {
+      if (!customerId) throw notAvailable('no_customer');
+      const target = await loadRefundTarget(stripe, account, customerId, { invoiceId: charge.invoiceId });
+      const left = target.paidMinor - (await recordedRefundedMinor(db, { paymentIntentId: target.paymentIntentId }));
+      if (left <= 0) reason = 'already_refunded';
+      // Step 2 names an amount only for a part of the payment; "everything" is sent without one.
+      else if (due < charge.paidMinor && due > left) reason = 'amount_above_refundable';
+    } catch (err) {
+      if (!(err instanceof BillingError) || err.code !== 'refund_not_available') throw providerError('The purchase could not be read from the payment provider. Try again.', err);
+      reason = typeof err.details?.reason === 'string' ? err.details.reason : 'refund_not_available';
+    }
+    if (reason) {
+      logger.error('RA_BILLING', 'withdrawal refused before anything was ended: a refund it owes cannot be made', { userId: input.userId, purchaseId: purchase.id, invoiceId: charge.invoiceId, reason });
+      throw refuse();
+    }
+  }
 
   // 1. End the subscription now. Access ends through customer.subscription.deleted, whatever is refunded.
   if (open.subscriptionId) {

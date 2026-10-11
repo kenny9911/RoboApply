@@ -2,6 +2,8 @@
 //
 // Seams:
 //   - jobDetailService.get                the Assistant's get_job tool, the extension
+//   - jobDetailService.similar            the job page's Similar jobs list, for the Assistant's
+//                                         similar_jobs tool (M4 gate; MKT-4H request 1)
 //   - jobDetailService.recordApplyClick   the shared apply path (feed card, job page,
 //                                         Ready to apply `open`): tracker → applied at once
 //   - jobDetailService.undoApplied        "Undo · I didn't apply"
@@ -11,7 +13,7 @@
 //                                         types the extension can fill and the
 //                                         market/host check (`extensionSupported`)
 
-import type { ApplyClickResponse, JobDetailResponse, UndoAppliedResponse } from './contract.js';
+import type { ApplyClickResponse, JobDetailResponse, SimilarJobsResponse, UndoAppliedResponse } from './contract.js';
 
 export * from './contract.js';
 export { createJobDetailRouter, type JobDetailRouterDeps } from './routes.js';
@@ -21,6 +23,12 @@ export { peopleSearchLinks, shareTarget, toBadges, toPay, toSponsorship, toRequi
 
 export interface JobDetailService {
   get(userId: string, jobId: string): Promise<JobDetailResponse>;
+  /**
+   * The job page's Similar jobs list (`GET /jobs/:id/similar`): by job vector,
+   * best fit first, with the page's own rules (no hidden or flagged job, no
+   * row whose credit line this list cannot print).
+   */
+  similar(userId: string, jobId: string): Promise<SimilarJobsResponse>;
   /** Shared apply path (feed card, detail page, Ready to apply `open`): tracker → applied at once. */
   recordApplyClick(userId: string, jobId: string): Promise<ApplyClickResponse>;
   undoApplied(userId: string, jobId: string): Promise<UndoAppliedResponse>;
@@ -32,6 +40,9 @@ const impl = async () => (await import('./defaultService.js')).defaultJobDetailS
 export const jobDetailService: JobDetailService = {
   async get(userId, jobId) {
     return (await impl()).get(userId, jobId);
+  },
+  async similar(userId, jobId) {
+    return (await impl()).similar(userId, jobId);
   },
   async recordApplyClick(userId, jobId) {
     return (await impl()).recordApplyClick(userId, jobId);

@@ -643,8 +643,11 @@ describe('the stamp on the source after a read', () => {
   it('success: read time, listed count, no error, no failures; next read by how recently the board changed; a board never read is due at once', async () => {
     const h = harness({
       sources: [
-        // Never read: due immediately. It adds a posting, so it is read again in 2 h.
+        // Never read: due immediately. Its first read adds every posting it lists, which is the load and not a
+        // change of the board: it is read again in 24 h (the next test).
         sourceRow({ id: 'new', boardToken: 'newco', failCount: 2, lastError: 'http_503' }),
+        // Read before, and this read adds two postings: a change, read again in 2 h.
+        sourceRow({ id: 'hot', boardToken: 'hotco', lastSyncedAt: new Date(T0 - 24 * H), lastJobCount: 5, nextSyncAt: new Date(T0 - 2), lastChangeAt: new Date(T0 - 30 * 24 * H) }),
         // Due, nothing changes this time, changed 3 days ago: 12 h.
         sourceRow({ id: 'warm', boardToken: 'warmco', lastSyncedAt: new Date(T0 - 12 * H), nextSyncAt: new Date(T0 - 1), lastChangeAt: new Date(T0 - 72 * H) }),
         // Due, nothing changes, last change 30 days ago: 24 h.
@@ -653,16 +656,67 @@ describe('the stamp on the source after a read', () => {
         sourceRow({ id: 'later', boardToken: 'laterco', lastSyncedAt: new Date(T0 - H), nextSyncAt: new Date(T0 + H) }),
       ],
     });
-    const w = world({ greenhouse: { newco: [ghJob('newco', 1, 'Singapore'), ghJob('newco', 2, 'Singapore')], warmco: [ghJob('warmco', 1, 'Singapore')], coldco: [], laterco: [ghJob('laterco', 1, 'Singapore')] } });
-    const rec = recorder((c) => (c.ids[0]!.startsWith('newco') ? 2 : 0));
+    const two = (token: string) => [ghJob(token, 1, 'Singapore'), ghJob(token, 2, 'Singapore')];
+    const w = world({ greenhouse: { newco: two('newco'), hotco: two('hotco'), warmco: [ghJob('warmco', 1, 'Singapore')], coldco: [], laterco: [ghJob('laterco', 1, 'Singapore')] } });
+    const rec = recorder((c) => (c.ids[0]!.startsWith('newco') || c.ids[0]!.startsWith('hotco') ? 2 : 0));
     const tally = await run(h, w, { process: rec.process });
-    expect(tally).toMatchObject({ boards: 3, inserted: 2 });
-    expect(h.leases[0]!.leased).toEqual(['new', 'cold', 'warm']);
-    expect(h.source('new')).toMatchObject({ lastSyncedAt: new Date(T0), lastJobCount: 2, lastError: null, failCount: 0, lastChangeAt: new Date(T0), nextSyncAt: new Date(T0 + 2 * H), enabled: true });
+    expect(tally).toMatchObject({ boards: 4, inserted: 4 });
+    expect(h.leases[0]!.leased).toEqual(['new', 'hot', 'cold', 'warm']);
+    expect(h.source('new')).toMatchObject({ lastSyncedAt: new Date(T0), lastJobCount: 2, lastError: null, failCount: 0, lastChangeAt: null, nextSyncAt: new Date(T0 + 24 * H), enabled: true });
+    expect(h.source('hot')).toMatchObject({ lastSyncedAt: new Date(T0), lastJobCount: 2, lastChangeAt: new Date(T0), nextSyncAt: new Date(T0 + 2 * H) });
     expect(h.source('warm')).toMatchObject({ lastSyncedAt: new Date(T0), lastJobCount: 1, lastChangeAt: new Date(T0 - 72 * H), nextSyncAt: new Date(T0 + 12 * H) });
     expect(h.source('cold')).toMatchObject({ lastSyncedAt: new Date(T0), lastJobCount: 0, nextSyncAt: new Date(T0 + 24 * H) });
     expect(h.source('later')).toMatchObject({ lastSyncedAt: new Date(T0 - H), nextSyncAt: new Date(T0 + H) });
     expect(w.listings.has('laterco')).toBe(false);
+  });
+
+  it('a first read does not make a board hot: the load is not a change; the first posting that really opens does (M4 cross-review)', async () => {
+    // Before: `inserted > 0` on the first read stamped `lastChangeAt`, so every newly seeded board was read again every
+    // 2 hours for 48 hours, and each of those reads downloads the whole board and rewrites every posting.
+    const listing: unknown[] = [ghJob('seedco', 1, 'Singapore'), ghJob('seedco', 2, 'Singapore'), ghJob('seedco', 3, 'Singapore')];
+    const h = harness({ sources: [sourceRow({ id: 'seed', boardToken: 'seedco', origin: 'seed' })] });
+    const w = world({ greenhouse: { seedco: () => listing } });
+    // The pipeline reports as new exactly the postings it has not been handed before.
+    const known = new Set<string>();
+    const rec = recorder((c) => {
+      const fresh = c.ids.filter((id) => !known.has(id));
+      for (const id of c.ids) known.add(id);
+      return fresh.length;
+    });
+    const sync = () => run(h, w, { process: rec.process });
+
+    // A new board is read at once, and all three postings are inserted.
+    expect(await sync()).toMatchObject({ boards: 1, inserted: 3 });
+    expect(h.source('seed')).toMatchObject({ lastSyncedAt: new Date(T0), lastJobCount: 3, lastChangeAt: null, nextSyncAt: new Date(T0 + 24 * H) });
+    // Two hours later it is not due (it used to be), and nothing is requested.
+    h.clock.now = T0 + 2 * H;
+    expect(await sync()).toMatchObject({ boards: 0 });
+    expect(w.listings.get('seedco')).toBe(1);
+    // The next day it lists the same postings: still no change, 24 hours again.
+    h.clock.now = T0 + 24 * H;
+    expect(await sync()).toMatchObject({ boards: 1, inserted: 0 });
+    expect(h.source('seed')).toMatchObject({ lastChangeAt: null, nextSyncAt: new Date(T0 + 48 * H) });
+    // A posting really opens: that is a change, and the board is read every 2 hours from here.
+    listing.push(ghJob('seedco', 4, 'Singapore'));
+    h.clock.now = T0 + 48 * H;
+    expect(await sync()).toMatchObject({ boards: 1, inserted: 1 });
+    expect(h.source('seed')).toMatchObject({ lastJobCount: 4, lastChangeAt: new Date(T0 + 48 * H), nextSyncAt: new Date(T0 + 50 * H) });
+  });
+
+  it('a board whose first attempts failed in passing still has its first successful read: that read is the load too', async () => {
+    // It has a `lastSyncedAt` (the failed attempt) and no successful read: `lastJobCount` is what says so.
+    const h = harness({ sources: [sourceRow({ id: 'late', boardToken: 'lateco', lastSyncedAt: new Date(T0 - H), lastError: 'http_503', nextSyncAt: new Date(T0 - 1) })] });
+    const w = world({ greenhouse: { lateco: [ghJob('lateco', 1, 'Singapore')] } });
+    await run(h, w, { process: recorder().process });
+    expect(h.source('late')).toMatchObject({ lastJobCount: 1, lastError: null, lastChangeAt: null, nextSyncAt: new Date(T0 + 24 * H) });
+  });
+
+  it('a first read that also closes rows left from an earlier load is a change (a closure always is)', async () => {
+    const h = harness({ sources: [sourceRow()], jobs: [openJob('greenhouse', 'globalco:9')] });
+    const w = world({ greenhouse: { globalco: [ghJob('globalco', 1, 'Singapore')] } });
+    const tally = await run(h, w, { process: recorder().process });
+    expect(tally.closed).toBe(1);
+    expect(h.source('cs1')).toMatchObject({ lastChangeAt: new Date(T0), nextSyncAt: new Date(T0 + 2 * H) });
   });
 
   it('a source registered without a name learns the name its board states', async () => {
@@ -912,6 +966,37 @@ describe('the run stays inside its budget', () => {
     expect(tally).toMatchObject({ boards: 0, stoppedBy: 'budget', candidatesChecked: 0 });
     expect(h.leases).toEqual([]);
     expect(w.urls).toEqual([]);
+  });
+
+  it('with no brand that writes board postings nothing is leased and no request is made: the boards are not read to be dropped (M4 cross-review)', async () => {
+    // Before: every due board was downloaded once a day and its postings counted as dropped.
+    const cases: Array<[string, readonly ('roboapply' | 'goapply')[], Record<string, string>]> = [
+      ['the mainland stack with recruitment-info mode off', ['goapply'], { CN_RECRUITMENT_INFO_MODE: 'off' }],
+      ['RoboApply narrowed to providers without ats_public', ['roboapply'], { JOB_PROVIDERS_ROBOAPPLY: 'jsearch,bank_robohire' }],
+      ['both brands, neither writing boards', BOTH, { CN_RECRUITMENT_INFO_MODE: 'off', JOB_PROVIDERS_ROBOAPPLY: 'jsearch' }],
+    ];
+    for (const [name, brands, env] of cases) {
+      expect(writingBrands(brands, env), name).toEqual({});
+      // A due board, and a candidate waiting for its list-only check.
+      const h = harness({ sources: [sourceRow(), sourceRow({ id: 'cand', boardToken: 'candco', companyName: 'Cand Co', enabled: false, origin: 'discovered' })] });
+      const w = world({ greenhouse: { globalco: [ghJob('globalco', 1, 'Singapore')], candco: [ghJob('candco', 1, 'Singapore')] }, names: { candco: 'Cand Co' } });
+      const rec = recorder();
+      const tally = await run(h, w, { brands, env, process: rec.process });
+      expect(w.urls, name).toEqual([]);
+      expect(h.leases, name).toEqual([]);
+      expect(rec.calls, name).toEqual([]);
+      expect(tally, name).toMatchObject({ boards: 0, calls: 0, candidatesChecked: 0, droppedIntl: 0, droppedCn: 0 });
+      // Nothing was stamped: the boards are as they were, and are read when a brand writes them again.
+      expect(h.source('cs1'), name).toMatchObject({ lastSyncedAt: null, nextSyncAt: null, enabled: true });
+      expect(h.source('cand'), name).toMatchObject({ enabled: false, lastSyncedAt: null });
+      // The cron step answers "no work".
+      expect(await runJobsBoards(createBudget(240_000, () => 0), { db: h.db, now: () => new Date(h.clock.now), env, fetch: w.fetch, brands, loadSeeds: async () => null, process: rec.process, kick: () => undefined }), name).toEqual({ skipped: 'no_work' });
+    }
+    // One writing brand is enough to read (the other market's postings are dropped, as before).
+    const h = harness({ sources: [sourceRow()] });
+    const w = world({ greenhouse: { globalco: [ghJob('globalco', 1, 'Singapore')] } });
+    expect(await run(h, w, { env: { CN_RECRUITMENT_INFO_MODE: 'off' }, process: recorder().process })).toMatchObject({ boards: 1 });
+    expect(w.urls).toHaveLength(1);
   });
 
   it('with the kill switch on the run reports skipped and touches neither a board nor the database', async () => {
@@ -1187,8 +1272,9 @@ describe('1,000 boards at 60 boards per 5-minute run', () => {
     const CAPACITY = 60;
     const tokens = Array.from({ length: BOARDS }, (_, i) => `b${i}`);
     const isHot = (token: string) => Number(token.slice(1)) < HOT;
-    // Quiet boards last changed 3 days ago (inside the 14-day window for the whole simulated day).
-    const h = harness({ sources: tokens.map((t, i) => sourceRow({ id: `s${i}`, boardToken: t, companyName: `Co ${i}`, lastChangeAt: i < HOT ? null : new Date(T0 - 72 * H) })) });
+    // Quiet boards last changed 3 days ago (inside the 14-day window for the whole simulated day). Every board has
+    // been read before (`lastJobCount`), so a posting a read adds is a change and not the board's first load.
+    const h = harness({ sources: tokens.map((t, i) => sourceRow({ id: `s${i}`, boardToken: t, companyName: `Co ${i}`, lastJobCount: 1, lastChangeAt: i < HOT ? null : new Date(T0 - 72 * H) })) });
     const reads = new Map<string, number[]>(tokens.map((t) => [t, []]));
     let readsThisRun = 0;
     const fetch: FetchLike = async (url) => {

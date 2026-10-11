@@ -61,6 +61,23 @@ export function jobContentHash(row: JobHashInput): string {
 }
 
 /**
+ * The key of a stored requirement list (`RAJob.requirements.contentHash`,
+ * MARKET_TASK_PLAN 3.3): the hash of the posting's title and requirement text
+ * with NO skills. Requirement lines are copied from the text, while
+ * `RAJob.skills` changes without the text changing (enrichment adds the skills
+ * the posting names; the next ingest refresh writes the provider's list back),
+ * so a key that read the skills would call the list stale at every refresh and
+ * the scorer would copy the lines again inside a paid call (strategy 2.3 step
+ * 7: requirements are extracted once per job). Enrichment writes its lists
+ * under the same value (`jobContentHash(requirementsHashRow(job))`,
+ * jobs/enrich/reconcile.ts); `features/m4Seams.test.ts` holds the two equal.
+ * The fit's own `jobContentHash` and `RAJob.contentHash` keep reading the skills.
+ */
+export function requirementListHash(row: Pick<JobHashInput, 'title' | 'qualifications' | 'descriptionPlain'>): string {
+  return jobContentHash({ title: row.title, qualifications: row.qualifications, descriptionPlain: row.descriptionPlain, skills: [] });
+}
+
+/**
  * The posting's current hash for a row that carries its text (a full row):
  * the stored `RAJob.contentHash` when the row has one (written with the search
  * document by this same function), else computed from the row's own text. A

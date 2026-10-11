@@ -84,6 +84,8 @@ interface DetailEntry {
   skill: string;
   required: boolean;
   soft: boolean;
+  /** Other spellings of the same skill in `RAJob.skills` (enrichment v3, `skillsDetail[].also`). */
+  also: string[];
 }
 
 function readDetail(value: unknown): DetailEntry[] {
@@ -91,9 +93,11 @@ function readDetail(value: unknown): DetailEntry[] {
   const out: DetailEntry[] = [];
   for (const e of value) {
     if (!e || typeof e !== 'object') continue;
-    const r = e as { skill?: unknown; required?: unknown; kind?: unknown };
+    const r = e as { skill?: unknown; required?: unknown; kind?: unknown; also?: unknown };
     const skill = clean(typeof r.skill === 'string' ? r.skill : '');
-    if (skill) out.push({ skill, required: r.required === true, soft: r.kind === 'soft' });
+    // Enrichment v3: the other spellings of this one skill that `RAJob.skills` also holds.
+    const also = Array.isArray(r.also) ? r.also.filter((a): a is string => typeof a === 'string').map((a) => clean(a)).filter(Boolean) : [];
+    if (skill) out.push({ skill, required: r.required === true, soft: r.kind === 'soft', also });
   }
   return out;
 }
@@ -113,7 +117,10 @@ function unique(values: string[]): string[] {
 /** The stored display strings: required first, soft skills left out. */
 function displaySkills(row: Pick<IndexJobRow, 'skills' | 'skillsDetail'>): { required: string[]; preferred: string[] } {
   const detail = readDetail(row.skillsDetail);
-  const soft = new Set(detail.filter((d) => d.soft).map((d) => keyOf(d.skill)));
+  // A soft skill is left out under every spelling the row holds of it: enrichment v3 keeps each spelling in `skills`
+  // and names the others on the entry (`also`), so "team player" beside the soft entry "teamwork" is not a hard skill
+  // of the search document. (The other spellings of a HARD skill stay: they are search text.)
+  const soft = new Set(detail.filter((d) => d.soft).flatMap((d) => [d.skill, ...d.also].map(keyOf)));
   const required = unique(detail.filter((d) => d.required && !d.soft).map((d) => d.skill));
   const requiredKeys = new Set(required.map(keyOf));
   const rest = [...detail.filter((d) => !d.required && !d.soft).map((d) => d.skill), ...(row.skills ?? []).map((s) => clean(s))];

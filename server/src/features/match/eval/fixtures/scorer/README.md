@@ -6,10 +6,10 @@ Read by `eval/suites/scorer.suite.ts` (strategy 2.6, scorer layer; requirement S
 |---|---|---|
 | `selfcheck.json` | Ten hand-written resume-posting pairs with three hand-written answers each (the same checklist in three spellings) and the totals worked out by hand. No model output. The suite replays it on every run: ICC 1 and no tier flip, or the command fails. An answer never has more than a third of its copied lines missing from the posting: beyond that the server refuses the answer, which the self-check would report as a failure. | Committed with the suite. |
 | `recorded.<market>.json` | The raw answers of three runs of the pinned scorer (scorer v4) on 100 synthetic persona-posting pairs: the fixture behind `icc_3_runs` and `tier_flip_rate`. | A live run writes it under `eval/.snapshots/<date>/scorer/`; the owner reviews it and copies it here. |
-| `recorded.v3.<market>.json` | The same for scorer v3 (`MATCH_SCORER_RUBRIC=fit_v3`), so its correlation with the recruiters' grades can be printed next to scorer v4's. Optional. | As above, recorded with the rollback switch set. |
+| `recorded.v3.<market>.json` | The same for scorer v3 (`MATCH_SCORER_RUBRIC=fit_v3`): the fixture behind the fourth gate, `spearman_human_gain_over_v3` ("not below the current scorer", SM-8), and behind `spearman_human_v3`, printed next to scorer v4's value. Without this file that gate is NOT measured: it reads `no_fixture`, also when `spearman_human` passes. | As above, recorded with the rollback switch set: `MATCH_SCORER_RUBRIC=fit_v3 EVAL_LIVE=1 EVAL_SCORER_RECORD=1 npm run eval:match -- --live`. |
 | `audit.<market>.json` | Recruiters' grades (0 to 3) of recorded pairs: the fixture behind `spearman_human`. Human grades only. | The owner, from the graded sheet (see below). |
 
-Until `recorded.<market>.json` is here the three scorer rows of the report read `no_fixture`. Nothing fails and no number is invented.
+Until `recorded.<market>.json` is here the four gated scorer rows of the report read `no_fixture` (`icc_3_runs`, `tier_flip_rate`, `spearman_human`, `spearman_human_gain_over_v3`). Nothing fails and no number is invented. With the recording and the audit here and no `recorded.v3.<market>.json`, the first three are measured and the fourth still reads `no_fixture`, with the command above in its note.
 
 ## How a recording is read
 

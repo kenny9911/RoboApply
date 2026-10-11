@@ -8,7 +8,8 @@
 // Units: every share, recall, precision, NDCG, kappa, ICC and correlation is
 // a number from 0 to 1 (kappa, ICC and correlation may be negative). "Points"
 // in the strategy are percentage points: +15 points is +0.15 here. Latency is
-// milliseconds.
+// milliseconds. The two skills counts (`duplicate_items`, `soft_items_listed`)
+// are numbers of items.
 //
 // Label rule (strategy 2.6): a metric computed from LLM-judge labels is
 // reported `untrusted` until an audit file says the judge agrees with human
@@ -88,8 +89,10 @@ export const CAREER_CHANGER_SUBSET = 'career_changer';
 
 export const GATES: readonly Gate[] = [
   // Retrieval: Recall@200 hybrid ≥ recency-only + 15 points; no persona more than 5 below its baseline.
-  { layer: 'retrieval', metric: 'recall_at_200_hybrid', rule: { kind: 'min_gain', points: 0.15, over: 'recall_at_200_recency' }, sample: '40 personas per market' },
-  { layer: 'retrieval', metric: 'recall_at_200_worst_persona_delta', rule: { kind: 'min', threshold: -0.05 }, sample: 'hybrid minus recency-only, worst persona' },
+  // Career changers are printed apart (as in ranking): the suite reports their fused recall under its own metric
+  // id today, and a row it reports under the gated id for that subset is information, never held against the gate.
+  { layer: 'retrieval', metric: 'recall_at_200_hybrid', rule: { kind: 'min_gain', points: 0.15, over: 'recall_at_200_recency' }, exceptSubsets: [CAREER_CHANGER_SUBSET], sample: '40 personas per market' },
+  { layer: 'retrieval', metric: 'recall_at_200_worst_persona_delta', rule: { kind: 'min', threshold: -0.05 }, exceptSubsets: [CAREER_CHANGER_SUBSET], sample: 'hybrid minus recency-only, worst persona' },
   // Ranking: NDCG@10 and @20 no regression.
   { layer: 'ranking', metric: 'ndcg_at_10', rule: { kind: 'no_regression', tolerance: NO_REGRESSION_TOLERANCE }, exceptSubsets: [CAREER_CHANGER_SUBSET] },
   { layer: 'ranking', metric: 'ndcg_at_20', rule: { kind: 'no_regression', tolerance: NO_REGRESSION_TOLERANCE }, exceptSubsets: [CAREER_CHANGER_SUBSET] },
@@ -98,12 +101,19 @@ export const GATES: readonly Gate[] = [
   { layer: 'estimate_vs_ai', metric: 'estimate_great_ai_below_possible', rule: { kind: 'below', threshold: 0.05 } },
   // Scorer: ICC ≥ 0.85 over 3 runs; tier flips under 5%; Spearman with human grades ≥ 0.6.
   { layer: 'scorer', metric: 'icc_3_runs', rule: { kind: 'min', threshold: 0.85 }, sample: '3 runs on 100 pairs per market, drawn over every persona' },
-  { layer: 'scorer', metric: 'tier_flip_rate', rule: { kind: 'below', threshold: 0.05 }, sample: '3 runs on 100 pairs per market, drawn over every persona' },
+  { layer: 'scorer', metric: 'tier_flip_rate', rule: { kind: 'below', threshold: 0.05 }, sample: '3 runs on 100 pairs per market, drawn over every persona; a run with no usable answer counts as a flip' },
   { layer: 'scorer', metric: 'spearman_human', rule: { kind: 'min', threshold: 0.6 }, sample: 'audited pairs' },
+  // SM-8: the new scorer must agree with recruiters at least as well as the one it replaces (v4 minus v3, a
+  // correlation difference). Measured only when both recordings and the audit exist.
+  { layer: 'scorer', metric: 'spearman_human_gain_over_v3', rule: { kind: 'min', threshold: 0 }, sample: 'audited pairs, both scorers' },
   // Taxonomy: category precision ≥ 95% on 300 labelled titles per market.
   { layer: 'taxonomy', metric: 'category_precision', rule: { kind: 'min', threshold: 0.95 }, sample: '300 labelled titles per market' },
   // Skills: precision of "Not shown" ≥ 95%.
   { layer: 'skills', metric: 'precision_not_shown', rule: { kind: 'min', threshold: 0.95 }, sample: '100 labelled resume-job pairs' },
+  // The strategy's invariant "no skill is listed twice", and "a soft skill is never an item of the check": counts
+  // of items (not shares), which must be 0. `npm test` enforces the same two (suites/skills.suite.test.ts).
+  { layer: 'skills', metric: 'duplicate_items', rule: { kind: 'below', threshold: 1 }, sample: '100 labelled resume-job pairs; a count, must be 0' },
+  { layer: 'skills', metric: 'soft_items_listed', rule: { kind: 'below', threshold: 1 }, sample: '100 labelled resume-job pairs; a count, must be 0' },
   // Language: zh-TW, zh-CN and cross-language subsets within 10% relative of the English subset.
   { layer: 'language', metric: 'ndcg_at_10', rule: { kind: 'within_relative', share: 0.1, ofSubset: LANGUAGE_REFERENCE_SUBSET }, subsets: LANGUAGE_GATED_SUBSETS },
   { layer: 'language', metric: 'ndcg_at_20', rule: { kind: 'within_relative', share: 0.1, ofSubset: LANGUAGE_REFERENCE_SUBSET }, subsets: LANGUAGE_GATED_SUBSETS },

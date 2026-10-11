@@ -166,17 +166,23 @@ export interface WithdrawalResponse {
  * Errors (the envelope's top-level `code`):
  *   409 `withdrawal_not_available`  no withdrawal is open for this purchase
  *                                   (a stale id, after the 14 days, already
- *                                   withdrawn, GoApply). With `details.reason:
+ *                                   withdrawn, GoApply, or a purchase whose
+ *                                   payment cannot be resolved for a refund:
+ *                                   nothing was ended). With `details.reason:
  *                                   'refund_refused'` the subscription was
- *                                   ended and the payment provider refused the
- *                                   refund itself (it was refunded by hand
- *                                   just before): read the plan again;
+ *                                   ended and the refund was refused because
+ *                                   the money already went back (it was
+ *                                   refunded by hand just before): read the
+ *                                   plan again;
  *   429 `rate_limited`              more than 3 in an hour (sending a request
  *                                   that failed with 502 again is counted
  *                                   apart, 10 in an hour);
  *   503 `rail_not_configured`       card payments are not set up here;
- *   502 `payment_provider_error`    Stripe failed; sending it again finishes
- *                                   it. The moment of this first request is
+ *   502 `payment_provider_error`    Stripe failed, or refused the refund
+ *                                   request for another reason than "already
+ *                                   refunded"; sending it again finishes it
+ *                                   (`details` is `{ provider }` only, never
+ *                                   the provider's text). The moment of this first request is
  *                                   kept for 14 days: the request sent again
  *                                   is decided as of that moment (the same
  *                                   amount, also after the purchase's 14th
@@ -186,7 +192,11 @@ export const WithdrawBodySchema = z.object({ purchaseId: z.string().trim().min(1
 export type WithdrawBody = z.infer<typeof WithdrawBodySchema>;
 export interface WithdrawResponse {
   status: 'withdrawn';
-  /** Minor units, as quoted. */
+  /**
+   * Minor units, as the rule gives them at the moment of this request (or of the first request, for one sent again
+   * after a 502). A pro-rata amount counts used days, so it can be one day lower than a quote read before a day
+   * boundary of the paid period; the confirm does not carry the quoted amount yet (`requests/waveM4-carryover.md`).
+   */
   refundMinor: number;
   currency: string;
   accessEnded: true;

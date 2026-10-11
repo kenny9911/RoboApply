@@ -43,7 +43,7 @@ function syntheticPairs(n: number, slope = 0.6, components: CalibrationPair['com
 }
 
 function fakeStore(seed: { value?: string | null; pairs?: CalibrationPair[]; pairsSince?: (since: Date) => CalibrationPair[] } = {}) {
-  const state = { value: seed.value ?? null, reads: 0, writes: 0, pairReads: [] as Date[] };
+  const state = { value: seed.value ?? null, reads: 0, writes: 0, pairReads: [] as Date[], prompts: [] as Array<string | null | undefined> };
   const store: CalibrationStore = {
     async getConfigValue(key) {
       expect(key).toBe(CALIBRATION_CONFIG_KEY);
@@ -55,8 +55,9 @@ function fakeStore(seed: { value?: string | null; pairs?: CalibrationPair[]; pai
       state.writes += 1;
       state.value = value;
     },
-    async listCalibrationPairs({ since, limit }) {
+    async listCalibrationPairs({ since, limit, promptVersion }) {
       state.pairReads.push(since);
+      state.prompts.push(promptVersion);
       return (seed.pairsSince ? seed.pairsSince(since) : (seed.pairs ?? [])).slice(0, limit);
     },
   };
@@ -300,6 +301,23 @@ describe('refreshIfDue', () => {
     expect(afterPriors.computedAt).toBe(daysAgo(6).toISOString());
   });
 
+  it('learns from the rows of the market\'s pinned scorer only (M4 gate; MKT-4G request 8): v4 by default, v3 on a rollback, GoApply by its own value', async () => {
+    const ask = async (market: 'intl' | 'cn', env: Record<string, string>) => {
+      const { store, state } = fakeStore({ pairs: syntheticPairs(500) });
+      await createCalibration({ store, env, now: () => NOW }).refreshIfDue(market, NOW);
+      // Both reads of a refresh (the map's and the priors') name the same scorer.
+      expect(state.prompts).toHaveLength(2);
+      expect(new Set(state.prompts).size).toBe(1);
+      return state.prompts[0];
+    };
+    expect(await ask('intl', {})).toBe('scorer_v4');
+    expect(await ask('cn', {})).toBe('scorer_v4');
+    expect(await ask('intl', { MATCH_SCORER_RUBRIC: 'fit_v3' })).toBe('scorer_v3');
+    expect(await ask('cn', { MATCH_SCORER_RUBRIC: 'fit_v3' })).toBe('scorer_v3');
+    expect(await ask('cn', { MATCH_SCORER_RUBRIC: 'fit_v3', CN_MATCH_SCORER_RUBRIC: 'fit_v4' })).toBe('scorer_v4');
+    expect(await ask('intl', { MATCH_SCORER_RUBRIC: 'fit_v3', CN_MATCH_SCORER_RUBRIC: 'fit_v4' })).toBe('scorer_v3');
+  });
+
   it('writes its market next to what the other market stored meanwhile', async () => {
     const { store, state } = fakeStore({ pairs: syntheticPairs(500) });
     const c = createCalibration({ store, env: {}, now: () => NOW });
@@ -330,7 +348,7 @@ describe('pairs come from stored AI rows of primary resumes, numbers only', () =
     expect(toCalibrationPair({ ai: 'x', estimateAtScore: { score: 64 }, dimensions })).toBeNull();
   });
 
-  it('pairsFor: this market, since the date, primary resumes, newest first', async () => {
+  it('pairsFor: this market, the pinned scorer\'s rows, since the date, primary resumes, newest first', async () => {
     const row = (jobId: string, at: Date, over: Record<string, unknown> = {}) => ({
       userId: 'u1',
       jobId,
@@ -343,15 +361,18 @@ describe('pairs come from stored AI rows of primary resumes, numbers only', () =
       scoreKind: 'ai',
       tier: 'good',
       dimensions: [{ key: 'skills', weight: 30, score: 55, status: 'scored', evidence: [] }],
-      promptVersion: 'scorer_v3',
+      // The scorer both markets pin by default (`fit_v4`, MKT-4G).
+      promptVersion: 'scorer_v4',
       locale: 'en',
       searchProfileVersion: 1,
       ...over,
     });
     const repo = createMemoryRepo({
-      jobs: [jobRecord({ id: 'a' }), jobRecord({ id: 'b' }), jobRecord({ id: 'cn1', market: 'cn' }), jobRecord({ id: 'old' }), jobRecord({ id: 'tailored' }), jobRecord({ id: 'legacy' })],
+      jobs: [jobRecord({ id: 'a' }), jobRecord({ id: 'b' }), jobRecord({ id: 'cn1', market: 'cn' }), jobRecord({ id: 'old' }), jobRecord({ id: 'tailored' }), jobRecord({ id: 'legacy' }), jobRecord({ id: 'v3row' })],
       scores: [
         row('a', daysAgo(2)),
+        // Written by the scorer the market no longer pins: another scale, never a pair of this one.
+        row('v3row', daysAgo(1), { promptVersion: 'scorer_v3', score: 99, explanation: { estimateAtScore: { score: 10, coverage: 0.9 } } }),
         row('b', daysAgo(1), { score: 40, explanation: { estimateAtScore: { score: 50, coverage: 0.5 } } }),
         row('cn1', daysAgo(1)),
         row('old', daysAgo(200)),
@@ -368,5 +389,9 @@ describe('pairs come from stored AI rows of primary resumes, numbers only', () =
     ]);
     expect(JSON.stringify(pairs)).not.toContain('prose');
     expect(await c.pairsFor('cn', daysAgo(90))).toHaveLength(1);
+    // The rollback pin reads the other scorer's rows, and only those.
+    const rolledBack = createCalibration({ store: repo, env: { MATCH_SCORER_RUBRIC: 'fit_v3' }, now: () => NOW });
+    expect(await rolledBack.pairsFor('intl', daysAgo(90))).toEqual([{ estimate: 10, ai: 99, components: { skills: 55 } }]);
+    expect(await rolledBack.pairsFor('cn', daysAgo(90))).toEqual([]);
   });
 });

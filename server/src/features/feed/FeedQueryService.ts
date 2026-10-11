@@ -38,7 +38,8 @@
 //   C dense     the job vectors nearest to a vector, exact distance
 // The query text of B and C: what the user wrote, the typed `q` and
 // `relevance` together (`relevance` is the residual of a natural-language
-// search: it only ORDERS, it is never a predicate; `q` alone filters); with
+// search: it only ORDERS, it is never a predicate; `q` alone filters, and it
+// filters all three legs, so the list holds what the count counts); with
 // neither, for a personalised list, B takes the titles of the person's recent
 // roles and their top skills and C the person's own vector (resume, else
 // intent). A leg that cannot run (no search document yet, no embedding key, a
@@ -634,6 +635,19 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     }
   }
 
+  /** Does any posting the list can hold carry one of the words to rank by? One row of the lexical leg, asked with those words alone. */
+  async function relevanceMatches(leg: { scope: SqlScope; filters: FilterSet; limit: number }, floor: Date, relevance: string): Promise<boolean> {
+    try {
+      const tsQuery = toTsQuery(relevance);
+      if (!tsQuery) return false;
+      return (await repo.queryRows(lexicalLegSql({ ...leg, limit: 1, ageFloor: floor }, tsQuery))).length > 0;
+    } catch (err) {
+      // No claim from a read that failed.
+      logger.warn('FEED', 'the ranking words could not be checked against the list; the order is not reported as ranked by them', { error: err instanceof Error ? err.message : String(err) });
+      return false;
+    }
+  }
+
   /**
    * The first window of a hybrid list: legs A, B and C run together, fused by
    * reciprocal rank and cut at 400 (see the header). `rows` is in the fused
@@ -705,8 +719,17 @@ export function createFeedQueryService(deps: FeedServiceDeps) {
     const rows = fused.map((f) => byId.get(f.id)!);
     const retrievalRank = new Map(fused.map((f, i) => [f.id, i]));
 
-    // The text to rank by took part when a leg that was asked with it answered (`typed` holds it whenever it is given).
-    const relevanceApplied = !!h.relevance && (b.length > 0 || c.length > 0);
+    // Did the text to rank by take part in the order? Only when a leg ordered by it and found something for it:
+    //   - the dense leg orders by the vector of a text that holds the words, so its rows are enough;
+    //   - the lexical leg's query is the OR of `q` and the words together. With no typed `q` its rows matched the
+    //     words. With one, it returns rows for the q words alone, so the words are asked on their own (one row,
+    //     the same predicates): a search whose topics no posting mentions must not be reported as ranked by them
+    //     (the job-search API names `agent.rankedBy` from this; D3).
+    let relevanceApplied = false;
+    if (h.relevance) {
+      if (c.length > 0) relevanceApplied = true;
+      else if (b.length > 0) relevanceApplied = filters.q?.trim() ? await relevanceMatches(leg, floor, h.relevance) : true;
+    }
 
     const firstDropped = a.rows.findIndex((r) => !kept.has(r.id));
     const boundary = firstDropped > 0 ? a.rows[firstDropped - 1] : firstDropped === -1 && a.rows.length >= L.legLimit ? a.rows[a.rows.length - 1] : undefined;

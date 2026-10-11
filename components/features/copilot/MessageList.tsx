@@ -27,6 +27,9 @@ const TOOL_KEYS = [
   'search_jobs',
   'top_fit_jobs',
   'added_jobs',
+  // MKT-4H: the two job tools added in M4 (`assistant.tools.similar_jobs`, `assistant.tools.show_jobs`).
+  'similar_jobs',
+  'show_jobs',
   'get_current_filters',
   'propose_filter_change',
   'analyze_fit',

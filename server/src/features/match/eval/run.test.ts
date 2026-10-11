@@ -150,8 +150,10 @@ describe('suite discovery', () => {
     expect(suiteNameOfFile('/x/retrieval.suite.ts')).toBe('retrieval');
   });
 
-  it('the shipped suites are taxonomy, ranking and language', () => {
-    expect(discoverSuites(SUITES_DIR).map(suiteNameOfFile)).toEqual(['language', 'ranking', 'taxonomy']);
+  it('the shipped suites are language, ranking, retrieval, scorer, skills and taxonomy', () => {
+    // M1 shipped taxonomy, ranking and language; M4 added retrieval (MKT-4F), scorer (MKT-4G) and skills (MKT-4E).
+    // A suite's colocated test file (`*.suite.test.ts`) is not a suite.
+    expect(discoverSuites(SUITES_DIR).map(suiteNameOfFile)).toEqual(['language', 'ranking', 'retrieval', 'scorer', 'skills', 'taxonomy']);
   });
 
   it('loads a suite a later bundle drops in, and runs it without editing the runner', async () => {
@@ -343,7 +345,7 @@ describe('exit-code rules', () => {
     const text = renderTable(r.rows);
     expect(text.split('\n')[0]).toMatch(/^layer\s+metric\s+value\s+gate\s+status$/);
     expect(text).toContain('pending');
-    expect(text).toContain('- [not_built] scorer icc_3_runs, tier_flip_rate, spearman_human: no suite for this layer yet');
+    expect(text).toContain('- [not_built] scorer icc_3_runs, tier_flip_rate, spearman_human, spearman_human_gain_over_v3: no suite for this layer yet');
     expect(text).toContain('- [pending] invariant INV-3: pending reason');
   });
 });
@@ -474,7 +476,9 @@ describe('the shipped suites', () => {
 
   it('ranking and language are not_built while the fit seam is missing', async () => {
     setFitModuleForTests(path.join(EVAL_DIR, 'testdata', 'noSuchFitModule.ts'));
-    const runs = await runSuites(discoverSuites(SUITES_DIR).filter((f) => !f.includes('taxonomy')), ctx({ fixturesDir: path.join(FIXTURES_DIR) }));
+    // The two suites this test is about: the M4 suites (retrieval, scorer, skills) do not read the fit seam and measure.
+    const runs = await runSuites(discoverSuites(SUITES_DIR).filter((f) => /(ranking|language)\.suite\./.test(f)), ctx({ fixturesDir: path.join(FIXTURES_DIR) }));
+    expect(runs.map((r) => r.name).sort()).toEqual(['language', 'ranking']);
     for (const run of runs) {
       expect(run.error).toBeNull();
       expect(run.measures.length).toBeGreaterThan(0);

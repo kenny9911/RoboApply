@@ -90,9 +90,11 @@ export const BANK_SYNC_PROVIDER: Readonly<Record<BankBoard, 'bank_robohire' | 'b
  * The recruiter banks and the public ATS boards (`ats_public`: greenhouse,
  * lever, ashby, smartrecruiters): boards whose own sync closes a posting.
  * The expiry step no longer reads this list (it names the boards that DO
- * expire by age, `AGE_EXPIRY_BOARDS`, so a new source is safe by default). It
- * is kept because the feed's age floor is held equal to it by a test
- * (feed/sourceLine.ts `NO_AGE_FLOOR_BOARDS`).
+ * expire by age, `AGE_EXPIRY_BOARDS`, so a new source is safe by default),
+ * and neither does the feed since MKT-4F (`AGE_FLOOR_BOARDS` in feed/sql.ts
+ * is built from `AGE_EXPIRY_BOARDS`; its twin in feed/sourceLine.ts was
+ * removed at the M4 gate). Nothing reads it now but its own test: MKT-5C
+ * deletes it with that assertion (requests/waveM4-carryover.md).
  */
 export const NO_DATE_EXPIRY_BOARDS: readonly string[] = [...BANK_BOARDS, ...PUBLIC_ATS];
 

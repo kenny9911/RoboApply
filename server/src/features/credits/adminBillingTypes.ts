@@ -122,6 +122,13 @@ export interface AdminCnOrderRow {
   amountMinor: number;
   completedAt: string;
   refunded: RefundedMark | null;
+  /**
+   * Present (and true) only when the order's refund is on record in full and
+   * the reversal of what it bought failed: the record stopped half way, and
+   * the same record call finishes it. The console offers "Check the record"
+   * for such a row (M4 gate; MKT-4C's request to MKT-4B). Omitted otherwise.
+   */
+  reversalPending?: true;
 }
 
 export interface AdminCnOrdersResponse {

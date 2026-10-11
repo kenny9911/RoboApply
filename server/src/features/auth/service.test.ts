@@ -612,6 +612,11 @@ describe('side mails', () => {
     await service().sendAccountDeletedEmail({ userId: 'u1', email: 'ana@example.test', brand: ROBO });
     await service().sendAccountDeletedEmail({ userId: 'u1', email: 'ana@example.test', brand: GO });
     expect(sent.map((s) => s.params.days)).toEqual([30, 15]);
+    // The plan sentence is asked for only when the deletion turned a renewal off.
+    expect(sent.map((s) => s.params.renewalStopped)).toEqual([undefined, undefined]);
+    await service().sendAccountDeletedEmail({ userId: 'u1', email: 'ana@example.test', brand: ROBO, renewalStopped: true });
+    await service().sendAccountDeletedEmail({ userId: 'u1', email: 'ana@example.test', brand: ROBO, renewalStopped: false });
+    expect(sent.slice(2).map((s) => s.params)).toEqual([{ days: 30, renewalStopped: true }, { days: 30 }]);
   });
 });
 

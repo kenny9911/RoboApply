@@ -55,9 +55,10 @@ export interface CopilotAreas {
   fits(userId: string, jobIds: readonly string[], options: { locale?: string }): Promise<Map<string, MatchFitView>>;
   /**
    * Open jobs like one job. `by: 'similar'` = the job page's own Similar jobs
-   * list (by job vector, best fit first); `by: 'title'` = a search by the
-   * job's title through the feed, for as long as the job-detail surface does
-   * not offer its list. The job itself is never among them.
+   * list (by job vector, best fit first), which is what production answers
+   * since the job-detail surface offers it (M4 gate); `by: 'title'` = a search
+   * by the job's title through the feed, only for a job-detail seam handed in
+   * without the list. The job itself is never among them.
    */
   similarJobs(userId: string, jobId: string): Promise<{ items: Array<FeedItem | SimilarJobItem>; by: 'similar' | 'title' }>;
   /** Jobs the user added themselves ("Added by you": private, owned by them), newest first. */

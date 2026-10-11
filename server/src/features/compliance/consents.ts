@@ -64,6 +64,7 @@
 import crypto from 'node:crypto';
 import prisma from '../../lib/prisma.js';
 import { HttpError } from '../../platform/http.js';
+import { logger } from '../../services/LoggerService.js';
 import { getBrand, type BrandId, type ProductBrand } from '../../platform/brand/registry.js';
 import { parseBoolEnv, type EnvSource } from '../../platform/brand/brandEnv.js';
 import { enqueue, kickDrain } from '../../platform/queue/index.js';
@@ -747,6 +748,26 @@ export interface ConsentServiceDeps {
   now?: () => Date;
   enqueue?: typeof enqueue;
   kick?: (kinds: string[]) => unknown;
+  /** Test seam: the vector deletion of a withdrawn GoApply consent (default: `deleteVectorsOfWithdrawnConsent`). */
+  deleteVectors?: (userId: string, type: VectorConsentType) => Promise<void>;
+}
+
+/** The two GoApply consents a person's vectors exist under (features/retrieval `userVectorGate`). */
+export type VectorConsentType = 'ai_resume_parsing' | 'personalized_recommendation';
+const VECTOR_CONSENT_TYPES: readonly string[] = ['ai_resume_parsing', 'personalized_recommendation'] satisfies readonly VectorConsentType[];
+
+/**
+ * GoApply: the vectors that exist under a consent go when it is withdrawn,
+ * at the withdrawal and not at the next retrieval sweep (strategy 2.5
+ * "Consent"; carry-over M2 MKT-4A.5). The same rule as the sweep's consent
+ * step and the `user.embed` worker: without either consent no vector of the
+ * person's profile or resume is kept, and without the AI consent the vectors
+ * of the person's own imported jobs go too (they were embedded under it).
+ * Retrieval is loaded on first use.
+ */
+async function deleteVectorsOfWithdrawnConsent(userId: string, type: VectorConsentType): Promise<void> {
+  const { deleteUserEmbeddings, deleteJobEmbeddingsOfOwner } = await import('../retrieval/index.js');
+  await Promise.all([deleteUserEmbeddings(userId, 'cn'), ...(type === 'ai_resume_parsing' ? [deleteJobEmbeddingsOfOwner(userId, 'cn')] : [])]);
 }
 
 async function profileIdFor(db: ConsentDb, userId: string): Promise<string> {
@@ -880,6 +901,21 @@ export async function recordConsent(input: RecordConsentInput, deps: ConsentServ
       }));
     return { row: created, requestId: request.id };
   });
+
+  // GoApply: a withdrawn "Use AI" or 个性化推荐 consent takes the person's vectors with it now. Best effort after the
+  // record is committed: the withdrawal itself never fails over it, the readers already refuse the vectors (the feed
+  // and the embed worker ask the consent first), and the retrieval sweep's consent step removes what is left.
+  if (!input.granted && input.brand.market === 'cn' && VECTOR_CONSENT_TYPES.includes(def.type)) {
+    try {
+      await (deps.deleteVectors ?? deleteVectorsOfWithdrawnConsent)(input.userId, def.type as VectorConsentType);
+    } catch (err) {
+      logger.warn('COMPLIANCE', 'consent withdrawn: vectors not deleted now; the retrieval sweep removes them', {
+        userId: input.userId,
+        type: def.type,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 
   if (closing && requestId) {
     await (deps.enqueue ?? enqueue)(

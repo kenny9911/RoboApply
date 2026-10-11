@@ -209,18 +209,18 @@ In `alipay callback refused` the field `out_trade_no` is taken from the query on
 
 **f. Refund ¥12 in the Alipay merchant console.** By hand, by the owner or the person named in section 7 item 6 of the strategy. Write the console's refund reference on the form.
 
-**g. Record the refund in the admin console.** *Available after phase M4* (requirement AL-7; built by bundles MKT-4B and MKT-4C, so this step is described from their contract and is not in the code yet). The action only records a refund that was already made, and reverses the entitlement once:
+**g. Record the refund in the admin console.** Requirement AL-7, built in phase M4 (server: bundle MKT-4B; console: bundle MKT-4C; the two were held together at the M4 gate, `__tests__/contracts/billingM4.seam.test.ts`). In the console: open `/admin/credits`, section "Refunds", enter the buyer's user id and press "Show"; under "Mainland orders" find the order by its order number and press "Record refund"; tick "The money was returned in the merchant console", give a reason and save. The row then shows the marker and what happened to the access. The action only records a refund that was already made, and reverses the entitlement once. It never writes the order row and never calls a payment provider. The same two calls, for a shell:
 
 ```
 GET  /api/v1/roboapply/admin/credits/cn-orders?userId=<the buyer's user id>
-     → { items: [{ id, outTradeNo, planKey, channel, amountMinor, completedAt, refunded }] }
+     → { items: [{ id, outTradeNo, planKey, channel, amountMinor, completedAt, refunded, reversalPending? }] }
 
 POST /api/v1/roboapply/admin/credits/cn-orders/<id>/refund
      { "reason": "<why>", "confirmMoneyReturned": true }
      → { status: "recorded" | "already_recorded", orderId, entitlement: "pass_ended" | "pass_shortened" | "pack_zeroed" | "none" }
 ```
 
-`<id>` is the `id` of the list, not the order number. A second call answers `already_recorded` and changes nothing. Until M4 is merged, note on the form that the refund is not recorded in the product: the account keeps its 7 days.
+`<id>` is the `id` of the list, not the order number. A second call answers `already_recorded` with what the first record did, and changes nothing. One case finishes something: when the record was written and the reversal of the access failed (the call answered an error, the account still has its 7 days), the order's row says so (`reversalPending: true`) and offers "Check the record"; that sends the same call again, which finishes the reversal and answers `already_recorded` with the outcome. A partial amount (`refundedAmountMinor` below the order) is recorded and changes no access, and closes the order's record: a later full refund of the same order cannot be recorded (`waveM4-carryover.md`, Owner). Write the answer on the form.
 
 **If the owner paid and the order did not activate.** The money is with the merchant; refund it in the console as in f. Do not open sales. To serve the buyer of this one supervised order after the cause is understood, the operator may send the notify once more by hand, from a shell that holds the secret in the variable `ALIPAY_CALLBACK_SECRET`:
 
@@ -439,6 +439,6 @@ node scripts/alipay-notify-preflight.mjs --origin http://localhost:4621
 - That a proxy in front of the deployment passes the `X-RA-Brand` response header through. If one removes it, the script reports `PASS-ROUTE / FAIL-HANDLER` on a correct deployment; use the `curl` check of 4.2 and confirm the deployment another way.
 - What the hosting platform's request log records (method, path, query). The application logs none of it.
 - The `vercel env ls production` command and Deployment Protection behaviour are Vercel's; they were not run here.
-- The admin action of step 3 g: written from the contract in `MARKET_TASK_PLAN.md` section 3.1, built in phase M4.
+- The admin action of step 3 g is built (phase M4) and tested on an in-memory database with orders paid through the real `fulfilPass`. It was not run against a deployed host, and the console page was not seen in a browser.
 
 **Not decided here** (owner, `MARKET_STRATEGY.md` section 7): whether production has the secret today (item 5), the merchant's legal name and whether GoApply may sell through it (item 6), the supervised order itself (item 7), the M-18 default (item 8), the notify origin (item 8a).

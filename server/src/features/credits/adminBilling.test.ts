@@ -1083,9 +1083,15 @@ describe('POST /cn-orders/:orderId/refund: record a refund made in the merchant 
     expect((await refundRows())[0]).toMatchObject({ full: true, entitlementReversed: false, note: 'entitlement: not_reversed' });
     expect(await planRow()).toMatchObject({ tier: 'pro' });
     expect(auditRows.map((a) => a.payload.entitlement)).toEqual(['not_reversed']);
+    // The order list says the record stopped half way (the console then offers "Check the record"): M4 gate.
+    const listed = async () => (await h.request<any>('GET', `${BASE}/cn-orders?userId=cn_1`, AS_ADMIN)).body.data.items.find((o: { id: string }) => o.id === 'o_1');
+    expect(await listed()).toMatchObject({ refunded: 'full', reversalPending: true });
 
     const healed = await record('o_1');
     expect(healed.body.data).toEqual({ status: 'already_recorded', orderId: 'o_1', entitlement: 'pass_ended' });
+    // Finished: the flag is gone (absent, never false).
+    expect(await listed()).toMatchObject({ refunded: 'full' });
+    expect('reversalPending' in (await listed())).toBe(false);
     expect(await planRow()).toMatchObject({ tier: 'free', status: 'canceled' });
     expect((await refundRows())[0]).toMatchObject({ entitlementReversed: true });
     expect(auditRows.map((a) => [a.payload.entitlement, a.payload.completesEarlierRecord ?? false])).toEqual([

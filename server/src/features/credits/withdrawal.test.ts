@@ -579,6 +579,8 @@ describe('POST /credits/withdrawal (confirm)', () => {
     const failed = await post(CONFIRM);
     expect(failed.status).toBe(502);
     expect(failed.body.code).toBe('payment_provider_error');
+    // The answer names the provider and nothing of the failure's own text (it is logged).
+    expect(failed.body.details).toEqual({ provider: 'stripe' });
     expect(writes()).toEqual(['subscriptions.cancel', 'refunds.create']);
     expect(sendEmail).not.toHaveBeenCalled();
     // The subscription is cancelled at Stripe by now: the cached plan is dropped although the call failed.
@@ -605,6 +607,73 @@ describe('POST /credits/withdrawal (confirm)', () => {
     expect(invalidated).toEqual(['u_1']);
     // A final answer, not a failure to finish later: no instant is kept.
     expect(await claims()).toEqual([]);
+  });
+
+  // M4 cross-review. "Already refunded" is the one refusal after which nothing more can go back. Any other request
+  // Stripe rejects is a refund that was never made: the buyer has no plan and no refund, so the instant is kept.
+  it('a refund Stripe refuses for another reason after the cancel keeps the instant: 502, the purchase stays listed at the quoted amount, and sent again it finishes', async () => {
+    await seedBuyer({ waiver: true });
+    stripe.refunds.create.mockRejectedValueOnce(stripeError({ type: 'StripeInvalidRequestError', code: 'parameter_unknown', message: "Received unknown parameter: foo on account 'acct_1EXAMPLE'" }));
+    const failed = await post(CONFIRM);
+    expect(failed.status).toBe(502);
+    expect(failed.body.code).toBe('payment_provider_error');
+    expect(failed.body.details).toEqual({ provider: 'stripe' });
+    expect(JSON.stringify(failed.body)).not.toMatch(/acct_|parameter/);
+    expect(writes()).toEqual(['subscriptions.cancel', 'refunds.create']);
+    expect(invalidated).toEqual(['u_1']);
+    // The declaration is the row staff can find (carry-over "declared and not completed").
+    expect(await claims()).toEqual([DECLARED]);
+    expect(((await db.rACreditLedger.findMany({})) as Obj[])[0]).toMatchObject({ userId: 'u_1', refType: 'stripe_withdrawal_declared', refId: 'withdraw-declared:in_1', settledAt: at(5) });
+    expect(sendEmail).not.toHaveBeenCalled();
+
+    // A day later the page still lists it at the amount of the first request (25 unused days, not 24).
+    account.subscriptions.set('sub_1', { ...account.subscriptions.get('sub_1'), status: 'canceled' });
+    clock.now = at(6.5);
+    const listed = (await h.request<any>('GET', WITHDRAWAL, RA)).body.data;
+    expect(listed.quote).toMatchObject({ rule: 'withdrawal_14d_prorata', refundMinor: 2082, prorata: { usedDays: 5, periodDays: 30 } });
+    const retry = await post(CONFIRM);
+    expect(retry.body.data).toEqual({ status: 'withdrawn', refundMinor: 2082, currency: 'USD', accessEnded: true });
+    expect(await claims()).toEqual([DECLARED, DONE]);
+  });
+
+  it('a refusal with no Stripe code at all is not final either', async () => {
+    await seedBuyer({ waiver: true });
+    stripe.refunds.create.mockRejectedValueOnce(stripeError({ type: 'StripeInvalidRequestError', message: 'This PaymentIntent cannot be refunded.' }));
+    const failed = await post(CONFIRM);
+    expect(failed.status).toBe(502);
+    expect(await claims()).toEqual([DECLARED]);
+  });
+
+  it('a purchase whose payment cannot be resolved cancels nothing: 409 before the subscription is touched', async () => {
+    await seedBuyer({ waiver: true });
+    // The invoice is listed as paid, and no paid payment can be found for it.
+    account.payments.set('in_1', []);
+    const res = await post(CONFIRM);
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('withdrawal_not_available');
+    // Nothing happened, so it is not the "ended and refused" answer.
+    expect(res.body.details?.reason).toBeUndefined();
+    expect(writes()).toEqual([]);
+    expect(stripe.subscriptions.cancel).not.toHaveBeenCalled();
+    expect(invalidated).toEqual([]);
+    expect(await claims()).toEqual([]);
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('a failure while reading never puts the provider\'s or the database\'s own text into the answer', async () => {
+    await seedBuyer({ waiver: true });
+    stripe.invoices.list.mockRejectedValueOnce(stripeError({ type: 'StripeAuthenticationError', message: 'Invalid API Key provided: sk_live_********************abcd' }));
+    const read = await h.request<any>('GET', WITHDRAWAL, RA);
+    expect(read.status).toBe(502);
+    expect(read.body.details).toEqual({ provider: 'stripe' });
+    // A database read inside the same block (the completion claim) fails with a Prisma text.
+    const prismaText = "\nInvalid `prisma.rACreditLedger.findUnique()` invocation in\n/var/task/server/src/platform/billing/stripeRefunds.ts:1110:44\n\nCan't reach database server at `ep-internal-host.neon.tech:5432`";
+    const findUnique = vi.spyOn(db.rACreditLedger, 'findUnique').mockRejectedValue(new Error(prismaText));
+    const failed = await h.request<any>('GET', WITHDRAWAL, RA);
+    findUnique.mockRestore();
+    expect(failed.status).toBe(502);
+    expect(failed.body.details).toEqual({ provider: 'stripe' });
+    expect(JSON.stringify([read.body, failed.body])).not.toMatch(/sk_live|neon\.tech|var\/task|prisma/);
   });
 });
 
@@ -1116,6 +1185,8 @@ describe('public cancel link: POST /confirm with withdraw', () => {
     const failed = await confirm({ token, withdraw: true });
     expect(failed.status).toBe(502);
     expect(failed.body.code).toBe('payment_provider_error');
+    // A public route: the answer never carries the failure's own text.
+    expect(failed.body.details).toEqual({ provider: 'stripe' });
     expect(await linkUsed()).toBe(false);
     expect(sendEmail).not.toHaveBeenCalled();
 
@@ -1151,6 +1222,35 @@ describe('public cancel link: POST /confirm with withdraw', () => {
     expect(writes()).toEqual(['subscriptions.cancel', 'refunds.create']);
     expect(cancel).not.toHaveBeenCalled();
     expect(invalidated).toEqual(['u_1']);
+  });
+
+  it('a refund Stripe refuses for another reason after the cancel: 502, the link stays usable, the instant is kept, and no period-end cancel is run on top', async () => {
+    await seedBuyer({ waiver: true });
+    const token = await requestLink();
+    stripe.refunds.create.mockRejectedValueOnce(stripeError({ type: 'StripeInvalidRequestError', code: 'parameter_unknown', message: 'Received unknown parameter: foo' }));
+    const failed = await confirm({ token, withdraw: true });
+    expect(failed.status).toBe(502);
+    expect(failed.body).toMatchObject({ code: 'payment_provider_error', details: { provider: 'stripe' } });
+    expect(failed.body.details.message).toBeUndefined();
+    expect(await linkUsed()).toBe(false);
+    expect(cancel).not.toHaveBeenCalled();
+    expect(await claims()).toContain(DECLARED);
+    // The same link finishes it.
+    account.subscriptions.set('sub_1', { ...account.subscriptions.get('sub_1'), status: 'canceled' });
+    const retry = await confirm({ token, withdraw: true });
+    expect(retry.body.data.withdrawal).toEqual({ status: 'withdrawn', refundMinor: 2082, currency: 'USD' });
+  });
+
+  it('a plan whose payment cannot be resolved is not withdrawn and not ended: the link cancels at the end of the paid period instead, and says so', async () => {
+    await seedBuyer({ waiver: true });
+    const token = await requestLink();
+    account.payments.set('in_1', []);
+    const res = await confirm({ token, withdraw: true });
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ status: 'cancelled', withdrawal: { status: 'not_available', refundMinor: null, currency: null } });
+    // Nothing was ended at once and nothing was refunded.
+    expect(writes()).toEqual([]);
+    expect(cancel).toHaveBeenCalledTimes(1);
   });
 
   it('withdraws from the plan, never from a pack bought alongside', async () => {

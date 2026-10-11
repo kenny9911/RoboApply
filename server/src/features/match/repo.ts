@@ -92,19 +92,13 @@ export interface MatchRepo {
    * an earlier text of the posting is replaced. Answers whether this call
    * wrote it.
    *
-   * Optional so a repository that has no job table to write to (an in-memory
-   * one) still satisfies the interface: the caller then stores nothing, and
-   * every score of that posting copies its own lines.
+   * Optional so a caller can hand the service a repository that stores no
+   * list (the scorer suite of the harness does, so every score it records is
+   * a first score): the caller then stores nothing, and every score of that
+   * posting copies its own lines. The Prisma repository and the in-memory one
+   * of testkit.ts both implement it.
    */
   saveJobRequirements?(jobId: string, doc: StoredRequirementsDoc): Promise<boolean>;
-  /**
-   * @deprecated Never called. The fit of a resume version is read through
-   * `getVariantFit`; `RAResumeVariant.matchScoreCached` was a frozen copy of
-   * it outside the fit contract and is no longer written (nothing reads it
-   * since the M2 gate). The member is still declared only because the
-   * in-memory repository of testkit.ts implements it; it goes when that does.
-   */
-  updateVariantCachedScore?(variantId: string, score: number): Promise<void>;
   getKeywords(jobId: string): Promise<KeywordInput[] | null>;
   /** Users of a brand active since `since`, most recent first. */
   activeUsers(brandId: string, since: Date, limit: number): Promise<string[]>;
@@ -373,9 +367,11 @@ export function createPrismaMatchRepo(): MatchRepo {
       const out: KeywordInput[] = [];
       for (const k of row.keywords) {
         if (!k || typeof k !== 'object' || Array.isArray(k)) continue;
-        const { keyword, importance } = k as { keyword?: unknown; importance?: unknown };
+        const { keyword, importance, skillId } = k as { keyword?: unknown; importance?: unknown; skillId?: unknown };
         if (typeof keyword !== 'string') continue;
-        out.push({ keyword, importance: importance === 'high' || importance === 'low' ? importance : 'medium' });
+        // Enrichment v3 stores the canonical skill with each keyword (jobs/enrich/keywords.ts); a row written before has none.
+        const id = typeof skillId === 'string' && skillId.trim() ? skillId.trim() : null;
+        out.push({ keyword, importance: importance === 'high' || importance === 'low' ? importance : 'medium', ...(id ? { skillId: id } : {}) });
       }
       return out;
     },

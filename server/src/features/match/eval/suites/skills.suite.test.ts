@@ -256,12 +256,28 @@ describe('the gate on the committed pairs', () => {
     expect(findGate('skills', 'precision_not_shown')!.rule).toEqual({ kind: 'min', threshold: 0.95 });
   });
 
-  it('precision of "Not shown" is at or above 0.95, no skill is listed twice and no soft skill is listed', async () => {
+  it('ON THE COMMITTED SEED (the vocabulary production loads): precision of "Not shown" is at or above 0.95, no skill is listed twice and no soft skill is listed', async () => {
     const m = byMetric(await run(ctx()));
     const gate = findGate('skills', 'precision_not_shown')!;
     expect(compareWithGate(gate, { value: m.precision_not_shown!.value }).status, m.precision_not_shown!.note).toBe('pass');
     expect(m.precision_not_shown).toMatchObject({ market: 'all', labels: 'authored' });
-    expect(m.precision_not_shown!.n).toBeGreaterThanOrEqual(150);
+    // The gated value is the product's: it is the value the suite's own `comparePairs` gives on the seed alone
+    // (M4 cross-review: the gate used to be read on the seed plus 68 fixture skills the product does not load).
+    const { setVocabularyForTests } = await import('../../../skills/index.js');
+    const seams = await import('../../keywordRows.js');
+    const seedVocabulary = buildVocabulary(fixtures.seedRecords as never, { droppedKeys: fixtures.droppedKeys });
+    setVocabularyForTests(seedVocabulary as never);
+    let onSeed: ReturnType<typeof scoreState>;
+    try {
+      onSeed = scoreState(comparePairs(pairs, { buildKeywordRows: seams.buildKeywordRows as never, normalizeText: seams.normalizeText }, seedVocabulary, { withIds: true }).comparisons, 'not_shown');
+    } finally {
+      setVocabularyForTests(null);
+    }
+    expect(m.precision_not_shown!.value).toBe(onSeed.precision);
+    expect(m.precision_not_shown!.n).toBe(onSeed.predicted);
+    expect(m.precision_not_shown!.n).toBeGreaterThanOrEqual(100);
+    expect(m.precision_not_shown!.note).toContain(`on the committed seed (${fixtures.seedRecords.length} skills: the vocabulary production loads)`);
+    expect(fixtures.records.length).toBeGreaterThan(fixtures.seedRecords.length);
     expect(m.duplicate_items!.value, m.duplicate_items!.note).toBe(0);
     expect(m.soft_items_listed!.value, m.soft_items_listed!.note).toBe(0);
     // The other values are reported; none of them is invented when nothing was predicted.
@@ -271,6 +287,57 @@ describe('the gate on the committed pairs', () => {
     }
     // The note names every miss with the pair and the reason, so a miss can be read without the fixture.
     expect(m.precision_not_shown!.note).toMatch(/100 pairs, \d+ labelled skills; \d+ of \d+ "not shown" answers are right; by language: en /);
+  });
+
+  it('the run on the extended fixture vocabulary is reported as information under its own names, never as the gate', async () => {
+    const m = byMetric(await run(ctx()));
+    for (const metric of ['precision_not_shown_extended_vocabulary', 'precision_not_shown_extended_vocabulary_without_ids', 'unlisted_items_extended_vocabulary']) {
+      expect(typeof m[metric]!.value, metric).toBe('number');
+      expect(findGate('skills', metric), metric).toBeNull();
+      expect(m[metric]!.note, metric).toMatch(/^information: /);
+    }
+    expect(m.precision_not_shown_extended_vocabulary!.note).toContain('which only this suite loads');
+    // With the pairs' skills in the vocabulary the check answers for nearly every labelled skill; on the seed it
+    // leaves the ones the product does not hold yet unlisted (neither claimed nor denied).
+    expect(m.precision_not_shown_extended_vocabulary!.n).toBeGreaterThan(m.precision_not_shown!.n!);
+    expect(m.unlisted_items!.value!).toBeGreaterThan(m.unlisted_items_extended_vocabulary!.value!);
+    expect(m.precision_not_shown_extended_vocabulary!.value!).toBeGreaterThanOrEqual(0.95);
+  });
+
+  it('a posting enrichment v3 has not written yet (no ids) is measured on the seed, not gated, and its note says when it is under 0.95', async () => {
+    const m = byMetric(await run(ctx()));
+    const legacy = m.precision_not_shown_without_ids!;
+    expect(findGate('skills', 'precision_not_shown_without_ids')).toBeNull();
+    expect(legacy.note).toContain('on the committed seed');
+    expect(legacy.note).toContain('Not gated.');
+    // D3: a value under the strategy's 95% is said, in words, on the row itself.
+    expect(legacy.note!.includes('UNDER the 0.95')).toBe(legacy.value! < 0.95);
+  });
+
+  it('on the seed a row enrichment v3 wrote never answers "not shown" for a skill the vocabulary does not hold', async () => {
+    // The 11 wrong answers the cross-review traced to zero-id rows: such a row is a mapped row (`via: 'none'`).
+    const { setVocabularyForTests } = await import('../../../skills/index.js');
+    const seams = await import('../../keywordRows.js');
+    const seedVocabulary = buildVocabulary(fixtures.seedRecords as never, { droppedKeys: fixtures.droppedKeys });
+    setVocabularyForTests(seedVocabulary as never);
+    try {
+      const got = comparePairs(pairs, { buildKeywordRows: seams.buildKeywordRows as never, normalizeText: seams.normalizeText }, seedVocabulary, { withIds: true });
+      const unknown = got.comparisons.filter((x) => {
+        const id = seedVocabulary.idOf(x.name);
+        return !(id && seedVocabulary.reviewed(id));
+      });
+      expect(unknown.length).toBeGreaterThan(50);
+      for (const row of unknown) expect(row.predicted, `${row.pairId} ${row.name}`).not.toBe('not_shown');
+      // And a posting none of whose skills the seed holds has every entry marked `via: 'none'` and no id.
+      const zeroId = pairs.map((p) => postingSkillRow(p.posting, seedVocabulary, { withIds: true })).filter((row) => row.skillsDetail.every((d) => !d.skillId));
+      expect(zeroId.length).toBeGreaterThan(0);
+      for (const row of zeroId) {
+        expect(row.skillIds).toEqual([]);
+        expect(row.skillsDetail.every((d) => d.via === 'none')).toBe(true);
+      }
+    } finally {
+      setVocabularyForTests(null);
+    }
   });
 
   it('holds for each market on its own, and says so with the market', async () => {

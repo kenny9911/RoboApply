@@ -1,3 +1,7 @@
 {
-  "auth": {}
+  "auth": {
+    "accountDeleted": {
+      "renewalStopped": "Your paid plan will not renew, and you will not be charged for it again."
+    }
+  }
 }

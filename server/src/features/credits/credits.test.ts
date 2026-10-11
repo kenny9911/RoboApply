@@ -1243,6 +1243,25 @@ describe('admin: refund quote', () => {
       expect((await quote()).decision).toMatchObject({ eligible: true, rule: 'first_purchase_7d', amountMinor: 2499, prorata: null, endsAccess: false });
     });
 
+    it('the waiver is the box of THIS purchase (its checkout stamp), as the buyer\'s own quote reads it', async () => {
+      // M4 cross-review: a waiver record of another checkout six hours earlier lies inside the 25-hour window.
+      await db.seekerConsentRecord.create({ data: { seekerProfileId: 'sp_1', consentType: 'withdrawal_waiver', granted: true, createdAt: new Date(NOW.getTime() - 5 * 86_400_000 - 6 * 3_600_000) } });
+      const stamped = (box: 'yes' | 'no') => invoice(5, { parent: { subscription_details: { subscription: 'sub_1', metadata: { planKey: 'pro_monthly', withdrawalWaiver: box } } } });
+      stripe.invoices.list.mockResolvedValueOnce({ data: [stamped('no')] });
+      const unwaived = await quote();
+      expect(unwaived.facts.withdrawalWaiver).toBe(false);
+      expect(unwaived.decision).toMatchObject({ rule: 'withdrawal_14d', amountMinor: 2499, prorata: null });
+      // With no stamp on the invoice the window is the fallback, as before.
+      stripe.invoices.list.mockResolvedValueOnce({ data: [invoice(5)] });
+      expect((await quote()).decision).toMatchObject({ rule: 'withdrawal_14d_prorata', amountMinor: 2082 });
+      // A stamped "yes" needs no record at all.
+      await db.seekerConsentRecord.deleteMany({});
+      stripe.invoices.list.mockResolvedValueOnce({ data: [stamped('yes')] });
+      const waived = await quote();
+      expect(waived.facts.withdrawalWaiver).toBe(true);
+      expect(waived.decision).toMatchObject({ rule: 'withdrawal_14d_prorata', amountMinor: 2082 });
+    });
+
     it('an invoice without a line: the subscription is read, and bounds of a later period never give a pro-rata amount', async () => {
       await waiver(5);
       // Its own period: read from the subscription.

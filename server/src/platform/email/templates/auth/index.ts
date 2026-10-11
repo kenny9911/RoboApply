@@ -135,21 +135,26 @@ export const otherBrandNoticeEmail = defineEmailTemplate<{ otherOrigin: string }
   },
 });
 
-export const accountDeletedEmail = defineEmailTemplate<{ days: number }>({
+/**
+ * `renewalStopped`: the deletion request turned the auto-renewal of a paid plan
+ * off (accountCloseBilling.ts answered `stopped`). The mail then says the plan
+ * will not renew: it stands in for the "plan cancelled" mail, whose "your paid
+ * features stay on until …" would be false for a closed account.
+ */
+export const accountDeletedEmail = defineEmailTemplate<{ days: number; renewalStopped?: boolean }>({
   key: AUTH_EMAIL_KEYS.accountDeleted,
   category: 'transactional',
-  render: ({ t, params }) => ({
-    subject: t('auth.accountDeleted.subject'),
-    bodyHtml:
-      heading(t('auth.accountDeleted.heading')) +
-      paragraph(t('auth.accountDeleted.body')) +
-      paragraph(t('auth.accountDeleted.when', { days: params.days })) +
-      paragraph(t('auth.accountDeleted.notYou')),
-    bodyText: [
-      t('auth.accountDeleted.heading'),
+  render: ({ t, params }) => {
+    const lines = [
       t('auth.accountDeleted.body'),
+      ...(params.renewalStopped ? [t('auth.accountDeleted.renewalStopped')] : []),
       t('auth.accountDeleted.when', { days: params.days }),
       t('auth.accountDeleted.notYou'),
-    ].join('\n\n'),
-  }),
+    ];
+    return {
+      subject: t('auth.accountDeleted.subject'),
+      bodyHtml: heading(t('auth.accountDeleted.heading')) + lines.map((line) => paragraph(line)).join(''),
+      bodyText: [t('auth.accountDeleted.heading'), ...lines].join('\n\n'),
+    };
+  },
 });

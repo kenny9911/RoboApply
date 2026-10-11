@@ -109,9 +109,9 @@ import {
 } from './config.js';
 import { buildMatchUser, postingText, toMatchJob, userNames, type MatchJobRecord } from './context.js';
 import { guardEvidence } from './evidence.js';
-import { ADHOC_POSTING_ID, aiCoverage, assembleFit, fitToListResult, fitToView, storedFitStatus, tierWithinCoverage, type Fit, type FitFunctions, type FitProse, type GetFitOptions, type GetFitsOptions } from './fit.js';
-import { currentJobHash, jobContentHash as hashOfPostingText, storedJobHash } from './jobHash.js';
-import { buildKeywordRows } from './keywordRows.js';
+import { ADHOC_POSTING_ID, aiFitThin, assembleFit, fitToListResult, fitToView, storedFitStatus, tierWhenThin, type Fit, type FitFunctions, type FitProse, type GetFitOptions, type GetFitsOptions } from './fit.js';
+import { currentJobHash, requirementListHash, storedJobHash } from './jobHash.js';
+import { buildKeywordRows, vocabularyAsOf } from './keywordRows.js';
 import { stripResumeForScoring } from './pii.js';
 import { runMatchPreparers } from './prepare.js';
 import { defaultScorerRouteAllowed } from './scorerRoute.js';
@@ -461,7 +461,8 @@ export interface MatchService {
   /** The deterministic quick estimate only, over rows the caller loaded (precompute ranking, extension pages). */
   preScoreJobs(userId: string, jobs: MatchJobRecord[]): Promise<EstimateResult[]>;
   fitAnalysis(userId: string, jobId: string, idempotencyKey: string, options?: { resumeVariantId?: string | null; locale?: string }): Promise<FitAnalysisCard>;
-  keywordCheck(userId: string, jobId: string, options?: { resumeVariantId?: string | null }): Promise<KeywordCheckResponse>;
+  /** `locale`: the UI language of the request; skill labels are written in it (absent: the posting's language, else the market's). */
+  keywordCheck(userId: string, jobId: string, options?: { resumeVariantId?: string | null; locale?: string }): Promise<KeywordCheckResponse>;
   /** The user's side of the pre-score (precompute, extension). */
   userContext(userId: string): Promise<{ user: MatchUser; resume: ResumeRecord | null }>;
   /** Weights, tiers and the configured starting priors (the market's data-derived priors are applied inside the fit). */
@@ -477,6 +478,12 @@ interface FitCallOptions {
   variantId?: string | null;
   mode: ScoreMode;
   locale: string;
+  /**
+   * The UI language the caller named, when it named one: skill labels of the fit are written in it
+   * (`MatchUser.locale`). Null when the caller gave none: labels then follow the posting's language, else the
+   * market's (`labelLocaleFor`), never the 'en' that `locale` defaults to for the prose.
+   */
+  labelLocale?: string | null;
   force?: boolean;
   regenerateExplanation?: boolean;
   onAiFailure?: 'fallback' | 'throw';
@@ -539,7 +546,7 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
     return scorers[other] ? { ...pin, prompt: other, rubric: FIT_RUBRIC_BY_PROMPT[other] } : pin;
   }
 
-  async function userContext(userId: string, variantId?: string | null): Promise<{ user: MatchUser; resume: ResumeRecord | null; names: string[] }> {
+  async function userContext(userId: string, variantId?: string | null, labelLocale?: string | null): Promise<{ user: MatchUser; resume: ResumeRecord | null; names: string[] }> {
     // Anything the synchronous estimate needs loaded first (prepare.ts); nothing is registered in this phase.
     // A loader that fails must not take every list and every job page down with it: the read goes on with what is
     // loaded, and the next read runs the loader again.
@@ -551,7 +558,8 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
     const market = brandOf().market;
     const [inputs, resume] = await Promise.all([repo.getUserInputs(userId, market), repo.getResume(userId, variantId)]);
     if (variantId && !resume) throw new HttpError('not_found', 'Resume not found.', { reason: MATCH_ERROR_CODES.variantNotFound });
-    const full = { ...inputs, resumeParsed: resume?.parsedData ?? null };
+    // The request's UI language, when the caller named one: the language skill labels are read in (MKT-4E request 3).
+    const full = { ...inputs, resumeParsed: resume?.parsedData ?? null, ...(labelLocale?.trim() ? { locale: labelLocale.trim() } : {}) };
     const user: MatchUser = { ...buildMatchUser(full, now()), resumeTextNorm: resume ? normalizeText(resume.resumeMarkdown) : null, hasResume: !!resume };
     return { user, resume, names: userNames(full) };
   }
@@ -611,7 +619,7 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
   async function fitOne(userId: string, jobId: string, o: FitCallOptions): Promise<Fit> {
     const brand = brandOf();
     const jobRow = await loadVisibleJob(userId, jobId);
-    const { user, resume, names } = await userContext(userId, o.variantId);
+    const { user, resume, names } = await userContext(userId, o.variantId, o.labelLocale);
     const cfg = await fitConfig();
     const pin = await scorerPin(brand);
     const job = toMatchJob(jobRow);
@@ -685,9 +693,11 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
 
     // ── Model call ──
     const posting = postingText(jobRow);
-    // The hash of the posting as this row reads, computed from its own text and skills: what a stored requirement
-    // list is for. (Not the stored `RAJob.contentHash`: the index writes that a moment after enrichment wrote a list.)
-    const textHash = hashOfPostingText(jobRow);
+    // The key of a stored requirement list: the hash of the posting's title and requirement text as this row reads,
+    // WITHOUT its skills, which is the key enrichment v3 writes its lists under (`requirementListHash`). Not the fit's
+    // `jobContentHash` and not the stored `RAJob.contentHash`: both read the skills, which ingest rewrites at every
+    // refresh while the text (and so the lines copied from it) stays the same.
+    const textHash = requirementListHash(jobRow);
     // The facts, as the AI score counts them (met / stated), not the estimate's prior. Never judged by the model.
     const logistics = logisticsDimension(user, job, cfg.weights);
     const jobFacts = {
@@ -797,8 +807,9 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
     // Scorer v4: a total within 3 points of a tier edge is stored with the tier on the estimate's side of it (I5). The
     // score is stored as computed. Scorer v3 (the rollback) keeps its rule: a new result takes its own tier.
     const tierRule = pin.prompt === 'scorer_v4' ? borderlineTier(total, estimated.score, cfg.tiers) : { tier: tierFor(total, cfg.tiers), edge: null };
-    // I4: a result that could judge less than 60% of the rubric weight is never stored Great (the read holds the same rule).
-    const tier = tierWithinCoverage(tierRule.tier, aiCoverage(scored.dimensions));
+    // I4: a result that could judge less than 60% of the rubric weight, or that judged no skill line for a posting
+    // that states no level, is never stored Great (`aiFitThin`; the read holds the same rule).
+    const tier = tierWhenThin(tierRule.tier, aiFitThin(scored.dimensions, job));
 
     const reason = !existing
       ? 'first_score'
@@ -883,7 +894,10 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
     if (unread.length) for (const r of await repo.getFitJobs(unread)) byId.set(r.id, r);
     const visible = ids.map((id) => byId.get(id)).filter((r): r is MatchJobRecord => !!r && visibleTo(r, userId, brand.market, deps.env));
     if (!visible.length) return out;
-    const { user, resume } = opts.context ?? (await userContext(userId));
+    const loaded = opts.context ?? (await userContext(userId, null, opts.locale));
+    const resume = loaded.resume;
+    // A context the caller loaded carries no request language: the one named here is the labels' language.
+    const user: MatchUser = opts.context && opts.locale?.trim() ? { ...loaded.user, locale: opts.locale.trim() } : loaded.user;
     const cfg = await fitConfig();
     const pin = await scorerPin(brand);
 
@@ -939,6 +953,7 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
     variantId,
     mode: opts?.allowModelCall === true ? (opts.mode ?? 'on_demand') : 'cache_only',
     locale: opts?.locale ?? 'en',
+    labelLocale: opts?.locale ?? null,
   });
 
   async function scoreJob(userId: string, jobId: string, options: ScoreOptions = {}): Promise<MatchFitView> {
@@ -947,6 +962,7 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
       variantId: options.resumeVariantId ?? null,
       mode: options.mode ?? 'on_demand',
       locale,
+      labelLocale: options.locale ?? null,
       force: options.force,
       regenerateExplanation: options.regenerateExplanation,
       onAiFailure: options.onAiFailure,
@@ -1005,7 +1021,7 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
     options: { resumeVariantId?: string | null; locale?: string } = {},
   ): Promise<FitAnalysisCard> {
     const jobRow = await loadVisibleJob(userId, jobId);
-    const { user } = await userContext(userId, options.resumeVariantId);
+    const { user } = await userContext(userId, options.resumeVariantId, options.locale);
     const job = toMatchJob(jobRow);
     const base = { resumeVariantId: options.resumeVariantId, locale: options.locale };
     // A fresh AI score (or a reason no model may run) answers without a credit.
@@ -1030,16 +1046,18 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
     return toCard(view, user, job, true);
   }
 
-  async function keywordCheck(userId: string, jobId: string, options: { resumeVariantId?: string | null } = {}): Promise<KeywordCheckResponse> {
+  async function keywordCheck(userId: string, jobId: string, options: { resumeVariantId?: string | null; locale?: string } = {}): Promise<KeywordCheckResponse> {
     const jobRow = await loadVisibleJob(userId, jobId);
-    const [{ user, resume }, keywords] = await Promise.all([userContext(userId, options.resumeVariantId), repo.getKeywords(jobId)]);
+    const [{ user, resume }, keywords] = await Promise.all([userContext(userId, options.resumeVariantId, options.locale), repo.getKeywords(jobId)]);
     const rows = buildKeywordRows({
       job: { ...toMatchJob(jobRow), minYears: jobRow.minYears },
       user,
       resumeText: resume?.resumeMarkdown ?? '',
       keywords,
+      locale: options.locale,
     });
-    return { jobId, resumeVariantId: resume?.id ?? null, rows, asOf: now().toISOString() };
+    // Which vocabulary answered (the committed seed, or the reviewed table as read at that time): MKT-4E request 2.
+    return { jobId, resumeVariantId: resume?.id ?? null, rows, asOf: now().toISOString(), vocabularyAsOf: vocabularyAsOf() };
   }
 
   return {

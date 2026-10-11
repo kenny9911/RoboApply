@@ -602,10 +602,18 @@ export async function createPortalSession(userId: string, brand: ProductBrand, o
   }
 }
 
-/** One-click cancel (sends the confirmation email when auto-renewal was turned off). */
+/**
+ * One-click cancel (sends the confirmation email when auto-renewal was turned off).
+ *
+ * `confirmationMail: false` turns the renewal off and sends nothing. Only for a
+ * caller that sends its own mail about what happened: closing an account
+ * (accountCloseBilling.ts), where "Your paid features stay on until {date}" would
+ * be false for a person who can no longer sign in.
+ */
 export async function cancelPlan(
   userId: string,
   input: { reason?: string; note?: string; source: 'in_app' | 'public_link' | 'legacy_route' },
+  opts: { confirmationMail?: boolean } = {},
 ): Promise<CancelOutcome & { account: BillingAccount }> {
   const account = await requireAccount(userId);
   let outcome: CancelOutcome;
@@ -615,7 +623,7 @@ export async function cancelPlan(
     return fromBillingError(err);
   }
   deps.invalidate(userId);
-  if (outcome.changed) await sendCancelConfirmation(account, outcome);
+  if (outcome.changed && opts.confirmationMail !== false) await sendCancelConfirmation(account, outcome);
   return { ...outcome, account };
 }
 

@@ -7,7 +7,8 @@
 //
 //   POST /query                 60/min; a refresh (no cursor) also 20 per 10 min
 //                               `relevance` (free text to order by, ≤ 240 characters, never a filter) is
-//                               validated by the body schema and passed to the service as it is
+//                               validated by the body schema and passed to the service as it is; under
+//                               Recommended and Best fit it joins the query text of the hybrid legs (MKT-4F)
 //   GET  /counts
 //   POST /jobs/:id/hide         → { proposedFilterDiff, editor }
 //   POST /jobs/:id/unhide       → 204

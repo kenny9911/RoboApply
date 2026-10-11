@@ -7,7 +7,7 @@ import { DEFAULT_MATCH_TIERS, DEFAULT_MATCH_WEIGHTS } from './contract.js';
 import { calibrationMinPairs, currentScorerPin, getMatchTiers, getMatchWeights, precomputePerUserDay, scoreDailyBudget, tierFor } from './config.js';
 import { buildMatchUser, classYearsFromTags, degreeFromText, evidenceRoleIdsOf, levelFromSeekerType, parseMonth, postingText, toMatchJob, userNames, yearsFromRanges } from './context.js';
 import { bestTaxonomyMatch } from '../jobs/taxonomy/index.js';
-import { preScore } from './preScore.js';
+import { carriesSkillIds, preScore } from './preScore.js';
 import { guardEvidence, normalizeForGuard, plainQuote } from './evidence.js';
 import { buildKeywordRows, mentions, normalizeText } from './keywordRows.js';
 import { stripResumeForScoring } from './pii.js';
@@ -161,7 +161,7 @@ describe('toMatchJob', () => {
           { skill: 'TypeScript', kind: 'hard', required: true, skillId: 'typescript' },
           // How the id was found travels with it when enrichment stores it: a guess of the nearest vector is never compared.
           { skill: 'Kubernetes', kind: 'hard', required: true, skillId: 'kubernetes', via: 'embedding' },
-          // No canonical skill was found for this one (enrichment writes null), and a malformed id is no id.
+          // No canonical skill was found for this one (enrichment writes null and `via: 'none'`), and a malformed id is no id.
           { skill: 'Fast-paced environment', kind: 'hard', required: false, skillId: null, via: 'none' },
           { skill: 'Go', kind: 'hard', required: false, skillId: 42 },
         ],
@@ -172,10 +172,17 @@ describe('toMatchJob', () => {
     expect(j.skillsDetail).toEqual([
       { skill: 'TypeScript', kind: 'hard', required: true, skillId: 'typescript' },
       { skill: 'Kubernetes', kind: 'hard', required: true, skillId: 'kubernetes', via: 'embedding' },
-      { skill: 'Fast-paced environment', kind: 'hard', required: false },
+      // `via` is kept without an id: it says enrichment v3 mapped the row (M4 cross-review; preScore.ts `carriesSkillIds`).
+      { skill: 'Fast-paced environment', kind: 'hard', required: false, via: 'none' },
       { skill: 'Go', kind: 'hard', required: false },
     ]);
     expect(j.lang).toBe('zh-TW');
+    // A row in which enrichment v3 found NO skill in the vocabulary is still known to be a mapped row.
+    const unmapped = toMatchJob(jobRecord({ skillIds: [], skills: ['iv therapy'], skillsDetail: [{ skill: 'IV therapy', kind: 'hard', required: true, skillId: null, via: 'none' }] }));
+    expect(unmapped.skillsDetail).toEqual([{ skill: 'IV therapy', kind: 'hard', required: true, via: 'none' }]);
+    expect('skillIds' in unmapped).toBe(false);
+    expect(carriesSkillIds(unmapped)).toBe(true);
+    expect(carriesSkillIds(toMatchJob(jobRecord()))).toBe(false);
   });
 
   it('a row enrichment v3 has not written yet has no ids: nothing is added to it, so it is compared by its strings', () => {
@@ -389,8 +396,12 @@ describe('config', () => {
   });
 
   it('the scorer pin and the calibration minimum', () => {
-    expect(currentScorerPin('roboapply', 'vendor/model-a')).toEqual({ model: 'vendor/model-a', prompt: 'scorer_v3', rubric: 'fit_v3' });
-    expect(currentScorerPin('goapply', null)).toEqual({ model: null, prompt: 'scorer_v3', rubric: 'fit_v3' });
+    // Scorer v4 is the default pin of both markets since MKT-4G (SM-8); `MATCH_SCORER_RUBRIC=fit_v3` is the rollback
+    // (config.test.ts covers the per-market override and the values that are not a rubric).
+    expect(currentScorerPin('roboapply', 'vendor/model-a', {})).toEqual({ model: 'vendor/model-a', prompt: 'scorer_v4', rubric: 'fit_v4' });
+    expect(currentScorerPin('goapply', null, {})).toEqual({ model: null, prompt: 'scorer_v4', rubric: 'fit_v4' });
+    expect(currentScorerPin('roboapply', 'vendor/model-a', { MATCH_SCORER_RUBRIC: 'fit_v3' })).toEqual({ model: 'vendor/model-a', prompt: 'scorer_v3', rubric: 'fit_v3' });
+    expect(currentScorerPin('goapply', null, { MATCH_SCORER_RUBRIC: 'fit_v3' })).toEqual({ model: null, prompt: 'scorer_v3', rubric: 'fit_v3' });
     expect(calibrationMinPairs({})).toBe(500);
     expect(calibrationMinPairs({ MATCH_CALIBRATION_MIN_PAIRS: '50' })).toBe(50);
     for (const bad of ['0', '-3', 'many', '1.5', '']) expect(calibrationMinPairs({ MATCH_CALIBRATION_MIN_PAIRS: bad }), bad).toBe(500);

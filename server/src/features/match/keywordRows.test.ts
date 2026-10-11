@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildVocabulary, resetVocabularyForTests, setVocabularyForTests } from '../skills/index.js';
 import { KEYWORD_QUOTE_MAX, type KeywordItem, type KeywordRow } from './contract.js';
 import { buildKeywordRows, clipQuote, ratioStatus, resumeSentences, vocabularyAsOf, type KeywordInput } from './keywordRows.js';
-import { normalizeText, skillsDimension, splitSkills } from './preScore.js';
+import { carriesSkillIds, normalizeText, skillsDimension, splitSkills } from './preScore.js';
 import { DEFAULT_MATCH_WEIGHTS } from './contract.js';
 import { FIXTURE_SKILLS, matchJob, matchUser, skillRecord } from './testkit.js';
 
@@ -260,6 +260,35 @@ describe('what is not listed: nothing is claimed or denied about it', () => {
     const none = check(posting([]), { skills: [] }).skills;
     expect(none).toMatchObject({ status: 'not_stated', items: [] });
     expect('unchecked' in none).toBe(false);
+  });
+
+  it('a row enrichment v3 wrote in which NO skill is in the vocabulary is still a mapped row: its strings are unchecked, never "not in your resume" (M4 cross-review)', () => {
+    // A nursing posting against a vocabulary of software skills: enrichment tried every string and found none
+    // (`via: 'none'`, no id anywhere, `skillIds` empty). Before, this row could not be told from one enrichment
+    // never wrote, so the string rule answered "Iv therapy: not_shown" for skills nobody has reviewed.
+    const none = (skill: string, required = true) => ({ skill, kind: 'hard', required, skillId: null, via: 'none' });
+    const resume = { skills: [], text: 'Administered intravenous therapy on a 30-bed ward. Basic Life Support certified.' };
+    const mapped = { ...matchJob({ title: 'Registered Nurse', skills: ['iv therapy', 'bls certification'], skillsDetail: [none('IV therapy'), none('BLS certification', false)] }), minYears: null };
+    const { skills } = check(mapped, resume);
+    expect(skills.items).toEqual([]);
+    expect(skills).toMatchObject({ status: 'not_checked', found: null, total: null, unchecked: 2 });
+    // The same two strings beside one mapped skill read the same way (this already held).
+    const withOne = {
+      ...matchJob({
+        title: 'Registered Nurse',
+        skills: ['iv therapy', 'bls certification', 'typescript'],
+        skillsDetail: [none('IV therapy'), none('BLS certification', false), { skill: 'TypeScript', kind: 'hard', required: false, skillId: 'typescript', via: 'alias' }],
+        skillIds: ['typescript'],
+      }),
+      minYears: null,
+    };
+    const beside = check(withOne, resume).skills;
+    expect(beside.items.map((i) => i.term)).toEqual(['TypeScript']);
+    expect(beside.unchecked).toBe(2);
+    // A row enrichment v3 has NOT written (no `via` anywhere) keeps the string rule, as before.
+    const legacy = { ...matchJob({ title: 'Registered Nurse', skills: ['iv therapy', 'bls certification'], skillsDetail: [{ skill: 'IV therapy', kind: 'hard', required: true }, { skill: 'BLS certification', kind: 'hard', required: false }] }), minYears: null };
+    expect(check(legacy, resume).skills.items.map((i) => i.state)).toEqual(['not_shown', 'not_shown']);
+    expect([carriesSkillIds(mapped), carriesSkillIds(withOne), carriesSkillIds(legacy)]).toEqual([true, true, false]);
   });
 
   it('soft skills are never listed, whatever the posting marked them', () => {

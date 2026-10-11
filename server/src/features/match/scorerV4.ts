@@ -89,11 +89,11 @@ import {
   type RequirementCheck,
 } from './contract.js';
 import { MIN_EVIDENCE_CHARS, guardEvidence, normalizeForGuard, plainQuote } from './evidence.js';
-import type { MatchJob, MatchUser } from './preScore.js';
+import { classYearExcluded, type MatchJob, type MatchUser } from './preScore.js';
 
 // ── The anchors (SEARCH_RETRIEVE_MATCH 4.8) ───────────────────────────────
 
-/** Points of a judged requirement line. `not_applicable` has none: the line is left out. */
+/** Points of a judged requirement line. `not_applicable` (the server's own decision, never the model's for a stored line) has none: the line is left out. */
 export const CHECKLIST_POINTS = { met: 1, partly: 0.5, not_shown: 0 } as const;
 /** Weight of a line by its importance (the rule the estimate uses for required and preferred skills). */
 export const IMPORTANCE_WEIGHT = { must: 1, preferred: 0.5 } as const;
@@ -132,7 +132,7 @@ export class ScorerV4ChecklistError extends Error {
  */
 export interface StoredRequirementsDoc {
   v: 1;
-  /** `jobContentHash` of the posting the lines were copied from (computed from the row's own text and skills). */
+  /** The key of the text the lines were copied from: `requirementListHash` (jobHash.ts), the title and requirement text with no skills. */
   contentHash: string;
   /** The model that copied them. */
   model: string;
@@ -148,8 +148,9 @@ export interface StoredRequirementsDoc {
  * posting. Only the four fields of a requirement are read, so a field a later
  * writer adds to an item does not hide the list. An id is listed once.
  *
- * `contentHash` is the hash of the posting as it reads now (`jobContentHash`
- * computed from the row, which is also what enrichment stores with its list).
+ * `contentHash` is the key of the posting's text as it reads now
+ * (`requirementListHash` of the row: no skills), which is also what enrichment
+ * stores with its list.
  * A list of an earlier text is not the posting's checklist any more: the
  * caller lets the model copy the lines again and replaces the stored list.
  *
@@ -298,7 +299,8 @@ export function classYearEligibility(
   job: Pick<MatchJob, 'market' | 'classYears' | 'classYearQuote'>,
 ): { excluded: boolean; text: string | null } | null {
   if (job.market !== 'cn') return null;
-  const excluded = job.classYears.length > 0 && user.classYear !== null && !job.classYears.includes(user.classYear);
+  // The estimate's own rule, not a restatement of it.
+  const excluded = classYearExcluded(user, job);
   return { excluded, text: job.classYearQuote ?? (job.classYears.length ? job.classYears.join(', ') : null) };
 }
 
@@ -405,7 +407,19 @@ export interface ChecklistResult {
 
 type Answer = Pick<RequirementCheck, 'status' | 'evidence'>;
 
-/** One line with its verified status. */
+/**
+ * One line with its verified status.
+ *
+ * `not_applicable` is the SERVER's decision alone (`isNotJudgedRequirement`).
+ * A model's own `not_applicable` only reaches this function for a line of a
+ * STORED list (a copied line it marks so is dropped before, with nothing to
+ * judge), and there it is not taken: enrichment keeps non-requirements out of
+ * a stored list, so a stored line is a requirement for everyone, and a status
+ * nothing verifies must not take it out of the arithmetic. It reads "not
+ * shown", as an unverifiable "met" does. (Measured before this rule: four
+ * stored must-have lines, one met; the other three answered `not_shown` gave
+ * skills 25, answered `not_applicable` gave skills 100.)
+ */
 function judged(item: JobRequirement, answer: Answer, resume: string): RequirementCheck {
   if (isNotJudgedRequirement(item.text)) return { ...item, status: 'not_applicable', evidence: '' };
   if (answer.status === 'met' || answer.status === 'partly') {
@@ -413,7 +427,7 @@ function judged(item: JobRequirement, answer: Answer, resume: string): Requireme
     // A claim nobody can check is not kept: the line reads "not shown", never "met".
     return quote ? { ...item, status: answer.status, evidence: quote } : { ...item, status: 'not_shown', evidence: '' };
   }
-  return { ...item, status: answer.status, evidence: '' };
+  return { ...item, status: 'not_shown', evidence: '' };
 }
 
 function dim(key: MatchDimensionKey, weights: MatchWeights, score: number | null, evidence: MatchEvidence[] = []): MatchDimension {
@@ -451,7 +465,8 @@ export function componentsFromChecklist(out: RAJobMatchScorerV4Output, options: 
 
   if (stored) {
     // The list is the posting's: every person is judged against the same lines. The model only fills status and
-    // evidence; whatever else its entries carry (a kind, an importance, a reworded text) is not read.
+    // evidence; whatever else its entries carry (a kind, an importance, a reworded text) is not read. Nor can it
+    // take a line out: its `not_applicable` reads "not shown" (`judged`).
     const answers = new Map<string, Answer>();
     for (const a of out.requirements) if (a.id && !answers.has(a.id)) answers.set(a.id, a);
     for (const item of stored) {

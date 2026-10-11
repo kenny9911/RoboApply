@@ -115,7 +115,40 @@ describe('the keyword check of the default service says which vocabulary answere
     await runMatchPreparers();
     expect(vocabularyAsOf()).toBe(current().asOf!.toISOString());
     expect(typeof defaultMatchService.keywordCheck).toBe('function');
-    // The default service is the production service with that one field added to the keyword check: nothing else differs.
+    // The default service is the production service itself: `keywordCheck` sets the field (M4 gate), so a service
+    // built directly answers it too.
     expect(Object.keys(defaultMatchService).sort()).toEqual(Object.keys(service()).sort());
+    expect((await service().keywordCheck('u1', 'job1')).vocabularyAsOf).toBe(current().asOf!.toISOString());
+  });
+});
+
+describe('the request language is the language of the skill labels (M4 gate; MKT-4E request 3)', () => {
+  const ML = jobRecord({
+    id: 'ml-job',
+    skills: ['machine learning'],
+    skillsDetail: [{ skill: 'Machine learning', kind: 'hard', required: true, skillId: 'machine_learning' }],
+    skillIds: ['machine_learning'],
+  });
+
+  it('the keyword check labels a reviewed skill in the language asked for; with none, in the posting\'s or the market\'s', async () => {
+    const svc = service([ML]);
+    const term = async (locale?: string) => (await svc.keywordCheck('u1', 'ml-job', locale ? { locale } : {})).rows.find((r) => r.key === 'skills')!.items[0]!.term;
+    const en = current().label('machine_learning', 'en');
+    const zh = current().label('machine_learning', 'zh');
+    expect(zh).not.toBe(en);
+    expect(await term('zh')).toBe(zh);
+    expect(await term('en')).toBe(en);
+    // RoboApply, a posting with no language tag, no language named: the market's (English).
+    expect(await term()).toBe(en);
+  });
+
+  it('the fit of one job names the missing skill in the language asked for; a caller that names none changes nothing', async () => {
+    const svc = service([ML]);
+    const zh = current().label('machine_learning', 'zh');
+    const en = current().label('machine_learning', 'en');
+    expect((await svc.scoreJob('u1', 'ml-job', { locale: 'zh', mode: 'cache_only' })).skills.missing).toEqual([zh]);
+    expect((await svc.scoreJob('u1', 'ml-job', { mode: 'cache_only' })).skills.missing).toEqual([en]);
+    expect((await svc.fits.getFits('u1', ['ml-job'], { locale: 'zh' })).get('ml-job')!.skills.missing).toEqual([zh]);
+    expect((await svc.fits.getFits('u1', ['ml-job'])).get('ml-job')!.skills.missing).toEqual([en]);
   });
 });

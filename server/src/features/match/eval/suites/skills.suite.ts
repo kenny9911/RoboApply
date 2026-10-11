@@ -7,32 +7,51 @@
 // The keyword check (`buildKeywordRows`) runs on every pair of
 // fixtures/skills/pairs.json, and each item it lists is compared with the
 // state a person gave that skill by hand (`shown`, `related`, `not_shown`).
-// The vocabulary is the committed seed (features/skills/seed/skills.seed.json)
-// plus fixtures/skills/vocabulary.extension.json, pinned through the skills
-// test seam for the length of the run and released afterwards.
+//
+// Two vocabularies, each pinned through the skills test seam for the length
+// of its run and released afterwards:
+//   - the PRODUCT's: the committed seed (features/skills/seed/skills.seed.json),
+//     the file production loads (or seeds its table from). The gate is read on
+//     this one: a gate that passes only on skills the product does not hold
+//     says nothing about what users get (M4 cross-review);
+//   - the EXTENDED one: the seed plus fixtures/skills/vocabulary.extension.json
+//     (68 skills written with the labelled pairs, reviewed for the fixture
+//     only, loaded by nothing else). Its rows say what the check does once the
+//     vocabulary covers the pairs' skills. Information, named as such.
 //
 // A posting is built the way enrichment v3 writes it (jobs/enrich/reconcile.ts
 // `reconcileSkills`): ONE `skillsDetail` entry per skill, with the id the
-// vocabulary's exact-alias step gives its strings, shown under the spelling
-// that is the skill's own label when the posting uses it, else the first;
-// `skills` keeps every spelling, lower case; the ids of the hard ones are in
-// `skillIds`; and each skill is one keyword with its id (so the two rows must
-// not repeat each other). Soft skills of the posting are there too and must
-// not be listed.
+// vocabulary's exact-alias step gives its strings (`via: 'alias'`, or
+// `via: 'none'` and no id for a string it does not know), shown under the
+// spelling that is the skill's own label when the posting uses it, else the
+// first; `skills` keeps every spelling, lower case; the ids of the hard ones
+// are in `skillIds`; and each skill is one keyword with its id (so the two
+// rows must not repeat each other). Soft skills of the posting are there too
+// and must not be listed.
 //
-// Values (shares are 0 to 1):
+// Values (shares are 0 to 1). On the product's vocabulary:
 //   precision_not_shown        GATED: of the items the check calls not shown,
 //                              the share a person also calls not shown
 //   precision_shown, precision_related, recall_shown, recall_related,
 //   recall_not_shown           information
-//   duplicate_items            items that repeat a skill inside one check (must be 0)
+//   duplicate_items            GATED: items that repeat a skill inside one
+//                              check (must be 0; counted on both vocabularies)
+//   soft_items_listed          GATED: soft skills that became an item (must be
+//                              0; counted on both vocabularies)
 //   unlisted_items             labelled skills the check lists nothing for
-//                              (neither claimed nor denied)
-//   soft_items_listed          soft skills that became an item (must be 0)
+//                              (neither claimed nor denied): on the seed this
+//                              is every skill the product's vocabulary does
+//                              not hold yet
 //   precision_not_shown_without_ids
 //                              the same pairs with the ids taken off the
 //                              posting: the path a posting takes until it is
-//                              re-enriched. Information, not gated.
+//                              re-enriched. Information, not gated; its note
+//                              says when it is under the 0.95 the strategy
+//                              asks.
+// On the extended vocabulary (information):
+//   precision_not_shown_extended_vocabulary,
+//   precision_not_shown_extended_vocabulary_without_ids,
+//   unlisted_items_extended_vocabulary
 //
 // Labels: `authored`. The states were written by hand by the engineer of the
 // check, not graded by a recruiter, and the report says so.
@@ -358,7 +377,16 @@ function bySubset(comparisons: readonly Comparison[]): string {
   }).join(', ');
 }
 
-export function loadSkillsFixtures(ctx: Pick<SuiteContext, 'fixturesDir' | 'repoRoot'>): { pairs: SkillsPair[]; records: unknown[]; droppedKeys: string[] } | null {
+export interface SkillsFixtures {
+  pairs: SkillsPair[];
+  /** The committed seed: the vocabulary production loads. */
+  seedRecords: unknown[];
+  /** The seed plus the fixture extension (loaded by this suite only). */
+  records: unknown[];
+  droppedKeys: string[];
+}
+
+export function loadSkillsFixtures(ctx: Pick<SuiteContext, 'fixturesDir' | 'repoRoot'>): SkillsFixtures | null {
   const pairsFile = path.join(ctx.fixturesDir, SKILLS_FIXTURE_DIR, PAIRS_FILE);
   const extensionFile = path.join(ctx.fixturesDir, SKILLS_FIXTURE_DIR, EXTENSION_FILE);
   const seedFile = path.join(ctx.repoRoot, SEED_FILE);
@@ -369,10 +397,14 @@ export function loadSkillsFixtures(ctx: Pick<SuiteContext, 'fixturesDir' | 'repo
   if (!Array.isArray(seed.skills)) throw new Error(`${SEED_FILE}: expected { "skills": [...] }`);
   return {
     pairs: readPairs(JSON.parse(readFileSync(pairsFile, 'utf8'))),
+    seedRecords: [...seed.skills],
     records: [...seed.skills, ...extension.skills],
     droppedKeys: (seed.dropped ?? []).filter((k): k is string => typeof k === 'string'),
   };
 }
+
+/** The threshold of the gated value, for the note of the row that is measured beside it and not gated. */
+const NOT_SHOWN_GATE = 0.95;
 
 export async function run(ctx: SuiteContext): Promise<SuiteMeasure[]> {
   const market: SuiteMarket | 'all' = ctx.markets.length === 1 ? ctx.markets[0]! : 'all';
@@ -392,33 +424,47 @@ export async function run(ctx: SuiteContext): Promise<SuiteMeasure[]> {
   } catch (err) {
     return [notBuiltOrThrow('precision_not_shown', err, { market })];
   }
-  const vocabulary = seams.buildVocabulary(fixtures.records, { droppedKeys: fixtures.droppedKeys });
-  let result: SkillsResult;
-  let withoutIds: SkillsResult;
-  // The check reads the process-wide vocabulary: pin the fixture for the run and hand the loader back afterwards.
-  seams.setVocabularyForTests(vocabulary);
-  try {
-    result = comparePairs(pairs, seams, vocabulary, { withIds: true });
-    withoutIds = comparePairs(pairs, seams, vocabulary, { withIds: false });
-  } finally {
-    seams.setVocabularyForTests(null);
-  }
-  if (result.conflicts.length) throw new Error(`skills pairs: one skill carries two states in ${result.conflicts.map((c) => `${c.pairId} "${c.name}"`).join(', ')}`);
+  const droppedKeys = fixtures.droppedKeys;
+  /** Both paths of the check on one vocabulary: the posting as enrichment v3 writes it, and with its ids taken off. */
+  const measure = (records: readonly unknown[]): { withIds: SkillsResult; withoutIds: SkillsResult } => {
+    const vocabulary = seams.buildVocabulary(records, { droppedKeys });
+    // The check reads the process-wide vocabulary: pin this one for the run and hand the loader back afterwards.
+    seams.setVocabularyForTests(vocabulary);
+    try {
+      return { withIds: comparePairs(pairs, seams, vocabulary, { withIds: true }), withoutIds: comparePairs(pairs, seams, vocabulary, { withIds: false }) };
+    } finally {
+      seams.setVocabularyForTests(null);
+    }
+  };
+  // The vocabulary production loads decides the gate; the extended one is measured beside it.
+  const product = measure(fixtures.seedRecords);
+  const extended = measure(fixtures.records);
+  const result = product.withIds;
+  // A label conflict is a fixture error; with fewer known ids two spellings may fall apart, so it is read where every labelled skill has its id.
+  if (extended.withIds.conflicts.length) throw new Error(`skills pairs: one skill carries two states in ${extended.withIds.conflicts.map((c) => `${c.pairId} "${c.name}"`).join(', ')}`);
 
   const c = result.comparisons;
   const notShown = scoreState(c, 'not_shown');
   const shown = scoreState(c, 'shown');
   const related = scoreState(c, 'related');
   const unlisted = c.filter((x) => x.predicted === 'unlisted');
-  const legacy = scoreState(withoutIds.comparisons, 'not_shown');
+  const legacy = scoreState(product.withoutIds.comparisons, 'not_shown');
+  const wide = scoreState(extended.withIds.comparisons, 'not_shown');
+  const wideLegacy = scoreState(extended.withoutIds.comparisons, 'not_shown');
+  const wideUnlisted = extended.withIds.comparisons.filter((x) => x.predicted === 'unlisted');
+  const duplicates = [...result.duplicates, ...extended.withIds.duplicates];
+  const softListed = [...result.softListed, ...extended.withIds.softListed];
+  const seedSize = fixtures.seedRecords.length;
+  const extensionSize = fixtures.records.length - seedSize;
   const base = { market, labels: 'authored' as const };
+  const underGate = (score: StateScore): string => (score.precision !== null && score.precision < NOT_SHOWN_GATE ? ` UNDER the ${NOT_SHOWN_GATE} the strategy asks for "Not shown".` : '');
   return [
     {
       ...base,
       metric: 'precision_not_shown',
       value: notShown.precision,
       n: notShown.predicted,
-      note: `${pairs.length} pairs, ${c.length} labelled skills; ${notShown.correct} of ${notShown.predicted} "not shown" answers are right; by language: ${bySubset(c)}; ${missesOf(c, 'not_shown')}`,
+      note: `on the committed seed (${seedSize} skills: the vocabulary production loads); ${pairs.length} pairs, ${c.length} labelled skills; ${notShown.correct} of ${notShown.predicted} "not shown" answers are right; by language: ${bySubset(c)}; ${missesOf(c, 'not_shown')}`,
     },
     { ...base, metric: 'recall_not_shown', value: notShown.recall, n: notShown.expected },
     { ...base, metric: 'precision_shown', value: shown.precision, n: shown.predicted, note: missesOf(c, 'shown', 6) },
@@ -428,24 +474,47 @@ export async function run(ctx: SuiteContext): Promise<SuiteMeasure[]> {
     {
       ...base,
       metric: 'duplicate_items',
-      value: result.duplicates.length,
+      value: duplicates.length,
       n: pairs.length,
-      note: result.duplicates.length ? `must be 0: ${result.duplicates.slice(0, 8).map((d) => `${d.pairId} "${d.term}"`).join('; ')}` : 'no skill is listed twice in any check',
+      note: duplicates.length ? `must be 0: ${duplicates.slice(0, 8).map((d) => `${d.pairId} "${d.term}"`).join('; ')}` : 'no skill is listed twice in any check, on the seed and on the extended vocabulary',
     },
     {
       ...base,
       metric: 'unlisted_items',
       value: unlisted.length,
       n: c.length,
-      note: unlisted.length ? `neither claimed nor denied: ${unlisted.slice(0, 8).map((u) => `${u.pairId} "${u.name}" (a person says ${u.expected.replace('_', ' ')})`).join('; ')}` : 'every labelled skill is listed',
+      note: unlisted.length
+        ? `neither claimed nor denied on the committed seed (a skill the product's vocabulary does not hold reads "Not checked yet"): ${unlisted.slice(0, 8).map((u) => `${u.pairId} "${u.name}" (a person says ${u.expected.replace('_', ' ')})`).join('; ')}${unlisted.length > 8 ? `; and ${unlisted.length - 8} more` : ''}`
+        : 'every labelled skill is listed',
     },
-    { ...base, metric: 'soft_items_listed', value: result.softListed.length, n: pairs.length, note: result.softListed.length ? `must be 0: ${result.softListed.map((d) => `${d.pairId} "${d.term}"`).join('; ')}` : 'no soft skill is listed' },
+    { ...base, metric: 'soft_items_listed', value: softListed.length, n: pairs.length, note: softListed.length ? `must be 0: ${softListed.map((d) => `${d.pairId} "${d.term}"`).join('; ')}` : 'no soft skill is listed, on the seed and on the extended vocabulary' },
     {
       ...base,
       metric: 'precision_not_shown_without_ids',
       value: legacy.precision,
       n: legacy.predicted,
-      note: `the same pairs with the skill ids taken off the posting (a posting enrichment v3 has not written yet); ${missesOf(withoutIds.comparisons, 'not_shown', 6)}`,
+      note: `on the committed seed, the same pairs with the skill ids taken off the posting (a posting enrichment v3 has not written yet: the string rule). Not gated.${underGate(legacy)} ${legacy.correct} of ${legacy.predicted} right; by language: ${bySubset(product.withoutIds.comparisons)}; ${missesOf(product.withoutIds.comparisons, 'not_shown', 6)}`,
+    },
+    {
+      ...base,
+      metric: 'precision_not_shown_extended_vocabulary',
+      value: wide.precision,
+      n: wide.predicted,
+      note: `information: the seed plus the ${extensionSize} skills of fixtures/${SKILLS_FIXTURE_DIR}/${EXTENSION_FILE}, which only this suite loads (reviewed for the fixture, not rows of the product's vocabulary); ${wide.correct} of ${wide.predicted} right; by language: ${bySubset(extended.withIds.comparisons)}; ${missesOf(extended.withIds.comparisons, 'not_shown')}`,
+    },
+    {
+      ...base,
+      metric: 'precision_not_shown_extended_vocabulary_without_ids',
+      value: wideLegacy.precision,
+      n: wideLegacy.predicted,
+      note: `information: the extended vocabulary, ids taken off the posting; ${wideLegacy.correct} of ${wideLegacy.predicted} right`,
+    },
+    {
+      ...base,
+      metric: 'unlisted_items_extended_vocabulary',
+      value: wideUnlisted.length,
+      n: extended.withIds.comparisons.length,
+      note: wideUnlisted.length ? `information: neither claimed nor denied on the extended vocabulary: ${wideUnlisted.slice(0, 8).map((u) => `${u.pairId} "${u.name}" (a person says ${u.expected.replace('_', ' ')})`).join('; ')}` : 'information: every labelled skill is listed on the extended vocabulary',
     },
   ];
 }

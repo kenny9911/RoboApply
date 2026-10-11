@@ -1018,7 +1018,8 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
     });
   }
 
-  async function sendAccountDeletedEmail(input: { userId: string; email: string; brand: ProductBrand }) {
+  /** `renewalStopped`: closing the account turned a plan's auto-renewal off just now (the mail then says so; it is the only mail about it). */
+  async function sendAccountDeletedEmail(input: { userId: string; email: string; brand: ProductBrand; renewalStopped?: boolean }) {
     const profile = await profileOf(input.userId).catch(() => null);
     await sendSafe({
       template: AUTH_EMAIL_KEYS.accountDeleted,
@@ -1026,7 +1027,7 @@ export function createAuthFeatureService(deps: AuthServiceDeps = {}) {
       userId: input.userId,
       locale: profile?.locale ?? null,
       brand: input.brand,
-      params: { days: retentionDaysFor(input.brand.id, env()) },
+      params: { days: retentionDaysFor(input.brand.id, env()), ...(input.renewalStopped ? { renewalStopped: true } : {}) },
     });
   }
 

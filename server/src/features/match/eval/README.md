@@ -47,7 +47,7 @@ Status values:
 
 After the M1 merge the orchestrator runs `npm run eval:match -- --enforce M1`; after M2 `--enforce M2`; after M4 `--enforce M4`. The stage names are the phase names of the market wave.
 
-The harness specs (`*.eval.ts`) are **not** part of `npm test`. `vitest.eval.config.mts` collects them; the default config collects `*.test.ts` only. The invariants of finished phases run in `npm test` through `enforced.test.ts`, which calls `registerInvariants({ enforce })`: since phase M2 (MKT-2F) it enforces `M2`, so nine of the ten run there (INV-7 is due M4), together with the per-seam tests and the completeness test described under `seamRegistry.ts` below.
+The harness specs (`*.eval.ts`) are **not** part of `npm test`. `vitest.eval.config.mts` collects them; the default config collects `*.test.ts` only. The invariants of finished phases run in `npm test` through `enforced.test.ts`, which calls `registerInvariants({ enforce })`: since phase M4 (MKT-4E) it enforces `M4`, so all ten run there, together with the per-seam tests and the completeness test described under `seamRegistry.ts` below.
 
 ## The ten invariants
 
@@ -70,7 +70,8 @@ Files:
 - `invariantSpecs.ts`: the executable specs. They use `node:assert`, the MATCH test kit and the counting fakes of `world.ts`.
 - `invariants.eval.ts`: `registerInvariants({ enforce })` declares them as Vitest cases. It registers nothing at import.
 - `invariants.entry.eval.ts`: the entry the runner executes.
-- `seamRegistry.ts`: the surfaces INV-3 reads, wired since phase M2 (MKT-2F). Ten seams, each running the surface's own code on the fakes of the world: `feed_card`, `job_detail`, `similar_jobs`, `alert_selection`, `ready_list`, `assistant_stored_fit`, `assistant_analyze_fit`, `extension_chip`, `tailoring_kit`, `onboarding_result`. A name in `REQUIRED_FIT_SEAMS` is never removed.
+- `seamRegistry.ts`: the surfaces INV-3 reads, wired since phase M2 (MKT-2F). Ten seams, each running the surface's own code on the fakes of the world: `feed_card`, `job_detail`, `similar_jobs`, `alert_selection`, `ready_list`, `assistant_stored_fit`, `assistant_analyze_fit`, `extension_chip`, `tailoring_kit`, `onboarding_result`. A name in `REQUIRED_FIT_SEAMS` is never removed. `assistant_stored_fit` reads the fit on a row of the Assistant's job lists, which since phase M4 (MKT-4H) is the batch read `CopilotAreas.fits`.
+- `world.ts`: the worlds hold both scorer fakes (v3 and v4, one call counter), so a service built on a world runs the default pin (`fit_v4`) as production does, and `freshAiRow` writes a row of that pin.
 - `enforced.test.ts`: the `npm test` entry. It also scans `server/src` (outside `features/match`) for files that read `getFit`, `getFits`, `getVariantFit` or `estimateForPosting` and compares them with its `FIT_READERS` list: a new reader fails the test until it is listed there with its seam, or with a note saying why it is not a surface.
 
 Rules:
@@ -90,20 +91,22 @@ With neither, the seam is missing: functions bound only to the production reposi
 
 ## The gate table
 
-`gates.ts` holds the gates of strategy 2.6 as data. Shares, recall, precision, NDCG, kappa, ICC and correlation are numbers from 0 to 1; "points" are percentage points (15 points = 0.15); latency is milliseconds.
+`gates.ts` holds the gates of strategy 2.6 as data. Shares, recall, precision, NDCG, kappa, ICC and correlation are numbers from 0 to 1; "points" are percentage points (15 points = 0.15); latency is milliseconds; the two skills counts are numbers of items.
 
 | Layer | Metric | Gate |
 |---|---|---|
-| retrieval | `recall_at_200_hybrid` | at least `recall_at_200_recency` + 15 points |
-| retrieval | `recall_at_200_worst_persona_delta` | at least -0.05 (no persona more than 5 points below its baseline) |
+| retrieval | `recall_at_200_hybrid` (career changers reported apart, not gated) | at least `recall_at_200_recency` + 15 points |
+| retrieval | `recall_at_200_worst_persona_delta` (career changers left out) | at least -0.05 (no persona more than 5 points below its baseline) |
 | ranking | `ndcg_at_10`, `ndcg_at_20` (career changers reported apart, not gated) | no regression against the stored baseline |
 | estimate_vs_ai | `tier_kappa` | at least 0.5 |
 | estimate_vs_ai | `estimate_great_ai_below_possible` | under 0.05 |
 | scorer | `icc_3_runs` | at least 0.85 |
-| scorer | `tier_flip_rate` | under 0.05 |
+| scorer | `tier_flip_rate` (a run with no usable answer counts as a flip) | under 0.05 |
 | scorer | `spearman_human` | at least 0.6 |
+| scorer | `spearman_human_gain_over_v3` (scorer v4 minus scorer v3, on the audited pairs) | at least 0 |
 | taxonomy | `category_precision` | at least 0.95 on 300 labelled titles per market |
-| skills | `precision_not_shown` | at least 0.95 |
+| skills | `precision_not_shown` (on the committed seed, the vocabulary production loads) | at least 0.95 |
+| skills | `duplicate_items`, `soft_items_listed` (counts) | under 1, that is 0 |
 | language | `ndcg_at_10`, `ndcg_at_20` for `zh-TW`, `zh-CN`, `cross` | within 10% relative of the `en` subset |
 | latency | `feed_p95_ms` | at most the stored baseline + 150 ms (live only) |
 
@@ -114,7 +117,25 @@ Notes on three rules:
 - **Judge labels.** A value computed from LLM-judge labels is `untrusted` until a recruiter audit gives a judge-human quadratic-weighted kappa of 0.6 or better. The audit must be of the same judge (model id and prompt version), hold at least 30 graded pairs (`JUDGE_TRUST_MIN_PAIRS`) and hold pairs of the market the value is reported for. Change the judge model or the prompt and every judged value is untrusted again until a new audit.
 - **Career changers** are measured and printed on their own rows (`ndcg_at_10 [career_changer]`, status `info`) and are not part of the gated ranking value or of the language comparison. Their labels follow the role the person says they want. The only place that wish reaches the matcher is a Role chip of the saved search, and invariant 2 says a chip changes no fit. So a fit that is right cannot rank the wanted role first, and a fit that leaks the chip would raise the number. The goal may count in the feed order; a suite that measures that order can gate them.
 
-A layer with no suite yet prints `not_built`. The suites shipped here are `taxonomy`, `ranking` and `language`.
+A layer with no suite yet prints `not_built`. The suites shipped here are `taxonomy`, `ranking` and `language` (M1) and, since phase M4, `skills` (MKT-4E), `retrieval` (MKT-4F) and `scorer` (MKT-4G). `estimate_vs_ai` has no offline suite: it is measured by a live run.
+
+What the three M4 suites measure offline:
+
+- **`skills`**: the keyword check and the estimate against 100 hand-labelled synthetic resume-posting pairs (`fixtures/skills/pairs.json`, authored labels). Each posting is built as enrichment v3 writes a row. Gated: `precision_not_shown`, `duplicate_items`, `soft_items_listed`.
+  **The gate is read on the committed seed** (`features/skills/seed/skills.seed.json`, 273 skills: the vocabulary production loads). Until the M4 cross-review it was read on the seed plus `fixtures/skills/vocabulary.extension.json`, 68 skills written with the pairs that only this suite loads; a gate that passes on skills the product does not hold says nothing about what users get. Measured on 2026-10-12 with 100 pairs and 527 labelled skills:
+
+  | Row | Vocabulary | Posting | Value | |
+  |---|---|---|---|---|
+  | `precision_not_shown` | seed | as enrichment v3 writes it | 0.9545 (126 of 132) | gated, pass |
+  | `precision_not_shown_without_ids` | seed | not re-enriched yet (the string rule) | 0.8078 (206 of 255) | information; **under the 0.95 the strategy asks** |
+  | `precision_not_shown_extended_vocabulary` | seed + extension | as enrichment v3 writes it | 0.9671 (206 of 213) | information |
+  | `precision_not_shown_extended_vocabulary_without_ids` | seed + extension | not re-enriched yet | 0.9671 (206 of 213) | information |
+  | `unlisted_items` | seed | as enrichment v3 writes it | 208 of 527 | information: neither claimed nor denied |
+  | `unlisted_items_extended_vocabulary` | seed + extension | as enrichment v3 writes it | 4 of 527 | information |
+
+  Read it as: on the product's vocabulary a re-enriched posting meets the gate by six answers, and says nothing about two labelled skills in five; a posting that has not been re-enriched does NOT meet the 95% (about one "Not in your resume" in five is wrong on these pairs), and that row is printed, not gated, with "UNDER the 0.95" in its note. Whether to ship that path as it is belongs to the owner (`requests/waveM4-carryover.md`, Owner 12). `duplicate_items` and `soft_items_listed` are counted on both vocabularies and must be 0 on each.
+- **`retrieval`**: Recall@200 of the recency-only list and of the fused list, built with the feed's own statements on the in-memory twin of its repository. The dense leg needs a vector per text: `fixtures/retrieval/vectors.<market>.json` when it covers every text as it reads now, otherwise PROXY vectors (a hashed bag of tokens). A run on proxy vectors prints its values with status `no_fixture` and the note "proxy vectors": it is never held against the gate. The rules are in `fixtures/retrieval/README.md`. `feed_p95_ms` is `skipped_offline`.
+- **`scorer`**: a self-check on every run (ten hand-written pairs, three hand-written answers each: ICC 1 and no flip, or the command fails), and the four gated values from recordings when they are committed: `icc_3_runs`, `tier_flip_rate` and `spearman_human` from a recording of the pinned scorer (`fixtures/scorer/recorded.<market>.json`, `audit.<market>.json`), and `spearman_human_gain_over_v3` from that plus a recording of scorer v3 (`recorded.v3.<market>.json`). Until then each reads `no_fixture` per market, with the command that records what it lacks in its note; the comparison with v3 never reads `not_built`. How a recording is made and read: `fixtures/scorer/README.md`.
 
 ### The ranking baseline
 
@@ -151,6 +172,9 @@ Every fixture file starts with `"_synthetic": true`. Personas, postings, employe
 | `fixtures/labels.constructed.<market>.json` | one grade 0 to 3 per pooled persona-posting pair |
 | `fixtures/baselines.json` | the stored ranking values (see "The ranking baseline") |
 | `fixtures/seed/` | role groups, skills in four languages, sentence banks, invented employer names, hard negatives |
+| `fixtures/skills/` | `pairs.json` (100 pairs, 530 hand-labelled skills, authored) and `vocabulary.extension.json` (68 skills read by the suite only) |
+| `fixtures/retrieval/` | `README.md`; `vectors.<market>.json` once a live run has recorded them (optional) |
+| `fixtures/scorer/` | `selfcheck.json`, `README.md`; `recorded.<market>.json`, `recorded.v3.<market>.json` and `audit.<market>.json` once the owner has recorded and graded (optional) |
 
 Every role in `seed/groups.json` has its own skill list (eight positions of its group's vocabulary, the most characteristic first) and its own two work sentences. A posting requires the first skills of its role and describes that role's work, so an iOS posting asks for Swift and SwiftUI and a pharmacist posting is about a pharmacy. The two roles of a group share part of the vocabulary and never the leading skills or a work sentence; the generator refuses a seed where they do.
 
@@ -208,15 +232,20 @@ A market is measured as its brand: `intl` inside RoboApply's context, `cn` insid
 4. **Audit.** `--export-audit` writes a 10% sample of every market's judged pairs as CSV for RoboHire and GoHire recruiters: the persona's summary and resume (what the judge saw), the posting, and an empty grade column. The CSV does not show the judge's grade. A cell that starts with `=`, `+`, `-` or `@` gets a leading apostrophe so a spreadsheet shows posting text as text and never runs it as a formula. `--import-audit <csv>` computes the judge-human quadratic-weighted kappa and stores it with the judge model, the prompt version and the number of graded pairs per market. Judged values are trusted only for that judge and those markets.
 5. **Report.** `report.md` and `report.json` with the date, the judge model and prompt version, the scorer model of each market, the sample sizes and every gate, and which labels each value used.
 
-Everything a live run writes goes under `.snapshots/<yyyy-mm-dd>/`, which is git-ignored. Real posting text is never committed. Model calls go through the platform LLM service, so their cost lands in the existing usage log.
+Everything a live run writes goes under `.snapshots/<yyyy-mm-dd>/`, which is git-ignored, with one exception: the retrieval suite records the embeddings of the SYNTHETIC fixture texts (no user data, no real posting) into `fixtures/retrieval/vectors.<market>.json`, the one file a live run writes outside `.snapshots/`, so that later offline runs can evaluate the retrieval gate. Real posting text is never committed. Model calls go through the platform LLM service, so their cost lands in the existing usage log.
+
+The scorer's stability rows of a live run (`scorer icc_3_runs [live]`, `tier_flip_rate [live]`) call the market's PINNED scorer through the product's own path (`scoreOnce` of the scorer suite) since the M4 gate. A recording for the committed fixture is made only with `EVAL_SCORER_RECORD=1` (below).
+
+The latency gate compares with a stored live baseline. "Today" is the list before hybrid retrieval: run `FEED_HYBRID=off EVAL_LIVE=1 npm run eval:match -- --live --write-baseline` once, then a normal live run is held against that value plus 150 ms.
 
 | Variable | Meaning | Default |
 |---|---|---|
 | `EVAL_LIVE` | `1` allows `--live` to read the database (read-only) and call models. Anything else refuses. Set it in the shell for the command; it is not read from `.env`. | unset |
 | `EVAL_JUDGE_MODEL` | Model id of the relevance judge. Must differ from the scorer model of the market being judged (the resolved `LLM_MATCHING_MODEL`, or GoApply's own). Shell or `.env`. | unset: nothing is judged |
+| `EVAL_SCORER_RECORD` | `1` together with `EVAL_LIVE=1` lets a live run call the pinned scorer three times on 100 synthetic pairs per market and write a recording and the recruiters' sheet under `.snapshots/<date>/scorer/`. Read from the shell only. | unset: nothing is recorded |
 
 Live runs are the owner's step. A work-package engineer never runs one.
 
 ## Tests of the harness itself
 
-`metrics.test.ts`, `gates.test.ts`, `seams.test.ts`, `fixtures.test.ts`, `run.test.ts` and `live/live.test.ts` run in `npm test`. They use `testdata/fitShim.ts`, a stand-in that puts `MatchService.preScoreMany` behind the target signatures. It is reached only through `setFitModuleForTests`; `run.ts` never loads it, and it proves nothing about the contract. `baselineBeforeFit.ts` used the same stand-in once, on the base commit, to measure the first ranking baseline.
+`metrics.test.ts`, `gates.test.ts`, `seams.test.ts`, `fixtures.test.ts`, `run.test.ts`, `live/live.test.ts` and the three `suites/*.suite.test.ts` files run in `npm test` (a `*.suite.test.ts` file is a test, not a suite: the runner does not load it). They use `testdata/fitShim.ts`, a stand-in that puts `MatchService.preScoreMany` behind the target signatures. It is reached only through `setFitModuleForTests`; `run.ts` never loads it, and it proves nothing about the contract. `baselineBeforeFit.ts` used the same stand-in once, on the base commit, to measure the first ranking baseline.

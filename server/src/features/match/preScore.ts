@@ -528,7 +528,7 @@ export function titleLevelDimension(user: MatchUser, job: MatchJob, weights: Mat
     factor *= 0.5;
     evidence.push(ev(job.educationLevel!, 'posting', 'education_required'));
   }
-  if (job.market === 'cn' && job.classYears.length && user.classYear !== null && !job.classYears.includes(user.classYear)) {
+  if (classYearExcluded(user, job)) {
     factor *= 0.5;
     evidence.push(ev(job.classYearQuote ?? job.classYears.join(', '), 'posting', 'class_year'));
   }
@@ -582,13 +582,33 @@ type SkillDetailEntry = NonNullable<MatchJob['skillsDetail']>[number];
 const hasSkillId = (s: SkillDetailEntry | null | undefined): boolean => !!s && typeof s.skillId === 'string' && !!s.skillId.trim();
 
 /**
- * Does the posting's record carry canonical skill ids (written by enrichment
- * v3)? When not, every skill of it is compared by its string. The keyword
- * check reads this to decide what it lists.
+ * Was the posting's skill record written by enrichment v3 (the pass that maps
+ * each string to a canonical skill)? True when it carries an id, and also
+ * when an entry says HOW it was mapped (`via`): enrichment v3 writes `via` on
+ * every entry, `'none'` included, so a row it wrote in which no skill is in
+ * the vocabulary (a nursing posting against a vocabulary of software skills)
+ * is still known to be mapped. Without that, such a row could not be told
+ * from one enrichment never wrote, and the keyword check answered "not in
+ * your resume" by the string rule for skills nobody has reviewed.
+ *
+ * When false, every skill of the posting is compared by its string. The
+ * keyword check reads this to decide what it lists: for a mapped row, its
+ * reviewed skills only (an unmapped string is neither claimed nor denied).
  */
 export function carriesSkillIds(job: Pick<MatchJob, 'skillIds' | 'skillsDetail'>): boolean {
   if (job.skillIds?.some((id) => typeof id === 'string' && id.trim())) return true;
-  return !!job.skillsDetail?.some(hasSkillId);
+  return !!job.skillsDetail?.some((s) => hasSkillId(s) || (!!s && typeof s.via === 'string' && !!s.via.trim()));
+}
+
+/**
+ * GoApply 届别 (graduation class), the one eligibility rule of that kind: the
+ * posting states the classes it hires, the profile states one, and it is not
+ * among them. False outside GoApply, and whenever either side states none.
+ * Read by the estimate (`titleLevelDimension`) and by scorer v4
+ * (`classYearEligibility`), so the two cannot disagree about a person.
+ */
+export function classYearExcluded(user: Pick<MatchUser, 'classYear'>, job: Pick<MatchJob, 'market' | 'classYears'>): boolean {
+  return job.market === 'cn' && job.classYears.length > 0 && user.classYear !== null && !job.classYears.includes(user.classYear);
 }
 
 /**

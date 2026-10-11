@@ -1691,14 +1691,82 @@ describe('hybrid retrieval: the typed query finds a word that is only in the des
     expect(legStatements('recency')[0]!.values).toContain("'product' & 'manager'");
   });
 
-  it('the dense leg does not apply the typed q: it may add a job that says it another way', async () => {
+  it('with job vectors the list still holds what the count counts: the dense leg applies the typed q under Recommended and Best fit (M4 cross-review)', async () => {
+    // Every posting has a vector, and the one that does NOT carry the word is the nearest to the query vector.
     repo.vectors.set('other', testVector(1, 0));
-    const res = await service({ embeddings: embedFake(() => testVector(1, 0)), retrieval: retrievalFake() }).query(ctx(), { sort: 'recommended', q: 'terraform' });
-    expect(res.items.map((i) => i.jobId).sort()).toEqual(['body', 'other', 'title', 'unindexed']);
-    // Legs A and B carry the q rule, leg C does not.
-    expect(legStatements('recency')[0]!.text).toContain('j."searchText" ILIKE');
-    expect(legStatements('lexical')[0]!.text).toContain('j."searchText" ILIKE');
+    repo.vectors.set('title', testVector(0.6, 0.8));
+    repo.vectors.set('body', testVector(0, 1));
+    repo.vectors.set('unindexed', testVector(0.1, 1));
+    // More rows that do not carry the word, all with vectors nearer than the matches (the reported case in small).
+    for (let i = 0; i < 12; i++) {
+      repo.rows.push(feedRow({ id: `far${i}`, title: 'Data Analyst', titleNormalized: 'data analyst' }));
+      repo.searchDocs.set(`far${i}`, 'data analyst sql dashboards');
+      repo.vectors.set(`far${i}`, testVector(1, 0.01 * i));
+    }
+    const s = service({ embeddings: embedFake(() => testVector(1, 0)), retrieval: retrievalFake() });
+    const matches = ['body', 'title', 'unindexed'];
+    expect(await s.countForFilters(ctx(), { q: 'terraform' })).toEqual({ count: 3, capped: false });
+    for (const sort of ['recommended', 'best_fit'] as const) {
+      repo.queries.length = 0;
+      const res = await s.query(ctx(), { sort, q: 'terraform' });
+      expect(res.items.map((i) => i.jobId).sort(), sort).toEqual(matches);
+      expect(res.endOfFeed, sort).toBe(true);
+      // The dense leg ran, and it carried the q rule like legs A and B.
+      expect(legsUsed(), sort).toEqual(['dense', 'lexical', 'recency']);
+      for (const leg of ['recency', 'lexical', 'dense'] as const) expect(legStatements(leg)[0]!.text, `${sort} ${leg}`).toContain('j."searchText" ILIKE');
+    }
+    // What the Assistant's search_jobs and the job-search API read: the same filtered window.
+    expect((await s.preview(ctx(), { q: 'terraform', limit: 5 })).map((i) => i.jobId).sort()).toEqual(matches);
+    // The dense leg still ORDERS among the matches: with no fit to tell them apart the nearest one leads.
+    repo.queries.length = 0;
+    await s.query(ctx(), { sort: 'recommended', q: 'terraform' });
+    const dense = await repo.queryRows({ text: legStatements('dense')[0]!.text, values: legStatements('dense')[0]!.values } as never);
+    expect(dense.map((r) => r.id)).toEqual(['title', 'unindexed', 'body']);
+  });
+
+  it('with no typed q the dense leg is unconstrained: the ranking words and the person\'s own vector may add a job that says it another way', async () => {
+    repo.vectors.set('other', testVector(1, 0));
+    const s = service({ embeddings: embedFake(() => testVector(1, 0)), retrieval: retrievalFake() });
+    const res = await s.query(ctx(), { sort: 'recommended', relevance: 'terraform' });
+    expect(res.items.map((i) => i.jobId)).toContain('other');
     expect(legStatements('dense')[0]!.text).not.toContain('searchText');
+  });
+
+  it('a typed query filters on every word, the ones an OR query drops included: "IT support", "social work", 招聘专员', async () => {
+    repo.rows = [];
+    repo.searchDocs.clear();
+    const add = (id: string, title: string, doc: string) => {
+      repo.rows.push(feedRow({ id, title, titleNormalized: title.toLowerCase(), skills: [] }));
+      repo.searchDocs.set(id, doc);
+    };
+    add('it-support', 'IT Support Specialist', 'it support specialist helpdesk windows');
+    add('help-desk', 'Help Desk Technician', 'help desk technician you give it support to 200 staff');
+    add('csm', 'Customer Success Manager', 'customer success manager support renewals');
+    add('backend', 'Backend Engineer', 'backend engineer on call support rotation');
+    add('nurse', 'Registered Nurse', 'registered nurse support patients');
+    add('social-worker', 'Social Worker', 'licensed social worker case work social work');
+    add('social-media', 'Social Media Manager', 'social media manager campaigns');
+    add('recruiter-cn', '招聘专员', '招聘 专员 人力 资源');
+    add('admin-cn', '行政专员', '行政 专员 前台');
+    const s = service({ embeddings: embedFake(() => testVector(1, 0)), retrieval: retrievalFake(), search: { getActive: async () => profile(), get: async () => profile(), findById: async () => ({ ...profile(), userId: 'u1' }) } as never });
+    const cases: Array<[string, string[]]> = [
+      // Before: the filter was 'support' alone and listed the Customer Success Manager, the Backend Engineer and the nurse.
+      ['IT support', ['help-desk', 'it-support']],
+      // Before: 'social' alone kept the Social Media Manager.
+      ['social work', ['social-worker']],
+      // Before: '专员' alone kept the 行政专员.
+      ['招聘专员', ['recruiter-cn']],
+      ['招聘 专员', ['recruiter-cn']],
+    ];
+    for (const [q, expected] of cases) {
+      expect((await s.countForFilters(ctx(), { q })).count, q).toBe(expected.length);
+      for (const sort of ['recommended', 'best_fit', 'newest'] as const) {
+        expect((await s.query(ctx(), { sort, q })).items.map((i) => i.jobId).sort(), `${q} ${sort}`).toEqual(expected);
+      }
+      expect((await s.sampleForFilters(ctx(), { q }, { limit: 50 })).sort(), q).toEqual(expected);
+      profileFilters = { q };
+      expect((await s.alertCandidates({ market: 'intl', now: NOW }, 'sp1', { since: daysAgo(30), limit: 50 })).ids.sort(), q).toEqual(expected);
+    }
   });
 });
 
@@ -1875,6 +1943,14 @@ describe('natural-language search: the residual text ranks the list and is never
     // The report is per read, never assumed: no leg answered, the legs are off, or the list is by date.
     repo.searchDocs.clear();
     expect((await s.previewOrdered(ctx(), { q: 'backend', relevance: 'climate rust', limit: 10 })).relevanceApplied).toBe(false);
+    // The lexical leg answers for the typed word, and no listed posting mentions the topics: the order is the plain
+    // one, and it is not reported as ranked by them (M4 cross-review). The posting that mentions them is outside q.
+    for (const id of ['c', 'b', 'a']) repo.searchDocs.set(id, 'backend engineer');
+    repo.searchDocs.set('off-topic', 'data analyst climate rust');
+    const unmatched = await s.previewOrdered(ctx(), { q: 'backend', relevance: 'climate rust', limit: 10 });
+    expect(unmatched.items.map((i) => i.jobId)).toEqual(['c', 'b', 'a']);
+    expect(unmatched.relevanceApplied).toBe(false);
+    repo.searchDocs.clear();
     repo.searchDocs.set('a', 'backend engineer climate rust');
     expect((await service({ env: { FEED_HYBRID: 'off' } }).previewOrdered(ctx(), { q: 'backend', relevance: 'climate rust', limit: 10 })).relevanceApplied).toBe(false);
     expect((await s.previewOrdered(ctx(), { q: 'backend', relevance: 'climate rust', sort: 'newest', limit: 10 })).relevanceApplied).toBe(false);

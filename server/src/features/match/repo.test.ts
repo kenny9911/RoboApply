@@ -8,6 +8,7 @@ const db = vi.hoisted(() => ({
   queried: [] as Array<{ text: string; values: unknown[] }>,
   executeResult: 1,
   findManyArgs: [] as unknown[],
+  keywordRow: null as { keywords: unknown } | null,
 }));
 
 vi.mock('../../lib/prisma.js', () => {
@@ -31,6 +32,7 @@ vi.mock('../../lib/prisma.js', () => {
         }),
       },
       rAResumeVariant: { update: vi.fn() },
+      rAKeywordExtraction: { findUnique: vi.fn(async () => db.keywordRow) },
     },
   };
 });
@@ -52,6 +54,7 @@ beforeEach(() => {
   db.queried.length = 0;
   db.findManyArgs.length = 0;
   db.executeResult = 1;
+  db.keywordRow = null;
 });
 
 describe('saveJobRequirements: the first writer wins', () => {
@@ -109,7 +112,34 @@ describe('calibration pairs of one scorer', () => {
 describe('the frozen copy of a variant fit', () => {
   it('is no longer written: the repository has no updateVariantCachedScore', () => {
     const repo = createPrismaMatchRepo();
-    expect(repo.updateVariantCachedScore).toBeUndefined();
+    expect((repo as unknown as Record<string, unknown>).updateVariantCachedScore).toBeUndefined();
     expect((prisma as unknown as { rAResumeVariant: { update: ReturnType<typeof vi.fn> } }).rAResumeVariant.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('getKeywords: the stored keyword row of a posting (M4 gate; MKT-4D request 8, MKT-4E request 4)', () => {
+  it('passes on the canonical skill enrichment v3 stored with a keyword, and reads a row written before as words', async () => {
+    db.keywordRow = {
+      keywords: [
+        { keyword: 'postgres', importance: 'high', skillId: 'postgresql', tfidf: 0.4 },
+        { keyword: 'kafka', importance: 'low', skillId: '  kafka  ' },
+        // Written before version 3: no id. An id that is not a string is not an id.
+        { keyword: 'rest apis', importance: 'medium' },
+        { keyword: 'go', importance: 'unknown', skillId: 7 },
+        { keyword: 42, importance: 'high', skillId: 'x' },
+        null,
+      ],
+    };
+    const repo = createPrismaMatchRepo();
+    expect(await repo.getKeywords('job1')).toEqual([
+      { keyword: 'postgres', importance: 'high', skillId: 'postgresql' },
+      { keyword: 'kafka', importance: 'low', skillId: 'kafka' },
+      { keyword: 'rest apis', importance: 'medium' },
+      { keyword: 'go', importance: 'medium' },
+    ]);
+    db.keywordRow = { keywords: 'not a list' };
+    expect(await repo.getKeywords('job1')).toBeNull();
+    db.keywordRow = null;
+    expect(await repo.getKeywords('job1')).toBeNull();
   });
 });

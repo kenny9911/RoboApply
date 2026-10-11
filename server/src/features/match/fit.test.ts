@@ -19,6 +19,7 @@ import { DEFAULT_MATCH_PRIORS, DEFAULT_MATCH_TIERS, DEFAULT_MATCH_WEIGHTS, FitSn
 import {
   ADHOC_POSTING_ID,
   aiCoverage,
+  aiFitThin,
   assembleFit,
   createFitService,
   estimateForPosting,
@@ -33,6 +34,7 @@ import {
   setFitServiceForTests,
   storedFitStatus,
   thinCoverage,
+  tierWhenThin,
   tierWithinCoverage,
   toWireKind,
   type AdhocPosting,
@@ -576,6 +578,53 @@ describe('an AI fit that could judge less than 60% of the rubric weight is never
   });
 });
 
+describe('I4 is read on the posting too: no skill line judged for a posting that states no level is never Great (M4 cross-review)', () => {
+  const dims = (scores: Partial<Record<'title_level' | 'skills' | 'industry' | 'logistics' | 'career_path', number | null>>): MatchDimension[] =>
+    (['title_level', 'skills', 'industry', 'logistics', 'career_path'] as const).map((key) => {
+      const score = scores[key] ?? null;
+      return { key, weight: DEFAULT_MATCH_WEIGHTS[key], score, status: score === null ? 'not_stated' : 'scored', evidence: [] };
+    });
+  const posting = (over: Parameters<typeof jobRecord>[0] = {}) => toMatchJob(jobRecord(over));
+  const noSkillsNoLevel = { skills: [], skillsDetail: null, seniority: null };
+
+  it('aiFitThin: under 60% judged, or nothing judged on skills while the posting states no level', () => {
+    // 70% of the rubric judged (level, domain, logistics, trajectory), nothing on skills.
+    const judged = dims({ title_level: 100, industry: 100, logistics: 100, career_path: 100 });
+    expect(aiCoverage(judged)).toBe(0.7);
+    expect(thinCoverage(aiCoverage(judged))).toBe(false);
+    expect(aiFitThin(judged, posting(noSkillsNoLevel))).toBe(true);
+    // The posting states its level: the level judgment has something behind it.
+    expect(aiFitThin(judged, posting({ skills: [], skillsDetail: null }))).toBe(false);
+    // A level outside the scale is not a stated level.
+    expect(aiFitThin(judged, posting({ ...noSkillsNoLevel, seniority: 'rockstar' }))).toBe(true);
+    // The scorer found and judged a skill or experience line: not this rule, whatever the posting's fields say.
+    expect(aiFitThin(dims({ title_level: 100, skills: 100, industry: 100, logistics: 100 }), posting(noSkillsNoLevel))).toBe(false);
+    // The coverage half is unchanged.
+    expect(aiFitThin(dims({ title_level: 96, logistics: 100 }), posting())).toBe(true);
+    expect(aiFitThin(dims({ title_level: 96, skills: 96, logistics: 100 }), posting())).toBe(false);
+    expect(tierWhenThin('great', true)).toBe('good');
+    expect(tierWhenThin('great', false)).toBe('great');
+    for (const tier of ['good', 'possible', 'unlikely'] as const) expect(tierWhenThin(tier, true)).toBe(tier);
+    expect(tierWhenThin(null, true)).toBeNull();
+  });
+
+  it('scorer v3: level, domain and trajectory judged for a posting with no skills and no level: stored and shown at most Good, low confidence, on both forms', async () => {
+    const repo = createMemoryRepo({ jobs: [jobRecord(noSkillsNoLevel)] });
+    const { fits } = setup({ repo, output: () => scorerOutput({ title_level: 100, skills: null, industry: 100, career_path: 100 }) });
+    const scored = await fits.getFit('u1', 'job1', { allowModelCall: true });
+    expect(scored).toMatchObject({ kind: 'ai', score: 100, tier: 'good', coverage: 0.7, confidence: 'low', confidenceReason: 'no_skills_listed' });
+    expect(repo.state.scores[0]).toMatchObject({ score: 100, tier: 'good' });
+    expect(await fits.getFit('u1', 'job1')).toMatchObject({ score: 100, tier: 'good', confidence: 'low' });
+    expect((await fits.getFits('u1', ['job1'])).get('job1')).toMatchObject({ kind: 'ai', score: 100, tier: 'good', confidence: 'low' });
+    // A row stored Great before this rule reads Good too.
+    repo.state.scores[0] = { ...repo.state.scores[0]!, tier: 'great' };
+    expect((await fits.getFits('u1', ['job1'])).get('job1')).toMatchObject({ score: 100, tier: 'good', confidence: 'low' });
+    // The same answer for a posting that states its level keeps its Great.
+    const stated = setup({ repo: createMemoryRepo({ jobs: [jobRecord({ skills: [], skillsDetail: null })] }), output: () => scorerOutput({ title_level: 100, skills: null, industry: 100, career_path: 100 }) });
+    expect(await stated.fits.getFit('u1', 'job1', { allowModelCall: true })).toMatchObject({ kind: 'ai', score: 100, tier: 'great', confidence: 'medium' });
+  });
+});
+
 describe('GoApply without the AI consent: zero scorer calls, the estimate with its reason (I8)', () => {
   const cnRepo = () => createMemoryRepo({ jobs: [jobRecord({ market: 'cn' })] });
 
@@ -1006,6 +1055,26 @@ describe('MKT-4G: a scorer v4 fit on the contract (the default pin)', () => {
     expect(list).toMatchObject({ requirements: [], prose: null });
     expect(fitToListResult(list)).not.toHaveProperty('requirements');
     expect(scorerV4.run).toHaveBeenCalledTimes(1);
+  });
+
+  it('scorer v4 on a posting that says a title and nothing else: an empty checklist with level match, domain direct and trajectory toward is never Great (I4; M4 cross-review)', async () => {
+    // The harness's own INV-1 posting. Scorer v4 always scores the level and counts the domain and the trajectory
+    // with no quote, so before this rule the fit was stored and shown Great at 100 with medium confidence.
+    const text = 'We are hiring a Backend Engineer. More details are shared during the interview.';
+    const thin = jobRecord({ skills: [], skillsDetail: null, seniority: null, minYears: null, qualifications: null, description: text, descriptionPlain: text, companyIndustries: [] });
+    const repo = createMemoryRepo({ jobs: [thin] });
+    const answer = (): RAJobMatchScorerV4Output => ({ ...checklist(), requirements: [], domain: { status: 'direct', evidence: '' }, trajectory: { status: 'toward', evidence: '' } });
+    const { fits } = setupV4({ repo, scorerV4: { run: vi.fn(async () => answer()) } });
+    const scored = await fits.getFit('u1', 'job1', { allowModelCall: true });
+    expect(scored.kind).toBe('ai');
+    expect(scored.score).toBe(100);
+    expect(scored.dimensions.find((d) => d.key === 'skills')).toMatchObject({ status: 'not_stated', score: null });
+    expect(scored.tier).toBe('good');
+    expect(scored.confidence).toBe('low');
+    expect(scored.confidenceReason).toBe('no_skills_listed');
+    expect(repo.state.scores[0]).toMatchObject({ tier: 'good', promptVersion: 'scorer_v4' });
+    expect(await fits.getFit('u1', 'job1')).toMatchObject({ kind: 'ai', tier: 'good', confidence: 'low' });
+    expect((await fits.getFits('u1', ['job1'])).get('job1')).toMatchObject({ kind: 'ai', tier: 'good', confidence: 'low' });
   });
 
   it('an estimate carries no checklist, whichever scorer is pinned; the default rubric is fit_v4', async () => {

@@ -76,7 +76,7 @@ import {
 } from '../../../../roboapply/v2/agents/RAJobMatchScorerAgent.js';
 import { JobRequirementSchema, type FitPromptVersion } from '../../contract.js';
 import type { MatchJobRecord } from '../../context.js';
-import { jobContentHash } from '../../jobHash.js';
+import { requirementListHash } from '../../jobHash.js';
 import type { MatchServiceDeps, ScorerLike, ScorerV4Like } from '../../MatchService.js';
 import { loadMarketFixtures } from '../fixtures/load.js';
 import type { Persona } from '../fixtures/schema.js';
@@ -464,32 +464,39 @@ function recordingNote(recording: Recording, result: ReplayResult): string {
 }
 
 const RECORD_HINT = `EVAL_LIVE=1 ${RECORD_SWITCH}=1 npm run eval:match -- --live`;
+/** The same recording with the rollback switch set: scorer v3, the scorer the new one is compared with. */
+const RECORD_V3_HINT = `MATCH_SCORER_RUBRIC=fit_v3 ${RECORD_HINT}`;
+/** "Not below the current scorer" (SM-8): a gate of its own, so it is reported per market in every case, never left for the report to guess. */
+const GAIN_OVER_V3 = 'spearman_human_gain_over_v3';
 
 /** The gated rows of one market, from a recording (the committed one, or the one this live run just wrote). */
 async function marketMeasures(market: SuiteMarket, fixturesDir: string, recording: Recording | null, where: string): Promise<SuiteMeasure[]> {
   const out: SuiteMeasure[] = [];
   const stability = ['icc_3_runs', 'tier_flip_rate'] as const;
+  // The comparison with scorer v3 needs everything `spearman_human` needs, and the v3 recording besides: where the
+  // first cannot be read, neither can the second, and its row says the same reason.
+  const all = [...stability, 'spearman_human', GAIN_OVER_V3] as const;
   if (!recording) {
     const note = `${where} is not on disk yet: record it with "${RECORD_HINT}", review it and copy it there`;
-    for (const metric of [...stability, 'spearman_human']) out.push(unmeasured(metric, 'no_fixture', note, { market }));
+    for (const metric of all) out.push(unmeasured(metric, 'no_fixture', note, { market }));
     return out;
   }
   const result = await replayRecording(recording, fixturesDir);
   if (!result) {
-    for (const metric of [...stability, 'spearman_human']) out.push(unmeasured(metric, 'no_fixture', `no personas, postings or labels for ${market} in fixtures/`, { market }));
+    for (const metric of all) out.push(unmeasured(metric, 'no_fixture', `no personas, postings or labels for ${market} in fixtures/`, { market }));
     return out;
   }
   const note = recordingNote(recording, result);
   const known = result.total - result.unknown;
   if (known > 0 && result.changed / known > MAX_CHANGED_SHARE) {
     const why = `${note}: the recording is for other inputs than today's (the fixtures or the resume strip changed since); record it again with "${RECORD_HINT}"`;
-    for (const metric of [...stability, 'spearman_human']) out.push(unmeasured(metric, 'no_fixture', why, { market }));
+    for (const metric of all) out.push(unmeasured(metric, 'no_fixture', why, { market }));
     return out;
   }
   // The sample itself is too small: a fixture problem, not a result of the scorer.
   if (result.usable < SCORER_MIN_PAIRS) {
     const why = `${note}: ${result.usable} pairs on today's inputs; ${SCORER_MIN_PAIRS} are needed before a value is held against its gate. Record it again with "${RECORD_HINT}"`;
-    for (const metric of [...stability, 'spearman_human']) out.push(unmeasured(metric, 'no_fixture', why, { market }));
+    for (const metric of all) out.push(unmeasured(metric, 'no_fixture', why, { market }));
     return out;
   }
   // Every usable pair is in the flip rate: a run that gave nothing is a pair without one tier.
@@ -502,34 +509,42 @@ async function marketMeasures(market: SuiteMarket, fixturesDir: string, recordin
 
   const audit = loadScorerAudit(fixturesDir, market);
   if (!audit) {
-    out.push(unmeasured('spearman_human', 'no_fixture', `fixtures/${SCORER_FIXTURES}/${SCORER_FILES.audit(market)} is not on disk: no recruiter has graded the recorded pairs yet`, { market }));
+    const why = `fixtures/${SCORER_FIXTURES}/${SCORER_FILES.audit(market)} is not on disk: no recruiter has graded the recorded pairs yet`;
+    for (const metric of ['spearman_human', GAIN_OVER_V3]) out.push(unmeasured(metric, 'no_fixture', why, { market }));
     return out;
   }
   const human = spearmanWithHuman(result, audit);
   const graded = `recruiter grades of ${audit.gradedAt.slice(0, 10)}`;
   const tooFew = (n: number) => `${n} graded pairs were scored in every run; ${SCORER_MIN_PAIRS} are needed (two pairs always give +1 or -1)`;
   if (survivors || human.n < SCORER_MIN_PAIRS) {
-    out.push(unmeasured('spearman_human', 'no_fixture', `${graded}; ${note}: ${survivors ?? tooFew(human.n)}`, { market, labels: 'human', n: human.n }));
+    for (const metric of ['spearman_human', GAIN_OVER_V3]) out.push(unmeasured(metric, 'no_fixture', `${graded}; ${note}: ${survivors ?? tooFew(human.n)}`, { market, labels: 'human', n: human.n }));
     return out;
   }
   out.push({ metric: 'spearman_human', market, value: human.value, n: human.n, labels: 'human', note: `${graded}; ${note}` });
-  // "Not below the current scorer": the same correlation for scorer v3, recorded the same way, when that file is there.
+  // "Not below the current scorer": the same correlation for scorer v3, recorded the same way. Without that
+  // recording the comparison is NOT measured, and the row says which file is missing and how to make it: a
+  // `spearman_human` that passes must never read as the whole of SM-8.
+  const previousFile = `fixtures/${SCORER_FIXTURES}/${SCORER_FILES.recorded(market, 'scorer_v3')}`;
   const previous = loadRecording(fixturesDir, market, 'scorer_v3');
-  if (previous) {
-    const before = await replayRecording(previous, fixturesDir);
-    const v3 = before ? spearmanWithHuman(before, audit) : null;
-    if (before && v3) {
-      const v3Note = recordingNote(previous, before);
-      const v3Unreadable = survivorBias(before) ?? (v3.n < SCORER_MIN_PAIRS ? tooFew(v3.n) : null);
-      if (v3Unreadable) {
-        for (const metric of ['spearman_human_v3', 'spearman_human_gain_over_v3']) out.push(unmeasured(metric, 'no_fixture', `${v3Note}: ${v3Unreadable}`, { market, labels: 'human', n: v3.n }));
-        return out;
-      }
-      out.push({ metric: 'spearman_human_v3', market, value: v3.value, n: v3.n, labels: 'human', note: v3Note });
-      const gain = human.value !== null && v3.value !== null ? human.value - v3.value : null;
-      out.push({ metric: 'spearman_human_gain_over_v3', market, value: gain, n: Math.min(human.n, v3.n), labels: 'human', note: 'scorer v4 minus scorer v3; must not be below 0' });
-    }
+  if (!previous) {
+    out.push(unmeasured(GAIN_OVER_V3, 'no_fixture', `${previousFile} is not on disk: record scorer v3 with "${RECORD_V3_HINT}", review it and copy it there`, { market, labels: 'human' }));
+    return out;
   }
+  const before = await replayRecording(previous, fixturesDir);
+  const v3 = before ? spearmanWithHuman(before, audit) : null;
+  if (!before || !v3) {
+    out.push(unmeasured(GAIN_OVER_V3, 'no_fixture', `${previousFile}: no personas, postings or labels for ${market} in fixtures/`, { market, labels: 'human' }));
+    return out;
+  }
+  const v3Note = recordingNote(previous, before);
+  const v3Unreadable = survivorBias(before) ?? (v3.n < SCORER_MIN_PAIRS ? tooFew(v3.n) : null);
+  if (v3Unreadable) {
+    for (const metric of ['spearman_human_v3', GAIN_OVER_V3]) out.push(unmeasured(metric, 'no_fixture', `${v3Note}: ${v3Unreadable}`, { market, labels: 'human', n: v3.n }));
+    return out;
+  }
+  out.push({ metric: 'spearman_human_v3', market, value: v3.value, n: v3.n, labels: 'human', note: v3Note });
+  const gain = human.value !== null && v3.value !== null ? human.value - v3.value : null;
+  out.push({ metric: GAIN_OVER_V3, market, value: gain, n: Math.min(human.n, v3.n), labels: 'human', note: 'scorer v4 minus scorer v3; must not be below 0' });
   return out;
 }
 
@@ -563,8 +578,9 @@ function selfcheckWorld(pair: SelfcheckPair): World {
     seniority: pair.posting.seniority,
     marketTags: (pair.posting.classYears ?? []).map((year) => ({ tag: `class_year:${year}`, evidenceQuote: pair.posting.classYearQuote ?? null })),
   });
-  // A stored list is the posting's only for the text it was copied from: it carries the hash of this posting.
-  if (pair.posting.requirements) job.requirements = { v: 1, contentHash: jobContentHash(job), model: 'selfcheck', extractedAt: '2026-10-01T00:00:00.000Z', items: pair.posting.requirements };
+  // A stored list is the posting's only for the text it was copied from: it carries the key of this posting's text
+  // (`requirementListHash`: no skills, the key enrichment and the scorer both write).
+  if (pair.posting.requirements) job.requirements = { v: 1, contentHash: requirementListHash(job), model: 'selfcheck', extractedAt: '2026-10-01T00:00:00.000Z', items: pair.posting.requirements };
   return createWorld({
     brand: pair.market === 'cn' ? 'goapply' : 'roboapply',
     jobs: [job],
@@ -757,7 +773,7 @@ export function scorerAuditFromCsv(csv: string, market: SuiteMarket, now: Date):
 // ── The suite ─────────────────────────────────────────────────────────────
 
 const SELFCHECK_METRICS = ['selfcheck_icc_3_runs', 'selfcheck_tier_flip_rate'] as const;
-const GATED_METRICS = ['icc_3_runs', 'tier_flip_rate', 'spearman_human'] as const;
+const GATED_METRICS = ['icc_3_runs', 'tier_flip_rate', 'spearman_human', GAIN_OVER_V3] as const;
 
 export async function run(ctx: SuiteContext): Promise<SuiteMeasure[]> {
   // The suite reads the fit through its seam: without it nothing here is built.

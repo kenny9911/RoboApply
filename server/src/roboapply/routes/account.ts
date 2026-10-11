@@ -37,6 +37,7 @@ import {
 import prisma from '../../lib/prisma.js';
 import { logger } from '../../services/LoggerService.js';
 import { wipeSeekerApplicationData } from '../services/SeekerAccountDataWipeService.js';
+import { stopRenewalForClosingAccount } from '../services/accountCloseBilling.js';
 import { resolveTimeZone, sqlLocalTime } from '../../lib/timeBuckets.js';
 import { getRateCard, tierDailyCap } from '../../lib/rateCard.js';
 import { featureForSku } from '../v2/lib/raFeatureCatalog.js';
@@ -267,6 +268,11 @@ router.post('/delete', requireAuth, async (req: Request, res: Response) => {
       });
     }
     const userId = req.user!.id;
+    // A plan that renews is set to end with its paid period first, so a closed
+    // account is not charged again before the purge (which ends whatever still
+    // runs then). Never blocks the deletion and waits a bounded time for the
+    // payment provider; it sends no mail of its own: see accountCloseBilling.ts.
+    const renewal = await stopRenewalForClosingAccount(userId, {}, req.requestId);
     // Soft-disable: SeekerProfile.deletedAt makes login throw
     // SeekerAccountDeletedError; revoke every session so the account is
     // immediately inaccessible. The nightly account-purge sweep
@@ -277,9 +283,11 @@ router.post('/delete', requireAuth, async (req: Request, res: Response) => {
     res.clearCookie(SESSION_COOKIE_NAME, buildClearCookieOptions());
     // F-ACCT-06: confirmation email naming the purge window (GoApply ≤ 15
     // days for PIPL). Best effort: the deletion stands even if mail fails.
+    // It is also the one mail about the plan: it says the plan will not renew
+    // only when auto-renewal was really turned off just now.
     const brandId: BrandId = ((req as Request & { brand?: { id?: BrandId } }).brand?.id ?? getCurrentBrandId()) || 'roboapply';
     await authService
-      .sendAccountDeletedEmail({ userId, email: req.user?.email ?? '', brand: getBrand(brandId) })
+      .sendAccountDeletedEmail({ userId, email: req.user?.email ?? '', brand: getBrand(brandId), renewalStopped: renewal === 'stopped' })
       .catch(() => undefined);
     logger.warn('RA_ACCOUNT', 'account soft-deleted (GDPR)', { userId, email: userEmail }, req.requestId);
     return res.json({ success: true, data: { ok: true, deactivated: true } });

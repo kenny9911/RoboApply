@@ -173,12 +173,25 @@ describe('the suite as the runner finds it', () => {
   it('while the fit seam is missing every row is not_built; with no fixture folder every row is no_fixture', async () => {
     setFitModuleForTests(path.join(EVAL_DIR, 'testdata', 'noSuchFitModule.ts'));
     const unbuilt = await run(ctx());
-    expect(unbuilt.length).toBe(8);
+    // Four gated rows a market (the comparison with scorer v3 is one of them) and the two self-check rows.
+    expect(unbuilt.length).toBe(10);
     for (const m of unbuilt) expect(m, m.metric).toMatchObject({ value: null, status: 'not_built' });
     setFitModuleForTests(null);
     const empty = await run(ctx({ fixturesDir: tmp('nofix'), repoRoot: tmp('noroot') }));
-    expect(empty.length).toBe(8);
+    expect(empty.length).toBe(10);
     for (const m of empty) expect(m, m.metric).toMatchObject({ value: null, status: 'no_fixture' });
+    // "Not below scorer v3" is reported per market with the command that records what it needs, like its siblings:
+    // it never falls through to the report's market-less `not_built` ("the suite does not report this metric yet").
+    for (const market of ['intl', 'cn']) {
+      expect(row(empty, 'spearman_human_gain_over_v3', market)).toMatchObject({ value: null, status: 'no_fixture' });
+      expect(row(empty, 'spearman_human_gain_over_v3', market).note).toContain(`fixtures/scorer/recorded.${market}.json is not on disk yet`);
+    }
+    const report = buildReport({ enforce: 'all', live: false, invariants: [], suites: [{ file: 'scorer.suite.ts', name, layer, measures: empty, error: null, notBuilt: null }], baselines: {}, audit: null, listUnbuilt: false });
+    expect(report.rows.filter((r) => r.metric.startsWith('spearman_human_gain_over_v3')).map((r) => [r.metric, r.status])).toEqual([
+      ['spearman_human_gain_over_v3 [intl]', 'no_fixture'],
+      ['spearman_human_gain_over_v3 [cn]', 'no_fixture'],
+    ]);
+    expect(report.rows.some((r) => r.status === 'not_built')).toBe(false);
   });
 });
 
@@ -539,6 +552,15 @@ describe('recording (live) and replay (offline) of three runs', () => {
     expect(row(measures, 'spearman_human', 'intl')).toMatchObject({ value: agree.value, n: PAIRS, labels: 'human' });
     expect(row(measures, 'spearman_human', 'intl').note).toContain('recruiter grades of 2026-10-05');
     expect(measures.some((m) => m.metric === 'spearman_human_v3')).toBe(false);
+    // The v4 recording and the audit are on disk and `spearman_human` is measured (it passes); the comparison with
+    // scorer v3 is NOT, and its row says which file is missing and the command that records it (M4 cross-review).
+    const missingV3 = row(measures, 'spearman_human_gain_over_v3', 'intl');
+    expect(missingV3).toMatchObject({ value: null, status: 'no_fixture' });
+    expect(missingV3.note).toContain('fixtures/scorer/recorded.v3.intl.json is not on disk');
+    expect(missingV3.note).toContain('MATCH_SCORER_RUBRIC=fit_v3 EVAL_LIVE=1 EVAL_SCORER_RECORD=1 npm run eval:match -- --live');
+    const withoutV3 = reportOf(measures);
+    expect(withoutV3.rows.find((r) => r.metric === 'spearman_human [intl]')).toMatchObject({ status: 'pass' });
+    expect(withoutV3.rows.find((r) => r.metric === 'spearman_human_gain_over_v3 [intl]')).toMatchObject({ gate: '>= 0', status: 'no_fixture' });
 
     // Scorer v3, recorded the same way (the rollback switch set), on the same pairs.
     const v3 = await record(dir, (pair) => v3Answer(strong(`${pair.userId}::${pair.jobId}`) ? 'high' : 'low'), {}, 'scorer_v3');
@@ -560,7 +582,10 @@ describe('recording (live) and replay (offline) of three runs', () => {
     const few = await run(ctx({ markets: ['intl'], fixturesDir: dir }));
     expect(row(few, 'spearman_human', 'intl')).toMatchObject({ value: null, status: 'no_fixture', n: 29, labels: 'human' });
     expect(row(few, 'spearman_human', 'intl').note).toContain('29 graded pairs were scored in every run; 30 are needed');
-    expect(few.some((m) => m.metric.startsWith('spearman_human_'))).toBe(false);
+    // Nothing is compared with v3 then: no v3 value is printed, and the comparison reads `no_fixture` for the same reason.
+    expect(few.some((m) => m.metric === 'spearman_human_v3')).toBe(false);
+    expect(row(few, 'spearman_human_gain_over_v3', 'intl')).toMatchObject({ value: null, status: 'no_fixture', n: 29 });
+    expect(row(few, 'spearman_human_gain_over_v3', 'intl').note).toContain('29 graded pairs were scored in every run; 30 are needed');
     expect(reportOf(few).rows.find((r) => r.metric === 'spearman_human [intl]')).toMatchObject({ status: 'no_fixture' });
     // The stability rows do not depend on the audit.
     expect(row(few, 'tier_flip_rate', 'intl')).toMatchObject({ value: 0, n: PAIRS });

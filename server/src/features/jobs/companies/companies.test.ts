@@ -22,6 +22,7 @@ import {
   escapeLike,
   INDUSTRY_IDS,
   industryIdFor,
+  liveJobWhere,
   mapIndustries,
   MAX_POSTING_INDUSTRIES,
   POSTING_INDUSTRY_SOURCE,
@@ -306,6 +307,75 @@ describe('read service SQL', () => {
     expect(escapeLike('50%_off\\')).toBe('50\\%\\_off\\\\');
     expect(call.values.at(-1)).toBe(5);
     expect(await svc.typeahead('intl', 'a')).toEqual([]);
+  });
+});
+
+describe('the company\'s job list: sources (M4 cross-review)', () => {
+  // The list is the Company tab's "other jobs at this company" (components/features/company/CompanyTab.tsx) and
+  // the API's `GET /companies/:id/jobs`. It carries no `cardMeta`, so it cannot print a credit line.
+  const row = (id: string, sourceBoard: string, over: Record<string, unknown> = {}) => ({
+    id,
+    companyId: 'c1',
+    market: 'intl',
+    visibility: 'public',
+    isCanonical: true,
+    archivedAt: null,
+    title: `Role ${id}`,
+    companyName: 'Acme',
+    companyLogoUrl: null,
+    location: 'Taipei',
+    workModel: null,
+    employmentType: null,
+    seniority: null,
+    salaryMin: null,
+    salaryMax: null,
+    salaryCurrency: null,
+    salaryPeriod: null,
+    salaryText: null,
+    salaryDisclosed: false,
+    postedAt: NOW,
+    publicDisplay: true,
+    lastSeenAt: NOW,
+    sourceBoard,
+    sourceName: null,
+    originalSourceName: null,
+    sourceUrl: null,
+    fromRecruiterBank: false,
+    employerVerified: false,
+    isAgency: null,
+    ...over,
+  });
+  const db = createFakePrisma({
+    seed: {
+      rACompany: [{ id: 'c1', market: 'intl', nameNormalized: 'acme', displayName: 'Acme', slug: 'acme', domain: null, logoUrl: null, website: null, industries: [], sizeBand: null, hqLocation: null, foundedYear: null, description: null, facts: {} }],
+      rAJob: [
+        row('board', 'greenhouse'),
+        row('open_data', 'tw_open_data'),
+        row('gov', 'tw_gov_jobs'),
+        row('unknown', 'some_new_source'),
+        row('aggregator', 'jsearch'),
+        row('bank', 'robohire', { fromRecruiterBank: true }),
+      ],
+      rAH1bEmployerStat: [],
+    },
+  });
+  const service = createCompanyReadService(db as unknown as CompaniesDb, () => NOW);
+
+  it('a row that owes a credit line is neither listed nor counted: the list cannot print the line', async () => {
+    for (const viewer of [{ publicOnly: true }, { publicOnly: false }]) {
+      const list = await service.jobs('intl', 'c1', undefined, viewer);
+      expect(list.items.map((i) => i.jobId).sort()).toEqual(['aggregator', 'bank', 'board', 'unknown']);
+      expect((await service.profile('intl', 'c1', viewer)).openJobs).toMatchObject({ value: 4 });
+    }
+    // The hold is in the one predicate the list and the count share, next to a caller's own restriction.
+    expect(liveJobWhere('intl', 'c1').AND).toEqual([{ NOT: { sourceBoard: { in: ['tw_open_data', 'tw_gov_jobs'] } } }]);
+    expect(liveJobWhere('cn', 'c1', { publicOnly: false, restrict: { fromRecruiterBank: false } }).AND).toEqual([{ NOT: { sourceBoard: { in: ['tw_open_data', 'tw_gov_jobs'] } } }, { fromRecruiterBank: false }]);
+  });
+
+  it('an employer board is claimed only for a known board source; anything else is a provider, never "read from the employer"', async () => {
+    const kinds = Object.fromEntries((await service.jobs('intl', 'c1', undefined, { publicOnly: false })).items.map((i) => [i.jobId, i.source.kind]));
+    // Before: every row that was not a bank's or one of three aggregators' was labelled `ats_public` (D3).
+    expect(kinds).toEqual({ board: 'ats_public', unknown: 'provider', aggregator: 'provider', bank: 'bank' });
   });
 });
 

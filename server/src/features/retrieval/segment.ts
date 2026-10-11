@@ -32,6 +32,11 @@
 // numbers. When nothing else is left they are kept, so a query never becomes
 // empty by this rule.
 //
+// `filterTokens` is the other list: the tokens a typed query FILTERS on (an
+// AND). It keeps the stopwords that can be part of a job's name ("IT support",
+// "social work", 招聘专员; FILTER_KEPT_STOPWORDS), because a filter that leaves
+// them out filters on the other word alone.
+//
 // Nothing here is ever displayed.
 
 import { foldHantToHans } from './hantHans.js';
@@ -147,6 +152,34 @@ export function queryTokens(text: string | null | undefined): string[] {
   const all = [...new Set(segmentForSearch(text))];
   const useful = all.filter((t) => !QUERY_STOPWORDS.has(t) && !isSingleCjk(t) && !/^\p{N}+$/u.test(t));
   return (useful.length ? useful : all).slice(0, MAX_QUERY_TOKENS);
+}
+
+/**
+ * The stopwords that can be part of a job's name: "IT support", "US tax",
+ * "social work", "work from home", "job coach", "show producer", 招聘专员,
+ * 社会工作. An OR query leaves them out with the rest (they match nearly every
+ * posting and `ts_rank_cd` has no rarity weight); a FILTER that leaves them
+ * out filters "IT support" on "support" alone.
+ */
+export const FILTER_KEPT_STOPWORDS: ReadonlySet<string> = new Set(['it', 'us', 'work', 'working', 'job', 'role', 'position', 'use', 'show', 'find', '招聘', '工作', '岗位', '职位']);
+
+/**
+ * The distinct tokens a typed query FILTERS on (the AND of the feed's typed-query
+ * predicate, feed/sql.ts `allTokensTsQuery`), at most `MAX_QUERY_TOKENS`, in
+ * order of first appearance. A document keeps every token, so a word can be
+ * required of it. Every token of the query is required, except:
+ *   - the stopwords that are grammar or the filler of a job search ("for", "a",
+ *     "the", "jobs", "roles", "looking", 相关, 想找): `QUERY_STOPWORDS` without
+ *     `FILTER_KEPT_STOPWORDS`. "nurse jobs" must not need a posting that says
+ *     "jobs";
+ *   - one-character CJK tokens and bare numbers, as in the OR query.
+ * When nothing else is left they are kept, so a filter never becomes empty by
+ * this rule. `queryTokens` (the OR query of the lexical leg) is not this list.
+ */
+export function filterTokens(text: string | null | undefined): string[] {
+  const all = [...new Set(segmentForSearch(text))];
+  const required = all.filter((t) => (!QUERY_STOPWORDS.has(t) || FILTER_KEPT_STOPWORDS.has(t)) && !isSingleCjk(t) && !/^\p{N}+$/u.test(t));
+  return (required.length ? required : all).slice(0, MAX_QUERY_TOKENS);
 }
 
 /** A token as a quoted `to_tsquery` operand. */

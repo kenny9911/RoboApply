@@ -97,8 +97,27 @@ export const CompanyFactsSchema = z.record(
   z.object({ source: z.string(), url: z.string().optional(), fetchedAt: z.string() }).passthrough(),
 );
 
-/** `RAJob.skillsDetail`: `[{ skill, kind, required }]` */
-export const JobSkillsDetailSchema = z.array(z.object({ skill: z.string(), kind: z.enum(['hard', 'soft']), required: z.boolean() }).strict());
+/**
+ * `RAJob.skillsDetail`. Enrichment v3 (MKT-4D) writes ONE entry per skill:
+ * `[{ skill, kind: 'hard' | 'soft' | 'certification', required, skillId, via, also? }]`
+ * (`skillId` null when the vocabulary holds no skill for the string; `via:
+ * 'embedding'` is a machine guess; `also` names the other spellings of the
+ * skill that `RAJob.skills` keeps). A row enriched before version 3 carries
+ * `[{ skill, kind: 'hard' | 'soft', required }]`. Both shapes parse; the type
+ * the writer uses is `SkillDetail` (jobs/enrich/reconcile.ts).
+ */
+export const JobSkillsDetailSchema = z.array(
+  z
+    .object({
+      skill: z.string(),
+      kind: z.enum(['hard', 'soft', 'certification']),
+      required: z.boolean(),
+      skillId: z.string().nullable().optional(),
+      via: z.enum(['alias', 'embedding', 'new', 'none']).optional(),
+      also: z.array(z.string()).optional(),
+    })
+    .strict(),
+);
 
 /** `RAJob.locations`: `[{ city, region, country, lat, lng }]` */
 export const JobLocationsSchema = z.array(

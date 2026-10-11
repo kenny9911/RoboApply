@@ -175,7 +175,6 @@ export interface MemoryRepoState {
   keywords: Record<string, KeywordInput[]>;
   users: Record<string, Omit<UserMatchInputs, 'resumeParsed' | 'userId' | 'market'>>;
   active: Array<{ id: string; brand: string; lastActiveAt: Date }>;
-  cachedScores: Record<string, number>;
   /** AppConfig values by key (the calibration document). */
   config: Record<string, string>;
   /** Variant ids that are NOT a primary resume (calibration reads primary resumes only). Default: every variant is primary. */
@@ -208,7 +207,6 @@ export function createMemoryRepo(seed: Partial<MemoryRepoState> = {}): MatchRepo
     keywords: seed.keywords ?? {},
     users: seed.users ?? { u1: defaultUserInputs() },
     active: seed.active ?? [],
-    cachedScores: {},
     config: seed.config ?? {},
     nonPrimary: seed.nonPrimary ?? [],
   };
@@ -252,8 +250,15 @@ export function createMemoryRepo(seed: Partial<MemoryRepoState> = {}): MatchRepo
       state.scores.push(saved);
       return saved;
     },
-    async updateVariantCachedScore(variantId, score) {
-      state.cachedScores[variantId] = score;
+    // The production rule (repo.ts): the first writer wins for a text of the posting; a list of another text is replaced.
+    async saveJobRequirements(jobId, doc) {
+      hit('saveJobRequirements');
+      const job = state.jobs.find((j) => j.id === jobId);
+      if (!job) return false;
+      const had = job.requirements as { contentHash?: unknown } | null | undefined;
+      if (had && had.contentHash === doc.contentHash) return false;
+      job.requirements = doc;
+      return true;
     },
     async getKeywords(jobId) {
       return state.keywords[jobId] ?? null;
@@ -291,11 +296,13 @@ export function createMemoryRepo(seed: Partial<MemoryRepoState> = {}): MatchRepo
           .map((s) => s.jobId),
       );
     },
-    async listCalibrationPairs({ market, since, limit }) {
+    async listCalibrationPairs({ market, since, limit, promptVersion }) {
       hit('listCalibrationPairs');
       const marketOf = new Map(state.jobs.map((j) => [j.id, j.market]));
       return state.scores
         .filter((s) => s.scoreKind === 'ai' && s.generatedAt >= since && marketOf.get(s.jobId) === market && !state.nonPrimary.includes(s.resumeVariantId))
+        // As the Prisma repository: with a prompt version named, only the rows that scorer wrote.
+        .filter((s) => !promptVersion || s.promptVersion === promptVersion)
         .sort((a, b) => b.generatedAt.getTime() - a.generatedAt.getTime())
         .map((s) =>
           toCalibrationPair({

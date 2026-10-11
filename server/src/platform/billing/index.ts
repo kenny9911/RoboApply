@@ -154,6 +154,8 @@ export type {
 export {
   STRIPE_REFUND_EVENT_TYPES,
   issueRefund,
+  purchaseWaived,
+  purchaseWaiverStamp,
   reversePackGrant,
   reversePassPeriod,
   setStripeRefundDepsForTests,

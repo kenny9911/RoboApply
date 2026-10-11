@@ -12,6 +12,8 @@ next-env.d.ts
 .tsbuildinfo
 .turbo/
 coverage/
+# vitest's JSON reporter output (`npx vitest run --reporter=json`); written into the repository root
+.vitest/
 .playwright-cli/
 output/playwright/
 

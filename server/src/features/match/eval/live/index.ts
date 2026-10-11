@@ -27,7 +27,7 @@ import type { Persona } from '../fixtures/schema.js';
 import { CAREER_CHANGER_SUBSET, LANGUAGE_GATED_SUBSETS, LANGUAGE_REFERENCE_SUBSET, type GateLayer, type JudgeUse } from '../gates.js';
 import { ndcgAtK, shareEstimateGreatAiBelowPossible, tierOfScore, weightedKappa } from '../metrics.js';
 import type { Report, SuiteRun } from '../run.js';
-import { fitKind, isSeamMissing, loadSeam, type FitApi, type FitLike } from '../seams.js';
+import { fitKind, isSeamMissing, type FitApi, type FitLike } from '../seams.js';
 import type { SuiteContext, SuiteMarket, SuiteMeasure } from '../suite.js';
 import { recordsWorld } from '../world.js';
 import { exportAudit, type AuditPair } from './audit.js';
@@ -104,25 +104,30 @@ async function defaultScorerModel(): Promise<string | null> {
   }
 }
 
-/** The production scorer on a synthetic persona and a snapshot posting, in the persona's locale; the total uses the product's own arithmetic. */
-const defaultScoreOnce: LiveDeps['scoreOnce'] = async ({ persona, row, estimate, model }) => {
-  const { RAJobMatchScorerV3Agent } = await import('../../../../roboapply/v2/agents/RAJobMatchScorerAgent.js');
-  const combine = await loadSeam<(dims: unknown[]) => number | null>('server/src/features/match/preScore.ts#combineDimensions');
-  const logistics = estimate?.dimensions.find((d) => d.key === 'logistics') ?? null;
-  const out = await new RAJobMatchScorerV3Agent().run(
-    {
-      resumeMarkdown: persona.resumeMarkdown,
-      profileContext: null,
-      job: { title: row.title, companyName: row.companyName, seniority: row.seniority, educationLevel: row.educationLevel, minYears: row.minYears, skills: row.skills, description: row.descriptionPlain, qualifications: row.qualifications, responsibilities: null },
-      logistics: { score: logistics?.score ?? null, lines: [] },
-      targets: { titles: [], seniority: [] },
-    },
-    { locale: persona.locale, model },
-  );
-  const weights = { title_level: 35, skills: 30, industry: 15, career_path: 10 } as const;
-  const dims: unknown[] = (Object.keys(weights) as Array<keyof typeof weights>).map((key) => ({ key, weight: weights[key], score: out.dimensions[key].score, status: out.dimensions[key].score === null ? 'not_stated' : 'scored', evidence: [] }));
-  if (logistics) dims.push(logistics);
-  return combine(dims);
+/**
+ * The PINNED scorer of the market (scorer v4 unless `MATCH_SCORER_RUBRIC` says
+ * `fit_v3`) on a synthetic persona and a snapshot posting, in the persona's
+ * locale, through the product's own path: `scoreOnce` of the scorer suite runs
+ * `getFit` on a MatchService whose scorer is the real agent, so the total, the
+ * verification of the checklist and the tier rule are the product's. Null when
+ * the scorer gave no usable answer. (Until the M4 gate this called the v3
+ * agent directly, so the live `icc_3_runs` measured the scorer the product no
+ * longer runs by default: MKT-4G request 5.)
+ */
+const defaultScoreOnce: LiveDeps['scoreOnce'] = async ({ persona, row, model, market }) => {
+  const { scoreOnce } = await import('../suites/scorer.suite.js');
+  const { currentScorerPin } = await import('../../config.js');
+  const world = recordsWorld(market, [persona], [row as MatchJobRecord]);
+  const scored = await scoreOnce(world, {
+    userId: persona.id,
+    jobId: row.id,
+    locale: persona.locale,
+    prompt: currentScorerPin(brandOfMarket(market), model).prompt,
+    answerer: { kind: 'live' },
+    // The real model of the market and the real route rule; everything else is the world's fakes.
+    deps: { resolveModel: () => model, routeAllowed: undefined },
+  });
+  return scored.score;
 };
 
 function rankByFit(ids: string[], fits: Map<string, FitLike>): string[] {

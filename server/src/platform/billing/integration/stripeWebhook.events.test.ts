@@ -1439,6 +1439,17 @@ describe('a cancellation made in the Stripe portal gets the confirmation mail, o
     expect(await claims()).toEqual([]);
   });
 
+  it('a cancellation for an account that is being closed sends no "features stay on" mail: not from the app, not from the webhook', async () => {
+    // M4 cross-review: the closing account gets ONE mail, the account-deleted one (accountCloseBilling.ts).
+    await subscribedRow();
+    account.subs.set('sub_1', sub('sub_1'));
+    const outcome = await cancelPlan('u_1', { source: 'in_app' }, { confirmationMail: false });
+    expect(outcome).toMatchObject({ status: 'cancelled', changed: true });
+    expect(account.subs.get('sub_1')).toMatchObject({ cancel_at_period_end: true, metadata: { cancelSource: 'in_app' } });
+    expect(await deliver('customer.subscription.updated', account.subs.get('sub_1')!)).toEqual({ handled: true });
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
   it('the webhook that overtakes our own row update (the row still says "renews") does not mail either', async () => {
     await subscribedRow({ cancelAtPeriodEnd: false });
     for (const source of ['in_app', 'public_link', 'legacy_route']) {

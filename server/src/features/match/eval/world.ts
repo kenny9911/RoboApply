@@ -13,7 +13,8 @@
 import crypto from 'node:crypto';
 import { runWithBrand } from '../../../lib/requestContext.js';
 import { getBrand, type BrandId, type ProductBrand } from '../../../platform/brand/registry.js';
-import { SCORER_PROMPT_VERSION, type MatchDimension } from '../contract.js';
+import { currentScorerPin } from '../config.js';
+import { FIT_RUBRIC_BY_PROMPT, type FitPromptVersion, type MatchDimension } from '../contract.js';
 import type { MatchJobRecord } from '../context.js';
 import type { MatchServiceDeps } from '../MatchService.js';
 import { createMemoryRepo, defaultUserInputs, jobRecord, resumeRecord, type MemoryRepoState } from '../testkit.js';
@@ -59,6 +60,33 @@ export function countingScorer(): CountingScorer {
     },
   };
   return scorer;
+}
+
+/**
+ * The scorer v4 twin of `countingScorer`, counting into the same counter. A
+ * service that is handed both scorers runs the one its pin names, so with this
+ * fake the harness worlds run the DEFAULT pin (`fit_v4`) instead of following
+ * the one scorer they were given (MKT-4G request 7). It answers as a model
+ * does: it copies one line of the posting (an empty checklist is refused for
+ * a posting that lists skills) and judges it "not shown".
+ */
+export function countingScorerV4(counter: { calls: number }): NonNullable<MatchServiceDeps['scorerV4']> {
+  return {
+    async run(input) {
+      counter.calls += 1;
+      const source = String(input.job.qualifications || input.job.description || '');
+      const line = (source.split(/(?<=[.。])\s+/)[0] ?? '').replace(/[.。]$/, '').slice(0, 240);
+      return {
+        requirements: [{ id: 'r1', kind: 'experience', text: line, importance: 'must', status: 'not_shown', evidence: '' }],
+        level: { post: 'senior', resume: 'senior', direction: 'match' },
+        domain: { status: 'not_stated', evidence: '' },
+        trajectory: { status: 'neutral', evidence: '' },
+        strengths: [],
+        gaps: [],
+        summary: null,
+      };
+    },
+  };
 }
 
 export interface CountingEmbeddings {
@@ -145,6 +173,7 @@ export function createWorld(options: WorldOptions = {}): World {
   const deps: MatchServiceDeps & Record<string, unknown> = {
     repo,
     scorer,
+    scorerV4: countingScorerV4(scorer),
     resolveModel: () => EVAL_SCORER_MODEL,
     routeAllowed: () => true,
     aiAllowed: async () => aiAllowed,
@@ -221,27 +250,45 @@ function weightedTotal(dims: MatchDimension[]): number {
  * every rule of the contract (same resume content hash, a fit rubric, valid
  * components, no job content hash recorded yet).
  */
-export function freshAiRow(input: { userId?: string; jobId?: string; resumeVariantId?: string; resumeContentHash?: string; dimensions?: MatchDimension[]; generatedAt?: Date } = {}): Record<string, unknown> {
+export function freshAiRow(
+  input: {
+    userId?: string;
+    jobId?: string;
+    resumeVariantId?: string;
+    resumeContentHash?: string;
+    dimensions?: MatchDimension[];
+    generatedAt?: Date;
+    /**
+     * The scorer that wrote the row. Default: the default pin of an empty environment (`scorer_v4` since MKT-4G; the
+     * same for both markets), which is what a world of `createWorld` runs. A service that is handed the v3 fake ONLY
+     * follows it (its pin is v3): a test that builds such a service names `scorer_v3` here, or its "fresh" row is a
+     * row of another rubric, which is stale and which a surface that may call a model replaces.
+     */
+    prompt?: FitPromptVersion;
+  } = {},
+): Record<string, unknown> {
   const dimensions = input.dimensions ?? aiDimensions({ title_level: 80, skills: 60, industry: 50, logistics: 100, career_path: 70 });
   const score = weightedTotal(dimensions);
+  const prompt = input.prompt ?? currentScorerPin('roboapply', EVAL_SCORER_MODEL, {}).prompt;
+  const pin = { prompt, rubric: FIT_RUBRIC_BY_PROMPT[prompt] };
   return {
     userId: input.userId ?? 'u1',
     jobId: input.jobId ?? 'job1',
     resumeVariantId: input.resumeVariantId ?? 'v1',
     score,
-    explanation: { strengths: [], gaps: [], rationale: '', keywordsMatched: [], keywordsMissing: [], responseLanguage: 'en', promptVersion: SCORER_PROMPT_VERSION },
+    explanation: { strengths: [], gaps: [], rationale: '', keywordsMatched: [], keywordsMissing: [], responseLanguage: 'en', promptVersion: pin.prompt },
     resumeContentHashAtScore: input.resumeContentHash ?? 'hash-1',
     modelUsed: EVAL_SCORER_MODEL,
     generatedAt: input.generatedAt ?? new Date(EVAL_NOW.getTime() - 3_600_000),
     scoreKind: 'ai',
     tier: score >= 80 ? 'great' : score >= 65 ? 'good' : score >= 45 ? 'possible' : 'unlikely',
     dimensions,
-    promptVersion: SCORER_PROMPT_VERSION,
+    promptVersion: pin.prompt,
     locale: 'en',
     searchProfileVersion: 1,
     // Columns of the fit contract (MKT-0 schema; written by MKT-1F). Null hash: recorded before the column existed.
     jobContentHash: null,
-    rubricVersion: 'fit_v3',
+    rubricVersion: pin.rubric,
   };
 }
 

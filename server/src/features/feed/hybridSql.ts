@@ -8,18 +8,25 @@
 //   leg         order                                   extra                        the typed q
 //   A recency   postedAt DESC                           the window (14 or 45 days)   wide predicate
 //   B lexical   ts_rank_cd(searchTsv, query) DESC       searchTsv @@ query           wide predicate
-//   C dense     embedding <=> vector (exact distance)   JOIN "RAJobEmbedding"        not applied
+//   C dense     embedding <=> vector (exact distance)   JOIN "RAJobEmbedding"        wide predicate
 //
 // Leg A is `retrievalSql` of sql.ts, unchanged. Legs B and C reach back to the
 // list's age floor (`ageFloorSql`: 120 days, or the search's "posted within"),
 // not to the 14-day first window, so the best match that is not among the
 // newest rows can be found.
 //
-// The typed `q`: every leg is built with the filter fields minus `q`, and the
-// q rule is added apart. Legs A and B apply `wideQPredicateSql(q)` (the search
-// document holds every word of the query, OR the thin searchText matches;
-// sql.ts). Leg C does not: it is the leg that finds synonyms, adjacent titles
-// and other languages. Every other predicate applies to all three legs.
+// The typed `q` is a FILTER of the list, so every leg applies it: each is
+// built with the filter fields minus `q`, and the one q rule
+// (`wideQPredicateSql(q)`: the search document holds every word of the query,
+// OR the thin searchText matches; sql.ts) is added to all three. A leg that
+// skipped it would return its 200 nearest (or newest) rows of everything the
+// other filters leave, and the list would hold postings the count does not
+// (M4 cross-review: with fewer than 200 vector rows under a search, a typed
+// keyword filtered nothing under Recommended and Best fit). What leg C adds
+// under a typed `q` is ORDER: among the postings that carry the words, the
+// ones nearest in meaning first. With no typed `q` (the ranking words of a
+// natural-language search, or the person's own vector) it is unconstrained:
+// that is where it finds synonyms, adjacent titles and other languages.
 //
 // Two queries, two jobs. The FILTER of a typed `q` needs every word (the AND
 // of its tokens, `allTokensTsQuery`). Leg B's own `@@` and its ORDER BY use the
@@ -67,7 +74,7 @@ export interface WideLegSqlInput extends LegSqlInput {
 export interface LegPredicates {
   /** Scope and filter predicates: the same for every leg of one input. */
   shared: Prisma.Sql[];
-  /** The typed-query rule of legs A and B; null when no `q` is typed. */
+  /** The typed-query rule, applied by every leg; null when no `q` is typed. */
   q: Prisma.Sql | null;
 }
 
@@ -75,7 +82,7 @@ const FROM = Prisma.sql`FROM "RAJob" j LEFT JOIN "RACompany" c ON c."id" = j."co
 
 const withoutQ = (fields: readonly FilterField[] | undefined): FilterField[] => (fields ?? FILTER_FIELDS).filter((f) => f !== 'q');
 
-/** The predicates every leg shares, and the q rule legs A and B add. */
+/** The predicates every leg shares, and the q rule every leg adds when a `q` is typed. */
 export function legPredicates(input: Pick<LegSqlInput, 'scope' | 'filters' | 'fields'>): LegPredicates {
   const q = input.filters.q?.trim();
   return {
@@ -122,11 +129,13 @@ LIMIT ${input.limit}`;
  * Leg C: rows that have a vector of `modelTag` in this market, nearest to the
  * vector first: an exact distance over the rows the filters leave, no
  * approximate index. `vectorLiteral` is the text form of a checked 1024-number
- * vector (retrieval `vectorLiteral`). The typed `q` is not applied.
+ * vector (retrieval `vectorLiteral`). A typed `q` filters this leg like the
+ * other two (the list holds what the count counts); with none the leg is
+ * bounded by the other filters only.
  */
 export function denseLegSql(input: WideLegSqlInput, vectorLiteral: string, modelTag: string): Prisma.Sql {
-  const { shared } = legPredicates(input);
-  const parts = [...shared, ageFloorSql(input.ageFloor)];
+  const { shared, q } = legPredicates(input);
+  const parts = [...shared, ...(q ? [q] : []), ageFloorSql(input.ageFloor)];
   return Prisma.sql`SELECT ${FEED_COLUMNS}
 ${FROM}
 JOIN "RAJobEmbedding" e ON e."jobId" = j."id" AND e."model" = ${modelTag} AND e."market" = ${input.scope.market}

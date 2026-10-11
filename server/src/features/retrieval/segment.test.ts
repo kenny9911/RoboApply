@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { normalizeTitle } from '../jobs/taxonomy/index.js';
-import { MAX_QUERY_TOKENS, QUERY_STOPWORDS, queryTokens, segmentForSearch, toTsQuery } from './segment.js';
+import { FILTER_KEPT_STOPWORDS, MAX_QUERY_TOKENS, QUERY_STOPWORDS, filterTokens, queryTokens, segmentForSearch, toTsQuery } from './segment.js';
 
 describe('segmentForSearch', () => {
   it('gives the same tokens with and without a space: 产品经理 and 产品 经理', () => {
@@ -128,6 +128,30 @@ describe('toTsQuery', () => {
     expect(toTsQuery('jobs')).toBe("'jobs'");
     expect(toTsQuery('厨')).toBe("'厨'");
     expect(toTsQuery('2026')).toBe("'2026'");
+  });
+
+  it('filterTokens: the tokens a typed query filters on keep the stopwords that can be part of a job\'s name', () => {
+    // The OR query leaves them out; a filter that does so filters "IT support" on "support" alone.
+    expect(queryTokens('IT support')).toEqual(['support']);
+    expect(filterTokens('IT support')).toEqual(['it', 'support']);
+    expect(filterTokens('social work')).toEqual(['social', 'work']);
+    expect(filterTokens('US tax')).toEqual(['us', 'tax']);
+    expect(filterTokens('work from home')).toEqual(['work', 'home']);
+    expect(filterTokens('招聘 专员')).toEqual(['招聘', '专员']);
+    for (const word of FILTER_KEPT_STOPWORDS) expect(QUERY_STOPWORDS.has(word), word).toBe(true);
+    // Grammar and search filler are not required of a posting; nor are one-character CJK tokens and bare numbers.
+    expect(filterTokens('jobs for a data engineer in 2026')).toEqual(['data', 'engineer']);
+    expect(filterTokens('nurse jobs')).toEqual(['nurse']);
+    expect(filterTokens('北京的产品经理')).toEqual(queryTokens('北京的产品经理'));
+    // A document holds every token the filter asks for (it keeps all of its own).
+    const doc = new Set(segmentForSearch('IT Support Specialist. You will support our US tax team and work from home.'));
+    for (const q of ['IT support', 'US tax', 'work from home']) for (const token of filterTokens(q)) expect(doc.has(token), `${q}: ${token}`).toBe(true);
+    // Never empty by this rule, at most 24, and nothing for no text.
+    expect(filterTokens('the jobs')).toEqual(['the', 'jobs']);
+    expect(filterTokens('厨')).toEqual(['厨']);
+    expect(filterTokens(Array.from({ length: 40 }, (_, i) => `term${i}`).join(' '))).toHaveLength(MAX_QUERY_TOKENS);
+    expect(filterTokens(null)).toEqual([]);
+    expect(filterTokens(' !!! ')).toEqual([]);
   });
 
   it('carries at most 24 tokens, the first ones', () => {

@@ -541,18 +541,24 @@ export class AdminBillingService {
       select: CN_ORDER_SELECT,
     });
     const refunds = orders.length
-      ? await db.rABillingRefund.findMany({ where: { alipayOrderId: { in: orders.map((o) => o.id) } }, select: { alipayOrderId: true, kind: true, full: true } })
+      ? await db.rABillingRefund.findMany({ where: { alipayOrderId: { in: orders.map((o) => o.id) } }, select: { alipayOrderId: true, kind: true, full: true, entitlementReversed: true, note: true } })
       : [];
     return {
-      items: orders.map((order) => ({
-        id: order.id,
-        outTradeNo: order.outTradeNo,
-        planKey: cnPlanKey(order),
-        channel: cnChannel(order),
-        amountMinor: cnAmountMinor(order),
-        completedAt: (order.completedAt ?? order.createdAt).toISOString(),
-        refunded: refundedMarkOf(refunds.filter((r) => r.alipayOrderId === order.id)),
-      })),
+      items: orders.map((order) => {
+        const mine = refunds.filter((r) => r.alipayOrderId === order.id);
+        // A full record whose reversal failed (`recordCnRefund` marked the row): the next record call finishes it.
+        const stoppedHalfWay = mine.some((r) => r.kind === 'manual_cn' && r.full && !r.entitlementReversed && r.note === NOTE_NOT_REVERSED);
+        return {
+          id: order.id,
+          outTradeNo: order.outTradeNo,
+          planKey: cnPlanKey(order),
+          channel: cnChannel(order),
+          amountMinor: cnAmountMinor(order),
+          completedAt: (order.completedAt ?? order.createdAt).toISOString(),
+          refunded: refundedMarkOf(mine),
+          ...(stoppedHalfWay ? { reversalPending: true as const } : {}),
+        };
+      }),
     };
   }
 

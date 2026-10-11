@@ -24,8 +24,15 @@ import { ADHOC_POSTING_ID, setFitServiceForTests } from '../match/fit.js';
 import { fitFixture } from '../agent/__tests__/fitFixture.js';
 import { createMatchService } from '../match/MatchService.js';
 import { createMemoryRepo, jobRecord } from '../match/testkit.js';
-import { freshAiRow } from '../match/eval/world.js';
+import { freshAiRow as harnessAiRow } from '../match/eval/world.js';
 import { RESUME_SERVICE_MODULE, chip, defaultExtensionDeps, pagePosting } from './defaultDeps.js';
+
+/**
+ * A stored AI fit that is fresh for THIS file's service: it is handed the scorer v3 fake only, so its pin is v3
+ * (a service follows the one scorer it was given), and a fresh row is a v3 row. The harness helper writes a row of
+ * the default pin (scorer v4) since the M4 gate.
+ */
+const freshAiRow = (input: Parameters<typeof harnessAiRow>[0] = {}) => harnessAiRow({ prompt: 'scorer_v3', ...input });
 
 describe('defaultExtensionDeps', () => {
   it('resolves the resume service module', () => {

@@ -453,7 +453,8 @@ export function measuresOf(market: SuiteMarket, rows: readonly PersonaRecall[], 
     const r = mean(changers.map((c) => c.recency));
     const h = mean(changers.map((c) => c.hybrid));
     out.push({ metric: 'recall_at_200_recency', market, subset: CAREER_CHANGER_SUBSET, labels: 'constructed', value: r.value, n: r.n, note: apart });
-    // Its own metric id: the hybrid gate reads every subset of `recall_at_200_hybrid`, and these rows are not gated.
+    // Its own metric id, so the row cannot be mistaken for the gated value. (Since the M4 gate the two retrieval
+    // gates also leave this subset out themselves, `exceptSubsets` in gates.ts, as the ranking gates do.)
     out.push({ metric: 'recall_at_200_fused', market, subset: CAREER_CHANGER_SUBSET, labels: 'constructed', value: h.value, n: h.n, note: apart });
   }
   return out;

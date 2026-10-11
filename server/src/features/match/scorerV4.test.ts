@@ -516,6 +516,39 @@ describe('the posting\'s stored list: every person is judged against the same li
     expect(second.requirements.map((r) => r.status)).toEqual(['not_shown', 'not_shown', 'met']);
   });
 
+  it('a model cannot take a stored line out of the score: its "not_applicable" reads "not shown" (M4 cross-review)', () => {
+    // Four must-have lines the posting's stored list holds; the resume shows one.
+    const four: JobRequirement[] = [
+      { id: 'r1', kind: 'experience', text: '5+ years of backend experience', importance: 'must' },
+      { id: 'r2', kind: 'skill', text: 'Kubernetes required', importance: 'must' },
+      { id: 'r3', kind: 'skill', text: 'Terraform required', importance: 'must' },
+      { id: 'r4', kind: 'experience', text: 'Experience leading an on-call rotation', importance: 'must' },
+    ];
+    const answers = (rest: ScorerV4RequirementAnswer['status']): ScorerV4RequirementAnswer[] => [
+      { ...four[0]!, status: 'met', evidence: 'Senior Software Engineer, PayCo (2019-01 – present)' },
+      ...four.slice(1).map((line) => ({ ...line, status: rest, evidence: '' })),
+    ];
+    const notShown = run(answer({ requirements: answers('not_shown') }), { stored: four });
+    const notApplicable = run(answer({ requirements: answers('not_applicable') }), { stored: four });
+    // One of four must-have lines: 25. Before this rule the second answer left three lines out and read 100.
+    expect(score(notShown, 'skills')).toBe(25);
+    expect(score(notApplicable, 'skills')).toBe(25);
+    expect(notApplicable.requirements.map((r) => r.status)).toEqual(['met', 'not_shown', 'not_shown', 'not_shown']);
+    expect(notApplicable.requirements).toEqual(notShown.requirements);
+    expect(notApplicable.dimensions).toEqual(notShown.dimensions);
+    // A required degree answered "not applicable" halves the level like one answered "not shown": the same line for everyone.
+    const degree: JobRequirement[] = [{ id: 'r1', kind: 'education', text: "Bachelor's degree in Computer Science", importance: 'must' }];
+    const level = (status: ScorerV4RequirementAnswer['status']) => score(run(answer({ requirements: [{ ...degree[0]!, status, evidence: '' }] }), { stored: degree }), 'title_level');
+    expect(level('not_applicable')).toBe(level('not_shown'));
+    expect(level('not_applicable')).toBe(50);
+    // The server's own "never judged" lines stay not applicable (an age line, a school tier), whatever was answered.
+    const age: JobRequirement[] = [{ id: 'r1', kind: 'experience', text: '年龄35岁以下', importance: 'must' }, four[1]!];
+    const withAge = run(answer({ requirements: [{ ...age[0]!, status: 'not_applicable', evidence: '' }, { ...age[1]!, status: 'not_applicable', evidence: '' }] }), { stored: age });
+    expect(withAge.requirements.map((r) => r.status)).toEqual(['not_applicable', 'not_shown']);
+    // A COPIED line the model marks not applicable is still not a line of the checklist (nothing to store or judge).
+    expect(run(answer()).requirements.map((r) => r.text)).not.toContain('We offer a gym membership');
+  });
+
   it('the stored order is kept, an entry the list does not have is ignored, and an answer that leaves a line out is refused', () => {
     const shuffled = [...filled()].reverse();
     const extra: ScorerV4RequirementAnswer = { id: 'r9', kind: 'skill', text: 'Go', importance: 'must', status: 'met', evidence: 'TypeScript, Go, PostgreSQL' };

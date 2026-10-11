@@ -28,7 +28,7 @@
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { Market } from '../../platform/brand/registry.js';
 import { logger } from '../../services/LoggerService.js';
-import { CALIBRATION_PRIORS_MIN_PAIRS, calibrationMinPairs } from './config.js';
+import { CALIBRATION_PRIORS_MIN_PAIRS, calibrationMinPairs, currentScorerPin } from './config.js';
 import { MATCH_DIMENSION_KEYS, type MatchDimensionKey, type MatchPriors } from './contract.js';
 import type { CalibrationPair } from './repo.js';
 
@@ -298,7 +298,8 @@ export function withCalibratedPriors(starting: MatchPriors, calibrated: Partial<
 export interface CalibrationStore {
   getConfigValue(key: string): Promise<string | null>;
   setConfigValue(key: string, value: string): Promise<void>;
-  listCalibrationPairs(input: { market: Market; since: Date; limit: number }): Promise<CalibrationPair[]>;
+  /** `promptVersion`: only the rows that scorer prompt wrote (the market's pinned scorer). */
+  listCalibrationPairs(input: { market: Market; since: Date; limit: number; promptVersion?: string | null }): Promise<CalibrationPair[]>;
 }
 
 export interface CalibrationDeps {
@@ -343,7 +344,15 @@ export function createCalibration(deps: CalibrationDeps): Calibration {
     return doc;
   }
 
-  const pairsFor = (market: Market, since: Date) => deps.store.listCalibrationPairs({ market, since, limit: CALIBRATION_PAIR_LIMIT });
+  /**
+   * The pairs the market's PINNED scorer wrote (`MATCH_SCORER_RUBRIC`, per market): the map and the priors put the
+   * estimate on the scale of one scorer. Scorer v3 judged four components and scorer v4 computes them from a
+   * checklist, so their totals are two scales; while v4 replaces the stored v3 rows, mixed pairs would teach the map
+   * neither. Consequence: after a change of the pin a market has no map (ranking keeps the blend) until the new
+   * scorer has written `MATCH_CALIBRATION_MIN_PAIRS` rows, and gets it at the next weekly refresh after that.
+   */
+  const pairsFor = (market: Market, since: Date) =>
+    deps.store.listCalibrationPairs({ market, since, limit: CALIBRATION_PAIR_LIMIT, promptVersion: currentScorerPin(market === 'cn' ? 'goapply' : 'roboapply', null, deps.env).prompt });
 
   return {
     pairsFor,

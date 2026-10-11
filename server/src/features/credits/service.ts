@@ -62,6 +62,7 @@ import {
   paidOnlyCreditsUsed,
   planDefinitionFor,
   publicFxReference,
+  purchaseWaived,
   readFxReference,
   recordCheckoutAcknowledgements,
   resumeSubscription,
@@ -428,6 +429,20 @@ function invoiceLinePeriod(invoice: Stripe.Invoice): { start: Date; end: Date } 
 /** `details.reason` of a 409 `withdrawal_not_available`: the subscription was ended, and the provider refused the refund. */
 const REFUND_REFUSED = 'refund_refused';
 
+/**
+ * Is this refusal of a withdrawal's refund the end of the matter? Only when
+ * nothing more CAN go back: our rows say the payment is refunded already
+ * (`already_refunded`, `amount_above_refundable`), or the provider says so
+ * itself (`charge_already_refunded`). The engine reports every other request
+ * the provider rejects under the same `refund_not_available` /
+ * `refused_by_provider`; those are not final (the refund was never made).
+ */
+function refundRefusalIsFinal(err: BillingError): boolean {
+  const reason = err.details?.reason;
+  if (reason === 'already_refunded' || reason === 'amount_above_refundable') return true;
+  return reason === 'refused_by_provider' && err.details?.providerCode === 'charge_already_refunded';
+}
+
 function cancelLinkInvalid(): BillingError {
   return new BillingError('cancel_token_invalid', 'This link has expired or was already used. Ask for a new one.');
 }
@@ -768,12 +783,17 @@ export class CreditsAreaService {
    * other failure can come after the subscription was already cancelled at
    * Stripe, so the cache is dropped then too.
    *
-   * One of those failures is the provider refusing the refund itself after the
-   * subscription was ended (the payment was refunded by hand a moment ago,
-   * say). Nothing more can go back, so it is answered as "not open" with the
-   * reason `refund_refused`: the page reads the plan again and finds it ended.
-   * Every other one is the provider (or our database) failing: the instant is
-   * kept, so the same request sent again finishes what the buyer asked for.
+   * One of those failures is the refund being refused after the subscription
+   * was ended because the money already went back (the payment was refunded
+   * by hand a moment ago, say: `refundRefusalIsFinal`). Nothing more can go
+   * back, so it is answered as "not open" with the reason `refund_refused`:
+   * the page reads the plan again and finds it ended. Every other one is the
+   * provider (or our database) failing, or the provider rejecting the refund
+   * request for another reason: the instant is kept and the answer is 502, so
+   * the same request sent again finishes what the buyer asked for and the
+   * declaration is there for staff. (The engine resolves each payment BEFORE
+   * it ends the subscription, so a purchase it cannot refund at all is refused
+   * with nothing changed.)
    */
   private async runWithdrawal(db: CreditsDb, userId: string, purchaseId: string, actor: 'self' | 'public_link', declaredAt: Date | null): Promise<WithdrawalResult> {
     try {
@@ -784,7 +804,12 @@ export class CreditsAreaService {
       this.d.invalidateEntitlements(userId);
       if (err instanceof BillingError && err.code === 'refund_not_available') {
         logger.error('CREDITS', 'withdrawal: the refund was refused after the subscription was ended', { userId, purchaseId, actor, details: err.details ?? null });
-        throw new BillingError('withdrawal_not_available', 'A withdrawal is not open for this purchase', { reason: REFUND_REFUSED });
+        if (refundRefusalIsFinal(err)) throw new BillingError('withdrawal_not_available', 'A withdrawal is not open for this purchase', { reason: REFUND_REFUSED });
+        // Any other refusal (a request the provider rejects, a payment that could not be resolved a second time) is
+        // not "the money already went back": the buyer has no plan and no refund. It is kept like a provider
+        // failure, so the purchase stays listed at the quoted amount and staff can find the declaration.
+        if (!declaredAt) await this.declareWithdrawal(db, userId, purchaseId, actor);
+        throw new BillingError('payment_provider_error', 'The refund could not be sent to the payment provider. Try again.', { provider: 'stripe' });
       }
       if (!declaredAt) await this.declareWithdrawal(db, userId, purchaseId, actor);
       throw err;
@@ -1393,17 +1418,9 @@ export class CreditsAreaService {
     if (!charge) return { charge: null, facts: null, decision: null };
 
     const chargedAt = new Date(charge.chargedAt);
-    const waiver = account.seekerProfileId
-      ? await db.seekerConsentRecord.findFirst({
-          where: {
-            seekerProfileId: account.seekerProfileId,
-            consentType: 'withdrawal_waiver',
-            granted: true,
-            createdAt: { gte: new Date(chargedAt.getTime() - 86_400_000), lte: new Date(chargedAt.getTime() + 3_600_000) },
-          },
-          select: { id: true },
-        })
-      : null;
+    // The waiver box of this charge: the Stripe purchase's own checkout stamp, else the consent window (the engine's
+    // one reading, `purchaseWaived`; a mainland order and a renewal carry no stamp).
+    const waiver = await purchaseWaived(db, account.seekerProfileId, charge.source === 'stripe' ? invoice : null, chargedAt);
 
     const usage = await db.rACreditLedger.findMany({
       where: { userId, status: 'committed', fromSource: 'window', bucket: { in: [...WINDOW_BUCKETS] }, createdAt: { gte: chargedAt } },
@@ -1457,7 +1474,7 @@ export class CreditsAreaService {
       currency: charge.currency,
       now,
       billingCountry,
-      withdrawalWaiver: Boolean(waiver),
+      withdrawalWaiver: waiver,
       paidOnlyCreditsUsed: paidOnly,
       packCreditsUsed: packCreditsUsed ?? undefined,
       periodStart: period.start,
@@ -1465,7 +1482,7 @@ export class CreditsAreaService {
     });
     return {
       charge,
-      facts: { billingCountry, withdrawalWaiver: Boolean(waiver), paidOnlyCreditsUsed: paidOnly, packCreditsUsed },
+      facts: { billingCountry, withdrawalWaiver: waiver, paidOnlyCreditsUsed: paidOnly, packCreditsUsed },
       decision,
     };
   }

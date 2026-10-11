@@ -9,7 +9,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import { normalizeSql } from '../../test/sqlSnapshot.js';
 import { FILTER_FIELDS, type FilterField, type FilterSet } from '../search/index.js';
 import { AGE_EXPIRY_BOARDS } from '../jobs/normalize/index.js';
-import { queryTokens, toTsQuery } from '../retrieval/index.js';
+import { filterTokens, queryTokens, toTsQuery } from '../retrieval/index.js';
 import {
   AGE_FLOOR_BOARDS,
   ageFloorSql,
@@ -111,14 +111,40 @@ describe('predicates (one snapshot per FilterSet field)', () => {
     expect(show(wideQPredicateSql('product manager'))!.values[0]).toBe("'product' & 'manager'");
     expect(show(wideQPredicateSql('Terraform, Kubernetes'))!.values[0]).toBe("'terraform' & 'kubernetes'");
     expect(show(predicateFor('q', { q: 'senior product manager' }, intl))!.values[0]).toBe("'senior' & 'product' & 'manager'");
-    // The same tokens as the lexical leg's query (function words, one-character CJK tokens and bare numbers left
-    // out; the Traditional form folded), joined by AND where the leg's ORDER BY joins them by OR.
+    // The tokens are retrieval `filterTokens` (the Traditional form folded), joined by AND. For a query with no
+    // stopword that can be part of a job's name they are the lexical leg's tokens, which its ORDER BY joins by OR.
     for (const q of ['product manager', 'jobs for a data engineer in 2026', '資深 前端 工程師', 'C++ and node.js']) {
       const all = allTokensTsQuery(q)!;
+      expect(all.split(' & '), q).toEqual(filterTokens(q).map((t) => `'${t}'`));
       expect(all.split(' & '), q).toEqual(queryTokens(q).map((t) => `'${t}'`));
       expect(all.split(' & ').join(' | '), q).toBe(toTsQuery(q));
     }
+    // Grammar, search filler ("jobs", "for", "a", "in") and bare numbers are not required of a posting.
     expect(allTokensTsQuery('jobs for a data engineer in 2026')).toBe("'data' & 'engineer'");
+    expect(allTokensTsQuery('nurse jobs')).toBe("'nurse'");
+  });
+
+  it('the filter keeps the words an OR query drops when they can be part of a job\'s name (M4 cross-review)', () => {
+    // Before: "IT support" filtered on 'support' alone, "social work" on 'social', "招聘 专员" on '专员'.
+    const cases: Array<[string, string, string]> = [
+      ['IT support', "'it' & 'support'", "'support'"],
+      ['social work', "'social' & 'work'", "'social'"],
+      ['IT manager', "'it' & 'manager'", "'manager'"],
+      ['US tax', "'us' & 'tax'", "'tax'"],
+      ['work from home', "'work' & 'home'", "'home'"],
+      ['job coach', "'job' & 'coach'", "'coach'"],
+      ['招聘 专员', "'招聘' & '专员'", "'专员'"],
+      ['招聘专员', "'招聘' & '专员'", "'专员'"],
+    ];
+    for (const [q, filter, legQuery] of cases) {
+      expect(allTokensTsQuery(q), q).toBe(filter);
+      expect(show(wideQPredicateSql(q))!.values[0], q).toBe(filter);
+      // The lexical leg's OR query is unchanged: it still ranks by the words that tell postings apart.
+      expect(toTsQuery(q), q).toBe(legQuery);
+    }
+    // Only such words: they are all that is left, and they are required.
+    expect(allTokensTsQuery('work')).toBe("'work'");
+    expect(allTokensTsQuery('the jobs')).toBe("'the' & 'jobs'");
     // A query of one word is the same under AND and OR: nothing changes for it.
     expect(allTokensTsQuery('terraform')).toBe(toTsQuery('terraform'));
     expect(allTokensTsQuery('+++')).toBeNull();

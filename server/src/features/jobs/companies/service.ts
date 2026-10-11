@@ -24,7 +24,7 @@ import { createHash } from 'node:crypto';
 import type prisma from '../../../lib/prisma.js';
 import type { Market } from '../../../platform/brand/index.js';
 import { httpError, type Sourced } from '../../../platform/http.js';
-import type { FeedItem } from '../../feed/contract.js';
+import { creditLineHeldWhere, sourceKindOf, type FeedItem } from '../../feed/contract.js';
 import { hostOf, normalizeCompanyName, type CompanyUpsert } from '../normalize/index.js';
 import { industryIdFor, mapIndustries } from './industryMap.js';
 import {
@@ -278,7 +278,15 @@ export interface CompanyReadViewer {
   restrict?: Record<string, unknown>;
 }
 
-/** Public, live, canonical, this market (TASK_PLAN §2.2 count rule); `publicOnly` adds publicDisplay (OPS-A4). */
+/**
+ * Public, live, canonical, this market (TASK_PLAN §2.2 count rule); `publicOnly` adds publicDisplay (OPS-A4).
+ *
+ * A row that owes a credit line (the Taiwan open-data sources) is held out of
+ * the list and of the count: the list is the Company tab's "other jobs at this
+ * company" and carries no `cardMeta` to print the line with (strategy 1.3:
+ * attribution on every open-data row; feed/sourceLine.ts `creditLineHeld`).
+ * Remove the hold in the change that carries `cardMeta.tw_sources` here.
+ */
 export function liveJobWhere(market: Market, companyId: string, viewer: CompanyReadViewer = { publicOnly: true }) {
   return {
     companyId,
@@ -287,7 +295,7 @@ export function liveJobWhere(market: Market, companyId: string, viewer: CompanyR
     isCanonical: true,
     archivedAt: null,
     ...(viewer.publicOnly ? { publicDisplay: true } : {}),
-    ...(viewer.restrict ? { AND: [viewer.restrict] } : {}),
+    AND: [creditLineHeldWhere(), ...(viewer.restrict ? [viewer.restrict] : [])],
   };
 }
 
@@ -371,12 +379,13 @@ interface JobListRow {
 }
 
 const PAY_PERIODS = new Set(['year', 'month', 'day', 'hour']);
-const API_BOARDS = new Set(['activejobs', 'linkedin', 'jsearch']);
 
 /** Pure: a live job row → the feed card shape (no fit, no badges derived here). */
 export function toCompanyJobItem(r: JobListRow): FeedItem {
   const hasPay = r.salaryDisclosed && (r.salaryMin != null || r.salaryMax != null) && !!r.salaryCurrency && PAY_PERIODS.has(r.salaryPeriod ?? '');
-  const kind: FeedItem['source']['kind'] = r.fromRecruiterBank ? 'bank' : API_BOARDS.has(r.sourceBoard) ? 'provider' : 'ats_public';
+  // The feed's own rule (feed/sourceLine.ts): an employer board is claimed only for a known board source. Before,
+  // every row that was not a bank's or one of three aggregators' was called an employer board (D3).
+  const kind: FeedItem['source']['kind'] = sourceKindOf({ sourceBoard: r.sourceBoard, fromRecruiterBank: r.fromRecruiterBank });
   return {
     jobId: r.id,
     title: r.title,

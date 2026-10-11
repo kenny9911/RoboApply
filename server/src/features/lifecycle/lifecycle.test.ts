@@ -14,7 +14,7 @@ import { fitSnapshot, type Fit } from '../match/fit.js';
 import { fitFixture, fitsFixture } from '../agent/__tests__/fitFixture.js';
 import { TOP_FIT_CANDIDATES, createPrismaLifecycleRepo, resumeCheckViewSignalSince, type LifecyclePerson, type LifecycleRepo, type PrismaLifecycleRepoOptions, type TopFitJob } from './repo.js';
 import { LIFECYCLE_STEPS, TIPS_STEPS, dayBudgetUsed, eligibleSteps, stepForTemplate, type SentRecord } from './rules.js';
-import { FEED_LIMITS } from '../feed/contract.js';
+import { CREDIT_LINE_BOARDS, FEED_LIMITS, creditLineHeldWhere } from '../feed/contract.js';
 import { CANDIDATE_PAGE, RE_ENGAGEMENT_COUNT_LIMIT, canSendWith, countNewJobsWith, createLifecycleTask, runForPerson, type LifecycleDeps } from './service.js';
 
 const HOUR = 3_600_000;
@@ -548,6 +548,16 @@ describe('lifecycle repo: the tailoring tip reads THE fit', () => {
       orderBy: { score: 'desc' },
       where: { userId: 'u1', job: { market: 'intl', visibility: 'public', isCanonical: true, archivedAt: null, closedAt: null } },
     });
+  });
+
+  it('never names a job that owes a credit line the tip cannot print: the Taiwan open-data rows are not candidates (M4 cross-review)', async () => {
+    const { repo, findScores } = repoWith();
+    await repo.topFitJob('u1', 'intl');
+    const where = (findScores.mock.calls[0]![0] as unknown as { where: { job: Record<string, unknown> } }).where;
+    // The same hold as alerts, similar jobs and Ready to apply (feed/sourceLine.ts `creditLineHeld`).
+    expect(where.job).toMatchObject({ market: 'intl', visibility: 'public', NOT: { sourceBoard: { in: [...CREDIT_LINE_BOARDS] } } });
+    expect(where.job.NOT).toEqual(creditLineHeldWhere().NOT);
+    expect(CREDIT_LINE_BOARDS).toContain('tw_open_data');
   });
 
   it('the candidates are different jobs: rows of tailored versions cannot crowd out the job that has an AI fit for the main resume', async () => {

@@ -78,9 +78,10 @@ export interface DefaultAreasOptions {
 
 /**
  * What the Assistant reads of job detail's public surface. `similar` is the
- * job page's Similar jobs list (`GET /jobs/:id/similar`). The surface
- * (`jobDetailService` in jobs/detail/index.ts) does not offer it yet, so it is
- * read when present; see `similarJobs` below.
+ * job page's Similar jobs list (`GET /jobs/:id/similar`), which the surface
+ * (`jobDetailService` in jobs/detail/index.ts) offers since the M4 gate, so
+ * production always reads that list. It stays optional here for a seam handed
+ * in without it; see `similarJobs` below.
  */
 export type JobDetailSeam = Pick<JobDetailService, 'get'> & { similar?: (userId: string, jobId: string) => Promise<SimilarJobsResponse> };
 
@@ -152,13 +153,15 @@ export function createDefaultAreas(options: DefaultAreasOptions): CopilotAreas {
       const personalized = options.personalized ?? (await import('../feed/index.js')).isFeedPersonalized;
       if (!(await personalized(userId, getCurrentBrandOrDefault().market))) return out;
       const read = options.fits?.getFits ?? match.getFits;
-      for (const [jobId, fit] of await read(userId, ids)) out.set(jobId, match.fitToView(fit, { locale: opts.locale }));
+      // The request language goes to the read too: skill labels (`topOverlap`, `topGap`, the aligned and missing
+      // lists) are then written in it, as the keyword check and a re-score of the same job already are.
+      for (const [jobId, fit] of await read(userId, ids, { locale: opts.locale })) out.set(jobId, match.fitToView(fit, { locale: opts.locale }));
       return out;
     },
-    // The job page's Similar jobs list (by job vector since MKT-2F / MKT-2H, best fit first). Job detail's public
-    // surface offers `get` only today, so `similar` is read when the surface has it (the Request in
-    // docs/jobright-clone/orch/handoffs-mkt/MKT-4H.md adds it there). Until then the answer is what the Similar
-    // jobs quick action did before: a search by the job's title through the feed, said as such (`by: 'title'`).
+    // The job page's Similar jobs list (by job vector since MKT-2F / MKT-2H, best fit first), read from job detail's
+    // public surface (`jobDetailService.similar`, there since the M4 gate). A seam without it (a test's) gets what
+    // the Similar jobs quick action did before MKT-4H: a search by the job's title through the feed, said as such
+    // (`by: 'title'`). That branch is not reached in production; removing it is in requests/waveM4-carryover.md.
     async similarJobs(userId, jobId) {
       const detail = await jobDetail();
       if (typeof detail.similar === 'function') return { items: (await detail.similar(userId, jobId)).items, by: 'similar' };

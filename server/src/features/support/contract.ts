@@ -71,7 +71,10 @@ export interface PopularJobList {
 export interface IndexStatsResponse {
   /** Live public canonical jobs of the brand's market, rounded down; null when unknown. */
   openRoles: Sourced<number> | null;
-  /** Of those, first seen in the last 7 days, rounded down; null when unknown. */
+  /**
+   * Of those, the ones first seen in the last 7 days whose own posting date (stated by the source, not estimated)
+   * is in the last 7 days too, rounded down; null when unknown. Never the size of a bulk load.
+   */
   addedThisWeek: Sourced<number> | null;
   /** Roles with ≥ POPULAR_LIST_MIN_JOBS publicly displayable live jobs, most first. */
   popularLists: PopularJobList[];

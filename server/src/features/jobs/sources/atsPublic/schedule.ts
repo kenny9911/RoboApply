@@ -4,6 +4,10 @@
 //
 //   success        failCount 0, lastError null, lastSyncedAt = the read.
 //                  lastChangeAt = now when the run added or closed a posting.
+//                  A board's FIRST successful read is not a change (it adds
+//                  every posting the board lists; ingest/boards.ts
+//                  `writeBoard`): the board is then read every 24 h until a
+//                  posting really opens or closes.
 //                  Next read: +2 h when the board changed in the last 48 h,
 //                  +12 h when in the last 14 days, +24 h otherwise.
 //                  Posting texts (SmartRecruiters) change that: while texts

@@ -27,6 +27,19 @@ describe('the gate table (strategy 2.6)', () => {
     expect(gate('scorer', 'spearman_human').rule).toEqual({ kind: 'min', threshold: 0.6 });
     expect(gate('taxonomy', 'category_precision').rule).toEqual({ kind: 'min', threshold: 0.95 });
     expect(gate('skills', 'precision_not_shown').rule).toEqual({ kind: 'min', threshold: 0.95 });
+    // M4 gate: the two counts the skills suite must report as 0, the v3 comparison of the scorer, and the career
+    // changers left out of the two retrieval gates as they are out of the ranking ones.
+    expect(gate('skills', 'duplicate_items').rule).toEqual({ kind: 'below', threshold: 1 });
+    expect(gate('skills', 'soft_items_listed').rule).toEqual({ kind: 'below', threshold: 1 });
+    expect(compareWithGate(gate('skills', 'duplicate_items'), { value: 0 }).status).toBe('pass');
+    expect(compareWithGate(gate('skills', 'duplicate_items'), { value: 1 }).status).toBe('fail');
+    expect(gate('scorer', 'spearman_human_gain_over_v3').rule).toEqual({ kind: 'min', threshold: 0 });
+    expect(compareWithGate(gate('scorer', 'spearman_human_gain_over_v3'), { value: -0.01 }).status).toBe('fail');
+    expect(compareWithGate(gate('scorer', 'spearman_human_gain_over_v3'), { value: 0 }).status).toBe('pass');
+    for (const metric of ['recall_at_200_hybrid', 'recall_at_200_worst_persona_delta']) {
+      expect(gateReads(gate('retrieval', metric), CAREER_CHANGER_SUBSET)).toBe(false);
+      expect(gateReads(gate('retrieval', metric), null)).toBe(true);
+    }
     expect(gate('language', 'ndcg_at_10').rule).toEqual({ kind: 'within_relative', share: 0.1, ofSubset: 'en' });
     expect(gate('language', 'ndcg_at_10').subsets).toEqual(['zh-TW', 'zh-CN', 'cross']);
     expect(gate('latency', 'feed_p95_ms').rule).toEqual({ kind: 'max_increase', amount: 150 });
@@ -40,7 +53,9 @@ describe('the gate table (strategy 2.6)', () => {
   });
 
   it('describes each gate in words', () => {
-    for (const g of GATES) expect(gateText(g).length).toBeGreaterThan(3);
+    // The shortest text is a count gate's ("< 1": the two skills counts that must be 0).
+    for (const g of GATES) expect(gateText(g).length).toBeGreaterThanOrEqual(3);
+    expect(gateText(gate('skills', 'duplicate_items'))).toBe('< 1');
     expect(gateText(gate('retrieval', 'recall_at_200_hybrid'))).toBe('>= recall_at_200_recency + 15 points');
     expect(gateText(gate('language', 'ndcg_at_10'))).toBe('within 10% relative of the en subset');
   });
