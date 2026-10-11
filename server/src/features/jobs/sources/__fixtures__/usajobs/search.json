@@ -1,0 +1,215 @@
+{
+  "LanguageCode": "EN",
+  "SearchParameters": {},
+  "SearchResult": {
+    "SearchResultCount": 2,
+    "SearchResultCountAll": 2,
+    "SearchResultItems": [
+      {
+        "MatchedObjectId": "21947200",
+        "MatchedObjectDescriptor": {
+          "PositionID": "SW62210-05-1716110PB411413H",
+          "PositionTitle": "IT SPECIALIST (INFOSEC/NETWORK)",
+          "PositionURI": "https://www.usajobs.gov/GetJob/ViewDetails/21947200",
+          "ApplyURI": [
+            "https://www.usajobs.gov/GetJob/ViewDetails/21947200?PostingChannelID=RESTAPI"
+          ],
+          "PositionLocationDisplay": "Point Loma Complex, San Diego, California",
+          "PositionLocation": [
+            {
+              "LocationName": "Point Loma Complex, San Diego, California",
+              "CountryCode": "United States",
+              "CountrySubDivisionCode": "California",
+              "CityName": "Point Loma Complex, San Diego, California",
+              "Longitude": -117.194382,
+              "Latitude": 32.7042961
+            }
+          ],
+          "OrganizationName": "Space and Naval Warfare Systems Command",
+          "DepartmentName": "Department of the Navy",
+          "JobCategory": [
+            {
+              "Name": "Information Technology",
+              "Code": "2200"
+            },
+            {
+              "Name": "Information Technology Management",
+              "Code": "2210"
+            }
+          ],
+          "JobGrade": [
+            {
+              "Code": "NO"
+            }
+          ],
+          "PositionSchedule": [
+            {
+              "Name": "Full Time",
+              "Code": "1"
+            }
+          ],
+          "PositionOfferingType": [
+            {
+              "Name": "Permanent",
+              "Code": "15317"
+            }
+          ],
+          "QualificationSummary": "SYNTHETIC qualification summary: one year of experience securing networks.",
+          "PositionRemuneration": [
+            {
+              "MinimumRange": "92108",
+              "MaximumRange": "119746",
+              "RateIntervalCode": "PA",
+              "Description": "Per Year"
+            }
+          ],
+          "PositionStartDate": "2016-06-05T00:00:00Z",
+          "PositionEndDate": "2016-12-01T00:00:00Z",
+          "PublicationStartDate": "2016-06-05T00:00:00Z",
+          "ApplicationCloseDate": "2016-12-01T00:00:00Z",
+          "PositionFormattedDescription": [
+            {
+              "Content": "SYNTHETIC teaser text.",
+              "Label": "Dynamic Teaser",
+              "LabelDescription": "Hit highlighting for keyword searches."
+            }
+          ],
+          "UserArea": {
+            "Details": {
+              "MajorDuties": "SYNTHETIC major duties: plan and run network security reviews.",
+              "Education": "SYNTHETIC education text.",
+              "Requirements": "",
+              "Evaluations": "SYNTHETIC evaluations text.",
+              "HowToApply": "SYNTHETIC how to apply. Contact Fake Person at fake.person@example.invalid or 000-555-0100.",
+              "WhatToExpectNext": "SYNTHETIC what to expect next.",
+              "RequiredDocuments": "SYNTHETIC required documents.",
+              "Benefits": "SYNTHETIC benefits.",
+              "BenefitsUrl": "",
+              "OtherInformation": "SYNTHETIC other information.",
+              "KeyRequirements": [],
+              "JobSummary": "SYNTHETIC job summary: protect the command's networks.",
+              "WhoMayApply": {
+                "Name": "United States Citizens",
+                "Code": "15514"
+              },
+              "LowGrade": "05",
+              "HighGrade": "05",
+              "SubAgencyName": "Space and Naval Warfare System Command Pacific",
+              "OrganizationCodes": "DD/NV/NV39"
+            },
+            "IsRadialSearch": false
+          }
+        },
+        "RelevanceRank": 0.0
+      },
+      {
+        "MatchedObjectId": "900000002",
+        "MatchedObjectDescriptor": {
+          "PositionID": "SYNTHETIC-0002",
+          "PositionTitle": "SYNTHETIC Program Support Assistant",
+          "PositionURI": "https://www.usajobs.gov/GetJob/ViewDetails/900000002",
+          "ApplyURI": [
+            "https://www.usajobs.gov/GetJob/ViewDetails/900000002?PostingChannelID=RESTAPI"
+          ],
+          "PositionLocationDisplay": "Washington, District of Columbia",
+          "PositionLocation": [
+            {
+              "LocationName": "Washington, District of Columbia",
+              "CountryCode": "United States",
+              "CountrySubDivisionCode": "District of Columbia",
+              "CityName": "Washington, District of Columbia",
+              "Longitude": -77.0369,
+              "Latitude": 38.9072
+            },
+            {
+              "LocationName": "Denver, Colorado",
+              "CountryCode": "United States",
+              "CountrySubDivisionCode": "Colorado",
+              "CityName": "Denver, Colorado",
+              "Longitude": -104.9903,
+              "Latitude": 39.7392
+            }
+          ],
+          "OrganizationName": "SYNTHETIC Example Bureau",
+          "DepartmentName": "SYNTHETIC Example Department",
+          "JobCategory": [
+            {
+              "Name": "Information Technology Management",
+              "Code": "2210"
+            }
+          ],
+          "JobGrade": [
+            {
+              "Code": "GS"
+            }
+          ],
+          "PositionSchedule": [
+            {
+              "Name": "Part-Time",
+              "Code": "2"
+            }
+          ],
+          "PositionOfferingType": [
+            {
+              "Name": "Permanent",
+              "Code": "15317"
+            }
+          ],
+          "QualificationSummary": "SYNTHETIC qualification summary: six months of office support experience.",
+          "PositionRemuneration": [
+            {
+              "MinimumRange": "21.50",
+              "MaximumRange": "27.95",
+              "RateIntervalCode": "PH",
+              "Description": "Per Hour"
+            }
+          ],
+          "PositionStartDate": "2026-10-05T00:00:00Z",
+          "PositionEndDate": "2026-10-19T00:00:00Z",
+          "PublicationStartDate": "2026-10-05T00:00:00Z",
+          "ApplicationCloseDate": "2026-10-19T00:00:00Z",
+          "PositionFormattedDescription": [
+            {
+              "Content": "SYNTHETIC teaser text.",
+              "Label": "Dynamic Teaser",
+              "LabelDescription": "Hit highlighting for keyword searches."
+            }
+          ],
+          "UserArea": {
+            "Details": {
+              "MajorDuties": "SYNTHETIC major duties: keep the office's records and schedules.",
+              "Education": "",
+              "Requirements": "SYNTHETIC requirements: a background check.",
+              "Evaluations": "SYNTHETIC evaluations text.",
+              "HowToApply": "SYNTHETIC how to apply. Contact Fake Person at fake.person@example.invalid or 000-555-0100.",
+              "WhatToExpectNext": "SYNTHETIC what to expect next.",
+              "RequiredDocuments": "SYNTHETIC required documents.",
+              "Benefits": "SYNTHETIC benefits.",
+              "BenefitsUrl": "",
+              "OtherInformation": "SYNTHETIC other information.",
+              "KeyRequirements": [
+                "SYNTHETIC: U.S. Citizenship is required",
+                "SYNTHETIC: Must pass a background check"
+              ],
+              "JobSummary": "SYNTHETIC job summary: support the bureau's program office.",
+              "WhoMayApply": {
+                "Name": "Agency Employees Only",
+                "Code": "15509"
+              },
+              "LowGrade": "05",
+              "HighGrade": "06",
+              "SubAgencyName": "SYNTHETIC Example Office",
+              "OrganizationCodes": "XX/XX00"
+            },
+            "IsRadialSearch": false
+          }
+        },
+        "RelevanceRank": 0.0
+      }
+    ],
+    "UserArea": {
+      "NumberOfPages": "1",
+      "IsRadialSearch": false
+    }
+  }
+}
