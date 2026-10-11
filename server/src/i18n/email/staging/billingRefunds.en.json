@@ -1,0 +1,28 @@
+{
+  "billingRefunds": {
+    "refundIssued": {
+      "subject": "Your %BRAND% refund of {amount}",
+      "heading": "We refunded your payment",
+      "bodyFull": "We refunded {amount} for {plan}. That is the full amount you paid.",
+      "bodyPartial": "We refunded {amount} of your payment for {plan}.",
+      "bodyRest": "We refunded {amount} for {plan}. With the earlier refunds, your payment is now refunded in full.",
+      "method": "The money goes back to the payment method you paid with. Your bank or card provider decides when it shows on your statement.",
+      "accessEndedPlan": "The paid time from this purchase is no longer on your account. If no other paid plan is running, your account is now on Free.",
+      "accessEndedPack": "The unused practice credits from this pack are no longer on your account.",
+      "accessUnchanged": "Your plan and your credits stay as they are.",
+      "cta": "See your plan"
+    },
+    "withdrawalConfirmed": {
+      "subject": "Your %BRAND% withdrawal is confirmed",
+      "heading": "Your withdrawal is confirmed",
+      "body": "You withdrew from your contract for {plan}.",
+      "received": "We received your withdrawal on {at}.",
+      "refund": "We are refunding {amount} to the payment method you paid with. Your bank or card provider decides when it shows on your statement.",
+      "refundNone": "No refund is due, because the period you paid for was already used.",
+      "endedSubscription": "The subscription has ended. It will not renew and you will not be charged again for it.",
+      "endedPass": "The pass has ended. Its paid time is no longer on your account.",
+      "endedPack": "The unused practice credits from this pack are no longer on your account.",
+      "cta": "See your plan"
+    }
+  }
+}
