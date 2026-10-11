@@ -8,15 +8,31 @@
 //   1. skip users without AI consent (GoApply `aiAllowed=false`: zero model
 //      calls), without a resume, or whose per-user precompute allowance
 //      (SCORE_PRECOMPUTE_PER_USER_DAY, default 25) is spent;
-//   2. pre-score the candidate jobs the feed would list for them (the feed's
-//      `preview` seam: their active search with the feed's own filters, order
-//      and visibility rules), so AI scores land on the jobs they will see;
-//   3. queue `job.score` for the best pre-scores that have no fresh AI score.
-//      Fresh means written for this resume content AND by the pinned model and
-//      prompt AND for the posting as it is now: a row of an earlier model, an
-//      earlier prompt or an earlier version of the posting is picked again.
-//      That is the planned backfill after a version or posting change (I7);
-//      until its turn comes the old row keeps serving, flagged stale.
+//   2. read the candidate jobs the feed lists first for them (the feed's
+//      `preview` seam: their active search with the feed's own filters, its
+//      fused and ranked order and its visibility rules), so AI scores land on
+//      the jobs they will see, in the order they will see them;
+//   3. queue `job.score` for those candidates IN THE FEED'S ORDER, skipping
+//      only the ones that have a fresh AI score. The list is not sorted again
+//      by the estimate: the feed's order already is the best reading of what
+//      the person sees first, and the newest candidates of the feed are
+//      re-scored first after a version change.
+//      Fresh means written for this resume content AND under the current pin
+//      (config.ts `currentScorerPin`: the model and the scorer prompt of
+//      MATCH_SCORER_RUBRIC) AND for the posting as it is now: a row of an
+//      earlier model, an earlier prompt or rubric, or an earlier version of
+//      the posting is picked again. That is the planned backfill after a
+//      version or posting change (I7): gradual, inside the per-user and brand
+//      budgets below, never a bulk invalidation; until its turn comes the old
+//      row keeps serving, flagged stale.
+//      The walk stops when the person's allowance (and the brand's budget)
+//      worth of items was really queued: a candidate whose item already
+//      exists (still waiting, or dead after a refused answer) takes no slot,
+//      so it cannot keep the candidates behind it from being scored. An item
+//      that is DONE while its pair has no fresh score is queued again: its
+//      row was replaced since (the rubric or the model was switched and
+//      switched back), and the same version key would otherwise block the
+//      pair until the finished item is pruned.
 // One user's failure (their profile, their search, the feed preview) is
 // logged and counted; the run goes on with the next user, so a user whose
 // preview throws cannot block everyone behind them run after run.
@@ -39,13 +55,13 @@ import crypto from 'node:crypto';
 import type { RateLimitResult, RateWindow } from '../../platform/ratelimit/index.js';
 import type { CronResult, CronTask, EnqueueOptions, EnqueuedItem } from '../../platform/queue/index.js';
 import { calibrationFor, type CalibrationRefreshResult } from './calibration.js';
-import { SCORER_PROMPT_VERSION } from './contract.js';
 import { currentJobHash } from './jobHash.js';
 import {
   PRECOMPUTE_ACTIVE_DAYS,
   PRECOMPUTE_CANDIDATES,
   PRECOMPUTE_MAX_USERS,
   SCORE_WINDOW_SEC,
+  currentScorerPin,
   precomputePerUserDay,
   scoreCounterKeys,
   scoreDailyBudget,
@@ -54,7 +70,7 @@ import type { EnvSource } from '../../platform/brand/brandEnv.js';
 import type { ProductBrand } from '../../platform/brand/registry.js';
 import { logger } from '../../services/LoggerService.js';
 import { defaultScorerRouteAllowed } from './scorerRoute.js';
-import type { MatchService } from './MatchService.js';
+import { visibleTo, type MatchService } from './MatchService.js';
 import type { MatchRepo } from './repo.js';
 import { MATCH_WORK_KINDS, type JobScorePayload } from './workers.js';
 
@@ -82,8 +98,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const RESERVE_MS = 5_000;
 
 /** One queued item per (person, job) and per version of what the score depends on: resume, model, prompt and posting. */
-function dedupeKey(userId: string, jobId: string, resumeHash: string, model: string, jobHash: string): string {
-  const h = crypto.createHash('sha256').update(`${resumeHash}|${model}|${SCORER_PROMPT_VERSION}|${jobHash}`).digest('hex').slice(0, 16);
+function dedupeKey(userId: string, jobId: string, resumeHash: string, model: string, prompt: string, jobHash: string): string {
+  const h = crypto.createHash('sha256').update(`${resumeHash}|${model}|${prompt}|${jobHash}`).digest('hex').slice(0, 16);
   return `job.score:${userId}:${jobId}:${h}`;
 }
 
@@ -94,6 +110,9 @@ export function createScorePrecompute(getDeps: () => Promise<PrecomputeDeps>): C
     const model = await deps.resolveModel();
     // No model, or one this brand may not send user data to (GoApply → domestic only).
     if (!model || !(await (deps.routeAllowed ?? defaultScorerRouteAllowed)(brand, model))) return { skipped: 'ai_unavailable' };
+    // The one scorer version of this market. The queued item carries no version: the worker scores with the pin of
+    // the moment it runs, so a switch of MATCH_SCORER_RUBRIC between queueing and scoring is honoured.
+    const pin = currentScorerPin(brand, model, deps.env);
 
     // Peek at the brand budget (cost 0 reads the counter without spending).
     const budgetWindow = [{ limit: scoreDailyBudget(brand, deps.env), windowSec: SCORE_WINDOW_SEC }];
@@ -126,31 +145,47 @@ export function createScorePrecompute(getDeps: () => Promise<PrecomputeDeps>): C
       const ids = await deps.candidateIds(userId, PRECOMPUTE_CANDIDATES, brand);
       if (!ids.length) return 0;
       const rows = new Map((await deps.repo.getJobs(ids)).map((r) => [r.id, r]));
-      const candidates = ids.map((id) => rows.get(id)).filter((r): r is NonNullable<typeof r> => !!r);
+      // The feed's own order, one entry per job; a job that is gone, or that this person may not see on this brand, is left out.
+      const candidates = [...new Set(ids)]
+        .map((id) => rows.get(id))
+        .filter((r): r is NonNullable<typeof r> => !!r && visibleTo(r, userId, brand.market, deps.env));
       if (!candidates.length) return 0;
-      const pre = (await deps.service.preScoreJobs(userId, candidates)).filter((p) => p.score !== null);
-      pre.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
       const jobHashes = new Map(candidates.map((r) => [r.id, currentJobHash(r)]));
       // Fresh = this resume, the pinned model and prompt, the posting as it is now. Anything else is re-scored here.
       const fresh = await deps.repo.freshAiScoredJobIds({
         userId,
-        jobIds: pre.map((p) => p.jobId),
+        jobIds: candidates.map((r) => r.id),
         resumeVariantId: resume.id,
         resumeContentHash: resume.resumeContentHash,
         modelUsed: model,
-        promptVersion: SCORER_PROMPT_VERSION,
+        promptVersion: pin.prompt,
         jobContentHashes: jobHashes,
       });
-      const picks = pre.filter((p) => !fresh.has(p.jobId)).slice(0, Math.min(allowance, budgetLeft));
+      // A candidate is skipped only when it has a row of the current pin for the posting as it is now. The walk goes
+      // down the feed's order until `cap` items were really queued, so an item that already exists takes no slot.
+      const cap = Math.min(allowance, budgetLeft);
       let queuedForUser = 0;
       try {
-        for (const p of picks) {
-          const item = await deps.enqueue(
-            MATCH_WORK_KINDS.jobScore,
-            { userId, jobId: p.jobId, resumeVariantId: resume.id },
-            { dedupeKey: dedupeKey(userId, p.jobId, resume.resumeContentHash, model, jobHashes.get(p.jobId) ?? ''), userId, brand: brand.id, priority: 200 },
-          );
-          if (item.created) queuedForUser += 1;
+        for (const p of candidates) {
+          if (queuedForUser >= cap) break;
+          if (fresh.has(p.id)) continue;
+          const payload: JobScorePayload = { userId, jobId: p.id, resumeVariantId: resume.id };
+          const options: EnqueueOptions = {
+            dedupeKey: dedupeKey(userId, p.id, resume.resumeContentHash, model, pin.prompt, jobHashes.get(p.id) ?? ''),
+            userId,
+            brand: brand.id,
+            priority: 200,
+          };
+          const item = await deps.enqueue(MATCH_WORK_KINDS.jobScore, payload, options);
+          if (item.created) {
+            queuedForUser += 1;
+          } else if (item.status === 'done') {
+            // The item of this very version finished, and the pair has no fresh score: the row it wrote was replaced
+            // since (a switch of the rubric or the model, and back). Put it back in the queue. A dead item is left
+            // alone (its answer was refused, or it failed five times), and so is one that is still waiting.
+            const again = await deps.enqueue(MATCH_WORK_KINDS.jobScore, payload, { ...options, onConflict: 'requeue' });
+            if (again.status === 'queued') queuedForUser += 1;
+          }
         }
       } finally {
         // What was queued is charged even when a later enqueue failed.

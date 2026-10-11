@@ -1,6 +1,9 @@
 // @vitest-environment node
 // The fit contract (MARKET_STRATEGY 2.2; SM-5): getFit, getFits and getVariantFit over the in-memory repo with a
 // counting fake scorer. No network, no database, no model.
+//
+// The contract does not depend on which scorer wrote a row. Most cases here run on scorer v3 with its switch set
+// explicitly (`setup`: MATCH_SCORER_RUBRIC=fit_v3, the rollback); the scorer v4 cases at the end run the default.
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,11 +13,12 @@ vi.mock('../../services/LoggerService.js', () => ({ logger: { info: vi.fn(), war
 
 import { getBrand } from '../../platform/brand/registry.js';
 import type { RateLimitResult } from '../../platform/ratelimit/index.js';
-import type { RAJobMatchScorerV3Output } from '../../roboapply/v2/agents/RAJobMatchScorerAgent.js';
+import type { RAJobMatchScorerV3Output, RAJobMatchScorerV4Output } from '../../roboapply/v2/agents/RAJobMatchScorerAgent.js';
 import { currentScorerPin } from './config.js';
 import { DEFAULT_MATCH_PRIORS, DEFAULT_MATCH_TIERS, DEFAULT_MATCH_WEIGHTS, FitSnapshotSchema, readFitSnapshot, type MatchDimension } from './contract.js';
 import {
   ADHOC_POSTING_ID,
+  aiCoverage,
   assembleFit,
   createFitService,
   estimateForPosting,
@@ -28,13 +32,15 @@ import {
   hysteresisTier,
   setFitServiceForTests,
   storedFitStatus,
+  thinCoverage,
+  tierWithinCoverage,
   toWireKind,
   type AdhocPosting,
   type Fit,
 } from './fit.js';
 import { toMatchJob } from './context.js';
 import { currentJobHash, jobContentHash } from './jobHash.js';
-import { FITS_MAX_IDS, createMatchService, type MatchServiceDeps, type ScorerLike } from './MatchService.js';
+import { FITS_MAX_IDS, createMatchService, type MatchServiceDeps, type ScorerLike, type ScorerV4Like } from './MatchService.js';
 import { preScore } from './preScore.js';
 import type { ScoreRecord } from './repo.js';
 import { createMemoryRepo, jobRecord, matchUser, resumeRecord } from './testkit.js';
@@ -79,12 +85,17 @@ function setup(over: Partial<MatchServiceDeps> & { repo?: ReturnType<typeof crea
     costLog: async () => undefined,
     profileSnapshot: async () => null,
     brand: () => getBrand('roboapply'),
-    env: {},
     now: () => NOW,
     ...deps,
+    // Scorer v3 behind its switch (the rollback).
+    env: { MATCH_SCORER_RUBRIC: 'fit_v3', ...deps.env },
   });
   return { service, repo, scorer, fits: fitFunctions(service) };
 }
+
+/** The pin of the rollback switch and the default pin. */
+const pinV3 = (model: string | null) => currentScorerPin('roboapply', model, { MATCH_SCORER_RUBRIC: 'fit_v3' });
+const pinV4 = (model: string | null) => currentScorerPin('roboapply', model, {});
 
 /** What every surface must agree on (invariant I1). */
 const shown = (f: Fit | undefined) => (f ? { score: f.score, tier: f.tier, kind: f.kind } : null);
@@ -274,13 +285,16 @@ describe('a model or prompt change is a version bump, never a silent miss (I7)',
 
   it('storedFitStatus: the model, the prompt and the posting\'s hash decide staleness, never usability', () => {
     const row = { dimensions: [{ key: 'skills', weight: 30, score: 60, status: 'scored', evidence: [] }], promptVersion: 'scorer_v3', modelUsed: MODEL_A, jobContentHash: 'h1', resumeContentHashAtScore: 'r1' };
-    const ctx = { resumeContentHash: 'r1', jobContentHash: 'h1', pin: currentScorerPin('roboapply', MODEL_A) };
+    const ctx = { resumeContentHash: 'r1', jobContentHash: 'h1', pin: pinV3(MODEL_A) };
     expect(storedFitStatus(row, ctx)).toMatchObject({ usable: true, stale: false });
-    expect(storedFitStatus(row, { ...ctx, pin: currentScorerPin('roboapply', MODEL_B) })).toMatchObject({ usable: true, stale: true });
-    // The next scorer's rows are fits too, and stale against today's pin.
+    expect(storedFitStatus(row, { ...ctx, pin: pinV3(MODEL_B) })).toMatchObject({ usable: true, stale: true });
+    // The other scorer's rows are fits too, and stale against this pin. Either direction: v4 under the v3 pin
+    // (after a rollback), v3 under the default v4 pin (the planned backfill).
     expect(storedFitStatus({ ...row, promptVersion: 'scorer_v4' }, ctx)).toMatchObject({ usable: true, stale: true });
+    expect(storedFitStatus(row, { ...ctx, pin: pinV4(MODEL_A) })).toMatchObject({ usable: true, stale: true });
+    expect(storedFitStatus({ ...row, promptVersion: 'scorer_v4' }, { ...ctx, pin: pinV4(MODEL_A) })).toMatchObject({ usable: true, stale: false });
     // No model configured: nothing can be re-scored, so nothing is called stale for its model.
-    expect(storedFitStatus(row, { ...ctx, pin: currentScorerPin('roboapply', null) })).toMatchObject({ usable: true, stale: false });
+    expect(storedFitStatus(row, { ...ctx, pin: pinV3(null) })).toMatchObject({ usable: true, stale: false });
     expect(storedFitStatus({ ...row, resumeContentHashAtScore: 'r0' }, ctx).usable).toBe(false);
     // Written for an earlier version of the posting: stale, never absent.
     expect(storedFitStatus({ ...row, jobContentHash: 'h0' }, ctx)).toMatchObject({ usable: true, stale: true });
@@ -515,6 +529,53 @@ describe('a displayed tier moves only 3 points past the edge it crosses (I5)', (
   });
 });
 
+describe('an AI fit that could judge less than 60% of the rubric weight is never Great and its confidence is low (I4)', () => {
+  it('tierWithinCoverage holds Great back under 60% and changes nothing else', () => {
+    expect(tierWithinCoverage('great', 0.59)).toBe('good');
+    expect(tierWithinCoverage('great', 0.45)).toBe('good');
+    expect(tierWithinCoverage('great', 0.6)).toBe('great');
+    expect(tierWithinCoverage('great', 1)).toBe('great');
+    for (const tier of ['good', 'possible', 'unlikely'] as const) expect(tierWithinCoverage(tier, 0.1)).toBe(tier);
+    expect(tierWithinCoverage(null, 0.1)).toBeNull();
+    expect([thinCoverage(0.599), thinCoverage(0.6), thinCoverage(0.61)]).toEqual([true, false, false]);
+  });
+
+  it('a stored row whose scorer judged the level only: the total is shown as computed, the tier stops at Good, confidence is low, on both forms', async () => {
+    // A row a scorer wrote with the title and level judged and nothing else stated (35% + the 10% of logistics).
+    const repo = createMemoryRepo();
+    const { fits, scorer } = setup({ repo, output: () => scorerOutput({ title_level: 96, skills: null, industry: null }) });
+    const first = await fits.getFit('u1', 'job1', { allowModelCall: true });
+    expect(aiCoverage(first.dimensions)).toBe(0.45);
+    // (35 × 96 + 10 × 100) / 45 = 96.9
+    expect(first).toMatchObject({ kind: 'ai', score: 97, tier: 'good', coverage: 0.45, confidence: 'low' });
+    expect(first.confidenceReason).not.toBeNull();
+    expect(repo.state.scores[0]).toMatchObject({ score: 97, tier: 'good' });
+    // The 3-point rule alone would lift a stored Good with a total of 97 to Great on the next read.
+    expect(hysteresisTier('good', 97, TIERS)).toBe('great');
+    expect(await fits.getFit('u1', 'job1')).toMatchObject({ score: 97, tier: 'good', confidence: 'low' });
+    expect((await fits.getFits('u1', ['job1'])).get('job1')).toMatchObject({ kind: 'ai', score: 97, tier: 'good', confidence: 'low' });
+    // A row stored Great before this rule reads Good too.
+    repo.state.scores[0] = { ...repo.state.scores[0]!, tier: 'great' };
+    expect((await fits.getFits('u1', ['job1'])).get('job1')).toMatchObject({ score: 97, tier: 'good' });
+    expect(scorer.run).toHaveBeenCalledTimes(1);
+  });
+
+  it('from 60% on the rule does not apply: the same total is Great, and coverage between 50% and 60% is low confidence', async () => {
+    // title_level and skills judged, with logistics: 75% of the rubric.
+    const { fits } = setup({ output: () => scorerOutput({ title_level: 96, skills: 96, industry: null }) });
+    expect(await fits.getFit('u1', 'job1', { allowModelCall: true })).toMatchObject({ kind: 'ai', tier: 'great', coverage: 0.75, confidence: 'high' });
+    // title_level, industry and logistics: 60%. Not under it.
+    const edge = setup({ output: () => scorerOutput({ title_level: 96, skills: null, industry: 96 }) });
+    expect(await edge.fits.getFit('u1', 'job1', { allowModelCall: true })).toMatchObject({ tier: 'great', coverage: 0.6, confidence: 'medium' });
+    // title_level, industry and career path, logistics not stated: 60% as well; without the industry 45% + … stays low.
+    const dims = (keys: string[]): MatchDimension[] =>
+      (['title_level', 'skills', 'industry', 'logistics', 'career_path'] as const).map((key) => ({ key, weight: DEFAULT_MATCH_WEIGHTS[key], score: keys.includes(key) ? 96 : null, status: keys.includes(key) ? 'scored' : 'not_stated', evidence: [] }));
+    expect(aiCoverage(dims(['title_level', 'industry', 'career_path']))).toBe(0.6);
+    expect(aiCoverage(dims(['skills', 'industry', 'career_path']))).toBe(0.55);
+    expect(tierWithinCoverage('great', aiCoverage(dims(['skills', 'industry', 'career_path'])))).toBe('good');
+  });
+});
+
 describe('GoApply without the AI consent: zero scorer calls, the estimate with its reason (I8)', () => {
   const cnRepo = () => createMemoryRepo({ jobs: [jobRecord({ market: 'cn' })] });
 
@@ -676,14 +737,14 @@ describe('the wire shapes', () => {
     expect(fitToListResult(ai).kind).toBe('ai');
   });
 
-  it('requirements is always an empty list until scorer v4 writes it', async () => {
+  it('requirements is an empty list for an estimate and for a row scorer v3 wrote', async () => {
     const { fits } = setup();
     expect((await fits.getFit('u1', 'job1')).requirements).toEqual([]);
     expect((await fits.getFit('u1', 'job1', { allowModelCall: true })).requirements).toEqual([]);
   });
 
   it('assembleFit is pure: the same inputs give the same fit', () => {
-    const input = { job: jobRecord(), user: matchUser(), resume: { id: 'v1', resumeContentHash: 'hash-1' }, config: CFG, pin: currentScorerPin('roboapply', MODEL_A), now: NOW };
+    const input = { job: jobRecord(), user: matchUser(), resume: { id: 'v1', resumeContentHash: 'hash-1' }, config: CFG, pin: pinV4(MODEL_A), now: NOW };
     const a = assembleFit(input);
     expect(assembleFit(input)).toEqual(a);
     // With nothing stored it is the estimate, number for number.
@@ -791,6 +852,14 @@ describe('MKT-2F: estimateForPosting, the estimate of a posting that is not a st
     expect(repo.calls.saveScore ?? 0).toBe(0);
     expect(repo.calls.getJob ?? 0).toBe(before.getJob ?? 0);
     expect(repo.calls.getFitJobs ?? 0).toBe(before.getFitJobs ?? 0);
+    // No stored score is asked for either: a posting that is not a stored job cannot have one.
+    expect(repo.calls.listAiScores ?? 0).toBe(before.listAiScores ?? 0);
+    // A list that holds the page next to stored jobs still reads the stored scores of those, and only those.
+    const listAiScores = vi.spyOn(repo, 'listAiScores');
+    const { id: _id, visibility: _v, ownerUserId: _o, ...page } = jobRecord();
+    await fits.getFits('u1', ['job1', ADHOC_POSTING_ID], { rows: [{ ...page, id: ADHOC_POSTING_ID, visibility: 'private', ownerUserId: 'u1' }] });
+    expect(listAiScores).toHaveBeenCalledTimes(1);
+    expect(listAiScores.mock.calls[0]![0].jobIds).toEqual(['job1']);
   });
 
   it('is an estimate even when the person has stored AI fits, and even for a row saved under the ad-hoc id by mistake', async () => {
@@ -887,5 +956,118 @@ describe('MKT-2F: every consumer reads the fit contract (SM-5)', () => {
     const { service } = setup();
     const fit = (await service.fits.getFits('u1', ['job1'])).get('job1')!;
     expect(await service.preScoreMany('u1', ['job1'])).toEqual([fitToListResult(fit)]);
+  });
+});
+
+// ── MKT-4G: scorer v4 on the fit contract ─────────────────────────────────
+
+describe('MKT-4G: a scorer v4 fit on the contract (the default pin)', () => {
+  // The ids are the ones the server gives a first copy (r1, r2), so the same answer also fills a list a repository stored.
+  const checklist = (): RAJobMatchScorerV4Output => ({
+    requirements: [
+      { id: 'r1', kind: 'experience', text: '5+ years of backend experience', importance: 'must', status: 'met', evidence: 'Senior Software Engineer, PayCo (2019-01 – present)' },
+      { id: 'r2', kind: 'skill', text: 'Kubernetes required', importance: 'must', status: 'not_shown', evidence: '' },
+    ],
+    level: { post: 'senior', resume: 'senior', direction: 'match' },
+    domain: { status: 'adjacent', evidence: '' },
+    trajectory: { status: 'toward', evidence: '' },
+    strengths: ['Your payments APIs in Go'],
+    gaps: ['No Kubernetes work shown'],
+    summary: 'Your payments work lines up well.',
+  });
+
+  function setupV4(over: Partial<MatchServiceDeps> & { repo?: ReturnType<typeof createMemoryRepo> } = {}) {
+    const repo = over.repo ?? createMemoryRepo();
+    const scorer = { run: vi.fn(async () => scorerOutput()) } satisfies ScorerLike;
+    const scorerV4 = { run: vi.fn(async () => checklist()) } satisfies ScorerV4Like;
+    const service = createMatchService({ repo, scorer, scorerV4, resolveModel: () => MODEL_A, routeAllowed: () => true, aiAllowed: async () => true, consume: async () => allow(), costLog: async () => undefined, profileSnapshot: async () => null, brand: () => getBrand('roboapply'), env: {}, now: () => NOW, ...over });
+    return { service, repo, scorer, scorerV4, fits: fitFunctions(service) };
+  }
+
+  const EXPECTED = [
+    { id: 'r1', kind: 'experience', text: '5+ years of backend experience', importance: 'must', status: 'met', evidence: 'Senior Software Engineer, PayCo (2019-01 – present)' },
+    { id: 'r2', kind: 'skill', text: 'Kubernetes required', importance: 'must', status: 'not_shown', evidence: '' },
+  ];
+
+  it('the checklist is on the fit and on the view of a single-job read; a list carries none, like the prose', async () => {
+    const { fits, scorerV4, scorer } = setupV4();
+    const scored = await fits.getFit('u1', 'job1', { allowModelCall: true });
+    expect(scorerV4.run).toHaveBeenCalledTimes(1);
+    expect(scorer.run).not.toHaveBeenCalled();
+    expect(scored).toMatchObject({ kind: 'ai', score: 79, requirements: EXPECTED });
+    expect(scored.version).toEqual({ rubric: 'fit_v4', estimator: 'est_v2', model: MODEL_A, prompt: 'scorer_v4' });
+    // Read back from the stored row, with no model call.
+    const one = await fits.getFit('u1', 'job1');
+    expect(one).toMatchObject({ kind: 'ai', cached: true, stale: false, requirements: EXPECTED });
+    expect(fitToView(one).requirements).toEqual(EXPECTED);
+    expect(fitToView(one)).toMatchObject({ kind: 'ai', score: 79, summary: 'Your payments work lines up well.', stale: false });
+    const list = (await fits.getFits('u1', ['job1'])).get('job1')!;
+    expect(shown(list)).toEqual(shown(one));
+    expect(list).toMatchObject({ requirements: [], prose: null });
+    expect(fitToListResult(list)).not.toHaveProperty('requirements');
+    expect(scorerV4.run).toHaveBeenCalledTimes(1);
+  });
+
+  it('an estimate carries no checklist, whichever scorer is pinned; the default rubric is fit_v4', async () => {
+    const { fits } = setupV4();
+    const estimate = await fits.getFit('u1', 'job1');
+    expect(estimate).toMatchObject({ kind: 'estimate', requirements: [] });
+    expect(estimate.version).toEqual({ rubric: 'fit_v4', estimator: 'est_v2', model: null, prompt: null });
+    expect(fitSnapshot(estimate)).toMatchObject({ kind: 'estimate', rubric: 'fit_v4' });
+    expect(fitToView(estimate)).toMatchObject({ kind: 'pre', requirements: [] });
+    expect(fitToView(estimate)).not.toHaveProperty('rewriteBlocked');
+  });
+
+  it('a snapshot of a v4 fit says fit_v4; a v3 row under the v4 pin keeps its own version, serves stale and has no checklist', async () => {
+    const repo = createMemoryRepo();
+    const v3 = setup({ repo });
+    const old = await v3.fits.getFit('u1', 'job1', { allowModelCall: true });
+    const v4 = setupV4({ repo });
+    const read = await v4.fits.getFit('u1', 'job1');
+    expect(read).toMatchObject({ kind: 'ai', score: old.score, tier: old.tier, stale: true, requirements: [] });
+    expect(read.version).toMatchObject({ rubric: 'fit_v3', prompt: 'scorer_v3' });
+    expect(fitSnapshot(read)).toMatchObject({ kind: 'ai', rubric: 'fit_v3' });
+    expect((await v4.fits.getFits('u1', ['job1'])).get('job1')).toMatchObject({ kind: 'ai', score: old.score, stale: true });
+    expect(v4.scorerV4.run).not.toHaveBeenCalled();
+    // An allowed call replaces it with a checklist fit.
+    const fresh = await v4.fits.getFit('u1', 'job1', { allowModelCall: true });
+    expect(fresh).toMatchObject({ kind: 'ai', stale: false, requirements: EXPECTED });
+    expect(fitSnapshot(fresh)).toEqual({ score: 79, tier: fresh.tier, kind: 'ai', rubric: 'fit_v4', estimator: 'est_v2', model: MODEL_A, scoredAt: NOW.toISOString() });
+    expect(readFitSnapshot(JSON.parse(JSON.stringify(fitSnapshot(fresh))))).toEqual(fitSnapshot(fresh));
+  });
+
+  it('a stored checklist that does not parse reads as none: the fit still serves', async () => {
+    const { fits, repo } = setupV4();
+    await fits.getFit('u1', 'job1', { allowModelCall: true });
+    const row = repo.state.scores[0]!;
+    repo.state.scores[0] = { ...row, explanation: { ...(row.explanation as object), requirements: [{ id: 'r1', status: 'maybe' }] } };
+    expect(await fits.getFit('u1', 'job1')).toMatchObject({ kind: 'ai', score: 79, requirements: [] });
+    repo.state.scores[0] = { ...row, explanation: null };
+    expect(await fits.getFit('u1', 'job1')).toMatchObject({ kind: 'ai', score: 79, requirements: [] });
+  });
+
+  it('assembleFit takes the checklist from its caller for an AI row and ignores it for an estimate; the view passes rewriteBlocked through', () => {
+    const base = { job: jobRecord(), user: matchUser(), resume: { id: 'v1', resumeContentHash: 'hash-1' }, config: CFG, pin: pinV4(MODEL_A), now: NOW };
+    const requirements = EXPECTED as Fit['requirements'];
+    const stored = { resumeVariantId: 'v1', score: 79, tier: 'good', dimensions: [{ key: 'skills' as const, weight: 30, score: 50, status: 'scored' as const, evidence: [] }], generatedAt: NOW, modelUsed: MODEL_A, promptVersion: 'scorer_v4', jobContentHash: null, rubricVersion: 'fit_v4', searchProfileVersion: 1, resumeContentHashAtScore: 'hash-1' };
+    expect(assembleFit({ ...base, stored, requirements }).requirements).toEqual(EXPECTED);
+    expect(assembleFit({ ...base, stored }).requirements).toEqual([]);
+    expect(assembleFit({ ...base, requirements }).requirements).toEqual([]);
+    const ai = assembleFit({ ...base, stored });
+    expect(fitToView({ ...ai, rewriteBlocked: 'daily_cap' }).rewriteBlocked).toBe('daily_cap');
+    expect(fitToView(ai)).not.toHaveProperty('rewriteBlocked');
+    expect(fitToView({ ...ai, rewriteBlocked: null })).not.toHaveProperty('rewriteBlocked');
+  });
+
+  it('GoApply without the AI consent: zero calls of either scorer, the estimate, and a stored checklist fit is not shown (I8)', async () => {
+    const repo = createMemoryRepo({ jobs: [jobRecord({ market: 'cn' })] });
+    const on = setupV4({ repo, brand: () => getBrand('goapply') });
+    expect(await on.fits.getFit('u1', 'job1', { allowModelCall: true })).toMatchObject({ kind: 'ai', requirements: EXPECTED });
+    const off = setupV4({ repo, brand: () => getBrand('goapply'), aiAllowed: async () => false });
+    const one = await off.fits.getFit('u1', 'job1', { allowModelCall: true });
+    expect(one).toMatchObject({ kind: 'estimate', estimateReason: 'ai_off', requirements: [] });
+    expect((await off.fits.getFits('u1', ['job1'])).get('job1')).toMatchObject({ kind: 'estimate', estimateReason: 'ai_off', requirements: [] });
+    expect(off.scorerV4.run).not.toHaveBeenCalled();
+    expect(off.scorer.run).not.toHaveBeenCalled();
   });
 });

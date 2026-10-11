@@ -19,9 +19,11 @@
 //     stored AI score can be shown, mapped onto the AI scale once the market
 //     has a calibration map (calibration.ts).
 //   - A stored AI score is the fit (I2) when it was written for this resume
-//     content by a fit scorer (`scorer_v3`, later `scorer_v4`). The legacy v2
-//     scorer writes rows without components into the same table; those are
-//     never a fit.
+//     content by a fit scorer (`scorer_v4`, the requirement checklist, or
+//     `scorer_v3`, its rollback). The legacy v2 scorer writes rows without
+//     components into the same table; those are never a fit. A single-job
+//     read of a v4 row also carries its checklist (`requirements`); a list
+//     carries none, like the prose.
 //   - A row written by an earlier model or prompt than the pinned one, or for
 //     an earlier version of the posting (its job content hash differs from the
 //     posting's hash now), keeps serving, with `stale: true`, until the
@@ -31,7 +33,14 @@
 //   - The total of a stored row is recomputed on every read from its
 //     components, today's weights and today's logistics, with no model call.
 //     Its tier moves only when the new total is 3 points past the edge it
-//     crosses (I5); a new model result takes its own tier.
+//     crosses (I5). A new scorer v4 result within 3 points of an edge is
+//     stored with the tier on the estimate's side of that edge
+//     (scorerV4.ts `borderlineTier`); this read keeps it there.
+//   - An AI score that could judge less than 60% of the rubric weight (its
+//     other components are "not stated") is never Great and its confidence is
+//     low, whatever its total (I4, `tierWithinCoverage`): the same rule the
+//     estimate applies to a thin posting. The total itself is shown as
+//     computed.
 //   - AI is off for this person (GoApply without the "Use AI" consent): the
 //     estimate, with `estimateReason: 'ai_off'`, on every surface (I8).
 //
@@ -45,6 +54,7 @@ import { tierFor, type ScorerPin } from './config.js';
 import {
   ESTIMATOR_VERSION,
   MatchDimensionsSchema,
+  POSTING_COVERAGE_MIN,
   TIER_HYSTERESIS_POINTS,
   rubricOfPrompt,
   tierForScore,
@@ -98,7 +108,12 @@ export interface Fit {
   /** One reason when the confidence is low; null otherwise. */
   confidenceReason: ConfidenceReason | null;
   dimensions: MatchDimension[];
-  /** The requirement checklist of scorer v4. Always [] until that scorer writes it. */
+  /**
+   * The requirement checklist of a scorer v4 fit: each requirement line of the
+   * posting with its verified status and the resume quote behind it. On
+   * single-job reads only. [] for an estimate, for a row scorer v3 wrote and
+   * on every list row (a list reads no prose and no checklist).
+   */
   requirements: RequirementCheck[];
   topOverlap: string | null;
   topGap: string | null;
@@ -145,6 +160,15 @@ export interface Fit {
   prose: FitProse | null;
   /** Served without a model call in this request. */
   cached: boolean;
+  /**
+   * Set when this request asked for the written parts in another language and
+   * they could not be written: the reason (`daily_cap`, `budget`,
+   * `ai_unavailable`, `ai_failed`). The stored fit is answered as it was.
+   * Whether the stored row is current (a rewrite of its words) or stale (its
+   * planned re-score would have written them) makes no difference: the person
+   * asked, and is told why nothing changed.
+   */
+  rewriteBlocked?: EstimateReason | null;
 }
 
 // The wire value of a fit kind (`toWireKind`: an estimate stays `pre`) is a contract rule; re-exported for callers of this module.
@@ -216,11 +240,26 @@ export function refreshDimensions(stored: MatchDimension[], user: MatchUser, job
 }
 
 /** Coverage of an AI fit: the weight of the components the scorer scored (logistics as computed now) over all weights. */
-function aiCoverage(dimensions: MatchDimension[]): number {
+export function aiCoverage(dimensions: MatchDimension[]): number {
   const total = dimensions.reduce((sum, d) => sum + Math.max(0, d.weight), 0);
   if (total <= 0) return 0;
   const scored = dimensions.filter((d) => d.status === 'scored' && d.score !== null && d.weight > 0).reduce((sum, d) => sum + d.weight, 0);
   return Math.round((scored / total) * 1000) / 1000;
+}
+
+/** An AI fit backed by under 60% of the rubric weight (invariant I4). */
+export function thinCoverage(coverage: number): boolean {
+  return coverage < POSTING_COVERAGE_MIN - 1e-9;
+}
+
+/**
+ * Invariant I4 for an AI fit: a result that could judge less than 60% of the
+ * rubric weight is never Great, whatever its total. Applied when a new score
+ * is stored (MatchService) and on every read (`assembleFit`), so the stored
+ * tier and the shown tier agree.
+ */
+export function tierWithinCoverage<T extends FitTierKey | null>(tier: T, coverage: number): T | 'good' {
+  return tier === 'great' && thinCoverage(coverage) ? 'good' : tier;
 }
 
 // ── Assembly ──────────────────────────────────────────────────────────────
@@ -254,6 +293,8 @@ export interface FitInputs {
   estimateReason?: EstimateReason | null;
   /** The prose of the stored row, prepared by the caller (single-job reads). */
   prose?: FitProse | null;
+  /** The checklist of the stored row, prepared by the caller (single-job reads of a scorer v4 row). */
+  requirements?: RequirementCheck[] | null;
   /** False when a model call in this request produced the stored row. Default true. */
   cached?: boolean;
   now: Date;
@@ -303,11 +344,13 @@ export function assembleFit(input: FitInputs): Fit {
     const dimensions = refreshDimensions(status.dimensions, user, job, config.weights);
     const score = combineDimensions(dimensions) ?? row.score;
     const coverage = aiCoverage(dimensions);
-    const confidence = confidenceFor(coverage);
+    // I4: under 60% of the rubric weight judged is low confidence and never Great.
+    const confidence = confidenceFor(coverage, thinCoverage(coverage));
     return {
       ...common,
+      requirements: input.requirements ?? [],
       score,
-      tier: hysteresisTier(row.tier, score, config.tiers),
+      tier: tierWithinCoverage(hysteresisTier(row.tier, score, config.tiers), coverage),
       kind: 'ai',
       coverage,
       confidence,
@@ -377,6 +420,7 @@ export function fitToView(fit: Fit, opts: { locale?: string } = {}): MatchFitVie
     requirements: fit.requirements,
     stale: fit.stale,
     calibrated: fit.calibrated,
+    ...(fit.rewriteBlocked ? { rewriteBlocked: fit.rewriteBlocked } : {}),
   };
 }
 

@@ -4,8 +4,8 @@
 // The reads, the caps and the one model call behind the fit contract (fit.ts):
 //
 //   fits.getFit / getFits / getVariantFit   the fit contract (fit.ts): one job, a list, another resume version
-//   scoreJob                     `getFit` as a `MatchFitView` (job detail); scorer v3 behind the cache,
-//                                platform-paid, 80/day/user and a brand budget, beyond either the
+//   scoreJob                     `getFit` as a `MatchFitView` (job detail); the pinned scorer behind the
+//                                cache, platform-paid, 80/day/user and a brand budget, beyond either the
 //                                estimate with its reason
 //   preScoreMany                 `getFits` as a list of `PreScoreResult` (kept for callers not yet on getFits)
 //   preScoreJobs                 the estimate only, over rows the caller loaded (precompute ranking, extension pages)
@@ -14,11 +14,34 @@
 //   keywordCheck                 requirement rows (title, years, education, skills, keywords)
 //
 // Rules this file enforces:
-//   - The server computes the total: the model judges four components; the
-//     fifth (location, pay and visa) is deterministic; for an AI score the
-//     weights renormalize over the components that are stated.
+//   - One scorer version per market (config.ts `currentScorerPin`): scorer v4
+//     by default, scorer v3 behind MATCH_SCORER_RUBRIC=fit_v3. Scorer v4 fills
+//     a requirement checklist and the server computes every component from it
+//     (scorerV4.ts); scorer v3 judges four components. Either way the server
+//     computes the total, the fifth component (location, pay and visa) is
+//     deterministic, and the weights renormalize over the components that are
+//     stated.
 //   - Evidence that is not a verbatim substring of the resume or the posting
-//     is dropped (CitationGuard).
+//     is dropped (CitationGuard). In a checklist, a requirement line that is
+//     not in the posting disappears and a "met" without a verifiable resume
+//     quote reads "not shown".
+//   - The requirement lines are the posting's: read from `RAJob.requirements`
+//     when it has them for the text it has now, and stored there by the first
+//     score when it has none (first writer wins; a list of an earlier text is
+//     replaced), so every person is judged against the same lines.
+//   - A model's own copy of the requirement lines is used only when the
+//     server can trust it to be the posting's (scorerV4.ts): a copy of which
+//     more than a third of the lines are not in the posting, or one without
+//     the skill and experience lines the posting has, answers the estimate
+//     and stores nothing, and a copy is stored on the job only when every
+//     line of it was found there.
+//   - A new scorer v4 total within 3 points of a tier edge is stored with the
+//     tier on the estimate's side of that edge (I5); the score is stored as
+//     computed and no second model call is made. A result that could judge
+//     less than 60% of the rubric weight is never stored or shown Great (I4).
+//   - A failed scorer run says what failed (`ScorerFailedError.kind`): a call
+//     that failed may be tried again; an answer that was received and refused
+//     is not (the queue worker marks its item dead after one attempt).
 //   - `aiAllowed(user)` is checked before any model call and before a stored
 //     AI score is shown. When false (GoApply without the "Use AI" consent)
 //     nothing is sent to a model: the answer is the estimate, on every surface.
@@ -35,7 +58,9 @@
 //     filled; the single-job read and the precompute cron hold the full row
 //     and always know.
 //   - The resume reaches the model PII-stripped, with no sensitive fields;
-//     school tier is never an input.
+//     school tier is never an input. Two strips run one after the other: the
+//     scorer's own (pii.ts) and the retrieval area's `redactResumeText`
+//     (profile links without a scheme, chat handles, personal pages).
 
 import { getCurrentBrandOrDefault } from '../../platform/brand/brandContext.js';
 import type { EnvSource } from '../../platform/brand/brandEnv.js';
@@ -48,14 +73,19 @@ import { logger } from '../../services/LoggerService.js';
 import type {
   RAJobMatchScorerV3Input,
   RAJobMatchScorerV3Output,
+  RAJobMatchScorerV4Input,
+  RAJobMatchScorerV4Output,
 } from '../../roboapply/v2/agents/RAJobMatchScorerAgent.js';
 import { calibrationFor, withCalibratedPriors, type ActiveCalibration, type CalibrationMap } from './calibration.js';
 import {
+  FIT_RUBRIC_BY_PROMPT,
   MATCH_ERROR_CODES,
-  SCORER_PROMPT_VERSION,
+  rubricOfPrompt,
   type EstimateReason,
   type EstimateResult,
   type FitAnalysisCard,
+  type FitPromptVersion,
+  type JobRequirement,
   type KeywordCheckResponse,
   type MatchDimension,
   type MatchFitView,
@@ -63,6 +93,7 @@ import {
   type MatchTiers,
   type MatchWeights,
   type PreScoreResult,
+  type RequirementCheck,
 } from './contract.js';
 import {
   ON_DEMAND_SCORE_CAP_PER_DAY,
@@ -78,8 +109,8 @@ import {
 } from './config.js';
 import { buildMatchUser, postingText, toMatchJob, userNames, type MatchJobRecord } from './context.js';
 import { guardEvidence } from './evidence.js';
-import { assembleFit, fitToListResult, fitToView, storedFitStatus, type Fit, type FitFunctions, type FitProse, type GetFitOptions, type GetFitsOptions } from './fit.js';
-import { currentJobHash, storedJobHash } from './jobHash.js';
+import { ADHOC_POSTING_ID, aiCoverage, assembleFit, fitToListResult, fitToView, storedFitStatus, tierWithinCoverage, type Fit, type FitFunctions, type FitProse, type GetFitOptions, type GetFitsOptions } from './fit.js';
+import { currentJobHash, jobContentHash as hashOfPostingText, storedJobHash } from './jobHash.js';
 import { buildKeywordRows } from './keywordRows.js';
 import { stripResumeForScoring } from './pii.js';
 import { runMatchPreparers } from './prepare.js';
@@ -91,6 +122,7 @@ import {
   logisticsDimension,
   mentions,
   normalizeText,
+  postingStates,
   userShows,
   type ShownSource,
   preScore,
@@ -98,13 +130,31 @@ import {
   type MatchUser,
 } from './preScore.js';
 import { createPrismaMatchRepo, type MatchRepo, type ResumeRecord, type ScoreRecord, type StoredFitRow } from './repo.js';
+import {
+  SCORER_V4_ANSWER_ERROR,
+  ScorerV4ChecklistError,
+  borderlineTier,
+  classYearEligibility,
+  componentsFromChecklist,
+  readRequirementChecks,
+  readStoredRequirements,
+} from './scorerV4.js';
 import { dedupeTerms, displayTerm, termKey } from './terms.js';
 
 // ── Dependencies (all injectable; defaults are lazy so importing is cheap) ──
 
+/** Scorer v3 (`scorer_v3`): four judged components. The rollback behind MATCH_SCORER_RUBRIC=fit_v3. */
 export interface ScorerLike {
   run(input: RAJobMatchScorerV3Input, options: { locale?: string; model?: string }): Promise<RAJobMatchScorerV3Output>;
 }
+
+/** Scorer v4 (`scorer_v4`): the requirement checklist. The default. */
+export interface ScorerV4Like {
+  run(input: RAJobMatchScorerV4Input, options: { locale?: string; model?: string }): Promise<RAJobMatchScorerV4Output>;
+}
+
+/** Removes personal data from a resume before it goes into a prompt; the names are the person's own. */
+export type ResumeStripForModel = (markdown: string, options: { names: string[] }) => string | Promise<string>;
 
 export interface CostLogInput {
   userId: string;
@@ -112,11 +162,23 @@ export interface CostLogInput {
   resumeVariantId: string;
   reason: string;
   mode: ScoreMode;
+  /** The scorer prompt that made the call (`scorer_v4`, `scorer_v3`). */
+  prompt?: string;
 }
 
 export interface MatchServiceDeps {
   repo?: MatchRepo;
+  /**
+   * Scorer v3 and scorer v4. With neither given (production) the service
+   * loads the real agents and the pinned rubric picks one. A service that was
+   * given a scorer runs only what it was given and never reaches for a real
+   * agent: when the pinned rubric's scorer is not among them, it scores with
+   * the one it has and its pin follows (see `scorerPin`).
+   */
   scorer?: ScorerLike;
+  scorerV4?: ScorerV4Like;
+  /** The strip of a resume before a prompt (default: the scorer's own strip, then the retrieval area's). */
+  stripResume?: ResumeStripForModel;
   /** The model the scorer will use, or null when none is configured for this brand. */
   resolveModel?: () => string | null;
   /** Brand LLM-route policy (match/scorerRoute.ts) for the resolved model; false → no model call ("Quick estimate"). */
@@ -153,11 +215,30 @@ export interface ScoreOptions {
   onAiFailure?: 'fallback' | 'throw';
 }
 
+/**
+ * Why a scorer run gave no score.
+ * - `call`: the call itself failed (transport, provider, the resume strip).
+ *   Another attempt may succeed.
+ * - `answer`: the model answered and the answer cannot be used: it is not a
+ *   checklist (the v4 parser refused it), its checklist is refused
+ *   (`ScorerV4ChecklistError`), or nothing in it could be scored. Scorer v4
+ *   runs at temperature 0, so the same two texts give the same answer:
+ *   another attempt is another paid call for the same failure.
+ */
+export type ScorerFailureKind = 'call' | 'answer';
+
 export class ScorerFailedError extends Error {
-  constructor(cause: unknown) {
+  readonly kind: ScorerFailureKind;
+  constructor(cause: unknown, kind: ScorerFailureKind = 'call') {
     super(`fit scorer failed: ${cause instanceof Error ? cause.message : String(cause)}`);
     this.name = 'ScorerFailedError';
+    this.kind = kind;
   }
+}
+
+/** An answer that was received and refused, as opposed to a call that failed. */
+function failureKind(err: unknown): ScorerFailureKind {
+  return err instanceof ScorerV4ChecklistError || (err instanceof Error && err.name === SCORER_V4_ANSWER_ERROR) ? 'answer' : 'call';
 }
 
 const lazyScorer: ScorerLike = {
@@ -166,6 +247,26 @@ const lazyScorer: ScorerLike = {
     return new RAJobMatchScorerV3Agent().run(input, options);
   },
 };
+
+const lazyScorerV4: ScorerV4Like = {
+  async run(input, options) {
+    const { RAJobMatchScorerV4Agent } = await import('../../roboapply/v2/agents/RAJobMatchScorerAgent.js');
+    return new RAJobMatchScorerV4Agent().run(input, options);
+  },
+};
+
+/**
+ * The resume as a prompt may carry it. Two strips, one after the other, each
+ * rule in its own file: the scorer's (images, sensitive-field lines, the name
+ * heading, contact details, id numbers, the person's name in every spelling),
+ * then the retrieval area's (a profile link written without a scheme, a chat
+ * handle after its label, a personal page, what is left glued to a removed
+ * name). The retrieval area imports MATCH, so it is loaded lazily.
+ */
+async function defaultStripResume(markdown: string, options: { names: string[] }): Promise<string> {
+  const { redactResumeText } = await import('../retrieval/index.js');
+  return redactResumeText(stripResumeForScoring(markdown, options), options);
+}
 
 let modelResolver: (() => string | null) | null = null;
 async function defaultResolveModelAsync(): Promise<string | null> {
@@ -228,8 +329,9 @@ async function defaultCostLog(input: CostLogInput): Promise<void> {
       relatedEntityId: input.jobId,
       metadata: {
         ...cost.metadata,
-        source: 'match_v3',
-        agent: 'RAJobMatchScorerV3Agent',
+        source: input.prompt === 'scorer_v3' ? 'match_v3' : 'match_v4',
+        agent: input.prompt === 'scorer_v3' ? 'RAJobMatchScorerV3Agent' : 'RAJobMatchScorerV4Agent',
+        promptVersion: input.prompt ?? null,
         resumeVariantId: input.resumeVariantId,
         reason: input.reason,
         mode: input.mode,
@@ -287,6 +389,13 @@ function readExplanation(v: unknown): StoredExplanation & { responseLanguage: st
     keywordsMissing: strings(o.keywordsMissing),
     responseLanguage: typeof o.responseLanguage === 'string' ? o.responseLanguage : null,
   };
+}
+
+/** The checklist stored with a scorer v4 row; [] for a row of any other scorer. */
+function requirementsOf(row: Pick<ScoreRecord, 'explanation' | 'promptVersion'>): RequirementCheck[] {
+  if (rubricOfPrompt(row.promptVersion) !== 'fit_v4') return [];
+  const exp = row.explanation && typeof row.explanation === 'object' && !Array.isArray(row.explanation) ? (row.explanation as Record<string, unknown>) : {};
+  return readRequirementChecks(exp.requirements);
 }
 
 /**
@@ -375,7 +484,14 @@ interface FitCallOptions {
 
 export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
   const repo = deps.repo ?? createPrismaMatchRepo();
-  const scorer = deps.scorer ?? lazyScorer;
+  // The scorers this service may run. Production: both real agents, loaded when first used. A service that was handed
+  // a scorer runs only what it was handed (a fake never falls through to a real agent and a real model call).
+  const handed = !!(deps.scorer || deps.scorerV4);
+  const scorers: { scorer_v3: ScorerLike | null; scorer_v4: ScorerV4Like | null } = {
+    scorer_v3: deps.scorer ?? (handed ? null : lazyScorer),
+    scorer_v4: deps.scorerV4 ?? (handed ? null : lazyScorerV4),
+  };
+  const stripResume = deps.stripResume ?? defaultStripResume;
   const resolveModelRaw = async () => (deps.resolveModel ? deps.resolveModel() : defaultResolveModelAsync());
   const routeAllowed = deps.routeAllowed ?? defaultScorerRouteAllowed;
   /** The scorer model, or null when none is configured or the brand may not use its route. */
@@ -410,9 +526,17 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
     return { ...base, priors: withCalibratedPriors(base.priors, cal.priors), map: cal.map };
   }
 
-  /** The pinned scorer version (the configured model, whether or not this brand may call it now). */
+  /**
+   * The pinned scorer version: the configured model (whether or not this brand
+   * may call it now) and the rubric of MATCH_SCORER_RUBRIC. When this service
+   * was built with one scorer only and it is not the pinned rubric's, the pin
+   * is that scorer's: the service writes what its scorer speaks.
+   */
   async function scorerPin(brand: ProductBrand): Promise<ScorerPin> {
-    return currentScorerPin(brand, await resolveModelRaw());
+    const pin = currentScorerPin(brand, await resolveModelRaw(), deps.env);
+    if (scorers[pin.prompt]) return pin;
+    const other: FitPromptVersion = pin.prompt === 'scorer_v4' ? 'scorer_v3' : 'scorer_v4';
+    return scorers[other] ? { ...pin, prompt: other, rubric: FIT_RUBRIC_BY_PROMPT[other] } : pin;
   }
 
   async function userContext(userId: string, variantId?: string | null): Promise<{ user: MatchUser; resume: ResumeRecord | null; names: string[] }> {
@@ -494,10 +618,10 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
     const jobContentHash = currentJobHash(jobRow);
     const base = { job: jobRow, jobContentHash, user, resume, config: cfg, pin, map: cfg.map, now: now() };
     const estimate = (reason: EstimateReason | null): Fit => assembleFit({ ...base, stored: null, estimateReason: reason });
-    /** The fit a stored row gives (its prose included). */
-    const fromRow = (row: ScoreRecord, cached: boolean): Fit => {
-      const bare = assembleFit({ ...base, stored: row, cached });
-      return bare.kind === 'ai' ? { ...bare, prose: proseOf(row, user, bare.skills) } : bare;
+    /** The fit a stored row gives (its prose and, for a scorer v4 row, its checklist included). */
+    const fromRow = (row: ScoreRecord, cached: boolean, extra: Pick<Fit, 'rewriteBlocked'> = {}): Fit => {
+      const bare = assembleFit({ ...base, stored: row, cached, requirements: requirementsOf(row) });
+      return bare.kind === 'ai' ? { ...bare, prose: proseOf(row, user, bare.skills), ...extra } : bare;
     };
 
     if (!resume) return estimate('no_resume');
@@ -512,10 +636,14 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
     // language"): the stored score and its components are kept; only the
     // summary, strengths and gaps are written again. Set when that is what was asked.
     let rewrite: ScoreRecord | null = null;
+    // The person asked for the written parts in another language than the stored fit has them in. On a current row
+    // that is the rewrite above; on a stale one the planned re-score writes them in that language. Either way, when
+    // the model may not run or fails, the answer says why (`rewriteBlocked`).
+    let wantsProse = false;
     if (status.usable && existing) {
       const exp = readExplanation(existing.explanation);
       const localeOk = (existing.locale ?? exp.responseLanguage ?? 'en') === o.locale;
-      const wantsProse = !localeOk && o.regenerateExplanation === true;
+      wantsProse = !localeOk && o.regenerateExplanation === true;
       // A row of an earlier model or prompt, or of an earlier version of the posting, is re-scored by precompute or by
       // an on-demand call, never by a list.
       const rescore = mayCall && (o.force === true || status.stale);
@@ -540,87 +668,141 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
 
     /** What answers when the model may not run or fails: the stored fit when there is one to keep, else the estimate. */
     const keep = status.usable && existing && (rewrite || status.stale) ? existing : null;
+    /**
+     * The written parts were asked for in another language and could not be written: the stored fit is answered as
+     * it was, with the reason. Keyed on what was asked, not on whether the row is current: after a change of the
+     * scorer version every stored row is stale, and the person who is stopped by the daily cap is told so all the same.
+     */
+    const blocked = (reason: EstimateReason): Pick<Fit, 'rewriteBlocked'> => (wantsProse ? { rewriteBlocked: reason } : {});
 
     const model = await resolveModel(brand);
-    if (!model) return keep ? fromRow(keep, true) : estimate('ai_unavailable');
+    if (!model) return keep ? fromRow(keep, true, blocked('ai_unavailable')) : estimate('ai_unavailable');
 
     const capped = await underCaps(userId, o.mode, brand);
     // A rewrite or a planned re-score that may not run leaves the stored AI fit as it is, never a quick estimate in
     // its place. The queued precompute item gets the reason instead, so the worker can defer it.
-    if (capped) return keep && o.mode !== 'precompute' ? fromRow(keep, true) : estimate(capped);
+    if (capped) return keep && o.mode !== 'precompute' ? fromRow(keep, true, blocked(capped)) : estimate(capped);
 
     // ── Model call ──
-    const pre = preScore(user, job, cfg);
     const posting = postingText(jobRow);
-    const resumeForModel = stripResumeForScoring(resume.resumeMarkdown, { names });
-    let out: RAJobMatchScorerV3Output;
+    // The hash of the posting as this row reads, computed from its own text and skills: what a stored requirement
+    // list is for. (Not the stored `RAJob.contentHash`: the index writes that a moment after enrichment wrote a list.)
+    const textHash = hashOfPostingText(jobRow);
+    // The facts, as the AI score counts them (met / stated), not the estimate's prior. Never judged by the model.
+    const logistics = logisticsDimension(user, job, cfg.weights);
+    const jobFacts = {
+      title: jobRow.title,
+      companyName: jobRow.companyName,
+      seniority: jobRow.seniority,
+      educationLevel: jobRow.educationLevel,
+      minYears: jobRow.minYears,
+      skills: jobRow.skills,
+      description: jobRow.descriptionPlain || jobRow.description,
+      qualifications: jobRow.qualifications,
+      responsibilities: jobRow.responsibilities,
+    };
+    let prose: { strengths: string[]; gaps: string[]; summary: string | null };
+    /** What a new score is made of; not computed for a rewrite, which keeps every number it has. */
+    let scored: { dimensions: MatchDimension[]; explanation: Record<string, unknown>; extracted: JobRequirement[] | null } | null = null;
     try {
-      out = await scorer.run(
-        {
-          resumeMarkdown: resumeForModel,
-          profileContext: await profileSnapshot(userId),
-          job: {
-            title: jobRow.title,
-            companyName: jobRow.companyName,
-            seniority: jobRow.seniority,
-            educationLevel: jobRow.educationLevel,
-            minYears: jobRow.minYears,
-            skills: jobRow.skills,
-            description: jobRow.descriptionPlain || jobRow.description,
-            qualifications: jobRow.qualifications,
-            responsibilities: jobRow.responsibilities,
+      // Inside the guard: when the strip cannot run, nothing is sent to a model.
+      const resumeForModel = await stripResume(resume.resumeMarkdown, { names });
+      const sources = { resume: resumeForModel, posting };
+      const profileContext = await profileSnapshot(userId);
+      if (pin.prompt === 'scorer_v4') {
+        const run = scorers.scorer_v4;
+        if (!run) throw new Error('no scorer v4 on this service');
+        // The posting's own requirement lines when it has them for the text it has now: every person is judged against
+        // the same checklist. A list copied from an earlier text is not used: the model copies the lines again below.
+        const stored = readStoredRequirements(jobRow.requirements, { contentHash: textHash });
+        const out = await run.run({ resumeMarkdown: resumeForModel, profileContext, job: jobFacts, requirements: stored, logistics: { lines: logisticsLines(user, job) } }, { locale: o.locale, model });
+        prose = { strengths: out.strengths, gaps: out.gaps, summary: out.summary };
+        if (!rewrite) {
+          // Verification, then every number, on the server (scorerV4.ts). A checklist that cannot be used throws.
+          const check = componentsFromChecklist(out, {
+            weights: cfg.weights,
+            logistics,
+            sources,
+            stored,
+            classYear: classYearEligibility(user, job),
+            // What the posting's own fields say there is to judge: a copy that has none of it is refused.
+            posting: { listsSkillsOrYears: postingStates(job).skills || typeof jobRow.minYears === 'number', hasQualifications: !!jobRow.qualifications?.trim() },
+          });
+          scored = {
+            dimensions: check.dimensions,
+            explanation: { requirements: check.requirements, level: check.level, domain: check.domain, trajectory: check.trajectory },
+            extracted: check.extracted,
+          };
+        }
+      } else {
+        const run = scorers.scorer_v3;
+        if (!run) throw new Error('no scorer v3 on this service');
+        const out = await run.run(
+          {
+            resumeMarkdown: resumeForModel,
+            profileContext,
+            job: jobFacts,
+            logistics: { score: logistics.score, lines: logisticsLines(user, job) },
+            // What the person says they are looking for (the saved search): context for the model, never an input of the estimate.
+            targets: { titles: user.targetTitles, seniority: user.targetSeniority },
           },
-          // The facts, as the AI score counts them (met / stated), not the estimate's prior.
-          logistics: { score: logisticsDimension(user, job, cfg.weights).score, lines: logisticsLines(user, job) },
-          // What the person says they are looking for (the saved search): context for the model, never an input of the estimate.
-          targets: { titles: user.targetTitles, seniority: user.targetSeniority },
-        },
-        { locale: o.locale, model },
-      );
+          { locale: o.locale, model },
+        );
+        prose = { strengths: out.strengths, gaps: out.gaps, summary: out.summary };
+        if (!rewrite) {
+          // CitationGuard against the text the model actually saw.
+          const dimensions: MatchDimension[] = (['title_level', 'skills', 'industry', 'logistics', 'career_path'] as const).map((key) => {
+            if (key === 'logistics') return logistics;
+            const d = out.dimensions[key];
+            return { key, weight: cfg.weights[key], score: d.score, status: d.score === null ? 'not_stated' : 'scored', evidence: guardEvidence(d.evidence, sources) } satisfies MatchDimension;
+          });
+          // Model-picked terms, kept only when the server can confirm them.
+          scored = { dimensions, explanation: verifyKeywords(out.keywordsMatched, out.keywordsMissing, posting, user), extracted: null };
+        }
+      }
     } catch (err) {
-      logger.warn('MATCH', 'scorer v3 failed', { userId, jobId, error: err instanceof Error ? err.message : String(err) });
-      if (o.onAiFailure === 'throw') throw new ScorerFailedError(err);
-      return keep ? fromRow(keep, true) : estimate('ai_failed');
+      const kind = failureKind(err);
+      logger.warn('MATCH', 'fit scorer failed', { userId, jobId, prompt: pin.prompt, kind, error: err instanceof Error ? err.message : String(err) });
+      if (o.onAiFailure === 'throw') throw new ScorerFailedError(err, kind);
+      return keep ? fromRow(keep, true, blocked('ai_failed')) : estimate('ai_failed');
     }
 
     if (rewrite) {
-      // Same score, same components, same keywords; new words only.
+      // Same score, same components, same checklist and keywords; new words only. Statuses are fixed-list values, so
+      // the number does not depend on the language and "rewrite in my language" never changes it.
       const kept = fromRow(rewrite, true);
       const stored = rewrite.explanation && typeof rewrite.explanation === 'object' && !Array.isArray(rewrite.explanation) ? (rewrite.explanation as Record<string, unknown>) : {};
       const saved = await repo.saveScore({
         ...rewrite,
         ...(kept.kind === 'ai' && kept.score !== null ? { score: kept.score, tier: kept.tier } : {}),
         dimensions: kept.dimensions,
-        explanation: { ...stored, strengths: out.strengths, gaps: out.gaps, rationale: out.summary ?? '', responseLanguage: o.locale },
+        explanation: { ...stored, strengths: prose.strengths, gaps: prose.gaps, rationale: prose.summary ?? '', responseLanguage: o.locale },
         locale: o.locale,
         searchProfileVersion: user.searchProfileVersion,
         generatedAt: rewrite.generatedAt,
       });
-      await costLog({ userId, jobId, resumeVariantId: resume.id, reason: 'locale_regen', mode: o.mode });
+      await costLog({ userId, jobId, resumeVariantId: resume.id, reason: 'locale_regen', mode: o.mode, prompt: pin.prompt });
       return fromRow(saved, false);
     }
 
-    // CitationGuard against the text the model actually saw.
-    const sources = { resume: resumeForModel, posting };
-    const logistics = logisticsDimension(user, job, cfg.weights);
-    const dims: MatchDimension[] = (['title_level', 'skills', 'industry', 'logistics', 'career_path'] as const).map((key) => {
-      if (key === 'logistics') return logistics;
-      const d = out.dimensions[key];
-      const score = d.score;
-      return {
-        key,
-        weight: cfg.weights[key],
-        score,
-        status: score === null ? 'not_stated' : 'scored',
-        evidence: guardEvidence(d.evidence, sources),
-      } satisfies MatchDimension;
-    });
-    const total = combineDimensions(dims);
-    if (total === null) return keep ? fromRow(keep, true) : estimate('ai_failed');
+    const total = scored ? combineDimensions(scored.dimensions) : null;
+    if (!scored || total === null) {
+      // An answer in which nothing could be scored: received, and of no use. Not retried.
+      if (o.onAiFailure === 'throw') throw new ScorerFailedError(new Error('the answer scored no component'), 'answer');
+      return keep ? fromRow(keep, true, blocked('ai_failed')) : estimate('ai_failed');
+    }
+
+    // The estimate for the same inputs, as the fit contract shows it (on the AI scale once the market has a map).
+    const estimated = estimate(null);
+    // Scorer v4: a total within 3 points of a tier edge is stored with the tier on the estimate's side of it (I5). The
+    // score is stored as computed. Scorer v3 (the rollback) keeps its rule: a new result takes its own tier.
+    const tierRule = pin.prompt === 'scorer_v4' ? borderlineTier(total, estimated.score, cfg.tiers) : { tier: tierFor(total, cfg.tiers), edge: null };
+    // I4: a result that could judge less than 60% of the rubric weight is never stored Great (the read holds the same rule).
+    const tier = tierWithinCoverage(tierRule.tier, aiCoverage(scored.dimensions));
 
     const reason = !existing
       ? 'first_score'
-      : existing.promptVersion !== SCORER_PROMPT_VERSION
+      : existing.promptVersion !== pin.prompt
         ? 'prompt_changed'
         : existing.resumeContentHashAtScore !== resume.resumeContentHash
           ? 'resume_changed'
@@ -637,34 +819,41 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
       resumeVariantId: resume.id,
       score: total,
       explanation: {
-        strengths: out.strengths,
-        gaps: out.gaps,
-        rationale: out.summary ?? '',
-        // Model-picked terms, kept only when the server can confirm them.
-        ...verifyKeywords(out.keywordsMatched, out.keywordsMissing, posting, user),
+        strengths: prose.strengths,
+        gaps: prose.gaps,
+        rationale: prose.summary ?? '',
+        // Scorer v4: the verified checklist and the three judgments. Scorer v3: the verified keywords.
+        ...scored.explanation,
         // Same keys RACrossBankSearchService / RAOnboardingRecommendService read.
         responseLanguage: o.locale,
-        promptVersion: SCORER_PROMPT_VERSION,
+        promptVersion: pin.prompt,
         // The v2 estimate this score was written next to: the (estimate, AI) pair calibration.ts learns from.
-        estimateAtScore: { score: pre.score, coverage: pre.coverage },
+        estimateAtScore: { score: estimated.estimateScore, coverage: estimated.coverage },
+        // Which edge the borderline rule was applied at, and the estimate that decided the side.
+        ...(tierRule.edge !== null ? { tierRule: { edge: tierRule.edge, estimate: estimated.score } } : {}),
       },
       resumeContentHashAtScore: resume.resumeContentHash,
       modelUsed: model,
       scoreKind: 'ai',
-      // A new model result takes its own tier.
-      tier: tierFor(total, cfg.tiers),
-      dimensions: dims,
-      promptVersion: SCORER_PROMPT_VERSION,
+      tier,
+      dimensions: scored.dimensions,
+      promptVersion: pin.prompt,
       locale: o.locale,
       searchProfileVersion: user.searchProfileVersion,
       jobContentHash,
-      rubricVersion: currentScorerPin(brand, model).rubric,
+      rubricVersion: pin.rubric,
       generatedAt: now(),
     });
-    if (resume.targetJobId === jobId) {
-      await repo.updateVariantCachedScore(resume.id, total).catch(() => undefined);
+    // The posting had no requirement list for its text and this score copied one: store it once, for everyone scored
+    // after (first writer wins; a list of an earlier text is replaced). A failure here never fails the score.
+    if (scored.extracted?.length && repo.saveJobRequirements) {
+      try {
+        await repo.saveJobRequirements(jobId, { v: 1, contentHash: textHash, model, extractedAt: now().toISOString(), items: scored.extracted });
+      } catch (err) {
+        logger.warn('MATCH', 'requirement lines could not be stored on the job; the next score copies them again', { jobId, error: err instanceof Error ? err.message : String(err) });
+      }
     }
-    await costLog({ userId, jobId, resumeVariantId: resume.id, reason, mode: o.mode });
+    await costLog({ userId, jobId, resumeVariantId: resume.id, reason, mode: o.mode, prompt: pin.prompt });
     return fromRow(saved, false);
   }
 
@@ -699,9 +888,11 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
     const pin = await scorerPin(brand);
 
     let stored = new Map<string, StoredFitRow>();
-    if (resume) {
+    // A posting that is not a stored job (the extension's page, `estimateForPosting`) can have no stored score: not asked for.
+    const scorable = visible.map((j) => j.id).filter((id) => id !== ADHOC_POSTING_ID);
+    if (resume && scorable.length) {
       try {
-        stored = await repo.listAiScores({ userId, jobIds: visible.map((j) => j.id), resumeVariantId: resume.id, resumeContentHash: resume.resumeContentHash });
+        stored = await repo.listAiScores({ userId, jobIds: scorable, resumeVariantId: resume.id, resumeContentHash: resume.resumeContentHash });
       } catch (err) {
         // The quick estimate still answers; a list never fails over the stored scores.
         logger.warn('MATCH', 'stored AI scores unavailable for a list; answering the quick estimate', { error: err instanceof Error ? err.message : String(err) });
@@ -802,6 +993,8 @@ export function createMatchService(deps: MatchServiceDeps = {}): MatchService {
       aiWritten: ai && (view.summary !== null || view.strengths.length > 0 || view.gaps.length > 0),
       estimateReason: view.estimateReason,
       charged,
+      // The checklist of a scorer v4 fit goes on the card too (additive: absent for an estimate and for a v3 row).
+      ...(ai && view.requirements?.length ? { requirements: view.requirements } : {}),
     };
   }
 

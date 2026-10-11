@@ -12,6 +12,7 @@ import { normalizeCompanyName } from '../jobs/normalize/index.js';
 import type { MatchDimension } from './contract.js';
 import type { MatchJobRecord, UserMatchInputs } from './context.js';
 import type { KeywordInput } from './keywordRows.js';
+import type { StoredRequirementsDoc } from './scorerV4.js';
 
 export interface ResumeRecord {
   id: string;
@@ -83,7 +84,27 @@ export interface MatchRepo {
    */
   listAiScores(input: { userId: string; jobIds: string[]; resumeVariantId: string; resumeContentHash: string }): Promise<Map<string, StoredFitRow>>;
   saveScore(row: ScoreWrite): Promise<ScoreRecord>;
-  updateVariantCachedScore(variantId: string, score: number): Promise<void>;
+  /**
+   * Store the requirement lines of a posting that has none for the text it
+   * has now (scorer v4: the first score of a posting copies them; enrichment
+   * writes them otherwise). The first writer wins: a job that already has a
+   * list for this text (the same `contentHash`) is left as it is. A list of
+   * an earlier text of the posting is replaced. Answers whether this call
+   * wrote it.
+   *
+   * Optional so a repository that has no job table to write to (an in-memory
+   * one) still satisfies the interface: the caller then stores nothing, and
+   * every score of that posting copies its own lines.
+   */
+  saveJobRequirements?(jobId: string, doc: StoredRequirementsDoc): Promise<boolean>;
+  /**
+   * @deprecated Never called. The fit of a resume version is read through
+   * `getVariantFit`; `RAResumeVariant.matchScoreCached` was a frozen copy of
+   * it outside the fit contract and is no longer written (nothing reads it
+   * since the M2 gate). The member is still declared only because the
+   * in-memory repository of testkit.ts implements it; it goes when that does.
+   */
+  updateVariantCachedScore?(variantId: string, score: number): Promise<void>;
   getKeywords(jobId: string): Promise<KeywordInput[] | null>;
   /** Users of a brand active since `since`, most recent first. */
   activeUsers(brandId: string, since: Date, limit: number): Promise<string[]>;
@@ -105,9 +126,11 @@ export interface MatchRepo {
   }): Promise<Set<string>>;
   /**
    * (estimate, AI) pairs of a market since `since`, newest first: AI rows of
-   * primary resumes that stored the estimate they were scored next to.
+   * primary resumes that stored the estimate they were scored next to. With
+   * `promptVersion`, only rows that scorer prompt wrote: two scorers put
+   * their totals on two scales, and a map learned from both fits neither.
    */
-  listCalibrationPairs(input: { market: Market; since: Date; limit: number }): Promise<CalibrationPair[]>;
+  listCalibrationPairs(input: { market: Market; since: Date; limit: number; promptVersion?: string | null }): Promise<CalibrationPair[]>;
   /** One AppConfig value (the calibration document); null when the key is not stored. */
   getConfigValue(key: string): Promise<string | null>;
   setConfigValue(key: string, value: string): Promise<void>;
@@ -190,9 +213,13 @@ function toRecord(row: JobRow): MatchJobRecord {
   return { ...rest, companyIndustries: company?.industries ?? [] };
 }
 
-/** The list projection: JOB_SELECT without the long text a list never reads. */
-const { description: _d, descriptionPlain: _p, responsibilities: _r, benefits: _b, ...FIT_JOB_SELECT } = JOB_SELECT;
-type FitJobRow = Omit<JobRow, 'description' | 'descriptionPlain' | 'responsibilities' | 'benefits'>;
+/**
+ * The list projection: JOB_SELECT without the long text a list never reads.
+ * The stored requirement lines are long text too (up to a dozen lines of the
+ * posting): only the model call reads them, and a list never makes one.
+ */
+const { description: _d, descriptionPlain: _p, responsibilities: _r, benefits: _b, requirements: _q, ...FIT_JOB_SELECT } = JOB_SELECT;
+type FitJobRow = Omit<JobRow, 'description' | 'descriptionPlain' | 'responsibilities' | 'benefits' | 'requirements'>;
 
 /**
  * Company-name key for looking up past employers in RACompany.nameNormalized:
@@ -226,7 +253,7 @@ export function createPrismaMatchRepo(): MatchRepo {
       if (!jobIds.length) return [];
       const p = await db();
       const rows = (await p.rAJob.findMany({ where: { id: { in: jobIds } }, select: FIT_JOB_SELECT })) as unknown as FitJobRow[];
-      return rows.map((r) => toRecord({ ...r, description: '', descriptionPlain: '', responsibilities: null, benefits: null }));
+      return rows.map((r) => toRecord({ ...r, description: '', descriptionPlain: '', responsibilities: null, benefits: null, requirements: null }));
     },
 
     async getUserInputs(userId, market) {
@@ -323,9 +350,20 @@ export function createPrismaMatchRepo(): MatchRepo {
       return saved;
     },
 
-    async updateVariantCachedScore(variantId, score) {
+    async saveJobRequirements(jobId, doc) {
       const p = await db();
-      await p.rAResumeVariant.update({ where: { id: variantId }, data: { matchScoreCached: score } });
+      // One statement, so two first scores of one posting cannot both write: the row is updated only while it has no
+      // list for this text. That is SQL NULL, a JSON null an earlier writer left, or a list whose content hash is not
+      // this one (copied from an earlier text of the posting; a list with no hash reads as one). `updatedAt` is not
+      // moved: the posting did not change.
+      const written = await p.$executeRaw(Prisma.sql`
+        UPDATE "RAJob"
+        SET "requirements" = ${JSON.stringify(doc)}::jsonb
+        WHERE "id" = ${jobId}
+          AND ("requirements" IS NULL
+            OR "requirements" = 'null'::jsonb
+            OR ("requirements"->>'contentHash') IS DISTINCT FROM ${doc.contentHash})`);
+      return written > 0;
     },
 
     async getKeywords(jobId) {
@@ -388,8 +426,9 @@ export function createPrismaMatchRepo(): MatchRepo {
       return new Set(rows.filter((r) => jobHashCurrent(r.jobContentHash, jobContentHashes?.get(r.jobId))).map((r) => r.jobId));
     },
 
-    async listCalibrationPairs({ market, since, limit }) {
+    async listCalibrationPairs({ market, since, limit, promptVersion }) {
       const p = await db();
+      const onePrompt = promptVersion ? Prisma.sql`AND s."promptVersion" = ${promptVersion}` : Prisma.empty;
       // Numbers only: the estimate stored at score time, the AI total and its components. No prose is read.
       const rows = await p.$queryRaw<Array<{ ai: number; estimateAtScore: unknown; dimensions: unknown }>>(Prisma.sql`
         SELECT s."score" AS "ai", s."explanation"->'estimateAtScore' AS "estimateAtScore", s."dimensions" AS "dimensions"
@@ -402,6 +441,7 @@ export function createPrismaMatchRepo(): MatchRepo {
           AND v."isPrimary" = true
           AND v."deletedAt" IS NULL
           AND (s."explanation"->'estimateAtScore') IS NOT NULL
+          ${onePrompt}
         ORDER BY s."generatedAt" DESC
         LIMIT ${Math.max(1, Math.floor(limit))}`);
       return rows.map((r) => toCalibrationPair(r)).filter((x): x is CalibrationPair => !!x);

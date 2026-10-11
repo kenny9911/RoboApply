@@ -1,6 +1,7 @@
 // @vitest-environment node
-// WP-18 — MatchService: scorer v3 behind the cache, caps, consent, CitationGuard,
-// fit analysis credits and the keyword check. No network, no database.
+// WP-18, MKT-4G — MatchService: the pinned scorer behind the cache (scorer v4 by default, scorer v3 behind
+// MATCH_SCORER_RUBRIC=fit_v3), caps, consent, CitationGuard, the requirement checklist, fit analysis credits and
+// the keyword check. No network, no database; every scorer is a fake and the model is never called.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const llm = vi.hoisted(() => ({ chat: vi.fn() }));
@@ -25,11 +26,20 @@ vi.mock('../../services/LoggerService.js', () => ({
 import { getBrand } from '../../platform/brand/registry.js';
 import { createCreditTestKit } from '../../platform/credits/testkit.js';
 import type { RateLimitResult } from '../../platform/ratelimit/index.js';
-import { RAJobMatchScorerV3Agent, type RAJobMatchScorerV3Output } from '../../roboapply/v2/agents/RAJobMatchScorerAgent.js';
-import { SCORER_PROMPT_VERSION } from './contract.js';
+import {
+  RAJobMatchScorerV3Agent,
+  RAJobMatchScorerV4Agent,
+  type RAJobMatchScorerV3Output,
+  type RAJobMatchScorerV4Input,
+  type RAJobMatchScorerV4Output,
+  type ScorerV4RequirementAnswer,
+} from '../../roboapply/v2/agents/RAJobMatchScorerAgent.js';
+import { SCORER_PROMPT_VERSION, type JobRequirement } from './contract.js';
 import { cnPostingVisible } from '../cn/jobs/index.js';
-import { createMatchService, shownKeywords, visibleTo, type MatchServiceDeps, type ScorerLike } from './MatchService.js';
-import { createMemoryRepo, jobRecord, resumeRecord } from './testkit.js';
+import { currentJobHash, jobContentHash } from './jobHash.js';
+import { ScorerFailedError, createMatchService, shownKeywords, visibleTo, type MatchServiceDeps, type ScorerLike, type ScorerV4Like } from './MatchService.js';
+import type { StoredRequirementsDoc } from './scorerV4.js';
+import { createMemoryRepo, defaultUserInputs, jobRecord, resumeRecord } from './testkit.js';
 
 const MODEL = 'test/model-a';
 
@@ -54,6 +64,10 @@ function allow(remaining = 100): RateLimitResult {
   return { allowed: true, retryAfterSec: 0, remaining, windows: [] };
 }
 
+/**
+ * A service on scorer v3: the rollback, with its switch set explicitly (MATCH_SCORER_RUBRIC=fit_v3). The scorer v4
+ * cases further down use `setupV4`, which sets nothing and so runs the default.
+ */
 function setup(over: Partial<MatchServiceDeps> & { repo?: ReturnType<typeof createMemoryRepo> } = {}) {
   const repo = over.repo ?? createMemoryRepo();
   const scorer = { run: vi.fn(async () => scorerOutput()) } satisfies ScorerLike;
@@ -71,10 +85,11 @@ function setup(over: Partial<MatchServiceDeps> & { repo?: ReturnType<typeof crea
     costLog,
     profileSnapshot: async () => null,
     brand: () => getBrand('roboapply'),
-    // Nothing set: GoApply cases here score public postings, which the recruitment-info mode allows by default (D5).
-    env: {},
     now: () => new Date('2026-10-10T08:00:00Z'),
     ...over,
+    // The rollback switch. Nothing else is set: GoApply cases here score public postings, which the recruitment-info
+    // mode allows by default (D5).
+    env: { MATCH_SCORER_RUBRIC: 'fit_v3', ...over.env },
   });
   return { service, repo, scorer: (over.scorer as typeof scorer) ?? scorer, consume, costLog, withCredit };
 }
@@ -83,7 +98,7 @@ beforeEach(() => {
   llm.chat.mockReset();
 });
 
-describe('scoreJob — scorer v3', () => {
+describe('scoreJob — scorer v3 (the rollback: MATCH_SCORER_RUBRIC=fit_v3)', () => {
   it('the server computes the total from the components; the model never emits it', async () => {
     const { service, repo, scorer, costLog } = setup();
     const fit = await service.scoreJob('u1', 'job1', { locale: 'en' });
@@ -488,11 +503,39 @@ describe('scoreJob — scorer v3', () => {
     expect(visibleTo(jobs[0]!, 'u1', 'intl', { CN_RECRUITMENT_INFO_MODE: 'licensed' })).toBe(false);
   });
 
-  it('updates the variant’s cached score when it was tailored for this job', async () => {
-    const repo = createMemoryRepo({ resumes: [{ ...resumeRecord({ targetJobId: 'job1' }), userId: 'u1' }] });
+  it('a score for the job a resume version was tailored for is stored as a fit only: no copy is written to the version (matchScoreCached)', async () => {
+    // The writer is put on the repository here, so the test says the same whether or not the test kit still has one.
+    const cached = vi.fn(async () => undefined);
+    const repo = Object.assign(createMemoryRepo({ resumes: [{ ...resumeRecord({ targetJobId: 'job1' }), userId: 'u1' }] }), { updateVariantCachedScore: cached });
     const { service } = setup({ repo });
     const fit = await service.scoreJob('u1', 'job1');
-    expect(repo.state.cachedScores.v1).toBe(fit.score);
+    expect(fit.kind).toBe('ai');
+    expect(repo.state.scores).toHaveLength(1);
+    expect(cached).not.toHaveBeenCalled();
+    expect((repo.state as { cachedScores?: Record<string, number> }).cachedScores ?? {}).toEqual({});
+  });
+
+  it('a rewrite the daily cap stops says so on the view (rewriteBlocked), and the stored fit is answered as it was', async () => {
+    let capped = false;
+    const consume = vi.fn(async ({ key }: { key: string }) => (capped && key.includes(':score:user:') ? { ...allow(0), allowed: false } : allow()));
+    const a = setup({ consume });
+    const first = await a.service.scoreJob('u1', 'job1', { locale: 'en' });
+    expect(first.rewriteBlocked).toBeUndefined();
+    capped = true;
+    const blocked = await a.service.scoreJob('u1', 'job1', { locale: 'zh', regenerateExplanation: true });
+    expect(blocked).toMatchObject({ kind: 'ai', score: first.score, summaryLocaleStale: true, rewriteBlocked: 'daily_cap' });
+    // A plain read in the other language asked for no rewrite: nothing is blocked.
+    expect((await a.service.scoreJob('u1', 'job1', { locale: 'zh' })).rewriteBlocked).toBeUndefined();
+    // No model this brand may call, and a failed call, say so too.
+    const noModel = setup({ repo: a.repo, resolveModel: () => null });
+    expect((await noModel.service.scoreJob('u1', 'job1', { locale: 'zh', regenerateExplanation: true })).rewriteBlocked).toBe('ai_unavailable');
+    const failing = setup({ repo: a.repo, scorer: { run: vi.fn(async () => Promise.reject(new Error('upstream 502'))) } });
+    expect((await failing.service.scoreJob('u1', 'job1', { locale: 'zh', regenerateExplanation: true })).rewriteBlocked).toBe('ai_failed');
+    // A re-score that could not run is not a rewrite: the stale fit answers with no such flag.
+    const other = setup({ repo: a.repo, resolveModel: () => 'test/model-b', consume: vi.fn(async () => ({ ...allow(0), allowed: false })) });
+    const stale = await other.service.scoreJob('u1', 'job1', { locale: 'en' });
+    expect(stale).toMatchObject({ kind: 'ai', stale: true });
+    expect(stale.rewriteBlocked).toBeUndefined();
   });
 });
 
@@ -645,5 +688,818 @@ describe('keywordCheck', () => {
     expect(res.resumeVariantId).toBe('v1');
     expect(res.rows.map((r) => r.key)).toEqual(['title', 'years', 'education', 'skills', 'keywords']);
     expect(res.rows[4]).toMatchObject({ found: 1, total: 1, status: 'met' });
+  });
+});
+
+// ── Scorer v4 (MKT-4G; MARKET_STRATEGY 2.1 point 5, 2.2 I5 and I7): the default ──────────────────────────────────
+
+/** Requirement lines of the test kit's posting (verbatim) and what the test kit's resume shows of them. */
+const YEARS: ScorerV4RequirementAnswer = { id: 'a', kind: 'experience', text: '5+ years of backend experience', importance: 'must', status: 'met', evidence: 'Senior Software Engineer, PayCo (2019-01 – present)' };
+const K8S: ScorerV4RequirementAnswer = { id: 'b', kind: 'skill', text: 'Kubernetes required', importance: 'must', status: 'not_shown', evidence: '' };
+
+function checklist(over: Partial<RAJobMatchScorerV4Output> = {}): RAJobMatchScorerV4Output {
+  return {
+    requirements: [YEARS, K8S],
+    level: { post: 'senior', resume: 'senior', direction: 'match' },
+    domain: { status: 'adjacent', evidence: 'Built payment APIs in TypeScript and Go serving 2M users.' },
+    trajectory: { status: 'toward', evidence: '' },
+    strengths: ['Your payments APIs in Go'],
+    gaps: ['No Kubernetes work shown'],
+    summary: 'Your payments work lines up well, though the post centres on Kubernetes.',
+    ...over,
+  };
+}
+
+/** An in-memory `saveJobRequirements` with the production rule: the first writer wins for a text of the posting; a list of another text is replaced. */
+function withRequirementStore(repo: ReturnType<typeof createMemoryRepo>) {
+  const saveJobRequirements = vi.fn(async (jobId: string, doc: StoredRequirementsDoc): Promise<boolean> => {
+    const job = repo.state.jobs.find((j) => j.id === jobId);
+    if (!job) return false;
+    const had = job.requirements as { contentHash?: unknown } | null | undefined;
+    if (had && had.contentHash === doc.contentHash) return false;
+    job.requirements = doc;
+    return true;
+  });
+  return Object.assign(repo, { saveJobRequirements });
+}
+
+/** The hash a stored requirement list of the test kit's posting carries: the posting's own text and skills. */
+const KIT_HASH = jobContentHash(jobRecord());
+
+/** A service with BOTH scorers and nothing configured: the default pin decides which one runs. */
+function setupV4(over: Partial<MatchServiceDeps> & { repo?: ReturnType<typeof createMemoryRepo>; answer?: () => RAJobMatchScorerV4Output } = {}) {
+  const { answer, ...deps } = over;
+  const repo = deps.repo ?? withRequirementStore(createMemoryRepo());
+  const scorer = { run: vi.fn(async () => scorerOutput()) } satisfies ScorerLike;
+  const scorerV4 = { run: vi.fn(async (_input: RAJobMatchScorerV4Input) => (answer ? answer() : checklist())) } satisfies ScorerV4Like;
+  const consume = vi.fn(async () => allow());
+  const costLog = vi.fn(async () => undefined);
+  const withCredit = vi.fn(async (_o: unknown, fn: () => Promise<unknown>) => fn()) as unknown as NonNullable<MatchServiceDeps['withCredit']>;
+  const service = createMatchService({
+    repo,
+    scorer,
+    scorerV4,
+    resolveModel: () => MODEL,
+    routeAllowed: () => true,
+    aiAllowed: async () => true,
+    consume,
+    withCredit,
+    costLog,
+    profileSnapshot: async () => null,
+    brand: () => getBrand('roboapply'),
+    env: {},
+    now: () => new Date('2026-10-10T08:00:00Z'),
+    ...deps,
+  });
+  return { service, repo, scorer, scorerV4, consume, costLog, withCredit };
+}
+
+/** A calibration map that puts every estimate at one value on the AI scale: the estimate the borderline rule reads. */
+const estimateAt = (value: number): MatchServiceDeps['calibration'] => async () => ({ map: { knots: [[0, value], [100, value]] }, priors: null });
+
+describe('scoreJob — scorer v4 (the default)', () => {
+  it('with nothing configured a new score is the checklist\'s: every number computed on the server, stored as fit_v4', async () => {
+    const { service, repo, scorer, scorerV4, costLog } = setupV4();
+    const fit = await service.scoreJob('u1', 'job1', { locale: 'en' });
+    expect(scorerV4.run).toHaveBeenCalledTimes(1);
+    expect(scorer.run).not.toHaveBeenCalled();
+    expect(fit.kind).toBe('ai');
+    const dim = (key: string) => fit.dimensions.find((d) => d.key === key)!;
+    // One required line met and one not shown: 100 × 1 / 2 = 50. Same level: 100. Adjacent domain: 60. Toward: 100.
+    expect([dim('title_level').score, dim('skills').score, dim('industry').score, dim('logistics').score, dim('career_path').score]).toEqual([100, 50, 60, 100, 100]);
+    // (35 × 100 + 30 × 50 + 15 × 60 + 10 × 100 + 10 × 100) / 100 = 79
+    expect(fit.score).toBe(79);
+    const saved = repo.state.scores[0]!;
+    expect(saved).toMatchObject({ score: 79, promptVersion: 'scorer_v4', rubricVersion: 'fit_v4', modelUsed: MODEL, scoreKind: 'ai', locale: 'en', searchProfileVersion: 1, jobContentHash: currentJobHash(jobRecord()) });
+    const exp = saved.explanation as Record<string, unknown>;
+    expect(Object.keys(exp).sort()).toEqual(['domain', 'estimateAtScore', 'gaps', 'level', 'promptVersion', 'rationale', 'requirements', 'responseLanguage', 'strengths', 'tierRule', 'trajectory']);
+    expect(exp).toMatchObject({
+      strengths: ['Your payments APIs in Go'],
+      gaps: ['No Kubernetes work shown'],
+      rationale: 'Your payments work lines up well, though the post centres on Kubernetes.',
+      level: { post: 'senior', resume: 'senior', direction: 'match' },
+      domain: { status: 'adjacent', evidence: 'Built payment APIs in TypeScript and Go serving 2M users.' },
+      trajectory: { status: 'toward', evidence: '' },
+      responseLanguage: 'en',
+      promptVersion: 'scorer_v4',
+    });
+    expect(exp.requirements).toEqual([
+      { id: 'r1', kind: 'experience', text: '5+ years of backend experience', importance: 'must', status: 'met', evidence: 'Senior Software Engineer, PayCo (2019-01 – present)' },
+      { id: 'r2', kind: 'skill', text: 'Kubernetes required', importance: 'must', status: 'not_shown', evidence: '' },
+    ]);
+    expect((exp.estimateAtScore as { score: number }).score).toBe((await setupV4({ aiAllowed: async () => false }).service.scoreJob('u1', 'job1')).score);
+    // The view carries the checklist; the model-picked keyword lists of v3 are gone (the checklist replaces them).
+    expect(fit.requirements).toEqual(exp.requirements);
+    expect(fit).toMatchObject({ summary: 'Your payments work lines up well, though the post centres on Kubernetes.', keywordsMatched: [], keywordsMissing: [] });
+    expect(costLog).toHaveBeenCalledWith(expect.objectContaining({ reason: 'first_score', jobId: 'job1', prompt: 'scorer_v4' }));
+  });
+
+  it('on both brands: GoApply writes fit_v4 too, and CN_MATCH_SCORER_RUBRIC switches GoApply alone', async () => {
+    const cn = () => withRequirementStore(createMemoryRepo({ jobs: [jobRecord({ market: 'cn' })] }));
+    const go = setupV4({ repo: cn(), brand: () => getBrand('goapply') });
+    expect((await go.service.scoreJob('u1', 'job1')).kind).toBe('ai');
+    expect(go.repo.state.scores[0]).toMatchObject({ promptVersion: 'scorer_v4', rubricVersion: 'fit_v4' });
+
+    const env = { CN_MATCH_SCORER_RUBRIC: 'fit_v3' };
+    const goV3 = setupV4({ repo: cn(), brand: () => getBrand('goapply'), env });
+    await goV3.service.scoreJob('u1', 'job1');
+    expect(goV3.repo.state.scores[0]).toMatchObject({ promptVersion: 'scorer_v3', rubricVersion: 'fit_v3' });
+    expect(goV3.scorerV4.run).not.toHaveBeenCalled();
+    const robo = setupV4({ env });
+    await robo.service.scoreJob('u1', 'job1');
+    expect(robo.repo.state.scores[0]).toMatchObject({ promptVersion: 'scorer_v4', rubricVersion: 'fit_v4' });
+  });
+
+  it('MATCH_SCORER_RUBRIC=fit_v3 writes v3 rows again with no deploy; the v4 fits already stored stay visible and are replaced one by one', async () => {
+    const repo = withRequirementStore(createMemoryRepo({ jobs: [jobRecord(), jobRecord({ id: 'job2' })] }));
+    const v4 = setupV4({ repo });
+    const first = await v4.service.scoreJob('u1', 'job1');
+    expect(repo.state.scores[0]).toMatchObject({ rubricVersion: 'fit_v4' });
+
+    // The rollback: the same deployment, one variable.
+    const back = setupV4({ repo, env: { MATCH_SCORER_RUBRIC: 'fit_v3' } });
+    // The stored v4 fit keeps serving on every read that makes no call, flagged stale; nothing drops to an estimate.
+    expect(await back.service.scoreJob('u1', 'job1', { mode: 'cache_only' })).toMatchObject({ kind: 'ai', score: first.score, tier: first.tier, stale: true, cached: true });
+    expect((await back.service.fits.getFits('u1', ['job1'])).get('job1')).toMatchObject({ kind: 'ai', score: first.score, stale: true });
+    expect(back.scorer.run).not.toHaveBeenCalled();
+    // A new score is a v3 row; the planned re-score of the old one writes v3 over it and says why.
+    await back.service.scoreJob('u1', 'job2');
+    expect(repo.state.scores.find((r) => r.jobId === 'job2')).toMatchObject({ promptVersion: 'scorer_v3', rubricVersion: 'fit_v3' });
+    await back.service.scoreJob('u1', 'job1', { mode: 'precompute' });
+    expect(repo.state.scores.find((r) => r.jobId === 'job1')).toMatchObject({ promptVersion: 'scorer_v3', rubricVersion: 'fit_v3' });
+    expect(back.costLog).toHaveBeenLastCalledWith(expect.objectContaining({ reason: 'prompt_changed', prompt: 'scorer_v3' }));
+    expect(back.scorerV4.run).not.toHaveBeenCalled();
+
+    // And forward again: a v3 row under the v4 pin is stale, serves, and its re-score is a checklist.
+    const forward = setupV4({ repo });
+    expect(await forward.service.scoreJob('u1', 'job2', { mode: 'cache_only' })).toMatchObject({ kind: 'ai', stale: true, requirements: [] });
+    const rescored = await forward.service.scoreJob('u1', 'job2', { mode: 'precompute' });
+    expect(rescored).toMatchObject({ kind: 'ai', stale: false, cached: false });
+    expect(rescored.requirements).toHaveLength(2);
+    // Anything that is not a known rubric keeps the default: a typo never switches the scorer.
+    const typo = setupV4({ env: { MATCH_SCORER_RUBRIC: 'fit_v5' } });
+    await typo.service.scoreJob('u1', 'job1');
+    expect(typo.repo.state.scores[0]).toMatchObject({ rubricVersion: 'fit_v4' });
+  });
+
+  it('after a model change the existing fits stay visible and are re-scored gradually', async () => {
+    const repo = withRequirementStore(createMemoryRepo());
+    const first = await setupV4({ repo }).service.scoreJob('u1', 'job1');
+    // The posting has its stored lines by now (the first score wrote them): the new model fills in those ids.
+    const next = setupV4({ repo, resolveModel: () => 'test/model-b', answer: () => checklist({ requirements: [{ ...YEARS, id: 'r1' }, { ...K8S, id: 'r2', status: 'partly', evidence: 'TypeScript, Go, PostgreSQL' }] }) });
+    expect(await next.service.scoreJob('u1', 'job1', { mode: 'cache_only' })).toMatchObject({ kind: 'ai', score: first.score, stale: true });
+    expect((await next.service.preScoreMany('u1', ['job1']))[0]).toMatchObject({ kind: 'ai', score: first.score });
+    expect(next.scorerV4.run).not.toHaveBeenCalled();
+    const rescored = await next.service.scoreJob('u1', 'job1', { mode: 'precompute' });
+    expect(rescored).toMatchObject({ kind: 'ai', stale: false });
+    expect(rescored.requirements!.map((r) => [r.id, r.status])).toEqual([['r1', 'met'], ['r2', 'partly']]);
+    expect(repo.state.scores).toHaveLength(1);
+    expect(repo.state.scores[0]).toMatchObject({ modelUsed: 'test/model-b', rubricVersion: 'fit_v4' });
+    expect(next.costLog).toHaveBeenLastCalledWith(expect.objectContaining({ reason: 'model_changed' }));
+  });
+
+  it('a service that was handed one scorer writes what that scorer speaks and never reaches for a real agent', async () => {
+    // Only a v3 fake, nothing configured (the default is fit_v4): v3 rows, and no LLMService call.
+    const repo = createMemoryRepo();
+    const scorer = { run: vi.fn(async () => scorerOutput()) };
+    const v3only = createMatchService({ repo, scorer, resolveModel: () => MODEL, routeAllowed: () => true, aiAllowed: async () => true, consume: async () => allow(), costLog: async () => undefined, profileSnapshot: async () => null, brand: () => getBrand('roboapply'), env: {} });
+    expect((await v3only.scoreJob('u1', 'job1')).kind).toBe('ai');
+    expect(repo.state.scores[0]).toMatchObject({ promptVersion: 'scorer_v3', rubricVersion: 'fit_v3' });
+    // Its own rows are current under its own pin.
+    expect(await v3only.scoreJob('u1', 'job1')).toMatchObject({ cached: true, stale: false });
+    // Only a v4 fake, with the rollback switch set: v4 rows.
+    const repo4 = createMemoryRepo();
+    const scorerV4 = { run: vi.fn(async () => checklist()) };
+    const v4only = createMatchService({ repo: repo4, scorerV4, resolveModel: () => MODEL, routeAllowed: () => true, aiAllowed: async () => true, consume: async () => allow(), costLog: async () => undefined, profileSnapshot: async () => null, brand: () => getBrand('roboapply'), env: { MATCH_SCORER_RUBRIC: 'fit_v3' } });
+    expect((await v4only.scoreJob('u1', 'job1')).kind).toBe('ai');
+    expect(repo4.state.scores[0]).toMatchObject({ promptVersion: 'scorer_v4', rubricVersion: 'fit_v4' });
+    expect(llm.chat).not.toHaveBeenCalled();
+  });
+
+  it('the model is given the stripped resume first, the job, the stored lines or none, and the logistics facts; never the saved search', async () => {
+    const { service, scorerV4 } = setupV4();
+    await service.scoreJob('u1', 'job1', { locale: 'zh' });
+    const [input, options] = scorerV4.run.mock.calls[0]! as unknown as [RAJobMatchScorerV4Input, { locale: string; model: string }];
+    expect(options).toEqual({ locale: 'zh', model: MODEL });
+    expect(input.resumeMarkdown).not.toMatch(/Ada|Lovelace|ada@example\.com|2345 6789/);
+    expect(input.resumeMarkdown).toContain('Built payment APIs');
+    expect(input.requirements).toBeNull();
+    expect(input.job).toMatchObject({ title: 'Backend Engineer', companyName: 'Acme', seniority: 'senior', minYears: 5 });
+    expect(input.logistics).toEqual({ lines: ['Location: fits what the candidate asked for', 'Pay: fits what the candidate asked for'] });
+    expect(input).not.toHaveProperty('targets');
+  });
+
+  it('a "met" with an invented quote is stored as "not shown" and lowers the score; a line that is not in the posting is not stored at all, and neither is the thinned list', async () => {
+    const honest = await setupV4().service.scoreJob('u1', 'job1');
+    const padded = setupV4({
+      answer: () =>
+        checklist({
+          requirements: [
+            { ...YEARS, evidence: 'Led a platform team of 40 engineers.' },
+            K8S,
+            { id: 'z', kind: 'skill', text: '10 years of COBOL', importance: 'must', status: 'met', evidence: 'TypeScript, Go, PostgreSQL' },
+          ],
+        }),
+    });
+    const fit = await padded.service.scoreJob('u1', 'job1');
+    expect(fit.requirements!.map((r) => [r.text, r.status, r.evidence])).toEqual([
+      ['5+ years of backend experience', 'not_shown', ''],
+      ['Kubernetes required', 'not_shown', ''],
+    ]);
+    expect(fit.dimensions.find((d) => d.key === 'skills')!.score).toBe(0);
+    expect(fit.score!).toBeLessThan(honest.score!);
+    expect(JSON.stringify(padded.repo.state.scores[0])).not.toContain('COBOL');
+    // One copied line of three was not the posting's: the score stands for this person, and the remaining two lines
+    // are NOT written to the job as its checklist (the next score copies the lines again).
+    expect(padded.repo.saveJobRequirements).not.toHaveBeenCalled();
+    expect(padded.repo.state.jobs[0]!.requirements ?? null).toBeNull();
+  });
+
+  // The review's probes, through the service: the same judgments, with the lines the resume does not show reworded.
+  const OWNS: ScorerV4RequirementAnswer = { id: 'c', kind: 'experience', text: 'You will own our payments service', importance: 'must', status: 'not_shown', evidence: '' };
+  const K8S_REWORDED: ScorerV4RequirementAnswer = { ...K8S, text: 'Kubernetes experience is required' };
+  const OWNS_REWORDED: ScorerV4RequirementAnswer = { ...OWNS, text: 'Own the payments service' };
+
+  it('requirement lines the model did not copy verbatim never raise the score: the answer is refused, the estimate answers and nothing is stored', async () => {
+    // Verbatim: one required line met, two not shown: skills 100 × 1 / 3 = 33.
+    const verbatim = setupV4({ answer: () => checklist({ requirements: [YEARS, K8S, OWNS] }) });
+    const honest = await verbatim.service.scoreJob('u1', 'job1');
+    expect(honest).toMatchObject({ kind: 'ai', score: 74, tier: 'good' });
+    expect(honest.dimensions.find((d) => d.key === 'skills')!.score).toBe(33);
+    expect((verbatim.repo.state.jobs[0]!.requirements as StoredRequirementsDoc).items).toHaveLength(3);
+
+    // The two "not shown" lines reworded. Dropping them would read skills 100 and 94 / Great, and would leave the
+    // one surviving line as the posting's checklist for everyone after.
+    const reworded = setupV4({ answer: () => checklist({ requirements: [YEARS, K8S_REWORDED, OWNS_REWORDED] }) });
+    const fit = await reworded.service.scoreJob('u1', 'job1');
+    expect(fit).toMatchObject({ kind: 'pre', estimateReason: 'ai_failed', requirements: [] });
+    expect(reworded.repo.state.scores).toHaveLength(0);
+    expect(reworded.repo.saveJobRequirements).not.toHaveBeenCalled();
+    expect(reworded.repo.state.jobs[0]!.requirements ?? null).toBeNull();
+    expect(reworded.costLog).not.toHaveBeenCalled();
+
+    // Both lines not shown, both reworded: no line would be left and the total would renormalize to 91 / Great.
+    const both = setupV4({ answer: () => checklist({ requirements: [K8S, OWNS] }) });
+    expect(await both.service.scoreJob('u1', 'job1')).toMatchObject({ kind: 'ai', score: 64, tier: 'possible' });
+    const bothReworded = setupV4({ answer: () => checklist({ requirements: [K8S_REWORDED, OWNS_REWORDED] }) });
+    expect(await bothReworded.service.scoreJob('u1', 'job1')).toMatchObject({ kind: 'pre', estimateReason: 'ai_failed' });
+    expect(bothReworded.repo.state.scores).toHaveLength(0);
+    expect(bothReworded.repo.saveJobRequirements).not.toHaveBeenCalled();
+  });
+
+  it('one reworded line in three is tolerated for this score; the thinned list is never stored, so the next person is judged on a full copy', async () => {
+    const repo = withRequirementStore(createMemoryRepo());
+    const first = setupV4({ repo, answer: () => checklist({ requirements: [YEARS, K8S, OWNS_REWORDED] }) });
+    const mine = await first.service.scoreJob('u1', 'job1');
+    expect(mine.kind).toBe('ai');
+    expect(mine.requirements!.map((r) => r.text)).toEqual(['5+ years of backend experience', 'Kubernetes required']);
+    expect(repo.saveJobRequirements).not.toHaveBeenCalled();
+    // The next score of the posting is not handed a list: its model copies the lines itself, and a clean copy is stored.
+    repo.state.resumes.push({ ...resumeRecord({ id: 'v2', resumeContentHash: 'hash-u2' }), userId: 'u2' });
+    repo.state.users.u2 = defaultUserInputs();
+    const second = setupV4({ repo, answer: () => checklist({ requirements: [YEARS, K8S, OWNS] }) });
+    await second.service.scoreJob('u2', 'job1');
+    expect((second.scorerV4.run.mock.calls[0]![0] as RAJobMatchScorerV4Input).requirements).toBeNull();
+    expect((repo.state.jobs[0]!.requirements as StoredRequirementsDoc).items.map((r) => r.text)).toEqual(['5+ years of backend experience', 'Kubernetes required', 'You will own our payments service']);
+  });
+
+  it('nothing the model returns can set a component or the total: a score it adds anyway changes nothing', async () => {
+    const plain = await setupV4().service.scoreJob('u1', 'job1');
+    const loud = setupV4({ answer: () => ({ ...checklist(), score: 100, total: 100, dimensions: { skills: { score: 100 } } }) as unknown as RAJobMatchScorerV4Output });
+    const fit = await loud.service.scoreJob('u1', 'job1');
+    expect(fit.score).toBe(plain.score);
+    expect(fit.dimensions).toEqual(plain.dimensions);
+    expect(loud.repo.state.scores[0]!.explanation).not.toHaveProperty('score');
+    expect(loud.repo.state.scores[0]!.explanation).not.toHaveProperty('total');
+  });
+
+  it('the real v4 agent path: LLMService is called once, the number in the answer is ignored and the server computes the score', async () => {
+    llm.chat.mockResolvedValueOnce(JSON.stringify({ ...checklist(), score: 12, total: 12 }));
+    const realAgent = new RAJobMatchScorerV4Agent();
+    const { service, repo } = setupV4({ scorerV4: { run: (input, o) => realAgent.run(input, o) } });
+    const fit = await service.scoreJob('u1', 'job1');
+    expect(llm.chat).toHaveBeenCalledTimes(1);
+    expect(fit).toMatchObject({ kind: 'ai', score: 79 });
+    expect(repo.state.scores[0]).toMatchObject({ promptVersion: 'scorer_v4' });
+    // Temperature 0 and the 2,400-token cap reach the call; the user message starts with the resume.
+    const [messages, options] = llm.chat.mock.calls[0]! as [Array<{ role: string; content: string }>, { temperature: number; maxTokens: number }];
+    expect(options).toMatchObject({ temperature: 0, maxTokens: 2400 });
+    expect(messages[1]!.content.startsWith('## Candidate resume\n')).toBe(true);
+  });
+
+  it('a parser error or a checklist that cannot be used answers the estimate and stores nothing', async () => {
+    // The model's answer does not parse (the real agent throws on it).
+    llm.chat.mockResolvedValue(JSON.stringify({ ...checklist(), level: undefined }));
+    const realAgent = new RAJobMatchScorerV4Agent();
+    const broken = setupV4({ scorerV4: { run: (input, o) => realAgent.run(input, o) } });
+    expect(await broken.service.scoreJob('u1', 'job1')).toMatchObject({ kind: 'pre', estimateReason: 'ai_failed', requirements: [] });
+    expect(broken.repo.state.scores).toHaveLength(0);
+    expect(broken.repo.saveJobRequirements).not.toHaveBeenCalled();
+    expect(broken.costLog).not.toHaveBeenCalled();
+    await expect(broken.service.scoreJob('u1', 'job1', { onAiFailure: 'throw' })).rejects.toThrow(/fit scorer failed/);
+    llm.chat.mockReset();
+
+    // The posting has a stored list and the answer leaves one of its lines out.
+    const stored: StoredRequirementsDoc = { v: 1, contentHash: KIT_HASH, model: 'enrich/model', extractedAt: '2026-10-09T00:00:00.000Z', items: [{ id: 'r1', kind: 'experience', text: YEARS.text, importance: 'must' }, { id: 'r2', kind: 'skill', text: K8S.text, importance: 'must' }] };
+    const partial = setupV4({ repo: withRequirementStore(createMemoryRepo({ jobs: [jobRecord({ requirements: stored })] })), answer: () => checklist({ requirements: [{ ...YEARS, id: 'r1' }] }) });
+    expect(await partial.service.scoreJob('u1', 'job1')).toMatchObject({ kind: 'pre', estimateReason: 'ai_failed' });
+    expect(partial.repo.state.scores).toHaveLength(0);
+    // The model call fails outright.
+    const down = setupV4({ answer: () => { throw new Error('upstream 502'); } });
+    expect(await down.service.scoreJob('u1', 'job1')).toMatchObject({ kind: 'pre', estimateReason: 'ai_failed' });
+    // A strip that cannot run sends nothing to a model.
+    const noStrip = setupV4({ stripResume: () => { throw new Error('strip unavailable'); } });
+    expect(await noStrip.service.scoreJob('u1', 'job1')).toMatchObject({ kind: 'pre', estimateReason: 'ai_failed' });
+    expect(noStrip.scorerV4.run).not.toHaveBeenCalled();
+  });
+
+  it('GoApply without the AI consent: zero LLMService calls on the default pin, the Quick estimate, nothing stored (I8)', async () => {
+    const realAgent = new RAJobMatchScorerV4Agent();
+    const { service, repo } = setupV4({
+      repo: withRequirementStore(createMemoryRepo({ jobs: [jobRecord({ market: 'cn' })] })),
+      scorerV4: { run: (input, o) => realAgent.run(input, o) },
+      aiAllowed: async () => false,
+      brand: () => getBrand('goapply'),
+    });
+    expect(await service.scoreJob('u1', 'job1')).toMatchObject({ kind: 'pre', estimateReason: 'ai_off', requirements: [] });
+    expect(await service.fitAnalysis('u1', 'job1', 'idem-key-1')).toMatchObject({ kind: 'pre', charged: false, aiWritten: false });
+    expect(await service.scoreJob('u1', 'job1', { mode: 'precompute' })).toMatchObject({ kind: 'pre', estimateReason: 'ai_off' });
+    expect(llm.chat).not.toHaveBeenCalled();
+    expect(repo.state.scores).toHaveLength(0);
+    expect(repo.saveJobRequirements).not.toHaveBeenCalled();
+  });
+
+  const EMPTY = () => checklist({ requirements: [], domain: { status: 'not_stated', evidence: '' }, trajectory: { status: 'no_history', evidence: '' } });
+
+  it('an empty checklist for a posting that lists skills, states years or has a qualifications section is not an answer: the estimate, with nothing stored', async () => {
+    const { service, repo, costLog } = setupV4({ answer: EMPTY });
+    expect(await service.scoreJob('u1', 'job1')).toMatchObject({ kind: 'pre', estimateReason: 'ai_failed', requirements: [] });
+    expect(repo.state.scores).toHaveLength(0);
+    expect(repo.saveJobRequirements).not.toHaveBeenCalled();
+    expect(costLog).not.toHaveBeenCalled();
+    // Each of the three alone is a posting with lines to judge.
+    const only = (over: Parameters<typeof jobRecord>[0]) => setupV4({ repo: withRequirementStore(createMemoryRepo({ jobs: [jobRecord({ skills: [], skillsDetail: null, qualifications: null, minYears: null, ...over })] })), answer: EMPTY });
+    for (const over of [{ skills: ['kubernetes'], skillsDetail: [{ skill: 'Kubernetes', kind: 'hard', required: true }] }, { minYears: 5 }, { qualifications: 'Kubernetes required.' }]) {
+      const s = only(over);
+      expect(await s.service.scoreJob('u1', 'job1'), JSON.stringify(over)).toMatchObject({ kind: 'pre', estimateReason: 'ai_failed' });
+      expect(s.repo.state.scores).toHaveLength(0);
+    }
+    // A qualifications section that asks for a degree and nothing else (a campus posting): its degree line is a full copy.
+    const campus = setupV4({
+      repo: withRequirementStore(createMemoryRepo({ jobs: [jobRecord({ skills: [], skillsDetail: null, minYears: null, qualifications: "Bachelor's degree in Computer Science." })] })),
+      answer: () => checklist({ requirements: [{ id: 'd', kind: 'education', text: "Bachelor's degree in Computer Science", importance: 'must', status: 'not_shown', evidence: '' }] }),
+    });
+    const fit = await campus.service.scoreJob('u1', 'job1');
+    expect(fit.kind).toBe('ai');
+    expect(fit.dimensions.find((d) => d.key === 'skills')).toMatchObject({ score: null, status: 'not_stated' });
+    // The required degree is not shown in the resume: title_level is halved (100 × 0.5).
+    expect(fit.dimensions.find((d) => d.key === 'title_level')!.score).toBe(50);
+    expect((campus.repo.state.jobs[0]!.requirements as StoredRequirementsDoc).items).toHaveLength(1);
+  });
+
+  it('I4: a result that could judge less than 60% of the rubric weight is never Great, stored or shown, and its confidence is low', async () => {
+    // A posting that lists no skills, states no years and has no qualifications section: an empty checklist is a true answer for it.
+    const bare = () => withRequirementStore(createMemoryRepo({ jobs: [jobRecord({ skills: [], skillsDetail: null, qualifications: null, minYears: null })] }));
+    const { service, repo } = setupV4({ repo: bare(), answer: EMPTY });
+    const fit = await service.scoreJob('u1', 'job1');
+    expect(fit.dimensions.filter((d) => d.status === 'not_stated').map((d) => d.key)).toEqual(['skills', 'industry', 'career_path']);
+    // title_level 100 and logistics 100 over their own weights: the total is 100, as computed, over 45% of the rubric.
+    expect(fit).toMatchObject({ kind: 'ai', score: 100, coverage: 0.45, tier: 'good', confidence: 'low', requirements: [] });
+    expect(repo.state.scores[0]).toMatchObject({ score: 100, tier: 'good' });
+    // Every later read holds it there (the 3-point rule alone would move 100 up to Great), and nothing is rewritten.
+    const saves = vi.spyOn(repo, 'saveScore');
+    expect(await service.scoreJob('u1', 'job1')).toMatchObject({ kind: 'ai', score: 100, tier: 'good', confidence: 'low', cached: true });
+    expect((await service.fits.getFits('u1', ['job1'])).get('job1')).toMatchObject({ kind: 'ai', score: 100, tier: 'good', confidence: 'low' });
+    expect(saves).not.toHaveBeenCalled();
+    // With the domain and the trajectory judged the same total is backed by 70% of the rubric and is Great.
+    const backed = setupV4({ repo: bare(), answer: () => checklist({ requirements: [], domain: { status: 'direct', evidence: '' }, trajectory: { status: 'toward', evidence: '' } }) });
+    expect(await backed.service.scoreJob('u1', 'job1')).toMatchObject({ kind: 'ai', score: 100, coverage: 0.7, tier: 'great' });
+  });
+
+  it('a failed run says what failed: an answer that was received and refused, or a call that failed', async () => {
+    const thrown = async (s: ReturnType<typeof setupV4>): Promise<unknown> => s.service.scoreJob('u1', 'job1', { mode: 'precompute', onAiFailure: 'throw' }).then(() => null, (err: unknown) => err);
+    // The checklist is refused (reworded lines), the answer does not parse, a stored line is left out: 'answer'.
+    const refused = await thrown(setupV4({ answer: () => checklist({ requirements: [K8S_REWORDED, OWNS_REWORDED] }) }));
+    expect(refused).toBeInstanceOf(ScorerFailedError);
+    expect(refused).toMatchObject({ kind: 'answer', message: expect.stringMatching(/fit scorer failed: scorer v4 checklist: 2 of the 2 copied/) });
+    llm.chat.mockResolvedValue('I cannot help with that.');
+    const realAgent = new RAJobMatchScorerV4Agent();
+    expect(await thrown(setupV4({ scorerV4: { run: (input, o) => realAgent.run(input, o) } }))).toMatchObject({ kind: 'answer', message: expect.stringMatching(/unparseable scorer response/) });
+    llm.chat.mockReset();
+    // The call itself failed, or the resume could not be stripped: 'call'.
+    expect(await thrown(setupV4({ answer: () => { throw new Error('upstream 502'); } }))).toMatchObject({ kind: 'call' });
+    llm.chat.mockRejectedValue(new Error('socket hang up'));
+    expect(await thrown(setupV4({ scorerV4: { run: (input, o) => realAgent.run(input, o) } }))).toMatchObject({ kind: 'call' });
+    llm.chat.mockReset();
+    expect(await thrown(setupV4({ stripResume: () => { throw new Error('strip unavailable'); } }))).toMatchObject({ kind: 'call' });
+    expect(new ScorerFailedError(new Error('x')).kind).toBe('call');
+  });
+});
+
+describe('scorer v4 — the requirement lines belong to the posting', () => {
+  const STORED: JobRequirement[] = [
+    { id: 'r1', kind: 'experience', text: '5+ years of backend experience', importance: 'must' },
+    { id: 'r2', kind: 'skill', text: 'Kubernetes required', importance: 'must' },
+    { id: 'r3', kind: 'skill', text: 'Build APIs in TypeScript and Go', importance: 'preferred' },
+  ];
+  const doc = (): StoredRequirementsDoc => ({ v: 1, contentHash: KIT_HASH, model: 'enrich/model', extractedAt: '2026-10-09T00:00:00.000Z', items: STORED });
+  const filled = (): RAJobMatchScorerV4Output =>
+    checklist({
+      requirements: [
+        // The model rewords a line and re-labels it: the store's text, kind and importance are the ones kept.
+        { id: 'r1', kind: 'skill', text: 'Five years in backend', importance: 'preferred', status: 'met', evidence: 'Senior Software Engineer, PayCo (2019-01 – present)' },
+        { id: 'r2', kind: 'skill', text: 'Kubernetes required', importance: 'must', status: 'not_shown', evidence: '' },
+        { id: 'r3', kind: 'skill', text: 'Build APIs in TypeScript and Go', importance: 'preferred', status: 'met', evidence: 'Built payment APIs in TypeScript and Go serving 2M users.' },
+      ],
+    });
+
+  it('stored-requirements mode: the model gets the stored lines, the row carries their ids and texts, and nothing is written to the job', async () => {
+    const repo = withRequirementStore(createMemoryRepo({ jobs: [jobRecord({ requirements: doc() })] }));
+    const { service, scorerV4 } = setupV4({ repo, answer: filled });
+    const fit = await service.scoreJob('u1', 'job1');
+    expect((scorerV4.run.mock.calls[0]![0] as RAJobMatchScorerV4Input).requirements).toEqual(STORED);
+    expect(fit.requirements!.map(({ id, kind, text, importance }) => ({ id, kind, text, importance }))).toEqual(STORED);
+    expect(fit.requirements!.map((r) => r.status)).toEqual(['met', 'not_shown', 'met']);
+    // must met 1, must not shown 0, preferred met 0.5: 100 × 1.5 / 2.5 = 60
+    expect(fit.dimensions.find((d) => d.key === 'skills')!.score).toBe(60);
+    expect(repo.saveJobRequirements).not.toHaveBeenCalled();
+    expect(repo.state.jobs[0]!.requirements).toEqual(doc());
+  });
+
+  it('first-writer rule: the first score of a posting with no list stores its verified lines once; the next person is judged against them', async () => {
+    const repo = withRequirementStore(createMemoryRepo());
+    repo.state.resumes.push({ ...resumeRecord({ id: 'v2', resumeContentHash: 'hash-u2', resumeMarkdown: '## Experience\nPlatform Engineer, Globex (2021-03 – present)\n- Ran Kubernetes clusters for 40 services.\n\n## Skills\nKubernetes, Go' }), userId: 'u2' });
+    repo.state.users.u2 = defaultUserInputs();
+    const first = setupV4({ repo });
+    const mine = await first.service.scoreJob('u1', 'job1');
+    expect(repo.saveJobRequirements).toHaveBeenCalledTimes(1);
+    const written = repo.state.jobs[0]!.requirements as StoredRequirementsDoc;
+    expect(written).toEqual({
+      v: 1,
+      contentHash: KIT_HASH,
+      model: MODEL,
+      extractedAt: '2026-10-10T08:00:00.000Z',
+      items: [
+        { id: 'r1', kind: 'experience', text: '5+ years of backend experience', importance: 'must' },
+        { id: 'r2', kind: 'skill', text: 'Kubernetes required', importance: 'must' },
+      ],
+    });
+
+    // The second person: the model is handed the stored lines and only fills them in.
+    const second = setupV4({
+      repo,
+      answer: () =>
+        checklist({
+          requirements: [
+            { id: 'r1', kind: 'experience', text: YEARS.text, importance: 'must', status: 'partly', evidence: 'Platform Engineer, Globex (2021-03 – present)' },
+            { id: 'r2', kind: 'skill', text: K8S.text, importance: 'must', status: 'met', evidence: 'Ran Kubernetes clusters for 40 services.' },
+          ],
+        }),
+    });
+    const theirs = await second.service.scoreJob('u2', 'job1');
+    expect((second.scorerV4.run.mock.calls[0]![0] as RAJobMatchScorerV4Input).requirements).toEqual(written.items);
+    const lines = (view: typeof mine) => view.requirements!.map(({ id, kind, text, importance }) => ({ id, kind, text, importance }));
+    expect(lines(theirs)).toEqual(lines(mine));
+    expect(theirs.requirements!.map((r) => r.status)).toEqual(['partly', 'met']);
+    // 100 × (0.5 + 1) / 2 = 75
+    expect(theirs.dimensions.find((d) => d.key === 'skills')!.score).toBe(75);
+    // Nothing is written a second time, and the list is the first writer's.
+    expect(repo.saveJobRequirements).toHaveBeenCalledTimes(1);
+    expect(repo.state.jobs[0]!.requirements).toEqual(written);
+  });
+
+  it('a stored list is the posting\'s only for the text it was copied from: one of an earlier text is not used, and the next score replaces it', async () => {
+    // Enrichment stored these lines for an earlier text of the posting; the posting has changed since.
+    const stale: StoredRequirementsDoc = { v: 1, contentHash: 'hash-of-the-earlier-text', model: 'enrich/model', extractedAt: '2026-10-01T00:00:00.000Z', items: [{ id: 'r1', kind: 'skill', text: 'A line the posting no longer has', importance: 'must' }] };
+    const repo = withRequirementStore(createMemoryRepo({ jobs: [jobRecord({ requirements: stale })] }));
+    const { service, scorerV4 } = setupV4({ repo });
+    const fit = await service.scoreJob('u1', 'job1');
+    // The model was not handed the outdated lines: it copied the posting's lines as they are now.
+    expect((scorerV4.run.mock.calls[0]![0] as RAJobMatchScorerV4Input).requirements).toBeNull();
+    expect(fit.requirements!.map((r) => r.text)).toEqual(['5+ years of backend experience', 'Kubernetes required']);
+    expect(repo.saveJobRequirements).toHaveBeenCalledTimes(1);
+    expect(repo.state.jobs[0]!.requirements).toMatchObject({ contentHash: KIT_HASH, model: MODEL, items: [{ id: 'r1', text: '5+ years of backend experience' }, { id: 'r2', text: 'Kubernetes required' }] });
+    // A list that does not say which text it is for is treated the same way.
+    const unhashed = withRequirementStore(createMemoryRepo({ jobs: [jobRecord({ requirements: { v: 1, items: stale.items } })] }));
+    const again = setupV4({ repo: unhashed });
+    await again.service.scoreJob('u1', 'job1');
+    expect((again.scorerV4.run.mock.calls[0]![0] as RAJobMatchScorerV4Input).requirements).toBeNull();
+    expect(unhashed.state.jobs[0]!.requirements).toMatchObject({ contentHash: KIT_HASH });
+    // The list is for the posting's own text and skills, whatever the search index stored as its hash a moment ago.
+    const indexedLater = withRequirementStore(createMemoryRepo({ jobs: [jobRecord({ contentHash: 'the-hash-the-index-wrote-before-enrichment', requirements: { v: 1, contentHash: KIT_HASH, model: 'enrich/model', extractedAt: '2026-10-09T00:00:00.000Z', items: [{ id: 'r1', kind: 'skill', text: K8S.text, importance: 'must' }] } })] }));
+    const fresh = setupV4({ repo: indexedLater, answer: () => checklist({ requirements: [{ ...K8S, id: 'r1' }] }) });
+    await fresh.service.scoreJob('u1', 'job1');
+    expect((fresh.scorerV4.run.mock.calls[0]![0] as RAJobMatchScorerV4Input).requirements).toEqual([{ id: 'r1', kind: 'skill', text: K8S.text, importance: 'must' }]);
+    expect(indexedLater.saveJobRequirements).not.toHaveBeenCalled();
+  });
+
+  it('nothing is stored when no copied line is in the posting: the answer is refused; a lost race or a failed write never fails the score', async () => {
+    const none = setupV4({ answer: () => checklist({ requirements: [{ ...K8S, text: 'A line the posting does not have' }] }) });
+    expect(await none.service.scoreJob('u1', 'job1')).toMatchObject({ kind: 'pre', estimateReason: 'ai_failed' });
+    expect(none.repo.state.scores).toHaveLength(0);
+    expect(none.repo.saveJobRequirements).not.toHaveBeenCalled();
+
+    // Another writer got there first (the guarded UPDATE touched no row).
+    const lost = createMemoryRepo();
+    const saveLost = vi.fn(async () => false);
+    const a = setupV4({ repo: Object.assign(lost, { saveJobRequirements: saveLost }) });
+    expect(await a.service.scoreJob('u1', 'job1')).toMatchObject({ kind: 'ai', score: 79 });
+    expect(saveLost).toHaveBeenCalledTimes(1);
+    expect(lost.state.scores).toHaveLength(1);
+
+    const failing = createMemoryRepo();
+    const b = setupV4({ repo: Object.assign(failing, { saveJobRequirements: vi.fn(async () => Promise.reject(new Error('db down'))) }) });
+    expect(await b.service.scoreJob('u1', 'job1')).toMatchObject({ kind: 'ai', score: 79 });
+    expect(failing.state.scores).toHaveLength(1);
+
+    // A repository with no way to write to the job (the member is optional on the interface): the score is stored, the lines are not.
+    const plain = Object.assign(createMemoryRepo(), { saveJobRequirements: undefined });
+    expect(await setupV4({ repo: plain }).service.scoreJob('u1', 'job1')).toMatchObject({ kind: 'ai', score: 79 });
+    expect(plain.state.jobs[0]!.requirements ?? null).toBeNull();
+  });
+
+  it('a list never reads the checklist; the single-job read and the fit-analysis card carry it', async () => {
+    const { service, withCredit } = setupV4();
+    const card = await service.fitAnalysis('u1', 'job1', 'idem-key-1');
+    expect(withCredit).toHaveBeenCalledTimes(1);
+    expect(card).toMatchObject({ kind: 'ai', charged: true, aiWritten: true, highlights: ['Your payments APIs in Go'] });
+    expect((card as { requirements?: unknown[] }).requirements).toHaveLength(2);
+    expect((await service.scoreJob('u1', 'job1', { mode: 'cache_only' })).requirements).toHaveLength(2);
+    expect((await service.fits.getFits('u1', ['job1'])).get('job1')).toMatchObject({ kind: 'ai', requirements: [], prose: null });
+    // An estimate has no checklist, on the card either.
+    const pre = await setupV4({ aiAllowed: async () => false }).service.fitAnalysis('u1', 'job1', 'idem-key-2');
+    expect(pre.kind).toBe('pre');
+    expect(pre).not.toHaveProperty('requirements');
+  });
+});
+
+describe('scorer v4 — "rewrite in my language" changes the words and nothing else', () => {
+  it('statuses, components, the score, the tier and the scored date are kept; only strengths, gaps and summary are written again', async () => {
+    const run = vi
+      .fn<ScorerV4Like['run']>()
+      .mockResolvedValueOnce(checklist())
+      // The second answer would judge everything differently: none of it may be used.
+      .mockResolvedValueOnce(
+        checklist({
+          requirements: [{ ...YEARS, status: 'not_shown', evidence: '' }, { ...K8S, status: 'met', evidence: 'TypeScript, Go, PostgreSQL' }],
+          level: { post: 'senior', resume: 'intern_newgrad', direction: 'post_higher' },
+          domain: { status: 'unrelated', evidence: '' },
+          trajectory: { status: 'away', evidence: '' },
+          strengths: ['你在 Go 里做过支付接口'],
+          gaps: ['没有体现 Kubernetes 经验'],
+          summary: '你的支付经验很对口，但这个职位以 Kubernetes 为主。',
+        }),
+      );
+    const { service, repo, costLog } = setupV4({ scorerV4: { run } });
+    const first = await service.scoreJob('u1', 'job1', { locale: 'en' });
+    const before = repo.state.scores[0]!;
+    const regen = await service.scoreJob('u1', 'job1', { locale: 'zh', regenerateExplanation: true });
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(regen).toMatchObject({
+      kind: 'ai',
+      score: first.score,
+      tier: first.tier,
+      dimensions: first.dimensions,
+      requirements: first.requirements,
+      scoredAt: first.scoredAt,
+      summary: '你的支付经验很对口，但这个职位以 Kubernetes 为主。',
+      strengths: ['你在 Go 里做过支付接口'],
+      gaps: ['没有体现 Kubernetes 经验'],
+      summaryLocaleStale: false,
+      cached: false,
+    });
+    const after = repo.state.scores[0]!;
+    expect(repo.state.scores).toHaveLength(1);
+    expect(after).toMatchObject({ score: before.score, tier: before.tier, dimensions: before.dimensions, locale: 'zh', generatedAt: before.generatedAt, promptVersion: 'scorer_v4', rubricVersion: 'fit_v4' });
+    const exp = after.explanation as Record<string, unknown>;
+    const was = before.explanation as Record<string, unknown>;
+    for (const key of ['requirements', 'level', 'domain', 'trajectory', 'estimateAtScore']) expect(exp[key], key).toEqual(was[key]);
+    expect(exp).toMatchObject({ responseLanguage: 'zh', rationale: '你的支付经验很对口，但这个职位以 Kubernetes 为主。' });
+    expect(costLog).toHaveBeenLastCalledWith(expect.objectContaining({ reason: 'locale_regen', prompt: 'scorer_v4' }));
+    // The posting's stored lines are untouched by a rewrite.
+    expect(repo.saveJobRequirements).toHaveBeenCalledTimes(1);
+    // The next read in that language is the cache.
+    expect(await service.scoreJob('u1', 'job1', { locale: 'zh' })).toMatchObject({ cached: true, summaryLocaleStale: false, score: first.score });
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it('a rewrite the cap stops leaves the fit and its checklist as they were, and says so', async () => {
+    let capped = false;
+    const consume = vi.fn(async ({ key }: { key: string }) => (capped && key.includes(':score:user:') ? { ...allow(0), allowed: false } : allow()));
+    const { service, scorerV4 } = setupV4({ consume });
+    const first = await service.scoreJob('u1', 'job1', { locale: 'en' });
+    capped = true;
+    const blocked = await service.scoreJob('u1', 'job1', { locale: 'zh', regenerateExplanation: true });
+    expect(blocked).toMatchObject({ kind: 'ai', score: first.score, requirements: first.requirements, summary: first.summary, summaryLocaleStale: true, rewriteBlocked: 'daily_cap' });
+    expect(scorerV4.run).toHaveBeenCalledTimes(1);
+  });
+
+  describe('on a stale row (every stored row, after a change of the scorer version) the person who asked is still told why', () => {
+    const ASK = { locale: 'zh', regenerateExplanation: true } as const;
+    /** A v3 fit written in English, read under the default pin (scorer v4): stale. */
+    async function staleV3Row() {
+      const repo = withRequirementStore(createMemoryRepo());
+      const v3 = setupV4({ repo, env: { MATCH_SCORER_RUBRIC: 'fit_v3' } });
+      const first = await v3.service.scoreJob('u1', 'job1', { locale: 'en' });
+      expect(repo.state.scores[0]).toMatchObject({ promptVersion: 'scorer_v3', locale: 'en' });
+      return { repo, first };
+    }
+    const denied = (key: (k: string) => boolean) => vi.fn(async (input: { key: string }) => (key(input.key) ? { ...allow(0), allowed: false } : allow()));
+
+    it.each([
+      ['daily_cap', { consume: denied((k) => k.includes(':score:user:')) }],
+      ['budget', { consume: vi.fn(async () => ({ ...allow(0), allowed: false })) }],
+      ['ai_unavailable', { resolveModel: () => null }],
+      ['ai_unavailable', { routeAllowed: () => false }],
+      ['ai_failed', { answer: () => { throw new Error('upstream 502'); } }],
+      ['ai_failed', { answer: () => checklist({ requirements: [] }) }],
+    ] as const)('%s', async (reason, deps) => {
+      const { repo, first } = await staleV3Row();
+      const s = setupV4({ repo, ...(deps as Partial<Parameters<typeof setupV4>[0]>) });
+      const view = await s.service.scoreJob('u1', 'job1', ASK);
+      // The old-language fit is answered as it was, flagged stale, with the reason the rewrite did not happen.
+      expect(view).toMatchObject({ kind: 'ai', score: first.score, tier: first.tier, summary: first.summary, stale: true, summaryLocaleStale: true, rewriteBlocked: reason });
+      expect(repo.state.scores).toHaveLength(1);
+      expect(repo.state.scores[0]).toMatchObject({ promptVersion: 'scorer_v3', locale: 'en' });
+    });
+
+    it('the same on a row of another model or of an earlier posting text; a plain read, or one that asked for no rewrite, carries no flag', async () => {
+      const capped = { consume: denied((k) => k.includes(':score:user:')) };
+      const repo = withRequirementStore(createMemoryRepo());
+      const first = await setupV4({ repo }).service.scoreJob('u1', 'job1', { locale: 'en' });
+      const otherModel = setupV4({ repo, resolveModel: () => 'test/model-b', ...capped });
+      expect(await otherModel.service.scoreJob('u1', 'job1', ASK)).toMatchObject({ kind: 'ai', score: first.score, stale: true, rewriteBlocked: 'daily_cap' });
+      // No rewrite was asked for: a re-score that could not run is not a blocked rewrite.
+      const plain = await otherModel.service.scoreJob('u1', 'job1', { locale: 'zh' });
+      expect(plain).toMatchObject({ kind: 'ai', stale: true, summaryLocaleStale: true });
+      expect(plain.rewriteBlocked).toBeUndefined();
+      // Asked for, in the language the row already has: nothing to rewrite, nothing blocked.
+      expect((await otherModel.service.scoreJob('u1', 'job1', { locale: 'en', regenerateExplanation: true })).rewriteBlocked).toBeUndefined();
+      // A read that may not call a model at all (a list, the cache) never carries it.
+      expect((await otherModel.service.scoreJob('u1', 'job1', { ...ASK, mode: 'cache_only' })).rewriteBlocked).toBeUndefined();
+      // The posting changed since the score.
+      repo.state.jobs[0]!.qualifications = '7+ years of backend experience. Kubernetes required.';
+      expect(await setupV4({ repo, ...capped }).service.scoreJob('u1', 'job1', ASK)).toMatchObject({ kind: 'ai', stale: true, rewriteBlocked: 'daily_cap' });
+    });
+
+    it('when the model may run, the stale row is re-scored in the language that was asked for and nothing is blocked', async () => {
+      const { repo } = await staleV3Row();
+      const s = setupV4({ repo, answer: () => checklist({ summary: '你的支付经验很对口。' }) });
+      const view = await s.service.scoreJob('u1', 'job1', ASK);
+      expect(view).toMatchObject({ kind: 'ai', stale: false, cached: false, summary: '你的支付经验很对口。', summaryLocaleStale: false });
+      expect(view.rewriteBlocked).toBeUndefined();
+      expect(repo.state.scores[0]).toMatchObject({ promptVersion: 'scorer_v4', locale: 'zh' });
+    });
+  });
+});
+
+describe('scorer v4 — the borderline rule (I5): within 3 points of a tier edge the stored tier is on the estimate\'s side', () => {
+  // The test kit's logistics are met (100). With the same level (100): total = 45 + 0.3 × skills + 0.15 × domain + 0.1 × trajectory.
+  // One level apart (60): total = 31 + the same three terms.
+  const NO_SKILL = [K8S]; // skills 0
+  const HALF = [YEARS, K8S]; // skills 50
+  const ALL = [YEARS]; // skills 100
+  const totals: Record<number, Partial<RAJobMatchScorerV4Output>> = {
+    // 31 + 0 + 3 + 10
+    44: { requirements: NO_SKILL, level: { post: 'senior', resume: 'mid', direction: 'post_higher' }, domain: { status: 'unrelated', evidence: '' }, trajectory: { status: 'toward', evidence: '' } },
+    // 31 + 0 + 9 + 6
+    46: { requirements: NO_SKILL, level: { post: 'senior', resume: 'mid', direction: 'post_higher' }, domain: { status: 'adjacent', evidence: '' }, trajectory: { status: 'neutral', evidence: '' } },
+    // 45 + 0 + 9 + 10
+    64: { requirements: NO_SKILL, domain: { status: 'adjacent', evidence: '' }, trajectory: { status: 'toward', evidence: '' } },
+    // 45 + 15 + 3 + 2.5 = 65.5
+    66: { requirements: HALF, domain: { status: 'unrelated', evidence: '' }, trajectory: { status: 'away', evidence: '' } },
+    // 45 + 15 + 3 + 6
+    69: { requirements: HALF, domain: { status: 'unrelated', evidence: '' }, trajectory: { status: 'neutral', evidence: '' } },
+    // 45 + 15 + 9 + 10
+    79: { requirements: HALF, domain: { status: 'adjacent', evidence: '' }, trajectory: { status: 'toward', evidence: '' } },
+    // 45 + 30 + 3 + 2.5 = 80.5
+    81: { requirements: ALL, domain: { status: 'unrelated', evidence: '' }, trajectory: { status: 'away', evidence: '' } },
+  };
+
+  it.each([
+    // total, estimate, stored tier, edge the rule was applied at
+    [66, 58, 'possible', 65], // the plan's case: a total of 66 with an estimate of 58
+    [66, 70, 'good', 65],
+    [64, 58, 'possible', 65],
+    [64, 70, 'good', 65],
+    [69, 58, 'good', null], // the plan's other case: 4 points over, its own tier
+    [79, 85, 'great', 80],
+    [79, 70, 'good', 80],
+    [81, 85, 'great', 80],
+    [81, 70, 'good', 80],
+    [44, 50, 'possible', 45],
+    [44, 30, 'unlikely', 45],
+    [46, 50, 'possible', 45],
+    [46, 30, 'unlikely', 45],
+  ] as const)('a total of %s with an estimate of %s is stored as %s', async (total, estimate, tier, edge) => {
+    const { service, repo, scorerV4 } = setupV4({ answer: () => checklist(totals[total]), calibration: estimateAt(estimate) });
+    // The estimate the person was shown before the score.
+    expect((await service.scoreJob('u1', 'job1', { mode: 'cache_only' })).score).toBe(estimate);
+    const fit = await service.scoreJob('u1', 'job1');
+    // The score is stored as computed; only the tier follows the estimate.
+    expect(fit).toMatchObject({ kind: 'ai', score: total, tier });
+    expect(repo.state.scores[0]).toMatchObject({ score: total, tier });
+    const exp = repo.state.scores[0]!.explanation as { tierRule?: { edge: number; estimate: number } };
+    expect(exp.tierRule ?? null).toEqual(edge === null ? null : { edge, estimate });
+    // No second model call, and every later read shows the same tier.
+    expect(scorerV4.run).toHaveBeenCalledTimes(1);
+    expect(await service.scoreJob('u1', 'job1')).toMatchObject({ score: total, tier, cached: true });
+    expect((await service.fits.getFits('u1', ['job1'])).get('job1')).toMatchObject({ score: total, tier });
+  });
+
+  it('without a calibration map the side is the plain estimate\'s; the configured MATCH_TIERS edges are the ones read', async () => {
+    const plain = setupV4({ answer: () => checklist(totals[66]) });
+    const estimate = (await plain.service.scoreJob('u1', 'job1', { mode: 'cache_only' })).score!;
+    const fit = await plain.service.scoreJob('u1', 'job1');
+    expect(fit.score).toBe(66);
+    expect(fit.tier).toBe(estimate >= 65 ? 'good' : 'possible');
+    expect((plain.repo.state.scores[0]!.explanation as { estimateAtScore: { score: number } }).estimateAtScore.score).toBe(estimate);
+
+    // Good starts at 70 here: 69 is one point under that edge, 66 is no longer near one.
+    const env = { MATCH_TIERS: '{"great":85,"good":70,"possible":50}' };
+    const near = setupV4({ env, answer: () => checklist(totals[69]), calibration: estimateAt(75) });
+    expect(await near.service.scoreJob('u1', 'job1')).toMatchObject({ score: 69, tier: 'good' });
+    const far = setupV4({ env, answer: () => checklist(totals[66]), calibration: estimateAt(75) });
+    expect(await far.service.scoreJob('u1', 'job1')).toMatchObject({ score: 66, tier: 'possible' });
+  });
+
+  it('three runs that land on both sides of an edge store one tier; scorer v3 keeps its own rule', async () => {
+    const tiers: string[] = [];
+    for (const total of [64, 66, 64]) {
+      const { service } = setupV4({ answer: () => checklist(totals[total]), calibration: estimateAt(58) });
+      tiers.push((await service.scoreJob('u1', 'job1')).tier!);
+    }
+    expect(new Set(tiers)).toEqual(new Set(['possible']));
+    // The rollback scorer: a new result takes its own tier (its tests above), estimate or not.
+    const v3 = setup({ calibration: estimateAt(20), scorer: { run: vi.fn(async () => scorerOutput({ dimensions: { title_level: { score: 66, evidence: [] }, skills: { score: 66, evidence: [] }, industry: { score: 66, evidence: [] }, career_path: { score: 66, evidence: [] } } })) } });
+    const fit = await v3.service.scoreJob('u1', 'job1');
+    expect(fit.score).toBe(69);
+    expect(fit.tier).toBe('good');
+    expect(v3.repo.state.scores[0]!.explanation).not.toHaveProperty('tierRule');
+  });
+});
+
+describe('the resume a prompt gets (both scorers): two strips, one after the other', () => {
+  const RESUME = [
+    '# Ada Lovelace',
+    'ada@example.com · +49 151 2345 6789',
+    '- Profile: linkedin.com/in/ada-example',
+    '- Code: github.com/adal0velace',
+    '联系我 微信 wxm_dev2020 或 QQ 123456789',
+    'WeChat: coder_x99, Telegram @coderx',
+    'Site: adalovelace.dev',
+    'Portfolio at ada-portfolio.vercel.app',
+    '',
+    '## Experience',
+    'Senior Software Engineer, PayCo (2019-01 – present)',
+    '- Built payment APIs in TypeScript and Go serving 2M users.',
+    '- Built WeChat mini programs and an ASP.NET service with socket.io.',
+    '',
+    '## Skills',
+    'TypeScript, Go, PostgreSQL',
+  ].join('\n');
+
+  it.each(['fit_v4', 'fit_v3'])('%s: no profile link without a scheme, no chat handle, no personal page; ordinary text is left alone', async (rubric) => {
+    const repo = withRequirementStore(createMemoryRepo({ resumes: [{ ...resumeRecord({ resumeMarkdown: RESUME }), userId: 'u1' }] }));
+    const s = setupV4({ repo, env: { MATCH_SCORER_RUBRIC: rubric } });
+    await s.service.scoreJob('u1', 'job1');
+    const call = (rubric === 'fit_v4' ? s.scorerV4.run : s.scorer.run).mock.calls[0]! as unknown as [{ resumeMarkdown: string }];
+    const sent = call[0].resumeMarkdown;
+    for (const leak of ['Ada', 'Lovelace', 'ada@example.com', '2345 6789', 'linkedin.com', 'ada-example', 'github.com', 'adal0velace', 'wxm_dev2020', '123456789', 'coder_x99', '@coderx', 'adalovelace.dev', 'vercel.app']) {
+      expect(sent, leak).not.toContain(leak);
+    }
+    for (const kept of ['Senior Software Engineer, PayCo (2019-01 – present)', 'Built payment APIs in TypeScript and Go serving 2M users.', 'Built WeChat mini programs and an ASP.NET service with socket.io.', 'TypeScript, Go, PostgreSQL']) {
+      expect(sent, kept).toContain(kept);
+    }
+  });
+
+  it('a quote is verified against the text the model was sent: one that names what the strip removed is not kept', async () => {
+    const repo = withRequirementStore(createMemoryRepo({ resumes: [{ ...resumeRecord({ resumeMarkdown: RESUME }), userId: 'u1' }] }));
+    const { service } = setupV4({ repo, answer: () => checklist({ requirements: [{ ...YEARS, evidence: 'Code: github.com/adal0velace' }, K8S] }) });
+    const fit = await service.scoreJob('u1', 'job1');
+    expect(fit.requirements![0]).toMatchObject({ status: 'not_shown', evidence: '' });
+    expect(JSON.stringify(repo.state.scores[0])).not.toContain('adal0velace');
+  });
+
+  it('a true short quote is not an invented one: "Go", "C#", "R", "AI" and 本科 quoted from the resume stay met, and a required degree line does not halve the level', async () => {
+    const resume = ['## Experience', 'Data Engineer, Example Cloud (2020-03 – present)', '- Moved the billing jobs to Google Cloud.', '', '## Education', '北京大学 本科 计算机', '', '## Skills', 'Go, C#, R, SQL, AI'].join('\n');
+    // A fresh row per world: the first score of a posting stores its lines on the row.
+    const job = () => jobRecord({ qualifications: 'Go. C#. R. AI. Rust. 本科. 硕士.' });
+    const line = (text: string, over: Partial<ScorerV4RequirementAnswer> = {}): ScorerV4RequirementAnswer => ({ id: text, kind: 'skill', text, importance: 'must', status: 'met', evidence: text, ...over });
+    const world = (requirements: ScorerV4RequirementAnswer[]) =>
+      setupV4({ repo: withRequirementStore(createMemoryRepo({ jobs: [job()], resumes: [{ ...resumeRecord({ resumeMarkdown: resume }), userId: 'u1' }] })), answer: () => checklist({ requirements }) });
+    const shown = await world([line('Go'), line('C#'), line('R'), line('AI'), line('本科', { kind: 'education' })]).service.scoreJob('u1', 'job1');
+    expect(shown.requirements!.map((r) => [r.text, r.status, r.evidence])).toEqual([['Go', 'met', 'Go'], ['C#', 'met', 'C#'], ['R', 'met', 'R'], ['AI', 'met', 'AI'], ['本科', 'met', '本科']]);
+    const dim = (view: typeof shown, key: string) => view.dimensions.find((d) => d.key === key)!.score;
+    expect([dim(shown, 'skills'), dim(shown, 'title_level')]).toEqual([100, 100]);
+    // What the resume does not say is still not shown: "Rust" is in no line, 硕士 neither, and "Go" is not found inside "Google".
+    const missing = await world([line('Go'), line('Rust'), line('硕士', { kind: 'education' })]).service.scoreJob('u1', 'job1');
+    expect(missing.requirements!.map((r) => r.status)).toEqual(['met', 'not_shown', 'not_shown']);
+    expect([dim(missing, 'skills'), dim(missing, 'title_level')]).toEqual([50, 50]);
+    const noGo = setupV4({
+      repo: withRequirementStore(createMemoryRepo({ jobs: [job()], resumes: [{ ...resumeRecord({ resumeMarkdown: resume.replace('Go, C#, R, SQL, AI', 'C#, SQL') }), userId: 'u1' }] })),
+      answer: () => checklist({ requirements: [line('Go'), line('C#')] }),
+    });
+    expect((await noGo.service.scoreJob('u1', 'job1')).requirements!.map((r) => [r.text, r.status])).toEqual([['Go', 'not_shown'], ['C#', 'met']]);
   });
 });
