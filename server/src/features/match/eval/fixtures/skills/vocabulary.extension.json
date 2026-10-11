@@ -1,0 +1,871 @@
+{
+ "_synthetic": true,
+ "_note": "Fixture extension of the skill vocabulary for the skills gate (eval/suites/skills.suite.ts). The gate runs on the committed seed (server/src/features/skills/seed/skills.seed.json) plus these skills: the skills of the MKT-1D role groups (eval/fixtures/seed/groups.json) that the seed does not hold, with the names those groups use in English, Simplified and Traditional Chinese. Every entry is reviewed for the purpose of the fixture only. Nothing here is loaded by the product, and none of it is a reviewed row of RASkill.",
+ "skills": [
+  {
+   "id": "model_deployment",
+   "kind": "hard",
+   "labelEn": "Model deployment",
+   "labelZh": "模型部署",
+   "labelZhHant": "模型部署",
+   "aliases": [
+    "model serving"
+   ],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "feature_engineering",
+   "kind": "hard",
+   "labelEn": "Feature engineering",
+   "labelZh": "特征工程",
+   "labelZhHant": "特徵工程",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "mlflow",
+   "kind": "hard",
+   "labelEn": "MLflow",
+   "labelZh": null,
+   "labelZhHant": null,
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "prompt_engineering",
+   "kind": "hard",
+   "labelEn": "Prompt engineering",
+   "labelZh": "提示词工程",
+   "labelZhHant": "提示工程",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "model_fine_tuning",
+   "kind": "hard",
+   "labelEn": "Model fine-tuning",
+   "labelZh": "模型微调",
+   "labelZhHant": "模型微調",
+   "aliases": [
+    "fine-tuning",
+    "finetuning"
+   ],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "text_classification",
+   "kind": "hard",
+   "labelEn": "Text classification",
+   "labelZh": "文本分类",
+   "labelZhHant": "文本分類",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "a_b_testing",
+   "kind": "hard",
+   "labelEn": "A/B testing",
+   "labelZh": "A/B 测试",
+   "labelZhHant": "A/B 測試",
+   "aliases": [
+    "ab testing",
+    "split testing"
+   ],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "statistics",
+   "kind": "hard",
+   "labelEn": "Statistics",
+   "labelZh": "统计分析",
+   "labelZhHant": "統計分析",
+   "aliases": [
+    "statistical analysis"
+   ],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "predictive_modeling",
+   "kind": "hard",
+   "labelEn": "Predictive modeling",
+   "labelZh": "预测建模",
+   "labelZhHant": "預測建模",
+   "aliases": [
+    "predictive modelling"
+   ],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "experiment_design",
+   "kind": "hard",
+   "labelEn": "Experiment design",
+   "labelZh": "实验设计",
+   "labelZhHant": "實驗設計",
+   "aliases": [
+    "design of experiments"
+   ],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "user_research",
+   "kind": "hard",
+   "labelEn": "User research",
+   "labelZh": "用户研究",
+   "labelZhHant": "使用者研究",
+   "aliases": [
+    "user interviews"
+   ],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "wireframing",
+   "kind": "hard",
+   "labelEn": "Wireframing",
+   "labelZh": "线框图",
+   "labelZhHant": "線框圖",
+   "aliases": [
+    "wireframes"
+   ],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "prototyping",
+   "kind": "hard",
+   "labelEn": "Prototyping",
+   "labelZh": "原型设计",
+   "labelZhHant": "原型設計",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "usability_testing",
+   "kind": "hard",
+   "labelEn": "Usability testing",
+   "labelZh": "可用性测试",
+   "labelZhHant": "易用性測試",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "design_systems",
+   "kind": "hard",
+   "labelEn": "Design systems",
+   "labelZh": "设计系统",
+   "labelZhHant": "設計系統",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "interaction_design",
+   "kind": "hard",
+   "labelEn": "Interaction design",
+   "labelZh": "交互设计",
+   "labelZhHant": "互動設計",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "campaign_planning",
+   "kind": "hard",
+   "labelEn": "Campaign planning",
+   "labelZh": "营销活动策划",
+   "labelZhHant": "行銷活動企劃",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "market_research",
+   "kind": "hard",
+   "labelEn": "Market research",
+   "labelZh": "市场调研",
+   "labelZhHant": "市場調查",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "brand_strategy",
+   "kind": "hard",
+   "labelEn": "Brand strategy",
+   "labelZh": "品牌策略",
+   "labelZhHant": "品牌策略",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "budget_management",
+   "kind": "hard",
+   "labelEn": "Budget management",
+   "labelZh": "预算管理",
+   "labelZhHant": "預算管理",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "content_strategy",
+   "kind": "hard",
+   "labelEn": "Content strategy",
+   "labelZh": "内容策略",
+   "labelZhHant": "內容策略",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "web_analytics",
+   "kind": "hard",
+   "labelEn": "Web analytics",
+   "labelZh": "网站分析",
+   "labelZhHant": "網站分析",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "google_analytics",
+   "kind": "hard",
+   "labelEn": "Google Analytics",
+   "labelZh": null,
+   "labelZhHant": null,
+   "aliases": [
+    "ga4",
+    "google analytics 4"
+   ],
+   "parentId": "web_analytics",
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "copywriting",
+   "kind": "hard",
+   "labelEn": "Copywriting",
+   "labelZh": "文案撰写",
+   "labelZhHant": "文案撰寫",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "keyword_research",
+   "kind": "hard",
+   "labelEn": "Keyword research",
+   "labelZh": "关键词研究",
+   "labelZhHant": "關鍵字研究",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "social_media_advertising",
+   "kind": "hard",
+   "labelEn": "Social media advertising",
+   "labelZh": "社交媒体广告",
+   "labelZhHant": "社群媒體廣告",
+   "aliases": [
+    "paid social"
+   ],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "community_management",
+   "kind": "hard",
+   "labelEn": "Community management",
+   "labelZh": "社群管理",
+   "labelZhHant": "社群經營",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "prospecting",
+   "kind": "hard",
+   "labelEn": "Prospecting",
+   "labelZh": "客户开发",
+   "labelZhHant": "客戶開發",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "contract_negotiation",
+   "kind": "hard",
+   "labelEn": "Contract negotiation",
+   "labelZh": "合同谈判",
+   "labelZhHant": "合約談判",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "pipeline_management",
+   "kind": "hard",
+   "labelEn": "Pipeline management",
+   "labelZh": "销售漏斗管理",
+   "labelZhHant": "銷售漏斗管理",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "sales_forecasting",
+   "kind": "hard",
+   "labelEn": "Sales forecasting",
+   "labelZh": "销售预测",
+   "labelZhHant": "銷售預測",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "account_planning",
+   "kind": "hard",
+   "labelEn": "Account planning",
+   "labelZh": "客户规划",
+   "labelZhHant": "客戶規劃",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "cold_calling",
+   "kind": "hard",
+   "labelEn": "Cold calling",
+   "labelZh": "电话销售",
+   "labelZhHant": "電話銷售",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "financial_modeling",
+   "kind": "hard",
+   "labelEn": "Financial modeling",
+   "labelZh": "财务建模",
+   "labelZhHant": "財務建模",
+   "aliases": [
+    "financial modelling"
+   ],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "financial_forecasting",
+   "kind": "hard",
+   "labelEn": "Financial forecasting",
+   "labelZh": "财务预测",
+   "labelZhHant": "財務預測",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "variance_analysis",
+   "kind": "hard",
+   "labelEn": "Variance analysis",
+   "labelZh": "差异分析",
+   "labelZhHant": "差異分析",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "budgeting",
+   "kind": "hard",
+   "labelEn": "Budgeting",
+   "labelZh": "预算编制",
+   "labelZhHant": "預算編製",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "credit_analysis",
+   "kind": "hard",
+   "labelEn": "Credit analysis",
+   "labelZh": "信用分析",
+   "labelZhHant": "信用分析",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "risk_modeling",
+   "kind": "hard",
+   "labelEn": "Risk modeling",
+   "labelZh": "风险建模",
+   "labelZhHant": "風險建模",
+   "aliases": [
+    "risk modelling"
+   ],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "employee_relations",
+   "kind": "hard",
+   "labelEn": "Employee relations",
+   "labelZh": "员工关系",
+   "labelZhHant": "員工關係",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "employee_onboarding",
+   "kind": "hard",
+   "labelEn": "Employee onboarding",
+   "labelZh": "入职管理",
+   "labelZhHant": "到職管理",
+   "aliases": [
+    "new hire onboarding"
+   ],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "hris",
+   "kind": "hard",
+   "labelEn": "HRIS",
+   "labelZh": null,
+   "labelZhHant": null,
+   "aliases": [
+    "hr information systems"
+   ],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "payroll",
+   "kind": "hard",
+   "labelEn": "Payroll",
+   "labelZh": "薪资核算",
+   "labelZhHant": "薪資核算",
+   "aliases": [
+    "payroll processing"
+   ],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "performance_management",
+   "kind": "hard",
+   "labelEn": "Performance management",
+   "labelZh": "绩效管理",
+   "labelZhHant": "績效管理",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "employment_law",
+   "kind": "hard",
+   "labelEn": "Employment law",
+   "labelZh": "劳动法",
+   "labelZhHant": "勞動法規",
+   "aliases": [
+    "labor law",
+    "labour law"
+   ],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "patient_assessment",
+   "kind": "hard",
+   "labelEn": "Patient assessment",
+   "labelZh": "病情评估",
+   "labelZhHant": "病情評估",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "medication_administration",
+   "kind": "hard",
+   "labelEn": "Medication administration",
+   "labelZh": "给药护理",
+   "labelZhHant": "給藥護理",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "electronic_health_records",
+   "kind": "hard",
+   "labelEn": "Electronic health records",
+   "labelZh": "电子病历",
+   "labelZhHant": "電子病歷",
+   "aliases": [
+    "ehr",
+    "emr",
+    "electronic medical records"
+   ],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "iv_therapy",
+   "kind": "hard",
+   "labelEn": "IV therapy",
+   "labelZh": "静脉输液",
+   "labelZhHant": "靜脈輸液",
+   "aliases": [
+    "intravenous therapy"
+   ],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "wound_care",
+   "kind": "hard",
+   "labelEn": "Wound care",
+   "labelZh": "伤口护理",
+   "labelZhHant": "傷口護理",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "infection_control",
+   "kind": "hard",
+   "labelEn": "Infection control",
+   "labelZh": "感染控制",
+   "labelZhHant": "感染控制",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "bls_certification",
+   "kind": "certification",
+   "labelEn": "BLS certification",
+   "labelZh": "BLS 证书",
+   "labelZhHant": "BLS 證書",
+   "aliases": [
+    "basic life support",
+    "bls"
+   ],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "lesson_planning",
+   "kind": "hard",
+   "labelEn": "Lesson planning",
+   "labelZh": "备课",
+   "labelZhHant": "備課",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "classroom_management",
+   "kind": "hard",
+   "labelEn": "Classroom management",
+   "labelZh": "课堂管理",
+   "labelZhHant": "課堂管理",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "curriculum_development",
+   "kind": "hard",
+   "labelEn": "Curriculum development",
+   "labelZh": "课程开发",
+   "labelZhHant": "課程開發",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "student_assessment",
+   "kind": "hard",
+   "labelEn": "Student assessment",
+   "labelZh": "学生评价",
+   "labelZhHant": "學生評量",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "user_growth",
+   "kind": "hard",
+   "labelEn": "User growth",
+   "labelZh": "用户增长",
+   "labelZhHant": "用戶成長",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "retention_analysis",
+   "kind": "hard",
+   "labelEn": "Retention analysis",
+   "labelZh": "留存分析",
+   "labelZhHant": "留存分析",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "community_operations",
+   "kind": "hard",
+   "labelEn": "Community operations",
+   "labelZh": "社群运营",
+   "labelZhHant": "社群營運",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "content_planning",
+   "kind": "hard",
+   "labelEn": "Content planning",
+   "labelZh": "内容策划",
+   "labelZhHant": "內容企劃",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "active_directory",
+   "kind": "hard",
+   "labelEn": "Active Directory",
+   "labelZh": null,
+   "labelZhHant": null,
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "windows_server",
+   "kind": "hard",
+   "labelEn": "Windows Server",
+   "labelZh": null,
+   "labelZhHant": null,
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "vmware",
+   "kind": "hard",
+   "labelEn": "VMware",
+   "labelZh": null,
+   "labelZhHant": null,
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "network_troubleshooting",
+   "kind": "hard",
+   "labelEn": "Network troubleshooting",
+   "labelZh": "网络故障排查",
+   "labelZhHant": "網路故障排除",
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "web_accessibility",
+   "kind": "hard",
+   "labelEn": "Web accessibility",
+   "labelZh": "无障碍设计",
+   "labelZhHant": "無障礙設計",
+   "aliases": [
+    "accessibility",
+    "a11y",
+    "wcag"
+   ],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "uikit",
+   "kind": "hard",
+   "labelEn": "UIKit",
+   "labelZh": null,
+   "labelZhHant": null,
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "core_data",
+   "kind": "hard",
+   "labelEn": "Core Data",
+   "labelZh": null,
+   "labelZhHant": null,
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  },
+  {
+   "id": "xctest",
+   "kind": "hard",
+   "labelEn": "XCTest",
+   "labelZh": null,
+   "labelZhHant": null,
+   "aliases": [],
+   "parentId": null,
+   "esco": null,
+   "onet": null,
+   "status": "reviewed"
+  }
+ ]
+}

@@ -4,9 +4,10 @@
 // 2.6; SM-1, SM-5). `npm run eval:match` runs the same specs through its own
 // config; this file makes them gate every later change:
 //
-//   - INV-1, 2, 3, 4, 5, 6, 8, 9, 10 are due at or before M2 and must hold.
-//     INV-7 (the three-state keyword check) is due M4: it runs here too, its
-//     result is recorded, and it does not fail the run until then.
+//   - All ten are enforced since phase M4 (MKT-4E): INV-1, 2, 3, 4, 5, 6, 8,
+//     9, 10 were due at or before M2; INV-7 (the three-state keyword check:
+//     PostgreSQL is related evidence for "relational databases", no skill is
+//     listed twice) is due M4 and must hold now.
 //   - "The contract test calls every seam and gets one score" (SM-5): every
 //     surface of eval/seamRegistry.ts, read for one person and one job, once
 //     with no stored AI fit and once with a fresh one.
@@ -29,15 +30,22 @@ import { FIT_SEAMS, REQUIRED_FIT_SEAMS, type FitSeam, type SeamContext } from '.
 import { REPO_ROOT, loadSeam, toSeamFit, type SeamFit } from './seams.js';
 import { createWorld, defaultUserInputs, freshAiRow, jobRecord, userWith, type World } from './world.js';
 
-// ── The invariants due by M2 ──────────────────────────────────────────────
+// ── The invariants due by M4: all ten ─────────────────────────────────────
 
-registerInvariants({ enforce: 'M2' });
+/** The phase whose invariants gate `npm test`. M4 is the last phase that has one due. */
+const ENFORCED_PHASE = 'M4' as const;
+
+registerInvariants({ enforce: ENFORCED_PHASE });
 
 describe('which invariants gate npm test', () => {
-  it('the nine due at or before M2 are enforced; INV-7 stays pending until M4', () => {
-    const enforced = INVARIANT_LIST.filter((i) => isEnforced(i.due, 'M2')).map((i) => i.id);
-    expect(enforced).toEqual(['INV-1', 'INV-2', 'INV-3', 'INV-4', 'INV-5', 'INV-6', 'INV-8', 'INV-9', 'INV-10']);
+  it('all ten are enforced: the nine due at or before M2 and INV-7, due M4; none is pending', () => {
+    const enforced = INVARIANT_LIST.filter((i) => isEnforced(i.due, ENFORCED_PHASE)).map((i) => i.id);
+    expect(enforced).toEqual(['INV-1', 'INV-2', 'INV-3', 'INV-4', 'INV-5', 'INV-6', 'INV-7', 'INV-8', 'INV-9', 'INV-10']);
+    expect(INVARIANT_LIST.filter((i) => !isEnforced(i.due, ENFORCED_PHASE))).toEqual([]);
+    // INV-7 was the one M2 left pending: it is the tenth.
     expect(INVARIANT_LIST.filter((i) => !isEnforced(i.due, 'M2')).map((i) => [i.id, i.due])).toEqual([['INV-7', 'M4']]);
+    // Enforcing the last phase enforces what `--enforce all` does.
+    expect(INVARIANT_LIST.every((i) => isEnforced(i.due, 'all'))).toBe(true);
   });
 });
 

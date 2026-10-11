@@ -12,6 +12,8 @@ const EVIDENCE_REFS = new Set([
   'title',
   'seniority',
   'skill_have',
+  // The post asks for a broader skill and the resume shows a more specific one (server: match/preScore.ts).
+  'skill_related',
   'skill_missing',
   'education_required',
   'class_year',

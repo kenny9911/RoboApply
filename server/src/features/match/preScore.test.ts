@@ -2,8 +2,9 @@
 // The quick estimate, version 2 (MARKET_STRATEGY 2.2, 2.4; SM-3): table tests
 // per component, the priors, the logistics rule, coverage and confidence, and
 // the rule that no chip of the saved search moves a fit (invariant I3).
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { current as currentVocabulary, resetVocabularyForTests, setVocabularyForTests } from '../skills/index.js';
 import { getMatchPriors } from './config.js';
 import { DEFAULT_MATCH_PRIORS, DEFAULT_MATCH_TIERS, DEFAULT_MATCH_WEIGHTS, tierForScore } from './contract.js';
 import {
@@ -17,7 +18,18 @@ import {
   hardFiltersOf,
   industryDimension,
   isByFilters,
+  carriesSkillIds,
+  hardSkillList,
+  isAmbiguousAbbreviation,
+  jobSkillCheck,
   jobSkillList,
+  labelLocaleFor,
+  listedSkillCheck,
+  postingStates,
+  termCheck,
+  textShowsSkill,
+  userShows,
+  userSkillIdSet,
   levelGap,
   locationCheck,
   logisticsDimension,
@@ -39,17 +51,18 @@ import {
   titleLevelDimension,
   titleOverlap,
   visaCheck,
+  type MatchUser,
 } from './preScore.js';
 import { buildKeywordRows } from './keywordRows.js';
 import { buildMatchUser, payAsPosted, toMatchJob, type UserMatchInputs } from './context.js';
-import { defaultUserInputs, jobRecord, matchJob, matchUser } from './testkit.js';
+import { FIXTURE_SKILLS, defaultUserInputs, jobRecord, matchJob, matchUser, skillRecord } from './testkit.js';
 
 const W = { ...DEFAULT_MATCH_WEIGHTS };
 const P = { ...DEFAULT_MATCH_PRIORS };
 const CFG = { weights: W, tiers: { ...DEFAULT_MATCH_TIERS } };
 const NOW = new Date('2026-10-10T00:00:00Z');
 /** No logistics answers at all: nothing to check, nothing guaranteed. */
-const NO_LOGISTICS = { locations: [], workModels: [], country: null, salaryMin: null } as const;
+const NO_LOGISTICS: Pick<MatchUser, 'locations' | 'workModels' | 'country' | 'salaryMin'> = { locations: [], workModels: [], country: null, salaryMin: null };
 
 describe('taxonomy distance', () => {
   it.each([
@@ -183,7 +196,7 @@ describe('skills = Σ weight shown / Σ weight listed over the first 10 hard ski
       ],
     });
     expect(skillsDimension(matchUser({ skills: ['Communication'] }), softOnly, W)).toMatchObject({ status: 'not_stated', score: null });
-    expect(splitSkills(matchUser(), softOnly)).toEqual({ aligned: [], missing: [], missingRequired: [], softSkills: ['Communication', 'Attention to detail'] });
+    expect(splitSkills(matchUser(), softOnly)).toEqual({ aligned: [], related: [], missing: [], missingRequired: [], softSkills: ['Communication', 'Attention to detail'], unchecked: [] });
     expect(preScore(matchUser(), softOnly, CFG).softSkills).toEqual(['Communication', 'Attention to detail']);
 
     // Mixed: the soft skill is in neither the numerator nor the denominator.
@@ -201,7 +214,7 @@ describe('skills = Σ weight shown / Σ weight listed over the first 10 hard ski
       ['Teamwork', 'soft', true],
       ['Go', 'hard', false],
     ]);
-    expect(splitSkills(matchUser({ skills: ['TypeScript'] }), mixed)).toEqual({ aligned: ['TypeScript'], missing: ['Go'], missingRequired: [], softSkills: ['Teamwork'] });
+    expect(splitSkills(matchUser({ skills: ['TypeScript'] }), mixed)).toEqual({ aligned: ['TypeScript'], related: [], missing: ['Go'], missingRequired: [], softSkills: ['Teamwork'], unchecked: [] });
     // The gap on a card is never a soft skill.
     expect(preScore(matchUser({ skills: [] }), mixed, CFG).topGap).toBe('TypeScript');
   });
@@ -222,7 +235,7 @@ describe('skills = Σ weight shown / Σ weight listed over the first 10 hard ski
     const user = matchUser({ skills: ['TypeScript'], resumeTextNorm: normalizeText(resume) });
     const job = matchJob({ skills: ['typescript', 'go', 'kubernetes', 'rust'], skillsDetail: null });
     // Stored lower case, shown in the usual spelling.
-    expect(splitSkills(user, job)).toEqual({ aligned: ['TypeScript', 'Go', 'Kubernetes'], missing: ['Rust'], missingRequired: [], softSkills: [] });
+    expect(splitSkills(user, job)).toEqual({ aligned: ['TypeScript', 'Go', 'Kubernetes'], related: [], missing: ['Rust'], missingRequired: [], softSkills: [], unchecked: [] });
     expect(skillsDimension(user, job, W).score).toBe(75);
     expect(skillsDimension(user, job, W).evidence).toContainEqual({ text: 'Rust', source: 'posting', ref: 'skill_missing' });
     const skillsRow = buildKeywordRows({ job: { ...job, minYears: null }, user, resumeText: resume, keywords: null }).find((r) => r.key === 'skills')!;
@@ -236,6 +249,514 @@ describe('skills = Σ weight shown / Σ weight listed over the first 10 hard ski
     expect(skillKey(' Node.JS ')).toBe('nodejs');
     expect(skillKey('C++')).toBe('c++');
     expect(skillKey('C#')).not.toBe(skillKey('C++'));
+  });
+});
+
+// ── Canonical skills (SM-6; MARKET_STRATEGY 2.1 point 4; MATCH 4.4 point 3) ──
+
+describe('canonical skills in the estimate: a posting that carries skill ids is compared by them', () => {
+  beforeEach(() => setVocabularyForTests(FIXTURE_SKILLS));
+  afterEach(() => resetVocabularyForTests());
+
+  /** A posting as enrichment v3 writes it: every skill with the id of its canonical skill. */
+  const posting = (detail: Array<{ skill: string; skillId: string | null; required?: boolean; kind?: string }>, more: Parameters<typeof matchJob>[0] = {}) =>
+    matchJob({
+      skills: detail.map((d) => d.skill.toLowerCase()),
+      skillsDetail: detail.map((d) => ({ skill: d.skill, kind: d.kind ?? 'hard', required: d.required === true, skillId: d.skillId })),
+      skillIds: [...new Set(detail.map((d) => d.skillId).filter((id): id is string => !!id))],
+      ...more,
+    });
+  const check = (user: ReturnType<typeof matchUser>, job: ReturnType<typeof matchJob>, skill: string) => {
+    const s = jobSkillList(job).find((x) => x.skill === skill)!;
+    return jobSkillCheck(user, s, { locale: 'en' });
+  };
+
+  it('the three states and what each counts: shown the whole weight, related half, not shown nothing', () => {
+    const job = posting([
+      { skill: 'TypeScript', skillId: 'typescript', required: true },
+      { skill: 'Relational databases', skillId: 'relational_databases', required: true },
+      { skill: 'Kubernetes', skillId: 'kubernetes', required: true },
+    ]);
+    const user = matchUser({ skills: ['TypeScript', 'PostgreSQL'] });
+    expect(check(user, job, 'TypeScript')).toEqual({ state: 'shown', via: null, credit: 1 });
+    expect(check(user, job, 'Relational databases')).toEqual({ state: 'related', via: 'PostgreSQL', credit: 0.5 });
+    expect(check(user, job, 'Kubernetes')).toEqual({ state: 'not_shown', via: null, credit: 0 });
+    // (1 + 0.5 + 0) / 3.
+    expect(skillsDimension(user, job, W).score).toBe(50);
+  });
+
+  it('ACCEPT: "relational databases" (required) with PostgreSQL on the resume is related: half, neither missing nor fully shown', () => {
+    const job = posting([{ skill: 'relational databases', skillId: 'relational_databases', required: true }]);
+    const user = matchUser({ skills: ['PostgreSQL'] });
+    expect(skillsDimension(user, job, W).score).toBe(50);
+    const split = splitSkills(user, job);
+    expect(split.aligned).toEqual(['Relational databases']);
+    expect(split.related).toEqual(['Relational databases']);
+    expect(split.missing).toEqual([]);
+    expect(skillsDimension(user, job, W).evidence).toEqual([{ text: 'Relational databases', source: 'resume', ref: 'skill_related' }]);
+    // The same posting against someone who lists the term itself, and someone who shows neither.
+    expect(skillsDimension(matchUser({ skills: ['Relational databases'] }), job, W).score).toBe(100);
+    expect(skillsDimension(matchUser({ skills: ['Figma'] }), job, W).score).toBe(0);
+    // Two steps down the chain is still related (postgresql → sql → relational_databases); a sibling says nothing.
+    expect(check(matchUser({ skills: ['MySQL'] }), posting([{ skill: 'PostgreSQL', skillId: 'postgresql' }]), 'PostgreSQL').state).toBe('not_shown');
+    // Never the other way round: the broad term on a resume does not show the named technology.
+    expect(check(matchUser({ skills: ['Relational databases'] }), posting([{ skill: 'PostgreSQL', skillId: 'postgresql' }]), 'PostgreSQL').state).toBe('not_shown');
+  });
+
+  it('ACCEPT: a posting that lists "Postgres" and "PostgreSQL" counts one skill, under the usual spelling', () => {
+    const job = posting([
+      { skill: 'Postgres', skillId: 'postgresql', required: false },
+      { skill: 'PostgreSQL', skillId: 'postgresql', required: true },
+      { skill: 'Kubernetes', skillId: 'kubernetes', required: true },
+    ]);
+    expect(jobSkillList(job).map((s) => [s.skill, s.skillId, s.required])).toEqual([
+      ['PostgreSQL', 'postgresql', true],
+      ['Kubernetes', 'kubernetes', true],
+    ]);
+    // One of two required skills shown: 1 / 2, not 1.5 / 2.5.
+    expect(skillsDimension(matchUser({ skills: ['Postgres'] }), job, W).score).toBe(50);
+    expect(preScore(matchUser({ skills: ['Postgres'] }), job, CFG)).toMatchObject({ topOverlap: 'PostgreSQL', topGap: 'Kubernetes' });
+    // "Node.js", "node" and "NodeJS" are one skill too, whichever the resume writes.
+    const node = posting([
+      { skill: 'node', skillId: 'nodejs' },
+      { skill: 'NodeJS', skillId: 'nodejs' },
+      { skill: 'Node.js', skillId: 'nodejs' },
+    ]);
+    expect(jobSkillList(node).map((s) => s.skill)).toEqual(['Node.js']);
+    expect(skillsDimension(matchUser({ skills: ['nodejs'] }), node, W).score).toBe(100);
+    // An id that was merged into another skill is that skill: the old id resolves through the vocabulary.
+    const merged = posting([
+      { skill: 'Postgres', skillId: 'postgres' },
+      { skill: 'PostgreSQL', skillId: 'postgresql' },
+    ]);
+    expect(jobSkillList(merged).map((s) => [s.skill, s.skillId])).toEqual([['PostgreSQL', 'postgresql']]);
+  });
+
+  it('ACCEPT: the row enrichment v3 writes (one entry per skill, every spelling in `skills`) counts "postgres" and "PostgreSQL" as one skill', () => {
+    // Exactly what reconcile stores for a posting that says "postgres", "PostgreSQL" and "communication":
+    // one skillsDetail entry per canonical id, and RAJob.skills keeps every spelling for search.
+    const job = matchJob({
+      skills: ['postgres', 'postgresql', 'communication'],
+      skillsDetail: [
+        { skill: 'postgresql', kind: 'hard', required: true, skillId: 'postgresql', via: 'alias' },
+        { skill: 'communication', kind: 'soft', required: true, skillId: 'communication', via: 'alias' },
+      ],
+      skillIds: ['postgresql'],
+    });
+    expect(jobSkillList(job)).toEqual([
+      { skill: 'PostgreSQL', skillId: 'postgresql', required: true, kind: 'hard', term: 'postgresql', also: ['postgres'] },
+      { skill: 'Communication', skillId: 'communication', required: true, kind: 'soft', term: 'communication' },
+    ]);
+    // The second spelling is not a second, id-less skill: one hard skill is listed and the person shows it.
+    expect(hardSkillList(job)).toHaveLength(1);
+    const user = matchUser({ skills: ['PostgreSQL'], resumeTextNorm: null });
+    expect(skillsDimension(user, job, W)).toMatchObject({ score: 100, evidence: [{ text: 'PostgreSQL', source: 'resume', ref: 'skill_have' }] });
+    expect(splitSkills(user, job)).toEqual({ aligned: ['PostgreSQL'], related: [], missing: [], missingRequired: [], softSkills: ['Communication'], unchecked: [] });
+    expect(skillsDimension(matchUser({ skills: [], resumeTextNorm: null }), job, W).score).toBe(0);
+
+    // Three skills, each under two spellings, the model's string first or second: three entries, and the soft one stays soft.
+    const wide = matchJob({
+      skills: ['postgres', 'PostgreSQL', 'k8s', 'Kubernetes', 'communication skills', 'Communication'],
+      skillsDetail: [
+        { skill: 'PostgreSQL', kind: 'hard', required: true, skillId: 'postgresql', via: 'alias' },
+        { skill: 'Kubernetes', kind: 'hard', required: true, skillId: 'kubernetes', via: 'alias' },
+        { skill: 'Communication', kind: 'soft', required: false, skillId: 'communication', via: 'alias' },
+      ],
+      skillIds: ['postgresql', 'kubernetes'],
+    });
+    expect(jobSkillList(wide).map((s) => [s.skill, s.kind, s.also ?? []])).toEqual([
+      ['PostgreSQL', 'hard', ['postgres']],
+      ['Kubernetes', 'hard', ['k8s']],
+      ['Communication', 'soft', ['communication skills']],
+    ]);
+    const both = matchUser({ skills: ['PostgreSQL', 'Kubernetes'], resumeTextNorm: null });
+    expect(skillsDimension(both, wide, W).score).toBe(100);
+    expect(splitSkills(both, wide)).toMatchObject({ aligned: ['PostgreSQL', 'Kubernetes'], missing: [], softSkills: ['Communication'], unchecked: [] });
+    expect(preScore(both, wide, CFG).topGap).toBeNull();
+  });
+
+  it('a row that carries ids: `skillsDetail` is the list; a string of `skills` is a spelling of an entry or nothing', () => {
+    const job = matchJob({
+      // "pg database" reached PostgreSQL by a route this vocabulary does not know; "container platform" was a guess.
+      skills: ['postgresql', 'pg database', 'container platform', 'k8s', 'wound care'],
+      skillsDetail: [
+        { skill: 'postgresql', kind: 'hard', required: true, skillId: 'postgresql', via: 'alias' },
+        { skill: 'container platform', kind: 'hard', required: true, skillId: 'kubernetes', via: 'embedding' },
+        // A string enrichment could not map has an entry of its own, without an id.
+        { skill: 'wound care', kind: 'hard', required: false, skillId: null, via: 'none' },
+      ],
+      skillIds: ['postgresql', 'kubernetes'],
+    });
+    expect(jobSkillList(job).map((s) => [s.skill, s.skillId, s.guessed ?? false, s.also ?? []])).toEqual([
+      ['PostgreSQL', 'postgresql', false, []],
+      // "k8s" is a name the vocabulary knows for the guessed skill: it is no longer a guess, and it is labelled.
+      ['Kubernetes', 'kubernetes', false, ['k8s']],
+      ['Wound care', null, false, []],
+    ]);
+    // Without that second spelling the guess stays a guess, in the posting's own words.
+    const guessOnly = { ...job, skills: ['postgresql', 'container platform', 'wound care'] };
+    expect(jobSkillList(guessOnly).map((s) => [s.skill, s.guessed ?? false])).toEqual([
+      ['PostgreSQL', false],
+      ['Container platform', true],
+      ['Wound care', false],
+    ]);
+    // A posting whose detail carries no id is read as before: every string of `skills` is a skill.
+    const legacy = matchJob({ skills: ['postgres', 'postgresql'], skillsDetail: [{ skill: 'postgresql', kind: 'hard', required: true }] });
+    expect(jobSkillList(legacy).map((s) => [s.skill, s.skillId])).toEqual([
+      ['PostgreSQL', null],
+      ['Postgres', null],
+    ]);
+  });
+
+  it('ACCEPT: an unreviewed skill changes no score, and nothing calls it missing', () => {
+    const base = posting([
+      { skill: 'TypeScript', skillId: 'typescript', required: true },
+      { skill: 'Kubernetes', skillId: 'kubernetes', required: true },
+    ]);
+    const withUnreviewed = posting([
+      { skill: 'TypeScript', skillId: 'typescript', required: true },
+      { skill: 'Vertex AI', skillId: 'vertex_ai', required: true },
+      { skill: 'Kubernetes', skillId: 'kubernetes', required: true },
+      // An id the vocabulary does not hold at all.
+      { skill: 'Quantum widgets', skillId: 'quantum_widgets', required: true },
+    ]);
+    for (const skills of [['TypeScript'], ['TypeScript', 'Vertex AI'], ['Kubernetes', 'Quantum widgets'], []]) {
+      const user = matchUser({ skills, resumeTextNorm: null });
+      expect(skillsDimension(user, withUnreviewed, W).score, skills.join(',')).toBe(skillsDimension(user, base, W).score);
+      expect(preScore(user, withUnreviewed, CFG).score, skills.join(',')).toBe(preScore(user, base, CFG).score);
+    }
+    const split = splitSkills(matchUser({ skills: ['TypeScript', 'Vertex AI'] }), withUnreviewed);
+    // The one the resume names is shown as such; the others are neither aligned nor missing.
+    expect(split.aligned).toEqual(['TypeScript', 'Vertex AI']);
+    expect(split.missing).toEqual(['Kubernetes']);
+    expect(split.unchecked).toEqual(['Quantum widgets']);
+    // The gap on a card is never a skill nobody has reviewed.
+    expect(preScore(matchUser({ skills: [] }), withUnreviewed, CFG).topGap).toBe('TypeScript');
+    expect(preScore(matchUser({ skills: ['TypeScript', 'Kubernetes'] }), withUnreviewed, CFG).topGap).toBeNull();
+  });
+
+  it('a string enrichment could not map (no id) is still compared by the string rule, next to skills that carry ids', () => {
+    // Enrichment maps by exact name until label vectors exist: a posting outside the vocabulary keeps most of its
+    // skills as strings. They must stay in the number, or one mapped skill would decide the whole part.
+    const job = posting([
+      { skill: 'Excel', skillId: 'excel', required: true },
+      { skill: 'Patient assessment', skillId: null, required: true },
+      { skill: 'Wound care', skillId: null, required: true },
+      { skill: 'IV therapy', skillId: null, required: false },
+    ]);
+    expect(carriesSkillIds(job)).toBe(true);
+    const nurse = matchUser({ skills: ['Patient assessment', 'Wound care'], resumeTextNorm: null });
+    // 0 (Excel) + 1 + 1 + 0 of 1 + 1 + 1 + 0.5.
+    expect(skillsDimension(nurse, job, W).score).toBe(Math.round(200 / 3.5));
+    expect(splitSkills(nurse, job)).toMatchObject({ aligned: ['Patient assessment', 'Wound care'], missing: ['Excel', 'IV therapy'], unchecked: [] });
+    expect(check(nurse, job, 'Wound care')).toEqual({ state: 'shown', via: null, credit: 1 });
+    expect(check(nurse, job, 'IV therapy')).toEqual({ state: 'not_shown', via: null, credit: 0 });
+    // The same strings in a posting that carries no ids at all count exactly the same.
+    const legacy = matchJob({ skills: ['excel', 'patient assessment', 'wound care', 'iv therapy'], skillsDetail: job.skillsDetail!.map(({ skill, kind, required }) => ({ skill, kind, required })) });
+    expect(skillsDimension(nurse, legacy, W).score).toBe(skillsDimension(nurse, job, W).score);
+  });
+
+  it('an id that is only a machine guess (the nearest vector) is shown and never compared: no score moves, nothing is called missing', () => {
+    const base = posting([{ skill: 'TypeScript', skillId: 'typescript', required: true }]);
+    const guessed = matchJob({
+      skills: ['typescript', 'container platform'],
+      skillsDetail: [
+        { skill: 'TypeScript', kind: 'hard', required: true, skillId: 'typescript', via: 'alias' },
+        // Enrichment found Kubernetes as the nearest skill of "container platform": a guess, not a name.
+        { skill: 'Container platform', kind: 'hard', required: true, skillId: 'kubernetes', via: 'embedding' },
+      ],
+      skillIds: ['typescript', 'kubernetes'],
+    });
+    // The guess keeps the posting's own words: it is not labelled as the skill it was guessed to be.
+    expect(jobSkillList(guessed).map((s) => [s.skill, s.skillId, s.guessed ?? false])).toEqual([
+      ['TypeScript', 'typescript', false],
+      ['Container platform', 'kubernetes', true],
+    ]);
+    for (const skills of [['TypeScript'], ['TypeScript', 'Kubernetes'], []]) {
+      const user = matchUser({ skills, resumeTextNorm: null });
+      expect(skillsDimension(user, guessed, W).score, skills.join(',')).toBe(skillsDimension(user, base, W).score);
+    }
+    const split = splitSkills(matchUser({ skills: ['TypeScript'], resumeTextNorm: null }), guessed);
+    expect(split.missing).toEqual([]);
+    expect(split.unchecked).toEqual(['Container platform']);
+    // The same skill also listed under a name the vocabulary knows is compared as usual.
+    const named = matchJob({
+      skills: ['container platform', 'k8s'],
+      skillsDetail: [
+        { skill: 'Container platform', kind: 'hard', required: true, skillId: 'kubernetes', via: 'embedding' },
+        { skill: 'K8s', kind: 'hard', required: false, skillId: 'kubernetes', via: 'alias' },
+      ],
+      skillIds: ['kubernetes'],
+    });
+    expect(jobSkillList(named).map((s) => [s.skill, s.required, s.guessed ?? false])).toEqual([['Kubernetes', true, false]]);
+    expect(splitSkills(matchUser({ skills: [], resumeTextNorm: null }), named).missing).toEqual(['Kubernetes']);
+  });
+
+  it('a posting whose skills are all waiting for review states skills, and its skills part is not compared', () => {
+    const job = posting([
+      { skill: 'Vertex AI', skillId: 'vertex_ai', required: true },
+      { skill: 'Quantum widgets', skillId: 'quantum_widgets', required: false },
+    ]);
+    const user = matchUser({ skills: ['Vertex AI'] });
+    expect(skillsDimension(user, job, W)).toMatchObject({ status: 'not_stated', score: null });
+    // It lists skills (the card shows them), so the reason is never "this post lists no skills".
+    expect(hardSkillList(job).map((s) => s.skill)).toEqual(['Vertex AI', 'Quantum widgets']);
+    expect(postingStates(job).skills).toBe(true);
+    expect(preScore(user, job, CFG).confidenceReason).not.toBe('no_skills_listed');
+    // The skills part counts at its prior, like any part that cannot be compared.
+    const noSkills = preScore(user, matchJob({ skills: [], skillsDetail: null }), CFG);
+    expect(preScore(user, job, CFG).score).toBe(noSkills.score);
+  });
+
+  it('soft skills are never counted: the vocabulary says what is soft, whatever the posting marked', () => {
+    const job = posting([
+      { skill: 'TypeScript', skillId: 'typescript', required: true },
+      // Marked hard by the model, soft in the vocabulary: the vocabulary wins.
+      { skill: 'communication skills', skillId: 'communication', required: true, kind: 'hard' },
+    ]);
+    expect(jobSkillList(job).map((s) => [s.skill, s.kind])).toEqual([
+      ['TypeScript', 'hard'],
+      ['Communication', 'soft'],
+    ]);
+    expect(skillsDimension(matchUser({ skills: ['TypeScript'] }), job, W).score).toBe(100);
+    expect(splitSkills(matchUser({ skills: [] }), job)).toMatchObject({ missing: ['TypeScript'], softSkills: ['Communication'] });
+  });
+
+  it('a certificate is compared like a hard skill; one whose only trace is an ambiguous abbreviation is neither claimed nor denied', () => {
+    const job = posting([
+      { skill: 'CPA', skillId: 'cpa', required: true },
+      { skill: 'Excel', skillId: 'excel', required: true },
+    ]);
+    const listed = matchUser({ skills: ['CPA', 'Excel'] });
+    expect(skillsDimension(listed, job, W).score).toBe(100);
+    // The licence written out is found in the text; so is its Chinese name.
+    expect(check(matchUser({ skills: [], resumeTextNorm: normalizeText('Certified Public Accountant since 2019.') }), job, 'CPA').state).toBe('shown');
+    expect(check(matchUser({ skills: [], resumeTextNorm: normalizeText('持有注册会计师证书。') }), job, 'CPA').state).toBe('shown');
+    // "CPA" in a marketing sentence is cost per acquisition as often as the licence: not counted either way.
+    const marketer = matchUser({ skills: ['Excel'], resumeTextNorm: normalizeText('Cut CPA by 20% across paid social.') });
+    expect(check(marketer, job, 'CPA')).toEqual({ state: 'unscored', via: null, credit: null });
+    expect(skillsDimension(marketer, job, W).score).toBe(100);
+    // Withheld is withheld everywhere: the card does not claim what the check declined to ("What lines up: CPA").
+    expect(splitSkills(marketer, job)).toMatchObject({ aligned: ['Excel'], missing: [], unchecked: ['CPA'] });
+    expect(preScore(marketer, job, CFG)).toMatchObject({ topOverlap: 'Excel', topGap: null });
+    const onlyCpa = posting([{ skill: 'CPA', skillId: 'cpa', required: true }]);
+    expect(splitSkills(marketer, onlyCpa)).toMatchObject({ aligned: [], missing: [], unchecked: ['CPA'] });
+    expect(preScore(marketer, onlyCpa, CFG).topOverlap).toBeNull();
+    expect(skillsDimension(marketer, onlyCpa, W)).toMatchObject({ status: 'not_stated', score: null, evidence: [] });
+    // No trace at all is a plain not shown.
+    expect(check(matchUser({ skills: ['Excel'], resumeTextNorm: normalizeText('Managed the quarterly close.') }), job, 'CPA').state).toBe('not_shown');
+  });
+
+  it('a name that is also an ordinary word: shown when the resume writes it, never proof of a broader skill from a sentence', () => {
+    const job = posting([
+      { skill: 'Go', skillId: 'go', required: true },
+      { skill: 'React', skillId: 'react', required: true },
+      { skill: 'Frontend frameworks', skillId: 'frontend_frameworks', required: true },
+    ]);
+    const prose = matchUser({ skills: [], resumeTextNorm: normalizeText('Wrote services in Go. I react quickly to incidents.') });
+    // The question "does the resume say Go?" reads the sentence, as the string rule always did.
+    expect(check(prose, job, 'Go').state).toBe('shown');
+    expect(check(prose, job, 'React').state).toBe('shown');
+    // The person's own skills do not include a word taken from a sentence, so it shows nothing broader.
+    expect([...userSkillIdSet(prose)]).toEqual([]);
+    expect(check(prose, job, 'Frontend frameworks').state).toBe('not_shown');
+    // Listed as a skill, React shows the broader term.
+    expect(check(matchUser({ skills: ['React'] }), job, 'Frontend frameworks')).toEqual({ state: 'related', via: 'React', credit: 0.5 });
+    // "Google" is not Go, and "net revenue" is not .NET.
+    expect(check(matchUser({ skills: [], resumeTextNorm: normalizeText('Worked at Google on ads.') }), job, 'Go').state).toBe('not_shown');
+  });
+
+  it('an abbreviation with another reading in a sentence proves nothing: neither claimed nor denied, unless the posting writes the skill that way', () => {
+    setVocabularyForTests([...FIXTURE_SKILLS, skillRecord('photoshop', 'Photoshop', { aliases: ['adobe photoshop', 'ps'] }), skillRecord('pytorch', 'PyTorch', { parentId: 'machine_learning' })]);
+    const job = posting([
+      { skill: 'Machine learning', skillId: 'machine_learning', required: true },
+      { skill: 'Photoshop', skillId: 'photoshop', required: true },
+      { skill: 'Node.js', skillId: 'nodejs', required: true },
+      { skill: 'TypeScript', skillId: 'typescript', required: true },
+      { skill: 'Excel', skillId: 'excel', required: true },
+      { skill: 'Go', skillId: 'go', required: true },
+    ]);
+    const resume = normalizeText('Administered 500 ml of saline per shift.\nPS: available at once.\nLooked after a 5-node cluster of beds.\nKept the ward rota in Excel.');
+    const nurse = matchUser({ skills: [], resumeTextNorm: resume, recentTitle: 'Registered Nurse' });
+    for (const skill of ['Machine learning', 'Photoshop', 'Node.js']) expect(check(nurse, job, skill), skill).toEqual({ state: 'unscored', via: null, credit: null });
+    // A full word that is also an ordinary one is still read from a sentence, as the string rule always did.
+    expect(check(nurse, job, 'Excel')).toEqual({ state: 'shown', via: null, credit: 1 });
+    expect(check(nurse, job, 'TypeScript').state).toBe('not_shown');
+    // Counted: Excel of Excel, TypeScript and Go. The three abbreviations are in neither sum.
+    expect(skillsDimension(nurse, job, W).score).toBe(33);
+    expect(splitSkills(nurse, job)).toMatchObject({ aligned: ['Excel'], missing: ['TypeScript', 'Go'], unchecked: ['Machine learning', 'Photoshop', 'Node.js'] });
+    // The string rule on the same strings never met "Machine learning" by "ml" either: Excel of all six.
+    const legacy = matchJob({ skills: ['machine learning', 'photoshop', 'node.js', 'typescript', 'excel', 'go'], skillsDetail: job.skillsDetail!.map(({ skill, kind, required }) => ({ skill, kind, required })) });
+    expect(skillsDimension(nurse, legacy, W).score).toBe(17);
+    expect(splitSkills(nurse, legacy)).toMatchObject({ aligned: ['Excel'], unchecked: [] });
+
+    // Listed as a skill, or written out, the skill is shown.
+    expect(check(matchUser({ skills: ['ML'], resumeTextNorm: resume }), job, 'Machine learning').state).toBe('shown');
+    expect(check(matchUser({ skills: [], resumeTextNorm: normalizeText('Three years of machine learning on tabular data.') }), job, 'Machine learning').state).toBe('shown');
+    // A more specific skill the person lists is real evidence, whatever else the text holds.
+    expect(check(matchUser({ skills: ['PyTorch'], resumeTextNorm: resume }), job, 'Machine learning')).toEqual({ state: 'related', via: 'PyTorch', credit: 0.5 });
+    // The posting itself writes the abbreviation: what the string rule always counted still counts.
+    const engineer = matchUser({ skills: [], resumeTextNorm: normalizeText('Shipped ML models to production.') });
+    expect(check(engineer, posting([{ skill: 'ML', skillId: 'machine_learning', required: true }]), 'Machine learning').state).toBe('shown');
+    expect(check(engineer, job, 'Machine learning').state).toBe('unscored');
+    // The second spelling `skills` keeps counts as the posting's own too.
+    const both = matchJob({ skills: ['machine learning', 'ml'], skillsDetail: [{ skill: 'machine learning', kind: 'hard', required: true, skillId: 'machine_learning', via: 'alias' }], skillIds: ['machine_learning'] });
+    expect(check(engineer, both, 'Machine learning').state).toBe('shown');
+
+    // What is an abbreviation with another reading, and what is a word.
+    for (const name of ['ML', 'ps', 'node', 'TS', 'AI', 'CPA', 'NLP']) expect(isAmbiguousAbbreviation(name), name).toBe(true);
+    for (const name of ['Go', 'React', 'Excel', 'SAP', 'SQL', 'AWS', 'Machine learning', 'Node.js', 'C#', '机器学习']) expect(isAmbiguousAbbreviation(name), name).toBe(false);
+    // One sentence at a time (what the keyword check may quote).
+    const vocabulary = currentVocabulary();
+    expect(textShowsSkill(vocabulary, 'machine_learning', 'Administered 500 ml of saline per shift.', ['Machine learning'])).toBe(false);
+    expect(textShowsSkill(vocabulary, 'machine_learning', 'Shipped ML models to production.', ['ML'])).toBe(true);
+    expect(textShowsSkill(vocabulary, 'machine_learning', 'Three years of machine learning.', ['Machine learning'])).toBe(true);
+    expect(textShowsSkill(vocabulary, 'go', 'Wrote services in Go.', ['Golang'])).toBe(true);
+    expect(textShowsSkill(vocabulary, 'cpa', 'Cut CPA by 20% across paid social.', ['CPA'])).toBe(false);
+  });
+
+  it('the person\'s canonical skills: listed skills and reviewed skills the resume text names; computed once per person', () => {
+    const user = matchUser({ skills: ['Postgres', 'k8s', 'Vertex AI'], resumeTextNorm: normalizeText('Trained models; 熟悉机器学习。') });
+    const ids = userSkillIdSet(user);
+    expect([...ids].sort()).toEqual(['kubernetes', 'machine_learning', 'postgresql', 'vertex_ai']);
+    expect(userSkillIdSet(user)).toBe(ids);
+    // Another vocabulary is another answer for the same person.
+    setVocabularyForTests([skillRecord('postgresql', 'PostgreSQL', { aliases: ['postgres'] })]);
+    expect([...userSkillIdSet(user)]).toEqual(['postgresql']);
+  });
+
+  it('labels follow the reader: the request language, else the posting\'s; Taiwan never gets a Simplified label', () => {
+    const job = posting([
+      { skill: 'machine learning', skillId: 'machine_learning', required: true },
+      { skill: 'cpa', skillId: 'cpa', required: true },
+      { skill: 'postgres', skillId: 'postgresql', required: true },
+    ]);
+    expect(jobSkillList(job, 'en').map((s) => s.skill)).toEqual(['Machine learning', 'CPA', 'PostgreSQL']);
+    expect(jobSkillList(job, 'zh').map((s) => s.skill)).toEqual(['机器学习', '注册会计师', 'PostgreSQL']);
+    // CPA has no Traditional label: Taiwan reads the English one, never 注册会计师.
+    expect(jobSkillList(job, 'zh-TW').map((s) => s.skill)).toEqual(['機器學習', 'CPA', 'PostgreSQL']);
+    expect(jobSkillList(job, 'zh-HK').map((s) => s.skill)).toEqual(['機器學習', 'CPA', 'PostgreSQL']);
+    // With no request language: the posting's own, else the market's.
+    expect(labelLocaleFor(matchJob({ lang: 'zh-TW' }))).toBe('zh-TW');
+    expect(labelLocaleFor(matchJob({ market: 'cn' }))).toBe('zh');
+    expect(labelLocaleFor(matchJob())).toBe('en');
+    expect(labelLocaleFor(matchJob({ market: 'cn', lang: 'en' }), { locale: 'zh-TW' })).toBe('zh-TW');
+    expect(jobSkillList({ ...job, lang: 'zh-TW' }).map((s) => s.skill)).toEqual(['機器學習', 'CPA', 'PostgreSQL']);
+    expect(jobSkillList({ ...job, market: 'cn' }).map((s) => s.skill)).toEqual(['机器学习', '注册会计师', 'PostgreSQL']);
+    // RAJob.lang as the column holds it: 'en', 'zh-Hans', 'zh-Hant', 'ja', 'ko', 'other'.
+    expect(jobSkillList({ ...job, lang: 'zh-Hans' }).map((s) => s.skill)).toEqual(['机器学习', '注册会计师', 'PostgreSQL']);
+    expect(jobSkillList({ ...job, lang: 'zh-Hant' }).map((s) => s.skill)).toEqual(['機器學習', 'CPA', 'PostgreSQL']);
+    expect(jobSkillList({ ...job, market: 'cn', lang: 'en' }).map((s) => s.skill)).toEqual(['Machine learning', 'CPA', 'PostgreSQL']);
+    // 'other' (a short or mixed text), 'ja' and 'ko' name no language a label exists in: the market decides.
+    for (const lang of ['other', 'ja', 'ko', 'fr', '']) {
+      expect(labelLocaleFor(matchJob({ market: 'cn', lang })), lang).toBe('zh');
+      expect(labelLocaleFor(matchJob({ market: 'intl', lang })), lang).toBe('en');
+    }
+    expect(jobSkillList({ ...job, market: 'cn', lang: 'other' }).map((s) => s.skill)).toEqual(['机器学习', '注册会计师', 'PostgreSQL']);
+    // The card's overlap and gap carry the same label, once.
+    const tw = preScore(matchUser({ skills: ['機器學習'], locale: 'zh-TW' }), job, CFG);
+    expect(tw).toMatchObject({ topOverlap: '機器學習', topGap: 'CPA' });
+    // An empty label means "show the posting's own string": an unreviewed skill written in Simplified, read in Taiwan.
+    setVocabularyForTests([...FIXTURE_SKILLS, skillRecord('飞书', '飞书', { labelZh: '飞书', status: 'unreviewed' }), skillRecord('data_lake', 'Data lake', { labelZh: '数据湖' })]);
+    const own = posting([
+      { skill: '数据湖', skillId: 'data_lake' },
+      { skill: '飞书', skillId: '飞书' },
+    ]);
+    expect(jobSkillList(own, 'zh-TW').map((s) => s.skill)).toEqual(['Data lake', '飞书']);
+  });
+
+  it('ACCEPT: a posting with empty skillIds is compared by its strings: the estimate MKT-1F computed, under any vocabulary', () => {
+    // The same strings, once without ids and once with: only the second reads the vocabulary.
+    const strings = ['relational databases', 'postgres', 'postgresql', 'kubernetes'];
+    const legacy = matchJob({ skills: strings, skillsDetail: strings.map((skill) => ({ skill, kind: 'hard', required: true })) });
+    const user = matchUser({ skills: ['PostgreSQL'], resumeTextNorm: null });
+    expect(carriesSkillIds(legacy)).toBe(false);
+    expect(jobSkillList(legacy).map((s) => [s.skill, s.skillId])).toEqual([
+      ['Relational databases', null],
+      ['Postgres', null],
+      ['PostgreSQL', null],
+      ['Kubernetes', null],
+    ]);
+    // The string rule: "relational databases" is shown by PostgreSQL (whole weight), "postgres" is another string.
+    expect(skillsDimension(user, legacy, W).score).toBe(50);
+    // With ids: one PostgreSQL (shown), relational databases related (half), Kubernetes not shown: 1.5 / 3.
+    const enriched = matchJob({
+      skills: strings,
+      skillsDetail: [
+        { skill: 'relational databases', kind: 'hard', required: true, skillId: 'relational_databases' },
+        { skill: 'postgresql', kind: 'hard', required: true, skillId: 'postgresql' },
+        { skill: 'kubernetes', kind: 'hard', required: true, skillId: 'kubernetes' },
+      ],
+      skillIds: ['relational_databases', 'postgresql', 'kubernetes'],
+    });
+    expect(carriesSkillIds(enriched)).toBe(true);
+    expect(skillsDimension(user, enriched, W).score).toBe(50);
+    expect(jobSkillList(enriched)).toHaveLength(3);
+    // The vocabulary does not move a posting without ids: any vocabulary, the same estimate, number and words.
+    const whole = (r: ReturnType<typeof preScore>) => ({ score: r.score, tier: r.tier, coverage: r.coverage, confidence: r.confidence, limit: r.limit, dimensions: r.dimensions, topOverlap: r.topOverlap, topGap: r.topGap, softSkills: r.softSkills });
+    const before = whole(preScore(user, legacy, CFG));
+    expect(before.dimensions.find((d) => d.key === 'skills')).toMatchObject({ score: 50, status: 'scored' });
+    // What the string rule says: "Postgres" is another string than PostgreSQL, and the card says what the number counted.
+    expect(before).toMatchObject({ topOverlap: 'Relational databases', topGap: 'Postgres' });
+    const split = splitSkills(user, legacy);
+    setVocabularyForTests([]);
+    expect(whole(preScore(user, legacy, CFG))).toEqual(before);
+    expect(splitSkills(user, legacy)).toEqual(split);
+    resetVocabularyForTests();
+    expect(whole(preScore(user, legacy, CFG))).toEqual(before);
+    expect(splitSkills(user, legacy)).toEqual(split);
+  });
+
+  it('a skill without an id: one answer for the number, its evidence and the card; the keyword check and a bare term also read the vocabulary', () => {
+    // The resume says 机器学习; the posting, not yet re-enriched, says "machine learning".
+    const job = matchJob({ skills: ['machine learning', 'kubernetes'], skillsDetail: null });
+    const user = matchUser({ skills: ['机器学习'], resumeTextNorm: null });
+    // Counted as before: neither string is on the resume. The card says what the number counted.
+    expect(skillsDimension(user, job, W)).toMatchObject({ score: 0, evidence: [{ text: 'Machine learning', source: 'posting', ref: 'skill_missing' }] });
+    expect(splitSkills(user, job)).toMatchObject({ aligned: [], missing: ['Machine learning', 'Kubernetes'], unchecked: [] });
+    expect(preScore(user, job, CFG)).toMatchObject({ topOverlap: null, topGap: 'Machine learning' });
+    for (const s of jobSkillList(job)) expect(jobSkillCheck(user, s, { locale: 'en' })).toEqual({ state: 'not_shown', via: null, credit: 0 });
+
+    // A posting that asks for "k8s" and "ReactJS" of a person who lists Kubernetes and React: 0 / 100 and no line that
+    // says the resume mentions them. (Re-enriched, the same posting carries ids and scores 100.)
+    const short = matchJob({ skills: ['k8s', 'ReactJS'], skillsDetail: [{ skill: 'k8s', kind: 'hard', required: true }, { skill: 'ReactJS', kind: 'hard', required: true }] });
+    const listed = matchUser({ skills: ['Kubernetes', 'React'], resumeTextNorm: null });
+    const part = skillsDimension(listed, short, W);
+    expect(part.score).toBe(0);
+    expect(part.evidence.map((e) => e.ref)).toEqual(['skill_missing']);
+    expect(splitSkills(listed, short)).toMatchObject({ aligned: [], missing: ['K8s', 'ReactJS'] });
+    expect(preScore(listed, short, CFG)).toMatchObject({ topOverlap: null, topGap: 'K8s' });
+    const enriched = matchJob({
+      skills: ['k8s', 'reactjs'],
+      skillsDetail: [
+        { skill: 'k8s', kind: 'hard', required: true, skillId: 'kubernetes', via: 'alias' },
+        { skill: 'reactjs', kind: 'hard', required: true, skillId: 'react', via: 'alias' },
+      ],
+      skillIds: ['kubernetes', 'react'],
+    });
+    expect(skillsDimension(listed, enriched, W).score).toBe(100);
+    expect(splitSkills(listed, enriched)).toMatchObject({ aligned: ['Kubernetes', 'React'], missing: [] });
+
+    // The keyword check may say more than the string rule: it must not tell a person they lack what they list under
+    // another name. So may a bare term (a term the model picked, a skill of the competitiveness report).
+    const row = buildKeywordRows({ job: { ...short, minYears: null }, user: listed, resumeText: '', keywords: null }).find((r) => r.key === 'skills')!;
+    expect(row.items.map((i) => [i.term, i.state])).toEqual([
+      ['Kubernetes', 'shown'],
+      ['React', 'shown'],
+    ]);
+    expect(listedSkillCheck(user, 'machine learning', 'machine_learning')).toEqual({ state: 'shown', via: null });
+    expect(termCheck(user, 'machine learning')).toEqual({ state: 'shown', via: null });
+    expect(userShows(user, 'ML')).toBe(true);
+    expect(userShows(user, 'Kubernetes')).toBe(false);
+    // A soft skill and a skill nobody has reviewed are never answered by the vocabulary for a bare term.
+    expect(termCheck(matchUser({ skills: ['Communication skills'] }), 'communication').state).toBe('not_shown');
+    expect(termCheck(matchUser({ skills: ['Vertex AI'] }), 'vertex ai').state).toBe('shown');
+    expect(termCheck(matchUser({ skills: [] }), 'vertex ai').state).toBe('not_shown');
+    // A trace with another reading: the keyword check says nothing, a yes-or-no caller gets no.
+    const nurse = matchUser({ skills: [], resumeTextNorm: normalizeText('Administered 500 ml of saline per shift.') });
+    expect(listedSkillCheck(nurse, 'machine learning', 'machine_learning').state).toBe('unscored');
+    expect(termCheck(nurse, 'machine learning').state).toBe('not_shown');
+    expect(userShows(nurse, 'machine learning')).toBe(false);
   });
 });
 

@@ -16,9 +16,24 @@
 //                A stated degree requirement (and, on GoApply, a stated 届别)
 //                the person does not meet halves it. School tier is NEVER an
 //                input (C15); an age limit in a posting is never read.
-//   skills       hard skills only: Σ weight shown / Σ weight listed over the
-//                first 10 (required 1, preferred 0.5). Soft skills are shown
-//                and never counted.
+//   skills       hard canonical skills only: Σ weight × credit / Σ weight over
+//                the first 10 (required 1, preferred 0.5). A posting written
+//                by enrichment v3 carries a canonical skill id per skill
+//                (features/skills): the person's own ids decide, shown counts
+//                the whole weight, a more specific skill that shows a broader
+//                one (PostgreSQL for "relational databases") counts half, and
+//                a skill nobody has reviewed is shown and never counted. Such
+//                a posting's `skillsDetail` is its list of skills, one entry
+//                per skill; `skills` keeps every spelling for search, and a
+//                second spelling is never a second skill. A skill with no id
+//                (every skill of a posting that has not been re-enriched, and
+//                a string enrichment could not map) is compared by its
+//                string, exactly as before (terms.ts): the number, its
+//                evidence lines and the card's overlap and gap of such a
+//                posting do not move until it is re-enriched. A reviewed
+//                skill whose only trace in the resume is an abbreviation with
+//                another reading ("500 ml" for Machine learning) is neither
+//                claimed nor denied. Soft skills are shown and never counted.
 //   industry     the employer's industries ∩ the person's past employers' industries
 //   logistics    location / pay / visa, each met | not met | not stated. A
 //                location or pay check that is met only because the saved
@@ -69,6 +84,7 @@ import {
   type MatchTiers,
   type MatchWeights,
 } from './contract.js';
+import { EVERYDAY_WORDS, aliasKey, current as currentVocabulary, evidenceFor, isListOnlyWord, skillIdsInText, userSkillIds, type SkillSnapshot } from '../skills/index.js';
 import { tierFor } from './config.js';
 import { dedupeTerms, displayTerm, isEverydayWord, showingTerms, termKey, termParts, titleShows } from './terms.js';
 
@@ -91,8 +107,28 @@ export interface MatchJob {
   primaryTaxonomyId: string | null;
   seniority: string | null;
   skills: string[];
-  /** `[{ skill, kind, required }]` from enrichment. */
-  skillsDetail: Array<{ skill: string; kind?: string; required: boolean }> | null;
+  /**
+   * `[{ skill, kind, required, skillId, via }]` from enrichment. `skillId` is
+   * the canonical skill (RASkill) enrichment v3 mapped the string to; absent
+   * or null on a row it has not written yet. `via` says how the id was found
+   * when enrichment stores it: `embedding` is a machine guess (the nearest
+   * skill by vector), not a name the vocabulary knows.
+   */
+  skillsDetail: Array<{ skill: string; kind?: string; required: boolean; skillId?: string | null; via?: string | null }> | null;
+  /**
+   * RAJob.skillIds: the canonical ids of the posting's hard skills and
+   * certificates. Empty or absent on a row enrichment v3 has not written yet:
+   * such a posting is compared by its strings.
+   */
+  skillIds?: string[];
+  /**
+   * RAJob.lang, the language of the posting's text when it is known: 'en',
+   * 'zh-Hans', 'zh-Hant', 'ja', 'ko' or 'other' (features/retrieval/lang.ts).
+   * An English or Chinese posting is labelled in its own language when the
+   * reader's is not known (`labelLocaleFor`); any other value says nothing
+   * about labels, which exist in English and two Chinese scripts only.
+   */
+  lang?: string | null;
   educationLevel: DegreeLevel | null;
   workModel: string | null;
   remoteScope: string | null;
@@ -167,6 +203,11 @@ export interface MatchUser {
    * resume body mentions it — the same rule as the keyword check.
    */
   resumeTextNorm?: string | null;
+  /**
+   * The language this request reads skill labels in ('en', 'zh', 'zh-TW', …).
+   * Absent: the posting's own language, else the market's (`labelLocaleFor`).
+   */
+  locale?: string | null;
   /** Industries of the user's past employers, from our company records. */
   employerIndustries: string[];
   locations: FilterLocation[];
@@ -208,18 +249,27 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * A letter or digit that continues a word written with spaces. A Chinese,
+ * Japanese or Korean character does not: those scripts write no spaces, so
+ * "使用Go开发" names Go and "熟悉Java和Python" names both.
+ */
+const WORD_CHAR = String.raw`(?:(?![\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}])[\p{L}\p{N}])`;
+
 /** Does `textNorm` (normalized) mention `term`? Whole word for Latin terms, substring otherwise. */
 export function mentions(textNorm: string, term: string): boolean {
   const t = normalizeText(term).trim();
-  if (!t) return false;
+  // The term's own characters must be in the text for either rule to find it: most skills of a posting are not in a
+  // given resume, and this answers for them without building a pattern.
+  if (!t || !textNorm.includes(t)) return false;
   if (/^[\p{Script=Latin}\p{N}\s.+#/&'-]+$/u.test(t)) {
-    return new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(t)}(?![\\p{L}\\p{N}+#])`, 'u').test(textNorm);
+    return new RegExp(`(?<!${WORD_CHAR})${escapeRegExp(t)}(?!${WORD_CHAR}|[+#])`, 'u').test(textNorm);
   }
-  return textNorm.includes(t);
+  return true;
 }
 
 /** What the check reads about the user: their skills, the resume text, and (for a practice a title shows) the latest title. */
-export type ShownSource = Pick<MatchUser, 'skills' | 'resumeTextNorm'> & { recentTitle?: string | null };
+export type ShownSource = Pick<MatchUser, 'skills' | 'resumeTextNorm'> & { recentTitle?: string | null; locale?: string | null };
 
 /** The term itself, or its singular / plural ("REST APIs" on the post, "REST API" on the resume). */
 function spellings(term: string): string[] {
@@ -276,13 +326,17 @@ export function shownVia(user: ShownSource, term: string, skillSet?: Set<string>
 }
 
 /**
- * Does the user show `term`? Their skill list (profile ∪ parsed resume), a
- * whole-word mention in the resume text, or a named technology that shows it
- * (`shownVia`). One rule for the score, the fit card and the keyword check,
- * so they never disagree about the same skill.
+ * Does the user show the bare `term` (a term the model picked, a skill of the
+ * competitiveness report)? Their skill list (profile ∪ parsed resume), a
+ * whole-word mention in the resume text, a named technology that shows it
+ * (`shownVia`), or, when the vocabulary knows the term as a reviewed skill,
+ * the person's canonical skills (`termCheck`). A skill of a posting is asked
+ * through `jobSkillCheck` (the number and the card) and `listedSkillCheck`
+ * (the keyword check).
  */
 export function userShows(user: ShownSource, term: string, skillSet?: Set<string>): boolean {
-  return shownVia(user, term, skillSet).shown;
+  const state = termCheck(user, term, { skillSet }).state;
+  return state === 'shown' || state === 'related';
 }
 
 function uniqueBy<T>(items: T[], key: (t: T) => string): T[] {
@@ -483,80 +537,606 @@ export function titleLevelDimension(user: MatchUser, job: MatchJob, weights: Mat
 
 // ── skills ────────────────────────────────────────────────────────────────
 
+/**
+ * One skill a posting asks for.
+ *
+ * `skillId` is the canonical skill the posting's own record carries
+ * (enrichment v3 writes it into `skillsDetail`), resolved through the
+ * vocabulary so an id that was merged into another skill is that skill. It is
+ * null on a posting that has not been re-enriched: nothing here looks a string
+ * up to make one, so such a posting keeps the number it had. (A string is
+ * looked up only to find which stored entry it is another spelling of.)
+ */
 export interface JobSkill {
+  /**
+   * As it is shown: the vocabulary's label in the reader's language when the
+   * skill is reviewed, else the posting's own string in its usual spelling.
+   */
   skill: string;
+  skillId: string | null;
   required: boolean;
-  /** `soft` only when enrichment marked it so (`skillsDetail.kind`); a skill with no detail entry counts as hard. */
+  /** `soft`: shown, never compared. A certificate is compared like a hard skill. */
   kind: 'hard' | 'soft';
+  /** The posting's own string for it (the first when it lists the skill under two spellings). */
+  term: string;
+  /** Every other string the posting writes the skill as ("postgres" next to "PostgreSQL"). Absent when there is none. */
+  also?: string[];
+  /**
+   * The id is a machine guess: every spelling of the skill reached it through
+   * the nearest vector (`via: 'embedding'`), none through a name the
+   * vocabulary knows. A guessed skill is shown and never compared: nothing may
+   * say "not in your resume" about a skill nobody matched by name.
+   */
+  guessed?: boolean;
+}
+
+/** Every string the posting writes a skill as, its own first. */
+export function postingStringsOf(skill: Pick<JobSkill, 'term' | 'also'>): string[] {
+  return skill.also?.length ? [skill.term, ...skill.also] : [skill.term];
+}
+
+/** How enrichment says an id was found by the nearest vector (features/skills `CanonicalSkill.via`). */
+export const SKILL_VIA_EMBEDDING = 'embedding';
+
+type SkillDetailEntry = NonNullable<MatchJob['skillsDetail']>[number];
+const hasSkillId = (s: SkillDetailEntry | null | undefined): boolean => !!s && typeof s.skillId === 'string' && !!s.skillId.trim();
+
+/**
+ * Does the posting's record carry canonical skill ids (written by enrichment
+ * v3)? When not, every skill of it is compared by its string. The keyword
+ * check reads this to decide what it lists.
+ */
+export function carriesSkillIds(job: Pick<MatchJob, 'skillIds' | 'skillsDetail'>): boolean {
+  if (job.skillIds?.some((id) => typeof id === 'string' && id.trim())) return true;
+  return !!job.skillsDetail?.some(hasSkillId);
 }
 
 /**
- * The posting's skills, required ones first, one entry per thing and in the
- * spelling a reader expects (terms.ts: "typescript/node.js" is dropped next
- * to "TypeScript" and "Node.js"; "go" is written "Go").
+ * The language skill labels are written in: the request's when the caller
+ * knows it, else the posting's own when it is English or Chinese (a
+ * Traditional Chinese posting is labelled in Traditional Chinese whoever
+ * reads it), else the market's. `RAJob.lang` also holds 'ja', 'ko' and
+ * 'other' (a short or mixed text): none of them names a language a label
+ * exists in, so the market decides. Taiwan never gets a Simplified label: the
+ * vocabulary answers the Traditional one or the English one (features/skills
+ * `label`).
  */
-export function jobSkillList(job: MatchJob): JobSkill[] {
+export function labelLocaleFor(job: Pick<MatchJob, 'market' | 'lang'>, user?: Pick<ShownSource, 'locale'> | null): string {
+  const own = user?.locale?.trim();
+  if (own) return own;
+  const lang = job.lang?.trim() ?? '';
+  if (/^(en|zh)(-|$)/i.test(lang)) return lang;
+  return job.market === 'cn' ? 'zh' : 'en';
+}
+
+/** The id as the vocabulary holds it now: itself, or the skill an older id was merged into. */
+function canonicalSkillId(vocabulary: SkillSnapshot, id: string): string {
+  if (vocabulary.kindOf(id) !== null) return id;
+  return vocabulary.idOf(id) ?? id;
+}
+
+/** What a memo of a job's skills was computed from: the same arrays, of the same length (an edit of either starts over). */
+interface JobSkillInputs {
+  vocabulary: SkillSnapshot;
+  skills: readonly string[];
+  skillsLength: number;
+  detail: MatchJob['skillsDetail'];
+  detailLength: number;
+  skillIds: MatchJob['skillIds'];
+}
+const jobInputs = (job: MatchJob, vocabulary: SkillSnapshot): JobSkillInputs => ({
+  vocabulary,
+  skills: job.skills,
+  skillsLength: job.skills.length,
+  detail: job.skillsDetail,
+  detailLength: job.skillsDetail?.length ?? 0,
+  skillIds: job.skillIds,
+});
+const sameJobInputs = (a: JobSkillInputs, b: JobSkillInputs): boolean =>
+  a.vocabulary === b.vocabulary && a.skills === b.skills && a.skillsLength === b.skillsLength && a.detail === b.detail && a.detailLength === b.detailLength && a.skillIds === b.skillIds;
+
+interface JobSkillCache {
+  inputs: JobSkillInputs;
+  byLocale: Map<string, JobSkill[]>;
+}
+const JOB_SKILLS = new WeakMap<object, JobSkillCache>();
+
+/**
+ * The posting's skills, required ones first, one entry per thing and in the
+ * spelling a reader expects.
+ *
+ *   · A posting written by enrichment v3 (its `skillsDetail` carries ids):
+ *     `skillsDetail` IS the list, one entry per skill, and `skills` holds
+ *     every spelling for search. A string of `skills` with no entry of its own
+ *     is another spelling of one of them ("postgres" next to the PostgreSQL
+ *     entry, "communication skills" next to the soft Communication entry): it
+ *     joins the entry whose skill the vocabulary says it names, and is never a
+ *     skill of its own.
+ *   · A skill listed twice under one canonical id ("Postgres", "PostgreSQL")
+ *     is one entry, labelled with the vocabulary's label for `locale`.
+ *   · Strings without an id are de-duplicated as before (terms.ts:
+ *     "typescript/node.js" is dropped next to "TypeScript" and "Node.js";
+ *     "go" is written "Go").
+ *
+ * For a posting that carries no ids the list is what it always was.
+ */
+export function jobSkillList(job: MatchJob, locale?: string | null): JobSkill[] {
+  const vocabulary = currentVocabulary();
+  const lang = locale?.trim() || labelLocaleFor(job);
+  const inputs = jobInputs(job, vocabulary);
+  let cache = JOB_SKILLS.get(job);
+  if (!cache || !sameJobInputs(cache.inputs, inputs)) {
+    cache = { inputs, byLocale: new Map() };
+    JOB_SKILLS.set(job, cache);
+  }
+  const hit = cache.byLocale.get(lang);
+  if (hit) return [...hit];
+
   const detail = (job.skillsDetail ?? []).filter((s) => s && typeof s.skill === 'string' && s.skill.trim());
   const kindOf = new Map<string, JobSkill['kind']>();
+  const idOf = new Map<string, string>();
+  const guessedKeys = new Set<string>();
   for (const s of detail) {
     const key = skillKey(s.skill);
     if (!kindOf.has(key)) kindOf.set(key, s.kind === 'soft' ? 'soft' : 'hard');
+    if (!idOf.has(key) && hasSkillId(s)) {
+      idOf.set(key, canonicalSkillId(vocabulary, s.skillId!.trim()));
+      if (s.via === SKILL_VIA_EMBEDDING) guessedKeys.add(key);
+    }
   }
-  const kind = (skill: string): JobSkill['kind'] => kindOf.get(skillKey(skill)) ?? 'hard';
-  const fromDetail = detail.map((s) => ({ skill: s.skill.trim(), required: s.required === true, kind: kind(s.skill) }));
-  const fromList = job.skills.filter((s) => typeof s === 'string' && s.trim()).map((s) => ({ skill: s.trim(), required: false, kind: kind(s) }));
-  const merged = uniqueBy([...fromDetail.filter((s) => s.required), ...fromDetail, ...fromList], (s) => skillKey(s.skill));
-  return dedupeTerms(merged, (s) => s.skill).map((s) => ({ skill: displayTerm(s.skill), required: s.required, kind: s.kind }));
+  const entry = (skill: string, required: boolean) => ({
+    term: skill.trim(),
+    required,
+    kind: kindOf.get(skillKey(skill)) ?? ('hard' as JobSkill['kind']),
+    skillId: idOf.get(skillKey(skill)) ?? null,
+    guessed: guessedKeys.has(skillKey(skill)),
+  });
+  const fromDetail = detail.map((s) => entry(s.skill, s.required === true));
+  const listed = job.skills.filter((s) => typeof s === 'string' && s.trim());
+  // Enrichment v3 writes one `skillsDetail` entry per skill and keeps every spelling in `skills`: there the detail is
+  // the list. Without ids in the detail (a posting not yet re-enriched) every string of `skills` is a skill, as before.
+  const detailIsList = idOf.size > 0;
+  const fromList = detailIsList ? [] : listed.map((s) => entry(s, false));
+  const merged = uniqueBy([...fromDetail.filter((s) => s.required), ...fromDetail, ...fromList], (s) => skillKey(s.term));
+
+  const out: JobSkill[] = [];
+  const byId = new Map<string, JobSkill>();
+  // The vocabulary's label for a reviewed skill; an empty label means "show the posting's own string" (features/skills `label`).
+  const labelOf = (id: string, term: string): string => vocabulary.label(id, lang) || displayTerm(term);
+  /** One more spelling of a skill already listed. `named`: the vocabulary knows the spelling as a name of the skill. */
+  const addSpelling = (twin: JobSkill, spelling: string, named: boolean): void => {
+    const known = new Set(postingStringsOf(twin).map(skillKey));
+    if (!known.has(skillKey(spelling))) twin.also = [...(twin.also ?? []), spelling.trim()];
+    // A guess only while no spelling is a name the vocabulary knows.
+    if (twin.guessed && named) {
+      delete twin.guessed;
+      if (vocabulary.reviewed(twin.skillId!)) twin.skill = labelOf(twin.skillId!, spelling);
+    }
+  };
+  for (const s of dedupeTerms(merged, (x) => x.term)) {
+    const twin = s.skillId ? byId.get(s.skillId) : undefined;
+    if (twin) {
+      // The same skill under another spelling: one entry, required when either spelling is.
+      twin.required ||= s.required;
+      addSpelling(twin, s.term, !s.guessed);
+      continue;
+    }
+    const reviewed = !!s.skillId && vocabulary.reviewed(s.skillId);
+    const item: JobSkill = {
+      // A guess keeps the posting's own words: the label of the guessed skill would state the guess as a fact.
+      skill: reviewed && !s.guessed ? labelOf(s.skillId!, s.term) : displayTerm(s.term),
+      skillId: s.skillId,
+      required: s.required,
+      // The vocabulary's kind wins for a reviewed skill; a certificate is compared like a hard skill.
+      kind: reviewed ? (vocabulary.kindOf(s.skillId!) === 'soft' ? 'soft' : 'hard') : s.kind,
+      term: s.term,
+      ...(s.guessed ? { guessed: true } : {}),
+    };
+    if (s.skillId) byId.set(s.skillId, item);
+    out.push(item);
+  }
+  if (detailIsList) {
+    // The other spellings `skills` keeps. One the vocabulary cannot place on an entry stays out: enrichment stored it
+    // as a spelling of one of them, and counting it again would ask for the same skill twice.
+    const own = new Set(detail.map((s) => skillKey(s.skill)));
+    for (const spelling of listed) {
+      if (own.has(skillKey(spelling))) continue;
+      const id = vocabulary.idOf(spelling);
+      const twin = id ? byId.get(id) : undefined;
+      if (twin) addSpelling(twin, spelling, true);
+    }
+  }
+  cache.byLocale.set(lang, out);
+  return [...out];
 }
 
-/** The skills that are compared and counted: everything the posting lists that is not a soft skill. */
-export function hardSkillList(job: MatchJob): JobSkill[] {
-  return jobSkillList(job).filter((s) => s.kind !== 'soft');
+/** The skills that are shown as asked for: everything the posting lists that is not a soft skill (reviewed or not). */
+export function hardSkillList(job: MatchJob, locale?: string | null): JobSkill[] {
+  return jobSkillList(job, locale).filter((s) => s.kind !== 'soft');
 }
 
 /** Hard skills counted by the number: the first this many, required ones first. */
 export const SKILLS_COUNTED_MAX = 10;
 const skillWeight = (s: Pick<JobSkill, 'required'>): number => (s.required ? 1 : 0.5);
+/** A more specific skill that shows the broader one the posting asks for counts this share of the skill's weight. */
+export const RELATED_SKILL_CREDIT = 0.5;
+
+// ── What the person's record says about a skill ───────────────────────────
 
 /**
- * The posting's hard skills the person shows and the ones they do not, plus
- * the soft skills it names (`softSkills`: shown on the card, never compared
- * and never part of the number).
+ * `unscored`: nothing is claimed and nothing is denied. A skill nobody has
+ * reviewed, or a reviewed one whose only trace in the resume is a word with
+ * another reading ("CPA" as cost per acquisition, "ml" as millilitres).
  */
-export function splitSkills(user: MatchUser, job: MatchJob): { aligned: string[]; missing: string[]; missingRequired: string[]; softSkills: string[] } {
-  const have = new Set(user.skills.map(skillKey));
-  const aligned: string[] = [];
-  const missing: string[] = [];
-  const missingRequired: string[] = [];
-  const softSkills: string[] = [];
-  for (const s of jobSkillList(job)) {
-    if (s.kind === 'soft') softSkills.push(s.skill);
-    else if (userShows(user, s.skill, have)) aligned.push(s.skill);
-    else {
-      missing.push(s.skill);
-      if (s.required) missingRequired.push(s.skill);
-    }
-  }
-  return { aligned, missing, missingRequired, softSkills };
+export type SkillState = 'shown' | 'related' | 'not_shown' | 'unscored';
+
+export interface SkillCheck {
+  state: SkillState;
+  /** For `related`: what the person shows that counted, as a label (a skill, or the title that shows the practice). */
+  via: string | null;
+}
+
+const SHOWN: SkillCheck = { state: 'shown', via: null };
+const NOT_SHOWN: SkillCheck = { state: 'not_shown', via: null };
+const UNSCORED: SkillCheck = { state: 'unscored', via: null };
+
+/** The keys of terms.ts EVERYDAY_WORDS ("rails" and "rail" are one key). */
+const EVERYDAY_KEYS: ReadonlySet<string> = new Set([...EVERYDAY_WORDS].map((w) => termKey(w)));
+
+/**
+ * Is this name of a skill an abbreviation with another reading (features/skills
+ * keys.ts: ML, PS, node, TS, AI, CPA, or three letters or fewer that nobody has
+ * cleared)? A sentence that holds one ("500 ml of saline", "PS: available at
+ * once", "a 5-node cluster") says nothing about the skill. A full word that is
+ * also an ordinary one (Go, React, Excel) is not an abbreviation: the string
+ * rule always read it from a sentence, and so does this one.
+ */
+export function isAmbiguousAbbreviation(name: string): boolean {
+  const w = name.normalize('NFKC').trim().toLowerCase();
+  if (!w || isEverydayWord(w) || EVERYDAY_KEYS.has(aliasKey(w))) return false;
+  return isListOnlyWord(w);
 }
 
 /**
- * 100 × Σ weight shown / Σ weight listed, over the first 10 hard skills
- * (required 1, preferred 0.5). Not stated when the posting lists no hard skill.
+ * How a text names a skill that a plain reading of it does not find: under
+ * names that are also something else.
+ */
+export interface AmbiguousTrace {
+  /** A name that is no abbreviation is among them: a full word with another reading ("Go"), or a spelling the scan reads differently ("C#"). */
+  word: boolean;
+  /** The abbreviations with another reading the text holds, as comparison keys ("ml", "ps", "node"). */
+  abbreviations: ReadonlySet<string>;
+}
+
+/** The names the vocabulary has for `id` that the text writes (whole word; substring for Chinese). */
+function namesInText(vocabulary: SkillSnapshot, id: string, textNorm: string): string[] {
+  const record = vocabulary.record(id);
+  if (!record) return [];
+  const out: string[] = [];
+  for (const name of [record.labelEn, record.labelZh, record.labelZhHant, ...record.aliases]) {
+    if (!name || [...name.trim()].length < 2) continue;
+    if (spellings(name).some((v) => mentions(textNorm, v))) out.push(name);
+  }
+  return out;
+}
+
+/** How `textNorm` (normalized) names the skill, each find confirmed by the name as it is written (`mentions`: "net revenue" is not .NET); null when it does not. */
+export function ambiguousTraceOf(vocabulary: SkillSnapshot, id: string, textNorm: string): AmbiguousTrace | null {
+  const names = namesInText(vocabulary, id, textNorm);
+  if (!names.length) return null;
+  const abbreviations = names.filter(isAmbiguousAbbreviation);
+  return { word: abbreviations.length < names.length, abbreviations: new Set(abbreviations.map(aliasKey)) };
+}
+
+/**
+ * Does such a trace show the skill, for a posting that writes the skill as
+ * `postingStrings`? A full word does. An abbreviation with another reading
+ * does only when the posting itself writes the skill that way (it asks for
+ * "ML" and the resume says "ML": what the string rule always counted).
+ */
+function traceShows(trace: AmbiguousTrace, postingStrings: readonly string[]): boolean {
+  return trace.word || postingStrings.some((s) => trace.abbreviations.has(aliasKey(s)));
+}
+
+/**
+ * Does this piece of text show the reviewed skill `id`, for a posting that
+ * writes it as `postingStrings`? The rule `jobSkillCheck` applies to the whole
+ * resume, for one sentence: the keyword check quotes only a sentence that
+ * passes it. A certificate is never shown by a word with another reading.
+ */
+export function textShowsSkill(vocabulary: SkillSnapshot, id: string, text: string, postingStrings: readonly string[]): boolean {
+  if (skillIdsInText(text, { vocabulary }).includes(id)) return true;
+  if (vocabulary.kindOf(id) === 'certification') return false;
+  const trace = ambiguousTraceOf(vocabulary, id, normalizeText(text));
+  return !!trace && traceShows(trace, postingStrings);
+}
+
+interface PersonSkills {
+  vocabulary: SkillSnapshot;
+  skills: readonly string[];
+  skillsLength: number;
+  text: string | null | undefined;
+  /** `userSkillIds`: listed skills, and reviewed skills the resume text names (an everyday word only from the list). */
+  ids: ReadonlySet<string>;
+  /** Skills the resume text names that `ids` leaves out because the name is also an ordinary word or a short abbreviation, with how it names them. */
+  traces: ReadonlyMap<string, AmbiguousTrace>;
+}
+const PERSON_SKILLS = new WeakMap<object, PersonSkills>();
+
+function personSkills(user: ShownSource): PersonSkills {
+  const vocabulary = currentVocabulary();
+  const hit = PERSON_SKILLS.get(user);
+  if (hit && hit.vocabulary === vocabulary && hit.skills === user.skills && hit.skillsLength === user.skills.length && hit.text === user.resumeTextNorm) return hit;
+  const text = user.resumeTextNorm;
+  const ids = new Set(userSkillIds(user.skills, text, vocabulary));
+  const traces = new Map<string, AmbiguousTrace>();
+  if (text) {
+    // The question "does the resume say X?" may read a name that is also an ordinary word ("built services in Go"),
+    // which a list of the person's skills must not collect. Each such find is confirmed by the name as it is
+    // written, the whole-word rule of `mentions`, so "net revenue" is not .NET.
+    for (const id of skillIdsInText(text, { vocabulary, listOnlyWords: true })) {
+      if (ids.has(id)) continue;
+      const trace = ambiguousTraceOf(vocabulary, id, text);
+      if (trace) traces.set(id, trace);
+    }
+  }
+  const made: PersonSkills = { vocabulary, skills: user.skills, skillsLength: user.skills.length, text, ids, traces };
+  PERSON_SKILLS.set(user, made);
+  return made;
+}
+
+/**
+ * The person's canonical skills: the ids of their listed skills plus every
+ * reviewed skill one of whose names appears as a whole word in the resume (a
+ * name that is also an everyday word counts from the skill list only).
+ * Computed once per person object and vocabulary.
+ */
+export function userSkillIdSet(user: ShownSource): ReadonlySet<string> {
+  return personSkills(user).ids;
+}
+
+/**
+ * What the person's canonical skills say about one reviewed skill, which the
+ * posting writes as `postingStrings`.
+ *
+ *   shown      the skill is among the person's ids, or the resume names it
+ *              under a full word that is also an ordinary one ("Go", "React",
+ *              "Excel": the string rule always read those), or under the very
+ *              abbreviation the posting writes;
+ *   related    a more specific skill of theirs shows it, or their title does;
+ *   unscored   none of that, and the resume holds a name of the skill with
+ *              another reading ("500 ml" for Machine learning, "Cut CPA by
+ *              20%" for the licence; a certificate is never shown by such a
+ *              word): neither claimed nor denied;
+ *   not_shown  no trace at all.
+ */
+function canonicalCheck(user: ShownSource, id: string, postingStrings: readonly string[], locale: string, vocabulary: SkillSnapshot): SkillCheck {
+  const person = personSkills(user);
+  if (person.ids.has(id)) return SHOWN;
+  const trace = person.traces.get(id);
+  if (trace && vocabulary.kindOf(id) !== 'certification' && traceShows(trace, postingStrings)) return SHOWN;
+  const evidence = evidenceFor(id, person.ids, vocabulary);
+  if (evidence.state === 'related' && evidence.via) return { state: 'related', via: vocabulary.label(evidence.via, locale) || vocabulary.label(evidence.via, 'en') || evidence.via };
+  if (evidence.state === 'unscored') return UNSCORED;
+  // A practice the person's own title shows ("software engineering" for a Software Engineer).
+  if (postingStrings.some((term) => titleShows(user.recentTitle, term))) return { state: 'related', via: user.recentTitle!.trim() };
+  return trace ? UNSCORED : NOT_SHOWN;
+}
+
+/** The string rule (terms.ts): named itself, or shown by a named technology or the title. */
+function literalCheck(user: ShownSource, term: string, skillSet?: Set<string>): SkillCheck {
+  const r = shownVia(user, term, skillSet);
+  if (!r.shown) return NOT_SHOWN;
+  return r.via ? { state: 'related', via: r.via } : SHOWN;
+}
+
+/**
+ * The better of the string rule's answer for `term` and, when the vocabulary
+ * holds `id` as a reviewed hard skill or certificate, what the person's
+ * canonical skills say about it. `unscored` only when neither finds the skill
+ * and the resume holds a name of it with another reading.
+ */
+function withVocabulary(user: ShownSource, term: string, literal: SkillCheck, id: string | null, locale?: string | null): SkillCheck {
+  if (literal.state === 'shown') return literal;
+  const vocabulary = currentVocabulary();
+  if (!id || !vocabulary.reviewed(id) || vocabulary.kindOf(id) === 'soft') return literal;
+  const canonical = canonicalCheck(user, id, [term], locale?.trim() || user.locale?.trim() || 'en', vocabulary);
+  if (canonical.state === 'shown') return canonical;
+  if (literal.state === 'related') return literal;
+  return canonical.state === 'not_shown' ? literal : canonical;
+}
+
+/**
+ * What the person's record says about a bare term (a model-picked keyword, a
+ * skill of the competitiveness report): the string rule first, then, when the
+ * vocabulary knows the term as a reviewed hard skill or certificate, the
+ * person's canonical skills. The better of the two answers: a term is never
+ * called not shown while either rule finds it. Never `unscored`: a caller that
+ * must answer yes or no gets `not_shown` for a trace with another reading.
+ */
+export function termCheck(user: ShownSource, term: string, options: { skillSet?: Set<string>; locale?: string | null } = {}): SkillCheck {
+  const check = withVocabulary(user, term, literalCheck(user, term, options.skillSet), currentVocabulary().idOf(term), options.locale);
+  return check.state === 'unscored' ? NOT_SHOWN : check;
+}
+
+/**
+ * What the keyword check says about a skill or keyword the posting's record
+ * carries no id for (a posting enrichment v3 has not written yet), which the
+ * vocabulary knows as `id` (null: it does not). The string rule, then the
+ * person's canonical skills: the check must not tell a person they lack a
+ * skill they list under its other name. This is wider than the number and the
+ * card of such a posting, which stay on the string rule (`jobSkillCheck`).
+ * `unscored`: nothing may be said (see `canonicalCheck`).
+ */
+export function listedSkillCheck(user: ShownSource, term: string, id: string | null, options: { skillSet?: Set<string>; locale?: string | null } = {}): SkillCheck {
+  return withVocabulary(user, term, literalCheck(user, term, options.skillSet), id, options.locale);
+}
+
+/** Is a skill that carries an id compared by it? A reviewed skill the vocabulary matched by name; never a guess. */
+function isCompared(skill: JobSkill, vocabulary: SkillSnapshot): skill is JobSkill & { skillId: string } {
+  return !!skill.skillId && !skill.guessed && vocabulary.reviewed(skill.skillId);
+}
+
+export interface JobSkillCheck extends SkillCheck {
+  /**
+   * The share of the skill's weight the number counts: 1, 0.5 or 0. Null when
+   * the skill is not counted at all (neither numerator nor denominator).
+   */
+  credit: number | null;
+}
+
+/**
+ * How one hard skill of a posting is compared: the state and the credit come
+ * from one answer, so the number, its evidence lines and the card never
+ * disagree about a skill. The skill's own record decides the rule:
+ *
+ *   a reviewed id       the person's canonical skills (`canonicalCheck`):
+ *                       shown 1, related 0.5, not shown 0; `unscored` (not
+ *                       counted) when the resume's only trace of the skill is
+ *                       a word with another reading;
+ *   any other id        `unscored`: a skill nobody has reviewed, an id the
+ *                       vocabulary does not hold and an id that is only a
+ *                       machine guess (`guessed`) are shown on the card and
+ *                       never counted;
+ *   no id               the string rule, exactly as before (shown, or shown
+ *                       by a named technology: 1; else 0), for the state and
+ *                       the credit alike. This is every skill of a posting
+ *                       that has not been re-enriched, and a string
+ *                       enrichment could not map: such a posting keeps the
+ *                       estimate it had, words and number. The vocabulary is
+ *                       not asked here; the keyword check asks it
+ *                       (`listedSkillCheck`).
+ */
+export function jobSkillCheck(user: ShownSource, skill: JobSkill, options: { locale: string; skillSet?: Set<string> }): JobSkillCheck {
+  if (skill.skillId) {
+    const vocabulary = currentVocabulary();
+    if (!isCompared(skill, vocabulary)) return { ...UNSCORED, credit: null };
+    const check = canonicalCheck(user, skill.skillId, postingStringsOf(skill), options.locale, vocabulary);
+    const credit = check.state === 'shown' ? 1 : check.state === 'related' ? RELATED_SKILL_CREDIT : check.state === 'not_shown' ? 0 : null;
+    return { ...check, credit };
+  }
+  const literal = literalCheck(user, skill.skill, options.skillSet);
+  return { ...literal, credit: literal.state === 'not_shown' ? 0 : 1 };
+}
+
+/** Is this skill part of the number? Never a soft skill; one that carries an id only when it is compared by it. */
+function isCounted(skill: JobSkill, vocabulary: SkillSnapshot): boolean {
+  if (skill.kind === 'soft') return false;
+  return !skill.skillId || isCompared(skill, vocabulary);
+}
+
+export interface SkillSplit {
+  /** Hard skills the person shows, the related ones included, in the posting's order. */
+  aligned: string[];
+  /** The part of `aligned` that is shown by a more specific skill or by the title, not by the skill itself. */
+  related: string[];
+  missing: string[];
+  missingRequired: string[];
+  /** Soft skills the posting names: shown on the card, never compared and never part of the number. */
+  softSkills: string[];
+  /**
+   * Skills nothing is said about, so neither aligned nor missing: one nobody
+   * has reviewed that the resume does not name, and a reviewed one whose only
+   * trace in the resume is a word with another reading.
+   */
+  unchecked: string[];
+}
+
+/** What a memo of a split was computed from; any other input starts over. */
+interface SplitInputs {
+  job: JobSkillInputs;
+  locale: string;
+  skills: readonly string[];
+  skillsLength: number;
+  text: string | null | undefined;
+  recentTitle: string | null | undefined;
+}
+const sameSplitInputs = (a: SplitInputs, b: SplitInputs): boolean =>
+  sameJobInputs(a.job, b.job) && a.locale === b.locale && a.skills === b.skills && a.skillsLength === b.skillsLength && a.text === b.text && a.recentTitle === b.recentTitle;
+
+const SPLITS = new WeakMap<object, WeakMap<object, { inputs: SplitInputs; split: SkillSplit }>>();
+
+const copySplit = (s: SkillSplit): SkillSplit => ({
+  aligned: [...s.aligned],
+  related: [...s.related],
+  missing: [...s.missing],
+  missingRequired: [...s.missingRequired],
+  softSkills: [...s.softSkills],
+  unchecked: [...s.unchecked],
+});
+
+/**
+ * The posting's hard skills the person shows and the ones they do not, plus
+ * the soft skills it names. Each skill is listed once, under its usual
+ * spelling, and by the answer that sets its share of the number
+ * (`jobSkillCheck`). A skill that is not compared by id (nobody has reviewed
+ * it, or its id is a guess) is `aligned` when the resume names its string and
+ * `unchecked` otherwise: nothing says "missing" about it. A reviewed skill the
+ * check withholds (a certificate behind "Cut CPA by 20%") is `unchecked`: the
+ * string rule may not claim what the check declined to.
+ */
+export function splitSkills(user: MatchUser, job: MatchJob): SkillSplit {
+  const vocabulary = currentVocabulary();
+  const locale = labelLocaleFor(job, user);
+  let perUser = SPLITS.get(job);
+  if (!perUser) {
+    perUser = new WeakMap();
+    SPLITS.set(job, perUser);
+  }
+  const inputs: SplitInputs = { job: jobInputs(job, vocabulary), locale, skills: user.skills, skillsLength: user.skills.length, text: user.resumeTextNorm, recentTitle: user.recentTitle };
+  const hit = perUser.get(user);
+  if (hit && sameSplitInputs(hit.inputs, inputs)) return copySplit(hit.split);
+
+  const have = new Set(user.skills.map(skillKey));
+  const split: SkillSplit = { aligned: [], related: [], missing: [], missingRequired: [], softSkills: [], unchecked: [] };
+  for (const s of jobSkillList(job, locale)) {
+    if (s.kind === 'soft') {
+      split.softSkills.push(s.skill);
+      continue;
+    }
+    const check = jobSkillCheck(user, s, { locale, skillSet: have });
+    if (check.state === 'shown') split.aligned.push(s.skill);
+    else if (check.state === 'related') {
+      split.aligned.push(s.skill);
+      split.related.push(s.skill);
+    } else if (check.state === 'not_shown') {
+      split.missing.push(s.skill);
+      if (s.required) split.missingRequired.push(s.skill);
+    } else if (!isCompared(s, vocabulary) && shownVia(user, s.term, have).shown) split.aligned.push(s.skill);
+    else split.unchecked.push(s.skill);
+  }
+  perUser.set(user, { inputs, split });
+  return copySplit(split);
+}
+
+/**
+ * 100 × Σ weight × credit / Σ weight, over the first 10 counted skills
+ * (required 1, preferred 0.5; shown 1, related 0.5). Not stated when the
+ * posting lists no skill that can be counted.
  */
 export function skillsDimension(user: MatchUser, job: MatchJob, weights: MatchWeights): MatchDimension {
-  const counted = hardSkillList(job).slice(0, SKILLS_COUNTED_MAX);
+  const vocabulary = currentVocabulary();
+  const locale = labelLocaleFor(job, user);
+  const counted = jobSkillList(job, locale)
+    .filter((s) => isCounted(s, vocabulary))
+    .slice(0, SKILLS_COUNTED_MAX);
   if (!counted.length) return dim('skills', weights, null);
   const have = new Set(user.skills.map(skillKey));
   let shown = 0;
   let listed = 0;
   for (const s of counted) {
+    const { credit } = jobSkillCheck(user, s, { locale, skillSet: have });
+    if (credit === null) continue;
     listed += skillWeight(s);
-    if (userShows(user, s.skill, have)) shown += skillWeight(s);
+    shown += skillWeight(s) * credit;
   }
-  const { aligned, missing, missingRequired } = splitSkills(user, job);
+  if (listed === 0) return dim('skills', weights, null);
+  const { aligned, related, missing, missingRequired } = splitSkills(user, job);
+  // The skills the resume names itself first; a related one only when fewer than two of those exist.
+  const direct = aligned.filter((s) => !related.includes(s));
   const evidence = [
-    ...aligned.slice(0, 2).map((s) => ev(s, 'resume', 'skill_have')),
+    ...direct.slice(0, 2).map((s) => ev(s, 'resume', 'skill_have')),
+    ...related.slice(0, Math.max(0, 2 - direct.length)).map((s) => ev(s, 'resume', 'skill_related')),
     ...(missingRequired.length ? missingRequired : missing).slice(0, 1).map((s) => ev(s, 'posting', 'skill_missing')),
   ];
   return dim('skills', weights, (100 * shown) / listed, evidence);

@@ -3,7 +3,25 @@
     "keywordCheck": {
       "count": "{found} of {total} shown by your resume",
       "shownBy": "your resume shows {term}",
-      "via": "from {term}"
+      "via": "from {term}",
+      "countStates": "{shown} shown, {related} related, of {total}",
+      "state": {
+        "shown": "Your resume shows it",
+        "related": "Related: your resume shows {term}",
+        "relatedPlain": "Related: your resume shows something close",
+        "not_shown": "Not in your resume"
+      },
+      "quote": "“{text}”",
+      "unchecked": "{count, plural, one {# more skill from the post is not checked yet.} other {# more skills from the post are not checked yet.}}",
+      "uncheckedAll": "{count, plural, one {The # skill from the post is not checked yet.} other {The # skills from the post are not checked yet.}}",
+      "status": {
+        "not_checked": "Not checked yet"
+      },
+      "add": {
+        "note": "Have one of these? Add the exact words to your resume yourself. Nothing is added for you.",
+        "action": "Open your resume for this job",
+        "resume": "Open your resume"
+      }
     },
     "otherLanguage": {
       "note": "The written parts of this analysis are in another language. The score is the same.",
@@ -14,8 +32,12 @@
     "compared": {
       "notCompared": "Not enough to compare.",
       "evidence": {
-        "logistics_by_your_filters": "These already match the filters you set, so they do not change the score: {text}"
-      }
+        "logistics_by_your_filters": "These already match the filters you set, so they do not change the score: {text}",
+        "skill_related": "They ask for {text}, and your resume shows a related skill"
+      },
+      "notComparedEstimate": "Not enough to compare, so this part is counted at a typical value.",
+      "notComparedAi": "Not enough to compare, so this part is left out of the score.",
+      "byFilters": "Not compared. The filters you set already cover this part."
     },
     "confidence": {
       "reason": {
@@ -24,6 +46,27 @@
         "no_role_evidence": "Your resume shows no role to compare",
         "few_details": "This post says too little to compare"
       }
+    },
+    "requirements": {
+      "title": "What the post asks for",
+      "intro": "Each line is copied from the job post and checked against your resume.",
+      "must": "Must have",
+      "preferred": "Nice to have",
+      "count": "{met} met, {partly} partly, {notShown} not shown, of {total}",
+      "status": {
+        "met": "Met",
+        "partly": "Partly",
+        "not_shown": "Not shown in your resume"
+      },
+      "note": "AI compared each line with your resume. Check it before you rely on it."
+    },
+    "missing": {
+      "emptyCompared": "Your resume or profile shows every skill we compared for this post.",
+      "unchecked": "{count, plural, one {# more skill in the post is not checked yet.} other {# more skills in the post are not checked yet.}}",
+      "noneChecked": "{count, plural, one {The # skill in this post is not checked against your resume yet.} other {The # skills in this post are not checked against your resume yet.}}"
+    },
+    "why": {
+      "notChecked": "The skills this post lists are not checked against your resume yet."
     }
   }
 }

@@ -57,19 +57,24 @@ describe('obvious equivalents count as present, and say what counted', () => {
     expect(titleShows('Backend Developer', 'software development')).toBe(true);
   });
 
-  it('the keyword check lists them as met, with the technology that counted; the score uses the same rule', () => {
+  it('the keyword check lists them with the technology that counted; a posting without ids keeps its number', () => {
     const job = matchJob({ skills: ['cloud infrastructure', 'relational databases', 'api design', 'kubernetes'], skillsDetail: null });
     const rows = buildKeywordRows({ job: { ...job, minYears: null }, user, resumeText: RESUME, keywords: [{ keyword: 'software engineering', importance: 'high' }] });
     const skills = rows.find((r) => r.key === 'skills')!;
     expect(skills.items).toEqual([
-      { term: 'Cloud infrastructure', found: true, via: 'AWS', required: false },
-      { term: 'Relational databases', found: true, via: 'PostgreSQL', required: false },
-      { term: 'API design', found: true, via: 'REST API', required: false },
-      { term: 'Kubernetes', found: false, required: false },
+      // Shown by a more specific skill: related, and the item says which one counted.
+      { term: 'Cloud infrastructure', state: 'related', found: true, skillId: 'cloud_infrastructure', via: 'AWS', quote: null, required: false },
+      { term: 'Relational databases', state: 'related', found: true, skillId: 'relational_databases', via: 'PostgreSQL', quote: null, required: false },
+      // The resume writes "APIs", a name of the skill itself: shown, with the sentence.
+      { term: 'API design', state: 'shown', found: true, skillId: 'api_design', quote: 'Designed REST APIs used by 40 partner teams', required: false },
+      { term: 'Kubernetes', state: 'not_shown', found: false, skillId: 'kubernetes', quote: null, required: false },
     ]);
+    // One shown and two related of four: 1 + 2 × 0.5 = 2 points.
     expect(skills).toMatchObject({ found: 3, total: 4, status: 'partly' });
-    expect(rows.find((r) => r.key === 'keywords')!.items).toEqual([{ term: 'Software engineering', found: true, via: 'Senior Software Engineer' }]);
+    // "Software engineering" is no skill the vocabulary has reviewed: it is not a keyword, so nothing is claimed or denied.
+    expect(rows.find((r) => r.key === 'keywords')!.items).toEqual([]);
     expect(splitSkills(user, job)).toMatchObject({ aligned: ['Cloud infrastructure', 'Relational databases', 'API design'], missing: ['Kubernetes'] });
+    // The posting carries no skill ids, so its number is the one the string rule always gave (3 of 4).
     expect(skillsDimension(user, job, DEFAULT_MATCH_WEIGHTS).score).toBe(75);
   });
 });
@@ -183,10 +188,13 @@ describe('one entry per thing', () => {
         { keyword: 'TypeScript/Node.js', importance: 'high' },
         { keyword: 'ingestion', importance: 'medium' },
         { keyword: 'ingestion', importance: 'medium' },
+        { keyword: 'postgres', importance: 'medium' },
+        { keyword: 'PostgreSQL', importance: 'medium' },
         { keyword: 'team', importance: 'low' },
       ],
     });
-    expect(rows.find((r) => r.key === 'keywords')!.items.map((i) => i.term)).toEqual(['TypeScript/Node.js', 'Ingestion']);
+    // "TypeScript" is in the skills row; "TypeScript/Node.js" and "ingestion" name no reviewed skill; "team" is low.
+    expect(rows.find((r) => r.key === 'keywords')!.items.map((i) => i.term)).toEqual(['PostgreSQL']);
     const terms = rows.flatMap((r) => r.items.map((i) => i.term));
     expect(new Set(terms).size).toBe(terms.length);
   });
