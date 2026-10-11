@@ -51,25 +51,44 @@ export const ALERT_LEVELS = {
   emailFailures: 50,
   /** Queries due for more than this many minutes count as overdue. */
   overdueMinutes: 60,
+  /**
+   * A metered provider is 'low' when the requests (or postings) its plan has
+   * left for the period are under this share of the plan's limit, both as the
+   * provider itself stated them (JI-1).
+   */
+  quotaLowShare: 0.1,
 } as const;
 
 export type AlertKey =
   | 'ingest_new_low'
   | 'dead_items'
   | 'provider_budget'
+  | 'provider_quota'
   | 'enrich_budget'
   | 'score_budget'
   | 'assistant_budget'
   | 'email_failures';
 
+/** The provider states that raise a `provider_quota` alert. */
+export type ProviderAlertState = 'exhausted' | 'not_subscribed' | 'unauthorized' | 'low';
+
 export interface AlertHit {
   key: AlertKey;
   /** Brand the metric belongs to; null for platform-wide metrics (queue, providers). */
   brand: string | null;
-  /** Provider name for `provider_budget`. */
+  /** Provider name for `provider_budget` and `provider_quota` (the row's `provider`, e.g. 'activejobs' or 'activejobs:cn'). */
   subject: string | null;
+  /**
+   * `provider_quota`: for state 'low' the requests (or postings) the plan has
+   * left and the level they fell under; 0 and 0 for the other three states
+   * (the state says it all, and no number is made up for it).
+   */
   value: number;
   level: number;
+  /** `provider_quota` only: which state raised it. Absent on every other alert. */
+  state?: ProviderAlertState;
+  /** `provider_quota` only: whole days until the provider's quota resets; null when the provider did not say. */
+  daysToReset?: number | null;
 }
 
 // ── GET /system ──────────────────────────────────────────────────────────
@@ -89,14 +108,71 @@ export interface QueueKindRow {
   oldestQueuedAt: string | null;
 }
 
+/**
+ * What the System panel says about a job provider right now (JI-1):
+ *   ok              on, and its plan has quota left (or it is not metered);
+ *   low             under ALERT_LEVELS.quotaLowShare of the period's requests or postings left;
+ *   exhausted       the provider says the period's quota is used up (a 429, or 0 requests or postings left);
+ *   not_subscribed  the key has no plan for this API;
+ *   unauthorized    the provider refused the key;
+ *   gated           a metered source that is off until a larger plan exists
+ *                   (the licensed feed under 20,000 postings a month: MARKET_STRATEGY M-2);
+ *   disabled        off for another reason (no key, a kill switch, a guard);
+ *   unknown         a metered provider the snapshot says nothing current about.
+ * The first of unauthorized / not_subscribed, gated, exhausted, disabled,
+ * unknown, low, ok that applies (system.ts `providerState`).
+ */
+export const PROVIDER_STATES = ['ok', 'low', 'exhausted', 'not_subscribed', 'unauthorized', 'gated', 'disabled', 'unknown'] as const;
+export type ProviderState = (typeof PROVIDER_STATES)[number];
+export type ProviderMarket = 'intl' | 'cn';
+export type ProviderCostModel = 'free' | 'per_job' | 'per_request';
+
+/**
+ * One job provider of one market: today's calls and yields
+ * (`RAProviderUsage`) and the provider's own quota reading (the snapshot in
+ * AppConfig `jobs.providerQuota.v1`, written by ingest).
+ *
+ * Listed for every source of every brand the deployment serves, with or
+ * without a call today, and for a mainland counter the operator opened for a
+ * provider no mainland brand lists as a source. Every quota field is what
+ * the provider itself stated: null means "not stated" (the panel shows a
+ * dash), never 0 and never a guess.
+ */
 export interface ProviderUsageRow {
+  /**
+   * The usage key (`RAProviderUsage.provider`): the provider id for the
+   * international market, `<provider>:cn` for the mainland counter.
+   */
   provider: string;
+  /** From the usage key: a ':cn' suffix is the mainland counter. */
+  market: ProviderMarket;
   calls: number;
-  /** INGEST_<PROVIDER>_DAILY_CALLS (or the default); null = not metered. */
+  /**
+   * Calls ingest may make to the provider in this market today: the configured
+   * daily bound, cut to what is left of the plan's quota spread over the days
+   * to its reset (0 when nothing is left). Null = not metered.
+   */
   limit: number | null;
   jobsReturned: number;
   jobsNew: number;
   errors: number;
+  /** The plan's name as the provider stated it (e.g. "BASIC"). */
+  plan: string | null;
+  /** Requests the plan allows in the period, and how many are left. */
+  requestsLimit: number | null;
+  requestsRemaining: number | null;
+  /** Postings the plan allows in the period, and how many are left. */
+  jobsLimit: number | null;
+  jobsRemaining: number | null;
+  /** When the period's quota resets (ISO 8601). */
+  resetAt: string | null;
+  /** Whole days until `resetAt`, rounded up. */
+  daysToReset: number | null;
+  /** When the quota reading was taken (ISO 8601); null = no reading. */
+  observedAt: string | null;
+  /** 'free' = not metered (banks, employer boards, open data): calls and yields only. */
+  costModel: ProviderCostModel;
+  state: ProviderState;
 }
 
 /** What one ingest run of a job source did (counters and reason codes only). */
@@ -204,7 +280,11 @@ export interface SystemStatusResponse {
   dayElapsedShare: number;
   brands: BrandHealth[];
   queue: { kinds: QueueKindRow[]; deadTotal: number };
-  /** Job providers today (shared by the brands they serve). */
+  /**
+   * Job providers, platform-wide: one row per source and market of every brand
+   * this deployment serves (listed with or without a call in the day covered),
+   * with the day's calls and the provider's current quota reading.
+   */
   providers: ProviderUsageRow[];
   /** Metrics past their alert level for the day covered. */
   alerts: AlertHit[];

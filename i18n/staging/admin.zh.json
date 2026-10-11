@@ -156,6 +156,49 @@
       },
       "safety": {
         "problemsDegraded": "配置有问题。修复之前，检查使用内置词表运行"
+      },
+      "system": {
+        "providers": {
+          "title": "职位服务商",
+          "sub": "各服务商最近一次报告的套餐情况，以及 UTC 日期 {day} 的调用次数。短横线表示服务商没有说明。",
+          "empty": "还没有设置职位服务商。",
+          "provider": "服务商",
+          "market": "市场",
+          "state": "状态",
+          "plan": "套餐",
+          "requests": "剩余请求数 / 上限",
+          "jobs": "剩余职位数 / 上限",
+          "resetsIn": "距离重置",
+          "calls": "今天调用次数 / 每日上限",
+          "returned": "返回",
+          "new": "新增",
+          "errors": "错误",
+          "leftOfLimit": "{left} / {limit}",
+          "days": "{count, plural, other {# 天}}",
+          "markets": {
+            "intl": "国际",
+            "cn": "中国大陆"
+          },
+          "states": {
+            "ok": "已开启",
+            "low": "额度偏低",
+            "exhausted": "额度已用完",
+            "not_subscribed": "未订阅",
+            "unauthorized": "密钥被拒绝",
+            "gated": "需要更大的套餐",
+            "disabled": "已关闭",
+            "unknown": "尚不清楚"
+          },
+          "banner": "目前不可用：{providers}。职位列表在没有它们的情况下运行。",
+          "bannerOne": "目前不可用：{providers}。职位列表在没有它的情况下运行。",
+          "alert": {
+            "exhausted": "{provider}：本月额度已用完，{days}后重置。",
+            "exhaustedNoReset": "{provider}：本月额度已用完。服务商没有说明何时重置。",
+            "not_subscribed": "{provider}：这个密钥没有订阅该服务商的套餐。",
+            "unauthorized": "{provider}：服务商拒绝了这个密钥。",
+            "low": "{provider}：本月额度还剩 {value}（告警线 {level}）。"
+          }
+        }
       }
     }
   }

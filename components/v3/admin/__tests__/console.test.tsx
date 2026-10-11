@@ -52,9 +52,10 @@ import type { HeldReferralView } from '../../../../lib/api/contracts/growth';
 import adminCopy from '../../../../i18n/messages/en.json';
 import { ADMIN_AUDIT_EVENTS } from '../../../../server/src/features/admin/contract';
 import { RISK_WEIGHTS } from '../../../../server/src/features/growth/referralRisk';
-import { AUDIT_ACTIONS } from '../SystemConsole';
+import { AUDIT_ACTIONS, PROVIDER_STATE_TONE } from '../SystemConsole';
+import { PROVIDER_STATES } from '../../../../server/src/features/admin/contract';
 import { UserOverridesPanel, parseOverrideValue } from '../UserAdminPanels';
-import type { BrandHealth, SystemStatusResponse, ReportItem } from '../../../../lib/api/admin';
+import type { BrandHealth, ProviderUsageRow, SystemStatusResponse, ReportItem } from '../../../../lib/api/admin';
 
 const admin = () => buildAuthValue({ user: { ...buildFakeUser(), role: 'admin' } as never });
 
@@ -71,6 +72,14 @@ const brand = (over: Partial<BrandHealth> = {}): BrandHealth => ({
   ...over,
 });
 
+/** A provider row with nothing stated by the provider; a test names what it cares about. */
+const provider = (over: Partial<ProviderUsageRow> & { provider: string }): ProviderUsageRow => ({
+  market: 'intl', calls: 0, limit: null, jobsReturned: 0, jobsNew: 0, errors: 0,
+  plan: null, requestsLimit: null, requestsRemaining: null, jobsLimit: null, jobsRemaining: null, resetAt: null, daysToReset: null, observedAt: null,
+  costModel: 'free', state: 'ok',
+  ...over,
+});
+
 const status: SystemStatusResponse = {
   asOf: '2026-10-10T12:00:00.000Z',
   dayKey: '2026-10-10',
@@ -78,7 +87,7 @@ const status: SystemStatusResponse = {
   dayElapsedShare: 0.5,
   brands: [brand()],
   queue: { kinds: [{ kind: 'job.enrich', queued: 4, leased: 1, failed: 0, dead: 2, oldestQueuedAt: '2026-10-10T10:00:00.000Z' }], deadTotal: 2 },
-  providers: [{ provider: 'jsearch', calls: 20, limit: 200, jobsReturned: 300, jobsNew: 40, errors: 1 }],
+  providers: [provider({ provider: 'jsearch', calls: 20, limit: 200, jobsReturned: 300, jobsNew: 40, errors: 1, costModel: 'per_request', requestsLimit: 10_000, requestsRemaining: 9_773, observedAt: '2026-10-10T11:00:00.000Z' })],
   alerts: [{ key: 'ingest_new_low', brand: 'roboapply', subject: null, value: 12, level: 20 }],
   brandsServed: ['roboapply'],
 };
@@ -188,6 +197,100 @@ describe('/admin/system', () => {
     expect(screen.getByText('20 of 200')).toBeInTheDocument();
     expect(screen.getByText(/Not recorded yet/)).toBeInTheDocument();
     expect(screen.getByText('$0.0123 / $50.00')).toBeInTheDocument();
+  });
+
+  // ── Job providers: plan, quota left, days to reset (MKT-3F, JI-1) ──────────
+  const providerCells = (id: string) => {
+    const row = screen.getByRole('rowheader', { name: id }).closest('tr')!;
+    return within(row).getAllByRole('cell').map((c) => c.textContent);
+  };
+  const withProviders = (providers: ProviderUsageRow[], alerts: SystemStatusResponse['alerts'] = []) => api.getSystemStatus.mockResolvedValue({ ...status, providers, alerts });
+
+  it('providers: one row says the provider is exhausted, on which plan, what is left and when it resets; the banner names it', async () => {
+    withProviders([
+      provider({ provider: 'activejobs', costModel: 'per_job', state: 'exhausted', limit: 300, plan: 'BASIC', requestsLimit: 25, requestsRemaining: 0, resetAt: '2026-10-27T12:00:00.000Z', daysToReset: 17, observedAt: '2026-10-10T11:00:00.000Z' }),
+      provider({ provider: 'jsearch', costModel: 'per_request', state: 'ok', calls: 20, limit: 200, jobsReturned: 300, jobsNew: 40, errors: 1, requestsLimit: 10_000, requestsRemaining: 9_773 }),
+    ]);
+    renderWithBrand(<SystemConsole />);
+    const table = (await screen.findByRole('rowheader', { name: 'activejobs' })).closest('table')!;
+    expect(within(table).getAllByRole('columnheader').map((h) => h.textContent)).toEqual([
+      'Provider', 'Market', 'State', 'Plan', 'Requests left / limit', 'Jobs left / limit', 'Resets in', 'Calls today / daily limit', 'Returned', 'New', 'Errors',
+    ]);
+    // activejobs · Exhausted · BASIC · 0 / 25 · Resets in 17 days, in one row; it made no call today.
+    expect(providerCells('activejobs')).toEqual(['International', 'Exhausted', 'BASIC', '0 / 25', '—', '17 days', '0 of 300', '0', '0', '0']);
+    expect(providerCells('jsearch')).toEqual(['International', 'On', '—', '9,773 / 10,000', '—', '—', '20 of 200', '300', '40', '1']);
+    const banner = screen.getByTestId('providers-banner');
+    expect(banner).toHaveTextContent('Not available right now: activejobs. The job feed is running without it.');
+    expect(banner).toHaveAttribute('role', 'status');
+    // No promise about how much of the market the feed covers (D3).
+    expect(banner.textContent).not.toMatch(/all|every|full|complete|cover/i);
+  });
+
+  it('providers: every state has its words and its tone; an unmetered source that is off is not in the banner', async () => {
+    const labels: Record<string, string> = { ok: 'On', low: 'Running low', exhausted: 'Exhausted', not_subscribed: 'Not subscribed', unauthorized: 'Key rejected', gated: 'Needs a larger plan', disabled: 'Off', unknown: 'Not known yet' };
+    expect(Object.keys(labels).sort()).toEqual([...PROVIDER_STATES].sort());
+    expect(Object.keys(PROVIDER_STATE_TONE).sort()).toEqual([...PROVIDER_STATES].sort());
+    expect(PROVIDER_STATE_TONE).toEqual({ ok: 'neutral', low: 'warn', exhausted: 'danger', not_subscribed: 'danger', unauthorized: 'danger', gated: 'muted', disabled: 'muted', unknown: 'muted' });
+    withProviders([
+      ...PROVIDER_STATES.map((state) => provider({ provider: `p_${state}`, costModel: 'per_request', state })),
+      provider({ provider: 'bank_gohire:cn', market: 'cn', costModel: 'free', state: 'disabled' }),
+    ]);
+    renderWithBrand(<SystemConsole />);
+    await screen.findByRole('rowheader', { name: 'p_ok' });
+    for (const state of PROVIDER_STATES) {
+      const cells = providerCells(`p_${state}`);
+      expect(cells[1], state).toBe(labels[state]);
+      const badge = screen.getByRole('rowheader', { name: `p_${state}` }).closest('tr')!.querySelector('[data-state]')!;
+      expect(badge).toHaveAttribute('data-state', state);
+      expect(badge).toHaveTextContent(labels[state]!);
+    }
+    expect(providerCells('bank_gohire:cn').slice(0, 2)).toEqual(['Mainland China', 'Off']);
+    // The three dead states of metered providers, in table order; the bank that is off is not one of them.
+    expect(screen.getByTestId('providers-banner')).toHaveTextContent('Not available right now: p_exhausted, p_not_subscribed, p_unauthorized. The job feed is running without them.');
+  });
+
+  it('providers: a value the provider did not state is a dash, never 0; no banner while nothing is dead', async () => {
+    withProviders([
+      provider({ provider: 'jsearch', costModel: 'per_request', state: 'unknown', limit: 200 }),
+      provider({ provider: 'activejobs', costModel: 'per_job', state: 'low', limit: 300, plan: 'BASIC', requestsLimit: 25, requestsRemaining: null, jobsLimit: 250, jobsRemaining: 12, daysToReset: 1 }),
+      provider({ provider: 'bank_robohire', calls: 144, jobsReturned: 60, jobsNew: 2 }),
+    ]);
+    renderWithBrand(<SystemConsole />);
+    await screen.findByRole('rowheader', { name: 'jsearch' });
+    expect(providerCells('jsearch')).toEqual(['International', 'Not known yet', '—', '—', '—', '—', '0 of 200', '0', '0', '0']);
+    // Half-stated: the side the provider gave is shown, the other is a dash. One day is singular.
+    expect(providerCells('activejobs')).toEqual(['International', 'Running low', 'BASIC', '— / 25', '12 / 250', '1 day', '0 of 300', '0', '0', '0']);
+    // An unmetered source shows calls and yields only.
+    expect(providerCells('bank_robohire')).toEqual(['International', 'On', '—', '—', '—', '—', '144 (no daily limit)', '60', '2', '0']);
+    expect(screen.queryByTestId('providers-banner')).not.toBeInTheDocument();
+  });
+
+  it('providers: the alert list says what is wrong with a provider in plain words', async () => {
+    const hit = (state: 'exhausted' | 'not_subscribed' | 'unauthorized' | 'low', subject: string, over: Record<string, unknown> = {}) => ({ key: 'provider_quota' as const, brand: null, subject, value: 0, level: 0, state, daysToReset: null, ...over });
+    withProviders(
+      [provider({ provider: 'activejobs', costModel: 'per_job', state: 'exhausted', daysToReset: 17 })],
+      [hit('exhausted', 'activejobs', { daysToReset: 17 }), hit('exhausted', 'feed'), hit('not_subscribed', 'linkedin'), hit('unauthorized', 'activejobs:cn'), hit('low', 'jsearch', { value: 412, level: 1000, daysToReset: 3 })],
+    );
+    renderWithBrand(<SystemConsole />);
+    expect(await screen.findByText('activejobs: the monthly quota is used up. It resets in 17 days.')).toBeInTheDocument();
+    expect(screen.getByText('feed: the monthly quota is used up. The provider did not say when it resets.')).toBeInTheDocument();
+    expect(screen.getByText('linkedin: the key has no plan for this provider.')).toBeInTheDocument();
+    expect(screen.getByText('activejobs:cn: the provider rejected the key.')).toBeInTheDocument();
+    expect(screen.getByText('jsearch: 412 left of the monthly quota (alert level 1,000).')).toBeInTheDocument();
+    expect(screen.getByText('5 numbers need a look')).toBeInTheDocument();
+  });
+
+  it('providers: a state this build does not know reads as not known yet, never as a raw code; an empty list says so', async () => {
+    withProviders([provider({ provider: 'jsearch', costModel: 'per_request', state: 'paused_by_vendor' as never })]);
+    const first = renderWithBrand(<SystemConsole />);
+    await screen.findByRole('rowheader', { name: 'jsearch' });
+    expect(providerCells('jsearch')[1]).toBe('Not known yet');
+    expect(screen.queryByText(/paused_by_vendor/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('providers-banner')).not.toBeInTheDocument();
+    first.unmount();
+    withProviders([]);
+    renderWithBrand(<SystemConsole />);
+    expect(await screen.findByText('No job providers are set up.')).toBeInTheDocument();
   });
 
   it('retries a dead item', async () => {

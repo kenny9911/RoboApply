@@ -21,11 +21,16 @@ import type { ReportsStore, ReportJobRow, DecisionRow } from '../reports.js';
 import type { OverridesService } from '../overrides.js';
 import type { ReferralModeration } from '../moderation.js';
 import { KEEP_DECISION_HOLDS } from '../reports.js';
-import { fakeSystemStore } from './fakes.js';
+import { registerSourceAdapter, type JobSourceAdapter } from '../../jobs/ingest/index.js';
+import { getCurrentBrandId } from '../../../platform/brand/index.js';
+import { PROVIDER_STATES, type ProviderUsageRow } from '../contract.js';
+import { fakeSystemData, fakeSystemStore, type FakeSystemData } from './fakes.js';
 
 const ENV = { NODE_ENV: 'test', ALLOWED_BRANDS: 'roboapply,goapply' };
 
 let harness: RouteHarness;
+/** What the fake System store answers; a test may replace it (reset before each test). */
+let systemData: FakeSystemData = fakeSystemData();
 let who: HarnessUser | null = { id: 'admin1', role: 'admin' };
 const audits: StoredAdminAuditRow[] = [];
 let auditClock = Date.parse('2026-10-10T12:00:00Z');
@@ -112,7 +117,7 @@ beforeAll(async () => {
           adminAuth: [fakeAuth(() => who), requireAdmin],
           env: ENV,
           now: () => new Date('2026-10-10T12:00:00Z'),
-          system: fakeSystemStore(),
+          system: fakeSystemStore(() => systemData),
           queue,
           reports,
           audit,
@@ -135,6 +140,7 @@ afterAll(() => harness.close());
 
 beforeEach(() => {
   who = { id: 'admin1', role: 'admin' };
+  systemData = fakeSystemData();
   audits.length = 0;
   decisions.length = 0;
   jobUpdates.length = 0;
@@ -184,6 +190,93 @@ describe('as an admin', () => {
     expect(res.body.data.brands.map((b) => b.brand)).toEqual(['roboapply', 'goapply']);
     expect(res.body.data.brandsServed).toEqual(['roboapply', 'goapply']);
     expect(res.body.data.queue.deadTotal).toBe(3);
+  });
+
+  it('GET /system lists every provider of the served brands with its quota reading, with or without a call today (JI-1)', async () => {
+    // Two search providers that are on (no key is read: the adapters are test doubles and never fetch).
+    const on = (provider: 'activejobs' | 'jsearch'): JobSourceAdapter => ({
+      provider,
+      kind: 'search',
+      markets: ['intl'],
+      sourceBoards: [provider],
+      isEnabled: () => true,
+      supportsCountry: () => true,
+      dailyCallLimit: () => null,
+      fetch: async () => ({ jobs: [], calls: 0 }),
+    });
+    registerSourceAdapter(on('activejobs'), { replace: true });
+    registerSourceAdapter(on('jsearch'), { replace: true });
+    systemData = fakeSystemData({
+      // jsearch made calls today (the default row); activejobs made none; one mainland counter exists.
+      providers: [
+        { provider: 'jsearch', calls: 20, jobsReturned: 400, jobsNew: 50, errors: 0 },
+        { provider: 'activejobs:cn', calls: 2, jobsReturned: 30, jobsNew: 4, errors: 0 },
+      ],
+      quota: {
+        activejobs: { plan: 'BASIC', requestsLimit: 25, requestsRemaining: 0, resetAt: '2026-10-27T12:00:00.000Z', state: 'exhausted', lastStatus: 429 },
+        jsearch: { requestsLimit: 10_000, requestsRemaining: 9_773 },
+      },
+    });
+    const res = await harness.request<{ data: { providers: ProviderUsageRow[]; alerts: Array<{ key: string; subject: string | null; state?: string; daysToReset?: number | null }> } }>('GET', '/admin/system');
+    expect(res.status).toBe(200);
+    const rows = res.body.data.providers;
+    const of = (provider: string) => rows.find((r) => r.provider === provider)!;
+
+    // The response shape: every row carries every field of the contract, and a known state.
+    const FIELDS = ['provider', 'market', 'calls', 'limit', 'jobsReturned', 'jobsNew', 'errors', 'plan', 'requestsLimit', 'requestsRemaining', 'jobsLimit', 'jobsRemaining', 'resetAt', 'daysToReset', 'observedAt', 'costModel', 'state'];
+    expect(rows.length).toBeGreaterThanOrEqual(5);
+    for (const row of rows) {
+      expect(Object.keys(row).sort(), row.provider).toEqual([...FIELDS].sort());
+      expect(PROVIDER_STATES).toContain(row.state);
+      expect(['intl', 'cn']).toContain(row.market);
+      expect(['free', 'per_job', 'per_request']).toContain(row.costModel);
+    }
+
+    // Dead since its monthly quota ran out, no call today: still listed, with plan, what is left and the days to reset.
+    expect(of('activejobs')).toEqual({
+      // The daily limit is what ingest may still call today: nothing, with 0 of 25 left.
+      provider: 'activejobs', market: 'intl', calls: 0, limit: 0, jobsReturned: 0, jobsNew: 0, errors: 0,
+      plan: 'BASIC', requestsLimit: 25, requestsRemaining: 0, jobsLimit: null, jobsRemaining: null, resetAt: '2026-10-27T12:00:00.000Z', daysToReset: 17, observedAt: '2026-10-10T11:00:00.000Z',
+      costModel: 'per_job', state: 'exhausted',
+    });
+    expect(of('jsearch')).toMatchObject({ market: 'intl', calls: 20, limit: 200, plan: null, requestsLimit: 10_000, requestsRemaining: 9_773, daysToReset: null, costModel: 'per_request', state: 'ok' });
+    // The mainland counter is its own row; it shares the provider's one plan.
+    expect(of('activejobs:cn')).toMatchObject({ market: 'cn', calls: 2, limit: 0, jobsReturned: 30, jobsNew: 4, plan: 'BASIC', requestsRemaining: 0, daysToReset: 17, costModel: 'per_job', state: 'exhausted' });
+    // Both brands are served: the banks of both markets are listed, unmetered, with no quota fields.
+    expect(of('bank_robohire')).toMatchObject({ market: 'intl', limit: null, plan: null, requestsLimit: null, daysToReset: null, observedAt: null, costModel: 'free' });
+    expect(of('bank_gohire:cn')).toMatchObject({ market: 'cn', limit: null, plan: null, costModel: 'free' });
+    expect(rows.map((r) => r.provider)).not.toContain('user_import');
+
+    expect(res.body.data.alerts.filter((a) => a.key === 'provider_quota')).toEqual([
+      { key: 'provider_quota', brand: null, subject: 'activejobs', value: 0, level: 0, state: 'exhausted', daysToReset: 17 },
+      { key: 'provider_quota', brand: null, subject: 'activejobs:cn', value: 0, level: 0, state: 'exhausted', daysToReset: 17 },
+    ]);
+
+    // The same deployment with nothing recorded: the provider is listed as unknown, with no number made up.
+    systemData = fakeSystemData({ providers: [] });
+    const blank = await harness.request<{ data: { providers: ProviderUsageRow[] } }>('GET', '/admin/system?brand=goapply');
+    expect(blank.body.data.providers.find((r) => r.provider === 'activejobs')).toEqual({
+      provider: 'activejobs', market: 'intl', calls: 0, limit: 300, jobsReturned: 0, jobsNew: 0, errors: 0,
+      plan: null, requestsLimit: null, requestsRemaining: null, jobsLimit: null, jobsRemaining: null, resetAt: null, daysToReset: null, observedAt: null,
+      costModel: 'per_job', state: 'unknown',
+    });
+  });
+
+  it('GET /system reports the same providers and sources from either brand\u2019s host', async () => {
+    // A provider that answers "off" when it is asked as the mainland brand (it is never called for that market).
+    const adapter = (isEnabled: () => boolean): JobSourceAdapter => ({ provider: 'jsearch', kind: 'search', markets: ['intl'], sourceBoards: ['jsearch'], isEnabled, supportsCountry: () => true, dailyCallLimit: () => null, fetch: async () => ({ jobs: [], calls: 0 }) });
+    registerSourceAdapter(adapter(() => getCurrentBrandId() !== 'goapply'), { replace: true });
+    type Body = { data: { providers: ProviderUsageRow[]; brands: Array<{ brand: string; sources: Array<{ provider: string; enabled: boolean; reason: string | null }> }>; alerts: unknown[] } };
+    const from = async (host: string) => (await harness.request<Body>('GET', '/admin/system', { host })).body.data;
+    const robo = await from('roboapply.localhost:3611');
+    const go = await from('goapply.localhost:3621');
+    expect(go.providers).toEqual(robo.providers);
+    expect(go.alerts).toEqual(robo.alerts);
+    expect(go.providers.find((r) => r.provider === 'jsearch')).toMatchObject({ market: 'intl', state: 'unknown' });
+    const sourceOf = (data: Body['data']) => data.brands.find((b) => b.brand === 'roboapply')!.sources.find((x) => x.provider === 'jsearch');
+    expect(sourceOf(go)).toMatchObject({ enabled: true, reason: null });
+    expect(sourceOf(go)).toEqual(sourceOf(robo));
+    registerSourceAdapter(adapter(() => true), { replace: true });
   });
 
   it('GET /system?brand= narrows to one brand; an unknown brand is a 422', async () => {

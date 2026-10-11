@@ -17,12 +17,16 @@
 //
 // The email goes to staff only, so its text is English and lives here rather
 // than in the user-facing email bundles. No personal data: counts only.
+//
+// Job providers (JI-1): besides the daily call limit, a line per metered
+// provider whose own monthly quota is used up, refused or nearly gone, read
+// from the provider's quota reading as it stands when the email is built.
 
 import { allowedBrands, type BrandId, type EnvSource } from '../../platform/brand/index.js';
 import { defineEmailTemplate, emailOrigin, escapeHtml, heading, paragraph, sendEmail } from '../../platform/email/index.js';
 import type { CronContext, CronResult, CronTask } from '../../platform/queue/index.js';
 import { logger } from '../../services/LoggerService.js';
-import type { AlertHit, AlertKey } from './contract.js';
+import { ALERT_LEVELS, type AlertHit, type AlertKey, type ProviderAlertState } from './contract.js';
 import { buildSystemStatus, createPrismaSystemStore, type SystemStore } from './system.js';
 
 export const ADMIN_HEALTH_TEMPLATE_KEY = 'admin.daily_health';
@@ -31,6 +35,7 @@ const LABELS: Record<AlertKey, string> = {
   ingest_new_low: 'New jobs that day were below half of the 7-day daily average',
   dead_items: 'Dead work items in the queue now',
   provider_budget: 'Job provider calls used most of the daily limit',
+  provider_quota: 'Job provider monthly quota',
   enrich_budget: 'Job enrichment used most of its daily limit',
   score_budget: 'AI fit scores used most of the daily budget',
   assistant_budget: 'Assistant spend (USD) used most of the daily budget',
@@ -45,7 +50,25 @@ export interface HealthEmailParams {
   systemUrl: string;
 }
 
+/** What each provider quota state means for the reader, after "<provider>: ". */
+const QUOTA_TEXT: Record<ProviderAlertState, string> = {
+  exhausted: 'monthly quota used up',
+  not_subscribed: 'not subscribed',
+  unauthorized: 'key rejected',
+  low: `under ${Math.round(ALERT_LEVELS.quotaLowShare * 100)}% of the monthly quota left`,
+};
+
+/** "<provider>: monthly quota used up, resets in 17 days" (the reset only when the provider stated it). */
+function quotaLine(hit: AlertHit): string {
+  const provider = hit.subject ?? 'A job provider';
+  const state = hit.state ?? 'low';
+  const days = hit.daysToReset;
+  const reset = state === 'exhausted' && typeof days === 'number' && days > 0 ? `, resets in ${days} ${days === 1 ? 'day' : 'days'}` : '';
+  return `${provider}: ${QUOTA_TEXT[state]}${reset}`;
+}
+
 export function alertLine(hit: AlertHit): string {
+  if (hit.key === 'provider_quota') return quotaLine(hit);
   const subject = hit.subject ? ` (${hit.subject})` : '';
   return `${LABELS[hit.key]}${subject}: ${hit.value} (alert level ${hit.level})`;
 }

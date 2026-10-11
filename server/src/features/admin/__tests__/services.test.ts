@@ -13,8 +13,22 @@ vi.mock('../../../lib/prisma.js', () => ({
   default: new Proxy({}, { get: () => { throw new Error('tests must not reach Prisma'); } }),
 }));
 
-import { ALERT_LEVELS, type BrandHealth, type SystemStatusResponse } from '../contract.js';
-import { brandHealth, buildSystemStatus, evaluateAlerts, healthWindow, jobSourcesHealth, type SourceLister } from '../system.js';
+import { ALERT_LEVELS, PROVIDER_STATES, type BrandHealth, type ProviderUsageRow, type SystemStatusResponse } from '../contract.js';
+import {
+  brandHealth,
+  buildProviderRows,
+  buildSystemStatus,
+  createPrismaSystemStore,
+  evaluateAlerts,
+  healthWindow,
+  jobSourcesHealth,
+  mainlandCounterSources,
+  parseUsageKey,
+  providerSources,
+  providerState,
+  type ProviderSource,
+  type SourceLister,
+} from '../system.js';
 import { ADMIN_REVIEW_KIND, KEEP_DECISION_HOLDS, buildItem, clearedRuleSet, createPrismaReportsStore, intlScamFlags, listReports, resolveReport, reviewedElsewhere, type ReportJobRow, type ReportsStore, type DecisionRow } from '../reports.js';
 import { costsCsv, getCosts, resolveCostRange } from '../costs.js';
 import { listAdminFeedback, type FeedbackStore } from '../feedback.js';
@@ -23,13 +37,15 @@ import { createFakePrisma } from '../../../test/fakePrisma.js';
 import { createAdminHealthTask, parseAdminEmails, alertLine, adminHealthTemplate } from '../healthEmail.js';
 import { toSafetyView } from '../safety.js';
 import * as limits from '../limits.js';
-import { fakeSystemData, fakeSystemStore } from './fakes.js';
-import { getBrand } from '../../../platform/brand/index.js';
+import { fakeSystemData, fakeSystemStore, quotaSnapshot } from './fakes.js';
+import { getBrand, getCurrentBrandId, runWithBrand } from '../../../platform/brand/index.js';
 import { createBudget } from '../../../platform/queue/index.js';
 // Parity: the originals the admin mirrors (tests are outside the boundary rule).
 import { DEFAULT_SCORE_DAILY_BUDGET, scoreDailyBudget, scoreCounterKeys } from '../../match/config.js';
 import { DEFAULT_COPILOT_DAILY_BUDGET_USD, copilotDailyBudgetUsd } from '../../copilot/budget.js';
 import { dailyCallLimit } from '../../jobs/ingest/config.js';
+import * as ingest from '../../jobs/ingest/index.js';
+import { PROVIDER_QUOTA_CONFIG_KEY, serializeProviderQuota } from '../../jobs/ingest/quotaContract.js';
 import { enrichBudgetKey } from '../../jobs/enrich/budget.js';
 
 const NOW = new Date('2026-10-10T12:00:00Z');
@@ -111,6 +127,22 @@ describe('job sources per brand (the admin sources panel)', () => {
     expect(bank).toMatchObject({ enabled: false, transport: 'off', reason: 'tls_required_no_api_key', lastRun: null, lastCounted: null, publicPage: { configured: true, variable: 'GOHIRE_PUBLIC_JOB_URL_TEMPLATE' } });
   });
 
+  it('a brand\u2019s sources answer in that brand\u2019s own context, whichever brand the request or cron runs as', async () => {
+    // A source that is on only when it is asked as RoboApply (a provider that is never called for the mainland).
+    const asked: Array<string | undefined> = [];
+    const status = () => {
+      const on = getCurrentBrandId() === 'roboapply';
+      return { enabled: on, transport: on ? 'rapidapi' : 'off', reason: on ? null : 'disabled' };
+    };
+    const list: SourceLister = () => (asked.push(getCurrentBrandId()), [{ brand: 'roboapply', market: 'intl', provider: 'jsearch', kind: 'search', transport: 'rapidapi', sourceBoards: ['jsearch'], adapter: null, enabled: () => status().enabled, status } as never]);
+    // The admin is on the GoApply host and looks at RoboApply's sources.
+    const [fromGoApply] = await runWithBrand('goapply', () => jobSourcesHealth(fakeSystemStore(), 'roboapply', {}, list));
+    expect(fromGoApply).toMatchObject({ provider: 'jsearch', enabled: true, transport: 'rapidapi', reason: null });
+    const [fromRoboApply] = await runWithBrand('roboapply', () => jobSourcesHealth(fakeSystemStore(), 'roboapply', {}, list));
+    expect(fromRoboApply).toEqual(fromGoApply);
+    expect(asked).toEqual(['roboapply', 'roboapply']);
+  });
+
   it('each brand gets its own sources from the registry: RoboApply never lists the GoHire bank and GoApply never lists a search API', async () => {
     const s = await buildSystemStatus(fakeSystemStore(), { brands: ['roboapply', 'goapply'], brandsServed: ['roboapply', 'goapply'], now: NOW, env: {} });
     const of = (brand: string) => s.brands.find((b) => b.brand === brand)!.sources.map((x) => x.provider);
@@ -142,6 +174,22 @@ function healthWith(over: Partial<BrandHealth['ingest']> & { precompute?: BrandH
     creditExhaustion: null,
   };
 }
+
+/** A provider row with nothing stated; a test names what it cares about. */
+function providerRow(over: Partial<ProviderUsageRow> & { provider: string }): ProviderUsageRow {
+  return {
+    market: 'intl', calls: 0, limit: null, jobsReturned: 0, jobsNew: 0, errors: 0,
+    plan: null, requestsLimit: null, requestsRemaining: null, jobsLimit: null, jobsRemaining: null, resetAt: null, daysToReset: null, observedAt: null,
+    costModel: 'free', state: 'ok',
+    ...over,
+  };
+}
+
+/** Registry descriptions for the provider tests: every source on, cost model by provider id. */
+const onSource = (brand: 'roboapply' | 'goapply', provider: string, kind: 'bank' | 'ats' | 'search' | 'import') =>
+  ({ brand, market: brand === 'goapply' ? 'cn' : 'intl', provider, kind, transport: 'off', sourceBoards: [], adapter: null, enabled: () => true, status: () => ({ enabled: true, transport: 'off', reason: null }) }) as never;
+const roboSources: SourceLister = () => [onSource('roboapply', 'activejobs', 'search'), onSource('roboapply', 'bank_robohire', 'bank'), onSource('roboapply', 'jsearch', 'search'), onSource('roboapply', 'user_import', 'import')];
+const goProviderSources: SourceLister = () => [onSource('goapply', 'bank_gohire', 'bank'), onSource('goapply', 'activejobs', 'search'), onSource('goapply', 'user_import', 'import')];
 
 describe('healthWindow', () => {
   it('live: today so far, with the elapsed share of the UTC day', () => {
@@ -194,7 +242,7 @@ describe('evaluateAlerts', () => {
       base(
         [healthWith({ enrichBudget: { used: 7200, limit: 8000 }, precompute: { used: 18000, limit: 20000 }, copilot: { costUsd: 45, budgetUsd: 50 }, emailFailed: 51 })],
         101,
-        [{ provider: 'jsearch', calls: 180, limit: 200, jobsReturned: 0, jobsNew: 0, errors: 0 }, { provider: 'bank', calls: 9999, limit: null, jobsReturned: 0, jobsNew: 0, errors: 0 }],
+        [providerRow({ provider: 'jsearch', calls: 180, limit: 200, costModel: 'per_request' }), providerRow({ provider: 'bank', calls: 9999, limit: null })],
       ),
     );
     expect(hits.map((h) => `${h.key}:${h.subject ?? h.brand ?? ''}`)).toEqual([
@@ -209,6 +257,526 @@ describe('evaluateAlerts', () => {
 
   it('a 0 limit (feature off) never alerts', () => {
     expect(evaluateAlerts(base([healthWith({ enrichBudget: { used: 0, limit: 0 } })]))).toEqual([]);
+    // A mainland counter with no budget (0) and no calls is quiet too.
+    expect(evaluateAlerts(base([healthWith()], 0, [providerRow({ provider: 'activejobs:cn', market: 'cn', limit: 0, costModel: 'per_job', state: 'unknown' })]))).toEqual([]);
+  });
+
+  it('provider quota (JI-1): one hit per metered provider that is exhausted, not subscribed, refused or low', () => {
+    const metered = (provider: string, over: Partial<ProviderUsageRow>) => providerRow({ provider, costModel: 'per_request', ...over });
+    const hits = evaluateAlerts(
+      base([healthWith()], 0, [
+        metered('activejobs', { costModel: 'per_job', state: 'exhausted', plan: 'BASIC', requestsLimit: 25, requestsRemaining: 0, daysToReset: 17 }),
+        metered('feed', { state: 'not_subscribed' }),
+        metered('jsearch', { state: 'low', requestsLimit: 10_000, requestsRemaining: 412, daysToReset: 3 }),
+        metered('keyless', { state: 'unauthorized' }),
+      ]),
+    );
+    expect(hits).toEqual([
+      { key: 'provider_quota', brand: null, subject: 'activejobs', value: 0, level: 0, state: 'exhausted', daysToReset: 17 },
+      { key: 'provider_quota', brand: null, subject: 'feed', value: 0, level: 0, state: 'not_subscribed', daysToReset: null },
+      { key: 'provider_quota', brand: null, subject: 'jsearch', value: 412, level: 1000, state: 'low', daysToReset: 3 },
+      { key: 'provider_quota', brand: null, subject: 'keyless', value: 0, level: 0, state: 'unauthorized', daysToReset: null },
+    ]);
+  });
+
+  it('provider quota: low on postings names the postings left; ok, gated, disabled and unknown providers raise nothing', () => {
+    const low = evaluateAlerts(base([healthWith()], 0, [providerRow({ provider: 'activejobs', costModel: 'per_job', state: 'low', requestsLimit: 25, requestsRemaining: 20, jobsLimit: 250, jobsRemaining: 12 })]));
+    expect(low).toEqual([{ key: 'provider_quota', brand: null, subject: 'activejobs', value: 12, level: 25, state: 'low', daysToReset: null }]);
+    const quiet = (['ok', 'gated', 'disabled', 'unknown'] as const).map((state) => providerRow({ provider: `p_${state}`, costModel: 'per_job', state }));
+    expect(evaluateAlerts(base([healthWith()], 0, quiet))).toEqual([]);
+    // An unmetered source is never a quota alert, whatever its row says.
+    expect(evaluateAlerts(base([healthWith()], 0, [providerRow({ provider: 'bank_gohire:cn', market: 'cn', costModel: 'free', state: 'disabled' })]))).toEqual([]);
+  });
+
+  it('the daily call limit and the monthly quota are two rules: a provider can trip both', () => {
+    const hits = evaluateAlerts(base([healthWith()], 0, [providerRow({ provider: 'jsearch', costModel: 'per_request', calls: 190, limit: 200, state: 'low', requestsLimit: 10_000, requestsRemaining: 5 })]));
+    expect(hits.map((h) => h.key)).toEqual(['provider_budget', 'provider_quota']);
+  });
+});
+
+// ── Job providers: usage, quota and state (MKT-3F, JI-1) ──────────────────
+
+const src = (provider: string, over: Partial<ProviderSource> = {}): ProviderSource => ({ provider, market: 'intl', enabled: true, reason: null, costModel: 'free', ...over });
+/** 2026-10-27T12:00Z is 17 days after NOW. */
+const RESET_17D = '2026-10-27T12:00:00.000Z';
+
+describe('providerState', () => {
+  const reading = (over: Partial<Parameters<typeof providerState>[0]['reading'] & object> = {}) => ({ state: 'ok' as const, requestsLimit: 10_000, requestsRemaining: 9_773, jobsLimit: null, jobsRemaining: null, ...over });
+  const on = { enabled: true, reason: null };
+  const off = (reason: string | null = 'no_key') => ({ enabled: false, reason });
+  const state = (over: Partial<Parameters<typeof providerState>[0]>) => providerState({ provider: 'jsearch', costModel: 'per_request', source: on, reading: reading(), planJobsLimit: null, ...over });
+
+  it('every state has a case', () => {
+    const seen = new Set([
+      state({}),
+      state({ reading: reading({ requestsRemaining: 999 }) }),
+      state({ reading: reading({ state: 'exhausted', requestsRemaining: 0 }) }),
+      state({ reading: reading({ state: 'not_subscribed' }) }),
+      state({ reading: reading({ state: 'unauthorized' }) }),
+      state({ provider: 'activejobs_feed', costModel: 'per_job', source: off('disabled'), planJobsLimit: 250 }),
+      state({ source: off() }),
+      state({ reading: null }),
+    ]);
+    expect([...seen]).toEqual(['ok', 'low', 'exhausted', 'not_subscribed', 'unauthorized', 'gated', 'disabled', 'unknown']);
+    expect(new Set(seen)).toEqual(new Set(PROVIDER_STATES));
+  });
+
+  it('ok: 9,773 of 10,000 requests left', () => {
+    expect(state({})).toBe('ok');
+    // Limits the provider did not state are not "low".
+    expect(state({ reading: reading({ requestsLimit: null, requestsRemaining: null }) })).toBe('ok');
+    expect(state({ reading: reading({ requestsLimit: null, requestsRemaining: 5 }) })).toBe('ok');
+  });
+
+  it('exhausted: the provider said so (a 429), or it stated that nothing is left after a call it still served', () => {
+    expect(state({ reading: reading({ state: 'exhausted', requestsRemaining: 0 }) })).toBe('exhausted');
+    // The call that used the last request was served (state ok): 0 of 25 left is used up, not "low".
+    expect(state({ reading: reading({ requestsLimit: 25, requestsRemaining: 0 }) })).toBe('exhausted');
+    expect(state({ reading: reading({ jobsLimit: 250, jobsRemaining: 0 }) })).toBe('exhausted');
+    expect(state({ reading: reading({ requestsLimit: null, requestsRemaining: 0 }) })).toBe('exhausted');
+    // The adapter is then off because of it: still "exhausted", never a bare "off".
+    expect(state({ source: off('quota'), reading: reading({ requestsLimit: 25, requestsRemaining: 0 }) })).toBe('exhausted');
+    // One left is low, not used up; a count nobody stated is neither.
+    expect(state({ reading: reading({ requestsLimit: 25, requestsRemaining: 1 }) })).toBe('low');
+    expect(state({ reading: reading({ requestsLimit: 25, requestsRemaining: null }) })).toBe('ok');
+  });
+
+  it('low: under 10% of the requests or of the postings left, both stated', () => {
+    expect(state({ reading: reading({ requestsRemaining: 999 }) })).toBe('low');
+    expect(state({ reading: reading({ requestsRemaining: 1000 }) })).toBe('ok');
+    expect(state({ reading: reading({ jobsLimit: 250, jobsRemaining: 24 }) })).toBe('low');
+    expect(state({ reading: reading({ jobsLimit: 250, jobsRemaining: 25 }) })).toBe('ok');
+  });
+
+  it('a closed reading wins over "off": the adapter is off BECAUSE the quota is gone', () => {
+    expect(state({ source: off('quota'), reading: reading({ state: 'exhausted', requestsRemaining: 0 }) })).toBe('exhausted');
+    expect(state({ source: off(), reading: reading({ state: 'not_subscribed' }) })).toBe('not_subscribed');
+    expect(state({ source: off(), reading: reading({ state: 'unauthorized' }) })).toBe('unauthorized');
+  });
+
+  it('disabled: off for another reason (no key, a kill switch), with or without a reading', () => {
+    expect(state({ source: off('no_key') })).toBe('disabled');
+    expect(state({ source: off('kill_switch'), reading: null })).toBe('disabled');
+    // A low reading does not turn "no key" into "running low": the adapter said why it is off.
+    expect(state({ source: off('no_key'), reading: reading({ requestsRemaining: 400 }) })).toBe('disabled');
+    expect(state({ source: off('no_key'), reading: reading({ requestsRemaining: 400 }), atReserve: true })).toBe('disabled');
+    // No reason stated and plenty left: off for something else.
+    expect(state({ source: off('disabled') })).toBe('disabled');
+    expect(state({ source: off(null) })).toBe('disabled');
+  });
+
+  it('off because the quota stops ingest is not "off": the reading tells the state', () => {
+    // The adapter says the quota is the reason: 400 of 10,000 left is low (and an alert), 9,000 is fine.
+    expect(state({ source: off('quota'), reading: reading({ requestsRemaining: 400 }) })).toBe('low');
+    expect(state({ source: off('quota'), reading: reading({ requestsRemaining: 9_000 }) })).toBe('ok');
+    expect(state({ source: off('quota'), reading: null })).toBe('unknown');
+    // The adapter gives no reason, and the reading is at or under the share ingest never spends: same answer.
+    expect(state({ source: off('disabled'), reading: reading({ requestsRemaining: 400 }), atReserve: true })).toBe('low');
+    expect(state({ source: off(null), reading: reading({ requestsLimit: 25, requestsRemaining: 2 }), atReserve: true })).toBe('low');
+    // Low but above the reserve, with no reason stated: ingest would still call, so it is off for something else.
+    expect(state({ source: off('disabled'), reading: reading({ requestsRemaining: 900 }) })).toBe('disabled');
+  });
+
+  it('unknown: a metered provider that is on with no current reading, or a reading that says nothing', () => {
+    expect(state({ reading: null })).toBe('unknown');
+    expect(state({ reading: reading({ state: 'unknown' }) })).toBe('unknown');
+    // A usage row no served brand lists: nothing says it is off.
+    expect(state({ source: null, reading: null })).toBe('unknown');
+  });
+
+  it('gated: the licensed feed is off and its stated plan is under 20,000 postings a month (M-2); a refused key still comes first', () => {
+    const feed = (over: Partial<Parameters<typeof providerState>[0]>) => state({ provider: 'activejobs_feed', costModel: 'per_job', source: off('disabled'), ...over });
+    expect(limits.FEED_MIN_MONTHLY_JOBS).toBe(20_000);
+    expect(feed({ planJobsLimit: 250 })).toBe('gated');
+    // Today's BASIC plan is also used up: the plan size is what keeps the feed off.
+    expect(feed({ planJobsLimit: 250, reading: reading({ state: 'exhausted', requestsRemaining: 0 }) })).toBe('gated');
+    expect(feed({ planJobsLimit: 19_999, reading: null })).toBe('gated');
+    // A large enough plan, or a plan size nobody stated, is not "gated".
+    expect(feed({ planJobsLimit: 20_000 })).toBe('disabled');
+    expect(feed({ planJobsLimit: null })).toBe('disabled');
+    // On (the plan size was set another way): not gated.
+    expect(feed({ planJobsLimit: 250, source: on })).toBe('ok');
+    expect(feed({ planJobsLimit: 250, reading: reading({ state: 'unauthorized' }) })).toBe('unauthorized');
+    // Another metered source is gated only when its adapter says the plan is the reason.
+    expect(state({ provider: 'activejobs', costModel: 'per_job', source: off('disabled'), planJobsLimit: 250 })).toBe('disabled');
+    expect(state({ provider: 'activejobs', costModel: 'per_job', source: off('plan_too_small'), planJobsLimit: null })).toBe('gated');
+  });
+
+  it('an unmetered source (bank, employer boards, open data) is only on or off', () => {
+    expect(state({ provider: 'bank_robohire', costModel: 'free', reading: null })).toBe('ok');
+    expect(state({ provider: 'bank_gohire', costModel: 'free', source: off('tls_required'), reading: null })).toBe('disabled');
+    expect(state({ provider: 'ats_public', costModel: 'free', source: null, reading: null })).toBe('ok');
+  });
+});
+
+describe('parseUsageKey', () => {
+  it('a ":cn" suffix is the mainland counter', () => {
+    expect(parseUsageKey('activejobs')).toEqual({ provider: 'activejobs', market: 'intl' });
+    expect(parseUsageKey('activejobs:cn')).toEqual({ provider: 'activejobs', market: 'cn' });
+    expect(parseUsageKey(':cn')).toEqual({ provider: ':cn', market: 'intl' });
+  });
+});
+
+describe('buildProviderRows (registry + usage + quota snapshot)', () => {
+  const rows = (input: Partial<Parameters<typeof buildProviderRows>[0]>) => buildProviderRows({ sources: [], usage: [], quota: new Map(), now: NOW, env: {}, ...input });
+  const NO_QUOTA = { plan: null, requestsLimit: null, requestsRemaining: null, jobsLimit: null, jobsRemaining: null, resetAt: null, daysToReset: null, observedAt: null };
+
+  it('JI-1: a provider that made no call today is listed with its plan, what is left and the days to its reset', () => {
+    const quota = new Map([
+      ['activejobs', quotaSnapshot('activejobs', { plan: 'BASIC', requestsLimit: 25, requestsRemaining: 0, jobsLimit: 250, jobsRemaining: 0, resetAt: RESET_17D, state: 'exhausted', lastStatus: 429 })],
+      ['jsearch', quotaSnapshot('jsearch', { requestsLimit: 10_000, requestsRemaining: 9_773, resetAt: '2026-10-25T00:00:00.000Z' })],
+    ]);
+    const out = rows({
+      sources: [src('activejobs', { costModel: 'per_job', enabled: false, reason: 'quota' }), src('bank_robohire'), src('jsearch', { costModel: 'per_request' }), src('ats_public')],
+      usage: [{ provider: 'jsearch', calls: 20, jobsReturned: 400, jobsNew: 50, errors: 1 }],
+      quota,
+    });
+    expect(out.map((r) => r.provider)).toEqual(['activejobs', 'ats_public', 'bank_robohire', 'jsearch']);
+    expect(out[0]).toEqual({
+      // Nothing is left of the plan: ingest may make no call today.
+      provider: 'activejobs', market: 'intl', calls: 0, limit: 0, jobsReturned: 0, jobsNew: 0, errors: 0,
+      plan: 'BASIC', requestsLimit: 25, requestsRemaining: 0, jobsLimit: 250, jobsRemaining: 0, resetAt: RESET_17D, daysToReset: 17, observedAt: '2026-10-10T11:00:00.000Z',
+      costModel: 'per_job', state: 'exhausted',
+    });
+    // (9,773 left − 500 kept back) over the 15 days to the reset.
+    expect(out[3]).toMatchObject({ provider: 'jsearch', calls: 20, limit: 618, jobsReturned: 400, jobsNew: 50, errors: 1, plan: null, requestsLimit: 10_000, requestsRemaining: 9_773, daysToReset: 15, costModel: 'per_request', state: 'ok' });
+    // Unmetered sources: calls and yields only.
+    expect(out[1]).toEqual({ provider: 'ats_public', market: 'intl', calls: 0, limit: null, jobsReturned: 0, jobsNew: 0, errors: 0, ...NO_QUOTA, costModel: 'free', state: 'ok' });
+    expect(out[2]).toMatchObject({ provider: 'bank_robohire', ...NO_QUOTA, costModel: 'free', state: 'ok' });
+  });
+
+  it('a provider absent from the snapshot shows state unknown and null numbers, never invented ones', () => {
+    const [row] = rows({ sources: [src('jsearch', { costModel: 'per_request' })], quota: new Map([['activejobs', quotaSnapshot('activejobs', { plan: 'BASIC', requestsLimit: 25, requestsRemaining: 0 })]]) });
+    expect(row).toEqual({ provider: 'jsearch', market: 'intl', calls: 0, limit: 200, jobsReturned: 0, jobsNew: 0, errors: 0, ...NO_QUOTA, costModel: 'per_request', state: 'unknown' });
+  });
+
+  it('GoApply: "activejobs:cn" is its own row with market cn, its own counters and budget, on the provider\u2019s one plan', () => {
+    const quota = new Map([['activejobs', quotaSnapshot('activejobs', { plan: 'PRO', requestsLimit: 5000, requestsRemaining: 4000, jobsLimit: 100_000, jobsRemaining: 90_000, resetAt: RESET_17D })]]);
+    const out = rows({
+      sources: [src('activejobs', { costModel: 'per_job' }), src('activejobs', { market: 'cn', costModel: 'per_job' }), src('bank_gohire', { market: 'cn' }), src('ats_public'), src('ats_public', { market: 'cn' })],
+      usage: [
+        { provider: 'activejobs', calls: 40, jobsReturned: 900, jobsNew: 80, errors: 0 },
+        { provider: 'activejobs:cn', calls: 6, jobsReturned: 55, jobsNew: 21, errors: 1 },
+        { provider: 'bank_gohire:cn', calls: 3, jobsReturned: 181, jobsNew: 0, errors: 0 },
+      ],
+      quota,
+      env: { INGEST_ACTIVEJOBS_CN_DAILY_CALLS: '20' },
+    });
+    expect(out.map((r) => `${r.provider}|${r.market}`)).toEqual(['activejobs|intl', 'activejobs:cn|cn', 'ats_public|intl', 'ats_public:cn|cn', 'bank_gohire:cn|cn']);
+    // One plan, one cap for both counters: (4,000 left − 250 kept back) over 17 days = 220; the mainland budget of 20 is under it.
+    expect(out[0]).toMatchObject({ calls: 40, limit: 220, plan: 'PRO', requestsRemaining: 4000, state: 'ok' });
+    expect(out[1]).toMatchObject({ provider: 'activejobs:cn', market: 'cn', calls: 6, limit: 20, jobsReturned: 55, jobsNew: 21, errors: 1, plan: 'PRO', jobsLimit: 100_000, jobsRemaining: 90_000, daysToReset: 17, costModel: 'per_job', state: 'ok' });
+    expect(out[4]).toMatchObject({ provider: 'bank_gohire:cn', market: 'cn', calls: 3, limit: null, jobsReturned: 181, costModel: 'free', state: 'ok' });
+    // A reading stored under the mainland key wins for the mainland row.
+    const own = new Map([...quota, ['activejobs:cn', quotaSnapshot('activejobs:cn', { plan: 'CN-DIRECT', requestsLimit: 100, requestsRemaining: 3, resetAt: RESET_17D })]]);
+    const cn = rows({ sources: [src('activejobs', { market: 'cn', costModel: 'per_job' })], quota: own })[0]!;
+    expect(cn).toMatchObject({ provider: 'activejobs:cn', plan: 'CN-DIRECT', requestsRemaining: 3, state: 'low' });
+  });
+
+  it('a mainland counter with no budget set is 0 for a metered provider and stays unmetered for a bank', () => {
+    const out = rows({ sources: [src('activejobs', { market: 'cn', costModel: 'per_job' }), src('bank_gohire', { market: 'cn' })] });
+    expect(out.map((r) => [r.provider, r.limit])).toEqual([['activejobs:cn', 0], ['bank_gohire:cn', null]]);
+  });
+
+  it('a usage row no served brand lists is still shown (real calls are never hidden), with the market from its key', () => {
+    const out = rows({
+      sources: [src('bank_gohire', { market: 'cn' })],
+      usage: [{ provider: 'jsearch', calls: 2, jobsReturned: 10, jobsNew: 1, errors: 0 }, { provider: 'activejobs:cn', calls: 1, jobsReturned: 0, jobsNew: 0, errors: 1 }],
+    });
+    expect(out.map((r) => `${r.provider}|${r.market}|${r.costModel}|${r.state}|${r.calls}`)).toEqual(['activejobs:cn|cn|per_job|unknown|1', 'bank_gohire:cn|cn|free|ok|0', 'jsearch|intl|per_request|unknown|2']);
+  });
+
+  it('a reading whose reset time has passed says nothing about this period: plan and limits stay, what was left and the state do not', () => {
+    const stale = quotaSnapshot('activejobs', { plan: 'BASIC', requestsLimit: 25, requestsRemaining: 0, jobsLimit: 250, jobsRemaining: 0, resetAt: '2026-10-10T11:59:00.000Z', state: 'exhausted' });
+    const [row] = rows({ sources: [src('activejobs', { costModel: 'per_job' })], quota: new Map([['activejobs', stale]]) });
+    expect(row).toMatchObject({ plan: 'BASIC', requestsLimit: 25, requestsRemaining: null, jobsLimit: 250, jobsRemaining: null, resetAt: null, daysToReset: null, observedAt: '2026-10-10T11:00:00.000Z', state: 'unknown' });
+    // A closed reading with no reset time stated stands as the provider's last word.
+    const noReset = quotaSnapshot('activejobs', { state: 'not_subscribed', lastStatus: 403 });
+    expect(rows({ sources: [src('activejobs', { costModel: 'per_job', enabled: false, reason: 'quota' })], quota: new Map([['activejobs', noReset]]) })[0]).toMatchObject({ state: 'not_subscribed', daysToReset: null, plan: null });
+  });
+
+  it('the daily limit is what ingest enforces that day, so "calls today" and the budget alert mean what ingest does', () => {
+    const alerts = (providers: ProviderUsageRow[]) => evaluateAlerts({ brands: [], queue: { kinds: [], deadTotal: 0 }, providers, dayElapsedShare: 1 }).map((a) => `${a.key}:${a.subject}`);
+    // JSearch: 9,773 of 10,000 left, 17 days to the reset. Ingest may make 545 calls a day, not the default 200.
+    const jsearch = new Map([['jsearch', quotaSnapshot('jsearch', { requestsLimit: 10_000, requestsRemaining: 9_773, resetAt: RESET_17D })]]);
+    const busy = rows({ sources: [src('jsearch', { costModel: 'per_request' })], usage: [{ provider: 'jsearch', calls: 190, jobsReturned: 3000, jobsNew: 200, errors: 0 }], quota: jsearch });
+    expect(busy[0]).toMatchObject({ calls: 190, limit: 545, state: 'ok' });
+    expect(alerts(busy)).toEqual([]);
+    // A bound the operator set still holds under the cap, and is cut by it when the plan allows less.
+    expect(rows({ sources: [src('jsearch', { costModel: 'per_request' })], quota: jsearch, env: { INGEST_JSEARCH_DAILY_CALLS: '200' } })[0]!.limit).toBe(200);
+    expect(rows({ sources: [src('jsearch', { costModel: 'per_request' })], quota: jsearch, env: { INGEST_JSEARCH_DAILY_CALLS: '900' } })[0]!.limit).toBe(545);
+    // Active Jobs DB on BASIC: 23 of 25 left, 17 days. One call a day, and that one call is the day's budget.
+    const basic = new Map([['activejobs', quotaSnapshot('activejobs', { plan: 'BASIC', requestsLimit: 25, requestsRemaining: 23, resetAt: RESET_17D })]]);
+    const one = rows({ sources: [src('activejobs', { costModel: 'per_job' })], usage: [{ provider: 'activejobs', calls: 1, jobsReturned: 10, jobsNew: 2, errors: 0 }], quota: basic });
+    expect(one[0]).toMatchObject({ calls: 1, limit: 1, state: 'ok' });
+    expect(alerts(one)).toEqual(['provider_budget:activejobs']);
+    // No reading, a reading with no reset time, or one whose period ended: the cap is not known, the configured limit stands.
+    const unknownCap = [new Map(), new Map([['jsearch', quotaSnapshot('jsearch', { requestsLimit: 10_000, requestsRemaining: 9_773 })]]), new Map([['jsearch', quotaSnapshot('jsearch', { requestsLimit: 10_000, requestsRemaining: 9_773, resetAt: '2026-10-10T11:59:00.000Z' })]])];
+    for (const quota of unknownCap) expect(rows({ sources: [src('jsearch', { costModel: 'per_request' })], quota })[0]!.limit).toBe(200);
+  });
+
+  it('a provider at or under ingest\u2019s reserve reads "low" whether or not the adapter is already off for it', () => {
+    // 400 of 10,000 left: under the 500 ingest keeps for people's own searches. In a process that holds the
+    // reading the adapter is off (it states no reason); in one that does not it is still on. One state for both.
+    const quota = new Map([['jsearch', quotaSnapshot('jsearch', { requestsLimit: 10_000, requestsRemaining: 400, resetAt: RESET_17D })]]);
+    const warm = rows({ sources: [src('jsearch', { costModel: 'per_request', enabled: false, reason: 'disabled' })], quota })[0]!;
+    const cold = rows({ sources: [src('jsearch', { costModel: 'per_request' })], quota })[0]!;
+    expect([warm.state, cold.state]).toEqual(['low', 'low']);
+    expect(evaluateAlerts({ brands: [], queue: { kinds: [], deadTotal: 0 }, providers: [warm], dayElapsedShare: 1 })).toEqual([
+      { key: 'provider_quota', brand: null, subject: 'jsearch', value: 400, level: 1000, state: 'low', daysToReset: 17 },
+    ]);
+    expect(warm.limit).toBe(0);
+    // Active Jobs DB on BASIC keeps 2 back: with 2 left it is low, not "off".
+    const basic = new Map([['activejobs', quotaSnapshot('activejobs', { plan: 'BASIC', requestsLimit: 25, requestsRemaining: 2, resetAt: RESET_17D })]]);
+    expect(rows({ sources: [src('activejobs', { costModel: 'per_job', enabled: false, reason: 'disabled' })], quota: basic })[0]!.state).toBe('low');
+    // 900 left is low and above the reserve: an adapter that is off there is off for something else.
+    const above = new Map([['jsearch', quotaSnapshot('jsearch', { requestsLimit: 10_000, requestsRemaining: 900, resetAt: RESET_17D })]]);
+    expect(rows({ sources: [src('jsearch', { costModel: 'per_request', enabled: false, reason: 'disabled' })], quota: above })[0]!.state).toBe('disabled');
+    // A reason of its own always wins, and the reserve share is the operator's.
+    expect(rows({ sources: [src('jsearch', { costModel: 'per_request', enabled: false, reason: 'no_key' })], quota })[0]!.state).toBe('disabled');
+    expect(rows({ sources: [src('jsearch', { costModel: 'per_request', enabled: false, reason: 'disabled' })], quota: above, env: { INGEST_QUOTA_RESERVE_SHARE: '0.09' } })[0]!.state).toBe('low');
+  });
+
+  it('the licensed feed reads the plan it is billed on and is gated under 20,000 postings a month', () => {
+    const basic = new Map([['activejobs', quotaSnapshot('activejobs', { plan: 'BASIC', requestsLimit: 25, requestsRemaining: 11, jobsLimit: 250, jobsRemaining: 120, resetAt: RESET_17D })]]);
+    const feed = (quota: Map<string, ReturnType<typeof quotaSnapshot>>, market: 'intl' | 'cn' = 'intl') =>
+      rows({ sources: [src('activejobs_feed', { market, costModel: 'per_job', enabled: false, reason: 'disabled' })], quota })[0]!;
+    expect(feed(basic)).toMatchObject({ provider: 'activejobs_feed', plan: 'BASIC', jobsLimit: 250, jobsRemaining: 120, daysToReset: 17, state: 'gated' });
+    expect(feed(basic, 'cn')).toMatchObject({ provider: 'activejobs_feed:cn', market: 'cn', plan: 'BASIC', state: 'gated' });
+    const paid = new Map([['activejobs', quotaSnapshot('activejobs', { plan: 'ULTRA', jobsLimit: 100_000, jobsRemaining: 99_000, resetAt: RESET_17D })]]);
+    expect(feed(paid)).toMatchObject({ plan: 'ULTRA', state: 'disabled' });
+    // No reading at all: nothing says the plan is too small.
+    expect(feed(new Map())).toMatchObject({ plan: null, jobsLimit: null, state: 'disabled' });
+    // The plan it is billed on is shown; the search provider's daily budget is not the feed's.
+    const search = quotaSnapshot('activejobs', { plan: 'ULTRA', requestsLimit: 10_000, requestsRemaining: 300, jobsLimit: 100_000, jobsRemaining: 99_000, resetAt: RESET_17D });
+    expect(feed(new Map([['activejobs', search]]))).toMatchObject({ plan: 'ULTRA', requestsRemaining: 300, limit: null, state: 'disabled' });
+  });
+});
+
+describe('providerSources (the registry of every served brand)', () => {
+  const adapter = (provider: string, over: Record<string, unknown> = {}) => ({ provider, kind: 'search', markets: ['intl', 'cn'], sourceBoards: [], isEnabled: () => true, supportsCountry: () => true, dailyCallLimit: () => null, fetch: async () => ({ jobs: [], calls: 0 }), ...over });
+  const described = (market: 'intl' | 'cn', provider: string, kind: string, status: { enabled: boolean; reason: string | null }, a: unknown = null) =>
+    ({ brand: market === 'cn' ? 'goapply' : 'roboapply', market, provider, kind, transport: 'off', sourceBoards: [], adapter: a, enabled: () => status.enabled, status: () => ({ ...status, transport: 'off' }) }) as never;
+  const list: SourceLister = (brand) =>
+    brand.market === 'cn'
+      ? [
+          described('cn', 'bank_gohire', 'bank', { enabled: false, reason: 'tls_required' }),
+          // On in general, off for the mainland (a per-market gate): the row reads as off.
+          described('cn', 'activejobs', 'search', { enabled: true, reason: null }, adapter('activejobs', { isEnabledFor: (m: string) => m === 'intl', costModel: 'per_job' })),
+          described('cn', 'user_import', 'import', { enabled: true, reason: null }),
+        ]
+      : [
+          described('intl', 'activejobs', 'search', { enabled: true, reason: null }, adapter('activejobs', { isEnabledFor: (m: string) => m === 'intl' })),
+          described('intl', 'jsearch', 'search', { enabled: false, reason: 'no_key' }, adapter('jsearch', { isEnabled: () => false })),
+          described('intl', 'ats_public', 'ats', { enabled: true, reason: null }),
+          described('intl', 'user_import', 'import', { enabled: true, reason: null }),
+        ];
+
+  it('one source per provider and market, without user_import; the cost model from the adapter or the provider id', () => {
+    expect(providerSources(['roboapply', 'goapply'], {}, list)).toEqual([
+      { provider: 'activejobs', market: 'intl', enabled: true, reason: null, costModel: 'per_job' },
+      { provider: 'jsearch', market: 'intl', enabled: false, reason: 'no_key', costModel: 'per_request' },
+      { provider: 'ats_public', market: 'intl', enabled: true, reason: null, costModel: 'free' },
+      { provider: 'bank_gohire', market: 'cn', enabled: false, reason: 'tls_required', costModel: 'free' },
+      { provider: 'activejobs', market: 'cn', enabled: false, reason: null, costModel: 'per_job' },
+    ]);
+    expect(providerSources(['roboapply'], {}, list).map((s) => `${s.provider}:${s.market}`)).toEqual(['activejobs:intl', 'jsearch:intl', 'ats_public:intl']);
+  });
+
+  it('on or off is the adapter\u2019s answer for the market, and an adapter that is off for one market says why itself', () => {
+    const perMarket = (over: Record<string, unknown>) => adapter('activejobs', { costModel: 'per_job', ...over });
+    const one = (a: unknown, status = { enabled: true, reason: null as string | null }): SourceLister => (brand) => (brand.market === 'cn' ? [described('cn', 'activejobs', 'search', status, a)] : []);
+    // On in general, off for the mainland until a larger plan exists: the adapter's code is the reason (the row then reads "gated").
+    expect(providerSources(['goapply'], {}, one(perMarket({ isEnabledFor: () => false, disabledReason: () => 'plan_too_small' })))).toEqual([
+      { provider: 'activejobs', market: 'cn', enabled: false, reason: 'plan_too_small', costModel: 'per_job' },
+    ]);
+    // The per-market answer decides, as it does for ingest: off in general, on for this market.
+    expect(providerSources(['goapply'], {}, one(perMarket({ isEnabled: () => false, isEnabledFor: (m: string) => m === 'cn' }), { enabled: false, reason: 'disabled' }))[0]).toMatchObject({ enabled: true, reason: null });
+    // An adapter that throws while answering is off, and a reason that throws is "not stated".
+    const broken = perMarket({ isEnabledFor: () => { throw new Error('boom'); }, disabledReason: () => { throw new Error('boom'); } });
+    expect(providerSources(['goapply'], {}, one(broken))[0]).toMatchObject({ enabled: false, reason: null });
+    // No adapter for the market: the registry's reason.
+    expect(providerSources(['goapply'], {}, one(null, { enabled: false, reason: 'wrong_market' }))[0]).toMatchObject({ enabled: false, reason: 'wrong_market', costModel: 'per_job' });
+  });
+
+  it('each brand\u2019s sources answer in that brand\u2019s own context: the rows do not depend on the host the admin is on', () => {
+    // An adapter that asks which brand the unit of work runs as (a provider that is never called for the mainland).
+    const hostBound = adapter('jsearch', { markets: ['intl'], isEnabled: () => getCurrentBrandId() !== 'goapply', disabledReason: () => (getCurrentBrandId() === 'goapply' ? 'wrong_brand' : null) });
+    const asked: string[] = [];
+    const lister: SourceLister = (brand) => {
+      asked.push(`${brand.id}:${getCurrentBrandId()}`);
+      if (brand.market !== 'intl') return [];
+      const status = () => ({ enabled: hostBound.isEnabled(), transport: 'rapidapi', reason: hostBound.disabledReason() ?? null });
+      return [{ brand: brand.id, market: 'intl', provider: 'jsearch', kind: 'search', transport: 'rapidapi', sourceBoards: [], adapter: hostBound, enabled: () => status().enabled, status } as never];
+    };
+    const want = [{ provider: 'jsearch', market: 'intl', enabled: true, reason: null, costModel: 'per_request' }];
+    expect(runWithBrand('goapply', () => providerSources(['roboapply', 'goapply'], {}, lister))).toEqual(want);
+    expect(runWithBrand('roboapply', () => providerSources(['roboapply', 'goapply'], {}, lister))).toEqual(want);
+    expect(providerSources(['goapply', 'roboapply'], {}, lister)).toEqual(want);
+    expect(new Set(asked)).toEqual(new Set(['roboapply:roboapply', 'goapply:goapply']));
+    // The caller's own context is untouched afterwards.
+    expect(runWithBrand('goapply', () => (providerSources(['roboapply'], {}, lister), getCurrentBrandId()))).toBe('goapply');
+  });
+
+  it('the real registry: RoboApply lists its search providers and bank, GoApply its bank, and neither lists user_import', () => {
+    const robo = providerSources(['roboapply'], {}).map((s) => s.provider);
+    expect(robo).toEqual(expect.arrayContaining(['activejobs', 'bank_robohire', 'jsearch']));
+    const both = providerSources(['roboapply', 'goapply'], {});
+    expect(both.find((s) => s.provider === 'bank_gohire')).toMatchObject({ market: 'cn', costModel: 'free' });
+    expect(both.find((s) => s.provider === 'jsearch')).toMatchObject({ market: 'intl', costModel: 'per_request' });
+    expect(both.find((s) => s.provider === 'activejobs' && s.market === 'intl')).toMatchObject({ costModel: 'per_job' });
+    expect(both.map((s) => s.provider)).not.toContain('user_import');
+    // MARKET_STRATEGY M-6: no RapidAPI search provider is a GoApply source.
+    expect(both.filter((s) => s.market === 'cn').map((s) => s.provider)).not.toContain('jsearch');
+  });
+});
+
+describe('mainlandCounterSources (a mainland counter the operator opened)', () => {
+  const quota = new Map([
+    ['activejobs', quotaSnapshot('activejobs', { plan: 'BASIC', requestsLimit: 25, requestsRemaining: 0, resetAt: RESET_17D, state: 'exhausted', lastStatus: 429 })],
+    ['jsearch', quotaSnapshot('jsearch', { requestsLimit: 10_000, requestsRemaining: 9_773 })],
+  ]);
+  const OPEN = { INGEST_ACTIVEJOBS_CN_DAILY_CALLS: '20' };
+  const counter = { provider: 'activejobs', market: 'cn', enabled: true, reason: null, costModel: 'per_job' };
+
+  it('one source per provider of the snapshot whose mainland budget is above 0, when a mainland brand is served', () => {
+    expect(mainlandCounterSources({ brands: ['goapply'], quota, listed: [], env: OPEN })).toEqual([counter]);
+    expect(mainlandCounterSources({ brands: ['roboapply', 'goapply'], quota, listed: [src('activejobs', { costModel: 'per_job' })], env: OPEN })).toEqual([counter]);
+    // A reading stored under the mainland key names the same counter, once.
+    const both = new Map([...quota, ['activejobs:cn', quotaSnapshot('activejobs:cn', { state: 'ok' })]]);
+    expect(mainlandCounterSources({ brands: ['goapply'], quota: both, listed: [], env: OPEN })).toEqual([counter]);
+  });
+
+  it('the operator’s setting decides: no budget, no mainland brand or no reading means no row', () => {
+    expect(mainlandCounterSources({ brands: ['goapply'], quota, listed: [], env: {} })).toEqual([]);
+    expect(mainlandCounterSources({ brands: ['goapply'], quota, listed: [], env: { INGEST_ACTIVEJOBS_CN_DAILY_CALLS: '0' } })).toEqual([]);
+    expect(mainlandCounterSources({ brands: ['roboapply'], quota, listed: [], env: OPEN })).toEqual([]);
+    expect(mainlandCounterSources({ brands: ['goapply'], quota: new Map(), listed: [], env: OPEN })).toEqual([]);
+    // A source the registry already lists for the mainland keeps the registry's answer.
+    expect(mainlandCounterSources({ brands: ['goapply'], quota, listed: [src('activejobs', { market: 'cn', costModel: 'per_job', enabled: false, reason: 'plan_too_small' })], env: OPEN })).toEqual([]);
+    // An unmetered provider has no quota to watch, whatever a snapshot says.
+    const bank = new Map([['bank_gohire', quotaSnapshot('bank_gohire')]]);
+    expect(mainlandCounterSources({ brands: ['goapply'], quota: bank, listed: [], env: { INGEST_BANK_GOHIRE_CN_DAILY_CALLS: '20' } })).toEqual([]);
+  });
+});
+
+describe('providerDailyLimit', () => {
+  const reading = (requestsRemaining: number | null, requestsLimit: number | null = 10_000, resetAt: string | null = RESET_17D) => ({ requestsLimit, requestsRemaining, resetAt });
+
+  it('with no quota reading: the ingest limit (intl), the mainland budget (cn), null when not metered', () => {
+    expect(limits.providerDailyLimit('jsearch', 'intl', {})).toBe(dailyCallLimit('jsearch', {}));
+    expect(limits.providerDailyLimit('jsearch', 'intl', { INGEST_JSEARCH_DAILY_CALLS: '50' })).toBe(50);
+    expect(limits.providerDailyLimit('bank_robohire', 'intl', {})).toBeNull();
+    expect(limits.providerDailyLimit('activejobs', 'cn', {})).toBe(0);
+    expect(limits.providerDailyLimit('activejobs', 'cn', { INGEST_ACTIVEJOBS_DAILY_CALLS: '500' })).toBe(0);
+    expect(limits.providerDailyLimit('activejobs', 'cn', { INGEST_ACTIVEJOBS_CN_DAILY_CALLS: '20' })).toBe(20);
+    expect(limits.providerDailyLimit('activejobs', 'cn', { INGEST_ACTIVEJOBS_CN_DAILY_CALLS: 'many' })).toBe(0);
+    expect(limits.providerDailyLimit('bank_gohire', 'cn', {})).toBeNull();
+  });
+
+  it('quotaReserve: the share of the plan ingest never spends, at least 1', () => {
+    expect(limits.quotaReserve(10_000, {})).toBe(500);
+    expect(limits.quotaReserve(25, {})).toBe(2);
+    expect(limits.quotaReserve(null, {})).toBe(1);
+    expect(limits.quotaReserve(10_000, { INGEST_QUOTA_RESERVE_SHARE: '0.2' })).toBe(2000);
+    expect(limits.quotaReserve(10_000, { INGEST_QUOTA_RESERVE_SHARE: '0' })).toBe(1);
+    expect(limits.quotaReserve(10_000, { INGEST_QUOTA_RESERVE_SHARE: '7' })).toBe(10_000);
+    expect(limits.quotaReserve(10_000, { INGEST_QUOTA_RESERVE_SHARE: 'half' })).toBe(500);
+  });
+
+  it('quotaDailyCap: what is left above the reserve, spread over the days to the reset; null when the provider did not state it', () => {
+    expect(limits.quotaDailyCap(reading(9_773), NOW, {})).toBe(545);
+    expect(limits.quotaDailyCap(reading(23, 25), NOW, {})).toBe(1);
+    expect(limits.quotaDailyCap(reading(0, 25), NOW, {})).toBe(0);
+    expect(limits.quotaDailyCap(reading(400), NOW, {})).toBe(0);
+    // The last day of the period: everything above the reserve.
+    expect(limits.quotaDailyCap(reading(9_773, 10_000, '2026-10-10T18:00:00.000Z'), NOW, {})).toBe(9_273);
+    expect(limits.quotaDailyCap(reading(null), NOW, {})).toBeNull();
+    expect(limits.quotaDailyCap(reading(9_773, 10_000, null), NOW, {})).toBeNull();
+    expect(limits.quotaDailyCap(null, NOW, {})).toBeNull();
+  });
+
+  it('intl: a stated quota replaces the default, and a bound the operator set holds under it', () => {
+    expect(limits.providerDailyLimit('jsearch', 'intl', {}, reading(9_773), NOW)).toBe(545);
+    expect(limits.providerDailyLimit('jsearch', 'intl', { INGEST_JSEARCH_DAILY_CALLS: '200' }, reading(9_773), NOW)).toBe(200);
+    expect(limits.providerDailyLimit('jsearch', 'intl', { INGEST_JSEARCH_DAILY_CALLS: '900' }, reading(9_773), NOW)).toBe(545);
+    expect(limits.providerDailyLimit('jsearch', 'intl', { INGEST_JSEARCH_DAILY_CALLS: '0' }, reading(9_773), NOW)).toBe(0);
+    expect(limits.providerDailyLimit('activejobs', 'intl', {}, reading(23, 25), NOW)).toBe(1);
+    expect(limits.providerDailyLimit('activejobs', 'intl', {}, reading(0, 25), NOW)).toBe(0);
+    // A reading that states no reset time gives no cap.
+    expect(limits.providerDailyLimit('jsearch', 'intl', {}, reading(9_773, 10_000, null), NOW)).toBe(dailyCallLimit('jsearch', {}));
+  });
+
+  it('cn: the mainland budget under the same cap', () => {
+    const open = { INGEST_ACTIVEJOBS_CN_DAILY_CALLS: '20' };
+    expect(limits.providerDailyLimit('activejobs', 'cn', open, reading(4_000, 5_000), NOW)).toBe(20);
+    expect(limits.providerDailyLimit('activejobs', 'cn', open, reading(23, 25), NOW)).toBe(1);
+    expect(limits.providerDailyLimit('activejobs', 'cn', open, reading(0, 25), NOW)).toBe(0);
+    expect(limits.providerDailyLimit('activejobs', 'cn', {}, reading(4_000, 5_000), NOW)).toBe(0);
+    expect(limits.mainlandCallBudget('activejobs', open)).toBe(20);
+    expect(limits.mainlandCallBudget('activejobs', {})).toBe(0);
+    expect(limits.mainlandCallBudget('activejobs', { INGEST_ACTIVEJOBS_CN_DAILY_CALLS: '-4' })).toBe(0);
+  });
+
+  // The rule belongs to the ingest area (jobs/ingest/config.ts `effectiveDailyLimit`, which reads the quota from
+  // ingest's in-memory copy). limits.ts states it with the reading as an argument, because the admin process
+  // holds the stored reading instead. This test compares the two as soon as the ingest area exports its own.
+  const upstream = ingest as unknown as {
+    effectiveDailyLimit?: (provider: string, market: 'intl' | 'cn', env: Record<string, string | undefined>, now: Date) => number | null;
+    hydrateProviderQuota?: (store: { appConfig: { findUnique: (args: unknown) => Promise<{ value: string } | null> } }) => Promise<void>;
+  };
+  it.skipIf(typeof upstream.effectiveDailyLimit !== 'function' || typeof upstream.hydrateProviderQuota !== 'function')('the daily limit is the one ingest enforces (same reading, same answer)', async () => {
+    const stored = new Map([
+      ['activejobs', quotaSnapshot('activejobs', { plan: 'BASIC', requestsLimit: 25, requestsRemaining: 23, resetAt: RESET_17D })],
+      ['jsearch', quotaSnapshot('jsearch', { requestsLimit: 10_000, requestsRemaining: 9_773, resetAt: RESET_17D })],
+    ]);
+    await upstream.hydrateProviderQuota!({ appConfig: { findUnique: async () => ({ value: serializeProviderQuota(stored) }) } });
+    const envs: Array<Record<string, string>> = [
+      {},
+      { INGEST_JSEARCH_DAILY_CALLS: '200', INGEST_ACTIVEJOBS_DAILY_CALLS: '0' },
+      { INGEST_JSEARCH_DAILY_CALLS: '900', INGEST_ACTIVEJOBS_CN_DAILY_CALLS: '20', INGEST_JSEARCH_CN_DAILY_CALLS: '5' },
+      { INGEST_QUOTA_RESERVE_SHARE: '0.2' },
+      // A bound set under a name only the ingest area knows (its deprecated alias) is still the operator's bound.
+      { RA_ONBOARDING_JSEARCH_DAILY_BUDGET: '150' },
+    ];
+    for (const env of envs) {
+      // The providers ingest meters by daily calls. (For one it does not meter, the panel shows "no daily limit": null.)
+      for (const provider of ['activejobs', 'jsearch']) {
+        for (const market of ['intl', 'cn'] as const) {
+          const mine = limits.providerDailyLimit(provider, market, env, stored.get(provider) ?? null, NOW);
+          expect(mine, `${provider} ${market} ${JSON.stringify(env)}`).toBe(upstream.effectiveDailyLimit!(provider, market, env, NOW));
+        }
+      }
+    }
+  });
+});
+
+describe('createPrismaSystemStore.providerQuota', () => {
+  const dbWith = (value: string | null) => {
+    const keys: string[] = [];
+    const db = { appConfig: { findUnique: async (args: { where: { key: string } }) => (keys.push(args.where.key), value === null ? null : { value }) } };
+    return { keys, store: createPrismaSystemStore(db as never) };
+  };
+
+  it('reads the one AppConfig row ingest writes and parses it with the contract\u2019s parser', async () => {
+    const stored = serializeProviderQuota([quotaSnapshot('activejobs', { plan: 'BASIC', requestsLimit: 25, requestsRemaining: 0, resetAt: RESET_17D, state: 'exhausted' }), quotaSnapshot('activejobs:cn', { state: 'ok' })]);
+    const { keys, store } = dbWith(stored);
+    const quota = await store.providerQuota();
+    expect(keys).toEqual([PROVIDER_QUOTA_CONFIG_KEY]);
+    expect(PROVIDER_QUOTA_CONFIG_KEY).toBe('jobs.providerQuota.v1');
+    expect([...quota.keys()]).toEqual(['activejobs', 'activejobs:cn']);
+    expect(quota.get('activejobs')).toMatchObject({ plan: 'BASIC', requestsRemaining: 0, state: 'exhausted' });
+  });
+
+  it('no row, or a damaged one, is "nothing recorded" (never an error, never a made-up reading)', async () => {
+    expect((await dbWith(null).store.providerQuota()).size).toBe(0);
+    expect((await dbWith('{not json').store.providerQuota()).size).toBe(0);
+    expect((await dbWith(JSON.stringify({ version: 2, providers: {} })).store.providerQuota()).size).toBe(0);
+  });
+
+  it('never writes: the store reads AppConfig with findUnique only', () => {
+    const source = readFileSync(new URL('../system.ts', import.meta.url), 'utf8');
+    expect(source).not.toMatch(/appConfig\.(upsert|update|create|delete)/);
   });
 });
 
@@ -220,8 +788,72 @@ describe('buildSystemStatus', () => {
     expect(s.dayElapsedShare).toBe(0.5);
     expect(s.queue.deadTotal).toBe(3);
     expect(s.queue.kinds[0]!.kind).toBe('job.enrich');
-    expect(s.providers).toEqual([{ provider: 'jsearch', calls: 20, limit: 200, jobsReturned: 400, jobsNew: 50, errors: 0 }]);
     expect(s.asOf).toBe(NOW.toISOString());
+  });
+
+  it('providers: every source of the served brands, with or without a call today, merged with usage and the quota snapshot', async () => {
+    const store = fakeSystemStore(
+      fakeSystemData({
+        // Only jsearch made calls today (the default usage row).
+        quota: {
+          activejobs: { plan: 'BASIC', requestsLimit: 25, requestsRemaining: 0, resetAt: RESET_17D, state: 'exhausted', lastStatus: 429 },
+          jsearch: { requestsLimit: 10_000, requestsRemaining: 9_773 },
+        },
+      }),
+    );
+    const s = await buildSystemStatus(store, { brands: ['roboapply'], brandsServed: ['roboapply'], now: NOW, env: {}, listSources: roboSources });
+    expect(s.providers.map((p) => `${p.provider}|${p.state}`)).toEqual(['activejobs|exhausted', 'bank_robohire|ok', 'jsearch|ok']);
+    expect(s.providers[0]).toMatchObject({ market: 'intl', calls: 0, limit: 0, plan: 'BASIC', requestsLimit: 25, requestsRemaining: 0, jobsLimit: null, jobsRemaining: null, daysToReset: 17, costModel: 'per_job' });
+    expect(s.providers[2]).toEqual({
+      provider: 'jsearch', market: 'intl', calls: 20, limit: 200, jobsReturned: 400, jobsNew: 50, errors: 0,
+      plan: null, requestsLimit: 10_000, requestsRemaining: 9_773, jobsLimit: null, jobsRemaining: null, resetAt: null, daysToReset: null, observedAt: '2026-10-10T11:00:00.000Z',
+      costModel: 'per_request', state: 'ok',
+    });
+    // The dead source is an alert the same day, and only that one.
+    expect(s.alerts.filter((a) => a.key === 'provider_quota')).toEqual([{ key: 'provider_quota', brand: null, subject: 'activejobs', value: 0, level: 0, state: 'exhausted', daysToReset: 17 }]);
+  });
+
+  it('providers are platform-wide: the served brands decide the list, not the brand shown', async () => {
+    const store = fakeSystemStore(fakeSystemData({ providers: [{ provider: 'bank_gohire:cn', calls: 3, jobsReturned: 181, jobsNew: 0, errors: 0 }] }));
+    const lister: SourceLister = (brand, env) => (brand.id === 'goapply' ? goProviderSources(brand, env) : roboSources(brand, env));
+    const shown = await buildSystemStatus(store, { brands: ['roboapply'], brandsServed: ['roboapply', 'goapply'], now: NOW, env: {}, listSources: lister });
+    expect(shown.brands.map((b) => b.brand)).toEqual(['roboapply']);
+    expect(shown.providers.map((p) => `${p.provider}|${p.market}`)).toEqual(['activejobs|intl', 'activejobs:cn|cn', 'bank_gohire:cn|cn', 'bank_robohire|intl', 'jsearch|intl']);
+    expect(shown.providers.find((p) => p.provider === 'bank_gohire:cn')).toMatchObject({ calls: 3, jobsReturned: 181, costModel: 'free', state: 'ok' });
+    // A deployment that serves RoboApply only lists no mainland source.
+    const intlOnly = await buildSystemStatus(fakeSystemStore(), { brands: ['roboapply'], brandsServed: ['roboapply'], now: NOW, env: {}, listSources: lister });
+    expect(intlOnly.providers.every((p) => p.market === 'intl')).toBe(true);
+  });
+
+  it('a mainland counter the operator opened is listed on a day without calls, including the day the plan dies', async () => {
+    // GoApply's registry lists no search provider; its own searches may call Active Jobs DB once the mainland budget is open.
+    const dead = { activejobs: { plan: 'BASIC', requestsLimit: 25, requestsRemaining: 0, resetAt: RESET_17D, state: 'exhausted' as const, lastStatus: 429 } };
+    const store = fakeSystemStore(fakeSystemData({ providers: [], quota: dead }));
+    const lister: SourceLister = (brand, env) => (brand.id === 'goapply' ? [onSource('goapply', 'bank_gohire', 'bank'), onSource('goapply', 'user_import', 'import')] : roboSources(brand, env));
+    const open = await buildSystemStatus(store, { brands: ['goapply'], brandsServed: ['goapply'], now: NOW, env: { INGEST_ACTIVEJOBS_CN_DAILY_CALLS: '20' }, listSources: lister });
+    expect(open.providers.map((p) => `${p.provider}|${p.market}|${p.state}`)).toEqual(['activejobs:cn|cn|exhausted', 'bank_gohire:cn|cn|ok']);
+    expect(open.providers[0]).toMatchObject({ calls: 0, limit: 0, plan: 'BASIC', requestsLimit: 25, requestsRemaining: 0, daysToReset: 17, costModel: 'per_job' });
+    expect(open.alerts.filter((a) => a.key === 'provider_quota')).toEqual([{ key: 'provider_quota', brand: null, subject: 'activejobs:cn', value: 0, level: 0, state: 'exhausted', daysToReset: 17 }]);
+    // Without the budget the stored reading alone creates no row.
+    const closed = await buildSystemStatus(store, { brands: ['goapply'], brandsServed: ['goapply'], now: NOW, env: {}, listSources: lister });
+    expect(closed.providers.map((p) => p.provider)).toEqual(['bank_gohire:cn']);
+    expect(closed.alerts.filter((a) => a.key === 'provider_quota')).toEqual([]);
+    // A deployment that serves RoboApply only has no mainland counter, whatever the setting.
+    const intl = await buildSystemStatus(store, { brands: ['roboapply'], brandsServed: ['roboapply'], now: NOW, env: { INGEST_ACTIVEJOBS_CN_DAILY_CALLS: '20' }, listSources: lister });
+    expect(intl.providers.map((p) => p.provider)).toEqual(['activejobs', 'bank_robohire', 'jsearch']);
+  });
+
+  it('with the real registry and nothing recorded: every source is listed and no quota number is made up', async () => {
+    const s = await buildSystemStatus(fakeSystemStore(), { brands: ['roboapply', 'goapply'], brandsServed: ['roboapply', 'goapply'], now: NOW, env: {} });
+    const keys = s.providers.map((p) => p.provider);
+    expect(keys).toEqual(expect.arrayContaining(['activejobs', 'bank_robohire', 'jsearch', 'bank_gohire:cn']));
+    expect(keys).toEqual([...keys].sort((a, b) => a.localeCompare(b)));
+    for (const p of s.providers) {
+      expect([p.plan, p.requestsLimit, p.requestsRemaining, p.jobsLimit, p.jobsRemaining, p.resetAt, p.daysToReset, p.observedAt], p.provider).toEqual([null, null, null, null, null, null, null, null]);
+      expect(p.market).toBe(p.provider.endsWith(':cn') ? 'cn' : 'intl');
+    }
+    expect(s.providers.find((p) => p.provider === 'jsearch')).toMatchObject({ calls: 20, limit: 200, jobsReturned: 400, jobsNew: 50, costModel: 'per_request' });
+    expect(s.alerts.filter((a) => a.key === 'provider_quota')).toEqual([]);
   });
 
   it('live at 03:30 UTC with an even ingest rate: no false ingest alert', async () => {
@@ -805,6 +1437,44 @@ describe('daily health email', () => {
     expect(body.bodyText).toContain(alertLine({ key: 'dead_items', brand: null, subject: null, value: 150, level: 100 }));
     expect(body.bodyText).not.toMatch(/threshold|pipeline|funnel/i);
   });
+
+  it('provider quota lines: one plain line per state, the reset only when the provider stated it', () => {
+    const hit = (state: 'exhausted' | 'not_subscribed' | 'unauthorized' | 'low', daysToReset: number | null = null, subject = 'activejobs') => ({ key: 'provider_quota' as const, brand: null, subject, value: 0, level: 0, state, daysToReset });
+    expect(alertLine(hit('exhausted', 17))).toBe('activejobs: monthly quota used up, resets in 17 days');
+    expect(alertLine(hit('exhausted', 1))).toBe('activejobs: monthly quota used up, resets in 1 day');
+    expect(alertLine(hit('exhausted'))).toBe('activejobs: monthly quota used up');
+    expect(alertLine(hit('not_subscribed', 17))).toBe('activejobs: not subscribed');
+    expect(alertLine(hit('unauthorized'))).toBe('activejobs: key rejected');
+    expect(alertLine(hit('low', 3, 'jsearch'))).toBe('jsearch: under 10% of the monthly quota left');
+    expect(alertLine(hit('exhausted', 17, 'activejobs:cn'))).toBe('activejobs:cn: monthly quota used up, resets in 17 days');
+    // The other alert lines keep their form.
+    expect(alertLine({ key: 'provider_budget', brand: null, subject: 'jsearch', value: 180, level: 180 })).toBe('Job provider calls used most of the daily limit (jsearch): 180 (alert level 180)');
+  });
+
+  it('an exhausted provider is one provider_quota alert in the status and one line in that day\u2019s email; an ok provider adds none', async () => {
+    const quota = {
+      activejobs: { plan: 'BASIC', requestsLimit: 25, requestsRemaining: 0, resetAt: RESET_17D, state: 'exhausted' as const },
+      jsearch: { requestsLimit: 10_000, requestsRemaining: 9_773 },
+    };
+    const send = vi.fn(async () => ({ status: 'sent' as const }));
+    const env = { ADMIN_ALERT_EMAILS: 'ops@example.com', ALLOWED_BRANDS: 'roboapply,goapply' };
+    const task = createAdminHealthTask({ env, send, store: fakeSystemStore(fakeSystemData({ queue: [], quota })), origin: () => 'https://app.example' });
+    expect(await task(ctx('roboapply'))).toEqual({ processed: 1, alerts: 1, recipients: 1 });
+    const call = send.mock.calls[0]![0] as { params: Parameters<typeof adminHealthTemplate.render>[0]['params'] };
+    expect(call.params.alerts).toEqual([{ key: 'provider_quota', brand: null, subject: 'activejobs', value: 0, level: 0, state: 'exhausted', daysToReset: 17 }]);
+    const body = adminHealthTemplate.render({ brand: getBrand('roboapply'), t: ((k: string) => k) as never, origin: 'https://x', params: call.params });
+    // The email covers the last complete UTC day; the quota line is the provider's reading as it stands now.
+    expect(body.subject).toBe('RoboApply health, 2026-10-09: 1 metric needs a look');
+    expect(body.bodyText.split('\n').filter((l) => l.startsWith('- '))).toEqual(['- activejobs: monthly quota used up, resets in 17 days']);
+    expect(body.bodyHtml).toContain('<li>activejobs: monthly quota used up, resets in 17 days</li>');
+    // Provider alerts are platform-wide: the second served brand does not repeat them.
+    send.mockClear();
+    expect(await task(ctx('goapply'))).toEqual({ processed: 0, alerts: 0 });
+    expect(send).not.toHaveBeenCalled();
+    // The same day without the dead source: nothing to send.
+    const quiet = createAdminHealthTask({ env, send, store: fakeSystemStore(fakeSystemData({ queue: [], quota: { jsearch: quota.jsearch } })) });
+    expect(await quiet(ctx('roboapply'))).toEqual({ processed: 0, alerts: 0 });
+  });
 });
 
 // ── Safety view ───────────────────────────────────────────────────────────
@@ -836,7 +1506,10 @@ describe('limits come from the owning areas (J3)', () => {
     expect(src).toContain("export { dailyCallLimit } from '../jobs/ingest/index.js';");
     // system.ts uses only those names (plus the enrich readers).
     const system = readFileSync(new URL('../system.ts', import.meta.url), 'utf8');
-    expect(system).toContain("import { copilotDailyBudgetUsd, dailyCallLimit, enrichCounterKey, enrichDailyLimit, scoreCounterKeys, scoreDailyBudget } from './limits.js';");
+    expect(system).toContain("import { FEED_MIN_MONTHLY_JOBS, copilotDailyBudgetUsd, enrichCounterKey, enrichDailyLimit, mainlandCallBudget, providerDailyLimit, quotaReserve, scoreCounterKeys, scoreDailyBudget } from './limits.js';");
+    // The provider limit is built on the ingest area's readers, not on a copy of its defaults.
+    expect(src).toContain("import { dailyCallLimit, daysToReset, type IngestProvider, type ProviderQuotaSnapshot } from '../jobs/ingest/index.js';");
+    expect(src).not.toMatch(/DEFAULT_DAILY_CALLS|activejobs: \d|jsearch: \d/);
   });
 });
 

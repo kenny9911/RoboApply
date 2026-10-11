@@ -23,9 +23,22 @@
 //     so a budget used up at 20:00 is still reported the next morning.
 // Queue depth, due/overdue queries and open jobs are read as they are now in
 // both modes.
+//
+// Job providers (MARKET_STRATEGY §1.2, JI-1): one row per source of every
+// brand the deployment serves (the registry again, so a provider that made no
+// call is still listed), merged with the day's `RAProviderUsage` counters and
+// with the provider's own quota reading (AppConfig `jobs.providerQuota.v1`,
+// written by ingest, only read here). A dead source is therefore visible the
+// day it dies: plan, quota left, days to reset and a state. Every quota value
+// is the provider's own statement; what it did not state is null.
+//
+// A brand's sources are always read in that brand's own context
+// (`readBrandSources`), whichever host the admin is on and whichever brand a
+// cron runs as: an adapter may answer "on or off" for the brand of the unit
+// of work (a provider that is never called for the mainland is off there).
 
 import prisma from '../../lib/prisma.js';
-import { getBrand, type BrandId, type EnvSource } from '../../platform/brand/index.js';
+import { getBrand, runWithBrand, type BrandId, type EnvSource, type Market, type ProductBrand } from '../../platform/brand/index.js';
 import { DAY, windowStartFor } from '../../platform/ratelimit/index.js';
 import { NOTIFY_TEMPLATES } from '../alerts/index.js';
 import {
@@ -34,20 +47,29 @@ import {
   type BrandHealth,
   type JobSourceRunView,
   type JobSourceView,
+  type ProviderAlertState,
+  type ProviderCostModel,
+  type ProviderState,
   type ProviderUsageRow,
   type QueueKindRow,
   type SystemStatusResponse,
 } from './contract.js';
 import {
+  PROVIDER_QUOTA_CONFIG_KEY,
   bankPublicPageState,
+  daysToReset,
+  parseProviderQuota,
   readSourceStatuses,
   sourcesForBrand,
+  usageKey,
   type IngestProvider,
   type JobSourceDescription,
+  type ProviderQuotaSnapshot,
   type SourceRunStatus,
   type SourceStatusDoc,
 } from '../jobs/ingest/index.js';
-import { copilotDailyBudgetUsd, dailyCallLimit, enrichCounterKey, enrichDailyLimit, scoreCounterKeys, scoreDailyBudget } from './limits.js';
+import { adapterCostModel, adapterEnabledFor } from '../jobs/sources/index.js';
+import { FEED_MIN_MONTHLY_JOBS, copilotDailyBudgetUsd, enrichCounterKey, enrichDailyLimit, mainlandCallBudget, providerDailyLimit, quotaReserve, scoreCounterKeys, scoreDailyBudget } from './limits.js';
 
 const DAY_MS = DAY * 1000;
 const COPILOT_SKU = 'ra_copilot_turn';
@@ -66,7 +88,14 @@ export interface SystemStore {
   openJobCounts(market: string): Promise<{ open: number; enriched: number }>;
   rateCounter(key: string, windowStart: Date): Promise<number>;
   queueByKind(): Promise<QueueKindRow[]>;
-  providerUsage(dayKey: string): Promise<Array<Omit<ProviderUsageRow, 'limit'>>>;
+  /** The day's `RAProviderUsage` rows; `provider` is the usage key ('<provider>' or '<provider>:cn'). */
+  providerUsage(dayKey: string): Promise<ProviderUsageCounters[]>;
+  /**
+   * The providers' quota readings by snapshot key (AppConfig
+   * `jobs.providerQuota.v1`, parsed with `parseProviderQuota`). Read-only:
+   * ingest writes the row. Empty when nothing was recorded.
+   */
+  providerQuota(): Promise<Map<string, ProviderQuotaSnapshot>>;
   /** Email sends per status in `range`, optionally only these templates. */
   emailStatus(brand: string, range: TimeRange, templates?: readonly string[]): Promise<{ sent: number; failed: number }>;
   emailFailuresByTemplate(brand: string, range: TimeRange, limit: number): Promise<Array<{ template: string; count: number }>>;
@@ -84,19 +113,38 @@ export interface SystemStore {
 /** Lists a brand's sources (default: the registry, with the built-in adapters registered). */
 export type SourceLister = (brand: ReturnType<typeof getBrand>, env: EnvSource) => JobSourceDescription[];
 
+/**
+ * Reads every source of one brand inside that brand's context, so what an
+ * adapter answers (on or off, why, how it is reached) is its answer for THIS
+ * brand and not for the brand of the request or cron that asked. `read` runs
+ * synchronously per source; it must not defer a question to later.
+ */
+function readBrandSources<T>(brandId: BrandId, env: EnvSource, list: SourceLister, read: (source: JobSourceDescription, brand: ProductBrand) => T): T[] {
+  const brand = getBrand(brandId);
+  return runWithBrand(brandId, () => list(brand, env).map((source) => read(source, brand)));
+}
+
 function runView(run: SourceRunStatus | null | undefined): JobSourceRunView | null {
   if (!run) return null;
   return { at: run.at, ok: run.ok, error: run.error, received: run.received, written: run.written, inserted: run.inserted, closed: run.closed, skipped: run.skipped, notes: { ...run.notes } };
 }
 
+/** One `RAProviderUsage` row of a day. */
+export interface ProviderUsageCounters {
+  provider: string;
+  calls: number;
+  jobsReturned: number;
+  jobsNew: number;
+  errors: number;
+}
+
 /** A brand's job sources with their state (the admin sources panel). */
 export async function jobSourcesHealth(store: SystemStore, brandId: BrandId, env: EnvSource = process.env, list: SourceLister = sourcesForBrand): Promise<JobSourceView[]> {
   const brand = getBrand(brandId);
-  const sources = list(brand, env);
-  const statuses = await store.sourceStatuses(brand.market, sources.map((s) => s.provider));
+  const sources = readBrandSources(brandId, env, list, (source) => ({ source, status: source.status(), publicPage: bankPublicPageState(source.provider, env) }));
+  const statuses = await store.sourceStatuses(brand.market, sources.map((s) => s.source.provider));
   return Promise.all(
-    sources.map(async (source): Promise<JobSourceView> => {
-      const status = source.status();
+    sources.map(async ({ source, status, publicPage }): Promise<JobSourceView> => {
       const doc = statuses.get(source.provider) ?? null;
       const [counts, boards] = await Promise.all([
         source.sourceBoards.length ? store.sourceJobCounts(brand.market, source.sourceBoards) : Promise.resolve({ open: 0, held: 0 }),
@@ -112,7 +160,7 @@ export async function jobSourcesHealth(store: SystemStore, brandId: BrandId, env
         lastCounted: runView(doc?.counted),
         openJobs: counts.open,
         heldJobs: counts.held,
-        publicPage: bankPublicPageState(source.provider, env),
+        publicPage,
         boards,
       };
     }),
@@ -212,6 +260,274 @@ export async function brandHealth(
   };
 }
 
+// ── Job providers: usage, quota and state (JI-1) ─────────────────────────
+
+/** The source the licensed window feed registers as (JI-7); the M-2 plan gate applies to it. */
+const LICENSED_FEED_PROVIDER = 'activejobs_feed';
+/**
+ * A provider that is billed on another provider's plan reads that provider's
+ * quota: the licensed feed and the Active Jobs DB search are one subscription.
+ */
+const QUOTA_ACCOUNT: Readonly<Record<string, string>> = { [LICENSED_FEED_PROVIDER]: 'activejobs' };
+/** The reason code an adapter gives when it is off until a larger plan exists. */
+const PLAN_GATE_REASON = 'plan_too_small';
+/** The reason code an adapter gives when it is off because the plan's quota does not allow an ingest call now. */
+const QUOTA_REASON = 'quota';
+/** The registry's code for an adapter that is off and gave no reason of its own. */
+const UNSTATED_REASON = 'disabled';
+const CN_SUFFIX = ':cn';
+
+/** A source of a served brand, reduced to what a provider row needs. */
+export interface ProviderSource {
+  provider: string;
+  market: Market;
+  /** On for this market right now (key present, switches off, guards closed, quota gate open). */
+  enabled: boolean;
+  /** Why it is off, as the adapter's short code ('disabled' = it gave none); null when on or not stated. */
+  reason: string | null;
+  costModel: ProviderCostModel;
+}
+
+/** A usage key back into its provider and market: a ':cn' suffix is the mainland counter. */
+export function parseUsageKey(key: string): { provider: string; market: Market } {
+  return key.endsWith(CN_SUFFIX) && key.length > CN_SUFFIX.length ? { provider: key.slice(0, -CN_SUFFIX.length), market: 'cn' } : { provider: key, market: 'intl' };
+}
+
+/** The adapter's own short code for why it is off; null when it gives none (or throws). */
+function adapterReason(adapter: JobSourceDescription['adapter']): string | null {
+  try {
+    return adapter?.disabledReason?.() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The ingest sources of the served brands, one per (provider, market).
+ * `user_import` is not an ingest source and has no usage counter.
+ *
+ * On or off is the adapter's answer for the market (`adapterEnabledFor`: its
+ * `isEnabledFor(market)` when it has one, else `isEnabled()`), the same
+ * question ingest asks before it plans or runs a query. A source the registry
+ * has no adapter for in this market (not registered, another market's) is off
+ * with the registry's reason.
+ */
+export function providerSources(brands: readonly BrandId[], env: EnvSource = process.env, list: SourceLister = sourcesForBrand): ProviderSource[] {
+  const out = new Map<string, ProviderSource>();
+  for (const brandId of brands) {
+    // Each brand's sources answer inside that brand's context: the rows do not depend on the host the admin is on.
+    const sources = readBrandSources(brandId, env, list, (source, brand): ProviderSource | null => {
+      if (source.kind === 'import') return null;
+      const adapter = source.adapter;
+      const status = source.status();
+      const enabled = adapter ? adapterEnabledFor(adapter, brand.market) : status.enabled;
+      return {
+        provider: source.provider,
+        market: brand.market,
+        enabled,
+        // Off for this market only (the registry's status is the adapter's general answer): ask the adapter why.
+        reason: enabled ? null : (status.enabled ? adapterReason(adapter) : status.reason),
+        costModel: adapterCostModel(adapter ?? { provider: source.provider as IngestProvider }),
+      };
+    });
+    for (const source of sources) {
+      if (!source) continue;
+      const key = usageKey(source.provider, source.market);
+      // Two brands of one market share the counter: the provider is on when either runs it.
+      if (!out.get(key)?.enabled) out.set(key, source);
+    }
+  }
+  return [...out.values()];
+}
+
+/**
+ * The mainland counters the operator opened that no served brand's registry
+ * lists. A mainland brand's own searches may call a metered provider once its
+ * mainland budget is above 0 (`mainlandCallBudget`), counted under
+ * `<provider>:cn`, although the provider is not one of the brand's ingest
+ * sources. Such a counter would otherwise show only on a day with calls, and
+ * vanish on the day the plan dies (no call is made, so no usage row exists).
+ *
+ * One source per provider the quota snapshot knows, when a served brand is a
+ * mainland brand and the provider's mainland budget is above 0. The
+ * operator's own setting decides: a snapshot entry alone never creates a row.
+ */
+export function mainlandCounterSources(input: {
+  brands: readonly BrandId[];
+  quota: ReadonlyMap<string, ProviderQuotaSnapshot>;
+  listed: readonly ProviderSource[];
+  env?: EnvSource;
+}): ProviderSource[] {
+  if (!input.brands.some((b) => getBrand(b).market === 'cn')) return [];
+  const env = input.env ?? process.env;
+  const seen = new Set(input.listed.filter((s) => s.market === 'cn').map((s) => s.provider));
+  const out: ProviderSource[] = [];
+  for (const key of input.quota.keys()) {
+    const { provider } = parseUsageKey(key);
+    if (seen.has(provider)) continue;
+    seen.add(provider);
+    const costModel = adapterCostModel({ provider: provider as IngestProvider });
+    if (costModel === 'free' || mainlandCallBudget(provider, env) <= 0) continue;
+    out.push({ provider, market: 'cn', enabled: true, reason: null, costModel });
+  }
+  return out;
+}
+
+/**
+ * The quota reading that applies to a provider in a market: its own entry for
+ * the market, else the provider's (one plan serves both markets), else the
+ * entry of the provider whose plan it is billed on.
+ */
+function quotaFor(quota: ReadonlyMap<string, ProviderQuotaSnapshot>, provider: string, market: Market): { snapshot: ProviderQuotaSnapshot; own: boolean } | null {
+  const own = quota.get(usageKey(provider, market)) ?? quota.get(provider);
+  if (own) return { snapshot: own, own: true };
+  const account = QUOTA_ACCOUNT[provider];
+  const billed = account ? (quota.get(usageKey(account, market)) ?? quota.get(account)) : undefined;
+  return billed ? { snapshot: billed, own: false } : null;
+}
+
+const CLOSED_BY_KEY: ReadonlySet<string> = new Set(['not_subscribed', 'unauthorized']);
+
+/** Left is under `quotaLowShare` of the limit, both stated. */
+function isLow(remaining: number | null, limit: number | null): boolean {
+  return remaining !== null && limit !== null && limit > 0 && remaining < limit * ALERT_LEVELS.quotaLowShare;
+}
+
+/**
+ * The provider says the period's quota is used up: its reading is 'exhausted'
+ * (a 429), or it stated that 0 requests or 0 postings are left. The second
+ * form is the call that used the last of the quota: it was served (state
+ * 'ok') and nothing can follow it until the reset.
+ */
+function isUsedUp(reading: Pick<ProviderQuotaSnapshot, 'state' | 'requestsRemaining' | 'jobsRemaining'>): boolean {
+  return reading.state === 'exhausted' || reading.requestsRemaining === 0 || reading.jobsRemaining === 0;
+}
+
+/**
+ * The provider stated a request limit and what is left of it is at or under
+ * the share ingest keeps for people's own searches (`quotaReserve`). Ingest
+ * makes no call from there on, so its adapter answers "off" although the
+ * provider still serves.
+ */
+function isAtReserve(reading: Pick<ProviderQuotaSnapshot, 'requestsLimit' | 'requestsRemaining'> | null, env: EnvSource): boolean {
+  if (!reading || reading.requestsRemaining === null || reading.requestsLimit === null || reading.requestsLimit <= 0) return false;
+  return reading.requestsRemaining <= quotaReserve(reading.requestsLimit, env);
+}
+
+/**
+ * The state of one provider row (contract.ts `ProviderState`). Pure.
+ *
+ * `reading` is the provider's quota reading, or null when there is none or
+ * its period has ended (a reading from before the reset says nothing about
+ * this period). `source` is null for a usage row no served brand lists.
+ * An unmetered source (bank, employer boards, open data) is only on or off.
+ *
+ * "Off" has two meanings and only one of them is the state 'disabled'. An
+ * adapter that is off for a reason of its own (no key, a kill switch, a
+ * missing certificate) is 'disabled'. An adapter that is off because the
+ * plan's quota stops ingest is not: the provider still answers, and what the
+ * row must show is how much is left ('low', 'exhausted'), the same in a
+ * process that holds the reading in memory and in one that does not. The
+ * quota is the cause when the adapter says so (reason 'quota'), or when it
+ * states no reason while the reading is at or under ingest's reserve
+ * (`atReserve`).
+ */
+export function providerState(input: {
+  provider: string;
+  costModel: ProviderCostModel;
+  source: Pick<ProviderSource, 'enabled' | 'reason'> | null;
+  reading: Pick<ProviderQuotaSnapshot, 'state' | 'requestsLimit' | 'requestsRemaining' | 'jobsLimit' | 'jobsRemaining'> | null;
+  /** The plan's monthly postings as last stated (kept across a reset: a plan fact, not a period fact). */
+  planJobsLimit: number | null;
+  /** The reading is at or under the share of the plan ingest never spends (`isAtReserve`). Default false. */
+  atReserve?: boolean;
+}): ProviderState {
+  const { source, reading } = input;
+  const off = source !== null && !source.enabled;
+  if (input.costModel === 'free') return off ? 'disabled' : 'ok';
+  // The key itself is refused: nothing else about the plan matters until that is fixed.
+  if (reading && CLOSED_BY_KEY.has(reading.state)) return reading.state as ProviderState;
+  // Off until a larger plan exists (M-2): the adapter says so, or the licensed feed's stated plan is under the gate.
+  if (off && (source.reason === PLAN_GATE_REASON || (input.provider === LICENSED_FEED_PROVIDER && input.planJobsLimit !== null && input.planJobsLimit < FEED_MIN_MONTHLY_JOBS))) {
+    return 'gated';
+  }
+  if (reading && isUsedUp(reading)) return 'exhausted';
+  const unstated = off && (source.reason === null || source.reason === UNSTATED_REASON);
+  const offForQuota = off && (source.reason === QUOTA_REASON || (unstated && input.atReserve === true));
+  if (off && !offForQuota) return 'disabled';
+  if (!reading || reading.state === 'unknown') return 'unknown';
+  if (isLow(reading.requestsRemaining, reading.requestsLimit) || isLow(reading.jobsRemaining, reading.jobsLimit)) return 'low';
+  return 'ok';
+}
+
+/**
+ * The provider rows of the System status: every source of the served brands
+ * (zero counters when it made no call), plus any other usage row of the day
+ * (calls that were really made are never hidden), each with its quota
+ * reading and state. Sorted by usage key. Pure.
+ */
+export function buildProviderRows(input: {
+  sources: readonly ProviderSource[];
+  usage: readonly ProviderUsageCounters[];
+  quota: ReadonlyMap<string, ProviderQuotaSnapshot>;
+  now: Date;
+  env?: EnvSource;
+}): ProviderUsageRow[] {
+  const env = input.env ?? process.env;
+  const sources = new Map(input.sources.map((s) => [usageKey(s.provider, s.market), s]));
+  const usage = new Map(input.usage.map((u) => [u.provider, u]));
+  const keys = [...new Set([...sources.keys(), ...usage.keys()])].sort((a, b) => a.localeCompare(b));
+  return keys.map((key): ProviderUsageRow => {
+    const source = sources.get(key) ?? null;
+    const { provider, market } = source ?? parseUsageKey(key);
+    const counters = usage.get(key);
+    const costModel = source?.costModel ?? adapterCostModel({ provider: provider as IngestProvider });
+    const found = costModel === 'free' ? null : quotaFor(input.quota, provider, market);
+    const snapshot = found?.snapshot ?? null;
+    // A reading whose reset time has passed describes the previous period: its plan and limits
+    // still stand, what was left then (and the state that followed from it) does not.
+    const days = daysToReset(snapshot, input.now);
+    const current = snapshot !== null && days !== 0;
+    // What ingest decides from is the provider's own reading: its daily budget and its reserve
+    // are not those of another source billed on the same plan.
+    const own = current && found?.own ? snapshot : null;
+    return {
+      provider: key,
+      market,
+      calls: counters?.calls ?? 0,
+      limit: providerDailyLimit(provider, market, env, own, input.now),
+      jobsReturned: counters?.jobsReturned ?? 0,
+      jobsNew: counters?.jobsNew ?? 0,
+      errors: counters?.errors ?? 0,
+      plan: snapshot?.plan ?? null,
+      requestsLimit: snapshot?.requestsLimit ?? null,
+      requestsRemaining: current ? snapshot.requestsRemaining : null,
+      jobsLimit: snapshot?.jobsLimit ?? null,
+      jobsRemaining: current ? snapshot.jobsRemaining : null,
+      resetAt: current ? snapshot.resetAt : null,
+      daysToReset: current ? days : null,
+      observedAt: snapshot?.observedAt ?? null,
+      costModel,
+      state: providerState({ provider, costModel, source, reading: current ? snapshot : null, planJobsLimit: snapshot?.jobsLimit ?? null, atReserve: isAtReserve(own, env) }),
+    };
+  });
+}
+
+const QUOTA_ALERT_STATES: ReadonlySet<ProviderState> = new Set<ProviderAlertState>(['exhausted', 'not_subscribed', 'unauthorized', 'low']);
+
+/** The `provider_quota` hit of a row, or null (unmetered, or a state that needs no look). */
+function quotaAlert(p: ProviderUsageRow): AlertHit | null {
+  if (p.costModel === 'free' || !QUOTA_ALERT_STATES.has(p.state)) return null;
+  let value = 0;
+  let level = 0;
+  if (p.state === 'low') {
+    const requestsLow = isLow(p.requestsRemaining, p.requestsLimit);
+    value = (requestsLow ? p.requestsRemaining : p.jobsRemaining) ?? 0;
+    level = Math.ceil(((requestsLow ? p.requestsLimit : p.jobsLimit) ?? 0) * ALERT_LEVELS.quotaLowShare);
+  }
+  return { key: 'provider_quota', brand: null, subject: p.provider, value, level, state: p.state as ProviderAlertState, daysToReset: p.daysToReset };
+}
+
 const overShare = (used: number, limit: number | null) => limit !== null && limit > 0 && used >= limit * ALERT_LEVELS.budgetShare;
 
 /**
@@ -221,6 +537,11 @@ const overShare = (used: number, limit: number | null) => limit !== null && limi
  * average prorated by `dayElapsedShare` (1 for a complete day), and stays
  * quiet early in the UTC day (`ingestMinDayShare`) and while the prorated
  * level is under one job.
+ *
+ * Providers: `provider_budget` compares the day's calls with the row's daily
+ * limit, which is the one ingest enforces that day (`providerDailyLimit`);
+ * `provider_quota` reports the provider's own monthly quota, one hit per
+ * metered provider row that is exhausted, not subscribed, refused or low.
  */
 export function evaluateAlerts(status: Pick<SystemStatusResponse, 'brands' | 'queue' | 'providers' | 'dayElapsedShare'>): AlertHit[] {
   const hits: AlertHit[] = [];
@@ -232,6 +553,9 @@ export function evaluateAlerts(status: Pick<SystemStatusResponse, 'brands' | 'qu
     if (overShare(p.calls, p.limit)) {
       hits.push({ key: 'provider_budget', brand: null, subject: p.provider, value: p.calls, level: Math.ceil(p.limit! * ALERT_LEVELS.budgetShare) });
     }
+    // The provider's own monthly quota (JI-1): used up, refused or nearly gone.
+    const quota = quotaAlert(p);
+    if (quota) hits.push(quota);
   }
   for (const b of status.brands) {
     const avg = b.ingest.newJobs7dAvg;
@@ -264,15 +588,17 @@ export async function buildSystemStatus(
   const env = options.env ?? process.env;
   const window = healthWindow(now, options.mode ?? 'live');
   const dayKey = window.dayKey;
-  const [brands, kinds, usage] = await Promise.all([
+  const [brands, kinds, usage, quota] = await Promise.all([
     Promise.all(options.brands.map((b) => brandHealth(store, b, now, env, window, options.listSources))),
     store.queueByKind(),
     store.providerUsage(dayKey),
+    store.providerQuota(),
   ]);
-  const providers: ProviderUsageRow[] = usage
-    // RAProviderUsage.provider is the ingest provider's name; an unknown one has no default and reads its env limit or null.
-    .map((u) => ({ ...u, limit: dailyCallLimit(u.provider as IngestProvider, env) }))
-    .sort((a, b) => a.provider.localeCompare(b.provider));
+  // Providers are platform-wide: the sources of every brand this deployment serves, whichever brand is shown,
+  // plus the mainland counters the operator opened for a provider no mainland brand lists as a source.
+  const listed = providerSources(options.brandsServed, env, options.listSources);
+  const sources = [...listed, ...mainlandCounterSources({ brands: options.brandsServed, quota, listed, env })];
+  const providers = buildProviderRows({ sources, usage, quota, now, env });
   const queue = { kinds: [...kinds].sort((a, b) => b.dead - a.dead || b.queued - a.queued || a.kind.localeCompare(b.kind)), deadTotal: kinds.reduce((s, k) => s + k.dead, 0) };
   const partial = { brands, queue, providers, dayElapsedShare: window.elapsedShare };
   return {
@@ -347,6 +673,10 @@ export function createPrismaSystemStore(db: Db = prisma): SystemStore {
     async providerUsage(dayKey) {
       const rows = await db.rAProviderUsage.findMany({ where: { dayKey } });
       return rows.map((r) => ({ provider: r.provider, calls: r.calls, jobsReturned: r.jobsReturned, jobsNew: r.jobsNew, errors: r.errors }));
+    },
+    async providerQuota() {
+      const row = await db.appConfig.findUnique({ where: { key: PROVIDER_QUOTA_CONFIG_KEY }, select: { value: true } });
+      return parseProviderQuota(row?.value);
     },
     async emailStatus(brand, range, templates) {
       const rows = await db.rAEmailLog.groupBy({
